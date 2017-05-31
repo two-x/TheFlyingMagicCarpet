@@ -9,6 +9,44 @@
 
 FASTLED_NAMESPACE_BEGIN
 
+struct CRGBW : CRGB {
+  union {
+    uint8_t white;
+    uint8_t w;
+  };
+  uint8_t rw;
+
+  // allow assignment from one RGB struct to another
+	inline CRGBW& operator= (const CRGBW& rhs) __attribute__((always_inline))
+    {
+        r = rhs.r;
+        g = rhs.g;
+        b = rhs.b;
+        w = rhs.w;
+        return *this;
+    }
+
+    /// allow assignment from one RGB struct to another
+	inline CRGBW& operator= (const CRGB& rhs) __attribute__((always_inline))
+    {
+        r = rhs.r;
+        g = rhs.g;
+        b = rhs.b;
+        return *this;
+    }
+
+    /// allow assignment from 32-bit (really 24-bit) 0xRRGGBB color code
+	inline CRGBW& operator= (const uint32_t colorcode) __attribute__((always_inline))
+    {
+        r = (colorcode >> 16) & 0xFF;
+        g = (colorcode >>  8) & 0xFF;
+        b = (colorcode >>  0) & 0xFF;
+        return *this;
+    }
+
+} CRGBW_t;
+
+/*
 struct CRGBW;
 
 // Representation of an RGBW pixel (Red, Green, Blue, White)
@@ -151,16 +189,6 @@ struct CRGBW {
         return *this;
     }
 
-    /// allow assignment from 32-bit (really 24-bit) 0xRRGGBB color code w/ w
-	inline CRGBW& operator= (const uint32_t colorcode, uint8_t iw) __attribute__((always_inline))
-    {
-        r = (colorcode >> 16) & 0xFF;
-        g = (colorcode >>  8) & 0xFF;
-        b = (colorcode >>  0) & 0xFF;
-        w = iw;
-        return *this;
-    }
-
     /// allow assignment from R, G, and B
 	inline CRGBW& setRGBW(uint8_t nr, uint8_t ng, uint8_t nb) __attribute__((always_inline))
     {
@@ -181,7 +209,7 @@ struct CRGBW {
     }
 
     /// allow assignment from H, S, and V
-	inline CRGB& setHSV (uint8_t hue, uint8_t sat, uint8_t val) __attribute__((always_inline))
+	inline CRGBW& setHSV (uint8_t hue, uint8_t sat, uint8_t val) __attribute__((always_inline))
     {
        CRGB tmp;
         hsv2rgb_rainbow( CHSV(hue, sat, val), tmp);
@@ -189,7 +217,7 @@ struct CRGBW {
     }
 
     /// allow assignment from just a Hue, saturation and value automatically at max.
-	inline CRGB& setHue (uint8_t hue) __attribute__((always_inline))
+	inline CRGBW& setHue (uint8_t hue) __attribute__((always_inline))
     {
        CRGB tmp;
         hsv2rgb_rainbow( CHSV(hue, 255, 255), tmp);
@@ -205,7 +233,7 @@ struct CRGBW {
     }
 
     /// allow assignment from 32-bit (really 24-bit) 0xRRGGBB color code
-	inline CRGB& setColorCode (uint32_t colorcode) __attribute__((always_inline))
+	inline CRGBW& setColorCode (uint32_t colorcode) __attribute__((always_inline))
     {
         r = (colorcode >> 16) & 0xFF;
         g = (colorcode >>  8) & 0xFF;
@@ -259,7 +287,7 @@ struct CRGBW {
     /// this is NOT an operator+= overload because the compiler
     /// can't usefully decide when it's being passed a 32-bit
     /// constant (e.g. CRGB::Red) and an 8-bit one (CRGB::Blue)
-    inline CRGB& addToRGBW (uint8_t d )
+    inline CRGBW& addToRGBW (uint8_t d )
     {
         r = qadd8( r, d);
         g = qadd8( g, d);
@@ -286,7 +314,7 @@ struct CRGBW {
         w = qsub8( w, rhs.w);
         return *this;
     }
-/*
+
     /// subtract a constant from each channel, saturating at 0x00
     /// this is NOT an operator+= overload because the compiler
     /// can't usefully decide when it's being passed a 32-bit
@@ -543,6 +571,8 @@ struct CRGBW {
 
       return ret;
     }
-*/
 };
 
+*/
+
+# endif

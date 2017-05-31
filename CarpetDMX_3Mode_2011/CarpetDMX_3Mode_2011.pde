@@ -18,28 +18,6 @@
 // I2C rountines for Eliot's Organ board
 // written by cameron burge July, 2011
 
-#include <DmxSimple.h>
-#include <FastLED.h>
-
-#define NUM_LEDS 1
-#define DATA_PIN 5
-
-CRGB leds[NUM_LEDS];
-
-void setup() {
-  FastLED.addLeds<DMXSIMPLE, DATA_PIN, RGB>(leds, NUM_LEDS);
-}
-
-void loop() {
-  leds[0] = CRGB::Black; 
-  FastLED.show(); 
-  delay(5);
-}
-
-
-
-
-/*
 #include <Wire.h>
 #include <DmxSimple.h>
 
