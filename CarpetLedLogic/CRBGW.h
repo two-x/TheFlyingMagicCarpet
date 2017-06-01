@@ -575,4 +575,6 @@ struct CRGBW {
 
 */
 
+FASTLED_NAMESPACE_END
+
 # endif

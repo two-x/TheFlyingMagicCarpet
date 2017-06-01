@@ -14,14 +14,6 @@
 CRGB dmxleds[NUM_DMX_LEDS];
 CRGB rgbleds[NUM_RGB_LEDS];
 
-/*struct CRGBW {
-  CRGB rgb;
-  union {
-    uint8_t white;
-    uint8_t w;
-  };
-} CRGBW_t;
-*/
 static void convertCRGBW2CRGB( CRGBW *src, CRGB *dst ) {
   dst[0] = CRGB(src[0].r, src[0].g, src[0].b); //(red led 1, green on led 1, blue led 1)
   dst[1] = CRGB(src[1].g, src[0].w, src[1].r); //(green led 2, white on led 1, red led 2)
