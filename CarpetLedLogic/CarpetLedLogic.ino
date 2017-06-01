@@ -1,7 +1,15 @@
+/* CarpetLedLogic.ino
+ *
+ *   This is the main entry point for the carpet's LED system.
+ *
+ *   Author: Anders Linn
+ *   Date: June 2017
+ */
 
 #include <DmxSimple.h>
 #include <FastLED.h>
 #include "CRBGW.h"
+#include "LegacyRoutines.h"
 
 #define NUM_DMX_LEDS 1
 #define NUM_RGB_LEDS 30
@@ -19,6 +27,8 @@ struct CRGBW rgbwleds[NUM_RGBW_LEDS];
 CRGB convertedrgbwleds[NUM_THEORETICAL_RGBW_LEDS];
 
 void robeDemoSetup() {
+  // this needs to be passed the raw led array, we'll handle to conversion elsewhere
+  FastLED.addLeds<NEOPIXEL, RGBW_DATA_PIN>( convertedrgbwleds, NUM_THEORETICAL_RGBW_LEDS);
   for ( int i = 0; i < NUM_RGBW_LEDS; ++i ) {
     rgbwleds[i] = CRGB::LightSteelBlue;
   }
@@ -57,14 +67,14 @@ void robeDemo() {
 }
 
 void setup() {
-  // FastLED.addLeds<DMXSIMPLE, DMX_DATA_PIN, RGB>(dmxleds, NUM_DMX_LEDS);
-  // FastLED.addLeds<NEOPIXEL, RGB_DATA_PIN>(rgbleds, NUM_RGB_LEDS);
+   // FastLED.addLeds<DMXSIMPLE, DMX_DATA_PIN, RGB>(dmxleds, NUM_DMX_LEDS);
+   // FastLED.addLeds<NEOPIXEL, RGB_DATA_PIN>(rgbleds, NUM_RGB_LEDS);
 
-  // this needs to be passed the raw led array, we'll handle to conversion elsewhere
-  FastLED.addLeds<NEOPIXEL, RGBW_DATA_PIN>( convertedrgbwleds, NUM_THEORETICAL_RGBW_LEDS);
-  robeDemoSetup();
+   // robeDemoSetup();
+   dmxSetup();
 }
 
 void loop() {
-   robeDemo();
+   dmxLoop();
+   // robeDemo();
 }

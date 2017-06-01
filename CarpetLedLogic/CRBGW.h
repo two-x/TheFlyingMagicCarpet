@@ -1,3 +1,13 @@
+/* CRGBW.h
+ *
+ *   A helper class for using the RGBW robe lights with the FastLED CRGB class. When
+ *   FastLED makes the switch to support RGBW we should scrap this code and use their
+ *   implementation.
+ *
+ *   Author: Anders Linn
+ *   Date: June 2017
+ */
+
 #ifndef __CRBGW_H
 #define __CRBGW_H
 
