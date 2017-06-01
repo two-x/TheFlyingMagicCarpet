@@ -7,8 +7,6 @@
 #include "lib8tion.h"
 #include "color.h"
 
-FASTLED_NAMESPACE_BEGIN
-
 struct CRGBW : CRGB {
   union {
     uint8_t white;
@@ -575,6 +573,22 @@ struct CRGBW {
 
 */
 
-FASTLED_NAMESPACE_END
+static void convertCRGBW2CRGB( CRGBW *src, CRGB *dst ) {
+  dst[0] = CRGB(src[0].r, src[0].g, src[0].b); //(red led 1, green on led 1, blue led 1)
+  dst[1] = CRGB(src[1].g, src[0].w, src[1].r); //(green led 2, white on led 1, red led 2)
+  dst[2] = CRGB(src[1].w, src[1].b, src[2].g); //(white led 2,blue led 2, green led 3)
+  dst[3] = CRGB(src[2].b, src[2].r, src[2].w); //(blue led 3, red led 3, white led 3)
+}
+
+static void covertCRGBWArrayToCRGBArray( CRGBW *src, CRGB *dst,
+                                          uint16_t srcSize, uint16_t dstSize ) {
+  int s, d;
+  // we want to cut out if the entire array has been converted, or if we're out of leds
+  while ( s < srcSize && d < dstSize ) {
+    convertCRGBW2CRGB( src + s, dst + d );
+    s += 3;
+    d += 4;
+  }
+}
 
 # endif
