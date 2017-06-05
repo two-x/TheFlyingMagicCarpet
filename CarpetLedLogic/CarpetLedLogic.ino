@@ -65,9 +65,9 @@ void robeDemo() {
   if ( loc == 0 ) {
     --end;
   }
-  covertCRGBWArrayToCRGBArray( rgbwleds, convertedrgbwleds, NUM_RGBW_LEDS, NUM_THEORETICAL_RGBW_LEDS );
+  convertNeopixelRgbwArray( rgbwleds, convertedrgbwleds, NUM_RGBW_LEDS, NUM_THEORETICAL_RGBW_LEDS );
   FastLED.show(); 
-  FastLed.delay(50);
+  FastLED.delay( 50 );
 }
 
 void setup() {

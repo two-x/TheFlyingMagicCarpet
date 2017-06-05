@@ -204,5 +204,5 @@ class MagicCarpet {
 };
 
 // singleton representing the one-and-only Flying Magic Carpet (TM)
-MagicCarpet carpet();
+MagicCarpet carpet;
 

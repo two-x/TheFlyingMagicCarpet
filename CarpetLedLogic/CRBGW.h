@@ -597,7 +597,7 @@ static void convertDmxRgbw( CRGBW *src, CRGB *dst ) {
   dst[ 3 ] = CRGB( src[ 2 ].g, src[ 2 ].b, src[ 2 ].w );
 }
 
-static void covertNeopixelRgbwArray( CRGBW *src, CRGB *dst,
+static void convertNeopixelRgbwArray( CRGBW *src, CRGB *dst,
                                      uint16_t srcSize, uint16_t dstSize ) {
   int s, d;
   // cut out if the entire array has been converted, or if we're out of leds
@@ -608,7 +608,7 @@ static void covertNeopixelRgbwArray( CRGBW *src, CRGB *dst,
   }
 }
 
-static void covertDmxRgbwArray( CRGBW *src, CRGB *dst,
+static void convertDmxRgbwArray( CRGBW *src, CRGB *dst,
                                 uint16_t srcSize, uint16_t dstSize ) {
   int s, d;
   // cut out if the entire array has been converted, or if we're out of leds
