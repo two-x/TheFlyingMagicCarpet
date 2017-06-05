@@ -619,4 +619,13 @@ static void covertDmxRgbwArray( CRGBW *src, CRGB *dst,
   }
 }
 
+static void reverse( CRGB *arr, uint16_t size ) {
+   for ( int i = 0; i < size / 2; ++i ) {
+      int rearIndex = size - i - 1;
+      CRGB tmp = arr[ rearIndex ];
+      arr[ rearIndex ] = arr[ i ];
+      arr[ i ] = tmp;
+   }
+}
+
 # endif
