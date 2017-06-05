@@ -28,32 +28,11 @@
 
 #include <DmxSimple.h>
 #include <FastLED.h>
+#include "MagicCarpet.h"
 
 #endif
 
-// number of dmx leds
 #define NUM_DMX_LEDS 10
-#define NUM_CONVERTED_DMX_LEDS ( NUM_DMX_LEDS + ( NUM_DMX_LEDS / 3 ) )
-
-// all the dmx lights are on the same pin
-#define DMX_PIN 3
-
-// analog inputs
-#define ANALOG_LOW_PIN 3
-#define ANALOG_MID_PIN 2
-#define ANALOG_HIGH_PIN 1
-#define ANALOG_BRIGHTNESS_PIN 0
-
-// inputs from mode select switch
-#define MODE0_PIN 8
-#define MODE1_PIN 9
-#define MODE2_PIN 2
-#define MODE3_PIN 4
-
-// inputs from wireless board
-#define INPUT0_PIN 5
-#define INPUT1_PIN 6
-#define INPUT2_PIN 7
 
 // button ids from wireless board
 #define UP_BUTTON 3
@@ -62,62 +41,17 @@
 #define DOWN_BUTTON 7
 #define CENTER_BUTTON 6
 
-// max voltage from an analog input pin
-#define MAX_VOLTAGE 1023
-
 // TODO: there's probably a FastLED alternative to this.
 //======SINE Lookup Array
 extern const uint8_t SINELUT[];
 
-// the dmx led array
-CRGBW dmxLeds[ NUM_DMX_LEDS ];
-CRGB convertedDmxLeds[ NUM_CONVERTED_DMX_LEDS ];
-
-void show() {
-   convertDmxRgbwArray( dmxLeds, convertedDmxLeds, NUM_DMX_LEDS,
-                        NUM_CONVERTED_DMX_LEDS );
-   FastLED.show();
-}
-
-uint8_t readMode() {
-   return digitalRead( MODE2_PIN ) << 3 | digitalRead( MODE3_PIN ) << 2;
-}
-
-uint8_t readDigitalInput() {
-   return digitalRead( INPUT0_PIN ) << 2 |
-          digitalRead( INPUT1_PIN ) << 1 |
-          digitalRead( INPUT2_PIN );
-}
-
-CRGB readAnalogInput() {
-   // TODO: name these pins
-   // TODO: why are we inverting the values here?
-   // convert analog inputs into rgb values between 0-255
-   uint16_t r = ( MAX_VOLTAGE - analogRead( ANALOG_LOW_PIN ) ) / 4;
-   uint16_t g = ( MAX_VOLTAGE - analogRead( ANALOG_MID_PIN ) ) / 4;
-   uint16_t b = ( MAX_VOLTAGE - analogRead( ANALOG_HIGH_PIN ) ) / 4;
-   return CRGB( r, g, b );
-}
-
-uint8_t readBrightnessInput() {
-   uint16_t ret = ( MAX_VOLTAGE - analogRead( ANALOG_BRIGHTNESS_PIN ) ) / 4;
-   return ret;
-}
-
-void clearDmxLeds() {
-  for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
-    dmxLeds[ i ] = CRGB::Black; // black is all zeros
-  }
-  show(); // TODO: do we really need the show here? i don't think so...
-}
-
 void strobeHit() {
   for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
-    dmxLeds[ i ] = CRGB::White; // white is all ones
+    carpet.dmxLeds[ i ] = CRGB::White; // white is all ones
   }
-  show();
+  carpet.show();
   FastLED.delay( 10 );
-  clearDmxLeds();
+  carpet.clearDmx();
   FastLED.delay( 10 );
 }
 
@@ -125,9 +59,9 @@ void strobeHit() {
 void fadeOut() {
    for ( int red = 255; red >= 0; --red ) {
       for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
-        dmxLeds[ i ] = CRGB::Red;
+        carpet.dmxLeds[ i ] = CRGB::Red;
       }
-      show();
+      carpet.show();
       FastLED.delay( 1 );
   }
 }
@@ -136,21 +70,21 @@ void fadeOut() {
 //       maybe it just never did what was inteneded? Needs fixing or removing.
 void chaseBurst() {
   for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
-     dmxLeds[ i ] = CRGB::Red;
+     carpet.dmxLeds[ i ] = CRGB::Red;
   }
-  show();
+  carpet.show();
   FastLED.delay( 10 );
 }
 
 // Scene #1
 // this sets all lights to have red bass, green mids, and blue highs
 void dmxScene1() {
-   CRGB inputColor = readAnalogInput();
+   CRGB inputColor = carpet.readAnalogInput();
    for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
-      dmxLeds[ i ] = inputColor;
+      carpet.dmxLeds[ i ] = inputColor;
    }
    FastLED.setBrightness( 255 );
-   show();
+   carpet.show();
 }
 
 // Scene #2
@@ -162,19 +96,19 @@ void dmxScene2() {
    static CRGB previousColor = CRGB::Black;
    static uint8_t arrayOffset = 0;
 
-   CRGB inputColor = readAnalogInput();
-   uint8_t brightness = readBrightnessInput();
+   CRGB inputColor = carpet.readAnalogInput();
+   uint8_t brightness = carpet.readBrightnessInput();
 
    // TODO: we should set the RGB values back to zero before we call this
    for ( int i = 0; i < NUM_DMX_LEDS; i += 3 ) {
       int j = ( i + arrayOffset ) % NUM_DMX_LEDS;
-      dmxLeds[ i ].red = inputColor.red;
+      carpet.dmxLeds[ i ].red = inputColor.red;
       if ( i + 1 <= NUM_DMX_LEDS ) {
          j = ( i + arrayOffset + 1 ) % NUM_DMX_LEDS;
-         dmxLeds[ i + 1 ].green = inputColor.green;
+         carpet.dmxLeds[ i + 1 ].green = inputColor.green;
          if ( i + 2 <= NUM_DMX_LEDS ) {
             j = ( i + arrayOffset + 2 ) % NUM_DMX_LEDS;
-            dmxLeds[ i + 2 ].blue = inputColor.blue;
+            carpet.dmxLeds[ i + 2 ].blue = inputColor.blue;
          }
       }
    }
@@ -185,11 +119,11 @@ void dmxScene2() {
    // Note: the bitwise-or is intentional here, for performance
    if ( inputColor.red - previousColor.red >= 70 |
         previousColor.red - inputColor.red >= 70 |
-        readDigitalInput() == LEFT_BUTTON ) {
+        carpet.readDigitalInput() == LEFT_BUTTON ) {
       arrayOffset = ++arrayOffset % NUM_DMX_LEDS;
    }
    FastLED.setBrightness( brightness );
-   show();
+   carpet.show();
 }
 
 //Scene 3
@@ -199,19 +133,19 @@ void dmxScene3() {
    static CRGB previousColor = CRGB::Black;
    static uint8_t arrayOffset = 0;
 
-   CRGB inputColor = readAnalogInput();
-   uint8_t brightness = readBrightnessInput();
+   CRGB inputColor = carpet.readAnalogInput();
+   uint8_t brightness = carpet.readBrightnessInput();
 
    // TODO: we should set the RGB values back to zero before we call this
    for ( int i = 0; i < NUM_DMX_LEDS; i += 3 ) {
       int j = ( i + arrayOffset ) % NUM_DMX_LEDS;
-      dmxLeds[ i ].red = 255;
+      carpet.dmxLeds[ i ].red = 255;
       if ( i + 1 <= NUM_DMX_LEDS ) {
          j = ( i + arrayOffset + 1 ) % NUM_DMX_LEDS;
-         dmxLeds[ i + 1 ].green = 255;
+         carpet.dmxLeds[ i + 1 ].green = 255;
          if ( i + 2 <= NUM_DMX_LEDS ) {
             j = ( i + arrayOffset + 2 ) % NUM_DMX_LEDS;
-            dmxLeds[ i + 2 ].blue = 255;
+            carpet.dmxLeds[ i + 2 ].blue = 255;
          }
       }
    }
@@ -222,11 +156,11 @@ void dmxScene3() {
    // Note: the bitwise-or is intentional here, for performance
    if ( inputColor.red - previousColor.red >= 70 |
         previousColor.red - inputColor.red >= 70 |
-        readDigitalInput() == LEFT_BUTTON ) {
+        carpet.readDigitalInput() == LEFT_BUTTON ) {
       arrayOffset = ++arrayOffset % NUM_DMX_LEDS;
    }
    FastLED.setBrightness( brightness );
-   show();
+   carpet.show();
 }
 
 //Scene 4
@@ -236,8 +170,8 @@ void dmxScene4() {
    static uint8_t heartColor = 0;
    static uint8_t sineIndex = 0;
 
-   uint8_t brightness = readBrightnessInput();
-   uint8_t wirelessInput = readDigitalInput();
+   uint8_t brightness = carpet.readBrightnessInput();
+   uint8_t wirelessInput = carpet.readDigitalInput();
 
    if ( wirelessInput == LEFT_BUTTON ) {
       heartColor = 0;
@@ -256,19 +190,19 @@ void dmxScene4() {
     case 0:
       // RED HEARTBEAT
       for ( int j = 0; j <= NUM_DMX_LEDS; ++j ) {
-        dmxLeds[ j ].red = SINELUT[ sineIndex];
+        carpet.dmxLeds[ j ].red = SINELUT[ sineIndex];
       }
       break;
     case 1:
       // GREEN HEARTBEAT
       for ( int j = 0; j <= NUM_DMX_LEDS; ++j ) {
-        dmxLeds[ j ].green = SINELUT[ sineIndex ];
+        carpet.dmxLeds[ j ].green = SINELUT[ sineIndex ];
       }
       break;
     case 2:
       // BLUE HEARTBEAT
       for ( int j = 0; j <= NUM_DMX_LEDS; ++j ) {
-        dmxLeds[ j ].blue = SINELUT[ sineIndex ];
+        carpet.dmxLeds[ j ].blue = SINELUT[ sineIndex ];
       }
       break;
     case 3:
@@ -277,9 +211,9 @@ void dmxScene4() {
       //       color selection?
       // ORANGE HEARTBEAT
       for ( int j = 0; j <= NUM_DMX_LEDS; ++j ) {
-        dmxLeds[ j ].red = 2 * SINELUT[ sineIndex ] - 254;
-        dmxLeds[ j ].green = 2 * SINELUT[ ( sineIndex + 85 ) % 255 ] - 254;
-        dmxLeds[ j ].blue = 2 * SINELUT[ ( sineIndex + 170 ) % 255 ] - 254;
+        carpet.dmxLeds[ j ].red = 2 * SINELUT[ sineIndex ] - 254;
+        carpet.dmxLeds[ j ].green = 2 * SINELUT[ ( sineIndex + 85 ) % 255 ] - 254;
+        carpet.dmxLeds[ j ].blue = 2 * SINELUT[ ( sineIndex + 170 ) % 255 ] - 254;
       }
       break;
     default:
@@ -306,7 +240,7 @@ void dmxScene4() {
    sineIndex = ++sineIndex % NUM_DMX_LEDS;
 
    FastLED.setBrightness( brightness );
-   show();
+   carpet.show();
    FastLED.delay( 10 ); // delay so it seems to pulse slowly
 }
 
@@ -317,19 +251,7 @@ void dmxScene4() {
 /* NOT IMPLEMENTED IN OLD CODE */
 
 void dmxSetup() {
-  //set inputs from wireless board
-  pinMode( INPUT0_PIN, INPUT );
-  pinMode( INPUT1_PIN, INPUT );
-  pinMode( INPUT1_PIN, INPUT );
-
-  //set inputs from Mode Select Switch
-  pinMode( MODE0_PIN, INPUT );
-  pinMode( MODE1_PIN, INPUT );
-  pinMode( MODE2_PIN, INPUT );
-  pinMode( MODE3_PIN, INPUT );
-
-  FastLED.addLeds<DMXSIMPLE, DMX_DATA_PIN>( convertedDmxLeds,
-                                            NUM_CONVERTED_DMX_LEDS );
+   carpet.setup();
 }
 
 void dmxLoop() {
@@ -338,16 +260,16 @@ void dmxLoop() {
    // the loop
    static uint8_t lastModeSwitchInput = 0xFF;
 
-   uint8_t modeSwitchInput = readMode();
+   uint8_t modeSwitchInput = carpet.readMode();
    if ( modeSwitchInput != lastModeSwitchInput ) {
       // we've changed modes, clear the lights so we start from scratch again
-      clearDmxLeds();
+      carpet.clearDmx();
    }
    lastModeSwitchInput = modeSwitchInput;
 
-   CRGB inputColor = readAnalogInput();
+   CRGB inputColor = carpet.readAnalogInput();
    // TODO: hmmmm, how does FastLED deal with dmx brightness?
-   uint8_t brightness = readBrightnessInput();
+   uint8_t brightness = carpet.readBrightnessInput();
 
    // main logic selection
    switch ( modeSwitchInput ) {
@@ -369,7 +291,7 @@ void dmxLoop() {
 
    // these are the responses to wireless button presses
    // they do not vary by mode, but they could...
-   uint8_t wirelessInput = readDigitalInput();
+   uint8_t wirelessInput = carpet.readDigitalInput();
    if ( wirelessInput == CENTER_BUTTON ) {
       strobeHit();
    } else if ( wirelessInput == DOWN_BUTTON ) {
