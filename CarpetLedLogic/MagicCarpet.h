@@ -10,8 +10,11 @@
 #include <FastLED.h>
 #include "CRBGW.h"
 
+// dmx constants
 #define NUM_DMX_LEDS 10 // TODO: this number doesn't include the new floods
 #define NUM_CONVERTED_DMX_LEDS ( NUM_DMX_LEDS + ( NUM_DMX_LEDS / 3 ) )
+
+// neopixel constants
 #define NUM_NEO_LEDS 1024
 #define NUM_NEOPIXEL_STRIPS 8
 #define NUM_NEO_SMALL_LEDS 110
@@ -19,8 +22,37 @@
 #define NUM_CONVERTED_NEO_LEDS ( NUM_NEO_LEDS + NUM_NEO_LEDS / 3 )
 #define NUM_CONVERTED_NEO_SMALL_LEDS ( NUM_NEO_SMALL_LEDS + NUM_NEO_SMALL_LEDS / 3 )
 #define NUM_CONVERTED_NEO_LARGE_LEDS ( NUM_NEO_LARGE_LEDS + NUM_NEO_LARGE_LEDS / 3 )
+
+// outputs
 #define DMX_DATA_PIN 3
 #define NEO_DATA_PIN 6 // TODO: add more data pins!
+
+// analog inputs
+#define ANALOG_LOW_PIN 3
+#define ANALOG_MID_PIN 2
+#define ANALOG_HIGH_PIN 1
+#define ANALOG_BRIGHTNESS_PIN 0
+
+// inputs from mode select switch
+#define MODE0_PIN 8
+#define MODE1_PIN 9
+#define MODE2_PIN 2
+#define MODE3_PIN 4
+
+// inputs from wireless board
+#define INPUT0_PIN 5
+#define INPUT1_PIN 6
+#define INPUT2_PIN 7
+
+// button ids from wireless board
+#define UP_BUTTON 3
+#define LEFT_BUTTON 4
+#define RIGHT_BUTTON 1
+#define DOWN_BUTTON 7
+#define CENTER_BUTTON 6
+
+// max voltage from an analog input pin
+#define MAX_VOLTAGE 1023
 
 class MagicCarpet {
  private:
@@ -57,8 +89,22 @@ class MagicCarpet {
    CRGBW ropeLeds[ NUM_NEO_LEDS ];
 
    void setup() {
+      // set inputs from wireless board
+      pinMode( INPUT0_PIN, INPUT );
+      pinMode( INPUT1_PIN, INPUT );
+      pinMode( INPUT1_PIN, INPUT );
+
+      // set inputs from Mode Select Switch
+      pinMode( MODE0_PIN, INPUT );
+      pinMode( MODE1_PIN, INPUT );
+      pinMode( MODE2_PIN, INPUT );
+      pinMode( MODE3_PIN, INPUT );
+
+      // add dmx leds
       FastLED.addLeds<DMXSIMPLE, DMX_DATA_PIN>( convertedDmxLeds,
                                                 NUM_CONVERTED_DMX_LEDS );
+
+      // add eight channels of rope leds
       FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds,
                                                NUM_CONVERTED_NEO_SMALL_LEDS );
       FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x06E,
@@ -75,7 +121,9 @@ class MagicCarpet {
                                                NUM_CONVERTED_NEO_LARGE_LEDS );
       FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x392,
                                                NUM_CONVERTED_NEO_SMALL_LEDS );
+
       clear(); // there might be stale values left in the leds, start from scratch
+
       show();
    }
 
@@ -127,6 +175,31 @@ class MagicCarpet {
    void clear() {
       clearDmx();
       clearRope();
+   }
+
+   uint8_t readMode() {
+      return digitalRead( MODE2_PIN ) << 3 | digitalRead( MODE3_PIN ) << 2;
+   }
+
+   uint8_t readDigitalInput() {
+      return digitalRead( INPUT0_PIN ) << 2 |
+             digitalRead( INPUT1_PIN ) << 1 |
+             digitalRead( INPUT2_PIN );
+   }
+
+   CRGB readAnalogInput() {
+      // TODO: name these pins
+      // TODO: why are we inverting the values here?
+      // convert analog inputs into rgb values between 0-255
+      uint16_t r = ( MAX_VOLTAGE - analogRead( ANALOG_LOW_PIN ) ) / 4;
+      uint16_t g = ( MAX_VOLTAGE - analogRead( ANALOG_MID_PIN ) ) / 4;
+      uint16_t b = ( MAX_VOLTAGE - analogRead( ANALOG_HIGH_PIN ) ) / 4;
+      return CRGB( r, g, b );
+   }
+
+   uint8_t readBrightnessInput() {
+      uint16_t ret = ( MAX_VOLTAGE - analogRead( ANALOG_BRIGHTNESS_PIN ) ) / 4;
+      return ret;
    }
 };
 

@@ -113,7 +113,7 @@ void clearDmxLeds() {
 
 void strobeHit() {
   for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
-    dmxLeds[ i ] = CRGB::White; // white is all zeros
+    dmxLeds[ i ] = CRGB::White; // white is all ones
   }
   show();
   FastLED.delay( 10 );
