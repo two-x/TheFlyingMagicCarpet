@@ -32,7 +32,7 @@
 #endif
 
 // number of dmx leds
-#define NUM_DMX_LEDS 10
+#define NUM_DMX_LEDS 1 // 10
 
 // all the dmx lights are on the same pin
 #define DMX_PIN 3
