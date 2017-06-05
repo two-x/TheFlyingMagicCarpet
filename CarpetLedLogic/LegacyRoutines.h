@@ -32,7 +32,8 @@
 #endif
 
 // number of dmx leds
-#define NUM_DMX_LEDS 1 // 10
+#define NUM_DMX_LEDS 10
+#define NUM_CONVERTED_DMX_LEDS ( NUM_DMX_LEDS + ( NUM_DMX_LEDS / 3 ) )
 
 // all the dmx lights are on the same pin
 #define DMX_PIN 3
@@ -69,7 +70,14 @@
 extern const uint8_t SINELUT[];
 
 // the dmx led array
-CRGB dmxLeds[ NUM_DMX_LEDS ];
+CRGBW dmxLeds[ NUM_DMX_LEDS ];
+CRGB convertedDmxLeds[ NUM_CONVERTED_DMX_LEDS ];
+
+void show() {
+   convertDmxRgbwArray( dmxLeds, convertedDmxLeds, NUM_DMX_LEDS,
+                        NUM_CONVERTED_DMX_LEDS );
+   FastLED.show();
+}
 
 uint8_t readMode() {
    return digitalRead( MODE2_PIN ) << 3 | digitalRead( MODE3_PIN ) << 2;
@@ -100,14 +108,14 @@ void clearDmxLeds() {
   for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
     dmxLeds[ i ] = CRGB::Black; // black is all zeros
   }
-  FastLED.show(); // TODO: do we really need the show here? i don't think so...
+  show(); // TODO: do we really need the show here? i don't think so...
 }
 
 void strobeHit() {
   for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
     dmxLeds[ i ] = CRGB::White; // white is all zeros
   }
-  FastLED.show();
+  show();
   FastLED.delay( 10 );
   clearDmxLeds();
   FastLED.delay( 10 );
@@ -119,7 +127,7 @@ void fadeOut() {
       for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
         dmxLeds[ i ] = CRGB::Red;
       }
-      FastLED.show();
+      show();
       FastLED.delay( 1 );
   }
 }
@@ -130,7 +138,7 @@ void chaseBurst() {
   for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
      dmxLeds[ i ] = CRGB::Red;
   }
-  FastLED.show();
+  show();
   FastLED.delay( 10 );
 }
 
@@ -142,7 +150,7 @@ void dmxScene1() {
       dmxLeds[ i ] = inputColor;
    }
    FastLED.setBrightness( 255 );
-   FastLED.show();
+   show();
 }
 
 // Scene #2
@@ -181,7 +189,7 @@ void dmxScene2() {
       arrayOffset = ++arrayOffset % NUM_DMX_LEDS;
    }
    FastLED.setBrightness( brightness );
-   FastLED.show();
+   show();
 }
 
 //Scene 3
@@ -218,7 +226,7 @@ void dmxScene3() {
       arrayOffset = ++arrayOffset % NUM_DMX_LEDS;
    }
    FastLED.setBrightness( brightness );
-   FastLED.show();
+   show();
 }
 
 //Scene 4
@@ -298,7 +306,7 @@ void dmxScene4() {
    sineIndex = ++sineIndex % NUM_DMX_LEDS;
 
    FastLED.setBrightness( brightness );
-   FastLED.show();
+   show();
    FastLED.delay( 10 ); // delay so it seems to pulse slowly
 }
 
@@ -320,7 +328,8 @@ void dmxSetup() {
   pinMode( MODE2_PIN, INPUT );
   pinMode( MODE3_PIN, INPUT );
 
-  FastLED.addLeds<DMXSIMPLE, DMX_PIN, RGB>(dmxLeds, NUM_DMX_LEDS);
+  FastLED.addLeds<DMXSIMPLE, DMX_DATA_PIN>( convertedDmxLeds,
+                                            NUM_CONVERTED_DMX_LEDS );
 }
 
 void dmxLoop() {
