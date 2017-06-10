@@ -2,17 +2,29 @@
  *
  *    This is a data abstraction of the carpet.
  *
+ *    TODO: total power consumption throttle
+ *
  *    Author: Anders Linn
  *    Date: June 2017
  */
 
+#ifndef __MAGIC_CARPET_H
+#define __MAGIC_CARPET_H
+
+
+#ifndef __FASTLED_H
+#define __FASTLED_H
+
 #include <DmxSimple.h>
 #include <FastLED.h>
+
+#endif
+
 #include "CRBGW.h"
 
 // dmx constants
-#define NUM_DMX_LEDS 10 // TODO: this number doesn't include the new floods
-#define NUM_CONVERTED_DMX_LEDS ( NUM_DMX_LEDS + ( NUM_DMX_LEDS / 3 ) )
+// note: make sure we switch the dmx lights to be 3-channel
+#define NUM_DMX_LEDS 18
 
 // neopixel constants
 #define NUM_NEO_LEDS 1024
@@ -203,6 +215,4 @@ class MagicCarpet {
    }
 };
 
-// singleton representing the one-and-only Flying Magic Carpet (TM)
-MagicCarpet carpet;
-
+#endif
