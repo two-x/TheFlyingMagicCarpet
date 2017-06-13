@@ -11,13 +11,14 @@
 #ifndef __MAGIC_CARPET_H
 #define __MAGIC_CARPET_H
 
+#ifndef __DMXSIMPLE_H
+#define __DMXSIMPLE_H
+#include <DmxSimple.h>
+#endif
 
 #ifndef __FASTLED_H
 #define __FASTLED_H
-
-#include <DmxSimple.h>
 #include <FastLED.h>
-
 #endif
 
 #include "CRBGW.h"
@@ -28,6 +29,10 @@
 
 // neopixel constants
 #define NUM_NEO_LEDS 30 // 1024
+#define NUM_CONVERTED_DMX_LEDS ( NUM_DMX_LEDS + NUM_DMX_LEDS / 3 )
+
+// neopixel constants
+#define NUM_NEO_LEDS 400 // 1024
 #define NUM_NEOPIXEL_STRIPS 8
 #define NUM_NEO_SMALL_LEDS 110
 #define NUM_NEO_LARGE_LEDS 146
@@ -112,8 +117,10 @@ class MagicCarpet {
       pinMode( MODE3_PIN, INPUT );
 
       // add dmx leds
-      FastLED.addLeds<DMXSIMPLE, DMX_DATA_PIN>( convertedDmxLeds,
-                                                NUM_CONVERTED_DMX_LEDS );
+      FastLED.addLeds<DMXSIMPLE, DMX_DATA_PIN>( dmxLeds,
+                                                NUM_DMX_LEDS );
+      // FastLED.addLeds<DMXSIMPLE, DMX_DATA_PIN>( convertedDmxLeds,
+      //                                           NUM_CONVERTED_DMX_LEDS );
 
       // add eight channels of rope leds
       // FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds,
@@ -143,9 +150,8 @@ class MagicCarpet {
    }
 
    void show() {
-      convertDmxRgbwArray( dmxLeds, convertedDmxLeds, NUM_DMX_LEDS,
+      CRGBW::convertDmxArray( dmxLeds, convertedDmxLeds, NUM_DMX_LEDS,
                            NUM_CONVERTED_DMX_LEDS );
-
       /* the lights aren't always arranged the same way as they are addressed, so in
        * some cases we need to reverse whatever has been programmed in the user array
        * in order to keep the addressing consistent.
@@ -159,8 +165,8 @@ class MagicCarpet {
       // reverse( ropeLeds + 0x200, NUM_NEO_SMALL_LEDS );
       // reverse( ropeLeds + 0x300, NUM_NEO_LARGE_LEDS );
 
-      // convertNeopixelRgbwArray( ropeLeds, convertedRopeLeds, NUM_NEO_LEDS,
-      //                           NUM_CONVERTED_NEO_LEDS );
+      CRGBW::convertNeopixelArray( ropeLeds, convertedRopeLeds, NUM_NEO_LEDS,
+                                   NUM_CONVERTED_NEO_LEDS );
 
       // // make sure to reverse the values so the user has a consistent view
       // reverse( ropeLeds, NUM_NEO_SMALL_LEDS );
@@ -212,5 +218,11 @@ class MagicCarpet {
       return ( MAX_VOLTAGE - analogRead( ANALOG_BRIGHTNESS_PIN ) ) / 4;
    }
 };
+
+// singleton representing the one-and-only Flying Magic Carpet (TM)
+MagicCarpet * theMagicCarpet() {
+   static MagicCarpet * carpet = new MagicCarpet();
+   return carpet;
+}
 
 #endif

@@ -1,3 +1,4 @@
+// TODO: some of the operators still need CRGBW versions
 /* CRGBW.h
  *
  *   A helper class for using the RGBW robe lights with the FastLED CRGB class. When
@@ -11,75 +12,369 @@
 #ifndef __CRBGW_H
 #define __CRBGW_H
 
-#include "FastLED.h"
+#ifndef __FASTLED_H
+#define __FASTLED_H
+#include <FastLED.h>
+#endif
 
 #include <stdint.h>
 #include "lib8tion.h"
 #include "color.h"
 
 struct CRGBW : CRGB {
-  union {
-    uint8_t white;
-    uint8_t w;
-  };
-  uint8_t rw;
+   union {
+     uint8_t white;
+     uint8_t w;
+   };
+   uint8_t rw;
+
+   // TODO: add 4-val constructor
+   // TODO: add CRGBW copy constructor
+   // TODO: add CRGBW operators
+
+ 	inline CRGBW() __attribute__((always_inline)) : CRGB() {
+     w = 255;
+  }
+
+  // allow copy construction
+ 	inline CRGBW(const CRGBW& rhs) __attribute__((always_inline)) : CRGB( rhs ) {
+     w = rhs.w;
+  }
+
+  // allow copy construction from regular CRGB object
+ 	inline CRGBW(const CRGB& rhs) __attribute__((always_inline)) : CRGB( rhs ) {}
+
+  // allow construction from HSV color
+ 	inline CRGBW(const CHSV& rhs) __attribute__((always_inline)) : CRGB( rhs ) {}
+
+   // allow assignment from one RGBW struct to another
+ 	inline CRGBW& operator=(const CRGBW& rhs) __attribute__((always_inline)) {
+     w = rhs.w;
+     return (CRGBW&) CRGB::operator=( rhs );
+  }
 
   // allow assignment from one RGB struct to another
-	inline CRGBW& operator= (const CRGBW& rhs) __attribute__((always_inline))
-    {
-        r = rhs.r;
-        g = rhs.g;
-        b = rhs.b;
-        w = rhs.w;
-        return *this;
-    }
+ 	inline CRGBW& operator=(const CRGB& rhs) __attribute__((always_inline)) {
+     return (CRGBW&) CRGB::operator=( rhs );
+  }
 
-    /// allow assignment from one RGB struct to another
-	inline CRGBW& operator= (const CRGB& rhs) __attribute__((always_inline))
-    {
-        r = rhs.r;
-        g = rhs.g;
-        b = rhs.b;
-        return *this;
-    }
+  // allow assignment from 32-bit (really 24-bit) 0xRRGGBB color code
+ 	inline CRGBW& operator=(const uint32_t colorcode) __attribute__((always_inline)) {
+         return (CRGBW&) CRGB::operator=( colorcode );
+     }
 
-    /// allow assignment from 32-bit (really 24-bit) 0xRRGGBB color code
-	inline CRGBW& operator= (const uint32_t colorcode) __attribute__((always_inline))
-    {
-        r = (colorcode >> 16) & 0xFF;
-        g = (colorcode >>  8) & 0xFF;
-        b = (colorcode >>  0) & 0xFF;
-        return *this;
-    }
+  // allow assignment from R, G, and B
+ 	inline CRGBW& setRGB(uint8_t nr, uint8_t ng,
+                       uint8_t nb) __attribute__((always_inline)) {
+     return (CRGBW&) CRGB::setRGB( nr, ng, nb );
+  }
+
+  // allow assignment from R, G, B, and W
+ 	inline CRGBW& setRGBW(uint8_t nr, uint8_t ng, uint8_t nb,
+                        uint8_t nw) __attribute__((always_inline)) {
+     w = nw;
+     return (CRGBW&) CRGB::setRGB( nr, ng, nb );
+  }
+
+  // allow assignment from H, S, and V
+ 	inline CRGBW& setHSV(uint8_t hue, uint8_t sat,
+                       uint8_t val) __attribute__((always_inline)) {
+     return (CRGBW&) CRGB::setHSV( hue, sat, val );
+  }
+
+  // allow assignment from just a Hue, saturation and value automatically at max.
+ 	inline CRGBW& setHue(uint8_t hue) __attribute__((always_inline)) {
+     return (CRGBW&) CRGB::setHue( hue );
+  }
+
+  // allow assignment from HSV color
+ 	inline CRGB& operator=(const CHSV& rhs) __attribute__((always_inline)) {
+     return (CRGBW&) CRGB::operator=( rhs );
+  }
+
+  // allow assignment from 32-bit (really 24-bit) 0xRRGGBB color code
+ 	inline CRGBW& setColorCode(uint32_t colorcode) __attribute__((always_inline)) {
+     return (CRGBW&) CRGB::setColorCode( colorcode );
+  }
+
+  // allow assignment from 32-bit (really 24-bit) 0xRRGGBB color code w/ w
+ 	inline CRGBW& setColorCode(uint32_t colorcode, uint8_t iw) __attribute__((always_inline)) {
+     w = iw;
+     return (CRGBW&) CRGB::setColorCode( colorcode );
+  }
+
+  // add one RGB to another, saturating at 0xFF for each channel
+  inline CRGBW& operator+=(const CRGB& rhs ) {
+     return (CRGBW&) CRGB::operator+=( rhs );
+  }
+
+  // add one RGB to another, saturating at 0xFF for each channel
+  inline CRGBW& operator+=(const CRGBW& rhs ) {
+      w = qadd8( w, rhs.w );
+     return (CRGBW&) CRGB::operator+=( rhs );
+  }
+
+  // add a constant to each channel, saturating at 0xFF
+  // this is NOT an operator+= overload because the compiler
+  // can't usefully decide when it's being passed a 32-bit
+  // constant (e.g. CRGB::Red) and an 8-bit one (CRGB::Blue)
+  inline CRGBW& addToRGB(uint8_t d ) {
+     return (CRGBW&) CRGB::addToRGB( d );
+  }
+
+  // add a constant to each channel, saturating at 0xFF
+  // this is NOT an operator+= overload because the compiler
+  // can't usefully decide when it's being passed a 32-bit
+  // constant (e.g. CRGB::Red) and an 8-bit one (CRGB::Blue)
+  inline CRGBW& addToRGBW(uint8_t d ) {
+      w = qadd8( w, d );
+     return (CRGBW&) CRGB::addToRGB( d );
+  }
+
+  // subtract one RGB from another, saturating at 0x00 for each channel
+  inline CRGBW& operator-=(const CRGB& rhs ) {
+     return (CRGBW&) CRGB::operator-=( rhs );
+  }
+
+  // subtract a constant from each channel, saturating at 0x00
+  // this is NOT an operator-= overload because the compiler
+  // can't usefully decide when it's being passed a 32-bit
+  // constant (e.g. CRGB::Red) and an 8-bit one (CRGB::Blue)
+  inline CRGB& subtractFromRGB(uint8_t d ) {
+     return (CRGBW&) CRGB::subtractFromRGB( d );
+  }
+
+  // subtract a constant of '1' from each channel, saturating at 0x00
+  inline CRGB& operator--()  __attribute__((always_inline)){
+     return (CRGBW&) CRGB::subtractFromRGB( 1 );
+  }
+
+  // subtract a constant of '1' from each channel, saturating at 0x00
+  inline CRGB operator--(int )  __attribute__((always_inline)) {
+     return (CRGBW&) CRGB::subtractFromRGB( 1 );
+  }
+
+  // add a constant of '1' from each channel, saturating at 0xFF
+  inline CRGB& operator++()  __attribute__((always_inline)) {
+     return (CRGBW&) CRGB::addToRGB( 1 );
+  }
+
+  // add a constant of '1' from each channel, saturating at 0xFF
+  inline CRGB operator++(int )  __attribute__((always_inline)) {
+     return (CRGBW&) CRGB::addToRGB( 1 );
+  }
+
+  // divide each of the channels by a constant
+  inline CRGB& operator/=(uint8_t d ) {
+     return (CRGBW&) CRGB::operator/=( d );
+  }
+
+  // right shift each of the channels by a constant
+  inline CRGB& operator>>=(uint8_t d) {
+     return (CRGBW&) CRGB::operator>>=( d );
+  }
+
+  // multiply each of the channels by a constant,
+  // saturating each channel at 0xFF
+  inline CRGB& operator*=(uint8_t d ) {
+     return (CRGBW&) CRGB::operator*=( d );
+  }
+
+  // scale down a RGB to N 256ths of it's current brightness, using
+  // 'video' dimming rules, which means that unless the scale factor is ZERO
+  // each channel is guaranteed NOT to dim down to zero.  If it's already
+  // nonzero, it'll stay nonzero, even if that means the hue shifts a little
+  // at low brightness levels.
+  inline CRGB& nscale8_video(uint8_t scaledown ) {
+     return (CRGBW&) CRGB::nscale8_video( scaledown);
+  }
+
+  // %= is a synonym for nscale8_video.  Think of it is scaling down
+  // by "a percentage"
+  inline CRGB& operator%=(uint8_t scaledown ) {
+     return (CRGBW&) CRGB::operator%=( scaledown );
+  }
+
+  // fadeLightBy is a synonym for nscale8_video( ..., 255-fadefactor)
+  inline CRGB& fadeLightBy(uint8_t fadefactor ) {
+     return (CRGBW&) CRGB::fadeLightBy( fadefactor);
+  }
+
+  // scale down a RGB to N 256ths of it's current brightness, using
+  // 'plain math' dimming rules, which means that if the low light levels
+  // may dim all the way to 100% black.
+  inline CRGB& nscale8(uint8_t scaledown ) {
+     return (CRGBW&) CRGB::nscale8( scaledown );
+  }
+
+  // scale down a RGB to N 256ths of it's current brightness, using
+  // 'plain math' dimming rules, which means that if the low light levels
+  // may dim all the way to 100% black.
+  inline CRGB& nscale8(const CRGB & scaledown ) {
+     return (CRGBW&) CRGB::nscale8( scaledown );
+  }
+
+  // return a CRGB object that is a scaled down version of this object
+  inline CRGB scale8(const CRGB & scaledown ) const {
+     return CRGB::scale8( scaledown );
+  }
+
+  // fadeToBlackBy is a synonym for nscale8( ..., 255-fadefactor)
+  inline CRGB& fadeToBlackBy(uint8_t fadefactor ) {
+     return (CRGBW&) CRGB::fadeToBlackBy( fadefactor );
+  }
+
+  // "or" operator brings each channel up to the higher of the two values
+  inline CRGB& operator|=(const CRGB& rhs ) {
+     return (CRGBW&) CRGB::operator|=( rhs );
+  }
+
+  // "or" operator brings each channel up to the higher of the two values
+  inline CRGB& operator|=(uint8_t d ) {
+     return (CRGBW&) CRGB::operator|=( d );
+  }
+
+  // "and" operator brings each channel down to the lower of the two values
+  inline CRGB& operator&=(const CRGB& rhs ) {
+     return (CRGBW&) CRGB::operator&=( rhs);
+  }
+
+  // "and" operator brings each channel down to the lower of the two values
+  inline CRGB& operator&=(uint8_t d ) {
+     return (CRGBW&) CRGB::operator&=( d );
+  }
+
+  // this allows testing a CRGB for zero-ness
+  inline operator bool() const __attribute__((always_inline)) {
+     return r || g || b || w;
+  }
+
+  /// invert each channel
+  inline CRGB operator-() {
+     return CRGB::operator-();
+  }
+
+  // Get the 'luma' of a CRGB object - aka roughly how much light the
+  // CRGB pixel is putting out (from 0 to 255).
+  inline uint8_t getLuma()  const {
+     return CRGB::getLuma();
+  }
+
+  // Get the average of the R, G, and B values
+  inline uint8_t getAverageLight()  const {
+     return CRGB::getAverageLight();
+  }
+
+  // maximize the brightness of this CRGBW object
+  inline void maximizeBrightness( uint8_t limit = 255 )  {
+     uint8_t max = red;
+     if( green > max) max = green;
+     if( blue > max) max = blue;
+     if( white > max) max = white;
+     uint16_t factor = ((uint16_t)(limit) * 256) / max;
+     red =   (red   * factor) / 256;
+     green = (green * factor) / 256;
+     blue =  (blue  * factor) / 256;
+     white =  (white  * factor) / 256;
+  }
+
+  // return a new CRGB object after performing a linear interpolation between this object and the passed in object
+  inline CRGB lerp8( const CRGB& other, fract8 frac) const {
+     return CRGB::lerp8( other, frac );
+  }
+
+  // return a new CRGB object after performing a linear interpolation between this object and the passed in object
+  inline CRGB lerp16( const CRGB& other, fract16 frac) const {
+     return CRGB::lerp16( other, frac );
+  }
+
+  // return a new CRGB object after performing a linear interpolation between this object and the passed in object
+  inline CRGBW lerp8( const CRGBW& other, fract8 frac) const {
+     CRGBW ret = (CRGBW) CRGB::lerp8( other, frac );
+     ret.w = lerp8by8(w,other.w,frac);
+     return ret;
+  }
+
+  // return a new CRGB object after performing a linear interpolation between this object and the passed in object
+  inline CRGBW lerp16( const CRGBW& other, fract16 frac) const {
+     CRGBW ret = (CRGBW) CRGB::lerp16( other, frac );
+     ret.w = lerp16by16(w,other.w,frac);
+     return ret;
+  }
+
+  /* Conversion functions
+   *
+   * FastLED doesn't support rgbw leds. We work around this by offsetting the color
+   * values to accomodate the white value.  For three rgbw leds we end up sending
+   * four rgb packets. For dmx, this is straightforward. Each of the values simply
+   * shifts by one to handle the extra value:
+   *
+   *   red on led 1, green on led 1, blue on led 1
+   *   white led 1, red on led 2, green led 2
+   *   blue led 2, white led 2, red led 3
+   *   green led 3, blue led 3, white led 3
+   *
+   * However, the protocol for the neopixel rgbw leds shuffles the values around in
+   * an odd way. The ordering is as follows:
+   *
+   *   red on led 1, green on led 1, blue on led 1
+   *   green led 2, white on led 1, red led 2
+   *   white led 2, blue led 2, green led 3
+   *   blue led 3, red led 3, white led 3
+   *
+   * credit to user joekitch on the arduino forum for figuring out neopixel order
+   * https://forum.arduino.cc/index.php?topic=432470.0
+   */
+  static void convertNeopixels( CRGBW *src, CRGB *dst ) {
+     dst[ 0 ] = CRGB( src[ 0 ].r, src[ 0 ].g, src[ 0 ].b );
+     dst[ 1 ] = CRGB( src[ 1 ].g, src[ 0 ].w, src[ 1 ].r );
+     dst[ 2 ] = CRGB( src[ 1 ].w, src[ 1 ].b, src[ 2 ].g );
+     dst[ 3 ] = CRGB( src[ 2 ].b, src[ 2 ].r, src[ 2 ].w );
+  }
+
+  static void convertDmx( CRGBW *src, CRGB *dst ) {
+     dst[ 0 ] = CRGB( src[ 0 ].r, src[ 0 ].g, src[ 0 ].b );
+     dst[ 1 ] = CRGB( src[ 0 ].w, src[ 1 ].r, src[ 1 ].g );
+     dst[ 2 ] = CRGB( src[ 1 ].b, src[ 1 ].w, src[ 2 ].r );
+     dst[ 3 ] = CRGB( src[ 2 ].g, src[ 2 ].b, src[ 2 ].w );
+  }
+
+  static void convertNeopixelArray( CRGBW *src, CRGB *dst, uint16_t srcSize,
+                                    uint16_t dstSize ) {
+     int s, d;
+     // cut out if the entire array has been converted, or if we're out of leds
+     while ( s < srcSize && d < dstSize ) {
+       convertNeopixels( src + s, dst + d );
+       s += 3;
+       d += 4;
+     }
+  }
+
+  static void convertDmxArray( CRGBW *src, CRGB *dst, uint16_t srcSize,
+                               uint16_t dstSize ) {
+     int s, d;
+     // cut out if the entire array has been converted, or if we're out of leds
+     while ( s < srcSize && d < dstSize ) {
+       convertDmx( src + s, dst + d );
+       s += 3;
+       d += 4;
+     }
+  }
 
 } CRGBW_t;
 
-/*
-struct CRGBW;
+// TODO: move this to a helper file somewhere
+template< class T >
+static void reverse( T *arr, uint16_t size ) {
+   for ( int i = 0; i < size / 2; ++i ) {
+      int rearIndex = size - i - 1;
+      T tmp = arr[ rearIndex ];
+      arr[ rearIndex ] = arr[ i ];
+      arr[ i ] = tmp;
+   }
+}
 
-// Representation of an RGBW pixel (Red, Green, Blue, White)
-struct CRGBW {
-	union {
-		struct {
-            union {
-                uint8_t r;
-                uint8_t red;
-            };
-            union {
-                uint8_t g;
-                uint8_t green;
-            };
-            union {
-                uint8_t b;
-                uint8_t blue;
-            };
-            union {
-                uint8_t w;
-                uint8_t white;
-            };
-        };
-		uint8_t raw[4];
-	};
+/*
 
 	inline uint8_t& operator[] (uint8_t x) __attribute__((always_inline)) {
         return raw[x];
@@ -582,50 +877,5 @@ struct CRGBW {
 };
 
 */
-
-static void convertNeopixelRgbw( CRGBW *src, CRGB *dst ) {
-  dst[ 0 ] = CRGB( src[ 0 ].r, src[ 0 ].g, src[ 0 ].b );
-  dst[ 1 ] = CRGB( src[ 1 ].g, src[ 0 ].w, src[ 1 ].r );
-  dst[ 2 ] = CRGB( src[ 1 ].w, src[ 1 ].b, src[ 2 ].g );
-  dst[ 3 ] = CRGB( src[ 2 ].b, src[ 2 ].r, src[ 2 ].w );
-}
-
-static void convertDmxRgbw( CRGBW *src, CRGB *dst ) {
-  dst[ 0 ] = CRGB( src[ 0 ].r, src[ 0 ].g, src[ 0 ].b );
-  dst[ 1 ] = CRGB( src[ 0 ].w, src[ 1 ].r, src[ 1 ].g );
-  dst[ 2 ] = CRGB( src[ 1 ].b, src[ 1 ].w, src[ 2 ].r );
-  dst[ 3 ] = CRGB( src[ 2 ].g, src[ 2 ].b, src[ 2 ].w );
-}
-
-static void convertNeopixelRgbwArray( CRGBW *src, CRGB *dst,
-                                     uint16_t srcSize, uint16_t dstSize ) {
-  int s, d;
-  // cut out if the entire array has been converted, or if we're out of leds
-  while ( s < srcSize && d < dstSize ) {
-    convertNeopixelRgbw( src + s, dst + d );
-    s += 3;
-    d += 4;
-  }
-}
-
-static void convertDmxRgbwArray( CRGBW *src, CRGB *dst,
-                                uint16_t srcSize, uint16_t dstSize ) {
-  int s, d;
-  // cut out if the entire array has been converted, or if we're out of leds
-  while ( s < srcSize && d < dstSize ) {
-    convertDmxRgbw( src + s, dst + d );
-    s += 3;
-    d += 4;
-  }
-}
-
-static void reverse( CRGB *arr, uint16_t size ) {
-   for ( int i = 0; i < size / 2; ++i ) {
-      int rearIndex = size - i - 1;
-      CRGB tmp = arr[ rearIndex ];
-      arr[ rearIndex ] = arr[ i ];
-      arr[ i ] = tmp;
-   }
-}
 
 # endif

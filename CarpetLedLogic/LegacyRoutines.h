@@ -23,18 +23,25 @@
 // I2C rountines for Eliot's Organ board
 // written by cameron burge July, 2011
 
-#ifndef __FASTLED_H
-#define __FASTLED_H
-
-#include <Wire.h>
+#ifndef __DMXSIMPLE_H
+#define __DMXSIMPLE_H
 #include <DmxSimple.h>
-#include <FastLED.h>
-#include "MagicCarpet.h"
-
 #endif
 
+#ifndef __FASTLED_H
+#define __FASTLED_H
+#include <FastLED.h>
+#endif
+
+#ifndef __WIRE_H
+#define __WIRE_H
+#include <Wire.h>
+#endif
+
+#include "MagicCarpet.h"
+
 // number of dmx leds
-#define NUM_DMX_LEDS 4
+#define NUM_DMX_LEDS 18
 #define NUM_CONVERTED_DMX_LEDS ( NUM_DMX_LEDS + ( NUM_DMX_LEDS / 3 ) )
 
 // all the dmx lights are on the same pin
@@ -184,13 +191,13 @@ MagicCarpet * carpet;
 extern const uint8_t SINELUT[];
 
 void strobeHit() {
-   for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
-     carpet->dmxLeds[ i ] = CRGB::White; // white is all ones
-   }
-   carpet->show();
-   FastLED.delay( 10 );
-   carpet->clearDmx();
-   FastLED.delay( 10 );
+  for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
+    carpet->dmxLeds[ i ] = CRGB::White; // white is all ones
+  }
+  carpet->show();
+  FastLED.delay( 10 );
+  carpet->clearDmx();
+  FastLED.delay( 10 );
 }
 
 // Note: this only fades out the red
@@ -349,9 +356,9 @@ void dmxScene4() {
       //       color selection?
       // ORANGE HEARTBEAT
       for ( int j = 0; j <= NUM_DMX_LEDS; ++j ) {
-         carpet->dmxLeds[ j ].red = 2 * SINELUT[ sineIndex ] - 254;
-         carpet->dmxLeds[ j ].green = 2 * SINELUT[ ( sineIndex + 85 ) % 255 ] - 254;
-         carpet->dmxLeds[ j ].blue = 2 * SINELUT[ ( sineIndex + 170 ) % 255 ] - 254;
+        carpet->dmxLeds[ j ].red = 2 * SINELUT[ sineIndex ] - 254;
+        carpet->dmxLeds[ j ].green = 2 * SINELUT[ ( sineIndex + 85 ) % 255 ] - 254;
+        carpet->dmxLeds[ j ].blue = 2 * SINELUT[ ( sineIndex + 170 ) % 255 ] - 254;
       }
       break;
     default:
@@ -400,7 +407,6 @@ void dmxScene4() {
 /* NOT IMPLEMENTED IN OLD CODE */
 
 void write_reg( int reg, unsigned char data ) {
-   // chip address
    Wire.beginTransmission( LP3950_address );
    Wire.write( reg );
    Wire.write( data );
@@ -408,7 +414,7 @@ void write_reg( int reg, unsigned char data ) {
 }
 
 void dmxSetup() {
-   carpet = new MagicCarpet();
+   carpet = theMagicCarpet();
    carpet->setup();
 
    // join i2c bus (address optional for master)
@@ -464,20 +470,20 @@ void dmxSetup() {
    AUDCON2 = ( (0 << 7)|(0 << 6)|(0 << 5)|(0 << 4)|
    (MODE_CTRL1 << 3)|(MODE_CTRL0 << 2)|(SPEED_CTRL1 << 1)|(SPEED_CTRL0) );
 
-  // configure LP3950 registers
-  write_reg( 0x00, RGBCONTROL );
-  write_reg( 0x01, RED );
-  write_reg( 0x02, GREEN );
-  write_reg( 0x03, BLUE );
-  write_reg( 0x04, RSLOPEDUTY );
-  write_reg( 0x05, GSLOPEDUTY );
-  write_reg( 0x06, BSLOPEDUTY );
-  write_reg( 0x07, CYCLEPWM );
-  write_reg( 0x0B, ENABLES );
-  write_reg( 0x0C, BOOSTFREQ );
-  write_reg( 0x0D, BOOSTVOLTAGE );
-  write_reg( 0x2A, AUDCON1 );
-  write_reg( 0x2B, AUDCON2 );
+   // configure LP3950 registers
+   write_reg( 0x00, RGBCONTROL );
+   write_reg( 0x01, RED );
+   write_reg( 0x02, GREEN );
+   write_reg( 0x03, BLUE );
+   write_reg( 0x04, RSLOPEDUTY );
+   write_reg( 0x05, GSLOPEDUTY );
+   write_reg( 0x06, BSLOPEDUTY );
+   write_reg( 0x07, CYCLEPWM );
+   write_reg( 0x0B, ENABLES );
+   write_reg( 0x0C, BOOSTFREQ );
+   write_reg( 0x0D, BOOSTVOLTAGE );
+   write_reg( 0x2A, AUDCON1 );
+   write_reg( 0x2B, AUDCON2 );
 }
 
 void dmxLoop() {
@@ -526,35 +532,7 @@ void dmxLoop() {
      chaseBurst();
 }
 
-#define NUM_RGBW_LEDS 40
-#define NUM_THEORETICAL_RGBW_LEDS ( NUM_RGBW_LEDS + ( NUM_RGBW_LEDS / 3 ) )
-void testLoop( CRGBW * leds, CRGB *conv ) {
-   uint8_t modeSwitchInput = readMode();
-
-   static CRGB clr;
-   uint8_t ret = ( MAX_VOLTAGE - analogRead( ANALOG_BRIGHTNESS_PIN ) ) / 4;
-   CHSV hue(ret,255,255);
-   clr = hue;
-
-   // main logic selection
-   switch ( modeSwitchInput ) {
-    case 0x0:
-  for ( int i = 0; i < NUM_RGBW_LEDS; ++i ) {
-   leds[i] = clr;
-   leds[i].w = 0;
-  }
-  convertNeopixelRgbwArray( leds, conv, NUM_RGBW_LEDS, NUM_THEORETICAL_RGBW_LEDS );
-   FastLED.show();
-      break;
-    case 0x4:
-      break;
-    default:
-      break;
-   }
-
-}
-
-// TODO: move this (and gamma correction aray) to another file
+// TODO: move this (and gamma correction array) to another file
 //======SINE Lookup Array
 const uint8_t SINELUT[ 256 ] = {
  190,
