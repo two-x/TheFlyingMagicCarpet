@@ -530,6 +530,7 @@ void dmxLoop() {
      fadeOut();
    } else if ( wirelessInput == LEFT_BUTTON ) {
      chaseBurst();
+   }
 }
 
 // TODO: move this (and gamma correction array) to another file

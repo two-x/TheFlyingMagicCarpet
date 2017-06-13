@@ -21,18 +21,14 @@
 #include <FastLED.h>
 #endif
 
-#include "CRBGW.h"
+#include "CRGBW.h"
 
 // dmx constants
 #define NUM_DMX_LEDS 18
 #define NUM_CONVERTED_DMX_LEDS ( NUM_NEO_LEDS + NUM_NEO_LEDS / 3 )
 
 // neopixel constants
-#define NUM_NEO_LEDS 30 // 1024
-#define NUM_CONVERTED_DMX_LEDS ( NUM_DMX_LEDS + NUM_DMX_LEDS / 3 )
-
-// neopixel constants
-#define NUM_NEO_LEDS 400 // 1024
+#define NUM_NEO_LEDS 80 // 1024
 #define NUM_NEOPIXEL_STRIPS 8
 #define NUM_NEO_SMALL_LEDS 110
 #define NUM_NEO_LARGE_LEDS 146
@@ -151,7 +147,7 @@ class MagicCarpet {
 
    void show() {
       CRGBW::convertDmxArray( dmxLeds, convertedDmxLeds, NUM_DMX_LEDS,
-                           NUM_CONVERTED_DMX_LEDS );
+                              NUM_CONVERTED_DMX_LEDS );
       /* the lights aren't always arranged the same way as they are addressed, so in
        * some cases we need to reverse whatever has been programmed in the user array
        * in order to keep the addressing consistent.
@@ -221,8 +217,8 @@ class MagicCarpet {
 
 // singleton representing the one-and-only Flying Magic Carpet (TM)
 MagicCarpet * theMagicCarpet() {
-   static MagicCarpet * carpet = new MagicCarpet();
-   return carpet;
+   static MagicCarpet carpet;
+   return &carpet;
 }
 
 #endif

@@ -7,22 +7,24 @@
  */
 
 
-#ifndef __FASTLED_H
-#define __FASTLED_H
-
+#ifndef __DMXSIMPLE_H
+#define __DMXSIMPLE_H
 #include <DmxSimple.h>
-#include <FastLED.h>
-
 #endif
 
-#include "CRBGW.h"
+#ifndef __FASTLED_H
+#define __FASTLED_H
+#include <FastLED.h>
+#endif
+
+#include "CRGBW.h"
 #include "LegacyRoutines.h"
 
 #define NUM_RGBW_LEDS 30
 #define NUM_THEORETICAL_RGBW_LEDS ( NUM_RGBW_LEDS + ( NUM_RGBW_LEDS / 3 ) )
 #define RGBW_DATA_PIN 6
 
-void robeDemoSetup() {
+void ropeDemoSetup() {
    carpet = theMagicCarpet();
    carpet->setup();
    for ( int i = 0; i < NUM_RGBW_LEDS; ++i ) {
