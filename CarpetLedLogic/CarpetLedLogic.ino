@@ -19,20 +19,21 @@
 #define RGB_DATA_PIN 7 // 6
 #define RGBW_DATA_PIN 6 // 7
 
-// TODO: wrap all of these in a class that represents the whole carpet
-CRGB dmxleds[NUM_DMX_LEDS];
-CRGB rgbleds[NUM_RGB_LEDS];
-
-struct CRGBW rgbwleds[NUM_RGBW_LEDS];
-CRGB convertedrgbwleds[NUM_THEORETICAL_RGBW_LEDS];
+// rope demo arrays
+CRGBW * rgbwleds;
+CRGB * convertedrgbwleds;
 
 void robeDemoSetup() {
-  // this needs to be passed the raw led array, we'll handle to conversion elsewhere
-  FastLED.addLeds<NEOPIXEL, RGBW_DATA_PIN>( convertedrgbwleds, NUM_THEORETICAL_RGBW_LEDS);
-  for ( int i = 0; i < NUM_RGBW_LEDS; ++i ) {
-    rgbwleds[i] = CRGB::Red;
-  }
-  FastLED.show();
+   static CRGBW rgbw[NUM_RGBW_LEDS];
+   static CRGB convrgbw[NUM_THEORETICAL_RGBW_LEDS];
+   rgbwleds = rgbw;
+   convertedrgbwleds = convrgbw;
+   // this needs to be passed the raw led array, we'll handle to conversion elsewhere
+   FastLED.addLeds<NEOPIXEL, RGBW_DATA_PIN>( convertedrgbwleds, NUM_THEORETICAL_RGBW_LEDS);
+   for ( int i = 0; i < NUM_RGBW_LEDS; ++i ) {
+     rgbwleds[i] = CRGB::Red;
+   }
+   FastLED.show();
 }
 
 void robeDemo() {
@@ -71,10 +72,6 @@ void robeDemo() {
 }
 
 void setup() {
-   // FastLED.addLeds<DMXSIMPLE, DMX_DATA_PIN, RGB>(dmxleds, NUM_DMX_LEDS);
-   // FastLED.addLeds<NEOPIXEL, RGB_DATA_PIN>(rgbleds, NUM_RGB_LEDS);
-   // covertCRGBWArrayToCRGBArray( rgbwleds, convertedrgbwleds, NUM_RGBW_LEDS, NUM_THEORETICAL_RGBW_LEDS );
-
    // dmxSetup();
    robeDemoSetup();
 }
