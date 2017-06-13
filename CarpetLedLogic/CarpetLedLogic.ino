@@ -11,13 +11,9 @@
 #include "CRBGW.h"
 #include "LegacyRoutines.h"
 
-#define NUM_DMX_LEDS 2
-#define NUM_RGB_LEDS 30
 #define NUM_RGBW_LEDS 30
 #define NUM_THEORETICAL_RGBW_LEDS ( NUM_RGBW_LEDS + ( NUM_RGBW_LEDS / 3 ) )
-#define DMX_DATA_PIN 3
-#define RGB_DATA_PIN 7 // 6
-#define RGBW_DATA_PIN 6 // 7
+#define RGBW_DATA_PIN 6
 
 // rope demo arrays
 CRGBW * rgbwleds;
@@ -29,10 +25,13 @@ void robeDemoSetup() {
    rgbwleds = rgbw;
    convertedrgbwleds = convrgbw;
    // this needs to be passed the raw led array, we'll handle to conversion elsewhere
-   FastLED.addLeds<NEOPIXEL, RGBW_DATA_PIN>( convertedrgbwleds, NUM_THEORETICAL_RGBW_LEDS);
+   FastLED.addLeds<NEOPIXEL, RGBW_DATA_PIN>( convertedrgbwleds,
+                                             NUM_THEORETICAL_RGBW_LEDS);
    for ( int i = 0; i < NUM_RGBW_LEDS; ++i ) {
      rgbwleds[i] = CRGB::Red;
    }
+   convertNeopixelRgbwArray( rgbwleds, convertedrgbwleds, NUM_RGBW_LEDS,
+                             NUM_THEORETICAL_RGBW_LEDS );
    FastLED.show();
 }
 
@@ -40,8 +39,8 @@ void robeDemo() {
   static int loc = 0;
   static int end = NUM_RGBW_LEDS;
   static int flip = 0;
-  static CRGB clr(rand()%255,rand()%255,rand()%255);
-  static CRGB oldclr = CRGB::Red;
+  static CRGB clr( rand() % 255, rand() % 255, rand() % 255 );
+  static CRGB oldclr( rand() % 255, rand() % 255, rand() % 255 );
   if ( end == 0 ) {
     end = NUM_RGBW_LEDS;
     if ( flip == 0 ) {
@@ -66,9 +65,11 @@ void robeDemo() {
   if ( loc == 0 ) {
     --end;
   }
-  convertNeopixelRgbwArray( rgbwleds, convertedrgbwleds, NUM_RGBW_LEDS, NUM_THEORETICAL_RGBW_LEDS );
-  FastLED.show(); 
-  FastLED.delay( 50 );
+  convertNeopixelRgbwArray( rgbwleds, convertedrgbwleds, NUM_RGBW_LEDS,
+                            NUM_THEORETICAL_RGBW_LEDS );
+  FastLED.setBrightness( 90 );
+  FastLED.show();
+  FastLED.delay( 10 );
 }
 
 void setup() {

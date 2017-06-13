@@ -26,13 +26,36 @@
 #ifndef __FASTLED_H
 #define __FASTLED_H
 
+#include <Wire.h>
 #include <DmxSimple.h>
 #include <FastLED.h>
 #include "MagicCarpet.h"
 
 #endif
 
-#define NUM_DMX_LEDS 10
+// number of dmx leds
+#define NUM_DMX_LEDS 4
+#define NUM_CONVERTED_DMX_LEDS ( NUM_DMX_LEDS + ( NUM_DMX_LEDS / 3 ) )
+
+// all the dmx lights are on the same pin
+#define DMX_PIN 3
+
+// analog inputs
+#define ANALOG_LOW_PIN 3
+#define ANALOG_MID_PIN 2
+#define ANALOG_HIGH_PIN 1
+#define ANALOG_BRIGHTNESS_PIN 0
+
+// inputs from mode select switch
+#define MODE0_PIN 8
+#define MODE1_PIN 9
+#define MODE2_PIN 2
+#define MODE3_PIN 4
+
+// inputs from wireless board
+#define INPUT0_PIN 5
+#define INPUT1_PIN 6
+#define INPUT2_PIN 7
 
 // button ids from wireless board
 #define UP_BUTTON 3
@@ -352,7 +375,18 @@ void dmxScene4() {
    */
 
    // update the sine index for the next round
-   sineIndex = ++sineIndex % NUM_DMX_LEDS;
+   // sineIndex = ++sineIndex % 256;
+   static bool up = true;
+   if ( up ) {
+      ++sineIndex;
+   } else {
+      --sineIndex;
+   }
+   if ( sineIndex == 256 ) {
+      up = false;
+   } else if ( sineIndex == 0 ) {
+      up = true;
+   }
 
    FastLED.setBrightness( brightness );
    carpet->show();
@@ -490,7 +524,34 @@ void dmxLoop() {
      fadeOut();
    } else if ( wirelessInput == LEFT_BUTTON ) {
      chaseBurst();
+}
+
+#define NUM_RGBW_LEDS 40
+#define NUM_THEORETICAL_RGBW_LEDS ( NUM_RGBW_LEDS + ( NUM_RGBW_LEDS / 3 ) )
+void testLoop( CRGBW * leds, CRGB *conv ) {
+   uint8_t modeSwitchInput = readMode();
+
+   static CRGB clr;
+   uint8_t ret = ( MAX_VOLTAGE - analogRead( ANALOG_BRIGHTNESS_PIN ) ) / 4;
+   CHSV hue(ret,255,255);
+   clr = hue;
+
+   // main logic selection
+   switch ( modeSwitchInput ) {
+    case 0x0:
+  for ( int i = 0; i < NUM_RGBW_LEDS; ++i ) {
+   leds[i] = clr;
+   leds[i].w = 0;
+  }
+  convertNeopixelRgbwArray( leds, conv, NUM_RGBW_LEDS, NUM_THEORETICAL_RGBW_LEDS );
+   FastLED.show();
+      break;
+    case 0x4:
+      break;
+    default:
+      break;
    }
+
 }
 
 // TODO: move this (and gamma correction aray) to another file
