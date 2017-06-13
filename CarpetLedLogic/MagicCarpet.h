@@ -23,11 +23,11 @@
 #include "CRBGW.h"
 
 // dmx constants
-// note: make sure we switch the dmx lights to be 3-channel
 #define NUM_DMX_LEDS 18
+#define NUM_CONVERTED_DMX_LEDS ( NUM_NEO_LEDS + NUM_NEO_LEDS / 3 )
 
 // neopixel constants
-#define NUM_NEO_LEDS 1024
+#define NUM_NEO_LEDS 30 // 1024
 #define NUM_NEOPIXEL_STRIPS 8
 #define NUM_NEO_SMALL_LEDS 110
 #define NUM_NEO_LARGE_LEDS 146
@@ -93,7 +93,6 @@ class MagicCarpet {
    CRGB convertedRopeLeds[ NUM_CONVERTED_NEO_LEDS ];
 
  public:
-
    // TODO: we can probably figure out a way to avoid duplicating the array if we
    //       start running low on memory (std::vararray?)
    // led arrays
@@ -117,31 +116,33 @@ class MagicCarpet {
                                                 NUM_CONVERTED_DMX_LEDS );
 
       // add eight channels of rope leds
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds,
-                                               NUM_CONVERTED_NEO_SMALL_LEDS );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x06E,
-                                               NUM_CONVERTED_NEO_LARGE_LEDS );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x100,
-                                               NUM_CONVERTED_NEO_LARGE_LEDS );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x192,
-                                               NUM_CONVERTED_NEO_SMALL_LEDS );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x200,
-                                               NUM_CONVERTED_NEO_SMALL_LEDS );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x26e,
-                                               NUM_CONVERTED_NEO_LARGE_LEDS );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x300,
-                                               NUM_CONVERTED_NEO_LARGE_LEDS );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x392,
-                                               NUM_CONVERTED_NEO_SMALL_LEDS );
+      // FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds,
+      //                                          NUM_CONVERTED_NEO_SMALL_LEDS );
+      // FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x06E,
+      //                                          NUM_CONVERTED_NEO_LARGE_LEDS );
+      // FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x100,
+      //                                          NUM_CONVERTED_NEO_LARGE_LEDS );
+      // FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x192,
+      //                                          NUM_CONVERTED_NEO_SMALL_LEDS );
+      // FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x200,
+      //                                          NUM_CONVERTED_NEO_SMALL_LEDS );
+      // FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x26e,
+      //                                          NUM_CONVERTED_NEO_LARGE_LEDS );
+      // FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x300,
+      //                                          NUM_CONVERTED_NEO_LARGE_LEDS );
+      // FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x392,
+      //                                          NUM_CONVERTED_NEO_SMALL_LEDS );
 
       clear(); // there might be stale values left in the leds, start from scratch
 
+      // set to full brightness
+      for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
+        dmxLeds[ i ].w = 0x255;
+      }
       show();
    }
 
    void show() {
-      // the new floods don't use 4-channel like the megabars. Could we scrap it?
-      // It would make life much easier...
       convertDmxRgbwArray( dmxLeds, convertedDmxLeds, NUM_DMX_LEDS,
                            NUM_CONVERTED_DMX_LEDS );
 
@@ -153,19 +154,19 @@ class MagicCarpet {
        * be too slow
        */
       // TODO: use names instead of raw indices here and below
-      reverse( ropeLeds, NUM_NEO_SMALL_LEDS );
-      reverse( ropeLeds + 0x100, NUM_NEO_LARGE_LEDS );
-      reverse( ropeLeds + 0x200, NUM_NEO_SMALL_LEDS );
-      reverse( ropeLeds + 0x300, NUM_NEO_LARGE_LEDS );
+      // reverse( ropeLeds, NUM_NEO_SMALL_LEDS );
+      // reverse( ropeLeds + 0x100, NUM_NEO_LARGE_LEDS );
+      // reverse( ropeLeds + 0x200, NUM_NEO_SMALL_LEDS );
+      // reverse( ropeLeds + 0x300, NUM_NEO_LARGE_LEDS );
 
-      convertNeopixelRgbwArray( ropeLeds, convertedRopeLeds, NUM_NEO_LEDS,
-                                NUM_CONVERTED_NEO_LEDS );
+      // convertNeopixelRgbwArray( ropeLeds, convertedRopeLeds, NUM_NEO_LEDS,
+      //                           NUM_CONVERTED_NEO_LEDS );
 
-      // make sure to reverse the values so the user has a consistent view
-      reverse( ropeLeds, NUM_NEO_SMALL_LEDS );
-      reverse( ropeLeds + 0x100, NUM_NEO_LARGE_LEDS );
-      reverse( ropeLeds + 0x200, NUM_NEO_SMALL_LEDS );
-      reverse( ropeLeds + 0x300, NUM_NEO_LARGE_LEDS );
+      // // make sure to reverse the values so the user has a consistent view
+      // reverse( ropeLeds, NUM_NEO_SMALL_LEDS );
+      // reverse( ropeLeds + 0x100, NUM_NEO_LARGE_LEDS );
+      // reverse( ropeLeds + 0x200, NUM_NEO_SMALL_LEDS );
+      // reverse( ropeLeds + 0x300, NUM_NEO_LARGE_LEDS );
 
       FastLED.show();
    }
@@ -173,14 +174,12 @@ class MagicCarpet {
    void clearDmx() {
       for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
         dmxLeds[ i ] = CRGB::Black;
-        dmxLeds[ i ].w = 0x0;
       }
    }
 
    void clearRope() {
       for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
         ropeLeds[ i ] = CRGB::Black;
-        ropeLeds[ i ].w = 0x0;
       }
    }
 
@@ -203,15 +202,14 @@ class MagicCarpet {
       // TODO: name these pins
       // TODO: why are we inverting the values here?
       // convert analog inputs into rgb values between 0-255
-      uint16_t r = ( MAX_VOLTAGE - analogRead( ANALOG_LOW_PIN ) ) / 4;
-      uint16_t g = ( MAX_VOLTAGE - analogRead( ANALOG_MID_PIN ) ) / 4;
-      uint16_t b = ( MAX_VOLTAGE - analogRead( ANALOG_HIGH_PIN ) ) / 4;
+      uint8_t r = ( MAX_VOLTAGE - analogRead( ANALOG_LOW_PIN ) ) / 4;
+      uint8_t g = ( MAX_VOLTAGE - analogRead( ANALOG_MID_PIN ) ) / 4;
+      uint8_t b = ( MAX_VOLTAGE - analogRead( ANALOG_HIGH_PIN ) ) / 4;
       return CRGB( r, g, b );
    }
 
    uint8_t readBrightnessInput() {
-      uint16_t ret = ( MAX_VOLTAGE - analogRead( ANALOG_BRIGHTNESS_PIN ) ) / 4;
-      return ret;
+      return ( MAX_VOLTAGE - analogRead( ANALOG_BRIGHTNESS_PIN ) ) / 4;
    }
 };
 
