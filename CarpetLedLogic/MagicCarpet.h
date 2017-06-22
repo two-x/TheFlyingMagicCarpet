@@ -22,6 +22,7 @@
 #endif
 
 #include "CRGBW.h"
+#include "ProgmemConsts.h"
 
 // dmx constants
 #define NUM_DMX_LEDS 18
@@ -146,8 +147,14 @@ class MagicCarpet {
    }
 
    void show() {
-      CRGBW::convertDmxArray( dmxLeds, convertedDmxLeds, NUM_DMX_LEDS,
-                              NUM_CONVERTED_DMX_LEDS );
+      // gamma correct before we display anything
+      for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
+         gammaCorrect( dmxLeds[ i ] );
+      }
+      for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+         gammaCorrect( ropeLeds[ i ] );
+      }
+
       /* the lights aren't always arranged the same way as they are addressed, so in
        * some cases we need to reverse whatever has been programmed in the user array
        * in order to keep the addressing consistent.
@@ -161,6 +168,8 @@ class MagicCarpet {
       // reverse( ropeLeds + 0x200, NUM_NEO_SMALL_LEDS );
       // reverse( ropeLeds + 0x300, NUM_NEO_LARGE_LEDS );
 
+      CRGBW::convertDmxArray( dmxLeds, convertedDmxLeds, NUM_DMX_LEDS,
+                              NUM_CONVERTED_DMX_LEDS );
       CRGBW::convertNeopixelArray( ropeLeds, convertedRopeLeds, NUM_NEO_LEDS,
                                    NUM_CONVERTED_NEO_LEDS );
 
