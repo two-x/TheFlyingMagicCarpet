@@ -6,7 +6,6 @@
  *   Date: June 2017
  */
 
-
 #ifndef __DMXSIMPLE_H
 #define __DMXSIMPLE_H
 #include <DmxSimple.h>
@@ -18,27 +17,36 @@
 #endif
 
 #include "CRGBW.h"
+#include "MagicCarpet.h"
 #include "LegacyRoutines.h"
 
-#define NUM_RGBW_LEDS 30
+#define NUM_RGBW_LEDS 10
 #define NUM_THEORETICAL_RGBW_LEDS ( NUM_RGBW_LEDS + ( NUM_RGBW_LEDS / 3 ) )
-#define RGBW_DATA_PIN 6
+
+static MagicCarpet * carpet;
 
 void ropeDemoSetup() {
    carpet = theMagicCarpet();
    carpet->setup();
    for ( int i = 0; i < NUM_RGBW_LEDS; ++i ) {
      carpet->ropeLeds[i] = CRGB::Red;
+     carpet->ropeLeds[i].w = 0x0;
    }
    carpet->show();
+   FastLED.delay( 1000 );
+   for ( int i = 0; i < NUM_RGBW_LEDS; ++i ) {
+     carpet->ropeLeds[i] = CRGB::Black;
+   }
+   carpet->show();
+   FastLED.delay( 1000 );
 }
 
 void ropeDemo() {
   static int loc = 0;
   static int end = NUM_RGBW_LEDS;
   static int flip = 0;
-  static CRGB clr( rand() % 255, rand() % 255, rand() % 255 );
-  static CRGB oldclr( rand() % 255, rand() % 255, rand() % 255 );
+  static CRGB clr( random8() % 255, random8() % 255, random8() % 255 );
+  static CRGB oldclr( random8() % 255, random8() % 255, random8() % 255 );
   if ( end == 0 ) {
     end = NUM_RGBW_LEDS;
     if ( flip == 0 ) {
@@ -47,7 +55,7 @@ void ropeDemo() {
       flip = 0;
     }
     oldclr = clr;
-    clr = CRGB( rand() % 255, rand() % 255, rand() % 255);
+    clr = CRGB( random8() % 255, random8() % 255, random8() % 255 );
     return;
   }
   for ( int i = 0; i < NUM_RGBW_LEDS; ++i ) {
