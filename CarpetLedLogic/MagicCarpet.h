@@ -22,6 +22,7 @@
 #endif
 
 #include "CRGBW.h"
+#include "AudioBoard.h"
 #include "ProgmemConsts.h"
 
 // DMX constants
@@ -147,7 +148,8 @@ class MagicCarpet {
       pinMode( MODE2_PIN, INPUT );
       pinMode( MODE3_PIN, INPUT );
 
-      // TODO: setup for elliot's board
+      // setup eliot's board
+      setupAudioBoard();
 
       // add dmx leds
       FastLED.addLeds<DMXSIMPLE, DMX_DATA_PIN>( convertedDmxLeds,
