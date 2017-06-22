@@ -24,22 +24,29 @@
 #include "CRGBW.h"
 #include "ProgmemConsts.h"
 
-// dmx constants
+// DMX constants
 #define NUM_DMX_LEDS 18
 #define NUM_CONVERTED_DMX_LEDS ( NUM_NEO_LEDS + NUM_NEO_LEDS / 3 )
+#define DMX_DATA_PIN 3
 
-// neopixel constants
-#define NUM_NEO_LEDS 80 // 1024
+// Neopixel constants
+#define NUM_NEO_LEDS 1024
 #define NUM_NEOPIXEL_STRIPS 8
 #define NUM_NEO_SMALL_LEDS 110
 #define NUM_NEO_LARGE_LEDS 146
 #define NUM_CONVERTED_NEO_LEDS ( NUM_NEO_LEDS + NUM_NEO_LEDS / 3 )
 #define NUM_CONVERTED_NEO_SMALL_LEDS ( NUM_NEO_SMALL_LEDS + NUM_NEO_SMALL_LEDS / 3 )
 #define NUM_CONVERTED_NEO_LARGE_LEDS ( NUM_NEO_LARGE_LEDS + NUM_NEO_LARGE_LEDS / 3 )
+#define NEO_DATA_PIN0 52
+#define NEO_DATA_PIN1 51
+#define NEO_DATA_PIN2 50
+#define NEO_DATA_PIN3 49
+#define NEO_DATA_PIN4 48
+#define NEO_DATA_PIN5 47
+#define NEO_DATA_PIN6 46
+#define NEO_DATA_PIN7 45
 
-// outputs
-#define DMX_DATA_PIN 3
-#define NEO_DATA_PIN 6 // TODO: add more data pins!
+// TODO: all of these pins need to be updated for the due
 
 // analog inputs
 #define ANALOG_LOW_PIN 3
@@ -68,8 +75,35 @@
 // max voltage from an analog input pin
 #define MAX_VOLTAGE 1023
 
+/* Positional Constants
+ *
+ * These are aliases for the index values of the carpet's led arrays. Their are two
+ * different types defined: directional and temporal. Both led array start from the
+ * midpoint of the front of the carpet (FRONT or TWELVE). So far these are defined
+ * only for the rope light arrays, but we can do this for the dmx leds too if we
+ * feel the need.
+ */
+#define FRONT 0x0
+#define FRONT_RIGHT 0x06E
+#define RIGHT 0x100
+#define BACK_RIGHT 0x192
+#define BACK 0x200
+#define BACK_LEFT 0x26E
+#define LEFT 0x300
+#define FRONT_LEFT 0x392
+
+#define TWELVE NEO_FRONT
+#define ONE_THIRTY NEO_FRONT_RIGHT
+#define THREE NEO_RIGHT
+#define FOUR_THIRTY NEO_BACK_RIGHT
+#define SIX NEO_BACK
+#define SEVEN_THIRTY NEO_BACK_LEFT
+#define NINE NEO_LEFT
+#define TEN_THIRTY NEO_FRONT_LEFT
+
 class MagicCarpet {
  private:
+
    /* FastLED doesn't support rgbw leds. We work around this by offsetting the color
     * values to accomodate the white value.  For three rgbw leds we end up sending
     * four rgb packets. For dmx, this is straightforward. Each of the values simply
@@ -95,13 +129,13 @@ class MagicCarpet {
    CRGB convertedRopeLeds[ NUM_CONVERTED_NEO_LEDS ];
 
  public:
-   // TODO: we can probably figure out a way to avoid duplicating the array if we
-   //       start running low on memory (std::vararray?)
+
    // led arrays
    CRGBW dmxLeds[ NUM_DMX_LEDS ];
    CRGBW ropeLeds[ NUM_NEO_LEDS ];
 
    void setup() {
+      // TODO: all of the input setup needs to change based on the new controls
       // set inputs from wireless board
       pinMode( INPUT0_PIN, INPUT );
       pinMode( INPUT1_PIN, INPUT );
@@ -113,35 +147,38 @@ class MagicCarpet {
       pinMode( MODE2_PIN, INPUT );
       pinMode( MODE3_PIN, INPUT );
 
+      // TODO: setup for elliot's board
+
       // add dmx leds
-      FastLED.addLeds<DMXSIMPLE, DMX_DATA_PIN>( dmxLeds,
-                                                NUM_DMX_LEDS );
-      // FastLED.addLeds<DMXSIMPLE, DMX_DATA_PIN>( convertedDmxLeds,
-      //                                           NUM_CONVERTED_DMX_LEDS );
+      FastLED.addLeds<DMXSIMPLE, DMX_DATA_PIN>( convertedDmxLeds,
+                                                NUM_CONVERTED_DMX_LEDS );
 
       // add eight channels of rope leds
-      // FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds,
-      //                                          NUM_CONVERTED_NEO_SMALL_LEDS );
-      // FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x06E,
-      //                                          NUM_CONVERTED_NEO_LARGE_LEDS );
-      // FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x100,
-      //                                          NUM_CONVERTED_NEO_LARGE_LEDS );
-      // FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x192,
-      //                                          NUM_CONVERTED_NEO_SMALL_LEDS );
-      // FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x200,
-      //                                          NUM_CONVERTED_NEO_SMALL_LEDS );
-      // FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x26e,
-      //                                          NUM_CONVERTED_NEO_LARGE_LEDS );
-      // FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x300,
-      //                                          NUM_CONVERTED_NEO_LARGE_LEDS );
-      // FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN>( convertedRopeLeds + 0x392,
-      //                                          NUM_CONVERTED_NEO_SMALL_LEDS );
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN0>( convertedRopeLeds,
+                                                NUM_CONVERTED_NEO_SMALL_LEDS );
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN1>( convertedRopeLeds + FRONT_RIGHT,
+                                                NUM_CONVERTED_NEO_LARGE_LEDS );
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN2>( convertedRopeLeds + RIGHT,
+                                                NUM_CONVERTED_NEO_LARGE_LEDS );
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN3>( convertedRopeLeds + BACK_RIGHT,
+                                                NUM_CONVERTED_NEO_SMALL_LEDS );
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN4>( convertedRopeLeds + BACK,
+                                                NUM_CONVERTED_NEO_SMALL_LEDS );
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN5>( convertedRopeLeds + BACK_LEFT,
+                                                NUM_CONVERTED_NEO_LARGE_LEDS );
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN6>( convertedRopeLeds + LEFT,
+                                                NUM_CONVERTED_NEO_LARGE_LEDS );
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN7>( convertedRopeLeds + FRONT_LEFT,
+                                                NUM_CONVERTED_NEO_SMALL_LEDS );
 
       clear(); // there might be stale values left in the leds, start from scratch
 
-      // set to full brightness
+      // start with the white led off
       for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
-        dmxLeds[ i ].w = 0x255;
+        dmxLeds[ i ].w = 0x0;
+      }
+      for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+        ropeLeds[ i ].w = 0x0;
       }
       show();
    }
@@ -157,27 +194,26 @@ class MagicCarpet {
 
       /* the lights aren't always arranged the same way as they are addressed, so in
        * some cases we need to reverse whatever has been programmed in the user array
-       * in order to keep the addressing consistent.
+       * in order to keep the addressing consistent. This is done in-place.
        *
-       * we might be able to use std::slice and std::vararray instead but they might
-       * be too slow
+       * TODO: if we start running too slow we can look at ways to get around this
+       *       reversal
        */
-      // TODO: use names instead of raw indices here and below
-      // reverse( ropeLeds, NUM_NEO_SMALL_LEDS );
-      // reverse( ropeLeds + 0x100, NUM_NEO_LARGE_LEDS );
-      // reverse( ropeLeds + 0x200, NUM_NEO_SMALL_LEDS );
-      // reverse( ropeLeds + 0x300, NUM_NEO_LARGE_LEDS );
+      reverse( ropeLeds, NUM_NEO_SMALL_LEDS );
+      reverse( ropeLeds + RIGHT, NUM_NEO_LARGE_LEDS );
+      reverse( ropeLeds + BACK, NUM_NEO_SMALL_LEDS );
+      reverse( ropeLeds + LEFT, NUM_NEO_LARGE_LEDS );
 
       CRGBW::convertDmxArray( dmxLeds, convertedDmxLeds, NUM_DMX_LEDS,
                               NUM_CONVERTED_DMX_LEDS );
       CRGBW::convertNeopixelArray( ropeLeds, convertedRopeLeds, NUM_NEO_LEDS,
                                    NUM_CONVERTED_NEO_LEDS );
 
-      // // make sure to reverse the values so the user has a consistent view
-      // reverse( ropeLeds, NUM_NEO_SMALL_LEDS );
-      // reverse( ropeLeds + 0x100, NUM_NEO_LARGE_LEDS );
-      // reverse( ropeLeds + 0x200, NUM_NEO_SMALL_LEDS );
-      // reverse( ropeLeds + 0x300, NUM_NEO_LARGE_LEDS );
+      // make sure to reverse the values so the user has a consistent view
+      reverse( ropeLeds, NUM_NEO_SMALL_LEDS );
+      reverse( ropeLeds + RIGHT, NUM_NEO_LARGE_LEDS );
+      reverse( ropeLeds + BACK, NUM_NEO_SMALL_LEDS );
+      reverse( ropeLeds + LEFT, NUM_NEO_LARGE_LEDS );
 
       FastLED.show();
    }
@@ -194,9 +230,17 @@ class MagicCarpet {
       }
    }
 
+   void clearRopeWhite() {
+      for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+        ropeLeds[ i ].white = 0;
+      }
+   }
+
+   // clears all the lights back to full black
    void clear() {
       clearDmx();
       clearRope();
+      clearRopeWhite();
    }
 
    uint8_t readMode() {
