@@ -21,6 +21,8 @@
 #include "lib8tion.h"
 #include "color.h"
 
+#define crgbw2crgb( leds ) ( leds + leds / 3 )
+
 struct CRGBW : CRGB {
    union {
      uint8_t white;
