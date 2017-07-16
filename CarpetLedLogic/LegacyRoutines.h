@@ -81,11 +81,11 @@ extern const uint8_t SINELUT[];
 
 void strobeHit() {
   for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
-    carpet->dmxLeds[ i ] = CRGB::White; // white is all ones
+    carpet->megabarLeds[ i ] = CRGB::White; // white is all ones
   }
   carpet->show();
   FastLED.delay( 10 );
-  carpet->clearDmx();
+  carpet->clear();
   FastLED.delay( 10 );
 }
 
@@ -93,7 +93,7 @@ void strobeHit() {
 void fadeOut() {
    for ( int red = 255; red >= 0; --red ) {
       for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
-        carpet->dmxLeds[ i ] = CRGB::Red;
+        carpet->megabarLeds[ i ] = CRGB::Red;
       }
       carpet->show();
       FastLED.delay( 1 );
@@ -104,7 +104,7 @@ void fadeOut() {
 //       maybe it just never did what was inteneded? Needs fixing or removing.
 void chaseBurst() {
   for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
-     carpet->dmxLeds[ i ] = CRGB::Red;
+     carpet->megabarLeds[ i ] = CRGB::Red;
   }
   carpet->show();
   FastLED.delay( 10 );
@@ -115,7 +115,7 @@ void chaseBurst() {
 void dmxScene1() {
    CRGB inputColor = carpet->readAnalogInput();
    for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
-      carpet->dmxLeds[ i ] = inputColor;
+      carpet->megabarLeds[ i ] = inputColor;
    }
    FastLED.setBrightness( 255 );
    carpet->show();
@@ -136,13 +136,13 @@ void dmxScene2() {
    // TODO: we should set the RGB values back to zero before we call this
    for ( int i = 0; i < NUM_DMX_LEDS; i += 3 ) {
       int j = ( i + arrayOffset ) % NUM_DMX_LEDS;
-      carpet->dmxLeds[ i ].red = inputColor.red;
+      carpet->megabarLeds[ i ].red = inputColor.red;
       if ( i + 1 <= NUM_DMX_LEDS ) {
          j = ( i + arrayOffset + 1 ) % NUM_DMX_LEDS;
-         carpet->dmxLeds[ i + 1 ].green = inputColor.green;
+         carpet->megabarLeds[ i + 1 ].green = inputColor.green;
          if ( i + 2 <= NUM_DMX_LEDS ) {
             j = ( i + arrayOffset + 2 ) % NUM_DMX_LEDS;
-            carpet->dmxLeds[ i + 2 ].blue = inputColor.blue;
+            carpet->megabarLeds[ i + 2 ].blue = inputColor.blue;
          }
       }
    }
@@ -173,13 +173,13 @@ void dmxScene3() {
    // TODO: we should set the RGB values back to zero before we call this
    for ( int i = 0; i < NUM_DMX_LEDS; i += 3 ) {
       int j = ( i + arrayOffset ) % NUM_DMX_LEDS;
-      carpet->dmxLeds[ i ].red = 255;
+      carpet->megabarLeds[ i ].red = 255;
       if ( i + 1 <= NUM_DMX_LEDS ) {
          j = ( i + arrayOffset + 1 ) % NUM_DMX_LEDS;
-         carpet->dmxLeds[ i + 1 ].green = 255;
+         carpet->megabarLeds[ i + 1 ].green = 255;
          if ( i + 2 <= NUM_DMX_LEDS ) {
             j = ( i + arrayOffset + 2 ) % NUM_DMX_LEDS;
-            carpet->dmxLeds[ i + 2 ].blue = 255;
+            carpet->megabarLeds[ i + 2 ].blue = 255;
          }
       }
    }
@@ -224,19 +224,19 @@ void dmxScene4() {
     case 0:
       // RED HEARTBEAT
       for ( int j = 0; j <= NUM_DMX_LEDS; ++j ) {
-         carpet->dmxLeds[ j ].red = SINELUT[ sineIndex];
+         carpet->megabarLeds[ j ].red = SINELUT[ sineIndex];
       }
       break;
     case 1:
       // GREEN HEARTBEAT
       for ( int j = 0; j <= NUM_DMX_LEDS; ++j ) {
-         carpet->dmxLeds[ j ].green = SINELUT[ sineIndex ];
+         carpet->megabarLeds[ j ].green = SINELUT[ sineIndex ];
       }
       break;
     case 2:
       // BLUE HEARTBEAT
       for ( int j = 0; j <= NUM_DMX_LEDS; ++j ) {
-         carpet->dmxLeds[ j ].blue = SINELUT[ sineIndex ];
+         carpet->megabarLeds[ j ].blue = SINELUT[ sineIndex ];
       }
       break;
     case 3:
@@ -245,9 +245,9 @@ void dmxScene4() {
       //       color selection?
       // ORANGE HEARTBEAT
       for ( int j = 0; j <= NUM_DMX_LEDS; ++j ) {
-        carpet->dmxLeds[ j ].red = 2 * SINELUT[ sineIndex ] - 254;
-        carpet->dmxLeds[ j ].green = 2 * SINELUT[ ( sineIndex + 85 ) % 255 ] - 254;
-        carpet->dmxLeds[ j ].blue = 2 * SINELUT[ ( sineIndex + 170 ) % 255 ] - 254;
+        carpet->megabarLeds[ j ].red = 2 * SINELUT[ sineIndex ] - 254;
+        carpet->megabarLeds[ j ].green = 2 * SINELUT[ ( sineIndex + 85 ) % 255 ] - 254;
+        carpet->megabarLeds[ j ].blue = 2 * SINELUT[ ( sineIndex + 170 ) % 255 ] - 254;
       }
       break;
     default:
@@ -309,7 +309,7 @@ void dmxLoop() {
    uint8_t modeSwitchInput = carpet->readMode();
    if ( modeSwitchInput != lastModeSwitchInput ) {
       // we've changed modes, clear the lights so we start from scratch again
-      carpet->clearDmx();
+      carpet->clearMegabars();
    }
    lastModeSwitchInput = modeSwitchInput;
 

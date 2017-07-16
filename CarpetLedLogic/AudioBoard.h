@@ -1,5 +1,7 @@
 /* AudioBoard.h
  *
+ *    TODO: all of this will be rewritten when we get eliot's new code.
+ *
  *    All of the #defines needed for the LP3950 audio board are included here.
  *    The setupAudioBoard function writes all the required registers.
  *

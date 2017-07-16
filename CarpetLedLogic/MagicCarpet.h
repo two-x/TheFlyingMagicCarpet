@@ -26,18 +26,17 @@
 #include "LedConsts.h"
 
 // DMX constants
-#define NUM_DMX_LEDS 18
-#define NUM_CONVERTED_DMX_LEDS ( NUM_NEO_LEDS + NUM_NEO_LEDS / 3 )
-#define DMX_DATA_PIN 3
+#define NUM_MEGABAR_LEDS 10
+#define NUM_CHINA_LEDS 8
+#define MEGABAR_DATA_PIN 3
+#define CHINA_DATA_PIN 3
 
 // Neopixel constants
 #define NUM_NEO_LEDS 1024
 #define NUM_NEOPIXEL_STRIPS 8
+// TODO: fix these numbers, we ended up with less total leds
 #define NUM_NEO_SMALL_LEDS 110
 #define NUM_NEO_LARGE_LEDS 146
-#define NUM_CONVERTED_NEO_LEDS ( NUM_NEO_LEDS + NUM_NEO_LEDS / 3 )
-#define NUM_CONVERTED_NEO_SMALL_LEDS ( NUM_NEO_SMALL_LEDS + NUM_NEO_SMALL_LEDS / 3 )
-#define NUM_CONVERTED_NEO_LARGE_LEDS ( NUM_NEO_LARGE_LEDS + NUM_NEO_LARGE_LEDS / 3 )
 #define NEO_DATA_PIN0 52
 #define NEO_DATA_PIN1 51
 #define NEO_DATA_PIN2 50
@@ -49,10 +48,15 @@
 
 // TODO: all of these pins need to be updated for the due
 
-// analog inputs
+// TODO: move to sound board file
+// input from sound board
 #define ANALOG_LOW_PIN 3
 #define ANALOG_MID_PIN 2
 #define ANALOG_HIGH_PIN 1
+
+// TODO: need to change to new controller inputs
+
+// potentiometer input
 #define ANALOG_BRIGHTNESS_PIN 0
 
 // inputs from mode select switch
@@ -106,33 +110,17 @@ class MagicCarpet {
  private:
 
    /* FastLED doesn't support rgbw leds. We work around this by offsetting the color
-    * values to accomodate the white value.  For three rgbw leds we end up sending
-    * four rgb packets. For dmx, this is straightforward. Each of the values simply
-    * shifts by one to handle the extra value:
-    *
-    *   red on led 1, green on led 1, blue on led 1
-    *   white led 1, red on led 2, green led 2
-    *   blue led 2, white led 2, red led 3
-    *   green led 3, blue led 3, white led 3
-    *
-    * However, the protocol for the neopixel rgbw leds shuffles the values around in
-    * an odd way. The ordering is as follows:
-    *
-    *   red on led 1, green on led 1, blue on led 1
-    *   green led 2, white on led 1, red led 2
-    *   white led 2, blue led 2, green led 3
-    *   blue led 3, red led 3, white led 3
-    *
-    * credit to user joekitch on the arduino forum for figuring out neopixel order
-    * https://forum.arduino.cc/index.php?topic=432470.0
+    * values to accomodate the white value. See CRGBW.h for more details.
     */
-   CRGB convertedDmxLeds[ NUM_CONVERTED_DMX_LEDS ];
-   CRGB convertedRopeLeds[ NUM_CONVERTED_NEO_LEDS ];
+   CRGB megabarShowLeds[ resizeCRGBW( NUM_MEGABAR_LEDS ) ];
+   CRGB chinaShowLeds[ resizeCRGBW( NUM_CHINA_LEDS ) ];
+   CRGB ropeShowLeds[ resizeCRGBW( NUM_NEO_LEDS ) ];
 
  public:
 
    // led arrays
-   CRGBW dmxLeds[ NUM_DMX_LEDS ];
+   CRGBW megabarLeds[ NUM_MEGABAR_LEDS ];
+   CRGBWUA chinaLeds[ NUM_CHINA_LEDS ];
    CRGBW ropeLeds[ NUM_NEO_LEDS ];
 
    void setup() {
@@ -177,9 +165,14 @@ class MagicCarpet {
 
       clear(); // there might be stale values left in the leds, start from scratch
 
-      // start with the white led off
-      for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
-        dmxLeds[ i ].w = 0x0;
+      // start with the white/uv/a leds off
+      for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) {
+        megabarLeds[ i ].w = 0x0;
+      }
+      for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
+        chinaLeds[ i ].w = 0x0;
+        chinaLeds[ i ].u = 0x0;
+        chinaLeds[ i ].a = 0x0;
       }
       for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
         ropeLeds[ i ].w = 0x0;
@@ -216,9 +209,15 @@ class MagicCarpet {
       FastLED.show();
    }
 
-   void clearDmx() {
-      for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
-        dmxLeds[ i ] = CRGB::Black;
+   void clearMegabars() {
+      for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) {
+        megabarLeds[ i ] = CRGB::Black;
+      }
+   }
+
+   void clearChinas() {
+      for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
+        chinaLeds[ i ] = CRGB::Black;
       }
    }
 
@@ -236,11 +235,13 @@ class MagicCarpet {
 
    // clears all the lights back to full black
    void clear() {
-      clearDmx();
+      clearMegabars();
+      clearChinas();
       clearRope();
       clearRopeWhite();
    }
 
+   // TODO: all of this needs to change when we get the new controllers programmed
    uint8_t readMode() {
       return digitalRead( MODE2_PIN ) << 3 | digitalRead( MODE3_PIN ) << 2;
    }
