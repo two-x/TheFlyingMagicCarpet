@@ -23,7 +23,7 @@
 
 #include "CRGBW.h"
 #include "AudioBoard.h"
-#include "ProgmemConsts.h"
+#include "LedConsts.h"
 
 // DMX constants
 #define NUM_DMX_LEDS 18
@@ -152,26 +152,28 @@ class MagicCarpet {
       setupAudioBoard();
 
       // add dmx leds
-      FastLED.addLeds<DMXSIMPLE, DMX_DATA_PIN>( convertedDmxLeds,
-                                                NUM_CONVERTED_DMX_LEDS );
+      FastLED.addLeds<DMXSIMPLE, MEGABAR_DATA_PIN>( megabarShowLeds,
+                                                    resizeCRGBW( NUM_MEGABAR_LEDS ) );
+      FastLED.addLeds<DMXSIMPLE, CHINA_DATA_PIN>( chinaShowLeds,
+                                                  resizeCRGBWUA( NUM_CHINA_LEDS ) );
 
       // add eight channels of rope leds
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN0>( convertedRopeLeds,
-                                                NUM_CONVERTED_NEO_SMALL_LEDS );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN1>( convertedRopeLeds + FRONT_RIGHT,
-                                                NUM_CONVERTED_NEO_LARGE_LEDS );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN2>( convertedRopeLeds + RIGHT,
-                                                NUM_CONVERTED_NEO_LARGE_LEDS );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN3>( convertedRopeLeds + BACK_RIGHT,
-                                                NUM_CONVERTED_NEO_SMALL_LEDS );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN4>( convertedRopeLeds + BACK,
-                                                NUM_CONVERTED_NEO_SMALL_LEDS );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN5>( convertedRopeLeds + BACK_LEFT,
-                                                NUM_CONVERTED_NEO_LARGE_LEDS );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN6>( convertedRopeLeds + LEFT,
-                                                NUM_CONVERTED_NEO_LARGE_LEDS );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN7>( convertedRopeLeds + FRONT_LEFT,
-                                                NUM_CONVERTED_NEO_SMALL_LEDS );
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN0>( ropeShowLeds,
+                                                resizeCRGBW( NUM_NEO_SMALL_LEDS ) );
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN1>( ropeShowLeds + FRONT_RIGHT,
+                                                resizeCRGBW( NUM_NEO_LARGE_LEDS ) );
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN2>( ropeShowLeds + RIGHT,
+                                                resizeCRGBW( NUM_NEO_LARGE_LEDS ) );
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN3>( ropeShowLeds + BACK_RIGHT,
+                                                resizeCRGBW( NUM_NEO_SMALL_LEDS ) );
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN4>( ropeShowLeds + BACK,
+                                                resizeCRGBW( NUM_NEO_SMALL_LEDS ) );
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN5>( ropeShowLeds + BACK_LEFT,
+                                                resizeCRGBW( NUM_NEO_LARGE_LEDS ) );
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN6>( ropeShowLeds + LEFT,
+                                                resizeCRGBW( NUM_NEO_LARGE_LEDS ) );
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN7>( ropeShowLeds + FRONT_LEFT,
+                                                resizeCRGBW( NUM_NEO_SMALL_LEDS ) );
 
       clear(); // there might be stale values left in the leds, start from scratch
 
@@ -186,14 +188,6 @@ class MagicCarpet {
    }
 
    void show() {
-      // gamma correct before we display anything
-      for ( int i = 0; i < NUM_DMX_LEDS; ++i ) {
-         gammaCorrect( dmxLeds[ i ] );
-      }
-      for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
-         gammaCorrect( ropeLeds[ i ] );
-      }
-
       /* the lights aren't always arranged the same way as they are addressed, so in
        * some cases we need to reverse whatever has been programmed in the user array
        * in order to keep the addressing consistent. This is done in-place.
@@ -201,21 +195,23 @@ class MagicCarpet {
        * TODO: if we start running too slow we can look at ways to get around this
        *       reversal
        */
-      reverse( ropeLeds, NUM_NEO_SMALL_LEDS );
-      reverse( ropeLeds + RIGHT, NUM_NEO_LARGE_LEDS );
-      reverse( ropeLeds + BACK, NUM_NEO_SMALL_LEDS );
-      reverse( ropeLeds + LEFT, NUM_NEO_LARGE_LEDS );
+      LedUtil::reverse( ropeLeds, NUM_NEO_SMALL_LEDS );
+      LedUtil::reverse( ropeLeds + RIGHT, NUM_NEO_LARGE_LEDS );
+      LedUtil::reverse( ropeLeds + BACK, NUM_NEO_SMALL_LEDS );
+      LedUtil::reverse( ropeLeds + LEFT, NUM_NEO_LARGE_LEDS );
 
-      CRGBW::convertDmxArray( dmxLeds, convertedDmxLeds, NUM_DMX_LEDS,
-                              NUM_CONVERTED_DMX_LEDS );
-      CRGBW::convertNeopixelArray( ropeLeds, convertedRopeLeds, NUM_NEO_LEDS,
-                                   NUM_CONVERTED_NEO_LEDS );
+      LedUtil::convertDmxArray4( megabarLeds, megabarShowLeds, NUM_MEGABAR_LEDS,
+                                 resizeCRGBW( NUM_MEGABAR_LEDS ) );
+      LedUtil::convertDmxArray6( chinaLeds, chinaShowLeds, NUM_CHINA_LEDS,
+                                 resizeCRGBWUA( NUM_CHINA_LEDS ) );
+      LedUtil::convertNeoArray( ropeLeds, ropeShowLeds, NUM_NEO_LEDS,
+                                resizeCRGBW( NUM_NEO_LEDS ) );
 
       // make sure to reverse the values so the user has a consistent view
-      reverse( ropeLeds, NUM_NEO_SMALL_LEDS );
-      reverse( ropeLeds + RIGHT, NUM_NEO_LARGE_LEDS );
-      reverse( ropeLeds + BACK, NUM_NEO_SMALL_LEDS );
-      reverse( ropeLeds + LEFT, NUM_NEO_LARGE_LEDS );
+      LedUtil::reverse( ropeLeds, NUM_NEO_SMALL_LEDS );
+      LedUtil::reverse( ropeLeds + RIGHT, NUM_NEO_LARGE_LEDS );
+      LedUtil::reverse( ropeLeds + BACK, NUM_NEO_SMALL_LEDS );
+      LedUtil::reverse( ropeLeds + LEFT, NUM_NEO_LARGE_LEDS );
 
       FastLED.show();
    }

@@ -89,24 +89,35 @@ void ropeDemo() {
 namespace AliasDemo {
 
 #define NUM_ALIAS_DEMO_LEDS 10
+#define NUM_ALIAS_DEMO_SHOW_LEDS resizeCRGBW( NUM_ALIAS_DEMO_LEDS )
 #define ALIAS_DEMO_DATA_PIN 52
 
 // pointer to alias demo leds
 CRGBW * leds;
 
 static CRGBW * aliasDemoLeds() {
-   CRGBW * leds = new CRGBW[ NUM_ALIAS_DEMO_LEDS ];
-   return leds;
+   static CRGBW aliasLeds[ NUM_ALIAS_DEMO_LEDS ];
+   return aliasLeds;
+}
+
+static void aliasDemoShow() {
+   static uint32_t numShowLeds = resizeCRGBW( NUM_ALIAS_DEMO_LEDS );
+   static CRGB showLeds[ NUM_ALIAS_DEMO_SHOW_LEDS ];
+   LedUtil::convertNeoArray( leds, showLeds, NUM_ALIAS_DEMO_LEDS, numShowLeds );
+   FastLED.show();
 }
 
 void aliasDemoSetup() {
    leds = aliasDemoLeds();
    FastLED.addLeds<NEOPIXEL, ALIAS_DEMO_DATA_PIN>( leds, NUM_ALIAS_DEMO_LEDS );
+   for ( int i = 0; i < NUM_ALIAS_DEMO_LEDS; ++i ) {
+      leds[i].w = 0;
+   }
    fill_solid( leds, NUM_ALIAS_DEMO_LEDS, CRGB::Red );
-   FastLED.show();
+   aliasDemoShow();
    FastLED.delay( 1000 );
    fill_solid( leds, NUM_ALIAS_DEMO_LEDS, CRGB::Black );
-   FastLED.show();
+   aliasDemoShow();
    FastLED.delay( 1000 );
 }
 
@@ -139,7 +150,7 @@ void aliasDemoLoop() {
          leds[i] = CRGB::Black;
       }
    }
-   FastLED.show();
+   aliasDemoShow();
 }
 
 } // end namespace AliasDemo
@@ -158,8 +169,8 @@ namespace ColorDemo {
 CRGB * leds;
 
 static CRGB * colorDemoLeds() {
-   CRGB * leds = new CRGB[ NUM_COLOR_DEMO_LEDS ];
-   return leds;
+   static CRGB colorLeds[ NUM_COLOR_DEMO_LEDS ];
+   return colorLeds;
 }
 
 void colorDemoSetup() {
@@ -195,7 +206,7 @@ void colorDemoLoop() {
          // ColorFromPalette wraps around in some circumstances, gotta fix that
          uint8_t idx = ( location + i ) % NUM_COLOR_DEMO_LEDS;
          auto clr = ColorFromPalette( palette, colorIndex );
-         leds[ idx ] = gammaCorrect( clr );
+         leds[ idx ] = LedUtil::gammaCorrect( clr );
          // update this to use a sine function for faster transfers
          colorIndex += stepSize;
       }
@@ -220,15 +231,15 @@ void colorDemoLoop() {
 } // end namespace ColorDemo
 
 void setup() {
-   // LegacyRoutines::dmxSetup();
+   LegacyRoutines::dmxSetup();
    // RopeDemo::ropeDemoSetup();
    // ColorDemo::colorDemoSetup();
-   AliasDemo::aliasDemoSetup();
+   // AliasDemo::aliasDemoSetup();
 }
 
 void loop() {
-   // LegacyRoutines::dmxLoop();
+   LegacyRoutines::dmxLoop();
    // RopeDemo::ropeDemo();
    // ColorDemo::colorDemoLoop();
-   AliasDemo::aliasDemoLoop();
+   // AliasDemo::aliasDemoLoop();
 }

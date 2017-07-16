@@ -1,26 +1,21 @@
 /* ProgmemConsts.h
  *
  *    Holds various constant lookup arrays and other values stored in
- *    progmem. Defines a single constant function gammaCorrect() which
- *    takes a reference to a CRGB object and corrects the values inside.
- *    CRGBW objects can be used as well, but we don't gamma correct for the
- *    white (what would that even mean?).
- *
- *    Gamma: 2.8
+ *    progmem.
  *
  *    Author: Anders Linn
  *    Date: June 2017
  */
 
-#ifndef __PROGMEM_CONSTS_H
-#define __PROGMEM_CONSTS_H
+#ifndef __LED_CONSTS_H
+#define __LED_CONSTS_H
 
 #ifndef __FASTLED_H
 #define __FASTLED_H
    #include <FastLED.h>
 #endif
 
-const uint8_t PROGMEM gammaR[] = {
+const uint8_t gammaR[] = {
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,
     1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,
@@ -38,7 +33,7 @@ const uint8_t PROGMEM gammaR[] = {
   160,162,164,166,168,170,172,174,177,179,181,183,185,187,190,192,
   194,196,199,201,203,206,208,210,213,215,218,220,223,225,227,230 };
 
-const uint8_t PROGMEM gammaG[] = {
+const uint8_t gammaG[] = {
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,
     1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,
@@ -57,7 +52,7 @@ const uint8_t PROGMEM gammaG[] = {
   215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255 };
 
 
-const uint8_t PROGMEM gammaB[] = {
+const uint8_t gammaB[] = {
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,
     1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,
@@ -74,12 +69,5 @@ const uint8_t PROGMEM gammaB[] = {
   113,115,116,118,119,121,122,124,126,127,129,131,132,134,136,137,
   139,141,143,144,146,148,150,152,153,155,157,159,161,163,165,167,
   169,171,173,175,177,179,181,183,185,187,189,191,193,196,198,200 };
-
-CRGB & gammaCorrect( CRGB & clr ) {
-   clr.r = pgm_read_byte( &gammaR[ clr.r ]);
-   clr.g = pgm_read_byte( &gammaG[ clr.g ]);
-   clr.b = pgm_read_byte( &gammaB[ clr.b ]);
-   return clr;
-}
 
 #endif
