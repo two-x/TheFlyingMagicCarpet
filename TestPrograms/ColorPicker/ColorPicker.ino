@@ -64,6 +64,7 @@ void colorDemoSetup() {
 
 void colorDemoLoop() {
    static long drawTock = millis();
+   static uint8_t phase = 0;
    long tick = millis();
    if ( tick > drawTock + 40 ) {
       CRGB sky = ColorFromPalette( skyPalette, phase );
@@ -72,7 +73,7 @@ void colorDemoLoop() {
       for ( uint8_t i = 0; i < NUM_COLOR_PICKER_LEDS; ++i ) {
          uint16_t colorIdx = ( i * 255 ) / NUM_COLOR_PICKER_LEDS;
          auto clr = ColorFromPalette( palette, colorIdx );
-         leds[ i ] = gammaCorrect( clr );
+         leds[ i ] = LedUtil::gammaCorrect( clr );
       }
       drawTock = tick;
    }
