@@ -114,7 +114,14 @@ class MagicCarpet {
     */
    CRGB megabarShowLeds[ resizeCRGBW( NUM_MEGABAR_LEDS ) ];
    CRGB chinaShowLeds[ resizeCRGBW( NUM_CHINA_LEDS ) ];
-   CRGB ropeShowLeds[ resizeCRGBW( NUM_NEO_LEDS ) ];
+   CRGB ropeShowLeds1[ resizeCRGBW( NUM_NEO_SMALL_LEDS ) ];
+   CRGB ropeShowLeds2[ resizeCRGBW( NUM_NEO_LARGE_LEDS ) ];
+   CRGB ropeShowLeds3[ resizeCRGBW( NUM_NEO_LARGE_LEDS ) ];
+   CRGB ropeShowLeds4[ resizeCRGBW( NUM_NEO_SMALL_LEDS ) ];
+   CRGB ropeShowLeds5[ resizeCRGBW( NUM_NEO_SMALL_LEDS ) ];
+   CRGB ropeShowLeds6[ resizeCRGBW( NUM_NEO_LARGE_LEDS ) ];
+   CRGB ropeShowLeds7[ resizeCRGBW( NUM_NEO_LARGE_LEDS ) ];
+   CRGB ropeShowLeds8[ resizeCRGBW( NUM_NEO_SMALL_LEDS ) ];
 
  public:
 
@@ -146,21 +153,21 @@ class MagicCarpet {
                                                   resizeCRGBWUA( NUM_CHINA_LEDS ) );
 
       // add eight channels of rope leds
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN0>( ropeShowLeds,
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN0>( ropeShowLeds1,
                                                 resizeCRGBW( NUM_NEO_SMALL_LEDS ) );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN1>( ropeShowLeds + FRONT_RIGHT,
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN1>( ropeShowLeds2,
                                                 resizeCRGBW( NUM_NEO_LARGE_LEDS ) );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN2>( ropeShowLeds + RIGHT,
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN2>( ropeShowLeds3,
                                                 resizeCRGBW( NUM_NEO_LARGE_LEDS ) );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN3>( ropeShowLeds + BACK_RIGHT,
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN3>( ropeShowLeds4,
                                                 resizeCRGBW( NUM_NEO_SMALL_LEDS ) );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN4>( ropeShowLeds + BACK,
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN4>( ropeShowLeds5,
                                                 resizeCRGBW( NUM_NEO_SMALL_LEDS ) );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN5>( ropeShowLeds + BACK_LEFT,
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN5>( ropeShowLeds6,
                                                 resizeCRGBW( NUM_NEO_LARGE_LEDS ) );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN6>( ropeShowLeds + LEFT,
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN6>( ropeShowLeds7,
                                                 resizeCRGBW( NUM_NEO_LARGE_LEDS ) );
-      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN7>( ropeShowLeds + FRONT_LEFT,
+      FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN7>( ropeShowLeds8,
                                                 resizeCRGBW( NUM_NEO_SMALL_LEDS ) );
 
       clear(); // there might be stale values left in the leds, start from scratch
@@ -197,8 +204,23 @@ class MagicCarpet {
                                  resizeCRGBW( NUM_MEGABAR_LEDS ) );
       LedUtil::convertDmxArray6( chinaLeds, chinaShowLeds, NUM_CHINA_LEDS,
                                  resizeCRGBWUA( NUM_CHINA_LEDS ) );
-      LedUtil::convertNeoArray( ropeLeds, ropeShowLeds, NUM_NEO_LEDS,
-                                resizeCRGBW( NUM_NEO_LEDS ) );
+
+      LedUtil::convertNeoArray( ropeLeds, ropeShowLeds1, NUM_NEO_SMALL_LEDS,
+                                resizeCRGBW( NUM_NEO_SMALL_LEDS ) );
+      LedUtil::convertNeoArray( ropeLeds, ropeShowLeds2, NUM_NEO_LARGE_LEDS,
+                                resizeCRGBW( NUM_NEO_LARGE_LEDS ) );
+      LedUtil::convertNeoArray( ropeLeds, ropeShowLeds3, NUM_NEO_LARGE_LEDS,
+                                resizeCRGBW( NUM_NEO_LARGE_LEDS ) );
+      LedUtil::convertNeoArray( ropeLeds, ropeShowLeds4, NUM_NEO_SMALL_LEDS,
+                                resizeCRGBW( NUM_NEO_SMALL_LEDS ) );
+      LedUtil::convertNeoArray( ropeLeds, ropeShowLeds5, NUM_NEO_SMALL_LEDS,
+                                resizeCRGBW( NUM_NEO_SMALL_LEDS ) );
+      LedUtil::convertNeoArray( ropeLeds, ropeShowLeds6, NUM_NEO_LARGE_LEDS,
+                                resizeCRGBW( NUM_NEO_LARGE_LEDS ) );
+      LedUtil::convertNeoArray( ropeLeds, ropeShowLeds7, NUM_NEO_LARGE_LEDS,
+                                resizeCRGBW( NUM_NEO_LARGE_LEDS ) );
+      LedUtil::convertNeoArray( ropeLeds, ropeShowLeds8, NUM_NEO_SMALL_LEDS,
+                                resizeCRGBW( NUM_NEO_SMALL_LEDS ) );
 
       // make sure to reverse the values so the user has a consistent view
       LedUtil::reverse( ropeLeds, NUM_NEO_SMALL_LEDS );
