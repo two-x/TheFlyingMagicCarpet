@@ -16,14 +16,14 @@
 #include <FastLED.h>
 #endif
 
-#include <cassert>
+#include <assert.h>
 #include <stdint.h>
 #include "lib8tion.h"
 #include "color.h"
 
 #include "LedConsts.h"
 
-#define resizeCRGBW( leds ) ( leds + leds / 3 )
+#define resizeCRGBW( leds ) ( leds * 4 )
 #define resizeCRGBWUA( leds ) ( leds * 2 )
 
 struct CRGBW : CRGB {
