@@ -26,16 +26,11 @@ class Potentiometer {
 
 namespace PushButtonImpl {
 
-static bool down_;
-static uint32_t lastChangeTimestamp_;
+volatile bool down_;
+volatile uint32_t lastChangeTimestamp_;
 
-static void _lowCallback() {
-   down_ = true;
-   lastChangeTimestamp_ = millis();
-}
-
-static void _highCallback() {
-   down_ = false;
+void callback() {
+   down_ = !down_;
    lastChangeTimestamp_ = millis();
 }
 
@@ -63,8 +58,7 @@ static PushButton & getPushButton( uint8_t pin ) {
       PushButtonImpl::lastChangeTimestamp_ = millis();
       pinMode( pin, INPUT_PULLUP ); // TODO: really a pullup?
       uint8_t interrupt = digitalPinToInterrupt( pin );
-      attachInterrupt( interrupt, PushButtonImpl::_lowCallback, FALLING );
-      attachInterrupt( interrupt, PushButtonImpl::_highCallback, RISING );
+      attachInterrupt( interrupt, PushButtonImpl::callback, CHANGE );
       first = false;
    }
    return pb;
@@ -72,11 +66,11 @@ static PushButton & getPushButton( uint8_t pin ) {
 
 namespace EncoderImpl {
 
-static uint8_t pinA_;
-static uint8_t pinB_;
-static int pos_;
-static uint8_t a_;
-static uint8_t b_;
+volatile uint8_t pinA_;
+volatile uint8_t pinB_;
+volatile int pos_;
+volatile uint8_t a_;
+volatile uint8_t b_;
 
 static void updatePosition() {
    if ( a_ ^ b_ ) {
@@ -88,6 +82,8 @@ static void updatePosition() {
 
 static void callbackA() {
    a_ = digitalRead( pinA_ );
+   a_ = 3;
+   updatePosition();
 }
 
 static void callbackB() {
