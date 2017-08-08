@@ -12,6 +12,20 @@
 // max voltage from an analog input pin
 #define MAX_VOLTAGE 1023
 
+// TODO: these are useful, move them somewhere common
+inline void digitalWriteDirect( int pin, bool val ) {
+   if ( val ) {
+      g_APinDescription[ pin ].pPort->PIO_SODR = g_APinDescription[ pin ].ulPin;
+   } else {
+      g_APinDescription[ pin ].pPort->PIO_CODR = g_APinDescription[ pin ].ulPin;
+   }
+}
+
+inline int digitalReadDirect( int pin ) {
+   return !!( g_APinDescription[ pin ].pPort->PIO_PDSR &
+              g_APinDescription[ pin ].ulPin );
+}
+
 namespace LedControl {
 
 class Potentiometer {
@@ -26,11 +40,12 @@ class Potentiometer {
 
 namespace PushButtonImpl {
 
-volatile bool down_;
-volatile uint32_t lastChangeTimestamp_;
+bool down_;
+uint8_t buttonPin_;
+uint32_t lastChangeTimestamp_;
 
 void callback() {
-   down_ = !down_;
+   down_ = !digitalReadDirect( buttonPin_ );
    lastChangeTimestamp_ = millis();
 }
 
@@ -50,13 +65,15 @@ class PushButton {
    PushButton() {}; // define constructor as private to force factory to be used
 };
 
-static PushButton & getPushButton( uint8_t pin ) {
+PushButton & getPushButton( uint8_t pin ) {
    static PushButton pb;
    static bool first = true;
    if ( first ) {
-      PushButtonImpl::down_ = false;
+      PushButtonImpl::buttonPin_ = pin;
+      PushButtonImpl::down_ = true;
       PushButtonImpl::lastChangeTimestamp_ = millis();
-      pinMode( pin, INPUT_PULLUP ); // TODO: really a pullup?
+      pinMode( pin, INPUT );
+      digitalWriteDirect( pin, LOW );
       uint8_t interrupt = digitalPinToInterrupt( pin );
       attachInterrupt( interrupt, PushButtonImpl::callback, CHANGE );
       first = false;
@@ -66,13 +83,13 @@ static PushButton & getPushButton( uint8_t pin ) {
 
 namespace EncoderImpl {
 
-volatile uint8_t pinA_;
-volatile uint8_t pinB_;
-volatile int pos_;
-volatile uint8_t a_;
-volatile uint8_t b_;
+uint8_t pinA_;
+uint8_t pinB_;
+uint8_t pos_;
+bool a_;
+bool b_;
 
-static void updatePosition() {
+void updatePosition() {
    if ( a_ ^ b_ ) {
       ++pos_;
    } else {
@@ -80,14 +97,27 @@ static void updatePosition() {
    }
 }
 
-static void callbackA() {
-   a_ = digitalRead( pinA_ );
-   a_ = 3;
+void resetPosition() {
+   pos_ = 0;
+}
+
+void callbackA() {
+   static uint32_t timestamp = 0;
+   uint32_t time = millis();
+   if ( time - timestamp < 20 ) {
+      return;
+   }
+   a_ = digitalReadDirect( pinA_ );
    updatePosition();
 }
 
-static void callbackB() {
-   b_ = digitalRead( pinB_ );
+void callbackB() {
+   static uint32_t timestamp = 0;
+   uint32_t time = millis();
+   if ( time - timestamp < 20 ) {
+      return;
+   }
+   b_ = digitalReadDirect( pinB_ );
 }
 
 } // end namespace EncoderImpl
@@ -96,16 +126,18 @@ class Encoder {
    friend Encoder & getEncoder( uint8_t pinA, uint8_t pinB );
  public:
    int readPositionDelta() {
-      int tmp = EncoderImpl::pos_;
-      EncoderImpl::pos_ = 0;
-      return tmp;
+      return EncoderImpl::pos_;
+   }
+
+   void resetPositionDelta() {
+      EncoderImpl::resetPosition();
    }
 
  private:
    Encoder() {}; // define constructor as private to force factory to be used
 };
 
-static Encoder & getEncoder( uint8_t pinA, uint8_t pinB ) {
+Encoder & getEncoder( uint8_t pinA, uint8_t pinB ) {
    static Encoder enc;
    static bool first = true;
    if ( first ) {
@@ -118,8 +150,8 @@ static Encoder & getEncoder( uint8_t pinA, uint8_t pinB ) {
       uint8_t interruptB = digitalPinToInterrupt( pinB );
       attachInterrupt( interruptA, EncoderImpl::callbackA, CHANGE );
       attachInterrupt( interruptB, EncoderImpl::callbackB, CHANGE );
-      EncoderImpl::a_ = digitalRead( EncoderImpl::pinA_ );
-      EncoderImpl::b_ = digitalRead( EncoderImpl::pinB_ );
+      EncoderImpl::a_ = digitalReadDirect( EncoderImpl::pinA_ );
+      EncoderImpl::b_ = digitalReadDirect( EncoderImpl::pinB_ );
       first = false;
    }
    return enc;
