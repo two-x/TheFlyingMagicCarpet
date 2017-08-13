@@ -11,11 +11,6 @@
 #ifndef __MAGIC_CARPET_H
 #define __MAGIC_CARPET_H
 
-#ifndef __DMXSIMPLE_H
-#define __DMXSIMPLE_H
-#include <DmxSimple.h>
-#endif
-
 #ifndef __FASTLED_H
 #define __FASTLED_H
 #include <FastLED.h>
@@ -24,16 +19,20 @@
 #include "CRGBW.h"
 #include "AudioBoard.h"
 #include "LedConsts.h"
+#include "ArmDmx.h"
 
 // DMX constants
 #define NUM_MEGABAR_LEDS 10
 #define NUM_CHINA_LEDS 8
-#define MEGABAR_DATA_PIN 3
-#define CHINA_DATA_PIN 3
+#define SIZEOF_MEGABAR_LEDS ( NUM_MEGABAR_LEDS * sizeof( CRGB ) )
+#define SIZEOF_CHINA_LEDS ( NUM_CHINA_LEDS * sizeof( CRGBWUA ) )
+#define TOTAL_DMX_SIZE ( SIZEOF_MEGABAR_LEDS + SIZEOF_CHINA_LEDS )
 
 // Neopixel constants
 #define NUM_NEO_LEDS 1024
+#define NUM_NEO_SHOW_LEDS resizeCRGB( NUM_NEO_LEDS )
 #define NUM_NEOPIXEL_STRIPS 8
+#define SIZOF_NEO_SHOW_LEDS ( NUM_NEO_SHOW_LEDS * sizeof( CRGB ) )
 // TODO: fix these numbers, we ended up with less total leds
 #define NUM_NEO_SMALL_LEDS 110
 #define NUM_NEO_LARGE_LEDS 146
@@ -125,9 +124,14 @@ class MagicCarpet {
 
  public:
 
-   // led arrays
-   CRGBW megabarLeds[ NUM_MEGABAR_LEDS ];
+   /* DON'T CHANGE THE ORDER OF THESE ARRAYS!
+    * They're declared separately to make them easy to work with, but treated as a
+    * single continguous array when passed into dmx_send.
+    */
+   CRGB megabarLeds[ NUM_MEGABAR_LEDS ];
    CRGBWUA chinaLeds[ NUM_CHINA_LEDS ];
+
+   // neopixel leds
    CRGBW ropeLeds[ NUM_NEO_LEDS ];
 
    void setup() {
@@ -147,10 +151,7 @@ class MagicCarpet {
       setupAudioBoard();
 
       // add dmx leds
-      FastLED.addLeds<DMXSIMPLE, MEGABAR_DATA_PIN>( megabarShowLeds,
-                                                    resizeCRGBW( NUM_MEGABAR_LEDS ) );
-      FastLED.addLeds<DMXSIMPLE, CHINA_DATA_PIN>( chinaShowLeds,
-                                                  resizeCRGBWUA( NUM_CHINA_LEDS ) );
+      dmx_init( TOTAL_DMX_SIZE );
 
       // add eight channels of rope leds
       FastLED.addLeds<NEOPIXEL, NEO_DATA_PIN0>( ropeShowLeds1,
@@ -172,18 +173,6 @@ class MagicCarpet {
 
       clear(); // there might be stale values left in the leds, start from scratch
 
-      // start with the white/uv/a leds off
-      for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) {
-        megabarLeds[ i ].w = 0x0;
-      }
-      for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
-        chinaLeds[ i ].w = 0x0;
-        chinaLeds[ i ].u = 0x0;
-        chinaLeds[ i ].a = 0x0;
-      }
-      for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
-        ropeLeds[ i ].w = 0x0;
-      }
       show();
    }
 
@@ -199,11 +188,6 @@ class MagicCarpet {
       LedUtil::reverse( ropeLeds + RIGHT, NUM_NEO_LARGE_LEDS );
       LedUtil::reverse( ropeLeds + BACK, NUM_NEO_SMALL_LEDS );
       LedUtil::reverse( ropeLeds + LEFT, NUM_NEO_LARGE_LEDS );
-
-      LedUtil::convertDmxArray4( megabarLeds, megabarShowLeds, NUM_MEGABAR_LEDS,
-                                 resizeCRGBW( NUM_MEGABAR_LEDS ) );
-      LedUtil::convertDmxArray6( chinaLeds, chinaShowLeds, NUM_CHINA_LEDS,
-                                 resizeCRGBWUA( NUM_CHINA_LEDS ) );
 
       LedUtil::convertNeoArray( ropeLeds, ropeShowLeds1, NUM_NEO_SMALL_LEDS,
                                 resizeCRGBW( NUM_NEO_SMALL_LEDS ) );
@@ -228,31 +212,21 @@ class MagicCarpet {
       LedUtil::reverse( ropeLeds + BACK, NUM_NEO_SMALL_LEDS );
       LedUtil::reverse( ropeLeds + LEFT, NUM_NEO_LARGE_LEDS );
 
+      dmx_send( megabarLeds );
+
       FastLED.show();
    }
 
    void clearMegabars() {
-      for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) {
-        megabarLeds[ i ] = CRGB::Black;
-      }
+      memset( chinaLeds, 0, SIZEOF_MEGABAR_LEDS );
    }
 
    void clearChinas() {
-      for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
-        chinaLeds[ i ] = CRGB::Black;
-      }
+      memset( chinaLeds, 0, SIZEOF_CHINA_LEDS );
    }
 
    void clearRope() {
-      for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
-        ropeLeds[ i ] = CRGB::Black;
-      }
-   }
-
-   void clearRopeWhite() {
-      for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
-        ropeLeds[ i ].white = 0;
-      }
+      memset( ropeLeds, 0, SIZEOF_NEO_SHOW_LEDS );
    }
 
    // clears all the lights back to full black
