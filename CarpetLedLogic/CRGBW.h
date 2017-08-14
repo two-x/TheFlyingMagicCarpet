@@ -18,13 +18,11 @@
 
 #include <assert.h>
 #include <stdint.h>
+#include <math.h>
 #include "lib8tion.h"
 #include "color.h"
 
 #include "LedConsts.h"
-
-#define resizeCRGBW( leds ) ( leds * 4 )
-#define resizeCRGBWUA( leds ) ( leds * 2 )
 
 struct CRGBW : CRGB {
    union {
@@ -401,6 +399,10 @@ struct CRGBWUA : CRGBW {
  */
 namespace LedUtil {
 
+constexpr uint16_t resizeCRGBW( uint16_t leds ) {
+   return ( ( leds * 4 ) / 3 ) + ( leds % 3 != 0 );
+}
+
 template< class T >
 static void reverse( T *arr, uint16_t size ) {
    for ( int i = 0; i < size / 2; ++i ) {
@@ -429,49 +431,14 @@ static void convertNeo( CRGBW *src, CRGB *dst ) {
    dst[ 3 ] = CRGB( gamB( src[ 2 ].b ), gamR( src[ 2 ].r ), src[ 2 ].w );
 }
 
-static void convertDmx4( CRGBW *src, CRGB *dst ) {
-   dst[ 0 ] = CRGB( gamR( src[ 0 ].r ), gamG( src[ 0 ].g ), gamB( src[ 0 ].b ) );
-   dst[ 1 ] = CRGB( src[ 0 ].w, gamR( src[ 1 ].r ), gamG( src[ 1 ].g ) );
-   dst[ 2 ] = CRGB( gamB( src[ 1 ].b ), src[ 1 ].w, gamR( src[ 2 ].r ) );
-   dst[ 3 ] = CRGB( gamG( src[ 2 ].g ), gamB( src[ 2 ].b ), src[ 2 ].w );
-}
-
-static void convertDmx6( CRGBWUA *src, CRGB *dst ) {
-   dst[ 0 ] = CRGB( gamR( src[ 0 ].r ), gamG( src[ 0 ].g ), gamB( src[ 0 ].b ) );
-   dst[ 1 ] = CRGB( src[ 0 ].w, src[ 1 ].u, src[ 1 ].a );
-}
-
-static void convertNeoArray( CRGBW *src, CRGB *dst, uint16_t srcSize,
-                             uint16_t dstSize ) {
-   assert( dstSize == resizeCRGBW( srcSize ) );
+// NOTE: this function assumes that dst is large enough to fit all of src,
+//       so it's up to you to make sure you've allocated enough space!
+static void convertNeoArray( CRGBW *src, CRGB *dst, uint16_t srcSize ) {
    int s = 0, d = 0;
    while ( s < srcSize ) {
      convertNeo( src + s, dst + d );
      s += 3;
      d += 4;
-   }
-}
-
-static void convertDmxArray4( CRGBW *src, CRGB *dst, uint16_t srcSize,
-                              uint16_t dstSize ) {
-   assert( dstSize == resizeCRGBW( srcSize ) );
-   int s = 0, d = 0;
-   // cut out if the entire array has been converted, or if we're out of leds
-   while ( s < srcSize ) {
-     convertDmx4( src + s, dst + d );
-     s += 3;
-     d += 4;
-   }
-}
-
-static void convertDmxArray6( CRGBWUA *src, CRGB *dst, uint16_t srcSize,
-                              uint16_t dstSize ) {
-   assert( dstSize == resizeCRGBWUA( srcSize ) );
-   int s = 0, d = 0;
-   while ( s < srcSize ) {
-     convertDmx6( src + s, dst + d );
-     s += 1;
-     d += 2;
    }
 }
 

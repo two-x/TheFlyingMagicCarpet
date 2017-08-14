@@ -144,8 +144,8 @@ Encoder & getEncoder( uint8_t pinA, uint8_t pinB ) {
       EncoderImpl::pinA_ = pinA;
       EncoderImpl::pinB_ = pinB;
       EncoderImpl::pos_ = 0;
-      pinMode( EncoderImpl::pinA_, INPUT_PULLUP );
-      pinMode( EncoderImpl::pinB_, INPUT_PULLUP );
+      pinMode( EncoderImpl::pinA_, INPUT );
+      pinMode( EncoderImpl::pinB_, INPUT );
       uint8_t interruptA = digitalPinToInterrupt( pinA );
       uint8_t interruptB = digitalPinToInterrupt( pinB );
       attachInterrupt( interruptA, EncoderImpl::callbackA, CHANGE );

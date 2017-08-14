@@ -24,10 +24,34 @@
 #include "CRGBW.h"
 #include "MagicCarpet.h"
 
+// The Flying Magic Carpet (TM)
+MagicCarpet * carpet;
+
+// controls
+Potentiometer * pot;
+PushButton * button;
+Encoder * encoder;
+
 void setup() {
-   // add carpet setup here
+   // TODO: set up any other cards here
+
+   // set up the controller
+   pot = new Potentiometer( POT_ANALOG_PIN );
+   button = getPushButton( BUTTON_PIN );
+   encoder = getEncoder( ENCODER_A_PIN, ENCODER_B_PIN );
+
+   // setup the carpet
+   carpet = theMagicCarpet();
+   carpet->setup();
 }
 
 void loop() {
-   // add control options here
+   static uint32_t clock;
+   clock = millis();
+
+   // read encoder
+   // based on diff, switch between existing light shows
+
+   // TODO: time this!
+   carpet->show();
 }
