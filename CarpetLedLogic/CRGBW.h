@@ -400,7 +400,7 @@ struct CRGBWUA : CRGBW {
 namespace LedUtil {
 
 constexpr uint16_t resizeCRGBW( uint16_t leds ) {
-   return ( ( leds * 4 ) / 3 ) + ( leds % 3 != 0 );
+   return ( ( leds * 4 ) / 3 ) + ( ( leds % 3 ) != 0 );
 }
 
 template< class T >
