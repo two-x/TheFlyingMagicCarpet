@@ -17,8 +17,8 @@
 #endif
 
 #include "CRGBW.h"
+#include "LedController.h"
 #include "AudioBoard.h"
-#include "LedConsts.h"
 #include "ArmDmx.h"
 
 // Controller constants
@@ -39,9 +39,11 @@
 #define SIZEOF_SMALL_NEO 108
 #define SIZEOF_LARGE_NEO 146
 #define NUM_NEOPIXEL_STRIPS 8
-#define NUM_NEO_LEDS ( ( SIZEOF_SMALL_NEO * NUM_NEOPIXEL_STRIPS / 2 ) + \
-                       ( SIZEOF_LARGE_NEO * NUM_NEOPIXEL_STRIPS / 2 ) )
-#define NUM_NEO_SHOW_LEDS LedUtil::resizeCRGB( NUM_NEO_LEDS )
+#define NUM_NEO_SMALL_LEDS ( NUM_NEOPIXEL_STRIPS / 2 )
+#define NUM_NEO_LARGE_LEDS NUM_NEO_SMALL_LEDS
+#define NUM_NEO_LEDS ( ( SIZEOF_SMALL_NEO * NUM_NEO_SMALL_LEDS ) + \
+                       ( SIZEOF_LARGE_NEO * NUM_NEO_LARGE_LEDS ) )
+#define NUM_NEO_SHOW_LEDS LedUtil::resizeCRGBW( NUM_NEO_LEDS )
 #define NUM_NEO_LEDS_PER_STRIP ( NUM_NEO_SHOW_LEDS / NUM_NEOPIXEL_STRIPS )
 #define SIZEOF_NEO_STRIP ( NUM_NEO_LEDS_PER_STRIP * sizeof( CRGB ) )
 #define SIZEOF_NEO_SHOW_LEDS ( NUM_NEOPIXEL_STRIPS * SIZEOF_NEO_STRIP )
@@ -110,7 +112,17 @@ class MagicCarpet {
    // neopixel leds
    CRGBW ropeLeds[ NUM_NEO_LEDS ];
 
+   // controls
+   LedControl::Potentiometer * pot;
+   LedControl::PushButton * button;
+   LedControl::Encoder * encoder;
+
    void setup() {
+      // set up the controller
+      pot = new LedControl::Potentiometer( POT_ANALOG_PIN );
+      button = LedControl::getPushButton( BUTTON_PIN );
+      encoder = LedControl::getEncoder( ENCODER_A_PIN, ENCODER_B_PIN );
+
       // add dmx leds
       dmx_init( TOTAL_DMX_SIZE );
 
@@ -168,7 +180,7 @@ class MagicCarpet {
 
       // we don't have to pass the china light array separately. Instead, we treat
       // both arrays as a single big array, since they're contiguous in memory.
-      dmx_send( megabarLeds );
+      dmx_send( ( uint8_t * ) megabarLeds );
 
       FastLED.show();
    }
@@ -190,7 +202,6 @@ class MagicCarpet {
       clearMegabars();
       clearChinas();
       clearRope();
-      clearRopeWhite();
    }
 };
 

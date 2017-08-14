@@ -52,7 +52,7 @@ void callback() {
 } // end namespace PushButtonImpl
 
 class PushButton {
-   friend PushButton & getPushButton( uint8_t pin );
+   friend PushButton * getPushButton( uint8_t pin );
  public:
    bool isDown() {
       return PushButtonImpl::down_;
@@ -65,7 +65,7 @@ class PushButton {
    PushButton() {}; // define constructor as private to force factory to be used
 };
 
-PushButton & getPushButton( uint8_t pin ) {
+PushButton * getPushButton( uint8_t pin ) {
    static PushButton pb;
    static bool first = true;
    if ( first ) {
@@ -78,7 +78,7 @@ PushButton & getPushButton( uint8_t pin ) {
       attachInterrupt( interrupt, PushButtonImpl::callback, CHANGE );
       first = false;
    }
-   return pb;
+   return &pb;
 }
 
 namespace EncoderImpl {
@@ -123,7 +123,7 @@ void callbackB() {
 } // end namespace EncoderImpl
 
 class Encoder {
-   friend Encoder & getEncoder( uint8_t pinA, uint8_t pinB );
+   friend Encoder * getEncoder( uint8_t pinA, uint8_t pinB );
  public:
    int readPositionDelta() {
       return EncoderImpl::pos_;
@@ -137,7 +137,7 @@ class Encoder {
    Encoder() {}; // define constructor as private to force factory to be used
 };
 
-Encoder & getEncoder( uint8_t pinA, uint8_t pinB ) {
+Encoder * getEncoder( uint8_t pinA, uint8_t pinB ) {
    static Encoder enc;
    static bool first = true;
    if ( first ) {
@@ -154,7 +154,7 @@ Encoder & getEncoder( uint8_t pinA, uint8_t pinB ) {
       EncoderImpl::b_ = digitalReadDirect( EncoderImpl::pinB_ );
       first = false;
    }
-   return enc;
+   return &enc;
 }
 
 } // end namespace LedControl
