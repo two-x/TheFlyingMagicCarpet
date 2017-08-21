@@ -85,9 +85,9 @@ namespace EncoderImpl {
 
 uint8_t pinA_;
 uint8_t pinB_;
-uint8_t pos_;
-bool a_;
-bool b_;
+int8_t pos_;
+int a_;
+int b_;
 
 void updatePosition() {
    if ( a_ ^ b_ ) {
@@ -102,21 +102,11 @@ void resetPosition() {
 }
 
 void callbackA() {
-   static uint32_t timestamp = 0;
-   uint32_t time = millis();
-   if ( time - timestamp < 20 ) {
-      return;
-   }
    a_ = digitalReadDirect( pinA_ );
    updatePosition();
 }
 
 void callbackB() {
-   static uint32_t timestamp = 0;
-   uint32_t time = millis();
-   if ( time - timestamp < 20 ) {
-      return;
-   }
    b_ = digitalReadDirect( pinB_ );
 }
 
