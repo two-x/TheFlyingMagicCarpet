@@ -1,5 +1,6 @@
 #include "sam.h"
 #include <FastLED.h>
+#include "CRGBW.h"
 
 // Units are in timer ticks. 
 #define DMX_BRKTIME       (100)       // Time to hold serial in break before mark
@@ -31,6 +32,10 @@ void dmx_init(size_t buflen) {
 
 void dmx_send(uint8_t *buf)
 {
+  static const uint32_t minResetTime = 10;
+  static uint32_t timeSinceLastSend = 0;
+  while ( millis() - timeSinceLastSend < minResetTime );
+  timeSinceLastSend = millis();
   _dmx_buf[0] = 0;
   memcpy(_dmx_buf+1, buf, dmx_buflen);
   DMX_UART->US_CR |= US_CR_STTBRK;   // Start break
@@ -42,8 +47,15 @@ void dmx_send(uint8_t *buf)
 }
 
 CRGB rope[ 1024 ];
-CRGB dmx[ 18 ];
+CRGBWUA dmx[ 18 ];
 void setup() {
+  Serial.begin(9600);
+  Serial.print( "sizeof(CRGB):" );
+  Serial.println( sizeof(CRGB) );
+  Serial.print( "sizeof(CRGBW):" );
+  Serial.println( sizeof(CRGBW) );
+  Serial.print( "sizeof(CRGBWUA):" );
+  Serial.println( sizeof(CRGBWUA) );
   pinMode( 32, OUTPUT );
   pinMode( 37, OUTPUT );
   digitalWrite(32, LOW); 
@@ -59,19 +71,28 @@ void loop() {
      rope[ i ].g = random(255);
   }
   
+  static bool loop = true;
   for(int i=0;i<18;i++) {
-      dmx[i].r = random(255);
-      dmx[i].b = random(255);
-      dmx[i].g = random(255);
+      dmx[i] = CRGB::White;
+      // if ( loop ) {
+      //    dmx[i] = CRGB::Green;
+      // } else {
+      //    dmx[i] = CRGB::Red;
+      // }
+      // dmx[i].r = random(255);
+      // dmx[i].b = random(255);
+      // dmx[i].g = random(255);
   }
    
+   loop = !loop;
    digitalWrite(32, HIGH);
-   dmx_send((void *)dmx);
+   dmx_send((uint8_t *)dmx);
    digitalWrite(32, LOW);
 
    digitalWrite(37, HIGH);
    FastLED.show();
    digitalWrite(37, LOW);
 
-   delayMicroseconds( 100000 );
+   delay( 1000 );
+   // delayMicroseconds( 100000 );
 }
