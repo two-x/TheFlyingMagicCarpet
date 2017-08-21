@@ -24,12 +24,15 @@
 
 #include "LedConsts.h"
 
+int scaleTo255( int x, int max, int min ) {
+   return 255 + ( ( -255 ) * ( x - min ) ) / ( max - min );
+}
+
 struct CRGBW : CRGB {
    union {
      uint8_t white;
      uint8_t w;
    };
-   uint8_t rw;
 
  	 inline CRGBW() __attribute__((always_inline)) : CRGB() {
       w = 0;
@@ -308,13 +311,11 @@ struct CRGBWUA : CRGBW {
        uint8_t u;
        uint8_t black;
    };
-   uint8_t ru;
    union {
        uint8_t a;
        // TODO: figure out what a is for...
        uint8_t dunno;
    };
-   uint8_t ra;
 
  	 inline CRGBWUA() __attribute__((always_inline)) : CRGBW() {
       u = 0;
@@ -345,6 +346,11 @@ struct CRGBWUA : CRGBW {
 
    // allow assignment from one RGBW struct to another
  	 inline CRGBWUA& operator=( const CRGBW& rhs ) __attribute__((always_inline)) {
+      return (CRGBWUA&) CRGBW::operator=( rhs );
+   }
+
+   // allow assignment from HSV color
+ 	 inline CRGBWUA& operator=( const CHSV& rhs ) __attribute__((always_inline)) {
       return (CRGBWUA&) CRGBW::operator=( rhs );
    }
 
