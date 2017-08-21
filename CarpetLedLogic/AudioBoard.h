@@ -1,10 +1,5 @@
 /* AudioBoard.h
  *
- *    TODO: all of this will be rewritten when we get eliot's new code.
- *
- *    All of the #defines needed for the LP3950 audio board are included here.
- *    The setupAudioBoard function writes all the required registers.
- *
  *   Author: Anders Linn
  *   Date: June 2017
  */
@@ -12,199 +7,262 @@
 #ifndef __AUDIO_BOARD_H
 #define __AUDIO_BOARD_H
 
-#ifndef __WIRE_H
-#define __WIRE_H
-#include <Wire.h>
-#endif
+//****************TUNABLE SYSTEM PARAMTERS************************
+//all the other art cars might need different values.
 
-//I2C address of the LP3950
-#define LP3950_address 0x50
-#define ON 1
-#define OFF 0
+#define NOISE_FLOOR_LOW 75
+#define NOISE_FLOOR_MID 75
+#define NOISE_FLOOR_HIGH 75
 
-//Sets up the values of the LP3950 registers
-#define RGB_PWM ON    //set bit 7 reg 0 to ON to enable PWM control, if OFF you only
-                      //have on/off control of leds via xSWx bits
-#define RGB_START ON  //must be set to ON or PWM and blinking control will be disabled
+//Declare Spectrum Shield pin connections
+#define STROBE 7
+#define RESET 6
+#define DC_One A0
+#define LOW_OUTPUT 9
+#define MID_OUTPUT 10
+#define HIGH_OUTPUT 11
+#define ARR 8
+#define SGAIN 25
 
-//the following 6 bits control whether the lowside switches which drive the 
-//LEDs and the Arduino ADC inputs are enabled
-#define RGB_RSW1 ON
-#define RGB_GSW1 ON
-#define RGB_BSW1 ON
-#define RGB_RSW2 ON
-#define RGB_GSW2 ON
-#define RGB_BSW2 ON
+inline int scale( int x ) { return ( 255 * x ) / 1023; }
 
-//ON sets the beginning time of the turn-on slope. The on-time is relative to the selected 
-//blinking cycle length. On-setting N (N = 0–15) sets the on-time to N/16 * cycle length.
-#define RON 0x2
-#define GON 0x2
-#define BON 0x2
+class AudioBoard {
+ public:
+   //Define spectrum variables
+   static int Frequencies_Mono[7];
+   static int bin_low, bin_mid, bin_high;
 
-//OFF sets the beginning time of the turn-off slope. Off-time is relative to blinking 
-//cycle length in the same way as on-time.
-#define ROFF 0x2
-#define GOFF 0x2
-#define BOFF 0x2
+   static void Read_Frequencies(){
+      //Read frequencies for each band
+      for ( int freq_amp = 0; freq_amp < 7 ; ++freq_amp ) {
+        Frequencies_Mono[freq_amp] = analogRead(DC_One);
+        digitalWrite(STROBE, HIGH); //toggle pin of spectrum shield to get next bin value
+        delayMicroseconds( 100 );
+        digitalWrite(STROBE, LOW);
+        delayMicroseconds( 100 );
+      }
+   }
 
-//SLOPE sets the turn-on and turn-off slopes. Fastest slope is set by [0000] and slowest 
-//by [1111]. SLOPE changes the duty cycle at constant, programmable rate. For each slope 
-//setting the maximum slope time appears at maximum DUTY setting. When DUTY is reduced, 
-//the slope time decreases proportionally. For example, in case of maximum DUTY, the sloping
-//time can be adjusted from 31 ms [0000] to 930 ms [1111]. For DUTY [0111] the sloping time
-//is 14 ms [0000] to 434 ms [1111]. The blinking cycle has no effect on SLOPE.
-#define RSLOPE 0xA
-#define GSLOPE 0xA
-#define BSLOPE 0xA
+   static void Into_3_Bins(){
+     //amalgamate into 3 bins by averaging
+     bin_low = ((Frequencies_Mono[0]+Frequencies_Mono[1]+Frequencies_Mono[2])/3);
+     bin_mid = ((Frequencies_Mono[3]+Frequencies_Mono[4])/2);
+     bin_high = ((Frequencies_Mono[5]+Frequencies_Mono[6])/2);
+   
+   
+   /*
+     //amalgamate into 3 bins by taking MAX value
+     bin_low = max (Frequencies_Mono[0], Frequencies_Mono[1]);
+     bin_low = max (bin_low, Frequencies_Mono[2]);
+     bin_mid = max (Frequencies_Mono[3], Frequencies_Mono[4]);
+     bin_high = max (Frequencies_Mono[5], Frequencies_Mono[6]);
+   */
+   
+   //Don's test to try to eliminate "randomness" from mixing mulitple signals
+   /*
+     //amalgamate into 3 bins by taking the following frequencies and ignoring others
+   
+   
+     // we should use a measure for this instead fo prinitnt uncodin
+     bin_low = Frequencies_Mono[0];
+     bin_mid = Frequencies_Mono[3];
+     bin_high = Frequencies_Mono[6];
+   */
+     
+   }
 
-//DUTY sets the brightness of the LED by adjusting the duty cycle of the PWM driver. The 
-//minimum DUTY cycle is 0% [0000] and the maximum in the flash mode is A 100% [1111]. 
-//The peak pulse current is determined by the external resistor, LED forward voltage drop
-//and the boost voltage. In the normal mode the maximum duty cycle is 33%.
-#define RDUTY 0xA
-#define GDUTY 0xA
-#define BDUTY 0xA
 
-//CYCLE sets the blinking cycle: [000] for 0.25s, [001] for 0.5s, [010] for 1.0s, [011] 
-//for 2.0s. and [1XX] for 4.0s CYCLE effects to all RGB LEDs
-#define CYCLE0 OFF
-#define CYCLE1 ON
-#define CYCLE2 OFF
+   //analogRead returns 0-1023, and analogWrite works 0-255. Make sure there's no rollover.
+   static void Clipping_Basic() {
+      bin_low = scale( bin_low );
+      bin_mid = scale( bin_mid );
+      bin_high = scale( bin_high );
+   }
 
-//Setting these bits to ON enables the PWM to the low side FET switches
-#define R1_PMW ON
-#define G1_PMW ON
-#define B1_PMW ON
-#define R2_PMW ON
-#define G2_PMW ON
-#define B2_PMW ON
+   static void Noisefloor_Compensate(){
+   //here at my desk, I see that the 'floor' of each channel is between 60-70. Let's try a simple offset, plus clip so the value is never lower than 0
+   /****
+     bin_low -= NOISE_FLOOR_LOW;
+     bin_mid -= NOISE_FLOOR_MID;
+     bin_high -= NOISE_FLOOR_HIGH;
+     
+     if(bin_low < 0)
+       bin_low = 0;
+     if(bin_mid < 0)
+       bin_mid = 0;
+     if(bin_high < 0)
+       bin_high = 0;
+       //NOTE FORM DON: This algorithm lowers all LED OUTPUTS by the floor values, so max output = MAX - FLOOR, aka 185 instead of 255
+       ****/
+   
+     //Don's proposed code change
+     if(bin_low < NOISE_FLOOR_LOW)
+       bin_low = 0;
+     if(bin_mid < NOISE_FLOOR_MID)
+       bin_mid = 0;
+     if(bin_high < NOISE_FLOOR_HIGH)
+       bin_high = 0;
+   }
 
-//Set to on to enable boost converter
-#define EN_BOOST OFF
 
-//MUST BE SET ON if set to OFF device will enter a low power standby mode
-//(think regs can still be writen in standby)
-#define NSTBY ON
+   //this is the tricky part.
+   //without this, the LEDs are mostly-off at low volumes, and mostly-on at high volumes.
+   //in practicality, there's an in-between mode that sorta looks best. But it's hard to quantify.
+   //perhaps it's having an average target for each output.
+   //perhaps it's enforcing that each LED turns all the way off every 5 sec?
+   //
+   //essentially we're trying to make an AGC (auto gain control) circuit digitally
+   //so this discussion may be of use:
+   //https://www.dsprelated.com/showthread/comp.dsp/21943-1.php
+   //
+   //
+   //whatever algorithm is used, it should have a few tunable parameters. Maybe 'gain change rate' and 'target amplitude' if it's servoing gain around.
+   static void Normalize(){
+      static int low_hist[ARR], mid_hist[ARR], high_hist[ARR];
+      static int low_average, mid_average, high_average = 0;
+      static int counter = 0;
+      static int low_gain = SGAIN, mid_gain = SGAIN, high_gain = SGAIN;
+      static int gain = SGAIN;
 
-//Flash mode enable control for RGB1 and RGB2. In the flash mode (EN_FLASH = 1) 
-//RGB outputs are PWM controlled simultaneously, not in 3-phase system as in the normal mode.
-#define EN_FLASH ON
+      //this currently does not support normalizing at low volumes (basically impossible for the situation)
+      //the "fix" will be to ensure the user inputs high enough volume that noise is overwhelmed by music
+      
+      //gather recent history
+      for(int i = ARR-1; i > 0; i--){
+         low_hist[i] = low_hist[i-1];
+         mid_hist[i] = mid_hist[i-1];
+         high_hist[i] = high_hist[i-1];   
+      }
+      low_hist[0] = bin_low;
+      mid_hist[0] = bin_mid;
+      high_hist[0] = bin_high;
 
-//dont know what this does
-#define AUTOLOAD_EN OFF
+      //average in history
+      for(int i = ARR-1; i >= 0; i--){
+         low_average = low_average + low_hist[i];
+         mid_average = mid_average + mid_hist[i];
+         high_average = high_average + high_hist[i];  
+      }
+      low_average = low_average / ARR;
+      mid_average = mid_average / ARR;
+      high_average = high_average / ARR;
 
-//Both bits should be to ON to enable both channel outputs to Audio sync
-#define RGB_SEL0 ON
-#define RGB_SEL1 ON
+      //use gain on bins
+//      bin_low = (bin_low * low_gain) / SGAIN;
+//      bin_mid = (bin_mid * mid_gain) / SGAIN;
+//      bin_high = (bin_high * high_gain) / SGAIN;
+//    
+      bin_low = (bin_low * gain) / SGAIN;
+      bin_mid = (bin_mid * gain) / SGAIN;
+      bin_high = (bin_high * gain) / SGAIN;
 
-//Input signal gain control. Gain has a range from 0 dB to 21 dB with 3 dB steps
-#define GAIN_SEL0 ON
-#define GAIN_SEL1 OFF
-#define GAIN_SEL2 ON
+      //adjust gain if average is too high and the current note is too high
+      //however, if average and current note is too low, set gain back to 100% (rarely the case, unless volume is set to below operating range)
+      if(low_average > 200 && bin_low > 200){
+        low_gain--;
+      }
+      else if(low_average < 100 && bin_low < 100){
+        low_gain = SGAIN;
+      }
+      if(mid_average > 200 && bin_mid > 200){
+        mid_gain--;
+      }
+      else if(mid_average < 100 && bin_mid < 100){
+        mid_gain = SGAIN;
+      }
+      if(high_average > 200 && bin_high > 200){
+        high_gain--;
+      }
+      else if(high_average < 100 && bin_high < 100){
+        high_gain = SGAIN;
+      }
 
-//Automatic gain control. Set EN_AGC = 1 to enable automatic control or 0 to disable.
-//When EN_AGC is disabled, the audio input signal gain value is defined by GAIN_SEL
-#define EN_AGC ON
+      //the following is an attempt to use one gain instead of three separate
+      if(mid_average > 200 && bin_mid > 200){
+        gain--;
+      }
+      else if(mid_average < 100 && bin_mid < 100){
+        gain = SGAIN;
+      }
+  
+      //very relaxed upward gain correction, this takes ~ 3 seconds to return from 20% gain to 100%
+      counter++;
+      if(counter > 30){
+        counter = 0;
+        low_gain++;
+        mid_gain++;
+        high_gain++;
 
-//Synchronization mode selector. Set SYNC_MODE = 0 for amplitude synchronization. 
-//Set SYNC_MODE = 1 for frequency synchronization
-#define SYNC_MODE 1
+        gain++;
+      }
 
-//Audio synchronization enabled.
-#define EN_SYNC ON
+      //sanity check gains
+      if(low_gain > SGAIN){
+        low_gain = SGAIN;
+      }
+      if(mid_gain > SGAIN){
+        mid_gain = SGAIN;
+      } 
+      if(high_gain > SGAIN){
+        high_gain = SGAIN;
+      }
 
-//[00] ... Single ended input signal, ASE.
-//[01] ... Differential input signal, AD1 and AD2.
-//[10] ... Stereo input or single ended and differential input signal.
-//Note: Sum of input signals divided by 2.
-//[11] ... No input
-#define INPUT_SEL0 1
-#define INPUT_SEL1 0
+      if(gain > SGAIN){
+        gain = SGAIN;
+      }
+   }
 
-//see datasheet, changes how lights behave and depend if you are in freq or amp sync
-#define MODE_CTRL0 0
-#define MODE_CTRL1 0
+ public:
 
-//Control for speed of the mapping
-#define SPEED_CTRL0 0
-#define SPEED_CTRL1 0
+   static void pollFrequencies( uint32_t time ) {
+     static uint32_t timestamp;
+     // TODO: fiddle around with this value to find the right tuning
+     if ( time - timestamp > 30 ) {
+        Serial.println( "getting freqs" );
+        timestamp = time;
+        Read_Frequencies();
+        Into_3_Bins();
+        Clipping_Basic();
+        Noisefloor_Compensate();
+     }
+   }
 
-void write_reg( int reg, unsigned char data ) {
-   Wire.beginTransmission( LP3950_address );
-   Wire.write( reg );
-   Wire.write( data );
-   Wire.endTransmission();
-}
+   static uint8_t getLow() {
+      return bin_low;
+   }
 
-void setupAudioBoard() {
-   // join i2c bus (address optional for master)
-   Wire.begin();
+   static uint8_t getMid() {
+      return bin_low;
+   }
 
-   // declare variables to mask register bits into
-   unsigned char  RGBCONTROL = 0;
-   unsigned char  RED = 0;
-   unsigned char  GREEN = 0;
-   unsigned char  BLUE = 0;
-   unsigned char  RSLOPEDUTY = 0;
-   unsigned char  GSLOPEDUTY = 0;
-   unsigned char  BSLOPEDUTY = 0;
-   unsigned char  CYCLEPWM = 0;
-   unsigned char  ENABLES = 0;
-   unsigned char  BOOSTFREQ = 0;
-   unsigned char  BOOSTVOLTAGE = 0;
-   unsigned char  AUDCON1 = 0;
-   unsigned char  AUDCON2 = 0;
+   static uint8_t getHigh() {
+      return bin_low;
+   }
 
-   // bunch of code which masks all the LP3950 register controls bits into
-   // bytes which can be writen in to the register
+   static void setup() {
+      //Set spectrum Shield pin configurations
+      pinMode(STROBE, OUTPUT);
+      pinMode(RESET, OUTPUT);
+      pinMode(DC_One, INPUT);
+      digitalWrite(STROBE, HIGH);
+      digitalWrite(RESET, HIGH);
 
-   //assembling register 0x00 RGB_control
-   RGBCONTROL = ( (RGB_PWM << 7)|(RGB_START << 6)|(RGB_RSW1 << 5)|(RGB_GSW1 << 4)|
-   (RGB_BSW1 << 3)|(RGB_RSW2 << 2)|(RGB_GSW2 << 1)|(RGB_BSW2) );
+      //Initialize Spectrum Analyzers
+      digitalWrite(STROBE, LOW);
+      delay(1);
+      digitalWrite(RESET, HIGH);
+      delay(1);
+      digitalWrite(STROBE, HIGH);
+      delay(1);
+      digitalWrite(STROBE, LOW);
+      delay(1);
+      digitalWrite(RESET, LOW);
+   }
+};
 
-   RED = ( (RON << 4)|(ROFF) );
-
-   GREEN = ( (GON << 4)|(GOFF) );
-
-   BLUE = ( (BON << 4)|(BOFF) );
-
-   RSLOPEDUTY = ( (RSLOPE << 4)|(RDUTY) );
-
-   GSLOPEDUTY = ( (GSLOPE << 4)|(GDUTY) );
-
-   BSLOPEDUTY = ( (BSLOPE << 4)|(BDUTY) );
-
-   CYCLEPWM = ( (CYCLE1 << 7)|(CYCLE0 << 6)|(R1_PMW << 5)|(G1_PMW << 4)|
-   (B1_PMW << 3)|(R2_PMW << 2)|(G2_PMW << 1)|(B2_PMW) );
-
-   ENABLES = ( (CYCLE2 << 7)|(NSTBY << 6)|(EN_BOOST << 5)|(EN_FLASH << 4)|
-   (0 << 3)|(AUTOLOAD_EN << 2)|(RGB_SEL1 << 1)|(RGB_SEL0) );
-
-   // Boost convert is not connected so I have fixed the regs to it is off
-   BOOSTFREQ = 0x01;
-   BOOSTVOLTAGE = 0x3F;
-
-   AUDCON1 = ( (GAIN_SEL2 << 7)|(GAIN_SEL1 << 6)|(GAIN_SEL0 << 5)|(SYNC_MODE << 4)|
-   (EN_AGC << 3)|(EN_SYNC << 2)|(INPUT_SEL1 << 1)|(INPUT_SEL0) );
-
-   AUDCON2 = ( (0 << 7)|(0 << 6)|(0 << 5)|(0 << 4)|
-   (MODE_CTRL1 << 3)|(MODE_CTRL0 << 2)|(SPEED_CTRL1 << 1)|(SPEED_CTRL0) );
-
-   // configure LP3950 registers
-   write_reg( 0x00, RGBCONTROL );
-   write_reg( 0x01, RED );
-   write_reg( 0x02, GREEN );
-   write_reg( 0x03, BLUE );
-   write_reg( 0x04, RSLOPEDUTY );
-   write_reg( 0x05, GSLOPEDUTY );
-   write_reg( 0x06, BSLOPEDUTY );
-   write_reg( 0x07, CYCLEPWM );
-   write_reg( 0x0B, ENABLES );
-   write_reg( 0x0C, BOOSTFREQ );
-   write_reg( 0x0D, BOOSTVOLTAGE );
-   write_reg( 0x2A, AUDCON1 );
-   write_reg( 0x2B, AUDCON2 );
-}
+int AudioBoard::Frequencies_Mono[7];
+int AudioBoard::bin_low = 0;
+int AudioBoard::bin_mid = 0;
+int AudioBoard::bin_high = 0;
 
 #endif
