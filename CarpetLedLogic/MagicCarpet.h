@@ -27,14 +27,15 @@
 #include "ArmDmx.h"
 
 // Controller constants
-#define POT_ANALOG_PIN 7
-#define BUTTON_PIN 50
-#define ENCODER_A_PIN 51
-#define ENCODER_B_PIN 52
+#define POT_ANALOG_PIN 3
+#define BUTTON_PIN 3
+#define ENCODER_A_PIN 5
+#define ENCODER_B_PIN 4
 
 // DMX constants
 #define NUM_MEGABAR_LEDS 10
 #define NUM_CHINA_LEDS 8
+#define NUM_DMX_LEDS NUM_MEGABAR_LEDS + NUM_CHINA_LEDS
 #define SIZEOF_MEGABAR_LEDS ( NUM_MEGABAR_LEDS * sizeof( CRGB ) )
 #define SIZEOF_CHINA_LEDS ( NUM_CHINA_LEDS * sizeof( CRGBWUA ) )
 #define TOTAL_DMX_SIZE ( SIZEOF_MEGABAR_LEDS + SIZEOF_CHINA_LEDS )
