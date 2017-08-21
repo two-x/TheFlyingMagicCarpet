@@ -40,7 +40,6 @@
 #define TOTAL_DMX_SIZE ( SIZEOF_MEGABAR_LEDS + SIZEOF_CHINA_LEDS )
 
 // Neopixel constants
-// TODO: double-check these numbers and the addressing scheme
 // TODO: convert the user-facing values to constexpr global vars
 #define SIZEOF_SMALL_NEO 108
 #define SIZEOF_LARGE_NEO 145
@@ -125,6 +124,13 @@ class MagicCarpet {
    LedControl::Encoder * encoder;
 
    void setup() {
+      // seed random so we always get different random patterns
+      randomSeed( analogRead( 0 ) );
+
+      AudioBoard::setup();
+
+      digitalWrite( 2, HIGH );
+
       // set up the controller
       pot = new LedControl::Potentiometer( POT_ANALOG_PIN );
       button = LedControl::getPushButton( BUTTON_PIN );

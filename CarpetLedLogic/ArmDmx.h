@@ -48,6 +48,10 @@ void dmx_init(size_t buflen) {
 }
 
 void dmx_send(uint8_t *buf) {
+  static const uint32_t minResetTime = 2;
+  static uint32_t timeSinceLastSend = 0;
+  while ( millis() - timeSinceLastSend < minResetTime );
+  timeSinceLastSend = millis();
   _dmx_buf[0] = 0;
   memcpy(_dmx_buf+1, buf, dmx_buflen);
   DMX_UART->US_CR |= US_CR_STTBRK;   // Start break
