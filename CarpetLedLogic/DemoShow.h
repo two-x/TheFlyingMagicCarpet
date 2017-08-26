@@ -53,27 +53,38 @@ class DemoShow : public LightShow {
                                              // CRGB::White, CRGB::Yellow,
                                              // CRGB::Red, CRGB::Black );
 
-      static const int rate = 1000; // millis
-      static int pos = 0;
+      static const int rate = 10000; // millis
+      static uint8_t pos = 0;
       uint32_t diff = timestamp - dmxTime;
       if ( diff > rate ) {
          dmxTime = timestamp;
          diff = 0;
+         ++pos;
       }
 
       for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) {
-         int index = scaleTo255( i, NUM_MEGABAR_LEDS - 1, 0 );
+         int index = scaleTo255( i + pos, NUM_MEGABAR_LEDS - 1, 0 );
          int diffIndex = scaleTo255( diff, rate, 0 );
-         CRGB clr1 = ColorFromPalette( dmxPalette, index );
-         CRGB clr2 = ColorFromPalette( dmxPalette, index + 1 );
-         carpet->megabarLeds[ i ] = blend( clr1, clr2, diffIndex );
+         carpet->megabarLeds[ i ] = CHSV( index + diffIndex, 255, 255 );
       }
       for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
          int index = scaleTo255( i, NUM_CHINA_LEDS - 1, 0 );
          int diffIndex = scaleTo255( diff, rate, 0 );
-         CRGB clr1 = ColorFromPalette( dmxPalette, index );
-         CRGB clr2 = ColorFromPalette( dmxPalette, index + 1 );
-         carpet->chinaLeds[ i ] = blend( clr1, clr2, diffIndex );
+         carpet->chinaLeds[ i ] = CHSV( index + diffIndex, 255, 255 );
       }
+      // for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) {
+      //    int index = scaleTo255( i + pos, NUM_MEGABAR_LEDS - 1, 0 );
+      //    int diffIndex = scaleTo255( diff, rate, 0 );
+      //    CRGB clr1 = ColorFromPalette( dmxPalette, index );
+      //    CRGB clr2 = ColorFromPalette( dmxPalette, index + 1 );
+      //    carpet->megabarLeds[ i ] = blend( clr1, clr2, diffIndex );
+      // }
+      // for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
+      //    int index = scaleTo255( i, NUM_CHINA_LEDS - 1, 0 );
+      //    int diffIndex = scaleTo255( diff, rate, 0 );
+      //    CRGB clr1 = ColorFromPalette( dmxPalette, index );
+      //    CRGB clr2 = ColorFromPalette( dmxPalette, index + 1 );
+      //    carpet->chinaLeds[ i ] = blend( clr1, clr2, diffIndex );
+      // }
    }
 };

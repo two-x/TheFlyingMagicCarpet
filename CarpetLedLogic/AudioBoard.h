@@ -34,12 +34,20 @@ class AudioBoard {
 
    static void Read_Frequencies(){
       //Read frequencies for each band
+      //Initialize Spectrum Analyzers
+      delay(1);
+      digitalWrite(RESET, LOW);
+      delay(1);
+      digitalWrite(RESET, HIGH);
+      delay(1);
       for ( int freq_amp = 0; freq_amp < 7 ; ++freq_amp ) {
         Frequencies_Mono[freq_amp] = analogRead(DC_One);
-        digitalWrite(STROBE, HIGH); //toggle pin of spectrum shield to get next bin value
-        delayMicroseconds( 100 );
-        digitalWrite(STROBE, LOW);
-        delayMicroseconds( 100 );
+        digitalWrite(STROBE, LOW); //toggle pin of spectrum shield to get next bin value
+         delay(1);
+        // delayMicroseconds( 10000 );
+        digitalWrite(STROBE, HIGH);
+        // delayMicroseconds( 10000 );
+         delay(1);
       }
    }
 
@@ -218,7 +226,6 @@ class AudioBoard {
      static uint32_t timestamp;
      // TODO: fiddle around with this value to find the right tuning
      if ( time - timestamp > 30 ) {
-        Serial.println( "getting freqs" );
         timestamp = time;
         Read_Frequencies();
         Into_3_Bins();
@@ -248,15 +255,15 @@ class AudioBoard {
       digitalWrite(RESET, HIGH);
 
       //Initialize Spectrum Analyzers
-      digitalWrite(STROBE, LOW);
+      digitalWrite(STROBE, HIGH);
       delay(1);
-      digitalWrite(RESET, HIGH);
+      digitalWrite(RESET, LOW);
+      delay(1);
+      digitalWrite(STROBE, LOW);
       delay(1);
       digitalWrite(STROBE, HIGH);
       delay(1);
-      digitalWrite(STROBE, LOW);
-      delay(1);
-      digitalWrite(RESET, LOW);
+      digitalWrite(RESET, HIGH);
    }
 };
 
