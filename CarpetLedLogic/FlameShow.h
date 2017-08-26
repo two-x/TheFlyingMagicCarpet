@@ -33,9 +33,7 @@ class FlameShow : public LightShow {
 
    void start() {
       CRGB clr = ColorFromPalette( flames, 0 );
-      for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
-         carpet->ropeLeds[ i ] = clr;
-      }
+      fill( carpet->ropeLeds, clr, NUM_NEO_LEDS );
    }
 
    void update( uint32_t time ) {
@@ -52,14 +50,16 @@ class FlameShow : public LightShow {
          uint16_t hi = i < NUM_NEO_LEDS - 1 ? i + i : 0;
          currTemperature[ i ] = ( prevTemperature[ lw ] +
                                   prevTemperature[ hi ] +
-                                  prevTemperature[ i ] ) / 3;
+                                  prevTemperature[ i ] * 2 ) / 4;
       }
 
       // add sparks
       // TODO: this isn't enough for us, we'll want to spread our sparks out around the car
-      if ( random8() < sparkingRate ) {
-         uint16_t index = random16( NUM_NEO_LEDS - 1 );
-         currTemperature[ index ] = qadd8( currTemperature[ index ], random8( 160, 255 ) );
+      for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+         if ( random8() < sparkingRate ) {
+            currTemperature[ i ] = qadd8( currTemperature[ i ],
+                                          random8( 160, 255 ) );
+         }
       }
 
       // assign color
