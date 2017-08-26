@@ -218,6 +218,22 @@ class MagicCarpet {
       clearChinas();
       clearRope();
    }
+
+   void error() {
+      while( true ) {
+         static CRGB clr = CRGB::Black;
+         static CRGBWUA chinaClr = clr;
+         clr.a = 255
+         fill( ropeLeds, CRGB::Red, NUM_NEO_LEDS );
+         fill( dmxLeds, CRGB::Yellow, NUM_DMX_LEDS );
+         fill( chinaLeds, chinaClr, NUM_CHINA_LEDS );
+         FastLED.delay( 1000 );
+         fill( ropeLeds, clr, NUM_NEO_LEDS );
+         fill( dmxLeds, clr, NUM_DMX_LEDS );
+         fill( chinaLeds, clr, NUM_CHINA_LEDS );
+         FastLED.delay( 1000 );
+      }
+   }
 };
 
 // singleton representing the one-and-only Flying Magic Carpet (TM)
