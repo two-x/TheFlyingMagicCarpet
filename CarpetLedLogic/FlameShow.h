@@ -17,12 +17,19 @@ static const CRGBPalette256 flames(
       CRGB::Orange,
       CRGB::Yellow );
 
+  // Second, this palette is like the heat colors, but blue/aqua instead of red/yellow
+static const CRGBPalette256 waterflames(
+      CRGB::DarkBlue,
+      CRGB::Blue,
+      CRGB::Aqua,
+      CRGB::White );
+  
 class FlameShow : public LightShow {
  private:
 
    // TODO: tune this
-   static const uint8_t coolingRate = 15;
-   static const uint8_t sparkingRate = 230; // maybe set this based on music?
+   static const uint8_t coolingRate = 65;
+   static const uint8_t sparkingRate = 70; // maybe set this based on music?
 
    uint8_t currTemperature[ NUM_NEO_LEDS ] = { 0 };
    uint8_t prevTemperature[ NUM_NEO_LEDS ] = { 0 };
@@ -33,43 +40,82 @@ class FlameShow : public LightShow {
 
    void start() {
       CRGB clr = ColorFromPalette( flames, 0 );
-      fill( carpet->ropeLeds, clr, NUM_NEO_LEDS );
+      LedUtil::fill( carpet->ropeLeds, clr, NUM_NEO_LEDS );
    }
 
    void update( uint32_t time ) {
       static uint32_t timestamp = 0;
+      static uint32_t rate = 10;
 
-      // cool everything
-      for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
-         prevTemperature[ i ] = qsub8( prevTemperature[ i ], coolingRate );
-      }
-
-      // disperse heat
-      for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
-         uint16_t lw = i > 0 ? i - 1 : NUM_NEO_LEDS - 1;
-         uint16_t hi = i < NUM_NEO_LEDS - 1 ? i + i : 0;
-         currTemperature[ i ] = ( prevTemperature[ lw ] +
-                                  prevTemperature[ hi ] +
-                                  prevTemperature[ i ] * 2 ) / 4;
-      }
-
-      // add sparks
-      // TODO: this isn't enough for us, we'll want to spread our sparks out around the car
-      for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
-         if ( random8() < sparkingRate ) {
-            currTemperature[ i ] = qadd8( currTemperature[ i ],
-                                          random8( 160, 255 ) );
+      if ( time - timestamp > rate ) {
+         timestamp = time;
+         // cool everything
+         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+            prevTemperature[ i ] = qsub8( prevTemperature[ i ], coolingRate );
          }
-      }
 
-      // assign color
-      for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
-         carpet->ropeLeds[ i ] = ColorFromPalette( flames, currTemperature[ i ] );
-      }
+         // disperse heat
+         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+            uint16_t lw = i > 0 ? i - 1 : NUM_NEO_LEDS - 1;
+            uint16_t hi = i < NUM_NEO_LEDS - 1 ? i + i : 0;
+            currTemperature[ i ] = ( prevTemperature[ lw ] +
+                                     prevTemperature[ hi ] +
+                                     prevTemperature[ i ] ) / 3;
+         }
 
-      // store prev color for next round
-      for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
-         prevTemperature[ i ] = currTemperature[ i ];
+         // add sparks
+         // TODO: this isn't enough for us, we'll want to spread our sparks out around the car
+         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+            if ( random8() < sparkingRate ) {
+               currTemperature[ i ] = qadd8( currTemperature[ i ],
+                                             random8( 160, 255 ) );
+            }
+         }
+
+         // pick color
+         bool buttonStatus;
+         if ( carpet->button->isDown() ) {
+            buttonStatus = false;
+         } else {
+            buttonStatus = true;
+         }
+
+         // assign color
+         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+            if ( buttonStatus ) {
+               carpet->ropeLeds[ i ] = ColorFromPalette( flames, currTemperature[ i ] );
+            } else {
+               carpet->ropeLeds[ i ] = ColorFromPalette( waterflames, currTemperature[ i ] );
+            }
+         }
+
+         // store prev color for next round
+         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+            prevTemperature[ i ] = currTemperature[ i ];
+         }
+      } else {
+         // pick color
+         bool buttonStatus;
+         if ( carpet->button->isDown() ) {
+            buttonStatus = false;
+         } else {
+            buttonStatus = true;
+         }
+
+         // assign color
+         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+            CRGB newclr, oldclr;
+            if ( buttonStatus ) {
+               newclr = ColorFromPalette( flames, currTemperature[ i ] );
+               oldclr = ColorFromPalette( flames, prevTemperature[ i ] );
+            } else {
+               newclr = ColorFromPalette( waterflames, currTemperature[ i ] );
+               oldclr = ColorFromPalette( waterflames, prevTemperature[ i ] );
+            }
+            int val = scaleTo255( time - timestamp, rate, 0 );
+            Serial.println( val );
+            carpet->ropeLeds[ i ] = blend( val, newclr, oldclr );
+         }
       }
    }
 };

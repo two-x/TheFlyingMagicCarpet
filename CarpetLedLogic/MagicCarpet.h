@@ -223,14 +223,14 @@ class MagicCarpet {
       while( true ) {
          static CRGB clr = CRGB::Black;
          static CRGBWUA chinaClr = clr;
-         clr.a = 255
-         fill( ropeLeds, CRGB::Red, NUM_NEO_LEDS );
-         fill( dmxLeds, CRGB::Yellow, NUM_DMX_LEDS );
-         fill( chinaLeds, chinaClr, NUM_CHINA_LEDS );
+         chinaClr.a = 255;
+         LedUtil::fill( ropeLeds, CRGB::Red, NUM_NEO_LEDS );
+         LedUtil::fill( megabarLeds, CRGB::Yellow, NUM_DMX_LEDS );
+         LedUtil::fill( chinaLeds, chinaClr, NUM_CHINA_LEDS );
          FastLED.delay( 1000 );
-         fill( ropeLeds, clr, NUM_NEO_LEDS );
-         fill( dmxLeds, clr, NUM_DMX_LEDS );
-         fill( chinaLeds, clr, NUM_CHINA_LEDS );
+         LedUtil::fill( ropeLeds, clr, NUM_NEO_LEDS );
+         LedUtil::fill( megabarLeds, clr, NUM_DMX_LEDS );
+         LedUtil::fill( chinaLeds, clr, NUM_CHINA_LEDS );
          FastLED.delay( 1000 );
       }
    }

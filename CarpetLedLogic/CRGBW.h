@@ -448,19 +448,8 @@ static void convertNeoArray( CRGBW *src, CRGB *dst, uint16_t srcSize ) {
    }
 }
 
-static void fill( CRGB *src, CRGB clr, uint16_t srcSize ) {
-   for ( uint16_t i = 0; i < srcSize; ++i ) {
-      src[ i ] = clr;
-   }
-}
-
-static void fill( CRGBW *src, CRGBW clr, uint16_t srcSize ) {
-   for ( uint16_t i = 0; i < srcSize; ++i ) {
-      src[ i ] = clr;
-   }
-}
-
-static void fill( CRGBWUA *src, CRGBWUA clr, uint16_t srcSize ) {
+template< typename C >
+static void fill( C *src, CRGB clr, uint16_t srcSize ) {
    for ( uint16_t i = 0; i < srcSize; ++i ) {
       src[ i ] = clr;
    }
