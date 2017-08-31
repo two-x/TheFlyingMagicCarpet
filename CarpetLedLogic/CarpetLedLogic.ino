@@ -8,6 +8,8 @@
 
 #include "MagicCarpet.h"
 
+#include "AudioBoard.h"
+
 // light shows
 #include "DemoShow.h"
 #include "FlameShow.h"
@@ -19,6 +21,8 @@ MagicCarpet * carpet;
 LightShow * currLightShow;
 
 void setup() {
+   // AudioBoard::setup();
+
    // setup the carpet
    carpet = theMagicCarpet();
    carpet->setup();
@@ -28,7 +32,7 @@ void setup() {
    // currLightShow = new FlameShow( carpet );
    currLightShow = new NightriderShow( carpet );
    currLightShow->start();
-   // Serial.begin(9600);
+   Serial.begin(9600);
 }
 
 void loop() {
@@ -36,7 +40,42 @@ void loop() {
 
    clock = millis();
 
-   // AudioBoard::pollFrequencies( clock );
+   AudioBoard::pollFrequencies( clock );
+
+   if ( false && true ) {
+      // Serial.println("millis");
+      // Serial.println( clock );
+      // Serial.println("output");
+      // Serial.println( AudioBoard::bin_low );
+      // Serial.println( AudioBoard::bin_mid );
+      // Serial.println( AudioBoard::bin_high );
+      // Serial.println("input");
+      // Serial.println( scaleTo255( AudioBoard::Frequencies_Mono[0], 1024, 0 ) );
+      // Serial.println( scaleTo255( AudioBoard::Frequencies_Mono[1], 1024, 0 ) );
+      // Serial.println( scaleTo255( AudioBoard::Frequencies_Mono[2], 1024, 0 ) );
+      // Serial.println( scaleTo255( AudioBoard::Frequencies_Mono[4], 1024, 0 ) );
+      // Serial.println( scaleTo255( AudioBoard::Frequencies_Mono[5], 1024, 0 ) );
+      // Serial.println( scaleTo255( AudioBoard::Frequencies_Mono[6], 1024, 0 ) );
+      // Serial.println( scaleTo255( AudioBoard::Frequencies_Mono[7], 1024, 0 ) );
+   }
+
+   // CRGB clr2 = CRGB::Red;
+   // CRGB clr1 = CRGB::Cyan;
+
+   // for ( int j = NEO6_OFFSET; j < NEO6_OFFSET + 7; ++j ) {
+   //    carpet->ropeLeds[ j ] = blend( clr1, clr2, scaleTo255( AudioBoard::Frequencies_Mono[j], 1024, 0 ) );
+   // }
+   // carpet->ropeLeds[ NEO6_OFFSET + 7 ] = blend( clr1, clr2, AudioBoard::getLow() );
+   // carpet->ropeLeds[ NEO6_OFFSET + 8 ] = blend( clr1, clr2, AudioBoard::getMid() );
+   // carpet->ropeLeds[ NEO6_OFFSET + 9 ] = blend( clr1, clr2, AudioBoard::getHigh() );
+
+   // for ( int j = NEO6_OFFSET + 7; j < NEO6_OFFSET + 10; ++j ) {
+   //    Serial.print( "freqcolor" );
+   //    Serial.println( j );
+   //    Serial.println( carpet->ropeLeds[ j ].r );
+   //    Serial.println( carpet->ropeLeds[ j ].g );
+   //    Serial.println( carpet->ropeLeds[ j ].b );
+   // }
 
    // read encoder
    static const uint8_t numModes = 2;
@@ -51,6 +90,8 @@ void loop() {
    // Serial.println( currMode );
    // Serial.println( "delta" );
    // Serial.println( delta );
+   // Serial.println( "button" );
+   // Serial.println( carpet->button->isDown() );
    if ( currMode != prevMode ) {
       delete currLightShow;
       // based on diff, switch between existing light shows
@@ -65,8 +106,10 @@ void loop() {
          //    currLightShow = new DemoShow( carpet );
          //    break;
          default:
-            // we fucked up
-            carpet->error();
+            // we fucked up, just reset
+            // carpet->error(); // uncomment for debugging
+            currMode = 0;
+            currLightShow = new NightriderShow( carpet );
       }
       currLightShow->start();
       prevMode = currMode;

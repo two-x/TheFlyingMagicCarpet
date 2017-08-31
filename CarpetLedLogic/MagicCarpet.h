@@ -188,8 +188,6 @@ class MagicCarpet {
 
       // make sure to reverse the values so the user has a consistent view
       LedUtil::reverse( ropeLeds + NEO0_OFFSET, SIZEOF_SMALL_NEO );
-      LedUtil::reverse( ropeLeds + NEO2_OFFSET, SIZEOF_LARGE_NEO );
-      LedUtil::reverse( ropeLeds + NEO4_OFFSET, SIZEOF_SMALL_NEO );
       LedUtil::reverse( ropeLeds + NEO6_OFFSET, SIZEOF_LARGE_NEO );
 
       // we don't have to pass the china light array separately. Instead, we treat

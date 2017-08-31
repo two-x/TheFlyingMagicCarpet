@@ -24,7 +24,7 @@
 #define ARR 8
 #define SGAIN 25
 
-inline int scale( int x ) { return ( 255 * x ) / 1023; }
+inline int scale( int x ) { return 255 - ( ( 255 * x ) / 1023 ); }
 
 class AudioBoard {
  public:
@@ -34,28 +34,20 @@ class AudioBoard {
 
    static void Read_Frequencies(){
       //Read frequencies for each band
-      //Initialize Spectrum Analyzers
-      delay(1);
-      digitalWrite(RESET, LOW);
-      delay(1);
-      digitalWrite(RESET, HIGH);
-      delay(1);
       for ( int freq_amp = 0; freq_amp < 7 ; ++freq_amp ) {
         Frequencies_Mono[freq_amp] = analogRead(DC_One);
         digitalWrite(STROBE, LOW); //toggle pin of spectrum shield to get next bin value
-         delay(1);
-        // delayMicroseconds( 10000 );
+        delayMicroseconds( 100 );
         digitalWrite(STROBE, HIGH);
-        // delayMicroseconds( 10000 );
-         delay(1);
+        delayMicroseconds( 100 );
       }
    }
 
    static void Into_3_Bins(){
      //amalgamate into 3 bins by averaging
-     bin_low = ((Frequencies_Mono[0]+Frequencies_Mono[1]+Frequencies_Mono[2])/3);
-     bin_mid = ((Frequencies_Mono[3]+Frequencies_Mono[4])/2);
-     bin_high = ((Frequencies_Mono[5]+Frequencies_Mono[6])/2);
+     // bin_low = ((Frequencies_Mono[0]+ ( Frequencies_Mono[1] * 0.3 ) )/1.3);
+     // bin_mid = ((Frequencies_Mono[3]+Frequencies_Mono[4])/2);
+     // bin_high = ((Frequencies_Mono[5]+Frequencies_Mono[6])/2);
    
    
    /*
@@ -67,15 +59,12 @@ class AudioBoard {
    */
    
    //Don's test to try to eliminate "randomness" from mixing mulitple signals
-   /*
      //amalgamate into 3 bins by taking the following frequencies and ignoring others
    
    
-     // we should use a measure for this instead fo prinitnt uncodin
-     bin_low = Frequencies_Mono[0];
+     bin_low = Frequencies_Mono[0] || Frequencies_Mono[1];
      bin_mid = Frequencies_Mono[3];
      bin_high = Frequencies_Mono[6];
-   */
      
    }
 
@@ -228,9 +217,8 @@ class AudioBoard {
      if ( time - timestamp > 30 ) {
         timestamp = time;
         Read_Frequencies();
-        Into_3_Bins();
-        Clipping_Basic();
-        Noisefloor_Compensate();
+        // Into_3_Bins();
+        // Clipping_Basic();
      }
    }
 
@@ -239,11 +227,11 @@ class AudioBoard {
    }
 
    static uint8_t getMid() {
-      return bin_low;
+      return bin_mid;
    }
 
    static uint8_t getHigh() {
-      return bin_low;
+      return bin_high;
    }
 
    static void setup() {
@@ -256,13 +244,13 @@ class AudioBoard {
 
       //Initialize Spectrum Analyzers
       digitalWrite(STROBE, HIGH);
-      delay(1);
+      delayMicroseconds(100);
       digitalWrite(RESET, LOW);
-      delay(1);
+      delayMicroseconds(100);
       digitalWrite(STROBE, LOW);
-      delay(1);
+      delayMicroseconds(100);
       digitalWrite(STROBE, HIGH);
-      delay(1);
+      delayMicroseconds(100);
       digitalWrite(RESET, HIGH);
    }
 };
