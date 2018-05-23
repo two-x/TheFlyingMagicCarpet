@@ -38,11 +38,13 @@ void setup() {
 void loop() {
    static uint32_t clock;
 
+   Serial.println( carpet->pot->read() );
+
    clock = millis();
 
    AudioBoard::pollFrequencies( clock );
 
-   if ( false && true ) {
+   if ( true ) {
       // Serial.println("millis");
       // Serial.println( clock );
       // Serial.println("output");
@@ -50,13 +52,13 @@ void loop() {
       // Serial.println( AudioBoard::bin_mid );
       // Serial.println( AudioBoard::bin_high );
       // Serial.println("input");
-      // Serial.println( scaleTo255( AudioBoard::Frequencies_Mono[0], 1024, 0 ) );
-      // Serial.println( scaleTo255( AudioBoard::Frequencies_Mono[1], 1024, 0 ) );
-      // Serial.println( scaleTo255( AudioBoard::Frequencies_Mono[2], 1024, 0 ) );
-      // Serial.println( scaleTo255( AudioBoard::Frequencies_Mono[4], 1024, 0 ) );
-      // Serial.println( scaleTo255( AudioBoard::Frequencies_Mono[5], 1024, 0 ) );
-      // Serial.println( scaleTo255( AudioBoard::Frequencies_Mono[6], 1024, 0 ) );
-      // Serial.println( scaleTo255( AudioBoard::Frequencies_Mono[7], 1024, 0 ) );
+      // Serial.println( AudioBoard::Frequencies_Mono[0] );
+      // Serial.println( AudioBoard::Frequencies_Mono[1] );
+      // Serial.println( AudioBoard::Frequencies_Mono[2] );
+      // Serial.println( AudioBoard::Frequencies_Mono[4] );
+      // Serial.println( AudioBoard::Frequencies_Mono[5] );
+      // Serial.println( AudioBoard::Frequencies_Mono[6] );
+      // Serial.println( AudioBoard::Frequencies_Mono[7] );
    }
 
    // CRGB clr2 = CRGB::Red;

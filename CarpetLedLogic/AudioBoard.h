@@ -62,7 +62,7 @@ class AudioBoard {
      //amalgamate into 3 bins by taking the following frequencies and ignoring others
    
    
-     bin_low = Frequencies_Mono[0] || Frequencies_Mono[1];
+     bin_low = Frequencies_Mono[1];
      bin_mid = Frequencies_Mono[3];
      bin_high = Frequencies_Mono[6];
      
@@ -217,8 +217,8 @@ class AudioBoard {
      if ( time - timestamp > 30 ) {
         timestamp = time;
         Read_Frequencies();
-        // Into_3_Bins();
-        // Clipping_Basic();
+        Into_3_Bins();
+        Clipping_Basic();
      }
    }
 
