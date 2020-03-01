@@ -10,6 +10,26 @@
 
 #include "LightShow.h"
 
+const CRGB topC[] {
+   CRGB( 0, 255, 127), // summer day
+   CRGB( 178, 118, 50), // end summer day
+   CRGB( 178, 102, 9), // deep dark night
+   CRGB( 0, 255, 72), // desert afternoon
+   CRGB( 43, 123, 93), //under the sea
+   CRGB( 236, 84, 81), // beach party
+   CRGB( 248, 182, 124)
+};
+
+const CRGB bottomC[] {
+ CRGB( 0, 201, 100 ),
+ CRGB( 254, 181, 97 ),
+ CRGB( 0, 68, 101 ),
+ CRGB( 76, 255, 127 ),
+ CRGB( 50, 199, 143 ),
+ CRGB( 182, 35, 99 ),
+ CRGB( 248, 247, 5 ),
+};
+
 class NightriderShow : public LightShow {
  public:
    NightriderShow( MagicCarpet * carpetArg ) : LightShow( carpetArg ) {}
@@ -61,6 +81,20 @@ class NightriderShow : public LightShow {
       const uint8_t val2 = ( val1 + 128 ) % 255;
       const CRGB clr1 = CHSV( val1, 255, 255 );
       const CRGB clr2 = CHSV( val2, 255, 255 );;
+      // Serial.println( "potval" );
+      // Serial.println( val1 );
+      // const CRGBW clr1 = topC[val1];
+      // const CRGBW clr2 = bottomC[val1];
+      // Serial.println( "CRGB1" );
+      // Serial.println( clr1.r );
+      // Serial.println( clr1.g );
+      // Serial.println( clr1.b );
+      // Serial.println( clr1.w );
+      // Serial.println( "CRGB2" );
+      // Serial.println( clr2.r );
+      // Serial.println( clr2.g );
+      // Serial.println( clr2.b );
+      // Serial.println( clr2.w );
       int diffIndex = scaleTo255( diff, rate, 0 );
 
       for ( int i = NEO0_OFFSET; i < NEO1_OFFSET; ++i ) {

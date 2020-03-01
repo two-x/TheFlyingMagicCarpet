@@ -67,9 +67,31 @@ void ropeDemo() {
 }
 
 void setup() {
-   ropeDemoSetup();
+   Serial.begin(9600);
+  carpet = theMagicCarpet();
+   carpet->setup();
+   carpet->show();
+   for ( int i = 0; i < NUM_NEO_LEDS; i++ ) {
+     carpet->ropeLeds[i] = CRGBW::Red;
+   }
+   FastLED.delay( 1000 );
+   // ropeDemoSetup();
 }
 
 void loop() {
-   ropeDemo();
+  CRGB clr( random8() % 255, random8() % 255, random8() % 255 );
+  int start = FRONT_RIGHT;
+  int end = RIGHT;
+   for ( int i = 0; i < start; i++ ) {
+     carpet->ropeLeds[i] = CRGBW::Black;
+   }
+   for ( int i = start; i < end; i++ ) {
+     carpet->ropeLeds[i] = clr;
+   }
+   for ( int i = end; i < NUM_NEO_LEDS; i++ ) {
+     carpet->ropeLeds[i] = CRGBW::Black;
+   }
+   carpet->show();
+   FastLED.delay( 1000 );
+   // ropeDemo();
 }
