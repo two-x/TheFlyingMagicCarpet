@@ -89,7 +89,7 @@
 #define LOCK 0
 #define JOY 1
 #define CAR 2
-#define PWM 3
+#define PWMS 3
 #define BPID 4 
 #define GPID 5
 #define CPID 6
@@ -221,7 +221,7 @@ char tunings[sim_tuning_modes][disp_tuning_lines][12] = {
         "   Gas PID:",
         " Gesturing:",
         "BrakePosZP:" },
-    {   "  Steer Lt:",  // PWM
+    {   "  Steer Lt:",  // PWMS
         "Steer Stop:",
         "  Steer Rt:",
         " Brake Ext:",
@@ -272,7 +272,7 @@ char simgrid[touch_rows][touch_cols][6] = {
 };    
 char modecard[6][7] = { "Shutdn", "Basic", "Stall", "Hold", "Fly", "Cruise" };
 uint16_t colorcard[6] = { RED, MGT, YEL, YEL, GRN, CYN };
-char tunecard[7][5] = { "Run ", "Joy ", "Car ", "PWM ", "Bpid", "Gpid", "Cpid" };
+char tunecard[7][5] = { "Run ", "Joy ", "Car ", "PWMs", "Bpid", "Gpid", "Cpid" };
 
 // Settable calibration values and control parameters
 //
@@ -282,15 +282,15 @@ bool gas_pid = true;  // Are we using pid to get gas pulse output from desired e
 bool display_enabled = true;  // Should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
 bool cruise_gesturing = false;  // Is cruise mode enabled by gesturing?  Otherwise by press of cruise button
 float brake_pid_kc = 0.8;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-float brake_pid_fi_mhz = 0.02;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-float brake_pid_td_us = 0.4;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+float brake_pid_fi_mhz = 0.0;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+float brake_pid_td_us = 0.0;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
 float brake_pid_pos_kx = 0.6;  // Extra brake actuator position influence. This kicks in when the actuator is below the pressure zeropoint, to bring it up  (unitless range 0-1)
 float cruise_pid_kc = 0.9;  // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
-float cruise_pid_fi_mhz = 0.005;  // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
+float cruise_pid_fi_mhz = 0.0;  // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
 float cruise_pid_td_us = 0.0;  // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
 float gas_pid_kc = 0.85;  // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
-float gas_pid_fi_mhz = 0.001;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
-float gas_pid_td_us = 0.3;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
+float gas_pid_fi_mhz = 0.0;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
+float gas_pid_td_us = 0.0;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
 float joy_ema_alpha = 0.05;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 float pot_ema_alpha = 0.2;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 float battery_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
@@ -331,8 +331,10 @@ uint16_t cruise_max_change_mmph = 500;  // What's the max car cruise speed chang
 uint32_t cruise_adj_period_us = 250000;  // how often cruise mode applies speed adjustments based on joystick vert position (in us)
 uint32_t cruise_sw_timeout_us = 500000;  // how long do you have to hold down the cruise button to start cruise mode (in us)
 uint8_t gas_governor_percent = 85;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
-uint16_t gas_pulse_idle_us = 1761;  // Gas duty cycle on-time corresponding to fully closed throttle (in us)
-uint16_t gas_pulse_redline_us = 1544;  // Gas duty cycle on-time corresponding to full open throttle (in us)
+// uint16_t gas_pulse_idle_us = 1761;  // Gas duty cycle on-time corresponding to fully closed throttle (in us)
+// uint16_t gas_pulse_redline_us = 1544;  // Gas duty cycle on-time corresponding to full open throttle (in us)
+uint16_t gas_pulse_idle_us = 2300;  // Gas duty cycle on-time corresponding to fully closed throttle (in us)
+uint16_t gas_pulse_redline_us = 1700;  // Gas duty cycle on-time corresponding to full open throttle (in us)
 uint16_t steer_pulse_right_us = 840;  // Duty cycle on-time corresponding to full-speed right steering (in us)
 uint16_t steer_pulse_stop_us = 1500;  // Center point on-time corresponding to zero steering motor movement (in us)
 uint16_t steer_pulse_left_us = 2200;  // Duty cycle on-time corresponding to full-speed left steering (in us)
@@ -539,6 +541,21 @@ static Servo steer_servo;
 static Servo brake_servo;
 // static Servo gas_servo;
 
+// General use functions
+// long map(long x, long in_min, long in_max, long out_min, long out_max) {
+//   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+// }
+// template<class T>
+// const T& constrain(const T& x, const T& xmin, const T& xmax) {
+//     if(x < xmin) {
+//         return xmin;
+//     }
+//     else if(xmax < x) {
+//         return xmax;
+//     }
+//     else
+//         return x;
+// }
 
 // Interrupt service routines
 //
@@ -565,154 +582,9 @@ void speedo_isr(void) {  //  A better approach would be to read, reset, and rest
     speedo_last_us = speedo_timer_us;
 }
 
-
-void setup() {
-    pinMode(led_pin, OUTPUT);
-    pinMode(encoder_a_pin, INPUT_PULLUP);
-    pinMode(encoder_b_pin, INPUT_PULLUP);
-    pinMode(sim_pulse_pin, OUTPUT);
-    pinMode(brake_pwm_pin, OUTPUT);
-    pinMode(steer_pwm_pin, OUTPUT);
-    pinMode(tft_dc_pin, OUTPUT);
-    pinMode(encoder_sw_pin, INPUT_PULLUP);
-    pinMode(gas_pwm_pin, OUTPUT);
-    pinMode(ignition_pin, INPUT);
-    pinMode(neutral_pin, INPUT_PULLUP);
-    pinMode(basicmodesw_pin, INPUT_PULLUP);
-    pinMode(cruise_sw_pin, INPUT_PULLUP);
-    pinMode(tach_pulse_pin, INPUT);
-    pinMode(speedo_pulse_pin, INPUT);
-    pinMode(joy_horz_pin, INPUT);
-    pinMode(joy_vert_pin, INPUT);
-    pinMode(pressure_pin, INPUT);
-    pinMode(brake_pos_pin, INPUT);
-    pinMode(battery_pin, INPUT);
-    pinMode(usd_cs_pin, OUTPUT);
-    pinMode(tft_cs_pin, OUTPUT);
-    pinMode(pot_wipe_pin, INPUT);
-    pinMode(tp_irq_pin, INPUT);
-    // pinMode(tft_ledk_pin, OUTPUT);
-
-    // Set all outputs to known sensible values
-    digitalWrite(tft_cs_pin, HIGH);   // Prevent bus contention
-    digitalWrite(usd_cs_pin, HIGH);   // Prevent bus contention
-    digitalWrite(tft_dc_pin, LOW);
-    digitalWrite(sim_pulse_pin, LOW);
-    digitalWrite(pot_pwr_pin, HIGH);  // Power up the potentiometer
-    digitalWrite(led_pin, HIGH);  // Light on
-
-    analogReadResolution(adc_bits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
-
-    // Arduino Due timer research:
-    //
-    // TCLK0 (PB26, Peripheral B) is external clock for Timer/Counter0, Ch0, Enabled by rtegister TC0XC0S
-    // TCLK6 (PC27, Peripheral B) is external clock for Timer/Counter2, Ch0, Enabled by rtegister TC2XC0S (?)
-    // Peripheral ID for programming interrupt for TC0: 27.  For TC2: 29
-    // Enabling TC requires configuration of PMC (Power Mgmt Controller) to enable TC clock
-    // QDEC must be disabled (default) for TC0 1 and 2 to be independent
-    // Each 32bit TC channel has a 32bit counter, increments on rising edges of clock. Counter Value in TC_CV reg,  Overflow sets COVFS bit in TC_SR
-    // Configure clock source for each channel with TCCLKS bit of TC_BMR.  External clk signals XC0, XC2.  Can invert with CLKI bit in TC_CMR, or configure burst (BURST in TC_CMR)
-    // External clock freq must be 2.5x less than peripheral clock.  100 Hz x 2.5 = 250 Hz.  No problem, yeah?
-    // Enable/disable clock with CLKEN and CLKDIS in TC_CCR.  See pg 862-863 for config of stop, disable, trigger events
-    // Set mode to capture or waveform (PWM) using WAVE bit of TC_CMR
-    // See waveform mode setup to configure PWM.  See Quadrature encoder setup on pg 875 to decode rotary encoders.
-    // TC0XC0S = 0  B.26 D22  
-    // Can sync up the three PWM outputs by setting SYNCx bits of PWM_SCM.  Synced channels get CPREx, CPRDx, and CALG0 fields from those of ch 0 instead of their own channel. Pg 985
-
-    // PWM setup (for gas):    (found here: https://forum.arduino.cc/index.php?topic=386981.0)
-    // Output 50Hz PWM at a resolution of 14 bits on pin DAC1 (D67) (pin: PB16, peripheral: PWML0)
-    // The PWM channels can be multiplexed onto a number of different pins on the Due. Which PWM pins are available is specified by the mutliplexing tables in the SAM3X8E's datasheet.
-    // The SAM3X8E has four tables for each of its 32-bit ports A, B, C and D. Most pins having two peripheral functions: "Peripheral A" and "Peripheral B". 
-    // It's possible for each PWM channel to control two complementary (opposite of each other) square wave outputs, labelled in the table as PWMLx (low) and PWMHx (high).
-    // It's first necessary to enable the PWM controller and multiplex the PWM controller's output to DAC1, which is pin PB16, using the REG_PMC_PCER1, REG_PIOB_ABSR and REG_PIOB_PDR reg.
-    // The PWM controller's clock register (REG_PWM_CLK) allows you to either divide down the master clock (84MHz), either by using a prescaler, or clock divisor, or both. 
-    // There are two clock divisor and prescaler registers: A and B, so you can generate up to two base frequencies for your 8 channels.
-    // The channel mode register (REG_PWM_CMR0) connects the divided clock (2MHz) to channel 0 and selects the PWM mode of operation, in this case dual slope PWM, (center aligned).
-    // REG_PWM_CPRD0 and REG_PWM_CDTY0 determine the period (frequency) and duty cycle (phase) respectively for a given channel. It's also necessary to enable ch 0 with the REG_PWM_ENA reg.
-    // By the way, if you plan on changing the period or duty cycle during PWM operation, you'll need to use the REG_PWM_CPRDUPDx and REG_PWM_CDTYUPDx update registers for the given channel.
-    // The equation for calculating the PWM frequency is also contained in the SAM3X8E's datasheet. For dual slope PWM:  PWMFrequency = MCLK/(2*CPRD*DIVA) = 84MHz/(2*20000*42) = 50Hz
-    REG_PMC_PCER1 |= PMC_PCER1_PID36;                     // Enable PWM
-    REG_PIOB_ABSR |= PIO_ABSR_P16;                        // Set PWM pin perhipheral type A or B, in this case B
-    REG_PIOB_PDR |= PIO_PDR_P16;                          // Set PWM pin to an output
-    REG_PWM_CLK = PWM_CLK_PREA(0) | PWM_CLK_DIVA(42);     // Set the PWM clock rate to 2MHz (84MHz/42)
-    REG_PWM_CMR0 = PWM_CMR_CALG | PWM_CMR_CPRE_CLKA;      // Enable dual slope PWM and set the clock source as CLKA
-    REG_PWM_CPRD0 = pid_period_us;                        // Set the PWM frequency 2MHz/(2 * 20000) = 50Hz
-    REG_PWM_CDTY0 = gas_pulse_idle_us;                    // Set the PWM duty cycle to nominal angle
-    REG_PWM_ENA = PWM_ENA_CHID0;                          // Enable the PWM channel     
-    // To change duty cycle:  CW limit: REG_PWM_CDTYUPD0 = 1000;      Center: REG_PWM_CDTYUPD0 = 1500;      CCW limit: REG_PWM_CDTYUPD0 = 2000;
-    
-    // analogWrite(steer_pwm_pin, steer_stop_pwm);   // Write values range from 0 to 255
-    // analogWrite(gas_pwm_pin, gas_min_pwm);
-    // analogWrite(brake_pwm_pin, brake_stop_pwm);
-    
-    // while (!Serial);     // needed for debugging?!
-    Serial.begin(115200);
-    
-    if (display_enabled) {
-        Serial.print(F("Init LCD... "));
-        tft.begin();
-        tft.setRotation(1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
-        // tft.setFont(&FreeSans12pt7b);  // Use tft.setFont() to return to fixed font      
-        for (uint8_t lineno=0; lineno<=arraysize(telemetry); lineno++)  {
-            disp_age_quanta[lineno] = -1;
-            disp_ages_us[lineno] = 0;
-            memset(disp_values[lineno],0,strlen(disp_values[lineno]));
-        }
-        for (uint8_t row=0; row<disp_nobools; row++)  {
-            disp_bool_values[row] = 0;
-        }
-        draw_text(false);
-        Serial.println(F("Success"));
-    }
-
-    Serial.print(F("Captouch initialization... "));
-    if (! touchpanel.begin(40)) {     // pass in 'sensitivity' coefficient
-        Serial.println(F("Couldn't start FT6206 touchscreen controller"));
-        // while (1);
-    }
-    else {
-        Serial.println(F("Capacitive touchscreen started"));        
-    }
-    
-    /*
-    while (1) {  // Useful to uncomment and move around the code to find points of crashing
-        Serial.print(F("Alive, "));
-        Serial.println(micros());
-        delay(250);
-    }
-    */
-    
-    Serial.print(F("Initializing filesystem...  "));  // SD card is pretty straightforward, a single call. 
-    if (! sd.begin(usd_cs_pin, SD_SCK_MHZ(25))) {   // ESP32 requires 25 mhz limit
-        Serial.println(F("SD begin() failed"));
-        for(;;); // Fatal error, do not continue
-    }
-    sd_init();
-    Serial.println(F("Filesystem started"));
-    
-    // Set up our interrupts
-    Serial.print(F("Interrupts... "));
-    attachInterrupt(digitalPinToInterrupt(encoder_a_pin), encoder_a_isr, RISING); // One type of encoder (e.g. Panasonic EVE-YBCAJ016B) needs Rising int on pin A only
-    // attachInterrupt(digitalPinToInterrupt(encoder_b_pin), encoder_b_isr, FALLING); // Other type (e.g. on the tan proto board) needs both pins.  Interrupts needed on both pins
-    // attachInterrupt(digitalPinToInterrupt(encoder_sw_pin), encoder_sw_isr, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(tach_pulse_pin), tach_isr, RISING);
-    attachInterrupt(digitalPinToInterrupt(speedo_pulse_pin), speedo_isr, RISING);
-    Serial.println(F("Set up and enabled"));
-    
-    steer_servo.attach(steer_pwm_pin);
-    brake_servo.attach(brake_pwm_pin);
-    // gas_servo.attach(gas_pwm_pin);
-    
-    // steer_pid.setOutputRange(steer_min_pwm, steer_max_pwm);
-    // gas_pid.setOutputRange(gas_min_pwm, gas_max_pwm);
-
-    // brake_pid.setOutputRange(brake_pwm_retract_pwm, brake_pwm_extend_pwm);  // Lines only useful with FastPID library
-    // cruise_pid.setOutputRange(engine_idle_rpm, engine_redline_rpm);  // Lines only useful with FastPID library
-
-    Serial.println(F("Setup finished"));
-}
-
-/*  Here are the older ISRs for use with the encoder on the tan protoboard. These need CHANGE interrupts
+// Functions
+/*
+Here are the older ISRs for use with the encoder on the tan protoboard. These need CHANGE interrupts
 void encoder_a_isr(void) {  // If A goes high before B, we are turning CCW -- This ISR intended for encoders like the one on the tan proto board
     if (micros()-encoder_timer_us > encoder_invalid_timeout_us && digitalRead(encoder_b_pin)) {  // If transition is valid and not already triggered by other pin
         encoder_timer_us = micros();
@@ -933,6 +805,153 @@ void sd_init() {
 //     else return amt;
 // }
 
+void setup() {
+    pinMode(led_pin, OUTPUT);
+    pinMode(encoder_a_pin, INPUT_PULLUP);
+    pinMode(encoder_b_pin, INPUT_PULLUP);
+    pinMode(sim_pulse_pin, OUTPUT);
+    pinMode(brake_pwm_pin, OUTPUT);
+    pinMode(steer_pwm_pin, OUTPUT);
+    pinMode(tft_dc_pin, OUTPUT);
+    pinMode(encoder_sw_pin, INPUT_PULLUP);
+    pinMode(gas_pwm_pin, OUTPUT);
+    pinMode(ignition_pin, INPUT);
+    pinMode(neutral_pin, INPUT_PULLUP);
+    pinMode(basicmodesw_pin, INPUT_PULLUP);
+    pinMode(cruise_sw_pin, INPUT_PULLUP);
+    pinMode(tach_pulse_pin, INPUT);
+    pinMode(speedo_pulse_pin, INPUT);
+    pinMode(joy_horz_pin, INPUT);
+    pinMode(joy_vert_pin, INPUT);
+    pinMode(pressure_pin, INPUT);
+    pinMode(brake_pos_pin, INPUT);
+    pinMode(battery_pin, INPUT);
+    pinMode(usd_cs_pin, OUTPUT);
+    pinMode(tft_cs_pin, OUTPUT);
+    pinMode(pot_wipe_pin, INPUT);
+    pinMode(tp_irq_pin, INPUT);
+    // pinMode(tft_ledk_pin, OUTPUT);
+
+    // Set all outputs to known sensible values
+    digitalWrite(tft_cs_pin, HIGH);   // Prevent bus contention
+    digitalWrite(usd_cs_pin, HIGH);   // Prevent bus contention
+    digitalWrite(tft_dc_pin, LOW);
+    digitalWrite(sim_pulse_pin, LOW);
+    digitalWrite(pot_pwr_pin, HIGH);  // Power up the potentiometer
+    digitalWrite(led_pin, HIGH);  // Light on
+
+    analogReadResolution(adc_bits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
+
+    // Arduino Due timer research:
+    //
+    // TCLK0 (PB26, Peripheral B) is external clock for Timer/Counter0, Ch0, Enabled by rtegister TC0XC0S
+    // TCLK6 (PC27, Peripheral B) is external clock for Timer/Counter2, Ch0, Enabled by rtegister TC2XC0S (?)
+    // Peripheral ID for programming interrupt for TC0: 27.  For TC2: 29
+    // Enabling TC requires configuration of PMC (Power Mgmt Controller) to enable TC clock
+    // QDEC must be disabled (default) for TC0 1 and 2 to be independent
+    // Each 32bit TC channel has a 32bit counter, increments on rising edges of clock. Counter Value in TC_CV reg,  Overflow sets COVFS bit in TC_SR
+    // Configure clock source for each channel with TCCLKS bit of TC_BMR.  External clk signals XC0, XC2.  Can invert with CLKI bit in TC_CMR, or configure burst (BURST in TC_CMR)
+    // External clock freq must be 2.5x less than peripheral clock.  100 Hz x 2.5 = 250 Hz.  No problem, yeah?
+    // Enable/disable clock with CLKEN and CLKDIS in TC_CCR.  See pg 862-863 for config of stop, disable, trigger events
+    // Set mode to capture or waveform (PWM) using WAVE bit of TC_CMR
+    // See waveform mode setup to configure PWM.  See Quadrature encoder setup on pg 875 to decode rotary encoders.
+    // TC0XC0S = 0  B.26 D22  
+    // Can sync up the three PWM outputs by setting SYNCx bits of PWM_SCM.  Synced channels get CPREx, CPRDx, and CALG0 fields from those of ch 0 instead of their own channel. Pg 985
+
+    // PWM setup (for gas):    (found here: https://forum.arduino.cc/index.php?topic=386981.0)
+    // Output 50Hz PWM at a resolution of 14 bits on pin DAC1 (D67) (pin: PB16, peripheral: PWML0)
+    // The PWM channels can be multiplexed onto a number of different pins on the Due. Which PWM pins are available is specified by the mutliplexing tables in the SAM3X8E's datasheet.
+    // The SAM3X8E has four tables for each of its 32-bit ports A, B, C and D. Most pins having two peripheral functions: "Peripheral A" and "Peripheral B". 
+    // It's possible for each PWM channel to control two complementary (opposite of each other) square wave outputs, labelled in the table as PWMLx (low) and PWMHx (high).
+    // It's first necessary to enable the PWM controller and multiplex the PWM controller's output to DAC1, which is pin PB16, using the REG_PMC_PCER1, REG_PIOB_ABSR and REG_PIOB_PDR reg.
+    // The PWM controller's clock register (REG_PWM_CLK) allows you to either divide down the master clock (84MHz), either by using a prescaler, or clock divisor, or both. 
+    // There are two clock divisor and prescaler registers: A and B, so you can generate up to two base frequencies for your 8 channels.
+    // The channel mode register (REG_PWM_CMR0) connects the divided clock (2MHz) to channel 0 and selects the PWM mode of operation, in this case dual slope PWM, (center aligned).
+    // REG_PWM_CPRD0 and REG_PWM_CDTY0 determine the period (frequency) and duty cycle (phase) respectively for a given channel. It's also necessary to enable ch 0 with the REG_PWM_ENA reg.
+    // By the way, if you plan on changing the period or duty cycle during PWM operation, you'll need to use the REG_PWM_CPRDUPDx and REG_PWM_CDTYUPDx update registers for the given channel.
+    // The equation for calculating the PWM frequency is also contained in the SAM3X8E's datasheet. For dual slope PWM:  PWMFrequency = MCLK/(2*CPRD*DIVA) = 84MHz/(2*20000*42) = 50Hz
+    REG_PMC_PCER1 |= PMC_PCER1_PID36;                     // Enable PWM
+    REG_PIOB_ABSR |= PIO_ABSR_P16;                        // Set PWM pin perhipheral type A or B, in this case B
+    REG_PIOB_PDR |= PIO_PDR_P16;                          // Set PWM pin to an output
+    REG_PWM_CLK = PWM_CLK_PREA(0) | PWM_CLK_DIVA(42);     // Set the PWM clock rate to 2MHz (84MHz/42)
+    REG_PWM_CMR0 = PWM_CMR_CALG | PWM_CMR_CPRE_CLKA;      // Enable dual slope PWM and set the clock source as CLKA
+    REG_PWM_CPRD0 = pid_period_us;                        // Set the PWM frequency 2MHz/(2 * 20000) = 50Hz
+    REG_PWM_CDTY0 = gas_pulse_idle_us;                    // Set the PWM duty cycle to nominal angle
+    REG_PWM_ENA = PWM_ENA_CHID0;                          // Enable the PWM channel     
+    // To change duty cycle:  CW limit: REG_PWM_CDTYUPD0 = 1000;      Center: REG_PWM_CDTYUPD0 = 1500;      CCW limit: REG_PWM_CDTYUPD0 = 2000;
+    
+    // analogWrite(steer_pwm_pin, steer_stop_pwm);   // Write values range from 0 to 255
+    // analogWrite(gas_pwm_pin, gas_min_pwm);
+    // analogWrite(brake_pwm_pin, brake_stop_pwm);
+    
+    // while (!Serial);     // needed for debugging?!
+    Serial.begin(115200);
+    
+    delay(500); // This is needed to allow the screen board enough time after a cold boot before we start trying to talk to it.
+    if (display_enabled) {
+        Serial.print(F("Init LCD... "));
+        tft.begin();
+        tft.setRotation(1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
+        // tft.setFont(&FreeSans12pt7b);  // Use tft.setFont() to return to fixed font      
+        for (uint8_t lineno=0; lineno<=arraysize(telemetry); lineno++)  {
+            disp_age_quanta[lineno] = -1;
+            disp_ages_us[lineno] = 0;
+            memset(disp_values[lineno],0,strlen(disp_values[lineno]));
+        }
+        for (uint8_t row=0; row<disp_nobools; row++)  {
+            disp_bool_values[row] = 0;
+        }
+        draw_text(false);
+        Serial.println(F("Success"));
+    }
+
+    Serial.print(F("Captouch initialization... "));
+    if (! touchpanel.begin(40)) {     // pass in 'sensitivity' coefficient
+        Serial.println(F("Couldn't start FT6206 touchscreen controller"));
+        // while (1);
+    }
+    else {
+        Serial.println(F("Capacitive touchscreen started"));        
+    }
+    
+    /*
+    while (1) {  // Useful to uncomment and move around the code to find points of crashing
+        Serial.print(F("Alive, "));
+        Serial.println(micros());
+        delay(250);
+    }
+    */
+    
+    Serial.print(F("Initializing filesystem...  "));  // SD card is pretty straightforward, a single call. 
+    if (! sd.begin(usd_cs_pin, SD_SCK_MHZ(25))) {   // ESP32 requires 25 mhz limit
+        Serial.println(F("SD begin() failed"));
+        for(;;); // Fatal error, do not continue
+    }
+    sd_init();
+    Serial.println(F("Filesystem started"));
+    
+    // Set up our interrupts
+    Serial.print(F("Interrupts... "));
+    attachInterrupt(digitalPinToInterrupt(encoder_a_pin), encoder_a_isr, RISING); // One type of encoder (e.g. Panasonic EVE-YBCAJ016B) needs Rising int on pin A only
+    // attachInterrupt(digitalPinToInterrupt(encoder_b_pin), encoder_b_isr, FALLING); // Other type (e.g. on the tan proto board) needs both pins.  Interrupts needed on both pins
+    // attachInterrupt(digitalPinToInterrupt(encoder_sw_pin), encoder_sw_isr, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(tach_pulse_pin), tach_isr, RISING);
+    attachInterrupt(digitalPinToInterrupt(speedo_pulse_pin), speedo_isr, RISING);
+    Serial.println(F("Set up and enabled"));
+    
+    steer_servo.attach(steer_pwm_pin);
+    brake_servo.attach(brake_pwm_pin);
+    // gas_servo.attach(gas_pwm_pin);
+    
+    // steer_pid.setOutputRange(steer_min_pwm, steer_max_pwm);
+    // gas_pid.setOutputRange(gas_min_pwm, gas_max_pwm);
+
+    // brake_pid.setOutputRange(brake_pwm_retract_pwm, brake_pwm_extend_pwm);  // Lines only useful with FastPID library
+    // cruise_pid.setOutputRange(engine_idle_rpm, engine_redline_rpm);  // Lines only useful with FastPID library
+
+    Serial.println(F("Setup finished"));
+}
+
 // Main loop.  Each time through we do these eight steps:
 //
 // 0) Beginning-of-the-loop nonsense
@@ -1069,12 +1088,9 @@ void loop() {
         if (joy_horz_filt_adc >= joy_horz_deadband_top_adc) steer_pulse_out_us = map(joy_horz_filt_adc, joy_horz_deadband_top_adc, joy_horz_max_adc, steer_pulse_stop_us, steer_pulse_right_us);
         else if (joy_horz_filt_adc <= joy_horz_deadband_bot_adc) steer_pulse_out_us = map(joy_horz_filt_adc, joy_horz_deadband_bot_adc, joy_horz_min_adc, steer_pulse_stop_us, steer_pulse_left_us);
         else steer_pulse_out_us = steer_pulse_stop_us;  // Stop the steering motor if inside the deadband, otherwisee scale and set output in the right direction
-        
         // Serial.print("joy_horz_filt_adc, joy_horz_deadband_top_adc, joy_horz_max_adc, steer_pulse_stop_us, steer_pulse_right_us ");
-
         // Serial.print(joy_horz_filt_adc);  Serial.print(" "); Serial.print(joy_horz_deadband_top_adc);  Serial.print(" "); Serial.print(joy_horz_max_adc);  Serial.print(" "); Serial.print(steer_pulse_stop_us); Serial.print(" "); Serial.println(steer_pulse_right_us);
         // Serial.print("joy V/H: ");  Serial.print(joy_vert_adc); Serial.print(" ");  Serial.print(joy_vert_filt_adc); Serial.print(" ");  Serial.print(joy_horz_adc); Serial.print(" ");  Serial.println(joy_horz_filt_adc);
-
     }
 
     // Serial.print("Point1: ");  Serial.println(carspeed_target_mmph);
@@ -1133,7 +1149,6 @@ void loop() {
                 // Scale joystick value to pressure adc setpoint
                 // pressure_target_adc = scalefloat((float)joy_vert_filt_adcpot_filtered_adc, 0.0, 4096.0, (float)pressure_min_adc, (float)pressure_max_adc);
                 pressure_target_adc = map(joy_vert_filt_adc, joy_vert_deadband_bot_adc, joy_vert_min_adc, pressure_min_adc, pressure_max_adc);
-
                 // Serial.print(joy_vert_filt_adc);  Serial.print(" ");
                 // Serial.print(joy_vert_deadband_bot_adc);  Serial.print(" ");
                 // Serial.print(joy_vert_min_adc);  Serial.print(" ");
@@ -1160,7 +1175,7 @@ void loop() {
             pressure_target_adc += brake_hold_increment_adc;  // Slowly add more brakes until car stops
             brake_timer_us = now_us;
         }
-        constrain(pressure_target_adc, pressure_min_adc, pressure_max_adc);  // Just make sure we don't try to push harder than we can 
+        pressure_target_adc = constrain(pressure_target_adc, pressure_min_adc, pressure_max_adc);  // Just make sure we don't try to push harder than we can 
         //Serial.print("runmode: ");   Serial.println(runmode);
     }
     else if (runmode == FLY)  {
@@ -1171,7 +1186,9 @@ void loop() {
             cruise_sw_held = false;
             cruise_sw_timer_us = now_us;
         }
-        if (cruise_gesturing) {  // If gestures are used to go to cruise mode
+        // Cruise mode can be entered by pressing a physical momentary button, or by performing a specific joystick gesture, depending on the cruise_gesturing flag.
+        // The gesture involves pushing the joystick from the center to the top, then to the bottom, then back to center, quickly enough.
+        if (cruise_gesturing) {  // If we are configured to use joystick gestures to go to cruise mode, the gesture is 
             if (!gesture_progress && joy_vert_filt_adc >= joy_vert_deadband_bot_adc && joy_vert_filt_adc <= joy_vert_deadband_top_adc)  { // Re-zero gesture timer for potential new gesture whenever joystick at center
                 gesture_timer_us = now_us;
             }
@@ -1227,7 +1244,7 @@ void loop() {
         if (joy_vert_filt_adc <= joy_vert_min_adc+default_margin_adc && now_us-gesture_timer_us < gesture_flytimeout_us)  runmode = FLY;  // If joystick quickly pushed to bottom 
         if (cruise_sw)  cruise_sw_held = true;   // Pushing cruise button sets up return to fly mode
         else if (cruise_sw_held) { // Release of button drops us back to fly mode
-            cruise_sw_held - false;
+            cruise_sw_held = false;
             runmode = FLY;
         }
         else if (joy_vert_deadband_bot_adc < joy_vert_filt_adc && joy_vert_deadband_top_adc > joy_vert_filt_adc)  {  // joystick at center: reset gesture timer
@@ -1284,7 +1301,6 @@ void loop() {
             else brake_pid_pos_error_adc = 0;
             pressure_delta_adc = (int16_t)(brake_pid_kc*(float)brake_pid_error_adc + brake_pid_i_term_adc + brake_pid_d_term_adc + brake_pid_pos_kp*(float)brake_pid_pos_error_adc);  // Add all the terms and scale to get delta in adc counts
             brake_pulse_out_us = map(pressure_delta_adc+pressure_min_adc, pressure_min_adc, pressure_max_adc, brake_pulse_extend_us, brake_pulse_retract_us);  // Scale pressure adc value to range of PWM pulse on-time
-            
             // Serial.print("Brake: ");                                 Serial.print(" ");  //
             // Serial.print(brake_pos_adc);                             Serial.print(" ");  // Brake position current adc value
             // Serial.print(brake_pos_zeropoint_adc);                   Serial.print(" ");  // Brake position zero point
@@ -1314,24 +1330,22 @@ void loop() {
                 cruise_pid_error_last_mmph = cruise_pid_error_mmph;  // For use next time in mmph derivative calculation
                 cruise_pid_d_term_mmph = cruise_pid_kd_us*(float)cruise_pid_derivative_mmphperus;
                 carspeed_delta_mmph = (int16_t)(cruise_pid_kc*(float)cruise_pid_error_mmph + cruise_pid_i_term_mmph + cruise_pid_d_term_mmph);  // Add all the terms and scale to get delta from center in mmph
-                gas_target_rpm = map(carspeed_delta_mmph+carspeed_idle_mmph, carspeed_idle_mmph, carspeed_govern_mmph, engine_idle_rpm, engine_govern_rpm);  // Scale mmph value to range of rpm
-                
-                Serial.print("Cruise: ");                                                     Serial.print(" ");  //
-                Serial.print(carspeed_target_mmph);                                           Serial.print(" ");  // Raw sensor feedback value
-                Serial.print(cruise_pid_kc*cruise_pid_error_mmph);                            Serial.print(" ");  // Proportional component
-                Serial.print(cruise_pid_kc*cruise_pid_fi_mhz*cruise_pid_integral_mmphus);     Serial.print(" ");  // Integral component
-                Serial.print(cruise_pid_kc*cruise_pid_td_us*cruise_pid_derivative_mmphperus); Serial.print(" ");  // Derivative component
-                Serial.print(carspeed_filt_mmph);                                             Serial.print(" ");  // Filtered sensor feedback value
-                Serial.print(carspeed_delta_mmph);                                            Serial.print(" ");  // Raw sensor feedback value
-                Serial.print(carspeed_delta_mmph+carspeed_idle_mmph);                         Serial.print(" ");  // Raw sensor feedback value
-                Serial.println(gas_target_rpm);                                               // Serial.print(" ");  // Raw sensor feedback value
+                gas_target_rpm = map(carspeed_delta_mmph+carspeed_idle_mmph, carspeed_idle_mmph, carspeed_govern_mmph, engine_idle_rpm, engine_govern_rpm);  // Scale mmph value to range of rpm                
+                // Serial.print("Cruise: ");                                                     Serial.print(" ");  //
+                // Serial.print(carspeed_target_mmph);                                           Serial.print(" ");  // Raw sensor feedback value
+                // Serial.print(cruise_pid_kc*cruise_pid_error_mmph);                            Serial.print(" ");  // Proportional component
+                // Serial.print(cruise_pid_kc*cruise_pid_fi_mhz*cruise_pid_integral_mmphus);     Serial.print(" ");  // Integral component
+                // Serial.print(cruise_pid_kc*cruise_pid_td_us*cruise_pid_derivative_mmphperus); Serial.print(" ");  // Derivative component
+                // Serial.print(carspeed_filt_mmph);                                             Serial.print(" ");  // Filtered sensor feedback value
+                // Serial.print(carspeed_delta_mmph);                                            Serial.print(" ");  // Raw sensor feedback value
+                // Serial.print(carspeed_delta_mmph+carspeed_idle_mmph);                         Serial.print(" ");  // Raw sensor feedback value
+                // Serial.println(gas_target_rpm);                                               // Serial.print(" ");  // Raw sensor feedback value
             }
 
             if (runmode != STALL) {  // If Hold, Fly or Cruise mode, then we need to determine gas actuator output from rpm target
                 gas_target_rpm = constrain(gas_target_rpm, engine_idle_rpm, engine_govern_rpm);  // Make sure desired rpm isn't out of range (due to crazy pid math, for example)
 
                 if (gas_pid) {  // If use of gas pid is enabled, calculate pid to get pulse output from rpm target
-                    // Here is the gas PID math
                     gas_pid_error_rpm = gas_target_rpm - engine_filt_rpm;  // Determine the rpm error
                     gas_pid_integral_rpmus += gas_pid_error_rpm*pid_period_us;  // Calculate rpm integral
                     gas_pid_i_term_rpm = constrain((int16_t)(gas_pid_ki_mhz*(float)gas_pid_integral_rpmus), engine_idle_rpm-engine_govern_rpm, engine_govern_rpm-engine_idle_rpm);  // Prevent integral runaway by limiting it to 2x the full range of the input
@@ -1340,7 +1354,6 @@ void loop() {
                     gas_pid_d_term_rpm = gas_pid_kd_us*(float)gas_pid_derivative_rpmperus;
                     gas_delta_rpm = (int16_t)(gas_pid_kc*(float)gas_pid_error_rpm + gas_pid_i_term_rpm + gas_pid_d_term_rpm);  // Add all the terms and scale to get delta from center in rpm
                     gas_pulse_out_us = map(gas_delta_rpm+engine_idle_rpm, engine_idle_rpm, engine_govern_rpm, gas_pulse_idle_us, gas_pulse_govern_us);  // Scale rpm alue to range of PWM pulse on-time
-                    
                     // Serial.print("Gas: ");                                              Serial.print(" ");  //
                     // Serial.print(gas_target_rpm);                                       Serial.print(" ");  // Raw sensor feedback value
                     // Serial.print(gas_pid_kc*gas_pid_error_rpm);                         Serial.print(" ");  // Proportional component
@@ -1357,10 +1370,10 @@ void loop() {
             }
             gas_pulse_out_us = constrain(gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_idle_us);  // Make sure pulse time is in range
             // Serial.println(gas_pulse_out_us);
+            REG_PWM_CDTYUPD0 = gas_pulse_out_us;  // Update the pin duty cycle.
             // gas_servo.writeMicroseconds(gas_pulse_out_us);  // Update gas pwm output (with gas pid or servo mode)
-            REG_PWM_CDTYUPD0 = gas_pulse_out_us;  // Update the pin duty cycle 
         }
-        pid_timer_us = now_us;
+        pid_timer_us = now_us; // reset timer to trigger the next update
     }
     
     // Serial.print("Point4: ");  Serial.println(carspeed_target_mmph);
@@ -1374,22 +1387,22 @@ void loop() {
     //
     if (touchpanel.touched()) {      // If someone is groping our touch screen, we should address that
         TS_Point touchpoint = touchpanel.getPoint();   // Retreive a point
-        touchpoint.x = map(touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft 
-        touchpoint.y = map(touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);
-        uint16_t touch_y = tft.height()-touchpoint.x;
-        uint16_t touch_x = touchpoint.y;
-        uint8_t touch_row = (uint8_t)((float)touch_y/touch_cell_height_pix);
-        uint8_t touch_col = (uint8_t)((float)touch_x/touch_cell_width_pix);
-        Serial.print("Got touched: \n");
-        Serial.print(touch_x);   Serial.print(" ");
-        Serial.print(touch_y);    Serial.print(" ");
-        Serial.print(touch_row);   Serial.print(" ");
-        Serial.println(touch_col);   // Serial.print(" ");
+        touchpoint.x = map(touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
+        touchpoint.y = map(touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);  // Rotate touch coordinates to match tft coordinates
+        uint16_t touch_y = tft.height()-touchpoint.x; // touch point y coordinate in pixels, from origin at top left corner
+        uint16_t touch_x = touchpoint.y; // touch point x coordinate in pixels, from origin at top left corner
+        uint8_t touch_row = (uint8_t)((float)touch_y/touch_cell_height_pix); // which of our 4 rows of touch buttons was touched?
+        uint8_t touch_col = (uint8_t)((float)touch_x/touch_cell_width_pix); // which of our 5 columns of touch buttons was touched?
+        // Serial.print("Got touched: \n");
+        // Serial.print(touch_x);   Serial.print(" ");
+        // Serial.print(touch_y);    Serial.print(" ");
+        // Serial.print(touch_row);   Serial.print(" ");
+        // Serial.println(touch_col);   // Serial.print(" ");
 
         // Simulation inputs
         //
         // on the bench, can simulate system conditions by touching twelve screen regions
-        if (touch_row == 0 && touch_col == 0 && laboratory) {
+        if (touch_row == 0 && touch_col == 0 && laboratory) { // If the top left touch button is pressed (and laboratory variable is set)
             simulate = 1-simulate;
             if (simulate) {
                 draw_touchgrid(false); // Draw the touch grid over the display, in its entirety
@@ -1529,7 +1542,7 @@ void loop() {
             sim_edit_mode = true;
         }
     }
-    if (encoder_delta != 0) {
+    if (encoder_delta != 0) { // First attempt to use encoder in UI 
         if (sim_edit_mode) {   
             sim_modify_polarity = 10*encoder_delta;
         }
@@ -1570,7 +1583,7 @@ void loop() {
             case 6:  cruise_gesturing = (sim_modify_polarity+1)/2;  break;
             case 7:  brake_pos_zeropoint_adc += sim_modify_polarity;  break;
         }
-        else if (sim_tuning_mode == PWM)  switch (sim_selected_value) {
+        else if (sim_tuning_mode == PWMS)  switch (sim_selected_value) {
             case 0:  steer_pulse_left_us += sim_modify_polarity;  break;
             case 1:  steer_pulse_stop_us += sim_modify_polarity;  break;
             case 2:  steer_pulse_right_us += sim_modify_polarity;  break;
@@ -1649,7 +1662,7 @@ void loop() {
             draw_value(19, cruise_gesturing, 0);
             draw_value(20, brake_pos_zeropoint_adc, 0);   
         }
-        else if (sim_tuning_mode == PWM) {
+        else if (sim_tuning_mode == PWMS) {
             draw_value(13, steer_pulse_left_us, 0);
             draw_value(14, steer_pulse_stop_us, 0);
             draw_value(15, steer_pulse_right_us, 0);
