@@ -102,7 +102,7 @@
 // LCD is 2.8in diagonal, 240x320 pixels
 // LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
 // Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
-// Color picker website:  https://chrishewett.com/blog/true-rgb565-colour-picker/
+// Color picker websites: http://www.barth-dev.de/online/rgb565 , https://chrishewett.com/blog/true-rgb565-colour-picker/
 #define BLK 0x0000
 #define BLU 0x001F
 #define RED 0xF800
@@ -126,8 +126,8 @@
 #define tft_cs_pin 10  // Output, active low, Chip select allows ILI9341 display chip use of the SPI bus
 #define led_pin 13  // Output, This is the LED onboard the arduino.  Active high.
 #define encoder_sw_pin 18  // Int input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
-#define encoder_b_pin 19  // Int input,  The B pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
-#define encoder_a_pin 21  // Int input,  The A pin of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
+#define encoder_b_pin 19  // Int input,  The B pin (aka DT pin) of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
+#define encoder_a_pin 21  // Int input,  The A pin (aka CLK pin) of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
                         // The other kind of encoder: When A toggles, if B is equal to A, then turn is CCW, else CW.  (needs pullup)
 #define pot_pwr_pin 24  // Output, Lets us supply the optional external potentiometer with 3.3V power
 #define sim_pulse_pin 26  // Output, For testing interrupts and stuff
@@ -179,7 +179,6 @@
 #define adc_bits 12
 #define adc_range_adc 4096    // = 2^12
 #define adc_midscale_adc 2048
-#define pid_period_us 20000    // time period between output updates. Reciprocal of pid frequency (in us)
 #define looptimer false  // Makes code write out timestamps throughout loop to serial port
 
 char telemetry[disp_fixed_lines][12] = {  
@@ -313,6 +312,7 @@ uint16_t brake_hold_increment_adc = 10;  // Incremental pressure added periodica
 uint32_t brake_increment_interval_us = 500000;  // How often to apply increment during auto-stopping (in us)
 uint16_t brake_pos_retracted_adc = 0;  // Brake position value corresponding to retract limit of actuator (ADC count 0-4095)
 uint16_t brake_pos_zeropoint_adc = 1000;  // Brake position value corresponding to the point where fluid PSI hits zero (ADC count 0-4095)
+uint16_t brake_pos_park_adc = 1500;  // Best position to park the actuator out of the way so we can use the pedal (ADC count 0-4095)
 uint16_t brake_pos_extended_adc = 4095;  // Brake position value corresponding to extend limit of actuator (ADC count 0-4095)
 uint32_t gesture_flytimeout_us = 250000;  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
 uint32_t sanity_timeout_us = 7000000;  // Gives certain loops an eventual way out if failures prevent normal completion (in us)
@@ -331,21 +331,24 @@ uint16_t cruise_max_change_mmph = 500;  // What's the max car cruise speed chang
 uint32_t cruise_adj_period_us = 250000;  // how often cruise mode applies speed adjustments based on joystick vert position (in us)
 uint32_t cruise_sw_timeout_us = 500000;  // how long do you have to hold down the cruise button to start cruise mode (in us)
 uint8_t gas_governor_percent = 85;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
-// uint16_t gas_pulse_idle_us = 1761;  // Gas duty cycle on-time corresponding to fully closed throttle (in us)
-// uint16_t gas_pulse_redline_us = 1544;  // Gas duty cycle on-time corresponding to full open throttle (in us)
-uint16_t gas_pulse_idle_us = 2300;  // Gas duty cycle on-time corresponding to fully closed throttle (in us)
-uint16_t gas_pulse_redline_us = 1700;  // Gas duty cycle on-time corresponding to full open throttle (in us)
-uint16_t steer_pulse_right_us = 840;  // Duty cycle on-time corresponding to full-speed right steering (in us)
-uint16_t steer_pulse_stop_us = 1500;  // Center point on-time corresponding to zero steering motor movement (in us)
-uint16_t steer_pulse_left_us = 2200;  // Duty cycle on-time corresponding to full-speed left steering (in us)
-uint16_t default_pulse_margin_us = 30;  // Default margin of error for comparisons of pulse on-times (in us)
-uint16_t brake_pulse_retract_us = 1000;  // Duty cycle on-time corresponding to full-speed retraction of brake actuator (in us)
-uint16_t brake_pulse_stop_us = 1425;  // Center point on-time for zero motor movement (in us)
-uint16_t brake_pulse_extend_us = 1900;  // Duty cycle on-time corresponding to full-speed extension of brake actuator (in us)
+// uint16_t gas_pulse_idle_us = 1761;  // Gas pulsewidth corresponding to fully closed throttle (in us)
+// uint16_t gas_pulse_redline_us = 1544;  // Gas pulsewidth corresponding to full open throttle (in us)
+uint16_t gas_pulse_redline_us = 1700;  // Gas pulsewidth corresponding to full open throttle (in us)
+uint16_t gas_pulse_idle_us = 2300;  // Gas pulsewidth corresponding to fully closed throttle (in us)
+uint16_t gas_pulse_park_us = gas_pulse_idle_us + 30;  // Gas pulsewidth where to park the servo out of the way so we can drive manually (in us)
+uint16_t steer_pulse_right_us = 840;  // Steering pulsewidth corresponding to full-speed right steering (in us)
+uint16_t steer_pulse_stop_us = 1500;  // Steering pulsewidth corresponding to zero steering motor movement (in us)
+uint16_t steer_pulse_left_us = 2200;  // Steering pulsewidth corresponding to full-speed left steering (in us)
+uint16_t default_pulse_margin_us = 30;  // Default margin of error for comparisons of pulsewidths (in us)
+uint16_t brake_pulse_retract_us = 650;  // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us)
+uint16_t brake_pulse_stop_us = 1500;  // Brake pulsewidth corresponding to center point where motor movement stops (in us)
+uint16_t brake_pulse_extend_us = 2350;  // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us)
 uint16_t encoder_invalid_timeout_us = 1000;  // Used to prevent bouncing and noise generated interrupts (in us)
 uint16_t default_margin_adc = 20;  // Default margin of error for comparisons of adc values (ADC count 0-4095)
-uint32_t touch_timeout_us = 300000;  // Minimum acceptable time between two valid touches (in us)
 uint32_t sim_modify_period_us = 150000;  // How fast to change variable values when holding modify button down in simulator (in us)
+uint16_t battery_max_mv = 16000;  // The max vehicle voltage we can sense. Design resistor divider to match. Must exceed max V possible.
+uint32_t pid_period_us = 20000;    // time period between output updates. Reciprocal of pid frequency (in us)
+bool motor_park_timeout_us = 3000000;  // If we can't park the motors faster than this, then give up.
 
 // Non-settable variables
 //
@@ -374,7 +377,7 @@ uint16_t joy_horz_adc = adc_midscale_adc;
 uint16_t joy_vert_filt_adc = adc_midscale_adc;
 uint16_t joy_horz_filt_adc = adc_midscale_adc;
 uint16_t steer_pulse_out_us = steer_pulse_stop_us;  // pid loop output to send to the actuator (steering)
-uint16_t brake_pulse_out_us = brake_pulse_stop_us;  // pid loop output to send to the actuator (brake)
+uint16_t brake_pulse_out_us = brake_pulse_stop_us;  // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
 uint32_t brake_timer_us = 0;  // Timer used to control braking increments
 int16_t brake_pid_error_adc = 0;
 int16_t brake_pid_error_last_adc = 0;
@@ -417,6 +420,8 @@ bool cruise_sw = false;
 bool cruise_sw_held = false;
 bool shutdown_complete = true;  // Shutdown mode has completed its work and can stop activity
 bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
+bool park_the_motors = false;  // Indicates we should release the brake & gas so the pedals can be used manually without interference
+uint32_t motor_park_timer_us = micros();
 bool sim_out = LOW;
 bool simulate = false;
 char disp_draw_buffer[8];  // Used to convert integers to ascii for purposes of displaying on screen
@@ -438,6 +443,7 @@ int8_t sim_modify_polarity = 0;
 uint32_t sim_modify_timer_us = micros();
 bool sim_edit_mode = false;
 uint32_t touch_timer_us = micros();
+bool touch_memory = false;  // Stores state of last time we checked if being touched
 uint32_t loopno = 1;    
 uint32_t loopzero = 0;  
 
@@ -480,6 +486,7 @@ SdFat sd;  // SD card filesystem
 #define error(msg) sd.errorHalt(F(msg))  // Error messages stored in flash.
 SdFile root;  // Directory file.
 SdFile file;  // Use for file creation in folders.
+
 // char cinBuf[40];  // Buffer for Serial input.
 // ArduinoOutStream cout(Serial);  // Create a Serial output stream.
 // ArduinoInStream cin(Serial, cinBuf, sizeof(cinBuf));  // Create a serial input stream.
@@ -564,8 +571,8 @@ void encoder_a_isr(void) {  // When A goes high if B is low, we are CW, otherwis
     //    encoder_timer_us = micros();    
     if (encoder_b_raw) encoder_delta++;
     else encoder_delta--;
-    led_state = !led_state;
-    digitalWrite(led_pin, led_state);
+    // led_state = !led_state;
+    // digitalWrite(led_pin, led_state);
 }
 // void encoder_sw_isr(void) {  
 //     encoder_button = 1-digitalRead(encoder_sw_pin);
@@ -764,7 +771,7 @@ void sd_init() {
     if (!root.open("/")) {
         error("open root failed");
     }
-    if (!sd.exists(approot)) {
+    if (!sd.exists(approot)) { 
         if (sd.mkdir(approot)) {
             Serial.println(F("Created approot directory\n"));  // cout << F("Created approot directory\n");
         }
@@ -885,7 +892,7 @@ void setup() {
     // analogWrite(brake_pwm_pin, brake_stop_pwm);
     
     // while (!Serial);     // needed for debugging?!
-    Serial.begin(115200);
+    Serial.begin(115200);  // Open serial port
     
     delay(500); // This is needed to allow the screen board enough time after a cold boot before we start trying to talk to it.
     if (display_enabled) {
@@ -922,13 +929,14 @@ void setup() {
     }
     */
     
-    Serial.print(F("Initializing filesystem...  "));  // SD card is pretty straightforward, a single call. 
-    if (! sd.begin(usd_cs_pin, SD_SCK_MHZ(25))) {   // ESP32 requires 25 mhz limit
-        Serial.println(F("SD begin() failed"));
-        for(;;); // Fatal error, do not continue
-    }
-    sd_init();
-    Serial.println(F("Filesystem started"));
+    // 230417 removing sdcard init b/c boot is hanging here unless I insert this one precious SD card
+    // Serial.print(F("Initializing filesystem...  "));  // SD card is pretty straightforward, a single call. 
+    // if (! sd.begin(usd_cs_pin, SD_SCK_MHZ(25))) {   // ESP32 requires 25 mhz limit
+    //     Serial.println(F("SD begin() failed"));
+    //     for(;;); // Fatal error, do not continue
+    // }
+    // sd_init();
+    // Serial.println(F("Filesystem started"));
     
     // Set up our interrupts
     Serial.print(F("Interrupts... "));
@@ -1012,9 +1020,10 @@ void loop() {
     
     // Voltage of vehicle battery
     uint16_t battery_adc = analogRead(battery_pin);
-    battery_mv = (uint16_t)(15638*((float)battery_adc)/adc_range_adc); 
+    battery_mv = (uint16_t)(battery_max_mv*((float)battery_adc)/adc_range_adc);  // convert adc value read into mV
     battery_filt_mv = (uint16_t)((battery_ema_alpha*(float)battery_mv) + ((1-battery_ema_alpha)*(float)battery_filt_mv));     // Apply EMA filter
     
+    // Read sensors
     if (simulate) {  // Any sensor data which should be mucked with or overridden automatically and continuously, during simulation should get set in here
         if (brake_pos_adc < brake_pos_zeropoint_adc) brake_pos_adc = brake_pos_zeropoint_adc;
     }
@@ -1104,14 +1113,10 @@ void loop() {
        
     // 4) Do actions based on which runmode we are in (and set gas/brake setpoints), and possibly change runmode 
     //
-    if (runmode == SHUTDOWN)  {
-        if (basicmodesw)  shutdown_complete = true;    // If basic mode switch is enabled
-        else if (ignition && engine_filt_rpm > 0) { // This should not happen, but we should catch any possibility
-            Serial.println(F("Error: Engine RPM without ignition signal"));  // , engine_filt_rpm, ignition
-            runmode = HOLD;  // Might be better to go to an error mode or failure mode in cases like this
-        }
+    if (runmode == SHUTDOWN)  { // In shutdown mode we stop the car if it's moving then park the motors.
+        if (basicmodesw)  shutdown_complete = true;    // If basic mode switch is enabled then stop any in-progress shutdown sequence
         else if (we_just_switched_modes)  {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
-            gas_target_rpm = engine_idle_rpm;  //  Begin Letting off the gas all the way
+            gas_target_rpm = engine_idle_rpm;  //  Release the throttle
             shutdown_complete = false;
             if (carspeed_filt_mmph)  {
                 pressure_target_adc = brake_hold_initial_adc;  // More brakes, etc. to stop the car
@@ -1119,8 +1124,10 @@ void loop() {
                 sanity_timer_us = now_us;
             }
         }
-        if (!shutdown_complete)  {  // If we haven't yet stopped the car and released the brakes and gas all the way
-            if (!carspeed_filt_mmph || now_us-sanity_timer_us > sanity_timeout_us)  {  // Car is stopped, but maybe we still need to release the brakes
+        if (!shutdown_complete)  {  // If we haven't yet stopped the car and then released the brakes and gas all the way
+            if (!carspeed_filt_mmph || now_us-sanity_timer_us > sanity_timeout_us)  {  // If car has stopped, or timeout expires, then release the brake
+                motor_park_timer_us = now_us;  // Set a timer to timebox this effort
+                park_the_motors = true;  // Flags the motor parking to happen
                 pressure_target_adc = pressure_min_adc;  // Start to Fully release brakes
                 if (pressure_filt_adc <= pressure_min_adc + pressure_margin_adc)  shutdown_complete = true;  // With this set, we will do nothing from here on out (until mode changes, i.e. ignition)
             }
@@ -1129,9 +1136,14 @@ void loop() {
                 if (pressure_target_adc > pressure_max_adc)  pressure_target_adc = pressure_max_adc;
                 brake_timer_us = now_us;  
             }
+            else if (!park_the_motors) shutdown_complete = true;
         }
     }
-    else if (runmode == BASIC)  {  // Basic mode is so basic, it's only 1 line long
+    else if (runmode == BASIC)  {  // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering stell works.
+        if (we_just_switched_modes) {  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
+            motor_park_timer_us = now_us;  // Set a timer to timebox this effort
+            park_the_motors = true;  // Flags the motor parking to happen
+        }
         if ((!basicmodesw) && engine_filt_rpm)  runmode = HOLD;  // If we turned off the basic mode switch with engine running, go to Hold mode. If engine is not running, we'll end up in Stall Mode automatically
     }
     else if (runmode == STALL)  {   // In stall mode, the gas doesn't have feedback
@@ -1375,7 +1387,49 @@ void loop() {
         }
         pid_timer_us = now_us; // reset timer to trigger the next update
     }
+    if (park_the_motors) {  // If we are supposed to release the gas & brake actuators to where they won't interfere with the pedals
+        if ( ( abs(brake_pos_adc - brake_pos_park_adc) <= default_margin_adc &&    // IF ( the brake motor is close enough to the park position AND
+               abs(gas_pulse_out_us == gas_pulse_park_us) )                         //      so is the gas servo )
+               || now_us-motor_park_timer_us > motor_park_timeout_us ) {           //      OR the parking timeout has expired
+            park_the_motors = false;                                               // THEN stop trying to park the motors
+        }
+        else {
+            if (brake_pos_adc + default_margin_adc <= brake_pos_park_adc) brake_pulse_out_us = map (brake_pos_adc, brake_pos_park_adc, brake_pos_retracted_adc, brake_pulse_stop_us, brake_pulse_extend_us); // If brake is too far retracted, extend toward park point, slowing as we approach
+            if (brake_pos_adc - default_margin_adc >= brake_pos_park_adc) brake_pulse_out_us = map (brake_pos_adc, brake_pos_park_adc, brake_pos_extended_adc, brake_pulse_stop_us, brake_pulse_retract_us); // If brake is too far extended, retract toward park point, slowing as we approach
+            brake_servo.writeMicroseconds(brake_pulse_out_us);  // Send to the motor
+            gas_pulse_out_us = gas_pulse_park_us;
+            REG_PWM_CDTYUPD0 = gas_pulse_out_us;  // Update the pin duty cycle.
+        }
+    }
     
+    // 5.5) Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
+    //
+    // This section should become a real time self-diagnostic system, to look for anything that doesn't seem right and display an
+    // informed trouble code. Much like the engine computer in cars nowadays, which keep track of any detectable failures for you to
+    // retreive with an OBD tool. Eventually this should include functions allowing us to detect things like:
+    //  1. A sensor or actuator is unplugged, movement blocked, missing magnetic pulses, etc.
+    //  2. Air in the brake lines.
+    //  3. Axle/brake drum may be going bad (increased engine RPM needed to achieve certain carspeed)  (beware going up hill may look the same).
+    //  4. E-brake has been left on (much the same symptoms as above? (beware going up hill may look the same) 
+    //  5. Battery isn't charging, or just running low.
+    //  6. Carburetor not behaving (or air filter is clogged). (See above about engine deiseling - we can detect this!)
+    //  7. After increasing braking, the actuator position changes in the opposite direction, or vise versa.
+    //  8. Changing an actuator is not having the expected effect.
+    //  9. A tunable value suspected to be out of tune.
+    //  10. Check regularly for ridiculous shit. Compare our variable values against a predetermined list of conditions which shouldn't be possible or are at least very suspect. For example:
+    //     A) Sensor reading is out of range, or has changed faster than it ever should.
+    //     B) Stopping the car on entering hold/shutdown mode is taking longer than it ever should.
+    //     C) Mule seems to be accelerating like a Tesla.
+    //     D) Car is accelerating yet engine is at idle.
+    //  11. The control system has nonsensical values in its variables.
+    //
+    if (ignition && engine_filt_rpm > 0) { // See if the engine is turning despite the ignition being off
+        Serial.println(F("Detected engine rotation in the absense of ignition signal"));  // , engine_filt_rpm, ignition
+        // I don't think we really need to panic about this, but it does seem curious. Actually this will probably occur when we're sliding
+        // into camp after a ride, and kill the engine before we stop the car. For a fraction of a second the engine would keep turning anyway.
+        // Or fopr that matter whenever the carb is out of tune and making the engine diesel after we kill the ign.
+    }
+
     // Serial.print("Point4: ");  Serial.println(carspeed_target_mmph);
 
     now_us = micros();
@@ -1385,7 +1439,7 @@ void loop() {
     
     // 6) Service the user interface
     //
-    if (touchpanel.touched()) {      // If someone is groping our touch screen, we should address that
+    if (touchpanel.touched()) { // Take actions upon being touched
         TS_Point touchpoint = touchpanel.getPoint();   // Retreive a point
         touchpoint.x = map(touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
         touchpoint.y = map(touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);  // Rotate touch coordinates to match tft coordinates
@@ -1413,109 +1467,119 @@ void loop() {
                 disp_redraw_all = true;  // Signal drawing functions to redraw everything
             }
         }
-        else if (simulate) {
+        else if (simulate) {  // if we are currenttly using the our built-in vehicle simulator tool,
+            // then we must do what's expected of us whenever the user touches one of our 20 touchscreen buttons.
             if (touch_row == 0) {
-                if (touch_col == 1) {
-                    if (touch_timer_us-now_us > touch_timeout_us) {
-                        ignition = 1-ignition;
-                        touch_timer_us = now_us;
-                    }
+                if (touch_col == 1) {  // Pressed the ignition switch toggle button
+                    if (!touch_memory) ignition = !ignition; // Toggle value, only once per touch
                 }
-                else if (touch_col == 2) {
+                else if (touch_col == 2) {  // Pressed the increase brake pressure button
                     if (pressure_max_adc-pressure_filt_adc < 25) pressure_filt_adc = pressure_max_adc;
                     else pressure_filt_adc += 25;
                 }
-                else if (touch_col == 3) {
+                else if (touch_col == 3) {  // Pressed the increase engine rpm button
                     if (engine_govern_rpm-engine_filt_rpm < 25) engine_filt_rpm = engine_govern_rpm;
                     else engine_filt_rpm += 25;
                 } 
-                else if (touch_col == 4) {
+                else if (touch_col == 4) {  // Pressed the increase vehicle speed button
                     if (carspeed_govern_mmph-carspeed_filt_mmph < 250) carspeed_filt_mmph = carspeed_govern_mmph;
                     else carspeed_filt_mmph += 250;
                 }
             }
             else if (touch_row == 1) {
-                if (touch_col == 0) {
+                if (touch_col == 0) {  // Pressed the one button that doesn't do anything
                 }
-                else if (touch_col == 1) {   
-                    if (touch_timer_us-now_us > touch_timeout_us) {
-                        basicmodesw = 1-basicmodesw;
-                        touch_timer_us = now_us;
-                    }
+                else if (touch_col == 1) {  // Pressed the basic mode toggle button
+                     if (!touch_memory) basicmodesw = !basicmodesw;  // Toggle value, only once per touch
                 }   
-                else if (touch_col == 2) {
+                else if (touch_col == 2) {  // Pressed the decrease brake pressure button
                     if (pressure_filt_adc-pressure_min_adc < 25) pressure_filt_adc = pressure_min_adc;
                     else pressure_filt_adc -= 25;
                 }
-                else if (touch_col == 3) {
+                else if (touch_col == 3) {  // Pressed the decrease engine rpm button
                     if (engine_filt_rpm < 25) engine_filt_rpm = 0;
                     else engine_filt_rpm -= 25;
                 }
-                else if (touch_col == 4) {
+                else if (touch_col == 4) {  // Pressed the decrease vehicle speed button
                     if (carspeed_filt_mmph < 250) carspeed_filt_mmph = 0;
                     else carspeed_filt_mmph -= 250;
                 }
             }
             else if (touch_row == 2) {
-                if (touch_col == 0) {
-                    if (touch_timer_us-now_us > touch_timeout_us) {
+                if (touch_col == 0) {  // Pressed the dataset selection button. Cycles thru six 8-value pages of data, to view or edit
+                    // if (touch_timer_us-now_us > touch_min_valid_us) {
+                    //     sim_tuning_mode += 1;
+                    //     if (sim_tuning_mode >= sim_tuning_modes)  sim_tuning_mode -= sim_tuning_modes;
+                    //     sim_selected_value = -1;
+                    //     draw_text(true);  // Redraw the tuning corner of the screen
+                    //     draw_touchgrid(false);  // Redraw entire touch grid
+                    //     touch_timer_us = now_us;
+                    // }
+                    if (!touch_memory) {
                         sim_tuning_mode += 1;
-                        if (sim_tuning_mode >= sim_tuning_modes)  sim_tuning_mode -= sim_tuning_modes;
+                        if (sim_tuning_mode >= sim_tuning_modes) sim_tuning_mode -= sim_tuning_modes;
                         sim_selected_value = -1;
                         draw_text(true);  // Redraw the tuning corner of the screen
                         draw_touchgrid(false);  // Redraw entire touch grid
-                        touch_timer_us = now_us;
                     }
                 }
-                else if (touch_col == 1) {
-                    if (touch_timer_us-now_us > touch_timeout_us) {
-                        neutral = !neutral;
-                        touch_timer_us = now_us;
-                    }
+                else if (touch_col == 1) {  // Pressed the neutral switch toggle button
+                    if (!touch_memory) neutral = !neutral;  // Toggle value, only once per touch
                 }
-                else if (touch_col == 2) {  // Subtract from the selected tunable value
+                else if (touch_col == 2) {  // Pressed the decrease value button, for real time tuning of variables
                     if (sim_tuning_mode != LOCK && sim_selected_value >= 0) sim_modify_polarity = -1;
                 }
-                else if (touch_col == 3) {
+                else if (touch_col == 3) {  // Pressed the joystick up button
                     if (joy_vert_max_adc-joy_vert_filt_adc < 25) joy_vert_filt_adc = joy_vert_max_adc;
                     else joy_vert_filt_adc += 25;
                 }
-                else if (touch_col == 4) {  // Add to the selected tunable value
+                else if (touch_col == 4) {  // Pressed the increase value button, for real time tuning of variables
                     if (sim_tuning_mode != LOCK && sim_selected_value >= 0) sim_modify_polarity = 1;
                 }   
             }
-            else if (touch_row == 3) {
-                if (touch_col == 0) {
-                    if (touch_timer_us-now_us > touch_timeout_us) {
-                        sim_selected_value += 1;
-                        if (sim_selected_value > arraysize(tunings[sim_tuning_mode]))  sim_selected_value -= arraysize(tunings[sim_tuning_mode]);
+            else if (touch_row == 3) {  // If touched button is in the 4th row (row 3)
+                if (touch_col == 0) {  // Pressed the select value button, for real time tuning of variables
+                    // if (touch_timer_us-now_us > touch_min_valid_us) {
+                    //     sim_selected_value += 1;
+                    //     if (sim_selected_value > arraysize(tunings[sim_tuning_mode]))  sim_selected_value -= arraysize(tunings[sim_tuning_mode]);
+                    //     if (sim_tuning_mode >= 4 && sim_selected_value == 0) sim_selected_value = 5;  // Skip unchangeable values for all PID modes
+                    //     if (sim_tuning_mode == JOY && sim_selected_value == 0) sim_selected_value = 2;  // Skip unchangeable values for joy mode
+                    //     touch_timer_us = now_us;
+                    // }
+                    if (!touch_memory) {  // Only take action once per touch
+                        sim_selected_value += 1;  // Select next value
+                        if (sim_selected_value >= arraysize(tunings[sim_tuning_mode]))  sim_selected_value -= arraysize(tunings[sim_tuning_mode]);
                         if (sim_tuning_mode >= 4 && sim_selected_value == 0) sim_selected_value = 5;  // Skip unchangeable values for all PID modes
                         if (sim_tuning_mode == JOY && sim_selected_value == 0) sim_selected_value = 2;  // Skip unchangeable values for joy mode
-                        touch_timer_us = now_us;
                     }
                 }
-                else if (touch_col == 1) {
-                    cruise_sw = true;  
+                else if (touch_col == 1) {  // Pressed the cruise mode button. This is a momentary button
+                    cruise_sw = true;  // This is a momentary control, not a toggle. Value changes back upon release
                 }
-                else if (touch_col == 2) {
+                else if (touch_col == 2) {  // Pressed the joystick left button
                     if (joy_horz_filt_adc-joy_horz_min_adc < 25) joy_horz_filt_adc = joy_horz_min_adc;
                     else joy_horz_filt_adc -= 25;
                 }
-                else if (touch_col == 3) {
+                else if (touch_col == 3) {  // Pressed the joystick down button
                     if (joy_vert_filt_adc-joy_vert_min_adc < 25) joy_vert_filt_adc = joy_vert_min_adc;
                     else joy_vert_filt_adc -= 25;
                 }
-                else if (touch_col == 4) {
+                else if (touch_col == 4) {  // Pressed the joystick right button
                     if (joy_horz_max_adc-joy_horz_filt_adc < 25) joy_horz_filt_adc = joy_horz_max_adc;
                     else joy_horz_filt_adc += 25;
                 }   
             }
         }
+        touch_memory = true;
     }
-    else if (simulate) {  // Put momentarily-set simulated button values back to default values
-        cruise_sw = false;  // Makes this button effectively momentary
-        sim_modify_polarity = 0;  // Stop changing value
+    else {  // If not being touched, put momentarily-set simulated button values back to default values
+        if (simulate) {
+            cruise_sw = false;  // Makes this button effectively momentary
+            sim_modify_polarity = 0;  // Stop changing value
+        }
+        touch_memory = false;  // remember last touch state
     }
+    
     // Act on any encoder action
     // if (encoder_sw_event) {
     //     Serial.print(F("encoderoder button = "));
@@ -1534,22 +1598,23 @@ void loop() {
     //     encoder_sw_event = false;  // Just let it go
     // }
 
-    if (encoder_sw && !encoder_sw_last) {  // if you push the encoder
-        if (sim_edit_mode)  {
-            sim_edit_mode = false;
+    // 
+    if (!encoder_sw && encoder_sw_last) {  // upon release of the encoder switch
+        if (sim_edit_mode)  {  // If we were editing a variable value
+            sim_edit_mode = false;  // Then stop doing that
         }
         else if (sim_selected_value != -1) {
             sim_edit_mode = true;
         }
     }
     if (encoder_delta != 0) { // First attempt to use encoder in UI 
-        if (sim_edit_mode) {   
+        if (sim_edit_mode) {  // If a tunable value is being edited, turning the encoder changes the value
             sim_modify_polarity = 10*encoder_delta;
         }
         else {
             if (sim_selected_value == -1)
                 sim_selected_value += 1;
-            if (sim_selected_value > arraysize(tunings[sim_tuning_mode]))  sim_selected_value -= (arraysize(tunings[sim_tuning_mode]) + 1);
+            if (sim_selected_value >= arraysize(tunings[sim_tuning_mode])) sim_selected_value -= arraysize(tunings[sim_tuning_mode]);  // was == and + 1;            
             if (sim_tuning_mode >= 4 && sim_selected_value == 0) sim_selected_value = 5;  // Skip unchangeable values for all PID modes
             if (sim_tuning_mode == JOY && sim_selected_value == 0) sim_selected_value = 2;  // Skip unchangeable values for joy mode
         }
