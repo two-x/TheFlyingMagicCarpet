@@ -6,14 +6,9 @@
 #include <Wire.h>      // Contains I2C serial bus, needed to talk to touchscreen chip
 #include <SdFat.h>        // SD card & FAT filesystem library
 #include <Servo.h>         // Makes PWM output to control motors (for rudimentary control of our gas and steering)
-#include <Adafruit_GFX.h>    // For drawing pictures & text on the screen
+// #include <Adafruit_GFX.h>    // For drawing pictures & text on the screen
 #include <Adafruit_FT6206.h>   // For interfacing with the cap touchscreen controller chip
 #include <Adafruit_ILI9341.h>   // For interfacing with the TFT LCD controller chip
-
-// #include <Fonts/FreeSans12pt7b.h>   // Variable width font (optional)  Note: fonts hog a ton of code memory
-// #include <Adafruit_ImageReader.h>  // Lets you display image files from the sd card so keeps memory free
-// #include <FastPID.h>  // Fixed-point math based PID loop (for our brakes and maybe cruise control, maybe also steering and gas)
-// #include <PID_v1.h>  // Arduino PID loop library
 
 /*
 # Here are the different runmodes documented
@@ -110,6 +105,7 @@
 #define CYN 0x07FF // 00000 111 111 11111 
 #define DCYN 0x0575 //
 #define MGT 0xF81F
+#define ORG 0xFCA0 
 #define YEL 0xFFE0 
 #define WHT 0xFFFF
 #define GRY1 0x8410 // 10000 100 000 10000 = 84 10
@@ -140,8 +136,7 @@
 #define cruise_sw_pin 41  // Input, momentary button low pulse >500ms in fly mode means start cruise mode. Any pulse in cruise mode goes to fly mode. Active low. (needs pullup)
 #define basicmodesw_pin 47  // Input, asserted to tell us to run in basic mode.   (needs pullup)
 #define neutral_pin 49  // Input, asserted when car is in neutral, i.e. out of gear. Active low. (needs pullup)
-#define gas_pwm_pin 67  // Output, PWM signal duty cycle controls throttle target
-// #define gas_pwm_pin 34  // Output, PWM signal duty cycle controls throttle target
+#define gas_pwm_pin 67  // Output, PWM signal duty cycle controls throttle target. On Due this is the pin labeled DAC1 (where A13 is on Mega)
 #define pot_wipe_pin A6  // Analog input, tells us position of attached potentiometer (useful for debug, etc.)
 #define battery_pin A7  // Analog input, mule battery voltage level, full scale is 15.638V
 #define joy_horz_pin A8  // Analog input, tells us left-right position of joystick. Take complement of ADC value gives:  Low values for left, High values for right.
@@ -179,7 +174,7 @@
 #define adc_bits 12
 #define adc_range_adc 4096    // = 2^12
 #define adc_midscale_adc 2048
-#define looptimer false  // Makes code write out timestamps throughout loop to serial port
+#define print_timestamps false  // Makes code write out timestamps throughout loop to serial port
 
 char telemetry[disp_fixed_lines][12] = {  
     "Flightmode:",
@@ -198,12 +193,12 @@ char telemetry[disp_fixed_lines][12] = {
 char tunings[sim_tuning_modes][disp_tuning_lines][12] = {
     {   "   Battery:",  // LOCK
         " Brake Pos:",
+        "  Pot Filt:",
         "       Pot:",
-        " Enc Delta:",
-        "     Enc A:",
-        "     Enc B:",
-        "    Enc Sw:",
-        "        - :" },
+        "Tach Magnt:",
+        "Tach Count:",
+        "Tach Timer:",
+        "LoopPeriod:" },
     {   "  Horz Raw:",  // JOY
         "  Vert Raw:",
         "  Horz Min:",
@@ -255,7 +250,7 @@ char tunings[sim_tuning_modes][disp_tuning_lines][12] = {
 };
 char units[disp_fixed_lines][5] = {"    ", "mmph", "rpm ", "adc ", "adc ", "adc ", "us  ", "mmph", "rpm ", "us  ", "adc ", "us  " };
 char tuneunits[sim_tuning_modes][disp_tuning_lines][5] = {
-    { "mV  ", "adc ", "adc ", "det ", "    ", "    ", "    ", "    " },  // LOCK
+    { "mV  ", "adc ", "adc ", "adc ", "    ", "    ", "us  ", "us  " },  // LOCK
     { "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // JOY
     { "%   ", "rpm ", "rpm ", "mmph", "mmph", "    ", "    ", "adc " },  // CAR
     { "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PWM
@@ -270,7 +265,7 @@ char simgrid[touch_rows][touch_cols][6] = {
     { "val  ", "  C  ", "< joy", "joy v", "joy >" }
 };    
 char modecard[6][7] = { "Shutdn", "Basic", "Stall", "Hold", "Fly", "Cruise" };
-uint16_t colorcard[6] = { RED, MGT, YEL, YEL, GRN, CYN };
+uint16_t colorcard[6] = { RED, MGT, ORG, YEL, GRN, CYN };
 char tunecard[7][5] = { "Run ", "Joy ", "Car ", "PWMs", "Bpid", "Gpid", "Cpid" };
 
 // Settable calibration values and control parameters
@@ -294,8 +289,8 @@ float joy_ema_alpha = 0.05;  // alpha value for ema filtering, lower is more con
 float pot_ema_alpha = 0.2;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 float battery_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 float pressure_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-float carspeed_ema_alpha = 0.05;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-float engine_rpm_ema_alpha = 0.2;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+float carspeed_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+float engine_rpm_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 uint16_t joy_vert_min_adc = 9;  // ADC count of furthest joy position in down direction (ADC count 0-4095)
 uint16_t joy_vert_max_adc = 4095;  // (3728 at 3.3V VDD) ADC count of furthest joy position in up direction (ADC count 0-4095)
 uint16_t joy_horz_min_adc = 9;  // ADC count of furthest joy position in left direction (ADC count 0-4095)
@@ -348,14 +343,14 @@ uint16_t default_margin_adc = 20;  // Default margin of error for comparisons of
 uint32_t sim_modify_period_us = 150000;  // How fast to change variable values when holding modify button down in simulator (in us)
 uint16_t battery_max_mv = 16000;  // The max vehicle voltage we can sense. Design resistor divider to match. Must exceed max V possible.
 uint32_t pid_period_us = 20000;    // time period between output updates. Reciprocal of pid frequency (in us)
-bool motor_park_timeout_us = 3000000;  // If we can't park the motors faster than this, then give up.
+uint32_t motor_park_timeout_us = 3000000;  // If we can't park the motors faster than this, then give up.
 
 // Non-settable variables
 //
-uint8_t sim_tuning_mode = LOCK;
+uint8_t sim_tuning_mode = LOCK;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
 uint8_t sim_tuning_mode_old = sim_tuning_mode;
-uint8_t sim_selected_value = 0;
-uint8_t sim_selected_value_old = 0;
+uint8_t sim_selected_value = -1;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
+uint8_t sim_selected_value_old = -1;
 float gas_pid_i_term_rpm = 0.0;
 float gas_pid_d_term_rpm = 0.0;
 float gas_pid_derivative_rpmperus = 0.0;
@@ -431,8 +426,6 @@ uint32_t disp_ages_us[disp_lines];
 #define disp_nobools 4
 bool disp_bool_values[disp_nobools];
 char disp_bool_buffer;
-// int16_t disp_bool_age_quanta[disp_nobools];
-// uint32_t disp_bool_ages_us[disp_nobools];
 uint32_t old_tach_time_us;
 uint32_t old_speedo_time_us;
 uint32_t cruise_sw_timer_us = 0;
@@ -444,12 +437,16 @@ uint32_t sim_modify_timer_us = micros();
 bool sim_edit_mode = false;
 uint32_t touch_timer_us = micros();
 bool touch_memory = false;  // Stores state of last time we checked if being touched
+uint32_t loop_timer_us = micros();  // used to determine loop_period_us
+uint32_t loop_period_us = 0;  // how long the previous main loop took to run
 uint32_t loopno = 1;    
 uint32_t loopzero = 0;  
 
 // int16_t pressure_min_psi = 0;  // Brake pressure when brakes are effectively off (psi 0-1000)
 // int16_t pressure_max_psi = 500;  // Highest possible pressure achievable by the actuator (psi 0-1000)
-// float pid_freq_hz = 1000000/pid_period_us; // PID looping frequency for all pid loops. (in Hz)
+
+// Testing magnet sensors
+uint8_t tach_magnet_count = 0;  // remove this after tach sensor bench testing (all references)
 
 // Volatile variables  - for variables set inside ISRs
 //
@@ -496,7 +493,7 @@ SdFile file;  // Use for file creation in folders.
 // Steering:  Motor direction and velocity are controlled with PWM, proportional to joystick horizontal direction and magnitude
 //   Setpoint Value: Proportional to Joystick Horz ADC value.  0V = Full Left, 2.5V = Stop, 5V = Full Right
 //   Measured Value: We have no feedback, other than the joystick current horizontal position
-//   Actuator Output Value: PWM signal to Steering Jaguar unit.  0% duty = Full Left, 50% = Stop, 100% = Full Right
+//   Actuator Output Value: PWM square wave sent to Jaguar, w/ high pulse width of: ~2.2ms = Full Left, 1.5ms = Stop, ~800us = Full Right
 //   Limits: Reed switch limit signals for left and right may be handled by us, or by the jaguar controller
 //   Setpoint scaling: Kp/Ki/Kd values should decrease appropriately as a function of vehicle speed (safety) 
 //
@@ -578,16 +575,32 @@ void encoder_a_isr(void) {  // When A goes high if B is low, we are CW, otherwis
 //     encoder_button = 1-digitalRead(encoder_sw_pin);
 //     encoder_sw_isr_flag = true;
 // }
+
+// The tach and speed use a hall sensor being triggered by a passing magnet once per pulley turn. These ISRs call micros()
+// on every pulse to know the time since the previous pulse. I tested this on the bench up to about 750 mmph which is as 
+// fast as I can move the magnet with my hand, and it works. It would be cleaner to just increment a counter here in the ISR
+// then call micros() in the main loop and compare with a timer to calculate mmph.
+
 void tach_isr(void) {  // The tach and speedo isrs compare value returned from the micros() function with the value from the last interrupt to determine period, to get frequency of the vehicle pulley rotations.
+    
+    // Method 1: This works but this is a sloppy excuse for an ISR. we shouldn't be calling micros() inside an ISR
     tach_timer_us = micros();  // This might screw up things.  Anders would remember
     tach_delta_us = tach_timer_us-tach_last_us;
     tach_last_us = tach_timer_us;
+    //
+    tach_magnet_count++; // this is temporary. remove after sensor tests (remove all copies)
+    
+    // Method 2: Makes this ISR squeaky clean like a fetus' asshole
+    // This aint working for some reason ... I don't have time to debug it now. Ugh!
+    // tach_magnet_count++; // add one to the pulses sensed since the last sensor value update (in main loop) 
 }
 void speedo_isr(void) {  //  A better approach would be to read, reset, and restart a hardware interval timer in the isr.  Better still would be to regularly read a hardware binary counter clocked by the pin - no isr.
     speedo_timer_us = micros();  // This might screw up things.  Anders would remember
     speedo_delta_us = speedo_timer_us-speedo_last_us;
     speedo_last_us = speedo_timer_us;
 }
+
+
 
 // Functions
 /*
@@ -957,6 +970,8 @@ void setup() {
     // brake_pid.setOutputRange(brake_pwm_retract_pwm, brake_pwm_extend_pwm);  // Lines only useful with FastPID library
     // cruise_pid.setOutputRange(engine_idle_rpm, engine_redline_rpm);  // Lines only useful with FastPID library
 
+    loop_timer_us = micros();  // start timer to measure the first loop
+
     Serial.println(F("Setup finished"));
 }
 
@@ -976,7 +991,7 @@ void loop() {
 
     // 0) Beginning-of-the-loop nonsense
     //
-    if (looptimer) {
+    if (print_timestamps) {
         Serial.print("Loop# ");
         Serial.print(loopno);  Serial.print(": ");      
         loopzero = micros();  // Start time for loop
@@ -998,7 +1013,11 @@ void loop() {
     uint16_t carspeed_govern_mmph = map(gas_governor_percent, 0, 100, 0, carspeed_redline_mmph);  // Governor must scale the top vehicle speed proportionally
     // uint16_t engine_center_rpm = (engine_idle_rpm+engine_govern_rpm)/2;  // RPM value center between idle and govern, needed in pid.
     // uint16_t carspeed_center_mmph = (carspeed_idle_mmph+carspeed_govern_mmph)/2;  // Car speed value center between idle and govern, needed in pid.
-     
+    
+    now_us = micros();
+    if (print_timestamps) {
+        // Serial.print(now_us-loopzero);  Serial.print(" ");
+    }
     // 1) Gather new telemetry and filter the signals
     //
     
@@ -1034,6 +1053,8 @@ void loop() {
         cruise_sw = 1-digitalRead(cruise_sw_pin);       // 1-value because electrical signal is active low
 
         // Tach
+        
+        // Method 1: This works with the ISR implementation having micros() call inside the ISR
         if (now_us-tach_timer_us < engine_stop_timeout_us)  engine_rpm = (uint32_t)(60000000/(float)tach_delta_us);  // Tachometer magnets/us * 60000000 (1 rot/magnet * 1000000 us/sec * 60 sec/min) gives rpm
         else engine_rpm = 0;  // If timeout since last magnet is exceeded
         if (abs(engine_rpm-engine_old_rpm) > engine_lp_thresh_rpm || engine_rpm-engine_last_rpm < engine_spike_thresh_rpm) {  // Remove noise spikes from tach values, if otherwise in range
@@ -1043,6 +1064,16 @@ void loop() {
         else engine_rpm = engine_last_rpm;  // Spike detected - ignore that sample
         if (engine_rpm)  engine_filt_rpm = (uint32_t)((engine_rpm_ema_alpha*(float)engine_rpm) + ((1-engine_rpm_ema_alpha)*(float)engine_filt_rpm));     // Sensor EMA filter
         else engine_filt_rpm = 0;    
+
+        // Method 2: This should work also, perhaps better at high speeds, and uses a squeaky clean ISR implementation.  But it doesn't :(        
+        // if (tach_magnet_count) {
+        //     engine_rpm = (uint32_t)(60000000 * (float)tach_magnet_count/(float)loop_period_us);  // Tachometer (magnets/loop) / (us/loop) * 60000000 (1 rot/magnet * 1000000 us/sec * 60 sec/min) gives rpm
+        //     tach_timer_us = micros();
+        //     tach_magnet_count = 0;
+        // }
+        // else if (now_us-tach_timer_us < engine_stop_timeout_us) engine_rpm = 0;  // If the vehicle stop timeout is exceeded, consider rpm is zero
+        // if (engine_rpm)  engine_filt_rpm = (uint32_t)((engine_rpm_ema_alpha*(float)engine_rpm) + ((1-engine_rpm_ema_alpha)*(float)engine_filt_rpm));     // Sensor EMA filter
+        // else engine_filt_rpm = 0;    
 
         // Speedo    
         if (now_us-speedo_timer_us < car_stop_timeout_us)  carspeed_mmph = (uint32_t)(179757270/(float)speedo_delta_us); // Update car speed value  
@@ -1069,7 +1100,7 @@ void loop() {
     }
 
     now_us = micros();
-    if (looptimer) {
+    if (print_timestamps) {
         // Serial.print(now_us-loopzero);  Serial.print(" ");
     }
     
@@ -1105,7 +1136,7 @@ void loop() {
     // Serial.print("Point1: ");  Serial.println(carspeed_target_mmph);
 
     now_us = micros();
-    if (looptimer) {
+    if (print_timestamps) {
         // Serial.print(now_us-loopzero);  Serial.print(" ");
     }
 
@@ -1116,7 +1147,7 @@ void loop() {
     if (runmode == SHUTDOWN)  { // In shutdown mode we stop the car if it's moving then park the motors.
         if (basicmodesw)  shutdown_complete = true;    // If basic mode switch is enabled then stop any in-progress shutdown sequence
         else if (we_just_switched_modes)  {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
-            gas_target_rpm = engine_idle_rpm;  //  Release the throttle
+            gas_target_rpm = engine_idle_rpm;  //  Release the throttle 
             shutdown_complete = false;
             if (carspeed_filt_mmph)  {
                 pressure_target_adc = brake_hold_initial_adc;  // More brakes, etc. to stop the car
@@ -1288,7 +1319,7 @@ void loop() {
     }
 
     now_us = micros();
-    if (looptimer) {
+    if (print_timestamps) {
         // Serial.print(now_us-loopzero);  Serial.print(" ");
     }
     
@@ -1433,7 +1464,7 @@ void loop() {
     // Serial.print("Point4: ");  Serial.println(carspeed_target_mmph);
 
     now_us = micros();
-    if (looptimer) {
+    if (print_timestamps) {
         // Serial.print(now_us-loopzero);  Serial.print(" ");
     }
     
@@ -1447,12 +1478,6 @@ void loop() {
         uint16_t touch_x = touchpoint.y; // touch point x coordinate in pixels, from origin at top left corner
         uint8_t touch_row = (uint8_t)((float)touch_y/touch_cell_height_pix); // which of our 4 rows of touch buttons was touched?
         uint8_t touch_col = (uint8_t)((float)touch_x/touch_cell_width_pix); // which of our 5 columns of touch buttons was touched?
-        // Serial.print("Got touched: \n");
-        // Serial.print(touch_x);   Serial.print(" ");
-        // Serial.print(touch_y);    Serial.print(" ");
-        // Serial.print(touch_row);   Serial.print(" ");
-        // Serial.println(touch_col);   // Serial.print(" ");
-
         // Simulation inputs
         //
         // on the bench, can simulate system conditions by touching twelve screen regions
@@ -1507,14 +1532,6 @@ void loop() {
             }
             else if (touch_row == 2) {
                 if (touch_col == 0) {  // Pressed the dataset selection button. Cycles thru six 8-value pages of data, to view or edit
-                    // if (touch_timer_us-now_us > touch_min_valid_us) {
-                    //     sim_tuning_mode += 1;
-                    //     if (sim_tuning_mode >= sim_tuning_modes)  sim_tuning_mode -= sim_tuning_modes;
-                    //     sim_selected_value = -1;
-                    //     draw_text(true);  // Redraw the tuning corner of the screen
-                    //     draw_touchgrid(false);  // Redraw entire touch grid
-                    //     touch_timer_us = now_us;
-                    // }
                     if (!touch_memory) {
                         sim_tuning_mode += 1;
                         if (sim_tuning_mode >= sim_tuning_modes) sim_tuning_mode -= sim_tuning_modes;
@@ -1539,13 +1556,6 @@ void loop() {
             }
             else if (touch_row == 3) {  // If touched button is in the 4th row (row 3)
                 if (touch_col == 0) {  // Pressed the select value button, for real time tuning of variables
-                    // if (touch_timer_us-now_us > touch_min_valid_us) {
-                    //     sim_selected_value += 1;
-                    //     if (sim_selected_value > arraysize(tunings[sim_tuning_mode]))  sim_selected_value -= arraysize(tunings[sim_tuning_mode]);
-                    //     if (sim_tuning_mode >= 4 && sim_selected_value == 0) sim_selected_value = 5;  // Skip unchangeable values for all PID modes
-                    //     if (sim_tuning_mode == JOY && sim_selected_value == 0) sim_selected_value = 2;  // Skip unchangeable values for joy mode
-                    //     touch_timer_us = now_us;
-                    // }
                     if (!touch_memory) {  // Only take action once per touch
                         sim_selected_value += 1;  // Select next value
                         if (sim_selected_value >= arraysize(tunings[sim_tuning_mode]))  sim_selected_value -= arraysize(tunings[sim_tuning_mode]);
@@ -1702,10 +1712,15 @@ void loop() {
             draw_value(13, battery_filt_mv, 0);
             draw_value(14, brake_pos_adc, 0);
             draw_value(15, pot_filt_adc, 0);
-            draw_value(16, encoder_delta, 0);
-            draw_value(17, encoder_a_raw, 0);
-            draw_value(18, encoder_b_raw, 0);
-            draw_value(19, encoder_sw, 0);
+            // draw_value(16, encoder_delta, 0);
+            // draw_value(17, encoder_a_raw, 0);
+            // draw_value(18, encoder_b_raw, 0);
+            // draw_value(19, encoder_sw, 0);
+            draw_value(16, pot_adc, 0);
+            draw_value(17, digitalRead(tach_pulse_pin), 0);
+            draw_value(18, tach_magnet_count, 0);
+            draw_value(19, tach_timer_us, 0);
+            draw_value(20, loop_period_us, 0);
         }
         else if (sim_tuning_mode == JOY) {
             draw_value(13, joy_horz_adc, 0);
@@ -1781,7 +1796,7 @@ void loop() {
     // 8) Do the control loop bookkeeping at the end of each loop
     //
     now_us = micros();
-    if (looptimer) {
+    if (print_timestamps) {
         // Serial.print(now_us-loopzero);
         // Serial.print(".  Loop in ");
         Serial.print(((float)(now_us-loopzero)/1000));
@@ -1798,4 +1813,7 @@ void loop() {
     if (runmode != oldmode) we_just_switched_modes = true;      // If changing runmode, set this so new mode logic can perform initial actions
     else we_just_switched_modes = false;    // Reset this variable
     oldmode = runmode;   // remember what mode we're in for next time
+    loop_period_us = micros() - loop_timer_us;
+    if (!loop_period_us) loop_period_us++;  // ensure loop period is never zero since it gets divided by 
+    loop_timer_us = micros();
 }
