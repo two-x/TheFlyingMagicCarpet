@@ -90,6 +90,8 @@
 #define CPID 6  // for dataset pages
 #define CW 1  // for encoder rotation
 #define CCW -1  // for encoder rotation
+#define A 0  // for encoder inputs
+#define B 1  // for encoder inputs
 #define OFF 0  // for UI tuning state
 #define SELECT 1  // for UI tuning state
 #define EDIT 2  // for UI tuning state
@@ -144,7 +146,7 @@
 #define joy_horz_pin A8  // Analog input, tells us left-right position of joystick. Take complement of ADC value gives:  Low values for left, High values for right.
 #define joy_vert_pin A9  // Analog input, tells us up-down position of joystick. Take complement of ADC value gives:  Low values for down, High values for up.
 #define pressure_pin A10  // Analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V.
-#define brake_pos_pin A11  // Analog input, tells us linear position of brake actuator 
+#define brake_pos_pin A11  // Analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
 #define sim_halfass false  // Don't sim the joystick or encoder or tach
 // Readily available possibilities we could wire up if we want
 //
@@ -293,7 +295,10 @@ float pot_ema_alpha = 0.2;  // alpha value for ema filtering, lower is more cont
 float battery_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 float pressure_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 float carspeed_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-float engine_rpm_ema_alpha = 0.005;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+float engine_ema_alpha = 0.005;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+int32_t pwm_pulse_min_us = 500;
+int32_t pwm_pulse_center_us = 1500;
+int32_t pwm_pulse_max_us = 2500;
 int32_t joy_vert_min_adc = 9;  // ADC count of furthest joy position in down direction (ADC count 0-4095)
 int32_t joy_vert_max_adc = 4095;  // (3728 at 3.3V VDD) ADC count of furthest joy position in up direction (ADC count 0-4095)
 int32_t joy_horz_min_adc = 9;  // ADC count of furthest joy position in left direction (ADC count 0-4095)
@@ -333,13 +338,13 @@ int32_t gas_governor_percent = 85;  // Software governor will only allow this pe
 // int32_t gas_pulse_redline_us = 1544;  // Gas pulsewidth corresponding to full open throttle (in us)
 int32_t gas_pulse_redline_us = 1700;  // Gas pulsewidth corresponding to full open throttle (in us)
 int32_t gas_pulse_idle_us = 2300;  // Gas pulsewidth corresponding to fully closed throttle (in us)
-int32_t gas_pulse_park_us = gas_pulse_idle_us + 30;  // Gas pulsewidth where to park the servo out of the way so we can drive manually (in us)
+int32_t gas_pulse_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_idle_us where to park the servo out of the way so we can drive manually (in us)
 int32_t steer_pulse_right_us = 840;  // Steering pulsewidth corresponding to full-speed right steering (in us)
-int32_t steer_pulse_stop_us = 1500;  // Steering pulsewidth corresponding to zero steering motor movement (in us)
+int32_t steer_pulse_stop_us = pwm_pulse_center_us;  // Steering pulsewidth corresponding to zero steering motor movement (in us)
 int32_t steer_pulse_left_us = 2200;  // Steering pulsewidth corresponding to full-speed left steering (in us)
 int32_t default_pulse_margin_us = 30;  // Default margin of error for comparisons of pulsewidths (in us)
 int32_t brake_pulse_retract_us = 650;  // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us)
-int32_t brake_pulse_stop_us = 1500;  // Brake pulsewidth corresponding to center point where motor movement stops (in us)
+int32_t brake_pulse_stop_us = pwm_pulse_center_us;  // Brake pulsewidth corresponding to center point where motor movement stops (in us)
 int32_t brake_pulse_extend_us = 2350;  // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us)
 int32_t default_margin_adc = 20;  // Default margin of error for comparisons of adc values (ADC count 0-4095)
 int32_t sim_modify_period_us = 150000;  // How fast to change variable values when holding modify button down in simulator (in us)
@@ -427,7 +432,7 @@ bool shutdown_complete = true;  // Shutdown mode has completed its work and can 
 bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
 bool park_the_motors = false;  // Indicates we should release the brake & gas so the pedals can be used manually without interference
 int32_t motor_park_timer_us = micros();
-bool sim_out = LOW;
+// bool sim_out = LOW;
 bool simulate = false;
 bool simulate_last = false; 
 char disp_draw_buffer[8];  // Used to convert integers to ascii for purposes of displaying on screen
@@ -477,9 +482,8 @@ volatile int32_t speedo_timer_us = micros();
 volatile int32_t tach_delta_us = 0;
 volatile int32_t speedo_last_us = speedo_timer_us;
 volatile int32_t speedo_delta_us = 0;
-volatile int32_t encoder_delta = 0;  //  Keeps track of un-handled rotary clicks of the encoder.  Positive for CW clicks, Negative for CCW. 
-// volatile int32_t encoder_debounce_timer_us = micros();  // Used to prevent bouncing and noise generated interrupts
-// volatile bool encoder_sw_isr_flag = false;  // flag for fresh interrupt (push down or up)
+volatile int32_t encoder_delta = 0;  // Keeps track of un-handled rotary clicks of the encoder.  Positive for CW clicks, Negative for CCW. 
+volatile bool encoder_bounce_danger = B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
 volatile bool led_state = LOW;
 // volatile int32_t int_count = 0;
 // volatile int32_t* pwm[] = { &OCR5A, &OCR5B, &OCR5C }; // &OCR1A, &OCR1B, &OCR1C, &OCR3A, &OCR3B, &OCR3C, &OCR4A, &OCR4B, &OCR4C,   // Store the addresses of the PWM timer compare (duty-cycle) registers:
@@ -498,8 +502,6 @@ bool encoder_sw = false;  // Remember whether switch is being pressed
 bool encoder_sw_action = true;  // Flag for encoder handler to know an encoder switch action needs to be handled
 bool encoder_timer_on = false;  // Flag to prevent re-handling long presses if the sw is just kept down
 bool encoder_suppress_click = false;  // Flag to prevent a short click on switch release after successful long press
-bool encoder_a_bounce_danger = false;
-bool encoder_b_bounce_danger = false;
 bool encoder_b_raw = digitalRead(encoder_b_pin);  // To store value of encoder pin value
 bool encoder_a_raw = digitalRead(encoder_a_pin);
 int32_t encoder_state = 0;
@@ -576,82 +578,21 @@ SdFile file;  // Use for file creation in folders.
 // Servo library lets us set pwm outputs given an on-time pulse width in us
 static Servo steer_servo;
 static Servo brake_servo;
-// static Servo gas_servo;
-
-// General use functions
-// long map(long x, long in_min, long in_max, long out_min, long out_max) {
-//   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-// }
-// template<class T>
-// const T& constrain(const T& x, const T& xmin, const T& xmax) {
-//     if(x < xmin) {
-//         return xmin;
-//     }
-//     else if(xmax < x) {
-//         return xmax;
-//     }
-//     else
-//         return x;
-// }
 
 // Interrupt service routines
 //
-// void encoder_a_isr(void) {  // When A goes high if B is low, we are CW, otherwise we are CCW -- This ISR intended for encoders like the one on the tan proto board
-//     if (!encoder_bounce_danger) {
-//         encoder_delta = digitalRead(encoder_b_pin) ? -1 : 1;  // CCW turn decreases things
-//         encoder_counter += encoder_delta;
-//         encoder_bounce_danger = true;
-//     }
-// }
-// void encoder_b_isr(void) {  // When A goes high if B is low, we are CW, otherwise we are CCW -- This ISR intended for encoders like the one on the tan proto board
-//     encoder_bounce_danger = false;
-// }
 void encoder_a_isr(void) {  // When A goes high if B is low, we are CW, otherwise we are CCW -- This ISR intended for encoders like the one on the tan proto board
-    if (!encoder_a_bounce_danger) {
+    if (encoder_bounce_danger != A) {
         if (digitalRead(encoder_a_pin)) {
-            encoder_delta = digitalRead(encoder_b_pin) ? -1 : 1;  // CCW turn decreases things
+            encoder_delta = digitalRead(encoder_b_pin) ? -1 : 1;  // If B=0, delta=-1 (CCW) turn decreases things
             encoder_counter += encoder_delta;
         }
-        encoder_a_bounce_danger = true;
-        encoder_b_bounce_danger = false;
+        encoder_bounce_danger = A;
     }
 }
 void encoder_b_isr(void) {  // On B rising or falling edge, When B A goes high if B is low, we are CW, otherwise we are CCW -- This ISR intended for encoders like the one on the tan proto board
-    if (!encoder_b_bounce_danger) {
-        encoder_a_bounce_danger = false;
-        encoder_b_bounce_danger = true;
-    }
+    if (encoder_bounce_danger != B) encoder_bounce_danger = B;
 }
-// void encoder_a_isr(void) {  // When A goes high if B is low, we are CW, otherwise we are CCW -- This ISR intended for encoders like the one on the tan proto board
-//     if (!encoder_a_bounce_danger && digitalRead(encoder_a_pin)) {
-//         encoder_delta = digitalRead(encoder_b_pin) ? -1 : 1;  // CCW turn decreases things
-//         encoder_counter += encoder_delta;
-//     }
-//     encoder_a_bounce_danger = true;
-//     encoder_b_bounce_danger = false;
-// }
-// void encoder_b_isr(void) {  // On B rising or falling edge, When B A goes high if B is low, we are CW, otherwise we are CCW -- This ISR intended for encoders like the one on the tan proto board
-//     encoder_a_bounce_danger = false;
-//     encoder_b_bounce_danger = true;
-// }
-
-    // if (digitalRead(encoder_b_pin) encoder_delta = -1;
-    // else encoder_delta = 1;  // CW turn increases things
-
-    // if (digitalRead(encoder_b_pin)) encoder_delta--;
-    // else encoder_delta++;
- 
-    // if (encoder_b_raw) encoder_delta--;
-    // led_state = !led_state;
-    // digitalWrite(led_pin, led_state);
-
-// void encoder_b_isr(void) {  // When A goes high if B is low, we are CW, otherwise we are CCW -- This ISR intended for encoders like the one on the tan proto board
-//     encoder_b_raw = digitalRead(encoder_b_pin);
-// }
-// void encoder_sw_isr(void) {  
-//     encoder_button = !digitalRead(encoder_sw_pin);
-//     encoder_sw_isr_flag = true;
-// }
 
 // The tach and speed use a hall sensor being triggered by a passing magnet once per pulley turn. These ISRs call micros()
 // on every pulse to know the time since the previous pulse. I tested this on the bench up to about 750 mmph which is as 
@@ -677,33 +618,39 @@ void speedo_isr(void) {  //  A better approach would be to read, reset, and rest
     speedo_last_us = speedo_timer_us;
 }
 
-// ema_filt : pass in a fresh raw value, the previously filtered value, and alpha factor, returns new filtered value
-int32_t ema_filt(int32_t raw_value, int32_t filt_value, float alpha) {
+// ema : pass in a fresh raw value, the previously filtered value, and alpha factor, returns new filtered value
+int32_t ema(int32_t raw_value, int32_t filt_value, float alpha) {
     return (int32_t)((alpha*(float)raw_value) + ((1-alpha)*(float)filt_value));
 }
     
 // Functions to write to the screen efficiently
 //
-// draw_text displays 20 rows of text strings with variable names. and also a column of text indicating units, all in grey.
+// draw_text displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
 void draw_text(bool redraw_tuning_corner) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
     tft.setTextColor(GRY2);
     tft.setTextSize(1);    
-    if (redraw_tuning_corner)  tft.fillRect(0,146,138,94,BLK);
+    if (redraw_tuning_corner)  tft.fillRect(0,146,138,94,BLK);  // Erase old dataset page area
     else {
-        tft.fillScreen(BLK);
-        for (int32_t lineno=0; lineno < (int32_t)arraysize(telemetry); lineno++)  {
+        tft.fillScreen(BLK);  // Black out the whole screen
+        for (int32_t lineno=0; lineno < (int32_t)arraysize(telemetry); lineno++)  {  // Step thru lines of fixed telemetry data
             tft.setCursor(2, lineno*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
-            tft.println(telemetry[lineno]);
+            tft.println(telemetry[lineno]);  // Draw names of fixed telemetry variables
             tft.setCursor(114, lineno*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
-            tft.println(units[lineno]);
+            tft.println(units[lineno]);  // Draw units for fixed telemetry variables
         }
     }
-    for (int32_t lineno=0; lineno < (int32_t)arraysize(dataset_pages[sim_dataset_page]); lineno++)  {
+    for (int32_t lineno=0; lineno < (int32_t)arraysize(dataset_pages[sim_dataset_page]); lineno++)  {  // Step thru lines of dataset page data
         tft.setCursor(2, (lineno+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
-        tft.println(dataset_pages[sim_dataset_page][lineno]);
+        tft.println(dataset_pages[sim_dataset_page][lineno]);  // Draw names of dataset page variables
         tft.setCursor(114, (lineno+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
-        tft.println(tuneunits[sim_dataset_page][lineno]);
-    }   
+        tft.println(tuneunits[sim_dataset_page][lineno]);  // Draw units for dataset page variables
+    }
+    for (int32_t row = 0; row < touch_rows; row++) {  // Step thru all touchgrid rows
+        for (int32_t col = 1; col < 2; col++) {  //  Just the 2nd touchgrid col 
+            tft.setCursor(col*disp_width_pix/touch_cols+touch_cell_width_pix/2-7, row*disp_height_pix/touch_rows+touch_cell_height_pix/2-disp_line_height_pix);
+            tft.println(simgrid[row][col]);  // Draw names of boolean variables
+        }
+    }
 }
 // draw_value  normally draws a given value on a given line (0-19) to the screen if it has changed since last draw.
 void draw_value(int32_t lineno, int32_t value, int32_t modeflag) {
@@ -729,20 +676,6 @@ void draw_value(int32_t lineno, int32_t value, int32_t modeflag) {
             tft.print(dataset_pages[sim_dataset_page][sim_selected_value]);  // Highlight selected value in white
         }
     }
-    // if (modeflag == 3 && sim_selected_value != sim_selected_value_last) {  // Modeflag 3 is for highlighting a variable name when its value may be changed
-    //     tft.setCursor(2, (sim_selected_value_last+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
-    //     tft.setTextColor(GRY2);  
-    //     // if (sim_dataset_page != sim_dataset_page_last) tft.print(dataset_pages[sim_dataset_page_last][sim_selected_value_last]);
-    //     // else
-    //     tft.print(dataset_pages[sim_dataset_page][sim_selected_value_last]);
-    //     // if (sim_dataset_page != LOCK && sim_selected_value >= 0) {
-    //         tft.setCursor(2, (sim_selected_value+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
-    //         if (sim_tuning_ctrl == EDIT) tft.setTextColor(BLU);
-    //         else tft.setTextColor(WHT);
-    //         tft.print(dataset_pages[sim_dataset_page][sim_selected_value]);
-    //     // }
-    //     // sim_selected_value_last = sim_selected_value;
-    // }
     else if (modeflag == 2 && sim_dataset_page != sim_dataset_page_last) {  // Modeflag 2 is used for displaying which set of tuning variables is being displayed. Text next to the runmode
         tft.setCursor(112, disp_vshift_pix);  // +disp_line_height_pix/2
         tft.setTextColor(BLK);  // Rewriting old value in black over visible value is efficient way to erase
@@ -775,58 +708,32 @@ void draw_value(int32_t lineno, int32_t value, int32_t modeflag) {
         disp_age_quanta[lineno] = age_us;   
     } // Else don't draw anything, because we already did.  Logic is 100s of times cheaper than screen drawing.
 }
-void draw_bool(bool value, int32_t row) {
+
+void draw_bool(bool value, int32_t row) {  // Draws values of boolean data
     if ((disp_bool_values[row] != value) || disp_redraw_all) {  // If value differs, Erase old value and write new
-        if (value) {
-            tft.setCursor(disp_width_pix/touch_cols+touch_cell_width_pix/2+11, row*disp_height_pix/touch_rows+touch_cell_height_pix/2-disp_line_height_pix);
-            tft.setTextColor(BLK);
-            tft.println("0");
-            tft.setCursor(disp_width_pix/touch_cols+touch_cell_width_pix/2+11, row*disp_height_pix/touch_rows+touch_cell_height_pix/2-disp_line_height_pix);
-            tft.setTextColor(CYN);
-            tft.println("1");
-            disp_bool_values[row] = 1;
-        }
-        else {
-            tft.setCursor(disp_width_pix/touch_cols+touch_cell_width_pix/2+11, row*disp_height_pix/touch_rows+touch_cell_height_pix/2-disp_line_height_pix);
-            tft.setTextColor(BLK);
-            tft.println("1");
-            tft.setCursor(disp_width_pix/touch_cols+touch_cell_width_pix/2+11, row*disp_height_pix/touch_rows+touch_cell_height_pix/2-disp_line_height_pix);
-            tft.setTextColor(DCYN);
-            tft.println("0");
-            disp_bool_values[row] = 0;
-        }
+        tft.setCursor(disp_width_pix/touch_cols+touch_cell_width_pix/2+11, row*disp_height_pix/touch_rows+touch_cell_height_pix/2-disp_line_height_pix);
+        tft.setTextColor(BLK);
+        tft.println(!value);
+        tft.setCursor(disp_width_pix/touch_cols+touch_cell_width_pix/2+11, row*disp_height_pix/touch_rows+touch_cell_height_pix/2-disp_line_height_pix);
+        tft.setTextColor(CYN);
+        tft.println(value);
+        disp_bool_values[row] = value;
     }
 }
 
 void draw_touchgrid(bool update) {  // if update is true, will only redraw the at-risk elements of the grid
-    // if (!update) {
-        for (int32_t row = 0; row < touch_rows; row++) tft.drawFastHLine(0, row*disp_height_pix/touch_rows, disp_width_pix, DPNK);  // x, y, length, color
-        for (int32_t col = 0; col < touch_cols; col++) tft.drawFastVLine(col*disp_width_pix/touch_cols, 0, disp_height_pix, DPNK);  // faster than tft.drawLine(0, 80, 320, 80, GRY1);
-        tft.drawFastHLine(0, disp_height_pix-1, disp_width_pix, DPNK);  // Draw line along very bottom. (x, y, length, color)
-        tft.drawFastVLine(disp_width_pix-1, 0, disp_height_pix, DPNK);  // Draw line along far right edge. Faster than tft.drawLine(0, 80, 320, 80, GRY1);
-    // }
+    for (int32_t row = 0; row < touch_rows; row++) tft.drawFastHLine(0, row*disp_height_pix/touch_rows, disp_width_pix, DPNK);  // x, y, length, color
+    for (int32_t col = 0; col < touch_cols; col++) tft.drawFastVLine(col*disp_width_pix/touch_cols, 0, disp_height_pix, DPNK);  // faster than tft.drawLine(0, 80, 320, 80, GRY1);
+    tft.drawFastHLine(0, disp_height_pix-1, disp_width_pix, DPNK);  // Draw line along very bottom. (x, y, length, color)
+    tft.drawFastVLine(disp_width_pix-1, 0, disp_height_pix, DPNK);  // Draw line along far right edge. Faster than tft.drawLine(0, 80, 320, 80, GRY1);
     tft.setTextColor(LPNK);
     tft.setTextSize(1);
-    for (int32_t row = 0; row < touch_rows; row++) {
-        for (int32_t col = 0; col < ((touch_cols-1) * !update) + 1; col++) {
+    for (int32_t row = 0; row < touch_rows; row++) {  // Step thru all rows
+        for (int32_t col = 0; col < ((touch_cols-1) * !update) + 1; col++) {  // Step thru all cols, or only 1st col if just updating at-risk areas
             tft.setCursor(col*disp_width_pix/touch_cols+touch_cell_width_pix/2-7, row*disp_height_pix/touch_rows+touch_cell_height_pix/2-disp_line_height_pix);
             tft.println(simgrid[row][col]);
         }
     }
-    // if (update) {
-    //     for (int32_t row = 0; row < touch_rows; row++) {
-    //         tft.setCursor(disp_width_pix/touch_cols+touch_cell_width_pix/2-7, row*disp_height_pix/touch_rows+touch_cell_height_pix/2-disp_line_height_pix);
-    //         tft.println(simgrid[row][1]);
-    //     }
-    // }
-    // else {
-    //     for (int32_t row = 0; row < touch_rows; row++) {
-    //         for (int32_t col = 0; col < touch_cols; col++) {
-    //             tft.setCursor(col*disp_width_pix/touch_cols+touch_cell_width_pix/2-7, row*disp_height_pix/touch_rows+touch_cell_height_pix/2-disp_line_height_pix);
-    //             tft.println(simgrid[row][col]);
-    //         }
-    //     }
-    // }
 }
 
 void sd_init() {
@@ -867,11 +774,16 @@ void sd_init() {
     // }
 }
 
-int32_t sim_edit(int32_t variable, int32_t modify) {
-        if (modify < 0 && (int32_t)variable < -modify) return 0;
-        else return variable + modify; 
-        // return (variable + modify < 0) ? 0 : variable + modify; 
-    }
+int32_t sim_edit(int32_t variable, int32_t modify, int32_t low_limit, int32_t high_limit) {
+    if (variable + modify < low_limit) return low_limit;
+    if (variable + modify > high_limit) return high_limit;
+    return variable + modify; 
+}
+// int32_t sim_edit(int32_t variable, int32_t modify) {
+//     if (modify < 0 && (int32_t)variable < -modify) return 0;
+//     else return variable + modify; 
+//     // return (variable + modify < 0) ? 0 : variable + modify; 
+// }
 
 void setup() {
     pinMode(led_pin, OUTPUT);
@@ -1071,26 +983,13 @@ void loop() {
 
     // Potentiometer
     int32_t pot_adc = analogRead(pot_wipe_pin);
-    pot_filt_adc = (int32_t)((pot_ema_alpha*(float)pot_adc) + ((1-pot_ema_alpha)*(float)pot_filt_adc));     // Apply EMA filter
+    pot_filt_adc = ema(pot_adc, pot_filt_adc, pot_ema_alpha);
 
     // Encoder
     //
     // Read and interpret encoder switch activity. Encoder rotation is handled in interrupt routine
     // Encoder handler routines should act whenever encoder_sw_action is true, setting it back to false once handled.
     // When handling press, if encoder_press_time is nonzero then press is a long press
-
-    // encoder_a_activity <<< 1;
-    // encoder_a_activity <<< 1;
-    // encoder_a_raw = digitalRead(encoder_a_pin);
-    // encoder_b_raw = digitalRead(encoder_b_pin);
-
-    // encoder_state = (encoder_state << 1) | digitalRead(encoder_a_pin) | 0xe000;
-    // if (encoder_state == 0xf000) {
-    //    encoder_state = 0x0000;
-    //    encoder_delta = digitalRead(encoder_b_pin) ? 1 : -1;
-    //    encoder_counter += encoder_delta;
-    // }
-
     if (!digitalRead(encoder_sw_pin)) {  // if encoder sw is being pressed (switch is active low)
         if (!encoder_sw) {  // if the press just occurred
             encoder_press_timer_us = now_us;  // start a press timer
@@ -1114,8 +1013,8 @@ void loop() {
     
     // Voltage of vehicle battery
     int32_t battery_adc = analogRead(battery_pin);
-    battery_mv = (int32_t)(battery_max_mv*((float)battery_adc)/adc_range_adc);  // convert adc value read into mV
-    battery_filt_mv = (int32_t)((battery_ema_alpha*(float)battery_mv) + ((1-battery_ema_alpha)*(float)battery_filt_mv));     // Apply EMA filter
+    battery_mv = (int32_t)(battery_max_mv*((float)battery_adc)/adc_range_adc);  // convert adc value read into mV    
+    battery_filt_mv = ema(battery_mv, battery_filt_mv, battery_ema_alpha);  // Apply EMA filter
     
     // Read sensors
     if (simulate) {  // Any sensor data which should be mucked with or overridden automatically and continuously, during simulation should get set in here
@@ -1137,7 +1036,7 @@ void loop() {
             engine_last_rpm = engine_rpm;
         }
         else engine_rpm = engine_last_rpm;  // Spike detected - ignore that sample
-        if (engine_rpm)  engine_filt_rpm = (int32_t)((engine_rpm_ema_alpha*(float)engine_rpm) + ((1-engine_rpm_ema_alpha)*(float)engine_filt_rpm));     // Sensor EMA filter
+        if (engine_rpm) engine_filt_rpm = ema(engine_rpm, engine_filt_rpm, engine_ema_alpha);  // Sensor EMA filter
         else engine_filt_rpm = 0;    
 
         // Method 2: This should work also, perhaps better at high speeds, and uses a squeaky clean ISR implementation.  But it doesn't :(        
@@ -1160,7 +1059,7 @@ void loop() {
             carspeed_last_mmph = carspeed_mmph;
         }
         else carspeed_mmph = carspeed_last_mmph;  // Spike detected - ignore that sample
-        if (carspeed_mmph)  carspeed_filt_mmph = (int32_t)((carspeed_ema_alpha*(float)carspeed_mmph) + ((1-carspeed_ema_alpha)*(float)carspeed_filt_mmph));     // Sensor EMA filter
+        if (carspeed_mmph)  carspeed_filt_mmph = ema(carspeed_mmph, carspeed_filt_mmph, carspeed_ema_alpha);  // Sensor EMA filter
         else carspeed_filt_mmph = 0;
     
         // Brake pressure.  Read sensor, then Remove noise spikes from brake feedback, if reading is otherwise in range
@@ -1171,7 +1070,7 @@ void loop() {
         }
         else pressure_adc = pressure_last_adc;  // Spike detected - ignore that sample
         // pressure_psi = (int32_t)(1000*(float)(pressure_adc)/adc_range_adc);      // Convert pressure to units of psi
-        pressure_filt_adc = (int32_t)((pressure_ema_alpha*(float)pressure_adc) + ((1-pressure_ema_alpha)*(float)pressure_filt_adc));     // Sensor EMA filter
+        pressure_filt_adc = ema(pressure_adc, pressure_filt_adc, pressure_ema_alpha);  // Sensor EMA filter
     }
 
     now_us = micros();
@@ -1184,12 +1083,12 @@ void loop() {
 
     if (!simulate || sim_halfass) {  // If not fully simulating 
         if (joy_vert_adc > joy_vert_deadband_bot_adc && joy_vert_adc < joy_vert_deadband_top_adc)  joy_vert_filt_adc = adc_midscale_adc;  // if joy vert is in the deadband, set joy_vert_filt to center value
-        else joy_vert_filt_adc = (int32_t)(joy_ema_alpha*joy_vert_adc + (1-joy_ema_alpha)*joy_vert_filt_adc);  // otherwise do ema filter to determine joy_vert_filt
+        else joy_vert_filt_adc = ema(joy_vert_adc, joy_vert_filt_adc, joy_ema_alpha);  // otherwise do ema filter to determine joy_vert_filt
 
         // Serial.print(joy_vert_deadband_top_adc); // joy_horz_deadband_top_adc, joy_horz_max_adc, steer_pulse_stop_us, steer_pulse_right_us ");
 
         if (joy_horz_adc > joy_horz_deadband_bot_adc && joy_horz_adc < joy_horz_deadband_top_adc)  joy_horz_filt_adc = adc_midscale_adc;  // if joy horz is in the deadband, set joy_horz_filt to center value
-        else joy_horz_filt_adc = (int32_t)(joy_ema_alpha*joy_horz_adc + (1-joy_ema_alpha)*joy_horz_filt_adc);  // otherwise do ema filter to determine joy_horz_filt
+        else joy_horz_filt_adc = ema(joy_horz_adc, joy_horz_filt_adc, joy_ema_alpha);  // otherwise do ema filter to determine joy_horz_filt
     }
     if (!(runmode == SHUTDOWN && (!carspeed_filt_mmph || shutdown_complete)))  { // If not in shutdown mode with shutdown complete and car stopped
         if (joy_horz_filt_adc >= joy_horz_deadband_top_adc) steer_pulse_out_us = map(joy_horz_filt_adc, joy_horz_deadband_top_adc, joy_horz_max_adc, steer_pulse_stop_us, steer_pulse_right_us);  // Figure out the steering setpoint if joy to the right of deadband
@@ -1393,14 +1292,12 @@ void loop() {
         steer_pulse_out_us = constrain(steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);  // Don't be out of range
         steer_servo.writeMicroseconds(steer_pulse_out_us);   // Write steering value to jaguar servo interface
         
-        int32_t brake_pos_max_temp_adc = brake_pos_zeropoint_adc;;
         if (park_the_motors) {  // First check if we're in motor parking mode, if so park motors instead of running PIDs
-            if ( ( abs(brake_pos_adc - brake_pos_park_adc) <= default_margin_adc &&  // IF ( the brake motor is close enough to the park position AND
-                abs(gas_pulse_out_us == gas_pulse_park_us) )                         //      so is the gas servo )
-                || abs(now_us - motor_park_timer_us) > motor_park_timeout_us ) {     //      OR the parking timeout has expired
-                park_the_motors = false;                                             // THEN stop trying to park the motors
+            if ( ( abs(brake_pos_adc - brake_pos_park_adc) <= default_margin_adc &&     // IF ( the brake motor is close enough to the park position AND
+                abs(gas_pulse_out_us == gas_pulse_idle_us + gas_pulse_park_slack_us) )  //      so is the gas servo )
+                || abs(now_us - motor_park_timer_us) > motor_park_timeout_us ) {        //    OR the parking timeout has expired
+                park_the_motors = false;                                                // THEN stop trying to park the motors
             }
-            else brake_pos_max_temp_adc = brake_pos_park_adc;
         }
         else if (runmode != BASIC) {  // Unless basicmode switch is turned on, we want brake and gas
             // Here is the brake PID math
@@ -1422,9 +1319,18 @@ void loop() {
 
             brake_pid_error_last_adc = brake_pid_error_adc;  // For use next time in pressure derivative calculation and hysteresis behavior            
         }
-        // Override pid for brake if position is out of allowed range, correct that instead
-        if (brake_pos_adc + default_margin_adc <= brake_pos_max_temp_adc) brake_pulse_out_us = map (brake_pos_adc, brake_pos_max_temp_adc, brake_pos_retracted_adc, brake_pulse_stop_us, brake_pulse_extend_us); // If brake is too far retracted, extend toward park point, slowing as we approach
-        if (brake_pos_adc - default_margin_adc >= brake_pos_max_temp_adc) brake_pulse_out_us = map (brake_pos_adc, brake_pos_max_temp_adc, brake_pos_extended_adc, brake_pulse_stop_us, brake_pulse_retract_us); // If brake is too far extended, retract toward park point, slowing as we approach
+        // Override pid for brake if position is out of allowed range or if parking the motor, correct that instead
+        if (park_the_motors) {
+            if (brake_pos_adc + default_margin_adc <= brake_pos_park_adc) brake_pulse_out_us = map (brake_pos_adc, brake_pos_park_adc, brake_pos_retracted_adc, brake_pulse_stop_us, brake_pulse_extend_us); // If brake is retracted from park point, extend toward park point, slowing as we approach
+            if (brake_pos_adc - default_margin_adc >= brake_pos_park_adc) brake_pulse_out_us = map (brake_pos_adc, brake_pos_park_adc, brake_pos_extended_adc, brake_pulse_stop_us, brake_pulse_retract_us); // If brake is extended from park point, retract toward park point, slowing as we approach
+        }
+        else {
+            if (brake_pos_adc < brake_pos_retracted_adc) brake_pulse_out_us = brake_pulse_stop_us + (brake_pulse_extend_us - brake_pulse_stop_us)/4;  // If brake is retracted beyond limit, extend at 1/4 speed
+            if (brake_pos_adc > brake_pos_extended_adc) brake_pulse_out_us = brake_pulse_stop_us - (brake_pulse_stop_us - brake_pulse_retract_us)/4;  // If brake is extended beyond limit, retract at 1/4 speed
+        }
+        // if (brake_pos_adc + default_mar(brake_pulse_extend_us - brake_pulse_stop_us)/4;gin_adc <= brake_pos_max_temp_adc) brake_pulse_out_us = map (brake_pos_adc, brake_pos_max_temp_adc, brake_pos_retracted_adc, brake_pulse_stop_us, brake_pulse_extend_us); // If brake is too far retracted, extend toward park point, slowing as we approach
+        // if (brake_pos_adc - default_margin_adc >= brake_pos_max_temp_adc) brake_pulse_out_us = map (brake_pos_adc, brake_pos_max_temp_adc, brake_pos_extended_adc, brake_pulse_stop_us, brake_pulse_retract_us); // If brake is too far extended, retract toward park point, slowing as we approach
+
         // Send to the actuator
         brake_pulse_out_us = constrain(brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);  // Refuse to exceed range
         brake_servo.writeMicroseconds(brake_pulse_out_us);  // Write result to jaguar servo interface
@@ -1491,7 +1397,7 @@ void loop() {
                 // Serial.println(gas_target_rpm);                                               // Serial.print(" ");  // Raw sensor feedback value
             }
 
-            if (park_the_motors) gas_pulse_out_us = gas_pulse_park_us;
+            if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
             else if (runmode != STALL) {  // If Hold, Fly or Cruise mode, then we need to determine gas actuator output from rpm target
                 gas_target_rpm = constrain(gas_target_rpm, engine_idle_rpm, engine_govern_rpm);  // Make sure desired rpm isn't out of range (due to crazy pid math, for example)
 
@@ -1716,12 +1622,12 @@ void loop() {
     }
     if (sim_tuning_ctrl == EDIT && sim_modify_polarity != 0) {
         if (sim_dataset_page == JOY)  switch (sim_selected_value) {
-            case 2:  joy_horz_min_adc = sim_edit(joy_horz_min_adc, sim_modify_polarity);  break;
-            case 3:  joy_horz_max_adc = sim_edit(joy_horz_max_adc, sim_modify_polarity);  break;
-            case 4:  joy_horz_deadband_adc = sim_edit(joy_horz_deadband_adc, sim_modify_polarity);  break;
-            case 5:  joy_vert_min_adc = sim_edit(joy_vert_min_adc, sim_modify_polarity);  break;
-            case 6:  joy_vert_max_adc = sim_edit(joy_vert_max_adc, sim_modify_polarity);  break;
-            case 7:  joy_vert_deadband_adc = sim_edit(joy_vert_deadband_adc, sim_modify_polarity);  break;
+            case 2:  joy_horz_min_adc = sim_edit(joy_horz_min_adc, sim_modify_polarity, 0, adc_midscale_adc - joy_horz_deadband_adc / 2 - 1);  break;
+            case 3:  joy_horz_max_adc = sim_edit(joy_horz_max_adc, sim_modify_polarity, adc_midscale_adc + joy_horz_deadband_adc / 2 + 1, adc_range_adc);  break;
+            case 4:  joy_horz_deadband_adc = sim_edit(joy_horz_deadband_adc, sim_modify_polarity, 0, (adc_midscale_adc - joy_horz_min_adc > joy_horz_max_adc - adc_midscale_adc) ? 2*(joy_horz_max_adc - adc_midscale_adc) : 2*(adc_midscale_adc - joy_horz_min_adc));  break;
+            case 5:  joy_vert_min_adc = sim_edit(joy_vert_min_adc, sim_modify_polarity, 0, adc_midscale_adc - joy_vert_deadband_adc / 2 - 1);  break;
+            case 6:  joy_vert_max_adc = sim_edit(joy_vert_max_adc, sim_modify_polarity, adc_midscale_adc + joy_vert_deadband_adc / 2 + 1, adc_range_adc);  break;
+            case 7:  joy_vert_deadband_adc = sim_edit(joy_vert_deadband_adc, sim_modify_polarity, 0, (adc_midscale_adc - joy_vert_min_adc > joy_vert_max_adc - adc_midscale_adc) ? 2*(joy_vert_max_adc - adc_midscale_adc) : 2*(adc_midscale_adc - joy_vert_min_adc));  break;
             // case 2:  joy_horz_min_adc += sim_modify_polarity;  break;
             // case 3:  joy_horz_max_adc += sim_modify_polarity;  break;
             // case 4:  joy_horz_deadband_adc += sim_modify_polarity;  break;
@@ -1764,6 +1670,42 @@ void loop() {
             case 6:  cruise_pid_fi_mhz += 0.001*(float)sim_modify_polarity;  break;
             case 7:  cruise_pid_td_us += 0.001*(float)sim_modify_polarity;  break;
         }
+
+        // else if (sim_dataset_page == CAR)  switch (sim_selected_value) {
+        //     case 0:  gas_governor_percent = sim_edit(gas_governor_percent, sim_modify_polarity, 0, 100);  break;
+        //     case 1:  engine_idle_rpm = sim_edit(engine_idle_rpm, sim_modify_polarity, 0, engine_redline_rpm -1);  break;
+        //     case 2:  engine_redline_rpm = sim_edit(engine_redline_rpm, sim_modify_polarity, engine_idle_rpm, 8000);  break;
+        //     case 3:  carspeed_idle_mmph = sim_edit(carspeed_idle_mmph, sim_modify_polarity, 0, carspeed_redline_mmph - 1);  break;
+        //     case 4:  carspeed_redline_mmph = sim_edit(carspeed_redline_mmph, sim_modify_polarity, carspeed_idle_mmph, 30000);  break;
+        //     case 5:  gas_pid = (sim_modify_polarity+1)/2;  break;
+        //     case 6:  cruise_gesturing = (sim_modify_polarity+1)/2;  break;
+        //     case 7:  brake_pos_zeropoint_adc = sim_edit(brake_pos_zeropoint_adc, sim_modify_polarity, brake_pos_retracted_adc, brake_pos_extended_adc);  break;
+        // }
+        // else if (sim_dataset_page == PWMS)  switch (sim_selected_value) {
+        //     case 0:  steer_pulse_left_us = sim_edit(steer_pulse_left_us, sim_modify_polarity, pwm_pulse_min_us, steer_pulse_stop_us - 1);  break;
+        //     case 1:  steer_pulse_stop_us = sim_edit(steer_pulse_stop_us, sim_modify_polarity, steer_pulse_left_us + 1, steer_pulse_right_us - 1);  break;
+        //     case 2:  steer_pulse_right_us = sim_edit(steer_pulse_right_us, sim_modify_polarity, steer_pulse_stop_us + 1, pwm_pulse_max_us);  break;
+        //     case 3:  brake_pulse_extend_us = sim_edit(brake_pulse_extend_us, sim_modify_polarity, brake_pulse_stop_us + 1, pwm_pulse_max_us);  break;
+        //     case 4:  brake_pulse_stop_us = sim_edit(brake_pulse_stop_us, sim_modify_polarity, brake_pulse_retract_us + 1, brake_pulse_extend_us - 1);  break;
+        //     case 5:  brake_pulse_retract_us = sim_edit(brake_pulse_retract_us, sim_modify_polarity, pwm_pulse_min_us, brake_pulse_stop_us -1);  break;
+        //     case 6:  gas_pulse_idle_us = sim_edit(gas_pulse_idle_us, sim_modify_polarity, gas_pulse_redline_us + 1, pwm_pulse_max_us - gas_pulse_park_slack_us);  break;
+        //     case 7:  gas_pulse_redline_us = sim_edit(gas_pulse_redline_us, sim_modify_polarity, pwm_pulse_min_us, gas_pulse_idle_us - 1);  break;
+        // }
+        // else if (sim_dataset_page == BPID)  switch (sim_selected_value) {
+        //     case 5:  brake_pid_kc += 0.001*(float)sim_modify_polarity;  break;
+        //     case 6:  brake_pid_fi_mhz += 0.001*(float)sim_modify_polarity;  break;
+        //     case 7:  brake_pid_td_us += 0.001*(float)sim_modify_polarity;  break;
+        // }
+        // else if (sim_dataset_page == GPID)  switch (sim_selected_value) {
+        //     case 5:  gas_pid_kc += 0.001*(float)sim_modify_polarity;  break;
+        //     case 6:  gas_pid_fi_mhz += 0.001*(float)sim_modify_polarity;  break;
+        //     case 7:  gas_pid_td_us += 0.001*(float)sim_modify_polarity;  break;
+        // }
+        // else if (sim_dataset_page == CPID)  switch (sim_selected_value) {
+        //     case 5:  cruise_pid_kc += 0.001*(float)sim_modify_polarity;  break;
+        //     case 6:  cruise_pid_fi_mhz += 0.001*(float)sim_modify_polarity;  break;
+        //     case 7:  cruise_pid_td_us += 0.001*(float)sim_modify_polarity;  break;
+        // }
     }
     
     // Update displayed telemetry values to the screen
