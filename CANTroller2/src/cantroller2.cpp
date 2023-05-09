@@ -1576,7 +1576,7 @@ void loop() {
                     else if (tuning_ctrl == EDIT) sim_edit_delta_touch = touch_accel;  // If in edit mode, decrease value
                 }   
                 else if (touch_row == 3 && touch_col == 0);  // Pressed a button that doesn't do anything
-                else if (touch_row == 3 && touch_col == 1) cruise_sw = (hotrc) ? !cruise_sw : true;  // Pressed the cruise mode button. This is a momentary control, not a toggle. Value changes back upon release
+                else if (touch_row == 3 && touch_col == 1) cruise_sw = true;  // Pressed the cruise mode button. This is a momentary control, not a toggle. Value changes back upon release
                 else if (touch_row == 3 && touch_col == 2) joy_horz_filt_adc -= touch_accel;  // (-= 25) Pressed the joystick left button
                 else if (touch_row == 3 && touch_col == 3) joy_vert_filt_adc -= touch_accel;  // (-= 25) Pressed the joystick down button
                 else if (touch_row == 3 && touch_col == 4) joy_horz_filt_adc += touch_accel;  // (+= 25) Pressed the joystick right button   
