@@ -200,8 +200,8 @@
 #define touch_cell_height_pix 60  // When touchscreen gridded as buttons, height of each button
 
 #define adc_bits 12
-#define adc_range_adc 4096    // = 2^12
-#define adc_midscale_adc 2048
+#define adc_range_adc 4095    // = 2^12-1
+#define adc_midscale_adc 2047
 #define serial_debugging true
 #define print_timestamps false  // Makes code write out timestamps throughout loop to serial port
 // #define dataset_page_count 7  // How many dataset pages
@@ -335,12 +335,12 @@ float cruise_pid_td_us = 0.0;  // PID derivative time factor (cruise). How much 
 float gas_pid_kc = 0.85;  // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
 float gas_pid_fi_mhz = 0.0;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
 float gas_pid_td_us = 0.0;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
-float joy_ema_alpha = 0.05;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+float joy_ema_alpha = 0.2;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 float pot_ema_alpha = 0.2;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 float battery_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 float pressure_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 float carspeed_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-float engine_ema_alpha = 0.005;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+float engine_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 int32_t pwm_pulse_min_us = 500;
 int32_t pwm_pulse_center_us = 1500;
 int32_t pwm_pulse_max_us = 2500;
@@ -392,6 +392,7 @@ int32_t steer_pulse_left_max_us = 2500;  // Longest pulsewidth acceptable to jag
 int32_t steer_pulse_right_us = 800;  // Steering pulsewidth corresponding to full-speed right steering (in us)
 int32_t steer_pulse_stop_us = pwm_pulse_center_us;  // Steering pulsewidth corresponding to zero steering motor movement (in us)
 int32_t steer_pulse_left_us = 2200;  // Steering pulsewidth corresponding to full-speed left steering (in us)
+int32_t steer_safe_percent = 72;  // Sterring is slower at high speed. How strong is this effect 
 int32_t default_pulse_margin_us = 22;  // Default margin of error for comparisons of pulsewidths (in us)
 int32_t brake_pulse_retract_max_us = 500;  // Smallest pulsewidth acceptable to jaguar
 int32_t brake_pulse_extend_max_us = 2500;  // Longest pulsewidth acceptable to jaguar
@@ -413,6 +414,7 @@ int32_t dataset_page = LOCK;
 int32_t dataset_page_last = dataset_page;
 int32_t selected_value = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
 int32_t selected_value_last = 0;
+int32_t steer_safe_max = 0;
 float gas_pid_p_term_rpm = 0.0;
 float gas_pid_i_term_rpm = 0.0;
 float gas_pid_d_term_rpm = 0.0;
@@ -472,10 +474,10 @@ int32_t carspeed_delta_mmph = 0;  //
 int32_t carspeed_target_mmph = 0.0;  // Stores new setpoint to give to the pid loop (cruise) in milli-mph
 int32_t gesture_progress = 0;  // How many steps of the Cruise Mode gesture have you completed successfully (from Fly Mode)
 // bool neutral = true;
-bool ignition = false;
+bool ignition = LOWe;
 bool disp_redraw_all = true;
-bool basicmodesw = false;
-bool cruise_sw = false;
+bool basicmodesw = LOW;
+bool cruise_sw = LOW;
 bool cruise_sw_held = false;
 bool shutdown_complete = true;  // Shutdown mode has completed its work and can stop activity
 bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
@@ -527,7 +529,7 @@ int32_t heartbeat_period_us = 500000;
 enum encoder_inputs {A, B, SW};
 volatile int32_t encoder_bounce_danger = B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
 volatile int32_t encoder_delta = 0;  // Keeps track of un-handled rotary clicks of the encoder.  Positive for CW clicks, Negative for CCW. 
-volatile bool encoder_a_stable = HIGH;  //  Stores the value of encoder A pin as read during B pin transition (where A is stable)
+volatile bool encoder_a_stable = true;  //  Stores the value of encoder A pin as read during B pin transition (where A is stable)
 volatile int32_t tach_timer_us = mycros();
 volatile int32_t tach_last_us = tach_timer_us;
 volatile int32_t tach_delta_us = 0;
@@ -538,7 +540,7 @@ volatile bool led_state = LOW;
 volatile int32_t hotrc_horz_pulse_us = 1500;
 volatile int32_t hotrc_vert_pulse_us = 1500;
 volatile int32_t hotrc_pulse_timer_us = mycros();
-volatile bool hotrc_ch3_sw, hotrc_ch4_sw;
+volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_last, hotrc_ch4_sw_last, hotrc_ch3_sw_event, hotrc_ch4_sw_event;
 
 // volatile int32_t int_count = 0;
 // volatile int32_t* pwm[] = { &OCR5A, &OCR5B, &OCR5C }; // &OCR1A, &OCR1B, &OCR1C, &OCR3A, &OCR3B, &OCR3C, &OCR4A, &OCR4B, &OCR4C,   // Store the addresses of the PWM timer compare (duty-cycle) registers:
@@ -560,9 +562,6 @@ bool encoder_b_raw = digitalRead(encoder_b_pin);  // To store value of encoder p
 bool encoder_a_raw = digitalRead(encoder_a_pin);
 int32_t encoder_state = 0;
 int32_t encoder_counter = 0;
-
-bool hotrc_ch3_sw_last = hotrc_ch3_sw;
-bool hotrc_ch4_sw_last = hotrc_ch4_sw;
 
 // Instantiate objects 
 Adafruit_FT6206 touchpanel = Adafruit_FT6206(); // Touch panel
@@ -682,9 +681,13 @@ void hotrc_vert_isr(void) {  // On falling edge, reads ranged PWM signal on an i
 }
 void hotrc_ch3_isr(void) {  // Reads a binary switch encoded as PWM on an input pin to determine button toggle state
     hotrc_ch3_sw = (abs(mycros() - hotrc_pulse_timer_us) <= 1500);  // Ch3 switch true if short pulse, otherwise false
+    if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled
+    hotrc_ch3_sw_last = hotrc_ch3_sw;
 }
 void hotrc_ch4_isr(void) {  // Reads PWM signal on an input pin to determine control position
     hotrc_ch4_sw = (abs(mycros() - hotrc_pulse_timer_us) <= 1500);  // Ch4 switch true if short pulse, otherwise false
+    if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled
+    hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
 
 int32_t neopixel_timer_us = mycros();
@@ -899,7 +902,6 @@ void setup() {
     pinMode(led_pin, OUTPUT);
     pinMode(encoder_a_pin, INPUT_PULLUP);
     pinMode(encoder_b_pin, INPUT_PULLUP);
-    // pinMode(sim_pulse_pin, OUTPUT);
     pinMode(brake_pwm_pin, OUTPUT);
     pinMode(steer_pwm_pin, OUTPUT);
     pinMode(tft_dc_pin, OUTPUT);
@@ -933,7 +935,6 @@ void setup() {
     digitalWrite(tft_cs_pin, HIGH);   // Prevent bus contention
     digitalWrite(usd_cs_pin, HIGH);   // Prevent bus contention
     digitalWrite(tft_dc_pin, LOW);
-    // digitalWrite(sim_pulse_pin, LOW);
     digitalWrite(pot_pwr_pin, HIGH);  // Power up the potentiometer
     digitalWrite(led_pin, HIGH);  // Light on
     digitalWrite(led_rx_pin, LOW);  // Light up
@@ -1148,8 +1149,7 @@ void loop() {
         ignition = digitalRead(ignition_pin);
         basicmodesw = !digitalRead(basicmodesw_pin);   // 1-value because electrical signal is active low
         // neutral = 1-digitalRead(neutral_pin);           // 1-value because electrical signal is active low
-        cruise_sw = (hotrc) ? (hotrc_ch3_sw != hotrc_ch3_sw_last) : !digitalRead(cruise_sw_pin);
-        hotrc_ch3_sw_last = hotrc_ch3_sw;
+        cruise_sw = digitalRead(cruise_sw_pin);
 
         // Tach
         
@@ -1224,8 +1224,14 @@ void loop() {
         else joy_horz_filt_adc = ema(joy_horz_adc, joy_horz_filt_adc, joy_ema_alpha);  // otherwise do ema filter to determine joy_horz_filt
     }
     if (!(runmode == SHUTDOWN && (!carspeed_filt_mmph || shutdown_complete)))  { // If not in shutdown mode with shutdown complete and car stopped
-        if (joy_horz_filt_adc >= joy_horz_deadband_top_adc) steer_pulse_out_us = map(joy_horz_filt_adc, joy_horz_deadband_top_adc, joy_horz_max_adc, steer_pulse_stop_us, steer_pulse_right_us);  // Figure out the steering setpoint if joy to the right of deadband
-        else if (joy_horz_filt_adc <= joy_horz_deadband_bot_adc) steer_pulse_out_us = map(joy_horz_filt_adc, joy_horz_deadband_bot_adc, joy_horz_min_adc, steer_pulse_stop_us, steer_pulse_left_us);  // Figure out the steering setpoint if joy to the left of deadband
+        if (joy_horz_filt_adc >= joy_horz_deadband_top_adc) {
+            steer_safe_max = steer_pulse_stop_us + (int32_t)((float)(steer_pulse_right_us - steer_pulse_stop_us)*(1-((float)steer_safe_percent*carspeed_filt_mmph/((float)carspeed_redline_mmph*100))));
+            steer_pulse_out_us = map(joy_horz_filt_adc, joy_horz_deadband_top_adc, joy_horz_max_adc, steer_pulse_stop_us, steer_safe_max);  // Figure out the steering setpoint if joy to the right of deadband
+        }
+        else if (joy_horz_filt_adc <= joy_horz_deadband_bot_adc) {
+            steer_safe_max = steer_pulse_stop_us - (int32_t)((float)(steer_pulse_stop_us - steer_pulse_left_us)*(1-((float)steer_safe_percent*carspeed_filt_mmph/((float)carspeed_redline_mmph*100))));
+            steer_pulse_out_us = map(joy_horz_filt_adc, joy_horz_deadband_bot_adc, joy_horz_min_adc, steer_pulse_stop_us, steer_safe_max);  // Figure out the steering setpoint if joy to the left of deadband
+        }
         else steer_pulse_out_us = steer_pulse_stop_us;  // Stop the steering motor if inside the deadband
     }
     
@@ -1339,21 +1345,17 @@ void loop() {
                 }        
             }
         }
-        else if (hotrc) {
-            if (cruise_sw) {
-                runmode = CRUISE;
-                cruise_sw = LOW;
-            }
+        if (hotrc && hotrc_ch4_sw_event) {
+            runmode = CRUISE;
+            hotrc_ch4_sw_event = false;    
         }
-        else {  // If cruise mode is entered by long press of a cruise button
-            if (!cruise_sw) {  // If button not currently pressed
-                if (cruise_sw_held && abs(mycros() - cruise_sw_timer_us) > cruise_sw_timeout_us)  runmode = CRUISE;  // If button was just held long enough, upon release enter Cruise mode
-                cruise_sw_held = false;  // Cancel button held state
-            }
-            else if (!cruise_sw_held) {  // If button is being pressed, but we aren't in button held state
-                cruise_sw_timer_us = mycros(); // Start hold time timer
-                cruise_sw_held = true;  // Get into that state
-            }
+        if (!cruise_sw) {  // If button not currently pressed
+            if (cruise_sw_held && abs(mycros() - cruise_sw_timer_us) > cruise_sw_timeout_us)  runmode = CRUISE;  // If button was just held long enough, upon release enter Cruise mode
+            cruise_sw_held = false;  // Cancel button held state
+        }
+        else if (!cruise_sw_held) {  // If button is being pressed, but we aren't in button held state
+            cruise_sw_timer_us = mycros(); // Start hold time timer
+            cruise_sw_held = true;  // Get into that state
         }
     }
     else if (runmode == CRUISE)  {
@@ -1371,25 +1373,21 @@ void loop() {
             cruise_adjusting = true;  // Suspend pid loop control of gas
             engine_target_rpm = map(joy_vert_filt_adc, joy_vert_min_adc, joy_vert_deadband_bot_adc, engine_idle_rpm, engine_filt_rpm);
         }
-        else {  // if joystick at center
-            if (cruise_adjusting) carspeed_target_mmph = carspeed_filt_mmph;  // Upon return to center set speed target to current speed
-            cruise_adjusting = false;
-            // gesture_timer_us = mycros();  // reset gesture timer - Needed for old cruise gesturing scheme
-        }
+        else cruise_adjusting = false;  // if joystick at center
+        if (cruise_adjusting) carspeed_target_mmph = carspeed_filt_mmph;  // Upon return to center set speed target to current speed
+        
         // Old gesture trigger drops to Fly mode if joystick moved quickly from center to bottom
         // if (joy_vert_filt_adc <= joy_vert_min_adc+default_margin_adc && abs(mycros() - gesture_timer_us) < gesture_flytimeout_us)  runmode = FLY;  // If joystick quickly pushed to bottom 
         // printf("hotvpuls=%ld, hothpuls=%ld, joyvfilt=%ld, joyvmin+marg=%ld, timer=%ld\n", hotrc_vert_pulse_us, hotrc_horz_pulse_us, joy_vert_adc, joy_vert_min_adc + default_margin_adc, gesture_timer_us);
         
         if (joy_vert_adc > joy_vert_min_adc + default_margin_adc) gesture_timer_us = micros();  // Keep resetting timer if joystick not at bottom
-        else if (abs(mycros() - gesture_timer_us) > gesture_flytimeout_us) runmode = FLY;  // New gesture is just to hold the brake all the way down for 500 ms
+        else if (abs(mycros() - gesture_timer_us) > gesture_flytimeout_us) runmode = FLY;  // New gesture to drop to fly mode is hold the brake all the way down for 500 ms
 
-        if (hotrc) {
-            if (cruise_sw) {
-                runmode = FLY;
-                cruise_sw = LOW;
-            }
+        if (hotrc && hotrc_ch4_sw_event) {
+            runmode = FLY;
+            hotrc_ch4_sw_event = false;    
         }
-        else if (cruise_sw)  cruise_sw_held = true;   // Pushing cruise button sets up return to fly mode
+        if (cruise_sw)  cruise_sw_held = true;   // Pushing cruise button sets up return to fly mode
         else if (cruise_sw_held) { // Release of button drops us back to fly mode
             cruise_sw_held = false;
             runmode = FLY;
@@ -1405,6 +1403,7 @@ void loop() {
     }
 
     if (serial_debugging && print_timestamps) printf ("%ld ", mycros()-loopzero);    
+    // printf("sw3=%d, sw4=%d, sw3e=%d, sw4e=%d\n", hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event);
 
     // 5) Step the pids, update the actuator outputs  (at regular intervals)
     //
@@ -1575,7 +1574,7 @@ void loop() {
                     else if (tuning_ctrl == EDIT) sim_edit_delta_touch = touch_accel;  // If in edit mode, decrease value
                 }   
                 else if (touch_row == 3 && touch_col == 0);  // Pressed a button that doesn't do anything
-                else if (touch_row == 3 && touch_col == 1) cruise_sw = (hotrc) ? !cruise_sw : true;  // Pressed the cruise mode button. This is a momentary control, not a toggle. Value changes back upon release
+                else if (touch_row == 3 && touch_col == 1) cruise_sw = true;  // Pressed the cruise mode button. This is a momentary control, not a toggle. Value changes back upon release
                 else if (touch_row == 3 && touch_col == 2) joy_horz_filt_adc -= touch_accel;  // (-= 25) Pressed the joystick left button
                 else if (touch_row == 3 && touch_col == 3) joy_vert_filt_adc -= touch_accel;  // (-= 25) Pressed the joystick down button
                 else if (touch_row == 3 && touch_col == 4) joy_horz_filt_adc += touch_accel;  // (+= 25) Pressed the joystick right button   
@@ -1596,7 +1595,7 @@ void loop() {
         }  // (if touchpanel reads a touch)
         else {  // If not being touched, put momentarily-set simulated button values back to default values
             if (simulate) {
-                if (!hotrc) cruise_sw = false;  // Makes this button effectively momentary
+                cruise_sw = false;  // Makes this button effectively momentary
                 sim_edit_delta_touch = 0;  // Stop changing value
             }
             touch_now_touched = false;  // remember last touch state
