@@ -474,7 +474,7 @@ int32_t carspeed_delta_mmph = 0;  //
 int32_t carspeed_target_mmph = 0.0;  // Stores new setpoint to give to the pid loop (cruise) in milli-mph
 int32_t gesture_progress = 0;  // How many steps of the Cruise Mode gesture have you completed successfully (from Fly Mode)
 // bool neutral = true;
-bool ignition = LOWe;
+bool ignition = LOW;
 bool disp_redraw_all = true;
 bool basicmodesw = LOW;
 bool cruise_sw = LOW;
@@ -540,7 +540,9 @@ volatile bool led_state = LOW;
 volatile int32_t hotrc_horz_pulse_us = 1500;
 volatile int32_t hotrc_vert_pulse_us = 1500;
 volatile int32_t hotrc_pulse_timer_us = mycros();
-volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_last, hotrc_ch4_sw_last, hotrc_ch3_sw_event, hotrc_ch4_sw_event;
+volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event;
+volatile bool hotrc_ch3_sw_last = hotrc_ch3_sw;
+volatile bool hotrc_ch4_sw_last = hotrc_ch4_sw;
 
 // volatile int32_t int_count = 0;
 // volatile int32_t* pwm[] = { &OCR5A, &OCR5B, &OCR5C }; // &OCR1A, &OCR1B, &OCR1C, &OCR3A, &OCR3B, &OCR3C, &OCR4A, &OCR4B, &OCR4C,   // Store the addresses of the PWM timer compare (duty-cycle) registers:
@@ -1574,7 +1576,7 @@ void loop() {
                     else if (tuning_ctrl == EDIT) sim_edit_delta_touch = touch_accel;  // If in edit mode, decrease value
                 }   
                 else if (touch_row == 3 && touch_col == 0);  // Pressed a button that doesn't do anything
-                else if (touch_row == 3 && touch_col == 1) cruise_sw = true;  // Pressed the cruise mode button. This is a momentary control, not a toggle. Value changes back upon release
+                else if (touch_row == 3 && touch_col == 1) cruise_sw = (hotrc) ? !cruise_sw : true;  // Pressed the cruise mode button. This is a momentary control, not a toggle. Value changes back upon release
                 else if (touch_row == 3 && touch_col == 2) joy_horz_filt_adc -= touch_accel;  // (-= 25) Pressed the joystick left button
                 else if (touch_row == 3 && touch_col == 3) joy_vert_filt_adc -= touch_accel;  // (-= 25) Pressed the joystick down button
                 else if (touch_row == 3 && touch_col == 4) joy_horz_filt_adc += touch_accel;  // (+= 25) Pressed the joystick right button   
