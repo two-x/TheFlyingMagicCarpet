@@ -319,6 +319,8 @@ char simgrid[touch_rows][touch_cols][6] = {
 };    
 char modecard[6][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise" };
 char menu_buttons[4][4] = { "PG ", "SEL", "+  ", "-  " };
+char sim_menu_button[4] = "SIM";
+
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, CYN };
 
 enum runmodes {BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE};
@@ -330,7 +332,7 @@ enum tuning_ctrl_states {OFF, SELECT, EDIT};
 int32_t tuning_ctrl = OFF;
 int32_t tuning_ctrl_last = OFF;
 
-Timer tuningCtrlTimer(80000000);
+Timer tuningCtrlTimer(25000000);  // This times out edit mode after a a long period of inactivity
 // int32_t tuning_ctrl_timer_us = mycros();
 // int32_t tuning_ctrl_timeout_us = 80000000;  // If left in edit or select mode, will return to normal mode after a timeout
 
@@ -511,9 +513,9 @@ char disp_values[disp_lines][8];
 int32_t disp_needles[disp_lines];
 int32_t disp_age_quanta[disp_lines];
 Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
-#define disp_nobools 4
-bool disp_bool_values[disp_nobools];
+bool disp_bool_values[4];
 char disp_bool_buffer;
+bool disp_fixed_dirty = true;
 int32_t old_tach_time_us;
 int32_t old_speedo_time_us;
 Timer cruiseSwTimer;
@@ -523,7 +525,7 @@ int32_t sim_edit_delta = 0;
 int32_t sim_edit_delta_touch = 0;
 int32_t sim_edit_delta_encoder = 0;
 Timer touchPollTimer(35000);  // Timer for regular touchscreen sampling
-Timer touchHoldTimer(1000000);  // Timer for regular touchscreen sampling
+Timer touchHoldTimer(1000000);  // For timing touch long presses
 Timer touchAccelTimer(850000);  // Touch hold time per left shift (doubling) of touch_accel
 bool touch_now_touched = false;  // Is a touch event in progress
 int32_t touch_accel_exponent = 0;  // Will edit values by +/- 2^touch_accel_exponent per touch_period interval
@@ -545,27 +547,37 @@ Timer heartbeatTimer(500000);
 // Volatile variables  - for variables set inside ISRs
 //
 enum encoder_inputs {A, B, SW};
+// volatile int32_t int_count = 0;
+// volatile int32_t* pwm[] = { &OCR5A, &OCR5B, &OCR5C }; // &OCR1A, &OCR1B, &OCR1C, &OCR3A, &OCR3B, &OCR3C, &OCR4A, &OCR4B, &OCR4C,   // Store the addresses of the PWM timer compare (duty-cycle) registers:
 volatile int32_t encoder_bounce_danger = B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
 volatile int32_t encoder_delta = 0;  // Keeps track of un-handled rotary clicks of the encoder.  Positive for CW clicks, Negative for CCW. 
 volatile bool encoder_a_stable = true;  //  Stores the value of encoder A pin as read during B pin transition (where A is stable)
 volatile int32_t encoder_spinrate_isr_us = 100000;  // Time elapsed between last two detents
-volatile int32_t tach_timer_us = mycros();  // Don't use Timer class for ISRs
 volatile int32_t tach_last_us;
 volatile int32_t tach_delta_us = 0;
-volatile int32_t speedo_timer_us = mycros();  // Don't use Timer class for ISRs
 volatile int32_t speedo_last_us;
 volatile int32_t speedo_delta_us = 0;
 volatile bool led_state = LOW;
 volatile int32_t hotrc_horz_pulse_us = 1500;
 volatile int32_t hotrc_vert_pulse_us = 1500;
-volatile int32_t hotrc_pulse_timer_us = mycros();  // Don't use Timer class for ISRs
-volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_last, hotrc_ch4_sw_last, hotrc_ch3_sw_event, hotrc_ch4_sw_event;
+volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
 
-// volatile int32_t int_count = 0;
-// volatile int32_t* pwm[] = { &OCR5A, &OCR5B, &OCR5C }; // &OCR1A, &OCR1B, &OCR1C, &OCR3A, &OCR3B, &OCR3C, &OCR4A, &OCR4B, &OCR4C,   // Store the addresses of the PWM timer compare (duty-cycle) registers:
+// volatile int32_t tach_timer_us = mycros();  // Don't use Timer class for ISRs
+// volatile int32_t speedo_timer_us = mycros();  // Don't use Timer class for ISRs
+// volatile int32_t tach_timer_us = mycros();  // Don't use Timer class for ISRs
+// volatile int32_t hotrc_pulse_timer_us = mycros();  // Don't use Timer class for ISRs
+Timer encoderSpinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
+Timer tachPulseTimer;  // OK to not be volatile?
+Timer speedoPulseTimer;  // OK to not be volatile?
+Timer hotrcPulseTimer;  // OK to not be volatile?
+
+int32_t tach_delta_impossible_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
+int32_t speedo_delta_impossible_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
+int32_t tach_error_us = -1;
+int32_t speedo_error_us = -1;
 
 enum encodersw_presses { NONE, SHORT, LONG };
-Timer encoderSpinspeedTimer;  // Used to figure out how fast we're spinning the knob
+// Timer encoderSpinspeedTimer;  // Used to figure out how fast we're spinning the knob
 Timer encoderLongPressTimer(800000);  // Used to time long button presses
 int32_t encoder_spinrate_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
 int32_t encoder_spinrate_min_us = 2500;  // Will reject spins faster than this as an attempt to debounce behavior
@@ -674,44 +686,50 @@ void encoder_b_isr(void) {  // On B rising or falling edge, A should have stabil
 // then call mycros() in the main loop and compare with a timer to calculate mmph.
 
 void tach_isr(void) {  // The tach and speedo isrs compare value returned from the mycros() function with the value from the last interrupt to determine period, to get frequency of the vehicle pulley rotations.
-    tach_timer_us = mycros();  // This might screw up things.  Anders would remember
-    tach_delta_us = abs(tach_timer_us-tach_last_us);
-    tach_last_us = tach_timer_us;
-    
-    // Method 1: This works but this is a sloppy excuse for an ISR. we shouldn't be calling mycros() inside an ISR
-    // tachTimer.reset();  // This might screw up things.  Anders would remember
-    // tach_delta_us = abs(tachTimer.start - tach_last_us);
-    // tach_last_us = tachTimer.start;
-    //
-    // tach_magnet_count++; // this is temporary. remove after sensor tests (remove all copies)
-    
-    // // Method 2: Promises to make this ISR squeaky clean like the vagina of a silkworm ... if it worked
-    // // This aint working for some reason ... I don't have time to debug it now. Ugh!
-    // tach_magnet_count++;  // add one to the pulses sensed since the last sensor value update (in main loop) 
+    int32_t temp_us = tachPulseTimer.elapsed();
+    if (temp_us > tach_delta_impossible_us) {
+        tach_delta_us = temp_us;    
+        tachPulseTimer.reset();
+    }
+    else tach_error_us = temp_us;
 }
-void speedo_isr(void) {  //  A better approach would be to read, reset, and restart a hardware interval timer in the isr.  Better still would be to regularly read a hardware binary counter clocked by the pin - no isr.
-    speedo_timer_us = mycros();  // This might screw up things.  Anders would remember
-    speedo_delta_us = abs(speedo_timer_us-speedo_last_us);
-    speedo_last_us = speedo_timer_us;
+// Method 1: This works but this is a sloppy excuse for an ISR. we shouldn't be calling mycros() inside an ISR
+// tachTimer.reset();  // This might screw up things.  Anders would remember
+// tach_delta_us = abs(tachTimer.start - tach_last_us);
+// tach_last_us = tachTimer.start;
+//
+// tach_magnet_count++; // this is temporary. remove after sensor tests (remove all copies)
 
-    // speedoTimer.reset();  // This might screw up things.  Anders would remember
-    // speedo_delta_us = abs(speedoTimer.start - speedo_last_us);
-    // speedo_last_us = speedoTimer.start;
+// // Method 2: Promises to make this ISR squeaky clean like the vagina of a silkworm ... if it worked
+// // This aint working for some reason ... I don't have time to debug it now. Ugh!
+// tach_magnet_count++;  // add one to the pulses sensed since the last sensor value update (in main loop) 
+
+void speedo_isr(void) {  //  A better approach would be to read, reset, and restart a hardware interval timer in the isr.  Better still would be to regularly read a hardware binary counter clocked by the pin - no isr.
+    int32_t temp_us = speedoPulseTimer.elapsed();
+    if (temp_us > speedo_delta_impossible_us) {
+        speedo_delta_us = temp_us;    
+        speedoPulseTimer.reset();
+    }
+    else tach_error_us = temp_us;
 }
+// speedoTimer.reset();  // This might screw up things.  Anders would remember
+// speedo_delta_us = abs(speedoTimer.start - speedo_last_us);
+// speedo_last_us = speedoTimer.start;
+
 void hotrc_horz_isr(void) {  // Reads ranged PWM signal on an input pin to determine control position. This ISR sets timer for all hotrc isrs on hi-going edge
-    if (digitalRead(hotrc_horz_pin)) hotrc_pulse_timer_us = mycros();
-    else hotrc_horz_pulse_us = abs(mycros() - hotrc_pulse_timer_us);
+    if (digitalRead(hotrc_horz_pin)) hotrcPulseTimer.reset();
+    else hotrc_horz_pulse_us = hotrcPulseTimer.elapsed();
 }
 void hotrc_vert_isr(void) {  // On falling edge, reads ranged PWM signal on an input pin to determine control position
-    hotrc_vert_pulse_us = abs(mycros() - hotrc_pulse_timer_us);
+    hotrc_vert_pulse_us = hotrcPulseTimer.elapsed();
 }
 void hotrc_ch3_isr(void) {  // Reads a binary switch encoded as PWM on an input pin to determine button toggle state
-    hotrc_ch3_sw = (abs(mycros() - hotrc_pulse_timer_us) <= 1500);  // Ch3 switch true if short pulse, otherwise false
+    hotrc_ch3_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch3 switch true if short pulse, otherwise false
     if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled
     hotrc_ch3_sw_last = hotrc_ch3_sw;
 }
 void hotrc_ch4_isr(void) {  // Reads PWM signal on an input pin to determine control position
-    hotrc_ch4_sw = (abs(mycros() - hotrc_pulse_timer_us) <= 1500);  // Ch4 switch true if short pulse, otherwise false
+    hotrc_ch4_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch4 switch true if short pulse, otherwise false
     if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
@@ -735,9 +753,9 @@ int32_t ema(int32_t raw_value, int32_t filt_value, float alpha) {
 
 // Functions to write to the screen efficiently
 //
-void draw_bargraph_base(int32_t corner_x, int32_t corner_y) {  // draws a horizontal bargraph scale
-    tft.drawFastHLine(corner_x+1, corner_y, 28, GRY1);
-    for (int32_t offset=0; offset<=2; offset++) tft.drawFastVLine((corner_x+1)+offset*14, corner_y-1, 3, WHT);
+void draw_bargraph_base(int32_t corner_x, int32_t corner_y, int32_t width) {  // draws a horizontal bargraph scale
+    tft.drawFastHLine(corner_x+1, corner_y, width-2, GRY1);
+    for (int32_t offset=0; offset<=2; offset++) tft.drawFastVLine((corner_x+1)+offset*(width/2 - 1), corner_y-1, 3, WHT);
 }
 void draw_bargraph_needle(int32_t pos_x, int32_t pos_y, int32_t color) {  // draws a cute little pointy needle
     tft.drawFastVLine(pos_x-1, pos_y, 2 , color);
@@ -757,7 +775,7 @@ void draw_fixed(bool redraw_tuning_corner) {  // set redraw_tuning_corner to tru
             tft.println(telemetry[lineno]);  // Draw names of fixed telemetry variables
             tft.setCursor(118, lineno*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
             tft.println(units[lineno]);  // Draw units for fixed telemetry variables
-            if (lineno) draw_bargraph_base(touch_cell_width_pix*2+15, lineno*disp_line_height_pix+disp_vshift_pix+7);
+            if (lineno) draw_bargraph_base(145, lineno*disp_line_height_pix+disp_vshift_pix+7, 38);
         }
     }
     for (int32_t lineno=0; lineno < (int32_t)arraysize(dataset_page_names[dataset_page]); lineno++)  {  // Step thru lines of dataset page data
@@ -765,7 +783,7 @@ void draw_fixed(bool redraw_tuning_corner) {  // set redraw_tuning_corner to tru
         tft.println(dataset_page_names[dataset_page][lineno]);  // Draw names of dataset page variables
         tft.setCursor(118, (lineno+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
         tft.println(tuneunits[dataset_page][lineno]);  // Draw units for dataset page variables
-        draw_bargraph_base(touch_cell_width_pix*2+15, (lineno+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix+7);
+        draw_bargraph_base(145, (lineno+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix+7, 38);
         //if (dataset_page < 4) tft.drawRect(touch_cell_width_pix*2+4, lineno*disp_line_height_pix+disp_vshift_pix, 30, 7, GRY1);  // Draw graph boxes
     }
     for (int32_t row = 0; row < touch_rows; row++) {  // Step thru all touchgrid rows
@@ -817,10 +835,10 @@ void draw_dynamic(int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, 
             tft.setTextColor(GRN);  // to draw value text below
             if (lowlim != -1) {  // draw slider graph //  && value - lowlim >= 0
                 int32_t needle_y = lineno*disp_line_height_pix+disp_vshift_pix-1;
-                draw_bargraph_needle(touch_cell_width_pix*2+15 + constrain(disp_needles[lineno], 1, 29), needle_y, BLK);
-                disp_needles[lineno] = map(value, lowlim, hilim, 1, 29);
-                int32_t ncolor = (disp_needles[lineno] > 29 || disp_needles[lineno] < 1) ? ORG : GRN;
-                draw_bargraph_needle(touch_cell_width_pix*2+15 + constrain(disp_needles[lineno], 1, 29), needle_y, ncolor);
+                draw_bargraph_needle(145 + constrain(disp_needles[lineno], 1, 37), needle_y, BLK);
+                disp_needles[lineno] = map(value, lowlim, hilim, 1, 37);
+                int32_t ncolor = (disp_needles[lineno] > 37 || disp_needles[lineno] < 1) ? ORG : GRN;
+                draw_bargraph_needle(145 + constrain(disp_needles[lineno], 1, 37), needle_y, ncolor);
             }
         }
         tft.print(disp_draw_buffer);
@@ -852,8 +870,8 @@ void draw_simbuttons(bool create) {  // draw grid of buttons to simulate sensors
     tft.setTextColor(LYEL);
     for (int32_t row = 0; row < 4; row++) {
         for (int32_t col = 0; col < 3; col++) {
-            int32_t cntr_x = 169 + col*50 + 25 + 4;  // Added +4 just to make space but now button isn't centered on touch area!
-            int32_t cntr_y = row*touch_cell_height_pix+touch_cell_height_pix/2;
+            int32_t cntr_x = (disp_width_pix - 1) - 44 * (2 - col) - 22;
+            int32_t cntr_y = (row+1) * 48 + 24;
             if ( strcmp( simgrid[row][col+2], "     " ) ) {
                 tft.fillCircle(cntr_x, cntr_y, 19, create ? DGRY : BLK);
                 if (create) {
@@ -867,12 +885,13 @@ void draw_simbuttons(bool create) {  // draw grid of buttons to simulate sensors
 }
 void draw_touchgrid(bool replace_names) {  // drawe side buttons with names in 'em. If replace_names, just updates names
     int32_t rows = replace_names ? 1 : 4;
+    int32_t namelen = 0;
     if (replace_names) strcpy(menu_buttons[0], pagecard[dataset_page]);
     tft.setTextColor(LYEL);
-    for (int32_t row = 0; row < rows; row++) {  // Step thru all rows
+    for (int32_t row = 0; row < rows; row++) {  // Step thru all rows to draw buttons on the left edge
         tft.fillRoundRect(-9, touch_cell_height_pix*row+3, 18, touch_cell_height_pix-6, 8, DGRY);
         if (!replace_names) tft.drawRoundRect(-9, touch_cell_height_pix*row+3, 18, touch_cell_height_pix-6, 8, LYEL);
-        int32_t namelen = 0;
+        namelen = 0;
         for (uint32_t x = 0 ; x < arraysize(menu_buttons[row]) ; x++ ) {
             if (menu_buttons[row][x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
         }
@@ -880,6 +899,17 @@ void draw_touchgrid(bool replace_names) {  // drawe side buttons with names in '
             tft.setCursor( 1, ( touch_cell_height_pix*row) + (touch_cell_height_pix/2) - (int32_t)(4.5*((float)namelen-1)) + 9*letter ); // adjusts vertical offset depending how many letters in the button name and which letter we're on
             tft.println( menu_buttons[row][letter] );  // Writes each letter such that the whole name is centered vertically on the button
         }
+    }
+    // Draw one button on the right edge at top corner
+    tft.fillRoundRect(disp_width_pix-9, 3, 18, (disp_height_pix/5)-6, 8, DGRY);
+    if (!replace_names) tft.drawRoundRect(disp_width_pix-9, 3, 18, (disp_height_pix/5)-6, 8, LYEL);
+    namelen = 0;
+    for (uint32_t x = 0 ; x < arraysize(sim_menu_button) ; x++ ) {
+        if (sim_menu_button[x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
+    }
+    for (int32_t letter = 0; letter < namelen; letter++) {  // Going letter by letter thru each button name so we can write vertically 
+        tft.setCursor( disp_width_pix-1-6, (float)(disp_height_pix/5/2) - (int32_t)(4.5*((float)namelen-1)) + 9*letter ); // adjusts vertical offset depending how many letters in the button name and which letter we're on
+        tft.println( sim_menu_button[letter] );  // Writes each letter such that the whole name is centered vertically on the button
     }
 }
 void sd_init() {
@@ -983,7 +1013,7 @@ void setup() {
             disp_age_quanta[lineno] = -1;
             memset(disp_values[lineno],0,strlen(disp_values[lineno]));
         }
-        for (int32_t row=0; row<disp_nobools; row++) disp_bool_values[row] = 1;
+        for (int32_t row=0; row<(int32_t)arraysize(disp_bool_values); row++) disp_bool_values[row] = 1;
         tft.fillScreen(BLK);  // Black out the whole screen
         draw_fixed(false);
         draw_touchgrid(false);
@@ -1057,9 +1087,9 @@ void loop() {
     // float cruise_pid_ki_mhz = cruise_pid_kp*cruise_pid_ki_mhz;  // Convert dependent-form PID coefficients to independent term for each of the influences
     // float cruise_pid_kd_us = cruise_pid_kp*cruise_pid_kd_us;  // Convert dependent-form PID coefficients to independent term for each of the influences
     ctrl_db_adc[VERT][BOT] = (adc_range_adc-ctrl_lims_adc[ctrl][VERT][DB])/2;  // Lower threshold of vert joy deadband (ADC count 0-4095)
-    ctrl_db_adc[VERT][TOP] = (adc_range_adc+ctrl_lims_adc[ctrl][VERT][DB])/2;  // Lower threshold of vert joy deadband (ADC count 0-4095)
-    ctrl_db_adc[HORZ][BOT] = (adc_range_adc-ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Lower threshold of vert joy deadband (ADC count 0-4095)
-    ctrl_db_adc[HORZ][TOP] = (adc_range_adc+ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Lower threshold of vert joy deadband (ADC count 0-4095)
+    ctrl_db_adc[VERT][TOP] = (adc_range_adc+ctrl_lims_adc[ctrl][VERT][DB])/2;  // Upper threshold of vert joy deadband (ADC count 0-4095)
+    ctrl_db_adc[HORZ][BOT] = (adc_range_adc-ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Lower threshold of horz joy deadband (ADC count 0-4095)
+    ctrl_db_adc[HORZ][TOP] = (adc_range_adc+ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Upper threshold of horz joy deadband (ADC count 0-4095)
     int32_t engine_govern_rpm = map(gas_governor_percent, 0, 100, 0, engine_redline_rpm);  // Create an artificially reduced maximum for the engine speed
     int32_t gas_pulse_govern_us = map(gas_governor_percent*(engine_redline_rpm-engine_idle_rpm)/engine_redline_rpm, 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
     int32_t carspeed_govern_mmph = map(gas_governor_percent, 0, 100, 0, carspeed_redline_mmph);  // Governor must scale the top vehicle speed proportionally
@@ -1128,7 +1158,7 @@ void loop() {
         // Tach
         //
         // Method 1: This works with the ISR implementation having mycros() call inside the ISR
-        if (abs(mycros() - tach_timer_us) < engine_stop_timeout_us)  engine_rpm = (int32_t)(60000000/(float)tach_delta_us);  // Tachometer magnets/us * 60000000 (1 rot/magnet * 1000000 us/sec * 60 sec/min) gives rpm
+        if (tachPulseTimer.elapsed() < engine_stop_timeout_us)  engine_rpm = (int32_t)(60000000/(float)tach_delta_us);  // Tachometer magnets/us * 60000000 (1 rot/magnet * 1000000 us/sec * 60 sec/min) gives rpm
         else engine_rpm = 0;  // If timeout since last magnet is exceeded
         if (abs(engine_rpm-engine_old_rpm) > engine_lp_thresh_rpm || engine_rpm-engine_last_rpm < engine_spike_thresh_rpm) {  // Remove noise spikes from tach values, if otherwise in range
             engine_old_rpm = engine_last_rpm;
@@ -1137,7 +1167,7 @@ void loop() {
         else engine_rpm = engine_last_rpm;  // Spike detected - ignore that sample
         if (engine_rpm) engine_filt_rpm = ema(engine_rpm, engine_filt_rpm, engine_ema_alpha);  // Sensor EMA filter
         else engine_filt_rpm = 0;    
-
+        
         // Method 2: This should work also, perhaps better at high speeds, and uses a squeaky clean ISR implementation.  But it doesn't :(        
         // if (tach_magnet_count) {
         //     engine_rpm = (int32_t)(60000000 * (float)tach_magnet_count/(float)loop_period_us);  // Tachometer (magnets/loop) / (us/loop) * 60000000 (1 rot/magnet * 1000000 us/sec * 60 sec/min) gives rpm
@@ -1149,7 +1179,7 @@ void loop() {
         // else engine_filt_rpm = 0;    
 
         // Speedo    
-        if (abs(mycros() - speedo_timer_us) < car_stop_timeout_us)  carspeed_mmph = (int32_t)(179757270/(float)speedo_delta_us); // Update car speed value  
+        if (speedoPulseTimer.elapsed() < car_stop_timeout_us)  carspeed_mmph = (int32_t)(179757270/(float)speedo_delta_us); // Update car speed value  
             // magnets/us * 179757270 (1 rot/magnet * 1000000 us/sec * 3600 sec/hr * 1/19.85 gearing * 20*pi in/rot * 1/12 ft/in * 1000/5280 milli-mi/ft gives milli-mph  // * 1/1.15 knots/mph gives milliknots
             // Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
         else carspeed_mmph = 0;     
@@ -1513,25 +1543,40 @@ void loop() {
         // into camp after a ride, and kill the engine before we stop the car. For a fraction of a second the engine would keep turning anyway.
         // Or fopr that matter whenever the carb is out of tune and making the engine diesel after we kill the ign.
     }
-
+    if (tach_error_us != -1) {
+        printf("Short reading on tach: %ld us.\n", tach_error_us);
+        tach_error_us = -1;
+    }
+    if (speedo_error_us != -1) {
+        printf("Short reading on tach: %ld us.\n", speedo_error_us);
+        speedo_error_us = -1;
+    }
     if (serial_debugging && print_timestamps) printf ("%ld ", mycros()-loopzero);
     
     // 6) Service the user interface
     //
-    
+    int32_t touch_x, touch_y, touch_row, touch_col;
     if (touchPollTimer.expired()) {
         touchPollTimer.reset();
         if (touchpanel.touched()) { // Take actions upon being touched
+            touch_accel = 1 << touch_accel_exponent;  // determine value editing rate
             TS_Point touchpoint = touchpanel.getPoint();   // Retreive a point
             touchpoint.x = map(touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
             touchpoint.y = map(touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);  // Rotate touch coordinates to match tft coordinates
-            int32_t touch_y = tft.height()-touchpoint.x; // touch point y coordinate in pixels, from origin at top left corner
-            int32_t touch_x = touchpoint.y; // touch point x coordinate in pixels, from origin at top left corner
-            int32_t touch_row = (int32_t)((float)touch_y/touch_cell_height_pix); // which of our 4 rows of touch buttons was touched?
-            int32_t touch_col = 0;  // which of our 5 columns of touch buttons was touched?
-            if (touch_x >= 50 && touch_x < 169 ) touch_col = 1;  // Big dead zone
-            else if (touch_x >= 169) touch_col = 2+(touch_x-169)/50;  // three columns at the right
-            touch_accel = 1 << touch_accel_exponent;  // determine value editing rate
+            touch_y = tft.height()-touchpoint.x; // touch point y coordinate in pixels, from origin at top left corner
+            touch_x = touchpoint.y; // touch point x coordinate in pixels, from origin at top left corner
+            if (touch_x < 50) {  // The buttons along the left edge
+                touch_col = 0;
+                touch_row = (int32_t)(4 * (float)touch_y / (float)disp_height_pix); // which of our 4 rows of touch buttons was touched?
+            }
+            else if (touch_x < 187) {  // The region with names data units and bargraphs
+                touch_col = 1;  // Big dead zone
+                touch_row = 0;
+            }
+            else {  // The simulator region to the right
+                touch_col = 2 + (int32_t)(((float)touch_x - 187) / 44);
+                touch_row = (int32_t)(5 * (float)touch_y / (float)disp_height_pix ); // which of our 5 rows of touch buttons was touched?
+            }
             
             // Take appropriate touchscreen actions depending how we're being touched
             if (touch_col == 0 && touch_row == 0 && !touch_now_touched) {
@@ -1548,14 +1593,14 @@ void loop() {
                 }
                 else if (tuning_ctrl == EDIT && !touch_now_touched) {
                     tuning_ctrl = SELECT;  // drop back to select mode
-                    selected_value += 1;  // and move to next selection
+                    selected_value++;  // and move to next selection
                 }
                 else if (tuning_ctrl == SELECT) {
                     if (!touch_now_touched) {
-                        selected_value += 1;  // move to next selection
+                        selected_value++;  // move to next selection
                         if (selected_value >= (int32_t)arraysize(dataset_page_names[dataset_page])) selected_value -= arraysize(dataset_page_names[dataset_page]);
-                        if (dataset_page >= 4) selected_value = constrain (selected_value, 5, 7);  // Skip unchangeable values for all PID modes
-                        else if (dataset_page == JOY) selected_value = constrain (selected_value, 2, 7);  // Skip unchangeable values for joy mode
+                        // if (dataset_page >= 4) selected_value = constrain (selected_value, 5, 7);  // Skip unchangeable values for all PID modes
+                        // else if (dataset_page == JOY) selected_value = constrain (selected_value, 2, 7);  // Skip unchangeable values for joy mode
                     }
                     else if (touch_longpress_valid && touchHoldTimer.expired()) {
                         tuning_ctrl = OFF;
@@ -1571,25 +1616,25 @@ void loop() {
                 if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change value yet
                 else if (tuning_ctrl == EDIT) sim_edit_delta_touch = -touch_accel;  // If in edit mode, decrease value
             }
-            else if (touch_col == 1 && touch_row == 0) {  // Pressed the simulation mode toggle. Needs long press
-                if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout()*3)  {
+            else if (touch_col == 1 && touch_row == 1 && !touch_now_touched && ui_simulating) basicmodesw = !basicmodesw;  // Pressed the basic mode toggle button. Toggle value, only once per touch
+            else if (touch_col == 1 && touch_row == 2 && !touch_now_touched && ui_simulating) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
+            else if (touch_col == 1 && touch_row == 3 && ui_simulating) cruise_sw = true;  // Pressed the cruise mode button. This is a momentary control, not a toggle. Value changes back upon release
+            else if (touch_col == 2 && touch_row == 1 && ui_simulating) adj_val(&pressure_filt_adc, touch_accel, pressure_min_adc, pressure_max_adc);  // (+= 25) Pressed the increase brake pressure button
+            else if (touch_col == 2 && touch_row == 2 && ui_simulating) adj_val(&pressure_filt_adc, -touch_accel, pressure_min_adc, pressure_max_adc);  // (-= 25) Pressed the decrease brake pressure button
+            else if (touch_col == 2 && touch_row == 4 && ui_simulating && !ui_sim_halfass) adj_val(&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (-= 25) Pressed the joystick left button
+            else if (touch_col == 3 && touch_row == 1 && ui_simulating) adj_val(&engine_filt_rpm, touch_accel, 0, engine_redline_rpm);  // (+= 25) Pressed the increase engine rpm button
+            else if (touch_col == 3 && touch_row == 2 && ui_simulating) adj_val(&engine_filt_rpm, -touch_accel, 0, engine_redline_rpm);  // (-= 25) Pressed the decrease engine rpm button
+            else if (touch_col == 3 && touch_row == 3 && ui_simulating && !ui_sim_halfass) adj_val(&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (+= 25) Pressed the joystick up button
+            else if (touch_col == 3 && touch_row == 4 && ui_simulating && !ui_sim_halfass) adj_val(&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (-= 25) Pressed the joystick down button
+            else if (touch_col == 4 && touch_row == 0) {  // && touch_row == 0 . Pressed the simulation mode toggle. Needs long press
+                if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout())  {
                     ui_simulating = !ui_simulating;
                     touch_longpress_valid = false;
                 }
             }
-            else if (touch_col == 1 && touch_row == 1 && !touch_now_touched && ui_simulating) basicmodesw = !basicmodesw;  // Pressed the basic mode toggle button. Toggle value, only once per touch
-            else if (touch_col == 1 && touch_row == 2 && !touch_now_touched && ui_simulating) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
-            else if (touch_col == 1 && touch_row == 3 && ui_simulating) cruise_sw = true;  // Pressed the cruise mode button. This is a momentary control, not a toggle. Value changes back upon release
-            else if (touch_col == 2 && touch_row == 0 && ui_simulating) adj_val(&pressure_filt_adc, touch_accel, pressure_min_adc, pressure_max_adc);  // (+= 25) Pressed the increase brake pressure button
-            else if (touch_col == 2 && touch_row == 1 && ui_simulating) adj_val(&pressure_filt_adc, -touch_accel, pressure_min_adc, pressure_max_adc);  // (-= 25) Pressed the decrease brake pressure button
-            else if (touch_col == 2 && touch_row == 3 && ui_simulating && !ui_sim_halfass) adj_val(&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (-= 25) Pressed the joystick left button
-            else if (touch_col == 3 && touch_row == 0 && ui_simulating) adj_val(&engine_filt_rpm, touch_accel, 0, engine_redline_rpm);  // (+= 25) Pressed the increase engine rpm button
-            else if (touch_col == 3 && touch_row == 1 && ui_simulating) adj_val(&engine_filt_rpm, -touch_accel, 0, engine_redline_rpm);  // (-= 25) Pressed the decrease engine rpm button
-            else if (touch_col == 3 && touch_row == 2 && ui_simulating && !ui_sim_halfass) adj_val(&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (+= 25) Pressed the joystick up button
-            else if (touch_col == 3 && touch_row == 3 && ui_simulating && !ui_sim_halfass) adj_val(&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (-= 25) Pressed the joystick down button
-            else if (touch_col == 4 && touch_row == 0 && ui_simulating) adj_val(&carspeed_filt_mmph, touch_accel, 0, carspeed_redline_mmph);  // (+= 50) // Pressed the increase vehicle speed button
-            else if (touch_col == 4 && touch_row == 1 && ui_simulating) adj_val(&carspeed_filt_mmph, -touch_accel, 0, carspeed_redline_mmph);  // (-= 50) Pressed the decrease vehicle speed button
-            else if (touch_col == 4 && touch_row == 3 && ui_simulating && !ui_sim_halfass) adj_val(&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (+= 25) Pressed the joystick right button                           
+            else if (touch_col == 4 && touch_row == 1 && ui_simulating) adj_val(&carspeed_filt_mmph, touch_accel, 0, carspeed_redline_mmph);  // (+= 50) // Pressed the increase vehicle speed button
+            else if (touch_col == 4 && touch_row == 2 && ui_simulating) adj_val(&carspeed_filt_mmph, -touch_accel, 0, carspeed_redline_mmph);  // (-= 50) Pressed the decrease vehicle speed button
+            else if (touch_col == 4 && touch_row == 4 && ui_simulating && !ui_sim_halfass) adj_val(&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (+= 25) Pressed the joystick right button                           
             if (touch_accel_exponent < touch_accel_exponent_max && (touchHoldTimer.elapsed() > (touch_accel_exponent + 1) * touchAccelTimer.timeout())) touch_accel_exponent++; // If timer is > the shift time * exponent, and not already maxed, double the edit speed by incrementing the exponent
                 
             touch_now_touched = true;
@@ -1647,23 +1692,22 @@ void loop() {
     if (display_enabled && ui_simulating != ui_simulating_last) draw_simbuttons(ui_simulating);  // if we just entered simulator draw the simulator buttons, or if we just left erase them
     sim_edit_delta = sim_edit_delta_encoder + sim_edit_delta_touch;  // Allow edits using the encoder
 
-    // if (tuning_ctrl != tuning_ctrl_last || dataset_page != dataset_page_last || sim_edit_delta != 0) tuning_ctrl_timer_us = mycros();  // If just switch tuning mode or there tuning activity, reset the timer
-    // if (tuning_ctrl != OFF && abs(mycros() - tuning_ctrl_timer_us) > tuning_ctrl_timeout_us) {  // If the timer expired, go to OFF and redraw the tuning corner
-    if (tuning_ctrl != tuning_ctrl_last || dataset_page != dataset_page_last || sim_edit_delta != 0) tuningCtrlTimer.reset();  // If just switch tuning mode or there tuning activity, reset the timer
+    if (tuning_ctrl != tuning_ctrl_last || dataset_page != dataset_page_last || selected_value != selected_value_last || sim_edit_delta != 0) tuningCtrlTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
     if (tuning_ctrl != OFF && tuningCtrlTimer.expired()) {  // If the timer expired, go to OFF and redraw the tuning corner
         tuning_ctrl = OFF;
-        if (display_enabled) draw_fixed(true);  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
+        disp_fixed_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
     }
     if (dataset_page != dataset_page_last) {
         dataset_page = constrain(dataset_page, 0, (int32_t)arraysize(pagecard)-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
         if (tuning_ctrl == EDIT) tuning_ctrl = SELECT;
-        if (display_enabled) draw_fixed(true);  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
+        disp_fixed_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
     }
     if (dataset_page == LOCK) tuning_ctrl = OFF;  // Can not select or edit when on LOCK page
     if (tuning_ctrl == SELECT) {
         if (dataset_page >= 4) selected_value = constrain (selected_value, 5, 7);  // Skip unchangeable values for all PID modes
         else if (dataset_page == JOY) selected_value = constrain (selected_value, 2, 7);  // Skip unchangeable values for joy mode
         else selected_value = constrain(selected_value, 0, (int32_t)arraysize(dataset_page_names[dataset_page])-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
+        if (selected_value != selected_value_last) disp_fixed_dirty = true;
     }
 
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
@@ -1714,6 +1758,10 @@ void loop() {
     
     // Update displayed telemetry values to the screen
     if (display_enabled)  {
+        if (disp_fixed_dirty) {
+            draw_fixed(true);
+            disp_fixed_dirty = false;
+        }
         int32_t range;
         draw_dynamic(0, 0, -1, -1, 2);
         draw_dynamic(0, 0, -1, -1, 3);
@@ -1806,17 +1854,12 @@ void loop() {
         }
         draw_bool(basicmodesw, 1);
         draw_bool(ignition, 2);
-        // draw_bool(neutral, 2);
         draw_bool(cruise_sw, 3);
     }
     if (serial_debugging && print_timestamps) printf("%ld ms, %ld Hz\n", (int32_t)((float)(abs(mycros()-loopzero)/1000)), (int32_t)(1000000/((float)(abs(mycros()-loopzero)))));
     
     // 8) Do the control loop bookkeeping at the end of each loop
     //
-    // if (ctrl != ctrl_last) {
-    //     ctrl_vert_deadband_adc = vert_deadband_adc[ctrl];
-    //     ctrl_horz_deadband_adc = horz_deadband_adc[ctrl];
-    // }
     ctrl_last = ctrl;
     sim_edit_delta_touch = 0;
     sim_edit_delta_encoder = 0;

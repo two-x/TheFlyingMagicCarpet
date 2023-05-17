@@ -16,7 +16,7 @@ int32_t mycros(void) {  // This is "my" micros() function that returns signed in
 // last 72 minutes between overflows. However you can only time for 36 minutes max.
 // Note: experimenting with use of micros() instead of mycros(), check for errors on overflow and possibly revert
 class Timer {
-    uint32_t start_us;  // start time in us
+    volatile uint32_t start_us;  // start time in us
     int32_t timeout_us = 0;  // in us
     public:
         Timer(void) { start_us = micros(); };
