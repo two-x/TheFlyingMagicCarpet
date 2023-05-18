@@ -117,7 +117,7 @@ using namespace std;
 #define tft_ledk_pin 10  // -- Output, Optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
 #define tp_irq_pin 11  // -- Optional int input so touchpanel can interrupt us (need to modify shield board for this to work)
 #define neopixel_pin 48 // ++ Output, no neopixel for due
-#define led_pin -1  // ++ Output, This is the LED labeled "L" onboard the arduino due.  Active high.
+#define heartbeat_led_pin -1  // ++ Output, This is the LED labeled "L" onboard the arduino due.  Active high.
 #define ignition_pin -1  // Input tells us if ignition signal is on or off, active high (no pullup)
 #endif
 #ifdef ESP32_WROOM32
@@ -128,7 +128,7 @@ using namespace std;
 #define tft_ledk_pin -1  // -- Output, Optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
 #define tp_irq_pin -1  // -- Optional int input so touchpanel can interrupt us (need to modify shield board for this to work)
 #define neopixel_pin -1 // ++ Output, no neopixel for due
-#define led_pin -1  // ++ Output, This is the LED labeled "L" onboard the arduino due.  Active high.
+#define heartbeat_led_pin -1  // ++ Output, This is the LED labeled "L" onboard the arduino due.  Active high.
 #define ignition_pin -1  // Input tells us if ignition signal is on or off, active high (no pullup)
 #endif
 #if defined(ESP32_WROOM32) || defined(ESP32_SX_DEVKIT)
@@ -160,7 +160,7 @@ using namespace std;
 #define tp_irq_pin 7  // Optional int input so touchpanel can interrupt us (need to modify shield board for this to work)
 #define tft_dc_pin 9  // Output, Assert when sending data to display chip to indicate commands vs. screen data
 #define tft_cs_pin 10  // Output, active low, Chip select allows ILI9341 display chip use of the SPI bus
-#define led_pin 13  // Output, This is the LED labeled "L" onboard the arduino due.  Active high.
+#define heartbeat_led_pin 13  // Output, This is the LED labeled "L" onboard the arduino due.  Active high.
 #define encoder_sw_pin 18  // Int input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
 #define encoder_b_pin 19  // Int input, The B pin (aka DT pin) of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define encoder_a_pin 21  // Int input, The A pin (aka CLK pin) of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
@@ -206,7 +206,7 @@ using namespace std;
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
 #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
 #define disp_lines 20  // Max lines of text displayable at line height = disp_line_height_pix
-#define disp_fixed_lines 12  // Lines of static variables/values always displayed
+#define disp_fixed_lines 11  // Lines of static variables/values always displayed
 #define disp_tuning_lines 8  // Lines of dynamic variables/values in dataset pages 
 #define disp_line_height_pix 12  // Pixel height of each text line. Screen can fit 16x 15-pixel or 20x 12-pixel lines
 #define disp_vshift_pix 2  // Unknown.  Note: At smallest text size, characters are 5x7 pix + pad on rt and bot for 6x8 pix.
@@ -229,18 +229,17 @@ using namespace std;
 enum dataset_pages {LOCK, JOY, CAR, PWMS, BPID, GPID, CPID};
 
 char telemetry[disp_fixed_lines][12] = {  
-    "Flightmode:",
-    " Air Speed:",
-    " Engine #1:",
-    "Hydraulics:",   
-    "Stick Horz:",
-    "Stick Vert:",
-    " Steer PWM:",
-    "Cruise Tgt:",
-    "Gas Target:",
+    "     Speed:",
+    "      Tach:",
+    "  Brk Pres:",   
+    "  Joy Horz:",
+    "  Joy Vert:",
+    "  CruisTgt:",
+    "   Brk Tgt:",
+    "   Gas Tgt:",
+    "   Brk PWM:",
     "   Gas PWM:",
-    "PresTarget:",
-    " Brake PWM:"
+    "  SteerPWM:",
 };
 char pagecard[7][5] = { "Run ", "Joy ", "Car ", "PWMs", "Bpid", "Gpid", "Cpid" };
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][12] = {
@@ -251,7 +250,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][12] = {
         " Encoder_A:",
         " Encoder_B:",
         " Enc State:",
-        " EnCounter:" },
+        " EnCounter:", },
     {   "  Horz Raw:",  // JOY
         "  Vert Raw:",
         "  Horz Min:",
@@ -259,7 +258,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][12] = {
         " Horz Dead:",
         "  Vert Min:",
         "  Vert Max:",
-        " Vert Dead:" },
+        " Vert Dead:", },
     {   "  Governor:",  // CAR
         "  Eng Idle:",
         "Eng Redlin:",
@@ -267,7 +266,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][12] = {
         "Spd Redlin:",
         "Use Joystk:",
         "Sm Halfass:",
-        "BrakePosZP:" },
+        "BrakePosZP:", },
     {   "  Steer Lt:",  // PWMS
         "Steer Stop:",
         "  Steer Rt:",
@@ -275,7 +274,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][12] = {
         "Brake Stop:",
         "Brake Retr:",
         "  Gas Idle:",
-        "Gas Redlin:" },
+        "Gas Redlin:", },
     {   "Pres Error:",  // BPID
         "    P Term:",
         "    I Term:",
@@ -283,7 +282,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][12] = {
         "Pres Delta:",
         "    Kp (P):",
         "    Ki (I):",
-        "    Kd (D):" },
+        "    Kd (D):", },
     {   " Eng Error:",  // GPID
         "    P Term:",
         "    I Term:",
@@ -299,9 +298,9 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][12] = {
         " Spd Delta:",
         "    Kp (P):",
         "    Ki (I):",
-        "    Kd (D):" },
+        "    Kd (D):", },
 };
-char units[disp_fixed_lines][5] = {"    ", "mmph", "rpm ", "adc ", "adc ", "adc ", "us  ", "mmph", "rpm ", "us  ", "adc ", "us  " };
+char units[disp_fixed_lines][5] = {"mmph", "rpm ", "adc ", "adc ", "adc ", "mmph", "adc ", "rpm ", "us  ", "us  ", "us  " };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "mV  ", "adc ", "adc ", "adc ", "    ", "    ", "Hz  ", "    " },  // LOCK
     { "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // JOY
@@ -309,13 +308,13 @@ char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PWM
     { "adc ", "adc ", "adc ", "adc ", "adc ", "*1k ", "mHz ", "ns  " },  // BPID
     { "mmph", "mmph", "mmph", "mmph", "mmph", "*1k ", "mHz ", "ns  " },  // GPID
-    { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "*1k ", "mHz ", "ns  " }   // CPID
+    { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "*1k ", "mHz ", "ns  " },  // CPID
 };
 char simgrid[touch_rows][touch_cols][6] = {
-    { "     ", "  S  ", "prs+ ", "rpm+ ", "car+ " },
+    { "     ", "     ", "prs+ ", "rpm+ ", "car+ " },
     { "     ", "  B  ", "prs- ", "rpm- ", "car- " },
     { "     ", "  I  ", "     ", "jy ^ ", "     " },
-    { "     ", "  C  ", "< jy ", "jy v ", "jy > " }
+    { "     ", "  C  ", "< jy ", "jy v ", "jy > " },
 };    
 char modecard[6][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise" };
 char menu_buttons[4][4] = { "PG ", "SEL", "+  ", "-  " };
@@ -542,7 +541,10 @@ int32_t loop_period_us = 100000;
 int32_t loop_freq_hz = 1;  // run loop real time frequency (in Hz)
 int32_t loopno = 1;    
 int32_t loopzero = 0;  
-Timer heartbeatTimer(500000);
+Timer heartbeatTimer(1000000);
+int32_t heartbeat_state = 0;
+int32_t heartbeat_ekg[4] = { 150000, 100000, 430000, 1100000 };
+bool heartbeat_pulse = HIGH;
 // int32_t pressure_min_psi = 0;  // Brake pressure when brakes are effectively off (psi 0-1000)
 // int32_t pressure_max_psi = 500;  // Highest possible pressure achievable by the actuator (psi 0-1000)
 
@@ -562,7 +564,6 @@ volatile int32_t tach_last_us;
 volatile int32_t tach_delta_us = 0;
 volatile int32_t speedo_last_us;
 volatile int32_t speedo_delta_us = 0;
-volatile bool led_state = LOW;
 volatile int32_t hotrc_horz_pulse_us = 1500;
 volatile int32_t hotrc_vert_pulse_us = 1500;
 volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
@@ -762,7 +763,14 @@ void draw_bargraph_needle(int32_t pos_x, int32_t pos_y, int32_t color) {  // dra
     tft.drawFastVLine(pos_x, pos_y, 4, color);
     tft.drawFastVLine(pos_x+1, pos_y, 2, color);
 }
-
+void draw_string(int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color) {  // Send in "" for oldtext if erase isn't needed
+    tft.setCursor(x, y);
+    tft.setTextColor(BLK);
+    tft.print(oldtext);  // Erase the old content
+    tft.setCursor(x, y);
+    tft.setTextColor(color);
+    tft.print(text);  // Erase the old content
+}
 // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
 void draw_fixed(bool redraw_tuning_corner) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
     tft.setTextColor(GRY2);
@@ -771,19 +779,19 @@ void draw_fixed(bool redraw_tuning_corner) {  // set redraw_tuning_corner to tru
     else {
         // tft.fillScreen(BLK);  // Black out the whole screen
         for (int32_t lineno=0; lineno < (int32_t)arraysize(telemetry); lineno++)  {  // Step thru lines of fixed telemetry data
-            tft.setCursor(12, lineno*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
+            tft.setCursor(12, (lineno+1)*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
             tft.println(telemetry[lineno]);  // Draw names of fixed telemetry variables
-            tft.setCursor(118, lineno*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
+            tft.setCursor(118, (lineno+1)*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
             tft.println(units[lineno]);  // Draw units for fixed telemetry variables
-            if (lineno) draw_bargraph_base(145, lineno*disp_line_height_pix+disp_vshift_pix+7, 38);
+            draw_bargraph_base(145, (lineno+1)*disp_line_height_pix+disp_vshift_pix+7, 38);
         }
     }
     for (int32_t lineno=0; lineno < (int32_t)arraysize(dataset_page_names[dataset_page]); lineno++)  {  // Step thru lines of dataset page data
-        tft.setCursor(12, (lineno+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
+        tft.setCursor(12, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
         tft.println(dataset_page_names[dataset_page][lineno]);  // Draw names of dataset page variables
-        tft.setCursor(118, (lineno+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
+        tft.setCursor(118, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
         tft.println(tuneunits[dataset_page][lineno]);  // Draw units for dataset page variables
-        draw_bargraph_base(145, (lineno+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix+7, 38);
+        draw_bargraph_base(145, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix+7, 38);
         //if (dataset_page < 4) tft.drawRect(touch_cell_width_pix*2+4, lineno*disp_line_height_pix+disp_vshift_pix, 30, 7, GRY1);  // Draw graph boxes
     }
     for (int32_t row = 0; row < touch_rows; row++) {  // Step thru all touchgrid rows
@@ -795,64 +803,56 @@ void draw_fixed(bool redraw_tuning_corner) {  // set redraw_tuning_corner to tru
 }
 // draw_dynamic  normally draws a given value on a given line (0-19) to the screen if it has changed since last draw.
 void draw_dynamic(int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int32_t modeflag) {
-    int32_t age_us = (int32_t)(( (double)(dispAgeTimer[lineno].elapsed()) / 2500000)); // Divide by us per color gradient quantum
-    memset(disp_draw_buffer,0,strlen(disp_draw_buffer));
-    if (modeflag == 0) itoa(value, disp_draw_buffer, 10);  // Modeflag 0 is for writing numeric values for variables in the active data column at a given line
-    else if (modeflag == 1)  strcpy(disp_draw_buffer, modecard[runmode]); // Modeflag 1 is used for writing the runmode. Each mode has a custom color which doesn't get stale
-    if (modeflag == 3) {  // Modeflag 3 is for highlighting a variable name when its value may be changed
-        if ( (tuning_ctrl == SELECT && selected_value != selected_value_last) || // IF the selected tuning variable has changed, OR
-             (tuning_ctrl != SELECT && tuning_ctrl_last == SELECT) ) {  // We just stopped selecting values altogether
-            tft.setCursor(12, (selected_value_last+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
-            tft.setTextColor(GRY2);
-            tft.print(dataset_page_names[dataset_page][selected_value_last]);  // Grey out the old highlighted variable
-        }
-        if (tuning_ctrl == EDIT && tuning_ctrl_last != EDIT) {  // If we just started editing the variable
-            tft.setCursor(12, (selected_value+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
-            tft.setTextColor(GRN);
-            tft.print(dataset_page_names[dataset_page][selected_value]);  // Highlight selected value in blue
-        }
-        else if ( tuning_ctrl == SELECT && (selected_value != selected_value_last || tuning_ctrl_last != SELECT) ) { // If just entered selecting mode or selected value changed
-            tft.setCursor(12, (selected_value+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
-            tft.setTextColor(YEL);
-            tft.print(dataset_page_names[dataset_page][selected_value]);  // Highlight selected value in white
-        }
-    }
-    else if (modeflag == 2 && dataset_page != dataset_page_last) {  // Modeflag 2 is used for displaying which set of tuning variables is being displayed. Text next to the runmode
-        tft.setCursor(122, disp_vshift_pix);  // +disp_line_height_pix/2
-        tft.setTextColor(BLK);  // Rewriting old value in black over visible value is efficient way to erase
-        tft.print(pagecard[dataset_page_last]);
-        tft.setCursor(122, disp_vshift_pix);  // +disp_line_height_pix/2
-        tft.setTextColor(CYN);  
-        tft.print(pagecard[dataset_page]);
-    }
-    if (modeflag < 2 && (strcmp(disp_values[lineno], disp_draw_buffer) || disp_redraw_all))  {  // If value differs, Erase old value and write new
-        tft.setCursor(80, lineno*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
-        tft.setTextColor(BLK);  // Rewriting old value in black over visible value is efficient way to erase
-        tft.print(disp_values[lineno]);
-        tft.setCursor(80, lineno*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
-        if (modeflag == 1)  tft.setTextColor(colorcard[runmode]);
-        else {
-            tft.setTextColor(GRN);  // to draw value text below
+    if (modeflag == 0) {
+        int32_t age_us = (int32_t)(( (double)(dispAgeTimer[lineno].elapsed()) / 2500000)); // Divide by us per color gradient quantum
+        memset(disp_draw_buffer,0,strlen(disp_draw_buffer));
+        itoa(value, disp_draw_buffer, 10);  // Modeflag 0 is for writing numeric values for variables in the active data column at a given line
+        if (strcmp(disp_values[lineno], disp_draw_buffer) || disp_redraw_all)  {  // If value differs, Erase old value and write new
+            draw_string(80, lineno*disp_line_height_pix+disp_vshift_pix, disp_draw_buffer, disp_values[lineno], GRN); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+            strcpy(disp_values[lineno], disp_draw_buffer);
+            dispAgeTimer[lineno].reset();
+            disp_age_quanta[lineno] = 0;
             if (lowlim != -1) {  // draw slider graph //  && value - lowlim >= 0
                 int32_t needle_y = lineno*disp_line_height_pix+disp_vshift_pix-1;
                 draw_bargraph_needle(145 + constrain(disp_needles[lineno], 1, 37), needle_y, BLK);
                 disp_needles[lineno] = map(value, lowlim, hilim, 1, 37);
-                int32_t ncolor = (disp_needles[lineno] > 37 || disp_needles[lineno] < 1) ? ORG : GRN;
+                int32_t ncolor = (disp_needles[lineno] > 37 || disp_needles[lineno] < 1) ? RED : GRN;
                 draw_bargraph_needle(145 + constrain(disp_needles[lineno], 1, 37), needle_y, ncolor);
             }
         }
-        tft.print(disp_draw_buffer);
-        strcpy(disp_values[lineno], disp_draw_buffer);
-        dispAgeTimer[lineno].reset();
-        disp_age_quanta[lineno] = 0;
+        else if (age_us > disp_age_quanta[lineno] && age_us < 11)  {  // As readings age, redraw in new color
+            if (age_us < 8) tft.setTextColor(0x1fe0 + age_us*0x2000);  // Base of green with red added as you age
+            else tft.setTextColor(0xffe0 - (age_us-8)*0x100);  // Until yellow is achieved, then lose green as you age further
+            tft.setCursor(80, (lineno)*disp_line_height_pix+disp_vshift_pix); // +disp_line_height_pix/2
+            tft.print(disp_values[lineno]);
+            disp_age_quanta[lineno] = age_us;
+        } // Else don't draw anything, because we already did.  Logic is 100s of times cheaper than screen drawing.)
     }
-    else if (modeflag == 0 && age_us > disp_age_quanta[lineno] && age_us < 11)  {  // As readings age, redraw in new color
-        if (age_us < 8) tft.setTextColor(0x1fe0 + age_us*0x2000);  // Base of green with red added as you age
-        else tft.setTextColor(0xffe0 - (age_us-8)*0x100);  // Until yellow is achieved, then lose green as you age further
-        tft.setCursor(80, (lineno)*disp_line_height_pix+disp_vshift_pix); // +disp_line_height_pix/2
-        tft.print(disp_values[lineno]);
-        disp_age_quanta[lineno] = age_us;
-    } // Else don't draw anything, because we already did.  Logic is 100s of times cheaper than screen drawing.
+    else if (modeflag == 1 && (strcmp(disp_values[lineno], modecard[runmode]) || disp_redraw_all)) {  // Modeflag 1 is for drawing the runmode in the upper left corner
+        draw_string(11+6, lineno*disp_line_height_pix+disp_vshift_pix, modecard[runmode], disp_values[lineno], colorcard[runmode]); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+        strcpy(disp_values[lineno], modecard[runmode]);
+    }
+    else if (modeflag == 2 && dataset_page != dataset_page_last) {  // Modeflag 2 is used for displaying which set of tuning variables is being displayed. Text next to the runmode
+        draw_string(122, disp_vshift_pix, pagecard[dataset_page], pagecard[dataset_page_last], CYN); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    }
+    else if (modeflag == 3) {  // Modeflag 3 is for highlighting a variable name when its value may be changed
+        if ( (tuning_ctrl == SELECT && selected_value != selected_value_last) || // IF the selected tuning variable has changed, OR
+             (tuning_ctrl != SELECT && tuning_ctrl_last == SELECT) ) {  // We just stopped selecting values altogether
+            tft.setCursor(12, 12+(selected_value_last+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
+            tft.setTextColor(GRY2);
+            tft.print(dataset_page_names[dataset_page][selected_value_last]);  // Grey out the old highlighted variable
+        }
+        if (tuning_ctrl == EDIT && tuning_ctrl_last != EDIT) {  // If we just started editing the variable
+            tft.setCursor(12, 12+(selected_value+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
+            tft.setTextColor(GRN);
+            tft.print(dataset_page_names[dataset_page][selected_value]);  // Highlight selected value in blue
+        }
+        else if ( tuning_ctrl == SELECT && (selected_value != selected_value_last || tuning_ctrl_last != SELECT) ) { // If just entered selecting mode or selected value changed
+            tft.setCursor(12, 12+(selected_value+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
+            tft.setTextColor(YEL);
+            tft.print(dataset_page_names[dataset_page][selected_value]);  // Highlight selected value in white
+        }
+    }
 }
 
 void draw_bool(bool value, int32_t row) {  // Draws values of boolean data
@@ -958,7 +958,7 @@ void adj_val(int32_t *variable, int32_t modify, int32_t low_limit, int32_t high_
 }
 
 void setup() {
-    pinMode(led_pin, OUTPUT);
+    pinMode(heartbeat_led_pin, OUTPUT);
     pinMode(encoder_a_pin, INPUT_PULLUP);
     pinMode(encoder_b_pin, INPUT_PULLUP);
     pinMode(brake_pwm_pin, OUTPUT);
@@ -966,7 +966,7 @@ void setup() {
     pinMode(tft_dc_pin, OUTPUT);
     pinMode(encoder_sw_pin, INPUT_PULLUP);
     pinMode(gas_pwm_pin, OUTPUT);
-    pinMode(ignition_pin, INPUT_PULLUP);
+    pinMode(ignition_pin, INPUT);
     pinMode(basicmodesw_pin, INPUT_PULLUP);
     pinMode(cruise_sw_pin, INPUT_PULLUP);
     pinMode(tach_pulse_pin, INPUT_PULLUP);
@@ -996,9 +996,6 @@ void setup() {
     digitalWrite(led_rx_pin, LOW);  // Light up
     digitalWrite(led_tx_pin, HIGH);  // Off
 #endif
-
-    // Set all outputs to known sensible values
-    digitalWrite(led_pin, HIGH);  // Light on
 
     analogReadResolution(adc_bits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
     Serial.begin(115200);  // Open serial port
@@ -1108,9 +1105,10 @@ void loop() {
     pot_filt_adc = ema(pot_adc, pot_filt_adc, pot_ema_alpha);
 
     if (heartbeatTimer.expired()) {  // Heartbeat LED
-        led_state = !led_state;
-        digitalWrite(led_pin, led_state);
-        heartbeatTimer.reset();
+        heartbeat_pulse = !heartbeat_pulse;
+        if (++heartbeat_state >= (int32_t)arraysize(heartbeat_ekg)) heartbeat_state -= arraysize(heartbeat_ekg);
+        heartbeatTimer.set(heartbeat_ekg[heartbeat_state]);
+        digitalWrite(heartbeat_led_pin, heartbeat_pulse);
     }
     uint8_t neopixel_wheel_counter = 0;
     if (neopixelTimer.expired()) {
@@ -1205,14 +1203,16 @@ void loop() {
    
     // 2) Read joystick then determine new steering setpoint
     //
+    digitalWrite(led_tx_pin, !touch_now_touched);
+    digitalWrite(led_rx_pin, (sim_edit_delta > 0) ? 0 : 1);
+    // digitalWrite(led_rx_pin, !hotrc_ch3_sw); 
+    
     if (!ui_simulating || ui_sim_halfass) {  // If not fully simulating 
         if (ctrl == HOTRC) {
             ctrl_pos_adc[VERT][RAW] = map(hotrc_vert_pulse_us, 2003, 1009, ctrl_lims_adc[ctrl][VERT][MAX], ctrl_lims_adc[ctrl][VERT][MIN]);
             ctrl_pos_adc[HORZ][RAW] = map(hotrc_horz_pulse_us, 2003, 1009, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
             ctrl_pos_adc[VERT][RAW] = constrain(ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-            ctrl_pos_adc[HORZ][RAW] = constrain(ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
-            digitalWrite(led_rx_pin, !hotrc_ch3_sw);
-            digitalWrite(led_tx_pin, !hotrc_ch4_sw);
+            ctrl_pos_adc[HORZ][RAW] = constrain(ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);   
         }
         else {
             ctrl_pos_adc[VERT][RAW] = analogRead(joy_vert_pin);  // Read joy vertical
@@ -1763,12 +1763,12 @@ void loop() {
         draw_dynamic(3, pressure_filt_adc, pressure_min_adc, pressure_max_adc, 0);
         draw_dynamic(4, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX], 0);
         draw_dynamic(5, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX], 0);
-        draw_dynamic(6, steer_pulse_out_us, steer_pulse_left_us, steer_pulse_right_us, 0);
-        draw_dynamic(7, carspeed_target_mmph, 0, carspeed_govern_mmph, 0);
+        draw_dynamic(6, carspeed_target_mmph, 0, carspeed_govern_mmph, 0);
+        draw_dynamic(7, pressure_target_adc, pressure_min_adc, pressure_max_adc, 0);
         draw_dynamic(8, engine_target_rpm, 0, engine_redline_rpm, 0);
-        draw_dynamic(9, gas_pulse_out_us, gas_pulse_idle_us, gas_pulse_redline_us, 0);
-        draw_dynamic(10, pressure_target_adc, pressure_min_adc, pressure_max_adc, 0);
-        draw_dynamic(11, brake_pulse_out_us, brake_pulse_extend_us, brake_pulse_retract_us, 0);
+        draw_dynamic(9, brake_pulse_out_us, brake_pulse_extend_us, brake_pulse_retract_us, 0);
+        draw_dynamic(10, gas_pulse_out_us, gas_pulse_idle_us, gas_pulse_redline_us, 0);
+        draw_dynamic(11, steer_pulse_out_us, steer_pulse_left_us, steer_pulse_right_us, 0);
         if (dataset_page == LOCK) {
             draw_dynamic(12, battery_filt_mv, 0, battery_max_mv, 0);
             draw_dynamic(13, brake_pos_filt_adc, brake_pos_retracted_adc, brake_pos_extended_adc, 0);
