@@ -212,23 +212,16 @@ using namespace std;
 #define disp_vshift_pix 2  // Unknown.  Note: At smallest text size, characters are 5x7 pix + pad on rt and bot for 6x8 pix.
 #define disp_font_height 8
 #define disp_font_width 6
-#define disp_bargraph_width 44
-// #define touch_rows 4  // When touchscreen gridded as buttons, how many rows of buttons. Deprecate this
-// #define touch_cols 5  // When touchscreen gridded as buttons, how many columns of buttons. Deprecate this
-// #define touch_cell_width_pix 64  // When touchscreen gridded as buttons, width of each button. Deprecate this
-// #define touch_cell_height_pix 60  // When touchscreen gridded as buttons, height of each button. Deprecate this
+#define disp_bargraph_width 40
 #define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
-// #define touch_cells_v 5
-// #define touch_cells_h 6
 
 #define adc_bits 12
 #define adc_range_adc 4095    // = 2^12-1
 #define adc_midscale_adc 2047
 #define serial_debugging false
 #define print_timestamps false  // Makes code write out timestamps throughout loop to serial port
-// #define dataset_page_count 7  // How many dataset pages
 
 // uint32_t temp = micros();
 // if (temp >= 0x80000000) temp -= 0x80000000;
@@ -318,24 +311,22 @@ char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "mmph", "mmph", "mmph", "mmph", "mmph", "*1k ", "mHz ", "ns  " },  // GPID
     { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "*1k ", "mHz ", "ns  " },  // CPID
 };
+// 
 char simgrid[4][3][5] = {
     { "prs+", "rpm+", "car+" },
     { "prs-", "rpm-", "car-" },
-    { "    ", " /\\ ", "    " },
-    { " <  ", " /\\ ", "  > " },
+    { "    ", " \x1e  ", "    " },
+    { " \x11  ", " \x1f  ", "  \x10 " },
 };
 char modecard[6][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise" };
 char side_menu_buttons[5][4] = { "PG ", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
-char top_menu_buttons[6][6] = { "     ", "     ", "     ", "BASIC", "IGN  ", "CRUIS" };  // Pad shorter names with spaces on the right
-// char simbools[3][6] = { "Basic", "Ign", "Cruis" };
-// char sim_menu_button[4] = "SIM";
+char top_menu_buttons[3][6] = { "BASIC", " IGN ", "CRUIS" };  // Pad shorter names with spaces to center
 
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, CYN };
 
 enum runmodes {BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE};
 int32_t runmode = SHUTDOWN;
 int32_t oldmode = runmode;  // So we can tell when the mode has just changed
-// int32_t runmode = SHUTDOWN;  // Variable to store what mode we're in
 
 enum tuning_ctrl_states {OFF, SELECT, EDIT};
 int32_t tuning_ctrl = OFF;
@@ -361,7 +352,6 @@ double brake_pid_kp = 0.8;  // PID proportional coefficient (brake). How hard to
 double brake_pid_ki_mhz = 0.0;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
 double brake_pid_kd_us = 0.0;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
 int32_t brake_pid_ctrl_dir = REV;  // Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
-// double brake_pid_pos_kx = 0.0;  // Extra brake actuator position influence. This kicks in when the actuator is below the pressure zeropoint, to bring it up  (unitless range 0-1)
 double cruise_pid_kp = 0.9;  // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
 double cruise_pid_ki_mhz = 0.0;  // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
 double cruise_pid_kd_us = 0.0;  // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
@@ -415,8 +405,6 @@ int32_t carspeed_redline_mmph = 15000;  // What is our steady state speed at red
 int32_t carspeed_max_mmph = 25000;  // What is max speed car can ever go
 int32_t cruise_sw_timeout_us = 500000;  // how long do you have to hold down the cruise button to start cruise mode (in us)
 int32_t gas_governor_percent = 95;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
-// int32_t gas_pulse_idle_us = 1761;  // Gas pulsewidth corresponding to fully closed throttle (in us)
-// int32_t gas_pulse_redline_us = 1544;  // Gas pulsewidth corresponding to full open throttle (in us)
 int32_t gas_pulse_ccw_max_us = 2000;  // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
 int32_t gas_pulse_cw_max_us = 1000;  // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
 int32_t gas_pulse_redline_us = 1400;  // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
@@ -505,7 +493,6 @@ bool cruise_adjusting = false;
 int32_t carspeed_delta_mmph = 0;  // 
 int32_t carspeed_target_mmph = 0.0;  // Stores new setpoint to give to the pid loop (cruise) in milli-mph
 int32_t gesture_progress = 0;  // How many steps of the Cruise Mode gesture have you completed successfully (from Fly Mode)
-// bool neutral = true;
 bool ignition = LOW;
 bool disp_redraw_all = true;
 bool basicmodesw = LOW;
@@ -515,9 +502,6 @@ bool shutdown_complete = true;  // Shutdown mode has completed its work and can 
 bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
 bool park_the_motors = false;  // Indicates we should release the brake & gas so the pedals can be used manually without interference
 Timer motorParkTimer;
-// bool sim_out = LOW;
-// bool ui_tuning = false;
-// bool ui_tuning_last = false;
 bool ui_simulating = false;
 bool ui_simulating_last = false;
 bool ui_sim_halfass = true;  // Don't sim the joystick or encoder or tach
@@ -525,6 +509,10 @@ bool ui_sim_joy = false;
 bool ui_sim_press = false;
 bool ui_sim_tach = false;
 bool ui_sim_spd = false;
+bool ui_sim_brkpos = false;
+bool ui_sim_basicsw = false;
+bool ui_sim_ign = false;
+bool ui_sim_cruisesw = false;
 char disp_draw_buffer[8];  // Used to convert integers to ascii for purposes of displaying on screen
 char disp_draw_buffer2[8];  // Used to convert integers to ascii for purposes of displaying on screen
 char disp_values[disp_lines][8];
@@ -583,10 +571,6 @@ volatile int32_t hotrc_horz_pulse_us = 1500;
 volatile int32_t hotrc_vert_pulse_us = 1500;
 volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
 
-// volatile int32_t tach_timer_us = mycros();  // Don't use Timer class for ISRs
-// volatile int32_t speedo_timer_us = mycros();  // Don't use Timer class for ISRs
-// volatile int32_t tach_timer_us = mycros();  // Don't use Timer class for ISRs
-// volatile int32_t hotrc_pulse_timer_us = mycros();  // Don't use Timer class for ISRs
 Timer encoderSpinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
 Timer tachPulseTimer;  // OK to not be volatile?
 Timer speedoPulseTimer;  // OK to not be volatile?
@@ -769,6 +753,22 @@ int32_t ema(int32_t raw_value, int32_t filt_value, double alpha) {
 
 // Functions to write to the screen efficiently
 //
+void draw_mmph(int32_t x, int32_t y, int32_t color) {
+    tft.setCursor(x, y);
+    tft.setTextColor(color);
+    tft.print("m");
+    tft.setCursor(x+4, y);
+    tft.print("m");
+    tft.drawPixel(x+3, y+2, color);
+    tft.drawPixel(x+11, y+2, color);
+    tft.drawPixel(x+11, y+6, color);
+    tft.drawPixel(x+15, y+2, color);
+    tft.drawFastVLine(x+10, y+2, 6, color);
+    tft.drawFastVLine(x+12, y+3, 3, color);
+    tft.drawFastVLine(x+14, y, 7, color);
+    tft.drawFastVLine(x+16, y+3, 4, color);
+}
+
 void draw_bargraph_base(int32_t corner_x, int32_t corner_y, int32_t width) {  // draws a horizontal bargraph scale
     tft.drawFastHLine(corner_x+1, corner_y, width-2, GRY1);
     for (int32_t offset=0; offset<=2; offset++) tft.drawFastVLine((corner_x+1)+offset*(width/2 - 1), corner_y-1, 3, WHT);
@@ -779,12 +779,14 @@ void draw_bargraph_needle(int32_t pos_x, int32_t pos_y, int32_t color) {  // dra
     tft.drawFastVLine(pos_x+1, pos_y, 2, color);
 }
 void draw_string(int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
-    tft.setCursor(x, y);
-    tft.setTextColor(bgcolor);
-    tft.print(oldtext);  // Erase the old content
-    tft.setCursor(x, y);
-    tft.setTextColor(color);
-    tft.print(text);  // Erase the old content
+        tft.setCursor(x, y);
+        tft.setTextColor(bgcolor);
+        if (strcmp(oldtext, "mmph")) tft.print(oldtext);  // Erase the old content
+        else draw_mmph(x, y, bgcolor);
+        tft.setCursor(x, y);
+        tft.setTextColor(color);
+        if (strcmp(text, "mmph")) tft.print(text);  // Erase the old content
+        else draw_mmph(x, y, color);
 }
 // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
 void draw_fixed(bool redraw_tuning_corner) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
@@ -792,34 +794,17 @@ void draw_fixed(bool redraw_tuning_corner) {  // set redraw_tuning_corner to tru
     tft.setTextSize(1);    
     if (redraw_tuning_corner) tft.fillRect(10, 145,167, 95, BLK); // tft.fillRect(0,145,167,95,BLK);  // Erase old dataset page area
     else {
-        // tft.fillScreen(BLK);  // Black out the whole screen
         for (int32_t lineno=0; lineno < arraysize(telemetry); lineno++)  {  // Step thru lines of fixed telemetry data
             draw_string(12, (lineno+1)*disp_line_height_pix+disp_vshift_pix, telemetry[lineno], "", GRY2, BLK);
-            // tft.setCursor(12, (lineno+1)*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
-            // tft.println(telemetry[lineno]);  // Draw names of fixed telemetry variables
-            draw_string(12, (lineno+1)*disp_line_height_pix+disp_vshift_pix, units[lineno], "", GRY2, BLK);
-            // tft.setCursor(112, (lineno+1)*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
-            // tft.println(units[lineno]);  // Draw units for fixed telemetry variables
-            draw_bargraph_base(139, (lineno+1)*disp_line_height_pix+disp_vshift_pix+7, disp_bargraph_width);
+            draw_string(104, (lineno+1)*disp_line_height_pix+disp_vshift_pix, units[lineno], "", GRY2, BLK);
+            draw_bargraph_base(124, (lineno+1)*disp_line_height_pix+disp_vshift_pix+7, disp_bargraph_width);
         }
     }
     for (int32_t lineno=0; lineno < arraysize(dataset_page_names[dataset_page]); lineno++)  {  // Step thru lines of dataset page data
         draw_string(12, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][lineno], dataset_page_names[dataset_page_last][lineno], GRY2, BLK);
-        // tft.setCursor(12, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
-        // tft.println(dataset_page_names[dataset_page][lineno]);  // Draw names of dataset page variables
-        draw_string(112, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, tuneunits[dataset_page][lineno], tuneunits[dataset_page_last][lineno], GRY2, BLK);
-        // tft.setCursor(112, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
-        // tft.println(tuneunits[dataset_page][lineno]);  // Draw units for dataset page variables
-        draw_bargraph_base(139, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix+7, disp_bargraph_width);
-        //if (dataset_page < 4) tft.drawRect(touch_cell_width_pix*2+4, lineno*disp_line_height_pix+disp_vshift_pix, 30, 7, GRY1);  // Draw graph boxes
+        draw_string(104, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, tuneunits[dataset_page][lineno], tuneunits[dataset_page_last][lineno], GRY2, BLK);
+        draw_bargraph_base(124, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix+7, disp_bargraph_width);
     }
-    // for (int32_t row = 0; row < touch_rows; row++) {  // Step thru all touchgrid rows
-    //     for (int32_t col = 1; col < 2; col++) {  //  Just the 2nd touchgrid col 
-    //         draw_string(touch_cell_width_pix + (touch_cell_width_pix>>1) - 3, row*touch_cell_height_pix + (touch_cell_height_pix >> 1) - disp_line_height_pix, simgrid[row][col], "", GRY2, BLK);
-    //         // tft.setCursor(touch_cell_width_pix + (touch_cell_width_pix>>1) - 3, row*touch_cell_height_pix + (touch_cell_height_pix >> 1) - disp_line_height_pix);
-    //         // tft.println(simgrid[row][col]);  // Draw names of boolean variables
-    //     }
-    // }
 }
 // draw_dynamic  normally draws a given value on a given line (0-19) to the screen if it has changed since last draw.
 void draw_dynamic(int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int32_t modeflag) {
@@ -828,16 +813,16 @@ void draw_dynamic(int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, 
         memset(disp_draw_buffer,0,strlen(disp_draw_buffer));
         itoa(value, disp_draw_buffer, 10);  // Modeflag 0 is for writing numeric values for variables in the active data column at a given line
         if (strcmp(disp_values[lineno], disp_draw_buffer) || disp_redraw_all)  {  // If value differs, Erase old value and write new
-            draw_string(80, lineno*disp_line_height_pix+disp_vshift_pix, disp_draw_buffer, disp_values[lineno], GRN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+            draw_string(66, lineno*disp_line_height_pix+disp_vshift_pix, disp_draw_buffer, disp_values[lineno], GRN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
             strcpy(disp_values[lineno], disp_draw_buffer);
             dispAgeTimer[lineno].reset();
             disp_age_quanta[lineno] = 0;
             if (lowlim != -1) {  // draw slider graph //  && value - lowlim >= 0
                 int32_t needle_y = lineno*disp_line_height_pix+disp_vshift_pix-1;
-                draw_bargraph_needle(145 + constrain(disp_needles[lineno], 1, disp_bargraph_width-1), needle_y, BLK);
+                draw_bargraph_needle(124 + constrain(disp_needles[lineno], 1, disp_bargraph_width-1), needle_y, BLK);
                 disp_needles[lineno] = map(value, lowlim, hilim, 1, disp_bargraph_width-1);
                 int32_t ncolor = (disp_needles[lineno] > disp_bargraph_width-1 || disp_needles[lineno] < 1) ? RED : GRN;
-                draw_bargraph_needle(145 + constrain(disp_needles[lineno], 1, disp_bargraph_width-1), needle_y, ncolor);
+                draw_bargraph_needle(124 + constrain(disp_needles[lineno], 1, disp_bargraph_width-1), needle_y, ncolor);
             }
         }
         else if (age_us > disp_age_quanta[lineno] && age_us < 11)  {  // As readings age, redraw in new color
@@ -846,7 +831,7 @@ void draw_dynamic(int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, 
             else color = 0xffe0 - (age_us-8)*0x100;  // Until yellow is achieved, then lose green as you age further
             // if (age_us < 8) tft.setTextColor(0x1fe0 + age_us*0x2000);  // Base of green with red added as you age
             // else tft.setTextColor(0xffe0 - (age_us-8)*0x100);  // Until yellow is achieved, then lose green as you age further
-            draw_string(80, (lineno)*disp_line_height_pix+disp_vshift_pix, disp_values[lineno], "", color, BLK);
+            draw_string(66, (lineno)*disp_line_height_pix+disp_vshift_pix, disp_values[lineno], "", color, BLK);
             // tft.setCursor(80, (lineno)*disp_line_height_pix+disp_vshift_pix); // +disp_line_height_pix/2
             // tft.print(disp_values[lineno]);
             disp_age_quanta[lineno] = age_us;
@@ -860,59 +845,36 @@ void draw_dynamic(int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, 
         draw_string(122, disp_vshift_pix, pagecard[dataset_page], pagecard[dataset_page_last], CYN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
     }
     else if (modeflag == 3) {  // Modeflag 3 is for highlighting a variable name when its value may be changed
-        if ( (tuning_ctrl == SELECT && selected_value != selected_value_last) || // IF the selected tuning variable has changed, OR
-             (tuning_ctrl != SELECT && tuning_ctrl_last == SELECT) ) {  // We just stopped selecting values altogether
-            tft.setCursor(12, 12+(selected_value_last+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
-            tft.setTextColor(GRY2);
-            tft.print(dataset_page_names[dataset_page][selected_value_last]);  // Grey out the old highlighted variable
+        int32_t color = GRY2;
+        if (tuning_ctrl == SELECT) color = YEL;
+        else if (tuning_ctrl == EDIT) color = GRN;
+        if (tuning_ctrl == SELECT && selected_value != selected_value_last) {
+            draw_string(12, 12+(selected_value+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_value], "", color, BLK);
+            draw_string(12, 12+(selected_value_last+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_value_last], "", GRY2, BLK);
         }
-        if (tuning_ctrl == EDIT && tuning_ctrl_last != EDIT) {  // If we just started editing the variable
-            tft.setCursor(12, 12+(selected_value+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
-            tft.setTextColor(GRN);
-            tft.print(dataset_page_names[dataset_page][selected_value]);  // Highlight selected value in blue
+        else if (tuning_ctrl != tuning_ctrl_last) {
+            draw_string(12, 12+(selected_value+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_value], "", color, BLK);
         }
-        else if ( tuning_ctrl == SELECT && (selected_value != selected_value_last || tuning_ctrl_last != SELECT) ) { // If just entered selecting mode or selected value changed
-            tft.setCursor(12, 12+(selected_value+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix);  // +disp_line_height_pix/2
-            tft.setTextColor(YEL);
-            tft.print(dataset_page_names[dataset_page][selected_value]);  // Highlight selected value in white
-        }
+
     }
 }
-
 void draw_bool(bool value, int32_t col) {  // Draws values of boolean data
     if ((disp_bool_values[col] != value) || disp_redraw_all) {  // If value differs, Erase old value and write new
-        draw_string(touch_margin_h_pix + touch_cell_h_pix*col + (touch_cell_h_pix<<1) - arraysize(top_menu_buttons[col])*(disp_font_width<<1), 0, top_menu_buttons[col], "", (value) ? CYN : DCYN, DGRY);
+        draw_string(touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) - arraysize(top_menu_buttons[col]-1)*(disp_font_width>>1) - 2, 0, top_menu_buttons[col], "", (value) ? CYN : DCYN, DGRY);
         disp_bool_values[col] = value;
     }
 }
-        // draw_string(cntr_x-(arraysize(simgrid[row][col])*(disp_font_width<<1), cntr_y-(disp_font_height<<1), simbools[col], "", LYEL, DGRY);
-        // memset(disp_draw_buffer,0,strlen(disp_draw_buffer));
-        // memset(disp_draw_buffer2,0,strlen(disp_draw_buffer2));
-        // itoa(value, disp_draw_buffer, 10);
-        // itoa(!value, disp_draw_buffer2, 10);
-        // draw_string(touch_cell_width_pix + (touch_cell_width_pix>>1) + 15, col*touch_cell_height_pix + (touch_cell_height_pix >> 1) - disp_line_height_pix, disp_draw_buffer, disp_draw_buffer2, CYN, BLK);
-        // draw_string(cntr_x-(arraysize(simgrid[row][col])*(disp_font_width<<1), cntr_y-(disp_font_height<<1), simbools[col], "", LYEL, DGRY);
-        // tft.setCursor(touch_cell_width_pix + (touch_cell_width_pix>>1) + 15, row*touch_cell_height_pix + (touch_cell_height_pix >> 1) - disp_line_height_pix);
-        // tft.setTextColor(BLK);
-        // tft.println(!value);
-        // tft.setCursor(touch_cell_width_pix + (touch_cell_width_pix>>1) + 15, row*touch_cell_height_pix + (touch_cell_height_pix >> 1) - disp_line_height_pix);
-        // tft.setTextColor(CYN);
-        // tft.println(value);
 void draw_simbuttons(bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
     tft.setTextColor(LYEL);
     for (int32_t row = 0; row < arraysize(simgrid); row++) {
         for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
-            int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix<<1);
-            int32_t cntr_y = touch_cell_h_pix*(row+1) + (touch_cell_h_pix<<1);
-            // int32_t cntr_x = (disp_width_pix - 1) - 44 * (2 - col) - 22;
-            // int32_t cntr_y = (row+1) * 48 + 24;
+            int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
+            int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
             if ( strcmp( simgrid[row][col], "    " ) ) {
                 tft.fillCircle(cntr_x, cntr_y, 19, create ? DGRY : BLK);
                 if (create) {
                     tft.drawCircle(cntr_x, cntr_y, 19, LYEL);
-                    draw_string(cntr_x-arraysize(simgrid[row][col])*(disp_font_width<<1), cntr_y-(disp_font_height<<1), simgrid[row][col], "", LYEL, DGRY);
-                    // tft.setCursor(cntr_x-12, cntr_y-4);
-                    // tft.println(simgrid[row][col+2]);
+                    draw_string(cntr_x-(arraysize(simgrid[row][col])-1)*(disp_font_width>>1), cntr_y-(disp_font_height>>1), simgrid[row][col], "", LYEL, DGRY);
                 }
             }
         }     
@@ -934,22 +896,12 @@ void draw_touchgrid(bool replace_names) {  // draws edge buttons with names in '
             tft.println( side_menu_buttons[row][letter] );  // Writes each letter such that the whole name is centered vertically on the button
         }
     }
-    for (int32_t col = 0; col <= 5; col++) {  // Step thru all cols to draw buttons across the top edge
-        if (!strcmp(top_menu_buttons[col], "     ")) {  // Don't draw button unless name contains non-space characters 
-            tft.fillRoundRect(touch_margin_h_pix + touch_cell_h_pix*col + 3, -10, touch_cell_h_pix-6, 20, 8, DGRY);
-            tft.drawRoundRect(touch_margin_h_pix + touch_cell_h_pix*col + 3, -10, touch_cell_h_pix-6, 20, 8, LYEL);  // tft.width()-9, 3, 18, (tft.height()/5)-6, 8, LYEL);
-            // namelen = 0;
-            // for (uint32_t x = 0 ; x < arraysize(top_menu_buttons[col]) ; x++ ) {
-            //     if (top_menu_buttons[x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
-            // }
-            draw_bool(top_menu_buttons[col], col);
-        }
+    for (int32_t btn = 0; btn < 3; btn++) {  // Step thru all cols to draw buttons across the top edge
+        tft.fillRoundRect(touch_margin_h_pix + touch_cell_h_pix*(btn+3) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
+        tft.drawRoundRect(touch_margin_h_pix + touch_cell_h_pix*(btn+3) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // tft.width()-9, 3, 18, (tft.height()/5)-6, 8, LYEL);
+        // draw_bool(top_menu_buttons[btn], btn+3);
     }
 }
-// for (int32_t letter = 0; letter < namelen; letter++) {  // Going letter by letter thru each button name so we can write vertically 
-//     tft.setCursor(touch_margin_h_pix + touch_cell_h_pix*col + (touch_cell_h_pix<<1) + letter*disp_font_width - namelen*(disp_font_width<<1), 0);
-//     tft.println( top_menu_buttons[col][letter] );  // Writes each letter such that the whole name is centered vertically on the button
-// }
 void sd_init() {
     if (!sd.begin(usd_cs_pin, SD_SCK_MHZ(50))) {  // Initialize at highest supported speed that is not over 50 mhz. Go lower if errors.
         sd.initErrorHalt();
@@ -1184,8 +1136,7 @@ void loop() {
     
     // Read sensors
     if (ui_simulating) {
-        if (!ui_sim_halfass) brake_pos_filt_adc = (brake_pos_retracted_adc + brake_pos_zeropoint_adc)/2;  // To keep brake position in legal range during simulation
-    }
+        if (ui_sim_brkpos) brake_pos_filt_adc = (brake_pos_retracted_adc + brake_pos_zeropoint_adc)/2;  // To keep brake position in legal range during simulation
     else {    // When not simulating, read real sensors and filter them.  Just those that would get taken over by the simulator go in here.
         ignition = digitalRead(ignition_pin);
         basicmodesw = !digitalRead(basicmodesw_pin);   // 1-value because electrical signal is active low
@@ -1594,23 +1545,12 @@ void loop() {
         if (touchpanel.touched()) { // Take actions upon being touched
             touch_accel = 1 << touch_accel_exponent;  // determine value editing rate
             TS_Point touchpoint = touchpanel.getPoint();  // Retreive a point
-            touch_x = tft.width() - touchpoint.y;  // Rotate touch coordinates to match tft coordinates
-            touch_y = touchpoint.x;  // Rotate touch coordinates to match tft coordinates
-            touch_row = touch_y/(tft.height()/touch_cell_v_pix);
-            touch_col = (touch_x-touch_margin_h_pix)/(tft.width()/touch_cell_h_pix);
-            // touchpoint.x = map(touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
-            // touchpoint.y = map(touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);  // Rotate touch coordinates to match tft coordinates
-            // touch_y = tft.height()-touchpoint.x; // touch point y coordinate in pixels, from origin at top left corner
-            // touch_x = touchpoint.y; // touch point x coordinate in pixels, from origin at top left corner
-            // if (touch_x < 187) {  // The left half of the screen is 2 cols, each 4 rows
-            //     touch_col = (touch_x > 50);  // col 0 is for side buttons, col 1 is for toggling bools (basicsw, ign, cruise) in sim,
-            //     touch_row = (int32_t)(4 * (double)touch_y / (double)disp_height_pix); // which of our 4 rows of touch buttons was touched?
-            // }
-            // else {  // The right half of the screen has 3 cols, 5 rows, for simulator
-            //     touch_col = 2 + (int32_t)(((double)touch_x - 187) / 44);
-            //     touch_row = (int32_t)(5 * (double)touch_y / (double)disp_height_pix ); // which of our 5 rows?
-            // }
-            
+            touchpoint.x = map(touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
+            touchpoint.y = map(touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);  // Rotate touch coordinates to match tft coordinates
+            touch_y = disp_height_pix-touchpoint.x; // touch point y coordinate in pixels, from origin at top left corner
+            touch_x = touchpoint.y; // touch point x coordinate in pixels, from origin at top left corner
+            touch_row = touch_y/touch_cell_v_pix;
+            touch_col = (touch_x-touch_margin_h_pix)/touch_cell_h_pix;
             // Take appropriate touchscreen actions depending how we're being touched
             if (touch_col == 0 && touch_row == 0 && !touch_now_touched) {
                 dataset_page += 1; // Displayed dataset page can also be changed outside of simulator
@@ -1631,8 +1571,6 @@ void loop() {
                 else if (tuning_ctrl == SELECT) {
                     if (!touch_now_touched) {
                         if (++selected_value >= arraysize(dataset_page_names[dataset_page])) selected_value -= arraysize(dataset_page_names[dataset_page]);
-                        // if (dataset_page >= 4) selected_value = constrain (selected_value, 5, 7);  // Skip unchangeable values for all PID modes
-                        // else if (dataset_page == JOY) selected_value = constrain (selected_value, 2, 7);  // Skip unchangeable values for joy mode
                     }
                     else if (touch_longpress_valid && touchHoldTimer.expired()) {
                         tuning_ctrl = OFF;
@@ -1654,16 +1592,16 @@ void loop() {
                     touch_longpress_valid = false;
                 }
             }
-            else if (touch_col == 3 && touch_row == 0 && ui_simulating && !touch_now_touched) basicmodesw = !basicmodesw;  // Pressed the basic mode toggle button. Toggle value, only once per touch
+            else if (touch_col == 3 && touch_row == 0 && ui_simulating && ui_sim_basicsw && !touch_now_touched) basicmodesw = !basicmodesw;  // Pressed the basic mode toggle button. Toggle value, only once per touch
             else if (touch_col == 3 && touch_row == 1 && ui_simulating && ui_sim_press) adj_val(&pressure_filt_adc, touch_accel, pressure_min_adc, pressure_max_adc);  // (+= 25) Pressed the increase brake pressure button
             else if (touch_col == 3 && touch_row == 2 && ui_simulating && ui_sim_press) adj_val(&pressure_filt_adc, -touch_accel, pressure_min_adc, pressure_max_adc);  // (-= 25) Pressed the decrease brake pressure button
             else if (touch_col == 3 && touch_row == 4 && ui_simulating && ui_sim_joy) adj_val(&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (-= 25) Pressed the joystick left button
-            else if (touch_col == 4 && touch_row == 0 && ui_simulating && !touch_now_touched) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
+            else if (touch_col == 4 && touch_row == 0 && ui_simulating && ui_sim_ign && !touch_now_touched) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
             else if (touch_col == 4 && touch_row == 1 && ui_simulating && ui_sim_tach) adj_val(&engine_filt_rpm, touch_accel, 0, engine_redline_rpm);  // (+= 25) Pressed the increase engine rpm button
             else if (touch_col == 4 && touch_row == 2 && ui_simulating && ui_sim_tach) adj_val(&engine_filt_rpm, -touch_accel, 0, engine_redline_rpm);  // (-= 25) Pressed the decrease engine rpm button
             else if (touch_col == 4 && touch_row == 3 && ui_simulating && ui_sim_joy) adj_val(&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (+= 25) Pressed the joystick up button
             else if (touch_col == 4 && touch_row == 4 && ui_simulating && ui_sim_joy) adj_val(&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (-= 25) Pressed the joystick down button
-            else if (touch_col == 5 && touch_row == 0 && ui_simulating) cruise_sw = true;  // Pressed the cruise mode button. This is a momentary control, not a toggle. Value changes back upon release
+            else if (touch_col == 5 && touch_row == 0 && ui_simulating && ui_sim_cruisesw) cruise_sw = true;  // Pressed the cruise mode button. This is a momentary control, not a toggle. Value changes back upon release
             else if (touch_col == 5 && touch_row == 1 && ui_simulating && ui_sim_spd) adj_val(&carspeed_filt_mmph, touch_accel, 0, carspeed_redline_mmph);  // (+= 50) // Pressed the increase vehicle speed button
             else if (touch_col == 5 && touch_row == 2 && ui_simulating && ui_sim_spd) adj_val(&carspeed_filt_mmph, -touch_accel, 0, carspeed_redline_mmph);  // (-= 50) Pressed the decrease vehicle speed button
             else if (touch_col == 5 && touch_row == 4 && ui_simulating && ui_sim_joy) adj_val(&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (+= 25) Pressed the joystick right button                           
@@ -1890,9 +1828,9 @@ void loop() {
             draw_dynamic(18, (int32_t)(1000000000*cruise_pid_ki_mhz), -1, -1, 0);
             draw_dynamic(19, (int32_t)(1000*cruise_pid_kd_us), -1, -1, 0);    
         }
-        draw_bool(basicmodesw, 3);
-        draw_bool(ignition, 4);
-        draw_bool(cruise_sw, 5);
+        draw_bool(basicmodesw, 0);
+        draw_bool(ignition, 1);
+        draw_bool(cruise_sw, 2);
     }
     if (serial_debugging && print_timestamps) printf("%ld ms, %ld Hz\n", (int32_t)((double)(abs(mycros()-loopzero)/1000)), (int32_t)(1000000/((double)(abs(mycros()-loopzero)))));
     
