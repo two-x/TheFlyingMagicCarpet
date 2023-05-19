@@ -36,7 +36,6 @@ class Timer {
         }
 };
 
-
 // class Variable {  // A wrapper for all veriables of consequence in our code.
 //     public:
 //         Variable(int32_t arg1) { int32_t value = arg1; }
