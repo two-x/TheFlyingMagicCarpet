@@ -247,7 +247,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][12] = {
     {   " Battery:",  // LOCK
         " Brk Pos:",
         "Pot Filt:",
-        "     Pot:",
+        "SimBkPos:",
         " Sim Joy:",
         "Sim Pres:",
         "Sim Tach:",
@@ -301,12 +301,12 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][12] = {
         "  Ki (I):",
         "  Kd (D):", },
 };
-char units[disp_fixed_lines][5] = {"mmph", "rpm ", "adc ", "adc ", "adc ", "mmph", "adc ", "rpm ", "us  ", "us  ", "us  " };
+char units[disp_fixed_lines][5] = {"mmph", "rpm ", "adc ", "adc ", "adc ", "mmph", "adc ", "rpm ", "\xe5s  ", "\xe5s  ", "\xe5s  " };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
-    { "mV  ", "adc ", "adc ", "adc ", "    ", "    ", "Hz  ", "    " },  // LOCK
+    { "mV  ", "adc ", "adc ", "    ", "    ", "    ", "    ", "    " },  // LOCK
     { "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // JOY
     { "%   ", "rpm ", "rpm ", "mmph", "mmph", "    ", "    ", "adc " },  // CAR
-    { "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PWM
+    { "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  " },  // PWM
     { "adc ", "adc ", "adc ", "adc ", "adc ", "*1k ", "mHz ", "ns  " },  // BPID
     { "mmph", "mmph", "mmph", "mmph", "mmph", "*1k ", "mHz ", "ns  " },  // GPID
     { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "*1k ", "mHz ", "ns  " },  // CPID
@@ -506,13 +506,13 @@ bool ui_simulating = false;
 bool ui_simulating_last = false;
 bool ui_sim_halfass = true;  // Don't sim the joystick or encoder or tach
 bool ui_sim_joy = false;
-bool ui_sim_press = false;
-bool ui_sim_tach = false;
-bool ui_sim_spd = false;
+bool ui_sim_press = true;
+bool ui_sim_tach = true;
+bool ui_sim_spd = true;
 bool ui_sim_brkpos = false;
-bool ui_sim_basicsw = false;
-bool ui_sim_ign = false;
-bool ui_sim_cruisesw = false;
+bool ui_sim_basicsw = true;
+bool ui_sim_ign = true;
+bool ui_sim_cruisesw = true;
 char disp_draw_buffer[8];  // Used to convert integers to ascii for purposes of displaying on screen
 char disp_draw_buffer2[8];  // Used to convert integers to ascii for purposes of displaying on screen
 char disp_values[disp_lines][8];
@@ -1137,6 +1137,7 @@ void loop() {
     // Read sensors
     if (ui_simulating) {
         if (ui_sim_brkpos) brake_pos_filt_adc = (brake_pos_retracted_adc + brake_pos_zeropoint_adc)/2;  // To keep brake position in legal range during simulation
+    }
     else {    // When not simulating, read real sensors and filter them.  Just those that would get taken over by the simulator go in here.
         ignition = digitalRead(ignition_pin);
         basicmodesw = !digitalRead(basicmodesw_pin);   // 1-value because electrical signal is active low
@@ -1672,7 +1673,7 @@ void loop() {
     if (tuning_ctrl == SELECT) {
         if (dataset_page >= 4) selected_value = constrain (selected_value, 5, 7);  // Skip unchangeable values for all PID modes
         else if (dataset_page == JOY) selected_value = constrain (selected_value, 2, 7);  // Skip unchangeable values for joy mode
-        else if (dataset_page == LOCK) selected_value = constrain (selected_value, 4, 7);  // Skip unchangeable values for joy mode
+        else if (dataset_page == LOCK) selected_value = constrain (selected_value, 3, 7);  // Skip unchangeable values for joy mode
         else selected_value = constrain(selected_value, 0, arraysize(dataset_page_names[dataset_page])-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
         if (selected_value != selected_value_last) selected_val_dirty = true;
     }
@@ -1680,6 +1681,7 @@ void loop() {
 
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == LOCK)  switch (selected_value) {
+            case 3:  ui_sim_brkpos = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : ui_sim_brkpos;  break;
             case 4:  ui_sim_joy = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : ui_sim_joy;  break;
             case 5:  ui_sim_press = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : ui_sim_press;  break;
             case 6:  ui_sim_tach = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : ui_sim_tach;  break;
@@ -1759,7 +1761,7 @@ void loop() {
             draw_dynamic(12, battery_filt_mv, 0, battery_max_mv, 0);
             draw_dynamic(13, brake_pos_filt_adc, brake_pos_retracted_adc, brake_pos_extended_adc, 0);
             draw_dynamic(14, pot_filt_adc, pot_min_adc, pot_max_adc, 0);
-            draw_dynamic(15, pot_adc, pot_min_adc, pot_max_adc, 0);
+            draw_dynamic(15, ui_sim_brkpos, -1, -1, 0);
             draw_dynamic(16, ui_sim_joy, -1, -1, 0);
             draw_dynamic(17, ui_sim_press, -1, -1, 0);
             draw_dynamic(18, ui_sim_tach, -1, -1, 0);
