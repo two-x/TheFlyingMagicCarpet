@@ -310,8 +310,8 @@ char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "%   ", "rpm ", "rpm ", "mmph", "mmph", "    ", "    ", "adc " },  // CAR
     { "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  " },  // PWM
     { "adc ", "adc ", "adc ", "adc ", "adc ", "/1k ", "mHz ", "\xe5s  " },  // BPID
-    { "mmph", "mmph", "mmph", "mmph", "mmph", "/1k ", "nHz ", "\xe5s  " },  // GPID
-    { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "/1k ", "nHz ", "\xe5s  " },  // CPID
+    { "mmph", "mmph", "mmph", "mmph", "mmph", "/1k ", "mHz ", "\xe5s  " },  // GPID
+    { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "/1k ", "mHz ", "\xe5s  " },  // CPID
 };
 char simgrid[4][3][5] = {
     { "prs+", "rpm+", "car+" },
@@ -357,10 +357,10 @@ bool display_enabled = true;  // Should we run 325x slower in order to get bomba
 bool cruise_gesturing = false;  // Is cruise mode enabled by gesturing?  Otherwise by press of cruise button
 double brake_lpid_kp = 0.4;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
 double brake_lpid_ki_hz = 0.5;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-double brake_lpid_kd_ms = 1;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+double brake_lpid_kd_ms = 1.0;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
 int32_t brake_lpid_ctrl_dir = REV;  // Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
 double brake_spid_kp = 0.7;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-double brake_spid_ki_hz = 0.1;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+double brake_spid_ki_hz = 0.0;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
 double brake_spid_kd_ms = 0.5;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
 int32_t brake_spid_ctrl_dir = REV;  // Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
 double cruise_spid_kp = 0.9;  // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
@@ -1789,7 +1789,7 @@ void loop() {
             }
             else {
                 if (selected_value == 5) brake_spid_kp += 0.001*(double)sim_edit_delta;
-                if (selected_value == 6) brake_spid_ki_hz += 0.000000001*(double)sim_edit_delta;
+                if (selected_value == 6) brake_spid_ki_hz += 0.001*(double)sim_edit_delta;
                 if (selected_value == 7) brake_spid_kd_ms += 0.001*(double)sim_edit_delta;
             }
             if (brake_spid_kp < 0) brake_spid_kp = 0;
@@ -1798,7 +1798,7 @@ void loop() {
         }
         else if (dataset_page == GPID) {
             if (selected_value == 5) gas_spid_kp += 0.001*(double)sim_edit_delta;
-            if (selected_value == 6) gas_spid_ki_hz += 0.000000001*(double)sim_edit_delta;
+            if (selected_value == 6) gas_spid_ki_hz += 0.001*(double)sim_edit_delta;
             if (selected_value == 7) gas_spid_kd_ms += 0.001*(double)sim_edit_delta;
             if (brake_spid_kp < 0) brake_spid_kp = 0;
             if (brake_spid_ki_hz < 0) brake_spid_ki_hz = 0;
@@ -1806,7 +1806,7 @@ void loop() {
         }
         else if (dataset_page == CPID) {
             if (selected_value == 5) cruise_spid_kp += 0.001*(double)sim_edit_delta;
-            if (selected_value == 6) cruise_spid_ki_hz += 0.000000001*(double)sim_edit_delta;
+            if (selected_value == 6) cruise_spid_ki_hz += 0.001*(double)sim_edit_delta;
             if (selected_value == 7) cruise_spid_kd_ms += 0.001*(double)sim_edit_delta;
             if (brake_spid_kp < 0) brake_spid_kp = 0;
             if (brake_spid_ki_hz < 0) brake_spid_ki_hz = 0;
@@ -1817,11 +1817,11 @@ void loop() {
     if (brake_use_lpid != brake_use_lpid_last) {
         if (brake_use_lpid) {
             brakePID.SetMode(AUTOMATIC);
-            strcpy(tuneunits[4][6], "mHz ");
+            // strcpy(tuneunits[4][6], "mHz ");
         }
         else {
             brakePID.SetMode(MANUAL);
-            strcpy(tuneunits[4][6], "nHz ");
+            // strcpy(tuneunits[4][6], "nHz ");
         }
         if (dataset_page == 4) dataset_page_dirty = true;
     }
@@ -1910,8 +1910,8 @@ void loop() {
                 draw_dynamic(15, brake_spid_d_term_adc, -range, range, 0);
                 draw_dynamic(16, pressure_delta_adc, -range, range, 0);
                 draw_dynamic(17, (int32_t)(1000*brake_spid_kp), 0, 10000, 0);  // Real value is 1000 * smaller than displayed
-                draw_dynamic(18, (int32_t)(1000000000*brake_spid_ki_hz), 0, 10000, 0);
-                draw_dynamic(19, (int32_t)(1000*brake_spid_kd_ms), -10000, 0, 0);
+                draw_dynamic(18, (int32_t)(1000*brake_spid_ki_hz), 0, 10000, 0);
+                draw_dynamic(19, (int32_t)(1000*brake_spid_kd_ms), 0, 10000, 0);
             }
         }
         else if (dataset_page == GPID) {
@@ -1922,7 +1922,7 @@ void loop() {
             draw_dynamic(15, gas_spid_d_term_rpm, -range, range, 0);
             draw_dynamic(16, engine_delta_rpm, -range, range, 0);
             draw_dynamic(17, (int32_t)(1000*gas_spid_kp), 0, 10000, 0);
-            draw_dynamic(18, (int32_t)(1000000000*gas_spid_ki_hz), 0, 10000, 0);
+            draw_dynamic(18, (int32_t)(1000*gas_spid_ki_hz), 0, 10000, 0);
             draw_dynamic(19, (int32_t)(1000*gas_spid_kd_ms), 0, 10000, 0);
         }
         else if (dataset_page == CPID) {
@@ -1933,7 +1933,7 @@ void loop() {
             draw_dynamic(15, cruise_spid_d_term_mmph, -range, range, 0);
             draw_dynamic(16, carspeed_delta_mmph, -range, range, 0);
             draw_dynamic(17, (int32_t)(1000*cruise_spid_kp), 0, 10000, 0);
-            draw_dynamic(18, (int32_t)(1000000000*cruise_spid_ki_hz), 0, 10000, 0);
+            draw_dynamic(18, (int32_t)(1000*cruise_spid_ki_hz), 0, 10000, 0);
             draw_dynamic(19, (int32_t)(1000*cruise_spid_kd_ms), 0, 10000, 0);    
         }
         draw_bool(basicmodesw, 0);
