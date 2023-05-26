@@ -31,7 +31,7 @@ class SPID {  // Soren's home-made pid loop
         double kp_coeff = 0, ki_coeff = 0, kd_coeff = 0, kp, ki_hz, kd_s;
         int32_t actuator_direction;
         uint32_t sample_period_ms;
-        double target = 0, error = 0, error_last = 0, p_term = 0, i_term = 0, d_term = 0;
+        double target = 0, error = 0, error_last = 0, p_term = 0, i_term = 0, d_term = 0, open_loop = false;
         double near_target_error_thresh_percent = 0.005;  // Fraction of the input range where if the error has not exceeded in either dir since last zero crossing, it is considered zero (to prevent endless microadjustments) 
         double output = 0, input = 0, input_last = 0, near_target_error_thresh = 0, near_target_lock = (in_max-in_min)/2;
         double in_min = 0, in_max = 4095, out_min = 0, out_max = 4095, in_center = 2047, out_center = 2047;
@@ -53,7 +53,7 @@ class SPID {  // Soren's home-made pid loop
             error_last = error;
             error = target - input;
 
-            printf(" in=%-+9.4lf err=%-+9.4lf errlast=%-+9.4lf ntet=%-+9.4lf kp_co=%-+9.4lf ki_co=%-+9.4lf kd_co=%-+9.4lf kds=%-+9.4lf kd_disp=%ld", input, error, error_last, near_target_error_thresh, kp_coeff, ki_coeff, kd_coeff, kd_s, disp_kd_ms);
+            // printf(" in=%-+9.4lf err=%-+9.4lf errlast=%-+9.4lf ntet=%-+9.4lf kp_co=%-+9.4lf ki_co=%-+9.4lf kd_co=%-+9.4lf kds=%-+9.4lf kd_disp=%ld", input, error, error_last, near_target_error_thresh, kp_coeff, ki_coeff, kd_coeff, kd_s, disp_kd_ms);
 
             // Add a layer of history here, with an additional condition that output only holds if change in error has been small for X time period
             // Also add code to hold output (below in this function) if output_hold = true
@@ -77,7 +77,7 @@ class SPID {  // Soren's home-made pid loop
 
             output = out_center + delta;
 
-            printf(" ntl2=%-+9.4lf sat=%1d outh=%1d pterm=%-+9.4lf iterm=%-+9.4lf dterm=%-+9.4lf out=%-+9.4lf", near_target_lock, saturated, output_hold, p_term, i_term, d_term, output);
+            // printf(" ntl2=%-+9.4lf sat=%1d outh=%1d pterm=%-+9.4lf iterm=%-+9.4lf dterm=%-+9.4lf out=%-+9.4lf", near_target_lock, saturated, output_hold, p_term, i_term, d_term, output);
 
             if (output < out_min) {  // need to include a margin
                 output = out_min;
@@ -200,6 +200,9 @@ class SPID {  // Soren's home-made pid loop
         void set_proportionality(bool arg_prop_to) { 
             proportional_to = arg_prop_to;
         }
+        void set_open_loop(bool arg_open_loop) { 
+            open_loop = arg_open_loop;
+        }
         double get_kp_coeff() { return kp_coeff; }
         double get_ki_coeff() { return ki_coeff; }
         double get_kd_coeff() { return kd_coeff; }
@@ -210,6 +213,7 @@ class SPID {  // Soren's home-made pid loop
         double get_disp_ki_mhz() { return disp_ki_mhz; }
         double get_disp_kd_ms() { return disp_kd_ms; }
         bool get_out_center_mode() { return out_center_mode; }
+        bool get_open_loop() { return open_loop; }
         bool get_in_center_mode() { return in_center_mode; }
         bool get_proportionality() { return proportional_to; }
         bool get_actuator_direction() { return actuator_direction; }
@@ -225,154 +229,59 @@ class SPID {  // Soren's home-made pid loop
         double get_target() { return target; }
         double get_output() { return output; }       
 };
+
+// Instantiate PID loops
+//
+// Steering:  Motor direction and velocity are controlled with PWM, proportional to joystick horizontal direction and magnitude
+//   Setpoint Value: Proportional to Joystick Horz ADC value.  0V = Full Left, 2.5V = Stop, 5V = Full Right
+//   Measured Value: We have no feedback, other than the joystick current horizontal position
+//   Actuator Output Value: PWM square wave sent to Jaguar, w/ high pulse width of: ~2.2ms = Full Left, 1.5ms = Stop, ~800us = Full Right
+//   Limits: Reed switch limit signals for left and right may be handled by us, or by the jaguar controller
+//   Setpoint scaling: Kp/Ki/Kd values should decrease appropriately as a function of vehicle speed (safety) 
+//
+//   Notes: The steering has no feedback sensing, other than two digital limit switches at the ends of travel.  
+//   So just consider the error to be the difference between the joystick position and the last output value.
+//
+// Brakes:  Motor direction & velocity are controlled with PWM until brake pressure matches pressure setpoint
+//   Setpoint Value: * Default: Pressure setpoint proportional to Joystick Vert distance from center when below center.
+//       * In Hold Mode: Brake adjusts automatically to keep car stopped, as long as joystick below center
+//       * In Cruise Mode: Brake is kept released 
+//   Measured Value: Analog voltage from brake fluid pressure sensor. 0-3.3V proportional to 0-1000psi
+//   Actuator Output Value: PWM signal to Brake Jaguar unit.
+//       0% duty = Full speed extend (less brake), 50% = Stop, 100% = Full speed Retract (more brake)
+//   Position: Analog 0-3.3V proportional to the travel length of the actuator (not used as feedback)
+//
+// Gas:  Servo angle is adjusted with PWM until engine rpm matches rpm target setpoint
+//   Setpoint Value: * Default: RPM Setpoint proportional to Joystick Vert distance from center when above center.
+//       * In Cruise Mode: Upward or downward joy vert motions modify vehicle speed setpoint
+//                          Gas pid setppoints are output from cruise pid
+//   Measured Value: * Default: Engine speed determined from tach pulses
+//   Actuator Output Value: PWM signal to throttle servo
+//       0% duty = Fully close throttle.  This will idle.  100% duty = Fully open throttle.
+//
+// Cruise:
+//   Setpoint Value: * Default: Set to the current vehicle speed when mode is entered.
+//       * In Cruise Mode: Upward or downward joy vert motions suspend loop and accelerate or decelerate,
+//                         upon return to center loop resumes with new speed target set to vehicle speed when released.
+//   Measured Value: * Vehicle speed determined from pulley sensor pulses
+//   Actuator Output Value: Cruise PID output values become setpoint values for the Gas PID above
+//       0% duty = Car stopped.  100% duty = Car max speed.
+//
+// One way to tune a PID loop:
+// 1) Set Kp = 0, Ki = 0, and Kd = 0
+// 2) Increase Kp until output starts to oscillate
+// 3) Increase Ki until oscillation stops
+// 4) If improved response time is needed, increase Kd slightly and go back to step 2
+//
+// Ziegler-Nichols method:
+// 1) Set Kp = 0, Ki = 0, and Kd = 0
+// 2) Increase Kp until output starts to oscillate.
+// 3) Record Kc = critical value of Kp, and Pc = period of oscillations
+// 4) Set Kp=0.6*Kc and Ki=1.2*Kc/Pc and Kd=Kc*Pc/13.33  (Or for P only:  Kp=Kc/2)  (Or for PI:  Kp=0.45*Kc and Ki=0.54*Kc/Pc)
+
 // If output constrain prevents us from exceeding the limits of the actuator. But we need to know two things as we constrain, to preevent "Windup", a condition where the I term exploded due to an extended error when maybe the motor couldn't meet the target. Once back to normal, don't want I term wound up.
 // So improve this Clamp to check for A. Is it saturating? I.e. was constrain necessary or not? and B. Is the sign (polarity) of the output the same as that of the error?  If both are true, we have Integrator Windup.  So when we detect this, we can temporarily "Clamp" the I-term to 0 until we are "recovered".
 // Recovered can be either of these conditions:  1. We are no longer saturated (constrain is doing nothing)m or, 2. The error changes sign. (then reconnect I term.)
 // When determining saturation or not, add a margin.
-
-class LPID {  // Soren's bastardized version of the Arduino "PID" library https://github.com/br3ttb/Arduino-PID-Library/tree/master
-    private:
-        double dispKp, dispKi, dispKd;  // Tuning parameters in passed-in units 
-        double kp, ki, kd;  // Tuning parameters scaled to sample time
-        double *myInput, *myOutput, *mySetpoint;  // Pointers to the Input, Output, and Setpoint variables. Frees the user from having to constantly tell us what these values are
-        double outputSum, lastInput, outMin, outMax;
-        double error, p_term, i_term, d_term, delta;  // Soren added these
-        uint32_t lastTime, SampleTime;
-        int32_t controllerDirection, pOn;
-        bool inAuto, pOnE;
-
-        void Initialize() {
-            outputSum = *myOutput;
-            lastInput = *myInput;
-            if(outputSum > outMax) outputSum = outMax;
-            else if(outputSum < outMin) outputSum = outMin;
-        }
-    public:
-        #define AUTOMATIC 1
-        #define MANUAL 0
-        #define DIRECT 0
-        #define REVERSE 1
-        #define P_ON_M 0
-        #define P_ON_E 1
-
-        LPID(double* Input, double* Output, double* Setpoint, double Kp, double Ki, double Kd, int32_t sampleTime, int32_t POn, int32_t ControllerDirection) {
-            myOutput = Output;
-            myInput = Input;
-            mySetpoint = Setpoint;
-            inAuto = false;
-            
-            SetOutputLimits(0, 255);				//default output limit corresponds to
-                                                        //the arduino pwm limits
-            SampleTime = (uint32_t)sampleTime;							//default Controller Sample Time is 0.1 seconds
-            SetControllerDirection(ControllerDirection);
-            SetTunings(Kp, Ki, Kd);
-            SetPropMode(POn);
-            
-            lastTime = millis()-SampleTime;
-        }
-        
-        bool Compute() {
-            if (!inAuto) return false;
-            uint32_t now = micros();
-            double input = *myInput;
-            error = *mySetpoint - input;
-            double dInput = (input - lastInput);
-            
-            outputSum += (ki * error);
-            i_term = outputSum;  // sc
-
-            if (!pOnE) {  // Add Proportional on Measurement, of P_ON_M is specified
-                p_term = -1 * kp * dInput;  // sc
-                outputSum += p_term;
-            }
-            
-            if (outputSum > outMax) outputSum = outMax;
-            else if (outputSum < outMin) outputSum = outMin;
-
-            double output;
-            if (pOnE) {
-                p_term = kp * error;  // sc
-                output = p_term;  // Add Proportional on Error, if P_ON_E is specified
-            }
-            else output = 0;
-
-            d_term = kd * dInput;  // sc
-            output += outputSum - d_term;
-
-            if (output > outMax) output = outMax;
-            else if (output < outMin) output = outMin;
-            *myOutput = output;
-
-            // printf(", setp=%10.4lf, err=%10.4lf, pt=%10.4lf, it=%10.4lf, dt=%10.4lf, delt=%10.4lf, out=%10.4lf, kp=%10.4lf, ki=%10.4lf, kd=%10.4lf", *mySetpoint, error, p_term, i_term, d_term, delta, *myOutput, kp, ki, kd);
-
-            lastInput = input;  // Remember some variables for next time
-            lastTime = now;
-            return true;
-        }
-        void SetTunings(double Kp, double Ki, double Kd) {
-            if (Kp < 0 || Ki < 0 || Kd < 0) return;
-            dispKp = Kp; dispKi = Ki; dispKd = Kd;
-
-            double SampleTimeInSec = ((double)SampleTime)/1000000;  // sc changed millis() to micros() and 1000 to 1000000 here
-
-            kp = Kp;
-            ki = Ki * SampleTimeInSec;
-            kd = Kd / SampleTimeInSec;
-
-            if (controllerDirection ==REVERSE) {
-                kp = (0 - kp);
-                ki = (0 - ki);
-                kd = (0 - kd);
-            }
-        }
-        void SetPropMode(int32_t POn) {  // Allows changing parameters any time, or setting proportional mode
-            pOn = POn;
-            pOnE = (POn == P_ON_E);
-        }
-        void SetSampleTime(int32_t NewSampleTime) {
-            if (NewSampleTime > 0) {
-                double ratio  = (double)NewSampleTime / (double)SampleTime;
-                ki *= ratio;
-                kd /= ratio;
-                SampleTime = (unsigned long)NewSampleTime;
-            }
-        }
-        void SetOutputLimits(double Min, double Max) {
-            if (Min >= Max) return;
-            outMin = Min;
-            outMax = Max;
-            if (inAuto) {
-                if (*myOutput > outMax) *myOutput = outMax;
-                else if (*myOutput < outMin) *myOutput = outMin;
-
-                if (outputSum > outMax) outputSum = outMax;
-                else if (outputSum < outMin) outputSum = outMin;
-            }
-        }
-        void SetMode(int32_t Mode) {
-            bool newAuto = (Mode == AUTOMATIC);
-            if (newAuto && !inAuto) Initialize();  /*we just went from manual to auto*/
-            inAuto = newAuto;
-        }
-        void SetControllerDirection(int32_t Direction) {
-            if (inAuto && Direction != controllerDirection) {
-                kp = (0 - kp);
-                ki = (0 - ki);
-                kd = (0 - kd);
-            }
-            controllerDirection = Direction;
-        }
-        double GetKp() { return  dispKp; }
-        double GetKi() { return  dispKi; }
-        double GetKd() { return  dispKd; }
-        int32_t GetPropMode() { return pOn; }
-        int32_t GetMode() { return inAuto ? AUTOMATIC : MANUAL; }
-        int32_t GetDirection() { return controllerDirection; }
-        double GetError() { return error; }
-        double GetDelta() { return delta; }
-        double GetPterm() { return p_term; }
-        double GetIterm() { return i_term; }
-        double GetDterm() { return d_term; }
-};
 
 #endif
