@@ -1,5 +1,5 @@
-#ifndef LPID_H
-#define LPID_H
+#ifndef SPID_H
+#define SPID_H
 #ifdef DUE
 #include <LibPrintf.h>  // This works on Due but not ESP32
 #endif
@@ -35,7 +35,7 @@ class SPID {  // Soren's home-made pid loop
         double near_target_error_thresh_percent = 0.005;  // Fraction of the input range where if the error has not exceeded in either dir since last zero crossing, it is considered zero (to prevent endless microadjustments) 
         double output = 0, input = 0, input_last = 0, near_target_error_thresh = 0, near_target_lock = (in_max-in_min)/2;
         double in_min = 0, in_max = 4095, out_min = 0, out_max = 4095, in_center = 2047, out_center = 2047;
-        bool out_center_mode = ABSOLUTE, in_center_mode = ABSOLUTE, proportional_to = ERROR_TERM, saturated = false, output_hold = false;
+        bool out_center_mode = RELATIVE, in_center_mode = RELATIVE, proportional_to = ERROR_TERM, saturated = false, output_hold = false;
     public:
         int32_t disp_kp_1k, disp_ki_mhz, disp_kd_ms;  // disp_* are integer version of tuning variables scaled up by *1000, suitable for screen display
 
@@ -73,7 +73,9 @@ class SPID {  // Soren's home-made pid loop
 
             d_term = kd_coeff * (input - input_last);
             
-            output = p_term + i_term - d_term;
+            double delta = p_term + i_term - d_term;
+
+            output = out_center + delta;
 
             printf(" ntl2=%-+9.4lf sat=%1d outh=%1d pterm=%-+9.4lf iterm=%-+9.4lf dterm=%-+9.4lf out=%-+9.4lf", near_target_lock, saturated, output_hold, p_term, i_term, d_term, output);
 
@@ -164,6 +166,7 @@ class SPID {  // Soren's home-made pid loop
                 return;
             }
             out_min = arg_min;  out_max = arg_max;
+            out_center = (out_min + out_max)/2;
             if (output < out_min) output = out_min;
             else if (output > out_max) output = out_max;
             // return output;                
