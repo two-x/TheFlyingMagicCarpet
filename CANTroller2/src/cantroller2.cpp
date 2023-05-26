@@ -1,24 +1,11 @@
 // Carpet CANTroller II  Source Code  - For Arduino Due with Adafruit 2.8inch Captouch TFT shield.
-
-#include <SPI.h>  // SPI serial bus needed to talk to the LCD and the SD card
-#include <Wire.h>  // Contains I2C serial bus, needed to talk to touchscreen chip
-#include <SdFat.h>  // SD card & FAT filesystem library
-#include <Servo.h>  // Makes PWM output to control motors (for rudimentary control of our gas and steering)
-#include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
-#include <Adafruit_ILI9341.h>  // For interfacing with the TFT LCD controller chip
-#ifdef DUE
-#include <LibPrintf.h>  // This works on Due but not ESP32
-#endif
-#include <Adafruit_NeoPixel.h>  // Plan to allow control of neopixel LED onboard the esp32
-#include "Arduino.h"
-// #include <Adafruit_GFX.h>  // For drawing pictures & text on the screen
-
-#include "globals.h"  // contains variable and object initializations, and function definitions inculding setup function
+#include "globals.h"  // Contains variable and object initializations, and function definitions inculding setup function
 #include "classes.h"  // Contains our data structures
 #include "spid.h"  // A class for Soren's pid loop code
-
 using namespace std;
-
+void setup() {
+    cantroller2_init();
+};
 // Main loop.  Each time through we do these eight steps:
 //
 // 0) Beginning-of-the-loop nonsense
@@ -31,9 +18,6 @@ using namespace std;
 // 7) Log to SD card
 // 8) Do the control loop bookkeeping at the end of each loop
 //
-void setup() {
-    cantroller2_init();
-};
 void loop() {
     // 0) Beginning-of-the-loop nonsense
     //
@@ -581,19 +565,19 @@ void loop() {
             case 7:  adj_val(&gas_pulse_redline_us, sim_edit_delta, pwm_pulse_min_us, gas_pulse_idle_us - 1);  break;
         }
         else if (dataset_page == BPID) {
-            if (selected_value == 5) brakeSPID.set_tunings( brakeSPID.get_disp_kp_1k()+(double)sim_edit_delta, brakeSPID.get_disp_ki_mhz(), brakeSPID.get_disp_kd_ms() );
-            if (selected_value == 6) brakeSPID.set_tunings( brakeSPID.get_disp_kp_1k(), brakeSPID.get_disp_ki_mhz()+(double)sim_edit_delta, brakeSPID.get_disp_kd_ms() );
-            if (selected_value == 7) brakeSPID.set_tunings( brakeSPID.get_disp_kp_1k(), brakeSPID.get_disp_ki_mhz(), brakeSPID.get_disp_kd_ms()+(double)sim_edit_delta );
+            if (selected_value == 5) brakeSPID.set_tunings( brakeSPID.get_kp_1k()+(double)sim_edit_delta, brakeSPID.get_ki_mhz(), brakeSPID.get_kd_ms() );
+            if (selected_value == 6) brakeSPID.set_tunings( brakeSPID.get_kp_1k(), brakeSPID.get_ki_mhz()+(double)sim_edit_delta, brakeSPID.get_kd_ms() );
+            if (selected_value == 7) brakeSPID.set_tunings( brakeSPID.get_kp_1k(), brakeSPID.get_ki_mhz(), brakeSPID.get_kd_ms()+(double)sim_edit_delta );
         }
         else if (dataset_page == GPID) {
-            if (selected_value == 5) gasSPID.set_tunings( gasSPID.get_disp_kp_1k()+(double)sim_edit_delta, gasSPID.get_disp_ki_mhz(), gasSPID.get_disp_kd_ms() );
-            if (selected_value == 6) gasSPID.set_tunings( gasSPID.get_disp_kp_1k(), gasSPID.get_disp_ki_mhz()+(double)sim_edit_delta, gasSPID.get_disp_kd_ms() );
-            if (selected_value == 7) gasSPID.set_tunings( gasSPID.get_disp_kp_1k(), gasSPID.get_disp_ki_mhz(), gasSPID.get_disp_kd_ms()+(double)sim_edit_delta );
+            if (selected_value == 5) gasSPID.set_tunings( gasSPID.get_kp_1k()+(double)sim_edit_delta, gasSPID.get_ki_mhz(), gasSPID.get_kd_ms() );
+            if (selected_value == 6) gasSPID.set_tunings( gasSPID.get_kp_1k(), gasSPID.get_ki_mhz()+(double)sim_edit_delta, gasSPID.get_kd_ms() );
+            if (selected_value == 7) gasSPID.set_tunings( gasSPID.get_kp_1k(), gasSPID.get_ki_mhz(), gasSPID.get_kd_ms()+(double)sim_edit_delta );
         }
         else if (dataset_page == CPID) {
-            if (selected_value == 5) cruiseSPID.set_tunings( cruiseSPID.get_disp_kp_1k()+(double)sim_edit_delta, cruiseSPID.get_disp_ki_mhz(), cruiseSPID.get_disp_kd_ms() );
-            if (selected_value == 6) cruiseSPID.set_tunings( cruiseSPID.get_disp_kp_1k(), cruiseSPID.get_disp_ki_mhz()+(double)sim_edit_delta, cruiseSPID.get_disp_kd_ms() );
-            if (selected_value == 7) cruiseSPID.set_tunings( cruiseSPID.get_disp_kp_1k(), cruiseSPID.get_disp_ki_mhz(), cruiseSPID.get_disp_kd_ms()+(double)sim_edit_delta );
+            if (selected_value == 5) cruiseSPID.set_tunings( cruiseSPID.get_kp_1k()+(double)sim_edit_delta, cruiseSPID.get_ki_mhz(), cruiseSPID.get_kd_ms() );
+            if (selected_value == 6) cruiseSPID.set_tunings( cruiseSPID.get_kp_1k(), cruiseSPID.get_ki_mhz()+(double)sim_edit_delta, cruiseSPID.get_kd_ms() );
+            if (selected_value == 7) cruiseSPID.set_tunings( cruiseSPID.get_kp_1k(), cruiseSPID.get_ki_mhz(), cruiseSPID.get_kd_ms()+(double)sim_edit_delta );
         }
     }
 
@@ -678,9 +662,9 @@ void loop() {
             draw_dynamic(14, (int32_t)(brakeSPID.get_i_term()), -range, range, 0);
             draw_dynamic(15, (int32_t)(brakeSPID.get_d_term()), -range, range, 0);
             draw_dynamic(16, (int32_t)(brakeSPID.get_delta()), -range, range, 0);  // brake_carspeed_delta_adc, -range, range, 0);
-            draw_dynamic(17, brakeSPID.get_disp_kp_1k(), 0, 1000, 0);  // Real value is 1000 * smaller than displayed
-            draw_dynamic(18, brakeSPID.get_disp_ki_mhz(), 0, 1000, 0);
-            draw_dynamic(19, brakeSPID.get_disp_kd_ms(), 0, 1000, 0);
+            draw_dynamic(17, brakeSPID.disp_kp_1k, 0, 1000, 0);  // Real value is 1000 * smaller than displayed
+            draw_dynamic(18, brakeSPID.disp_ki_mhz, 0, 1000, 0);
+            draw_dynamic(19, brakeSPID.disp_kd_ms, 0, 1000, 0);
         }
         else if (dataset_page == GPID) {
             range = engine_govern_rpm-engine_idle_rpm;
@@ -689,9 +673,9 @@ void loop() {
             draw_dynamic(14, (int32_t)(gasSPID.get_i_term()), -range, range, 0);
             draw_dynamic(15, (int32_t)(gasSPID.get_d_term()), -range, range, 0);
             draw_dynamic(16, (int32_t)(gasSPID.get_delta()), -range, range, 0);  // gas_carspeed_delta_adc, -range, range, 0);
-            draw_dynamic(17, gasSPID.get_disp_kp_1k(), 0, 1000, 0);  // Real value is 1000 * smaller than displayed
-            draw_dynamic(18, gasSPID.get_disp_ki_mhz(), 0, 1000, 0);
-            draw_dynamic(19, gasSPID.get_disp_kd_ms(), 0, 1000, 0);
+            draw_dynamic(17, gasSPID.disp_kp_1k, 0, 1000, 0);  // Real value is 1000 * smaller than displayed
+            draw_dynamic(18, gasSPID.disp_ki_mhz, 0, 1000, 0);
+            draw_dynamic(19, gasSPID.disp_kd_ms, 0, 1000, 0);
         }
         else if (dataset_page == CPID) {
             range = carspeed_govern_mmph-carspeed_idle_mmph;
@@ -700,9 +684,9 @@ void loop() {
             draw_dynamic(14, (int32_t)(cruiseSPID.get_i_term()), -range, range, 0);
             draw_dynamic(15, (int32_t)(cruiseSPID.get_d_term()), -range, range, 0);
             draw_dynamic(16, (int32_t)(cruiseSPID.get_delta()), -range, range, 0);  // cruise_carspeed_delta_adc, -range, range, 0);
-            draw_dynamic(17, cruiseSPID.get_disp_kp_1k(), 0, 1000, 0);  // Real value is 1000 * smaller than displayed
-            draw_dynamic(18, cruiseSPID.get_disp_ki_mhz(), 0, 1000, 0);
-            draw_dynamic(19, cruiseSPID.get_disp_kd_ms(), 0, 1000, 0);
+            draw_dynamic(17, cruiseSPID.disp_kp_1k, 0, 1000, 0);  // Real value is 1000 * smaller than displayed
+            draw_dynamic(18, cruiseSPID.disp_ki_mhz, 0, 1000, 0);
+            draw_dynamic(19, cruiseSPID.disp_kd_ms, 0, 1000, 0);
         }
         draw_bool(basicmodesw, 0);
         draw_bool(ignition, 1);

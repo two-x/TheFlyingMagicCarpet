@@ -29,7 +29,7 @@ class SPID {  // Soren's home-made pid loop
         #define FWD 1  // Actuator_direction influences sensed value in the same direction
         #define REV -1  // Actuator_direction influences sensed value in the opposite direction
     private:
-        double kp_coeff = 0, ki_coeff = 0, kd_coeff = 0, kp, ki_hz, kd_s;
+        double kp_coeff = 0, ki_coeff = 0, kd_coeff = 0, kp_1k, ki_mhz, kd_ms;
         int32_t actuator_direction;
         uint32_t sample_period_us;
         double target = 0, error = 0, error_last = 0, delta = 0, p_term = 0, i_term = 0, d_term = 0, open_loop = false;
@@ -112,9 +112,9 @@ class SPID {  // Soren's home-made pid loop
                 return;
             }
             double sample_period_s = ((double)sample_period_us)/1000000;
-            kp = arg_kp_1k/1000;  ki_hz = arg_ki_mhz/1000;  kd_s = arg_kd_ms/1000;
-            kp_coeff = arg_kp_1k / 1000 ;
-            ki_coeff = arg_ki_mhz * (sample_period_s/1000);
+            kp_1k = arg_kp_1k;  ki_mhz = arg_ki_mhz;  kd_ms = arg_kd_ms;
+            kp_coeff = kp_1k / 1000 ;
+            ki_coeff = ki_mhz * (sample_period_s/1000);
             
             // printf("dispkds=%ld", disp_kd_ms);
             // printf(", kds=%lf", kd_s);
@@ -122,16 +122,16 @@ class SPID {  // Soren's home-made pid loop
             // printf(", speriods=%lf", sample_period_s);
             // printf(", argkds=%lf", arg_kd_s);
 
-            kd_coeff = arg_kd_ms / (sample_period_s/1000);  // / sample_period_s;
+            kd_coeff = kd_ms / (sample_period_s/1000);  // / sample_period_s;
             // if (arg_kd_s != 0) kd_coeff = arg_kd_s /(((double)sample_period_ms)/1000);  // ??? yes, all those parentheses are needed or kd_coeff is infinite (due to div/0?)
             // else kd_coeff = 0;
             
             // printf(", kd_coeff=%lf", kd_coeff);
             // printf("\n");
 
-            disp_kp_1k = (int32_t)(arg_kp_1k);  // Scaled integer version of tuning parameters suitable for screen display
-            disp_ki_mhz = (int32_t)(arg_ki_mhz);
-            disp_kd_ms = (int32_t)(arg_kd_ms);
+            disp_kp_1k = (int32_t)(kp_1k);  // Scaled integer version of tuning parameters suitable for screen display
+            disp_ki_mhz = (int32_t)(ki_mhz);
+            disp_kd_ms = (int32_t)(kd_ms);
         }
         void set_actuator_direction(int32_t direction) {
             if (direction != actuator_direction) {
@@ -207,12 +207,12 @@ class SPID {  // Soren's home-made pid loop
         double get_kp_coeff() { return kp_coeff; }
         double get_ki_coeff() { return ki_coeff; }
         double get_kd_coeff() { return kd_coeff; }
-        double get_kp() { return kp; }
-        double get_ki_hz() { return ki_hz; }
-        double get_kd_s() { return kd_s; }
-        double get_disp_kp_1k() { return disp_kp_1k; }
-        double get_disp_ki_mhz() { return disp_ki_mhz; }
-        double get_disp_kd_ms() { return disp_kd_ms; }
+        double get_kp_1k() { return kp_1k; }
+        double get_ki_mhz() { return ki_mhz; }
+        double get_kd_ms() { return kd_ms; }
+        // double get_disp_kp_1k() { return disp_kp_1k; }
+        // double get_disp_ki_mhz() { return disp_ki_mhz; }
+        // double get_disp_kd_ms() { return disp_kd_ms; }
         bool get_out_center_mode() { return out_center_mode; }
         bool get_open_loop() { return open_loop; }
         bool get_in_center_mode() { return in_center_mode; }
@@ -239,7 +239,7 @@ class SPID {  // Soren's home-made pid loop
 //   Measured Value: We have no feedback, other than the joystick current horizontal position
 //   Actuator Output Value: PWM square wave sent to Jaguar, w/ high pulse width of: ~2.2ms = Full Left, 1.5ms = Stop, ~800us = Full Right
 //   Limits: Reed switch limit signals for left and right may be handled by us, or by the jaguar controller
-//   Setpoint scaling: Kp/Ki/Kd values should decrease appropriately as a function of vehicle speed (safety) 
+//   Setpoint scaling: kp_1k/Ki/Kd values should decrease appropriately as a function of vehicle speed (safety) 
 //
 //   Notes: The steering has no feedback sensing, other than two digital limit switches at the ends of travel.  
 //   So just consider the error to be the difference between the joystick position and the last output value.

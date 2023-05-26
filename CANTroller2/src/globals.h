@@ -2,7 +2,20 @@
 #define GLOBALS_H
 
 #include <stdio.h>
+
+#include <SPI.h>  // SPI serial bus needed to talk to the LCD and the SD card
+#include <Wire.h>  // Contains I2C serial bus, needed to talk to touchscreen chip
+#include <Servo.h>  // Makes PWM output to control motors (for rudimentary control of our gas and steering)
+#include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
+#include <Adafruit_ILI9341.h>  // For interfacing with the TFT LCD controller chip
+#include <SDfat.h>
+#ifdef DUE
+#include <LibPrintf.h>  // This works on Due but not ESP32
+#endif
+#include <Adafruit_NeoPixel.h>  // Plan to allow control of neopixel LED onboard the esp32
 #include "Arduino.h"
+// #include <Adafruit_GFX.h>  // For drawing pictures & text on the screen
+
 #include "classes.h"
 #include "spid.h"
 
@@ -133,25 +146,25 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][12] = {
         "  I Term:",
         "  D Term:",
         "   Delta:",
-        "  Kp (P):",
-        "  Ki (I):",
-        "  Kd (D):", },
+        "milli-kP:",
+        "      kI:",
+        "      kD:", },
     {   "PID",  // GPID
         "  P Term:",
         "  I Term:",
         "  D Term:",
         "   Delta:",
-        "  Kp (P):",
-        "  Ki (I):",
-        "  Kd (D):" },
+        "milli-kP:",
+        "      kI:",
+        "      kD:", },
     {   " Spd Err:",  // CPID
         "  P Term:",
         "  I Term:",
         "  D Term:",
         "   Delta:",
-        "  kP *1k:",
-        "     kI :",
-        "     kD :", },
+        "milli-kP:",
+        "      kI:",
+        "      kD:", },
 };
 char units[disp_fixed_lines][5] = {"mmph", "rpm ", "adc ", "adc ", "adc ", "mmph", "adc ", "rpm ", "\xe5s  ", "\xe5s  ", "\xe5s  " };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
@@ -410,18 +423,18 @@ SdFat sd;  // SD card filesystem
 SdFile root;  // Directory file.
 SdFile file;  // Use for file creation in folders.
 
-int32_t brake_ctrl_dir = FWD;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
+int32_t brake_pid_dir = REV;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
 double brake_kp_1k = 588;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
 double brake_kp_mhz = 193;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
 double brake_kd_ms = 252;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
 double cruise_kp_1k = 157;  // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
 double cruise_kp_mhz = 35;  // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
 double cruise_kd_ms = 44;  // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
-int32_t cruise_ctrl_dir = FWD;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
+int32_t cruise_pid_dir = FWD;  // 0 = fwd,. Because a higher val 1 = revue on the engine rpm causes an increase in car speed
 double gas_kp_1k = 64;  // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
 double gas_kp_mhz = 15;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
 double gas_kd_ms = 22;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
-int32_t gas_ctrl_dir = REV;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
+int32_t gas_pid_dir = REV;  // 0 = fwd, 1 = rev. Because a higher value on the gas servo pulsewidth causes a decrease in engine rpm
 int32_t pid_period_us = 1000000;  // time period between output updates. Reciprocal of pid frequency (in us)
 Timer pidTimer(pid_period_us);
 
@@ -495,14 +508,9 @@ Timer pidTimer(pid_period_us);
 bool encoder_b_raw = digitalRead(encoder_b_pin);  // To store value of encoder pin value
 bool encoder_a_raw = digitalRead(encoder_a_pin);
 
-SPID brakeSPID(brake_kp_1k, brake_kp_mhz, brake_kd_ms, brake_ctrl_dir, pid_period_us);
-SPID gasSPID(gas_kp_1k, gas_kp_mhz, gas_kd_ms, gas_ctrl_dir, pid_period_us);
-SPID cruiseSPID(cruise_kp_1k, cruise_kp_mhz, cruise_kd_ms, cruise_ctrl_dir, pid_period_us);
-
-Adafruit_FT6206 touchpanel = Adafruit_FT6206(); // Touch panel
-Adafruit_ILI9341 tft = Adafruit_ILI9341(tft_cs_pin, tft_dc_pin);  // LCD screen
-// Servo library lets us set pwm outputs given an on-time pulse width in us
-static Servo steer_servo;
+static Adafruit_FT6206 touchpanel = Adafruit_FT6206(); // Touch panel
+static Adafruit_ILI9341 tft = Adafruit_ILI9341(tft_cs_pin, tft_dc_pin);  // LCD screen
+static Servo steer_servo;  // Lets us set pwm outputs given an on-time pulse width in us
 static Servo brake_servo;
 static Servo gas_servo;
 static Adafruit_NeoPixel strip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
@@ -848,6 +856,11 @@ void diagnostic() {
         // Or fopr that matter whenever the carb is out of tune and making the engine diesel after we kill the ign.
     }
 }
+
+SPID brakeSPID(brake_kp_1k, brake_kp_mhz, brake_kd_ms, brake_pid_dir, pid_period_us);
+SPID gasSPID(gas_kp_1k, gas_kp_mhz, gas_kd_ms, gas_pid_dir, pid_period_us);
+SPID cruiseSPID(cruise_kp_1k, cruise_kp_mhz, cruise_kd_ms, cruise_pid_dir, pid_period_us);
+
 void cantroller2_init() {
     pinMode(heartbeat_led_pin, OUTPUT);
     pinMode(encoder_a_pin, INPUT_PULLUP);
