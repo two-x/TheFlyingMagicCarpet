@@ -256,8 +256,8 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][12] = {
         "Eng RedL:",
         "Spd Idle:",
         "Spd RedL:",
-        "Joystick?:",
-        "BrakLPID?:",
+        "Joystck?:",
+        "BrkLPID?:",
         "BrkPosZP:", },
     {   "Str Left:",  // PWMS
         "Str Stop:",
@@ -614,31 +614,6 @@ bool encoder_a_raw = digitalRead(encoder_a_pin);
 int32_t encoder_state = 0;
 int32_t encoder_counter = 0;
 
-// Instantiate objects 
-Adafruit_FT6206 touchpanel = Adafruit_FT6206(); // Touch panel
-Adafruit_ILI9341 tft = Adafruit_ILI9341(tft_cs_pin, tft_dc_pin);  // LCD screen
-
-SdFat sd;  // SD card filesystem
-#define approot "cantroller2020"
-#define logfile "log.txt"
-#define error(msg) sd.errorHalt(F(msg))  // Error messages stored in flash.
-SdFile root;  // Directory file.
-SdFile file;  // Use for file creation in folders.
-
-// LPID is a pid class from the arduino library, modified. We start a loop for the brake, and can choose LPID or SPID loop to use anytime
-LPID brakeLPID(&d_pressure_filt_adc, &d_brake_pulse_out_us, &d_pressure_target_adc, pid_period_us/1000, brake_lpid_initial_kp, brake_lpid_initial_ki_hz, brake_lpid_initial_kd_s, P_ON_E, brake_lpid_ctrl_dir);
-
-// SPID at the moment is just a container to manage pid tuning variables, but will build it out to be a functional pid class
-SPID brakeSPID(brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brake_spid_ctrl_dir, pid_period_ms);
-SPID gasSPID(gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, gas_spid_ctrl_dir, pid_period_ms);
-SPID cruiseSPID(cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, cruise_spid_ctrl_dir, pid_period_ms);
-
-// Servo library lets us set pwm outputs given an on-time pulse width in us
-static Servo steer_servo;
-static Servo brake_servo;
-static Servo gas_servo;
-static Adafruit_NeoPixel strip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
-
 // Instantiate PID loops
 //
 // Steering:  Motor direction and velocity are controlled with PWM, proportional to joystick horizontal direction and magnitude
@@ -687,6 +662,23 @@ static Adafruit_NeoPixel strip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
 // 2) Increase Kp until output starts to oscillate.
 // 3) Record Kc = critical value of Kp, and Pc = period of oscillations
 // 4) Set Kp=0.6*Kc and Ki=1.2*Kc/Pc and Kd=Kc*Pc/13.33  (Or for P only:  Kp=Kc/2)  (Or for PI:  Kp=0.45*Kc and Ki=0.54*Kc/Pc)
+
+// Instantiate objects 
+Adafruit_FT6206 touchpanel = Adafruit_FT6206(); // Touch panel
+Adafruit_ILI9341 tft = Adafruit_ILI9341(tft_cs_pin, tft_dc_pin);  // LCD screen
+
+#define approot "cantroller2020"
+#define logfile "log.txt"
+#define error(msg) sd.errorHalt(F(msg))  // Error messages stored in flash.
+SdFat sd;  // SD card filesystem
+SdFile root;  // Directory file.
+SdFile file;  // Use for file creation in folders.
+
+// Servo library lets us set pwm outputs given an on-time pulse width in us
+static Servo steer_servo;
+static Servo brake_servo;
+static Servo gas_servo;
+static Adafruit_NeoPixel strip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
 
 // Interrupt service routines
 //
@@ -1021,6 +1013,15 @@ void adj_val(int32_t* variable, int32_t modify, int32_t low_limit, int32_t high_
     else if (*variable + modify > high_limit) *variable = high_limit;
     else *variable += modify; 
 }
+
+// Instantiate more objects 
+// LPID is a pid class from the arduino library, modified. We start a loop for the brake, and can choose LPID or SPID loop to use anytime
+LPID brakeLPID(&d_pressure_filt_adc, &d_brake_pulse_out_us, &d_pressure_target_adc, pid_period_us/1000, brake_lpid_initial_kp, brake_lpid_initial_ki_hz, brake_lpid_initial_kd_s, P_ON_E, brake_lpid_ctrl_dir);
+
+// SPID at the moment is just a container to manage pid tuning variables, but will build it out to be a functional pid class
+SPID brakeSPID(brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brake_spid_ctrl_dir, pid_period_ms);
+SPID gasSPID(gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, gas_spid_ctrl_dir, pid_period_ms);
+SPID cruiseSPID(cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, cruise_spid_ctrl_dir, pid_period_ms);
 
 void setup() {
     pinMode(heartbeat_led_pin, OUTPUT);
