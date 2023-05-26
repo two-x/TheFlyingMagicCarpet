@@ -9,6 +9,7 @@
   #include "WProgram.h"
 #endif
 #include "math.h"  // Just using for signbit() function. Note signbit returns true for negative signed argument
+#include "globals.h"
 
 // Here is the brake PID math
 // Our target is the desired amount of the measured value. The error is what we must add to ourt current value to get there
@@ -30,20 +31,20 @@ class SPID {  // Soren's home-made pid loop
     private:
         double kp_coeff = 0, ki_coeff = 0, kd_coeff = 0, kp, ki_hz, kd_s;
         int32_t actuator_direction;
-        uint32_t sample_period_ms;
-        double target = 0, error = 0, error_last = 0, p_term = 0, i_term = 0, d_term = 0, open_loop = false;
+        uint32_t sample_period_us;
+        double target = 0, error = 0, error_last = 0, delta = 0, p_term = 0, i_term = 0, d_term = 0, open_loop = false;
         double near_target_error_thresh_percent = 0.005;  // Fraction of the input range where if the error has not exceeded in either dir since last zero crossing, it is considered zero (to prevent endless microadjustments) 
         double output = 0, input = 0, input_last = 0, near_target_error_thresh = 0, near_target_lock = (in_max-in_min)/2;
         double in_min = 0, in_max = 4095, out_min = 0, out_max = 4095, in_center = 2047, out_center = 2047;
         bool out_center_mode = RELATIVE, in_center_mode = RELATIVE, proportional_to = ERROR_TERM, saturated = false, output_hold = false;
     public:
-        int32_t disp_kp_1k, disp_ki_mhz, disp_kd_ms;  // disp_* are integer version of tuning variables scaled up by *1000, suitable for screen display
+        int32_t disp_kp_1k, disp_ki_mhz, disp_kd_ms;  // disp_* are integer version of tuning variables scaled as needed to be 10-1000 range, suitable for screen display
 
-        SPID(double arg_kp, double arg_ki_hz, double arg_kd_s, int32_t direction, int32_t arg_sample_period_ms) {  // , bool arg_in_center_mode, bool arg_out_center_mode
-            set_tunings(arg_kp, arg_ki_hz, arg_kd_s);
+        SPID(double arg_kp_1k, double arg_ki_mhz, double arg_kd_ms, int32_t direction, int32_t arg_sample_period_us) {  // , bool arg_in_center_mode, bool arg_out_center_mode
+            set_tunings(arg_kp_1k, arg_ki_mhz, arg_kd_ms);
             set_actuator_direction(direction);
             // set_center_modes(arg_in_center_mode, arg_out_center_mode);
-            sample_period_ms = (uint32_t)arg_sample_period_ms;
+            sample_period_us = (uint32_t)arg_sample_period_us;
         }
         void compute(double arg_input) {
             input_last = input;
@@ -73,7 +74,7 @@ class SPID {  // Soren's home-made pid loop
 
             d_term = kd_coeff * (input - input_last);
             
-            double delta = p_term + i_term - d_term;
+            delta = p_term + i_term - d_term;
 
             output = out_center + delta;
 
@@ -105,15 +106,15 @@ class SPID {  // Soren's home-made pid loop
             target = arg_target;
             error = target - input;
         }
-        void set_tunings(double arg_kp, double arg_ki_hz, double arg_kd_s) {  // Set tuning parameters to negative values if higher actuator values causes lower sensor values and vice versa 
-            if (arg_kp < 0 || arg_ki_hz < 0 || arg_kd_s < 0) {  // || ( arg_kp <= 0 && arg_ki_hz <= 0 && arg_kd_s <= 0 ) ) ) {
+        void set_tunings(double arg_kp_1k, double arg_ki_mhz, double arg_kd_ms) {  // Set tuning parameters to negative values if higher actuator values causes lower sensor values and vice versa 
+            if (arg_kp_1k < 0 || arg_ki_mhz < 0 || arg_kd_ms < 0) {  // || ( arg_kp <= 0 && arg_ki_hz <= 0 && arg_kd_s <= 0 ) ) ) {
                 printf ("Warning: SPID::set_tunings() ignored request to set tuning parameters to negative values.\n");
                 return;
             }
-            double sample_period_s = ((double)sample_period_ms)/1000;
-            kp = arg_kp;  ki_hz = arg_ki_hz;  kd_s = arg_kd_s;
-            kp_coeff = arg_kp;
-            ki_coeff = arg_ki_hz * sample_period_s;
+            double sample_period_s = ((double)sample_period_us)/1000000;
+            kp = arg_kp_1k/1000;  ki_hz = arg_ki_mhz/1000;  kd_s = arg_kd_ms/1000;
+            kp_coeff = arg_kp_1k / 1000 ;
+            ki_coeff = arg_ki_mhz * (sample_period_s/1000);
             
             // printf("dispkds=%ld", disp_kd_ms);
             // printf(", kds=%lf", kd_s);
@@ -121,16 +122,16 @@ class SPID {  // Soren's home-made pid loop
             // printf(", speriods=%lf", sample_period_s);
             // printf(", argkds=%lf", arg_kd_s);
 
-            kd_coeff = arg_kd_s;  // / sample_period_s;
+            kd_coeff = arg_kd_ms / (sample_period_s/1000);  // / sample_period_s;
             // if (arg_kd_s != 0) kd_coeff = arg_kd_s /(((double)sample_period_ms)/1000);  // ??? yes, all those parentheses are needed or kd_coeff is infinite (due to div/0?)
             // else kd_coeff = 0;
             
             // printf(", kd_coeff=%lf", kd_coeff);
             // printf("\n");
 
-            disp_kp_1k = (int32_t)(arg_kp * 1000);  // Scaled integer version of tuning parameters suitable for screen display
-            disp_ki_mhz = (int32_t)(arg_ki_hz * 1000);
-            disp_kd_ms = (int32_t)(arg_kd_s * 1000);
+            disp_kp_1k = (int32_t)(arg_kp_1k);  // Scaled integer version of tuning parameters suitable for screen display
+            disp_ki_mhz = (int32_t)(arg_ki_mhz);
+            disp_kd_ms = (int32_t)(arg_kd_ms);
         }
         void set_actuator_direction(int32_t direction) {
             if (direction != actuator_direction) {
@@ -227,6 +228,7 @@ class SPID {  // Soren's home-made pid loop
         double get_d_term() { return d_term; }
         double get_error() { return error; }
         double get_target() { return target; }
+        double get_delta() { return delta; } 
         double get_output() { return output; }       
 };
 

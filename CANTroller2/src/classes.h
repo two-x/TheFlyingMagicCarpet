@@ -3,13 +3,9 @@
 
 #include <stdio.h>
 #include "Arduino.h"
+#include "globals.h"
 
-using namespace std;
-
-int32_t mycros(void) {  // This is "my" micros() function that returns signed int32
-    uint32_t temp = micros();
-    return (int32_t)(temp &= 0x7fffffff);  // Note this overflows every 35 min due to being only 31 bits. 
-}
+// using namespace std;
 
 // Timer
 // For controlling event timing. Communicates in signed int32 values but uses uint32 under the hood to
