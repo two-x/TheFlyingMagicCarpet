@@ -84,13 +84,13 @@ void loop() {
     battery_filt_mv = ema(battery_mv, battery_filt_mv, battery_ema_alpha);  // Apply EMA filter
     
     // Read sensors
-    if (!ui_simulating && !ui_sim_brkpos) {
+    if (!ui_simulating[GLOBAL] && !ui_simulating[BRKPOS]) {
         brake_pos_adc = analogRead(brake_pos_pin);
         brake_pos_filt_adc = ema(brake_pos_adc, brake_pos_filt_adc, brake_pos_ema_alpha);
     }
-    else brake_pos_filt_adc = (brake_pos_nom_lim_retract_adc + brake_pos_zeropoint_adc)/2;  // To keep brake position in legal range during simulation
+    else if (!ui_simulating[GLOBAL] && ui_simulating[BRKPOS] == TOUCH) brake_pos_filt_adc = (brake_pos_nom_lim_retract_adc + brake_pos_zeropoint_adc)/2;  // To keep brake position in legal range during simulation
     // Tach
-    if (!ui_simulating || !ui_sim_tach) {
+    if (!ui_simulating[GLOBAL] || !ui_simulating[TACH]) {
         if (tachPulseTimer.elapsed() < engine_stop_timeout_us) engine_rpm = (int32_t)(60000000/(double)tach_delta_us);  // Tachometer magnets/us * 60000000 (1 rot/magnet * 1000000 us/sec * 60 sec/min) gives rpm
         else engine_rpm = 0;  // If timeout since last magnet is exceeded
         if (abs(engine_rpm-engine_old_rpm) > engine_lp_thresh_rpm || engine_rpm-engine_last_rpm < engine_spike_thresh_rpm) {  // Remove noise spikes from tach values, if otherwise in range
@@ -102,7 +102,7 @@ void loop() {
         else engine_filt_rpm = 0;
     }
     // Speedo
-    if (!ui_simulating || !ui_sim_speedo) { 
+    if (!ui_simulating[GLOBAL] || !ui_simulating[SPEEDO]) { 
         if (speedoPulseTimer.elapsed() < car_stop_timeout_us) carspeed_mmph = (int32_t)(179757270/(double)speedo_delta_us); // Update car speed value  
         // magnets/us * 179757270 (1 rot/magnet * 1000000 us/sec * 3600 sec/hr * 1/19.85 gearing * 20*pi in/rot * 1/12 ft/in * 1000/5280 milli-mi/ft gives milli-mph  // * 1/1.15 knots/mph gives milliknots
         // Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
@@ -116,7 +116,7 @@ void loop() {
         else carspeed_filt_mmph = 0;
     }
 
-    if (!ui_simulating || !ui_sim_press) {
+    if (!ui_simulating[GLOBAL] || !ui_simulating[PRESS]) {
         pressure_adc = analogRead(pressure_pin);  // Brake pressure.  Read sensor, then Remove noise spikes from brake feedback, if reading is otherwise in range
         if (abs(pressure_adc-pressure_old_adc) > pressure_lp_thresh_adc || pressure_adc-pressure_last_adc < pressure_spike_thresh_adc) {
             pressure_old_adc = pressure_last_adc;
@@ -131,7 +131,7 @@ void loop() {
     //
     digitalWrite(led_tx_pin, !touch_now_touched);
     digitalWrite(led_rx_pin, (sim_edit_delta > 0) ? 0 : 1);  
-    if (!ui_simulating || !ui_sim_joy) {  // If not simulating or not simulating joystick
+    if (!ui_simulating[GLOBAL] || !ui_simulating[CTRL]) {  // If not simulating or not simulating joystick
         if (ctrl == HOTRC) {
             ctrl_pos_adc[VERT][RAW] = map(hotrc_vert_pulse_us, 2003, 1009, ctrl_lims_adc[ctrl][VERT][MAX], ctrl_lims_adc[ctrl][VERT][MIN]);
             ctrl_pos_adc[HORZ][RAW] = map(hotrc_horz_pulse_us, 2003, 1009, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
@@ -167,8 +167,8 @@ void loop() {
         else if (runmode == CRUISE) runmode = FLY;
         hotrc_ch4_sw_event = false;    
     }
-    if (!ui_simulating || !ui_sim_basicsw) basicmodesw = !digitalRead(basicmodesw_pin);   // 1-value because electrical signal is active low
-    if (!ui_simulating || !ui_sim_cruisesw) cruise_sw = digitalRead(cruise_sw_pin);
+    if (!ui_simulating[GLOBAL] || !ui_simulating[BASICSW]) basicmodesw = !digitalRead(basicmodesw_pin);   // 1-value because electrical signal is active low
+    if (!ui_simulating[GLOBAL] || !ui_simulating[CRUISESW]) cruise_sw = digitalRead(cruise_sw_pin);
 
     // 3) Check if our current runmode has been overridden by certain specific conditions
     //
@@ -442,29 +442,29 @@ void loop() {
             }
             else if (touch_col == 0 && touch_row == 4) {  // && touch_row == 0 . Pressed the simulation mode toggle. Needs long press
                 if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout())  {
-                    ui_simulating = !ui_simulating;
+                    ui_simulating[GLOBAL] = (1 - ui_simulating[GLOBAL]);
                     touch_longpress_valid = false;
                 }
             }
-            else if (touch_col == 3 && touch_row == 0 && ui_simulating && ui_sim_basicsw && !touch_now_touched) basicmodesw = !basicmodesw;  // Pressed the basic mode toggle button. Toggle value, only once per touch
-            else if (touch_col == 3 && touch_row == 1 && ui_simulating && ui_sim_press) adj_val(&pressure_filt_adc, touch_accel, pressure_min_adc, pressure_max_adc);  // (+= 25) Pressed the increase brake pressure button
-            else if (touch_col == 3 && touch_row == 2 && ui_simulating && ui_sim_press) adj_val(&pressure_filt_adc, -touch_accel, pressure_min_adc, pressure_max_adc);  // (-= 25) Pressed the decrease brake pressure button
-            else if (touch_col == 3 && touch_row == 4 && ui_simulating && ui_sim_joy) adj_val(&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (-= 25) Pressed the joystick left button
-            else if (touch_col == 4 && touch_row == 0 && ui_simulating && ui_sim_ign && !touch_now_touched) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
-            else if (touch_col == 4 && touch_row == 1 && ui_simulating && ui_sim_tach) adj_val(&engine_filt_rpm, touch_accel, 0, engine_redline_rpm);  // (+= 25) Pressed the increase engine rpm button
-            else if (touch_col == 4 && touch_row == 2 && ui_simulating && ui_sim_tach) adj_val(&engine_filt_rpm, -touch_accel, 0, engine_redline_rpm);  // (-= 25) Pressed the decrease engine rpm button
-            else if (touch_col == 4 && touch_row == 3 && ui_simulating && ui_sim_joy) adj_val(&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (+= 25) Pressed the joystick up button
-            else if (touch_col == 4 && touch_row == 4 && ui_simulating && ui_sim_joy) adj_val(&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (-= 25) Pressed the joystick down button
-            else if (touch_col == 5 && touch_row == 0 && ui_simulating && ui_sim_cruisesw) cruise_sw = true;  // Pressed the cruise mode button. This is a momentary control, not a toggle. Value changes back upon release
-            else if (touch_col == 5 && touch_row == 1 && ui_simulating && ui_sim_speedo) adj_val(&carspeed_filt_mmph, touch_accel, 0, carspeed_redline_mmph);  // (+= 50) // Pressed the increase vehicle speed button
-            else if (touch_col == 5 && touch_row == 2 && ui_simulating && ui_sim_speedo) adj_val(&carspeed_filt_mmph, -touch_accel, 0, carspeed_redline_mmph);  // (-= 50) Pressed the decrease vehicle speed button
-            else if (touch_col == 5 && touch_row == 4 && ui_simulating && ui_sim_joy) adj_val(&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (+= 25) Pressed the joystick right button                           
+            else if (touch_col == 3 && touch_row == 0 && ui_simulating[GLOBAL] && ui_simulating[BASICSW] && !touch_now_touched) basicmodesw = !basicmodesw;  // Pressed the basic mode toggle button. Toggle value, only once per touch
+            else if (touch_col == 3 && touch_row == 1 && ui_simulating[GLOBAL] && ui_simulating[PRESS]) adj_val(&pressure_filt_adc, touch_accel, pressure_min_adc, pressure_max_adc);  // (+= 25) Pressed the increase brake pressure button
+            else if (touch_col == 3 && touch_row == 2 && ui_simulating[GLOBAL] && ui_simulating[PRESS]) adj_val(&pressure_filt_adc, -touch_accel, pressure_min_adc, pressure_max_adc);  // (-= 25) Pressed the decrease brake pressure button
+            else if (touch_col == 3 && touch_row == 4 && ui_simulating[GLOBAL] && ui_simulating[CTRL]) adj_val(&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (-= 25) Pressed the joystick left button
+            else if (touch_col == 4 && touch_row == 0 && ui_simulating[GLOBAL] && ui_simulating[IGN] && !touch_now_touched) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
+            else if (touch_col == 4 && touch_row == 1 && ui_simulating[GLOBAL] && ui_simulating[TACH]) adj_val(&engine_filt_rpm, touch_accel, 0, engine_redline_rpm);  // (+= 25) Pressed the increase engine rpm button
+            else if (touch_col == 4 && touch_row == 2 && ui_simulating[GLOBAL] && ui_simulating[TACH]) adj_val(&engine_filt_rpm, -touch_accel, 0, engine_redline_rpm);  // (-= 25) Pressed the decrease engine rpm button
+            else if (touch_col == 4 && touch_row == 3 && ui_simulating[GLOBAL] && ui_simulating[CTRL]) adj_val(&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (+= 25) Pressed the joystick up button
+            else if (touch_col == 4 && touch_row == 4 && ui_simulating[GLOBAL] && ui_simulating[CTRL]) adj_val(&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (-= 25) Pressed the joystick down button
+            else if (touch_col == 5 && touch_row == 0 && ui_simulating[GLOBAL] && ui_simulating[CRUISESW]) cruise_sw = true;  // Pressed the cruise mode button. This is a momentary control, not a toggle. Value changes back upon release
+            else if (touch_col == 5 && touch_row == 1 && ui_simulating[GLOBAL] && ui_simulating[SPEEDO]) adj_val(&carspeed_filt_mmph, touch_accel, 0, carspeed_redline_mmph);  // (+= 50) // Pressed the increase vehicle speed button
+            else if (touch_col == 5 && touch_row == 2 && ui_simulating[GLOBAL] && ui_simulating[SPEEDO]) adj_val(&carspeed_filt_mmph, -touch_accel, 0, carspeed_redline_mmph);  // (-= 50) Pressed the decrease vehicle speed button
+            else if (touch_col == 5 && touch_row == 4 && ui_simulating[GLOBAL] && ui_simulating[CTRL]) adj_val(&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (+= 25) Pressed the joystick right button                           
             if (touch_accel_exponent < touch_accel_exponent_max && (touchHoldTimer.elapsed() > (touch_accel_exponent + 1) * touchAccelTimer.timeout())) touch_accel_exponent++; // If timer is > the shift time * exponent, and not already maxed, double the edit speed by incrementing the exponent
                 
             touch_now_touched = true;
         }  // (if touchpanel reads a touch)
         else {  // If not being touched, put momentarily-set simulated button values back to default values
-            if (ui_simulating) cruise_sw = false;  // // Makes this button effectively momentary
+            if (ui_simulating[GLOBAL]) cruise_sw = false;  // // Makes this button effectively momentary
             sim_edit_delta_touch = 0;  // Stop changing value
             touch_now_touched = false;  // remember last touch state
             touch_accel_exponent = 0;
@@ -520,7 +520,7 @@ void loop() {
     if (tuning_ctrl == SELECT) {
         if (dataset_page >= 4) selected_value = constrain (selected_value, 5, 7);  // Skip unchangeable values for all PID modes
         else if (dataset_page == JOY) selected_value = constrain (selected_value, 2, 7);  // Skip unchangeable values for joy mode
-        else if (dataset_page == LOCK) selected_value = constrain (selected_value, 2, 7);  // Skip unchangeable values for joy mode
+        else if (dataset_page == LOCK) selected_value = constrain (selected_value, 3, 7);  // Skip unchangeable values for joy mode
         else selected_value = constrain(selected_value, 0, arraysize(dataset_page_names[dataset_page])-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
         if (selected_value != selected_value_last) selected_val_dirty = true;
     }
@@ -529,12 +529,12 @@ void loop() {
     
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == LOCK)  switch (selected_value) {
-            case 2:  brakeSPID.set_proportionality((sim_edit_delta > 0) ? ERROR_TERM : SENSED_INPUT);  break;
-            case 3:  ui_sim_brkpos = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : ui_sim_brkpos;  break;
-            case 4:  ui_sim_joy = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : ui_sim_joy;  break;
-            case 5:  ui_sim_press = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : ui_sim_press;  break;
-            case 6:  ui_sim_tach = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : ui_sim_tach;  break;
-            case 7:  ui_sim_speedo = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : ui_sim_speedo;  break;
+            // case 2:  brakeSPID.set_proportionality((sim_edit_delta > 0) ? ERROR_TERM : SENSED_INPUT);  break;
+            case 3:  ui_simulating[CTRL] = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : ui_simulating[CTRL];  break;
+            case 4:  if (!sim_edit_delta) sim_source_change(&ui_pot_addrs, &ui_simulating, BRKPOS, (sim_edit_delta > 0));  break;
+            case 5:  if (!sim_edit_delta) sim_source_change(&ui_pot_addrs, &ui_simulating, PRESS, (sim_edit_delta > 0));  break;
+            case 6:  if (!sim_edit_delta) sim_source_change(&ui_pot_addrs, &ui_simulating, TACH, (sim_edit_delta > 0));  break;
+            case 7:  if (!sim_edit_delta) sim_source_change(&ui_pot_addrs, &ui_simulating, SPEEDO, (sim_edit_delta > 0));  break;
         }
         else if (dataset_page == JOY)  switch (selected_value) {
             case 2:  adj_val(&ctrl_lims_adc[ctrl][HORZ][MIN], sim_edit_delta, 0, adc_midscale_adc - ctrl_lims_adc[ctrl][HORZ][DB] / 2 - 1);  break;
@@ -591,8 +591,8 @@ void loop() {
 
     // Update displayed telemetry values to the screen
     if (display_enabled)  {
-        if (ui_simulating != ui_simulating_last) draw_simbuttons(ui_simulating);  // if we just entered simulator draw the simulator buttons, or if we just left erase them
-        ui_simulating_last = ui_simulating;
+        if (ui_simulating[GLOBAL] != ui_simulating[LAST]) draw_simbuttons(ui_simulating[GLOBAL]);  // if we just entered simulator draw the simulator buttons, or if we just left erase them
+        ui_simulating[LAST] = ui_simulating[GLOBAL];
         if (dataset_page_dirty) {
             draw_fixed(true);
             draw_dynamic(0, 0, -1, -1, 2);
@@ -618,12 +618,13 @@ void loop() {
         if (dataset_page == LOCK) {
             draw_dynamic(12, battery_filt_mv, 0, battery_max_mv, 0);
             draw_dynamic(13, brake_pos_filt_adc, brake_pos_nom_lim_retract_adc, brake_pos_nom_lim_extend_adc, 0);
-            draw_dynamic(14, brakeSPID.get_proportionality(), -1, -1, 0);
-            draw_dynamic(15, ui_sim_brkpos, -1, -1, 0);
-            draw_dynamic(16, ui_sim_joy, -1, -1, 0);
-            draw_dynamic(17, ui_sim_press, -1, -1, 0);
-            draw_dynamic(18, ui_sim_tach, -1, -1, 0);
-            draw_dynamic(19, ui_sim_speedo, -1, -1, 0);
+            draw_dynamic(14, pot_filt_adc, pot_min_adc, pot_max_adc, 0);
+            // draw_dynamic(14, brakeSPID.get_proportionality(), -1, -1, 0);
+            draw_dynamic(15, ui_simulating[CTRL], -1, -1, 0);
+            draw_dynamic(16, ui_simulating[BRKPOS], -1, -1, 0);
+            draw_dynamic(17, ui_simulating[PRESS], -1, -1, 0);
+            draw_dynamic(18, ui_simulating[TACH], -1, -1, 0);
+            draw_dynamic(19, ui_simulating[SPEEDO], -1, -1, 0);
         }
         else if (dataset_page == JOY) {
             draw_dynamic(12, ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX], 0);
