@@ -106,32 +106,32 @@ class SPID {  // Soren's home-made pid loop
             target = arg_target;
             error = target - input;
         }
-        void set_tunings(double arg_kp_1k, double arg_ki_mhz, double arg_kd_ms) {  // Set tuning parameters to negative values if higher actuator values causes lower sensor values and vice versa 
+        void set_tunings(double arg_kp_1k, double arg_ki_mhz, double arg_kd_ms, int32_t arg_direction) {  // Set tuning parameters to negative values if higher actuator values causes lower sensor values and vice versa 
             if (arg_kp_1k < 0 || arg_ki_mhz < 0 || arg_kd_ms < 0) {  // || ( arg_kp <= 0 && arg_ki_hz <= 0 && arg_kd_s <= 0 ) ) ) {
                 printf ("Warning: SPID::set_tunings() ignored request to set tuning parameters to negative values.\n");
                 return;
             }
-            double sample_period_s = ((double)sample_period_us)/1000000;
-            kp_1k = arg_kp_1k;  ki_mhz = arg_ki_mhz;  kd_ms = arg_kd_ms;
-            kp_coeff = kp_1k / 1000 ;
-            ki_coeff = ki_mhz * (sample_period_s/1000);
-            
-            // printf("dispkds=%ld", disp_kd_ms);
-            // printf(", kds=%lf", kd_s);
-            // printf(", speriodms=%ld", sample_period_ms);
-            // printf(", speriods=%lf", sample_period_s);
-            // printf(", argkds=%lf", arg_kd_s);
-
-            kd_coeff = kd_ms / (sample_period_s/1000);  // / sample_period_s;
-            // if (arg_kd_s != 0) kd_coeff = arg_kd_s /(((double)sample_period_ms)/1000);  // ??? yes, all those parentheses are needed or kd_coeff is infinite (due to div/0?)
-            // else kd_coeff = 0;
-            
-            // printf(", kd_coeff=%lf", kd_coeff);
-            // printf("\n");
-
+            kp_1k = arg_kp_1k;
+            ki_mhz = arg_ki_mhz;
+            kd_ms = arg_kd_ms;
             disp_kp_1k = (int32_t)(kp_1k);  // Scaled integer version of tuning parameters suitable for screen display
             disp_ki_mhz = (int32_t)(ki_mhz);
             disp_kd_ms = (int32_t)(kd_ms);
+
+            double sample_period_s = ((double)sample_period_us)/1000000;
+            kp_coeff = kp_1k/1000 ;
+            ki_coeff = (ki_mhz/1000) * sample_period_s;
+            kd_coeff = (kd_ms/1000) / sample_period_s;  // / sample_period_s;
+            
+            if (arg_direction == REV) {
+                kp_coeff = (0 - kp_coeff);
+                ki_coeff = (0 - ki_coeff);
+                kd_coeff = (0 - kd_coeff);
+            }
+            if (arg_direction != actuator_direction) actuator_direction = arg_direction;
+        }
+        void set_tunings(double arg_kp_1k, double arg_ki_mhz, double arg_kd_ms) {  // Set tuning parameters to negative values if higher actuator values causes lower sensor values and vice versa 
+            set_tunings(arg_kp_1k, arg_ki_mhz, arg_kd_ms, actuator_direction);
         }
         void set_actuator_direction(int32_t direction) {
             if (direction != actuator_direction) {
