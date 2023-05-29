@@ -762,10 +762,10 @@ void adj_val(int32_t* variable, int32_t modify, int32_t low_limit, int32_t high_
     else *variable += modify; 
 }
 
-// enum simulatable { GLOBAL, LAST, POT, CTRL, BRKPOS, PRESS, TACH, SPEEDO, BASICSW, IGN, CRUISESW, };
+enum simulatable { GLOBAL, LAST, POT, CTRL, BRKPOS, PRESS, TACH, SPEEDO, BASICSW, IGN, CRUISESW, };
 // enum io_list { POT, ENCODER, JOY, HOTRC, BRKPOS, PRESS, TACH, SPEEDO, BASICSW, IGN, CRUISESW, STEERMTR, BRKMTR, GASSERVO};
 // Device* devs[14];
-// int32_t ui_simulating[11] = { 0, 0, 0,   1,     1,    1,      1,       1,   1,        1 };
+int32_t ui_simulating[11] = { 0, 0, 0,   1,     1,    1,      1,       1,   1,        1 };
 // int32_t ui_pot_addrs[11];
 // int32_t *ui_sim_pot = &pot_adc;
 
@@ -984,13 +984,13 @@ void cantroller2_init() {
     steer_servo.attach(steer_pwm_pin);
     gas_servo.attach(gas_pwm_pin);
 
-    for (int32_t x; x<arraysize(ui_pot_addrs); x++) ui_pot_addrs[x] = &pot_adc;
-    ui_pot_addrs[BRKPOS] = &brake_pos_adc;
-    ui_pot_addrs[PRESS] = &pressure_adc;
-    ui_pot_addrs[TACH] = &engine_rpm;
-    ui_pot_addrs[SPEEDO] = &carspeed_mmph;
+    // for (int32_t x; x<arraysize(ui_pot_addrs); x++) ui_pot_addrs[x] = &pot_adc;
+    // ui_pot_addrs[BRKPOS] = &brake_pos_adc;
+    // ui_pot_addrs[PRESS] = &pressure_adc;
+    // ui_pot_addrs[TACH] = &engine_rpm;
+    // ui_pot_addrs[SPEEDO] = &carspeed_mmph;
     
-     = { &pot_adc, &pot_adc, &pot_adc, &pot_adc, &brake_pos_adc, &pressure_adc, &engine_rpm, &carspeed_mmph, -1, -1, -1 };
+    //  = { &pot_adc, &pot_adc, &pot_adc, &pot_adc, &brake_pos_adc, &pressure_adc, &engine_rpm, &carspeed_mmph, -1, -1, -1 };
 
     loopTimer.reset();  // start timer to measure the first loop
     Serial.println(F("Setup finished"));
