@@ -205,7 +205,6 @@ bool cruise_gesturing = false;  // Is cruise mode enabled by gesturing?  Otherwi
 double ctrl_ema_alpha[2] = { 0.2, 0.1 };  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 double pot_ema_alpha = 0.2;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 double battery_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-double carspeed_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 double engine_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 double brake_pos_ema_alpha = 0.25;
 int32_t pwm_pulse_min_us = 500;
@@ -230,7 +229,6 @@ int32_t brake_pos_margin_adc = 10;  //
 int32_t brake_pos_adc = brake_pos_park_adc;
 int32_t brake_pos_filt_adc = brake_pos_adc;
 int32_t gesture_flytimeout_us = 500000;  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
-int32_t car_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the car is stopped (in us)
 int32_t engine_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
 int32_t engine_idle_rpm = 700;  // Min value for engine hz, corresponding to low idle (in rpm)
 int32_t engine_max_rpm = 6000;  // Max possible engine rotation speed
@@ -238,11 +236,6 @@ int32_t engine_redline_rpm = 4000;  // Max value for engine_rpm, pedal to the me
 int32_t engine_margin_rpm = 15;  // Margin of error for checking engine rpm (in rpm)
 int32_t engine_spike_thresh_rpm = 500;  // min pressure delta between two readings considered a spike to ignore (in rpm)
 int32_t engine_lp_thresh_rpm = 1000;   // max delta acceptable over three consecutive readings (in rpm)
-int32_t carspeed_spike_thresh_mmph = 1500;  // min pressure delta between two readings considered a spike to ignore (in milli-mph)
-int32_t carspeed_lp_thresh_mmph = 3000;   // max delta acceptable over three consecutive readings (in milli-mph)
-int32_t carspeed_idle_mmph = 4500;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
-int32_t carspeed_redline_mmph = 15000;  // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
-int32_t carspeed_max_mmph = 25000;  // What is max speed car can ever go
 int32_t cruise_sw_timeout_us = 500000;  // how long do you have to hold down the cruise button to start cruise mode (in us)
 int32_t gas_governor_percent = 95;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
 int32_t gas_pulse_ccw_max_us = 2000;  // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
@@ -276,11 +269,6 @@ int32_t engine_last_rpm = 50;  // Engine speed from previous loop (in rpm)
 int32_t engine_old_rpm = 50; // Engine speed from two loops back (in rpm)
 int32_t engine_govern_rpm = map(gas_governor_percent, 0, 100, 0, engine_redline_rpm);  // Create an artificially reduced maximum for the engine speed
 int32_t gas_pulse_govern_us = map(gas_governor_percent*(engine_redline_rpm-engine_idle_rpm)/engine_redline_rpm, 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
-int32_t carspeed_govern_mmph = map(gas_governor_percent, 0, 100, 0, carspeed_redline_mmph);  // Governor must scale the top vehicle speed proportionally
-int32_t carspeed_mmph = 10;  // Current car speed, raw as sensed (in mmph)
-int32_t carspeed_filt_mmph = 10;  // Current car speed, filtered (in mmph)
-int32_t carspeed_last_mmph = 10;  // Car speed from previous loop (in mmph)
-int32_t carspeed_old_mmph = 10;  // Car speed from two loops back (in mmph)
 int32_t battery_adc = 0;
 int32_t battery_mv = 10000;
 int32_t battery_filt_mv = 10000;
@@ -294,7 +282,6 @@ int32_t gas_pulse_out_us = gas_pulse_idle_us;  // pid loop output to send to the
 Timer sanityTimer(7000000);  // Allows code to fail in a sensible way after a delay if nothing is happening
 Timer gestureFlyTimer(gesture_flytimeout_us);  // Used to keep track of time for gesturing for going in and out of fly/cruise modes
 bool cruise_adjusting = false;
-int32_t carspeed_target_mmph = 0.0;  // Stores new setpoint to give to the pid loop (cruise) in milli-mph
 int32_t gesture_progress = 0;  // How many steps of the Cruise Mode gesture have you completed successfully (from Fly Mode)
 bool ignition = LOW;
 bool ignition_last = ignition;
@@ -319,7 +306,7 @@ char disp_bool_buffer;
 bool selected_val_dirty = true;
 bool dataset_page_dirty = true;
 int32_t old_tach_time_us;
-int32_t old_speedo_time_us;
+
 Timer cruiseSwTimer;
 Timer simTimer;
 int32_t sim_edit_delta = 0;
@@ -357,18 +344,15 @@ volatile int32_t encoder_delta = 0;  // Keeps track of un-handled rotary clicks 
 volatile bool encoder_a_stable = true;  //  Stores the value of encoder A pin as read during B pin transition (where A is stable)
 volatile int32_t encoder_spinrate_isr_us = 100000;  // Time elapsed between last two detents
 volatile int32_t tach_delta_us = 0;
-volatile int32_t speedo_delta_us = 0;
 volatile int32_t hotrc_horz_pulse_us = 1500;
 volatile int32_t hotrc_vert_pulse_us = 1500;
 volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
 
 Timer encoderSpinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
 Timer tachPulseTimer;  // OK to not be volatile?
-Timer speedoPulseTimer;  // OK to not be volatile?
 Timer hotrcPulseTimer;  // OK to not be volatile?
 
 int32_t tach_delta_impossible_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
-int32_t speedo_delta_impossible_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
 
 Timer encoderLongPressTimer(800000);  // Used to time long button presses
 int32_t encoder_spinrate_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
@@ -498,8 +482,27 @@ int32_t brake_pulse_stop_us = pwm_pulse_center_us;  // Brake pulsewidth correspo
 int32_t brake_pulse_extend_us = 2350;  // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us)
 int32_t brake_pulse_margin_us = 40; // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated 
 
+// volatile int32_t speedo_delta_us = 0;
+// Timer speedoPulseTimer;  // OK to not be volatile?
+double speedo_delta_impossible_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
+double car_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the car is stopped (in us)
+int32_t carspeed_spike_thresh_mmph = 1500;  // min pressure delta between two readings considered a spike to ignore (in milli-mph)
+int32_t carspeed_lp_thresh_mmph = 3000;   // max delta acceptable over three consecutive readings (in milli-mph)
+int32_t carspeed_idle_mmph = 4500;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
+double carspeed_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+int32_t carspeed_redline_mmph = 15000;  // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
+int32_t carspeed_max_mmph = 25000;  // What is max speed car can ever go
+int32_t carspeed_govern_mmph = map(gas_governor_percent, 0, 100, 0, carspeed_redline_mmph);  // Governor must scale the top vehicle speed proportionally
+int32_t carspeed_target_mmph = 0.0;  // Stores new setpoint to give to the pid loop (cruise) in milli-mph
+int32_t carspeed_mmph = 10;  // Current car speed, raw as sensed (in mmph)
+int32_t carspeed_filt_mmph = 10;  // Current car speed, filtered (in mmph)
+int32_t carspeed_last_mmph = 10;  // Car speed from previous loop (in mmph)
+int32_t carspeed_old_mmph = 10;  // Car speed from two loops back (in mmph)
+// int32_t old_speedo_time_us;
+
+
+PulseSensor Speedo(speedo_pulse_pin, speedo_delta_impossible_us, car_stop_timeout_us); //  pin, impossible, stop_timeout);
 AnalogSensor Pressure(d_pressure_filt_adc);
-Pressure.set_limits(658.0, 2100.0);
 
 
 static Adafruit_FT6206 touchpanel = Adafruit_FT6206(); // Touch panel
@@ -826,11 +829,12 @@ void tach_isr(void) {  // The tach and speedo isrs compare value returned from t
     }
 }
 void speedo_isr(void) {  //  A better approach would be to read, reset, and restart a hardware interval timer in the isr.  Better still would be to regularly read a hardware binary counter clocked by the pin - no isr.
-    int32_t temp_us = speedoPulseTimer.elapsed();
-    if (temp_us > speedo_delta_impossible_us) {
-        speedo_delta_us = temp_us;    
-        speedoPulseTimer.reset();
-    }
+    Speedo.isr();
+    // int32_t temp_us = speedoPulseTimer.elapsed();
+    // if (temp_us > speedo_delta_impossible_us) {
+    //     speedo_delta_us = temp_us;    
+    //     speedoPulseTimer.reset();
+    // }
 }
 void hotrc_horz_isr(void) {  // Reads ranged PWM signal on an input pin to determine control position. This ISR sets timer for all hotrc isrs on hi-going edge
     if (digitalRead(hotrc_horz_pin)) hotrcPulseTimer.reset();
@@ -991,6 +995,11 @@ void cantroller2_init() {
     // ui_pot_addrs[SPEEDO] = &carspeed_mmph;
     
     //  = { &pot_adc, &pot_adc, &pot_adc, &pot_adc, &brake_pos_adc, &pressure_adc, &engine_rpm, &carspeed_mmph, -1, -1, -1 };
+
+    Speedo.set_conversion_factor( (double)179757270 );
+    Speedo.set_ema_alpha(carspeed_ema_alpha);
+    Speedo.set_lp_spike_thresh(carspeed_lp_thresh_mmph, carspeed_spike_thresh_mmph);
+    Pressure.set_limits(658.0, 2100.0);
 
     loopTimer.reset();  // start timer to measure the first loop
     Serial.println(F("Setup finished"));

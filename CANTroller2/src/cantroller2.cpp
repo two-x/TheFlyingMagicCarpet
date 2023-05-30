@@ -3,6 +3,7 @@
 #include "classes.h"  // Contains our data structures
 #include "spid.h"  // A class for Soren's pid loop code
 using namespace std;
+
 void setup() {
     cantroller2_init();
 };
@@ -34,6 +35,7 @@ void loop() {
     engine_govern_rpm = map(gas_governor_percent, 0, 100, 0, engine_redline_rpm);  // Create an artificially reduced maximum for the engine speed
     gas_pulse_govern_us = map(gas_governor_percent*(engine_redline_rpm-engine_idle_rpm)/engine_redline_rpm, 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
     carspeed_govern_mmph = map(gas_governor_percent, 0, 100, 0, carspeed_redline_mmph);  // Governor must scale the top vehicle speed proportionally
+
 
     if (heartbeatTimer.expired()) {  // Heartbeat LED
         heartbeat_pulse = !heartbeat_pulse;
@@ -101,20 +103,21 @@ void loop() {
         if (engine_rpm) engine_filt_rpm = ema(engine_rpm, engine_filt_rpm, engine_ema_alpha);  // Sensor EMA filter
         else engine_filt_rpm = 0;
     }
+    speedoSensor.calc();
     // Speedo
-    if (!ui_simulating[GLOBAL] || !ui_simulating[SPEEDO]) { 
-        if (speedoPulseTimer.elapsed() < car_stop_timeout_us) carspeed_mmph = (int32_t)(179757270/(double)speedo_delta_us); // Update car speed value  
-        // magnets/us * 179757270 (1 rot/magnet * 1000000 us/sec * 3600 sec/hr * 1/19.85 gearing * 20*pi in/rot * 1/12 ft/in * 1000/5280 milli-mi/ft gives milli-mph  // * 1/1.15 knots/mph gives milliknots
-        // Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
-        else carspeed_mmph = 0;     
-        if (abs(carspeed_mmph-carspeed_old_mmph) > carspeed_lp_thresh_mmph || carspeed_mmph-carspeed_last_mmph < carspeed_spike_thresh_mmph) {  // Remove noise spikes from speedo values, if otherwise in range
-            carspeed_old_mmph = carspeed_last_mmph;
-            carspeed_last_mmph = carspeed_mmph;
-        }
-        else carspeed_mmph = carspeed_last_mmph;  // Spike detected - ignore that sample
-        if (carspeed_mmph)  carspeed_filt_mmph = ema(carspeed_mmph, carspeed_filt_mmph, carspeed_ema_alpha);  // Sensor EMA filter
-        else carspeed_filt_mmph = 0;
-    }
+    // if (!ui_simulating[GLOBAL] || !ui_simulating[SPEEDO]) { 
+    //     if (speedoPulseTimer.elapsed() < car_stop_timeout_us) carspeed_mmph = (int32_t)(179757270/(double)speedo_delta_us); // Update car speed value  
+    //     // magnets/us * 179757270 (1 rot/magnet * 1000000 us/sec * 3600 sec/hr * 1/19.85 gearing * 20*pi in/rot * 1/12 ft/in * 1000/5280 milli-mi/ft gives milli-mph  // * 1/1.15 knots/mph gives milliknots
+    //     // Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
+    //     else carspeed_mmph = 0;     
+    //     if (abs(carspeed_mmph-carspeed_old_mmph) > carspeed_lp_thresh_mmph || carspeed_mmph-carspeed_last_mmph < carspeed_spike_thresh_mmph) {  // Remove noise spikes from speedo values, if otherwise in range
+    //         carspeed_old_mmph = carspeed_last_mmph;
+    //         carspeed_last_mmph = carspeed_mmph;
+    //     }
+    //     else carspeed_mmph = carspeed_last_mmph;  // Spike detected - ignore that sample
+    //     if (carspeed_mmph)  carspeed_filt_mmph = ema(carspeed_mmph, carspeed_filt_mmph, carspeed_ema_alpha);  // Sensor EMA filter
+    //     else carspeed_filt_mmph = 0;
+    // }
 
     if (!ui_simulating[GLOBAL] || !ui_simulating[PRESS]) {
         pressure_adc = analogRead(pressure_pin);  // Brake pressure.  Read sensor, then Remove noise spikes from brake feedback, if reading is otherwise in range
