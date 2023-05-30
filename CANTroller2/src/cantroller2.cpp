@@ -103,7 +103,7 @@ void loop() {
         if (engine_rpm) engine_filt_rpm = ema(engine_rpm, engine_filt_rpm, engine_ema_alpha);  // Sensor EMA filter
         else engine_filt_rpm = 0;
     }
-    speedoSensor.calc();
+    Speedo.calc();
     // Speedo
     // if (!ui_simulating[GLOBAL] || !ui_simulating[SPEEDO]) { 
     //     if (speedoPulseTimer.elapsed() < car_stop_timeout_us) carspeed_mmph = (int32_t)(179757270/(double)speedo_delta_us); // Update car speed value  
@@ -449,19 +449,21 @@ void loop() {
                     touch_longpress_valid = false;
                 }
             }
-            else if (touch_col == 3 && touch_row == 0 && ui_simulating[GLOBAL] && ui_simulating[BASICSW] && !touch_now_touched) basicmodesw = !basicmodesw;  // Pressed the basic mode toggle button. Toggle value, only once per touch
-            else if (touch_col == 3 && touch_row == 1 && ui_simulating[GLOBAL] && ui_simulating[PRESS]) adj_val(&pressure_filt_adc, touch_accel, pressure_min_adc, pressure_max_adc);  // (+= 25) Pressed the increase brake pressure button
-            else if (touch_col == 3 && touch_row == 2 && ui_simulating[GLOBAL] && ui_simulating[PRESS]) adj_val(&pressure_filt_adc, -touch_accel, pressure_min_adc, pressure_max_adc);  // (-= 25) Pressed the decrease brake pressure button
-            else if (touch_col == 3 && touch_row == 4 && ui_simulating[GLOBAL] && ui_simulating[CTRL]) adj_val(&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (-= 25) Pressed the joystick left button
-            else if (touch_col == 4 && touch_row == 0 && ui_simulating[GLOBAL] && ui_simulating[IGN] && !touch_now_touched) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
-            else if (touch_col == 4 && touch_row == 1 && ui_simulating[GLOBAL] && ui_simulating[TACH]) adj_val(&engine_filt_rpm, touch_accel, 0, engine_redline_rpm);  // (+= 25) Pressed the increase engine rpm button
-            else if (touch_col == 4 && touch_row == 2 && ui_simulating[GLOBAL] && ui_simulating[TACH]) adj_val(&engine_filt_rpm, -touch_accel, 0, engine_redline_rpm);  // (-= 25) Pressed the decrease engine rpm button
-            else if (touch_col == 4 && touch_row == 3 && ui_simulating[GLOBAL] && ui_simulating[CTRL]) adj_val(&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (+= 25) Pressed the joystick up button
-            else if (touch_col == 4 && touch_row == 4 && ui_simulating[GLOBAL] && ui_simulating[CTRL]) adj_val(&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (-= 25) Pressed the joystick down button
-            else if (touch_col == 5 && touch_row == 0 && ui_simulating[GLOBAL] && ui_simulating[CRUISESW]) cruise_sw = true;  // Pressed the cruise mode button. This is a momentary control, not a toggle. Value changes back upon release
-            else if (touch_col == 5 && touch_row == 1 && ui_simulating[GLOBAL] && ui_simulating[SPEEDO]) adj_val(&carspeed_filt_mmph, touch_accel, 0, carspeed_redline_mmph);  // (+= 50) // Pressed the increase vehicle speed button
-            else if (touch_col == 5 && touch_row == 2 && ui_simulating[GLOBAL] && ui_simulating[SPEEDO]) adj_val(&carspeed_filt_mmph, -touch_accel, 0, carspeed_redline_mmph);  // (-= 50) Pressed the decrease vehicle speed button
-            else if (touch_col == 5 && touch_row == 4 && ui_simulating[GLOBAL] && ui_simulating[CTRL]) adj_val(&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (+= 25) Pressed the joystick right button                           
+            else if (ui_simulating[GLOBAL]) {
+                if (touch_col == 3 && touch_row == 0 && ui_simulating[BASICSW] && !touch_now_touched) basicmodesw = !basicmodesw;  // Pressed the basic mode toggle button. Toggle value, only once per touch
+                else if (touch_col == 3 && touch_row == 1 && Pressure.val_source() == TOUCH) pressure_filt_adc = Pressure.assign_val(pressure_filt_adc + touch_accel);  // , pressure_min_adc, pressure_max_adc);  // (+= 25) Pressed the increase brake pressure button
+                else if (touch_col == 3 && touch_row == 2 && Pressure.val_source() == TOUCH) pressure_filt_adc = Pressure.assign_val(pressure_filt_adc - touch_accel);  // (-= 25) Pressed the decrease brake pressure button
+                else if (touch_col == 3 && touch_row == 4 && ui_simulating[CTRL]) adj_val(&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (-= 25) Pressed the joystick left button
+                else if (touch_col == 4 && touch_row == 0 && ui_simulating[IGN] && !touch_now_touched) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
+                else if (touch_col == 4 && touch_row == 1 && ui_simulating[TACH]) adj_val(&engine_filt_rpm, touch_accel, 0, engine_redline_rpm);  // (+= 25) Pressed the increase engine rpm button
+                else if (touch_col == 4 && touch_row == 2 && ui_simulating[TACH]) adj_val(&engine_filt_rpm, -touch_accel, 0, engine_redline_rpm);  // (-= 25) Pressed the decrease engine rpm button
+                else if (touch_col == 4 && touch_row == 3 && ui_simulating[CTRL]) adj_val(&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (+= 25) Pressed the joystick up button
+                else if (touch_col == 4 && touch_row == 4 && ui_simulating[CTRL]) adj_val(&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (-= 25) Pressed the joystick down button
+                else if (touch_col == 5 && touch_row == 0 && ui_simulating[CRUISESW]) cruise_sw = true;  // Pressed the cruise mode button. This is a momentary control, not a toggle. Value changes back upon release
+                else if (touch_col == 5 && touch_row == 1 && Speedo.val_source() == TOUCH) carspeed_filt_mmph = Speedo.assign_val(carspeed_filt_mmph + touch_accel);  // (&carspeed_filt_mmph, touch_accel, 0, carspeed_redline_mmph);  // (+= 50) // Pressed the increase vehicle speed button
+                else if (touch_col == 5 && touch_row == 2 && Speedo.val_source() == TOUCH) carspeed_filt_mmph = Speedo.assign_val(carspeed_filt_mmph - touch_accel);  // (-= 50) Pressed the decrease vehicle speed button
+                else if (touch_col == 5 && touch_row == 4 && ui_simulating[CTRL]) adj_val(&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (+= 25) Pressed the joystick right button                           
+            }
             if (touch_accel_exponent < touch_accel_exponent_max && (touchHoldTimer.elapsed() > (touch_accel_exponent + 1) * touchAccelTimer.timeout())) touch_accel_exponent++; // If timer is > the shift time * exponent, and not already maxed, double the edit speed by incrementing the exponent
                 
             touch_now_touched = true;
@@ -607,9 +609,9 @@ void loop() {
         // draw_fixed();
         // if (ui_simulating) draw_touchgrid(); // Redraw only the at-risk content of the touch grid
         draw_dynamic(0, runmode, -1, -1, 1);
-        draw_dyn_pid(1, carspeed_filt_mmph, 0, carspeed_redline_mmph, (int32_t)cruiseSPID.get_target(), 4);
+        draw_dyn_pid(1, Speedo.val(), 0, carspeed_redline_mmph, (int32_t)cruiseSPID.get_target(), 4);
         draw_dyn_pid(2, engine_filt_rpm, 0, engine_redline_rpm, (int32_t)gasSPID.get_target(), 4);
-        draw_dyn_pid(3, pressure_filt_adc, pressure_min_adc, pressure_max_adc, (int32_t)brakeSPID.get_target(), 4);  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc, 4);
+        draw_dyn_pid(3, Pressure.val(), pressure_min_adc, pressure_max_adc, (int32_t)brakeSPID.get_target(), 4);  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc, 4);
         draw_dynamic(4, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX], 0);
         draw_dynamic(5, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX], 0);
         draw_dynamic(6, (int32_t)cruiseSPID.get_target(), 0, carspeed_govern_mmph, 0);
@@ -625,9 +627,9 @@ void loop() {
             // draw_dynamic(14, brakeSPID.get_proportionality(), -1, -1, 0);
             draw_dynamic(15, ui_simulating[CTRL], -1, -1, 0);
             draw_dynamic(16, ui_simulating[BRKPOS], -1, -1, 0);
-            draw_dynamic(17, ui_simulating[PRESS], -1, -1, 0);
+            draw_dynamic(17, Pressure.val_source(), -1, -1, 0);
             draw_dynamic(18, ui_simulating[TACH], -1, -1, 0);
-            draw_dynamic(19, ui_simulating[SPEEDO], -1, -1, 0);
+            draw_dynamic(19, Speedo.val_source(), -1, -1, 0);
         }
         else if (dataset_page == JOY) {
             draw_dynamic(12, ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX], 0);

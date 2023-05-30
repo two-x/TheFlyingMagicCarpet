@@ -131,6 +131,13 @@ class Transducer : public Device {
         *d_val = arg_new_val;
         saturated = !con_strain(d_val);
     }
+    void add_val (double arg_add_val) {  // 
+        double new_val = *d_val + arg_add_val;
+        d_val++;
+        if (d_val >= &vals[0] + sizeof(vals)) d_val -= sizeof(vals);
+        *d_val = new_val;
+        saturated = !con_strain(d_val);
+    }
     void set_center (double arg_val_cent) {
         if (arg_val_cent <= val_min || arg_val_cent >= val_max) {
             printf ("Transducer::set_limits(): Centerpoint must fall within min/max limits\n");
@@ -224,7 +231,7 @@ class BrakeMotor : public Actuator {
     : Actuator(eng_name, arg_pin, arg_dir, arg_val_min, arg_val_max) {}
 };
 
-// Device::Transducer::Sensor::AnalogSensor are those where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
+// Device::Transducer::Sensor::AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
 class AnalogSensor : public Sensor {
   public:
     void read() {
@@ -234,7 +241,7 @@ class AnalogSensor : public Sensor {
     }
 };
 
-// Device::Transducer::Sensor::PulseSensor are those where the value is based on the measured period between successive pulses (eg tach, speedo)
+// Device::Transducer::Sensor::PulseSensor are sensors where the value is based on the measured period between successive pulses (eg tach, speedo)
 class PulseSensor : public Sensor {
   protected:
     Timer PulseTimer;  // OK to not be volatile?
@@ -268,12 +275,6 @@ class PulseSensor : public Sensor {
                 else val_temp = conversion_factor/delta_us;
             }
             else val_temp = 0;     
-            
-            // carspeed_mmph = (int32_t)(179757270/(double)speedo_delta_us); // Update car speed value  
-            // magnets/us * 179757270 (1 rot/magnet * 1000000 us/sec * 3600 sec/hr * 1/19.85 gearing * 20*pi in/rot * 1/12 ft/in * 1000/5280 milli-mi/ft gives milli-mph  // * 1/1.15 knots/mph gives milliknots
-            // Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
-            
-                
             if (filt_lp_spike(val_temp)) {
                 if (val_temp == 0) assign_val(0.0);
                 else assign_val ( filt_ema(val_temp, *d_val, ema_alpha) );

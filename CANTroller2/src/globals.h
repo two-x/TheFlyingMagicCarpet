@@ -91,10 +91,10 @@ enum ctrls { HOTRC };  // This is a bad hack. Since JOY is already enum'd as 1 f
 enum ctrl_axes { HORZ, VERT };
 enum ctrl_thresh { MIN, DB, MAX };
 enum ctrl_edge { BOT, TOP };
-enum raw_filt { RAW, FILT};
+enum raw_filt { RAW, FILT };
 enum encoder_inputs {A, B};
 enum encodersw_presses { NONE, SHORT, LONG };
-enum sensor_sources { SENSOR, TOUCH, POT, LAST };
+// enum sensor_sources { SENSOR, TOUCH, POT, LAST };
 char telemetry[disp_fixed_lines][10] = {  
     "   Speed:",
     "    Tach:",
@@ -470,8 +470,8 @@ int32_t pressure_old_adc  = adc_midscale_adc;  // Some pressure reading history 
 double pressure_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 // int32_t pressure_adc = 0;
 // int32_t pressure_last_adc = adc_midscale_adc;  // Some pressure reading history for noise handling (-1)
-// int32_t d_pressure_min_adc = 658;  // Brake pressure when brakes are effectively off. Sensor min = 0.5V, scaled by 3.3/4.5V is 0.36V of 3.3V (ADC count 0-4095). 230430 measured 658 adc (0.554V) = no brakes
-// int32_t d_pressure_max_adc = 2100;  // Highest possible pressure achievable by the actuator (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as chris can push (wimp)
+int32_t d_pressure_min_adc = 658;  // Brake pressure when brakes are effectively off. Sensor min = 0.5V, scaled by 3.3/4.5V is 0.36V of 3.3V (ADC count 0-4095). 230430 measured 658 adc (0.554V) = no brakes
+int32_t d_pressure_max_adc = 2100;  // Highest possible pressure achievable by the actuator (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as chris can push (wimp)
 int32_t pressure_margin_adc = 12;  // Margin of error when comparing brake pressure adc values (ADC count 0-4095)
 int32_t pressure_spike_thresh_adc = 60;  // min pressure delta between two readings considered a spike to ignore (ADC count 0-4095)
 int32_t pressure_lp_thresh_adc = 1200;   // max delta acceptable over three consecutive readings (ADC count 0-4095)
@@ -978,7 +978,7 @@ void cantroller2_init() {
     attachInterrupt(digitalPinToInterrupt(hotrc_ch4_pin), hotrc_ch4_isr, FALLING);    
     // Set up the soren pid loops
     brakeSPID.set_output_center(brake_pulse_stop_us);  // Sets actuator centerpoint and puts pid loop in output centerpoint mode. Becasue actuator value is defined as a deviation from a centerpoint
-    brakeSPID.set_input_limits((double)pressure_min_adc, (double)pressure_max_adc);  // Make sure pressure target is in range
+    brakeSPID.set_input_limits(d_pressure_min_adc, d_pressure_max_adc);  // Make sure pressure target is in range
     brakeSPID.set_output_limits((double)brake_pulse_retract_us, (double)brake_pulse_extend_us);
     gasSPID.set_input_limits((double)engine_idle_rpm, (double)engine_govern_rpm);
     gasSPID.set_output_limits((double)gas_pulse_redline_us, (double)gas_pulse_idle_us);
@@ -996,10 +996,13 @@ void cantroller2_init() {
     
     //  = { &pot_adc, &pot_adc, &pot_adc, &pot_adc, &brake_pos_adc, &pressure_adc, &engine_rpm, &carspeed_mmph, -1, -1, -1 };
 
+    // carspeed_mmph = (int32_t)(179757270/(double)speedo_delta_us); // Update car speed value  
+    // magnets/us * 179757270 (1 rot/magnet * 1000000 us/sec * 3600 sec/hr * 1/19.85 gearing * 20*pi in/rot * 1/12 ft/in * 1000/5280 milli-mi/ft gives milli-mph  // * 1/1.15 knots/mph gives milliknots
+    // Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
     Speedo.set_conversion_factor( (double)179757270 );
     Speedo.set_ema_alpha(carspeed_ema_alpha);
     Speedo.set_lp_spike_thresh(carspeed_lp_thresh_mmph, carspeed_spike_thresh_mmph);
-    Pressure.set_limits(658.0, 2100.0);
+    Pressure.set_limits(d_pressure_min_adc, d_pressure_max_adc);
 
     loopTimer.reset();  // start timer to measure the first loop
     Serial.println(F("Setup finished"));
