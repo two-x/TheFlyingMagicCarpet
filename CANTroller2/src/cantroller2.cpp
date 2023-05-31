@@ -1,7 +1,8 @@
 // Carpet CANTroller II  Source Code  - For Arduino Due with Adafruit 2.8inch Captouch TFT shield.
 #include "globals.h"  // Contains variable and object initializations, and function definitions inculding setup function
-#include "classes.h"  // Contains our data structures
+#include "devices.h"  // Contains our data structures
 #include "spid.h"  // A class for Soren's pid loop code
+#include "ui.h"
 using namespace std;
 
 void setup() {
@@ -132,8 +133,8 @@ void loop() {
 
    // 2) Read joystick then determine new steering setpoint, and handle digital pins
     //
-    digitalWrite(led_tx_pin, !touch_now_touched);
-    digitalWrite(led_rx_pin, (sim_edit_delta > 0) ? 0 : 1);  
+    if (led_tx_pin >= 0) digitalWrite(led_tx_pin, !touch_now_touched);
+    if (led_rx_pin >= 0) digitalWrite(led_rx_pin, (sim_edit_delta > 0) ? 0 : 1);  
     if (!ui_simulating[GLOBAL] || !ui_simulating[CTRL]) {  // If not simulating or not simulating joystick
         if (ctrl == HOTRC) {
             ctrl_pos_adc[VERT][RAW] = map(hotrc_vert_pulse_us, 2003, 1009, ctrl_lims_adc[ctrl][VERT][MAX], ctrl_lims_adc[ctrl][VERT][MIN]);
