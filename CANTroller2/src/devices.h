@@ -6,39 +6,6 @@
 #include "Arduino.h"
 #include "globals.h"
 
-class TuneEditor {
-};
-class Simulator {
-};
-class Settings {
-};
-
-ControlLoop Steering();
-ControlLoop Braking();
-ControlLoop Throttle();
-ControlLoop Cruise();
-
-AnalogSensor MuleBatt();
-AnalogSensor BrakePos();
-AnalogSensor Pot();
-RotaryEncoder Encoder();
-InToggle BasicSw();
-OutToggle Ignition();
-Outtoggle SysPower();
-Outtoggle LedRx();
-Outtoggle LedTx();
-Outtoggle LedHeart();
-Outtoggle SysPower();
-
-ServoPWM gasServo();
-ServoPWM HotrcCh3();
-ServoPWM HotrcCh4();
-JagMotor steerMotor();
-JagMotor BrakeMotor(); 
-
-static Servo gas_servo;
-static Servo steer_servo;  // Lets us set pwm outputs given an on-time pulse width in us
-
 // class Variable {  // A wrapper for all veriables of consequence in our code.
 //     public:
 //         Variable(int32_t arg1) { int32_t value = arg1; }
@@ -48,17 +15,55 @@ static Servo steer_servo;  // Lets us set pwm outputs given an on-time pulse wid
 
 // Param is a value affecting control, which holds a double value, and can be displayed
 class Param {
-  //   protected:
-  //     std::string eng_name, disp_name, disp_units;
+  protected:
+    double effect_max_val, effect_min_val, last_val, last2_val; //, effect_cent_val;  // Values corresponding to a max/min real world effect (might be numerically reversed)
   public:
-    double val;
-    Param (double arg_val) { val = arg_val; }
-    // Param (std::string& eng_name, double arg_val, std::string& disp_name, std::string& disp_units) { val = arg_val; }
-    // void set_disp_strings (std::string& disp_name, std::string& disp_units) {}
-    // std::string& eng_name () { return eng_name; }
-    // std::string& disp_name () { return disp_name; }
-    // std::string& disp_units () { return disp_units; }
+    #define _FWD 1
+    #define _REV -1
+    bool can_sim, can_tune;
+    int32_t dir;  // For the case a lower val causes a higher real-life effect, 
+    char disp_name[9], disp_units[5];
+    double* val; double* min_val; double* max_val;  // Reference to numerical max/min values
+    Param (double* val, std::string arg_name, std::string arg_units, double* min_val, double* max_val) {
+        set_limits (min_val, max_val);
+        constrain_it (val, *min_val, *max_val);
+        strcpy(disp_name, arg_name.c_str());
+        strcpy(disp_units, arg_units.c_str());
+    }
+    Param (double* val, std::string arg_name, std::string arg_units, double effect_min_val, double effect_max_val) {
+        set_limits (effect_min_val, effect_max_val);
+        Param (val, arg_name, arg_units, &effect_min_val, &effect_max_val);
+    }
+    void set_limits (double* min_val, double* arg_max_val) {
+        dir = (*min_val <= *arg_max_val) * 2 - 1;
+        max_val = (dir == _FWD) ? arg_max_val : min_val;
+        if (dir == _REV) min_val = max_val;
+    }
+    void set_limits (double effect_min_val, double effect_max_val) {
+        min_val = &effect_min_val;
+        max_val = &effect_max_val;
+        set_limits (min_val, max_val);
+    }
+    bool set (double new_val) {
+
+    }
+  protected:
+    bool constrain_it (double* arg_value, double arg_min, double arg_max) {  // This should be called "constrain" not "constrain_it"
+        if (*arg_value < arg_min) set(arg_min);
+        else if (*arg_value > arg_max) *arg_value = arg_max;
+        else return true;  // No constraint was necessary
+        return false;  // If constraint was necessary
+    }
 };
+
+// bool constrain_it (double* arg_value, double arg_min, double arg_max) {  // This should be called "constrain" not "constrain_it"
+//     if (*arg_value < arg_min) *arg_value = arg_min;
+//     else if (*arg_value > arg_max) *arg_value = arg_max;
+//     else return true;  // No constraint was necessary
+//     return false;  // If constraint was necessary
+// }
+
+//: Param (val, arg_name, arg_units, &effect_min_val, &effect_max_val) {}
 
 // class Setting : public Variable {
 // }
@@ -105,8 +110,6 @@ class Device {
     #define _TOUCH 1  // source is from touch ui simulator
     #define _POT 2  // source is simulated using pot
     #define _LIVE 3   // source is determined by control algorithms
-    #define _FWD 1
-    #define _REV -1
     Device (int32_t arg_pin) {  // std::string& eng_name, 
         can_sim_touch = false;
         val_source = _PIN;
@@ -126,19 +129,19 @@ class Device {
     int32_t get_vsource () { return val_source; }
 };
 
-// // Device::Toggle is a base class for system signals or devices having a boolean value
-// class Toggle : virtual public Device {
-//   public:
-//     bool val, val_last, can_sim;
-//     int32_t pin, val_source;
-//     Toggle(int32_t arg_pin) {  // std::string& eng_name, 
-//         pin = arg_pin;
-//         can_sim = true;
-//     }
-// };
+// Device::Toggle is a base class for system signals or devices having a boolean value
+class Toggle : virtual public Device {
+  public:
+    bool val, val_last, can_sim;
+    int32_t pin, val_source;
+    Toggle(int32_t arg_pin) {  // std::string& eng_name, 
+        pin = arg_pin;
+        can_sim = true;
+    }
+};
 
 // Device::Toggle::InToggle is system signals or devices having a boolean value that serve as inputs (eg basicsw, cruisesw)
-class InToggle : virtual public Device {  // Toggle
+class InToggle : virtual public Toggle {  // Toggle
   public:
     InToggle(int32_t arg_pin)   // std::string& eng_name, 
     : Toggle(arg_pin) {
@@ -157,7 +160,7 @@ class InToggle : virtual public Device {  // Toggle
 };
 
 // Device::Toggle::OutToggle is system signals or devices having a boolean value that serve as outputs (eg ignition, leds, etc.)
-class OutToggle : virtual public Device {  // Toggle
+class OutToggle : virtual public Toggle {  // Toggle
   public:
     OutToggle(int32_t arg_pin)  // std::string& eng_name, 
     : Toggle(arg_pin) {
@@ -183,12 +186,6 @@ class Transducer : virtual public Device {
         for (int x = 0; x < sizeof(vals); x++) vals[x] = arg_val;
         d_val = &vals[0];
     }
-    bool con_strain (double* arg_value) {  // This should be called "constrain" not "con_strain"
-        if (*arg_value < val_min) *arg_value = val_min;
-        else if (*arg_value > val_max) *arg_value = val_max;
-        else return true;  // No constraint was necessary
-        return false;  // If constraint was necessary
-    }
   public:
     #define ABSOLUTE 0  // assign to outCenterMode if pid output just spans a range, rather than deviating from a centerpoint 
     #define RELATIVE 1  // assign to outCenterMode if pid output deviates from a centerpoint 
@@ -213,7 +210,7 @@ class Transducer : virtual public Device {
         d_val++;
         if (d_val >= &vals[0] + sizeof(vals)) d_val -= sizeof(vals);
         *d_val = arg_new_val;
-        saturated = !con_strain(d_val);
+        saturated = !constrainit(d_val);
     }
     void add_val (double arg_add_val) {  // 
         assign_val(*d_val + arg_add_val);
@@ -274,9 +271,10 @@ class Sensor : virtual public Transducer {
     }
     double getval (void) { return *d_val; }
     double getraw (void) { return raw_val; }
-    double filt_ema (int32_t raw_value, double filt_value, double alpha) {
-        return (int32_t)((alpha*(double)raw_value) + ((1-alpha)*filt_value));
+    double filter (void) {
+        return ema_alpha * raw_val + (1-ema_alpha) * (*d_val);
     }
+
     bool new_val (double arg_val) {  // return true if given new value need not be rejected due to spiked value
         raw_val = arg_val;
         if (!lp_spike_filtering) return true;
@@ -298,6 +296,9 @@ class Sensor : virtual public Transducer {
 // Device::Transducer::Sensor::AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
 class AnalogSensor : virtual public Sensor {
   public:
+    AnalogSensor (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max)  // std::string& eng_name, 
+    : Sensor (arg_pin, arg_dir, arg_val_min, arg_val_max) {}
+
     void read() {
         int32_t read_val = analogRead(pin);
         // filter, etc.
@@ -344,13 +345,30 @@ class PulseSensor : public Sensor {
         }
     }
 };
+// Device::Transducer::Sensor::InPWM are servo-pwm standard signals being read in, with variable pulsewidth
+class InPWM : public Sensor {
+  protected:
+    Timer PulseTimer;  // OK to not be volatile?
+  public:
+    InPWM(int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max, double arg_val_cent)
+    : Sensor(arg_pin, arg_dir, arg_val_min, arg_val_max, arg_val_cent)  {}
 
-// Device::Transducer::Actuator is a base class for control system actuators, ie anything that turns signals into real world physical change
+};
+// Device::Transducer::Sensor::InPWM::InPWMToggle are servo-pwm standard signals being read in, but only valid values are pulse_min (0) and pulse_max (1) (eg hotrc ch3-4)
+class InPWMToggle : public InPWM {
+  protected:
+    Timer PulseTimer;  // OK to not be volatile?
+  public:
+    InPWMToggle(int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max, double arg_val_cent)
+    : Sensor(arg_pin, arg_dir, arg_val_min, arg_val_max, arg_val_cent)  {}
+
+};
+// Device::Transducer::ServoPWM is a base class for control system actuators, ie anything that turns signals into real world physical change
 class ServoPWM : virtual public Transducer {
   protected:
     static Servo servo;
   public:
-    Actuator (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max) {  // std::string& eng_name, 
+    ServoPWM (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max) {  // std::string& eng_name, 
         Transducer (arg_pin, arg_dir);
         servo.attach(pin);
         set_limits(arg_val_min, arg_val_max);
@@ -360,18 +378,25 @@ class ServoPWM : virtual public Transducer {
     }
 };
 
-// Device::Transducer::Actuator::BrakeMotor is a class specifically for the brake linear actuator motor
+// Device::Transducer::ServoPWM::JagMotor is a class specifically for the brake linear actuator motor
 class JagMotor : public ServoPWM {
   protected:
     static Servo servo;
   public:
-    BrakeMotor (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max)  // std::string& eng_name, 
-    : Actuator(arg_pin, arg_dir, arg_val_min, arg_val_max) {}
+    JagMotor (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max)  // std::string& eng_name, 
+    : ServoPWM(arg_pin, arg_dir, arg_val_min, arg_val_max) {}
 };
 
 class Controller {};
 
 class HotRc : public Controller {
+  protected:
+    InPWM horz, vert;
+    InPWMToggle ch3, ch4;
+  public:
+    HotRC (int32_t arg_horz_pin, int32_t arg_vert_pin, int32_t arg_ch3_pin, int32_t arg_ch4_pin) {
+        InPWM horz(arg_horz_pin, )
+    }
 };
 
 class Joystick : public Controller {
@@ -380,6 +405,13 @@ class Joystick : public Controller {
 };
 
 class ControlLoop {
+};
+
+class TuneEditor {
+};
+class Simulator {
+};
+class Settings {
 };
 
 #endif  // DEVICES_H
