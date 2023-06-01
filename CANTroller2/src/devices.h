@@ -17,6 +17,12 @@
 class Param {
   protected:
     double effect_max_val, effect_min_val, last_val, last2_val; //, effect_cent_val;  // Values corresponding to a max/min real world effect (might be numerically reversed)
+    bool constrain_it (double* arg_value, double arg_min, double arg_max) {  // This should be called "constrain" not "constrain_it"
+        if (*arg_value < arg_min) *arg_value = arg_min;
+        else if (*arg_value > arg_max) *arg_value = arg_max;
+        else return true;  // No constraint was necessary
+        return false;  // If constraint was necessary
+    }
   public:
     #define _FWD 1
     #define _REV -1
@@ -44,25 +50,7 @@ class Param {
         max_val = &effect_max_val;
         set_limits (min_val, max_val);
     }
-    bool set (double new_val) {
-
-    }
-  protected:
-    bool constrain_it (double* arg_value, double arg_min, double arg_max) {  // This should be called "constrain" not "constrain_it"
-        if (*arg_value < arg_min) set(arg_min);
-        else if (*arg_value > arg_max) *arg_value = arg_max;
-        else return true;  // No constraint was necessary
-        return false;  // If constraint was necessary
-    }
 };
-
-// bool constrain_it (double* arg_value, double arg_min, double arg_max) {  // This should be called "constrain" not "constrain_it"
-//     if (*arg_value < arg_min) *arg_value = arg_min;
-//     else if (*arg_value > arg_max) *arg_value = arg_max;
-//     else return true;  // No constraint was necessary
-//     return false;  // If constraint was necessary
-// }
-
 //: Param (val, arg_name, arg_units, &effect_min_val, &effect_max_val) {}
 
 // class Setting : public Variable {

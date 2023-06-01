@@ -3,8 +3,8 @@
 #ifdef DUE  // #if ARDUINO >= 100
     #include "Arduino.h"
     #include <LibPrintf.h>  // This works on Due but not ESP32
-#else
-    #include "WProgram.h"
+// #else
+//     #include "WProgram.h"
 #endif
 #include "math.h"  // Just using for signbit() function. Note signbit returns true for negative signed argument
 #include "globals.h"
