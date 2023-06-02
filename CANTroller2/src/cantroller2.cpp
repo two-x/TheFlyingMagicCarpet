@@ -1,5 +1,6 @@
 // Carpet CANTroller II  Source Code  - For Arduino Due with Adafruit 2.8inch Captouch TFT shield.
-
+#undef min
+#undef max
 #include <SPI.h>  // SPI serial bus needed to talk to the LCD and the SD card
 #include <Wire.h>  // Contains I2C serial bus, needed to talk to touchscreen chip
 #include <SdFat.h>  // SD card & FAT filesystem library
@@ -342,24 +343,6 @@ int32_t dataset_page = LOCK;  // Which of the six 8-value dataset pages is curre
 int32_t dataset_page_last = dataset_page;
 int32_t selected_value = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
 int32_t selected_value_last = 0;
-
-// simulator related
-bool simulating = false;
-bool simulating_last = false;
-bool sim_halfass = true;  // Don't sim the joystick or encoder or tach
-bool sim_joy = false;
-bool sim_press = true;
-bool sim_tach = true;
-bool sim_speedo = true;
-bool sim_brkpos = true;
-bool sim_basicsw = true;
-bool sim_ign = true;
-bool sim_cruisesw = true;
-Timer simTimer;
-int32_t sim_edit_delta = 0;
-int32_t sim_edit_delta_touch = 0;
-int32_t sim_edit_delta_encoder = 0;
-
 // run state globals
 enum runmodes {BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE};
 int32_t runmode = SHUTDOWN;
@@ -446,19 +429,21 @@ int32_t steer_safe_percent = 72;  // Sterring is slower at high speed. How stron
 int32_t steer_pulse_out_us = steer_pulse_stop_us;  // pid loop output to send to the actuator (steering)
 
 // brake pressure related
+double pressure_adc = 0;
+// int32_t pressure_min_adc = 658;  // Brake pressure when brakes are effectively off. Sensor min = 0.5V, scaled by 3.3/4.5V is 0.36V of 3.3V (ADC count 0-4095). 230430 measured 658 adc (0.554V) = no brakes
+// int32_t pressure_max_adc = 2100;  // Highest possible pressure achievable by the actuator (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as chris can push (wimp)
+// double d_pressure_target_adc = pressure_target_adc;
+// double d_pressure_filt_adc = (double)pressure_filt_adc;
+Param pressure (&pressure_adc, "Pressure:", "adc ", 658, 2100);
+
 double pressure_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-int32_t pressure_min_adc = 658;  // Brake pressure when brakes are effectively off. Sensor min = 0.5V, scaled by 3.3/4.5V is 0.36V of 3.3V (ADC count 0-4095). 230430 measured 658 adc (0.554V) = no brakes
-int32_t pressure_max_adc = 2100;  // Highest possible pressure achievable by the actuator (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as chris can push (wimp)
-int32_t pressure_margin_adc = 12;  // Margin of error when comparing brake pressure adc values (ADC count 0-4095)
-int32_t pressure_spike_thresh_adc = 60;  // min pressure delta between two readings considered a spike to ignore (ADC count 0-4095)
-int32_t pressure_lp_thresh_adc = 1200;   // max delta acceptable over three consecutive readings (ADC count 0-4095)
-int32_t pressure_adc = 0;
-int32_t pressure_target_adc = 0;  // Stores new setpoint to give to the pid loop (brake)
-int32_t pressure_filt_adc = 0;  // Stores new setpoint to give to the pid loop (brake)
-int32_t pressure_last_adc = adc_midscale_adc;  // Some pressure reading history for noise handling (-1)
-double d_pressure_target_adc = (double)pressure_target_adc;
-double d_pressure_filt_adc = (double)pressure_filt_adc;
-int32_t pressure_old_adc  = adc_midscale_adc;  // Some pressure reading history for noise handling (-2)
+double pressure_margin_adc = 12;  // Margin of error when comparing brake pressure adc values (ADC count 0-4095)
+double pressure_spike_thresh_adc = 60;  // min pressure delta between two readings considered a spike to ignore (ADC count 0-4095)
+double pressure_lp_thresh_adc = 1200;   // max delta acceptable over three consecutive readings (ADC count 0-4095)
+double pressure_target_adc = 0;  // Stores new setpoint to give to the pid loop (brake)
+double pressure_filt_adc = 0;  // Stores new setpoint to give to the pid loop (brake)
+double pressure_last_adc = adc_midscale_adc;  // Some pressure reading history for noise handling (-1)
+double pressure_old_adc  = adc_midscale_adc;  // Some pressure reading history for noise handling (-2)
 // int32_t pressure_min_psi = 0;  // Brake pressure when brakes are effectively off (psi 0-1000)
 // int32_t pressure_max_psi = 500;  // Highest possible pressure achievable by the actuator (psi 0-1000)
 
@@ -604,6 +589,22 @@ bool encoder_b_raw = digitalRead(encoder_b_pin);  // To store value of encoder p
 bool encoder_a_raw = digitalRead(encoder_a_pin);
 int32_t encoder_state = 0;
 int32_t encoder_counter = 0;
+
+// simulator related
+bool simulating = false;
+bool simulating_last = false;
+bool sim_halfass = true;  // Don't sim the joystick or encoder or tach
+bool sim_joy = false;
+bool sim_tach = true;
+bool sim_speedo = true;
+bool sim_brkpos = true;
+bool sim_basicsw = true;
+bool sim_ign = true;
+bool sim_cruisesw = true;
+Timer simTimer;
+int32_t sim_edit_delta = 0;
+int32_t sim_edit_delta_touch = 0;
+int32_t sim_edit_delta_encoder = 0;
 
 // Instantiate objects 
 Adafruit_FT6206 touchpanel = Adafruit_FT6206(); // Touch panel
@@ -1038,7 +1039,7 @@ void setup() {
     
     // Set up the soren pid loops
     brakeSPID.set_output_center(brake_pulse_stop_us);  // Sets actuator centerpoint and puts pid loop in output centerpoint mode. Becasue actuator value is defined as a deviation from a centerpoint
-    brakeSPID.set_input_limits((double)pressure_min_adc, (double)pressure_max_adc);  // Make sure pressure target is in range
+    brakeSPID.set_input_limits(*pressure.min_val, *pressure.max_val);  // Make sure pressure target is in range
     brakeSPID.set_output_limits((double)brake_pulse_retract_us , (double)brake_pulse_extend_us);
     gasSPID.set_input_limits((double)engine_idle_rpm, (double)engine_govern_rpm);
     gasSPID.set_output_limits((double)gas_pulse_redline_us, (double)gas_pulse_idle_us);
@@ -1048,6 +1049,9 @@ void setup() {
     steer_servo.attach(steer_pwm_pin);
     brake_servo.attach(brake_pwm_pin);
     gas_servo.attach(gas_pwm_pin);
+
+    pressure.can_sim = true;
+
 
     loopTimer.reset();  // start timer to measure the first loop
     Serial.println(F("Setup finished"));
@@ -1167,15 +1171,15 @@ void loop() {
         else carspeed_filt_mmph = 0;
     }
 
-    if (!simulating || !sim_press) {
-        pressure_adc = analogRead(pressure_pin);  // Brake pressure.  Read sensor, then Remove noise spikes from brake feedback, if reading is otherwise in range
-        if (abs(pressure_adc-pressure_old_adc) > pressure_lp_thresh_adc || pressure_adc-pressure_last_adc < pressure_spike_thresh_adc) {
+    if (!simulating || !pressure.can_sim) {
+        *pressure.val = (double)analogRead(pressure_pin);  // Brake pressure.  Read sensor, then Remove noise spikes from brake feedback, if reading is otherwise in range
+        if (abs(*pressure.val-pressure_old_adc) > pressure_lp_thresh_adc || *pressure.val-pressure_last_adc < pressure_spike_thresh_adc) {
             pressure_old_adc = pressure_last_adc;
-            pressure_last_adc = pressure_adc;
+            pressure_last_adc = *pressure.val;
         }
-        else pressure_adc = pressure_last_adc;  // Spike detected - ignore that sample
+        else *pressure.val = pressure_last_adc;  // Spike detected - ignore that sample
         // pressure_psi = (int32_t)(1000*(double)(pressure_adc)/adc_range_adc);      // Convert pressure to units of psi
-        pressure_filt_adc = ema(pressure_adc, pressure_filt_adc, pressure_ema_alpha);  // Sensor EMA filter
+        pressure_filt_adc = ema(*pressure.val, pressure_filt_adc, pressure_ema_alpha);  // Sensor EMA filter
     }
 
    // 2) Read joystick then determine new steering setpoint, and handle digital pins
@@ -1244,7 +1248,7 @@ void loop() {
             engine_target_rpm = engine_idle_rpm;  //  Release the throttle 
             shutdown_complete = false;
             if (carspeed_filt_mmph)  {
-                pressure_target_adc = (panic_stop) ? brake_panic_initial_adc : brake_hold_initial_adc;  // More brakes, etc. to stop the car
+                pressure_target_adc = (panic_stop) ? (double)brake_panic_initial_adc : (double)brake_hold_initial_adc;  // More brakes, etc. to stop the car
                 brakeIntervalTimer.reset();
                 sanityTimer.reset();
             }
@@ -1253,10 +1257,10 @@ void loop() {
             if (!carspeed_filt_mmph || sanityTimer.expired())  {  // If car has stopped, or timeout expires, then release the brake
                 motorParkTimer.reset();  // Set a timer to timebox this effort
                 park_the_motors = true;  // Flags the motor parking to happen
-                if (pressure_filt_adc <= pressure_min_adc + pressure_margin_adc)  shutdown_complete = true;  // With this set, we will do nothing from here on out (until mode changes, i.e. ignition)
+                if (pressure_filt_adc <= *pressure.min_val + pressure_margin_adc)  shutdown_complete = true;  // With this set, we will do nothing from here on out (until mode changes, i.e. ignition)
             }
             else if (brakeIntervalTimer.expired())  {
-                pressure_target_adc += (panic_stop) ? brake_panic_increment_adc : brake_hold_increment_adc;  // Slowly add more brakes until car stops
+                pressure_target_adc += (panic_stop) ? (double)brake_panic_increment_adc : (double)brake_hold_increment_adc;  // Slowly add more brakes until car stops
                 brakeIntervalTimer.reset();  
             }
             else if (!park_the_motors) shutdown_complete = true;
@@ -1265,7 +1269,7 @@ void loop() {
     else if (runmode == STALL)  {   // In stall mode, the gas doesn't have feedback
         if (engine_filt_rpm)  runmode = HOLD;  //  Enter Hold Mode if we started the car
         else {  // Actuators still respond and everything, even tho engine is turned off
-            pressure_target_adc = pressure_min_adc;  // Default when joystick not pressed
+            pressure_target_adc = *pressure.min_val;  // Default when joystick not pressed
             gas_pulse_out_us = gas_pulse_idle_us;  // Default when joystick not pressed
             if (ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][TOP])  { //  If we are pushing up
                 // In stall mode there is no engine rpm for PID to use as feedback, so we bypass the PID and just set the engine_target_angle proportional to 
@@ -1273,7 +1277,7 @@ void loop() {
                 gas_pulse_out_us = map(ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_idle_us, gas_pulse_govern_us);
             }
             else if (ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT])  {  // If we are pushing down
-                pressure_target_adc = map(ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][BOT], ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_adc, pressure_max_adc);  // Scale joystick value to pressure adc setpoint
+                pressure_target_adc = (double)map(ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][BOT], ctrl_lims_adc[ctrl][VERT][MIN], (int32_t)*pressure.min_val, (int32_t)*pressure.max_val);  // Scale joystick value to pressure adc setpoint
             }
         }
     }
@@ -1281,15 +1285,15 @@ void loop() {
         if (we_just_switched_modes)  {  // Release throttle and push brake upon entering hold mode
             engine_target_rpm = engine_idle_rpm;  // Let off gas (if gas using PID mode)
             if (!carspeed_filt_mmph)  pressure_target_adc += brake_hold_increment_adc; // If the car is already stopped then just add a touch more pressure and then hold it.
-            else pressure_target_adc = brake_hold_initial_adc;  //  Otherwise, these hippies need us to stop the car for them
+            else pressure_target_adc = (double)brake_hold_initial_adc;  //  Otherwise, these hippies need us to stop the car for them
             brakeIntervalTimer.reset();
             joy_centered = false;
         }
         else if (carspeed_filt_mmph && brakeIntervalTimer.expired())  { // Each interval the car is still moving, push harder
-            pressure_target_adc += brake_hold_increment_adc;  // Slowly add more brakes until car stops
+            pressure_target_adc += (double)brake_hold_increment_adc;  // Slowly add more brakes until car stops
             brakeIntervalTimer.reset();
         }
-        pressure_target_adc = constrain(pressure_target_adc, pressure_min_adc, pressure_max_adc);  // Just make sure we don't try to push harder than we can 
+        pressure_target_adc = (double)constrain((int32_t)pressure_target_adc, (int32_t)*pressure.min_val, (int32_t)*pressure.max_val);  // Just make sure we don't try to push harder than we can 
         if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) {
             joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
         }
@@ -1308,12 +1312,12 @@ void loop() {
         if (!carspeed_filt_mmph && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT])  runmode = HOLD;  // Go to Hold Mode if we have braked to a stop
         else  {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
             engine_target_rpm = engine_idle_rpm;  // Default when joystick not pressed 
-            pressure_target_adc = pressure_min_adc;  // Default when joystick not pressed   
+            pressure_target_adc = *pressure.min_val;  // Default when joystick not pressed   
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])  {  // If we are trying to accelerate
                 engine_target_rpm = map(ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], engine_idle_rpm, engine_govern_rpm);
             }
             else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT])  {  // If we are trying to brake, scale joystick value to determine pressure adc setpoint
-                pressure_target_adc = map(ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][BOT], ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_adc, pressure_max_adc);
+                pressure_target_adc = (double)map(ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][BOT], ctrl_lims_adc[ctrl][VERT][MIN], (int32_t)*pressure.min_val, (int32_t)*pressure.max_val);
             }
         }
         // Cruise mode can be entered by pressing a physical momentary button, or by holding the brake on full for a half second. Which epends on the cruise_gesturing flag.
@@ -1349,7 +1353,7 @@ void loop() {
     else if (runmode == CRUISE)  {
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
             carspeed_target_mmph = carspeed_filt_mmph;  // Begin cruising with cruise set to current speed
-            pressure_target_adc = pressure_min_adc;  // Let off the brake and keep it there till out of Cruise mode
+            pressure_target_adc = *pressure.min_val;  // Let off the brake and keep it there till out of Cruise mode
             gestureFlyTimer.reset();  // reset gesture timer
             cruise_sw_held = false;
             hotrc_ch4_sw_event = false;
@@ -1409,10 +1413,10 @@ void loop() {
             }
         }
         else if (runmode != BASIC) {  // Unless basicmode switch is turned on, we want brake and gas   
-            pressure_target_adc = constrain(pressure_target_adc, pressure_min_adc, pressure_max_adc);  // Make sure pressure target is in range
+            pressure_target_adc = (double)constrain((int32_t)pressure_target_adc, (int32_t)*pressure.min_val, (int32_t)*pressure.max_val);  // Just make sure we don't try to push harder than we can 
             // printf("Brake PID rm=%-+4ld target=%-+9.4lf", runmode, (double)pressure_target_adc);
-            brakeSPID.set_target((double)pressure_target_adc);
-            brakeSPID.compute((double)pressure_filt_adc);
+            brakeSPID.set_target(pressure_target_adc);
+            brakeSPID.compute(pressure_filt_adc);
             brake_pulse_out_us = (int32_t)brakeSPID.get_output();
             // printf(" output = %-+9.4lf,  %+-4ld\n", brakeSPID.get_output(), brake_pulse_out_us);
             if ( ((brake_pos_filt_adc + brake_pos_margin_adc <= brake_pos_nom_lim_retract_adc) && (brake_pulse_out_us < brake_pulse_stop_us)) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
@@ -1528,8 +1532,8 @@ void loop() {
                 }
             }
             else if (tcol==3 && trow==0 && simulating && sim_basicsw && !touch_now_touched) basicmodesw = !basicmodesw;  // Pressed the basic mode toggle button. Toggle value, only once per touch
-            else if (tcol==3 && trow==1 && simulating && sim_press) adj_val(&pressure_filt_adc, touch_accel, pressure_min_adc, pressure_max_adc);  // (+= 25) Pressed the increase brake pressure button
-            else if (tcol==3 && trow==2 && simulating && sim_press) adj_val(&pressure_filt_adc, -touch_accel, pressure_min_adc, pressure_max_adc);  // (-= 25) Pressed the decrease brake pressure button
+            else if (tcol==3 && trow==1 && simulating && pressure.can_sim) pressure.add(touch_accel);  // (+= 25) Pressed the increase brake pressure button
+            else if (tcol==3 && trow==2 && simulating && pressure.can_sim) pressure.add(-touch_accel); // (-= 25) Pressed the decrease brake pressure button
             else if (tcol==3 && trow==4 && simulating && sim_joy) adj_val(&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (-= 25) Pressed the joystick left button
             else if (tcol==4 && trow==0 && simulating && sim_ign && !touch_now_touched) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
             else if (tcol==4 && trow==1 && simulating && sim_tach) adj_val(&engine_filt_rpm, touch_accel, 0, engine_redline_rpm);  // (+= 25) Pressed the increase engine rpm button
@@ -1613,7 +1617,7 @@ void loop() {
             case 2:  brakeSPID.set_proportionality((sim_edit_delta > 0) ? ERROR_TERM : SENSED_INPUT);  break;
             case 3:  sim_brkpos = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : sim_brkpos;  break;
             case 4:  sim_joy = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : sim_joy;  break;
-            case 5:  sim_press = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : sim_press;  break;
+            case 5:  pressure.can_sim = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : pressure.can_sim;  break;
             case 6:  sim_tach = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : sim_tach;  break;
             case 7:  sim_speedo = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : sim_speedo;  break;
         }
@@ -1687,11 +1691,11 @@ void loop() {
         draw_dynamic(0, runmode, -1, -1, 1);
         draw_dyn_pid(1, carspeed_filt_mmph, 0, carspeed_redline_mmph, (int32_t)cruiseSPID.get_target(), 4);
         draw_dyn_pid(2, engine_filt_rpm, 0, engine_redline_rpm, (int32_t)gasSPID.get_target(), 4);
-        draw_dyn_pid(3, pressure_filt_adc, pressure_min_adc, pressure_max_adc, (int32_t)brakeSPID.get_target(), 4);  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc, 4);
+        draw_dyn_pid(3, pressure_filt_adc, (int32_t)pressure.min_val, (int32_t)pressure.max_val, (int32_t)brakeSPID.get_target(), 4);  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc, 4);
         draw_dynamic(4, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX], 0);
         draw_dynamic(5, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX], 0);
         draw_dynamic(6, (int32_t)cruiseSPID.get_target(), 0, carspeed_govern_mmph, 0);
-        draw_dynamic(7, (int32_t)brakeSPID.get_target(), pressure_min_adc, pressure_max_adc, 0);
+        draw_dynamic(7, (int32_t)brakeSPID.get_target(), (int32_t)pressure.min_val, (int32_t)pressure.max_val, 0);
         draw_dynamic(8, (int32_t)gasSPID.get_target(), 0, engine_redline_rpm, 0);
         draw_dynamic(9, brake_pulse_out_us, brake_pulse_extend_us, brake_pulse_retract_us, 0);
         draw_dynamic(10, gas_pulse_out_us, gas_pulse_idle_us, gas_pulse_redline_us, 0);
@@ -1702,7 +1706,7 @@ void loop() {
             draw_dynamic(14, brakeSPID.get_proportionality(), -1, -1, 0);
             draw_dynamic(15, sim_brkpos, -1, -1, 0);
             draw_dynamic(16, sim_joy, -1, -1, 0);
-            draw_dynamic(17, sim_press, -1, -1, 0);
+            draw_dynamic(17, pressure.can_sim, -1, -1, 0);
             draw_dynamic(18, sim_tach, -1, -1, 0);
             draw_dynamic(19, sim_speedo, -1, -1, 0);
         }
@@ -1737,7 +1741,7 @@ void loop() {
             draw_dynamic(19, gas_pulse_redline_us, gas_pulse_ccw_max_us, gas_pulse_cw_max_us, 0);
         }
         else if (dataset_page == BPID) {
-            range = pressure_max_adc-pressure_min_adc;
+            range = (int32_t)*pressure.max_val-(int32_t)*pressure.min_val;
             draw_dynamic(12, (int32_t)(brakeSPID.get_error()), -range, range, 0);
             draw_dynamic(13, (int32_t)(brakeSPID.get_p_term()), -range, range, 0);
             draw_dynamic(14, (int32_t)(brakeSPID.get_i_term()), -range, range, 0);

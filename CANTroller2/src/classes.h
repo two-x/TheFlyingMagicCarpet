@@ -1,5 +1,7 @@
 #ifndef CLASSES_H
 #define CLASSES_H
+#undef min
+#undef max
 
 #include <stdio.h>
 #include <iostream>
@@ -47,16 +49,16 @@ class Timer {
 // Param is a value affecting control, which holds a double value, and can be displayed
 class Param {
   protected:
+    bool saturated;
     double effect_max_val, effect_min_val, last_val, last2_val; //, effect_cent_val;  // Values corresponding to a max/min real world effect (might be numerically reversed)
-    bool constrain_it (double* arg_value, double arg_min, double arg_max) {  // This should be called "constrain" not "constrain_it"
+    void constrain_it (double* arg_value, double arg_min, double arg_max) {  // This should be called "constrain" not "constrain_it"
         if (*arg_value < arg_min) *arg_value = arg_min;
         else if (*arg_value > arg_max) *arg_value = arg_max;
-        else return true;  // No constraint was necessary
-        return false;  // If constraint was necessary
+        else saturated = true;  // No constraint was necessary
+        saturated = false;  // If constraint was necessary
     }
   public:
-    #define _FWD 1
-    #define _REV -1
+    enum directions { _REV = -1, _FWD = 1 };
     bool can_sim, can_tune;
     int32_t dir;  // For the case a lower val causes a higher real-life effect, 
     char disp_name[9], disp_units[5];
@@ -86,145 +88,79 @@ class Param {
         max_val = &effect_max_val;
         set_limits (min_val, max_val);
     }
+    void set (double arg_val) {
+        *val = arg_val;
+        constrain_it (val, *min_val, *max_val);
+    }
+    void add (double arg_add) {
+        *val += arg_add;
+        constrain_it (val, *min_val, *max_val);
+    }
 };
 
 // // Device is a base class for any connected system device or signal
-// class Device {
-//   protected:
-//     bool direction, can_sim_touch, can_sim_pot;
-//     int32_t pin, val_source;
+// class Device : public Param {
 //   public:
-//     #define _PIN 0  // source is from reading an input pin
-//     #define _TOUCH 1  // source is from touch ui simulator
-//     #define _POT 2  // source is simulated using pot
-//     #define _LIVE 3   // source is determined by control algorithms
-//     Device (int32_t arg_pin) {  // std::string& eng_name, 
-//         can_sim_touch = false;
-//         val_source = _PIN;
+//     enum sources { _UNDEF, _PIN, _TOUCH, _POT, _CODE };  // source of value
+//     int32_t pin, source;
+//     bool can_sim_touch, can_sim_pot;
+//     Device (int32_t arg_pin) {
+//         can_sim_touch = true;
+//         can_sim_pot = false;
+//         source = _PIN;
 //         set_pin(arg_pin);
 //     }
-//     Device (int32_t arg_pin, bool arg_dir) 
-//     : Device(arg_pin) {  // std::string& eng_name, 
-//         set_dir(arg_dir);
+//     Device (void) : Device (-1) {};
+//     void set_source (int32_t arg_source) {
+//         if (arg_source == _POT && can_sim_pot) source = _POT;
+//         else if (arg_source == _TOUCH && can_sim_touch) source = _TOUCH;
+//         else source = arg_source;
 //     }
-//     void set_val_source (int32_t arg_source) {
-//         if (arg_source == _POT && can_sim_pot) val_source = _POT;
-//         else if (arg_source == _TOUCH && can_sim_touch) val_source = _TOUCH;
-//         else arg_source = _PIN;
-//     }
-//     void set_pin ( bool arg_pin) { pin = arg_pin; }
-//     int32_t get_source () { return val_source; }
+//     void set_pin (bool arg_pin) { pin = arg_pin; }
 // };
-
-// // // Device::Toggle is a base class for system signals or devices having a boolean value
-// // class Toggle : virtual public Device {
-// //   public:
-// //     bool val, val_last, can_sim;
-// //     int32_t pin, val_source;
-// //     Toggle(int32_t arg_pin) {  // std::string& eng_name, 
-// //         pin = arg_pin;
-// //         can_sim = true;
-// //     }
-// // };
-
-// // // Device::Toggle::InToggle is system signals or devices having a boolean value that serve as inputs (eg basicsw, cruisesw)
-// // class InToggle : virtual public Toggle {  // Toggle
-// //   public:
-// //     InToggle(int32_t arg_pin)   // std::string& eng_name, 
-// //     : Toggle(arg_pin) {
-// //         val_source = _PIN;
-// //     }
-// //     void set_val(bool arg_val) {
-// //         if (val_source != _PIN) {
-// //             val_last = val;
-// //             val = arg_val;
-// //         }
-// //     }
-// //     void read() {
-// //         val_last = val;
-// //         val = digitalRead(pin);
-// //     }
-// // };
-
-// // // Device::Toggle::OutToggle is system signals or devices having a boolean value that serve as outputs (eg ignition, leds, etc.)
-// // class OutToggle : virtual public Toggle {  // Toggle
-// //   public:
-// //     OutToggle(int32_t arg_pin)  // std::string& eng_name, 
-// //     : Toggle(arg_pin) {
-// //         val_source = _LIVE;
-// //     }
-// //     void set_val(bool arg_val) {
-// //         val_last = val;
-// //         val = arg_val;
-// //         if (val_source == _LIVE) write();
-// //     }
-// //     void write() {
-// //         digitalWrite(pin, val);
-// //     }
-// // };
 
 // // Device::Transducer is a base class for any system devices that convert real_world <--> signals in either direction
 // class Transducer : virtual public Device {
 //   protected:
-//     double val_min, val_max, val_center, val_margin, ema_alpha;
-//     double vals[10]; double* d_val;  // vals[] is ring buffer of past values. d_val is pointer to current value (in ring buffer)
 //     bool centermode, saturated;
+//     double vhist[5];  // vals[] is some past values, [0] beling most recent. 
 //     void hist_init (double arg_val) {
-//         for (int x = 0; x < sizeof(vals); x++) vals[x] = arg_val;
-//         d_val = &vals[0];
+//         for (int x = 0; x < sizeof(vals); x++) vhist[x] = arg_val;
+//     }
+//     void new_val (double new_val) {
+//         for (int x = sizeof(vhist)-1; x >= 1; x--) vhist[x] = vhist[x-1];
+//         vhist[0] = *val;
+//         *val = new_val;
 //     }
 //   public:
-//     #define ABSOLUTE 0  // assign to outCenterMode if pid output just spans a range, rather than deviating from a centerpoint 
-//     #define RELATIVE 1  // assign to outCenterMode if pid output deviates from a centerpoint 
-//     #define _RAW 0
-//     #define _FILT 1
-//     // Transducer (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max) { // std::string& eng_name, 
-//     Transducer (int32_t arg_pin, bool arg_dir) 
-//     : Device (arg_pin, arg_dir) { // std::string& eng_name, 
+//     enum relativity { ABSOLUTE, RELATIVE };
+//     double val_cent, val_margin;
+//     Transducer (int32_t arg_pin) 
+//     : Device (arg_pin) { // std::string& eng_name, 
 //         centermode = ABSOLUTE;
+//         val_margin = 0.0;
+//         val_cent = 
 //         // set_limits(arg_val_min, arg_val_max);
 //         hist_init(0);
 //     }
-//     Transducer (int32_t arg_pin) {
-//         bool arg_dir = _FWD;
-//         Transducer(arg_pin, arg_dir);
-//     }
-//     // Transducer (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max, double arg_val_cent) {  // std::string& eng_name, 
-//     //     Transducer (arg_pin, arg_dir, arg_val_min, arg_val_max);  // eng_name, 
-//     //     set_center (arg_val_cent);
-//     // }
-//     void assign_val (double arg_new_val) {  // 
-//         d_val++;
-//         if (d_val >= &vals[0] + sizeof(vals)) d_val -= sizeof(vals);
-//         *d_val = arg_new_val;
-//         saturated = !constrainit(d_val);
-//     }
-//     void add_val (double arg_add_val) {  // 
-//         assign_val(*d_val + arg_add_val);
-//     }
 //     void set_center (double arg_val_cent) {
-//         if (arg_val_cent <= val_min || arg_val_cent >= val_max) {
+//         if (arg_val_cent <= min_val || arg_val_cent >= max_val) {
 //             printf ("Transducer::set_limits(): Centerpoint must fall within min/max limits\n");
 //             return;
 //         }
 //         else {
-//             val_center = arg_val_cent;
+//             val_cent = arg_val_cent;
 //             centermode = RELATIVE;
 //         }
 //     }
-//     void set_limits (double arg_val_min, double arg_val_max) {
-//         if (arg_val_min >= arg_val_max) {
-//             printf ("Transducer::set_limits(): min must be less than max\n");
-//             return;
-//         }
-//         val_min = arg_val_min;
-//         val_max = arg_val_max;
-//     }
-//     void set_limits (double arg_val_min, double arg_val_max, double arg_val_cent) {
-//         set_limits(arg_val_min, arg_val_max);
-//         set_center(arg_val_cent);
+//     void set (double val) {
 //     }
 // };
+// // Transducer (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max) { // std::string& eng_name, 
+// void add_val (double arg_add_val) {  // 
+//     assign_val(*d_val + arg_add_val);
+// }
+
 
 // // Device::Transducer::Sensor is a base class for control system sensors, ie anything that measures real world data or electrical signals 
 // class Sensor : virtual public Transducer {
@@ -232,6 +168,8 @@ class Param {
 //     bool lp_spike_filtering;
 //     double conversion_factor, lp_thresh, spike_thresh, raw_val;  // Multiplier to convert values from direct measured units (adc, us) into useful units (rpm, mmph, etc.)
 //   public:
+//     #define _RAW 0
+//     #define _FILT 1
 //     Sensor (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max)  // std::string& eng_name, 
 //     : Transducer (arg_pin, arg_dir) {
 //         conversion_factor = 1.0;
@@ -373,6 +311,54 @@ class Param {
 //     JagMotor (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max)  // std::string& eng_name, 
 //     : ServoPWM(arg_pin, arg_dir, arg_val_min, arg_val_max) {}
 // };
+
+// // // Device::Toggle is a base class for system signals or devices having a boolean value
+// // class Toggle : virtual public Device {
+// //   public:
+// //     bool val, val_last, can_sim;
+// //     int32_t pin, val_source;
+// //     Toggle(int32_t arg_pin) {  // std::string& eng_name, 
+// //         pin = arg_pin;
+// //         can_sim = true;
+// //     }
+// // };
+
+// // // Device::Toggle::InToggle is system signals or devices having a boolean value that serve as inputs (eg basicsw, cruisesw)
+// // class InToggle : virtual public Toggle {  // Toggle
+// //   public:
+// //     InToggle(int32_t arg_pin)   // std::string& eng_name, 
+// //     : Toggle(arg_pin) {
+// //         val_source = _PIN;
+// //     }
+// //     void set_val(bool arg_val) {
+// //         if (val_source != _PIN) {
+// //             val_last = val;
+// //             val = arg_val;
+// //         }
+// //     }
+// //     void read() {
+// //         val_last = val;
+// //         val = digitalRead(pin);
+// //     }
+// // };
+
+// // // Device::Toggle::OutToggle is system signals or devices having a boolean value that serve as outputs (eg ignition, leds, etc.)
+// // class OutToggle : virtual public Toggle {  // Toggle
+// //   public:
+// //     OutToggle(int32_t arg_pin)  // std::string& eng_name, 
+// //     : Toggle(arg_pin) {
+// //         val_source = _LIVE;
+// //     }
+// //     void set_val(bool arg_val) {
+// //         val_last = val;
+// //         val = arg_val;
+// //         if (val_source == _LIVE) write();
+// //     }
+// //     void write() {
+// //         digitalWrite(pin, val);
+// //     }
+// // };
+
 
 // class Controller {};
 

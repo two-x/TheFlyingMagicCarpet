@@ -1,5 +1,8 @@
 #ifndef SPID_H
 #define SPID_H
+#undef min
+#undef max
+
 #ifdef DUE
 #include <LibPrintf.h>  // This works on Due but not ESP32
 #endif
