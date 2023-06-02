@@ -9,6 +9,11 @@
 
 Now in the PlatformIO menu, you can click to "Build" (builds `cantroller2.cpp`) and then click "Upload" (to upload the compiled code to your board)
 
+# Install platformio etc  on Mac
+1. Run `brew install platformio`
+2. Save the json file [here](https://github.com/platformio/platform-espressif32/blob/master/boards/esp32-s3-devkitc-1.json) as `~/.platformio/boards/esp32-s3-devkitc-1.json`
+
+
 
 ## Dev Env nice-to-haves
 (this assumes you're using iTerm + Mac + VSCode)
@@ -17,4 +22,6 @@ Now in the PlatformIO menu, you can click to "Build" (builds `cantroller2.cpp`) 
 1. macos.  Check out the in-terminal short cuts you're offered [here](https://github.com/ohmyzsh/ohmyzsh/tree/master/plugins/macos#commands)
 1. zsh autosuggestions.  In iTerm, suggestions for end of line come up in gray.  Click R arrow to select; tab to see more options.  Needs to be [installed](https://github.com/zsh-users/zsh-autosuggestions) in addition to being added to ~/.zshrc file
 
-FWIW, in my ~/.zshrc file, I have `plugins=(git zsh-autosuggestions macos)`
+FWIW, in my ~/.zshrc file, I have `plugins=(git zsh-autosuggest
+
+ions macos)`
