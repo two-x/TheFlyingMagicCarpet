@@ -189,6 +189,12 @@ using namespace std;
     #define button_pin -1
 #endif
 
+#define adc_bits 12
+#define adc_range_adc 4095    // = 2^12-1
+#define adc_midscale_adc 2047
+#define serial_debugging false
+#define print_timestamps false  // Makes code write out timestamps throughout loop to serial port
+
 // Readily available possibilities we could wire up if we want
 //
 // * Status LEDs (digital out)
@@ -217,9 +223,6 @@ using namespace std;
 #define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
-bool display_enabled = true;  // Should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
-
-enum dataset_pages {LOCK, JOY, CAR, PWMS, BPID, GPID, CPID};
 
 char telemetry[disp_fixed_lines][10] = {  
     "   Speed:",
@@ -312,30 +315,82 @@ char simgrid[4][3][5] = {
 char modecard[6][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise" };
 char side_menu_buttons[5][4] = { "PG ", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[3][6] = { "BASIC", " IGN ", "CRUIS" };  // Pad shorter names with spaces to center
-
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, CYN };
 
+// display related globals
+enum dataset_pages {LOCK, JOY, CAR, PWMS, BPID, GPID, CPID};
+bool display_enabled = true;  // Should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
+bool disp_redraw_all = true;
+char disp_draw_buffer[8];  // Used to convert integers to ascii for purposes of displaying on screen
+char disp_draw_buffer2[8];  // Used to convert integers to ascii for purposes of displaying on screen
+char disp_values[disp_lines][8];
+int32_t disp_needles[disp_lines];
+int32_t disp_targets[disp_lines];
+int32_t disp_age_quanta[disp_lines];
+Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
+bool disp_bool_values[6];
+char disp_bool_buffer;
+bool selected_val_dirty = true;
+bool dataset_page_dirty = true;
+
+// tuning related globals
 enum tuning_ctrl_states {OFF, SELECT, EDIT};
 int32_t tuning_ctrl = OFF;
 int32_t tuning_ctrl_last = OFF;
 Timer tuningCtrlTimer(25000000);  // This times out edit mode after a a long period of inactivity
+int32_t dataset_page = LOCK;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
+int32_t dataset_page_last = dataset_page;
+int32_t selected_value = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
+int32_t selected_value_last = 0;
 
-#define adc_bits 12
-#define adc_range_adc 4095    // = 2^12-1
-#define adc_midscale_adc 2047
-#define serial_debugging false
-#define print_timestamps false  // Makes code write out timestamps throughout loop to serial port
+// simulator related
+bool simulating = false;
+bool simulating_last = false;
+bool sim_halfass = true;  // Don't sim the joystick or encoder or tach
+bool sim_joy = false;
+bool sim_press = true;
+bool sim_tach = true;
+bool sim_speedo = true;
+bool sim_brkpos = true;
+bool sim_basicsw = true;
+bool sim_ign = true;
+bool sim_cruisesw = true;
+Timer simTimer;
+int32_t sim_edit_delta = 0;
+int32_t sim_edit_delta_touch = 0;
+int32_t sim_edit_delta_encoder = 0;
 
+// run state globals
 enum runmodes {BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE};
 int32_t runmode = SHUTDOWN;
 int32_t oldmode = runmode;  // So we can tell when the mode has just changed
-
-// Settable calibration values and control parameters
-//
-enum ctrls { HOTRC };  // This is a bad hack. Since JOY is already enum'd as 1 for dataset pages
-bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
+bool shutdown_complete = true;  // Shutdown mode has completed its work and can stop activity
+bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
+bool park_the_motors = false;  // Indicates we should release the brake & gas so the pedals can be used manually without interference
+int32_t motor_park_timeout_us = 3000000;  // If we can't park the motors faster than this, then give up.
+Timer motorParkTimer;
+bool panic_stop = false;
 bool cruise_gesturing = false;  // Is cruise mode enabled by gesturing?  Otherwise by press of cruise button
+int32_t gesture_flytimeout_us = 500000;  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
+Timer gestureFlyTimer(gesture_flytimeout_us);  // Used to keep track of time for gesturing for going in and out of fly/cruise modes
+int32_t gesture_progress = 0;  // How many steps of the Cruise Mode gesture have you completed successfully (from Fly Mode)
+int32_t cruise_sw_timeout_us = 500000;  // how long do you have to hold down the cruise button to start cruise mode (in us)
+bool cruise_sw = LOW;
+bool cruise_sw_held = false;
+Timer cruiseSwTimer;
 
+// generic values
+int32_t pwm_pulse_min_us = 500;
+int32_t pwm_pulse_center_us = 1500;
+int32_t pwm_pulse_max_us = 2500;
+int32_t default_pulse_margin_us = 22;  // Default margin of error for comparisons of pulsewidths (in us)
+int32_t default_margin_adc = 12;  // Default margin of error for comparisons of adc values (ADC count 0-4095)
+Timer sanityTimer(7000000);  // Allows code to fail in a sensible way after a delay if nothing is happening
+
+// pid related globals
+int32_t pid_period_us = 50000;    // time period between output updates. Reciprocal of pid frequency (in us)
+int32_t pid_period_ms = pid_period_us/1000;
+Timer pidTimer(pid_period_us);
 int32_t brake_spid_ctrl_dir = FWD;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
 double brake_spid_initial_kp = 0.588;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
 double brake_spid_initial_ki_hz = 0.193;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
@@ -348,33 +403,86 @@ double gas_spid_initial_kp = 0.064;  // PID proportional coefficient (gas) How m
 double gas_spid_initial_ki_hz = 0.015;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
 double gas_spid_initial_kd_s = 0.022;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
 int32_t gas_spid_ctrl_dir = REV;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
-double ctrl_ema_alpha[2] = { 0.2, 0.1 };  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-double pot_ema_alpha = 0.2;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+
+// mule battery related
+int32_t battery_max_mv = 16000;  // The max vehicle voltage we can sense. Design resistor divider to match. Must exceed max V possible.
+int32_t battery_adc = 0;
+int32_t battery_mv = 10000;
+int32_t battery_filt_mv = 10000;
 double battery_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-double pressure_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-double carspeed_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-double engine_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-double brake_pos_ema_alpha = 0.25;
-int32_t pwm_pulse_min_us = 500;
-int32_t pwm_pulse_center_us = 1500;
-int32_t pwm_pulse_max_us = 2500;
+
+// potentiometer related
+int32_t pot_min_adc = 100;
+int32_t pot_max_adc = adc_range_adc-100;
+int32_t pot_adc = 0;
+int32_t pot_filt_adc = adc_midscale_adc;
+double pot_ema_alpha = 0.2;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+
+// controller related
+volatile int32_t hotrc_horz_pulse_us = 1500;
+volatile int32_t hotrc_vert_pulse_us = 1500;
+double ctrl_ema_alpha[2] = { 0.2, 0.1 };  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 enum ctrl_axes { HORZ, VERT };
 enum ctrl_thresh { MIN, DB, MAX };
 enum ctrl_edge { BOT, TOP };
 int32_t ctrl_lims_adc[2][2][3] = { { { 3,  50, 4092 }, { 3,  75, 4092 } }, { { 9, 200, 4085 }, { 9, 200, 4085 } }, }; // [HOTRC, JOY] [HORZ, VERT], [MIN, DEADBAND, MAX] values as ADC counts
 int32_t ctrl_db_adc[2][2];  // To store the top and bottom deadband values for each axis of selected controller
+enum ctrls { HOTRC };  // This is a bad hack. Since JOY is already enum'd as 1 for dataset pages
+bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
+bool joy_centered = false;
+enum raw_filt { RAW, FILT};
+int32_t ctrl_pos_adc[2][2] = { { adc_midscale_adc, adc_midscale_adc }, { adc_midscale_adc, adc_midscale_adc} };  // [HORZ/VERT] [RAW/FILT]
+volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
+Timer hotrcPulseTimer;  // OK to not be volatile?
+
+// steering related
+int32_t steer_pulse_safe_us = 0;
+int32_t steer_pulse_right_max_us = 500;  // Smallest pulsewidth acceptable to jaguar
+int32_t steer_pulse_left_max_us = 2500;  // Longest pulsewidth acceptable to jaguar
+int32_t steer_pulse_right_us = 800;  // Steering pulsewidth corresponding to full-speed right steering (in us)
+int32_t steer_pulse_stop_us = pwm_pulse_center_us;  // Steering pulsewidth corresponding to zero steering motor movement (in us)
+int32_t steer_pulse_left_us = 2200;  // Steering pulsewidth corresponding to full-speed left steering (in us)
+int32_t steer_safe_percent = 72;  // Sterring is slower at high speed. How strong is this effect 
+int32_t steer_pulse_out_us = steer_pulse_stop_us;  // pid loop output to send to the actuator (steering)
+
+// brake pressure related
+double pressure_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 int32_t pressure_min_adc = 658;  // Brake pressure when brakes are effectively off. Sensor min = 0.5V, scaled by 3.3/4.5V is 0.36V of 3.3V (ADC count 0-4095). 230430 measured 658 adc (0.554V) = no brakes
 int32_t pressure_max_adc = 2100;  // Highest possible pressure achievable by the actuator (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as chris can push (wimp)
 int32_t pressure_margin_adc = 12;  // Margin of error when comparing brake pressure adc values (ADC count 0-4095)
 int32_t pressure_spike_thresh_adc = 60;  // min pressure delta between two readings considered a spike to ignore (ADC count 0-4095)
 int32_t pressure_lp_thresh_adc = 1200;   // max delta acceptable over three consecutive readings (ADC count 0-4095)
+int32_t pressure_adc = 0;
+int32_t pressure_target_adc = 0;  // Stores new setpoint to give to the pid loop (brake)
+int32_t pressure_filt_adc = 0;  // Stores new setpoint to give to the pid loop (brake)
+int32_t pressure_last_adc = adc_midscale_adc;  // Some pressure reading history for noise handling (-1)
+double d_pressure_target_adc = (double)pressure_target_adc;
+double d_pressure_filt_adc = (double)pressure_filt_adc;
+int32_t pressure_old_adc  = adc_midscale_adc;  // Some pressure reading history for noise handling (-2)
+// int32_t pressure_min_psi = 0;  // Brake pressure when brakes are effectively off (psi 0-1000)
+// int32_t pressure_max_psi = 500;  // Highest possible pressure achievable by the actuator (psi 0-1000)
+
+// brake actuator motor related
 int32_t brake_hold_initial_adc = 1200;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
 int32_t brake_hold_increment_adc = 25;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
-bool panic_stop = false;
 int32_t brake_panic_initial_adc = 1800;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
 int32_t brake_panic_increment_adc = 50;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 Timer brakeIntervalTimer(500000);  // How much time between increasing brake force during auto-stop if car still moving?
 int32_t brake_increment_interval_us = 500000;  // How often to apply increment during auto-stopping (in us)
+int32_t brake_pulse_retract_max_us = 500;  // Smallest pulsewidth acceptable to jaguar
+int32_t brake_pulse_extend_max_us = 2500;  // Longest pulsewidth acceptable to jaguar
+int32_t brake_pulse_retract_us = 650;  // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us)
+int32_t brake_pulse_stop_us = pwm_pulse_center_us;  // Brake pulsewidth corresponding to center point where motor movement stops (in us)
+int32_t brake_pulse_extend_us = 2350;  // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us)
+int32_t brake_pulse_margin_us = 40; // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated 
+int32_t brake_pulse_out_us = brake_pulse_stop_us;  // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
+double d_brake_pulse_out_us = (double)brake_pulse_out_us;
+int32_t brake_spid_pressure_error_adc = 0;
+int32_t brake_spid_integral_adcus = 0;
+int32_t brake_spid_pos_error_adc = 0;
+int32_t brake_spid_carspeed_delta_adc = 0;
+
+// brake actuator position related
 int32_t brake_pos_nom_lim_retract_adc = 153;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (ADC count 0-4095)
 int32_t brake_pos_abs_min_retract_adc = 175;  // Retract value corresponding with the absolute minimum retract actuator is capable of. (ADC count 0-4095)
 int32_t brake_pos_zeropoint_adc = 1500;  // ++ Brake position value corresponding to the point where fluid PSI hits zero (ADC count 0-4095)
@@ -384,8 +492,23 @@ int32_t brake_pos_abs_max_extend_adc = 3076;  // Extend value corresponding with
 int32_t brake_pos_margin_adc = 10;  //
 int32_t brake_pos_adc = brake_pos_park_adc;
 int32_t brake_pos_filt_adc = brake_pos_adc;
-int32_t gesture_flytimeout_us = 500000;  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
-int32_t car_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the car is stopped (in us)
+double brake_pos_ema_alpha = 0.25;
+
+// throttle servo related
+int32_t gas_governor_percent = 95;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
+int32_t gas_pulse_ccw_max_us = 2000;  // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
+int32_t gas_pulse_cw_max_us = 1000;  // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
+int32_t gas_pulse_redline_us = 1400;  // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
+int32_t gas_pulse_idle_us = 1800;  // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
+int32_t gas_pulse_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_idle_us where to park the servo out of the way so we can drive manually (in us)
+int32_t gas_spid_engine_error_rpm = 0;
+int32_t gas_spid_engine_delta_rpm = 0;
+int32_t gas_spid_integral_rpmus = 0;
+int32_t gas_pulse_delta_us;
+int32_t gas_pulse_out_us = gas_pulse_idle_us;  // pid loop output to send to the actuator (gas)
+int32_t gas_pulse_govern_us = 0;  // Governor must scale the pulse range proportionally. This is given a value in the loop
+
+// tachometer related
 int32_t engine_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
 int32_t engine_idle_rpm = 700;  // Min value for engine hz, corresponding to low idle (in rpm)
 int32_t engine_max_rpm = 6000;  // Max possible engine rotation speed
@@ -393,148 +516,44 @@ int32_t engine_redline_rpm = 4000;  // Max value for engine_rpm, pedal to the me
 int32_t engine_margin_rpm = 15;  // Margin of error for checking engine rpm (in rpm)
 int32_t engine_spike_thresh_rpm = 500;  // min pressure delta between two readings considered a spike to ignore (in rpm)
 int32_t engine_lp_thresh_rpm = 1000;   // max delta acceptable over three consecutive readings (in rpm)
+int32_t engine_rpm = 50;  // Current engine speed, raw as sensed (in rpm)
+int32_t engine_filt_rpm = 50;  // Current engine speed, filtered (in rpm)
+int32_t engine_last_rpm = 50;  // Engine speed from previous loop (in rpm)
+int32_t engine_old_rpm = 50; // Engine speed from two loops back (in rpm)
+int32_t engine_govern_rpm = 0;  // Create an artificially reduced maximum for the engine speed. This is given a value in the loop
+int32_t engine_target_rpm = 0;  // Stores new setpoint to give to the pid loop (gas)
+double engine_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+volatile int32_t tach_delta_us = 0;
+Timer tachPulseTimer;  // OK to not be volatile?
+int32_t tach_delta_impossible_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
+int32_t old_tach_time_us;
+
+// speedometer related
+int32_t car_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the car is stopped (in us)
 int32_t carspeed_spike_thresh_mmph = 1500;  // min pressure delta between two readings considered a spike to ignore (in milli-mph)
 int32_t carspeed_lp_thresh_mmph = 3000;   // max delta acceptable over three consecutive readings (in milli-mph)
 int32_t carspeed_idle_mmph = 4500;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
 int32_t carspeed_redline_mmph = 15000;  // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
 int32_t carspeed_max_mmph = 25000;  // What is max speed car can ever go
-int32_t cruise_sw_timeout_us = 500000;  // how long do you have to hold down the cruise button to start cruise mode (in us)
-int32_t gas_governor_percent = 95;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
-int32_t gas_pulse_ccw_max_us = 2000;  // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
-int32_t gas_pulse_cw_max_us = 1000;  // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
-int32_t gas_pulse_redline_us = 1400;  // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
-int32_t gas_pulse_idle_us = 1800;  // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
-int32_t gas_pulse_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_idle_us where to park the servo out of the way so we can drive manually (in us)
-int32_t steer_pulse_right_max_us = 500;  // Smallest pulsewidth acceptable to jaguar
-int32_t steer_pulse_left_max_us = 2500;  // Longest pulsewidth acceptable to jaguar
-int32_t steer_pulse_right_us = 800;  // Steering pulsewidth corresponding to full-speed right steering (in us)
-int32_t steer_pulse_stop_us = pwm_pulse_center_us;  // Steering pulsewidth corresponding to zero steering motor movement (in us)
-int32_t steer_pulse_left_us = 2200;  // Steering pulsewidth corresponding to full-speed left steering (in us)
-int32_t steer_safe_percent = 72;  // Sterring is slower at high speed. How strong is this effect 
-int32_t default_pulse_margin_us = 22;  // Default margin of error for comparisons of pulsewidths (in us)
-int32_t brake_pulse_retract_max_us = 500;  // Smallest pulsewidth acceptable to jaguar
-int32_t brake_pulse_extend_max_us = 2500;  // Longest pulsewidth acceptable to jaguar
-int32_t brake_pulse_retract_us = 650;  // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us)
-int32_t brake_pulse_stop_us = pwm_pulse_center_us;  // Brake pulsewidth corresponding to center point where motor movement stops (in us)
-int32_t brake_pulse_extend_us = 2350;  // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us)
-int32_t brake_pulse_margin_us = 40; // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated 
-int32_t default_margin_adc = 12;  // Default margin of error for comparisons of adc values (ADC count 0-4095)
-int32_t battery_max_mv = 16000;  // The max vehicle voltage we can sense. Design resistor divider to match. Must exceed max V possible.
-int32_t pid_period_us = 50000;    // time period between output updates. Reciprocal of pid frequency (in us)
-int32_t pid_period_ms = pid_period_us/1000;
-Timer pidTimer(pid_period_us);
-int32_t motor_park_timeout_us = 3000000;  // If we can't park the motors faster than this, then give up.
-int32_t pot_min_adc = 100;
-int32_t pot_max_adc = adc_range_adc-100;
-
-// Non-settable variables
-//
-int32_t dataset_page = LOCK;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
-int32_t dataset_page_last = dataset_page;
-int32_t selected_value = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
-int32_t selected_value_last = 0;
-int32_t steer_pulse_safe_us = 0;
-double gas_spid_derivative_rpmperus = 0.0;
-bool gas_spid_saturated = false;
-double cruise_spid_derivative_mmphperus = 0.0;
-bool cruise_spid_saturated = false;
-double brake_spid_derivative_adcperus = 0.0;
-bool brake_spid_saturated = false;
-int32_t engine_rpm = 50;  // Current engine speed, raw as sensed (in rpm)
-int32_t engine_filt_rpm = 50;  // Current engine speed, filtered (in rpm)
-int32_t engine_last_rpm = 50;  // Engine speed from previous loop (in rpm)
-int32_t engine_old_rpm = 50; // Engine speed from two loops back (in rpm)
-int32_t engine_govern_rpm = map(gas_governor_percent, 0, 100, 0, engine_redline_rpm);  // Create an artificially reduced maximum for the engine speed
-int32_t gas_pulse_govern_us = map(gas_governor_percent*(engine_redline_rpm-engine_idle_rpm)/engine_redline_rpm, 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
-int32_t carspeed_govern_mmph = map(gas_governor_percent, 0, 100, 0, carspeed_redline_mmph);  // Governor must scale the top vehicle speed proportionally
+int32_t carspeed_govern_mmph = 0;  // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
 int32_t carspeed_mmph = 10;  // Current car speed, raw as sensed (in mmph)
 int32_t carspeed_filt_mmph = 10;  // Current car speed, filtered (in mmph)
 int32_t carspeed_last_mmph = 10;  // Car speed from previous loop (in mmph)
 int32_t carspeed_old_mmph = 10;  // Car speed from two loops back (in mmph)
-int32_t battery_adc = 0;
-int32_t battery_mv = 10000;
-int32_t battery_filt_mv = 10000;
-int32_t pot_adc = 0;
-int32_t pot_filt_adc = adc_midscale_adc;
-enum raw_filt { RAW, FILT};
-int32_t ctrl_pos_adc[2][2] = { { adc_midscale_adc, adc_midscale_adc }, { adc_midscale_adc, adc_midscale_adc} };  // [HORZ/VERT] [RAW/FILT]
-int32_t steer_pulse_out_us = steer_pulse_stop_us;  // pid loop output to send to the actuator (steering)
-int32_t brake_pulse_out_us = brake_pulse_stop_us;  // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
-double d_brake_pulse_out_us = (double)brake_pulse_out_us;
-int32_t brake_spid_pressure_error_adc = 0;
-int32_t brake_spid_integral_adcus = 0;
-int32_t brake_spid_pos_error_adc = 0;
-int32_t pressure_adc = 0;
-int32_t brake_spid_carspeed_delta_adc = 0;
-int32_t pressure_target_adc = 0;  // Stores new setpoint to give to the pid loop (brake)
-double d_pressure_target_adc = (double)pressure_target_adc;
-int32_t pressure_filt_adc = 0;  // Stores new setpoint to give to the pid loop (brake)
-double d_pressure_filt_adc = (double)pressure_filt_adc;
-int32_t pressure_last_adc = adc_midscale_adc;  // Some pressure reading history for noise handling (-1)
-int32_t pressure_old_adc  = adc_midscale_adc;  // Some pressure reading history for noise handling (-2)
-int32_t engine_target_rpm = 0;  // Stores new setpoint to give to the pid loop (gas)
-int32_t gas_spid_engine_error_rpm = 0;
-int32_t gas_spid_engine_delta_rpm = 0;
-int32_t gas_spid_integral_rpmus = 0;
-int32_t gas_pulse_delta_us;
-int32_t gas_pulse_out_us = gas_pulse_idle_us;  // pid loop output to send to the actuator (gas)
-Timer sanityTimer(7000000);  // Allows code to fail in a sensible way after a delay if nothing is happening
-Timer gestureFlyTimer(gesture_flytimeout_us);  // Used to keep track of time for gesturing for going in and out of fly/cruise modes
+int32_t carspeed_target_mmph = 0.0;  // Stores new setpoint to give to the pid loop (cruise) in milli-mph
+double carspeed_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+volatile int32_t speedo_delta_us = 0;
+Timer speedoPulseTimer;  // OK to not be volatile?
+int32_t speedo_delta_impossible_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
+int32_t old_speedo_time_us;
+
+// cruise mode related
 int32_t cruise_spid_carspeed_error_mmph = 0;
 int32_t cruise_spid_integral_mmphus = 0;
 bool cruise_adjusting = false;
 int32_t cruise_spid_carspeed_delta_mmph = 0;  // 
-int32_t carspeed_target_mmph = 0.0;  // Stores new setpoint to give to the pid loop (cruise) in milli-mph
-int32_t gesture_progress = 0;  // How many steps of the Cruise Mode gesture have you completed successfully (from Fly Mode)
-bool ignition = LOW;
-bool ignition_last = ignition;
-bool disp_redraw_all = true;
-bool basicmodesw = LOW;
-bool cruise_sw = LOW;
-bool cruise_sw_held = false;
-bool shutdown_complete = true;  // Shutdown mode has completed its work and can stop activity
-bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
-bool park_the_motors = false;  // Indicates we should release the brake & gas so the pedals can be used manually without interference
-bool joy_centered = false;
-Timer motorParkTimer;
-bool simulating = false;
-bool simulating_last = false;
-bool sim_halfass = true;  // Don't sim the joystick or encoder or tach
-bool sim_joy = false;
-bool sim_press = true;
-bool sim_tach = true;
-bool sim_speedo = true;
-bool sim_brkpos = true;
-bool sim_basicsw = true;
-bool sim_ign = true;
-bool sim_cruisesw = true;
-char disp_draw_buffer[8];  // Used to convert integers to ascii for purposes of displaying on screen
-char disp_draw_buffer2[8];  // Used to convert integers to ascii for purposes of displaying on screen
-char disp_values[disp_lines][8];
-int32_t disp_needles[disp_lines];
-int32_t disp_targets[disp_lines];
-int32_t disp_age_quanta[disp_lines];
-Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
-bool disp_bool_values[6];
-char disp_bool_buffer;
-bool selected_val_dirty = true;
-bool dataset_page_dirty = true;
-int32_t old_tach_time_us;
-int32_t old_speedo_time_us;
-Timer cruiseSwTimer;
-Timer simTimer;
-int32_t sim_edit_delta = 0;
-int32_t sim_edit_delta_touch = 0;
-int32_t sim_edit_delta_encoder = 0;
-Timer touchPollTimer(35000);  // Timer for regular touchscreen sampling
-Timer touchHoldTimer(1000000);  // For timing touch long presses
-Timer touchAccelTimer(850000);  // Touch hold time per left shift (doubling) of touch_accel
-bool touch_now_touched = false;  // Is a touch event in progress
-int32_t touch_accel_exponent = 0;  // Will edit values by +/- 2^touch_accel_exponent per touch_period interval
-int32_t touch_accel = 1 << touch_accel_exponent;  // Touch acceleration level, which increases the longer you hold. Each edit update chages value by this
-int32_t touch_accel_exponent_max = 8;  // Never edit values faster than this. 2^8 = 256 change in value per update
-bool touch_longpress_valid = true;
-int32_t touch_fudge = 0;  // -8
+
+// diag/monitoring variables
 Timer loopTimer(1000000);  // how long the previous main loop took to run (in us)
 int32_t loop_period_us = 100000;
 int32_t loop_freq_hz = 1;  // run loop real time frequency (in Hz)
@@ -546,36 +565,31 @@ int32_t heartbeat_ekg[4] = { 150000, 100000, 430000, 1100000 };
 bool heartbeat_pulse = HIGH;
 bool button_last = 0;
 bool button_it = 0;
-// int32_t pressure_min_psi = 0;  // Brake pressure when brakes are effectively off (psi 0-1000)
-// int32_t pressure_max_psi = 500;  // Highest possible pressure achievable by the actuator (psi 0-1000)
 
-// Testing magnet sensors
-// int32_t tach_magnet_count = 0;  // remove this after tach sensor bench testing (all references)
+// input signal related
+bool ignition = LOW;
+bool ignition_last = ignition;
+bool basicmodesw = LOW;
 
-// Volatile variables  - for variables set inside ISRs
-//
-enum encoder_inputs {A, B, SW};
-// volatile int32_t int_count = 0;
-// volatile int32_t* pwm[] = { &OCR5A, &OCR5B, &OCR5C }; // &OCR1A, &OCR1B, &OCR1C, &OCR3A, &OCR3B, &OCR3C, &OCR4A, &OCR4B, &OCR4C,   // Store the addresses of the PWM timer compare (duty-cycle) registers:
+// touchscreen related
+Timer touchPollTimer(35000);  // Timer for regular touchscreen sampling
+Timer touchHoldTimer(1000000);  // For timing touch long presses
+Timer touchAccelTimer(850000);  // Touch hold time per left shift (doubling) of touch_accel
+bool touch_now_touched = false;  // Is a touch event in progress
+int32_t touch_accel_exponent = 0;  // Will edit values by +/- 2^touch_accel_exponent per touch_period interval
+int32_t touch_accel = 1 << touch_accel_exponent;  // Touch acceleration level, which increases the longer you hold. Each edit update chages value by this
+int32_t touch_accel_exponent_max = 8;  // Never edit values faster than this. 2^8 = 256 change in value per update
+bool touch_longpress_valid = true;
+int32_t touch_fudge = 0;  // -8
+
+// rotary encoder related
+enum encodersw_presses { NONE, SHORT, LONG };
+enum encoder_inputs { A, B };
 volatile int32_t encoder_bounce_danger = B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
 volatile int32_t encoder_delta = 0;  // Keeps track of un-handled rotary clicks of the encoder.  Positive for CW clicks, Negative for CCW. 
 volatile bool encoder_a_stable = true;  //  Stores the value of encoder A pin as read during B pin transition (where A is stable)
 volatile int32_t encoder_spinrate_isr_us = 100000;  // Time elapsed between last two detents
-volatile int32_t tach_delta_us = 0;
-volatile int32_t speedo_delta_us = 0;
-volatile int32_t hotrc_horz_pulse_us = 1500;
-volatile int32_t hotrc_vert_pulse_us = 1500;
-volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
-
 Timer encoderSpinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
-Timer tachPulseTimer;  // OK to not be volatile?
-Timer speedoPulseTimer;  // OK to not be volatile?
-Timer hotrcPulseTimer;  // OK to not be volatile?
-
-int32_t tach_delta_impossible_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
-int32_t speedo_delta_impossible_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
-
-enum encodersw_presses { NONE, SHORT, LONG };
 Timer encoderLongPressTimer(800000);  // Used to time long button presses
 int32_t encoder_spinrate_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
 int32_t encoder_spinrate_min_us = 2500;  // Will reject spins faster than this as an attempt to debounce behavior
