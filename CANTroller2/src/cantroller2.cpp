@@ -913,54 +913,60 @@ void sd_init() {
 }
 
 // int* x is c++ style, int *x is c style
-void adj_val(int32_t* variable, int32_t modify, int32_t low_limit, int32_t high_limit) {
+void adj_val (int32_t* variable, int32_t modify, int32_t low_limit, int32_t high_limit) {
     if (*variable + modify < low_limit) *variable = low_limit;
     else if (*variable + modify > high_limit) *variable = high_limit;
     else *variable += modify; 
 }
+void set_pin (int32_t pin, int32_t mode) {
+    if (pin >= 0) pinMode (pin, mode);
+}
+void write_pin (int32_t pin, int32_t val) {
+    if (pin >= 0) digitalWrite (pin, val);
+}
 
 void setup() {
-    pinMode(heartbeat_led_pin, OUTPUT);
-    pinMode(encoder_a_pin, INPUT_PULLUP);
-    pinMode(encoder_b_pin, INPUT_PULLUP);
-    pinMode(brake_pwm_pin, OUTPUT);
-    pinMode(steer_pwm_pin, OUTPUT);
-    pinMode(tft_dc_pin, OUTPUT);
-    pinMode(encoder_sw_pin, INPUT_PULLUP);
-    pinMode(gas_pwm_pin, OUTPUT);
-    pinMode(ignition_pin, OUTPUT);  // drives relay to turn on/off car. Active high
-    pinMode(basicmodesw_pin, INPUT_PULLUP);
-    pinMode(tach_pulse_pin, INPUT_PULLUP);
-    pinMode(speedo_pulse_pin, INPUT_PULLUP);
-    pinMode(joy_horz_pin, INPUT);
-    pinMode(joy_vert_pin, INPUT);
-    pinMode(pressure_pin, INPUT);
-    pinMode(brake_pos_pin, INPUT);
-    pinMode(battery_pin, INPUT);
-    pinMode(hotrc_horz_pin, INPUT);
-    pinMode(hotrc_vert_pin, INPUT);
-    pinMode(hotrc_ch3_pin, INPUT);
-    pinMode(hotrc_ch4_pin, INPUT);
-    pinMode(neopixel_pin, OUTPUT);
-    pinMode(usd_cs_pin, OUTPUT);
-    pinMode(tft_cs_pin, OUTPUT);
-    pinMode(pot_wipe_pin, INPUT);
-    if ((int32_t)button_pin >= 0) pinMode(button_pin, INPUT_PULLUP);    
-    if ((int32_t)pot_pwr_pin >= 0) pinMode(pot_pwr_pin, OUTPUT);
-    if ((int32_t)pot_pwr_pin >= 0) pinMode(pot_pwr_pin, OUTPUT);
-    if ((int32_t)cruise_sw_pin >= 0) pinMode(cruise_sw_pin, INPUT_PULLUP);
-    if ((int32_t)tp_irq_pin >= 0) pinMode(tp_irq_pin, INPUT_PULLUP);
-    if ((int32_t)led_rx_pin >= 0) pinMode(led_rx_pin, OUTPUT);
-    if ((int32_t)led_tx_pin >= 0) pinMode(led_tx_pin, OUTPUT);
-    // if ((int32_t)tft_ledk_pin >= 0) pinMode(tft_ledk_pin, OUTPUT);
+    set_pin(heartbeat_led_pin, OUTPUT);
+    set_pin(encoder_a_pin, INPUT_PULLUP);
+    set_pin(encoder_b_pin, INPUT_PULLUP);
+    set_pin(brake_pwm_pin, OUTPUT);
+    set_pin(steer_pwm_pin, OUTPUT);
+    set_pin(tft_dc_pin, OUTPUT);
+    set_pin(encoder_sw_pin, INPUT_PULLUP);
+    set_pin(gas_pwm_pin, OUTPUT);
+    set_pin(ignition_pin, OUTPUT);  // drives relay to turn on/off car. Active high
+    set_pin(basicmodesw_pin, INPUT_PULLUP);
+    set_pin(tach_pulse_pin, INPUT_PULLUP);
+    set_pin(speedo_pulse_pin, INPUT_PULLUP);
+    set_pin(joy_horz_pin, INPUT);
+    set_pin(joy_vert_pin, INPUT);
+    set_pin(pressure_pin, INPUT);
+    set_pin(brake_pos_pin, INPUT);
+    set_pin(battery_pin, INPUT);
+    set_pin(hotrc_horz_pin, INPUT);
+    set_pin(hotrc_vert_pin, INPUT);
+    set_pin(hotrc_ch3_pin, INPUT);
+    set_pin(hotrc_ch4_pin, INPUT);
+    set_pin(neopixel_pin, OUTPUT);
+    set_pin(usd_cs_pin, OUTPUT);
+    set_pin(tft_cs_pin, OUTPUT);
+    set_pin(pot_wipe_pin, INPUT);
+    set_pin(button_pin, INPUT_PULLUP);    
+    set_pin(pot_pwr_pin, OUTPUT);
+    set_pin(pot_pwr_pin, OUTPUT);
+    set_pin(cruise_sw_pin, INPUT_PULLUP);
+    set_pin(tp_irq_pin, INPUT_PULLUP);
+    set_pin(led_rx_pin, OUTPUT);
+    set_pin(led_tx_pin, OUTPUT);
+    // if ((int32_t)tft_ledk_pin >= 0) set_pin(tft_ledk_pin, OUTPUT);
     
-    digitalWrite(ignition_pin, ignition);
-    digitalWrite(tft_cs_pin, HIGH);   // Prevent bus contention
-    digitalWrite(usd_cs_pin, HIGH);   // Prevent bus contention
-    digitalWrite(tft_dc_pin, LOW);
-    if ((int32_t)led_rx_pin >= 0) digitalWrite(led_rx_pin, LOW);  // Light up
-    if ((int32_t)led_tx_pin >= 0) digitalWrite(led_tx_pin, HIGH);  // Off
-    if ((int32_t)pot_pwr_pin >= 0) digitalWrite(pot_pwr_pin, HIGH);
+    write_pin(ignition_pin, ignition);
+    write_pin(tft_cs_pin, HIGH);   // Prevent bus contention
+    write_pin(usd_cs_pin, HIGH);   // Prevent bus contention
+    write_pin(tft_dc_pin, LOW);
+    write_pin(led_rx_pin, LOW);  // Light up
+    write_pin(led_tx_pin, HIGH);  // Off
+    write_pin(pot_pwr_pin, HIGH);
 
     analogReadResolution(adc_bits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
     Serial.begin(115200);  // Open serial port
