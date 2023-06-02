@@ -497,17 +497,17 @@ bool we_just_switched_modes = true;  // For mode logic to set things up upon fir
 bool park_the_motors = false;  // Indicates we should release the brake & gas so the pedals can be used manually without interference
 bool joy_centered = false;
 Timer motorParkTimer;
-bool ui_simulating = false;
-bool ui_simulating_last = false;
-bool ui_sim_halfass = true;  // Don't sim the joystick or encoder or tach
-bool ui_sim_joy = false;
-bool ui_sim_press = true;
-bool ui_sim_tach = true;
-bool ui_sim_speedo = true;
-bool ui_sim_brkpos = true;
-bool ui_sim_basicsw = true;
-bool ui_sim_ign = true;
-bool ui_sim_cruisesw = true;
+bool simulating = false;
+bool simulating_last = false;
+bool sim_halfass = true;  // Don't sim the joystick or encoder or tach
+bool sim_joy = false;
+bool sim_press = true;
+bool sim_tach = true;
+bool sim_speedo = true;
+bool sim_brkpos = true;
+bool sim_basicsw = true;
+bool sim_ign = true;
+bool sim_cruisesw = true;
 char disp_draw_buffer[8];  // Used to convert integers to ascii for purposes of displaying on screen
 char disp_draw_buffer2[8];  // Used to convert integers to ascii for purposes of displaying on screen
 char disp_values[disp_lines][8];
@@ -1121,13 +1121,13 @@ void loop() {
     battery_filt_mv = ema(battery_mv, battery_filt_mv, battery_ema_alpha);  // Apply EMA filter
     
     // Read sensors
-    if (!ui_simulating && !ui_sim_brkpos) {
+    if (!simulating && !sim_brkpos) {
         brake_pos_adc = analogRead(brake_pos_pin);
         brake_pos_filt_adc = ema(brake_pos_adc, brake_pos_filt_adc, brake_pos_ema_alpha);
     }
     else brake_pos_filt_adc = (brake_pos_nom_lim_retract_adc + brake_pos_zeropoint_adc)/2;  // To keep brake position in legal range during simulation
     // Tach
-    if (!ui_simulating || !ui_sim_tach) {
+    if (!simulating || !sim_tach) {
         if (tachPulseTimer.elapsed() < engine_stop_timeout_us) engine_rpm = (int32_t)(60000000/(double)tach_delta_us);  // Tachometer magnets/us * 60000000 (1 rot/magnet * 1000000 us/sec * 60 sec/min) gives rpm
         else engine_rpm = 0;  // If timeout since last magnet is exceeded
         if (abs(engine_rpm-engine_old_rpm) > engine_lp_thresh_rpm || engine_rpm-engine_last_rpm < engine_spike_thresh_rpm) {  // Remove noise spikes from tach values, if otherwise in range
@@ -1139,7 +1139,7 @@ void loop() {
         else engine_filt_rpm = 0;
     }
     // Speedo
-    if (!ui_simulating || !ui_sim_speedo) { 
+    if (!simulating || !sim_speedo) { 
         if (speedoPulseTimer.elapsed() < car_stop_timeout_us) carspeed_mmph = (int32_t)(179757270/(double)speedo_delta_us); // Update car speed value  
         // magnets/us * 179757270 (1 rot/magnet * 1000000 us/sec * 3600 sec/hr * 1/19.85 gearing * 20*pi in/rot * 1/12 ft/in * 1000/5280 milli-mi/ft gives milli-mph  // * 1/1.15 knots/mph gives milliknots
         // Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
@@ -1153,7 +1153,7 @@ void loop() {
         else carspeed_filt_mmph = 0;
     }
 
-    if (!ui_simulating || !ui_sim_press) {
+    if (!simulating || !sim_press) {
         pressure_adc = analogRead(pressure_pin);  // Brake pressure.  Read sensor, then Remove noise spikes from brake feedback, if reading is otherwise in range
         if (abs(pressure_adc-pressure_old_adc) > pressure_lp_thresh_adc || pressure_adc-pressure_last_adc < pressure_spike_thresh_adc) {
             pressure_old_adc = pressure_last_adc;
@@ -1168,7 +1168,7 @@ void loop() {
     //
     if (led_tx_pin >= 0) digitalWrite(led_tx_pin, !touch_now_touched);
     if (led_rx_pin >= 0) digitalWrite(led_rx_pin, (sim_edit_delta > 0) ? 0 : 1);  
-    if (!ui_simulating || !ui_sim_joy) {  // If not simulating or not simulating joystick
+    if (!simulating || !sim_joy) {  // If not simulating or not simulating joystick
         if (ctrl == HOTRC) {
             ctrl_pos_adc[VERT][RAW] = map(hotrc_vert_pulse_us, 2003, 1009, ctrl_lims_adc[ctrl][VERT][MAX], ctrl_lims_adc[ctrl][VERT][MIN]);
             ctrl_pos_adc[HORZ][RAW] = map(hotrc_horz_pulse_us, 2003, 1009, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
@@ -1204,8 +1204,8 @@ void loop() {
         else if (runmode == CRUISE) runmode = FLY;
         hotrc_ch4_sw_event = false;    
     }
-    if (!ui_simulating || !ui_sim_basicsw) basicmodesw = !digitalRead(basicmodesw_pin);   // 1-value because electrical signal is active low
-    if (!ui_simulating || !ui_sim_cruisesw) cruise_sw = digitalRead(cruise_sw_pin);
+    if (!simulating || !sim_basicsw) basicmodesw = !digitalRead(basicmodesw_pin);   // 1-value because electrical signal is active low
+    if (!simulating || !sim_cruisesw) cruise_sw = digitalRead(cruise_sw_pin);
     
     if (serial_debugging && print_timestamps) printf ("%ld ", mycros()-loopzero);
 
@@ -1459,7 +1459,7 @@ void loop() {
 
     // 6) Service the user interface
     //
-    int32_t touch_x, touch_y, touch_row, touch_col;
+    int32_t touch_x, touch_y, trow, tcol;
     if (touchPollTimer.expired()) {
         touchPollTimer.reset();
         if (touchpanel.touched()) { // Take actions upon being touched
@@ -1469,15 +1469,15 @@ void loop() {
             touchpoint.y = map(touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);  // Rotate touch coordinates to match tft coordinates
             touch_y = disp_height_pix-touchpoint.x; // touch point y coordinate in pixels, from origin at top left corner
             touch_x = touchpoint.y; // touch point x coordinate in pixels, from origin at top left corner
-            touch_row = constrain((touch_y + touch_fudge)/touch_cell_v_pix, 0, 4);  // The -8 seems to be needed or the vertical touch seems off (?)
-            touch_col = (touch_x-touch_margin_h_pix)/touch_cell_h_pix;
-            // else printf("Touch: x:%ld, y:%ld, row:%ld, col:%ld\n", touch_x, touch_y, touch_row, touch_col);
+            trow = constrain((touch_y + touch_fudge)/touch_cell_v_pix, 0, 4);  // The -8 seems to be needed or the vertical touch seems off (?)
+            tcol = (touch_x-touch_margin_h_pix)/touch_cell_h_pix;
+            // else printf("Touch: x:%ld, y:%ld, row:%ld, col:%ld\n", touch_x, touch_y, trow, tcol);
             // Take appropriate touchscreen actions depending how we're being touched
-            if (touch_col == 0 && touch_row == 0 && !touch_now_touched) {
+            if (tcol==0 && trow==0 && !touch_now_touched) {
                 dataset_page += 1; // Displayed dataset page can also be changed outside of simulator
                 if (dataset_page >= arraysize(pagecard)) dataset_page -= arraysize(pagecard);
             }
-            else if (touch_col == 0 && touch_row == 1) {  // Long touch to enter/exit editing mode, if in editing mode, press to change selection of item to edit
+            else if (tcol==0 && trow==1) {  // Long touch to enter/exit editing mode, if in editing mode, press to change selection of item to edit
                 if (tuning_ctrl == OFF) {
                     selected_value = 0;  // if entering select mode from off mode, select first variable
                     if (touch_longpress_valid && touchHoldTimer.expired()) {
@@ -1499,39 +1499,39 @@ void loop() {
                     }
                 }
             }
-            else if (touch_col == 0 && touch_row == 2) {  // Pressed the increase value button, for real time tuning of variables
+            else if (tcol==0 && trow==2) {  // Pressed the increase value button, for real time tuning of variables
                 if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change value yet
                 else if (tuning_ctrl == EDIT) sim_edit_delta_touch = touch_accel;  // If in edit mode, increase value
             }   
-            else if (touch_col == 0 && touch_row == 3) {  // Pressed the decrease value button, for real time tuning of variables
+            else if (tcol==0 && trow==3) {  // Pressed the decrease value button, for real time tuning of variables
                 if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change value yet
                 else if (tuning_ctrl == EDIT) sim_edit_delta_touch = -touch_accel;  // If in edit mode, decrease value
             }
-            else if (touch_col == 0 && touch_row == 4) {  // && touch_row == 0 . Pressed the simulation mode toggle. Needs long press
+            else if (tcol==0 && trow==4) {  // && trow == 0 . Pressed the simulation mode toggle. Needs long press
                 if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout())  {
-                    ui_simulating = !ui_simulating;
+                    simulating = !simulating;
                     touch_longpress_valid = false;
                 }
             }
-            else if (touch_col == 3 && touch_row == 0 && ui_simulating && ui_sim_basicsw && !touch_now_touched) basicmodesw = !basicmodesw;  // Pressed the basic mode toggle button. Toggle value, only once per touch
-            else if (touch_col == 3 && touch_row == 1 && ui_simulating && ui_sim_press) adj_val(&pressure_filt_adc, touch_accel, pressure_min_adc, pressure_max_adc);  // (+= 25) Pressed the increase brake pressure button
-            else if (touch_col == 3 && touch_row == 2 && ui_simulating && ui_sim_press) adj_val(&pressure_filt_adc, -touch_accel, pressure_min_adc, pressure_max_adc);  // (-= 25) Pressed the decrease brake pressure button
-            else if (touch_col == 3 && touch_row == 4 && ui_simulating && ui_sim_joy) adj_val(&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (-= 25) Pressed the joystick left button
-            else if (touch_col == 4 && touch_row == 0 && ui_simulating && ui_sim_ign && !touch_now_touched) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
-            else if (touch_col == 4 && touch_row == 1 && ui_simulating && ui_sim_tach) adj_val(&engine_filt_rpm, touch_accel, 0, engine_redline_rpm);  // (+= 25) Pressed the increase engine rpm button
-            else if (touch_col == 4 && touch_row == 2 && ui_simulating && ui_sim_tach) adj_val(&engine_filt_rpm, -touch_accel, 0, engine_redline_rpm);  // (-= 25) Pressed the decrease engine rpm button
-            else if (touch_col == 4 && touch_row == 3 && ui_simulating && ui_sim_joy) adj_val(&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (+= 25) Pressed the joystick up button
-            else if (touch_col == 4 && touch_row == 4 && ui_simulating && ui_sim_joy) adj_val(&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (-= 25) Pressed the joystick down button
-            else if (touch_col == 5 && touch_row == 0 && ui_simulating && ui_sim_cruisesw) cruise_sw = true;  // Pressed the cruise mode button. This is a momentary control, not a toggle. Value changes back upon release
-            else if (touch_col == 5 && touch_row == 1 && ui_simulating && ui_sim_speedo) adj_val(&carspeed_filt_mmph, touch_accel, 0, carspeed_redline_mmph);  // (+= 50) // Pressed the increase vehicle speed button
-            else if (touch_col == 5 && touch_row == 2 && ui_simulating && ui_sim_speedo) adj_val(&carspeed_filt_mmph, -touch_accel, 0, carspeed_redline_mmph);  // (-= 50) Pressed the decrease vehicle speed button
-            else if (touch_col == 5 && touch_row == 4 && ui_simulating && ui_sim_joy) adj_val(&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (+= 25) Pressed the joystick right button                           
+            else if (tcol==3 && trow==0 && simulating && sim_basicsw && !touch_now_touched) basicmodesw = !basicmodesw;  // Pressed the basic mode toggle button. Toggle value, only once per touch
+            else if (tcol==3 && trow==1 && simulating && sim_press) adj_val(&pressure_filt_adc, touch_accel, pressure_min_adc, pressure_max_adc);  // (+= 25) Pressed the increase brake pressure button
+            else if (tcol==3 && trow==2 && simulating && sim_press) adj_val(&pressure_filt_adc, -touch_accel, pressure_min_adc, pressure_max_adc);  // (-= 25) Pressed the decrease brake pressure button
+            else if (tcol==3 && trow==4 && simulating && sim_joy) adj_val(&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (-= 25) Pressed the joystick left button
+            else if (tcol==4 && trow==0 && simulating && sim_ign && !touch_now_touched) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
+            else if (tcol==4 && trow==1 && simulating && sim_tach) adj_val(&engine_filt_rpm, touch_accel, 0, engine_redline_rpm);  // (+= 25) Pressed the increase engine rpm button
+            else if (tcol==4 && trow==2 && simulating && sim_tach) adj_val(&engine_filt_rpm, -touch_accel, 0, engine_redline_rpm);  // (-= 25) Pressed the decrease engine rpm button
+            else if (tcol==4 && trow==3 && simulating && sim_joy) adj_val(&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (+= 25) Pressed the joystick up button
+            else if (tcol==4 && trow==4 && simulating && sim_joy) adj_val(&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (-= 25) Pressed the joystick down button
+            else if (tcol==5 && trow==0 && simulating && sim_cruisesw) cruise_sw = true;  // Pressed the cruise mode button. This is a momentary control, not a toggle. Value changes back upon release
+            else if (tcol==5 && trow==1 && simulating && sim_speedo) adj_val(&carspeed_filt_mmph, touch_accel, 0, carspeed_redline_mmph);  // (+= 50) // Pressed the increase vehicle speed button
+            else if (tcol==5 && trow==2 && simulating && sim_speedo) adj_val(&carspeed_filt_mmph, -touch_accel, 0, carspeed_redline_mmph);  // (-= 50) Pressed the decrease vehicle speed button
+            else if (tcol==5 && trow==4 && simulating && sim_joy) adj_val(&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (+= 25) Pressed the joystick right button                           
             if (touch_accel_exponent < touch_accel_exponent_max && (touchHoldTimer.elapsed() > (touch_accel_exponent + 1) * touchAccelTimer.timeout())) touch_accel_exponent++; // If timer is > the shift time * exponent, and not already maxed, double the edit speed by incrementing the exponent
                 
             touch_now_touched = true;
         }  // (if touchpanel reads a touch)
         else {  // If not being touched, put momentarily-set simulated button values back to default values
-            if (ui_simulating) cruise_sw = false;  // // Makes this button effectively momentary
+            if (simulating) cruise_sw = false;  // // Makes this button effectively momentary
             sim_edit_delta_touch = 0;  // Stop changing value
             touch_now_touched = false;  // remember last touch state
             touch_accel_exponent = 0;
@@ -1573,7 +1573,7 @@ void loop() {
         encoder_delta = 0;
     }
     
-    // Implement effects of changes made by encoder or touchscreen to ui_simulating, dataset_page, selected_value, or tuning_ctrl
+    // Implement effects of changes made by encoder or touchscreen to simulating, dataset_page, selected_value, or tuning_ctrl
     //
     sim_edit_delta = sim_edit_delta_encoder + sim_edit_delta_touch;  // Allow edits using the encoder
 
@@ -1597,11 +1597,11 @@ void loop() {
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == LOCK)  switch (selected_value) {
             case 2:  brakeSPID.set_proportionality((sim_edit_delta > 0) ? ERROR_TERM : SENSED_INPUT);  break;
-            case 3:  ui_sim_brkpos = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : ui_sim_brkpos;  break;
-            case 4:  ui_sim_joy = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : ui_sim_joy;  break;
-            case 5:  ui_sim_press = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : ui_sim_press;  break;
-            case 6:  ui_sim_tach = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : ui_sim_tach;  break;
-            case 7:  ui_sim_speedo = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : ui_sim_speedo;  break;
+            case 3:  sim_brkpos = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : sim_brkpos;  break;
+            case 4:  sim_joy = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : sim_joy;  break;
+            case 5:  sim_press = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : sim_press;  break;
+            case 6:  sim_tach = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : sim_tach;  break;
+            case 7:  sim_speedo = (sim_edit_delta != 0) ? (sim_edit_delta > 0) : sim_speedo;  break;
         }
         else if (dataset_page == JOY)  switch (selected_value) {
             case 2:  adj_val(&ctrl_lims_adc[ctrl][HORZ][MIN], sim_edit_delta, 0, adc_midscale_adc - ctrl_lims_adc[ctrl][HORZ][DB] / 2 - 1);  break;
@@ -1658,8 +1658,8 @@ void loop() {
 
     // Update displayed telemetry values to the screen
     if (display_enabled)  {
-        if (ui_simulating != ui_simulating_last) draw_simbuttons(ui_simulating);  // if we just entered simulator draw the simulator buttons, or if we just left erase them
-        ui_simulating_last = ui_simulating;
+        if (simulating != simulating_last) draw_simbuttons(simulating);  // if we just entered simulator draw the simulator buttons, or if we just left erase them
+        simulating_last = simulating;
         if (dataset_page_dirty) {
             draw_fixed(true);
             draw_dynamic(0, 0, -1, -1, 2);
@@ -1669,7 +1669,7 @@ void loop() {
         selected_val_dirty = false;
         int32_t range;
         // draw_fixed();
-        // if (ui_simulating) draw_touchgrid(); // Redraw only the at-risk content of the touch grid
+        // if (simulating) draw_touchgrid(); // Redraw only the at-risk content of the touch grid
         draw_dynamic(0, runmode, -1, -1, 1);
         draw_dyn_pid(1, carspeed_filt_mmph, 0, carspeed_redline_mmph, (int32_t)cruiseSPID.get_target(), 4);
         draw_dyn_pid(2, engine_filt_rpm, 0, engine_redline_rpm, (int32_t)gasSPID.get_target(), 4);
@@ -1686,11 +1686,11 @@ void loop() {
             draw_dynamic(12, battery_filt_mv, 0, battery_max_mv, 0);
             draw_dynamic(13, brake_pos_filt_adc, brake_pos_nom_lim_retract_adc, brake_pos_nom_lim_extend_adc, 0);
             draw_dynamic(14, brakeSPID.get_proportionality(), -1, -1, 0);
-            draw_dynamic(15, ui_sim_brkpos, -1, -1, 0);
-            draw_dynamic(16, ui_sim_joy, -1, -1, 0);
-            draw_dynamic(17, ui_sim_press, -1, -1, 0);
-            draw_dynamic(18, ui_sim_tach, -1, -1, 0);
-            draw_dynamic(19, ui_sim_speedo, -1, -1, 0);
+            draw_dynamic(15, sim_brkpos, -1, -1, 0);
+            draw_dynamic(16, sim_joy, -1, -1, 0);
+            draw_dynamic(17, sim_press, -1, -1, 0);
+            draw_dynamic(18, sim_tach, -1, -1, 0);
+            draw_dynamic(19, sim_speedo, -1, -1, 0);
         }
         else if (dataset_page == JOY) {
             draw_dynamic(12, ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX], 0);
