@@ -24,8 +24,8 @@
 
 class SPID {  // Soren's home-made pid loop
     public:
-        #define ABSOLUTE 0  // assign to outCenterMode if pid output just spans a range, rather than deviating from a centerpoint 
-        #define RELATIVE 1  // assign to outCenterMode if pid output deviates from a centerpoint 
+        #define RANGED 0  // assign to outCenterMode if pid output just spans a range, rather than deviating from a centerpoint 
+        #define CENTERED 1  // assign to outCenterMode if pid output deviates from a centerpoint 
         #define ERROR_TERM 0  // What the proportional term is proportional_to
         #define SENSED_INPUT 1  // What the proportional term is proportional_to
         #define FWD 1  // Actuator_direction influences sensed value in the same direction
@@ -34,11 +34,11 @@ class SPID {  // Soren's home-made pid loop
         double kp_coeff = 0, ki_coeff = 0, kd_coeff = 0, kp, ki_hz, kd_s;
         int32_t actuator_direction;
         uint32_t sample_period_ms;
-        double target = 0, error = 0, error_last = 0, p_term = 0, i_term = 0, d_term = 0, open_loop = false;
+        double target = 0, error = 0, delta = 0, error_last = 0, p_term = 0, i_term = 0, d_term = 0, open_loop = false;
         double near_target_error_thresh_percent = 0.005;  // Fraction of the input range where if the error has not exceeded in either dir since last zero crossing, it is considered zero (to prevent endless microadjustments) 
         double output = 0, input = 0, input_last = 0, near_target_error_thresh = 0, near_target_lock = (in_max-in_min)/2;
         double in_min = 0, in_max = 4095, out_min = 0, out_max = 4095, in_center = 2047, out_center = 2047;
-        bool out_center_mode = RELATIVE, in_center_mode = RELATIVE, proportional_to = ERROR_TERM, saturated = false, output_hold = false;
+        bool out_center_mode = CENTERED, in_center_mode = CENTERED, proportional_to = ERROR_TERM, saturated = false, output_hold = false;
     public:
         int32_t disp_kp_1k, disp_ki_mhz, disp_kd_ms;  // disp_* are integer version of tuning variables scaled up by *1000, suitable for screen display
 
@@ -66,7 +66,7 @@ class SPID {  // Soren's home-made pid loop
             }
             else if (abs(near_target_lock - input) > near_target_error_thresh) output_hold = false;
 
-            // Add handling for RELATIVE controller!!  (our brake)
+            // Add handling for CENTERED controller!!  (our brake)
 
             if (proportional_to == ERROR_TERM) p_term = kp_coeff * error;  // If proportional_to Error (default)
             else p_term = -kp_coeff * (input - input_last);  // If proportional_to Input (default)
@@ -76,7 +76,7 @@ class SPID {  // Soren's home-made pid loop
 
             d_term = kd_coeff * (input - input_last);
             
-            double delta = p_term + i_term - d_term;
+            delta = p_term + i_term - d_term;
 
             output = out_center + delta;
 
@@ -182,22 +182,22 @@ class SPID {  // Soren's home-made pid loop
             // else if (*myInput < inMin) *myInput = inMin;
             // if (inputSum > inMax) inputSum = inMax;
             // else if (inputSum < inMin) inputSum = inMin;
-        void set_input_center(void) { in_center_mode = ABSOLUTE; }  // Call w/o arguments to set input to absolute mode
-        void set_input_center(double arg_in_center) {  // Sets input to relative (centerpoint) mode and takes value of center point. 
+        void set_input_center(void) { in_center_mode = RANGED; }  // Call w/o arguments to set input to RANGED mode
+        void set_input_center(double arg_in_center) {  // Sets input to CENTERED (centerpoint) mode and takes value of center point. 
             if (arg_in_center < in_min || arg_in_center > in_max) {
                 printf ("Warning: SPID::set_input_center() ignored request to set input centerpoint outside input range.\n");
                 return;
             }
-            in_center_mode = RELATIVE;
+            in_center_mode = CENTERED;
             in_center = arg_in_center;
         }
-        void set_output_center(void) { out_center_mode = ABSOLUTE; }  // Call w/o arguments to set output to absolute mode
-        void set_output_center(double arg_out_center) {  // Sets output to relative (centerpoint) mode and takes value of center point. 
+        void set_output_center(void) { out_center_mode = RANGED; }  // Call w/o arguments to set output to RANGED mode
+        void set_output_center(double arg_out_center) {  // Sets output to CENTERED (centerpoint) mode and takes value of center point. 
             if (arg_out_center < out_min || arg_out_center > out_max) {
                 printf ("Warning: SPID::set_output_center() ignored request to set output centerpoint outside output range.\n");
                 return;
             }
-            out_center_mode = RELATIVE;
+            out_center_mode = CENTERED;
             out_center = arg_out_center;
         }
         void set_proportionality(bool arg_prop_to) { 
