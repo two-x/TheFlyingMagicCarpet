@@ -948,20 +948,20 @@ void sd_init() {
 }
 
 // int* x is c++ style, int *x is c style
-void adj_val (int32_t* variable, int32_t modify, int32_t low_limit, int32_t high_limit) {
+void adj_val (int32_t* variable, int32_t modify, int32_t low_limit, int32_t high_limit) {  // sets an int reference to new val constrained to given range
     if (*variable + modify < low_limit) *variable = low_limit;
     else if (*variable + modify > high_limit) *variable = high_limit;
     else *variable += modify; 
 }
-void adj_bool (bool* val, int32_t delta) { if (delta != 0) *val = (delta > 0); }    
+void adj_bool (bool* val, int32_t delta) { if (delta != 0) *val = (delta > 0); }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
 
-void set_pin (int32_t pin, int32_t mode) {
+void set_pin (int32_t pin, int32_t mode) {  // configures a pin on the condition it exists for the current board
     if (pin >= 0) pinMode (pin, mode);
 }
-void write_pin (int32_t pin, int32_t val) {
+void write_pin (int32_t pin, int32_t val) {  // writes a digital value to a pin on the condition it exists for the current board
     if (pin >= 0) digitalWrite (pin, val);
 }
-int32_t read_pin (int32_t pin) {
+int32_t read_pin (int32_t pin) {  // reads a digital value from a pin on the condition it exists for the current board
     if (pin >= 0) return digitalRead (pin);
     return -1;
 }
@@ -1072,10 +1072,10 @@ void setup() {
     // Set up the soren pid loops
     brakeSPID.set_output_center((double)brake_pulse_stop_us);  // Sets actuator centerpoint and puts pid loop in output centerpoint mode. Becasue actuator value is defined as a deviation from a centerpoint
     brakeSPID.set_input_limits((double)pressure_min_adc, (double)pressure_max_adc);  // Make sure pressure target is in range
-    brakeSPID.set_output_limits((double)brake_pulse_retract_us , (double)brake_pulse_extend_us);
+    brakeSPID.set_output_limits((double)brake_pulse_retract_us, (double)brake_pulse_extend_us);
     gasSPID.set_input_limits((double)tach_idle_rpm, (double)tach_govern_rpm);
-    gasSPID.set_output_limits((double)gas_pulse_redline_us, (double)gas_pulse_idle_us);
-    cruiseSPID.set_input_limits((double)carspeed_idle_mmph, (double)carspeed_redline_mmph);
+    gasSPID.set_output_limits((double)gas_pulse_govern_us, (double)gas_pulse_idle_us);
+    cruiseSPID.set_input_limits((double)carspeed_idle_mmph, (double)carspeed_govern_mmph);
     cruiseSPID.set_output_limits((double)tach_idle_rpm, (double)tach_govern_rpm);
       
     steer_servo.attach(steer_pwm_pin);
@@ -1722,6 +1722,7 @@ void loop() {
     // Update output signals
     //
     if (syspower != syspower_last) syspower_set (syspower);
+    syspower_last = syspower;
     if (ignition != ignition_last) {  // Car was turned on or off
         write_pin (ignition_pin, ignition); // Make it real
         if (!ignition && carspeed_filt_mmph) panic_stop = true;
@@ -1746,9 +1747,9 @@ void loop() {
     if (display_enabled) {  // } && dispRefreshTimer.expired())  {
         // dispRefreshTimer.reset();
         if (simulating != simulating_last) draw_simbuttons(simulating);  // if we just entered simulator draw the simulator buttons, or if we just left erase them
-        if (disp_dataset_page_dirty) draw_page_name (dataset_page, dataset_page_last);
-        if (disp_selected_val_dirty) draw_selected_name (tuning_ctrl, tuning_ctrl_last, selected_value, selected_value_last);
-        if (disp_sidemenu_dirty) draw_touchgrid (true);
+        if (disp_dataset_page_dirty || disp_redraw_all) draw_page_name (dataset_page, dataset_page_last);
+        if (disp_selected_val_dirty || disp_redraw_all) draw_selected_name (tuning_ctrl, tuning_ctrl_last, selected_value, selected_value_last);
+        if (disp_sidemenu_dirty || disp_redraw_all) draw_touchgrid (true);
         if (disp_runmode_dirty || runmode != oldmode || disp_redraw_all) draw_runmode (runmode, oldmode, (runmode == SHUTDOWN) ? shutdown_color : -1);
         disp_dataset_page_dirty = false;
         disp_selected_val_dirty = false;
