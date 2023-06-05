@@ -197,6 +197,7 @@ using namespace std;
 // display related globals
 #define BLK  0x0000
 #define BLU  0x001f
+#define RBLU 0x043f  // royal blue. b/c true blue too dark to see over black
 #define RED  0xf800
 #define DRED 0xb000
 #define GRN  0x07e0
@@ -331,11 +332,13 @@ bool disp_bool_values[6];
 bool disp_selected_val_dirty = true;
 bool disp_dataset_page_dirty = true;
 bool disp_sidemenu_dirty = true;
-int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, CYN, BLU };
+bool disp_runmode_dirty = true;
+int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, CYN, RBLU };
 int32_t disp_needles[disp_lines];
 int32_t disp_targets[disp_lines];
 int32_t disp_age_quanta[disp_lines];
 Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
+Timer dispRefreshTimer(50000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
 
 // tuning-ui related globals
 enum tuning_ctrl_states {OFF, SELECT, EDIT};
@@ -353,8 +356,8 @@ enum runmodes {BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL};
 int32_t runmode = SHUTDOWN;
 int32_t oldmode = BASIC;  // So we can tell when the mode has just changed. start as different to trigger_mode start algo
 int32_t gesture_progress = 0;  // How many steps of the Cruise Mode gesture have you completed successfully (from Fly Mode)
-int32_t shutdown_color = RED;
-bool shutdown_complete = true;  // Shutdown mode has completed its work and can stop activity
+int32_t shutdown_color = colorcard[SHUTDOWN];
+bool shutdown_complete = false;  // Shutdown mode has completed its work and can stop activity
 bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
 bool park_the_motors = false;  // Indicates we should release the brake & gas so the pedals can be used manually without interference
 bool calmode_request = false;
@@ -838,14 +841,11 @@ void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim)
 }
 void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override) {  // color_override = -1 uses default color
     int32_t color = (color_override == -1) ? colorcard[runmode] : color_override;
-    if (runmode != oldmode || disp_redraw_all) {  // If our mode isn't the one currently displayed, or we are forced to draw all
-        draw_string(11+6, disp_vshift_pix, modecard[oldmode], "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-        draw_string(11+6*(2+strlen(modecard[oldmode])), disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-        draw_string(11+6, disp_vshift_pix, modecard[runmode], "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-        draw_string(11+6*(2+strlen(modecard[runmode])), disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-    }
+    draw_string(11+6, disp_vshift_pix, modecard[oldmode], "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string(11+6*(2+strlen(modecard[oldmode])), disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string(11+6, disp_vshift_pix, modecard[runmode], "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string(11+6*(2+strlen(modecard[runmode])), disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
 }
-void draw_runmode (int32_t runmode, int32_t oldmode) { draw_runmode (runmode, oldmode, -1); }
 void draw_page_name (int32_t page, int32_t page_last) {
     draw_fixed(true);  // Erase and redraw dynamic data corner of screen with names, units etc.
     draw_string(122, disp_vshift_pix, pagecard[dataset_page], pagecard[dataset_page_last], CYN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
@@ -1269,13 +1269,15 @@ void loop() {
                 if (shutdown_color == LPNK) {
                     park_the_motors = true;  // Flags the motor parking to happen, only once
                     motorParkTimer.reset();  // Set a timer to timebox this effort
+                    shutdown_color = DPNK;
+                    disp_runmode_dirty = true;
                 }
-                shutdown_color = DPNK;
-                if (!park_the_motors) {
+                else if (!park_the_motors) {
                     shutdown_complete = true;
                     strcpy(side_menu_buttons[4], "CAL");
                     disp_sidemenu_dirty = true;
                     shutdown_color = colorcard[SHUTDOWN];
+                    disp_runmode_dirty = true;
                     syspower = LOW;  // Power down devices
                     // go to sleep?
                 }
@@ -1741,16 +1743,17 @@ void loop() {
 
     // Display updates
     //
-    if (display_enabled)  {
+    if (display_enabled) {  // } && dispRefreshTimer.expired())  {
+        // dispRefreshTimer.reset();
         if (simulating != simulating_last) draw_simbuttons(simulating);  // if we just entered simulator draw the simulator buttons, or if we just left erase them
         if (disp_dataset_page_dirty) draw_page_name (dataset_page, dataset_page_last);
         if (disp_selected_val_dirty) draw_selected_name (tuning_ctrl, tuning_ctrl_last, selected_value, selected_value_last);
         if (disp_sidemenu_dirty) draw_touchgrid (true);
-        if (runmode == SHUTDOWN) draw_runmode (runmode, oldmode, shutdown_color);
-        else draw_runmode (runmode, oldmode);  // This will detect if dirty by itself
+        if (disp_runmode_dirty || runmode != oldmode || disp_redraw_all) draw_runmode (runmode, oldmode, (runmode == SHUTDOWN) ? shutdown_color : -1);
         disp_dataset_page_dirty = false;
         disp_selected_val_dirty = false;
         disp_sidemenu_dirty = false;
+        disp_runmode_dirty = false;
         int32_t range;
         draw_dyn_pid(1, carspeed_filt_mmph, 0, carspeed_redline_mmph, (int32_t)cruiseSPID.get_target());
         draw_dyn_pid(2, tach_filt_rpm, 0, tach_redline_rpm, (int32_t)gasSPID.get_target());
