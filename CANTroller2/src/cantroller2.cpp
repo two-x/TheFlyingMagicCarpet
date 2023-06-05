@@ -1429,7 +1429,7 @@ void loop() {
             int32_t temp = map (pot_filt_adc, pot_min_adc, pot_max_adc, gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
             if (temp <= gas_pulse_idle_us && temp >= gas_pulse_redline_us) cal_pot_gas_ready = true;
         }
-        if (cal_pot_gasservo && cal_pot_gas_ready) {
+        else if (cal_pot_gasservo) {
             gas_pulse_out_us = map (pot_filt_adc, pot_min_adc, pot_max_adc, gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
         }
         if (calmode_request) {
