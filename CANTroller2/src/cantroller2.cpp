@@ -89,12 +89,12 @@ using namespace std;
 
 // Defines for all the GPIO pins we're using
 #ifdef ESP32_SX_DEVKIT
-    #define button_pin 0  // (button0) - This is one of the buttons on the esp32 board
+    #define button_pin 0  // (button0 / strap to 1) - This is one of the buttons on the esp32 board
     #define joy_horz_pin 1  // (adc) - Analog input, tells us left-right position of joystick. Take complement of ADC value gives:  Low values for left, High values for right.
     #define joy_vert_pin 2  // (adc) - Analog input, tells us up-down position of joystick. Take complement of ADC value gives:  Low values for down, High values for up.
-    #define tft_dc_pin 3  // Output, Assert when sending data to display chip to indicate commands vs. screen data
+    #define tft_dc_pin 3  // (strap X) - Output, Assert when sending data to display chip to indicate commands vs. screen data
     #define battery_pin 4  // (adc) -  Analog input, mule battery voltage level, full scale is 15.638V
-    #define pot_wipe_pin 5  // Analog in from 20k pot. Use 1% series R=22k to 5V on wipe=CW-0ohm side, and R=15k to gnd on wipe-CCW-0ohm side. Gives wipe range of 1.315V (CCW) to 3.070V (CW) with 80 uA draw.
+    #define pot_wipe_pin 5  // (adc) - Analog in from 20k pot. Use 1% series R=22k to 5V on wipe=CW-0ohm side, and R=15k to gnd on wipe-CCW-0ohm side. Gives wipe range of 1.315V (CCW) to 3.070V (CW) with 80 uA draw.
     #define brake_pos_pin 6  // (adc) - Analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
     #define pressure_pin 7  // (adc) - Analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V.
     #define i2c_sda_pin 8  // (i2c0 sda / adc) - Hijack these pins for the touchscreen and micro-sd i2c bus
@@ -106,23 +106,23 @@ using namespace std;
     #define steer_pwm_pin 14  // (pwm0) - Output, PWM signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
     #define brake_pwm_pin 15  // (pwm1) - Output, PWM signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% is stopped) 
     #define gas_pwm_pin 16  // (pwm1) - Output, PWM signal duty cycle controls throttle target. On Due this is the pin labeled DAC1 (where A13 is on Mega)
-    #define hotrc_horz_pin 17  // (pwm0) - Hotrc thumb joystick input.
-    #define hotrc_vert_pin 18  // (pwm0) - Hotrc bidirectional trigger input
-    #define tp_irq_pin 19  // Optional int input so touchpanel can interrupt us (need to modify shield board for this to work)
-    #define hotrc_ch4_pin 20  // Hotrc Ch3 toggle output, used to toggle cruise mode
+    #define hotrc_horz_pin 17  // (pwm0 / tx1) - Hotrc thumb joystick input.
+    #define hotrc_vert_pin 18  // (pwm0 / rx1) - Hotrc bidirectional trigger input
+    #define tp_irq_pin 19  // (usb-otg) - Optional int input so touchpanel can interrupt us (need to modify shield board for this to work)
+    #define hotrc_ch4_pin 20  // (usb-otg) - Hotrc Ch3 toggle output, used to toggle cruise mode
     #define hotrc_ch3_pin 21  // (pwm0) - Hotrc Ch4 toggle output, used to panic stop & kill ignition
-    #define tach_pulse_pin 35  // Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
-    #define speedo_pulse_pin 36  // Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
-    #define ignition_pin 37  // Output flips a relay to kill the car ignition, active high (no pullup)
-    #define basicmodesw_pin 38  // Input, asserted to tell us to run in basic mode.   (needs pullup)
+    #define tach_pulse_pin 35  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
+    #define speedo_pulse_pin 36  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
+    #define ignition_pin 37  // (spi-ram / oct-spi) - Output flips a relay to kill the car ignition, active high (no pullup)
+    #define tft_ledk_pin 38  // (spi-ram / oct-spi) - Output, Optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
     #define encoder_sw_pin 39  // Int input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
     #define encoder_b_pin 40  // Int input, The B pin (aka DT pin) of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
     #define encoder_a_pin 41  // Int input, The A pin (aka CLK pin) of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
     #define syspower_pin 42  // Output, flips a relay to power all the tranducers
     #define uart0_tx_pin 43  // (uart0 tx) - Reserve for possible jaguar interface
     #define uart0_rx_pin 44  // (uart0 rx) - Reserve for possible jaguar interface
-    #define cruise_sw_pin 45  // Input, momentary button low pulse >500ms in fly mode means start cruise mode. Any pulse in cruise mode goes to fly mode. Active low. (needs pullup)
-    #define tft_ledk_pin 46  // Output, Optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
+    #define cruise_sw_pin 45  // (strap to 0) - Input, momentary button low pulse >500ms in fly mode means start cruise mode. Any pulse in cruise mode goes to fly mode. Active low. (needs pullup)
+    #define basicmodesw_pin 46  // (strap X) - Input, asserted to tell us to run in basic mode.   (needs pullup)
     #define usd_cs_pin 47  // Output, active low, Chip select allows SD card controller chip use of the SPI bus
     #define neopixel_pin 48  // (rgb led) - Data line to onboard Neopixel WS281x
 
@@ -130,7 +130,6 @@ using namespace std;
     #define led_rx_pin -1  // Unused on esp32
     #define led_tx_pin -1  // Unused on esp32
     #define heartbeat_led_pin -1
-
 #else  // Applies to Due
     #define usd_cs_pin 4  // Output, active low, Chip select allows SD card controller chip use of the SPI bus
     #define tft_ledk_pin 5  // Output, Optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
@@ -322,7 +321,7 @@ char simgrid[4][3][5] = {
 };
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 char side_menu_buttons[5][4] = { "PG ", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
-char top_menu_buttons[3][6] = { "BASIC", " IGN ", "CRUIS" };  // Pad shorter names with spaces to center
+char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 char disp_draw_buffer[8];  // Used to convert integers to ascii for purposes of displaying on screen
 char disp_draw_buffer2[8];  // Used to convert integers to ascii for purposes of displaying on screen
 char disp_values[disp_lines][8];
@@ -538,8 +537,11 @@ int32_t loopno = 1;
 int32_t loopzero = 0;
 Timer heartbeatTimer(1000000);
 int32_t heartbeat_state = 0;
+int32_t heartbeat_level = 0;
 int32_t heartbeat_ekg[4] = { 150000, 100000, 430000, 1100000 };
-bool heartbeat_pulse = HIGH;
+int32_t heartbeat_fadetime = 60000;
+int32_t heartbeat_pulse = 255;
+
 bool button_last = 0;
 bool button_it = 0;
 
@@ -602,6 +604,7 @@ bool sim_basicsw = true;
 bool sim_ign = true;
 bool sim_cruisesw = true;
 bool sim_pressure = false;
+bool sim_syspower = false;
 
 // Instantiate objects 
 Adafruit_FT6206 touchpanel = Adafruit_FT6206(); // Touch panel
@@ -684,9 +687,10 @@ void hotrc_ch4_isr(void) {  // Reads PWM signal on an input pin to determine con
     if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
-uint32_t neopixel_wheel_counter = 0;
+uint8_t neopixel_wheel_counter = 0;
+int32_t neopixel_brightness = 20;
 Timer neopixelTimer(100000);
-uint32_t colorwheel(int32_t WheelPos) {
+uint32_t colorwheel(uint8_t WheelPos) {
     WheelPos = 255 - WheelPos;
     if(WheelPos < 85) return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
     if(WheelPos < 170) {
@@ -841,14 +845,14 @@ void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim)
 }
 void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override) {  // color_override = -1 uses default color
     int32_t color = (color_override == -1) ? colorcard[runmode] : color_override;
-    draw_string(11+6, disp_vshift_pix, modecard[oldmode], "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-    draw_string(11+6*(2+strlen(modecard[oldmode])), disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-    draw_string(11+6, disp_vshift_pix, modecard[runmode], "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-    draw_string(11+6*(2+strlen(modecard[runmode])), disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string(8+6, disp_vshift_pix, modecard[oldmode], "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string(8+6*(2+strlen(modecard[oldmode]))-3, disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string(8+6, disp_vshift_pix, modecard[runmode], "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string(8+6*(2+strlen(modecard[runmode]))-3, disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
 }
 void draw_page_name (int32_t page, int32_t page_last) {
     draw_fixed(true);  // Erase and redraw dynamic data corner of screen with names, units etc.
-    draw_string(122, disp_vshift_pix, pagecard[dataset_page], pagecard[dataset_page_last], CYN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string(83, disp_vshift_pix, pagecard[dataset_page], pagecard[dataset_page_last], CYN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
 }
 void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
     int32_t color = GRY2;
@@ -864,9 +868,9 @@ void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t select
  
 }
 void draw_bool(bool value, int32_t col) {  // Draws values of boolean data
-    if ((disp_bool_values[col] != value) || disp_redraw_all) {  // If value differs, Erase old value and write new
-        draw_string(touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) - arraysize(top_menu_buttons[col]-1)*(disp_font_width>>1) - 2, 0, top_menu_buttons[col], "", (value) ? GRN : LGRY, DGRY);
-        disp_bool_values[col] = value;
+    if ((disp_bool_values[col-2] != value) || disp_redraw_all) {  // If value differs, Erase old value and write new
+        draw_string(touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - arraysize(top_menu_buttons[col-2]-1)*(disp_font_width>>1) - 2, 0, top_menu_buttons[col-2], "", (value) ? GRN : LGRY, DGRY);
+        disp_bool_values[col-2] = value;
     }
 }
 void draw_simbuttons(bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
@@ -902,9 +906,9 @@ void draw_touchgrid(bool side_only) {  // draws edge buttons with names in 'em. 
         printf("draw_touchgrid: row=%ld, name=%s\n", row, side_menu_buttons[row]);
     }
     if (!side_only) {
-      for (int32_t btn = 0; btn < 3; btn++) {  // Step thru all cols to draw buttons across the top edge
-          tft.fillRoundRect(touch_margin_h_pix + touch_cell_h_pix*(btn+3) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
-          tft.drawRoundRect(touch_margin_h_pix + touch_cell_h_pix*(btn+3) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // tft.width()-9, 3, 18, (tft.height()/5)-6, 8, LYEL);
+      for (int32_t col = 2; col <= 5; col++) {  // Step thru all cols to draw buttons across the top edge
+          tft.fillRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
+          tft.drawRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // tft.width()-9, 3, 18, (tft.height()/5)-6, 8, LYEL);
           // draw_bool(top_menu_buttons[btn], btn+3);
       }
     }
@@ -1082,6 +1086,10 @@ void setup() {
     brake_servo.attach(brake_pwm_pin);
     gas_servo.attach(gas_pwm_pin);
 
+    strip.begin();
+    strip.show(); // Initialize all pixels to 'off'
+    strip.setBrightness(neopixel_brightness);
+
     loopTimer.reset();  // start timer to measure the first loop
     Serial.println(F("Setup finished"));
 }
@@ -1241,16 +1249,12 @@ void loop() {
             syspower = HIGH;  // Power up devices if not already
             motorParkTimer.reset();  // Set a timer to timebox this effort
             park_the_motors = true;  // Flags the motor parking to happen
-            strcpy(side_menu_buttons[4], "SIM");
-            disp_sidemenu_dirty = true;        
         }
         if ((!basicmodesw) && tach_filt_rpm)  runmode = HOLD;  // If we turned off the basic mode switch with engine running, go to Hold mode. If engine is not running, we'll end up in Stall Mode automatically
     }
     else if (runmode == SHUTDOWN)  { // In shutdown mode we stop the car if it's moving then park the motors.
         if (ignition) {
             syspower = HIGH;  // Power up devices if not already
-            strcpy(side_menu_buttons[4], "SIM");
-            disp_sidemenu_dirty = true;        
             runmode = STALL;
         }
         else if (we_just_switched_modes)  {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
@@ -1274,8 +1278,6 @@ void loop() {
                 }
                 else if (!park_the_motors) {
                     shutdown_complete = true;
-                    strcpy(side_menu_buttons[4], "CAL");
-                    disp_sidemenu_dirty = true;
                     shutdown_color = colorcard[SHUTDOWN];
                     disp_runmode_dirty = true;
                     syspower = LOW;  // Power down devices
@@ -1579,10 +1581,15 @@ void loop() {
             }
             else if (tcol==0 && trow==4) {  // && trow == 0 . Pressed the simulation mode toggle. Needs long press
                 if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout())  {
-                    if (runmode == CAL || (runmode == SHUTDOWN && shutdown_complete)) calmode_request = true;
-                    else simulating = !simulating;
+                    simulating = !simulating;
                     touch_longpress_valid = false;
                 }
+            }
+            else if (tcol==2 && trow==0 && (runmode == CAL || (runmode == SHUTDOWN && shutdown_complete))) {
+                if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout())  {
+                    calmode_request = true;
+                    touch_longpress_valid = false;
+                }  // Pressed the basic mode toggle button. Toggle value, only once per touch
             }
             else if (tcol==3 && trow==0 && simulating && sim_basicsw && !touch_now_touched) basicmodesw = !basicmodesw;  // Pressed the basic mode toggle button. Toggle value, only once per touch
             else if (tcol==3 && trow==1 && simulating && sim_pressure) adj_val (&pressure_filt_adc, touch_accel, pressure_min_adc, pressure_max_adc);   // (+= 25) Pressed the increase brake pressure button
@@ -1593,7 +1600,12 @@ void loop() {
             else if (tcol==4 && trow==2 && simulating && sim_tach) adj_val (&tach_filt_rpm, -touch_accel, 0, tach_redline_rpm);  // (-= 25) Pressed the decrease engine rpm button
             else if (tcol==4 && trow==3 && simulating && sim_joy) adj_val (&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (+= 25) Pressed the joystick up button
             else if (tcol==4 && trow==4 && simulating && sim_joy) adj_val (&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (-= 25) Pressed the joystick down button
-            else if (tcol==5 && trow==0 && simulating && sim_cruisesw) cruise_sw = true;  // Pressed the cruise mode button. This is a momentary control, not a toggle. Value changes back upon release
+            else if (tcol==5 && trow==0 && simulating && sim_syspower) {  // You need to enable syspower simulation, be in sim mode and then long-press the syspower button to toggle it. (Hard to do by accident)/
+                if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout())  {
+                    syspower = !syspower;
+                    touch_longpress_valid = false;
+                }  
+            } 
             else if (tcol==5 && trow==1 && simulating && sim_speedo) adj_val (&carspeed_filt_mmph, touch_accel, 0, carspeed_redline_mmph);  // (+= 50) // Pressed the increase vehicle speed button
             else if (tcol==5 && trow==2 && simulating && sim_speedo) adj_val (&carspeed_filt_mmph, -touch_accel, 0, carspeed_redline_mmph);  // (-= 50) Pressed the decrease vehicle speed button
             else if (tcol==5 && trow==4 && simulating && sim_joy) adj_val (&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (+= 25) Pressed the joystick right button                           
@@ -1739,6 +1751,7 @@ void loop() {
     if (neopixel_pin >= 0 && neopixelTimer.expired()) {
         neopixel_wheel_counter++;
         strip.setPixelColor(0, colorwheel(neopixel_wheel_counter));
+        strip.show();
         neopixelTimer.reset();
     }
 
@@ -1843,9 +1856,10 @@ void loop() {
             draw_dynamic(18, cruiseSPID.get_disp_ki_mhz(), 0, 1000);
             draw_dynamic(19, cruiseSPID.get_disp_kd_ms(), 0, 1000);
         }
-        draw_bool(basicmodesw, 0);
-        draw_bool(ignition, 1);
-        draw_bool(cruise_sw, 2);
+        draw_bool((runmode == CAL), 2);
+        draw_bool(basicmodesw, 3);
+        draw_bool(ignition, 4);
+        draw_bool(syspower, 5);
     }
 
     // Do the control loop bookkeeping at the end of each loop
