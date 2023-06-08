@@ -1147,8 +1147,6 @@ void loop() {
         if (button_it != button_last) Serial.println("button\n");
         button_last = button_it;
     }
-    if (led_tx_pin >= 0) digitalWrite(led_tx_pin, !touch_now_touched);  // use these Due lights for whatever, here debugging the touchscreen
-    if (led_rx_pin >= 0) digitalWrite(led_rx_pin, (sim_edit_delta <= 0));  // use these Due lights for whatever, here debugging the touchscreen
 
     // External digital signals
     if (!simulating || !sim_basicsw) basicmodesw = !digitalRead(basicmodesw_pin);   // 1-value because electrical signal is active low
@@ -1754,13 +1752,13 @@ void loop() {
     //
     if (syspower != syspower_last) syspower_set (syspower);
     syspower_last = syspower;
+    if (!carspeed_filt_mmph) panic_stop = false;  //  Panic is over cuz car is stopped
     if (panic_stop) ignition = LOW;  // Kill car if panicking
     if (ignition != ignition_last) {  // Car was turned on or off
         if (!ignition || !panic_stop) write_pin (ignition_pin, ignition); // Make it real
         if (!ignition && carspeed_filt_mmph) panic_stop = true;
     }
     ignition_last = ignition; // Make sure this goes after the last comparison
-    if (!carspeed_filt_mmph) panic_stop = false;  //  Panic is over cuz car is stopped
     
     if (heartbeat_led_pin >= 0 && heartbeatTimer.expired()) {  // Heartbeat LED
         heartbeat_pulse = !heartbeat_pulse;
@@ -1774,6 +1772,8 @@ void loop() {
         strip.show();
         neopixelTimer.reset();
     }
+    if (led_tx_pin >= 0) digitalWrite(led_tx_pin, !touch_now_touched);  // use these Due lights for whatever, here debugging the touchscreen
+    if (led_rx_pin >= 0) digitalWrite(led_rx_pin, (sim_edit_delta <= 0));  // use these Due lights for whatever, here debugging the touchscreen
 
     // Display updates
     //
