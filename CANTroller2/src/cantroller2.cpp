@@ -1248,20 +1248,22 @@ void loop() {
         else steer_pulse_out_us = steer_pulse_stop_us;  // Stop the steering motor if inside the deadband
     }
     // Handle HotRC button generated events
-    if (ctrl == HOTRC && hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition
-        ignition = !ignition;
-        hotrc_ch3_sw_event = false;
+    if (ctrl == HOTRC) {
+        if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition
+            ignition = !ignition;
+            hotrc_ch3_sw_event = false;
+        }
+        if (hotrc_ch4_sw_event) {  // Toggle cruise/fly mode 
+            if (runmode == FLY) runmode = CRUISE;
+            else if (runmode == CRUISE) runmode = FLY;
+            hotrc_ch4_sw_event = false;    
+        }
+        // Detect loss of radio reception and panic stop
+        if (ctrl_pos_adc[VERT][FILT] > hotrc_pos_failsafe_min_adc && ctrl_pos_adc[VERT][FILT] < hotrc_pos_failsafe_max_adc) {
+            if (hotrcPanicTimer.expired()) panic_stop = true;
+        }
+        else hotrcPanicTimer.reset();
     }
-    if (ctrl == HOTRC && hotrc_ch4_sw_event) {  // Toggle cruise/fly mode 
-        if (runmode == FLY) runmode = CRUISE;
-        else if (runmode == CRUISE) runmode = FLY;
-        hotrc_ch4_sw_event = false;    
-    }
-    // Detect loss of radio reception and panic stop
-    if (ctrl_pos_adc[VERT][FILT] > hotrc_pos_failsafe_min_adc && ctrl_pos_adc[VERT][FILT] < hotrc_pos_failsafe_max_adc) {
-        if (hotrcPanicTimer.expired()) panic_stop = true;
-    }
-    else hotrcPanicTimer.reset();
 
     // Runmode state machine. Gas/brake control targets are determined here. 
     //
@@ -1755,11 +1757,11 @@ void loop() {
     if (!carspeed_filt_mmph) panic_stop = false;  //  Panic is over cuz car is stopped
     if (panic_stop) ignition = LOW;  // Kill car if panicking
     if (ignition != ignition_last) {  // Car was turned on or off
-        if (!ignition || !panic_stop) write_pin (ignition_pin, ignition); // Make it real
+        if (!ignition || !panic_stop) write_pin (ignition_pin, ignition);  // Make it real
         if (!ignition && carspeed_filt_mmph) panic_stop = true;
     }
     ignition_last = ignition; // Make sure this goes after the last comparison
-    
+
     if (heartbeat_led_pin >= 0 && heartbeatTimer.expired()) {  // Heartbeat LED
         heartbeat_pulse = !heartbeat_pulse;
         if (++heartbeat_state >= arraysize(heartbeat_ekg)) heartbeat_state -= arraysize(heartbeat_ekg);
