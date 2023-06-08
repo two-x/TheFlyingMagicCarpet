@@ -1259,9 +1259,7 @@ void loop() {
         else if (runmode == CRUISE) runmode = FLY;
         hotrc_ch4_sw_event = false;    
     }
-    // DEBUG THIS!  It isn't working
     // Detect loss of radio reception and panic stop
-
     if (ctrl_pos_adc[VERT][FILT] > hotrc_pos_failsafe_min_adc && ctrl_pos_adc[VERT][FILT] < hotrc_pos_failsafe_max_adc) {
         if (hotrcPanicTimer.expired()) panic_stop = true;
     }
@@ -1756,8 +1754,9 @@ void loop() {
     //
     if (syspower != syspower_last) syspower_set (syspower);
     syspower_last = syspower;
+    if (panic_stop) ignition = LOW;  // Kill car if panicking
     if (ignition != ignition_last) {  // Car was turned on or off
-        write_pin (ignition_pin, ignition); // Make it real
+        if (!ignition || !panic_stop) write_pin (ignition_pin, ignition); // Make it real
         if (!ignition && carspeed_filt_mmph) panic_stop = true;
     }
     ignition_last = ignition; // Make sure this goes after the last comparison
