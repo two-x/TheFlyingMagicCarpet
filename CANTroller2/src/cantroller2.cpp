@@ -439,8 +439,8 @@ int32_t hotrc_pulse_vert_min_us = 990;  // 1009;
 int32_t hotrc_pulse_vert_max_us = 1990;  // 2003;
 int32_t hotrc_pulse_horz_min_us = 990;  // 1009;
 int32_t hotrc_pulse_horz_max_us = 1990;  // 2003;
-int32_t hotrc_pulse_failsafe_min_us = 460;
-int32_t hotrc_pulse_failsafe_max_us = 520;
+int32_t hotrc_pos_failsafe_min_adc = 450;  // The failsafe setting in the hotrc must be set to a trigger level equal to max amount of trim upward from trigger released.
+int32_t hotrc_pos_failsafe_max_adc = 530;
 int32_t hotrc_panic_timeout = 1000000;  // how long to receive flameout-range signal from hotrc vertical before panic stopping
 Timer hotrcPanicTimer(hotrc_panic_timeout);
 
@@ -1259,19 +1259,22 @@ void loop() {
         else if (runmode == CRUISE) runmode = FLY;
         hotrc_ch4_sw_event = false;    
     }
-
     // DEBUG THIS!  It isn't working
     // Detect loss of radio reception and panic stop
-    if (ctrl_pos_adc[VERT][FILT] > hotrc_pulse_failsafe_min_us && ctrl_pos_adc[VERT][FILT] < hotrc_pulse_failsafe_max_us) {
+
+    if (ctrl_pos_adc[VERT][FILT] > hotrc_pos_failsafe_min_adc && ctrl_pos_adc[VERT][FILT] < hotrc_pos_failsafe_max_adc) {
         if (hotrcPanicTimer.expired()) panic_stop = true;
     }
     else hotrcPanicTimer.reset();
 
     // Runmode state machine. Gas/brake control targets are determined here. 
     //
-    if (basicmodesw) runmode = BASIC;    // if basicmode switch on --> Basic Mode
-    else if (runmode != CAL && (panic_stop || !ignition)) runmode == SHUTDOWN;
-    else if (runmode != CAL && !tach_filt_rpm)  runmode = STALL;    // otherwise if engine not running --> Stall Mode
+    
+    // printf("mode: %d, panic: %d, vpos: %4ld, min: %4ld, max: %4ld, elaps: %6ld", runmode, panic_stop, ctrl_pos_adc[VERT][FILT], hotrc_pos_failsafe_min_adc, hotrc_pos_failsafe_max_adc, hotrcPanicTimer.elapsed());
+
+    if (basicmodesw) runmode = BASIC;  // if basicmode switch on --> Basic Mode
+    else if (runmode != CAL && (panic_stop || !ignition)) runmode = SHUTDOWN;
+    else if (runmode != CAL && !tach_filt_rpm) runmode = STALL;  // otherwise if engine not running --> Stall Mode
     
     if (runmode == BASIC)  {  // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering stell works.
         if (we_just_switched_modes) {  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
@@ -1282,7 +1285,7 @@ void loop() {
         if ((!basicmodesw) && tach_filt_rpm)  runmode = HOLD;  // If we turned off the basic mode switch with engine running, go to Hold mode. If engine is not running, we'll end up in Stall Mode automatically
     }
     else if (runmode == SHUTDOWN)  { // In shutdown mode we stop the car if it's moving then park the motors.
-        if (ignition) {
+        if (ignition && !panic_stop) {
             syspower = HIGH;  // Power up devices if not already
             runmode = STALL;
         }
@@ -1457,8 +1460,9 @@ void loop() {
     }
     else { // Obviously this should never happen
         if (serial_debugging) Serial.println(F("Error: Invalid runmode entered"));  // ,  runmode
-        runmode = HOLD;
+        runmode = SHUTDOWN;
     }
+    // printf("newmode: %d\n", runmode);
 
     // Update outputs : Step the pids, update the actuator outputs  (at regular intervals)
     //
