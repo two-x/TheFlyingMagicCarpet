@@ -1498,25 +1498,27 @@ void loop() {
                 tach_target_rpm = (int32_t)cruiseSPID.get_output();
                 // printf(" output = %-+9.4lf,  %+-4ld\n", cruiseSPID.get_output(), tach_target_rpm);
             }
+        }
 
             // Gas.  Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
-            if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
-                if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_idle_us;  // If in deadband or being pushed down, we want idle
-                else gas_pulse_out_us = map(ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_idle_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
-            }
-            else if (gasSPID.get_open_loop())  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
-                gas_pulse_out_us = map (tach_target_rpm, tach_idle_rpm, tach_govern_rpm, gas_pulse_idle_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
-            else if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) 
-                gas_pulse_out_us = map (pot_filt_adc, pot_min_adc, pot_max_adc, gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
-            else if (park_the_motors)
-                gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
-            else {  // Do soren's quasi-pid math to determine gas_pulse_out_us from engine rpm error
-                // printf("Gas PID   rm= %+-4ld target=%-+9.4lf", runmode, (double)tach_target_rpm);
-                tach_target_rpm = constrain(tach_target_rpm, tach_idle_rpm, tach_govern_rpm);  // Make sure desired rpm isn't out of range (due to crazy pid math, for example)
-                gasSPID.set_target((double)tach_target_rpm);
-                gasSPID.compute((double)tach_filt_rpm);
-                gas_pulse_out_us = (int32_t)gasSPID.get_output();
-                // printf(" output = %-+9.4lf,  %+-4ld\n", gasSPID.get_output(), gas_pulse_out_us);
+            if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
+            else if (runmode != BASIC) {
+                if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
+                    if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_idle_us;  // If in deadband or being pushed down, we want idle
+                    else gas_pulse_out_us = map(ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_idle_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
+                }
+                else if (gasSPID.get_open_loop())  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
+                    gas_pulse_out_us = map (tach_target_rpm, tach_idle_rpm, tach_govern_rpm, gas_pulse_idle_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
+                else if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) 
+                    gas_pulse_out_us = map (pot_filt_adc, pot_min_adc, pot_max_adc, gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
+                else {  // Do soren's quasi-pid math to determine gas_pulse_out_us from engine rpm error
+                    // printf("Gas PID   rm= %+-4ld target=%-+9.4lf", runmode, (double)tach_target_rpm);
+                    tach_target_rpm = constrain(tach_target_rpm, tach_idle_rpm, tach_govern_rpm);  // Make sure desired rpm isn't out of range (due to crazy pid math, for example)
+                    gasSPID.set_target((double)tach_target_rpm);
+                    gasSPID.compute((double)tach_filt_rpm);
+                    gas_pulse_out_us = (int32_t)gasSPID.get_output();
+                    // printf(" output = %-+9.4lf,  %+-4ld\n", gasSPID.get_output(), gas_pulse_out_us);
+                }
             }
             if (runmode != CAL || !cal_pot_gasservo) gas_pulse_out_us = constrain(gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_idle_us);
             gas_servo.writeMicroseconds (gas_pulse_out_us);  // Write result to servo
