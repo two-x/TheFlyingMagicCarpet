@@ -1498,7 +1498,6 @@ void loop() {
                 tach_target_rpm = (int32_t)cruiseSPID.get_output();
                 // printf(" output = %-+9.4lf,  %+-4ld\n", cruiseSPID.get_output(), tach_target_rpm);
             }
-        }
 
             // Gas.  Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
             if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
