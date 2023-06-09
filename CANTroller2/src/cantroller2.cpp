@@ -13,6 +13,8 @@
 #include <Adafruit_NeoPixel.h>  // Plan to allow control of neopixel LED onboard the esp32
 #include "Arduino.h"
 // #include <Adafruit_GFX.h>  // For drawing pictures & text on the screen
+#include <OneWire.h>
+#include <DS18B20.h>
 #include "classes.h"  // Contains our data structures
 #include "spid.h"
 
@@ -114,7 +116,7 @@ using namespace std;
     #define tach_pulse_pin 35  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
     #define speedo_pulse_pin 36  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
     #define ignition_pin 37  // (spi-ram / oct-spi) - Output flips a relay to kill the car ignition, active high (no pullup)
-    #define tft_ledk_pin 38  // (spi-ram / oct-spi) - Output, Optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
+    #define onewire_pin 38  // For temperature sensors
     #define encoder_sw_pin 39  // Int input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
     #define encoder_b_pin 40  // Int input, The B pin (aka DT pin) of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
     #define encoder_a_pin 41  // Int input, The A pin (aka CLK pin) of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
@@ -126,6 +128,7 @@ using namespace std;
     #define usd_cs_pin 47  // Output, active low, Chip select allows SD card controller chip use of the SPI bus
     #define neopixel_pin 48  // (rgb led) - Data line to onboard Neopixel WS281x
 
+    #define tft_ledk_pin -1  // (spi-ram / oct-spi) - Output, Optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
     #define encoder_pwr_pin -1
     #define led_rx_pin -1  // Unused on esp32
     #define led_tx_pin -1  // Unused on esp32
@@ -165,6 +168,8 @@ using namespace std;
     #define brake_pos_pin A11  // Analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
 
     #define button_pin -1
+    #define onewire_pin -1  // For temperature sensors
+    
 #endif
 
 #define adc_bits 12
@@ -640,6 +645,17 @@ static Servo brake_servo;
 static Servo gas_servo;
 static Adafruit_NeoPixel strip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
 
+// #define onewire_bus2 2
+// #define onewire_bus3 3
+// #define onewire_bus4 4
+// #define onewire_bus5 5
+// #define onewire_bus6 6
+// #define onewire_bus7 7
+
+OneWire onewire(onewire_pin);
+DS18B20 tempsensor(&onewire);
+DeviceAddress tempsensor_addr;
+
 double d_map (double x, double in_min, double in_max, double out_min, double out_max) {
     if ( abs(in_max - in_min) >= 0.15 ) return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
     printf("d_map() refusing to divide by zero, mapped input %lf to value %lf.\n", x, (out_max-out_min)/2);
@@ -1103,6 +1119,16 @@ void setup() {
     strip.show(); // Initialize all pixels to 'off'
     strip.setBrightness(neopixel_brightness);
 
+    tempsensor.begin();
+    Serial.print("Temp sensor address: ");
+    for (uint8_t i = 0; i < 5; i++) {
+        if (tempsensor_addr[i] < 0x10) Serial.print('0');
+        Serial.print(tempsensor_addr[i], HEX);
+    }
+    Serial.print("\n");
+    
+    Serial.println(tempsensor.getAddress(tempsensor_addr));
+
     hotrcPanicTimer.reset();
 
     loopTimer.reset();  // start timer to measure the first loop
@@ -1151,6 +1177,10 @@ void loop() {
     // External digital signals
     if (!simulating || !sim_basicsw) basicmodesw = !digitalRead(basicmodesw_pin);   // 1-value because electrical signal is active low
     if (!simulating || !sim_cruisesw) cruise_sw = digitalRead(cruise_sw_pin);
+
+    // Temperature sensors
+    tempsensor.requestTemperatures();
+    Serial.println(tempsensor.getTempC());
     
     // Encoder
     // Read and interpret encoder switch activity. Encoder rotation is handled in interrupt routine
