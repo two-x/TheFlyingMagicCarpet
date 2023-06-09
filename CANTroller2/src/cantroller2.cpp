@@ -1519,9 +1519,10 @@ void loop() {
                 // printf(" output = %-+9.4lf,  %+-4ld\n", gasSPID.get_output(), gas_pulse_out_us);
             }
         }
-        if (runmode != CAL || !cal_pot_gasservo) gas_pulse_out_us = constrain(gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_idle_us);
-        gas_servo.writeMicroseconds (gas_pulse_out_us);  // Write result to servo
-
+        if (runmode != BASIC || park_the_motors) {
+            if (runmode != CAL || !cal_pot_gasservo) gas_pulse_out_us = constrain(gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_idle_us);
+            gas_servo.writeMicroseconds (gas_pulse_out_us);  // Write result to servo
+        }
         pidTimer.reset();  // reset timer to trigger the next update
     }
     
