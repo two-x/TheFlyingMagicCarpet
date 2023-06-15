@@ -1,7 +1,4 @@
 // Carpet CANTroller II  Source Code  - For Arduino Due with Adafruit 2.8inch Captouch TFT shield.
-#undef min
-#undef max
-#include <cmath>  // Just using for definition of nan
 #include <SPI.h>  // SPI serial bus needed to talk to the LCD and the SD card
 #include <Wire.h>  // Contains I2C serial bus, needed to talk to touchscreen chip
 #include <SdFat.h>  // SD card & FAT filesystem library
@@ -9,17 +6,19 @@
 #include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
 #include <Adafruit_ILI9341.h>  // For interfacing with the TFT LCD controller chip
 #ifdef DUE
-#include <LibPrintf.h>  // This works on Due but not ESP32
+    #include <LibPrintf.h>  // This works on Due but not ESP32
 #endif
 #include <Adafruit_NeoPixel.h>  // Plan to allow control of neopixel LED onboard the esp32
 #include "Arduino.h"
-// #include <Adafruit_GFX.h>  // For drawing pictures & text on the screen
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <vector>
+#include <string>
+#include <iomanip>
 #include "classes.h"  // Contains our data structures
 #include "spid.h"
-
 using namespace std;
+
 /*
 # Here are the different runmodes documented
 #
@@ -83,8 +82,8 @@ using namespace std;
 # - Actions: Release brake, Maintain car speed, Handle joyvert differently, Watch for gesture
 */
 
-#define arraysize(x)  ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays
-#define floor(amt, lim) ( (amt <= lim) ? lim : amt)
+#define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays
+#define floor(amt, lim) ((amt <= lim) ? lim : amt)
 #define ceiling(amt, lim) ((amt >= lim) ? lim : amt)
 // #define constrain(amt,low,high) ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
 // #define min(a, b) ( (a <= b) ? a : b)
@@ -111,17 +110,17 @@ using namespace std;
     #define gas_pwm_pin 16  // (pwm1) - Output, PWM signal duty cycle controls throttle target. On Due this is the pin labeled DAC1 (where A13 is on Mega)
     #define hotrc_horz_pin 17  // (pwm0 / tx1) - Hotrc thumb joystick input.
     #define hotrc_vert_pin 18  // (pwm0 / rx1) - Hotrc bidirectional trigger input
-    #define tp_irq_pin 19  // (usb-otg) - Optional int input so touchpanel can interrupt us (need to modify shield board for this to work)
+    #define syspower_pin 19  // (usb-otg) - Output, flips a relay to power all the tranducers
     #define hotrc_ch4_pin 20  // (usb-otg) - Hotrc Ch3 toggle output, used to toggle cruise mode
     #define hotrc_ch3_pin 21  // (pwm0) - Hotrc Ch4 toggle output, used to panic stop & kill ignition
     #define tach_pulse_pin 35  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
     #define speedo_pulse_pin 36  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
     #define ignition_pin 37  // (spi-ram / oct-spi) - Output flips a relay to kill the car ignition, active high (no pullup)
-    #define onewire_pin 38  // For temperature sensors
-    #define encoder_sw_pin 39  // Int input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
+    #define fun_pin 38  // (spi-ram / oct-spi) - Available
+    #define onewire_pin 39  // Onewire bus for temperature sensor data
     #define encoder_b_pin 40  // Int input, The B pin (aka DT pin) of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
     #define encoder_a_pin 41  // Int input, The A pin (aka CLK pin) of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
-    #define syspower_pin 42  // Output, flips a relay to power all the tranducers
+    #define encoder_sw_pin 42  // Int input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
     #define uart0_tx_pin 43  // (uart0 tx) - Reserve for possible jaguar interface
     #define uart0_rx_pin 44  // (uart0 rx) - Reserve for possible jaguar interface
     #define cruise_sw_pin 45  // (strap to 0) - Input, momentary button low pulse >500ms in fly mode means start cruise mode. Any pulse in cruise mode goes to fly mode. Active low. (needs pullup)
@@ -129,6 +128,7 @@ using namespace std;
     #define usd_cs_pin 47  // Output, active low, Chip select allows SD card controller chip use of the SPI bus
     #define neopixel_pin 48  // (rgb led) - Data line to onboard Neopixel WS281x
 
+    #define tp_irq_pin -1  // Optional int input so touchpanel can interrupt us (need to modify shield board for this to work)
     #define tft_ledk_pin -1  // (spi-ram / oct-spi) - Output, Optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
     #define encoder_pwr_pin -1
     #define led_rx_pin -1  // Unused on esp32
@@ -152,6 +152,8 @@ using namespace std;
     #define tach_pulse_pin 25  // Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
     #define syspower_pin 27  // Output, flips a relay to power all the tranducers
     #define steer_pwm_pin 29  // Output, PWM signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
+    #define onewire_pin 31  // For temperature sensors
+    #define fun_pin 33  // Available
     #define hotrc_horz_pin 35
     #define hotrc_vert_pin 37
     #define hotrc_ch3_pin 39
@@ -172,14 +174,13 @@ using namespace std;
 
     #define neopixel_pin -1
     #define button_pin -1
-    #define onewire_pin -1  // For temperature sensors
 #endif
 
 #define adc_bits 12
-#define adc_range_adc 4095    // = 2^12-1
-#define adc_midscale_adc 2047
-#define serial_debugging false
-#define print_timestamps false  // Makes code write out timestamps throughout loop to serial port
+#define adc_range_adc 4095  // = 2^12-1
+#define adc_midscale_adc 2047  // = 2^(12-1)-1
+#define serial_debugging true
+#define timestamp_loop true  // Makes code write out timestamps throughout loop to serial port
 
 // Readily available possibilities we could wire up if we want
 //
@@ -200,7 +201,6 @@ using namespace std;
 
 // Globals -------------------
 //
-
 // display related globals
 #define BLK  0x0000
 #define BLU  0x001f
@@ -223,7 +223,7 @@ using namespace std;
 #define DPNK 0xfa8a  // We need all shades of pink
 #define LPNK 0xfe18  // Especially light pink, the champagne of pinks
 
-enum dataset_pages { LOCK, JOY, CAR, PWMS, BPID, GPID, CPID, TEMP };
+enum dataset_pages { RUN, JOY, CAR, PWMS, BPID, GPID, CPID, TEMP };
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
 #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
 #define disp_lines 20  // Max lines of text displayable at line height = disp_line_height_pix
@@ -254,7 +254,7 @@ char telemetry[disp_fixed_lines][10] = {
 };
 char pagecard[8][5] = { "Run ", "Joy ", "Car ", "PWMs", "Bpid", "Gpid", "Cpid", "Temp" };
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][12] = {
-    {   " Battery:",  // LOCK
+    {   " Battery:",  // RUN
         " Brk Pos:",
         "     Pot:",
         "SimBkPos:",
@@ -319,16 +319,16 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][12] = {
         "GasOpnLp:",
         "BrkZeroP:", },
 };
-char units[disp_fixed_lines][5] = { "mmph", "rpm ", "adc ", "adc ", "adc ", "mmph", "adc ", "rpm ", "\xe5s  ", "\xe5s  ", "\xe5s  " };
+char units[disp_fixed_lines][5] = { "mmph", "rpm ", "psi ", "adc ", "adc ", "mmph", "adc ", "rpm ", "\xe5s  ", "\xe5s  ", "\xe5s  " };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
-    { "mV  ", "adc ", "adc ", "adc ", "    ", "    ", "    ", "    " },  // LOCK
+    { "mV  ", "thou", "%   ", "    ", "    ", "    ", "    ", "    " },  // RUN
     { "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // JOY
     { "%   ", "rpm ", "rpm ", "mmph", "mmph", "    ", "    ", "    " },  // CAR
     { "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  " },  // PWM
-    { "adc ", "adc ", "adc ", "adc ", "adc ", "/1k ", "mHz ", "ms  " },  // BPID
+    { "psi ", "psi ", "psi ", "psi ", "psi ", "/1k ", "mHz ", "ms  " },  // BPID
     { "mmph", "mmph", "mmph", "mmph", "mmph", "/1k ", "mHz ", "ms  " },  // GPID
     { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "/1k ", "mHz ", "ms  " },  // CPID
-    { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "    ", "adc " },  // TEMP
+    { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "    ", "thou" },  // TEMP
     // { "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "    ", "    " },  // TEMP
 };
 char simgrid[4][3][5] = {
@@ -355,18 +355,18 @@ int32_t disp_needles[disp_lines];
 int32_t disp_targets[disp_lines];
 int32_t disp_age_quanta[disp_lines];
 Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
-Timer dispRefreshTimer(50000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
+Timer dispRefreshTimer (50000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
 
 // tuning-ui related globals
 enum tuning_ctrl_states { OFF, SELECT, EDIT };
 int32_t tuning_ctrl = OFF;
 int32_t tuning_ctrl_last = OFF;
-int32_t dataset_page = LOCK;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
+int32_t dataset_page = RUN;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
 int32_t dataset_page_last = dataset_page;
 int32_t selected_value = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
 int32_t selected_value_last = 0;
 //  ---- tunable ----
-Timer tuningCtrlTimer(25000000);  // This times out edit mode after a a long period of inactivity
+Timer tuningCtrlTimer (25000000);  // This times out edit mode after a a long period of inactivity
 
 // run state globals
 enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL };
@@ -385,6 +385,7 @@ bool cruise_adjusting = false;
 Timer motorParkTimer;
 Timer gestureFlyTimer;  // Used to keep track of time for gesturing for going in and out of fly/cruise modes
 Timer cruiseSwTimer;
+Timer sleepInactivityTimer (10000000);  // After shutdown how long to wait before powering down to sleep
 //  ---- tunable ----
 int32_t motor_park_timeout_us = 3000000;  // If we can't park the motors faster than this, then give up.
 int32_t gesture_flytimeout_us = 500000;  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
@@ -398,12 +399,12 @@ bool cal_pot_gas_ready = false;  // To avoid immediately overturning gas pot, fi
 // generic values
 //  ---- tunable ----
 int32_t default_margin_adc = 12;  // Default margin of error for comparisons of adc values (ADC count 0-4095)
-Timer sanityTimer(7000000);  // Allows code to fail in a sensible way after a delay if nothing is happening
+Timer sanityTimer (7000000);  // Allows code to fail in a sensible way after a delay if nothing is happening
 
 // pid related globals
 //  ---- tunable ----
 int32_t pid_period_ms = 50;
-Timer pidTimer(pid_period_ms*1000);  // not actually tunable, just needs value above
+Timer pidTimer (pid_period_ms*1000);  // not actually tunable, just needs value above
 int32_t brake_spid_ctrl_dir = FWD;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
 double brake_spid_initial_kp = 0.588;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
 double brake_spid_initial_ki_hz = 0.193;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
@@ -418,12 +419,15 @@ double gas_spid_initial_kd_s = 0.022;  // PID derivative time factor (gas). How 
 int32_t gas_spid_ctrl_dir = REV;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
 
 // mule battery related
-int32_t battery_adc = 10000;
-int32_t battery_mv = 10000;
-int32_t battery_filt_mv = 10000;
+double battery_adc = adc_midscale_adc;
+double battery_mv = 10000;
+double battery_filt_mv = 10000;
 //  ---- tunable ----
+double battery_max_mv = 16000;  // The max vehicle voltage we can sense. Design resistor divider to match. Must exceed max V possible.
+double battery_convert_mv_per_adc = battery_max_mv/adc_range_adc;
+bool battery_convert_invert = false;
+int32_t battery_convert_polarity = FWD;
 double battery_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-int32_t battery_max_mv = 16000;  // The max vehicle voltage we can sense. Design resistor divider to match. Must exceed max V possible.
 
 // potentiometer related
 int32_t pot_adc = adc_midscale_adc;
@@ -561,20 +565,24 @@ int32_t carspeed_redline_mmph = 15000;  // What is our steady state speed at red
 int32_t carspeed_max_mmph = 25000;  // What is max speed car can ever go
 int32_t speedo_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the car is stopped (in us)
 int32_t speedo_delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
-
+            
 // neopixel related
 uint8_t neopixel_wheel_counter = 0;
 int8_t neopixel_brightness = 30;
 int32_t neopixel_timeout = 150000;
-Timer neopixelTimer(neopixel_timeout);
+Timer neopixelTimer (neopixel_timeout);
 
 // diag/monitoring variables
-Timer loopTimer(1000000);  // how long the previous main loop took to run (in us)
+Timer loopTimer (1000000);  // how long the previous main loop took to run (in us)
 int32_t loop_period_us = 100000;
-int32_t loop_freq_hz = 1;  // run loop real time frequency (in Hz)
+double loop_freq_hz = 1;  // run loop real time frequency (in Hz)
+volatile int32_t int_counter = 0;  // counts interrupts per loop
 int32_t loopno = 1;
-int32_t loopzero = 0;
-Timer heartbeatTimer(1000000);
+uint32_t looptimes_us[20];
+std::vector<string> loop_names(20);
+bool loop_dirty[20];
+int32_t loopindex = 0;
+Timer heartbeatTimer (1000000);
 int32_t heartbeat_state = 0;
 int32_t heartbeat_level = 0;
 int32_t heartbeat_ekg[4] = { 170000, 150000, 530000, 1100000 };
@@ -770,202 +778,231 @@ void ema_filt (int32_t raw, double* filt, double alpha) {
     else *filt = alpha * (double)raw + (1 - alpha) * (*filt);
 }
 
-
 // Functions to write to the screen efficiently
 //
-void draw_bargraph_base(int32_t corner_x, int32_t corner_y, int32_t width) {  // draws a horizontal bargraph scale.  124, y, 40
-    tft.drawFastHLine(corner_x+disp_bargraph_squeeze, corner_y, width-disp_bargraph_squeeze*2, GRY1);
-    for (int32_t offset=0; offset<=2; offset++) tft.drawFastVLine((corner_x+disp_bargraph_squeeze)+offset*(width/2 - disp_bargraph_squeeze), corner_y-1, 3, WHT);
+void draw_bargraph_base (int32_t corner_x, int32_t corner_y, int32_t width) {  // draws a horizontal bargraph scale.  124, y, 40
+    tft.drawFastHLine (corner_x+disp_bargraph_squeeze, corner_y, width-disp_bargraph_squeeze*2, GRY1);
+    for (int32_t offset=0; offset<=2; offset++) tft.drawFastVLine ((corner_x+disp_bargraph_squeeze)+offset*(width/2 - disp_bargraph_squeeze), corner_y-1, 3, WHT);
 }
-void draw_needle_shape(int32_t pos_x, int32_t pos_y, int32_t color) {  // draws a cute little pointy needle
-    tft.drawFastVLine(pos_x-1, pos_y, 2, color);
-    tft.drawFastVLine(pos_x, pos_y, 4, color);
-    tft.drawFastVLine(pos_x+1, pos_y, 2, color);
+void draw_needle_shape (int32_t pos_x, int32_t pos_y, int32_t color) {  // draws a cute little pointy needle
+    tft.drawFastVLine (pos_x-1, pos_y, 2, color);
+    tft.drawFastVLine (pos_x, pos_y, 4, color);
+    tft.drawFastVLine (pos_x+1, pos_y, 2, color);
 }
-void draw_target_shape(int32_t pos_x, int32_t pos_y, int32_t t_color, int32_t r_color) {  // draws a cute little target symbol
-    tft.drawFastVLine(pos_x, pos_y+6, 3, t_color);
-    tft.drawFastHLine(pos_x-1, pos_y+9, 3, t_color);
+void draw_target_shape (int32_t pos_x, int32_t pos_y, int32_t t_color, int32_t r_color) {  // draws a cute little target symbol
+    tft.drawFastVLine (pos_x, pos_y+6, 3, t_color);
+    tft.drawFastHLine (pos_x-1, pos_y+9, 3, t_color);
 }
-void draw_bargraph_needle(int32_t n_pos_x, int32_t old_n_pos_x, int32_t pos_y, int32_t n_color) {  // draws a cute little pointy needle
-    draw_needle_shape(old_n_pos_x, pos_y, BLK);
-    draw_needle_shape(n_pos_x, pos_y, n_color);
+void draw_bargraph_needle (int32_t n_pos_x, int32_t old_n_pos_x, int32_t pos_y, int32_t n_color) {  // draws a cute little pointy needle
+    draw_needle_shape (old_n_pos_x, pos_y, BLK);
+    draw_needle_shape (n_pos_x, pos_y, n_color);
 }
-void draw_bargraph_needle_target(int32_t n_pos_x, int32_t old_n_pos_x, int32_t t_pos_x, int32_t old_t_pos_x, int32_t pos_y, int32_t n_color, int32_t t_color, int32_t r_color) {  // draws a needle and target
-    draw_needle_shape(old_n_pos_x, pos_y, BLK);
-    draw_target_shape(old_t_pos_x, pos_y, BLK, BLK);
-    draw_target_shape(t_pos_x, pos_y, t_color, r_color);
-    draw_needle_shape(n_pos_x, pos_y, n_color);
+// void draw_bargraph_needle_target (int32_t n_pos_x, int32_t old_n_pos_x, int32_t t_pos_x, int32_t old_t_pos_x, int32_t pos_y, int32_t n_color, int32_t t_color, int32_t r_color) {  // draws a needle and target
+//     draw_needle_shape (old_n_pos_x, pos_y, BLK);
+//     draw_target_shape (old_t_pos_x, pos_y, BLK, BLK);
+//     draw_target_shape (t_pos_x, pos_y, t_color, r_color);
+//     draw_needle_shape (n_pos_x, pos_y, n_color);
+// }  // This function was for when the needle could overlap the target
+void draw_string (int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
+    tft.setCursor (x, y);
+    tft.setTextColor (bgcolor);
+    tft.print (oldtext);  // Erase the old content
+    tft.setCursor (x, y);
+    tft.setTextColor (color);
+    tft.print (text);  // Draw the new content
 }
-void draw_string(int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
-    tft.setCursor(x, y);
-    tft.setTextColor(bgcolor);
-    tft.print(oldtext);  // Erase the old content
-    tft.setCursor(x, y);
-    tft.setTextColor(color);
-    tft.print(text);  // Draw the new content
+void draw_mmph (int32_t x, int32_t y, int32_t color) {  // This is my cheesy pixel-drawn "mmph" compressed horizontally to 3-char width
+    tft.setTextColor (color);
+    tft.setCursor (x, y);
+    tft.print ("m");
+    tft.setCursor (x+4, y);
+    tft.print ("m");  // Overlapping 'mm' complete (x = 0-8)
+    tft.drawFastVLine (x+10, y+2, 6, color);
+    tft.drawPixel (x+11, y+2, color);
+    tft.drawPixel (x+11, y+6, color);
+    tft.drawFastVLine (x+12, y+3, 3, color);  // 'p' complete (x = 10-12)
+    tft.drawFastVLine (x+14, y, 7, color);
+    tft.drawPixel (x+15, y+2, color);
+    tft.drawFastVLine (x+16, y+3, 4, color);  // 'h' complete (x = 14-16)
 }
-void draw_mmph(int32_t x, int32_t y, int32_t color) {  // This is my cheesy pixel-drawn "mmph" compressed horizontally to 3-char width
-    tft.setCursor(x, y);
-    tft.setTextColor(color);
-    tft.print("m");
-    tft.setCursor(x+4, y);
-    tft.print("m");
-    tft.drawPixel(x+3, y+2, color);
-    tft.drawPixel(x+11, y+2, color);
-    tft.drawPixel(x+11, y+6, color);
-    tft.drawPixel(x+15, y+2, color);
-    tft.drawFastVLine(x+10, y+2, 6, color);
-    tft.drawFastVLine(x+12, y+3, 3, color);
-    tft.drawFastVLine(x+14, y, 7, color);
-    tft.drawFastVLine(x+16, y+3, 4, color);
+void draw_thou (int32_t x, int32_t y, int32_t color) {  // This is my cheesy pixel-drawn "thou" compressed horizontally to 3-char width
+    tft.drawFastVLine (x+1, y+1, 5, color);
+    tft.drawFastHLine (x, y+2, 3, color);
+    tft.drawPixel (x+2, y+6, color);  // 't' complete (x = 0-2)
+    tft.drawFastVLine (x+4, y, 7, color);
+    tft.drawPixel (x+5, y+3, color);
+    tft.drawPixel (x+6, y+2, color);
+    tft.drawFastVLine (x+7, y+3, 4, color);  // 'h' complete (x = 4-7)
+    tft.drawFastVLine (x+9, y+3, 3, color);
+    tft.drawFastHLine (x+10, y+2, 2, color);
+    tft.drawFastHLine (x+10, y+6, 2, color);
+    tft.drawFastVLine (x+12, y+3, 3, color);  // 'o' complete (x = 9-12)
+    tft.drawFastVLine (x+14, y+2, 4, color);
+    tft.drawPixel (x+15, y+6, color);
+    tft.drawFastVLine (x+16, y+2, 5, color);  // 'u' complete (x = 14-16)
 }
-void draw_string_units(int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
-    if (!strcmp(oldtext, "mmph")) {  // Handle "mmph" different than other units so all fit in 3-char width
-        draw_mmph(x, y, bgcolor);
+void draw_string_units (int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
+    if (!strcmp (oldtext, "mmph")) {  // Handle "mmph" different than other units so all fit in 3-char width
+        draw_mmph (x, y, bgcolor);
         oldtext = "";
     }
-    if (!strcmp(text, "mmph")) draw_mmph(x, y, color);
-    else draw_string(x, y, text, oldtext, color, bgcolor);
+    else if (!strcmp (oldtext, "thou")) {  // Handle "thou" different than other units so all fit in 3-char width
+        draw_thou (x, y, bgcolor);
+        oldtext = "";
+    }
+    if (!strcmp (text, "mmph")) draw_mmph(x, y, color);
+    else if (!strcmp (text, "thou")) draw_thou(x, y, color);
+    else draw_string (x, y, text, oldtext, color, bgcolor);
 }
 // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
-void draw_fixed(bool redraw_tuning_corner) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
-    tft.setTextColor(GRY2);
-    tft.setTextSize(1);    
-    if (redraw_tuning_corner) tft.fillRect(10, 145, 154, 95, BLK); // tft.fillRect(0,145,167,95,BLK);  // Erase old dataset page area
+void draw_fixed (bool redraw_tuning_corner) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
+    tft.setTextColor (GRY2);
+    tft.setTextSize (1);    
+    if (redraw_tuning_corner) tft.fillRect (10, 145, 154, 95, BLK); // tft.fillRect(0,145,167,95,BLK);  // Erase old dataset page area
     else {
         for (int32_t lineno=0; lineno < arraysize(telemetry); lineno++)  {  // Step thru lines of fixed telemetry data
-            draw_string(12, (lineno+1)*disp_line_height_pix+disp_vshift_pix, telemetry[lineno], "", GRY2, BLK);
-            draw_string_units(104, (lineno+1)*disp_line_height_pix+disp_vshift_pix, units[lineno], "", GRY2, BLK);
-            draw_bargraph_base(124, (lineno+1)*disp_line_height_pix+disp_vshift_pix+7, disp_bargraph_width);
+            draw_string (12, (lineno+1)*disp_line_height_pix+disp_vshift_pix, telemetry[lineno], "", GRY2, BLK);
+            draw_string_units (104, (lineno+1)*disp_line_height_pix+disp_vshift_pix, units[lineno], "", GRY2, BLK);
+            draw_bargraph_base (124, (lineno+1)*disp_line_height_pix+disp_vshift_pix+7, disp_bargraph_width);
         }
     }
     for (int32_t lineno=0; lineno < arraysize(dataset_page_names[dataset_page]); lineno++)  {  // Step thru lines of dataset page data
-        draw_string(12, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][lineno], dataset_page_names[dataset_page_last][lineno], GRY2, BLK);
-        draw_string_units(104, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, tuneunits[dataset_page][lineno], tuneunits[dataset_page_last][lineno], GRY2, BLK);
-        draw_bargraph_base(124, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix+7, disp_bargraph_width);
+        draw_string (12, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][lineno], dataset_page_names[dataset_page_last][lineno], GRY2, BLK);
+        draw_string_units (104, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, tuneunits[dataset_page][lineno], tuneunits[dataset_page_last][lineno], GRY2, BLK);
+        draw_bargraph_base (124, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix+7, disp_bargraph_width);
     }
 }
 // draw_dynamic  normally draws a given value on a given line (0-19) to the screen if it has changed since last draw.
-void draw_dyn_pid(int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int32_t target) {
-    int32_t age_us = (int32_t)( (double)( dispAgeTimer[lineno].elapsed() ) / 2500000 ); // Divide by us per color gradient quantum
-    memset(disp_draw_buffer,0,strlen(disp_draw_buffer));
-    itoa(value, disp_draw_buffer, 10);
-    if ( strcmp(disp_values[lineno], disp_draw_buffer) || disp_redraw_all ) {  // If value differs, Erase old value and write new
-        draw_string(66, lineno*disp_line_height_pix+disp_vshift_pix, disp_draw_buffer, disp_values[lineno], GRN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-        strcpy(disp_values[lineno], disp_draw_buffer);
+void draw_dyn_pid (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int32_t target) {
+    int32_t age_us = (int32_t)((double)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
+    memset (disp_draw_buffer,0,strlen(disp_draw_buffer));
+    itoa (value, disp_draw_buffer, 10);
+    if (strcmp (disp_values[lineno], disp_draw_buffer) || disp_redraw_all) {  // If value differs, Erase old value and write new
+        draw_string (66, lineno*disp_line_height_pix+disp_vshift_pix, disp_draw_buffer, disp_values[lineno], GRN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+        strcpy (disp_values[lineno], disp_draw_buffer);
         dispAgeTimer[lineno].reset();
         disp_age_quanta[lineno] = 0;
     }
-    if (lowlim < hilim)  {  // If a defined range was given, we have a bargraph to possibly update needles/targets on
+    else if (age_us > disp_age_quanta[lineno] && age_us < 11)  {  // As readings age, redraw in new color. This may fail and redraw when the timer overflows? 
+        int32_t color;
+        if (age_us < 8) color = 0x1fe0 + age_us*0x2000;  // Base of green with red added as you age, until yellow is achieved
+        else color = 0xffe0 - (age_us-8) * 0x100;  // Then lose green as you age further
+        draw_string (66, (lineno)*disp_line_height_pix+disp_vshift_pix, disp_values[lineno], "", color, BLK);
+        disp_age_quanta[lineno] = age_us;
+    }
+    if (lowlim < hilim) {  // Any value having a given range deserves a bargraph gauge with a needle
         int32_t corner_x = 124;    
         int32_t corner_y = lineno*disp_line_height_pix+disp_vshift_pix-1;
-        int32_t n_pos = map(value, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+        int32_t n_pos = map (value, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
         int32_t ncolor = (n_pos > disp_bargraph_width-disp_bargraph_squeeze || n_pos < disp_bargraph_squeeze) ? RED : GRN;
-        n_pos = corner_x + constrain(n_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
-        if (n_pos != disp_needles[lineno] || disp_redraw_all)  {  // If the value was changed the needle prob has to move
-            draw_bargraph_needle(n_pos, disp_needles[lineno], corner_y, ncolor);  // Let's draw a needle
-            disp_needles[lineno] = n_pos;
-        }
-        if (target != -1)  {  // If this graph has a target that might need to be moved
-            int32_t t_pos = map(target, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
-            t_pos = corner_x + constrain(t_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
-            if (t_pos != disp_targets[lineno] || disp_redraw_all) {  // If graph includes a target
-                int32_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || n_pos < disp_bargraph_squeeze) ? RED : ( (t_pos != n_pos) ? YEL : GRN );
-                // int32_t rcolor = (t_pos != n_pos) ? RED : GRN;  // Reticle color was a thing with the old 2-part target shape
-                draw_target_shape(disp_targets[lineno], corner_y, BLK, -1);
-                draw_bargraph_base(124, (lineno)*disp_line_height_pix+disp_vshift_pix+7, disp_bargraph_width);
-                draw_target_shape(t_pos, corner_y, tcolor, -1);
-                // draw_bargraph_needle_target(n_pos, disp_needles[lineno], t_pos, disp_targets[lineno], corner_y, ncolor, tcolor, rcolor);  // draws a needle and target
-                disp_targets[lineno] = t_pos;
+        n_pos = corner_x + constrain (n_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+        if (target != -1) {  // If target value is given, draw a target on the bargraph too
+            int32_t t_pos = map (target, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+            int32_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || t_pos < disp_bargraph_squeeze) ? RED : ( (t_pos != n_pos) ? YEL : GRN );
+            t_pos = corner_x + constrain (t_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+            if (t_pos != disp_targets[lineno] || (t_pos == n_pos)^(disp_needles[lineno] != disp_targets[lineno]) || disp_redraw_all) {
+                draw_target_shape (disp_targets[lineno], corner_y, BLK, -1);  // Erase old target
+                // draw_bargraph_base (124, lineno*disp_line_height_pix+disp_vshift_pix+7, disp_bargraph_width);
+                tft.drawFastHLine (disp_targets[lineno]-(disp_targets[lineno] != corner_x+disp_bargraph_squeeze),
+                    lineno*disp_line_height_pix+disp_vshift_pix+7,  // Patch bargraph line where old target got erased
+                    2+(disp_targets[lineno] != corner_x+disp_bargraph_width-disp_bargraph_squeeze), GRY1);
+                for (int32_t offset=0; offset<=2; offset++)  // Redraw bargraph graduations in case one got corrupted by target erasure
+                    tft.drawFastVLine ((corner_x+disp_bargraph_squeeze)+offset*(disp_bargraph_width/2 - disp_bargraph_squeeze), 
+                        lineno*disp_line_height_pix+disp_vshift_pix+6, 3, WHT);
+                draw_target_shape (t_pos, corner_y, tcolor, -1);  // Draw the new target
+                disp_targets[lineno] = t_pos;  // Remember position of target
             }
         }
+        if (n_pos != disp_needles[lineno] || disp_redraw_all) {
+            draw_bargraph_needle (n_pos, disp_needles[lineno], corner_y, ncolor);  // Let's draw a needle
+            disp_needles[lineno] = n_pos;  // Remember position of needle
+        }
     }
-    else if (age_us > disp_age_quanta[lineno] && age_us < 11)  {  // As readings age, redraw in new color
-        int32_t color;
-        if (age_us < 8) color = 0x1fe0 + age_us*0x2000;  // Base of green with red added as you age
-        else color = 0xffe0 - (age_us-8)*0x100;  // Until yellow is achieved, then lose green as you age further
-        draw_string(66, (lineno)*disp_line_height_pix+disp_vshift_pix, disp_values[lineno], "", color, BLK);
-        disp_age_quanta[lineno] = age_us;
-    } // Else don't draw anything, because we already did.  Logic is 100s of times cheaper than screen drawing.)
+}
+void draw_dyn_pid (int32_t lineno, double value, double lowlim, double hilim, double target) {
+    draw_dyn_pid (lineno, (int32_t)value, (int32_t)lowlim, (int32_t)hilim, (int32_t)target);
 }
 void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim) {
-    draw_dyn_pid(lineno, value, lowlim, hilim, -1);
+    draw_dyn_pid (lineno, value, lowlim, hilim, -1);
 }
+void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim) {
+    draw_dyn_pid (lineno, (int32_t)value, (int32_t)lowlim, (int32_t)hilim, -1);
+}
+
 void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override) {  // color_override = -1 uses default color
     int32_t color = (color_override == -1) ? colorcard[runmode] : color_override;
-    draw_string(8+6, disp_vshift_pix, modecard[oldmode], "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-    draw_string(8+6*(2+strlen(modecard[oldmode]))-3, disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-    draw_string(8+6, disp_vshift_pix, modecard[runmode], "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-    draw_string(8+6*(2+strlen(modecard[runmode]))-3, disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string (8+6, disp_vshift_pix, modecard[oldmode], "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string (8+6*(2+strlen (modecard[oldmode]))-3, disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string (8+6, disp_vshift_pix, modecard[runmode], "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string (8+6*(2+strlen (modecard[runmode]))-3, disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
 }
 void draw_page_name (int32_t page, int32_t page_last) {
-    draw_fixed(true);  // Erase and redraw dynamic data corner of screen with names, units etc.
-    draw_string(83, disp_vshift_pix, pagecard[dataset_page], pagecard[dataset_page_last], CYN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_fixed (true);  // Erase and redraw dynamic data corner of screen with names, units etc.
+    draw_string (83, disp_vshift_pix, pagecard[dataset_page], pagecard[dataset_page_last], CYN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
 }
 void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
     int32_t color = GRY2;
     if (tun_ctrl == SELECT) color = YEL;
     else if (tun_ctrl == EDIT) color = GRN;
     if (tun_ctrl == SELECT && selected_val != selected_last) {
-        draw_string(12, 12+(selected_val+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_val], "", color, BLK);
-        draw_string(12, 12+(selected_last+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_last], "", GRY2, BLK);
+        draw_string (12, 12+(selected_val+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_val], "", color, BLK);
+        draw_string (12, 12+(selected_last+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_last], "", GRY2, BLK);
     }
     else if (tun_ctrl != tun_ctrl_last) {
-        draw_string(12, 12+(selected_val+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_val], "", color, BLK);
+        draw_string (12, 12+(selected_val+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_val], "", color, BLK);
     }
  
 }
-void draw_bool(bool value, int32_t col) {  // Draws values of boolean data
+void draw_bool (bool value, int32_t col) {  // Draws values of boolean data
     if ((disp_bool_values[col-2] != value) || disp_redraw_all) {  // If value differs, Erase old value and write new
-        draw_string(touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - arraysize(top_menu_buttons[col-2]-1)*(disp_font_width>>1) - 2, 0, top_menu_buttons[col-2], "", (value) ? GRN : LGRY, DGRY);
+        draw_string (touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - arraysize (top_menu_buttons[col-2]-1)*(disp_font_width>>1) - 2, 0, top_menu_buttons[col-2], "", (value) ? GRN : LGRY, DGRY);
         disp_bool_values[col-2] = value;
     }
 }
-void draw_simbuttons(bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
-    tft.setTextColor(LYEL);
+void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
+    tft.setTextColor (LYEL);
     for (int32_t row = 0; row < arraysize(simgrid); row++) {
         for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
             int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
             int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
-            if ( strcmp( simgrid[row][col], "    " ) ) {
-                tft.fillCircle(cntr_x, cntr_y, 19, create ? DGRY : BLK);
+            if (strcmp (simgrid[row][col], "    " )) {
+                tft.fillCircle (cntr_x, cntr_y, 19, create ? DGRY : BLK);
                 if (create) {
-                    tft.drawCircle(cntr_x, cntr_y, 19, LYEL);
-                    draw_string(cntr_x-(arraysize(simgrid[row][col])-1)*(disp_font_width>>1), cntr_y-(disp_font_height>>1), simgrid[row][col], "", LYEL, DGRY);
+                    tft.drawCircle (cntr_x, cntr_y, 19, LYEL);
+                    draw_string (cntr_x-(arraysize (simgrid[row][col])-1)*(disp_font_width>>1), cntr_y-(disp_font_height>>1), simgrid[row][col], "", LYEL, DGRY);
                 }
             }
         }     
     }
 }
-void draw_touchgrid(bool side_only) {  // draws edge buttons with names in 'em. If replace_names, just updates names
+void draw_touchgrid (bool side_only) {  // draws edge buttons with names in 'em. If replace_names, just updates names
     int32_t namelen = 0;
-    tft.setTextColor(WHT);
-    for (int32_t row = 0; row < arraysize(side_menu_buttons); row++) {  // Step thru all rows to draw buttons along the left edge
-        tft.fillRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, DGRY);
-        tft.drawRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, LYEL);
+    tft.setTextColor (WHT);
+    for (int32_t row = 0; row < arraysize (side_menu_buttons); row++) {  // Step thru all rows to draw buttons along the left edge
+        tft.fillRoundRect (-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, DGRY);
+        tft.drawRoundRect (-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, LYEL);
         namelen = 0;
-        for (uint32_t x = 0 ; x < arraysize(side_menu_buttons[row]) ; x++ ) {
+        for (uint32_t x = 0 ; x < arraysize (side_menu_buttons[row]) ; x++ ) {
             if (side_menu_buttons[row][x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
         }
         for (int32_t letter = 0; letter < namelen; letter++) {  // Going letter by letter thru each button name so we can write vertically 
-            tft.setCursor( 1, ( touch_cell_v_pix*row) + (touch_cell_v_pix/2) - (int32_t)(4.5*((double)namelen-1)) + (disp_font_height+1)*letter ); // adjusts vertical offset depending how many letters in the button name and which letter we're on
-            tft.println( side_menu_buttons[row][letter] );  // Writes each letter such that the whole name is centered vertically on the button
+            tft.setCursor (1, ( touch_cell_v_pix*row) + (touch_cell_v_pix/2) - (int32_t)(4.5*((double)namelen-1)) + (disp_font_height+1)*letter); // adjusts vertical offset depending how many letters in the button name and which letter we're on
+            tft.println (side_menu_buttons[row][letter]);  // Writes each letter such that the whole name is centered vertically on the button
         }
-        printf("draw_touchgrid: row=%ld, name=%s\n", row, side_menu_buttons[row]);
     }
     if (!side_only) {
         for (int32_t col = 2; col <= 5; col++) {  // Step thru all cols to draw buttons across the top edge
-            tft.fillRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
-            tft.drawRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // tft.width()-9, 3, 18, (tft.height()/5)-6, 8, LYEL);
-            // draw_bool(top_menu_buttons[btn], btn+3);
+            tft.fillRoundRect (touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
+            tft.drawRoundRect (touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // tft.width()-9, 3, 18, (tft.height()/5)-6, 8, LYEL);
+            // draw_bool (top_menu_buttons[btn], btn+3);
         }
     }
 }
 void sd_init() {
-    if (!sd.begin(usd_cs_pin, SD_SCK_MHZ(50))) sd.initErrorHalt();  // Initialize at highest supported speed that is not over 50 mhz. Go lower if errors.
-    if (!root.open("/")) error("open root failed");
-    if (!sd.exists(approot)) { 
-        if (sd.mkdir(approot)) Serial.println(F("Created approot directory\n"));  // cout << F("Created approot directory\n");
+    if (!sd.begin (usd_cs_pin, SD_SCK_MHZ (50))) sd.initErrorHalt();  // Initialize at highest supported speed that is not over 50 mhz. Go lower if errors.
+    if (!root.open ("/")) error("open root failed");
+    if (!sd.exists (approot)) { 
+        if (sd.mkdir (approot)) Serial.println (F("Created approot directory\n"));  // cout << F("Created approot directory\n");
         else error("Create approot failed");
     }
     // Change volume working directory to Folder1.
@@ -981,10 +1018,8 @@ void sd_init() {
     //     error("Open logfile failed\n");
     // }
     // file.close();
-    Serial.println(F("Filesystem init finished\n"));  // cout << F("Filesystem init finished\n");
-
-    // for (byte a = 10; a >= 1; a--)
-    // {
+    // Serial.println(F("Filesystem init finished\n"));  // cout << F("Filesystem init finished\n");
+    // for (byte a = 10; a >= 1; a--) {
     //     char fileName[12];
     //     sprintf(fileName, "%d.txt", a);
     //     file = sd.open(fileName, FILE_WRITE); //create file
@@ -997,6 +1032,12 @@ void adj_val (int32_t* variable, int32_t modify, int32_t low_limit, int32_t high
     else if (*variable + modify > high_limit) *variable = high_limit;
     else *variable += modify; 
 }
+void adj_val (double* variable, int32_t modify, double low_limit, double high_limit) {  // sets an int reference to new val constrained to given range
+    if (*variable + modify < low_limit) *variable = low_limit;
+    else if (*variable + modify > high_limit) *variable = high_limit;
+    else *variable += modify; 
+}
+
 void adj_bool (bool* val, int32_t delta) { if (delta != 0) *val = (delta > 0); }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
 
 void set_pin (int32_t pin, int32_t mode) {  // configures a pin on the condition it exists for the current board
@@ -1010,19 +1051,30 @@ int32_t read_pin (int32_t pin) {  // reads a digital value from a pin on the con
     return -1;
 }
 void syspower_set (bool val) {
-    if (digitalRead(syspower_pin) != val) {
+    if (digitalRead (syspower_pin) != val) {
         write_pin (syspower_pin, val);
-        delay(val * 500);
+        delay (val * 500);
     }
 }
 
 double get_temp (DeviceAddress arg_addr) {  // function to print the temperature for a device
-    float tempC = tempsensebus.getTempC (arg_addr);
-    if (tempC == DEVICE_DISCONNECTED_C) {
-        // printf ("Error: Could not read temperature\n");
-        return -1;
+    float tempF = tempsensebus.getTempF (arg_addr);
+    // if (tempF == DEVICE_DISCONNECTED_C) printf ("Error: Could not read temperature\n");
+    return tempF;
+}
+
+double convert_units (double from_units, double convert_factor, bool invert) {
+    return ((invert) ? 1/from_units : from_units) * convert_factor;
+}
+void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names, bool dirty[], string loopname) {  // (int32_t timesarray[], int32_t index) {
+    if (timestamp_loop) {
+        if (dirty[index]) {
+            names[index] = loopname;  // names[index], name);
+            dirty[index] = false;
+        }
+        timesarray[index] = micros();
+        index++;
     }
-    return DallasTemperature::toFahrenheit (tempC);
 }
 
 void setup() {
@@ -1173,11 +1225,7 @@ void setup() {
 void loop() {
     // 0) Beginning-of-the-loop nonsense
     //
-    if (serial_debugging && print_timestamps) {
-        Serial.print("Loop# ");
-        Serial.print(loopno);  Serial.print(": ");      
-        loopzero = mycros();  // Start time for loop
-    }
+    
     // Update derived variable values in case they have changed
     ctrl_db_adc[VERT][BOT] = (adc_range_adc-ctrl_lims_adc[ctrl][VERT][DB])/2;  // Lower threshold of vert joy deadband (ADC count 0-4095)
     ctrl_db_adc[VERT][TOP] = (adc_range_adc+ctrl_lims_adc[ctrl][VERT][DB])/2;  // Upper threshold of vert joy deadband (ADC count 0-4095)
@@ -1758,14 +1806,14 @@ void loop() {
     if (tuning_ctrl == SELECT) {
         if (dataset_page >= 4) selected_value = constrain (selected_value, 5, 7);  // Skip unchangeable values for all PID modes
         else if (dataset_page == JOY) selected_value = constrain (selected_value, 2, 7);  // Skip unchangeable values for joy mode
-        else if (dataset_page == LOCK) selected_value = constrain (selected_value, 3, 7);  // Skip unchangeable values for run mode
+        else if (dataset_page == RUN) selected_value = constrain (selected_value, 3, 7);  // Skip unchangeable values for run mode
         else if (dataset_page == TEMP) selected_value = constrain (selected_value, 6, 7);  // Skip unchangeable values for run mode
         else selected_value = constrain(selected_value, 0, arraysize(dataset_page_names[dataset_page])-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
         if (selected_value != selected_value_last) disp_selected_val_dirty = true;
     }
     if (tuning_ctrl != tuning_ctrl_last || disp_dataset_page_dirty) disp_selected_val_dirty = true;
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
-        if (dataset_page == LOCK)  switch (selected_value) {
+        if (dataset_page == RUN)  switch (selected_value) {
             // case 2:  brakeSPID.set_proportionality((sim_edit_delta > 0) ? ERROR_TERM : SENSED_INPUT);  break;
             case 3:  adj_bool (&sim_brkpos, sim_edit_delta);  break;
             case 4:  adj_bool (&sim_joy, sim_edit_delta);  break;
@@ -1867,11 +1915,11 @@ void loop() {
     write_pin (led_rx_pin, (sim_edit_delta <= 0));  // use these Due lights for whatever, here debugging the touchscreen
     // write_pin (led_tx_pin, !touch_now_touched);  // use these Due lights for whatever, here debugging the touchscreen
     
-    // Display updates
+// Display updates
     //
     if (display_enabled) {  // } && dispRefreshTimer.expired())  {
         // dispRefreshTimer.reset();
-        if (simulating != simulating_last) draw_simbuttons(simulating);  // if we just entered simulator draw the simulator buttons, or if we just left erase them
+        if (simulating != simulating_last) draw_simbuttons (simulating);  // if we just entered simulator draw the simulator buttons, or if we just left erase them
         if (disp_dataset_page_dirty || disp_redraw_all) draw_page_name (dataset_page, dataset_page_last);
         if (disp_selected_val_dirty || disp_redraw_all) draw_selected_name (tuning_ctrl, tuning_ctrl_last, selected_value, selected_value_last);
         if (disp_sidemenu_dirty || disp_redraw_all) draw_touchgrid (true);
@@ -1880,29 +1928,35 @@ void loop() {
         disp_selected_val_dirty = false;
         disp_sidemenu_dirty = false;
         disp_runmode_dirty = false;
+    // loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d1");  //
         int32_t range;
-        draw_dyn_pid(1, carspeed_filt_mmph, 0, carspeed_redline_mmph, (int32_t)cruiseSPID.get_target());
-        draw_dyn_pid(2, tach_filt_rpm, 0, tach_redline_rpm, (int32_t)gasSPID.get_target());
-        draw_dyn_pid(3, pressure_filt_adc, pressure_min_adc, pressure_max_adc, (int32_t)brakeSPID.get_target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
+//        draw_dyn_pid(1, carspeed_filt_mmph, 0.0, carspeed_redline_mmph, cruiseSPID.get_target());
+    // loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d1.1");  //
+//        draw_dyn_pid(2, tach_filt_rpm, 0.0, tach_redline_rpm, gasSPID.get_target());
+//        draw_dyn_pid(3, pressure_filt_psi, pressure_min_psi, pressure_max_psi, brakeSPID.get_target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
         draw_dynamic(4, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
         draw_dynamic(5, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-        draw_dynamic(6, (int32_t)cruiseSPID.get_target(), 0, carspeed_govern_mmph);
-        draw_dynamic(7, (int32_t)brakeSPID.get_target(), pressure_min_adc, pressure_max_adc);
-        draw_dynamic(8, (int32_t)gasSPID.get_target(), 0, tach_redline_rpm);
+//        draw_dynamic(6, cruiseSPID.get_target(), 0.0, carspeed_govern_mmph);
+//        draw_dynamic(7, brakeSPID.get_target(), pressure_min_psi, pressure_max_psi);
+//        draw_dynamic(8, gasSPID.get_target(), 0.0, tach_redline_rpm);
         draw_dynamic(9, brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
         draw_dynamic(10, gas_pulse_out_us, gas_pulse_redline_us, gas_pulse_idle_us);
         draw_dynamic(11, steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);
-        if (dataset_page == LOCK) {
-            draw_dynamic(12, battery_filt_mv, 0, battery_max_mv);
-            draw_dynamic(13, brake_pos_filt_adc, brake_pos_nom_lim_retract_adc, brake_pos_nom_lim_extend_adc);
-            draw_dynamic(14, pot_filt_adc, pot_min_adc, pot_max_adc);
+    // loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d2");  //
+
+        if (dataset_page == RUN) {
+            draw_dynamic(12, battery_filt_mv, 0.0, battery_max_mv);
+//            draw_dynamic(13, brake_pos_filt_thou, brake_pos_nom_lim_retract_thou, brake_pos_nom_lim_extend_thou);
+//            draw_dynamic(14, pot_filt_percent, pot_min_percent, pot_max_percent);
             // draw_dynamic(14, brakeSPID.get_proportionality(), -1, -1);
             draw_dynamic(15, sim_brkpos, -1, -1);
             draw_dynamic(16, sim_joy, -1, -1);
             draw_dynamic(17, sim_pressure, -1, -1);
             draw_dynamic(18, sim_tach, -1, -1);
             draw_dynamic(19, sim_speedo, -1, -1);
+// loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d3");  //
         }
+    
         else if (dataset_page == JOY) {
             draw_dynamic(12, ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
             draw_dynamic(13, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
@@ -1915,10 +1969,10 @@ void loop() {
         }
         else if (dataset_page == CAR) {
             draw_dynamic(12, gas_governor_percent, 0, 100);
-            draw_dynamic(13, tach_idle_rpm, 0, tach_redline_rpm);
-            draw_dynamic(14, tach_redline_rpm, 0, tach_max_rpm);
-            draw_dynamic(15, carspeed_idle_mmph, 0, carspeed_redline_mmph);
-            draw_dynamic(16, carspeed_redline_mmph, 0, carspeed_max_mmph);
+//            draw_dynamic(13, tach_idle_rpm, 0.0, tach_redline_rpm);
+//            draw_dynamic(14, tach_redline_rpm, 0.0, tach_max_rpm);
+//            draw_dynamic(15, carspeed_idle_mmph, 0.0, carspeed_redline_mmph);
+//            draw_dynamic(16, carspeed_redline_mmph, 0.0, carspeed_max_mmph);
             draw_dynamic(17, ctrl, -1, -1);  // 0 if hotrc
             draw_dynamic(18, cal_joyvert_brkmotor, -1, -1);
             draw_dynamic(19, cal_pot_gasservo, -1, -1);
@@ -1934,52 +1988,53 @@ void loop() {
             draw_dynamic(19, gas_pulse_redline_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
         }
         else if (dataset_page == BPID) {
-            range = pressure_max_adc-pressure_min_adc;
-            draw_dynamic(12, (int32_t)(brakeSPID.get_error()), -range, range);
-            draw_dynamic(13, (int32_t)(brakeSPID.get_p_term()), -range, range);
-            draw_dynamic(14, (int32_t)(brakeSPID.get_i_term()), -range, range);
-            draw_dynamic(15, (int32_t)(brakeSPID.get_d_term()), -range, range);
-            draw_dynamic(16, (int32_t)(brakeSPID.get_output()), -range, range);  // brake_spid_carspeed_delta_adc, -range, range);
-            draw_dynamic(17, brakeSPID.get_disp_kp_1k(), 0, 1000);  // Real value is 1000 * smaller than displayed
-            draw_dynamic(18, brakeSPID.get_disp_ki_mhz(), 0, 1000);
-            draw_dynamic(19, brakeSPID.get_disp_kd_ms(), 0, 1000);
+//            range = pressure_max_psi-pressure_min_psi;
+            draw_dynamic(12, (int32_t)brakeSPID.get_error(), -range, range);
+            draw_dynamic(13, (int32_t)brakeSPID.get_p_term(), -range, range);
+            draw_dynamic(14, (int32_t)brakeSPID.get_i_term(), -range, range);
+            draw_dynamic(15, (int32_t)brakeSPID.get_d_term(), -range, range);
+            draw_dynamic(16, (int32_t)brakeSPID.get_output(), -range, range);  // brake_spid_carspeed_delta_adc, -range, range);
+            draw_dynamic(17, brakeSPID.get_disp_kp_1k(), 0.0, 1000.0);  // Real value is 1000 * smaller than displayed
+            draw_dynamic(18, brakeSPID.get_disp_ki_mhz(), 0.0, 1000.0);
+            draw_dynamic(19, brakeSPID.get_disp_kd_ms(), 0.0, 1000.0);
         }
         else if (dataset_page == GPID) {
             range = tach_govern_rpm-tach_idle_rpm;
-            draw_dynamic(12, (int32_t)(gasSPID.get_error()), -range, range);
-            draw_dynamic(13, (int32_t)(gasSPID.get_p_term()), -range, range);
-            draw_dynamic(14, (int32_t)(gasSPID.get_i_term()), -range, range);
-            draw_dynamic(15, (int32_t)(gasSPID.get_d_term()), -range, range);
-            draw_dynamic(16, (int32_t)(gasSPID.get_output()), -range, range);  // gas_spid_carspeed_delta_adc, -range, range);
-            draw_dynamic(17, gasSPID.get_disp_kp_1k(), 0, 1000);  // Real value is 1000 * smaller than displayed
-            draw_dynamic(18, gasSPID.get_disp_ki_mhz(), 0, 1000);
-            draw_dynamic(19, gasSPID.get_disp_kd_ms(), 0, 1000);
+            draw_dynamic(12, (int32_t)gasSPID.get_error(), -range, range);
+            draw_dynamic(13, (int32_t)gasSPID.get_p_term(), -range, range);
+            draw_dynamic(14, (int32_t)gasSPID.get_i_term(), -range, range);
+            draw_dynamic(15, (int32_t)gasSPID.get_d_term(), -range, range);
+            draw_dynamic(16, (int32_t)gasSPID.get_output(), -range, range);  // gas_spid_carspeed_delta_adc, -range, range);
+            draw_dynamic(17, gasSPID.get_disp_kp_1k(), 0.0, 1000.0);  // Real value is 1000 * smaller than displayed
+            draw_dynamic(18, gasSPID.get_disp_ki_mhz(), 0.0, 1000.0);
+            draw_dynamic(19, gasSPID.get_disp_kd_ms(), 0.0, 1000.0);
         }
         else if (dataset_page == CPID) {
             range = carspeed_govern_mmph-carspeed_idle_mmph;
-            draw_dynamic(12, (int32_t)(cruiseSPID.get_error()), -range, range);
-            draw_dynamic(13, (int32_t)(cruiseSPID.get_p_term()), -range, range);
-            draw_dynamic(14, (int32_t)(cruiseSPID.get_i_term()), -range, range);
-            draw_dynamic(15, (int32_t)(cruiseSPID.get_d_term()), -range, range);
-            draw_dynamic(16, (int32_t)(cruiseSPID.get_output()), -range, range);  // cruise_spid_carspeed_delta_adc, -range, range);
-            draw_dynamic(17, cruiseSPID.get_disp_kp_1k(), 0, 1000);  // Real value is 1000 * smaller than displayed
-            draw_dynamic(18, cruiseSPID.get_disp_ki_mhz(), 0, 1000);
-            draw_dynamic(19, cruiseSPID.get_disp_kd_ms(), 0, 1000);
+            draw_dynamic(12, (int32_t)cruiseSPID.get_error(), -range, range);
+            draw_dynamic(13, (int32_t)cruiseSPID.get_p_term(), -range, range);
+            draw_dynamic(14, (int32_t)cruiseSPID.get_i_term(), -range, range);
+            draw_dynamic(15, (int32_t)cruiseSPID.get_d_term(), -range, range);
+            draw_dynamic(16, (int32_t)cruiseSPID.get_output(), -range, range);  // cruise_spid_carspeed_delta_adc, -range, range);
+            draw_dynamic(17, cruiseSPID.get_disp_kp_1k(), 0.0, 1000.0);  // Real value is 1000 * smaller than displayed
+            draw_dynamic(18, cruiseSPID.get_disp_ki_mhz(), 0.0, 1000.0);
+            draw_dynamic(19, cruiseSPID.get_disp_kd_ms(), 0.0, 1000.0);
         }
         else if (dataset_page == TEMP) {
-            draw_dynamic(12, (int32_t)(temps[AMBIENT]), -1, -1);
-            draw_dynamic(13, (int32_t)(temps[ENGINE]), -1, -1);
-            draw_dynamic(14, (int32_t)(temps[WHEEL_FL]), -1, -1);
-            draw_dynamic(15, (int32_t)(temps[WHEEL_FR]), -1, -1);
-            draw_dynamic(16, (int32_t)(temps[WHEEL_RL]), -1, -1);
-            draw_dynamic(17, (int32_t)(temps[WHEEL_RR]), -1, -1);
+            draw_dynamic(12, (int32_t)temps[AMBIENT], -1, -1);
+            draw_dynamic(13, (int32_t)temps[ENGINE], -1, -1);
+            draw_dynamic(14, (int32_t)temps[WHEEL_FL], -1, -1);
+            draw_dynamic(15, (int32_t)temps[WHEEL_FR], -1, -1);
+            draw_dynamic(16, (int32_t)temps[WHEEL_RL], -1, -1);
+            draw_dynamic(17, (int32_t)temps[WHEEL_RR], -1, -1);
             draw_dynamic(18, gasSPID.get_open_loop(), -1, -1);
-            draw_dynamic(19, brake_pos_zeropoint_adc, brake_pos_nom_lim_retract_adc, brake_pos_nom_lim_extend_adc);   
+//            draw_dynamic(19, brake_pos_zeropoint_thou, brake_pos_nom_lim_retract_thou, brake_pos_nom_lim_extend_thou);   
         }
-        draw_bool((runmode == CAL), 2);
-        draw_bool(basicmodesw, 3);
-        draw_bool(ignition, 4);
-        draw_bool(syspower, 5);
+
+        draw_bool ((runmode == CAL), 2);
+        draw_bool (basicmodesw, 3);
+        draw_bool (ignition, 4);
+        draw_bool (syspower, 5);
     }
 
     // Do the control loop bookkeeping at the end of each loop
@@ -1997,6 +2052,5 @@ void loop() {
     if (!loop_period_us) loop_period_us++;  // ensure loop period is never zero since it gets divided by
     loop_freq_hz = (int32_t)(1000000/(double)loop_period_us);
     loopno++;  // I like to count how many loops
-    if (serial_debugging && print_timestamps) printf("Loop# %ld: %ld ms, %ld Hz\n", loopno, loop_period_us, loop_freq_hz); // (int32_t)((double)(abs(mycros()-loopzero)/1000)), (int32_t)(1000000/((double)(abs(mycros()-loopzero)))));
     loopTimer.reset();
 }
