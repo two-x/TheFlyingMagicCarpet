@@ -1664,8 +1664,8 @@ void loop() {
     //     D) Car is accelerating yet engine is at idle.
     //  11. The control system has nonsensical values in its variables.
     //
-    if (!ignition && tach_filt_rpm > 0) { // See if the engine is turning despite the ignition being off
-        Serial.println(F("Detected engine rotation in the absense of ignition signal"));  // , tach_filt_rpm, ignition
+    if (!ignition && ignition_last && tach_filt_rpm > 0) { // See if the engine is turning despite the ignition being off
+        Serial.println (F("Detected engine rotation in the absense of ignition signal"));  // , tach_filt_rpm, ignition
         // I don't think we really need to panic about this, but it does seem curious. Actually this will probably occur when we're sliding
         // into camp after a ride, and kill the engine before we stop the car. For a fraction of a second the engine would keep turning anyway.
         // Or fopr that matter whenever the carb is out of tune and making the engine diesel after we kill the ign.
@@ -1915,7 +1915,7 @@ void loop() {
     write_pin (led_rx_pin, (sim_edit_delta <= 0));  // use these Due lights for whatever, here debugging the touchscreen
     // write_pin (led_tx_pin, !touch_now_touched);  // use these Due lights for whatever, here debugging the touchscreen
     
-// Display updates
+    // Display updates
     //
     if (display_enabled) {  // } && dispRefreshTimer.expired())  {
         // dispRefreshTimer.reset();
@@ -2052,5 +2052,14 @@ void loop() {
     if (!loop_period_us) loop_period_us++;  // ensure loop period is never zero since it gets divided by
     loop_freq_hz = (int32_t)(1000000/(double)loop_period_us);
     loopno++;  // I like to count how many loops
+
+
+    if (serial_debugging && timestamp_loop) {
+        printf ("Loop# %ld, period:%5ld us, freq:%6.1lf Hz, ints:%2ld", loopno, loop_period_us, loop_freq_hz, int_counter); // (int32_t)((double)(abs(mycros()-loopzero)/1000), (int32_t)(1000000/((double)(abs(mycros()-loopzero)));
+        //for (int32_t x=1; x<loopindex; x++) printf (", %2ld(%s):%5ld", x, loop_names[x], looptimes_us[x]-looptimes_us[x-1]);
+        for (int32_t x=1; x<loopindex; x++) std::cout << ", " << setw(2) << x << "(" << std::setw(5) << loop_names[x] << "):" << looptimes_us[x]-looptimes_us[x-1];
+        printf (" us\n");
+    }
+    int_counter = 0;
     loopTimer.reset();
 }
