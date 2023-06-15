@@ -18,7 +18,7 @@
 #include <DallasTemperature.h>
 #include "classes.h"  // Contains our data structures
 #include "spid.h"
-s
+
 using namespace std;
 /*
 # Here are the different runmodes documented
