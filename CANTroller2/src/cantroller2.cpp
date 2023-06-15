@@ -18,7 +18,6 @@
 #include "classes.h"  // Contains our data structures
 #include "spid.h"
 using namespace std;
-
 /*
 # Here are the different runmodes documented
 #
@@ -201,6 +200,7 @@ using namespace std;
 
 // Globals -------------------
 //
+
 // display related globals
 #define BLK  0x0000
 #define BLU  0x001f
@@ -428,15 +428,20 @@ double battery_convert_mv_per_adc = battery_max_mv/adc_range_adc;
 bool battery_convert_invert = false;
 int32_t battery_convert_polarity = FWD;
 double battery_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-
+    
 // potentiometer related
-int32_t pot_adc = adc_midscale_adc;
-int32_t pot_filt_adc = pot_adc;
+double pot_percent = 50;
+double pot_filt_percent = pot_percent;
+double pot_min_percent = 0;  //
+double pot_max_percent = 100;  //
 //  ---- tunable ----
-double pot_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-int32_t pot_min_adc = 0;  // TUNED 230603
-int32_t pot_max_adc = 3996;  // TUNED 230604
-
+double pot_min_adc = 0;  // TUNED 230603 - Used only in determining theconversion factor
+double pot_max_adc = 4005;  // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
+double pot_convert_percent_per_adc = 100/(pot_max_adc - pot_min_adc);  // 100 % / (3996 adc - 0 adc) = 0.025 %/adc
+bool pot_convert_invert = false;
+int32_t pot_convert_polarity = FWD;
+double pot_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+ 
 // controller related
 enum ctrls { HOTRC };  // This is a bad hack. Since JOY is already enum'd as 1 for dataset pages
 enum ctrl_axes { HORZ, VERT };
@@ -454,6 +459,7 @@ bool hotrc_radio_detected_last = hotrc_radio_detected;
 bool hotrc_suppress_next_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 Timer hotrcPulseTimer;  // OK to not be volatile?
 //  ---- tunable ----
+double hotrc_pulse_period_us = 1000000.0 / 50;
 double ctrl_ema_alpha[2] = { 0.05, 0.1 };  // [HOTRC, JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 int32_t ctrl_lims_adc[2][2][3] = { { { 3,  50, 4092 }, { 3,  75, 4092 } }, { { 9, 200, 4085 }, { 9, 200, 4085 } }, }; // [HOTRC, JOY] [HORZ, VERT], [MIN, DEADBAND, MAX] values as ADC counts
 bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
@@ -481,27 +487,27 @@ int32_t steer_pulse_left_max_us = 2500;  // Longest pulsewidth acceptable to jag
 int32_t steer_safe_percent = 72;  // Sterring is slower at high speed. How strong is this effect 
 
 // brake pressure related
-int32_t pressure_adc;
-int32_t pressure_filt_adc;  // Stores new setpoint to give to the pid loop (brake)
-int32_t pressure_target_adc;  // Stores new setpoint to give to the pid loop (brake)
-// int32_t pressure_min_psi = 0;  // Brake pressure when brakes are effectively off (psi 0-1000)
-// int32_t pressure_max_psi = 500;  // Highest possible pressure achievable by the actuator (psi 0-1000)
+double pressure_psi;
+double pressure_filt_psi;  // Stores new setpoint to give to the pid loop (brake)
 // Param pressure (&pressure_adc, "Pressure:", "adc ", 658, 2100);
 //  ---- tunable ----
+double pressure_convert_psi_per_adc = 1000.0 * 3.3 / ( adc_range_adc * (4.5 - 0.5) );  // 1000 psi * 3.3 v / (4095 adc * (v-max v - v-min v)) = 0.2 psi/adc 
+bool pressure_convert_invert = false;
+int32_t pressure_convert_polarity = FWD;
 double pressure_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-int32_t pressure_margin_adc = 12;  // Margin of error when comparing brake pressure adc values (ADC count 0-4095)
-int32_t pressure_min_adc = 643;  // TUNED 230602 - Brake pressure when brakes are effectively off. Sensor min = 0.5V, scaled by 3.3/4.5V is 0.36V of 3.3V (ADC count 0-4095). 230430 measured 658 adc (0.554V) = no brakes
-int32_t pressure_max_adc = 2246;  // TUNED 230602 - Highest possible pressure achievable by the actuator (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as chris can push (wimp)
+double pressure_margin_psi = 2.5;  // Margin of error when comparing brake pressure adc values (psi)
+double pressure_min_psi = 129;  // TUNED 230602 - Brake pressure when brakes are effectively off. Sensor min = 0.5V, scaled by 3.3/4.5V is 0.36V of 3.3V (ADC count 0-4095). 230430 measured 658 adc (0.554V) = no brakes
+double pressure_max_psi = 452;  // TUNED 230602 - Highest possible pressure achievable by the actuator (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as chris can push (wimp)
+double pressure_hold_initial_psi = 200;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
+double pressure_hold_increment_psi = 10;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
+double pressure_panic_initial_psi = 300;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
+double pressure_panic_increment_psi = 25;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 // max pedal bent 1154
 
 // brake actuator motor related
 int32_t brake_pulse_out_us;  // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
 //  ---- tunable ----
-int32_t brake_hold_initial_adc = 1200;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
-int32_t brake_hold_increment_adc = 25;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
-int32_t brake_panic_initial_adc = 1800;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
-int32_t brake_panic_increment_adc = 50;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
-Timer brakeIntervalTimer(500000);  // How much time between increasing brake force during auto-stop if car still moving?
+Timer brakeIntervalTimer (500000);  // How much time between increasing brake force during auto-stop if car still moving?
 int32_t brake_increment_interval_us = 500000;  // How often to apply increment during auto-stopping (in us)
 int32_t brake_pulse_retract_min_us = 500;  // Smallest pulsewidth acceptable to jaguar
 int32_t brake_pulse_retract_us = 650;  // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us)
@@ -511,58 +517,86 @@ int32_t brake_pulse_extend_max_us = 2500;  // Longest pulsewidth acceptable to j
 int32_t brake_pulse_margin_us = 40; // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated 
 
 // brake actuator position related
-int32_t brake_pos_adc;
-int32_t brake_pos_filt_adc;
+double brake_pos_thou;
+double brake_pos_filt_thou;
 //  ---- tunable ----
+double brake_pos_convert_thou_per_adc = 3.3 * 10000.0 * 1000.0 / (5.0 * adc_range_adc * 557);  // 3.3 v * 10k ohm * 1k m-in/in / (5 v * 4095 adc * 557 ohm/in) = 0.0029 in/adc = 2.89 m-in/adc 
+bool brake_pos_convert_invert = false;
+int32_t brake_pos_convert_polarity = FWD;
 double brake_pos_ema_alpha = 0.25;
-int32_t brake_pos_abs_min_retract_adc = 116;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. (ADC count 0-4095)
-int32_t brake_pos_nom_lim_retract_adc = 175;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (ADC count 0-4095)
-int32_t brake_pos_zeropoint_adc = 1100;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (ADC count 0-4095)
-int32_t brake_pos_park_adc = 1465;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (ADC count 0-4095)
-int32_t brake_pos_nom_lim_extend_adc = 1600;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (ADC count 0-4095)
-int32_t brake_pos_abs_max_extend_adc = 2872;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (ADC count 0-4095)
-int32_t brake_pos_margin_adc = 10;  //
+double brake_pos_abs_min_retract_thou = 335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("thou"sandths of an inch)
+double brake_pos_nom_lim_retract_thou = 506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (thou)
+double brake_pos_zeropoint_thou = 3179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (thou)
+double brake_pos_park_thou = 4234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (thou)
+double brake_pos_nom_lim_extend_thou = 4624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (thou)
+double brake_pos_abs_max_extend_thou = 8300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (thou)
+double brake_pos_margin_thou = 29;  //
+// int32_t brake_pos_abs_min_retract_adc = 116;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. (ADC count 0-4095)
+// int32_t brake_pos_nom_lim_retract_adc = 175;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (ADC count 0-4095)
+// int32_t brake_pos_zeropoint_adc = 1100;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (ADC count 0-4095)
+// int32_t brake_pos_park_adc = 1465;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (ADC count 0-4095)
+// int32_t brake_pos_nom_lim_extend_adc = 1600;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (ADC count 0-4095)
+// int32_t brake_pos_abs_max_extend_adc = 2872;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (ADC count 0-4095)
+// int32_t brake_pos_margin_adc = 10;  //    
 
 // throttle servo related
 int32_t gas_pulse_out_us;  // pid loop output to send to the actuator (gas)
 int32_t gas_pulse_govern_us;  // Governor must scale the pulse range proportionally. This is given a value in the loop
 //  ---- tunable ----
-Timer gasServoTimer(500000);  // We expect the servo to find any new position within this time
+Timer gasServoTimer (500000);  // We expect the servo to find any new position within this time
 int32_t gas_governor_percent = 95;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
 int32_t gas_pulse_cw_min_us = 1000;  // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
 int32_t gas_pulse_redline_us = 1400;  // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
 int32_t gas_pulse_idle_us = 1800;  // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
 int32_t gas_pulse_ccw_max_us = 2000;  // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
 int32_t gas_pulse_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_idle_us where to park the servo out of the way so we can drive manually (in us)
+// double gas_angle_out_us;  // pid loop output to send to the actuator (gas)
+// double gas_angle_govern_us;  // Governor must scale the pulse range proportionally. This is given a value in the loop
+// //  ---- tunable ----
+// double gas_angle_convert_deg_per_us = 180 / (2500 - 500);  // 
+// bool gas_angle_convert_invert = false;
+// int32_t gas_angle_convert_polarity = REV;      
+// Timer gasServoTimer(500000);  // We expect the servo to find any new position within this time
+// int32_t gas_angle_governor_percent = 95;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
+// int32_t gas_angle_cw_min_us = 1000;  // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
+// int32_t gas_angle_redline_us = 1400;  // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
+// int32_t gas_angle_idle_us = 1800;  // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
+// int32_t gas_angle_ccw_max_us = 2000;  // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
+// int32_t gas_angle_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_idle_us where to park the servo out of the way so we can drive manually (in us)
 
 // tachometer related
 volatile int32_t tach_delta_us = 0;
 Timer tachPulseTimer;  // OK to not be volatile?
-int32_t tach_rpm = 50;  // Current engine speed, raw as sensed (in rpm)
-int32_t tach_filt_rpm = 50;  // Current engine speed, filtered (in rpm)
-int32_t tach_govern_rpm;  // Create an artificially reduced maximum for the engine speed. This is given a value in the loop
-int32_t tach_target_rpm;  // Stores new setpoint to give to the pid loop (gas)
+double tach_rpm = 50;  // Current engine speed, raw as sensed (in rpm)
+double tach_filt_rpm = 50;  // Current engine speed, filtered (in rpm)
+double tach_govern_rpm;  // Create an artificially reduced maximum for the engine speed. This is given a value in the loop
 //  ---- tunable ----
+double tach_convert_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min
+bool tach_convert_invert = true;
+int32_t tach_convert_polarity = FWD;      
 double tach_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-int32_t tach_idle_rpm = 700;  // Min value for engine hz, corresponding to low idle (in rpm)
-int32_t tach_max_rpm = 6000;  // Max possible engine rotation speed
-int32_t tach_redline_rpm = 4000;  // Max value for tach_rpm, pedal to the metal (in rpm)
-int32_t tach_margin_rpm = 15;  // Margin of error for checking engine rpm (in rpm)
+double tach_idle_rpm = 700;  // Min value for engine hz, corresponding to low idle (in rpm)
+double tach_max_rpm = 6000;  // Max possible engine rotation speed
+double tach_redline_rpm = 4000;  // Max value for tach_rpm, pedal to the metal (in rpm)
+double tach_margin_rpm = 15;  // Margin of error for checking engine rpm (in rpm)
 int32_t tach_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
 int32_t tach_delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
 
 // carspeed/speedo related
 volatile int32_t speedo_delta_us = 0;
-int32_t carspeed_govern_mmph;  // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
-int32_t carspeed_mmph;  // Current car speed, raw as sensed (in mmph)
-int32_t carspeed_filt_mmph;  // Current car speed, filtered (in mmph)
-int32_t carspeed_target_mmph;  // Stores new setpoint to give to the pid loop (cruise) in milli-mph
+double carspeed_govern_mmph;  // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
+double carspeed_mmph;  // Current car speed, raw as sensed (in mmph)
+double carspeed_filt_mmph;  // Current car speed, filtered (in mmph)
 Timer speedoPulseTimer;  // OK to not be volatile?
 //  ---- tunable ----
+double speedo_convert_mmph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 * 1000.0 / (19.85 * 12 * 5280);  // 1 rot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 gearing * 20*pi in/rot * 1/12 ft/in * 1000/5280 milli-mi/ft = 179757270 milli-mi/hr (mmph)
+// Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
+bool speedo_convert_invert = true;
+int32_t speedo_convert_polarity = FWD;      
 double carspeed_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-int32_t carspeed_idle_mmph = 4500;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
-int32_t carspeed_redline_mmph = 15000;  // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
-int32_t carspeed_max_mmph = 25000;  // What is max speed car can ever go
+double carspeed_idle_mmph = 4500;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
+double carspeed_redline_mmph = 15000;  // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
+double carspeed_max_mmph = 25000;  // What is max speed car can ever go
 int32_t speedo_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the car is stopped (in us)
 int32_t speedo_delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
             
@@ -612,9 +646,9 @@ int32_t touch_accel = 1 << touch_accel_exponent;  // Touch acceleration level, w
 int32_t touch_fudge = 0;  // -8
 //  ---- tunable ----
 int32_t touch_accel_exponent_max = 8;  // Never edit values faster than this. 2^8 = 256 change in value per update
-Timer touchPollTimer(35000);  // Timer for regular touchscreen sampling
-Timer touchHoldTimer(1000000);  // For timing touch long presses
-Timer touchAccelTimer(850000);  // Touch hold time per left shift (doubling) of touch_accel
+Timer touchPollTimer (35000);  // Timer for regular touchscreen sampling
+Timer touchHoldTimer (1000000);  // For timing touch long presses
+Timer touchAccelTimer (850000);  // Touch hold time per left shift (doubling) of touch_accel
 
 // rotary encoder related
 enum encodersw_presses { NONE, SHORT, LONG };
@@ -629,8 +663,8 @@ int32_t encoder_sw_action = NONE;  // Flag for encoder handler to know an encode
 bool encoder_sw = false;  // Remember whether switch is being pressed
 bool encoder_timer_active = false;  // Flag to prevent re-handling long presses if the sw is just kept down
 bool encoder_suppress_click = false;  // Flag to prevent a short click on switch release after successful long press
-bool encoder_b_raw = digitalRead(encoder_b_pin);  // To store value of encoder pin value
-bool encoder_a_raw = digitalRead(encoder_a_pin);
+bool encoder_b_raw = digitalRead (encoder_b_pin);  // To store value of encoder pin value
+bool encoder_a_raw = digitalRead (encoder_a_pin);
 volatile bool encoder_a_stable = true;  //  Stores the value of encoder A pin as read during B pin transition (where A is stable)
 volatile int32_t encoder_spinrate_isr_us = 100000;  // Time elapsed between last two detents
 volatile int32_t encoder_bounce_danger = B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
@@ -657,11 +691,11 @@ bool sim_basicsw = true;
 bool sim_ign = true;
 bool sim_cruisesw = true;
 bool sim_pressure = false;
-bool sim_syspower = false;
+bool sim_syspower = true;
 
 // Instantiate objects 
 Adafruit_FT6206 touchpanel = Adafruit_FT6206(); // Touch panel
-Adafruit_ILI9341 tft = Adafruit_ILI9341(tft_cs_pin, tft_dc_pin);  // LCD screen
+Adafruit_ILI9341 tft = Adafruit_ILI9341 (tft_cs_pin, tft_dc_pin);  // LCD screen
 
 SdFat sd;  // SD card filesystem
 #define approot "cantroller2020"
@@ -680,102 +714,131 @@ static Servo brake_servo;
 static Servo gas_servo;
 static Adafruit_NeoPixel neostrip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
 
+// Temperature sensor related
 enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
 double temps[6];
-int32_t temperature_precision = 9;
-OneWire onewire(onewire_pin);
-DallasTemperature tempsensebus(&onewire);
-DeviceAddress tempsensor[6];
-
-double d_map (double x, double in_min, double in_max, double out_min, double out_max) {
-    if ( abs(in_max - in_min) >= 0.15 ) return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-    printf("d_map() refusing to divide by zero, mapped input %lf to value %lf.\n", x, (out_max-out_min)/2);
-    return (out_max-out_min)/2;  // Avoiding 
-}
+int32_t temp_detected_device_ct = 0;
+int32_t temperature_precision = 9;  // 9-12 bit resolution
+OneWire onewire (onewire_pin);
+DallasTemperature tempsensebus (&onewire);
+DeviceAddress temp_temp_addr;
+DeviceAddress temp_addrs[6];
 
 // Interrupt service routines
 //
-void encoder_a_isr(void) {  // When A goes high if B is low, we are CW, otherwise we are CCW -- This ISR intended for encoders like the one on the tan proto board
+void encoder_a_isr (void) {  // When A goes high if B is low, we are CW, otherwise we are CCW -- This ISR intended for encoders like the one on the tan proto board
     if (encoder_bounce_danger != A) {  // Prevents taking action on any re-triggers after a valid trigger due to bouncing
         if (!encoder_a_stable) {  // Since A just transitioned, if a_stable is low, this is a rising edge = time to register a turn 
-            encoder_delta += digitalRead(encoder_b_pin) ? -1 : 1;  // Create turn event to be handled later. If B=0, delta=-1 (CCW) turn decreases things
+            encoder_delta += digitalRead (encoder_b_pin) ? -1 : 1;  // Create turn event to be handled later. If B=0, delta=-1 (CCW) turn decreases things
             encoder_spinrate_isr_us = encoderSpinspeedTimer.elapsed();
             encoderSpinspeedTimer.reset();
         }
         encoder_bounce_danger = A;  // Set to reject A retriggers and enable B trigger
     }
+    int_counter++;
 }
-void encoder_b_isr(void) {  // On B rising or falling edge, A should have stabilized by now, so don't ignore next A transition
+void encoder_b_isr (void) {  // On B rising or falling edge, A should have stabilized by now, so don't ignore next A transition
     if (encoder_bounce_danger != B) {  // Prevents taking action on any re-triggers after a valid trigger due to bouncing
-        encoder_a_stable = digitalRead(encoder_a_pin);  // Input A is stable by the time B changes, so read A value here
+        encoder_a_stable = digitalRead (encoder_a_pin);  // Input A is stable by the time B changes, so read A value here
         encoder_bounce_danger = B;  // Set to reject B retriggers and enable A trigger
     }
+    int_counter++;
 }
+// void encoder_a_rise_isr (void) {  // When A goes high if B is low, we are CW, otherwise we are CCW
+//     if (encoder_bounce_danger != A) {  // Prevents taking action on any re-triggers after a valid trigger due to bouncing
+//         encoder_spinrate_isr_us = encoderSpinspeedTimer.elapsed();
+//         encoderSpinspeedTimer.reset();
+//         encoder_delta += digitalRead (encoder_b_pin) ? -1 : 1;  // Create turn event to be handled later. If B=0, delta=-1 (CCW) turn decreases things        
+//     }  // Input B is stable by the time A changes, so read B value here
+//     encoder_bounce_danger = A;  // Set to reject A retriggers and enable B trigger
+// }
+// void encoder_a_fall_isr (void) {  // This ISR disables A triggering on A falling edge to prevent trigger during the subsequent ringing
+//     encoder_bounce_danger = A;  // Set to enable B trigger
+// }
+// void encoder_b_isr (void) {  // On B rising or falling edge, input A should be stable
+//     encoder_bounce_danger = B; // Set to enable A trigger
+// }
 // The tach and speed use a hall sensor being triggered by a passing magnet once per pulley turn. These ISRs call mycros()
 // on every pulse to know the time since the previous pulse. I tested this on the bench up to about 750 mmph which is as 
 // fast as I can move the magnet with my hand, and it works. It would be cleaner to just increment a counter here in the ISR
 // then call mycros() in the main loop and compare with a timer to calculate mmph.
-void tach_isr(void) {  // The tach and speedo isrs compare value returned from the mycros() function with the value from the last interrupt to determine period, to get frequency of the vehicle pulley rotations.
+void tach_isr (void) {  // The tach and speedo isrs compare value returned from the mycros() function with the value from the last interrupt to determine period, to get frequency of the vehicle pulley rotations.
     int32_t temp_us = tachPulseTimer.elapsed();
-    if (temp_us > tach_delta_abs_min_us) {
-        tach_delta_us = temp_us;    
+    if (temp_us > tach_delta_abs_min_us) {    
         tachPulseTimer.reset();
+        tach_delta_us = temp_us;
     }
+    int_counter++;
 }
-void speedo_isr(void) {  //  A better approach would be to read, reset, and restart a hardware interval timer in the isr.  Better still would be to regularly read a hardware binary counter clocked by the pin - no isr.
+void speedo_isr (void) {  //  A better approach would be to read, reset, and restart a hardware interval timer in the isr.  Better still would be to regularly read a hardware binary counter clocked by the pin - no isr.
     int32_t temp_us = speedoPulseTimer.elapsed();
     if (temp_us > speedo_delta_abs_min_us) {
-        speedo_delta_us = temp_us;    
         speedoPulseTimer.reset();
+        speedo_delta_us = temp_us;    
     }
+    int_counter++;
 }
-void hotrc_vert_isr(void) {  // Reads ranged PWM signal on an input pin to determine control position. This ISR sets timer for all hotrc isrs on hi-going edge
-    if (digitalRead(hotrc_vert_pin)) hotrcPulseTimer.reset();
+// void hotrc_vert_rise_isr (void) {  // On rising edge of ch1-vert, this ISR zeros the timer used as reference for all hotrc falling-edge isrs
+//     hotrcPulseTimer.reset();
+// }
+// void hotrc_vert_fall_isr (void) {  //  On falling edge, records high pulse width to determine ch1 trigger position
+//     hotrc_vert_pulse_us = hotrcPulseTimer.elapsed();
+// }
+void hotrc_vert_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
+    if (digitalRead (hotrc_vert_pin)) hotrcPulseTimer.reset();
     else hotrc_vert_pulse_us = hotrcPulseTimer.elapsed();
+    int_counter++;
 }
-void hotrc_horz_isr(void) {  // On falling edge, reads ranged PWM signal on an input pin to determine control position
+void hotrc_horz_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
     hotrc_horz_pulse_us = hotrcPulseTimer.elapsed();
+    int_counter++;
 }
-void hotrc_ch3_isr(void) {  // Reads a binary switch encoded as PWM on an input pin to determine button toggle state
+void hotrc_ch3_isr (void) {  // On falling edge, records high pulse width to determine ch3 button toggle state
     hotrc_ch3_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch3 switch true if short pulse, otherwise false
     if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled
     hotrc_ch3_sw_last = hotrc_ch3_sw;
+    int_counter++;
 }
-void hotrc_ch4_isr(void) {  // Reads PWM signal on an input pin to determine control position
+void hotrc_ch4_isr (void) {  // On falling edge, records high pulse width to determine ch4 button toggle state
     hotrc_ch4_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch4 switch true if short pulse, otherwise false
     if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled
     hotrc_ch4_sw_last = hotrc_ch4_sw;
-}
-uint32_t colorwheel(uint8_t WheelPos) {
-    WheelPos = 255 - WheelPos;
-    if(WheelPos < 85) return neostrip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
-    if(WheelPos < 170) {
-        WheelPos -= 85;
-        return neostrip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
-    }
-    WheelPos -= 170;
-    return neostrip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+    int_counter++;
 }
 
-// // Soren: This is dangerous, do not use it. After any trigger if input value stays at new level, output is stuck at pre-trigger value.
-// // Fast Low pass and spike rejection filter
-// // lp_thresh = max acceptable delta acceptable over three consecutive readings
-// void lp_spike_filt (int32_t* raw, int32_t* raw_last, int32_t* raw_old, int32_t lp_thresh, int32_t spike_thresh) {
-//     if (abs(*raw-*raw_old) > lp_thresh || abs(*raw-*raw_last) < spike_thresh) {  // Remove noise spikes from tach values, if otherwise in range
-//         *raw_old = *raw_last;
-//         *raw_last = *raw;
-//     }
-//     else *raw = *raw_last;  // Spike detected - ignore that sample
-// }
+double d_map (double x, double in_min, double in_max, double out_min, double out_max) {
+    if (in_max != in_min) return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+    printf("d_map() refusing to divide by zero, mapped input %lf to max value %lf.\n", x, out_max);
+    return out_max;
+}
+
+double d_constrain (double amt, double low, double high) {
+    return (amt < low) ? low : ((amt > high) ? high : amt);
+}
+
+uint32_t colorwheel (uint8_t WheelPos) {
+    WheelPos = 255 - WheelPos;
+    if (WheelPos < 85) return neostrip.Color (255 - WheelPos * 3, 0, WheelPos * 3);
+    if (WheelPos < 170) {
+        WheelPos -= 85;
+        return neostrip.Color (0, WheelPos * 3, 255 - WheelPos * 3);
+    }
+    WheelPos -= 170;
+    return neostrip.Color (WheelPos * 3, 255 - WheelPos * 3, 0);
+}
+
 // Exponential Moving Average filter : Smooth out noise on inputs. 0 < alpha < 1 where lower = smoother and higher = more responsive
 // Pass in a fresh raw value, address of filtered value, and alpha factor, filtered value will get updated
-void ema_filt (int32_t raw, int32_t* filt, double alpha) {
-    if (!raw) *filt = 0;
-     *filt = (int32_t)( alpha * (double)raw + (1-alpha) * (double)(*filt) );
+void ema_filt (double raw, double* filt, double alpha) {
+    // if (!raw) *filt = 0.0; else
+    *filt = alpha * raw + (1 - alpha) * (*filt);
 }
-void ema_filt (int32_t raw, double* filt, double alpha) {
-    if (!raw) *filt = 0.0;
-    else *filt = alpha * (double)raw + (1 - alpha) * (*filt);
+void ema_filt (int32_t raw, double* filt, double alpha) { 
+    ema_filt ((double)raw, filt, alpha);
+}
+void ema_filt (int32_t raw, int32_t* filt, double alpha) {
+    // if (!raw) *filt = 0; else
+    *filt = (int32_t)(alpha * (double)raw + (1-alpha) * (double)(*filt));
 }
 
 // Functions to write to the screen efficiently
@@ -1184,7 +1247,7 @@ void setup() {
     
     // Set up the soren pid loops
     brakeSPID.set_output_center ((double)brake_pulse_stop_us);  // Sets actuator centerpoint and puts pid loop in output centerpoint mode. Becasue actuator value is defined as a deviation from a centerpoint
-//    brakeSPID.set_input_limits (pressure_min_psi, pressure_max_psi);  // Make sure pressure target is in range
+    brakeSPID.set_input_limits (pressure_min_psi, pressure_max_psi);  // Make sure pressure target is in range
     brakeSPID.set_output_limits ((double)brake_pulse_retract_us, (double)brake_pulse_extend_us);
     gasSPID.set_input_limits (tach_idle_rpm, tach_govern_rpm);
     gasSPID.set_output_limits ((double)gas_pulse_govern_us, (double)gas_pulse_idle_us);
@@ -1203,16 +1266,16 @@ void setup() {
     tempsensebus.setWaitForConversion (true);  // Do not block during conversion process
     tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
     tempsensebus.begin();
-//    temp_detected_device_ct = tempsensebus.getDeviceCount();
-//    printf ("Temp sensors: Detected %d devices.\nParasitic power is: ", temp_detected_device_ct);  // , DEC);
+    temp_detected_device_ct = tempsensebus.getDeviceCount();
+    printf ("Temp sensors: Detected %d devices.\nParasitic power is: ", temp_detected_device_ct);  // , DEC);
     printf ((tempsensebus.isParasitePowerMode()) ? "On\n" : "Off\n");
     // for (int32_t x = 0; x < arraysize(temp_addrs); x++) {
-    // for (int32_t x = 0; x < temp_detected_device_ct; x++) {
-    //     if (tempsensebus.getAddress (temp_temp_addr, x)) printf ("Found sensor device: index %d, addr %d\n", x, temp_temp_addr);  // temp_addrs[x]
-    //     else printf ("Found ghost device : index %d, addr unknown\n", x);  // printAddress (temp_addrs[x]);
-    //     tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
-    // }
-    // // Serial.println ("Before blocking requestForConversion");
+    for (int32_t x = 0; x < temp_detected_device_ct; x++) {
+        if (tempsensebus.getAddress (temp_temp_addr, x)) printf ("Found sensor device: index %d, addr %d\n", x, temp_temp_addr);  // temp_addrs[x]
+        else printf ("Found ghost device : index %d, addr unknown\n", x);  // printAddress (temp_addrs[x]);
+        tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
+    }
+    // Serial.println ("Before blocking requestForConversion");
     // unsigned long start = mycros();
     // tempsensebus.requestTemperatures();
     // unsigned long stop = mycros();
@@ -1236,16 +1299,16 @@ void setup() {
   
     hotrcPanicTimer.reset();
     
-    // if (ctrl == HOTRC) {  // Look for evidence of a normal (not failsafe) hotrc signal. If it's not yet powered on, we will ignore its spurious poweron ignition event
-    //     int32_t temp = hotrc_vert_pulse_us;
-    //     hotrc_radio_detected = ((ctrl_lims_adc[HOTRC][VERT][MIN] <= temp && temp < hotrc_pos_failsafe_min_adc) || (hotrc_pos_failsafe_max_adc < temp && temp <= ctrl_lims_adc[HOTRC][VERT][MAX]));
-    //     for (int32_t x = 0; x < 4; x++) {
-    //         delay (20);
-    //         // if (!((ctrl_lims_adc[HOTRC][VERT][MIN] < temp && temp < hotrc_pos_failsafe_min_adc) || (hotrc_pos_failsafe_max_adc < temp && temp < ctrl_lims_adc[HOTRC][VERT][MAX]))
-    //         //     || (hotrcPulseTimer.elapsed() > (int32_t)(hotrc_pulse_period_us*2.5))) hotrc_radio_detected = false;
-    //     }
-    //     printf ("HotRC radio signal: %setected\n", (!hotrc_radio_detected) ? "Not d" : "D");
-    // }
+    if (ctrl == HOTRC) {  // Look for evidence of a normal (not failsafe) hotrc signal. If it's not yet powered on, we will ignore its spurious poweron ignition event
+        int32_t temp = hotrc_vert_pulse_us;
+        hotrc_radio_detected = ((ctrl_lims_adc[HOTRC][VERT][MIN] <= temp && temp < hotrc_pos_failsafe_min_adc) || (hotrc_pos_failsafe_max_adc < temp && temp <= ctrl_lims_adc[HOTRC][VERT][MAX]));
+        for (int32_t x = 0; x < 4; x++) {
+            delay (20);
+            if (!((ctrl_lims_adc[HOTRC][VERT][MIN] < temp && temp < hotrc_pos_failsafe_min_adc) || (hotrc_pos_failsafe_max_adc < temp && temp < ctrl_lims_adc[HOTRC][VERT][MAX]))
+                || (hotrcPulseTimer.elapsed() > (int32_t)(hotrc_pulse_period_us*2.5))) hotrc_radio_detected = false;
+        }
+        printf ("HotRC radio signal: %setected\n", (!hotrc_radio_detected) ? "Not d" : "D");
+    }
     
     loopTimer.reset();  // start timer to measure the first loop
     Serial.println (F("Setup finished"));
@@ -1264,42 +1327,33 @@ void setup() {
 // 8) Do the control loop bookkeeping at the end of each loop
 //   
 void loop() {
-    // 0) Beginning-of-the-loop nonsense
-    //
-    
-    // Update derived variable values in case they have changed
-    ctrl_db_adc[VERT][BOT] = (adc_range_adc-ctrl_lims_adc[ctrl][VERT][DB])/2;  // Lower threshold of vert joy deadband (ADC count 0-4095)
-    ctrl_db_adc[VERT][TOP] = (adc_range_adc+ctrl_lims_adc[ctrl][VERT][DB])/2;  // Upper threshold of vert joy deadband (ADC count 0-4095)
-    ctrl_db_adc[HORZ][BOT] = (adc_range_adc-ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Lower threshold of horz joy deadband (ADC count 0-4095)
-    ctrl_db_adc[HORZ][TOP] = (adc_range_adc+ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Upper threshold of horz joy deadband (ADC count 0-4095)
-    tach_govern_rpm = map(gas_governor_percent, 0, 100, 0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
-    gas_pulse_govern_us = map(gas_governor_percent*(tach_redline_rpm-tach_idle_rpm)/tach_redline_rpm, 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
-    carspeed_govern_mmph = map(gas_governor_percent, 0, 100, 0, carspeed_redline_mmph);  // Governor must scale the top vehicle speed proportionally
+    loopindex = 0;  // reset at top of loop
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "top");
     
     // Update inputs.  Fresh sensor data, and filtering.
     //
 
-    // Onboard devices
+    // Onboard devices - takes 12 us to read
     if (button_pin >= 0) {  // if encoder sw is being pressed (switch is active low)
-        button_it = !digitalRead(button_pin);
-        if (button_it != button_last) Serial.println("button\n");
+        button_it = !digitalRead (button_pin);
+        if (button_it != button_last) Serial.println ("button\n");
         button_last = button_it;
     }
-
-    // External digital signals
-    if (!simulating || !sim_basicsw) basicmodesw = !digitalRead(basicmodesw_pin);   // 1-value because electrical signal is active low
-    if (!simulating || !sim_cruisesw) cruise_sw = digitalRead(cruise_sw_pin);
-
+ 
+    // External digital signals - takes 11 us to read
+    if (!simulating || !sim_basicsw) basicmodesw = !digitalRead (basicmodesw_pin);   // 1-value because electrical signal is active low
+    if (!simulating || !sim_cruisesw) cruise_sw = digitalRead (cruise_sw_pin);
+     
     // Temperature sensors
-    for (uint8_t x = 0; x < arraysize(tempsensor); x++) {
-        temps[x] = get_temp (tempsensor[x]);
-    }
-
-    // Encoder
+    // for (uint8_t x = 0; x < arraysize(temp_addrs); x++) {
+    //     temps[x] = get_temp (temp_addrs[x]);
+    // }
+    
+    // Encoder - takes 10 us to read when no encoder activity
     // Read and interpret encoder switch activity. Encoder rotation is handled in interrupt routine
     // Encoder handler routines should act whenever encoder_sw_action is true, setting it back to false once handled.
     // When handling press, if encoder_long_clicked is nonzero then press is a long press
-    if (!digitalRead(encoder_sw_pin)) {  // if encoder sw is being pressed (switch is active low)
+    if (!digitalRead (encoder_sw_pin)) {  // if encoder sw is being pressed (switch is active low)
         if (!encoder_sw) {  // if the press just occurred
             encoderLongPressTimer.reset();  // start a press timer
             encoder_timer_active = true;  // flag to indicate timing for a possible long press
@@ -1317,49 +1371,45 @@ void loop() {
         encoder_sw = false;  // Remember press is not in effect
         encoder_suppress_click = false;  // End click suppression
     }
-
-    // Potentiometer
-    pot_adc = analogRead(pot_wipe_pin);  // Potentiometer
-    ema_filt (pot_adc, &pot_filt_adc, pot_ema_alpha);
-    
-    // Voltage of vehicle battery
-    battery_adc = analogRead(battery_pin);
-    battery_mv = (int32_t)(battery_max_mv*((double)battery_adc)/adc_range_adc);  // convert adc value read into mV    
+ 
+    // Potentiometer - takes 400 us to read & convert (?!)
+    pot_percent = convert_units ((double)analogRead (pot_wipe_pin), pot_convert_percent_per_adc, pot_convert_invert);  // Potentiometer
+    ema_filt (pot_percent, &pot_filt_percent, pot_ema_alpha);
+   
+    // Voltage of vehicle battery - takes 70 us to read, convert, and filter
+    battery_mv = convert_units ((double)analogRead (battery_pin), battery_convert_mv_per_adc, battery_convert_invert);
     ema_filt (battery_mv, &battery_filt_mv, battery_ema_alpha);  // Apply EMA filter
 
-    // Brake position
+       // Brake position - takes 70 us to read, convert, and filter
     if (!simulating || !sim_brkpos) {
-        brake_pos_adc = analogRead(brake_pos_pin);
-        ema_filt (brake_pos_adc, &brake_pos_filt_adc, brake_pos_ema_alpha);
+        brake_pos_thou = convert_units ((double)analogRead (brake_pos_pin), brake_pos_convert_thou_per_adc, brake_pos_convert_invert);
+        ema_filt (brake_pos_thou, &brake_pos_filt_thou, brake_pos_ema_alpha);
     }
-    else brake_pos_filt_adc = (brake_pos_nom_lim_retract_adc + brake_pos_zeropoint_adc)/2;  // To keep brake position in legal range during simulation
+    else brake_pos_filt_thou = (brake_pos_nom_lim_retract_thou + brake_pos_zeropoint_thou)/2;  // To keep brake position in legal range during simulation
     
-    // Tach
+    // Tach - takes 22 us to read when no activity
     if (!simulating || !sim_tach) {
-        if (tachPulseTimer.elapsed() < tach_stop_timeout_us) tach_rpm = (int32_t)(60000000/(double)tach_delta_us);  // Tachometer magnets/us * 60000000 (1 rot/magnet * 1000000 us/sec * 60 sec/min) gives rpm
+        if (tachPulseTimer.elapsed() < tach_stop_timeout_us) tach_rpm = convert_units ((double)(tach_delta_us), tach_convert_rpm_per_rpus, tach_convert_invert);
         else tach_rpm = 0;  // If timeout since last magnet is exceeded
         ema_filt (tach_rpm, &tach_filt_rpm, tach_ema_alpha);  // Sensor EMA filter
     }
-    
-    // Speedo
+ 
+    // Speedo - takes 14 us to read when no activity
     if (!simulating || !sim_speedo) { 
-        if (speedoPulseTimer.elapsed() < speedo_stop_timeout_us) carspeed_mmph = (int32_t)(179757270/(double)speedo_delta_us); // Update car speed value  
+        if (speedoPulseTimer.elapsed() < speedo_stop_timeout_us) carspeed_mmph = convert_units ((double)(speedo_delta_us), speedo_convert_mmph_per_rpus, speedo_convert_invert);  // Update car speed value  
         else carspeed_mmph = 0;     
         ema_filt (carspeed_mmph, &carspeed_filt_mmph, carspeed_ema_alpha);  // Sensor EMA filter
-        // magnets/us * 179757270 (1 rot/magnet * 1000000 us/sec * 3600 sec/hr * 1/19.85 gearing * 20*pi in/rot * 1/12 ft/in * 1000/5280 milli-mi/ft gives milli-mph  // * 1/1.15 knots/mph gives milliknots
-        // Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
-    }
-
-    // Brake pressure
+        }
+ 
+    // Brake pressure - takes 72 us to read
     if (!simulating || !sim_pressure) {
-        pressure_adc = analogRead(pressure_pin);  // Brake pressure.  Read sensor, then Remove noise spikes from brake feedback, if reading is otherwise in range
-        ema_filt (pressure_adc, &pressure_filt_adc, pressure_ema_alpha);  // Sensor EMA filter
-        // pressure_psi = (int32_t)(1000*(double)(pressure_adc)/adc_range_adc);      // Convert pressure to units of psi
+        pressure_psi = convert_units ((double)analogRead (pressure_pin), pressure_convert_psi_per_adc, pressure_convert_invert);  // Brake pressure.  Read sensor, then Remove noise spikes from brake feedback, if reading is otherwise in range
+        ema_filt (pressure_psi, &pressure_filt_psi, pressure_ema_alpha);  // Sensor EMA filter
     }
 
     // Controller handling
     //
-    // Read horz and vert inputs
+    // Read horz and vert inputs - takes 40 us to read
     if (!simulating || !sim_joy) {  // If not simulating or joystick simulation is disabled
         if (ctrl == HOTRC) {  // If using hotrc handle
             ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_vert_max_us, hotrc_pulse_vert_min_us, ctrl_lims_adc[ctrl][VERT][MAX], ctrl_lims_adc[ctrl][VERT][MIN]);
@@ -1370,27 +1420,28 @@ void loop() {
             ctrl_pos_adc[HORZ][RAW] = constrain (ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);   
         }
         else {  // If using old joystick
-            ctrl_pos_adc[VERT][RAW] = analogRead(joy_vert_pin);  // Read joy vertical
-            ctrl_pos_adc[HORZ][RAW] = analogRead(joy_horz_pin);  // Read joy horizontal
+            ctrl_pos_adc[VERT][RAW] = analogRead (joy_vert_pin);  // Read joy vertical
+            ctrl_pos_adc[HORZ][RAW] = analogRead (joy_horz_pin);  // Read joy horizontal
         }        
         if (ctrl_pos_adc[VERT][RAW] > ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][RAW] < ctrl_db_adc[VERT][TOP])  ctrl_pos_adc[VERT][FILT] = adc_midscale_adc;  // if joy vert is in the deadband, set joy_vert_filt to center value
         else ema_filt (ctrl_pos_adc[VERT][RAW], &ctrl_pos_adc[VERT][FILT], ctrl_ema_alpha[ctrl]);  // otherwise do ema filter to determine joy_vert_filt
         if (ctrl_pos_adc[HORZ][RAW] > ctrl_db_adc[HORZ][BOT] && ctrl_pos_adc[HORZ][RAW] < ctrl_db_adc[HORZ][TOP])  ctrl_pos_adc[HORZ][FILT] = adc_midscale_adc;  // if joy horz is in the deadband, set joy_horz_filt to center value
         else ema_filt (ctrl_pos_adc[HORZ][RAW], &ctrl_pos_adc[HORZ][FILT], ctrl_ema_alpha[ctrl]);  // otherwise do ema filter to determine joy_horz_filt
     }
-    // Determine steering pwm output
+ 
+    // Determine steering pwm output - takes 13 us to handle
     if (runmode != SHUTDOWN || !shutdown_complete)  { // Unless fully shut down at the moment, set the steering output
         if (ctrl_pos_adc[HORZ][FILT] >= ctrl_db_adc[HORZ][TOP]) {
-            steer_pulse_safe_us = steer_pulse_stop_us + (int32_t)( (double)(steer_pulse_right_us - steer_pulse_stop_us) * (1 - ( (double)steer_safe_percent * carspeed_filt_mmph / ((double)carspeed_redline_mmph * 100) ) ) );
+            steer_pulse_safe_us = steer_pulse_stop_us + (int32_t)((double)(steer_pulse_right_us - steer_pulse_stop_us) * (1 - ((double)steer_safe_percent * carspeed_filt_mmph / ((double)carspeed_redline_mmph * 100) )));
             steer_pulse_out_us = map (ctrl_pos_adc[HORZ][FILT], ctrl_db_adc[HORZ][TOP], ctrl_lims_adc[ctrl][HORZ][MAX], steer_pulse_stop_us, steer_pulse_safe_us);  // Figure out the steering setpoint if joy to the right of deadband
         }
         else if (ctrl_pos_adc[HORZ][FILT] <= ctrl_db_adc[HORZ][BOT]) {
-            steer_pulse_safe_us = steer_pulse_stop_us - (int32_t)( (double)(steer_pulse_stop_us - steer_pulse_left_us) * (1 - ( (double)steer_safe_percent * carspeed_filt_mmph / ((double)carspeed_redline_mmph * 100) ) ) );
+            steer_pulse_safe_us = steer_pulse_stop_us - (int32_t)((double)(steer_pulse_stop_us - steer_pulse_left_us) * (1 - ((double)steer_safe_percent * carspeed_filt_mmph / ((double)carspeed_redline_mmph * 100) )));
             steer_pulse_out_us = map (ctrl_pos_adc[HORZ][FILT], ctrl_db_adc[HORZ][BOT], ctrl_lims_adc[ctrl][HORZ][MIN], steer_pulse_stop_us, steer_pulse_safe_us);  // Figure out the steering setpoint if joy to the left of deadband
         }
         else steer_pulse_out_us = steer_pulse_stop_us;  // Stop the steering motor if inside the deadband
     }
-    // Handle HotRC button generated events and detect potential loss of radio signal
+    // Handle HotRC button generated events and detect potential loss of radio signal - takes 15 us to handle
     if (ctrl == HOTRC) {
         if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition
             if (hotrc_suppress_next_event) hotrc_suppress_next_event = false;
@@ -1416,110 +1467,109 @@ void loop() {
             hotrc_radio_detected = true;
         }
     }
-    // Runmode state machine. Gas/brake control targets are determined here. 
+    // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     //
     // printf("mode: %d, panic: %d, vpos: %4ld, min: %4ld, max: %4ld, elaps: %6ld", runmode, panic_stop, ctrl_pos_adc[VERT][FILT], hotrc_pos_failsafe_min_adc, hotrc_pos_failsafe_max_adc, hotrcPanicTimer.elapsed());
     if (basicmodesw) runmode = BASIC;  // if basicmode switch on --> Basic Mode
     else if (runmode != CAL && (panic_stop || !ignition)) runmode = SHUTDOWN;
     else if (runmode != CAL && !tach_filt_rpm) runmode = STALL;  // otherwise if engine not running --> Stall Mode
     
-    if (runmode == BASIC)  {  // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering stell works.
+    if (runmode == BASIC) {  // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering stell works.
         if (we_just_switched_modes) {  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
             syspower = HIGH;  // Power up devices if not already
             gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
             motorParkTimer.reset();  // Set a timer to timebox this effort
             park_the_motors = true;  // Flags the motor parking to happen
         }
-        if ((!basicmodesw) && tach_filt_rpm) runmode = HOLD;  // If we turned off the basic mode switch with engine running, go to Hold mode. If engine is not running, we'll end up in Stall Mode automatically
+        if (tach_filt_rpm && !basicmodesw) runmode = HOLD;  // If we turned off the basic mode switch with engine running, go to Hold mode. If engine is not running, we'll end up in Stall Mode automatically
     }
-    else if (runmode == SHUTDOWN)  { // In shutdown mode we stop the car if it's moving then park the motors.
+    else if (runmode == SHUTDOWN) { // In shutdown mode we stop the car if it's moving then park the motors.
         if (ignition && !panic_stop) {
             syspower = HIGH;  // Power up devices if not already
             runmode = STALL;
         }
-        else if (we_just_switched_modes)  {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
-            tach_target_rpm = tach_idle_rpm;  //  Release the throttle 
+        else if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
+            gasSPID.set_target (tach_idle_rpm);  //  Release the throttle 
             shutdown_complete = false;
             shutdown_color = LPNK;
             calmode_request = false;
-            if (carspeed_filt_mmph)  {
-                pressure_target_adc = (panic_stop) ? brake_panic_initial_adc : brake_hold_initial_adc;  // More brakes, etc. to stop the car
+            if (carspeed_filt_mmph) {
+                if (panic_stop && brakeSPID.get_target() < pressure_panic_initial_psi) brakeSPID.set_target (pressure_panic_initial_psi);
+                if (!panic_stop && brakeSPID.get_target() < pressure_hold_initial_psi) brakeSPID.set_target (pressure_hold_initial_psi);
                 brakeIntervalTimer.reset();
                 sanityTimer.reset();
             }
         }
-        if (!shutdown_complete)  {  // If we haven't yet stopped the car and then released the brakes and gas all the way
-            if (!carspeed_filt_mmph || sanityTimer.expired())  {  // If car has stopped, or timeout expires, then release the brake
-                if (shutdown_color == LPNK) {
+        if (!shutdown_complete) {  // If we haven't yet stopped the car and then released the brakes and gas all the way
+            if (!carspeed_filt_mmph || sanityTimer.expired()) {  // If car has stopped, or timeout expires, then release the brake
+                if (shutdown_color == LPNK) {  // On first time through here
                     park_the_motors = true;  // Flags the motor parking to happen, only once
                     gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
                     motorParkTimer.reset();  // Set a timer to timebox this effort
                     shutdown_color = DPNK;
                     disp_runmode_dirty = true;
                 }
-                else if (!park_the_motors) {
+                else if (!park_the_motors) {  // When done parking the motors we can finish shutting down
                     shutdown_complete = true;
                     shutdown_color = colorcard[SHUTDOWN];
                     disp_runmode_dirty = true;
-                    syspower = LOW;  // Power down devices
-                    // go to sleep?
+                    sleepInactivityTimer.reset();
                 }
             }
-            else if (brakeIntervalTimer.expired())  {
-                pressure_target_adc += (panic_stop) ? brake_panic_increment_adc : brake_hold_increment_adc;  // Slowly add more brakes until car stops
+            else if (brakeIntervalTimer.expired()) {
+                brakeSPID.set_target (brakeSPID.get_target() + (panic_stop) ? pressure_panic_increment_psi : pressure_hold_increment_psi);  // Slowly add more brakes until car stops
                 brakeIntervalTimer.reset();  
             }
-            // if (abs (pressure_filt_adc - pressure_min_adc) <= pressure_margin_adc)  shutdown_complete = true;  // With this set, we will do nothing from here on out (until mode changes, i.e. ignition)
         }
         else if (calmode_request) {  // if fully shut down and cal mode requested
             syspower = HIGH;  // Power up devices if not already
             runmode = CAL;
         }
+        else if (sleepInactivityTimer.expired()) {
+            syspower = LOW;  // Power down devices
+            // go to sleep?    
+        }
     }
-    else if (runmode == STALL)  {   // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
-        if (tach_filt_rpm)  runmode = HOLD;  //  Enter Hold Mode if we started the car
-        if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) pressure_target_adc = pressure_min_adc;  // If in deadband or being pushed up, no pressure target
-        else pressure_target_adc = map(ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][BOT], ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_adc, pressure_max_adc);  // Scale joystick value to pressure adc setpoint
+    else if (runmode == STALL) {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
+        if (tach_filt_rpm) runmode = HOLD;  // Enter Hold Mode if we started the car
+        if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) brakeSPID.set_target (pressure_min_psi);  // If in deadband or being pushed up, no pressure target
+        else brakeSPID.set_target (map (ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][BOT], ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi));  // Scale joystick value to pressure adc setpoint
         // Throttle behavior is handled in pid section
     }
-    else if (runmode == HOLD)  {
+    else if (runmode == HOLD) {
         if (we_just_switched_modes)  {  // Release throttle and push brake upon entering hold mode
-            tach_target_rpm = tach_idle_rpm;  // Let off gas (if gas using PID mode)
-            if (!carspeed_filt_mmph)  pressure_target_adc += brake_hold_increment_adc; // If the car is already stopped then just add a touch more pressure and then hold it.
-            else pressure_target_adc = brake_hold_initial_adc;  //  Otherwise, these hippies need us to stop the car for them
+            gasSPID.set_target (tach_idle_rpm);  // Let off gas (if gas using PID mode)
+            if (!carspeed_filt_mmph) brakeSPID.set_target (pressure_filt_psi + pressure_hold_increment_psi); // If the car is already stopped then just add a touch more pressure and then hold it.
+            else if (brakeSPID.get_target() < pressure_hold_initial_psi) brakeSPID.set_target (pressure_hold_initial_psi);  //  These hippies need us to stop the car for them
             brakeIntervalTimer.reset();
-            joy_centered = false;
+            sanityTimer.reset();
+            joy_centered = false;  // Fly mode will be locked until the joystick first is put at or below center
         }
-        else if (carspeed_filt_mmph && brakeIntervalTimer.expired())  { // Each interval the car is still moving, push harder
-            pressure_target_adc += brake_hold_increment_adc;  // Slowly add more brakes until car stops
+        else if (brakeIntervalTimer.expired() && !sanityTimer.expired()) {  // Each interval the car is still moving, push harder
+            if (carspeed_filt_mmph) brakeSPID.set_target (brakeSPID.get_target() + pressure_hold_increment_psi);
             brakeIntervalTimer.reset();
         }
-        pressure_target_adc = constrain(pressure_target_adc, pressure_min_adc, pressure_max_adc);  // Just make sure we don't try to push harder than we can 
-        if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) {
-            joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
-        }
-        if (joy_centered && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][TOP]) { 
-            runmode = FLY; // Enter Fly Mode upon joystick movement from center to above center
-        }
+        if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
+        else if (joy_centered) runmode = FLY; // Enter Fly Mode upon joystick movement from center to above center
     }
-    else if (runmode == FLY)  {
+    else if (runmode == FLY) {
         if (we_just_switched_modes)  {
             gesture_progress = 0;
-            gestureFlyTimer.set(gesture_flytimeout_us); // Initialize gesture timer to already-expired value
+            gestureFlyTimer.set (gesture_flytimeout_us); // Initialize gesture timer to already-expired value
             cruise_sw_held = false;
             cruiseSwTimer.reset();
             hotrc_ch4_sw_event = false;
         }
-        if (!carspeed_filt_mmph && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT])  runmode = HOLD;  // Go to Hold Mode if we have braked to a stop
+        if (!carspeed_filt_mmph) runmode = HOLD;  // Go to Hold Mode if we have come to a stop  // && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT]
         else  {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
-            tach_target_rpm = tach_idle_rpm;  // Default when joystick not pressed 
-            pressure_target_adc = pressure_min_adc;  // Default when joystick not pressed   
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])  {  // If we are trying to accelerate
-                tach_target_rpm = map(ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], tach_idle_rpm, tach_govern_rpm);
+                gasSPID.set_target (d_map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][TOP], (double)ctrl_lims_adc[ctrl][VERT][MAX], tach_idle_rpm, tach_govern_rpm));
             }
-            else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT])  {  // If we are trying to brake, scale joystick value to determine pressure adc setpoint
-                pressure_target_adc = map(ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][BOT], ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_adc, pressure_max_adc);
+            else gasSPID.set_target (tach_idle_rpm);  // Let off gas (if gas using PID mode)
+            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT])  {  // If we are trying to brake, scale joystick value to determine pressure adc setpoint
+                brakeSPID.set_target (d_map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][BOT], (double)ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi));
             }
+            else brakeSPID.set_target (pressure_min_psi);  // Default when joystick not pressed   
         }
         // Cruise mode can be entered by pressing a physical momentary button, or by holding the brake on full for a half second. Which epends on the cruise_gesturing flag.
         // The gesture involves pushing the joystick from the center to the top, then to the bottom, then back to center, quickly enough.
@@ -1543,77 +1593,75 @@ void loop() {
             }
         }
         if (!cruise_sw) {  // If button not currently pressed
-            if (cruise_sw_held && cruiseSwTimer.expired())  runmode = CRUISE;  // If button was just held long enough, upon release enter Cruise mode
+            if (cruise_sw_held && cruiseSwTimer.expired()) runmode = CRUISE;  // After a long press of sufficient length, upon release enter Cruise mode
             cruise_sw_held = false;  // Cancel button held state
         }
-        else if (!cruise_sw_held) {  // If button is being pressed, but we aren't in button held state
+        else if (!cruise_sw_held) {  // If the button just now got pressed
             cruiseSwTimer.reset(); // Start hold time timer
-            cruise_sw_held = true;  // Get into that state
+            cruise_sw_held = true;  // Get into button held state
         }
     }
     else if (runmode == CRUISE)  {
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
-            carspeed_target_mmph = carspeed_filt_mmph;  // Begin cruising with cruise set to current speed
-            pressure_target_adc = pressure_min_adc;  // Let off the brake and keep it there till out of Cruise mode
+            cruiseSPID.set_target (carspeed_filt_mmph);
+            brakeSPID.set_target (pressure_min_psi);  // Let off the brake and keep it there till out of Cruise mode
             gestureFlyTimer.reset();  // reset gesture timer
             cruise_sw_held = false;
             hotrc_ch4_sw_event = false;
         }
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) {  // When joystick vert above center, increase the throttle target proportional to how far off center
             cruise_adjusting = true;  // Suspend pid loop control of gas
-            tach_target_rpm = map(ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], tach_filt_rpm, tach_govern_rpm);
+            gasSPID.set_target (map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][TOP], (double)ctrl_lims_adc[ctrl][VERT][MAX], tach_filt_rpm, tach_govern_rpm));
         }
         else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) {  // When joystick vert below center, decrease the throttle target proportional to how far off center
             cruise_adjusting = true;  // Suspend pid loop control of gas
-            tach_target_rpm = map(ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_db_adc[VERT][BOT], tach_idle_rpm, tach_filt_rpm);
+            gasSPID.set_target (map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_lims_adc[ctrl][VERT][MIN], (double)ctrl_db_adc[VERT][BOT], tach_idle_rpm, tach_filt_rpm));
         }
         else cruise_adjusting = false;  // if joystick at center
-        if (cruise_adjusting) {
-            carspeed_target_mmph = carspeed_filt_mmph;  // Upon return to center set speed target to current speed
-            cruiseSPID.set_target((double)carspeed_target_mmph);
-        }
+        if (cruise_adjusting) cruiseSPID.set_target (carspeed_filt_mmph);
+        
         // This old gesture trigger drops to Fly mode if joystick moved quickly from center to bottom
         // if (ctrl_pos_adc[VERT][FILT] <= ctrl_lims_adc[ctrl][VERT][MIN]+default_margin_adc && abs(mycros() - gesture_timer_us) < gesture_flytimeout_us)  runmode = FLY;  // If joystick quickly pushed to bottom 
-        // printf("hotvpuls=%ld, hothpuls=%ld, joyvfilt=%ld, joyvmin+marg=%ld, timer=%ld\n", hotrc_vert_pulse_us, hotrc_horz_pulse_us, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc, gesture_timer_us);
-        if (ctrl_pos_adc[VERT][RAW] > ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
+        // printf ("hotvpuls=%ld, hothpuls=%ld, joyvfilt=%ld, joyvmin+marg=%ld, timer=%ld\n", hotrc_vert_pulse_us, hotrc_horz_pulse_us, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc, gesture_timer_us);
+        if (ctrl_pos_adc[VERT][FILT] > ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
         else if (gestureFlyTimer.expired()) runmode = FLY;  // New gesture to drop to fly mode is hold the brake all the way down for 500 ms
-        if (cruise_sw)  cruise_sw_held = true;   // Pushing cruise button sets up return to fly mode
-        else if (cruise_sw_held) { // Release of button drops us back to fly mode
+        if (cruise_sw)  cruise_sw_held = true;  // Pushing cruise button sets up return to fly mode
+        else if (cruise_sw_held) {  // Release of button drops us back to fly mode
             cruise_sw_held = false;
             runmode = FLY;
         }
-        if (!carspeed_filt_mmph)  {  // In case we slam into a brick wall, get out of cruise mode
-            if (serial_debugging) Serial.println(F("Error: Car stopped or taken out of gear in cruise mode"));  // , carspeed_filt_mmph, neutral
+        if (!carspeed_filt_mmph) {  // In case we slam into a brick wall, get out of cruise mode
+            if (serial_debugging) Serial.println (F("Error: Car stopped or taken out of gear in cruise mode"));  // , carspeed_filt_mmph, neutral
             runmode = HOLD;  // Back to Hold Mode  
         }
     }
     else if (runmode == CAL) {
-        if (we_just_switched_modes)  {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
+        if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
             calmode_request = false;
             cal_pot_gas_ready = false;
         }
         else if (calmode_request) runmode = SHUTDOWN;
         if (!cal_pot_gas_ready) {
-            int32_t temp = map (pot_filt_adc, pot_min_adc, pot_max_adc, gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
-            if (temp <= gas_pulse_idle_us && temp >= gas_pulse_redline_us) cal_pot_gas_ready = true;
+            double temp = d_map (pot_filt_percent, pot_min_percent, pot_max_percent, (double)gas_pulse_ccw_max_us, (double)gas_pulse_cw_min_us);
+            if (temp <= (double)gas_pulse_idle_us && temp >= (double)gas_pulse_redline_us) cal_pot_gas_ready = true;
         }
     }
     else { // Obviously this should never happen
-        if (serial_debugging) Serial.println(F("Error: Invalid runmode entered"));  // ,  runmode
+        if (serial_debugging) Serial.println (F("Error: Invalid runmode entered"));  // ,  runmode
         runmode = SHUTDOWN;
     }
-
-    // Update motor outputs
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "modes");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
     //
-    if (pidTimer.expired() && !(runmode == SHUTDOWN && shutdown_complete))  {  // Recalculate pid and update outputs, at regular intervals
+    if (pidTimer.expired() && !(runmode == SHUTDOWN && shutdown_complete)) {  // Recalculate pid and update outputs, at regular intervals
         
+        pidTimer.reset();  // reset timer to trigger the next update
         if ( park_the_motors && ( motorParkTimer.expired() ||  //  When parking motors, IF the timeout expires OR the brake and gas motors are both close enough to the park position ...
-            ( abs(brake_pos_filt_adc - brake_pos_park_adc) <= default_margin_adc && gasServoTimer.expired() && (gas_pulse_out_us == gas_pulse_idle_us + gas_pulse_park_slack_us) ) ) )
+            ( abs(brake_pos_filt_thou - brake_pos_park_thou) <= brake_pos_margin_thou && gasServoTimer.expired() && (gas_pulse_out_us == gas_pulse_idle_us + gas_pulse_park_slack_us) ) ) )
             park_the_motors = false;  // ... THEN stop trying to park the motors
         
         // Steering
-        steer_pulse_out_us = constrain(steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);  // Don't be out of range
-        steer_servo.writeMicroseconds(steer_pulse_out_us);   // Write steering value to jaguar servo interface
+        steer_pulse_out_us = constrain (steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);  // Don't be out of range
+        steer_servo.writeMicroseconds (steer_pulse_out_us);   // Write steering value to jaguar servo interface
 
         // Brakes
        if (runmode == CAL && cal_joyvert_brkmotor) {
@@ -1622,68 +1670,59 @@ void loop() {
             else brake_pulse_out_us = brake_pulse_stop_us;
         }
         else if (park_the_motors) {
-            if (brake_pos_filt_adc + brake_pos_margin_adc <= brake_pos_park_adc) brake_pulse_out_us = map (brake_pos_filt_adc, brake_pos_park_adc, brake_pos_nom_lim_retract_adc, brake_pulse_stop_us, brake_pulse_extend_us); // If brake is retracted from park point, extend toward park point, slowing as we approach
-            if (brake_pos_filt_adc - brake_pos_margin_adc >= brake_pos_park_adc) brake_pulse_out_us = map (brake_pos_filt_adc, brake_pos_park_adc, brake_pos_nom_lim_extend_adc, brake_pulse_stop_us, brake_pulse_retract_us); // If brake is extended from park point, retract toward park point, slowing as we approach
+            if (brake_pos_filt_thou + brake_pos_margin_thou <= brake_pos_park_thou) brake_pulse_out_us =  // If brake is retracted from park point, extend toward park point, slowing as we approach
+                map ((int32_t)brake_pos_filt_thou, (int32_t)brake_pos_park_thou, (int32_t)brake_pos_nom_lim_retract_thou, brake_pulse_stop_us, brake_pulse_extend_us);
+            else if (brake_pos_filt_thou - brake_pos_margin_thou >= brake_pos_park_thou) brake_pulse_out_us =  // If brake is extended from park point, retract toward park point, slowing as we approach
+                map ((int32_t)brake_pos_filt_thou, (int32_t)brake_pos_park_thou, (int32_t)brake_pos_nom_lim_extend_thou, brake_pulse_stop_us, brake_pulse_retract_us);
         }
-        else if (runmode != BASIC) {  // Otherwise the pid control is active
-            pressure_target_adc = constrain(pressure_target_adc, pressure_min_adc, pressure_max_adc);  // Just make sure we don't try to push harder than we can 
-            // printf("Brake PID rm=%-+4ld target=%-+9.4lf", runmode, (double)pressure_target_adc);
-            brakeSPID.set_target(pressure_target_adc);
-            brakeSPID.compute(pressure_filt_adc);
-            brake_pulse_out_us = (int32_t)brakeSPID.get_output();
-            // printf(" output = %-+9.4lf,  %+-4ld\n", brakeSPID.get_output(), brake_pulse_out_us); 
-        }
+        else if (runmode != BASIC) brake_pulse_out_us = (int32_t)brakeSPID.compute (pressure_filt_psi);  // Otherwise the pid control is active
+        // printf("Brake PID rm=%-+4ld target=%-+9.4lf", runmode, (double)pressure_target_psi);   
+        // printf(" output = %-+9.4lf,  %+-4ld\n", brakeSPID.get_output(), brake_pulse_out_us); 
         if (runmode != BASIC || park_the_motors) {
             if (runmode == CAL && cal_joyvert_brkmotor)  // In Cal mode constrain the motor to its entire range, instead of to the calibrated limits
-                brake_pulse_out_us = constrain(brake_pulse_out_us, brake_pulse_retract_min_us, brake_pulse_extend_max_us);  // Send to the actuator. Refuse to exceed range    
+                brake_pulse_out_us = constrain (brake_pulse_out_us, brake_pulse_retract_min_us, brake_pulse_extend_max_us);  // Send to the actuator. Refuse to exceed range    
             else {  // Prevent any movement of motor which would exceed position limits. Improve this by having the motor actively go back toward position range if position is beyond either limit
-                if ( ((brake_pos_filt_adc + brake_pos_margin_adc <= brake_pos_nom_lim_retract_adc) && (brake_pulse_out_us < brake_pulse_stop_us)) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
-                    ((brake_pos_filt_adc - brake_pos_margin_adc >= brake_pos_nom_lim_extend_adc) && (brake_pulse_out_us > brake_pulse_stop_us)) )  // ... or same thing in the extend direction ...
+                if ( ((brake_pos_filt_thou + brake_pos_margin_thou <= brake_pos_nom_lim_retract_thou) && (brake_pulse_out_us < brake_pulse_stop_us)) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
+                    ((brake_pos_filt_thou - brake_pos_margin_thou >= brake_pos_nom_lim_extend_thou) && (brake_pulse_out_us > brake_pulse_stop_us)) )  // ... or same thing in the extend direction ...
                     brake_pulse_out_us = brake_pulse_stop_us;  // ... then stop the motor
-                brake_pulse_out_us = constrain(brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);  // Send to the actuator. Refuse to exceed range    
-            } 
+                brake_pulse_out_us = constrain (brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);  // Send to the actuator. Refuse to exceed range    
+            }
             brake_servo.writeMicroseconds (brake_pulse_out_us);  // Write result to jaguar servo interface
         }
         
-        // Cruise.  Controls gas rpm target based on car speed error
-        if (runmode == CRUISE && !cruise_adjusting) {  // Cruise loop updates gas rpm target to keep speed equal to cruise mmph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
-            carspeed_target_mmph = constrain(carspeed_target_mmph, 0, carspeed_redline_mmph);
-            // printf("Cruise PID rm= %+-4ld target=%-+9.4lf", runmode, (double)carspeed_target_mmph);
-            cruiseSPID.compute((double)carspeed_filt_mmph);
-            tach_target_rpm = (int32_t)cruiseSPID.get_output();
-            // printf(" output = %-+9.4lf,  %+-4ld\n", cruiseSPID.get_output(), tach_target_rpm);
-        }
+        // Cruise.  Controls gas rpm target to keep speed equal to cruise mmph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
+        if (runmode == CRUISE && !cruise_adjusting) gasSPID.set_target (cruiseSPID.compute (carspeed_filt_mmph));  // 
+            
+        // cruiseSPID.set_target carspeed_target_mmph = constrain (carspeed_target_mmph, 0, carspeed_redline_mmph);
+        // printf ("Cruise PID rm= %+-4ld target=%-+9.4lf", runmode, (double)carspeed_target_mmph);
+        // cruiseSPID.compute (carspeed_filt_mmph);
+        // tach_target_rpm
+        // printf (" output = %-+9.4lf,  %+-4ld\n", cruiseSPID.get_output(), tach_target_rpm);
+        // }
 
         // Gas.  Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
         if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_idle_us;  // If in deadband or being pushed down, we want idle
-            else gas_pulse_out_us = map(ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_idle_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
+            else gas_pulse_out_us = map (ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_idle_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
         }
         else if (runmode != BASIC) {
-            if (gasSPID.get_open_loop())  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
-                gas_pulse_out_us = map (tach_target_rpm, tach_idle_rpm, tach_govern_rpm, gas_pulse_idle_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
-            else if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) 
-                gas_pulse_out_us = map (pot_filt_adc, pot_min_adc, pot_max_adc, gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
-            else {  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
-                // printf("Gas PID   rm= %+-4ld target=%-+9.4lf", runmode, (double)tach_target_rpm);
-                tach_target_rpm = constrain(tach_target_rpm, tach_idle_rpm, tach_govern_rpm);  // Make sure desired rpm isn't out of range (due to crazy pid math, for example)
-                gasSPID.set_target((double)tach_target_rpm);
-                gasSPID.compute((double)tach_filt_rpm);
-                gas_pulse_out_us = (int32_t)gasSPID.get_output();
-                // printf(" output = %-+9.4lf,  %+-4ld\n", gasSPID.get_output(), gas_pulse_out_us);
-            }
+            if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) 
+                gas_pulse_out_us = (int32_t)(d_map (pot_filt_percent, pot_min_percent, pot_max_percent, (double)gas_pulse_ccw_max_us, (double)gas_pulse_cw_min_us));
+            else if (gasSPID.get_open_loop())  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
+                gas_pulse_out_us = map (gasSPID.get_target(), tach_idle_rpm, tach_govern_rpm, gas_pulse_idle_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
+            else gas_pulse_out_us = (int32_t)gasSPID.compute (tach_filt_rpm);  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
+            // printf ("Gas PID   rm= %+-4ld target=%-+9.4lf", runmode, (double)tach_target_rpm);
+            // printf (" output = %-+9.4lf,  %+-4ld\n", gasSPID.get_output(), gas_pulse_out_us);
         }
         if (runmode != BASIC || park_the_motors) {
             if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo)
-                gas_pulse_out_us = constrain(gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
-            else gas_pulse_out_us = constrain(gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_idle_us);
+                gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
+            else gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_idle_us);
             gas_servo.writeMicroseconds (gas_pulse_out_us);  // Write result to servo
         }
-
-        pidTimer.reset();  // reset timer to trigger the next update
     }
-    
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
     // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
     //
     // This section should become a real time self-diagnostic system, to look for anything that doesn't seem right and display an
@@ -1711,8 +1750,9 @@ void loop() {
         // into camp after a ride, and kill the engine before we stop the car. For a fraction of a second the engine would keep turning anyway.
         // Or fopr that matter whenever the carb is out of tune and making the engine diesel after we kill the ign.
     }
-
-    // Touchscreen handling
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "diag");  //
+    
+    // Touchscreen handling - takes 800 us to handle every 20ms when the touch timer expires, otherwise 20 us (includes touch timer + encoder handling w/o activity)
     //
     int32_t touch_x, touch_y, trow, tcol;
     if (touchPollTimer.expired()) {
@@ -1720,8 +1760,8 @@ void loop() {
         if (touchpanel.touched()) { // Take actions upon being touched
             touch_accel = 1 << touch_accel_exponent;  // determine value editing rate
             TS_Point touchpoint = touchpanel.getPoint();  // Retreive a point
-            touchpoint.x = map(touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
-            touchpoint.y = map(touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);  // Rotate touch coordinates to match tft coordinates
+            touchpoint.x = map (touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
+            touchpoint.y = map (touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);  // Rotate touch coordinates to match tft coordinates
             touch_y = disp_height_pix-touchpoint.x; // touch point y coordinate in pixels, from origin at top left corner
             touch_x = touchpoint.y; // touch point x coordinate in pixels, from origin at top left corner
             trow = constrain((touch_y + touch_fudge)/touch_cell_v_pix, 0, 4);  // The -8 seems to be needed or the vertical touch seems off (?)
@@ -1774,24 +1814,26 @@ void loop() {
                     touch_longpress_valid = false;
                 }  // Pressed the basic mode toggle button. Toggle value, only once per touch
             }
-            else if (tcol==3 && trow==0 && simulating && sim_basicsw && !touch_now_touched) basicmodesw = !basicmodesw;  // Pressed the basic mode toggle button. Toggle value, only once per touch
-            else if (tcol==3 && trow==1 && simulating && sim_pressure) adj_val (&pressure_filt_adc, touch_accel, pressure_min_adc, pressure_max_adc);   // (+= 25) Pressed the increase brake pressure button
-            else if (tcol==3 && trow==2 && simulating && sim_pressure) adj_val (&pressure_filt_adc, -touch_accel, pressure_min_adc, pressure_max_adc); // (-= 25) Pressed the decrease brake pressure button
-            else if (tcol==3 && trow==4 && simulating && sim_joy) adj_val (&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (-= 25) Pressed the joystick left button
-            else if (tcol==4 && trow==0 && simulating && sim_ign && !touch_now_touched) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
-            else if (tcol==4 && trow==1 && simulating && sim_tach) adj_val (&tach_filt_rpm, touch_accel, 0, tach_redline_rpm);  // (+= 25) Pressed the increase engine rpm button
-            else if (tcol==4 && trow==2 && simulating && sim_tach) adj_val (&tach_filt_rpm, -touch_accel, 0, tach_redline_rpm);  // (-= 25) Pressed the decrease engine rpm button
-            else if (tcol==4 && trow==3 && simulating && sim_joy) adj_val (&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (+= 25) Pressed the joystick up button
-            else if (tcol==4 && trow==4 && simulating && sim_joy) adj_val (&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (-= 25) Pressed the joystick down button
-            else if (tcol==5 && trow==0 && simulating && sim_syspower) {  // You need to enable syspower simulation, be in sim mode and then long-press the syspower button to toggle it. (Hard to do by accident)/
-                if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout())  {
-                    syspower = !syspower;
-                    touch_longpress_valid = false;
-                }  
-            } 
-            else if (tcol==5 && trow==1 && simulating && sim_speedo) adj_val (&carspeed_filt_mmph, touch_accel, 0, carspeed_redline_mmph);  // (+= 50) // Pressed the increase vehicle speed button
-            else if (tcol==5 && trow==2 && simulating && sim_speedo) adj_val (&carspeed_filt_mmph, -touch_accel, 0, carspeed_redline_mmph);  // (-= 50) Pressed the decrease vehicle speed button
-            else if (tcol==5 && trow==4 && simulating && sim_joy) adj_val (&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (+= 25) Pressed the joystick right button                           
+            else if (simulating) {
+                if (tcol==3 && trow==0 && sim_basicsw && !touch_now_touched) basicmodesw = !basicmodesw;  // Pressed the basic mode toggle button. Toggle value, only once per touch
+                else if (tcol==3 && trow==1 && sim_pressure) adj_val (&pressure_filt_psi, touch_accel, pressure_min_psi, pressure_max_psi);   // (+= 25) Pressed the increase brake pressure button
+                else if (tcol==3 && trow==2 && sim_pressure) adj_val (&pressure_filt_psi, -touch_accel, pressure_min_psi, pressure_max_psi); // (-= 25) Pressed the decrease brake pressure button
+                else if (tcol==3 && trow==4 && sim_joy) adj_val (&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (-= 25) Pressed the joystick left button
+                else if (tcol==4 && trow==0 && sim_ign && !touch_now_touched) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
+                else if (tcol==4 && trow==1 && sim_tach) adj_val (&tach_filt_rpm, touch_accel, 0, tach_redline_rpm);  // (+= 25) Pressed the increase engine rpm button
+                else if (tcol==4 && trow==2 && sim_tach) adj_val (&tach_filt_rpm, -touch_accel, 0, tach_redline_rpm);  // (-= 25) Pressed the decrease engine rpm button
+                else if (tcol==4 && trow==3 && sim_joy) adj_val (&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (+= 25) Pressed the joystick up button
+                else if (tcol==4 && trow==4 && sim_joy) adj_val (&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (-= 25) Pressed the joystick down button
+                else if (tcol==5 && trow==0 && sim_syspower) {  // You need to enable syspower simulation, be in sim mode and then long-press the syspower button to toggle it. (Hard to do by accident)/
+                    if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout())  {
+                        syspower = !syspower;
+                        touch_longpress_valid = false;
+                    }  
+                } 
+                else if (tcol==5 && trow==1 && sim_speedo) adj_val (&carspeed_filt_mmph, touch_accel, 0, carspeed_redline_mmph);  // (+= 50) // Pressed the increase vehicle speed button
+                else if (tcol==5 && trow==2 && sim_speedo) adj_val (&carspeed_filt_mmph, -touch_accel, 0, carspeed_redline_mmph);  // (-= 50) Pressed the decrease vehicle speed button
+                else if (tcol==5 && trow==4 && sim_joy) adj_val (&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (+= 25) Pressed the joystick right button                           
+            }
             if (touch_accel_exponent < touch_accel_exponent_max && (touchHoldTimer.elapsed() > (touch_accel_exponent + 1) * touchAccelTimer.timeout())) touch_accel_exponent++; // If timer is > the shift time * exponent, and not already maxed, double the edit speed by incrementing the exponent
             touch_now_touched = true;
         }  // (if touchpanel reads a touch)
@@ -1804,6 +1846,8 @@ void loop() {
             touch_longpress_valid = true;
         }
     }
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "touch");  //
+
     // Encoder handling
     //
     if (encoder_sw_action != NONE) {  // First deal with any unhandled switch press events
@@ -1819,18 +1863,19 @@ void loop() {
         if (encoder_spinrate_isr_us >= encoder_spinrate_min_us) {  // Attempt to reject clicks coming in too fast
             encoder_spinrate_old_us = encoder_spinrate_last_us;  // Store last few spin times for filtering purposes ...
             encoder_spinrate_last_us = encoder_spinrate_us;  // ...
-            encoder_spinrate_us = constrain(encoder_spinrate_isr_us, encoder_spinrate_min_us, encoder_accel_thresh_us);
+            encoder_spinrate_us = constrain (encoder_spinrate_isr_us, encoder_spinrate_min_us, encoder_accel_thresh_us);
             int32_t spinrate_temp = (encoder_spinrate_old_us > encoder_spinrate_last_us) ? encoder_spinrate_old_us : encoder_spinrate_last_us;  // Find the slowest of the last 3 detents ...
             if (spinrate_temp < encoder_spinrate_us) spinrate_temp = encoder_spinrate_us;
-            encoder_edits_per_det = map(spinrate_temp, encoder_spinrate_min_us, encoder_accel_thresh_us, encoder_accel_max, 1);  // if turning faster than 100ms/det, proportionally accelerate the effect of each detent by up to 50x 
+            encoder_edits_per_det = map (spinrate_temp, encoder_spinrate_min_us, encoder_accel_thresh_us, encoder_accel_max, 1);  // if turning faster than 100ms/det, proportionally accelerate the effect of each detent by up to 50x 
             // encoderSpinspeedTimer.reset();
             if (tuning_ctrl == EDIT) sim_edit_delta_encoder = encoder_delta * encoder_edits_per_det;  // If a tunable value is being edited, turning the encoder changes the value
-            else encoder_delta = constrain(encoder_delta, -1, 1);  // Only change one at a time when selecting or turning pages
+            else encoder_delta = constrain (encoder_delta, -1, 1);  // Only change one at a time when selecting or turning pages
             if (tuning_ctrl == SELECT) selected_value += encoder_delta;  // If overflow constrain will fix in general handler below
             else if (tuning_ctrl == OFF) dataset_page += encoder_delta;  // If overflow tconstrain will fix in general below
         }
         encoder_delta = 0;  // Our responsibility to reset this flag after handling events
     }
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "enc");  //
 
     // Tuning : implement effects of changes made by encoder or touchscreen to simulating, dataset_page, selected_value, or tuning_ctrl
     //
@@ -1839,7 +1884,7 @@ void loop() {
     sim_edit_delta_encoder = 0;
     if (tuning_ctrl != tuning_ctrl_last || dataset_page != dataset_page_last || selected_value != selected_value_last || sim_edit_delta != 0) tuningCtrlTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
     if (tuning_ctrl != OFF && tuningCtrlTimer.expired()) tuning_ctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
-    dataset_page = constrain(dataset_page, 0, arraysize(pagecard)-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
+    dataset_page = constrain (dataset_page, 0, arraysize(pagecard)-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
     if (dataset_page != dataset_page_last) {
         if (tuning_ctrl == EDIT) tuning_ctrl = SELECT;  // If page is flipped during edit, drop back to select mode
         disp_dataset_page_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
@@ -1848,8 +1893,8 @@ void loop() {
         if (dataset_page >= 4) selected_value = constrain (selected_value, 5, 7);  // Skip unchangeable values for all PID modes
         else if (dataset_page == JOY) selected_value = constrain (selected_value, 2, 7);  // Skip unchangeable values for joy mode
         else if (dataset_page == RUN) selected_value = constrain (selected_value, 3, 7);  // Skip unchangeable values for run mode
-        else if (dataset_page == TEMP) selected_value = constrain (selected_value, 6, 7);  // Skip unchangeable values for run mode
-        else selected_value = constrain(selected_value, 0, arraysize(dataset_page_names[dataset_page])-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
+        else if (dataset_page == TEMP) selected_value = constrain (selected_value, 6, 7);  // Skip unchangeable values for temp mode
+        else selected_value = constrain (selected_value, 0, arraysize (dataset_page_names[dataset_page])-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
         if (selected_value != selected_value_last) disp_selected_val_dirty = true;
     }
     if (tuning_ctrl != tuning_ctrl_last || disp_dataset_page_dirty) disp_selected_val_dirty = true;
@@ -1891,25 +1936,38 @@ void loop() {
             case 7:  adj_val (&gas_pulse_redline_us, sim_edit_delta, gas_pulse_cw_min_us, gas_pulse_idle_us - 1);  break;
         }
         else if (dataset_page == BPID) {
-            if (selected_value == 5) brakeSPID.set_tunings( brakeSPID.get_kp()+0.001*(double)sim_edit_delta, brakeSPID.get_ki_hz(), brakeSPID.get_kd_s() );
-            if (selected_value == 6) brakeSPID.set_tunings( brakeSPID.get_kp(), brakeSPID.get_ki_hz()+0.001*(double)sim_edit_delta, brakeSPID.get_kd_s() );
-            if (selected_value == 7) brakeSPID.set_tunings( brakeSPID.get_kp(), brakeSPID.get_ki_hz(), brakeSPID.get_kd_s()+0.001*(double)sim_edit_delta );
+            if (selected_value == 5) brakeSPID.set_tunings (brakeSPID.get_kp()+0.001*(double)sim_edit_delta, brakeSPID.get_ki_hz(), brakeSPID.get_kd_s());
+            if (selected_value == 6) brakeSPID.set_tunings (brakeSPID.get_kp(), brakeSPID.get_ki_hz()+0.001*(double)sim_edit_delta, brakeSPID.get_kd_s());
+            if (selected_value == 7) brakeSPID.set_tunings (brakeSPID.get_kp(), brakeSPID.get_ki_hz(), brakeSPID.get_kd_s()+0.001*(double)sim_edit_delta);
         }
         else if (dataset_page == GPID) {
-            if (selected_value == 5) gasSPID.set_tunings( gasSPID.get_kp()+0.001*(double)sim_edit_delta, gasSPID.get_ki_hz(), gasSPID.get_kd_s() );
-            if (selected_value == 6) gasSPID.set_tunings( gasSPID.get_kp(), gasSPID.get_ki_hz()+0.001*(double)sim_edit_delta, gasSPID.get_kd_s() );
-            if (selected_value == 7) gasSPID.set_tunings( gasSPID.get_kp(), gasSPID.get_ki_hz(), gasSPID.get_kd_s()+0.001*(double)sim_edit_delta );
+            if (selected_value == 5) gasSPID.set_tunings (gasSPID.get_kp()+0.001*(double)sim_edit_delta, gasSPID.get_ki_hz(), gasSPID.get_kd_s());
+            if (selected_value == 6) gasSPID.set_tunings (gasSPID.get_kp(), gasSPID.get_ki_hz()+0.001*(double)sim_edit_delta, gasSPID.get_kd_s());
+            if (selected_value == 7) gasSPID.set_tunings (gasSPID.get_kp(), gasSPID.get_ki_hz(), gasSPID.get_kd_s()+0.001*(double)sim_edit_delta);
         }
         else if (dataset_page == CPID) {
-            if (selected_value == 5) cruiseSPID.set_tunings( cruiseSPID.get_kp()+0.001*(double)sim_edit_delta, cruiseSPID.get_ki_hz(), cruiseSPID.get_kd_s() );
-            if (selected_value == 6) cruiseSPID.set_tunings( cruiseSPID.get_kp(), cruiseSPID.get_ki_hz()+0.001*(double)sim_edit_delta, cruiseSPID.get_kd_s() );
-            if (selected_value == 7) cruiseSPID.set_tunings( cruiseSPID.get_kp(), cruiseSPID.get_ki_hz(), cruiseSPID.get_kd_s()+0.001*(double)sim_edit_delta );
+            if (selected_value == 5) cruiseSPID.set_tunings (cruiseSPID.get_kp()+0.001*(double)sim_edit_delta, cruiseSPID.get_ki_hz(), cruiseSPID.get_kd_s());
+            if (selected_value == 6) cruiseSPID.set_tunings (cruiseSPID.get_kp(), cruiseSPID.get_ki_hz()+0.001*(double)sim_edit_delta, cruiseSPID.get_kd_s());
+            if (selected_value == 7) cruiseSPID.set_tunings (cruiseSPID.get_kp(), cruiseSPID.get_ki_hz(), cruiseSPID.get_kd_s()+0.001*(double)sim_edit_delta);
         }
         else if (dataset_page == TEMP) {
-            if (selected_value == 6) gasSPID.set_open_loop(sim_edit_delta > 0);
-            if (selected_value == 7) adj_val (&brake_pos_zeropoint_adc, sim_edit_delta, brake_pos_nom_lim_retract_adc, brake_pos_nom_lim_extend_adc);
+            if (selected_value == 6) gasSPID.set_open_loop (sim_edit_delta > 0);
+            if (selected_value == 7) adj_val (&brake_pos_zeropoint_thou, sim_edit_delta, brake_pos_nom_lim_retract_thou, brake_pos_nom_lim_extend_thou);
         }
     }
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tune");  //
+
+    // Update derived variables values in case they have changed
+    //
+    ctrl_db_adc[VERT][BOT] = (adc_range_adc-ctrl_lims_adc[ctrl][VERT][DB])/2;  // Lower threshold of vert joy deadband (ADC count 0-4095)
+    ctrl_db_adc[VERT][TOP] = (adc_range_adc+ctrl_lims_adc[ctrl][VERT][DB])/2;  // Upper threshold of vert joy deadband (ADC count 0-4095)
+    ctrl_db_adc[HORZ][BOT] = (adc_range_adc-ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Lower threshold of horz joy deadband (ADC count 0-4095)
+    ctrl_db_adc[HORZ][TOP] = (adc_range_adc+ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Upper threshold of horz joy deadband (ADC count 0-4095)
+    tach_govern_rpm = d_map ((double)gas_governor_percent, 0, 100, 0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
+    gas_pulse_govern_us = map ((int32_t)(gas_governor_percent*(tach_redline_rpm-tach_idle_rpm)/tach_redline_rpm), 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
+    carspeed_govern_mmph = d_map ((double)gas_governor_percent, 0, 100, 0, carspeed_redline_mmph);  // Governor must scale the top vehicle speed proportionally
+    
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dvars");  //
 
     // Panic stop logic and Update output signals
     //
@@ -1924,38 +1982,44 @@ void loop() {
     ignition_last = ignition; // Make sure this goes after the last comparison
     hotrc_radio_detected_last = hotrc_radio_detected;
     
-    // Heartbeat led algorithm
-    if (neopixel_heartbeat) {  // } && (disp_redraw_all || runmode != oldmode)) {
-        neopixel_heart_color[N_RED] = ((colorcard[runmode] & 0xf800) >> 11) << 3;
-        neopixel_heart_color[N_GRN] = ((colorcard[runmode] & 0x7e0) >> 5) << 2;
-        neopixel_heart_color[N_BLU] = (colorcard[runmode] & 0x1f) << 3;
-        neostrip.setPixelColor (0, neostrip.Color (neopixel_heart_color[N_BLU], neopixel_heart_color[N_RED], neopixel_heart_color[N_GRN]));
-    }
-    if (heartbeatTimer.expired()) {  // Heartbeat LED
-        if (neopixel_heartbeat && heartbeat_pulse) neopixelTimer.reset();
-        heartbeat_pulse = !heartbeat_pulse;
-        if (neopixel_heartbeat && heartbeat_pulse) neopixel_heart_fade = neopixel_brightness;
-        if (++heartbeat_state >= arraysize(heartbeat_ekg)) heartbeat_state -= arraysize(heartbeat_ekg);
-        heartbeatTimer.set(heartbeat_ekg[heartbeat_state]);
-        write_pin (heartbeat_led_pin, heartbeat_pulse);
-    }
-    else if (neopixel_heartbeat && !heartbeat_pulse && neopixel_heart_fade) {
-        neopixel_heart_fade = (int8_t)( (double)neopixel_brightness * (1 - (double)neopixelTimer.elapsed()/(double)neopixel_timeout) );
-        if (neopixel_heart_fade < 1) neopixel_heart_fade = 0;
-    }
-    if (!neopixel_heartbeat && neopixelTimer.expired()) {
-        neopixel_wheel_counter++;
-        neostrip.setPixelColor(0, colorwheel(neopixel_wheel_counter));
-        neopixelTimer.reset();
-    }
-    if (neopixel_pin >= 0) {
-        neostrip.setBrightness (neopixel_heart_fade);
-        neostrip.show();
-    }
     // printf("card: 0x%04x, cred: 0x%04x, cgrn: 0x%04x, cblu: 0x%04x, red: 0x%04x, grn: 0x%04x, blu: 0x%04x, brite: %ld\n", colorcard[runmode], (colorcard[runmode] & 0xfe00)>>11 , (colorcard[runmode] & 0x7e0)>>5, (colorcard[runmode] & 0x1f), neopixel_heart_color[N_RED], neopixel_heart_color[N_GRN], neopixel_heart_color[N_BLU], neopixel_heart_fade );
     write_pin (led_rx_pin, (sim_edit_delta <= 0));  // use these Due lights for whatever, here debugging the touchscreen
     // write_pin (led_tx_pin, !touch_now_touched);  // use these Due lights for whatever, here debugging the touchscreen
     
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "exts");  //
+
+    // Heartbeat led algorithm
+    if (neopixel_heartbeat) { // Make the neopixel into a beating heart, in the color of the current runmode 
+        neopixel_heart_color[N_RED] = ((colorcard[runmode] & 0xf800) >> 11) << 3;
+        neopixel_heart_color[N_GRN] = ((colorcard[runmode] & 0x7e0) >> 5) << 2;
+        neopixel_heart_color[N_BLU] = (colorcard[runmode] & 0x1f) << 3;
+        neostrip.setPixelColor (0, neostrip.Color (neopixel_heart_color[N_BLU], neopixel_heart_color[N_RED], neopixel_heart_color[N_GRN]));
+        if (heartbeatTimer.expired()) {
+            heartbeat_pulse = !heartbeat_pulse;
+            if (heartbeat_pulse) neopixel_heart_fade = neopixel_brightness;
+            else neopixelTimer.reset();
+            if (++heartbeat_state >= arraysize (heartbeat_ekg)) heartbeat_state -= arraysize (heartbeat_ekg);
+            heartbeatTimer.set (heartbeat_ekg[heartbeat_state]);
+        }
+        else if (!heartbeat_pulse && neopixel_heart_fade) {
+            neopixel_heart_fade = (int8_t)((double)neopixel_brightness * (1 - (double)neopixelTimer.elapsed()/(double)neopixel_timeout));
+            if (neopixel_heart_fade < 1) neopixel_heart_fade = 0;
+        }
+        if (neopixel_pin >= 0) {
+            neostrip.setBrightness (neopixel_heart_fade);
+            neostrip.show();
+        }
+    }
+    else if (neopixelTimer.expired()) {  // Just make a heartbeat on the native board led
+        heartbeat_pulse = !heartbeat_pulse;
+        if (++heartbeat_state >= arraysize (heartbeat_ekg)) heartbeat_state -= arraysize (heartbeat_ekg);
+        heartbeatTimer.set (heartbeat_ekg[heartbeat_state]);
+        write_pin (heartbeat_led_pin, heartbeat_pulse);
+        neostrip.setPixelColor (0, colorwheel (++neopixel_wheel_counter));
+        neopixelTimer.reset();
+    }
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "heart");  //
+
     // Display updates
     //
     if (display_enabled) {  // } && dispRefreshTimer.expired())  {
@@ -1969,33 +2033,33 @@ void loop() {
         disp_selected_val_dirty = false;
         disp_sidemenu_dirty = false;
         disp_runmode_dirty = false;
-    // loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d1");  //
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d1");  //
         int32_t range;
-//        draw_dyn_pid(1, carspeed_filt_mmph, 0.0, carspeed_redline_mmph, cruiseSPID.get_target());
-    // loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d1.1");  //
-//        draw_dyn_pid(2, tach_filt_rpm, 0.0, tach_redline_rpm, gasSPID.get_target());
-//        draw_dyn_pid(3, pressure_filt_psi, pressure_min_psi, pressure_max_psi, brakeSPID.get_target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
+        draw_dyn_pid(1, carspeed_filt_mmph, 0.0, carspeed_redline_mmph, cruiseSPID.get_target());
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d1.1");  //
+        draw_dyn_pid(2, tach_filt_rpm, 0.0, tach_redline_rpm, gasSPID.get_target());
+        draw_dyn_pid(3, pressure_filt_psi, pressure_min_psi, pressure_max_psi, brakeSPID.get_target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
         draw_dynamic(4, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
         draw_dynamic(5, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-//        draw_dynamic(6, cruiseSPID.get_target(), 0.0, carspeed_govern_mmph);
-//        draw_dynamic(7, brakeSPID.get_target(), pressure_min_psi, pressure_max_psi);
-//        draw_dynamic(8, gasSPID.get_target(), 0.0, tach_redline_rpm);
+        draw_dynamic(6, cruiseSPID.get_target(), 0.0, carspeed_govern_mmph);
+        draw_dynamic(7, brakeSPID.get_target(), pressure_min_psi, pressure_max_psi);
+        draw_dynamic(8, gasSPID.get_target(), 0.0, tach_redline_rpm);
         draw_dynamic(9, brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
         draw_dynamic(10, gas_pulse_out_us, gas_pulse_redline_us, gas_pulse_idle_us);
         draw_dynamic(11, steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);
-    // loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d2");  //
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d2");  //
 
         if (dataset_page == RUN) {
             draw_dynamic(12, battery_filt_mv, 0.0, battery_max_mv);
-//            draw_dynamic(13, brake_pos_filt_thou, brake_pos_nom_lim_retract_thou, brake_pos_nom_lim_extend_thou);
-//            draw_dynamic(14, pot_filt_percent, pot_min_percent, pot_max_percent);
+            draw_dynamic(13, brake_pos_filt_thou, brake_pos_nom_lim_retract_thou, brake_pos_nom_lim_extend_thou);
+            draw_dynamic(14, pot_filt_percent, pot_min_percent, pot_max_percent);
             // draw_dynamic(14, brakeSPID.get_proportionality(), -1, -1);
             draw_dynamic(15, sim_brkpos, -1, -1);
             draw_dynamic(16, sim_joy, -1, -1);
             draw_dynamic(17, sim_pressure, -1, -1);
             draw_dynamic(18, sim_tach, -1, -1);
             draw_dynamic(19, sim_speedo, -1, -1);
-// loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d3");  //
+loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d3");  //
         }
     
         else if (dataset_page == JOY) {
@@ -2010,10 +2074,10 @@ void loop() {
         }
         else if (dataset_page == CAR) {
             draw_dynamic(12, gas_governor_percent, 0, 100);
-//            draw_dynamic(13, tach_idle_rpm, 0.0, tach_redline_rpm);
-//            draw_dynamic(14, tach_redline_rpm, 0.0, tach_max_rpm);
-//            draw_dynamic(15, carspeed_idle_mmph, 0.0, carspeed_redline_mmph);
-//            draw_dynamic(16, carspeed_redline_mmph, 0.0, carspeed_max_mmph);
+            draw_dynamic(13, tach_idle_rpm, 0.0, tach_redline_rpm);
+            draw_dynamic(14, tach_redline_rpm, 0.0, tach_max_rpm);
+            draw_dynamic(15, carspeed_idle_mmph, 0.0, carspeed_redline_mmph);
+            draw_dynamic(16, carspeed_redline_mmph, 0.0, carspeed_max_mmph);
             draw_dynamic(17, ctrl, -1, -1);  // 0 if hotrc
             draw_dynamic(18, cal_joyvert_brkmotor, -1, -1);
             draw_dynamic(19, cal_pot_gasservo, -1, -1);
@@ -2029,7 +2093,7 @@ void loop() {
             draw_dynamic(19, gas_pulse_redline_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
         }
         else if (dataset_page == BPID) {
-//            range = pressure_max_psi-pressure_min_psi;
+            range = pressure_max_psi-pressure_min_psi;
             draw_dynamic(12, (int32_t)brakeSPID.get_error(), -range, range);
             draw_dynamic(13, (int32_t)brakeSPID.get_p_term(), -range, range);
             draw_dynamic(14, (int32_t)brakeSPID.get_i_term(), -range, range);
@@ -2069,7 +2133,7 @@ void loop() {
             draw_dynamic(16, (int32_t)temps[WHEEL_RL], -1, -1);
             draw_dynamic(17, (int32_t)temps[WHEEL_RR], -1, -1);
             draw_dynamic(18, gasSPID.get_open_loop(), -1, -1);
-//            draw_dynamic(19, brake_pos_zeropoint_thou, brake_pos_nom_lim_retract_thou, brake_pos_nom_lim_extend_thou);   
+            draw_dynamic(19, brake_pos_zeropoint_thou, brake_pos_nom_lim_retract_thou, brake_pos_nom_lim_extend_thou);   
         }
 
         draw_bool ((runmode == CAL), 2);
@@ -2077,6 +2141,7 @@ void loop() {
         draw_bool (ignition, 4);
         draw_bool (syspower, 5);
     }
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d4");  //
 
     // Do the control loop bookkeeping at the end of each loop
     //
@@ -2086,14 +2151,14 @@ void loop() {
     selected_value_last = selected_value;
     disp_redraw_all = false;
     if (runmode != SHUTDOWN) shutdown_complete = false;
-    if (runmode != oldmode) we_just_switched_modes = true;      // If changing runmode, set this so new mode logic can perform initial actions
-    else we_just_switched_modes = false;    // Reset this variable
-    oldmode = runmode;   // remember what mode we're in for next time
-    loop_period_us = loopTimer.elapsed();  // abs is to handle when mycros() overflows back to 0
+    if (runmode != oldmode) we_just_switched_modes = true;  // If changing runmode, set this so new mode logic can perform initial actions
+    else we_just_switched_modes = false; // Reset this variable
+    oldmode = runmode;  // remember what mode we're in for next time
+    loop_period_us = loopTimer.elapsed();  // us since beginning of this loop
     if (!loop_period_us) loop_period_us++;  // ensure loop period is never zero since it gets divided by
-    loop_freq_hz = (int32_t)(1000000/(double)loop_period_us);
+    loop_freq_hz = 1000000.0/(double)loop_period_us;
     loopno++;  // I like to count how many loops
-
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");  //
 
     if (serial_debugging && timestamp_loop) {
         printf ("Loop# %ld, period:%5ld us, freq:%6.1lf Hz, ints:%2ld", loopno, loop_period_us, loop_freq_hz, int_counter); // (int32_t)((double)(abs(mycros()-loopzero)/1000), (int32_t)(1000000/((double)(abs(mycros()-loopzero)));
