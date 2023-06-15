@@ -678,7 +678,7 @@ SPID cruiseSPID (cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_
 static Servo steer_servo;
 static Servo brake_servo;
 static Servo gas_servo;
-static Adafruit_NeoPixel strip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
+static Adafruit_NeoPixel neostrip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
 
 enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
 double temps[6];
@@ -748,13 +748,13 @@ void hotrc_ch4_isr(void) {  // Reads PWM signal on an input pin to determine con
 }
 uint32_t colorwheel(uint8_t WheelPos) {
     WheelPos = 255 - WheelPos;
-    if(WheelPos < 85) return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+    if(WheelPos < 85) return neostrip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
     if(WheelPos < 170) {
         WheelPos -= 85;
-        return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+        return neostrip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
     }
     WheelPos -= 170;
-    return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+    return neostrip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
 }
 
 // // Soren: This is dangerous, do not use it. After any trigger if input value stays at new level, output is stuck at pre-trigger value.
@@ -1078,82 +1078,84 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names
 }
 
 void setup() {
-    set_pin(heartbeat_led_pin, OUTPUT);
-    set_pin(encoder_a_pin, INPUT_PULLUP);
-    set_pin(encoder_b_pin, INPUT_PULLUP);
-    set_pin(encoder_sw_pin, INPUT_PULLUP);  // The esp32 pullup is too weak. Use resistor
-    set_pin(brake_pwm_pin, OUTPUT);
-    set_pin(steer_pwm_pin, OUTPUT);
-    set_pin(tft_dc_pin, OUTPUT);
-    set_pin(gas_pwm_pin, OUTPUT);
-    set_pin(ignition_pin, OUTPUT);  // drives relay to turn on/off car. Active high
-    set_pin(basicmodesw_pin, INPUT_PULLUP);
-    set_pin(tach_pulse_pin, INPUT_PULLUP);
-    set_pin(speedo_pulse_pin, INPUT_PULLUP);
-    set_pin(joy_horz_pin, INPUT);
-    set_pin(joy_vert_pin, INPUT);
-    set_pin(pressure_pin, INPUT);
-    set_pin(brake_pos_pin, INPUT);
-    set_pin(battery_pin, INPUT);
-    set_pin(hotrc_horz_pin, INPUT);
-    set_pin(hotrc_vert_pin, INPUT);
-    set_pin(hotrc_ch3_pin, INPUT);
-    set_pin(hotrc_ch4_pin, INPUT);
-    set_pin(neopixel_pin, OUTPUT);
-    set_pin(usd_cs_pin, OUTPUT);
-    set_pin(tft_cs_pin, OUTPUT);
-    set_pin(pot_wipe_pin, INPUT);
-    set_pin(button_pin, INPUT_PULLUP);    
-    set_pin(syspower_pin, OUTPUT);
-    set_pin(cruise_sw_pin, INPUT_PULLUP);
-    set_pin(tp_irq_pin, INPUT_PULLUP);
-    set_pin(led_rx_pin, OUTPUT);
-    // set_pin(led_tx_pin, OUTPUT);
-    set_pin(encoder_pwr_pin, OUTPUT);
-    // set_pin(tft_ledk_pin, OUTPUT);
-    // set_pin(onewire_pin, OUTPUT);
+    set_pin (heartbeat_led_pin, OUTPUT);
+    set_pin (encoder_a_pin, INPUT_PULLUP);
+    set_pin (encoder_b_pin, INPUT_PULLUP);
+    set_pin (encoder_sw_pin, INPUT_PULLUP);  // The esp32 pullup is too weak. Use resistor
+    set_pin (brake_pwm_pin, OUTPUT);
+    set_pin (steer_pwm_pin, OUTPUT);
+    set_pin (tft_dc_pin, OUTPUT);
+    set_pin (gas_pwm_pin, OUTPUT);
+    set_pin (ignition_pin, OUTPUT);  // drives relay to turn on/off car. Active high
+    set_pin (basicmodesw_pin, INPUT_PULLUP);
+    set_pin (tach_pulse_pin, INPUT_PULLUP);
+    set_pin (speedo_pulse_pin, INPUT_PULLUP);
+    set_pin (joy_horz_pin, INPUT);
+    set_pin (joy_vert_pin, INPUT);
+    set_pin (pressure_pin, INPUT);
+    set_pin (brake_pos_pin, INPUT);
+    set_pin (battery_pin, INPUT);
+    set_pin (hotrc_horz_pin, INPUT);
+    set_pin (hotrc_vert_pin, INPUT);
+    set_pin (hotrc_ch3_pin, INPUT);
+    set_pin (hotrc_ch4_pin, INPUT);
+    set_pin (neopixel_pin, OUTPUT);
+    set_pin (usd_cs_pin, OUTPUT);
+    set_pin (tft_cs_pin, OUTPUT);
+    set_pin (pot_wipe_pin, INPUT);
+    set_pin (button_pin, INPUT_PULLUP);    
+    set_pin (syspower_pin, OUTPUT);
+    set_pin (cruise_sw_pin, INPUT_PULLUP);
+    set_pin (tp_irq_pin, INPUT_PULLUP);
+    set_pin (led_rx_pin, OUTPUT);
+    // set_pin (led_tx_pin, OUTPUT);
+    set_pin (encoder_pwr_pin, OUTPUT);
+    // set_pin (tft_ledk_pin, OUTPUT);
+    // set_pin (onewire_pin, OUTPUT);
 
-    write_pin(ignition_pin, ignition);
-    write_pin(tft_cs_pin, HIGH);   // Prevent bus contention
-    write_pin(usd_cs_pin, HIGH);   // Prevent bus contention
-    write_pin(tft_dc_pin, LOW);
-    write_pin(led_rx_pin, LOW);  // Light up
-    // write_pin(led_tx_pin, HIGH);  // Off
-    write_pin(syspower_pin, syspower);
-    write_pin(encoder_pwr_pin, HIGH);
+    write_pin (ignition_pin, ignition);
+    write_pin (tft_cs_pin, HIGH);   // Prevent bus contention
+    write_pin (usd_cs_pin, HIGH);   // Prevent bus contention
+    write_pin (tft_dc_pin, LOW);
+    write_pin (led_rx_pin, LOW);  // Light up
+    // write_pin (led_tx_pin, HIGH);  // Off
+    write_pin (syspower_pin, syspower);
+    write_pin (encoder_pwr_pin, HIGH);
 
-    analogReadResolution(adc_bits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
-    Serial.begin(115200);  // Open serial port
+    analogReadResolution (adc_bits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
+    Serial.begin (115200);  // Open serial port
     // printf("Serial port open\n");  // This works on Due but not ESP32
     
+    for (int32_t x=0; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
+    
     if (display_enabled) {
-        Serial.print(F("Init LCD... "));
-        delay(500); // This is needed to allow the screen board enough time after a cold boot before we start trying to talk to it.
+        Serial.print (F("Init LCD... "));
+        delay (500); // This is needed to allow the screen board enough time after a cold boot before we start trying to talk to it.
         tft.begin();
-        tft.setRotation(1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
-        for (int32_t lineno=0; lineno <= arraysize(telemetry); lineno++)  {
+        tft.setRotation (1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
+        for (int32_t lineno=0; lineno <= arraysize (telemetry); lineno++)  {
             disp_age_quanta[lineno] = -1;
-            memset(disp_values[lineno],0,strlen(disp_values[lineno]));
+            memset (disp_values[lineno],0,strlen (disp_values[lineno]));
         }
-        for (int32_t row=0; row<arraysize(disp_bool_values); row++) disp_bool_values[row] = 1;
-        for (int32_t row=0; row<arraysize(disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
-        for (int32_t row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
+        for (int32_t row=0; row<arraysize (disp_bool_values); row++) disp_bool_values[row] = 1;
+        for (int32_t row=0; row<arraysize (disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
+        for (int32_t row=0; row<arraysize (disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
 
-        tft.fillScreen(BLK);  // Black out the whole screen
-        draw_fixed(false);
-        draw_touchgrid(false);
-        Serial.println(F("Success"));
+        tft.fillScreen (BLK);  // Black out the whole screen
+        draw_fixed (false);
+        draw_touchgrid (false);
+        Serial.println (F("Success"));
 
         Serial.print(F("Captouch initialization... "));
         if (! touchpanel.begin(40)) {     // pass in 'sensitivity' coefficient
-            Serial.println(F("Couldn't start FT6206 touchscreen controller"));
+            Serial.println (F("Couldn't start FT6206 touchscreen controller"));
             // while (1);
         }
-        else Serial.println(F("Capacitive touchscreen started"));
+        else Serial.println (F("Capacitive touchscreen started"));
     }
-    strip.begin();  // start datastream
-    strip.show();  // Turn off the pixel
-    strip.setBrightness(neopixel_brightness);  // It truly is incredibly bright
+    neostrip.begin();  // start datastream
+    neostrip.show();  // Turn off the pixel
+    neostrip.setBrightness (neopixel_brightness);  // It truly is incredibly bright
     // 230417 removing sdcard init b/c boot is hanging here unless I insert this one precious SD card
     // Serial.print(F("Initializing filesystem...  "));  // SD card is pretty straightforward, a single call. 
     // if (! sd.begin(usd_cs_pin, SD_SCK_MHZ(25))) {   // ESP32 requires 25 mhz limit
@@ -1164,50 +1166,89 @@ void setup() {
     // Serial.println(F("Filesystem started"));
 
     // Set up our interrupts
-    Serial.print(F("Interrupts... "));
-    attachInterrupt(digitalPinToInterrupt(tach_pulse_pin), tach_isr, RISING);
-    attachInterrupt(digitalPinToInterrupt(speedo_pulse_pin), speedo_isr, RISING);
-    attachInterrupt(digitalPinToInterrupt(encoder_a_pin), encoder_a_isr, CHANGE); // One type of encoder (e.g. Panasonic EVE-YBCAJ016B) needs Rising int on pin A only
-    attachInterrupt(digitalPinToInterrupt(encoder_b_pin), encoder_b_isr, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(hotrc_vert_pin), hotrc_vert_isr, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(hotrc_horz_pin), hotrc_horz_isr, FALLING);
-    attachInterrupt(digitalPinToInterrupt(hotrc_ch3_pin), hotrc_ch3_isr, FALLING);
-    attachInterrupt(digitalPinToInterrupt(hotrc_ch4_pin), hotrc_ch4_isr, FALLING);
+    Serial.print (F("Interrupts... "));
+    attachInterrupt (digitalPinToInterrupt(tach_pulse_pin), tach_isr, RISING);
+    attachInterrupt (digitalPinToInterrupt(speedo_pulse_pin), speedo_isr, RISING);
+    // attachInterrupt (digitalPinToInterrupt(encoder_a_pin), encoder_a_rise_isr, RISING); // One type of encoder (e.g. Panasonic EVE-YBCAJ016B) needs Rising int on pin A only
+    // attachInterrupt (digitalPinToInterrupt(encoder_a_pin), encoder_a_fall_isr, FALLING); // One type of encoder (e.g. Panasonic EVE-YBCAJ016B) needs Rising int on pin A only
+    attachInterrupt (digitalPinToInterrupt(encoder_a_pin), encoder_a_isr, CHANGE);
+    attachInterrupt (digitalPinToInterrupt(encoder_b_pin), encoder_b_isr, CHANGE);
+    // attachInterrupt (digitalPinToInterrupt(hotrc_vert_pin), hotrc_vert_rise_isr, RISING);
+    // attachInterrupt (digitalPinToInterrupt(hotrc_vert_pin), hotrc_vert_fall_isr, FALLING);
+    attachInterrupt (digitalPinToInterrupt(hotrc_vert_pin), hotrc_vert_isr, CHANGE);
+    attachInterrupt (digitalPinToInterrupt(hotrc_horz_pin), hotrc_horz_isr, FALLING);
+    attachInterrupt (digitalPinToInterrupt(hotrc_ch3_pin), hotrc_ch3_isr, FALLING);
+    attachInterrupt (digitalPinToInterrupt(hotrc_ch4_pin), hotrc_ch4_isr, FALLING);
     
-    Serial.println(F("set up and enabled\n"));
+    Serial.println (F("set up and enabled\n"));
     
     // Set up the soren pid loops
-    brakeSPID.set_output_center((double)brake_pulse_stop_us);  // Sets actuator centerpoint and puts pid loop in output centerpoint mode. Becasue actuator value is defined as a deviation from a centerpoint
-    brakeSPID.set_input_limits((double)pressure_min_adc, (double)pressure_max_adc);  // Make sure pressure target is in range
-    brakeSPID.set_output_limits((double)brake_pulse_retract_us, (double)brake_pulse_extend_us);
-    gasSPID.set_input_limits((double)tach_idle_rpm, (double)tach_govern_rpm);
-    gasSPID.set_output_limits((double)gas_pulse_govern_us, (double)gas_pulse_idle_us);
-    cruiseSPID.set_input_limits((double)carspeed_idle_mmph, (double)carspeed_govern_mmph);
-    cruiseSPID.set_output_limits((double)tach_idle_rpm, (double)tach_govern_rpm);
+    brakeSPID.set_output_center ((double)brake_pulse_stop_us);  // Sets actuator centerpoint and puts pid loop in output centerpoint mode. Becasue actuator value is defined as a deviation from a centerpoint
+//    brakeSPID.set_input_limits (pressure_min_psi, pressure_max_psi);  // Make sure pressure target is in range
+    brakeSPID.set_output_limits ((double)brake_pulse_retract_us, (double)brake_pulse_extend_us);
+    gasSPID.set_input_limits (tach_idle_rpm, tach_govern_rpm);
+    gasSPID.set_output_limits ((double)gas_pulse_govern_us, (double)gas_pulse_idle_us);
+    cruiseSPID.set_input_limits (carspeed_idle_mmph, carspeed_govern_mmph);
+    cruiseSPID.set_output_limits (tach_idle_rpm, tach_govern_rpm);
       
-    steer_servo.attach(steer_pwm_pin);
-    brake_servo.attach(brake_pwm_pin);
-    gas_servo.attach(gas_pwm_pin);
+    steer_servo.attach (steer_pwm_pin);
+    brake_servo.attach (brake_pwm_pin);
+    gas_servo.attach (gas_pwm_pin);
 
     neopixel_heartbeat = (neopixel_pin >= 0);
-    strip.begin();
-    strip.show(); // Initialize all pixels to 'off'
-    strip.setBrightness(neopixel_brightness);
+    neostrip.begin();
+    neostrip.show(); // Initialize all pixels to 'off'
+    neostrip.setBrightness (neopixel_brightness);
 
+    tempsensebus.setWaitForConversion (true);  // Do not block during conversion process
+    tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
     tempsensebus.begin();
-    printf ("Temp sensors: Found %d devices.\nParasitic power is: ", tempsensebus.getDeviceCount());  // , DEC);
-    printf ( (tempsensebus.isParasitePowerMode()) ? "On\n" : "Off\n" );
-    for (int32_t x = 0; x < arraysize(tempsensor); x++) {
-        if (!tempsensebus.getAddress(tempsensor[x], x)) printf ("Failed to find temp sensor %d\n", x);  // printAddress (tempsensor[x]);
-        tempsensebus.setResolution (tempsensor[x], temperature_precision);
-    }
-    
+//    temp_detected_device_ct = tempsensebus.getDeviceCount();
+//    printf ("Temp sensors: Detected %d devices.\nParasitic power is: ", temp_detected_device_ct);  // , DEC);
+    printf ((tempsensebus.isParasitePowerMode()) ? "On\n" : "Off\n");
+    // for (int32_t x = 0; x < arraysize(temp_addrs); x++) {
+    // for (int32_t x = 0; x < temp_detected_device_ct; x++) {
+    //     if (tempsensebus.getAddress (temp_temp_addr, x)) printf ("Found sensor device: index %d, addr %d\n", x, temp_temp_addr);  // temp_addrs[x]
+    //     else printf ("Found ghost device : index %d, addr unknown\n", x);  // printAddress (temp_addrs[x]);
+    //     tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
+    // }
+    // // Serial.println ("Before blocking requestForConversion");
+    // unsigned long start = mycros();
+    // tempsensebus.requestTemperatures();
+    // unsigned long stop = mycros();
+    // Serial.println ("After blocking requestForConversion");
+    // Serial.print ("Time used: ");
+    // Serial.println (stop - start);
+    // Serial.print ("Temperature: ");  // get temperature
+    // Serial.println (tempsensebus.getTempCByIndex(0));
+    // Serial.println ("Before NON-blocking/async requestForConversion");
+    // start = mycros();
+    // tempsensebus.setWaitForConversion (false);  // makes it async
+    // tempsensebus.requestTemperatures();
+    // tempsensebus.setWaitForConversion (true);
+    // stop = mycros();
+    // Serial.println ("After NON-blocking/async requestForConversion");
+    // Serial.print ("Time used: ");
+    // Serial.println (stop - start);
+    // delay (750 / (1 << (12 - temperature_precision)));
+    // Serial.print ("Temperature: ");  // get temperature
+    // Serial.println (tempsensebus.getTempCByIndex(0));
+  
     hotrcPanicTimer.reset();
-    hotrc_radio_detected = (ctrl_pos_adc[VERT][FILT] < hotrc_pos_failsafe_min_adc || ctrl_pos_adc[VERT][FILT] > hotrc_pos_failsafe_max_adc);
-    printf ("HotRC radio signal detected? : %d\n", hotrc_radio_detected);
-
+    
+    // if (ctrl == HOTRC) {  // Look for evidence of a normal (not failsafe) hotrc signal. If it's not yet powered on, we will ignore its spurious poweron ignition event
+    //     int32_t temp = hotrc_vert_pulse_us;
+    //     hotrc_radio_detected = ((ctrl_lims_adc[HOTRC][VERT][MIN] <= temp && temp < hotrc_pos_failsafe_min_adc) || (hotrc_pos_failsafe_max_adc < temp && temp <= ctrl_lims_adc[HOTRC][VERT][MAX]));
+    //     for (int32_t x = 0; x < 4; x++) {
+    //         delay (20);
+    //         // if (!((ctrl_lims_adc[HOTRC][VERT][MIN] < temp && temp < hotrc_pos_failsafe_min_adc) || (hotrc_pos_failsafe_max_adc < temp && temp < ctrl_lims_adc[HOTRC][VERT][MAX]))
+    //         //     || (hotrcPulseTimer.elapsed() > (int32_t)(hotrc_pulse_period_us*2.5))) hotrc_radio_detected = false;
+    //     }
+    //     printf ("HotRC radio signal: %setected\n", (!hotrc_radio_detected) ? "Not d" : "D");
+    // }
+    
     loopTimer.reset();  // start timer to measure the first loop
-    Serial.println(F("Setup finished"));
+    Serial.println (F("Setup finished"));
 }
 
 // Main loop.  Each time through we do these eight steps:
@@ -1888,7 +1929,7 @@ void loop() {
         neopixel_heart_color[N_RED] = ((colorcard[runmode] & 0xf800) >> 11) << 3;
         neopixel_heart_color[N_GRN] = ((colorcard[runmode] & 0x7e0) >> 5) << 2;
         neopixel_heart_color[N_BLU] = (colorcard[runmode] & 0x1f) << 3;
-        strip.setPixelColor (0, strip.Color (neopixel_heart_color[N_BLU], neopixel_heart_color[N_RED], neopixel_heart_color[N_GRN]));
+        neostrip.setPixelColor (0, neostrip.Color (neopixel_heart_color[N_BLU], neopixel_heart_color[N_RED], neopixel_heart_color[N_GRN]));
     }
     if (heartbeatTimer.expired()) {  // Heartbeat LED
         if (neopixel_heartbeat && heartbeat_pulse) neopixelTimer.reset();
@@ -1904,12 +1945,12 @@ void loop() {
     }
     if (!neopixel_heartbeat && neopixelTimer.expired()) {
         neopixel_wheel_counter++;
-        strip.setPixelColor(0, colorwheel(neopixel_wheel_counter));
+        neostrip.setPixelColor(0, colorwheel(neopixel_wheel_counter));
         neopixelTimer.reset();
     }
     if (neopixel_pin >= 0) {
-        strip.setBrightness (neopixel_heart_fade);
-        strip.show();
+        neostrip.setBrightness (neopixel_heart_fade);
+        neostrip.show();
     }
     // printf("card: 0x%04x, cred: 0x%04x, cgrn: 0x%04x, cblu: 0x%04x, red: 0x%04x, grn: 0x%04x, blu: 0x%04x, brite: %ld\n", colorcard[runmode], (colorcard[runmode] & 0xfe00)>>11 , (colorcard[runmode] & 0x7e0)>>5, (colorcard[runmode] & 0x1f), neopixel_heart_color[N_RED], neopixel_heart_color[N_GRN], neopixel_heart_color[N_BLU], neopixel_heart_fade );
     write_pin (led_rx_pin, (sim_edit_delta <= 0));  // use these Due lights for whatever, here debugging the touchscreen
