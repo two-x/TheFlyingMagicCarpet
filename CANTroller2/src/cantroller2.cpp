@@ -115,8 +115,8 @@ using namespace std;
     #define tach_pulse_pin 35  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
     #define speedo_pulse_pin 36  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
     #define ignition_pin 37  // (spi-ram / oct-spi) - Output flips a relay to kill the car ignition, active high (no pullup)
-    #define fun_pin 38  // (spi-ram / oct-spi) - Available
-    #define onewire_pin 39  // Onewire bus for temperature sensor data
+    #define onewire_pin 38  // // (spi-ram / oct-spi) - Onewire bus for temperature sensor data
+    #define tft_rst_pin 39  // TFT Reset
     #define encoder_b_pin 40  // Int input, The B pin (aka DT pin) of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
     #define encoder_a_pin 41  // Int input, The A pin (aka CLK pin) of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
     #define encoder_sw_pin 42  // Int input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
@@ -152,7 +152,7 @@ using namespace std;
     #define syspower_pin 27  // Output, flips a relay to power all the tranducers
     #define steer_pwm_pin 29  // Output, PWM signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
     #define onewire_pin 31  // For temperature sensors
-    #define fun_pin 33  // Available
+    #define tft_rst_pin 33  // TFT Reset
     #define hotrc_horz_pin 35
     #define hotrc_vert_pin 37
     #define hotrc_ch3_pin 39
@@ -355,7 +355,7 @@ int32_t disp_needles[disp_lines];
 int32_t disp_targets[disp_lines];
 int32_t disp_age_quanta[disp_lines];
 Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
-Timer dispRefreshTimer (50000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
+Timer dispRefreshTimer (100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
 
 // tuning-ui related globals
 enum tuning_ctrl_states { OFF, SELECT, EDIT };
@@ -616,6 +616,9 @@ uint32_t looptimes_us[20];
 std::vector<string> loop_names(20);
 bool loop_dirty[20];
 int32_t loopindex = 0;
+Timer tftResetTimer (100000);
+Timer tftDelayTimer (3000000);
+int32_t timing_tft_reset = 0; 
 Timer heartbeatTimer (1000000);
 int32_t heartbeat_state = 0;
 int32_t heartbeat_level = 0;
@@ -633,7 +636,7 @@ bool button_it = 0;
 // external signal related
 bool ignition = LOW;
 bool ignition_last = ignition;
-bool syspower = LOW;
+bool syspower = HIGH;
 bool syspower_last = syspower;
 bool basicmodesw = LOW;
 bool cruise_sw = LOW;
@@ -1406,6 +1409,8 @@ void loop() {
         pressure_psi = convert_units ((double)analogRead (pressure_pin), pressure_convert_psi_per_adc, pressure_convert_invert);  // Brake pressure.  Read sensor, then Remove noise spikes from brake feedback, if reading is otherwise in range
         ema_filt (pressure_psi, &pressure_filt_psi, pressure_ema_alpha);  // Sensor EMA filter
     }
+    
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //
 
     // Controller handling
     //
