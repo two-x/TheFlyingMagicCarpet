@@ -433,7 +433,7 @@ double battery_ema_alpha = 0.01;  // alpha value for ema filtering, lower is mor
 int32_t pot_adc = adc_midscale_adc;
 int32_t pot_filt_adc = pot_adc;
 //  ---- tunable ----
-double pot_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+double pot_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 int32_t pot_min_adc = 0;  // TUNED 230603
 int32_t pot_max_adc = 3996;  // TUNED 230604
 
@@ -497,10 +497,10 @@ int32_t pressure_max_adc = 2246;  // TUNED 230602 - Highest possible pressure ac
 // brake actuator motor related
 int32_t brake_pulse_out_us;  // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
 //  ---- tunable ----
-int32_t brake_hold_initial_adc = 1200;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
-int32_t brake_hold_increment_adc = 25;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
-int32_t brake_panic_initial_adc = 1800;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
-int32_t brake_panic_increment_adc = 50;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
+int32_t pressure_hold_initial_adc = 1200;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
+int32_t pressure_hold_increment_adc = 25;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
+int32_t pressure_panic_initial_adc = 1800;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
+int32_t pressure_panic_increment_adc = 50;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 Timer brakeIntervalTimer(500000);  // How much time between increasing brake force during auto-stop if car still moving?
 int32_t brake_increment_interval_us = 500000;  // How often to apply increment during auto-stopping (in us)
 int32_t brake_pulse_retract_min_us = 500;  // Smallest pulsewidth acceptable to jaguar
@@ -1132,6 +1132,34 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names
     }
 }
 
+void init_tft (void) {
+    if (display_enabled) {
+        Serial.print (F("Init LCD... "));
+        // delay (500); // This is needed to allow the screen board enough time after a cold boot before we start trying to talk to it.
+        tft.begin();
+        tft.setRotation (1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
+        for (int32_t lineno=0; lineno <= arraysize (telemetry); lineno++)  {
+            disp_age_quanta[lineno] = -1;
+            memset (disp_values[lineno],0,strlen (disp_values[lineno]));
+        }
+        for (int32_t row=0; row<arraysize (disp_bool_values); row++) disp_bool_values[row] = 1;
+        for (int32_t row=0; row<arraysize (disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
+        for (int32_t row=0; row<arraysize (disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
+
+        tft.fillScreen (BLK);  // Black out the whole screen
+        draw_fixed (false);
+        draw_touchgrid (false);
+        Serial.println (F("Success"));
+
+        Serial.print(F("Captouch initialization... "));
+        if (! touchpanel.begin(40)) {     // pass in 'sensitivity' coefficient
+            Serial.println (F("Couldn't start FT6206 touchscreen controller"));
+            // while (1);
+        }
+        else Serial.println (F("Capacitive touchscreen started"));
+    }
+}
+
 void setup() {
     set_pin (heartbeat_led_pin, OUTPUT);
     set_pin (encoder_a_pin, INPUT_PULLUP);
@@ -1186,30 +1214,32 @@ void setup() {
     for (int32_t x=0; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
     
     if (display_enabled) {
-        Serial.print(F("Init LCD... "));
-        delay(500); // This is needed to allow the screen board enough time after a cold boot before we start trying to talk to it.
-        tft.begin();
-        tft.setRotation(1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
-        for (int32_t lineno=0; lineno <= arraysize(telemetry); lineno++)  {
-            disp_age_quanta[lineno] = -1;
-            memset(disp_values[lineno],0,strlen(disp_values[lineno]));
+        delay (500); // This is needed to allow the screen board enough time after a cold boot before we start trying to talk to it.
+        init_tft();
         }
-        for (int32_t row=0; row<arraysize(disp_bool_values); row++) disp_bool_values[row] = 1;
-        for (int32_t row=0; row<arraysize(disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
-        for (int32_t row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
+    //     Serial.print (F("Init LCD... "));
+    //     tft.begin();
+    //     tft.setRotation (1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
+    //     for (int32_t lineno=0; lineno <= arraysize (telemetry); lineno++)  {
+    //         disp_age_quanta[lineno] = -1;
+    //         memset (disp_values[lineno],0,strlen (disp_values[lineno]));
+    //     }
+    //     for (int32_t row=0; row<arraysize (disp_bool_values); row++) disp_bool_values[row] = 1;
+    //     for (int32_t row=0; row<arraysize (disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
+    //     for (int32_t row=0; row<arraysize (disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
 
-        tft.fillScreen(BLK);  // Black out the whole screen
-        draw_fixed(false);
-        draw_touchgrid(false);
-        Serial.println(F("Success"));
+    //     tft.fillScreen (BLK);  // Black out the whole screen
+    //     draw_fixed (false);
+    //     draw_touchgrid (false);
+    //     Serial.println (F("Success"));
 
-        Serial.print(F("Captouch initialization... "));
-        if (! touchpanel.begin(40)) {     // pass in 'sensitivity' coefficient
-            Serial.println(F("Couldn't start FT6206 touchscreen controller"));
-            // while (1);
-        }
-        else Serial.println(F("Capacitive touchscreen started"));
-    }
+    //     Serial.print(F("Captouch initialization... "));
+    //     if (! touchpanel.begin(40)) {     // pass in 'sensitivity' coefficient
+    //         Serial.println (F("Couldn't start FT6206 touchscreen controller"));
+    //         // while (1);
+    //     }
+    //     else Serial.println (F("Capacitive touchscreen started"));
+    // }
     neostrip.begin();  // start datastream
     neostrip.show();  // Turn off the pixel
     neostrip.setBrightness (neopixel_brightness);  // It truly is incredibly bright
@@ -1351,21 +1381,21 @@ void loop() {
     battery_mv = (int32_t)(battery_max_mv*((double)battery_adc)/adc_range_adc);  // convert adc value read into mV    
     ema_filt (battery_mv, &battery_filt_mv, battery_ema_alpha);  // Apply EMA filter
 
-    // Brake position
+       // Brake position - takes 70 us to read, convert, and filter
     if (!simulating || !sim_brkpos) {
         brake_pos_adc = analogRead(brake_pos_pin);
         ema_filt (brake_pos_adc, &brake_pos_filt_adc, brake_pos_ema_alpha);
     }
     else brake_pos_filt_adc = (brake_pos_nom_lim_retract_adc + brake_pos_zeropoint_adc)/2;  // To keep brake position in legal range during simulation
     
-    // Tach
+    // Tach - takes 22 us to read when no activity
     if (!simulating || !sim_tach) {
         if (tachPulseTimer.elapsed() < tach_stop_timeout_us) tach_rpm = (int32_t)(60000000/(double)tach_delta_us);  // Tachometer magnets/us * 60000000 (1 rot/magnet * 1000000 us/sec * 60 sec/min) gives rpm
         else tach_rpm = 0;  // If timeout since last magnet is exceeded
         ema_filt (tach_rpm, &tach_filt_rpm, tach_ema_alpha);  // Sensor EMA filter
     }
     
-    // Speedo
+    // Speedo - takes 14 us to read when no activity
     if (!simulating || !sim_speedo) { 
         if (speedoPulseTimer.elapsed() < speedo_stop_timeout_us) carspeed_mmph = (int32_t)(179757270/(double)speedo_delta_us); // Update car speed value  
         else carspeed_mmph = 0;     
@@ -1374,16 +1404,18 @@ void loop() {
         // Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
     }
 
-    // Brake pressure
+    // Brake pressure - takes 72 us to read
     if (!simulating || !sim_pressure) {
         pressure_adc = analogRead(pressure_pin);  // Brake pressure.  Read sensor, then Remove noise spikes from brake feedback, if reading is otherwise in range
         ema_filt (pressure_adc, &pressure_filt_adc, pressure_ema_alpha);  // Sensor EMA filter
         // pressure_psi = (int32_t)(1000*(double)(pressure_adc)/adc_range_adc);      // Convert pressure to units of psi
     }
 
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //
+
     // Controller handling
     //
-    // Read horz and vert inputs
+    // Read horz and vert inputs - takes 40 us to read
     if (!simulating || !sim_joy) {  // If not simulating or joystick simulation is disabled
         if (ctrl == HOTRC) {  // If using hotrc handle
             ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_vert_max_us, hotrc_pulse_vert_min_us, ctrl_lims_adc[ctrl][VERT][MAX], ctrl_lims_adc[ctrl][VERT][MIN]);
@@ -1394,27 +1426,28 @@ void loop() {
             ctrl_pos_adc[HORZ][RAW] = constrain (ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);   
         }
         else {  // If using old joystick
-            ctrl_pos_adc[VERT][RAW] = analogRead(joy_vert_pin);  // Read joy vertical
-            ctrl_pos_adc[HORZ][RAW] = analogRead(joy_horz_pin);  // Read joy horizontal
+            ctrl_pos_adc[VERT][RAW] = analogRead (joy_vert_pin);  // Read joy vertical
+            ctrl_pos_adc[HORZ][RAW] = analogRead (joy_horz_pin);  // Read joy horizontal
         }        
         if (ctrl_pos_adc[VERT][RAW] > ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][RAW] < ctrl_db_adc[VERT][TOP])  ctrl_pos_adc[VERT][FILT] = adc_midscale_adc;  // if joy vert is in the deadband, set joy_vert_filt to center value
         else ema_filt (ctrl_pos_adc[VERT][RAW], &ctrl_pos_adc[VERT][FILT], ctrl_ema_alpha[ctrl]);  // otherwise do ema filter to determine joy_vert_filt
         if (ctrl_pos_adc[HORZ][RAW] > ctrl_db_adc[HORZ][BOT] && ctrl_pos_adc[HORZ][RAW] < ctrl_db_adc[HORZ][TOP])  ctrl_pos_adc[HORZ][FILT] = adc_midscale_adc;  // if joy horz is in the deadband, set joy_horz_filt to center value
         else ema_filt (ctrl_pos_adc[HORZ][RAW], &ctrl_pos_adc[HORZ][FILT], ctrl_ema_alpha[ctrl]);  // otherwise do ema filter to determine joy_horz_filt
     }
-    // Determine steering pwm output
+ 
+    // Determine steering pwm output - takes 13 us to handle
     if (runmode != SHUTDOWN || !shutdown_complete)  { // Unless fully shut down at the moment, set the steering output
         if (ctrl_pos_adc[HORZ][FILT] >= ctrl_db_adc[HORZ][TOP]) {
-            steer_pulse_safe_us = steer_pulse_stop_us + (int32_t)( (double)(steer_pulse_right_us - steer_pulse_stop_us) * (1 - ( (double)steer_safe_percent * carspeed_filt_mmph / ((double)carspeed_redline_mmph * 100) ) ) );
+            steer_pulse_safe_us = steer_pulse_stop_us + (int32_t)((double)(steer_pulse_right_us - steer_pulse_stop_us) * (1 - ((double)steer_safe_percent * carspeed_filt_mmph / ((double)carspeed_redline_mmph * 100) )));
             steer_pulse_out_us = map (ctrl_pos_adc[HORZ][FILT], ctrl_db_adc[HORZ][TOP], ctrl_lims_adc[ctrl][HORZ][MAX], steer_pulse_stop_us, steer_pulse_safe_us);  // Figure out the steering setpoint if joy to the right of deadband
         }
         else if (ctrl_pos_adc[HORZ][FILT] <= ctrl_db_adc[HORZ][BOT]) {
-            steer_pulse_safe_us = steer_pulse_stop_us - (int32_t)( (double)(steer_pulse_stop_us - steer_pulse_left_us) * (1 - ( (double)steer_safe_percent * carspeed_filt_mmph / ((double)carspeed_redline_mmph * 100) ) ) );
+            steer_pulse_safe_us = steer_pulse_stop_us - (int32_t)((double)(steer_pulse_stop_us - steer_pulse_left_us) * (1 - ((double)steer_safe_percent * carspeed_filt_mmph / ((double)carspeed_redline_mmph * 100) )));
             steer_pulse_out_us = map (ctrl_pos_adc[HORZ][FILT], ctrl_db_adc[HORZ][BOT], ctrl_lims_adc[ctrl][HORZ][MIN], steer_pulse_stop_us, steer_pulse_safe_us);  // Figure out the steering setpoint if joy to the left of deadband
         }
         else steer_pulse_out_us = steer_pulse_stop_us;  // Stop the steering motor if inside the deadband
     }
-    // Handle HotRC button generated events and detect potential loss of radio signal
+    // Handle HotRC button generated events and detect potential loss of radio signal - takes 15 us to handle
     if (ctrl == HOTRC) {
         if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition
             if (hotrc_suppress_next_event) hotrc_suppress_next_event = false;
@@ -1441,112 +1474,114 @@ void loop() {
         }
     }
 
-    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "joy");  //
     
-    // Runmode state machine. Gas/brake control targets are determined here. 
+    // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     //
     // printf("mode: %d, panic: %d, vpos: %4ld, min: %4ld, max: %4ld, elaps: %6ld", runmode, panic_stop, ctrl_pos_adc[VERT][FILT], hotrc_pos_failsafe_min_adc, hotrc_pos_failsafe_max_adc, hotrcPanicTimer.elapsed());
     if (basicmodesw) runmode = BASIC;  // if basicmode switch on --> Basic Mode
     else if (runmode != CAL && (panic_stop || !ignition)) runmode = SHUTDOWN;
     else if (runmode != CAL && !tach_filt_rpm) runmode = STALL;  // otherwise if engine not running --> Stall Mode
     
-    if (runmode == BASIC)  {  // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering stell works.
+    if (runmode == BASIC) {  // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering stell works.
         if (we_just_switched_modes) {  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
-//            syspower = HIGH;  // Power up devices if not already
+            // syspower = HIGH;  // Power up devices if not already
             gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
             motorParkTimer.reset();  // Set a timer to timebox this effort
             park_the_motors = true;  // Flags the motor parking to happen
         }
-        if ((!basicmodesw) && tach_filt_rpm) runmode = HOLD;  // If we turned off the basic mode switch with engine running, go to Hold mode. If engine is not running, we'll end up in Stall Mode automatically
+        if (tach_filt_rpm && !basicmodesw) runmode = HOLD;  // If we turned off the basic mode switch with engine running, go to Hold mode. If engine is not running, we'll end up in Stall Mode automatically
     }
-    else if (runmode == SHUTDOWN)  { // In shutdown mode we stop the car if it's moving then park the motors.
+    else if (runmode == SHUTDOWN) { // In shutdown mode we stop the car if it's moving then park the motors.
         if (ignition && !panic_stop) {
-//            syspower = HIGH;  // Power up devices if not already
+            // syspower = HIGH;  // Power up devices if not already
             runmode = STALL;
         }
-        else if (we_just_switched_modes)  {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
-            tach_target_rpm = tach_idle_rpm;  //  Release the throttle 
+        else if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
+            gasSPID.set_target (tach_idle_rpm);  //  Release the throttle 
             shutdown_complete = false;
             shutdown_color = LPNK;
             calmode_request = false;
-            if (carspeed_filt_mmph)  {
-                pressure_target_adc = (panic_stop) ? brake_panic_initial_adc : brake_hold_initial_adc;  // More brakes, etc. to stop the car
+            if (carspeed_filt_mmph) {
+                if (panic_stop && brakeSPID.get_target() < pressure_panic_initial_adc) brakeSPID.set_target (pressure_panic_initial_adc);
+                if (!panic_stop && brakeSPID.get_target() < pressure_hold_initial_adc) brakeSPID.set_target (pressure_hold_initial_adc);
                 brakeIntervalTimer.reset();
                 sanityTimer.reset();
             }
         }
-        if (!shutdown_complete)  {  // If we haven't yet stopped the car and then released the brakes and gas all the way
-            if (!carspeed_filt_mmph || sanityTimer.expired())  {  // If car has stopped, or timeout expires, then release the brake
-                if (shutdown_color == LPNK) {
+        if (!shutdown_complete) {  // If we haven't yet stopped the car and then released the brakes and gas all the way
+            if (!carspeed_filt_mmph || sanityTimer.expired()) {  // If car has stopped, or timeout expires, then release the brake
+                if (shutdown_color == LPNK) {  // On first time through here
                     park_the_motors = true;  // Flags the motor parking to happen, only once
                     gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
                     motorParkTimer.reset();  // Set a timer to timebox this effort
                     shutdown_color = DPNK;
                     disp_runmode_dirty = true;
                 }
-                else if (!park_the_motors) {
+                else if (!park_the_motors) {  // When done parking the motors we can finish shutting down
                     shutdown_complete = true;
                     shutdown_color = colorcard[SHUTDOWN];
                     disp_runmode_dirty = true;
-//                    syspower = LOW;  // Power down devices
-                    // go to sleep?
+                    sleepInactivityTimer.reset();
                 }
             }
-            else if (brakeIntervalTimer.expired())  {
-                pressure_target_adc += (panic_stop) ? brake_panic_increment_adc : brake_hold_increment_adc;  // Slowly add more brakes until car stops
+            else if (brakeIntervalTimer.expired()) {
+                brakeSPID.set_target (brakeSPID.get_target() + (panic_stop) ? pressure_panic_increment_adc : pressure_hold_increment_adc);  // Slowly add more brakes until car stops
                 brakeIntervalTimer.reset();  
             }
             // if (abs (pressure_filt_adc - pressure_min_adc) <= pressure_margin_adc)  shutdown_complete = true;  // With this set, we will do nothing from here on out (until mode changes, i.e. ignition)
         }
         else if (calmode_request) {  // if fully shut down and cal mode requested
-//            syspower = HIGH;  // Power up devices if not already
+            // syspower = HIGH;  // Power up devices if not already
             runmode = CAL;
         }
+        else if (sleepInactivityTimer.expired()) {
+            // syspower = LOW;  // Power down devices
+            // go to sleep?    
     }
-    else if (runmode == STALL)  {   // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
-        if (tach_filt_rpm)  runmode = HOLD;  //  Enter Hold Mode if we started the car
-        if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) pressure_target_adc = pressure_min_adc;  // If in deadband or being pushed up, no pressure target
-        else pressure_target_adc = map(ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][BOT], ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_adc, pressure_max_adc);  // Scale joystick value to pressure adc setpoint
+    }
+    else if (runmode == STALL) {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
+        if (tach_filt_rpm) runmode = HOLD;  // Enter Hold Mode if we started the car
+        if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) brakeSPID.set_target (pressure_min_adc);  // If in deadband or being pushed up, no pressure target
+        else brakeSPID.set_target (map (ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][BOT], ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_adc, pressure_max_adc));  // Scale joystick value to pressure adc setpoint
         // Throttle behavior is handled in pid section
     }
-    else if (runmode == HOLD)  {
+    else if (runmode == HOLD) {
         if (we_just_switched_modes)  {  // Release throttle and push brake upon entering hold mode
-            tach_target_rpm = tach_idle_rpm;  // Let off gas (if gas using PID mode)
-            if (!carspeed_filt_mmph)  pressure_target_adc += brake_hold_increment_adc; // If the car is already stopped then just add a touch more pressure and then hold it.
-            else pressure_target_adc = brake_hold_initial_adc;  //  Otherwise, these hippies need us to stop the car for them
+            gasSPID.set_target (tach_idle_rpm);  // Let off gas (if gas using PID mode)
+            if (!carspeed_filt_mmph) brakeSPID.set_target (pressure_filt_adc + pressure_hold_increment_adc); // If the car is already stopped then just add a touch more pressure and then hold it.
+            else if (brakeSPID.get_target() < pressure_hold_initial_adc) brakeSPID.set_target (pressure_hold_initial_adc);  //  These hippies need us to stop the car for them
             brakeIntervalTimer.reset();
-            joy_centered = false;
+            sanityTimer.reset();
+            joy_centered = false;  // Fly mode will be locked until the joystick first is put at or below center
         }
-        else if (carspeed_filt_mmph && brakeIntervalTimer.expired())  { // Each interval the car is still moving, push harder
-            pressure_target_adc += brake_hold_increment_adc;  // Slowly add more brakes until car stops
+        else if (brakeIntervalTimer.expired() && !sanityTimer.expired()) {  // Each interval the car is still moving, push harder
+            if (carspeed_filt_mmph) brakeSPID.set_target (brakeSPID.get_target() + pressure_hold_increment_adc);
             brakeIntervalTimer.reset();
         }
-        pressure_target_adc = constrain(pressure_target_adc, pressure_min_adc, pressure_max_adc);  // Just make sure we don't try to push harder than we can 
-        if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) {
-            joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
+        if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
+        else if (joy_centered) runmode = FLY; // Enter Fly Mode upon joystick movement from center to above center
         }
-        if (joy_centered && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][TOP]) { 
-            runmode = FLY; // Enter Fly Mode upon joystick movement from center to above center
-        }
-    }
-    else if (runmode == FLY)  {
+    else if (runmode == FLY) {
         if (we_just_switched_modes)  {
             gesture_progress = 0;
-            gestureFlyTimer.set(gesture_flytimeout_us); // Initialize gesture timer to already-expired value
+            gestureFlyTimer.set (gesture_flytimeout_us); // Initialize gesture timer to already-expired value
             cruise_sw_held = false;
             cruiseSwTimer.reset();
             hotrc_ch4_sw_event = false;
         }
-        if (!carspeed_filt_mmph && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT])  runmode = HOLD;  // Go to Hold Mode if we have braked to a stop
+        if (!carspeed_filt_mmph) runmode = HOLD;  // Go to Hold Mode if we have come to a stop  // && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT]
         else  {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
             tach_target_rpm = tach_idle_rpm;  // Default when joystick not pressed 
             pressure_target_adc = pressure_min_adc;  // Default when joystick not pressed   
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])  {  // If we are trying to accelerate
-                tach_target_rpm = map(ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], tach_idle_rpm, tach_govern_rpm);
+                gasSPID.set_target (d_map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][TOP], (double)ctrl_lims_adc[ctrl][VERT][MAX], tach_idle_rpm, tach_govern_rpm));
             }
-            else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT])  {  // If we are trying to brake, scale joystick value to determine pressure adc setpoint
-                pressure_target_adc = map(ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][BOT], ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_adc, pressure_max_adc);
+            else gasSPID.set_target (tach_idle_rpm);  // Let off gas (if gas using PID mode)
+            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT])  {  // If we are trying to brake, scale joystick value to determine pressure adc setpoint
+                brakeSPID.set_target (d_map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][BOT], (double)ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_adc, pressure_max_adc));
             }
+            else brakeSPID.set_target (pressure_min_adc);  // Default when joystick not pressed   
         }
         // Cruise mode can be entered by pressing a physical momentary button, or by holding the brake on full for a half second. Which epends on the cruise_gesturing flag.
         // The gesture involves pushing the joystick from the center to the top, then to the bottom, then back to center, quickly enough.
@@ -1570,52 +1605,50 @@ void loop() {
             }
         }
         if (!cruise_sw) {  // If button not currently pressed
-            if (cruise_sw_held && cruiseSwTimer.expired())  runmode = CRUISE;  // If button was just held long enough, upon release enter Cruise mode
+            if (cruise_sw_held && cruiseSwTimer.expired()) runmode = CRUISE;  // After a long press of sufficient length, upon release enter Cruise mode
             cruise_sw_held = false;  // Cancel button held state
         }
-        else if (!cruise_sw_held) {  // If button is being pressed, but we aren't in button held state
+        else if (!cruise_sw_held) {  // If the button just now got pressed
             cruiseSwTimer.reset(); // Start hold time timer
-            cruise_sw_held = true;  // Get into that state
+            cruise_sw_held = true;  // Get into button held state
         }
     }
     else if (runmode == CRUISE)  {
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
-            carspeed_target_mmph = carspeed_filt_mmph;  // Begin cruising with cruise set to current speed
-            pressure_target_adc = pressure_min_adc;  // Let off the brake and keep it there till out of Cruise mode
+            cruiseSPID.set_target (carspeed_filt_mmph);
+            brakeSPID.set_target (pressure_min_adc);  // Let off the brake and keep it there till out of Cruise mode
             gestureFlyTimer.reset();  // reset gesture timer
             cruise_sw_held = false;
             hotrc_ch4_sw_event = false;
         }
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) {  // When joystick vert above center, increase the throttle target proportional to how far off center
             cruise_adjusting = true;  // Suspend pid loop control of gas
-            tach_target_rpm = map(ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], tach_filt_rpm, tach_govern_rpm);
+            gasSPID.set_target (map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][TOP], (double)ctrl_lims_adc[ctrl][VERT][MAX], tach_filt_rpm, tach_govern_rpm));
         }
         else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) {  // When joystick vert below center, decrease the throttle target proportional to how far off center
             cruise_adjusting = true;  // Suspend pid loop control of gas
-            tach_target_rpm = map(ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_db_adc[VERT][BOT], tach_idle_rpm, tach_filt_rpm);
+            gasSPID.set_target (map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_lims_adc[ctrl][VERT][MIN], (double)ctrl_db_adc[VERT][BOT], tach_idle_rpm, tach_filt_rpm));
         }
         else cruise_adjusting = false;  // if joystick at center
-        if (cruise_adjusting) {
-            carspeed_target_mmph = carspeed_filt_mmph;  // Upon return to center set speed target to current speed
-            cruiseSPID.set_target((double)carspeed_target_mmph);
-        }
+        if (cruise_adjusting) cruiseSPID.set_target (carspeed_filt_mmph);
+        
         // This old gesture trigger drops to Fly mode if joystick moved quickly from center to bottom
         // if (ctrl_pos_adc[VERT][FILT] <= ctrl_lims_adc[ctrl][VERT][MIN]+default_margin_adc && abs(mycros() - gesture_timer_us) < gesture_flytimeout_us)  runmode = FLY;  // If joystick quickly pushed to bottom 
-        // printf("hotvpuls=%ld, hothpuls=%ld, joyvfilt=%ld, joyvmin+marg=%ld, timer=%ld\n", hotrc_vert_pulse_us, hotrc_horz_pulse_us, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc, gesture_timer_us);
-        if (ctrl_pos_adc[VERT][RAW] > ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
+        // printf ("hotvpuls=%ld, hothpuls=%ld, joyvfilt=%ld, joyvmin+marg=%ld, timer=%ld\n", hotrc_vert_pulse_us, hotrc_horz_pulse_us, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc, gesture_timer_us);
+        if (ctrl_pos_adc[VERT][FILT] > ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
         else if (gestureFlyTimer.expired()) runmode = FLY;  // New gesture to drop to fly mode is hold the brake all the way down for 500 ms
-        if (cruise_sw)  cruise_sw_held = true;   // Pushing cruise button sets up return to fly mode
-        else if (cruise_sw_held) { // Release of button drops us back to fly mode
+        if (cruise_sw)  cruise_sw_held = true;  // Pushing cruise button sets up return to fly mode
+        else if (cruise_sw_held) {  // Release of button drops us back to fly mode
             cruise_sw_held = false;
             runmode = FLY;
         }
-        if (!carspeed_filt_mmph)  {  // In case we slam into a brick wall, get out of cruise mode
-            if (serial_debugging) Serial.println(F("Error: Car stopped or taken out of gear in cruise mode"));  // , carspeed_filt_mmph, neutral
+        if (!carspeed_filt_mmph) {  // In case we slam into a brick wall, get out of cruise mode
+            if (serial_debugging) Serial.println (F("Error: Car stopped or taken out of gear in cruise mode"));  // , carspeed_filt_mmph, neutral
             runmode = HOLD;  // Back to Hold Mode  
         }
     }
     else if (runmode == CAL) {
-        if (we_just_switched_modes)  {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
+        if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
             calmode_request = false;
             cal_pot_gas_ready = false;
         }
@@ -1626,95 +1659,87 @@ void loop() {
         }
     }
     else { // Obviously this should never happen
-        if (serial_debugging) Serial.println(F("Error: Invalid runmode entered"));  // ,  runmode
+        if (serial_debugging) Serial.println (F("Error: Invalid runmode entered"));  // ,  runmode
         runmode = SHUTDOWN;
     }
 
-    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "mod");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "mod");  //
 
-    // Update motor outputs
+    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
     //
-    if (pidTimer.expired() && !(runmode == SHUTDOWN && shutdown_complete))  {  // Recalculate pid and update outputs, at regular intervals
+    if (pidTimer.expired() && !(runmode == SHUTDOWN && shutdown_complete)) {  // Recalculate pid and update outputs, at regular intervals
         
+        pidTimer.reset();  // reset timer to trigger the next update
         if ( park_the_motors && ( motorParkTimer.expired() ||  //  When parking motors, IF the timeout expires OR the brake and gas motors are both close enough to the park position ...
-            ( abs(brake_pos_filt_adc - brake_pos_park_adc) <= default_margin_adc && gasServoTimer.expired() && (gas_pulse_out_us == gas_pulse_idle_us + gas_pulse_park_slack_us) ) ) )
+            ( abs(brake_pos_filt_adc - brake_pos_park_adc) <= brake_pos_margin_adc && gasServoTimer.expired() && (gas_pulse_out_us == gas_pulse_idle_us + gas_pulse_park_slack_us) ) ) )
             park_the_motors = false;  // ... THEN stop trying to park the motors
         
         // Steering
-        steer_pulse_out_us = constrain(steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);  // Don't be out of range
-        steer_servo.writeMicroseconds(steer_pulse_out_us);   // Write steering value to jaguar servo interface
+        steer_pulse_out_us = constrain (steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);  // Don't be out of range
+        steer_servo.writeMicroseconds (steer_pulse_out_us);   // Write steering value to jaguar servo interface
 
         // Brakes
-       if (runmode == CAL && cal_joyvert_brkmotor) {
+        if (runmode == CAL && cal_joyvert_brkmotor) {
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) brake_pulse_out_us = map (ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], brake_pulse_stop_us, brake_pulse_extend_us);
             else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) brake_pulse_out_us = map (ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_db_adc[VERT][BOT], brake_pulse_retract_us, brake_pulse_stop_us);
             else brake_pulse_out_us = brake_pulse_stop_us;
         }
         else if (park_the_motors) {
-            if (brake_pos_filt_adc + brake_pos_margin_adc <= brake_pos_park_adc) brake_pulse_out_us = map (brake_pos_filt_adc, brake_pos_park_adc, brake_pos_nom_lim_retract_adc, brake_pulse_stop_us, brake_pulse_extend_us); // If brake is retracted from park point, extend toward park point, slowing as we approach
-            if (brake_pos_filt_adc - brake_pos_margin_adc >= brake_pos_park_adc) brake_pulse_out_us = map (brake_pos_filt_adc, brake_pos_park_adc, brake_pos_nom_lim_extend_adc, brake_pulse_stop_us, brake_pulse_retract_us); // If brake is extended from park point, retract toward park point, slowing as we approach
+            if (brake_pos_filt_adc + brake_pos_margin_adc <= brake_pos_park_adc) brake_pulse_out_us =  // If brake is retracted from park point, extend toward park point, slowing as we approach
+                map ((int32_t)brake_pos_filt_adc, (int32_t)brake_pos_park_adc, (int32_t)brake_pos_nom_lim_retract_adc, brake_pulse_stop_us, brake_pulse_extend_us);
+            else if (brake_pos_filt_adc - brake_pos_margin_adc >= brake_pos_park_adc) brake_pulse_out_us =  // If brake is extended from park point, retract toward park point, slowing as we approach
+                map ((int32_t)brake_pos_filt_adc, (int32_t)brake_pos_park_adc, (int32_t)brake_pos_nom_lim_extend_adc, brake_pulse_stop_us, brake_pulse_retract_us);
         }
-        else if (runmode != BASIC) {  // Otherwise the pid control is active
-            pressure_target_adc = constrain(pressure_target_adc, pressure_min_adc, pressure_max_adc);  // Just make sure we don't try to push harder than we can 
-            // printf("Brake PID rm=%-+4ld target=%-+9.4lf", runmode, (double)pressure_target_adc);
-            brakeSPID.set_target(pressure_target_adc);
-            brakeSPID.compute(pressure_filt_adc);
-            brake_pulse_out_us = (int32_t)brakeSPID.get_output();
-            // printf(" output = %-+9.4lf,  %+-4ld\n", brakeSPID.get_output(), brake_pulse_out_us); 
-        }
+        else if (runmode != BASIC) brake_pulse_out_us = (int32_t)brakeSPID.compute (pressure_filt_adc);  // Otherwise the pid control is active
+        // printf("Brake PID rm=%-+4ld target=%-+9.4lf", runmode, (double)pressure_target_psi);   
+        // printf(" output = %-+9.4lf,  %+-4ld\n", brakeSPID.get_output(), brake_pulse_out_us); 
         if (runmode != BASIC || park_the_motors) {
             if (runmode == CAL && cal_joyvert_brkmotor)  // In Cal mode constrain the motor to its entire range, instead of to the calibrated limits
-                brake_pulse_out_us = constrain(brake_pulse_out_us, brake_pulse_retract_min_us, brake_pulse_extend_max_us);  // Send to the actuator. Refuse to exceed range    
+                brake_pulse_out_us = constrain (brake_pulse_out_us, brake_pulse_retract_min_us, brake_pulse_extend_max_us);  // Send to the actuator. Refuse to exceed range    
             else {  // Prevent any movement of motor which would exceed position limits. Improve this by having the motor actively go back toward position range if position is beyond either limit
                 if ( ((brake_pos_filt_adc + brake_pos_margin_adc <= brake_pos_nom_lim_retract_adc) && (brake_pulse_out_us < brake_pulse_stop_us)) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
                     ((brake_pos_filt_adc - brake_pos_margin_adc >= brake_pos_nom_lim_extend_adc) && (brake_pulse_out_us > brake_pulse_stop_us)) )  // ... or same thing in the extend direction ...
                     brake_pulse_out_us = brake_pulse_stop_us;  // ... then stop the motor
-                brake_pulse_out_us = constrain(brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);  // Send to the actuator. Refuse to exceed range    
+                brake_pulse_out_us = constrain (brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);  // Send to the actuator. Refuse to exceed range    
             } 
             brake_servo.writeMicroseconds (brake_pulse_out_us);  // Write result to jaguar servo interface
         }
         
-        // Cruise.  Controls gas rpm target based on car speed error
-        if (runmode == CRUISE && !cruise_adjusting) {  // Cruise loop updates gas rpm target to keep speed equal to cruise mmph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
-            carspeed_target_mmph = constrain(carspeed_target_mmph, 0, carspeed_redline_mmph);
-            // printf("Cruise PID rm= %+-4ld target=%-+9.4lf", runmode, (double)carspeed_target_mmph);
-            cruiseSPID.compute((double)carspeed_filt_mmph);
-            tach_target_rpm = (int32_t)cruiseSPID.get_output();
-            // printf(" output = %-+9.4lf,  %+-4ld\n", cruiseSPID.get_output(), tach_target_rpm);
-        }
+        // Cruise.  Controls gas rpm target to keep speed equal to cruise mmph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
+        if (runmode == CRUISE && !cruise_adjusting) gasSPID.set_target (cruiseSPID.compute (carspeed_filt_mmph));  // 
+            
+        // cruiseSPID.set_target carspeed_target_mmph = constrain (carspeed_target_mmph, 0, carspeed_redline_mmph);
+        // printf ("Cruise PID rm= %+-4ld target=%-+9.4lf", runmode, (double)carspeed_target_mmph);
+        // cruiseSPID.compute (carspeed_filt_mmph);
+        // tach_target_rpm
+        // printf (" output = %-+9.4lf,  %+-4ld\n", cruiseSPID.get_output(), tach_target_rpm);
+        // }
 
         // Gas.  Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
         if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_idle_us;  // If in deadband or being pushed down, we want idle
-            else gas_pulse_out_us = map(ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_idle_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
+            else gas_pulse_out_us = map (ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_idle_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
         }
         else if (runmode != BASIC) {
-            if (gasSPID.get_open_loop())  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
-                gas_pulse_out_us = map (tach_target_rpm, tach_idle_rpm, tach_govern_rpm, gas_pulse_idle_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
-            else if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) 
-                gas_pulse_out_us = map (pot_filt_adc, pot_min_adc, pot_max_adc, gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
-            else {  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
-                // printf("Gas PID   rm= %+-4ld target=%-+9.4lf", runmode, (double)tach_target_rpm);
-                tach_target_rpm = constrain(tach_target_rpm, tach_idle_rpm, tach_govern_rpm);  // Make sure desired rpm isn't out of range (due to crazy pid math, for example)
-                gasSPID.set_target((double)tach_target_rpm);
-                gasSPID.compute((double)tach_filt_rpm);
-                gas_pulse_out_us = (int32_t)gasSPID.get_output();
-                // printf(" output = %-+9.4lf,  %+-4ld\n", gasSPID.get_output(), gas_pulse_out_us);
-            }
+            if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) 
+                gas_pulse_out_us = (int32_t)(d_map (pot_filt_adc, pot_min_adc, pot_max_adc, (double)gas_pulse_ccw_max_us, (double)gas_pulse_cw_min_us));
+            else if (gasSPID.get_open_loop())  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
+                gas_pulse_out_us = map (gasSPID.get_target(), tach_idle_rpm, tach_govern_rpm, gas_pulse_idle_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
+            else gas_pulse_out_us = (int32_t)gasSPID.compute (tach_filt_rpm);  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
+            // printf ("Gas PID   rm= %+-4ld target=%-+9.4lf", runmode, (double)tach_target_rpm);
+            // printf (" output = %-+9.4lf,  %+-4ld\n", gasSPID.get_output(), gas_pulse_out_us);
         }
         if (runmode != BASIC || park_the_motors) {
             if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo)
-                gas_pulse_out_us = constrain(gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
-            else gas_pulse_out_us = constrain(gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_idle_us);
+                gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
+            else gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_idle_us);
             gas_servo.writeMicroseconds (gas_pulse_out_us);  // Write result to servo
         }
 
         pidTimer.reset();  // reset timer to trigger the next update
     }
 
-    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
-    
     // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
     //
     // This section should become a real time self-diagnostic system, to look for anything that doesn't seem right and display an
@@ -1737,13 +1762,15 @@ void loop() {
     //  11. The control system has nonsensical values in its variables.
     //
     if (!ignition && ignition_last && tach_filt_rpm > 0) { // See if the engine is turning despite the ignition being off
-        Serial.println(F("Detected engine rotation in the absense of ignition signal"));  // , tach_filt_rpm, ignition
+        Serial.println (F("Detected engine rotation in the absense of ignition signal"));  // , tach_filt_rpm, ignition
         // I don't think we really need to panic about this, but it does seem curious. Actually this will probably occur when we're sliding
         // into camp after a ride, and kill the engine before we stop the car. For a fraction of a second the engine would keep turning anyway.
         // Or fopr that matter whenever the carb is out of tune and making the engine diesel after we kill the ign.
     }
 
-    // Touchscreen handling
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");  //
+    
+    // Touchscreen handling - takes 800 us to handle every 20ms when the touch timer expires, otherwise 20 us (includes touch timer + encoder handling w/o activity)
     //
     int32_t touch_x, touch_y, trow, tcol;
     if (touchPollTimer.expired()) {
