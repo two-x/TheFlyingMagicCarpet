@@ -1,6 +1,7 @@
 // Carpet CANTroller II  Source Code  - For Arduino Due with Adafruit 2.8inch Captouch TFT shield.
 #include <SPI.h>  // SPI serial bus needed to talk to the LCD and the SD card
-#include <Wire.h>  // Contains I2C serial bus, needed to talk to touchscreen chip
+// #include <Wire.h>  // Contains I2C serial bus, needed to talk to touchscreen chip
+#include "Wire.h"
 #include <SdFat.h>  // SD card & FAT filesystem library
 #include <Servo.h>  // Makes PWM output to control motors (for rudimentary control of our gas and steering)
 #include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
@@ -28,7 +29,7 @@ using namespace std;
 # The gas and brake don't do anything in Basic Mode. Just the steering works, so use the pedals.
 # This mode is enabled with a toggle switch in the controller box.  When in Basic Mode, the only
 # other valid mode is Shutdown Mode. Shutdown Mode may override Basic Mode.
-# - Actions: Release and deactivate brake and gas actuators.  Steering PID keep active 
+# - Actions: Release and deactivate brake and gas actuators.  Steering PID keep active  
 #
 # ** Shutdown Mode **
 # - Required: BasicMode switch Off & Ignition Off
@@ -125,7 +126,7 @@ using namespace std;
     #define uart0_rx_pin 44  // (uart0 rx) - Reserve for possible jaguar interface
     #define cruise_sw_pin 45  // (strap to 0) - Input, momentary button low pulse >500ms in fly mode means start cruise mode. Any pulse in cruise mode goes to fly mode. Active low. (needs pullup)
     #define basicmodesw_pin 46  // (strap X) - Input, asserted to tell us to run in basic mode.   (needs pullup)
-    #define usd_cs_pin 47  // Output, active low, Chip select allows SD card controller chip use of the SPI bus
+    #define sdcard_cs_pin 47  // Output, active low, Chip select allows SD card controller chip use of the SPI bus
     #define neopixel_pin 48  // (rgb led) - Data line to onboard Neopixel WS281x
 
     #define tp_irq_pin -1  // Optional int input so touchpanel can interrupt us (need to modify shield board for this to work)
@@ -135,7 +136,7 @@ using namespace std;
     #define led_tx_pin -1  // Unused on esp32
     #define heartbeat_led_pin -1
 #else  // Applies to Due
-    #define usd_cs_pin 4  // Output, active low, Chip select allows SD card controller chip use of the SPI bus
+    #define sdcard_cs_pin 4  // Output, active low, Chip select allows SD card controller chip use of the SPI bus
     #define tft_ledk_pin 5  // Output, Optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
     #define tp_irq_pin 7  // Optional int input so touchpanel can interrupt us (need to modify shield board for this to work)
     #define tft_dc_pin 9  // Output, Assert when sending data to display chip to indicate commands vs. screen data
@@ -794,8 +795,8 @@ void draw_target_shape(int32_t pos_x, int32_t pos_y, int32_t t_color, int32_t r_
     tft.drawFastHLine(pos_x-1, pos_y+9, 3, t_color);
 }
 void draw_bargraph_needle(int32_t n_pos_x, int32_t old_n_pos_x, int32_t pos_y, int32_t n_color) {  // draws a cute little pointy needle
-    draw_needle_shape(old_n_pos_x, pos_y, BLK);
-    draw_needle_shape(n_pos_x, pos_y, n_color);
+    if (old_n_pos_x >= 0) draw_needle_shape (old_n_pos_x, pos_y, BLK);
+    if (n_pos_x >= 0) draw_needle_shape(n_pos_x, pos_y, n_color);
 }
 void draw_bargraph_needle_target(int32_t n_pos_x, int32_t old_n_pos_x, int32_t t_pos_x, int32_t old_t_pos_x, int32_t pos_y, int32_t n_color, int32_t t_color, int32_t r_color) {  // draws a needle and target
     draw_needle_shape(old_n_pos_x, pos_y, BLK);
@@ -827,29 +828,40 @@ void draw_mmph(int32_t x, int32_t y, int32_t color) {  // This is my cheesy pixe
     tft.drawFastVLine(x+16, y+3, 4, color);
 }
 void draw_string_units(int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
+    bool skiptext = false;
+    bool skipold = false;
     if (!strcmp(oldtext, "mmph")) {  // Handle "mmph" different than other units so all fit in 3-char width
         draw_mmph(x, y, bgcolor);
-        oldtext = "";
+        skipold = true;
     }
-    if (!strcmp(text, "mmph")) draw_mmph(x, y, color);
-    else draw_string(x, y, text, oldtext, color, bgcolor);
+    if (!strcmp(text, "mmph")) {
+        draw_mmph(x, y, color);
+        skiptext = true;
+    }
+    draw_string(x, y, (skiptext) ? "" : text, (skipold) ? "" : oldtext, color, bgcolor);
 }
 // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
 void draw_fixed(bool redraw_tuning_corner) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
     tft.setTextColor(GRY2);
-    tft.setTextSize(1);    
-    if (redraw_tuning_corner) tft.fillRect(10, 145, 154, 95, BLK); // tft.fillRect(0,145,167,95,BLK);  // Erase old dataset page area
-    else {
+    tft.setTextSize(1);
+    // if (redraw_tuning_corner) tft.fillRect(10, 145, 154, 95, BLK); // tft.fillRect(0,145,167,95,BLK);  // Erase old dataset page area - This line alone uses 15 ms
+    if (!redraw_tuning_corner) {
         for (int32_t lineno=0; lineno < arraysize(telemetry); lineno++)  {  // Step thru lines of fixed telemetry data
             draw_string(12, (lineno+1)*disp_line_height_pix+disp_vshift_pix, telemetry[lineno], "", GRY2, BLK);
-            draw_string_units(104, (lineno+1)*disp_line_height_pix+disp_vshift_pix, units[lineno], "", GRY2, BLK);
-            draw_bargraph_base(124, (lineno+1)*disp_line_height_pix+disp_vshift_pix+7, disp_bargraph_width);
+            draw_string_units (104, (lineno+1)*disp_line_height_pix+disp_vshift_pix, units[lineno], "", GRY2, BLK);
+            draw_bargraph_base (124, (lineno+1)*disp_line_height_pix+disp_vshift_pix+7, disp_bargraph_width);
         }
     }
-    for (int32_t lineno=0; lineno < arraysize(dataset_page_names[dataset_page]); lineno++)  {  // Step thru lines of dataset page data
-        draw_string(12, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][lineno], dataset_page_names[dataset_page_last][lineno], GRY2, BLK);
-        draw_string_units(104, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, tuneunits[dataset_page][lineno], tuneunits[dataset_page_last][lineno], GRY2, BLK);
-        draw_bargraph_base(124, (lineno+1+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix+7, disp_bargraph_width);
+    for (int32_t lineno=0; lineno < disp_tuning_lines; lineno++)  {  // Step thru lines of dataset page data
+        draw_string(12, (lineno+arraysize(telemetry)+1)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][lineno], dataset_page_names[dataset_page_last][lineno], GRY2, BLK);
+        // This printf line alone is enough to crash the screen i2c bus
+        // printf ("dp:%ld, dpl:$ld, ln:%ld, new:%4s, old:%4s\n", dataset_page, dataset_page_last, lineno, dataset_page_names[dataset_page][lineno], dataset_page_names[dataset_page_last][lineno]);
+        draw_string_units(104, (lineno+arraysize(telemetry)+1)*disp_line_height_pix+disp_vshift_pix, tuneunits[dataset_page][lineno], tuneunits[dataset_page_last][lineno], GRY2, BLK);
+        if (redraw_tuning_corner) {
+            int32_t corner_y = (lineno+arraysize(telemetry)+1)*disp_line_height_pix+disp_vshift_pix+7;  // lineno*disp_line_height_pix+disp_vshift_pix-1;
+            draw_bargraph_base (124, corner_y, disp_bargraph_width);
+            if (disp_needles[lineno] >= 0) draw_bargraph_needle (-1, disp_needles[lineno], corner_y-6, BLK);  // Let's draw a needle
+        }
     }
 }
 // draw_dynamic  normally draws a given value on a given line (0-19) to the screen if it has changed since last draw.
@@ -886,6 +898,10 @@ void draw_dyn_pid(int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, 
                 disp_targets[lineno] = t_pos;
             }
         }
+    }
+    else if (disp_needles[lineno] >= 0) {  // If value having no range is drawn over one that did ...
+        draw_bargraph_needle (-1, disp_needles[lineno], lineno*disp_line_height_pix+disp_vshift_pix-1, BLK);  // Erase the old needle
+        disp_needles[lineno] = -1;  // Flag for no needle
     }
     else if (age_us > disp_age_quanta[lineno] && age_us < 11)  {  // As readings age, redraw in new color
         int32_t color;
@@ -976,9 +992,8 @@ void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim) {
     draw_dyn_pid (lineno, (int32_t)value, (int32_t)lowlim, (int32_t)hilim, -1);
 }
 
-
 void sd_init() {
-    if (!sd.begin (usd_cs_pin, SD_SCK_MHZ (50))) sd.initErrorHalt();  // Initialize at highest supported speed that is not over 50 mhz. Go lower if errors.
+    if (!sd.begin (sdcard_cs_pin, SD_SCK_MHZ (50))) sd.initErrorHalt();  // Initialize at highest supported speed that is not over 50 mhz. Go lower if errors.
     if (!root.open ("/")) error("open root failed");
     if (!sd.exists (approot)) { 
         if (sd.mkdir (approot)) Serial.println (F("Created approot directory\n"));  // cout << F("Created approot directory\n");
@@ -1079,7 +1094,7 @@ void setup() {
     set_pin(hotrc_ch3_pin, INPUT);
     set_pin(hotrc_ch4_pin, INPUT);
     set_pin(neopixel_pin, OUTPUT);
-    set_pin(usd_cs_pin, OUTPUT);
+    set_pin(sdcard_cs_pin, OUTPUT);
     set_pin(tft_cs_pin, OUTPUT);
     set_pin(pot_wipe_pin, INPUT);
     set_pin(button_pin, INPUT_PULLUP);    
@@ -1094,13 +1109,13 @@ void setup() {
 
     write_pin(ignition_pin, ignition);
     write_pin(tft_cs_pin, HIGH);   // Prevent bus contention
-    write_pin(usd_cs_pin, HIGH);   // Prevent bus contention
+    write_pin(sdcard_cs_pin, HIGH);
     write_pin(tft_dc_pin, LOW);
     write_pin(led_rx_pin, LOW);  // Light up
     // write_pin(led_tx_pin, HIGH);  // Off
     write_pin(syspower_pin, syspower);
     write_pin(encoder_pwr_pin, HIGH);
-
+    
     analogReadResolution(adc_bits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
     Serial.begin(115200);  // Open serial port
     // printf("Serial port open\n");  // This works on Due but not ESP32
@@ -1358,7 +1373,9 @@ void loop() {
             hotrc_radio_detected = true;
         }
     }
-loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
+
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
+    
     // Runmode state machine. Gas/brake control targets are determined here. 
     //
     // printf("mode: %d, panic: %d, vpos: %4ld, min: %4ld, max: %4ld, elaps: %6ld", runmode, panic_stop, ctrl_pos_adc[VERT][FILT], hotrc_pos_failsafe_min_adc, hotrc_pos_failsafe_max_adc, hotrcPanicTimer.elapsed());
@@ -1545,7 +1562,8 @@ loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");    // Up
         if (serial_debugging) Serial.println(F("Error: Invalid runmode entered"));  // ,  runmode
         runmode = SHUTDOWN;
     }
-loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "mod");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
+
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "mod");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
 
     // Update motor outputs
     //
@@ -1627,7 +1645,8 @@ loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "mod");    // Up
 
         pidTimer.reset();  // reset timer to trigger the next update
     }
-loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
+
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
     
     // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
     //
@@ -1662,7 +1681,7 @@ loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");    // Up
     int32_t touch_x, touch_y, trow, tcol;
     if (touchPollTimer.expired()) {
         touchPollTimer.reset();
-        if (touchpanel.touched()) { // Take actions upon being touched
+        if (touchpanel.touched() == 1) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
             touch_accel = 1 << touch_accel_exponent;  // determine value editing rate
             TS_Point touchpoint = touchpanel.getPoint();  // Retreive a point
             touchpoint.x = map(touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
@@ -1749,7 +1768,8 @@ loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");    // Up
             touch_longpress_valid = true;
         }
     }
-loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tch");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
+
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tch");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
 
     // Encoder handling
     //
@@ -1778,7 +1798,8 @@ loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tch");    // Up
         }
         encoder_delta = 0;  // Our responsibility to reset this flag after handling events
     }
-loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "enc");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
+
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "enc");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
 
     // Tuning : implement effects of changes made by encoder or touchscreen to simulating, dataset_page, selected_value, or tuning_ctrl
     //
@@ -1858,7 +1879,8 @@ loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "enc");    // Up
             if (selected_value == 7) adj_val (&brake_pos_zeropoint_adc, sim_edit_delta, brake_pos_nom_lim_retract_adc, brake_pos_nom_lim_extend_adc);
         }
     }
-loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tun");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
+    
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tun");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
 
     // Panic stop logic and Update output signals
     //
@@ -1904,7 +1926,8 @@ loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tun");    // Up
     // printf("card: 0x%04x, cred: 0x%04x, cgrn: 0x%04x, cblu: 0x%04x, red: 0x%04x, grn: 0x%04x, blu: 0x%04x, brite: %ld\n", colorcard[runmode], (colorcard[runmode] & 0xfe00)>>11 , (colorcard[runmode] & 0x7e0)>>5, (colorcard[runmode] & 0x1f), neopixel_heart_color[N_RED], neopixel_heart_color[N_GRN], neopixel_heart_color[N_BLU], neopixel_heart_fade );
     write_pin (led_rx_pin, (sim_edit_delta <= 0));  // use these Due lights for whatever, here debugging the touchscreen
     // write_pin (led_tx_pin, !touch_now_touched);  // use these Due lights for whatever, here debugging the touchscreen
-loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "hrt");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
+
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "hrt");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
     
     // Display updates
     //
@@ -2020,7 +2043,8 @@ loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "hrt");    // Up
         draw_bool(ignition, 4);
         draw_bool(syspower, 5);
     }
-loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dis");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
+    
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dis");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
 
     // Do the control loop bookkeeping at the end of each loop
     //
@@ -2037,15 +2061,16 @@ loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dis");    // Up
     if (!loop_period_us) loop_period_us++;  // ensure loop period is never zero since it gets divided by
     loop_freq_hz = (int32_t)(1000000/(double)loop_period_us);
     loopno++;  // I like to count how many loops
-        loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");  //
+    loopTimer.reset();
+    
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");  //
 
-    if (serial_debugging && timestamp_loop && loop_period_us > 15000) {
+    if (serial_debugging && timestamp_loop) {
         // printf ("Loop# %ld, period:%5ld us, freq:%6.1lf Hz, ints:%2ld", loopno, loop_period_us, loop_freq_hz, int_counter); // (int32_t)((double)(abs(mycros()-loopzero)/1000), (int32_t)(1000000/((double)(abs(mycros()-loopzero)));
-        printf ("RM:%ld Loop# %ld, period:%5ld", runmode, loopno, loop_period_us); // (int32_t)((double)(abs(mycros()-loopzero)/1000), (int32_t)(1000000/((double)(abs(mycros()-loopzero)));
+        printf ("\rRM:%ld Loop# %ld, period:%5ld", runmode, loopno, loop_period_us); // (int32_t)((double)(abs(mycros()-loopzero)/1000), (int32_t)(1000000/((double)(abs(mycros()-loopzero)));
         //for (int32_t x=1; x<loopindex; x++) printf (", %2ld(%s):%5ld", x, loop_names[x], looptimes_us[x]-looptimes_us[x-1]);
         for (int32_t x=1; x<loopindex; x++) std::cout << ", " << setw(2) << x << "(" << std::setw(3) << loop_names[x] << "):" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1];
-        printf (" us\n");
+        if (loop_period_us > 25000) printf ("\n");
     }
     int_counter = 0;
-    loopTimer.reset();
 }
