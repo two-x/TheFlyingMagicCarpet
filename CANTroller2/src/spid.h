@@ -1,16 +1,9 @@
 #ifndef SPID_H
 #define SPID_H
-#undef min
-#undef max
-
 #ifdef DUE
-#include <LibPrintf.h>  // This works on Due but not ESP32
+    #include <LibPrintf.h>  // This works on Due but not ESP32
 #endif
-#if ARDUINO >= 100
-  #include "Arduino.h"
-#else
-  #include "WProgram.h"
-#endif
+#include "Arduino.h"
 #include "math.h"  // Just using for signbit() function. Note signbit returns true for negative signed argument
 
 // Here is the brake PID math

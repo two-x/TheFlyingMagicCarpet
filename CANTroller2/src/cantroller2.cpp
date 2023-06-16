@@ -1,7 +1,6 @@
 // Carpet CANTroller II  Source Code  - For Arduino Due with Adafruit 2.8inch Captouch TFT shield.
 #include <SPI.h>  // SPI serial bus needed to talk to the LCD and the SD card
-// #include <Wire.h>  // Contains I2C serial bus, needed to talk to touchscreen chip
-#include "Wire.h"
+#include <Wire.h>  // Contains I2C serial bus, needed to talk to touchscreen chip
 #include <SdFat.h>  // SD card & FAT filesystem library
 #include <Servo.h>  // Makes PWM output to control motors (for rudimentary control of our gas and steering)
 #include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
@@ -117,8 +116,8 @@ using namespace std;
     #define tach_pulse_pin 35  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
     #define speedo_pulse_pin 36  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
     #define ignition_pin 37  // (spi-ram / oct-spi) - Output flips a relay to kill the car ignition, active high (no pullup)
-    #define fun_pin 38  // (spi-ram / oct-spi) - Available
-    #define onewire_pin 39  // Onewire bus for temperature sensor data
+    #define onewire_pin 38  // // (spi-ram / oct-spi) - Onewire bus for temperature sensor data
+    #define tft_rst_pin 39  // TFT Reset
     #define encoder_b_pin 40  // Int input, The B pin (aka DT pin) of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
     #define encoder_a_pin 41  // Int input, The A pin (aka CLK pin) of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
     #define encoder_sw_pin 42  // Int input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
@@ -356,7 +355,7 @@ int32_t disp_needles[disp_lines];
 int32_t disp_targets[disp_lines];
 int32_t disp_age_quanta[disp_lines];
 Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
-Timer dispRefreshTimer (50000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
+Timer dispRefreshTimer (100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
 
 // tuning-ui related globals
 enum tuning_ctrl_states { OFF, SELECT, EDIT };
@@ -583,6 +582,9 @@ uint32_t looptimes_us[20];
 std::vector<string> loop_names(20);
 bool loop_dirty[20];
 int32_t loopindex = 0;
+Timer tftResetTimer (100000);
+Timer tftDelayTimer (3000000);
+int32_t timing_tft_reset = 0; 
 Timer heartbeatTimer (1000000);
 int32_t heartbeat_state = 0;
 int32_t heartbeat_level = 0;
@@ -600,7 +602,7 @@ bool button_it = 0;
 // external signal related
 bool ignition = LOW;
 bool ignition_last = ignition;
-bool syspower = LOW;
+bool syspower = HIGH;
 bool syspower_last = syspower;
 bool basicmodesw = LOW;
 bool cruise_sw = LOW;
@@ -613,9 +615,9 @@ int32_t touch_accel = 1 << touch_accel_exponent;  // Touch acceleration level, w
 int32_t touch_fudge = 0;  // -8
 //  ---- tunable ----
 int32_t touch_accel_exponent_max = 8;  // Never edit values faster than this. 2^8 = 256 change in value per update
-Timer touchPollTimer(35000);  // Timer for regular touchscreen sampling
-Timer touchHoldTimer(1000000);  // For timing touch long presses
-Timer touchAccelTimer(850000);  // Touch hold time per left shift (doubling) of touch_accel
+Timer touchPollTimer (35000);  // Timer for regular touchscreen sampling
+Timer touchHoldTimer (1000000);  // For timing touch long presses
+Timer touchAccelTimer (850000);  // Touch hold time per left shift (doubling) of touch_accel
 
 // rotary encoder related
 enum encodersw_presses { NONE, SHORT, LONG };
@@ -630,8 +632,8 @@ int32_t encoder_sw_action = NONE;  // Flag for encoder handler to know an encode
 bool encoder_sw = false;  // Remember whether switch is being pressed
 bool encoder_timer_active = false;  // Flag to prevent re-handling long presses if the sw is just kept down
 bool encoder_suppress_click = false;  // Flag to prevent a short click on switch release after successful long press
-bool encoder_b_raw = digitalRead(encoder_b_pin);  // To store value of encoder pin value
-bool encoder_a_raw = digitalRead(encoder_a_pin);
+bool encoder_b_raw = digitalRead (encoder_b_pin);  // To store value of encoder pin value
+bool encoder_a_raw = digitalRead (encoder_a_pin);
 volatile bool encoder_a_stable = true;  //  Stores the value of encoder A pin as read during B pin transition (where A is stable)
 volatile int32_t encoder_spinrate_isr_us = 100000;  // Time elapsed between last two detents
 volatile int32_t encoder_bounce_danger = B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
@@ -658,11 +660,11 @@ bool sim_basicsw = true;
 bool sim_ign = true;
 bool sim_cruisesw = true;
 bool sim_pressure = false;
-bool sim_syspower = false;
+bool sim_syspower = true;
 
 // Instantiate objects 
 Adafruit_FT6206 touchpanel = Adafruit_FT6206(); // Touch panel
-Adafruit_ILI9341 tft = Adafruit_ILI9341(tft_cs_pin, tft_dc_pin);  // LCD screen
+Adafruit_ILI9341 tft = Adafruit_ILI9341 (tft_cs_pin, tft_dc_pin);  // LCD screen
 
 SdFat sd;  // SD card filesystem
 #define approot "cantroller2020"
@@ -679,153 +681,189 @@ SPID cruiseSPID (cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_
 static Servo steer_servo;
 static Servo brake_servo;
 static Servo gas_servo;
-static Adafruit_NeoPixel strip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
+static Adafruit_NeoPixel neostrip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
 
+// Temperature sensor related
 enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
-double temps[6] = {0,0,0,0,0,0};
-int32_t temperature_precision = 9;
-// OneWire onewire(onewire_pin);
-// DallasTemperature tempsensebus(&onewire);
-// DeviceAddress tempsensor[6];
-
-double d_map (double x, double in_min, double in_max, double out_min, double out_max) {
-    if ( abs(in_max - in_min) >= 0.15 ) return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-    printf("d_map() refusing to divide by zero, mapped input %lf to value %lf.\n", x, (out_max-out_min)/2);
-    return (out_max-out_min)/2;  // Avoiding 
-}
+double temps[6];
+int32_t temp_detected_device_ct = 0;
+int32_t temperature_precision = 9;  // 9-12 bit resolution
+OneWire onewire (onewire_pin);
+DallasTemperature tempsensebus (&onewire);
+DeviceAddress temp_temp_addr;
+DeviceAddress temp_addrs[6];
 
 // Interrupt service routines
 //
-void encoder_a_isr(void) {  // When A goes high if B is low, we are CW, otherwise we are CCW -- This ISR intended for encoders like the one on the tan proto board
+void encoder_a_isr (void) {  // When A goes high if B is low, we are CW, otherwise we are CCW -- This ISR intended for encoders like the one on the tan proto board
     if (encoder_bounce_danger != A) {  // Prevents taking action on any re-triggers after a valid trigger due to bouncing
         if (!encoder_a_stable) {  // Since A just transitioned, if a_stable is low, this is a rising edge = time to register a turn 
-            encoder_delta += digitalRead(encoder_b_pin) ? -1 : 1;  // Create turn event to be handled later. If B=0, delta=-1 (CCW) turn decreases things
+            encoder_delta += digitalRead (encoder_b_pin) ? -1 : 1;  // Create turn event to be handled later. If B=0, delta=-1 (CCW) turn decreases things
             encoder_spinrate_isr_us = encoderSpinspeedTimer.elapsed();
             encoderSpinspeedTimer.reset();
         }
         encoder_bounce_danger = A;  // Set to reject A retriggers and enable B trigger
     }
 }
-void encoder_b_isr(void) {  // On B rising or falling edge, A should have stabilized by now, so don't ignore next A transition
+void encoder_b_isr (void) {  // On B rising or falling edge, A should have stabilized by now, so don't ignore next A transition
     if (encoder_bounce_danger != B) {  // Prevents taking action on any re-triggers after a valid trigger due to bouncing
-        encoder_a_stable = digitalRead(encoder_a_pin);  // Input A is stable by the time B changes, so read A value here
+        encoder_a_stable = digitalRead (encoder_a_pin);  // Input A is stable by the time B changes, so read A value here
         encoder_bounce_danger = B;  // Set to reject B retriggers and enable A trigger
     }
 }
+// void encoder_a_rise_isr (void) {  // When A goes high if B is low, we are CW, otherwise we are CCW
+//     if (encoder_bounce_danger != A) {  // Prevents taking action on any re-triggers after a valid trigger due to bouncing
+//         encoder_spinrate_isr_us = encoderSpinspeedTimer.elapsed();
+//         encoderSpinspeedTimer.reset();
+//         encoder_delta += digitalRead (encoder_b_pin) ? -1 : 1;  // Create turn event to be handled later. If B=0, delta=-1 (CCW) turn decreases things        
+//     }  // Input B is stable by the time A changes, so read B value here
+//     encoder_bounce_danger = A;  // Set to reject A retriggers and enable B trigger
+// }
+// void encoder_a_fall_isr (void) {  // This ISR disables A triggering on A falling edge to prevent trigger during the subsequent ringing
+//     encoder_bounce_danger = A;  // Set to enable B trigger
+// }
+// void encoder_b_isr (void) {  // On B rising or falling edge, input A should be stable
+//     encoder_bounce_danger = B; // Set to enable A trigger
+// }
 // The tach and speed use a hall sensor being triggered by a passing magnet once per pulley turn. These ISRs call mycros()
 // on every pulse to know the time since the previous pulse. I tested this on the bench up to about 750 mmph which is as 
 // fast as I can move the magnet with my hand, and it works. It would be cleaner to just increment a counter here in the ISR
 // then call mycros() in the main loop and compare with a timer to calculate mmph.
-void tach_isr(void) {  // The tach and speedo isrs compare value returned from the mycros() function with the value from the last interrupt to determine period, to get frequency of the vehicle pulley rotations.
+void tach_isr (void) {  // The tach and speedo isrs compare value returned from the mycros() function with the value from the last interrupt to determine period, to get frequency of the vehicle pulley rotations.
     int32_t temp_us = tachPulseTimer.elapsed();
     if (temp_us > tach_delta_abs_min_us) {
-        tach_delta_us = temp_us;    
         tachPulseTimer.reset();
+        tach_delta_us = temp_us;    
     }
 }
-void speedo_isr(void) {  //  A better approach would be to read, reset, and restart a hardware interval timer in the isr.  Better still would be to regularly read a hardware binary counter clocked by the pin - no isr.
+void speedo_isr (void) {  //  A better approach would be to read, reset, and restart a hardware interval timer in the isr.  Better still would be to regularly read a hardware binary counter clocked by the pin - no isr.
     int32_t temp_us = speedoPulseTimer.elapsed();
     if (temp_us > speedo_delta_abs_min_us) {
-        speedo_delta_us = temp_us;    
         speedoPulseTimer.reset();
+        speedo_delta_us = temp_us;    
     }
 }
-void hotrc_vert_isr(void) {  // Reads ranged PWM signal on an input pin to determine control position. This ISR sets timer for all hotrc isrs on hi-going edge
-    if (digitalRead(hotrc_vert_pin)) hotrcPulseTimer.reset();
+// void hotrc_vert_rise_isr (void) {  // On rising edge of ch1-vert, this ISR zeros the timer used as reference for all hotrc falling-edge isrs
+//     hotrcPulseTimer.reset();
+// }
+// void hotrc_vert_fall_isr (void) {  //  On falling edge, records high pulse width to determine ch1 trigger position
+//     hotrc_vert_pulse_us = hotrcPulseTimer.elapsed();
+// }
+void hotrc_vert_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
+    if (digitalRead (hotrc_vert_pin)) hotrcPulseTimer.reset();
     else hotrc_vert_pulse_us = hotrcPulseTimer.elapsed();
 }
-void hotrc_horz_isr(void) {  // On falling edge, reads ranged PWM signal on an input pin to determine control position
+void hotrc_horz_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
     hotrc_horz_pulse_us = hotrcPulseTimer.elapsed();
 }
-void hotrc_ch3_isr(void) {  // Reads a binary switch encoded as PWM on an input pin to determine button toggle state
+void hotrc_ch3_isr (void) {  // On falling edge, records high pulse width to determine ch3 button toggle state
     hotrc_ch3_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch3 switch true if short pulse, otherwise false
     if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled
     hotrc_ch3_sw_last = hotrc_ch3_sw;
 }
-void hotrc_ch4_isr(void) {  // Reads PWM signal on an input pin to determine control position
+void hotrc_ch4_isr (void) {  // On falling edge, records high pulse width to determine ch4 button toggle state
     hotrc_ch4_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch4 switch true if short pulse, otherwise false
     if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
-uint32_t colorwheel(uint8_t WheelPos) {
-    WheelPos = 255 - WheelPos;
-    if(WheelPos < 85) return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
-    if(WheelPos < 170) {
-        WheelPos -= 85;
-        return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
-    }
-    WheelPos -= 170;
-    return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+
+double d_map (double x, double in_min, double in_max, double out_min, double out_max) {
+    if (in_max != in_min) return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+    printf("d_map() refusing to divide by zero, mapped input %lf to max value %lf.\n", x, out_max);
+    return out_max;
 }
 
-// // Soren: This is dangerous, do not use it. After any trigger if input value stays at new level, output is stuck at pre-trigger value.
-// // Fast Low pass and spike rejection filter
-// // lp_thresh = max acceptable delta acceptable over three consecutive readings
-// void lp_spike_filt (int32_t* raw, int32_t* raw_last, int32_t* raw_old, int32_t lp_thresh, int32_t spike_thresh) {
-//     if (abs(*raw-*raw_old) > lp_thresh || abs(*raw-*raw_last) < spike_thresh) {  // Remove noise spikes from tach values, if otherwise in range
-//         *raw_old = *raw_last;
-//         *raw_last = *raw;
-//     }
-//     else *raw = *raw_last;  // Spike detected - ignore that sample
-// }
+double d_constrain (double amt, double low, double high) {
+    return (amt < low) ? low : ((amt > high) ? high : amt);
+}
+
+uint32_t colorwheel (uint8_t WheelPos) {
+    WheelPos = 255 - WheelPos;
+    if (WheelPos < 85) return neostrip.Color (255 - WheelPos * 3, 0, WheelPos * 3);
+    if (WheelPos < 170) {
+        WheelPos -= 85;
+        return neostrip.Color (0, WheelPos * 3, 255 - WheelPos * 3);
+    }
+    WheelPos -= 170;
+    return neostrip.Color (WheelPos * 3, 255 - WheelPos * 3, 0);
+}
+
 // Exponential Moving Average filter : Smooth out noise on inputs. 0 < alpha < 1 where lower = smoother and higher = more responsive
 // Pass in a fresh raw value, address of filtered value, and alpha factor, filtered value will get updated
-void ema_filt (int32_t raw, int32_t* filt, double alpha) {
-    if (!raw) *filt = 0;
-     *filt = (int32_t)( alpha * (double)raw + (1-alpha) * (double)(*filt) );
+void ema_filt (double raw, double* filt, double alpha) {
+    // if (!raw) *filt = 0.0; else
+    *filt = alpha * raw + (1 - alpha) * (*filt);
 }
 void ema_filt (int32_t raw, double* filt, double alpha) {
-    if (!raw) *filt = 0.0;
-    else *filt = alpha * (double)raw + (1 - alpha) * (*filt);
+    ema_filt ((double)raw, filt, alpha);
+}
+void ema_filt (int32_t raw, int32_t* filt, double alpha) {
+    // if (!raw) *filt = 0; else
+    *filt = (int32_t)(alpha * (double)raw + (1-alpha) * (double)(*filt));
 }
 
 // Functions to write to the screen efficiently
 //
-void draw_bargraph_base(int32_t corner_x, int32_t corner_y, int32_t width) {  // draws a horizontal bargraph scale.  124, y, 40
-    tft.drawFastHLine(corner_x+disp_bargraph_squeeze, corner_y, width-disp_bargraph_squeeze*2, GRY1);
-    for (int32_t offset=0; offset<=2; offset++) tft.drawFastVLine((corner_x+disp_bargraph_squeeze)+offset*(width/2 - disp_bargraph_squeeze), corner_y-1, 3, WHT);
+void draw_bargraph_base (int32_t corner_x, int32_t corner_y, int32_t width) {  // draws a horizontal bargraph scale.  124, y, 40
+    tft.drawFastHLine (corner_x+disp_bargraph_squeeze, corner_y, width-disp_bargraph_squeeze*2, GRY1);
+    for (int32_t offset=0; offset<=2; offset++) tft.drawFastVLine ((corner_x+disp_bargraph_squeeze)+offset*(width/2 - disp_bargraph_squeeze), corner_y-1, 3, WHT);
 }
-void draw_needle_shape(int32_t pos_x, int32_t pos_y, int32_t color) {  // draws a cute little pointy needle
-    tft.drawFastVLine(pos_x-1, pos_y, 2, color);
-    tft.drawFastVLine(pos_x, pos_y, 4, color);
-    tft.drawFastVLine(pos_x+1, pos_y, 2, color);
+void draw_needle_shape (int32_t pos_x, int32_t pos_y, int32_t color) {  // draws a cute little pointy needle
+    tft.drawFastVLine (pos_x-1, pos_y, 2, color);
+    tft.drawFastVLine (pos_x, pos_y, 4, color);
+    tft.drawFastVLine (pos_x+1, pos_y, 2, color);
 }
-void draw_target_shape(int32_t pos_x, int32_t pos_y, int32_t t_color, int32_t r_color) {  // draws a cute little target symbol
-    tft.drawFastVLine(pos_x, pos_y+6, 3, t_color);
-    tft.drawFastHLine(pos_x-1, pos_y+9, 3, t_color);
+void draw_target_shape (int32_t pos_x, int32_t pos_y, int32_t t_color, int32_t r_color) {  // draws a cute little target symbol
+    tft.drawFastVLine (pos_x, pos_y+6, 3, t_color);
+    tft.drawFastHLine (pos_x-1, pos_y+9, 3, t_color);
 }
-void draw_bargraph_needle(int32_t n_pos_x, int32_t old_n_pos_x, int32_t pos_y, int32_t n_color) {  // draws a cute little pointy needle
-    if (old_n_pos_x >= 0) draw_needle_shape (old_n_pos_x, pos_y, BLK);
-    if (n_pos_x >= 0) draw_needle_shape(n_pos_x, pos_y, n_color);
+void draw_bargraph_needle (int32_t n_pos_x, int32_t old_n_pos_x, int32_t pos_y, int32_t n_color) {  // draws a cute little pointy needle
+    draw_needle_shape (old_n_pos_x, pos_y, BLK);
+    draw_needle_shape (n_pos_x, pos_y, n_color);
 }
-void draw_bargraph_needle_target(int32_t n_pos_x, int32_t old_n_pos_x, int32_t t_pos_x, int32_t old_t_pos_x, int32_t pos_y, int32_t n_color, int32_t t_color, int32_t r_color) {  // draws a needle and target
-    draw_needle_shape(old_n_pos_x, pos_y, BLK);
-    draw_target_shape(old_t_pos_x, pos_y, BLK, BLK);
-    draw_target_shape(t_pos_x, pos_y, t_color, r_color);
-    draw_needle_shape(n_pos_x, pos_y, n_color);
+// void draw_bargraph_needle_target (int32_t n_pos_x, int32_t old_n_pos_x, int32_t t_pos_x, int32_t old_t_pos_x, int32_t pos_y, int32_t n_color, int32_t t_color, int32_t r_color) {  // draws a needle and target
+//     draw_needle_shape (old_n_pos_x, pos_y, BLK);
+//     draw_target_shape (old_t_pos_x, pos_y, BLK, BLK);
+//     draw_target_shape (t_pos_x, pos_y, t_color, r_color);
+//     draw_needle_shape (n_pos_x, pos_y, n_color);
+// }  // This function was for when the needle could overlap the target
+void draw_string (int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
+    tft.setCursor (x, y);
+    tft.setTextColor (bgcolor);
+    tft.print (oldtext);  // Erase the old content
+    tft.setCursor (x, y);
+    tft.setTextColor (color);
+    tft.print (text);  // Draw the new content
 }
-void draw_string(int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
-    tft.setCursor(x, y);
-    tft.setTextColor(bgcolor);
-    tft.print(oldtext);  // Erase the old content
-    tft.setCursor(x, y);
-    tft.setTextColor(color);
-    tft.print(text);  // Draw the new content
+void draw_mmph (int32_t x, int32_t y, int32_t color) {  // This is my cheesy pixel-drawn "mmph" compressed horizontally to 3-char width
+    tft.setTextColor (color);
+    tft.setCursor (x, y);
+    tft.print ("m");
+    tft.setCursor (x+4, y);
+    tft.print ("m");  // Overlapping 'mm' complete (x = 0-8)
+    tft.drawFastVLine (x+10, y+2, 6, color);
+    tft.drawPixel (x+11, y+2, color);
+    tft.drawPixel (x+11, y+6, color);
+    tft.drawFastVLine (x+12, y+3, 3, color);  // 'p' complete (x = 10-12)
+    tft.drawFastVLine (x+14, y, 7, color);
+    tft.drawPixel (x+15, y+2, color);
+    tft.drawFastVLine (x+16, y+3, 4, color);  // 'h' complete (x = 14-16)
 }
-void draw_mmph(int32_t x, int32_t y, int32_t color) {  // This is my cheesy pixel-drawn "mmph" compressed horizontally to 3-char width
-    tft.setCursor(x, y);
-    tft.setTextColor(color);
-    tft.print("m");
-    tft.setCursor(x+4, y);
-    tft.print("m");
-    tft.drawPixel(x+3, y+2, color);
-    tft.drawPixel(x+11, y+2, color);
-    tft.drawPixel(x+11, y+6, color);
-    tft.drawPixel(x+15, y+2, color);
-    tft.drawFastVLine(x+10, y+2, 6, color);
-    tft.drawFastVLine(x+12, y+3, 3, color);
-    tft.drawFastVLine(x+14, y, 7, color);
-    tft.drawFastVLine(x+16, y+3, 4, color);
+void draw_thou (int32_t x, int32_t y, int32_t color) {  // This is my cheesy pixel-drawn "thou" compressed horizontally to 3-char width
+    tft.drawFastVLine (x+1, y+1, 5, color);
+    tft.drawFastHLine (x, y+2, 3, color);
+    tft.drawPixel (x+2, y+6, color);  // 't' complete (x = 0-2)
+    tft.drawFastVLine (x+4, y, 7, color);
+    tft.drawPixel (x+5, y+3, color);
+    tft.drawPixel (x+6, y+2, color);
+    tft.drawFastVLine (x+7, y+3, 4, color);  // 'h' complete (x = 4-7)
+    tft.drawFastVLine (x+9, y+3, 3, color);
+    tft.drawFastHLine (x+10, y+2, 2, color);
+    tft.drawFastHLine (x+10, y+6, 2, color);
+    tft.drawFastVLine (x+12, y+3, 3, color);  // 'o' complete (x = 9-12)
+    tft.drawFastVLine (x+14, y+2, 4, color);
+    tft.drawPixel (x+15, y+6, color);
+    tft.drawFastVLine (x+16, y+2, 5, color);  // 'u' complete (x = 14-16)
 }
 void draw_string_units(int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
     bool skiptext = false;
@@ -834,20 +872,28 @@ void draw_string_units(int32_t x, int32_t y, const char* text, const char* oldte
         draw_mmph(x, y, bgcolor);
         skipold = true;
     }
+    else if (!strcmp(oldtext, "thou")) {  // Handle "mmph" different than other units so all fit in 3-char width
+        draw_thou(x, y, bgcolor);
+        skipold = true;
+    }
     if (!strcmp(text, "mmph")) {
         draw_mmph(x, y, color);
+        skiptext = true;
+    }
+    if (!strcmp(text, "thou")) {
+        draw_thou(x, y, color);
         skiptext = true;
     }
     draw_string(x, y, (skiptext) ? "" : text, (skipold) ? "" : oldtext, color, bgcolor);
 }
 // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
-void draw_fixed(bool redraw_tuning_corner) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
-    tft.setTextColor(GRY2);
-    tft.setTextSize(1);
+void draw_fixed (bool redraw_tuning_corner) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
+    tft.setTextColor (GRY2);
+    tft.setTextSize (1);
     // if (redraw_tuning_corner) tft.fillRect(10, 145, 154, 95, BLK); // tft.fillRect(0,145,167,95,BLK);  // Erase old dataset page area - This line alone uses 15 ms
     if (!redraw_tuning_corner) {
         for (int32_t lineno=0; lineno < arraysize(telemetry); lineno++)  {  // Step thru lines of fixed telemetry data
-            draw_string(12, (lineno+1)*disp_line_height_pix+disp_vshift_pix, telemetry[lineno], "", GRY2, BLK);
+            draw_string (12, (lineno+1)*disp_line_height_pix+disp_vshift_pix, telemetry[lineno], "", GRY2, BLK);
             draw_string_units (104, (lineno+1)*disp_line_height_pix+disp_vshift_pix, units[lineno], "", GRY2, BLK);
             draw_bargraph_base (124, (lineno+1)*disp_line_height_pix+disp_vshift_pix+7, disp_bargraph_width);
         }
@@ -865,25 +911,45 @@ void draw_fixed(bool redraw_tuning_corner) {  // set redraw_tuning_corner to tru
     }
 }
 // draw_dynamic  normally draws a given value on a given line (0-19) to the screen if it has changed since last draw.
-void draw_dyn_pid(int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int32_t target) {
-    int32_t age_us = (int32_t)( (double)( dispAgeTimer[lineno].elapsed() ) / 2500000 ); // Divide by us per color gradient quantum
-    memset(disp_draw_buffer,0,strlen(disp_draw_buffer));
-    itoa(value, disp_draw_buffer, 10);
-    if ( strcmp(disp_values[lineno], disp_draw_buffer) || disp_redraw_all ) {  // If value differs, Erase old value and write new
-        draw_string(66, lineno*disp_line_height_pix+disp_vshift_pix, disp_draw_buffer, disp_values[lineno], GRN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-        strcpy(disp_values[lineno], disp_draw_buffer);
+void draw_dyn_pid (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int32_t target) {
+    int32_t age_us = (int32_t)((double)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
+    memset (disp_draw_buffer,0,strlen(disp_draw_buffer));
+    itoa (value, disp_draw_buffer, 10);
+    if (strcmp (disp_values[lineno], disp_draw_buffer) || disp_redraw_all) {  // If value differs, Erase old value and write new
+        draw_string (66, lineno*disp_line_height_pix+disp_vshift_pix, disp_draw_buffer, disp_values[lineno], GRN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+        strcpy (disp_values[lineno], disp_draw_buffer);
         dispAgeTimer[lineno].reset();
         disp_age_quanta[lineno] = 0;
     }
-    if (lowlim < hilim)  {  // If a defined range was given, we have a bargraph to possibly update needles/targets on
+    else if (age_us > disp_age_quanta[lineno] && age_us < 11)  {  // As readings age, redraw in new color. This may fail and redraw when the timer overflows? 
+        int32_t color;
+        if (age_us < 8) color = 0x1fe0 + age_us*0x2000;  // Base of green with red added as you age, until yellow is achieved
+        else color = 0xffe0 - (age_us-8) * 0x100;  // Then lose green as you age further
+        draw_string (66, (lineno)*disp_line_height_pix+disp_vshift_pix, disp_values[lineno], "", color, BLK);
+        disp_age_quanta[lineno] = age_us;
+    }
+    if (lowlim < hilim) {  // Any value having a given range deserves a bargraph gauge with a needle
         int32_t corner_x = 124;    
         int32_t corner_y = lineno*disp_line_height_pix+disp_vshift_pix-1;
-        int32_t n_pos = map(value, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+        int32_t n_pos = map (value, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
         int32_t ncolor = (n_pos > disp_bargraph_width-disp_bargraph_squeeze || n_pos < disp_bargraph_squeeze) ? RED : GRN;
-        n_pos = corner_x + constrain(n_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
-        if (n_pos != disp_needles[lineno] || disp_redraw_all)  {  // If the value was changed the needle prob has to move
-            draw_bargraph_needle(n_pos, disp_needles[lineno], corner_y, ncolor);  // Let's draw a needle
-            disp_needles[lineno] = n_pos;
+        n_pos = corner_x + constrain (n_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+        if (target != -1) {  // If target value is given, draw a target on the bargraph too
+            int32_t t_pos = map (target, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+            int32_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || t_pos < disp_bargraph_squeeze) ? RED : ( (t_pos != n_pos) ? YEL : GRN );
+            t_pos = corner_x + constrain (t_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+            if (t_pos != disp_targets[lineno] || (t_pos == n_pos)^(disp_needles[lineno] != disp_targets[lineno]) || disp_redraw_all) {
+                draw_target_shape (disp_targets[lineno], corner_y, BLK, -1);  // Erase old target
+                // draw_bargraph_base (124, lineno*disp_line_height_pix+disp_vshift_pix+7, disp_bargraph_width);
+                tft.drawFastHLine (disp_targets[lineno]-(disp_targets[lineno] != corner_x+disp_bargraph_squeeze),
+                    lineno*disp_line_height_pix+disp_vshift_pix+7,  // Patch bargraph line where old target got erased
+                    2+(disp_targets[lineno] != corner_x+disp_bargraph_width-disp_bargraph_squeeze), GRY1);
+                for (int32_t offset=0; offset<=2; offset++)  // Redraw bargraph graduations in case one got corrupted by target erasure
+                    tft.drawFastVLine ((corner_x+disp_bargraph_squeeze)+offset*(disp_bargraph_width/2 - disp_bargraph_squeeze), 
+                        lineno*disp_line_height_pix+disp_vshift_pix+6, 3, WHT);
+                draw_target_shape (t_pos, corner_y, tcolor, -1);  // Draw the new target
+                disp_targets[lineno] = t_pos;  // Remember position of target
+            }
         }
         if (target != -1)  {  // If this graph has a target that might need to be moved
             int32_t t_pos = map(target, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
@@ -898,90 +964,16 @@ void draw_dyn_pid(int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, 
                 disp_targets[lineno] = t_pos;
             }
         }
+        if (n_pos != disp_needles[lineno] || disp_redraw_all) {
+            draw_bargraph_needle (n_pos, disp_needles[lineno], corner_y, ncolor);  // Let's draw a needle
+            disp_needles[lineno] = n_pos;  // Remember position of needle
+        }
     }
     else if (disp_needles[lineno] >= 0) {  // If value having no range is drawn over one that did ...
         draw_bargraph_needle (-1, disp_needles[lineno], lineno*disp_line_height_pix+disp_vshift_pix-1, BLK);  // Erase the old needle
         disp_needles[lineno] = -1;  // Flag for no needle
     }
-    else if (age_us > disp_age_quanta[lineno] && age_us < 11)  {  // As readings age, redraw in new color
-        int32_t color;
-        if (age_us < 8) color = 0x1fe0 + age_us*0x2000;  // Base of green with red added as you age
-        else color = 0xffe0 - (age_us-8)*0x100;  // Until yellow is achieved, then lose green as you age further
-        draw_string(66, (lineno)*disp_line_height_pix+disp_vshift_pix, disp_values[lineno], "", color, BLK);
-        disp_age_quanta[lineno] = age_us;
-    } // Else don't draw anything, because we already did.  Logic is 100s of times cheaper than screen drawing.)
 }
-void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override) {  // color_override = -1 uses default color
-    int32_t color = (color_override == -1) ? colorcard[runmode] : color_override;
-    draw_string(8+6, disp_vshift_pix, modecard[oldmode], "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-    draw_string(8+6*(2+strlen(modecard[oldmode]))-3, disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-    draw_string(8+6, disp_vshift_pix, modecard[runmode], "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-    draw_string(8+6*(2+strlen(modecard[runmode]))-3, disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-}
-void draw_page_name (int32_t page, int32_t page_last) {
-    draw_fixed(true);  // Erase and redraw dynamic data corner of screen with names, units etc.
-    draw_string(83, disp_vshift_pix, pagecard[dataset_page], pagecard[dataset_page_last], CYN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-}
-void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
-    int32_t color = GRY2;
-    if (tun_ctrl == SELECT) color = YEL;
-    else if (tun_ctrl == EDIT) color = GRN;
-    if (tun_ctrl == SELECT && selected_val != selected_last) {
-        draw_string(12, 12+(selected_val+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_val], "", color, BLK);
-        draw_string(12, 12+(selected_last+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_last], "", GRY2, BLK);
-    }
-    else if (tun_ctrl != tun_ctrl_last) {
-        draw_string(12, 12+(selected_val+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_val], "", color, BLK);
-    }
- 
-}
-void draw_bool(bool value, int32_t col) {  // Draws values of boolean data
-    if ((disp_bool_values[col-2] != value) || disp_redraw_all) {  // If value differs, Erase old value and write new
-        draw_string(touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - arraysize(top_menu_buttons[col-2]-1)*(disp_font_width>>1) - 2, 0, top_menu_buttons[col-2], "", (value) ? GRN : LGRY, DGRY);
-        disp_bool_values[col-2] = value;
-    }
-}
-void draw_simbuttons(bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
-    tft.setTextColor(LYEL);
-    for (int32_t row = 0; row < arraysize(simgrid); row++) {
-        for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
-            int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
-            int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
-            if ( strcmp( simgrid[row][col], "    " ) ) {
-                tft.fillCircle(cntr_x, cntr_y, 19, create ? DGRY : BLK);
-                if (create) {
-                    tft.drawCircle(cntr_x, cntr_y, 19, LYEL);
-                    draw_string(cntr_x-(arraysize(simgrid[row][col])-1)*(disp_font_width>>1), cntr_y-(disp_font_height>>1), simgrid[row][col], "", LYEL, DGRY);
-                }
-            }
-        }     
-    }
-}
-void draw_touchgrid(bool side_only) {  // draws edge buttons with names in 'em. If replace_names, just updates names
-    int32_t namelen = 0;
-    tft.setTextColor(WHT);
-    for (int32_t row = 0; row < arraysize(side_menu_buttons); row++) {  // Step thru all rows to draw buttons along the left edge
-        tft.fillRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, DGRY);
-        tft.drawRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, LYEL);
-        namelen = 0;
-        for (uint32_t x = 0 ; x < arraysize(side_menu_buttons[row]) ; x++ ) {
-            if (side_menu_buttons[row][x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
-        }
-        for (int32_t letter = 0; letter < namelen; letter++) {  // Going letter by letter thru each button name so we can write vertically 
-            tft.setCursor( 1, ( touch_cell_v_pix*row) + (touch_cell_v_pix/2) - (int32_t)(4.5*((double)namelen-1)) + (disp_font_height+1)*letter ); // adjusts vertical offset depending how many letters in the button name and which letter we're on
-            tft.println( side_menu_buttons[row][letter] );  // Writes each letter such that the whole name is centered vertically on the button
-        }
-        printf("draw_touchgrid: row=%ld, name=%s\n", row, side_menu_buttons[row]);
-    }
-    if (!side_only) {
-        for (int32_t col = 2; col <= 5; col++) {  // Step thru all cols to draw buttons across the top edge
-            tft.fillRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
-            tft.drawRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // tft.width()-9, 3, 18, (tft.height()/5)-6, 8, LYEL);
-            // draw_bool(top_menu_buttons[btn], btn+3);
-        }
-    }
-}
-
 void draw_dyn_pid (int32_t lineno, double value, double lowlim, double hilim, double target) {
     draw_dyn_pid (lineno, (int32_t)value, (int32_t)lowlim, (int32_t)hilim, (int32_t)target);
 }
@@ -990,6 +982,75 @@ void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim)
 }
 void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim) {
     draw_dyn_pid (lineno, (int32_t)value, (int32_t)lowlim, (int32_t)hilim, -1);
+}
+void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override) {  // color_override = -1 uses default color
+    int32_t color = (color_override == -1) ? colorcard[runmode] : color_override;
+    draw_string (8+6, disp_vshift_pix, modecard[oldmode], "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string (8+6*(2+strlen (modecard[oldmode]))-3, disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string (8+6, disp_vshift_pix, modecard[runmode], "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string (8+6*(2+strlen (modecard[runmode]))-3, disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+}
+void draw_page_name (int32_t page, int32_t page_last) {
+    draw_fixed (true);  // Erase and redraw dynamic data corner of screen with names, units etc.
+    draw_string (83, disp_vshift_pix, pagecard[dataset_page], pagecard[dataset_page_last], CYN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+}
+void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
+    int32_t color = GRY2;
+    if (tun_ctrl == SELECT) color = YEL;
+    else if (tun_ctrl == EDIT) color = GRN;
+    if (tun_ctrl == SELECT && selected_val != selected_last) {
+        draw_string (12, 12+(selected_val+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_val], "", color, BLK);
+        draw_string (12, 12+(selected_last+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_last], "", GRY2, BLK);
+    }
+    else if (tun_ctrl != tun_ctrl_last) {
+        draw_string (12, 12+(selected_val+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_val], "", color, BLK);
+    }
+ 
+}
+void draw_bool (bool value, int32_t col) {  // Draws values of boolean data
+    if ((disp_bool_values[col-2] != value) || disp_redraw_all) {  // If value differs, Erase old value and write new
+        draw_string (touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - arraysize (top_menu_buttons[col-2]-1)*(disp_font_width>>1) - 2, 0, top_menu_buttons[col-2], "", (value) ? GRN : LGRY, DGRY);
+        disp_bool_values[col-2] = value;
+    }
+}
+void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
+    tft.setTextColor (LYEL);
+    for (int32_t row = 0; row < arraysize(simgrid); row++) {
+        for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
+            int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
+            int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
+            if (strcmp (simgrid[row][col], "    " )) {
+                tft.fillCircle (cntr_x, cntr_y, 19, create ? DGRY : BLK);
+                if (create) {
+                    tft.drawCircle (cntr_x, cntr_y, 19, LYEL);
+                    draw_string (cntr_x-(arraysize (simgrid[row][col])-1)*(disp_font_width>>1), cntr_y-(disp_font_height>>1), simgrid[row][col], "", LYEL, DGRY);
+                }
+            }
+        }     
+    }
+}
+void draw_touchgrid (bool side_only) {  // draws edge buttons with names in 'em. If replace_names, just updates names
+    int32_t namelen = 0;
+    tft.setTextColor (WHT);
+    for (int32_t row = 0; row < arraysize (side_menu_buttons); row++) {  // Step thru all rows to draw buttons along the left edge
+        tft.fillRoundRect (-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, DGRY);
+        tft.drawRoundRect (-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, LYEL);
+        namelen = 0;
+        for (uint32_t x = 0 ; x < arraysize (side_menu_buttons[row]) ; x++ ) {
+            if (side_menu_buttons[row][x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
+        }
+        for (int32_t letter = 0; letter < namelen; letter++) {  // Going letter by letter thru each button name so we can write vertically 
+            tft.setCursor (1, ( touch_cell_v_pix*row) + (touch_cell_v_pix/2) - (int32_t)(4.5*((double)namelen-1)) + (disp_font_height+1)*letter); // adjusts vertical offset depending how many letters in the button name and which letter we're on
+            tft.println (side_menu_buttons[row][letter]);  // Writes each letter such that the whole name is centered vertically on the button
+        }
+    }
+    if (!side_only) {
+        for (int32_t col = 2; col <= 5; col++) {  // Step thru all cols to draw buttons across the top edge
+            tft.fillRoundRect (touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
+            tft.drawRoundRect (touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // tft.width()-9, 3, 18, (tft.height()/5)-6, 8, LYEL);
+            // draw_bool (top_menu_buttons[btn], btn+3);
+        }
+    }
 }
 
 void sd_init() {
@@ -1047,7 +1108,7 @@ int32_t read_pin (int32_t pin) {  // reads a digital value from a pin on the con
 void syspower_set (bool val) {
     if (digitalRead (syspower_pin) != val) {
         write_pin (syspower_pin, val);
-        // delay (val * 500);  // Bad!!
+        // delay (val * 500);
     }
 }
 
@@ -1072,52 +1133,54 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names
 }
 
 void setup() {
-    set_pin(heartbeat_led_pin, OUTPUT);
-    set_pin(encoder_a_pin, INPUT_PULLUP);
-    set_pin(encoder_b_pin, INPUT_PULLUP);
-    set_pin(encoder_sw_pin, INPUT_PULLUP);  // The esp32 pullup is too weak. Use resistor
-    set_pin(brake_pwm_pin, OUTPUT);
-    set_pin(steer_pwm_pin, OUTPUT);
-    set_pin(tft_dc_pin, OUTPUT);
-    set_pin(gas_pwm_pin, OUTPUT);
-    set_pin(ignition_pin, OUTPUT);  // drives relay to turn on/off car. Active high
-    set_pin(basicmodesw_pin, INPUT_PULLUP);
-    set_pin(tach_pulse_pin, INPUT_PULLUP);
-    set_pin(speedo_pulse_pin, INPUT_PULLUP);
-    set_pin(joy_horz_pin, INPUT);
-    set_pin(joy_vert_pin, INPUT);
-    set_pin(pressure_pin, INPUT);
-    set_pin(brake_pos_pin, INPUT);
-    set_pin(battery_pin, INPUT);
-    set_pin(hotrc_horz_pin, INPUT);
-    set_pin(hotrc_vert_pin, INPUT);
-    set_pin(hotrc_ch3_pin, INPUT);
-    set_pin(hotrc_ch4_pin, INPUT);
-    set_pin(neopixel_pin, OUTPUT);
-    set_pin(sdcard_cs_pin, OUTPUT);
-    set_pin(tft_cs_pin, OUTPUT);
-    set_pin(pot_wipe_pin, INPUT);
-    set_pin(button_pin, INPUT_PULLUP);    
-    set_pin(syspower_pin, OUTPUT);
-    set_pin(cruise_sw_pin, INPUT_PULLUP);
-    set_pin(tp_irq_pin, INPUT_PULLUP);
-    set_pin(led_rx_pin, OUTPUT);
-    // set_pin(led_tx_pin, OUTPUT);
-    set_pin(encoder_pwr_pin, OUTPUT);
-    // set_pin(tft_ledk_pin, OUTPUT);
-    // set_pin(onewire_pin, OUTPUT);
+    set_pin (heartbeat_led_pin, OUTPUT);
+    set_pin (encoder_a_pin, INPUT_PULLUP);
+    set_pin (encoder_b_pin, INPUT_PULLUP);
+    set_pin (encoder_sw_pin, INPUT_PULLUP);  // The esp32 pullup is too weak. Use resistor
+    set_pin (brake_pwm_pin, OUTPUT);
+    set_pin (steer_pwm_pin, OUTPUT);
+    set_pin (tft_dc_pin, OUTPUT);
+    set_pin (gas_pwm_pin, OUTPUT);
+    set_pin (ignition_pin, OUTPUT);  // drives relay to turn on/off car. Active high
+    set_pin (basicmodesw_pin, INPUT_PULLUP);
+    set_pin (tach_pulse_pin, INPUT_PULLUP);
+    set_pin (speedo_pulse_pin, INPUT_PULLUP);
+    set_pin (joy_horz_pin, INPUT);
+    set_pin (joy_vert_pin, INPUT);
+    set_pin (pressure_pin, INPUT);
+    set_pin (brake_pos_pin, INPUT);
+    set_pin (battery_pin, INPUT);
+    set_pin (hotrc_horz_pin, INPUT);
+    set_pin (hotrc_vert_pin, INPUT);
+    set_pin (hotrc_ch3_pin, INPUT);
+    set_pin (hotrc_ch4_pin, INPUT);
+    set_pin (neopixel_pin, OUTPUT);
+    set_pin (sdcard_cs_pin, OUTPUT);
+    set_pin (tft_cs_pin, OUTPUT);
+    set_pin (pot_wipe_pin, INPUT);
+    set_pin (button_pin, INPUT_PULLUP);    
+    set_pin (syspower_pin, OUTPUT);
+    set_pin (cruise_sw_pin, INPUT_PULLUP);
+    set_pin (tp_irq_pin, INPUT_PULLUP);
+    set_pin (led_rx_pin, OUTPUT);
+    // set_pin (led_tx_pin, OUTPUT);
+    set_pin (encoder_pwr_pin, OUTPUT);
+    // set_pin (tft_ledk_pin, OUTPUT);
+    // set_pin (onewire_pin, OUTPUT);
+    set_pin (tft_rst_pin, OUTPUT);
 
-    write_pin(ignition_pin, ignition);
-    write_pin(tft_cs_pin, HIGH);   // Prevent bus contention
-    write_pin(sdcard_cs_pin, HIGH);
-    write_pin(tft_dc_pin, LOW);
-    write_pin(led_rx_pin, LOW);  // Light up
-    // write_pin(led_tx_pin, HIGH);  // Off
-    write_pin(syspower_pin, syspower);
-    write_pin(encoder_pwr_pin, HIGH);
+    write_pin (ignition_pin, ignition);
+    write_pin (tft_cs_pin, HIGH);   // Prevent bus contention
+    write_pin (sdcard_cs_pin, HIGH);   // Prevent bus contention
+    write_pin (tft_dc_pin, LOW);
+    write_pin (led_rx_pin, LOW);  // Light up
+    // write_pin (led_tx_pin, HIGH);  // Off
+    write_pin (syspower_pin, syspower);
+    write_pin (encoder_pwr_pin, HIGH);
+    write_pin (tft_rst_pin, HIGH);
     
-    analogReadResolution(adc_bits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
-    Serial.begin(115200);  // Open serial port
+    analogReadResolution (adc_bits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
+    Serial.begin (115200);  // Open serial port
     // printf("Serial port open\n");  // This works on Due but not ESP32
     
     for (int32_t x=0; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
@@ -1147,9 +1210,9 @@ void setup() {
         }
         else Serial.println(F("Capacitive touchscreen started"));
     }
-    strip.begin();  // start datastream
-    strip.show();  // Turn off the pixel
-    strip.setBrightness(neopixel_brightness);  // It truly is incredibly bright
+    neostrip.begin();  // start datastream
+    neostrip.show();  // Turn off the pixel
+    neostrip.setBrightness (neopixel_brightness);  // It truly is incredibly bright
     // 230417 removing sdcard init b/c boot is hanging here unless I insert this one precious SD card
     // Serial.print(F("Initializing filesystem...  "));  // SD card is pretty straightforward, a single call. 
     // if (! sd.begin(usd_cs_pin, SD_SCK_MHZ(25))) {   // ESP32 requires 25 mhz limit
@@ -1160,35 +1223,39 @@ void setup() {
     // Serial.println(F("Filesystem started"));
 
     // Set up our interrupts
-    Serial.print(F("Interrupts... "));
-    attachInterrupt(digitalPinToInterrupt(tach_pulse_pin), tach_isr, RISING);
-    attachInterrupt(digitalPinToInterrupt(speedo_pulse_pin), speedo_isr, RISING);
-    attachInterrupt(digitalPinToInterrupt(encoder_a_pin), encoder_a_isr, CHANGE); // One type of encoder (e.g. Panasonic EVE-YBCAJ016B) needs Rising int on pin A only
-    attachInterrupt(digitalPinToInterrupt(encoder_b_pin), encoder_b_isr, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(hotrc_vert_pin), hotrc_vert_isr, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(hotrc_horz_pin), hotrc_horz_isr, FALLING);
-    attachInterrupt(digitalPinToInterrupt(hotrc_ch3_pin), hotrc_ch3_isr, FALLING);
-    attachInterrupt(digitalPinToInterrupt(hotrc_ch4_pin), hotrc_ch4_isr, FALLING);
+    Serial.print (F("Interrupts... "));
+    attachInterrupt (digitalPinToInterrupt(tach_pulse_pin), tach_isr, RISING);
+    attachInterrupt (digitalPinToInterrupt(speedo_pulse_pin), speedo_isr, RISING);
+    // attachInterrupt (digitalPinToInterrupt(encoder_a_pin), encoder_a_rise_isr, RISING); // One type of encoder (e.g. Panasonic EVE-YBCAJ016B) needs Rising int on pin A only
+    // attachInterrupt (digitalPinToInterrupt(encoder_a_pin), encoder_a_fall_isr, FALLING); // One type of encoder (e.g. Panasonic EVE-YBCAJ016B) needs Rising int on pin A only
+    attachInterrupt (digitalPinToInterrupt(encoder_a_pin), encoder_a_isr, CHANGE);
+    attachInterrupt (digitalPinToInterrupt(encoder_b_pin), encoder_b_isr, CHANGE);
+    // attachInterrupt (digitalPinToInterrupt(hotrc_vert_pin), hotrc_vert_rise_isr, RISING);
+    // attachInterrupt (digitalPinToInterrupt(hotrc_vert_pin), hotrc_vert_fall_isr, FALLING);
+    attachInterrupt (digitalPinToInterrupt(hotrc_vert_pin), hotrc_vert_isr, CHANGE);
+    attachInterrupt (digitalPinToInterrupt(hotrc_horz_pin), hotrc_horz_isr, FALLING);
+    attachInterrupt (digitalPinToInterrupt(hotrc_ch3_pin), hotrc_ch3_isr, FALLING);
+    attachInterrupt (digitalPinToInterrupt(hotrc_ch4_pin), hotrc_ch4_isr, FALLING);
     
-    Serial.println(F("set up and enabled\n"));
+    Serial.println (F("set up and enabled\n"));
     
     // Set up the soren pid loops
-    brakeSPID.set_output_center((double)brake_pulse_stop_us);  // Sets actuator centerpoint and puts pid loop in output centerpoint mode. Becasue actuator value is defined as a deviation from a centerpoint
-    brakeSPID.set_input_limits((double)pressure_min_adc, (double)pressure_max_adc);  // Make sure pressure target is in range
-    brakeSPID.set_output_limits((double)brake_pulse_retract_us, (double)brake_pulse_extend_us);
-    gasSPID.set_input_limits((double)tach_idle_rpm, (double)tach_govern_rpm);
-    gasSPID.set_output_limits((double)gas_pulse_govern_us, (double)gas_pulse_idle_us);
-    cruiseSPID.set_input_limits((double)carspeed_idle_mmph, (double)carspeed_govern_mmph);
-    cruiseSPID.set_output_limits((double)tach_idle_rpm, (double)tach_govern_rpm);
+    brakeSPID.set_output_center ((double)brake_pulse_stop_us);  // Sets actuator centerpoint and puts pid loop in output centerpoint mode. Becasue actuator value is defined as a deviation from a centerpoint
+    brakeSPID.set_input_limits (pressure_min_adc, pressure_max_adc);  // Make sure pressure target is in range
+    brakeSPID.set_output_limits ((double)brake_pulse_retract_us, (double)brake_pulse_extend_us);
+    gasSPID.set_input_limits (tach_idle_rpm, tach_govern_rpm);
+    gasSPID.set_output_limits ((double)gas_pulse_govern_us, (double)gas_pulse_idle_us);
+    cruiseSPID.set_input_limits (carspeed_idle_mmph, carspeed_govern_mmph);
+    cruiseSPID.set_output_limits (tach_idle_rpm, tach_govern_rpm);
       
-    steer_servo.attach(steer_pwm_pin);
-    brake_servo.attach(brake_pwm_pin);
-    gas_servo.attach(gas_pwm_pin);
+    steer_servo.attach (steer_pwm_pin);
+    brake_servo.attach (brake_pwm_pin);
+    gas_servo.attach (gas_pwm_pin);
 
     neopixel_heartbeat = (neopixel_pin >= 0);
-    strip.begin();
-    strip.show(); // Initialize all pixels to 'off'
-    strip.setBrightness(neopixel_brightness);
+    neostrip.begin();
+    neostrip.show(); // Initialize all pixels to 'off'
+    neostrip.setBrightness (neopixel_brightness);
 
     // tempsensebus.begin();
     // printf ("Temp sensors: Found %d devices.\nParasitic power is: ", tempsensebus.getDeviceCount());  // , DEC);
@@ -1203,7 +1270,7 @@ void setup() {
     printf ("HotRC radio signal detected? : %d\n", hotrc_radio_detected);
 
     loopTimer.reset();  // start timer to measure the first loop
-    Serial.println(F("Setup finished"));
+    Serial.println (F("Setup finished"));
 }
 
 // Main loop.  Each time through we do these eight steps:
@@ -1236,27 +1303,27 @@ void loop() {
     // Update inputs.  Fresh sensor data, and filtering.
     //
 
-    // Onboard devices
+    // Onboard devices - takes 12 us to read
     if (button_pin >= 0) {  // if encoder sw is being pressed (switch is active low)
-        button_it = !digitalRead(button_pin);
-        if (button_it != button_last) Serial.println("button\n");
+        button_it = !digitalRead (button_pin);
+        if (button_it != button_last) Serial.println ("button\n");
         button_last = button_it;
     }
 
-    // External digital signals
-    if (!simulating || !sim_basicsw) basicmodesw = !digitalRead(basicmodesw_pin);   // 1-value because electrical signal is active low
-    if (!simulating || !sim_cruisesw) cruise_sw = digitalRead(cruise_sw_pin);
+    // External digital signals - takes 11 us to read
+    if (!simulating || !sim_basicsw) basicmodesw = !digitalRead (basicmodesw_pin);   // 1-value because electrical signal is active low
+    if (!simulating || !sim_cruisesw) cruise_sw = digitalRead (cruise_sw_pin);
 
-    // // Temperature sensors
-    // for (uint8_t x = 0; x < arraysize(tempsensor); x++) {
-    //     temps[x] = get_temp (tempsensor[x]);
+    // Temperature sensors
+    // for (uint8_t x = 0; x < arraysize(temp_addrs); x++) {
+    //     temps[x] = get_temp (temp_addrs[x]);
     // }
 
-    // Encoder
+    // Encoder - takes 10 us to read when no encoder activity
     // Read and interpret encoder switch activity. Encoder rotation is handled in interrupt routine
     // Encoder handler routines should act whenever encoder_sw_action is true, setting it back to false once handled.
     // When handling press, if encoder_long_clicked is nonzero then press is a long press
-    if (!digitalRead(encoder_sw_pin)) {  // if encoder sw is being pressed (switch is active low)
+    if (!digitalRead (encoder_sw_pin)) {  // if encoder sw is being pressed (switch is active low)
         if (!encoder_sw) {  // if the press just occurred
             encoderLongPressTimer.reset();  // start a press timer
             encoder_timer_active = true;  // flag to indicate timing for a possible long press
@@ -1900,7 +1967,7 @@ void loop() {
         neopixel_heart_color[N_RED] = ((colorcard[runmode] & 0xf800) >> 11) << 3;
         neopixel_heart_color[N_GRN] = ((colorcard[runmode] & 0x7e0) >> 5) << 2;
         neopixel_heart_color[N_BLU] = (colorcard[runmode] & 0x1f) << 3;
-        strip.setPixelColor (0, strip.Color (neopixel_heart_color[N_BLU], neopixel_heart_color[N_RED], neopixel_heart_color[N_GRN]));
+        neostrip.setPixelColor (0, neostrip.Color (neopixel_heart_color[N_BLU], neopixel_heart_color[N_RED], neopixel_heart_color[N_GRN]));
     }
     if (heartbeatTimer.expired()) {  // Heartbeat LED
         if (neopixel_heartbeat && heartbeat_pulse) neopixelTimer.reset();
@@ -1916,12 +1983,12 @@ void loop() {
     }
     if (!neopixel_heartbeat && neopixelTimer.expired()) {
         neopixel_wheel_counter++;
-        strip.setPixelColor(0, colorwheel(neopixel_wheel_counter));
+        neostrip.setPixelColor(0, colorwheel(neopixel_wheel_counter));
         neopixelTimer.reset();
     }
     if (neopixel_pin >= 0) {
-        strip.setBrightness (neopixel_heart_fade);
-        strip.show();
+        neostrip.setBrightness (neopixel_heart_fade);
+        neostrip.show();
     }
     // printf("card: 0x%04x, cred: 0x%04x, cgrn: 0x%04x, cblu: 0x%04x, red: 0x%04x, grn: 0x%04x, blu: 0x%04x, brite: %ld\n", colorcard[runmode], (colorcard[runmode] & 0xfe00)>>11 , (colorcard[runmode] & 0x7e0)>>5, (colorcard[runmode] & 0x1f), neopixel_heart_color[N_RED], neopixel_heart_color[N_GRN], neopixel_heart_color[N_BLU], neopixel_heart_fade );
     write_pin (led_rx_pin, (sim_edit_delta <= 0));  // use these Due lights for whatever, here debugging the touchscreen
@@ -2066,11 +2133,9 @@ void loop() {
     loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");  //
 
     if (serial_debugging && timestamp_loop) {
-        // printf ("Loop# %ld, period:%5ld us, freq:%6.1lf Hz, ints:%2ld", loopno, loop_period_us, loop_freq_hz, int_counter); // (int32_t)((double)(abs(mycros()-loopzero)/1000), (int32_t)(1000000/((double)(abs(mycros()-loopzero)));
         printf ("\rRM:%ld Loop# %ld, period:%5ld", runmode, loopno, loop_period_us); // (int32_t)((double)(abs(mycros()-loopzero)/1000), (int32_t)(1000000/((double)(abs(mycros()-loopzero)));
-        //for (int32_t x=1; x<loopindex; x++) printf (", %2ld(%s):%5ld", x, loop_names[x], looptimes_us[x]-looptimes_us[x-1]);
         for (int32_t x=1; x<loopindex; x++) std::cout << ", " << setw(2) << x << "(" << std::setw(3) << loop_names[x] << "):" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1];
-        if (loop_period_us > 25000) printf ("\n");
+        if (loop_period_us > 30000) printf ("\n");
     }
     int_counter = 0;
 }
