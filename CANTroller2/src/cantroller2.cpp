@@ -1119,7 +1119,7 @@ int32_t read_pin (int32_t pin) {  // reads a digital value from a pin on the con
 void syspower_set (bool val) {
     if (digitalRead (syspower_pin) != val) {
         write_pin (syspower_pin, val);
-        delay (val * 500);
+        // delay (val * 500);
     }
 }
 
@@ -1140,6 +1140,34 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names
         }
         timesarray[index] = micros();
         index++;
+    }
+}
+
+void init_tft (void) {
+    if (display_enabled) {
+        Serial.print (F("Init LCD... "));
+        // delay (500); // This is needed to allow the screen board enough time after a cold boot before we start trying to talk to it.
+        tft.begin();
+        tft.setRotation (1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
+        for (int32_t lineno=0; lineno <= arraysize (telemetry); lineno++)  {
+            disp_age_quanta[lineno] = -1;
+            memset (disp_values[lineno],0,strlen (disp_values[lineno]));
+        }
+        for (int32_t row=0; row<arraysize (disp_bool_values); row++) disp_bool_values[row] = 1;
+        for (int32_t row=0; row<arraysize (disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
+        for (int32_t row=0; row<arraysize (disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
+
+        tft.fillScreen (BLK);  // Black out the whole screen
+        draw_fixed (false);
+        draw_touchgrid (false);
+        Serial.println (F("Success"));
+
+        Serial.print(F("Captouch initialization... "));
+        if (! touchpanel.begin(40)) {     // pass in 'sensitivity' coefficient
+            Serial.println (F("Couldn't start FT6206 touchscreen controller"));
+            // while (1);
+        }
+        else Serial.println (F("Capacitive touchscreen started"));
     }
 }
 
@@ -1178,6 +1206,7 @@ void setup() {
     set_pin (encoder_pwr_pin, OUTPUT);
     // set_pin (tft_ledk_pin, OUTPUT);
     // set_pin (onewire_pin, OUTPUT);
+    set_pin (tft_rst_pin, OUTPUT);
 
     write_pin (ignition_pin, ignition);
     write_pin (tft_cs_pin, HIGH);   // Prevent bus contention
@@ -1187,7 +1216,8 @@ void setup() {
     // write_pin (led_tx_pin, HIGH);  // Off
     write_pin (syspower_pin, syspower);
     write_pin (encoder_pwr_pin, HIGH);
-
+    write_pin (tft_rst_pin, HIGH);
+    
     analogReadResolution (adc_bits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
     Serial.begin (115200);  // Open serial port
     // printf("Serial port open\n");  // This works on Due but not ESP32
@@ -1195,30 +1225,32 @@ void setup() {
     for (int32_t x=0; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
     
     if (display_enabled) {
-        Serial.print (F("Init LCD... "));
         delay (500); // This is needed to allow the screen board enough time after a cold boot before we start trying to talk to it.
-        tft.begin();
-        tft.setRotation (1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
-        for (int32_t lineno=0; lineno <= arraysize (telemetry); lineno++)  {
-            disp_age_quanta[lineno] = -1;
-            memset (disp_values[lineno],0,strlen (disp_values[lineno]));
-        }
-        for (int32_t row=0; row<arraysize (disp_bool_values); row++) disp_bool_values[row] = 1;
-        for (int32_t row=0; row<arraysize (disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
-        for (int32_t row=0; row<arraysize (disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
-
-        tft.fillScreen (BLK);  // Black out the whole screen
-        draw_fixed (false);
-        draw_touchgrid (false);
-        Serial.println (F("Success"));
-
-        Serial.print(F("Captouch initialization... "));
-        if (! touchpanel.begin(40)) {     // pass in 'sensitivity' coefficient
-            Serial.println (F("Couldn't start FT6206 touchscreen controller"));
-            // while (1);
-        }
-        else Serial.println (F("Capacitive touchscreen started"));
+        init_tft();
     }
+    //     Serial.print (F("Init LCD... "));
+    //     tft.begin();
+    //     tft.setRotation (1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
+    //     for (int32_t lineno=0; lineno <= arraysize (telemetry); lineno++)  {
+    //         disp_age_quanta[lineno] = -1;
+    //         memset (disp_values[lineno],0,strlen (disp_values[lineno]));
+    //     }
+    //     for (int32_t row=0; row<arraysize (disp_bool_values); row++) disp_bool_values[row] = 1;
+    //     for (int32_t row=0; row<arraysize (disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
+    //     for (int32_t row=0; row<arraysize (disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
+
+    //     tft.fillScreen (BLK);  // Black out the whole screen
+    //     draw_fixed (false);
+    //     draw_touchgrid (false);
+    //     Serial.println (F("Success"));
+
+    //     Serial.print(F("Captouch initialization... "));
+    //     if (! touchpanel.begin(40)) {     // pass in 'sensitivity' coefficient
+    //         Serial.println (F("Couldn't start FT6206 touchscreen controller"));
+    //         // while (1);
+    //     }
+    //     else Serial.println (F("Capacitive touchscreen started"));
+    // }
     neostrip.begin();  // start datastream
     neostrip.show();  // Turn off the pixel
     neostrip.setBrightness (neopixel_brightness);  // It truly is incredibly bright
@@ -1472,6 +1504,9 @@ void loop() {
             hotrc_radio_detected = true;
         }
     }
+
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "joy");  //
+
     // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     //
     // printf("mode: %d, panic: %d, vpos: %4ld, min: %4ld, max: %4ld, elaps: %6ld", runmode, panic_stop, ctrl_pos_adc[VERT][FILT], hotrc_pos_failsafe_min_adc, hotrc_pos_failsafe_max_adc, hotrcPanicTimer.elapsed());
@@ -1481,7 +1516,7 @@ void loop() {
     
     if (runmode == BASIC) {  // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering stell works.
         if (we_just_switched_modes) {  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
-            syspower = HIGH;  // Power up devices if not already
+            // syspower = HIGH;  // Power up devices if not already
             gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
             motorParkTimer.reset();  // Set a timer to timebox this effort
             park_the_motors = true;  // Flags the motor parking to happen
@@ -1490,7 +1525,7 @@ void loop() {
     }
     else if (runmode == SHUTDOWN) { // In shutdown mode we stop the car if it's moving then park the motors.
         if (ignition && !panic_stop) {
-            syspower = HIGH;  // Power up devices if not already
+            // syspower = HIGH;  // Power up devices if not already
             runmode = STALL;
         }
         else if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
@@ -1527,11 +1562,11 @@ void loop() {
             }
         }
         else if (calmode_request) {  // if fully shut down and cal mode requested
-            syspower = HIGH;  // Power up devices if not already
+            // syspower = HIGH;  // Power up devices if not already
             runmode = CAL;
         }
         else if (sleepInactivityTimer.expired()) {
-            syspower = LOW;  // Power down devices
+            // syspower = LOW;  // Power down devices
             // go to sleep?    
         }
     }
@@ -1655,7 +1690,10 @@ void loop() {
         if (serial_debugging) Serial.println (F("Error: Invalid runmode entered"));  // ,  runmode
         runmode = SHUTDOWN;
     }
-    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "modes");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
+
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "mod");  //
+
+    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
     //
     if (pidTimer.expired() && !(runmode == SHUTDOWN && shutdown_complete)) {  // Recalculate pid and update outputs, at regular intervals
         
@@ -1727,7 +1765,7 @@ void loop() {
             gas_servo.writeMicroseconds (gas_pulse_out_us);  // Write result to servo
         }
     }
-    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
+
     // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
     //
     // This section should become a real time self-diagnostic system, to look for anything that doesn't seem right and display an
@@ -1755,7 +1793,8 @@ void loop() {
         // into camp after a ride, and kill the engine before we stop the car. For a fraction of a second the engine would keep turning anyway.
         // Or fopr that matter whenever the carb is out of tune and making the engine diesel after we kill the ign.
     }
-    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "diag");  //
+
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");  //
     
     // Touchscreen handling - takes 800 us to handle every 20ms when the touch timer expires, otherwise 20 us (includes touch timer + encoder handling w/o activity)
     //
@@ -1851,7 +1890,8 @@ void loop() {
             touch_longpress_valid = true;
         }
     }
-    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "touch");  //
+
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tch");  //
 
     // Encoder handling
     //
@@ -1880,6 +1920,7 @@ void loop() {
         }
         encoder_delta = 0;  // Our responsibility to reset this flag after handling events
     }
+
     loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "enc");  //
 
     // Tuning : implement effects of changes made by encoder or touchscreen to simulating, dataset_page, selected_value, or tuning_ctrl
@@ -1960,7 +2001,8 @@ void loop() {
             if (selected_value == 7) adj_val (&brake_pos_zeropoint_thou, sim_edit_delta, brake_pos_nom_lim_retract_thou, brake_pos_nom_lim_extend_thou);
         }
     }
-    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tune");  //
+    
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tun");  //
 
     // Update derived variables values in case they have changed
     //
@@ -1972,8 +2014,6 @@ void loop() {
     gas_pulse_govern_us = map ((int32_t)(gas_governor_percent*(tach_redline_rpm-tach_idle_rpm)/tach_redline_rpm), 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
     carspeed_govern_mmph = d_map ((double)gas_governor_percent, 0, 100, 0, carspeed_redline_mmph);  // Governor must scale the top vehicle speed proportionally
     
-    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dvars");  //
-
     // Panic stop logic and Update output signals
     //
     if ((ignition_last && !ignition) || (hotrc_radio_detected_last && !hotrc_radio_detected)) panic_stop = true;  
@@ -1982,8 +2022,8 @@ void loop() {
     if (ignition != ignition_last) {  // Car was turned on or off
         if (!ignition || !panic_stop) write_pin (ignition_pin, ignition);  // Make it real
     }
-    if (syspower != syspower_last) syspower_set (syspower);
-    syspower_last = syspower;
+    // if (syspower != syspower_last) syspower_set (syspower);
+    // syspower_last = syspower;
     ignition_last = ignition; // Make sure this goes after the last comparison
     hotrc_radio_detected_last = hotrc_radio_detected;
     
@@ -1991,7 +2031,7 @@ void loop() {
     write_pin (led_rx_pin, (sim_edit_delta <= 0));  // use these Due lights for whatever, here debugging the touchscreen
     // write_pin (led_tx_pin, !touch_now_touched);  // use these Due lights for whatever, here debugging the touchscreen
     
-    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "exts");  //
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
 
     // Heartbeat led algorithm
     if (neopixel_heartbeat) { // Make the neopixel into a beating heart, in the color of the current runmode 
@@ -2023,12 +2063,12 @@ void loop() {
         neostrip.setPixelColor (0, colorwheel (++neopixel_wheel_counter));
         neopixelTimer.reset();
     }
-    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "heart");  //
+loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "hrt");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
 
     // Display updates
     //
-    if (display_enabled) {  // } && dispRefreshTimer.expired())  {
-        // dispRefreshTimer.reset();
+    if (display_enabled && dispRefreshTimer.expired())  {
+        dispRefreshTimer.reset();
         if (simulating != simulating_last) draw_simbuttons (simulating);  // if we just entered simulator draw the simulator buttons, or if we just left erase them
         if (disp_dataset_page_dirty || disp_redraw_all) draw_page_name (dataset_page, dataset_page_last);
         if (disp_selected_val_dirty || disp_redraw_all) draw_selected_name (tuning_ctrl, tuning_ctrl_last, selected_value, selected_value_last);
@@ -2038,10 +2078,8 @@ void loop() {
         disp_selected_val_dirty = false;
         disp_sidemenu_dirty = false;
         disp_runmode_dirty = false;
-    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d1");  //
         int32_t range;
         draw_dyn_pid(1, carspeed_filt_mmph, 0.0, carspeed_redline_mmph, cruiseSPID.get_target());
-    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d1.1");  //
         draw_dyn_pid(2, tach_filt_rpm, 0.0, tach_redline_rpm, gasSPID.get_target());
         draw_dyn_pid(3, pressure_filt_psi, pressure_min_psi, pressure_max_psi, brakeSPID.get_target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
         draw_dynamic(4, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
@@ -2052,7 +2090,6 @@ void loop() {
         draw_dynamic(9, brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
         draw_dynamic(10, gas_pulse_out_us, gas_pulse_redline_us, gas_pulse_idle_us);
         draw_dynamic(11, steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);
-    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d2");  //
 
         if (dataset_page == RUN) {
             draw_dynamic(12, battery_filt_mv, 0.0, battery_max_mv);
@@ -2064,7 +2101,6 @@ void loop() {
             draw_dynamic(17, sim_pressure, -1, -1);
             draw_dynamic(18, sim_tach, -1, -1);
             draw_dynamic(19, sim_speedo, -1, -1);
-loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d3");  //
         }
     
         else if (dataset_page == JOY) {
@@ -2146,7 +2182,8 @@ loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d3");  //
         draw_bool (ignition, 4);
         draw_bool (syspower, 5);
     }
-    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d4");  //
+    
+    loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dis");    // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
 
     // Do the control loop bookkeeping at the end of each loop
     //
@@ -2163,13 +2200,30 @@ loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "d3");  //
     if (!loop_period_us) loop_period_us++;  // ensure loop period is never zero since it gets divided by
     loop_freq_hz = 1000000.0/(double)loop_period_us;
     loopno++;  // I like to count how many loops
+    
+    if (loop_period_us > 15000 && timing_tft_reset == 0) timing_tft_reset = 1;
+    if (timing_tft_reset == 0) tftDelayTimer.reset();
+    else if (!tftDelayTimer.expired()) tftResetTimer.reset();
+    else {
+        if (timing_tft_reset == 1) {
+            write_pin (tft_rst_pin, LOW);
+            timing_tft_reset = 2;
+        }
+        else if (timing_tft_reset == 2 && tftResetTimer.expired()) {
+            write_pin (tft_rst_pin, HIGH);
+            init_tft();
+            timing_tft_reset = 0;
+        }
+    }
+    
     loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");  //
 
-    if (serial_debugging && timestamp_loop) {
-        printf ("Loop# %ld, period:%5ld us, freq:%6.1lf Hz, ints:%2ld", loopno, loop_period_us, loop_freq_hz, int_counter); // (int32_t)((double)(abs(mycros()-loopzero)/1000), (int32_t)(1000000/((double)(abs(mycros()-loopzero)));
+    if (serial_debugging && timestamp_loop) {  // } && loop_period_us > 15000) {
+        // printf ("Loop# %ld, period:%5ld us, freq:%6.1lf Hz, ints:%2ld", loopno, loop_period_us, loop_freq_hz, int_counter); // (int32_t)((double)(abs(mycros()-loopzero)/1000), (int32_t)(1000000/((double)(abs(mycros()-loopzero)));
+        printf ("RM:%ld Lp#%ld us:%5ld ", runmode, loopno, loop_period_us); // (int32_t)((double)(abs(mycros()-loopzero)/1000), (int32_t)(1000000/((double)(abs(mycros()-loopzero)));
         //for (int32_t x=1; x<loopindex; x++) printf (", %2ld(%s):%5ld", x, loop_names[x], looptimes_us[x]-looptimes_us[x-1]);
-        for (int32_t x=1; x<loopindex; x++) std::cout << ", " << setw(2) << x << "(" << std::setw(5) << loop_names[x] << "):" << looptimes_us[x]-looptimes_us[x-1];
-        printf (" us\n");
+        for (int32_t x=1; x<loopindex; x++) std::cout << ", " << std::setw(3) << loop_names[x] << x << ": " << std::setw(5) << looptimes_us[x]-looptimes_us[x-1];
+        printf ("\n");
     }
     int_counter = 0;
     loopTimer.reset();
