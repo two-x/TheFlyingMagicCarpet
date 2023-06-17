@@ -110,13 +110,13 @@ using namespace std;
     #define gas_pwm_pin 16  // (pwm1) - Output, PWM signal duty cycle controls throttle target. On Due this is the pin labeled DAC1 (where A13 is on Mega)
     #define hotrc_horz_pin 17  // (pwm0 / tx1) - Hotrc thumb joystick input.
     #define hotrc_vert_pin 18  // (pwm0 / rx1) - Hotrc bidirectional trigger input
-    #define syspower_pin 19  // (usb-otg) - Output, flips a relay to power all the tranducers
+    #define syspower_pin 38  // (usb-otg) - Output, flips a relay to power all the tranducers
     #define hotrc_ch4_pin 20  // (usb-otg) - Hotrc Ch3 toggle output, used to toggle cruise mode
     #define hotrc_ch3_pin 21  // (pwm0) - Hotrc Ch4 toggle output, used to panic stop & kill ignition
     #define tach_pulse_pin 35  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
     #define speedo_pulse_pin 36  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
     #define ignition_pin 37  // (spi-ram / oct-spi) - Output flips a relay to kill the car ignition, active high (no pullup)
-    #define onewire_pin 38  // // (spi-ram / oct-spi) - Onewire bus for temperature sensor data
+    #define onewire_pin 19  // // (spi-ram / oct-spi) - Onewire bus for temperature sensor data
     #define tft_rst_pin 39  // TFT Reset
     #define encoder_b_pin 40  // Int input, The B pin (aka DT pin) of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
     #define encoder_a_pin 41  // Int input, The A pin (aka CLK pin) of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
@@ -179,8 +179,8 @@ using namespace std;
 #define adcbits 12
 #define adcrange_adc 4095  // = 2^adcbits-1
 #define adcmidscale_adc 2047  // = 2^(adcbits-1)-1
-#define serial_debugging false
-#define timestamp_loop false  // Makes code write out timestamps throughout loop to serial port
+#define serial_debugging true
+#define timestamp_loop true  // Makes code write out timestamps throughout loop to serial port
 
 // Readily available possibilities we could wire up if we want
 //
@@ -340,7 +340,7 @@ char simgrid[4][3][5] = {
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
 };
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
-char side_menu_buttons[5][4] = { "PAG", "SEL", "\x1e  ", "\x1f  ", "SIM" };  // Pad shorter names with spaces on the right
+char side_menu_buttons[5][4] = { "PAG", "SEL", "\x18  ", "\x19  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 char disp_draw_buffer[8];  // Used to convert integers to ascii for purposes of displaying on screen
 char disp_draw_buffer2[8];  // Used to convert integers to ascii for purposes of displaying on screen
@@ -600,6 +600,8 @@ Timer loopTimer (1000000);  // how long the previous main loop took to run (in u
 int32_t loop_period_us = 100000;
 double loop_freq_hz = 1;  // run loop real time frequency (in Hz)
 volatile int32_t int_counter = 0;  // counts interrupts per loop
+bool wait_one_loop = false;
+bool wait_one_loop_last = false;
 int32_t loopno = 1;
 uint32_t looptimes_us[20];
 std::vector<string> loop_names(20);
@@ -708,15 +710,19 @@ static Adafruit_NeoPixel neostrip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ80
 
 // Temperature sensor related
 enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
+Timer tempTimer (2000000);
+enum temp_status { IDLE, CONVERT, DELAY };
+int32_t temp_status = IDLE;
 double temps[6];
 double temp_min = -67.0;  // Minimum reading of sensor is -25 C = -67 F
 double temp_max = 257.0;  // Maximum reading of sensor is 125 C = 257 F
 double temp_room = 77.0;  // "Room" temperature is 25 C = 77 F
 int32_t temp_detected_device_ct = 0;
-int32_t temperature_precision = 9;  // 9-12 bit resolution
+int32_t temperature_precision = 12;  // 9-12 bit resolution
 OneWire onewire (onewire_pin);
 DallasTemperature tempsensebus (&onewire);
 DeviceAddress temp_temp_addr;
+int32_t temp_current_index = 0;
 DeviceAddress temp_addrs[6];
 
 // Interrupt service routines
@@ -1161,6 +1167,22 @@ void tft_watchdog (void) {
     }
 }
 
+// TaskHandle_t Task1;
+// void codeForTask1 (void * parameter) {
+//     for(;;) {
+//         if (tempTimer.expired()) {
+//             int32_t start = mycros();
+//             tempsensebus.setWaitForConversion (false);  // makes it async
+//             tempsensebus.requestTemperatures();
+//             int32_t mid = mycros();
+//             temps[0] = tempsensebus.getTempCByIndex(0);
+//             int32_t done = mycros();
+//             printf ("Temp: %lf, took %ld + %ld = %ld us.\n", temps[0], mid-start, done-mid, done-start);
+//             tempTimer.reset();
+//         }
+//     }
+// }
+
 void setup() {
     set_pin (heartbeat_led_pin, OUTPUT);
     set_pin (encoder_a_pin, INPUT_PULLUP);
@@ -1300,28 +1322,24 @@ void setup() {
         else printf ("Found ghost device : index %d, addr unknown\n", x);  // printAddress (temp_addrs[x]);
         tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
     }
-    // Serial.println ("Before blocking requestForConversion");
-    // unsigned long start = mycros();
-    // tempsensebus.requestTemperatures();
-    // unsigned long stop = mycros();
-    // Serial.println ("After blocking requestForConversion");
-    // Serial.print ("Time used: ");
-    // Serial.println (stop - start);
-    // Serial.print ("Temperature: ");  // get temperature
-    // Serial.println (tempsensebus.getTempCByIndex(0));
-    // Serial.println ("Before NON-blocking/async requestForConversion");
-    // start = mycros();
-    // tempsensebus.setWaitForConversion (false);  // makes it async
-    // tempsensebus.requestTemperatures();
-    // tempsensebus.setWaitForConversion (true);
-    // stop = mycros();
-    // Serial.println ("After NON-blocking/async requestForConversion");
-    // Serial.print ("Time used: ");
-    // Serial.println (stop - start);
-    // delay (750 / (1 << (12 - temperature_precision)));
-    // Serial.print ("Temperature: ");  // get temperature
-    // Serial.println (tempsensebus.getTempCByIndex(0));
+
+    int32_t start = mycros();
+    tempsensebus.requestTemperatures();
+    int32_t mid = mycros();
+    double temp = tempsensebus.getTempCByIndex(0);
+    int32_t done = mycros();
+    printf ("Test blocking request: %ld us, received: %ld us, temp = %lf.\n", mid-start, done-mid, temp);
+    start = mycros();
+    tempsensebus.setWaitForConversion (false);  // makes it async
+    tempsensebus.requestTemperatures();
+    tempsensebus.setWaitForConversion (true);
+    mid = mycros();
+    delay (750 / (1 << (12 - temperature_precision)));
+    temp = tempsensebus.getTempCByIndex(0);
+    done = mycros();
+    printf (" Non-blocking request: %ld us, received: %ld us, temp = %lf.\n", mid-start, done-mid, temp);
     
+    // xTaskCreatePinnedToCore ( codeForTask1, "Task_1", 1000, NULL, 1, &Task1, 0);
     // if (ctrl == HOTRC) {  // Look for evidence of a normal (not failsafe) hotrc signal. If it's not yet powered on, we will ignore its spurious poweron ignition event
     //     int32_t temp = hotrc_vert_pulse_us;
     //     hotrc_radio_detected = ((ctrl_lims_adc[HOTRC][VERT][MIN] <= temp && temp < hotrc_pos_failsafe_min_adc) || (hotrc_pos_failsafe_max_adc < temp && temp <= ctrl_lims_adc[HOTRC][VERT][MAX]));
@@ -1373,6 +1391,30 @@ void loop() {
     // for (uint8_t x = 0; x < arraysize(temp_addrs); x++) {
     //     temps[x] = get_temp (temp_addrs[x]);
     // }
+
+    int32_t temp_start, temp_mid, temp_done;
+    if (tempTimer.expired()) {
+        if (temp_status == IDLE) {
+            wait_one_loop = true;
+            if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
+            tempsensebus.setWaitForConversion (false);  // makes it async
+            tempsensebus.requestTemperatures();
+            tempsensebus.setWaitForConversion (true);
+            tempTimer.set(180000);  // Give some time before reading temp
+            temp_status = CONVERT;
+        }
+        else if (temp_status == CONVERT) {
+            wait_one_loop = true;
+            temps[temp_current_index] = tempsensebus.getTempFByIndex(temp_current_index);
+            tempTimer.set(1500000);
+            temp_status = DELAY;
+        }
+        else if (temp_status == DELAY) {
+            printf ("temps[%ld] = %lf F\n", temp_current_index, temps[temp_current_index]);
+            tempTimer.set(60000);
+            temp_status = IDLE;
+        }
+    }
 
     // Encoder - takes 10 us to read when no encoder activity
     // Read and interpret encoder switch activity. Encoder rotation is handled in interrupt routine
@@ -1792,7 +1834,8 @@ void loop() {
     int32_t touch_x, touch_y, trow, tcol;
     // if (touchPollTimer.expired()) {
     // touchPollTimer.reset();
-    if (touchpanel.touched() == 1) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
+    if (touchpanel.touched() == 1 && !wait_one_loop) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
+        wait_one_loop = true;
         touch_accel = 1 << touch_accel_exponent;  // determine value editing rate
         TS_Point touchpoint = touchpanel.getPoint();  // Retreive a point
         touchpoint.x = map (touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
@@ -2066,7 +2109,8 @@ void loop() {
         disp_selected_val_dirty = false;
         disp_sidemenu_dirty = false;
         disp_runmode_dirty = false;
-        if (dispRefreshTimer.expired() || sim_edit_delta != 0) {
+        if (dispRefreshTimer.expired() || sim_edit_delta != 0 && !wait_one_loop) {
+            wait_one_loop = true;
             dispRefreshTimer.reset();
             int32_t range;
             draw_dyn_pid(1, carspeed_filt_mmph, 0.0, carspeed_redline_mmph, cruiseSPID.get_target());
@@ -2175,6 +2219,8 @@ void loop() {
 
     // Do the control loop bookkeeping at the end of each loop
     //
+    wait_one_loop_last = wait_one_loop;
+    wait_one_loop = false;
     simulating_last = simulating;
     tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
     dataset_page_last = dataset_page;
@@ -2192,7 +2238,7 @@ void loop() {
     if (timestamp_loop) {
         loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");  //
         printf ("\rRM:%ld Lp#%ld us:%5ld ", runmode, loopno, loop_period_us);
-        for (int32_t x=1; x<loopindex; x++) std::cout << ", " << std::setw(3) << loop_names[x] << x << ": " << std::setw(4) << looptimes_us[x]-looptimes_us[x-1];
+        // for (int32_t x=1; x<loopindex; x++) std::cout << ", " << std::setw(3) << loop_names[x] << x << ": " << std::setw(4) << looptimes_us[x]-looptimes_us[x-1];
         if (loop_period_us > 25000) printf ("\n");
     }
     int_counter = 0;
