@@ -204,14 +204,16 @@ using namespace std;
 // display related globals
 #define BLK  0x0000
 #define BLU  0x001f
-#define RBLU 0x043f  // royal blue. b/c true blue too dark to see over black
+#define MBLU 0x009f  // midnight blue. b/c true blue too dark to see over black
+#define RBLU 0x043f  // royal blue
 #define RED  0xf800
 #define DRED 0xb000
 #define GRN  0x07e0
 #define CYN  0x07ff  // 00000 111 111 11111 
 #define DCYN 0x0575  //
 #define MGT  0xf81f
-#define ORG  0xfca0 
+#define ORG  0xfca0
+#define DORG 0xfa40  // Dark orange
 #define YEL  0xffe0
 #define LYEL 0xfff8
 #define WHT  0xffff
@@ -338,7 +340,7 @@ char simgrid[4][3][5] = {
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
 };
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
-char side_menu_buttons[5][4] = { "PG ", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
+char side_menu_buttons[5][4] = { "PAG", "SEL", "\x1e  ", "\x1f  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 char disp_draw_buffer[8];  // Used to convert integers to ascii for purposes of displaying on screen
 char disp_draw_buffer2[8];  // Used to convert integers to ascii for purposes of displaying on screen
@@ -350,7 +352,7 @@ bool disp_selected_val_dirty = true;
 bool disp_dataset_page_dirty = true;
 bool disp_sidemenu_dirty = true;
 bool disp_runmode_dirty = true;
-int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, CYN, RBLU };
+int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, CYN, MBLU };
 int32_t disp_needles[disp_lines];
 int32_t disp_targets[disp_lines];
 int32_t disp_age_quanta[disp_lines];
@@ -430,12 +432,17 @@ int32_t battery_convert_polarity = FWD;
 double battery_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 
 // potentiometer related
-int32_t pot_adc = adcmidscale_adc;
-int32_t pot_filt_adc = pot_adc;
+double pot_percent = 50;
+double pot_filt_percent = pot_percent;
+double pot_min_percent = 0;  //
+double pot_max_percent = 100;  //
 //  ---- tunable ----
+double pot_min_adc = 0;  // TUNED 230603 - Used only in determining theconversion factor
+double pot_max_adc = 4005;  // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
+double pot_convert_percent_per_adc = 100/(pot_max_adc - pot_min_adc);  // 100 % / (3996 adc - 0 adc) = 0.025 %/adc
+bool pot_convert_invert = false;
+int32_t pot_convert_polarity = FWD;
 double pot_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-int32_t pot_min_adc = 0;  // TUNED 230603
-int32_t pot_max_adc = 3996;  // TUNED 230604
 
 // controller related
 enum ctrls { HOTRC };  // This is a bad hack. Since JOY is already enum'd as 1 for dataset pages
@@ -512,17 +519,27 @@ int32_t brake_pulse_extend_max_us = 2500;  // Longest pulsewidth acceptable to j
 int32_t brake_pulse_margin_us = 40; // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated 
 
 // brake actuator position related
-int32_t brake_pos_adc;
-int32_t brake_pos_filt_adc;
+double brake_pos_thou;
+double brake_pos_filt_thou;
 //  ---- tunable ----
+double brake_pos_convert_thou_per_adc = 3.3 * 10000.0 * 1000.0 / (5.0 * adcrange_adc * 557);  // 3.3 v * 10k ohm * 1k m-in/in / (5 v * 4095 adc * 557 ohm/in) = 0.0029 in/adc = 2.89 m-in/adc 
+bool brake_pos_convert_invert = false;
+int32_t brake_pos_convert_polarity = FWD;
 double brake_pos_ema_alpha = 0.25;
-int32_t brake_pos_abs_min_retract_adc = 116;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. (ADC count 0-4095)
-int32_t brake_pos_nom_lim_retract_adc = 175;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (ADC count 0-4095)
-int32_t brake_pos_zeropoint_adc = 1100;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (ADC count 0-4095)
-int32_t brake_pos_park_adc = 1465;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (ADC count 0-4095)
-int32_t brake_pos_nom_lim_extend_adc = 1600;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (ADC count 0-4095)
-int32_t brake_pos_abs_max_extend_adc = 2872;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (ADC count 0-4095)
-int32_t brake_pos_margin_adc = 10;  //
+double brake_pos_abs_min_retract_thou = 335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("thou"sandths of an inch)
+double brake_pos_nom_lim_retract_thou = 506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (thou)
+double brake_pos_zeropoint_thou = 3179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (thou)
+double brake_pos_park_thou = 4234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (thou)
+double brake_pos_nom_lim_extend_thou = 4624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (thou)
+double brake_pos_abs_max_extend_thou = 8300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (thou)
+double brake_pos_margin_thou = 29;  //
+// int32_t brake_pos_abs_min_retract_adc = 116;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. (ADC count 0-4095)
+// int32_t brake_pos_nom_lim_retract_adc = 175;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (ADC count 0-4095)
+// int32_t brake_pos_zeropoint_adc = 1100;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (ADC count 0-4095)
+// int32_t brake_pos_park_adc = 1465;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (ADC count 0-4095)
+// int32_t brake_pos_nom_lim_extend_adc = 1600;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (ADC count 0-4095)
+// int32_t brake_pos_abs_max_extend_adc = 2872;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (ADC count 0-4095)
+// int32_t brake_pos_margin_adc = 10;  //    
 
 // throttle servo related
 int32_t gas_pulse_out_us;  // pid loop output to send to the actuator (gas)
@@ -539,31 +556,36 @@ int32_t gas_pulse_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_idle_u
 // tachometer related
 volatile int32_t tach_delta_us = 0;
 Timer tachPulseTimer;  // OK to not be volatile?
-int32_t tach_rpm = 50;  // Current engine speed, raw as sensed (in rpm)
-int32_t tach_filt_rpm = 50;  // Current engine speed, filtered (in rpm)
-int32_t tach_govern_rpm;  // Create an artificially reduced maximum for the engine speed. This is given a value in the loop
-int32_t tach_target_rpm;  // Stores new setpoint to give to the pid loop (gas)
+double tach_rpm = 50;  // Current engine speed, raw as sensed (in rpm)
+double tach_filt_rpm = 50;  // Current engine speed, filtered (in rpm)
+double tach_govern_rpm;  // Create an artificially reduced maximum for the engine speed. This is given a value in the loop
 //  ---- tunable ----
+double tach_convert_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min
+bool tach_convert_invert = true;
+int32_t tach_convert_polarity = FWD;      
 double tach_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-int32_t tach_idle_rpm = 700;  // Min value for engine hz, corresponding to low idle (in rpm)
-int32_t tach_max_rpm = 6000;  // Max possible engine rotation speed
-int32_t tach_redline_rpm = 4000;  // Max value for tach_rpm, pedal to the metal (in rpm)
-int32_t tach_margin_rpm = 15;  // Margin of error for checking engine rpm (in rpm)
+double tach_idle_rpm = 700;  // Min value for engine hz, corresponding to low idle (in rpm)
+double tach_max_rpm = 6000;  // Max possible engine rotation speed
+double tach_redline_rpm = 4000;  // Max value for tach_rpm, pedal to the metal (in rpm)
+double tach_margin_rpm = 15;  // Margin of error for checking engine rpm (in rpm)
 int32_t tach_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
 int32_t tach_delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
 
 // carspeed/speedo related
 volatile int32_t speedo_delta_us = 0;
-int32_t carspeed_govern_mmph;  // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
-int32_t carspeed_mmph;  // Current car speed, raw as sensed (in mmph)
-int32_t carspeed_filt_mmph;  // Current car speed, filtered (in mmph)
-int32_t carspeed_target_mmph;  // Stores new setpoint to give to the pid loop (cruise) in milli-mph
+double carspeed_govern_mmph;  // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
+double carspeed_mmph;  // Current car speed, raw as sensed (in mmph)
+double carspeed_filt_mmph;  // Current car speed, filtered (in mmph)
 Timer speedoPulseTimer;  // OK to not be volatile?
 //  ---- tunable ----
+double speedo_convert_mmph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 * 1000.0 / (19.85 * 12 * 5280);  // 1 rot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 gearing * 20*pi in/rot * 1/12 ft/in * 1000/5280 milli-mi/ft = 179757270 milli-mi/hr (mmph)
+// Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
+bool speedo_convert_invert = true;
+int32_t speedo_convert_polarity = FWD;      
 double carspeed_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-int32_t carspeed_idle_mmph = 4500;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
-int32_t carspeed_redline_mmph = 15000;  // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
-int32_t carspeed_max_mmph = 25000;  // What is max speed car can ever go
+double carspeed_idle_mmph = 4500;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
+double carspeed_redline_mmph = 15000;  // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
+double carspeed_max_mmph = 25000;  // What is max speed car can ever go
 int32_t speedo_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the car is stopped (in us)
 int32_t speedo_delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
             
@@ -687,6 +709,9 @@ static Adafruit_NeoPixel neostrip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ80
 // Temperature sensor related
 enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
 double temps[6];
+double temp_min = -67.0;  // Minimum reading of sensor is -25 C = -67 F
+double temp_max = 257.0;  // Maximum reading of sensor is 125 C = 257 F
+double temp_room = 77.0;  // "Room" temperature is 25 C = 77 F
 int32_t temp_detected_device_ct = 0;
 int32_t temperature_precision = 9;  // 9-12 bit resolution
 OneWire onewire (onewire_pin);
@@ -815,8 +840,9 @@ void draw_needle_shape (int32_t pos_x, int32_t pos_y, int32_t color) {  // draws
     tft.drawFastVLine (pos_x+1, pos_y, 2, color);
 }
 void draw_target_shape (int32_t pos_x, int32_t pos_y, int32_t t_color, int32_t r_color) {  // draws a cute little target symbol
-    tft.drawFastVLine (pos_x, pos_y+6, 3, t_color);
-    tft.drawFastHLine (pos_x-1, pos_y+9, 3, t_color);
+    tft.drawFastVLine (pos_x-1, pos_y+7, 2, t_color);
+    tft.drawFastVLine (pos_x, pos_y+5, 4, t_color);
+    tft.drawFastVLine (pos_x+1, pos_y+7, 2, t_color);
 }
 void draw_bargraph_needle (int32_t n_pos_x, int32_t old_n_pos_x, int32_t pos_y, int32_t n_color) {  // draws a cute little pointy needle
     draw_needle_shape (old_n_pos_x, pos_y, BLK);
@@ -926,11 +952,11 @@ void draw_dyn_pid (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim,
         int32_t corner_x = 124;    
         int32_t corner_y = lineno*disp_line_height_pix+disp_vshift_pix-1;
         int32_t n_pos = map (value, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
-        int32_t ncolor = (n_pos > disp_bargraph_width-disp_bargraph_squeeze || n_pos < disp_bargraph_squeeze) ? RED : GRN;
+        int32_t ncolor = (n_pos > disp_bargraph_width-disp_bargraph_squeeze || n_pos < disp_bargraph_squeeze) ? DORG : GRN;
         n_pos = corner_x + constrain (n_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
         if (target != -1) {  // If target value is given, draw a target on the bargraph too
             int32_t t_pos = map (target, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
-            int32_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || t_pos < disp_bargraph_squeeze) ? RED : ( (t_pos != n_pos) ? YEL : GRN );
+            int32_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || t_pos < disp_bargraph_squeeze) ? DORG : ( (t_pos != n_pos) ? YEL : GRN );
             t_pos = corner_x + constrain (t_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
             if (t_pos != disp_targets[lineno] || (t_pos == n_pos)^(disp_needles[lineno] != disp_targets[lineno]) || disp_redraw_all) {
                 draw_target_shape (disp_targets[lineno], corner_y, BLK, -1);  // Erase old target
@@ -968,7 +994,7 @@ void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override) {  
 }
 void draw_dataset_page (int32_t page, int32_t page_last) {
     draw_fixed (page, page_last, true);  // Erase and redraw dynamic data corner of screen with names, units etc.
-    draw_string (83, disp_vshift_pix, pagecard[page], pagecard[page_last], CYN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string (83, disp_vshift_pix, pagecard[page], pagecard[page_last], RBLU, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
 }
 void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
     if (selected_val != selected_last) draw_string (12, 12+(selected_last+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_last], "", GRY2, BLK);
@@ -976,8 +1002,7 @@ void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t select
 }
 void draw_bool (bool value, int32_t col) {  // Draws values of boolean data
     if ((disp_bool_values[col-2] != value) || disp_redraw_all) {  // If value differs, Erase old value and write new
-        int32_t x_pos = touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - arraysize (top_menu_buttons[col-2]-1)*(disp_font_width>>1) - 2;
-        draw_string (x_pos, 0, top_menu_buttons[col-2], "", (value) ? GRN : LGRY, DGRY);
+        draw_string (touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - arraysize (top_menu_buttons[col-2]-1)*(disp_font_width>>1) - 2, 0, top_menu_buttons[col-2], "", (value) ? GRN : LGRY, DGRY);
         disp_bool_values[col-2] = value;
     }
 }
@@ -1263,13 +1288,39 @@ void setup() {
     neostrip.show(); // Initialize all pixels to 'off'
     neostrip.setBrightness (neopixel_brightness);
 
-    // tempsensebus.begin();
-    // printf ("Temp sensors: Found %d devices.\nParasitic power is: ", tempsensebus.getDeviceCount());  // , DEC);
-    // printf ( (tempsensebus.isParasitePowerMode()) ? "On\n" : "Off\n" );
-    // for (int32_t x = 0; x < arraysize(tempsensor); x++) {
-    //     if (!tempsensebus.getAddress(tempsensor[x], x)) printf ("Failed to find temp sensor %d\n", x);  // printAddress (tempsensor[x]);
-    //     tempsensebus.setResolution (tempsensor[x], temperature_precision);
-    // }
+    tempsensebus.setWaitForConversion (true);  // Do not block during conversion process
+    tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
+    tempsensebus.begin();
+    temp_detected_device_ct = tempsensebus.getDeviceCount();
+    printf ("Temp sensors: Detected %d devices.\nParasitic power is: ", temp_detected_device_ct);  // , DEC);
+    printf ((tempsensebus.isParasitePowerMode()) ? "On\n" : "Off\n");
+    // for (int32_t x = 0; x < arraysize(temp_addrs); x++) {
+    for (int32_t x = 0; x < temp_detected_device_ct; x++) {
+        if (tempsensebus.getAddress (temp_temp_addr, x)) printf ("Found sensor device: index %d, addr %d\n", x, temp_temp_addr);  // temp_addrs[x]
+        else printf ("Found ghost device : index %d, addr unknown\n", x);  // printAddress (temp_addrs[x]);
+        tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
+    }
+    // Serial.println ("Before blocking requestForConversion");
+    // unsigned long start = mycros();
+    // tempsensebus.requestTemperatures();
+    // unsigned long stop = mycros();
+    // Serial.println ("After blocking requestForConversion");
+    // Serial.print ("Time used: ");
+    // Serial.println (stop - start);
+    // Serial.print ("Temperature: ");  // get temperature
+    // Serial.println (tempsensebus.getTempCByIndex(0));
+    // Serial.println ("Before NON-blocking/async requestForConversion");
+    // start = mycros();
+    // tempsensebus.setWaitForConversion (false);  // makes it async
+    // tempsensebus.requestTemperatures();
+    // tempsensebus.setWaitForConversion (true);
+    // stop = mycros();
+    // Serial.println ("After NON-blocking/async requestForConversion");
+    // Serial.print ("Time used: ");
+    // Serial.println (stop - start);
+    // delay (750 / (1 << (12 - temperature_precision)));
+    // Serial.print ("Temperature: ");  // get temperature
+    // Serial.println (tempsensebus.getTempCByIndex(0));
     
     // if (ctrl == HOTRC) {  // Look for evidence of a normal (not failsafe) hotrc signal. If it's not yet powered on, we will ignore its spurious poweron ignition event
     //     int32_t temp = hotrc_vert_pulse_us;
@@ -1299,20 +1350,11 @@ void setup() {
 // 8) Do the control loop bookkeeping at the end of each loop
 //   
 void loop() {
-    // 0) Beginning-of-the-loop nonsense
+    // Beginning-of-the-loop nonsense
     //
     loopindex = 0;  // reset at top of loop
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "top");
-    
-    // Update derived variable values in case they have changed
-    ctrl_db_adc[VERT][BOT] = (adcrange_adc-ctrl_lims_adc[ctrl][VERT][DB])/2;  // Lower threshold of vert joy deadband (ADC count 0-4095)
-    ctrl_db_adc[VERT][TOP] = (adcrange_adc+ctrl_lims_adc[ctrl][VERT][DB])/2;  // Upper threshold of vert joy deadband (ADC count 0-4095)
-    ctrl_db_adc[HORZ][BOT] = (adcrange_adc-ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Lower threshold of horz joy deadband (ADC count 0-4095)
-    ctrl_db_adc[HORZ][TOP] = (adcrange_adc+ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Upper threshold of horz joy deadband (ADC count 0-4095)
-    tach_govern_rpm = map(gas_governor_percent, 0, 100, 0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
-    gas_pulse_govern_us = map(gas_governor_percent*(tach_redline_rpm-tach_idle_rpm)/tach_redline_rpm, 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
-    carspeed_govern_mmph = map(gas_governor_percent, 0, 100, 0, carspeed_redline_mmph);  // Governor must scale the top vehicle speed proportionally
-    
+
     // Update inputs.  Fresh sensor data, and filtering.
     //
 
@@ -1355,36 +1397,33 @@ void loop() {
         encoder_suppress_click = false;  // End click suppression
     }
 
-    // Potentiometer
-    pot_adc = analogRead(pot_wipe_pin);  // Potentiometer
-    ema_filt (pot_adc, &pot_filt_adc, pot_ema_alpha);
+    // Potentiometer - takes 400 us to read & convert (?!)
+    pot_percent = convert_units ((double)analogRead (pot_wipe_pin), pot_convert_percent_per_adc, pot_convert_invert);  // Potentiometer
+    ema_filt (pot_percent, &pot_filt_percent, pot_ema_alpha);
     
-    // Voltage of vehicle battery
-    battery_adc = analogRead(battery_pin);
-    battery_mv = (int32_t)(battery_max_mv*((double)battery_adc)/adcrange_adc);  // convert adc value read into mV    
+    // Voltage of vehicle battery - takes 70 us to read, convert, and filter
+    battery_mv = convert_units ((double)analogRead (battery_pin), battery_convert_mv_per_adc, battery_convert_invert);
     ema_filt (battery_mv, &battery_filt_mv, battery_ema_alpha);  // Apply EMA filter
 
        // Brake position - takes 70 us to read, convert, and filter
     if (!simulating || !sim_brkpos) {
-        brake_pos_adc = analogRead(brake_pos_pin);
-        ema_filt (brake_pos_adc, &brake_pos_filt_adc, brake_pos_ema_alpha);
+        brake_pos_thou = convert_units ((double)analogRead (brake_pos_pin), brake_pos_convert_thou_per_adc, brake_pos_convert_invert);
+        ema_filt (brake_pos_thou, &brake_pos_filt_thou, brake_pos_ema_alpha);
     }
-    else brake_pos_filt_adc = (brake_pos_nom_lim_retract_adc + brake_pos_zeropoint_adc)/2;  // To keep brake position in legal range during simulation
+    else brake_pos_filt_thou = (brake_pos_nom_lim_retract_thou + brake_pos_zeropoint_thou)/2;  // To keep brake position in legal range during simulation
     
     // Tach - takes 22 us to read when no activity
     if (!simulating || !sim_tach) {
-        if (tachPulseTimer.elapsed() < tach_stop_timeout_us) tach_rpm = (int32_t)(60000000/(double)tach_delta_us);  // Tachometer magnets/us * 60000000 (1 rot/magnet * 1000000 us/sec * 60 sec/min) gives rpm
+        if (tachPulseTimer.elapsed() < tach_stop_timeout_us) tach_rpm = convert_units ((double)(tach_delta_us), tach_convert_rpm_per_rpus, tach_convert_invert);
         else tach_rpm = 0;  // If timeout since last magnet is exceeded
         ema_filt (tach_rpm, &tach_filt_rpm, tach_ema_alpha);  // Sensor EMA filter
     }
     
     // Speedo - takes 14 us to read when no activity
     if (!simulating || !sim_speedo) { 
-        if (speedoPulseTimer.elapsed() < speedo_stop_timeout_us) carspeed_mmph = (int32_t)(179757270/(double)speedo_delta_us); // Update car speed value  
+        if (speedoPulseTimer.elapsed() < speedo_stop_timeout_us) carspeed_mmph = convert_units ((double)(speedo_delta_us), speedo_convert_mmph_per_rpus, speedo_convert_invert);  // Update car speed value  
         else carspeed_mmph = 0;     
         ema_filt (carspeed_mmph, &carspeed_filt_mmph, carspeed_ema_alpha);  // Sensor EMA filter
-        // magnets/us * 179757270 (1 rot/magnet * 1000000 us/sec * 3600 sec/hr * 1/19.85 gearing * 20*pi in/rot * 1/12 ft/in * 1000/5280 milli-mi/ft gives milli-mph  // * 1/1.15 knots/mph gives milliknots
-        // Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
     }
 
     // Brake pressure - takes 72 us to read
@@ -1511,7 +1550,6 @@ void loop() {
                 brakeSPID.set_target (brakeSPID.get_target() + (panic_stop) ? pressure_panic_increment_psi : pressure_hold_increment_psi);  // Slowly add more brakes until car stops
                 brakeIntervalTimer.reset();  
             }
-            // if (abs (pressure_filt_adc - pressure_min_adc) <= pressure_margin_adc)  shutdown_complete = true;  // With this set, we will do nothing from here on out (until mode changes, i.e. ignition)
         }
         else if (calmode_request) {  // if fully shut down and cal mode requested
             // syspower = HIGH;  // Power up devices if not already
@@ -1634,8 +1672,8 @@ void loop() {
         }
         else if (calmode_request) runmode = SHUTDOWN;
         if (!cal_pot_gas_ready) {
-            int32_t temp = map (pot_filt_adc, pot_min_adc, pot_max_adc, gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
-            if (temp <= gas_pulse_idle_us && temp >= gas_pulse_redline_us) cal_pot_gas_ready = true;
+            double temp = d_map (pot_filt_percent, pot_min_percent, pot_max_percent, (double)gas_pulse_ccw_max_us, (double)gas_pulse_cw_min_us);
+            if (temp <= (double)gas_pulse_idle_us && temp >= (double)gas_pulse_redline_us) cal_pot_gas_ready = true;
         }
     }
     else { // Obviously this should never happen
@@ -1651,7 +1689,7 @@ void loop() {
         
         pidTimer.reset();  // reset timer to trigger the next update
         if ( park_the_motors && ( motorParkTimer.expired() ||  //  When parking motors, IF the timeout expires OR the brake and gas motors are both close enough to the park position ...
-            ( abs(brake_pos_filt_adc - brake_pos_park_adc) <= brake_pos_margin_adc && gasServoTimer.expired() && (gas_pulse_out_us == gas_pulse_idle_us + gas_pulse_park_slack_us) ) ) )
+            ( abs(brake_pos_filt_thou - brake_pos_park_thou) <= brake_pos_margin_thou && gasServoTimer.expired() && (gas_pulse_out_us == gas_pulse_idle_us + gas_pulse_park_slack_us) ) ) )
             park_the_motors = false;  // ... THEN stop trying to park the motors
         
         // Steering
@@ -1665,10 +1703,10 @@ void loop() {
             else brake_pulse_out_us = brake_pulse_stop_us;
         }
         else if (park_the_motors) {
-            if (brake_pos_filt_adc + brake_pos_margin_adc <= brake_pos_park_adc) brake_pulse_out_us =  // If brake is retracted from park point, extend toward park point, slowing as we approach
-                map ((int32_t)brake_pos_filt_adc, (int32_t)brake_pos_park_adc, (int32_t)brake_pos_nom_lim_retract_adc, brake_pulse_stop_us, brake_pulse_extend_us);
-            else if (brake_pos_filt_adc - brake_pos_margin_adc >= brake_pos_park_adc) brake_pulse_out_us =  // If brake is extended from park point, retract toward park point, slowing as we approach
-                map ((int32_t)brake_pos_filt_adc, (int32_t)brake_pos_park_adc, (int32_t)brake_pos_nom_lim_extend_adc, brake_pulse_stop_us, brake_pulse_retract_us);
+            if (brake_pos_filt_thou + brake_pos_margin_thou <= brake_pos_park_thou) brake_pulse_out_us =  // If brake is retracted from park point, extend toward park point, slowing as we approach
+                map ((int32_t)brake_pos_filt_thou, (int32_t)brake_pos_park_thou, (int32_t)brake_pos_nom_lim_retract_thou, brake_pulse_stop_us, brake_pulse_extend_us);
+            else if (brake_pos_filt_thou - brake_pos_margin_thou >= brake_pos_park_thou) brake_pulse_out_us =  // If brake is extended from park point, retract toward park point, slowing as we approach
+                map ((int32_t)brake_pos_filt_thou, (int32_t)brake_pos_park_thou, (int32_t)brake_pos_nom_lim_extend_thou, brake_pulse_stop_us, brake_pulse_retract_us);
         }
         else if (runmode != BASIC) brake_pulse_out_us = (int32_t)brakeSPID.compute (pressure_filt_psi);  // Otherwise the pid control is active
         // printf("Brake PID rm=%-+4ld target=%-+9.4lf", runmode, (double)pressure_target_psi);   
@@ -1677,8 +1715,8 @@ void loop() {
             if (runmode == CAL && cal_joyvert_brkmotor)  // In Cal mode constrain the motor to its entire range, instead of to the calibrated limits
                 brake_pulse_out_us = constrain (brake_pulse_out_us, brake_pulse_retract_min_us, brake_pulse_extend_max_us);  // Send to the actuator. Refuse to exceed range    
             else {  // Prevent any movement of motor which would exceed position limits. Improve this by having the motor actively go back toward position range if position is beyond either limit
-                if ( ((brake_pos_filt_adc + brake_pos_margin_adc <= brake_pos_nom_lim_retract_adc) && (brake_pulse_out_us < brake_pulse_stop_us)) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
-                    ((brake_pos_filt_adc - brake_pos_margin_adc >= brake_pos_nom_lim_extend_adc) && (brake_pulse_out_us > brake_pulse_stop_us)) )  // ... or same thing in the extend direction ...
+                if ( ((brake_pos_filt_thou + brake_pos_margin_thou <= brake_pos_nom_lim_retract_thou) && (brake_pulse_out_us < brake_pulse_stop_us)) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
+                    ((brake_pos_filt_thou - brake_pos_margin_thou >= brake_pos_nom_lim_extend_thou) && (brake_pulse_out_us > brake_pulse_stop_us)) )  // ... or same thing in the extend direction ...
                     brake_pulse_out_us = brake_pulse_stop_us;  // ... then stop the motor
                 brake_pulse_out_us = constrain (brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);  // Send to the actuator. Refuse to exceed range    
             } 
@@ -1703,7 +1741,7 @@ void loop() {
         }
         else if (runmode != BASIC) {
             if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) 
-                gas_pulse_out_us = (int32_t)(d_map (pot_filt_adc, pot_min_adc, pot_max_adc, (double)gas_pulse_ccw_max_us, (double)gas_pulse_cw_min_us));
+                gas_pulse_out_us = (int32_t)(d_map (pot_filt_percent, pot_min_percent, pot_max_percent, (double)gas_pulse_ccw_max_us, (double)gas_pulse_cw_min_us));
             else if (gasSPID.get_open_loop())  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
                 gas_pulse_out_us = map (gasSPID.get_target(), tach_idle_rpm, tach_govern_rpm, gas_pulse_idle_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
             else gas_pulse_out_us = (int32_t)gasSPID.compute (tach_filt_rpm);  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
@@ -1716,7 +1754,6 @@ void loop() {
             else gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_idle_us);
             gas_servo.writeMicroseconds (gas_pulse_out_us);  // Write result to servo
         }
-
         pidTimer.reset();  // reset timer to trigger the next update
     }
 
@@ -1949,8 +1986,8 @@ void loop() {
             if (selected_value == 7) cruiseSPID.set_tunings (cruiseSPID.get_kp(), cruiseSPID.get_ki_hz(), cruiseSPID.get_kd_s()+0.001*(double)sim_edit_delta);
         }
         else if (dataset_page == TEMP) {
-            if (selected_value == 6) gasSPID.set_open_loop(sim_edit_delta > 0);
-            if (selected_value == 7) adj_val (&brake_pos_zeropoint_adc, sim_edit_delta, brake_pos_nom_lim_retract_adc, brake_pos_nom_lim_extend_adc);
+            if (selected_value == 6) gasSPID.set_open_loop (sim_edit_delta > 0);
+            if (selected_value == 7) adj_val (&brake_pos_zeropoint_thou, sim_edit_delta, brake_pos_nom_lim_retract_thou, brake_pos_nom_lim_extend_thou);
         }
     }
     
@@ -1961,9 +1998,9 @@ void loop() {
     ctrl_db_adc[VERT][TOP] = (adcrange_adc+ctrl_lims_adc[ctrl][VERT][DB])/2;  // Upper threshold of vert joy deadband (ADC count 0-4095)
     ctrl_db_adc[HORZ][BOT] = (adcrange_adc-ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Lower threshold of horz joy deadband (ADC count 0-4095)
     ctrl_db_adc[HORZ][TOP] = (adcrange_adc+ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Upper threshold of horz joy deadband (ADC count 0-4095)
-    tach_govern_rpm = (int32_t)d_map ((double)gas_governor_percent, 0, 100, 0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
+    tach_govern_rpm = d_map ((double)gas_governor_percent, 0, 100, 0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
     gas_pulse_govern_us = map ((int32_t)(gas_governor_percent*(tach_redline_rpm-tach_idle_rpm)/tach_redline_rpm), 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
-    carspeed_govern_mmph = (int32_t)d_map ((double)gas_governor_percent, 0, 100, 0, carspeed_redline_mmph);  // Governor must scale the top vehicle speed proportionally
+    carspeed_govern_mmph = d_map ((double)gas_governor_percent, 0, 100, 0, carspeed_redline_mmph);  // Governor must scale the top vehicle speed proportionally
 
     // Ignition & Panic stop logic and Update output signals
     if (panic_stop && !carspeed_filt_mmph) panic_stop = false;  //  Panic is over cuz car is stopped
@@ -2029,24 +2066,24 @@ void loop() {
         disp_selected_val_dirty = false;
         disp_sidemenu_dirty = false;
         disp_runmode_dirty = false;
-        if (dispRefreshTimer.expired()) {
+        if (dispRefreshTimer.expired() || sim_edit_delta != 0) {
             dispRefreshTimer.reset();
             int32_t range;
-    //        draw_dyn_pid(1, carspeed_filt_mmph, 0.0, carspeed_redline_mmph, cruiseSPID.get_target());
-    //        draw_dyn_pid(2, tach_filt_rpm, 0.0, tach_redline_rpm, gasSPID.get_target());
+            draw_dyn_pid(1, carspeed_filt_mmph, 0.0, carspeed_redline_mmph, cruiseSPID.get_target());
+            draw_dyn_pid(2, tach_filt_rpm, 0.0, tach_redline_rpm, gasSPID.get_target());
             draw_dyn_pid(3, pressure_filt_psi, pressure_min_psi, pressure_max_psi, brakeSPID.get_target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
             draw_dynamic(4, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
             draw_dynamic(5, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-    //        draw_dynamic(6, cruiseSPID.get_target(), 0.0, carspeed_govern_mmph);
+            draw_dynamic(6, cruiseSPID.get_target(), 0.0, carspeed_govern_mmph);
             draw_dynamic(7, brakeSPID.get_target(), pressure_min_psi, pressure_max_psi);
-    //        draw_dynamic(8, gasSPID.get_target(), 0.0, tach_redline_rpm);
+            draw_dynamic(8, gasSPID.get_target(), 0.0, tach_redline_rpm);
             draw_dynamic(9, brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
             draw_dynamic(10, gas_pulse_out_us, gas_pulse_redline_us, gas_pulse_idle_us);
             draw_dynamic(11, steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);
             if (dataset_page == RUN) {
-    //            draw_dynamic(12, battery_filt_mv, 0, battery_max_mv);
-                draw_dynamic(13, brake_pos_filt_adc, brake_pos_nom_lim_retract_adc, brake_pos_nom_lim_extend_adc);
-                draw_dynamic(14, pot_filt_adc, pot_min_adc, pot_max_adc);
+                draw_dynamic(12, battery_filt_mv, 0.0, battery_max_mv);
+                draw_dynamic(13, brake_pos_filt_thou, brake_pos_nom_lim_retract_thou, brake_pos_nom_lim_extend_thou);
+                draw_dynamic(14, pot_filt_percent, pot_min_percent, pot_max_percent);
                 // draw_dynamic(14, brakeSPID.get_proportionality(), -1, -1);
                 draw_dynamic(15, sim_brkpos, -1, -1);
                 draw_dynamic(16, sim_joy, -1, -1);
@@ -2066,10 +2103,10 @@ void loop() {
             }
             else if (dataset_page == CAR) {
                 draw_dynamic(12, gas_governor_percent, 0, 100);
-                draw_dynamic(13, tach_idle_rpm, 0, tach_redline_rpm);
-                draw_dynamic(14, tach_redline_rpm, 0, tach_max_rpm);
-                draw_dynamic(15, carspeed_idle_mmph, 0, carspeed_redline_mmph);
-                draw_dynamic(16, carspeed_redline_mmph, 0, carspeed_max_mmph);
+                draw_dynamic(13, tach_idle_rpm, 0.0, tach_redline_rpm);
+                draw_dynamic(14, tach_redline_rpm, 0.0, tach_max_rpm);
+                draw_dynamic(15, carspeed_idle_mmph, 0.0, carspeed_redline_mmph);
+                draw_dynamic(16, carspeed_redline_mmph, 0.0, carspeed_max_mmph);
                 draw_dynamic(17, ctrl, -1, -1);  // 0 if hotrc
                 draw_dynamic(18, cal_joyvert_brkmotor, -1, -1);
                 draw_dynamic(19, cal_pot_gasservo, -1, -1);
@@ -2125,7 +2162,7 @@ void loop() {
                 draw_dynamic(16, (int32_t)(temps[WHEEL_RL]), -1, -1);
                 draw_dynamic(17, (int32_t)(temps[WHEEL_RR]), -1, -1);
                 draw_dynamic(18, gasSPID.get_open_loop(), -1, -1);
-                draw_dynamic(19, brake_pos_zeropoint_adc, brake_pos_nom_lim_retract_adc, brake_pos_nom_lim_extend_adc);   
+                draw_dynamic(19, brake_pos_zeropoint_thou, brake_pos_nom_lim_retract_thou, brake_pos_nom_lim_extend_thou);   
             }
             draw_bool ((runmode == CAL), 2);
             draw_bool (basicmodesw, 3);
