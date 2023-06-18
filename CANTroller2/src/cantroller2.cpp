@@ -237,6 +237,7 @@ enum dataset_pages { RUN, JOY, CAR, PWMS, BPID, GPID, CPID, TEMP };
 #define disp_font_width 6
 #define disp_bargraph_width 40
 #define disp_bargraph_squeeze 1
+#define disp_maxlength 7  // How many characters fit between the ":" and the units string
 #define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
@@ -936,14 +937,11 @@ void draw_fixed (int32_t page, int32_t page_last, bool redraw_tuning_corner) {  
         }
     }
 }
-// draw_dynamic  normally draws a given value on a given line (0-19) to the screen if it has changed since last draw.
-void draw_dyn_pid (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int32_t target) {
+void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target) {
     int32_t age_us = (int32_t)((double)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
-    memset (disp_draw_buffer,0,strlen(disp_draw_buffer));
-    itoa (value, disp_draw_buffer, 10);
-    if (strcmp (disp_values[lineno], disp_draw_buffer) || disp_redraw_all) {  // If value differs, Erase old value and write new
-        draw_string (66, lineno*disp_line_height_pix+disp_vshift_pix, disp_draw_buffer, disp_values[lineno], GRN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-        strcpy (disp_values[lineno], disp_draw_buffer);
+    if (strcmp(disp_values[lineno], disp_string) || disp_redraw_all) {  // If value differs, Erase old value and write new
+        draw_string (66, lineno*disp_line_height_pix+disp_vshift_pix, disp_string, disp_values[lineno], GRN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+        strcpy (disp_values[lineno], disp_string);
         dispAgeTimer[lineno].reset();
         disp_age_quanta[lineno] = 0;
     }
@@ -982,14 +980,55 @@ void draw_dyn_pid (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim,
         disp_needles[lineno] = -1;  // Flag for no needle
     }
 }
-void draw_dyn_pid (int32_t lineno, double value, double lowlim, double hilim, double target) {
-    draw_dyn_pid (lineno, (int32_t)value, (int32_t)lowlim, (int32_t)hilim, (int32_t)target);
+std::string my_itoa (int32_t value, int32_t maxlength) {
+    int32_t length = (int32_t)log10(abs(value)) + 1;
+    if (length <= maxlength && (value >= 0 || length <= (maxlength-1))) return std::to_string(value);
+    std::string result;
+    if (value < 0) {
+        result = "-";
+        value = -value;
+    }
+    int32_t magnitude = std::log10 (value);
+    double scaledValue = value / std::pow (10, magnitude + 1 - maxlength);  // was (10, magnitude - 5);
+    if (scaledValue >= 1.0 && scaledValue < 10.0) result += std::to_string (static_cast<int>(scaledValue));
+    else result += std::to_string (scaledValue);
+    if (magnitude >= maxlength) result += "e" + std::to_string (magnitude);
+    return result;
+}
+std::string my_ftoa (double value, int32_t maxlength) {
+    char buffer[20];
+    snprintf (buffer, sizeof (buffer), "%.*g", maxlength, value);
+    std::string result (buffer);
+    size_t decimalPos = result.find ('.');
+    size_t exponentPos = result.find ('e');
+    if (result.length() > maxlength || exponentPos != std::string::npos) {
+        snprintf (buffer, sizeof (buffer), "%.*e", maxlength, value);
+        result = buffer;
+        if (exponentPos != std::string::npos) result.erase(exponentPos + 1, 1);
+        size_t fractionalPos = result.find ('.');
+        if (fractionalPos != std::string::npos) result.erase(result.find_last_not_of('0') + 1);
+        size_t exponentEndPos = result.find_first_of ("eE");
+        if (exponentEndPos != std::string::npos) {
+            size_t exponentStartPos = result.find_last_not_of ('0', exponentEndPos - 1);
+            if (result[exponentStartPos] == 'e') result.erase (exponentStartPos, exponentEndPos - exponentStartPos);
+        }
+        if (result.length() > maxlength) result.erase (maxlength);
+    }
+    return result;
+}
+void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int target) {
+    std::string val_string = my_itoa (value, (int32_t)disp_maxlength);
+    std::cout << "Int: " << value << " -> " << disp_draw_buffer << std::endl;
+    char const* val_cstring = val_string.c_str();
+    draw_dynamic (lineno, val_cstring, value, lowlim, hilim, (int32_t)target);
 }
 void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim) {
-    draw_dyn_pid (lineno, value, lowlim, hilim, -1);
+    draw_dynamic (lineno, value, lowlim, hilim, -1);
 }
-void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim) {
-    draw_dyn_pid (lineno, (int32_t)value, (int32_t)lowlim, (int32_t)hilim, -1);
+void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim, double target) {
+    std::string val_string = my_ftoa (value, (int32_t)disp_maxlength);
+    std::cout << "Flt: " << value << " -> " << disp_draw_buffer << std::endl;
+    draw_dynamic (lineno, val_string.c_str(), (int32_t) value, (int32_t)lowlim, (int32_t)hilim, (int32_t)target);
 }
 void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override) {  // color_override = -1 uses default color
     int32_t color = (color_override == -1) ? colorcard[runmode] : color_override;
@@ -2113,9 +2152,9 @@ void loop() {
             wait_one_loop = true;
             dispRefreshTimer.reset();
             int32_t range;
-            draw_dyn_pid(1, carspeed_filt_mmph, 0.0, carspeed_redline_mmph, cruiseSPID.get_target());
-            draw_dyn_pid(2, tach_filt_rpm, 0.0, tach_redline_rpm, gasSPID.get_target());
-            draw_dyn_pid(3, pressure_filt_psi, pressure_min_psi, pressure_max_psi, brakeSPID.get_target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
+            draw_dynamic(1, carspeed_filt_mmph, 0.0, carspeed_redline_mmph, cruiseSPID.get_target());
+            draw_dynamic(2, tach_filt_rpm, 0.0, tach_redline_rpm, gasSPID.get_target());
+            draw_dynamic(3, pressure_filt_psi, pressure_min_psi, pressure_max_psi, brakeSPID.get_target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
             draw_dynamic(4, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
             draw_dynamic(5, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
             draw_dynamic(6, cruiseSPID.get_target(), 0.0, carspeed_govern_mmph);
