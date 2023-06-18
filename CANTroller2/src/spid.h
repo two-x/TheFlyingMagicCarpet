@@ -28,8 +28,8 @@ class SPID {  // Soren's home-made pid loop
     #define CENTERED 1  // assign to outCenterMode if pid output deviates from a centerpoint 
     #define ERROR_TERM 0  // What the proportional term is proportional_to
     #define SENSED_INPUT 1  // What the proportional term is proportional_to
-    #define FWD 1  // Actuator_direction influences sensed value in the same direction
-    #define REV -1  // Actuator_direction influences sensed value in the opposite direction
+    static const int32_t FWD = 1;  // Actuator_direction influences sensed value in the same direction
+    static const int32_t REV = -1;  // Actuator_direction influences sensed value in the opposite direction
   private:
     double kp_coeff = 0, ki_coeff = 0, kd_coeff = 0, kp, ki_hz, kd_s;
     int32_t actuator_direction;

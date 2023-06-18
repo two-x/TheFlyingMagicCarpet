@@ -4,44 +4,14 @@
 #include <stdio.h>
 #include <iostream>
 #include "Arduino.h"
+#include "globals.h"
 // #include "xtensa/core-macros.h"  // access to ccount register for esp32 timing ticks
 using namespace std;
-
-int32_t mycros(void) {  // This is "my" micros() function that returns signed int32
-    uint32_t temp = micros();
-    return (int32_t)(temp &= 0x7fffffff);  // Note this overflows every 35 min due to being only 31 bits. 
-}
 
 // int32_t nanos(void) {  // Uses CCount register of ESP
 //     uint32_t ccount = XTHAL_GET_CCOUNT();
 //     return (int32_t)(temp &= 0x7fffffff);
 // }
-
-// Timer
-// For controlling event timing. Communicates in signed int32 values but uses uint32 under the hood to
-// last 72 minutes between overflows. However you can only time for 36 minutes max.
-// Note: experimenting with use of micros() instead of mycros(), check for errors on overflow and possibly revert
-class Timer {
-  protected:
-    volatile uint32_t start_us;  // start time in us
-    int32_t timeout_us = 0;  // in us
-  public:
-    Timer(void) { start_us = micros(); };
-    Timer(int32_t arg1) { set(arg1); };
-
-    void reset()  { start_us = micros(); }
-    bool expired()  { return (abs((int32_t)(micros() - start_us)) > timeout_us); }
-    int32_t elapsed()  { return abs((int32_t)(micros() - start_us)); }
-    int32_t timeout()  { return (int32_t)timeout_us; }
-    void set(int32_t arg1)  {
-        timeout_us = arg1;
-        start_us = micros();
-    }
-    int32_t remain()  { 
-        uint32_t temp = abs((int32_t)(micros() - start_us));
-        return (timeout_us - (int32_t)temp);
-    }
-};
 
 class TimerESP {
   protected:
@@ -89,6 +59,7 @@ class Param {
   public:
     enum directions { _REV = -1, _FWD = 1 };
     bool can_sim, can_tune;
+    bool dirty = true;  // Has value been updated since last time value was displayed
     int32_t dir;  // For the case a lower val causes a higher real-life effect, 
     char disp_name[9], disp_units[5];
     double* val; double* min_val; double* max_val;  // Reference to numerical max/min values
@@ -118,12 +89,21 @@ class Param {
         set_limits (min_val, max_val);
     }
     void set (double arg_val) {
-        *val = arg_val;
-        constrain_it (val, *min_val, *max_val);
+        double temp = arg_val;
+        constrain_it (&temp, *min_val, *max_val);
+        if (*val != temp) {
+            *val = temp;
+            dirty = true;
+        }
     }
-    void add (double arg_add) {
-        *val += arg_add;
-        constrain_it (val, *min_val, *max_val);
+    void add (double arg_add) { set (*val + arg_add); }
+    void draw (int32_t lineno) {
+        if (dirty) draw_dynamic (lineno, *val, *min_val, *max_val, -1);
+        dirty = false;
+    }
+    void draw (int32_t lineno, int32_t target) {
+        if (dirty) draw_dynamic (lineno, *val, *min_val, *max_val, target);
+        dirty = false;
     }
 };
 
