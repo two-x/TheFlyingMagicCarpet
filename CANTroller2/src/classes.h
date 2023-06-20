@@ -48,7 +48,9 @@ using namespace std;
 class Param {
   protected:
     bool saturated;
-    double effect_max_val, effect_min_val, last_val, last2_val; //, effect_cent_val;  // Values corresponding to a max/min real world effect (might be numerically reversed)
+    double val_priv, min_priv, max_priv;  // To hold val/min/max actual values in case they are passed to us by value not external reference
+    double val_human_priv, min_human_priv, max_human_priv;  // To hold val/min/max actual values in case they are passed to us by value not external reference
+    double last_val, last2_val;
     void constrain_it (double* arg_value, double arg_min, double arg_max) {  // This should be called "constrain" not "constrain_it"
         if (*arg_value < arg_min) *arg_value = arg_min;
         else if (*arg_value > arg_max) *arg_value = arg_max;
@@ -59,49 +61,60 @@ class Param {
     enum directions { _REV = -1, _FWD = 1 };
     bool can_sim, can_tune;
     bool dirty = true;  // Has value been updated since last time value was displayed
-    int32_t dir;  // For the case a lower val causes a higher real-life effect, 
+    int32_t dir = _FWD;  // For the case a lower val causes a higher real-life effect, 
     char disp_name[9], disp_units[5];
-    double* val; double* min_val; double* max_val;  // Reference to numerical max/min values
-    Param (double* val, const string arg_name, const string arg_units, double* min_val, double* max_val) {
-        set_limits (min_val, max_val);
-        constrain_it (val, *min_val, *max_val);
+    double* p_val = &val_priv; double* p_min = &min_priv; double* p_max = &max_priv;  // Pointers to value/max/min, could be internal or external reference
+    double* p_min_human = &min_human_priv; double* p_max_human = &max_human_priv;  // Where applicable, human min/max refer to real world effect, possibly reversed (min <-> max) (and probably in different units requiring conversion - not yet implemented)
+    Param (double* arg_ref_p_val) {  // }, const string arg_name, const string arg_units) {  // Use if value is an external reference
+        p_val = arg_ref_p_val;
+        // set_names (arg_name, arg_units);
+    }
+    Param (double arg_ref_val) {  // }, const string arg_name, const string arg_units) {  // Use if value is kept in-class
+        p_val = &val_priv;
+        // set_names (arg_name, arg_units);
+    }
+    void set_names (const string arg_name, const string arg_units) {
         strcpy(disp_name, arg_name.c_str());
         strcpy(disp_units, arg_units.c_str());
     }
-    Param (double* val, const char* arg_name, const char* arg_units, double effect_min_val, double effect_max_val) {
-        set_limits (effect_min_val, effect_max_val);
-        Param (val, arg_name, arg_units, &effect_min_val, &effect_max_val);
-    }
-    Param (double* val, const string arg_name, const string arg_units) {
-        effect_min_val = *val;
-        effect_max_val = *val;
-        Param (val, arg_name, arg_units, &effect_min_val, &effect_max_val);
-    }
-    void set_limits (double* min_val, double* arg_max_val) {
-        dir = (*min_val <= *arg_max_val) * 2 - 1;
-        max_val = (dir == _FWD) ? arg_max_val : min_val;
-        if (dir == _REV) min_val = max_val;
-    }
-    void set_limits (double effect_min_val, double effect_max_val) {
-        min_val = &effect_min_val;
-        max_val = &effect_max_val;
-        set_limits (min_val, max_val);
-    }
-    void set (double arg_val) {
-        double temp = arg_val;
-        constrain_it (&temp, *min_val, *max_val);
-        if (*val != temp) {
-            *val = temp;
-            dirty = true;
+    void set_limits (double* arg_min, double* arg_max, int32_t arg_dir) {  // Use if min/max are kept in-class
+        if (*arg_min > *arg_max) printf ("*min is >= *max\n");
+        else {
+            dir = arg_dir;
+            p_min = arg_min;
+            p_max = arg_max;
+            constrain_it (p_val, *p_min, *p_min);
         }
     }
-    void add (double arg_add) { set (*val + arg_add); }
+    void set_limits (double arg_min, double arg_max, int32_t arg_dir) {  // Use if min/max are kept in-class
+        if (arg_min > arg_max) printf ("min is >= max\n");
+        else {
+            dir = arg_dir;
+            min_priv = arg_min;
+            max_priv = arg_max;
+            constrain_it (p_val, *p_min, *p_min);
+        }
+    }
+    // void set_human_limits (double* arg_min_human, double* arg_max_human) {  // Use if min/max are external references
+    //     // Maybe dir only applies when human values also do?
+    //     *p_min_human = arg_min_human;
+    //     *p_max_human = arg_max_human;
+    //     *p_min = (dir == _FWD) ? p_min_human : p_max_human;
+    //     *p_max = (dir == _FWD) ? p_max_human : p_min_human;
+    // }
+    void set (double arg_val) {
+        double temp = arg_val;
+        constrain_it (&temp, *p_min, *p_max);
+        if (*p_val != temp) dirty = true;
+        *p_val = temp;
+    }
+    void add (double arg_add) { set (*p_val + arg_add); }
     void draw (int32_t lineno) {
-        if (dirty) draw_dynamic (lineno, *val, *min_val, *max_val, -1);
+        if (dirty) draw_dynamic (lineno, *p_val, *p_min, *p_max, -1);
         dirty = false;
     }
     void draw (int32_t lineno, int32_t target) {
-        if (dirty) draw_dynamic (lineno, *val, *min_val, *max_val, target);
+        if (dirty) draw_dynamic (lineno, *p_val, *p_min, *p_max, target);
         dirty = false;
     }
 };
