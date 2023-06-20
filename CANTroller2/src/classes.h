@@ -1,6 +1,5 @@
 #ifndef CLASSES_H
 #define CLASSES_H
-
 #include <stdio.h>
 #include <iostream>
 #include "Arduino.h"
@@ -13,31 +12,31 @@ using namespace std;
 //     return (int32_t)(temp &= 0x7fffffff);
 // }
 
-class TimerESP {
-  protected:
-    volatile uint32_t start_us;  // start time in us
-    int32_t timeout_us = 0;  // in us
-    bool preciseESP = false;
-  public:
-    TimerESP(void) { start_us = micros(); }
-    TimerESP(bool precise) {
-        preciseESP = precise;
-    }
-    TimerESP(int32_t arg1) { set(arg1); }
+// class TimerESP {
+//   protected:
+//     volatile uint32_t start_us;  // start time in us
+//     int32_t timeout_us = 0;  // in us
+//     bool preciseESP = false;
+//   public:
+//     TimerESP(void) { start_us = micros(); }
+//     TimerESP(bool precise) {
+//         preciseESP = precise;
+//     }
+//     TimerESP(int32_t arg1) { set(arg1); }
 
-    void reset()  { start_us = micros(); }
-    bool expired()  { return (abs((int32_t)(micros() - start_us)) > timeout_us); }
-    int32_t elapsed()  { return abs((int32_t)(micros() - start_us)); }
-    int32_t timeout()  { return (int32_t)timeout_us; }
-    void set(int32_t arg1)  {
-        timeout_us = arg1;
-        start_us = micros();
-    }
-    int32_t remain()  { 
-        uint32_t temp = abs((int32_t)(micros() - start_us));
-        return (timeout_us - (int32_t)temp);
-    }
-};
+//     void reset()  { start_us = micros(); }
+//     bool expired()  { return (abs((int32_t)(micros() - start_us)) > timeout_us); }
+//     int32_t elapsed()  { return abs((int32_t)(micros() - start_us)); }
+//     int32_t timeout()  { return (int32_t)timeout_us; }
+//     void set(int32_t arg1)  {
+//         timeout_us = arg1;
+//         start_us = micros();
+//     }
+//     int32_t remain()  { 
+//         uint32_t temp = abs((int32_t)(micros() - start_us));
+//         return (timeout_us - (int32_t)temp);
+//     }
+// };
 // class Variable {  // A wrapper for all veriables of consequence in our code.
 //     public:
 //         Variable(int32_t arg1) { int32_t value = arg1; }
@@ -111,13 +110,14 @@ class Hotrc {
   public:
     int32_t index = 1;
     int32_t padding = 7;
-    static const int32_t depth = 30;
+    int32_t depth;
   protected:
     int32_t avg, min_index, max_index;
-    int32_t history[depth];
+    int32_t history[30];
     uint32_t sum;
   public:
     Hotrc (int32_t arg_val, int32_t arg_padding) {
+        depth = 30;
         for (int32_t x = 0; x < depth; x++) history[x] = arg_val;
         avg = arg_val;
         sum = avg * depth;
