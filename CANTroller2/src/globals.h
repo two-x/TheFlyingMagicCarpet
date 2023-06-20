@@ -1,6 +1,5 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
-
 #ifdef DUE
     #include <LibPrintf.h>  // This works on Due but not ESP32
 #endif
@@ -209,13 +208,13 @@ class Timer {
     int32_t paused_us;
     bool enabled = true;
   public:
-    Timer(void) { start_us = micros(); };
-    Timer(int32_t arg1) { set(arg1); };
+    Timer (void) { start_us = micros(); };
+    Timer (int32_t arg1) { set(arg1); };
     void reset()  { start_us = micros(); }
     bool expired()  { return (enabled) ? abs((int32_t)(micros() - start_us)) > timeout_us : false; }
     int32_t elapsed()  { return (enabled) ? abs((int32_t)(micros() - start_us)) : 0; }
     int32_t timeout()  { return (int32_t)timeout_us; }
-    void set(int32_t arg1)  {
+    void set (int32_t arg1)  {
         timeout_us = arg1;
         start_us = micros();
     }
@@ -271,85 +270,85 @@ enum dataset_pages { RUN, JOY, CAR, PWMS, BPID, GPID, CPID, TEMP };
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
 
-char telemetry[disp_fixed_lines][10] = {  
-    "   Speed:",
-    "    Tach:",
-    "Brk Pres:",   
-    "Joy Horz:",
-    "Joy Vert:",
-    "CruisTgt:",
-    " Brk Tgt:",
-    " Gas Tgt:",
-    " Brk PWM:",
-    " Gas PWM:",
-    "SteerPWM:",
+char telemetry[disp_fixed_lines][9] = {  
+    "   Speed",
+    "    Tach",
+    "Brk Pres",   
+    "Joy Horz",
+    "Joy Vert",
+    "CruisTgt",
+    " Brk Tgt",
+    " Gas Tgt",
+    " Brk PWM",
+    " Gas PWM",
+    "SteerPWM",
 };
 char pagecard[8][5] = { "Run ", "Joy ", "Car ", "PWMs", "Bpid", "Gpid", "Cpid", "Temp" };
-char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][12] = {
-    {   " Battery:",  // RUN
-        " Brk Pos:",
-        "     Pot:",
-        "SimBkPos:",
-        " Sim Joy:",
-        "Sim Pres:",
-        "Sim Tach:",
-        " Sim Spd:", },
-    {   "Horz Raw:",  // JOY
-        "Vert Raw:",
-        "Horz Min:",
-        "Horz Max:",
-        " Horz DZ:",
-        "Vert Min:",
-        "Vert Max:",
-        " Vert DZ:", },
-    {   "Governor:",  // CAR
-        "Eng Idle:",
-        "Eng RedL:",
-        "Spd Idle:",
-        "Spd RedL:",
-        "Joystck?:",
-        " Cal Brk:",
-        " Cal Gas:", },
-    {   "Str Left:",  // PWMS
-        "Str Stop:",
-        "Str Rght:",
-        "Brk Extd:",
-        "Brk Stop:",
-        "Brk Retr:",
-        "Gas Idle:",
-        "Gas RedL:", },
-    {   "Pres Err:",  // BPID
-        "  P Term:",
-        "  I Term:",
-        "  D Term:",
-        " PID Out:",
-        "  Kp (P):",
-        "  Ki (I):",
-        "  Kd (D):", },
-    {   " Eng Err:",  // GPID
-        "  P Term:",
-        "  I Term:",
-        "  D Term:",
-        " PID Out:",
-        "  Kp (P):",
-        "  Ki (I):",
-        "  Kd (D):" },
-    {   " Spd Err:",  // CPID
-        "  P Term:",
-        "  I Term:",
-        "  D Term:",
-        " PID Out:",
-        "  Kp (P):",
-        "  Ki (I):",
-        "  Kd (D):", },
-    {   " Tmp Amb:",  // TEMP
-        " Tmp Eng:",
-        "Tmp WhFL:",
-        "Tmp WhFR:",
-        "Tmp WhRL:",
-        "Tmp WhRR:",
-        "GasOpnLp:",
-        "BrkZeroP:", },
+char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
+    {   " Battery",  // RUN
+        " Brk Pos",
+        "     Pot",
+        "SimBkPos",
+        " Sim Joy",
+        "Sim Pres",
+        "Sim Tach",
+        " Sim Spd", },
+    {   "Horz Raw",  // JOY
+        "Vert Raw",
+        "Horz Min",
+        "Horz Max",
+        " Horz DZ",
+        "Vert Min",
+        "Vert Max",
+        " Vert DZ", },
+    {   "Governor",  // CAR
+        "Eng Idle",
+        "Eng RedL",
+        "Spd Idle",
+        "Spd RedL",
+        "Joystck?",
+        " Cal Brk",
+        " Cal Gas", },
+    {   "Str Left",  // PWMS
+        "Str Stop",
+        "Str Rght",
+        "Brk Extd",
+        "Brk Stop",
+        "Brk Retr",
+        "Gas Idle",
+        "Gas RedL", },
+    {   "Pres Err",  // BPID
+        "  P Term",
+        "  I Term",
+        "  D Term",
+        " PID Out",
+        "  Kp (P)",
+        "  Ki (I)",
+        "  Kd (D)", },
+    {   " Eng Err",  // GPID
+        "  P Term",
+        "  I Term",
+        "  D Term",
+        " PID Out",
+        "  Kp (P)",
+        "  Ki (I)",
+        "  Kd (D)" },
+    {   " Spd Err",  // CPID
+        "  P Term",
+        "  I Term",
+        "  D Term",
+        " PID Out",
+        "  Kp (P)",
+        "  Ki (I)",
+        "  Kd (D)", },
+    {   " Tmp Amb",  // TEMP
+        " Tmp Eng",
+        "Tmp WhFL",
+        "Tmp WhFR",
+        "Tmp WhRL",
+        "Tmp WhRR",
+        "GasOpnLp",
+        "BrkZeroP", },
 };
 char units[disp_fixed_lines][5] = { "mmph", "rpm ", "psi ", "adc ", "adc ", "mmph", "adc ", "rpm ", "\xe5s  ", "\xe5s  ", "\xe5s  " };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
@@ -372,9 +371,9 @@ char simgrid[4][3][5] = {
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 char side_menu_buttons[5][4] = { "PAG", "SEL", "\x18  ", "\x19  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
-char disp_draw_buffer[8];  // Used to convert integers to ascii for purposes of displaying on screen
-char disp_draw_buffer2[8];  // Used to convert integers to ascii for purposes of displaying on screen
-char disp_values[disp_lines][8];
+char disp_draw_buffer[disp_tuning_lines];  // Used to convert integers to ascii for purposes of displaying on screen
+char disp_values[disp_lines][disp_tuning_lines];
+bool disp_polarities[disp_tuning_lines];
 bool display_enabled = true;  // Should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
 bool disp_redraw_all = true;
 bool disp_bool_values[6];
@@ -894,11 +893,11 @@ void draw_bargraph_needle (int32_t n_pos_x, int32_t old_n_pos_x, int32_t pos_y, 
 //     draw_target_shape (t_pos_x, pos_y, t_color, r_color);
 //     draw_needle_shape (n_pos_x, pos_y, n_color);
 // }  // This function was for when the needle could overlap the target
-void draw_string (int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
-    tft.setCursor (x, y);
+void draw_string (int32_t x_new, int32_t x_old, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
+    tft.setCursor (x_old, y);
     tft.setTextColor (bgcolor);
     tft.print (oldtext);  // Erase the old content
-    tft.setCursor (x, y);
+    tft.setCursor (x_new, y);
     tft.setTextColor (color);
     tft.print (text);  // Draw the new content
 }
@@ -948,23 +947,32 @@ void draw_string_units (int32_t x, int32_t y, const char* text, const char* oldt
         tft.print (text);  // Erase the old content
     }
 }
+void draw_colons (int32_t x_pos, int32_t first, int32_t last, int32_t color) {
+    for (int32_t lineno=first; lineno < last; lineno++) {
+        tft.fillRect (x_pos, (lineno+1)*disp_line_height_pix+3, 2, 2, color);
+        tft.fillRect (x_pos, (lineno+1)*disp_line_height_pix+7, 2, 2, color);
+    }
+}
 // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
 void draw_fixed (int32_t page, int32_t page_last, bool redraw_tuning_corner) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
     tft.setTextColor (GRY2);
     tft.setTextSize (1);
     // if (redraw_tuning_corner) tft.fillRect(10, 145, 154, 95, BLK); // tft.fillRect(0,145,167,95,BLK);  // Erase old dataset page area - This line alone uses 15 ms
+    int32_t y_pos;
     if (!redraw_tuning_corner) {
-        for (int32_t lineno=0; lineno < arraysize(telemetry); lineno++)  {  // Step thru lines of fixed telemetry data
-            draw_string (12, (lineno+1)*disp_line_height_pix+disp_vshift_pix, telemetry[lineno], "", GRY2, BLK);
-            draw_string_units (104, (lineno+1)*disp_line_height_pix+disp_vshift_pix, units[lineno], "", GRY2, BLK);
-            draw_bargraph_base (124, (lineno+1)*disp_line_height_pix+disp_vshift_pix+7, disp_bargraph_width);
+        for (int32_t lineno=0; lineno < disp_fixed_lines; lineno++)  {  // Step thru lines of fixed telemetry data
+            y_pos = (lineno+1)*disp_line_height_pix+disp_vshift_pix;
+            draw_string (12, 12, y_pos, telemetry[lineno], "", GRY2, BLK);
+            draw_string_units (104, y_pos, units[lineno], "", GRY2, BLK);
+            draw_bargraph_base (124, y_pos+7, disp_bargraph_width);
         }
+        // draw_colons(7+disp_font_width*arraysize(telemetry[0]), 1, disp_fixed_lines+disp_tuning_lines, GRY1);
     }
     for (int32_t lineno=0; lineno < disp_tuning_lines; lineno++)  {  // Step thru lines of dataset page data
-        draw_string(12, (lineno+arraysize(telemetry)+1)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[page][lineno], dataset_page_names[page_last][lineno], GRY2, BLK);
-        draw_string_units(104, (lineno+arraysize(telemetry)+1)*disp_line_height_pix+disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], GRY2, BLK);
+        draw_string(12, 12, (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[page][lineno], dataset_page_names[page_last][lineno], GRY2, BLK);
+        draw_string_units(104, (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], GRY2, BLK);
         if (redraw_tuning_corner) {
-            int32_t corner_y = (lineno+arraysize(telemetry)+1)*disp_line_height_pix+disp_vshift_pix+7;  // lineno*disp_line_height_pix+disp_vshift_pix-1;
+            int32_t corner_y = (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix+7;  // lineno*disp_line_height_pix+disp_vshift_pix-1;
             draw_bargraph_base (124, corner_y, disp_bargraph_width);
             if (disp_needles[lineno] >= 0) draw_bargraph_needle (-1, disp_needles[lineno], corner_y-6, BLK);  // Let's draw a needle
         }
@@ -972,9 +980,11 @@ void draw_fixed (int32_t page, int32_t page_last, bool redraw_tuning_corner) {  
 }
 void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target) {
     int32_t age_us = (int32_t)((double)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
+    int32_t x_base = 60;
     if (strcmp(disp_values[lineno], disp_string) || disp_redraw_all) {  // If value differs, Erase old value and write new
-        draw_string (66, lineno*disp_line_height_pix+disp_vshift_pix, disp_string, disp_values[lineno], GRN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+        draw_string (x_base+6*(value>=0), x_base+6*disp_polarities[lineno], lineno*disp_line_height_pix+disp_vshift_pix, disp_string, disp_values[lineno], GRN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
         strcpy (disp_values[lineno], disp_string);
+        disp_polarities[lineno] = (value>=0);
         dispAgeTimer[lineno].reset();
         disp_age_quanta[lineno] = 0;
     }
@@ -982,7 +992,7 @@ void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32
         int32_t color;
         if (age_us < 8) color = 0x1fe0 + age_us*0x2000;  // Base of green with red added as you age, until yellow is achieved
         else color = 0xffe0 - (age_us-8) * 0x100;  // Then lose green as you age further
-        draw_string (66, (lineno)*disp_line_height_pix+disp_vshift_pix, disp_values[lineno], "", color, BLK);
+        draw_string (x_base+6*(value>=0), x_base+6*disp_polarities[lineno], (lineno)*disp_line_height_pix+disp_vshift_pix, disp_values[lineno], "", color, BLK);
         disp_age_quanta[lineno] = age_us;
     }
     if (lowlim < hilim) {  // Any value having a given range deserves a bargraph gauge with a needle
@@ -1051,7 +1061,7 @@ std::string my_ftoa (double value, int32_t maxlength) {
 }
 void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int target) {
     std::string val_string = my_itoa (value, (int32_t)disp_maxlength);
-    std::cout << "Int: " << value << " -> " << disp_draw_buffer << std::endl;
+    // std::cout << "Int: " << value << " -> " << val_string << std::endl;
     char const* val_cstring = val_string.c_str();
     draw_dynamic (lineno, val_cstring, value, lowlim, hilim, (int32_t)target);
 }
@@ -1060,7 +1070,7 @@ void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim)
 }
 void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim, int32_t target) {
     std::string val_string = my_ftoa (value, (int32_t)disp_maxlength);
-    std::cout << "Flt: " << value << " -> " << disp_draw_buffer << std::endl;
+    // std::cout << "Flt: " << value << " -> " << val_string << std::endl;
     draw_dynamic (lineno, val_string.c_str(), (int32_t)value, (int32_t)lowlim, (int32_t)hilim, target);
 }
 void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim) {
@@ -1068,22 +1078,25 @@ void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim) {
 }
 void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override) {  // color_override = -1 uses default color
     int32_t color = (color_override == -1) ? colorcard[runmode] : color_override;
-    draw_string (8+6, disp_vshift_pix, modecard[oldmode], "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-    draw_string (8+6*(2+strlen (modecard[oldmode]))-3, disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-    draw_string (8+6, disp_vshift_pix, modecard[runmode], "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-    draw_string (8+6*(2+strlen (modecard[runmode]))-3, disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    int32_t x_new = 8+6*(2+strlen (modecard[runmode]))-3;
+    int32_t x_old = 8+6*(2+strlen (modecard[oldmode]))-3;
+    draw_string (8+6, 8+6, disp_vshift_pix, modecard[oldmode], "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string (x_old, x_old, disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string (8+6, 8+6, disp_vshift_pix, modecard[runmode], "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string (x_new, x_new, disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
 }
 void draw_dataset_page (int32_t page, int32_t page_last) {
     draw_fixed (page, page_last, true);  // Erase and redraw dynamic data corner of screen with names, units etc.
-    draw_string (83, disp_vshift_pix, pagecard[page], pagecard[page_last], RBLU, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string (83, 83, disp_vshift_pix, pagecard[page], pagecard[page_last], RBLU, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
 }
 void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
-    if (selected_val != selected_last) draw_string (12, 12+(selected_last+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_last], "", GRY2, BLK);
-    draw_string (12, 12+(selected_val+arraysize(telemetry))*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_val], "", (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : GRY2), BLK);
+    if (selected_val != selected_last) draw_string (12, 12, 12+(selected_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_last], "", GRY2, BLK);
+    draw_string (12, 12, 12+(selected_val+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_val], "", (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : GRY2), BLK);
 }
 void draw_bool (bool value, int32_t col) {  // Draws values of boolean data
     if ((disp_bool_values[col-2] != value) || disp_redraw_all) {  // If value differs, Erase old value and write new
-        draw_string (touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - arraysize (top_menu_buttons[col-2]-1)*(disp_font_width>>1) - 2, 0, top_menu_buttons[col-2], "", (value) ? GRN : LGRY, DGRY);
+        int32_t x_mod = touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - arraysize (top_menu_buttons[col-2]-1)*(disp_font_width>>1) - 2;
+        draw_string (x_mod, x_mod, 0, top_menu_buttons[col-2], "", (value) ? GRN : LGRY, DGRY);
         disp_bool_values[col-2] = value;
     }
 }
@@ -1097,7 +1110,8 @@ void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensor
                 tft.fillCircle (cntr_x, cntr_y, 19, create ? DGRY : BLK);
                 if (create) {
                     tft.drawCircle (cntr_x, cntr_y, 19, LYEL);
-                    draw_string (cntr_x-(arraysize (simgrid[row][col])-1)*(disp_font_width>>1), cntr_y-(disp_font_height>>1), simgrid[row][col], "", LYEL, DGRY);
+                    int32_t x_mod = cntr_x-(arraysize (simgrid[row][col])-1)*(disp_font_width>>1);
+                    draw_string (x_mod, x_mod, cntr_y-(disp_font_height>>1), simgrid[row][col], "", LYEL, DGRY);
                 }
             }
         }     
@@ -1202,7 +1216,7 @@ void tft_init (void) {
         // delay (500); // This is needed to allow the screen board enough time after a cold boot before we start trying to talk to it.
         tft.begin();
         tft.setRotation (1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
-        for (int32_t lineno=0; lineno <= arraysize (telemetry); lineno++)  {
+        for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
             disp_age_quanta[lineno] = -1;
             memset (disp_values[lineno],0,strlen (disp_values[lineno]));
         }
@@ -1233,7 +1247,6 @@ void tft_watchdog (void) {
         }
     }
 }
-
 // TaskHandle_t Task1;
 // void codeForTask1 (void * parameter) {
 //     for(;;) {
@@ -1249,6 +1262,5 @@ void tft_watchdog (void) {
 //         }
 //     }
 // }
-
 
 #endif  // GLOBALS_H
