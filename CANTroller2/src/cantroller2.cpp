@@ -175,21 +175,21 @@ void setup() {
         tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
     }
 
-    int32_t start = mycros();
-    tempsensebus.requestTemperatures();
-    int32_t mid = mycros();
-    double temp = tempsensebus.getTempCByIndex(0);
-    int32_t done = mycros();
-    printf ("Test blocking request: %ld us, received: %ld us, temp = %lf.\n", mid-start, done-mid, temp);
-    start = mycros();
-    tempsensebus.setWaitForConversion (false);  // makes it async
-    tempsensebus.requestTemperatures();
-    tempsensebus.setWaitForConversion (true);
-    mid = mycros();
-    delay (750 / (1 << (12 - temperature_precision)));
-    temp = tempsensebus.getTempCByIndex(0);
-    done = mycros();
-    printf (" Non-blocking request: %ld us, received: %ld us, temp = %lf.\n", mid-start, done-mid, temp);
+    // int32_t start = mycros();
+    // tempsensebus.requestTemperatures();
+    // int32_t mid = mycros();
+    // double temp = tempsensebus.getTempCByIndex(0);
+    // int32_t done = mycros();
+    // printf ("Test blocking request: %ld us, received: %ld us, temp = %lf.\n", mid-start, done-mid, temp);
+    // start = mycros();
+    // tempsensebus.setWaitForConversion (false);  // makes it async
+    // tempsensebus.requestTemperatures();
+    // tempsensebus.setWaitForConversion (true);
+    // mid = mycros();
+    // delay (750 / (1 << (12 - temperature_precision)));
+    // temp = tempsensebus.getTempCByIndex(0);
+    // done = mycros();
+    // printf (" Non-blocking request: %ld us, received: %ld us, temp = %lf.\n", mid-start, done-mid, temp);
     
     // xTaskCreatePinnedToCore ( codeForTask1, "Task_1", 1000, NULL, 1, &Task1, 0);
     // if (ctrl == HOTRC) {  // Look for evidence of a normal (not failsafe) hotrc signal. If it's not yet powered on, we will ignore its spurious poweron ignition event
@@ -1071,6 +1071,7 @@ void loop() {
 
     // Do the control loop bookkeeping at the end of each loop
     //
+    
     wait_one_loop_last = wait_one_loop;
     wait_one_loop = false;
     simulating_last = simulating;
