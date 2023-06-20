@@ -206,13 +206,14 @@ class Timer {
   protected:
     volatile uint32_t start_us;  // start time in us
     int32_t timeout_us = 0;  // in us
+    int32_t paused_us;
+    bool enabled = true;
   public:
     Timer(void) { start_us = micros(); };
     Timer(int32_t arg1) { set(arg1); };
-
     void reset()  { start_us = micros(); }
-    bool expired()  { return (abs((int32_t)(micros() - start_us)) > timeout_us); }
-    int32_t elapsed()  { return abs((int32_t)(micros() - start_us)); }
+    bool expired()  { return (enabled) ? abs((int32_t)(micros() - start_us)) > timeout_us : false; }
+    int32_t elapsed()  { return (enabled) ? abs((int32_t)(micros() - start_us)) : 0; }
     int32_t timeout()  { return (int32_t)timeout_us; }
     void set(int32_t arg1)  {
         timeout_us = arg1;
@@ -221,6 +222,11 @@ class Timer {
     int32_t remain()  { 
         uint32_t temp = abs((int32_t)(micros() - start_us));
         return (timeout_us - (int32_t)temp);
+    }
+    void disable() { enabled = false; }  // int32_t pause()
+    void enable() {  // int32_t resume()
+        enabled = true;
+        reset();
     }
 };
 
@@ -421,6 +427,7 @@ int32_t cruise_sw_timeout_us = 500000;  // how long do you have to hold down the
 bool cal_joyvert_brkmotor = false;  // Allows direct control of brake motor using controller vert
 bool cal_pot_gasservo = false;  // Allows direct control of gas servo using pot
 bool cal_pot_gas_ready = false;  // To avoid immediately overturning gas pot, first pot must be turned to valid range
+bool cal_set_hotrc_failsafe_ready = false;  
 
 // generic values
 //  ---- tunable ----
@@ -480,12 +487,16 @@ volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event
 volatile int32_t hotrc_horz_pulse_us = 1500;
 volatile int32_t hotrc_vert_pulse_us = 1500;
 bool joy_centered = false;
+
+// Merging these into Hotrc class
 bool hotrc_radio_detected = false;
 bool hotrc_radio_detected_last = hotrc_radio_detected;
 bool hotrc_suppress_next_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 Timer hotrcPulseTimer;  // OK to not be volatile?
 //  ---- tunable ----
 double hotrc_pulse_period_us = 1000000.0 / 50;
+
+
 double ctrl_ema_alpha[2] = { 0.05, 0.1 };  // [HOTRC, JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 int32_t ctrl_lims_adc[2][2][3] = { { { 3,  50, 4092 }, { 3,  75, 4092 } }, { { 9, 200, 4085 }, { 9, 200, 4085 } }, }; // [HOTRC, JOY] [HORZ, VERT], [MIN, DEADBAND, MAX] values as ADC counts
 bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
@@ -496,10 +507,13 @@ int32_t hotrc_pulse_vert_min_us = 990;  // 1009;
 int32_t hotrc_pulse_vert_max_us = 1990;  // 2003;
 int32_t hotrc_pulse_horz_min_us = 990;  // 1009;
 int32_t hotrc_pulse_horz_max_us = 1990;  // 2003;
-int32_t hotrc_pos_failsafe_min_adc = 450;  // The failsafe setting in the hotrc must be set to a trigger level equal to max amount of trim upward from trigger released.
-int32_t hotrc_pos_failsafe_max_adc = 530;
+
+// Maybe merging these into Hotrc class
+int32_t hotrc_pos_failsafe_min_us = 450;  // The failsafe setting in the hotrc must be set to a trigger level equal to max amount of trim upward from trigger released.
+int32_t hotrc_pos_failsafe_max_us = 530;
 int32_t hotrc_panic_timeout = 1000000;  // how long to receive flameout-range signal from hotrc vertical before panic stopping
 Timer hotrcPanicTimer(hotrc_panic_timeout);
+
 
 // steering related
 int32_t steer_pulse_safe_us = 0;

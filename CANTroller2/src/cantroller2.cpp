@@ -35,6 +35,8 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names
     index++;
 }
 
+Hotrc hotrc ( (hotrc_pulse_vert_max_us+hotrc_pulse_vert_min_us)/2 );
+    
 void setup() {
     set_pin (heartbeat_led_pin, OUTPUT);
     set_pin (encoder_a_pin, INPUT_PULLUP);
@@ -194,10 +196,10 @@ void setup() {
     // xTaskCreatePinnedToCore ( codeForTask1, "Task_1", 1000, NULL, 1, &Task1, 0);
     // if (ctrl == HOTRC) {  // Look for evidence of a normal (not failsafe) hotrc signal. If it's not yet powered on, we will ignore its spurious poweron ignition event
     //     int32_t temp = hotrc_vert_pulse_us;
-    //     hotrc_radio_detected = ((ctrl_lims_adc[HOTRC][VERT][MIN] <= temp && temp < hotrc_pos_failsafe_min_adc) || (hotrc_pos_failsafe_max_adc < temp && temp <= ctrl_lims_adc[HOTRC][VERT][MAX]));
+    //     hotrc_radio_detected = ((ctrl_lims_adc[HOTRC][VERT][MIN] <= temp && temp < hotrc_pos_failsafe_min_us) || (hotrc_pos_failsafe_max_us < temp && temp <= ctrl_lims_adc[HOTRC][VERT][MAX]));
     //     for (int32_t x = 0; x < 4; x++) {
     //         delay (20);
-    //         if (!((ctrl_lims_adc[HOTRC][VERT][MIN] < temp && temp < hotrc_pos_failsafe_min_adc) || (hotrc_pos_failsafe_max_adc < temp && temp < ctrl_lims_adc[HOTRC][VERT][MAX]))
+    //         if (!((ctrl_lims_adc[HOTRC][VERT][MIN] < temp && temp < hotrc_pos_failsafe_min_us) || (hotrc_pos_failsafe_max_us < temp && temp < ctrl_lims_adc[HOTRC][VERT][MAX]))
     //             || (hotrcPulseTimer.elapsed() > (int32_t)(hotrc_pulse_period_us*2.5))) hotrc_radio_detected = false;
     //     }
     //     printf ("HotRC radio signal: %setected\n", (!hotrc_radio_detected) ? "Not d" : "D");
@@ -231,8 +233,7 @@ void loop() {
     // Onboard devices - takes 12 us to read
     if (button_pin >= 0) {  // if encoder sw is being pressed (switch is active low)
         button_it = !digitalRead (button_pin);
-        if (button_it != button_last) Serial.println ("button\n");
-        button_last = button_it;
+        // if (button_it != button_last) Serial.println ("button\n");
     }
 
     // External digital signals - takes 11 us to read
@@ -335,8 +336,6 @@ void loop() {
         if (ctrl == HOTRC) {  // If using hotrc handle
             ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_vert_max_us, hotrc_pulse_vert_min_us, ctrl_lims_adc[ctrl][VERT][MAX], ctrl_lims_adc[ctrl][VERT][MIN]);
             ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_horz_max_us, hotrc_pulse_horz_min_us, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
-            // ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][MAX], hotrc_pulse_lims_us[VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX], ctrl_lims_adc[ctrl][VERT][MIN]);
-            // ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][MAX], hotrc_pulse_lims_us[HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
             ctrl_pos_adc[VERT][RAW] = constrain (ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
             ctrl_pos_adc[HORZ][RAW] = constrain (ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);   
         }
@@ -377,7 +376,7 @@ void loop() {
             hotrc_ch4_sw_event = false;    
         }
         // Detect loss of radio reception and panic stop
-        if (ctrl_pos_adc[VERT][FILT] > hotrc_pos_failsafe_min_adc && ctrl_pos_adc[VERT][FILT] < hotrc_pos_failsafe_max_adc) {
+        if (ctrl_pos_adc[VERT][FILT] > hotrc_pos_failsafe_min_us && ctrl_pos_adc[VERT][FILT] < hotrc_pos_failsafe_max_us) {
             if (hotrcPanicTimer.expired()) {
                 hotrc_radio_detected = false;
                 hotrc_suppress_next_event = true;  // reject spurious ch3 switch event upon next hotrc poweron
@@ -393,7 +392,7 @@ void loop() {
     
     // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     //
-    // printf("mode: %d, panic: %d, vpos: %4ld, min: %4ld, max: %4ld, elaps: %6ld", runmode, panic_stop, ctrl_pos_adc[VERT][FILT], hotrc_pos_failsafe_min_adc, hotrc_pos_failsafe_max_adc, hotrcPanicTimer.elapsed());
+    // printf("mode: %d, panic: %d, vpos: %4ld, min: %4ld, max: %4ld, elaps: %6ld", runmode, panic_stop, ctrl_pos_adc[VERT][FILT], hotrc_pos_failsafe_min_us, hotrc_pos_failsafe_max_us, hotrcPanicTimer.elapsed());
     if (basicmodesw) runmode = BASIC;  // if basicmode switch on --> Basic Mode
     else if (runmode != CAL && (panic_stop || !ignition)) runmode = SHUTDOWN;
     else if (runmode != CAL && !tach_filt_rpm) runmode = STALL;  // otherwise if engine not running --> Stall Mode
@@ -563,11 +562,22 @@ void loop() {
         if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
             calmode_request = false;
             cal_pot_gas_ready = false;
+            cal_set_hotrc_failsafe_ready = false;
         }
         else if (calmode_request) runmode = SHUTDOWN;
         if (!cal_pot_gas_ready) {
             double temp = d_map (pot_filt_percent, pot_min_percent, pot_max_percent, (double)gas_pulse_ccw_max_us, (double)gas_pulse_cw_min_us);
             if (temp <= (double)gas_pulse_idle_us && temp >= (double)gas_pulse_redline_us) cal_pot_gas_ready = true;
+        }
+        if (!cal_set_hotrc_failsafe_ready) {
+            if (button_it && !button_last) cal_set_hotrc_failsafe_ready = true;
+        }
+        else if (button_it) hotrc.print();
+        else if (button_last) {
+            hotrc_pos_failsafe_min_us = hotrc.get_min();
+            hotrc_pos_failsafe_max_us = hotrc.get_max();
+            cout << "\nHotrc failsafe range set!  Min: " << hotrc_pos_failsafe_min_us << "us, Max: " << hotrc_pos_failsafe_max_us << " us, including " << hotrc.get_pad() << " us slop both ways" << std::endl;
+            cal_set_hotrc_failsafe_ready = false;
         }
     }
     else { // Obviously this should never happen
@@ -853,7 +863,7 @@ void loop() {
             case 4:  adj_val (&carspeed_redline_mmph, sim_edit_delta, carspeed_idle_mmph, 30000);  break;
             case 5:  adj_bool (&ctrl, sim_edit_delta);  break;
             case 6:  if (runmode == CAL) adj_bool (&cal_joyvert_brkmotor, sim_edit_delta);  break;
-            case 7:  if (runmode == CAL) adj_bool (&cal_pot_gasservo, sim_edit_delta);  break;
+            case 7:  if (runmode == CAL) adj_bool (&cal_pot_gasservo, (sim_edit_delta < 0 || cal_pot_gas_ready) ? sim_edit_delta : -1);  break;
         }
         else if (dataset_page == PWMS)  switch (selected_value) {
             case 0:  adj_val (&steer_pulse_left_us, sim_edit_delta, steer_pulse_stop_us + 1, steer_pulse_left_max_us);  break;
@@ -1079,6 +1089,7 @@ void loop() {
     dataset_page_last = dataset_page;
     selected_value_last = selected_value;
     disp_redraw_all = false;
+    button_last = button_it;
     if (runmode != SHUTDOWN) shutdown_complete = false;
     if (runmode != oldmode) we_just_switched_modes = true;  // If changing runmode, set this so new mode logic can perform initial actions
     else we_just_switched_modes = false; // Reset this variable

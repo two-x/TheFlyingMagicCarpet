@@ -107,6 +107,73 @@ class Param {
     }
 };
 
+class Hotrc {
+  public:
+    int32_t index = 1;
+    int32_t padding = 7;
+    static const int32_t depth = 30;
+  protected:
+    int32_t avg, min_index, max_index;
+    int32_t history[depth];
+    uint32_t sum;
+  public:
+    Hotrc (int32_t arg_val, int32_t arg_padding) {
+        for (int32_t x = 0; x < depth; x++) history[x] = arg_val;
+        avg = arg_val;
+        sum = avg * depth;
+        min_index = 0;
+        max_index = 0;
+        if (arg_padding >= -1) padding = arg_padding;
+    }
+    Hotrc (int32_t val) { Hotrc (val, -1); }    
+    int32_t calc (int32_t val) {
+        sum += val - history[index];
+        avg = sum/depth;
+        if (++index >= depth) index -= depth;  
+        if (val < history[min_index]) min_index = index;
+        else if (index >= depth) for (int32_t x = 0; x <= depth; x++) if (history[x] < history[min_index]) min_index = x;
+        if (val > history[max_index]) max_index = index;
+        else if (index >= depth) for (int32_t x = 0; x <= depth; x++) if (history[x] > history[max_index]) max_index = x;
+        return avg;
+    }
+    void print (void) {
+        std::cout << "Hotrc:" << history[index] << " av:" << avg << " min:" << min_index << " max:" << max_index << std::endl;
+    }
+    int32_t get_min () { return history[min_index]-padding; }
+    int32_t get_max () { return history[max_index]+padding; }
+    int32_t get_pad () { return padding; }
+    int32_t get_avg () { return avg; }
+};
+    // void code_from_globals (void) {
+        // // Code from globals.h maybe to marge into here
+        // bool hotrc_radio_detected = false;
+        // bool hotrc_radio_detected_last = hotrc_radio_detected;
+        // bool hotrc_suppress_next_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
+        // Timer hotrcPulseTimer;  // OK to not be volatile?
+        //
+        // int32_t hotrc_pos_failsafe_min_adc = 450;  // The failsafe setting in the hotrc must be set to a trigger level equal to max amount of trim upward from trigger released.
+        // int32_t hotrc_pos_failsafe_max_adc = 530;
+        // int32_t hotrc_panic_timeout = 1000000;  // how long to receive flameout-range signal from hotrc vertical before panic stopping
+        // Timer hotrcPanicTimer(hotrc_panic_timeout);
+        // //  ---- tunable ----
+        // //double hotrc_pulse_period_us = 1000000.0 / 50;
+        // in setup:
+        // hotrcPanicTimer.reset();
+        //
+        // // Detect loss of radio reception and panic stop
+        //     if (ctrl_pos_adc[VERT][FILT] > hotrc_pos_failsafe_min_adc && ctrl_pos_adc[VERT][FILT] < hotrc_pos_failsafe_max_adc) {
+        //         if (hotrcPanicTimer.expired()) {
+        //             hotrc_radio_detected = false;
+        //             hotrc_suppress_next_event = true;  // reject spurious ch3 switch event upon next hotrc poweron
+        //         }
+        //     }
+        //     hotrcPanicTimer.reset();
+        //     hotrc_radio_detected = true;
+        // }
+        // hotrc_radio_detected_last = hotrc_radio_detected;
+    // }
+
+
 //
 // // Device is a base class for any connected system device or signal
 // class Device : public Param {
