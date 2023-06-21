@@ -1,5 +1,9 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
+#undef min
+#undef max
+#undef map
+#undef constrain
 #ifdef DUE
     #include <LibPrintf.h>  // This works on Due but not ESP32
 #endif
@@ -8,6 +12,8 @@
 #include <string>
 #include <stdio.h>
 #include <iostream>
+#include <string>
+#include <iomanip>
 // #include "classes.h"
 #include "spid.h"
 // #include "disp.h"
@@ -171,7 +177,7 @@
 #define adcrange_adc 4095  // = 2^adcbits-1
 #define adcmidscale_adc 2047  // = 2^(adcbits-1)-1
 #define serial_debugging true
-#define timestamp_loop true  // Makes code write out timestamps throughout loop to serial port
+#define timestamp_loop false  // Makes code write out timestamps throughout loop to serial port
 
 // Readily available possibilities we could wire up if we want
 //
@@ -371,9 +377,8 @@ char simgrid[4][3][5] = {
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 char side_menu_buttons[5][4] = { "PAG", "SEL", "\x18  ", "\x19  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
-char disp_draw_buffer[disp_tuning_lines];  // Used to convert integers to ascii for purposes of displaying on screen
-char disp_values[disp_lines][disp_tuning_lines];
-bool disp_polarities[disp_tuning_lines];
+char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
+bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
 bool display_enabled = true;  // Should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
 bool disp_redraw_all = true;
 bool disp_bool_values[6];
@@ -832,14 +837,19 @@ void hotrc_ch4_isr (void) {  // On falling edge, records high pulse width to det
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
 
-double d_map (double x, double in_min, double in_max, double out_min, double out_max) {
+inline double max (double a, double b) { return (a > b) ? a : b; }
+inline double min (double a, double b) { return (a < b) ? a : b; }
+inline double constrain (double amt, double low, double high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
+inline double map (double x, double in_min, double in_max, double out_min, double out_max) {
     if (in_max != in_min) return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-    printf ("d_map() refusing to divide by zero, mapped input %lf to max value %lf.\n", x, out_max);
     return out_max;
 }
-
-double d_constrain (double amt, double low, double high) {
-    return (amt < low) ? low : ((amt > high) ? high : amt);
+inline int32_t max (int32_t a, int32_t b) { return (a > b) ? a : b; }
+inline int32_t min (int32_t a, int32_t b) { return (a < b) ? a : b; }
+inline int32_t constrain (int32_t amt, int32_t low, int32_t high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
+inline int32_t map (int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, int32_t out_max) {
+    if (in_max != in_min) return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+    return out_max;
 }
 
 uint32_t colorwheel (uint8_t WheelPos) {
@@ -948,9 +958,11 @@ void draw_string_units (int32_t x, int32_t y, const char* text, const char* oldt
     }
 }
 void draw_colons (int32_t x_pos, int32_t first, int32_t last, int32_t color) {
-    for (int32_t lineno=first; lineno < last; lineno++) {
-        tft.fillRect (x_pos, (lineno+1)*disp_line_height_pix+3, 2, 2, color);
-        tft.fillRect (x_pos, (lineno+1)*disp_line_height_pix+7, 2, 2, color);
+    for (int32_t lineno=first; lineno <= last; lineno++) {
+        tft.drawPixel (x_pos, lineno*disp_line_height_pix+3, color);
+        tft.drawPixel (x_pos, lineno*disp_line_height_pix+7, color);
+        // tft.fillRect (x_pos, (lineno+1)*disp_line_height_pix+3, 2, 2, color);
+        // tft.fillRect (x_pos, (lineno+1)*disp_line_height_pix+7, 2, 2, color);
     }
 }
 // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
@@ -978,13 +990,20 @@ void draw_fixed (int32_t page, int32_t page_last, bool redraw_tuning_corner) {  
         }
     }
 }
+// Font character \xfa is little 3-pixel wide hyphen, use for negative numbers 
+void draw_hyphen (int32_t x_pos, int32_t y_pos, int32_t color) {
+    tft.drawFastHLine (x_pos+2, y_pos+3, 3, color);
+}
 void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target) {
     int32_t age_us = (int32_t)((double)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
-    int32_t x_base = 60;
+    int32_t x_base = 59;
+    bool polarity = (value >= 0);  // polarity 0=negative, 1=positive
     if (strcmp(disp_values[lineno], disp_string) || disp_redraw_all) {  // If value differs, Erase old value and write new
-        draw_string (x_base+6*(value>=0), x_base+6*disp_polarities[lineno], lineno*disp_line_height_pix+disp_vshift_pix, disp_string, disp_values[lineno], GRN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+        int32_t y_pos = lineno*disp_line_height_pix+disp_vshift_pix;
+        if (polarity != disp_polarities[lineno]) draw_hyphen (x_base, y_pos, (!polarity) ? GRN : BLK);
+        draw_string (x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], GRN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
         strcpy (disp_values[lineno], disp_string);
-        disp_polarities[lineno] = (value>=0);
+        disp_polarities[lineno] = polarity;
         dispAgeTimer[lineno].reset();
         disp_age_quanta[lineno] = 0;
     }
@@ -992,7 +1011,9 @@ void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32
         int32_t color;
         if (age_us < 8) color = 0x1fe0 + age_us*0x2000;  // Base of green with red added as you age, until yellow is achieved
         else color = 0xffe0 - (age_us-8) * 0x100;  // Then lose green as you age further
-        draw_string (x_base+6*(value>=0), x_base+6*disp_polarities[lineno], (lineno)*disp_line_height_pix+disp_vshift_pix, disp_values[lineno], "", color, BLK);
+        int32_t y_pos = (lineno)*disp_line_height_pix+disp_vshift_pix;
+        if (!polarity) draw_hyphen (x_base, y_pos, color);
+        draw_string (x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_values[lineno], "", color, BLK);
         disp_age_quanta[lineno] = age_us;
     }
     if (lowlim < hilim) {  // Any value having a given range deserves a bargraph gauge with a needle
@@ -1023,54 +1044,73 @@ void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32
         disp_needles[lineno] = -1;  // Flag for no needle
     }
 }
-std::string my_itoa (int32_t value, int32_t maxlength) {
-    int32_t length = (int32_t)log10(abs(value)) + 1;
-    if (length <= maxlength && (value >= 0 || length <= (maxlength-1))) return std::to_string(value);
-    std::string result;
-    if (value < 0) {
-        result = "-";
-        value = -value;
+int32_t significant_place (double value) {
+    int32_t place = 0;
+    if (value >= 1) { // int32_t vallog = std::log10(value);  // Can be sped up
+        place = 1;
+        while (value >= 10) {
+            value /= 10;
+            place++;
+        }
     }
+    else if (value) {  // checking (value) rather than (value != 0.0) can help avoid precision errors caused by digital representation of floating numbers
+        while (value < 1) {
+            value *= 10;
+            place--;
+        }
+    }
+    return place;
+}
+std::string abs_itoa (int32_t value, int32_t maxlength) {
+    value = abs (value);  // This function disregards sign
+    if (significant_place(value) <= maxlength) return std::to_string (value);  // If value is short enough, return it
+    std::string result;
     int32_t magnitude = std::log10 (value);
     double scaledValue = value / std::pow (10, magnitude + 1 - maxlength);  // was (10, magnitude - 5);
-    if (scaledValue >= 1.0 && scaledValue < 10.0) result += std::to_string (static_cast<int>(scaledValue));
-    else result += std::to_string (scaledValue);
+    if (scaledValue >= 1.0 && scaledValue < 10.0) result = std::to_string (static_cast<int>(scaledValue));
+    else result = std::to_string (scaledValue);
     if (magnitude >= maxlength) result += "e" + std::to_string (magnitude);
     return result;
 }
-std::string my_ftoa (double value, int32_t maxlength) {
-    char buffer[20];
-    snprintf (buffer, sizeof (buffer), "%.*g", maxlength, value);
-    std::string result (buffer);
-    size_t decimalPos = result.find ('.');
-    size_t exponentPos = result.find ('e');
-    if (result.length() > maxlength || exponentPos != std::string::npos) {
-        snprintf (buffer, sizeof (buffer), "%.*e", maxlength, value);
-        result = buffer;
-        if (exponentPos != std::string::npos) result.erase(exponentPos + 1, 1);
-        size_t fractionalPos = result.find ('.');
-        if (fractionalPos != std::string::npos) result.erase(result.find_last_not_of('0') + 1);
-        size_t exponentEndPos = result.find_first_of ("eE");
-        if (exponentEndPos != std::string::npos) {
-            size_t exponentStartPos = result.find_last_not_of ('0', exponentEndPos - 1);
-            if (result[exponentStartPos] == 'e') result.erase (exponentStartPos, exponentEndPos - exponentStartPos);
-        }
-        if (result.length() > maxlength) result.erase (maxlength);
+std::string abs_ftoa (double value, int32_t maxlength, int32_t sigdig) {  // sigdig limits number of significant digits  
+    value = abs (value);  // This function disregards sign
+    int32_t place = significant_place (value);  // Learn decimal place of the most significant digit in value
+    if (place >= sigdig && place <= maxlength) {  // Then we want simple cast to an integer w/o decimal point (eg 123456, 12345, 1234)
+        std::string result (std::to_string ((int32_t)value));
+        return result;
     }
-    return result;
+    if (place >= 0 && place < maxlength) {  // Then we want float formatted with enough nonzero digits after the decimal point for 4 significant digits (eg 123.4, 12.34, 1.234, 0)
+        int32_t length = min (sigdig+1, maxlength);
+        char buffer[length+1];
+        std::snprintf (buffer, length + 1, "%.*f", length - 1, value);
+        std::string result (buffer);  // copy buffer to result
+        return result;
+    }
+    if (place >= 3-maxlength && place < maxlength) {  // Then we want decimal w/o initial '0' limited to 3 significant digits (eg .123, .0123, .00123)
+        std::string result (std::to_string(value));
+        size_t decimalPos = result.find('.');  // Remove any digits to the left of the decimal point
+        if (decimalPos != std::string::npos) result = result.substr(decimalPos);
+        if (result.length() > sigdig) result.resize(sigdig);  // Limit the string length to the desired number of significant digits
+        return result;
+    }  // Otherwise we want scientific notation with precision removed as needed to respect maxlength (eg 1.23e4, 1.23e5, but using long e character not e for negative exponents
+    char buffer[maxlength+1];  // Allocate buffer with the maximum required size
+    snprintf(buffer, sizeof(buffer), "%.*e", min (sigdig, maxlength-4), value);
+    std::string result (buffer);  // copy buffer to result
+    if (result.find ("e+0") != std::string::npos) result.replace (result.find ("e+0"), 3, "e");
+    else if (result.find ("e-0") != std::string::npos) result.replace (result.find ("e-0"), 3, "\x88");  // Font character \x88 is phoenetic long e, using for exponent to negative power  // if (result.find ("e-0") != std::string::npos) 
+    return result;    
 }
 void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int target) {
-    std::string val_string = my_itoa (value, (int32_t)disp_maxlength);
-    // std::cout << "Int: " << value << " -> " << val_string << std::endl;
-    char const* val_cstring = val_string.c_str();
-    draw_dynamic (lineno, val_cstring, value, lowlim, hilim, (int32_t)target);
+    std::string val_string = abs_itoa (value, (int32_t)disp_maxlength);
+    // std::cout << "Int: " << value << " -> " << val_string << ", " << ((value >= 0) ? 1 : -1) << std::endl;
+    draw_dynamic (lineno, val_string.c_str(), value, lowlim, hilim, (int32_t)target);
 }
 void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim) {
     draw_dynamic (lineno, value, lowlim, hilim, -1);
 }
 void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim, int32_t target) {
-    std::string val_string = my_ftoa (value, (int32_t)disp_maxlength);
-    // std::cout << "Flt: " << value << " -> " << val_string << std::endl;
+    std::string val_string = abs_ftoa (value, (int32_t)disp_maxlength, 4);
+    // std::cout << "Flt: " << value << " -> " << val_string << ", " << ((value >= 0) ? 1 : -1) << std::endl;
     draw_dynamic (lineno, val_string.c_str(), (int32_t)value, (int32_t)lowlim, (int32_t)hilim, target);
 }
 void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim) {
@@ -1087,6 +1127,7 @@ void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override) {  
 }
 void draw_dataset_page (int32_t page, int32_t page_last) {
     draw_fixed (page, page_last, true);  // Erase and redraw dynamic data corner of screen with names, units etc.
+    // for (int32_t lineno=0; lineno<disp_lines; lineno++) draw_hyphen (59, lineno*disp_line_height_pix+disp_vshift_pix, BLK);
     draw_string (83, 83, disp_vshift_pix, pagecard[page], pagecard[page_last], RBLU, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
 }
 void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
@@ -1219,6 +1260,7 @@ void tft_init (void) {
         for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
             disp_age_quanta[lineno] = -1;
             memset (disp_values[lineno],0,strlen (disp_values[lineno]));
+            disp_polarities[lineno] = 1;
         }
         for (int32_t row=0; row<arraysize (disp_bool_values); row++) disp_bool_values[row] = 1;
         for (int32_t row=0; row<arraysize (disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
