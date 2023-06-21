@@ -356,16 +356,16 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "GasOpnLp",
         "BrkZeroP", },
 };
-char units[disp_fixed_lines][5] = { "mmph", "rpm ", "psi ", "adc ", "adc ", "mmph", "adc ", "rpm ", "\xe5s  ", "\xe5s  ", "\xe5s  " };
+char units[disp_fixed_lines][5] = { "mph ", "rpm ", "psi ", "adc ", "adc ", "mph ", "adc ", "rpm ", "\xe5s  ", "\xe5s  ", "\xe5s  " };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
-    { "mV  ", "thou", "%   ", "    ", "    ", "    ", "    ", "    " },  // RUN
+    { "V   ", "in  ", "%   ", "    ", "    ", "    ", "    ", "    " },  // RUN
     { "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // JOY
-    { "%   ", "rpm ", "rpm ", "mmph", "mmph", "    ", "    ", "    " },  // CAR
+    { "%   ", "rpm ", "rpm ", "mph ", "mph ", "    ", "    ", "    " },  // CAR
     { "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  " },  // PWM
     { "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "Hz  ", "sec " },  // BPID
-    { "mmph", "mmph", "mmph", "mmph", "mmph", "    ", "Hz  ", "sec " },  // GPID
+    { "mph ", "mph ", "mph ", "mph ", "mph ", "    ", "Hz  ", "sec " },  // GPID
     { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "Hz  ", "sec " },  // CPID
-    { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "    ", "thou" },  // TEMP
+    { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "    ", "in  " },  // TEMP
     // { "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "    ", "    " },  // TEMP
 };
 char simgrid[4][3][5] = {
@@ -457,11 +457,11 @@ int32_t gas_spid_ctrl_dir = SPID::REV;  // 0 = fwd, 1 = rev. Because a higher va
 
 // mule battery related
 double battery_adc = adcmidscale_adc;
-double battery_mv = 10000;
-double battery_filt_mv = 10000;
+double battery_v = 10.0;
+double battery_filt_v = 10.0;
 //  ---- tunable ----
-double battery_max_mv = 16000;  // The max vehicle voltage we can sense. Design resistor divider to match. Must exceed max V possible.
-double battery_convert_mv_per_adc = battery_max_mv/adcrange_adc;
+double battery_max_v = 16.0;  // The max vehicle voltage we can sense. Design resistor divider to match. Must exceed max V possible.
+double battery_convert_v_per_adc = battery_max_v/adcrange_adc;
 bool battery_convert_invert = false;
 int32_t battery_convert_polarity = SPID::FWD;
 double battery_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
@@ -502,7 +502,7 @@ double hotrc_pulse_period_us = 1000000.0 / 50;
 
 
 double ctrl_ema_alpha[2] = { 0.05, 0.1 };  // [HOTRC, JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-int32_t ctrl_lims_adc[2][2][3] = { { { 3,  50, 4092 }, { 3,  75, 4092 } }, { { 9, 200, 4085 }, { 9, 200, 4085 } }, }; // [HOTRC, JOY] [HORZ, VERT], [MIN, DEADBAND, MAX] values as ADC counts
+int32_t ctrl_lims_adc[2][2][3] = { { { 3,  50, 4092 }, { 3,  100, 4092 } }, { { 9, 200, 4085 }, { 9, 200, 4085 } }, }; // [HOTRC, JOY] [HORZ, VERT], [MIN, DEADBAND, MAX] values as ADC counts
 bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
 // Limits of what pulsewidth the hotrc receiver puts out
 // For some funky reason I was unable to initialize these in an array format !?!?!
@@ -561,20 +561,20 @@ int32_t brake_pulse_extend_max_us = 2500;  // Longest pulsewidth acceptable to j
 int32_t brake_pulse_margin_us = 40; // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated 
 
 // brake actuator position related
-double brake_pos_thou;
-double brake_pos_filt_thou;
+double brake_pos_in;
+double brake_pos_filt_in;
 //  ---- tunable ----
-double brake_pos_convert_thou_per_adc = 3.3 * 10000.0 * 1000.0 / (5.0 * adcrange_adc * 557);  // 3.3 v * 10k ohm * 1k m-in/in / (5 v * 4095 adc * 557 ohm/in) = 0.0029 in/adc = 2.89 m-in/adc 
+double brake_pos_convert_in_per_adc = 3.3 * 10000.0 / (5.0 * adcrange_adc * 557);  // 3.3 v * 10k ohm / (5 v * 4095 adc * 557 ohm/in) = 0.0029 in/adc = 2.89 m-in/adc 
 bool brake_pos_convert_invert = false;
 int32_t brake_pos_convert_polarity = SPID::FWD;
 double brake_pos_ema_alpha = 0.25;
-double brake_pos_abs_min_retract_thou = 335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("thou"sandths of an inch)
-double brake_pos_nom_lim_retract_thou = 506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (thou)
-double brake_pos_zeropoint_thou = 3179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (thou)
-double brake_pos_park_thou = 4234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (thou)
-double brake_pos_nom_lim_extend_thou = 4624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (thou)
-double brake_pos_abs_max_extend_thou = 8300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (thou)
-double brake_pos_margin_thou = 29;  //
+double brake_pos_abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
+double brake_pos_nom_lim_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
+double brake_pos_zeropoint_in = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
+double brake_pos_park_in = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
+double brake_pos_nom_lim_extend_in = 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
+double brake_pos_abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
+double brake_pos_margin_in = .029;  //
 // int32_t brake_pos_abs_min_retract_adc = 116;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. (ADC count 0-4095)
 // int32_t brake_pos_nom_lim_retract_adc = 175;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (ADC count 0-4095)
 // int32_t brake_pos_zeropoint_adc = 1100;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (ADC count 0-4095)
@@ -606,28 +606,30 @@ double tach_convert_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min *
 bool tach_convert_invert = true;
 int32_t tach_convert_polarity = SPID::FWD;      
 double tach_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-double tach_idle_rpm = 700;  // Min value for engine hz, corresponding to low idle (in rpm)
-double tach_max_rpm = 6000;  // Max possible engine rotation speed
-double tach_redline_rpm = 4000;  // Max value for tach_rpm, pedal to the metal (in rpm)
-double tach_margin_rpm = 15;  // Margin of error for checking engine rpm (in rpm)
+double tach_idle_rpm = 700.0;  // Min value for engine hz, corresponding to low idle (in rpm)
+double tach_max_rpm = 6000.0;  // Max possible engine rotation speed
+double tach_redline_rpm = 4000.0;  // Max value for tach_rpm, pedal to the metal (in rpm)
+double tach_margin_rpm = 15.0;  // Margin of error for checking engine rpm (in rpm)
+double tach_stop_thresh_rpm = 0.01;  // Below which the engine is considered stopped
 int32_t tach_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
 int32_t tach_delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
 
 // carspeed/speedo related
 volatile int32_t speedo_delta_us = 0;
-double carspeed_govern_mmph;  // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
-double carspeed_mmph;  // Current car speed, raw as sensed (in mmph)
-double carspeed_filt_mmph;  // Current car speed, filtered (in mmph)
+double carspeed_govern_mph;  // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
+double carspeed_mph;  // Current car speed, raw as sensed (in mph)
+double carspeed_filt_mph;  // Current car speed, filtered (in mph)
 Timer speedoPulseTimer;  // OK to not be volatile?
 //  ---- tunable ----
-double speedo_convert_mmph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 * 1000.0 / (19.85 * 12 * 5280);  // 1 rot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 gearing * 20*pi in/rot * 1/12 ft/in * 1000/5280 milli-mi/ft = 179757270 milli-mi/hr (mmph)
+double speedo_convert_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 rot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 gearing * 20*pi in/rot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
 // Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
 bool speedo_convert_invert = true;
 int32_t speedo_convert_polarity = SPID::FWD;      
 double carspeed_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-double carspeed_idle_mmph = 4500;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
-double carspeed_redline_mmph = 15000;  // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
-double carspeed_max_mmph = 25000;  // What is max speed car can ever go
+double carspeed_idle_mph = 4.50;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
+double carspeed_redline_mph = 15.0;  // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
+double carspeed_max_mph = 25.0;  // What is max speed car can ever go
+double carspeed_stop_thresh_mph = 0.01;  // Below which the car is considered stopped
 int32_t speedo_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the car is stopped (in us)
 int32_t speedo_delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
             
@@ -796,9 +798,9 @@ void encoder_b_isr (void) {  // On B rising or falling edge, A should have stabi
 //     encoder_bounce_danger = B; // Set to enable A trigger
 // }
 // The tach and speed use a hall sensor being triggered by a passing magnet once per pulley turn. These ISRs call mycros()
-// on every pulse to know the time since the previous pulse. I tested this on the bench up to about 750 mmph which is as 
+// on every pulse to know the time since the previous pulse. I tested this on the bench up to about 0.750 mph which is as 
 // fast as I can move the magnet with my hand, and it works. It would be cleaner to just increment a counter here in the ISR
-// then call mycros() in the main loop and compare with a timer to calculate mmph.
+// then call mycros() in the main loop and compare with a timer to calculate mph.
 void tach_isr (void) {  // The tach and speedo isrs compare value returned from the mycros() function with the value from the last interrupt to determine period, to get frequency of the vehicle pulley rotations.
     int32_t temp_us = tachPulseTimer.elapsed();
     if (temp_us > tach_delta_abs_min_us) {
@@ -854,6 +856,9 @@ inline int32_t map (int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, 
     if (in_max != in_min) return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
     return out_max;
 }
+
+bool car_stopped (void) { return abs(carspeed_filt_mph) < carspeed_stop_thresh_mph; }
+bool engine_stopped (void) { return abs(tach_filt_rpm) < tach_stop_thresh_rpm; }
 
 uint32_t colorwheel (uint8_t WheelPos) {
     WheelPos = 255 - WheelPos;
@@ -945,20 +950,20 @@ void draw_thou (int32_t x, int32_t y, int32_t color) {  // This is my cheesy pix
     tft.drawFastVLine (x+16, y+2, 5, color);  // 'u' complete (x = 14-16)
 }
 void draw_string_units (int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
-    if (!strcmp (oldtext, "mmph")) draw_mmph(x, y, bgcolor);
-    else if (!strcmp (oldtext, "thou")) draw_thou (x, y, bgcolor);
-    else {
+    // if (!strcmp (oldtext, "mmph")) draw_mmph(x, y, bgcolor);
+    // else if (!strcmp (oldtext, "thou")) draw_thou (x, y, bgcolor);
+    // else {
         tft.setCursor (x, y);
         tft.setTextColor (bgcolor);
         tft.print (oldtext);  // Erase the old content
-    }
-    if (!strcmp (text, "mmph")) draw_mmph(x, y, color);
-    else if (!strcmp (text, "thou")) draw_thou (x, y, color);
-    else {
+    // }
+    // if (!strcmp (text, "mmph")) draw_mmph(x, y, color);
+    // else if (!strcmp (text, "thou")) draw_thou (x, y, color);
+    // else {
         tft.setCursor (x, y);
         tft.setTextColor (color);
         tft.print (text);  // Erase the old content
-    }
+    // }
 }
 void draw_colons (int32_t x_pos, int32_t first, int32_t last, int32_t color) {
     for (int32_t lineno=first; lineno <= last; lineno++) {

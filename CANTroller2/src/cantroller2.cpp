@@ -152,7 +152,7 @@ void setup() {
     brakeSPID.set_output_limits ((double)brake_pulse_retract_us, (double)brake_pulse_extend_us);
     gasSPID.set_input_limits (tach_idle_rpm, tach_govern_rpm);
     gasSPID.set_output_limits ((double)gas_pulse_govern_us, (double)gas_pulse_idle_us);
-    cruiseSPID.set_input_limits (carspeed_idle_mmph, carspeed_govern_mmph);
+    cruiseSPID.set_input_limits (carspeed_idle_mph, carspeed_govern_mph);
     cruiseSPID.set_output_limits (tach_idle_rpm, tach_govern_rpm);
       
     steer_servo.attach (steer_pwm_pin);
@@ -227,6 +227,8 @@ void loop() {
     loopindex = 0;  // reset at top of loop
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "top");
 
+    // cout << "(top)) spd:" << carspeed_filt_mph << " tach:" << tach_filt_rpm;
+    
     // Update inputs.  Fresh sensor data, and filtering.
     //
 
@@ -297,15 +299,15 @@ void loop() {
     ema_filt (pot_percent, &pot_filt_percent, pot_ema_alpha);
     
     // Voltage of vehicle battery - takes 70 us to read, convert, and filter
-    battery_mv = convert_units ((double)analogRead (battery_pin), battery_convert_mv_per_adc, battery_convert_invert);
-    ema_filt (battery_mv, &battery_filt_mv, battery_ema_alpha);  // Apply EMA filter
+    battery_v = convert_units ((double)analogRead (battery_pin), battery_convert_v_per_adc, battery_convert_invert);
+    ema_filt (battery_v, &battery_filt_v, battery_ema_alpha);  // Apply EMA filter
 
        // Brake position - takes 70 us to read, convert, and filter
     if (!simulating || !sim_brkpos) {
-        brake_pos_thou = convert_units ((double)analogRead (brake_pos_pin), brake_pos_convert_thou_per_adc, brake_pos_convert_invert);
-        ema_filt (brake_pos_thou, &brake_pos_filt_thou, brake_pos_ema_alpha);
+        brake_pos_in = convert_units ((double)analogRead (brake_pos_pin), brake_pos_convert_in_per_adc, brake_pos_convert_invert);
+        ema_filt (brake_pos_in, &brake_pos_filt_in, brake_pos_ema_alpha);
     }
-    else brake_pos_filt_thou = (brake_pos_nom_lim_retract_thou + brake_pos_zeropoint_thou)/2;  // To keep brake position in legal range during simulation
+    else brake_pos_filt_in = (brake_pos_nom_lim_retract_in + brake_pos_zeropoint_in)/2;  // To keep brake position in legal range during simulation
     
     // Tach - takes 22 us to read when no activity
     if (!simulating || !sim_tach) {
@@ -316,9 +318,9 @@ void loop() {
     
     // Speedo - takes 14 us to read when no activity
     if (!simulating || !sim_speedo) { 
-        if (speedoPulseTimer.elapsed() < speedo_stop_timeout_us) carspeed_mmph = convert_units ((double)(speedo_delta_us), speedo_convert_mmph_per_rpus, speedo_convert_invert);  // Update car speed value  
-        else carspeed_mmph = 0;     
-        ema_filt (carspeed_mmph, &carspeed_filt_mmph, carspeed_ema_alpha);  // Sensor EMA filter
+        if (speedoPulseTimer.elapsed() < speedo_stop_timeout_us) carspeed_mph = convert_units ((double)(speedo_delta_us), speedo_convert_mph_per_rpus, speedo_convert_invert);  // Update car speed value  
+        else carspeed_mph = 0;     
+        ema_filt (carspeed_mph, &carspeed_filt_mph, carspeed_ema_alpha);  // Sensor EMA filter
     }
 
     // Brake pressure - takes 72 us to read
@@ -352,11 +354,11 @@ void loop() {
     // Determine steering pwm output - takes 13 us to handle
     if (runmode != SHUTDOWN || !shutdown_complete)  { // Unless fully shut down at the moment, set the steering output
         if (ctrl_pos_adc[HORZ][FILT] >= ctrl_db_adc[HORZ][TOP]) {
-            steer_pulse_safe_us = steer_pulse_stop_us + (int32_t)((double)(steer_pulse_right_us - steer_pulse_stop_us) * (1 - ((double)steer_safe_percent * carspeed_filt_mmph / ((double)carspeed_redline_mmph * 100) )));
+            steer_pulse_safe_us = steer_pulse_stop_us + (int32_t)((double)(steer_pulse_right_us - steer_pulse_stop_us) * (1 - ((double)steer_safe_percent * carspeed_filt_mph / ((double)carspeed_redline_mph * 100) )));
             steer_pulse_out_us = map (ctrl_pos_adc[HORZ][FILT], ctrl_db_adc[HORZ][TOP], ctrl_lims_adc[ctrl][HORZ][MAX], steer_pulse_stop_us, steer_pulse_safe_us);  // Figure out the steering setpoint if joy to the right of deadband
         }
         else if (ctrl_pos_adc[HORZ][FILT] <= ctrl_db_adc[HORZ][BOT]) {
-            steer_pulse_safe_us = steer_pulse_stop_us - (int32_t)((double)(steer_pulse_stop_us - steer_pulse_left_us) * (1 - ((double)steer_safe_percent * carspeed_filt_mmph / ((double)carspeed_redline_mmph * 100) )));
+            steer_pulse_safe_us = steer_pulse_stop_us - (int32_t)((double)(steer_pulse_stop_us - steer_pulse_left_us) * (1 - ((double)steer_safe_percent * carspeed_filt_mph / ((double)carspeed_redline_mph * 100) )));
             steer_pulse_out_us = map (ctrl_pos_adc[HORZ][FILT], ctrl_db_adc[HORZ][BOT], ctrl_lims_adc[ctrl][HORZ][MIN], steer_pulse_stop_us, steer_pulse_safe_us);  // Figure out the steering setpoint if joy to the left of deadband
         }
         else steer_pulse_out_us = steer_pulse_stop_us;  // Stop the steering motor if inside the deadband
@@ -395,7 +397,7 @@ void loop() {
     // printf("mode: %d, panic: %d, vpos: %4ld, min: %4ld, max: %4ld, elaps: %6ld", runmode, panic_stop, ctrl_pos_adc[VERT][FILT], hotrc_pos_failsafe_min_us, hotrc_pos_failsafe_max_us, hotrcPanicTimer.elapsed());
     if (basicmodesw) runmode = BASIC;  // if basicmode switch on --> Basic Mode
     else if (runmode != CAL && (panic_stop || !ignition)) runmode = SHUTDOWN;
-    else if (runmode != CAL && !tach_filt_rpm) runmode = STALL;  // otherwise if engine not running --> Stall Mode
+    else if (runmode != CAL && engine_stopped()) runmode = STALL;  // otherwise if engine not running --> Stall Mode
     
     if (runmode == BASIC) {  // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering stell works.
         if (we_just_switched_modes) {  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
@@ -404,7 +406,7 @@ void loop() {
             motorParkTimer.reset();  // Set a timer to timebox this effort
             park_the_motors = true;  // Flags the motor parking to happen
         }
-        if (tach_filt_rpm && !basicmodesw) runmode = HOLD;  // If we turned off the basic mode switch with engine running, go to Hold mode. If engine is not running, we'll end up in Stall Mode automatically
+        if (!engine_stopped() && !basicmodesw) runmode = HOLD;  // If we turned off the basic mode switch with engine running, go to Hold mode. If engine is not running, we'll end up in Stall Mode automatically
     }
     else if (runmode == SHUTDOWN) { // In shutdown mode we stop the car if it's moving then park the motors.
         if (ignition && !panic_stop) {
@@ -416,7 +418,7 @@ void loop() {
             shutdown_complete = false;
             shutdown_color = LPNK;
             calmode_request = false;
-            if (carspeed_filt_mmph) {
+            if (car_stopped()) {
                 if (panic_stop && brakeSPID.get_target() < pressure_panic_initial_psi) brakeSPID.set_target (pressure_panic_initial_psi);
                 if (!panic_stop && brakeSPID.get_target() < pressure_hold_initial_psi) brakeSPID.set_target (pressure_hold_initial_psi);
                 brakeIntervalTimer.reset();
@@ -424,7 +426,7 @@ void loop() {
             }
         }
         if (!shutdown_complete) {  // If we haven't yet stopped the car and then released the brakes and gas all the way
-            if (!carspeed_filt_mmph || sanityTimer.expired()) {  // If car has stopped, or timeout expires, then release the brake
+            if (car_stopped() || sanityTimer.expired()) {  // If car has stopped, or timeout expires, then release the brake
                 if (shutdown_color == LPNK) {  // On first time through here
                     park_the_motors = true;  // Flags the motor parking to happen, only once
                     gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
@@ -454,7 +456,7 @@ void loop() {
     }
     }
     else if (runmode == STALL) {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
-        if (tach_filt_rpm) runmode = HOLD;  // Enter Hold Mode if we started the car
+        if (!engine_stopped()) runmode = HOLD;  // Enter Hold Mode if we started the car
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) brakeSPID.set_target (pressure_min_psi);  // If in deadband or being pushed up, no pressure target
         else brakeSPID.set_target (map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][BOT], (double)ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi));  // Scale joystick value to pressure adc setpoint
         // Throttle behavior is handled in pid section
@@ -462,14 +464,14 @@ void loop() {
     else if (runmode == HOLD) {
         if (we_just_switched_modes)  {  // Release throttle and push brake upon entering hold mode
             gasSPID.set_target (tach_idle_rpm);  // Let off gas (if gas using PID mode)
-            if (!carspeed_filt_mmph) brakeSPID.set_target (pressure_filt_psi + pressure_hold_increment_psi); // If the car is already stopped then just add a touch more pressure and then hold it.
+            if (car_stopped()) brakeSPID.set_target (pressure_filt_psi + pressure_hold_increment_psi); // If the car is already stopped then just add a touch more pressure and then hold it.
             else if (brakeSPID.get_target() < pressure_hold_initial_psi) brakeSPID.set_target (pressure_hold_initial_psi);  //  These hippies need us to stop the car for them
             brakeIntervalTimer.reset();
             sanityTimer.reset();
             joy_centered = false;  // Fly mode will be locked until the joystick first is put at or below center
         }
         else if (brakeIntervalTimer.expired() && !sanityTimer.expired()) {  // Each interval the car is still moving, push harder
-            if (carspeed_filt_mmph) brakeSPID.set_target (brakeSPID.get_target() + pressure_hold_increment_psi);
+            if (!car_stopped()) brakeSPID.set_target (brakeSPID.get_target() + pressure_hold_increment_psi);
             brakeIntervalTimer.reset();
         }
         if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
@@ -483,7 +485,7 @@ void loop() {
             cruiseSwTimer.reset();
             hotrc_ch4_sw_event = false;
         }
-        if (!carspeed_filt_mmph) runmode = HOLD;  // Go to Hold Mode if we have come to a stop  // && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT]
+        if (car_stopped() && ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) runmode = HOLD;  // Go to Hold Mode if we have braked to a stop  // && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT]
         else  {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])  {  // If we are trying to accelerate
                 gasSPID.set_target (map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][TOP], (double)ctrl_lims_adc[ctrl][VERT][MAX], tach_idle_rpm, tach_govern_rpm));
@@ -526,7 +528,7 @@ void loop() {
     }
     else if (runmode == CRUISE)  {
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
-            cruiseSPID.set_target (carspeed_filt_mmph);
+            cruiseSPID.set_target (carspeed_filt_mph);
             brakeSPID.set_target (pressure_min_psi);  // Let off the brake and keep it there till out of Cruise mode
             gestureFlyTimer.reset();  // reset gesture timer
             cruise_sw_held = false;
@@ -541,7 +543,7 @@ void loop() {
             gasSPID.set_target (map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_lims_adc[ctrl][VERT][MIN], (double)ctrl_db_adc[VERT][BOT], tach_idle_rpm, tach_filt_rpm));
         }
         else cruise_adjusting = false;  // if joystick at center
-        if (cruise_adjusting) cruiseSPID.set_target (carspeed_filt_mmph);
+        if (cruise_adjusting) cruiseSPID.set_target (carspeed_filt_mph);
         
         // This old gesture trigger drops to Fly mode if joystick moved quickly from center to bottom
         // if (ctrl_pos_adc[VERT][FILT] <= ctrl_lims_adc[ctrl][VERT][MIN]+default_margin_adc && abs(mycros() - gesture_timer_us) < gesture_flytimeout_us)  runmode = FLY;  // If joystick quickly pushed to bottom 
@@ -553,8 +555,8 @@ void loop() {
             cruise_sw_held = false;
             runmode = FLY;
         }
-        if (!carspeed_filt_mmph) {  // In case we slam into a brick wall, get out of cruise mode
-            if (serial_debugging) Serial.println (F("Error: Car stopped or taken out of gear in cruise mode"));  // , carspeed_filt_mmph, neutral
+        if (car_stopped()) {  // In case we slam into a brick wall, get out of cruise mode
+            if (serial_debugging) Serial.println (F("Error: Car stopped or taken out of gear in cruise mode"));  // , carspeed_filt_mph, neutral
             runmode = HOLD;  // Back to Hold Mode  
         }
     }
@@ -585,6 +587,7 @@ void loop() {
         runmode = SHUTDOWN;
     }
 
+    // cout << "rm:" << runmode << " om:" << oldmode << "vert:" << ctrl_pos_adc[VERT][FILT] << " up?" << (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) << " jc?" << joy_centered << "\n";
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "mod");  //
 
     // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
@@ -593,7 +596,7 @@ void loop() {
         
         pidTimer.reset();  // reset timer to trigger the next update
         if ( park_the_motors && ( motorParkTimer.expired() ||  //  When parking motors, IF the timeout expires OR the brake and gas motors are both close enough to the park position ...
-            ( abs(brake_pos_filt_thou - brake_pos_park_thou) <= brake_pos_margin_thou && gasServoTimer.expired() && (gas_pulse_out_us == gas_pulse_idle_us + gas_pulse_park_slack_us) ) ) )
+            ( abs(brake_pos_filt_in - brake_pos_park_in) <= brake_pos_margin_in && gasServoTimer.expired() && (gas_pulse_out_us == gas_pulse_idle_us + gas_pulse_park_slack_us) ) ) )
             park_the_motors = false;  // ... THEN stop trying to park the motors
         
         // Steering
@@ -607,10 +610,10 @@ void loop() {
             else brake_pulse_out_us = brake_pulse_stop_us;
         }
         else if (park_the_motors) {
-            if (brake_pos_filt_thou + brake_pos_margin_thou <= brake_pos_park_thou) brake_pulse_out_us =  // If brake is retracted from park point, extend toward park point, slowing as we approach
-                map ((int32_t)brake_pos_filt_thou, (int32_t)brake_pos_park_thou, (int32_t)brake_pos_nom_lim_retract_thou, brake_pulse_stop_us, brake_pulse_extend_us);
-            else if (brake_pos_filt_thou - brake_pos_margin_thou >= brake_pos_park_thou) brake_pulse_out_us =  // If brake is extended from park point, retract toward park point, slowing as we approach
-                map ((int32_t)brake_pos_filt_thou, (int32_t)brake_pos_park_thou, (int32_t)brake_pos_nom_lim_extend_thou, brake_pulse_stop_us, brake_pulse_retract_us);
+            if (brake_pos_filt_in + brake_pos_margin_in <= brake_pos_park_in) brake_pulse_out_us =  // If brake is retracted from park point, extend toward park point, slowing as we approach
+                map ((int32_t)brake_pos_filt_in, (int32_t)brake_pos_park_in, (int32_t)brake_pos_nom_lim_retract_in, brake_pulse_stop_us, brake_pulse_extend_us);
+            else if (brake_pos_filt_in - brake_pos_margin_in >= brake_pos_park_in) brake_pulse_out_us =  // If brake is extended from park point, retract toward park point, slowing as we approach
+                map ((int32_t)brake_pos_filt_in, (int32_t)brake_pos_park_in, (int32_t)brake_pos_nom_lim_extend_in, brake_pulse_stop_us, brake_pulse_retract_us);
         }
         else if (runmode != BASIC) brake_pulse_out_us = (int32_t)brakeSPID.compute (pressure_filt_psi);  // Otherwise the pid control is active
         // printf("Brake PID rm=%-+4ld target=%-+9.4lf", runmode, (double)pressure_target_psi);   
@@ -619,20 +622,20 @@ void loop() {
             if (runmode == CAL && cal_joyvert_brkmotor)  // In Cal mode constrain the motor to its entire range, instead of to the calibrated limits
                 brake_pulse_out_us = constrain (brake_pulse_out_us, brake_pulse_retract_min_us, brake_pulse_extend_max_us);  // Send to the actuator. Refuse to exceed range    
             else {  // Prevent any movement of motor which would exceed position limits. Improve this by having the motor actively go back toward position range if position is beyond either limit
-                if ( ((brake_pos_filt_thou + brake_pos_margin_thou <= brake_pos_nom_lim_retract_thou) && (brake_pulse_out_us < brake_pulse_stop_us)) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
-                    ((brake_pos_filt_thou - brake_pos_margin_thou >= brake_pos_nom_lim_extend_thou) && (brake_pulse_out_us > brake_pulse_stop_us)) )  // ... or same thing in the extend direction ...
+                if ( ((brake_pos_filt_in + brake_pos_margin_in <= brake_pos_nom_lim_retract_in) && (brake_pulse_out_us < brake_pulse_stop_us)) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
+                    ((brake_pos_filt_in - brake_pos_margin_in >= brake_pos_nom_lim_extend_in) && (brake_pulse_out_us > brake_pulse_stop_us)) )  // ... or same thing in the extend direction ...
                     brake_pulse_out_us = brake_pulse_stop_us;  // ... then stop the motor
                 brake_pulse_out_us = constrain (brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);  // Send to the actuator. Refuse to exceed range    
             } 
             brake_servo.writeMicroseconds (brake_pulse_out_us);  // Write result to jaguar servo interface
         }
         
-        // Cruise.  Controls gas rpm target to keep speed equal to cruise mmph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
-        if (runmode == CRUISE && !cruise_adjusting) gasSPID.set_target (cruiseSPID.compute (carspeed_filt_mmph));  // 
+        // Cruise.  Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
+        if (runmode == CRUISE && !cruise_adjusting) gasSPID.set_target (cruiseSPID.compute (carspeed_filt_mph));  // 
             
-        // cruiseSPID.set_target carspeed_target_mmph = constrain (carspeed_target_mmph, 0, carspeed_redline_mmph);
-        // printf ("Cruise PID rm= %+-4ld target=%-+9.4lf", runmode, (double)carspeed_target_mmph);
-        // cruiseSPID.compute (carspeed_filt_mmph);
+        // cruiseSPID.set_target carspeed_target_mph = constrain (carspeed_target_mph, 0, carspeed_redline_mph);
+        // printf ("Cruise PID rm= %+-4ld target=%-+9.4lf", runmode, (double)carspeed_target_mph);
+        // cruiseSPID.compute (carspeed_filt_mph);
         // tach_target_rpm
         // printf (" output = %-+9.4lf,  %+-4ld\n", cruiseSPID.get_output(), tach_target_rpm);
         // }
@@ -682,7 +685,7 @@ void loop() {
     //     D) Car is accelerating yet engine is at idle.
     //  11. The control system has nonsensical values in its variables.
     //
-    if (!ignition && ignition_last && tach_filt_rpm > 0) { // See if the engine is turning despite the ignition being off
+    if (!ignition && ignition_last && !engine_stopped()) { // See if the engine is turning despite the ignition being off
         Serial.println (F("Detected engine rotation in the absense of ignition signal"));  // , tach_filt_rpm, ignition
         // I don't think we really need to panic about this, but it does seem curious. Actually this will probably occur when we're sliding
         // into camp after a ride, and kill the engine before we stop the car. For a fraction of a second the engine would keep turning anyway.
@@ -769,8 +772,8 @@ void loop() {
                     touch_longpress_valid = false;
                 }
             }
-            else if (tcol==5 && trow==1 && sim_speedo) adj_val (&carspeed_filt_mmph, touch_accel, 0, carspeed_redline_mmph);  // (+= 50) // Pressed the increase vehicle speed button
-            else if (tcol==5 && trow==2 && sim_speedo) adj_val (&carspeed_filt_mmph, -touch_accel, 0, carspeed_redline_mmph);  // (-= 50) Pressed the decrease vehicle speed button
+            else if (tcol==5 && trow==1 && sim_speedo) adj_val (&carspeed_filt_mph, 0.01*touch_accel, 0, carspeed_redline_mph);  // (+= 50) // Pressed the increase vehicle speed button
+            else if (tcol==5 && trow==2 && sim_speedo) adj_val (&carspeed_filt_mph, -0.01*touch_accel, 0, carspeed_redline_mph);  // (-= 50) Pressed the decrease vehicle speed button
             else if (tcol==5 && trow==4 && sim_joy) adj_val (&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (+= 25) Pressed the joystick right button                           
         }
         if (touch_accel_exponent < touch_accel_exponent_max && (touchHoldTimer.elapsed() > (touch_accel_exponent + 1) * touchAccelTimer.timeout())) touch_accel_exponent++; // If timer is > the shift time * exponent, and not already maxed, double the edit speed by incrementing the exponent
@@ -857,10 +860,10 @@ void loop() {
         }
         else if (dataset_page == CAR)  switch (selected_value) {
             case 0:  adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);  break;
-            case 1:  adj_val (&tach_idle_rpm, sim_edit_delta, 0, tach_redline_rpm -1);  break;
-            case 2:  adj_val (&tach_redline_rpm, sim_edit_delta, tach_idle_rpm, 8000);  break;
-            case 3:  adj_val (&carspeed_idle_mmph, sim_edit_delta, 0, carspeed_redline_mmph - 1);  break;
-            case 4:  adj_val (&carspeed_redline_mmph, sim_edit_delta, carspeed_idle_mmph, 30000);  break;
+            case 1:  adj_val (&tach_idle_rpm, 0.01*sim_edit_delta, 0, tach_redline_rpm -1);  break;
+            case 2:  adj_val (&tach_redline_rpm, 0.01*sim_edit_delta, tach_idle_rpm, 8000);  break;
+            case 3:  adj_val (&carspeed_idle_mph, 0.01*sim_edit_delta, 0, carspeed_redline_mph - 1);  break;
+            case 4:  adj_val (&carspeed_redline_mph, 0.01*sim_edit_delta, carspeed_idle_mph, 30000);  break;
             case 5:  adj_bool (&ctrl, sim_edit_delta);  break;
             case 6:  if (runmode == CAL) adj_bool (&cal_joyvert_brkmotor, sim_edit_delta);  break;
             case 7:  if (runmode == CAL) adj_bool (&cal_pot_gasservo, (sim_edit_delta < 0 || cal_pot_gas_ready) ? sim_edit_delta : -1);  break;
@@ -892,9 +895,10 @@ void loop() {
         }
         else if (dataset_page == TEMP) {
             if (selected_value == 6) gasSPID.set_open_loop (sim_edit_delta > 0);
-            if (selected_value == 7) adj_val (&brake_pos_zeropoint_thou, sim_edit_delta, brake_pos_nom_lim_retract_thou, brake_pos_nom_lim_extend_thou);
+            if (selected_value == 7) adj_val (&brake_pos_zeropoint_in, 0.001*sim_edit_delta, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
         }
     }
+    // cout << "/(later) spd:" << carspeed_filt_mph << " tach:" << tach_filt_rpm << std::endl;
     
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tun");  //
 
@@ -905,10 +909,10 @@ void loop() {
     ctrl_db_adc[HORZ][TOP] = (adcrange_adc+ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Upper threshold of horz joy deadband (ADC count 0-4095)
     tach_govern_rpm = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
     gas_pulse_govern_us = map ((int32_t)(gas_governor_percent*(tach_redline_rpm-tach_idle_rpm)/tach_redline_rpm), 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
-    carspeed_govern_mmph = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, carspeed_redline_mmph);  // Governor must scale the top vehicle speed proportionally
+    carspeed_govern_mph = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, carspeed_redline_mph);  // Governor must scale the top vehicle speed proportionally
 
     // Ignition & Panic stop logic and Update output signals
-    if (panic_stop && !carspeed_filt_mmph) panic_stop = false;  //  Panic is over cuz car is stopped
+    if (panic_stop && car_stopped()) panic_stop = false;  //  Panic is over cuz car is stopped
     else if (ctrl == HOTRC && hotrc_radio_detected_last && !hotrc_radio_detected) panic_stop = true;  
     if (panic_stop) ignition = LOW;  // Kill car if panicking
     if ((ignition != ignition_last) && (!ignition || !panic_stop)) write_pin (ignition_pin, ignition);  // Turn car off or on, with some conditions
@@ -975,20 +979,20 @@ void loop() {
             wait_one_loop = true;
             dispRefreshTimer.reset();
             int32_t range; double drange;
-            draw_dynamic(1, carspeed_filt_mmph, 0.0, carspeed_redline_mmph, cruiseSPID.get_target());
+            draw_dynamic(1, carspeed_filt_mph, 0.0, carspeed_redline_mph, cruiseSPID.get_target());
             draw_dynamic(2, tach_filt_rpm, 0.0, tach_redline_rpm, gasSPID.get_target());
             draw_dynamic(3, pressure_filt_psi, pressure_min_psi, pressure_max_psi, brakeSPID.get_target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
             draw_dynamic(4, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
             draw_dynamic(5, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-            draw_dynamic(6, cruiseSPID.get_target(), 0.0, carspeed_govern_mmph);
+            draw_dynamic(6, cruiseSPID.get_target(), 0.0, carspeed_govern_mph);
             draw_dynamic(7, brakeSPID.get_target(), pressure_min_psi, pressure_max_psi);
             draw_dynamic(8, gasSPID.get_target(), 0.0, tach_redline_rpm);
             draw_dynamic(9, brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
             draw_dynamic(10, gas_pulse_out_us, gas_pulse_redline_us, gas_pulse_idle_us);
             draw_dynamic(11, steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);
             if (dataset_page == RUN) {
-                draw_dynamic(12, battery_filt_mv, 0.0, battery_max_mv);
-                draw_dynamic(13, brake_pos_filt_thou, brake_pos_nom_lim_retract_thou, brake_pos_nom_lim_extend_thou);
+                draw_dynamic(12, battery_filt_v, 0.0, battery_max_v);
+                draw_dynamic(13, brake_pos_filt_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
                 draw_dynamic(14, pot_filt_percent, pot_min_percent, pot_max_percent);
                 // draw_dynamic(14, brakeSPID.get_proportionality(), -1, -1);
                 draw_dynamic(15, sim_brkpos, -1, -1);
@@ -1011,8 +1015,8 @@ void loop() {
                 draw_dynamic(12, gas_governor_percent, 0, 100);
                 draw_dynamic(13, tach_idle_rpm, 0.0, tach_redline_rpm);
                 draw_dynamic(14, tach_redline_rpm, 0.0, tach_max_rpm);
-                draw_dynamic(15, carspeed_idle_mmph, 0.0, carspeed_redline_mmph);
-                draw_dynamic(16, carspeed_redline_mmph, 0.0, carspeed_max_mmph);
+                draw_dynamic(15, carspeed_idle_mph, 0.0, carspeed_redline_mph);
+                draw_dynamic(16, carspeed_redline_mph, 0.0, carspeed_max_mph);
                 draw_dynamic(17, ctrl, -1, -1);  // 0 if hotrc
                 draw_dynamic(18, cal_joyvert_brkmotor, -1, -1);
                 draw_dynamic(19, cal_pot_gasservo, -1, -1);
@@ -1050,7 +1054,7 @@ void loop() {
                 draw_dynamic(19, gasSPID.get_kd_s(), 0.0, 1.0);
             }
             else if (dataset_page == CPID) {
-                drange = carspeed_govern_mmph-carspeed_idle_mmph;
+                drange = carspeed_govern_mph-carspeed_idle_mph;
                 draw_dynamic(12, (cruiseSPID.get_error()), -drange, drange);
                 draw_dynamic(13, (cruiseSPID.get_p_term()), -drange, drange);
                 draw_dynamic(14, (cruiseSPID.get_i_term()), -drange, drange);
@@ -1068,7 +1072,7 @@ void loop() {
                 draw_dynamic(16, (temps[WHEEL_RL]), temp_min, temp_max);
                 draw_dynamic(17, (temps[WHEEL_RR]), temp_min, temp_max);
                 draw_dynamic(18, gasSPID.get_open_loop(), -1, -1);
-                draw_dynamic(19, brake_pos_zeropoint_thou, brake_pos_nom_lim_retract_thou, brake_pos_nom_lim_extend_thou);   
+                draw_dynamic(19, brake_pos_zeropoint_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);   
             }
             draw_bool ((runmode == CAL), 2);
             draw_bool (basicmodesw, 3);
