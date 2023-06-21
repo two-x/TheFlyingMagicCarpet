@@ -2,6 +2,7 @@
 #define CLASSES_H
 #include <stdio.h>
 #include <iostream>
+#include <cmath>
 #include "Arduino.h"
 #include "globals.h"
 // #include "xtensa/core-macros.h"  // access to ccount register for esp32 timing ticks
@@ -32,7 +33,8 @@ class Param {
         return saturated;
     }
   public:
-    bool dirty = true;  // Has value been updated since last time value was displayed
+    bool dirty = true, rounding = true;  // Has value been updated since last time value was displayed
+    int32_t max_precision = 4;
     char disp_name[9], disp_units[5];
     double* p_val = &val_priv; double* p_min = &min_priv; double* p_max = &max_priv;  // Pointers to value/max/min, could be internal or external reference
     Param (double* arg_ref_p_val) { p_val = arg_ref_p_val; }
@@ -44,6 +46,8 @@ class Param {
         strcpy(disp_name, arg_name.c_str());
         strcpy(disp_units, arg_units.c_str());
     }
+    double round (double val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
+    double round (double val) { return round (val, max_precision); }
     void set_limits (double* arg_min, double* arg_max) {  // Use if min/max are external references
         if (*arg_min > *arg_max) printf ("Error: *min is >= *max\n");
         else {
@@ -55,8 +59,8 @@ class Param {
     void set_limits (double arg_min, double arg_max) {  // Use if min/max are kept in-class
         if (arg_min > arg_max) printf ("Error: min is >= max\n");
         else {
-            min_priv = arg_min;
-            max_priv = arg_max;
+            min_priv = round (arg_min);
+            max_priv = round (arg_max);
             constrain_it (p_val, *p_min, *p_min);
         }
     }

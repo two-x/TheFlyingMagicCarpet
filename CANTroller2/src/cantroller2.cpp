@@ -1034,9 +1034,9 @@ void loop() {
                 draw_dynamic(14, (brakeSPID.get_i_term()), -drange, drange);
                 draw_dynamic(15, (brakeSPID.get_d_term()), -drange, drange);
                 draw_dynamic(16, (brakeSPID.get_output()), -drange, drange);  // brake_spid_carspeed_delta_adc, -range, range);
-                draw_dynamic(17, brakeSPID.get_disp_kp_1k(), 0.0, 1000.0);  // Real value is 1000 * smaller than displayed
-                draw_dynamic(18, brakeSPID.get_disp_ki_mhz(), 0.0, 1000.0);
-                draw_dynamic(19, brakeSPID.get_disp_kd_ms(), 0.0, 1000.0);
+                draw_dynamic(17, brakeSPID.get_kp(), 0.0, 1.0);
+                draw_dynamic(18, brakeSPID.get_ki_hz(), 0.0, 1.0);
+                draw_dynamic(19, brakeSPID.get_kd_s(), 0.0, 1.0);
             }
             else if (dataset_page == GPID) {
                 drange = tach_govern_rpm-tach_idle_rpm;
@@ -1045,9 +1045,9 @@ void loop() {
                 draw_dynamic(14, (gasSPID.get_i_term()), -drange, drange);
                 draw_dynamic(15, (gasSPID.get_d_term()), -drange, drange);
                 draw_dynamic(16, (gasSPID.get_output()), -drange, drange);  // gas_spid_carspeed_delta_adc, -drange, drange);
-                draw_dynamic(17, gasSPID.get_disp_kp_1k(), 0.0, 1000.0);  // Real value is 1000 * smaller than displayed
-                draw_dynamic(18, gasSPID.get_disp_ki_mhz(), 0.0, 1000.0);
-                draw_dynamic(19, gasSPID.get_disp_kd_ms(), 0.0, 1000.0);
+                draw_dynamic(17, gasSPID.get_kp(), 0.0, 1.0);
+                draw_dynamic(18, gasSPID.get_ki_hz(), 0.0, 1.0);
+                draw_dynamic(19, gasSPID.get_kd_s(), 0.0, 1.0);
             }
             else if (dataset_page == CPID) {
                 drange = carspeed_govern_mmph-carspeed_idle_mmph;
@@ -1056,9 +1056,9 @@ void loop() {
                 draw_dynamic(14, (cruiseSPID.get_i_term()), -drange, drange);
                 draw_dynamic(15, (cruiseSPID.get_d_term()), -drange, drange);
                 draw_dynamic(16, (cruiseSPID.get_output()), -drange, drange);  // cruise_spid_carspeed_delta_adc, -drange, drange);
-                draw_dynamic(17, cruiseSPID.get_disp_kp_1k(), 0.0, 1000.0);  // Real value is 1000 * smaller than displayed
-                draw_dynamic(18, cruiseSPID.get_disp_ki_mhz(), 0.0, 1000.0);
-                draw_dynamic(19, cruiseSPID.get_disp_kd_ms(), 0.0, 1000.0);
+                draw_dynamic(17, cruiseSPID.get_kp(), 0.0, 1.0);
+                draw_dynamic(18, cruiseSPID.get_ki_hz(), 0.0, 1.0);
+                draw_dynamic(19, cruiseSPID.get_kd_s(), 0.0, 1.0);
             }
             else if (dataset_page == TEMP) {
                 draw_dynamic(12, (temps[AMBIENT]), temp_min, temp_max);

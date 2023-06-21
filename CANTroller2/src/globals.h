@@ -362,9 +362,9 @@ char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // JOY
     { "%   ", "rpm ", "rpm ", "mmph", "mmph", "    ", "    ", "    " },  // CAR
     { "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  " },  // PWM
-    { "psi ", "psi ", "psi ", "psi ", "psi ", "/1k ", "mHz ", "ms  " },  // BPID
-    { "mmph", "mmph", "mmph", "mmph", "mmph", "/1k ", "mHz ", "ms  " },  // GPID
-    { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "/1k ", "mHz ", "ms  " },  // CPID
+    { "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "Hz  ", "sec " },  // BPID
+    { "mmph", "mmph", "mmph", "mmph", "mmph", "    ", "Hz  ", "sec " },  // GPID
+    { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "Hz  ", "sec " },  // CPID
     { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "    ", "thou" },  // TEMP
     // { "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "    ", "    " },  // TEMP
 };
@@ -844,6 +844,9 @@ inline double map (double x, double in_min, double in_max, double out_min, doubl
     if (in_max != in_min) return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
     return out_max;
 }
+bool rounding = true;
+double dround (double val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
+
 inline int32_t max (int32_t a, int32_t b) { return (a > b) ? a : b; }
 inline int32_t min (int32_t a, int32_t b) { return (a < b) ? a : b; }
 inline int32_t constrain (int32_t amt, int32_t low, int32_t high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
