@@ -12,96 +12,54 @@ using namespace std;
 //     return (int32_t)(temp &= 0x7fffffff);
 // }
 
-// class TimerESP {
-//   protected:
-//     volatile uint32_t start_us;  // start time in us
-//     int32_t timeout_us = 0;  // in us
-//     bool preciseESP = false;
-//   public:
-//     TimerESP(void) { start_us = micros(); }
-//     TimerESP(bool precise) {
-//         preciseESP = precise;
-//     }
-//     TimerESP(int32_t arg1) { set(arg1); }
-
-//     void reset()  { start_us = micros(); }
-//     bool expired()  { return (abs((int32_t)(micros() - start_us)) > timeout_us); }
-//     int32_t elapsed()  { return abs((int32_t)(micros() - start_us)); }
-//     int32_t timeout()  { return (int32_t)timeout_us; }
-//     void set(int32_t arg1)  {
-//         timeout_us = arg1;
-//         start_us = micros();
-//     }
-//     int32_t remain()  { 
-//         uint32_t temp = abs((int32_t)(micros() - start_us));
-//         return (timeout_us - (int32_t)temp);
-//     }
-// };
-// class Variable {  // A wrapper for all veriables of consequence in our code.
-//     public:
-//         Variable(int32_t arg1) { int32_t value = arg1; }
-//         Variable(double arg1) { double value = arg1; }
-//         Variable(bool arg1) { bool value = arg1; }
-// }
-
 // Param is a value affecting control, which holds a double value, and can be displayed
 class Param {
-  protected:
+  public:
     bool saturated;
-    double val_priv, min_priv, max_priv;  // To hold val/min/max actual values in case they are passed to us by value not external reference
-    double val_human_priv, min_human_priv, max_human_priv;  // To hold val/min/max actual values in case they are passed to us by value not external reference
-    double last_val, last2_val;
-    void constrain_it (double* arg_value, double arg_min, double arg_max) {  // This should be called "constrain" not "constrain_it"
-        if (*arg_value < arg_min) *arg_value = arg_min;
-        else if (*arg_value > arg_max) *arg_value = arg_max;
-        else saturated = true;  // No constraint was necessary
-        saturated = false;  // If constraint was necessary
+  protected:
+    double val_priv, min_priv, max_priv;  // To hold val/min/max actual values in case they are passed to us by value. Otherwise if external references used, these are unused.
+    double val_last, val_last2;
+    bool constrain_it (double* arg_value, double arg_min, double arg_max) {  // This should be called "constrain" not "constrain_it"
+        if (*arg_value < arg_min) {
+            *arg_value = arg_min;
+            saturated = true;  // Constraint was necessary
+        }
+        else if (*arg_value > arg_max) {
+            *arg_value = arg_max;
+            saturated = true;  // Constraint was necessary
+        }
+        else saturated = false;  // No constraint was necessary
+        return saturated;
     }
   public:
-    enum directions { _REV = -1, _FWD = 1 };
-    bool can_sim, can_tune;
     bool dirty = true;  // Has value been updated since last time value was displayed
-    int32_t dir = _FWD;  // For the case a lower val causes a higher real-life effect, 
     char disp_name[9], disp_units[5];
     double* p_val = &val_priv; double* p_min = &min_priv; double* p_max = &max_priv;  // Pointers to value/max/min, could be internal or external reference
-    double* p_min_human = &min_human_priv; double* p_max_human = &max_human_priv;  // Where applicable, human min/max refer to real world effect, possibly reversed (min <-> max) (and probably in different units requiring conversion - not yet implemented)
-    Param (double* arg_ref_p_val) {  // }, const string arg_name, const string arg_units) {  // Use if value is an external reference
-        p_val = arg_ref_p_val;
-        // set_names (arg_name, arg_units);
-    }
-    Param (double arg_ref_val) {  // }, const string arg_name, const string arg_units) {  // Use if value is kept in-class
+    Param (double* arg_ref_p_val) { p_val = arg_ref_p_val; }
+    Param (double arg_ref_val) { 
+        val_priv = arg_ref_val;
         p_val = &val_priv;
-        // set_names (arg_name, arg_units);
     }
     void set_names (const string arg_name, const string arg_units) {
         strcpy(disp_name, arg_name.c_str());
         strcpy(disp_units, arg_units.c_str());
     }
-    void set_limits (double* arg_min, double* arg_max, int32_t arg_dir) {  // Use if min/max are kept in-class
-        if (*arg_min > *arg_max) printf ("*min is >= *max\n");
+    void set_limits (double* arg_min, double* arg_max) {  // Use if min/max are external references
+        if (*arg_min > *arg_max) printf ("Error: *min is >= *max\n");
         else {
-            dir = arg_dir;
             p_min = arg_min;
             p_max = arg_max;
             constrain_it (p_val, *p_min, *p_min);
         }
     }
-    void set_limits (double arg_min, double arg_max, int32_t arg_dir) {  // Use if min/max are kept in-class
-        if (arg_min > arg_max) printf ("min is >= max\n");
+    void set_limits (double arg_min, double arg_max) {  // Use if min/max are kept in-class
+        if (arg_min > arg_max) printf ("Error: min is >= max\n");
         else {
-            dir = arg_dir;
             min_priv = arg_min;
             max_priv = arg_max;
             constrain_it (p_val, *p_min, *p_min);
         }
     }
-    // void set_human_limits (double* arg_min_human, double* arg_max_human) {  // Use if min/max are external references
-    //     // Maybe dir only applies when human values also do?
-    //     *p_min_human = arg_min_human;
-    //     *p_max_human = arg_max_human;
-    //     *p_min = (dir == _FWD) ? p_min_human : p_max_human;
-    //     *p_max = (dir == _FWD) ? p_max_human : p_min_human;
-    // }
     void set (double arg_val) {
         double temp = arg_val;
         constrain_it (&temp, *p_min, *p_max);
@@ -118,6 +76,68 @@ class Param {
         dirty = false;
     }
 };
+
+/*
+class Transducer : virtual public Param {
+  public:
+    int32_t _REV = -1, _FWD = 1;  // possible dir values. REV means raw sensed value has the opposite polarity of the real world effect (for example, if we sense fewer us per rotation, the engine is going faster)
+  protected:
+    double min_real, max_real;  // To hold val/min/max actual values in real life units
+    double m_factor, b_offset;  // Multiplier and adder values to plug in for unit conversion math
+    bool invert;  // Flag to indicated if unit conversion math should multiply or divide
+    char disp_real_units[5];
+    double convert_to_real_units (double numeric_val) {
+        if (!invert) return b_offset + m_factor * numeric_val;
+        else if (numerical_val) return b_offset + m_factor/numerical_val;
+        printf ("Error: unit conversion refused to divide by zero\n");
+        return -1;
+    }
+    double convert_from_real_units (double human_val) {
+        if (invert && human_val != b_offset) return m_factor / (human_val - b_offset);
+        else if (!invert && m_factor) return (human_val - b_offset) / m_factor;
+        printf ("Error: unit conversion refused to divide by zero\n");
+        return -1;
+    }
+
+  public:
+    double raw_val, raw_last;  // Sensed, unfiltered values
+    int32_t dir = _FWD;  // // Belongs in a child class for devices. For the case a lower val causes a higher real-life effect, 
+    Transducer (double arg_ref_p_val)
+      : Param (arg_ref_p_val) { 
+        val_h = val_priv;
+        min_human_priv = min_priv;
+        max_human_priv = max_priv;
+    }
+    // Use if the value at *p_val corresponds with a real-world effect having different units and possibly in the opposite direction as the underlying numerical values
+    void set_human_limits (double* arg_min_human, double* arg_max_human) {  // Direction dir applies when human limits set.  dir is set to reverse if given minimum > maximum
+        if (*arg_min_human > *arg_max_human) {
+            dir = _REV;
+            
+        }
+            *p_min_human = arg_min_human;
+        *p_max_human = arg_max_human;
+        *p_min = (dir == _FWD) ? p_min_human : p_max_human;
+        *p_max = (dir == _FWD) ? p_max_human : p_min_human;
+    }
+    void set_names (const string arg_name, const string arg_raw_units, const string arg_real_units) {
+        strcpy(disp_name, arg_name.c_str());
+        strcpy(disp_units, arg_raw_units.c_str());
+        strcpy(disp_real_units, arg_real_units.c_str());
+    }
+    // Convert units from base numerical value to human units:  val_human = m-factor*val_numeric + offset  -or-  val_human = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
+    void set_convert (double arg_m_factor, double arg_b_offset, bool arg_invert) {
+        m_factor = arg_m_factor;
+        b_offset = arg_b_offset;
+        invert = arg_invert;
+        dir = (to_human_units (*p_min) <= to_human_units (*p_max)) ? _FWD : _REV;
+        *p_min_human = to_human_units ((dir == _FWD) ? *p_min : *p_max);
+        *p_max_human = to_human_units ((dir == _FWD) ? *p_max : *p_min);
+        *p_val_human = to_human_units (*p_val);
+        constrain_it (p_val_human)
+        strcpy(disp_human_units, arg_human_units.c_str());
+    }
+};
+*/
 
 class Hotrc {
   public:

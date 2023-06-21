@@ -263,7 +263,7 @@ void loop() {
             temp_status = DELAY;
         }
         else if (temp_status == DELAY) {
-            printf ("temps[%ld] = %lf F\n", temp_current_index, temps[temp_current_index]);
+            // printf ("temps[%ld] = %lf F\n", temp_current_index, temps[temp_current_index]);
             tempTimer.set(60000);
             temp_status = IDLE;
         }
@@ -456,7 +456,7 @@ void loop() {
     else if (runmode == STALL) {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
         if (tach_filt_rpm) runmode = HOLD;  // Enter Hold Mode if we started the car
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) brakeSPID.set_target (pressure_min_psi);  // If in deadband or being pushed up, no pressure target
-        else brakeSPID.set_target (map (ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][BOT], ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi));  // Scale joystick value to pressure adc setpoint
+        else brakeSPID.set_target (map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][BOT], (double)ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi));  // Scale joystick value to pressure adc setpoint
         // Throttle behavior is handled in pid section
     }
     else if (runmode == HOLD) {
@@ -486,11 +486,11 @@ void loop() {
         if (!carspeed_filt_mmph) runmode = HOLD;  // Go to Hold Mode if we have come to a stop  // && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT]
         else  {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])  {  // If we are trying to accelerate
-                gasSPID.set_target (d_map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][TOP], (double)ctrl_lims_adc[ctrl][VERT][MAX], tach_idle_rpm, tach_govern_rpm));
+                gasSPID.set_target (map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][TOP], (double)ctrl_lims_adc[ctrl][VERT][MAX], tach_idle_rpm, tach_govern_rpm));
             }
             else gasSPID.set_target (tach_idle_rpm);  // Let off gas (if gas using PID mode)
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT])  {  // If we are trying to brake, scale joystick value to determine pressure adc setpoint
-                brakeSPID.set_target (d_map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][BOT], (double)ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi));
+                brakeSPID.set_target (map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][BOT], (double)ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi));
             }
             else brakeSPID.set_target (pressure_min_psi);  // Default when joystick not pressed   
         }
@@ -566,7 +566,7 @@ void loop() {
         }
         else if (calmode_request) runmode = SHUTDOWN;
         if (!cal_pot_gas_ready) {
-            double temp = d_map (pot_filt_percent, pot_min_percent, pot_max_percent, (double)gas_pulse_ccw_max_us, (double)gas_pulse_cw_min_us);
+            double temp = map (pot_filt_percent, pot_min_percent, pot_max_percent, (double)gas_pulse_ccw_max_us, (double)gas_pulse_cw_min_us);
             if (temp <= (double)gas_pulse_idle_us && temp >= (double)gas_pulse_redline_us) cal_pot_gas_ready = true;
         }
         if (!cal_set_hotrc_failsafe_ready) {
@@ -645,9 +645,9 @@ void loop() {
         }
         else if (runmode != BASIC) {
             if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) 
-                gas_pulse_out_us = (int32_t)(d_map (pot_filt_percent, pot_min_percent, pot_max_percent, (double)gas_pulse_ccw_max_us, (double)gas_pulse_cw_min_us));
+                gas_pulse_out_us = (int32_t)map (pot_filt_percent, pot_min_percent, pot_max_percent, (double)gas_pulse_ccw_max_us, (double)gas_pulse_cw_min_us);
             else if (gasSPID.get_open_loop())  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
-                gas_pulse_out_us = map (gasSPID.get_target(), tach_idle_rpm, tach_govern_rpm, gas_pulse_idle_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
+                gas_pulse_out_us = (int32_t)map (gasSPID.get_target(), tach_idle_rpm, tach_govern_rpm, (double)gas_pulse_idle_us, (double)gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
             else gas_pulse_out_us = (int32_t)gasSPID.compute (tach_filt_rpm);  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
             // printf ("Gas PID   rm= %+-4ld target=%-+9.4lf", runmode, (double)tach_target_rpm);
             // printf (" output = %-+9.4lf,  %+-4ld\n", gasSPID.get_output(), gas_pulse_out_us);
@@ -903,9 +903,9 @@ void loop() {
     ctrl_db_adc[VERT][TOP] = (adcrange_adc+ctrl_lims_adc[ctrl][VERT][DB])/2;  // Upper threshold of vert joy deadband (ADC count 0-4095)
     ctrl_db_adc[HORZ][BOT] = (adcrange_adc-ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Lower threshold of horz joy deadband (ADC count 0-4095)
     ctrl_db_adc[HORZ][TOP] = (adcrange_adc+ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Upper threshold of horz joy deadband (ADC count 0-4095)
-    tach_govern_rpm = d_map ((double)gas_governor_percent, 0, 100, 0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
+    tach_govern_rpm = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
     gas_pulse_govern_us = map ((int32_t)(gas_governor_percent*(tach_redline_rpm-tach_idle_rpm)/tach_redline_rpm), 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
-    carspeed_govern_mmph = d_map ((double)gas_governor_percent, 0, 100, 0, carspeed_redline_mmph);  // Governor must scale the top vehicle speed proportionally
+    carspeed_govern_mmph = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, carspeed_redline_mmph);  // Governor must scale the top vehicle speed proportionally
 
     // Ignition & Panic stop logic and Update output signals
     if (panic_stop && !carspeed_filt_mmph) panic_stop = false;  //  Panic is over cuz car is stopped

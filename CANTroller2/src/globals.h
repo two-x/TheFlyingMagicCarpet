@@ -1082,7 +1082,7 @@ std::string abs_ftoa (double value, int32_t maxlength, int32_t sigdig) {  // sig
     if (place >= 0 && place < maxlength) {  // Then we want float formatted with enough nonzero digits after the decimal point for 4 significant digits (eg 123.4, 12.34, 1.234, 0)
         int32_t length = min (sigdig+1, maxlength);
         char buffer[length+1];
-        std::snprintf (buffer, length + 1, "%.*f", length - 1, value);
+        std::snprintf (buffer, length + 1, "%.*g", length - 1, value);
         std::string result (buffer);  // copy buffer to result
         return result;
     }
@@ -1093,11 +1093,19 @@ std::string abs_ftoa (double value, int32_t maxlength, int32_t sigdig) {  // sig
         if (result.length() > sigdig) result.resize(sigdig);  // Limit the string length to the desired number of significant digits
         return result;
     }  // Otherwise we want scientific notation with precision removed as needed to respect maxlength (eg 1.23e4, 1.23e5, but using long e character not e for negative exponents
+    if (place <= -10) return std::string ("~0");  // Ridiculously small values just indicate basically zero
     char buffer[maxlength+1];  // Allocate buffer with the maximum required size
-    snprintf(buffer, sizeof(buffer), "%.*e", min (sigdig, maxlength-4), value);
+    // snprintf(buffer, sizeof(buffer), "%*.*e", min (sigdig, maxlength - ((place >= 10) ? 5, 4)), value);
+    
+    
+    snprintf(buffer, sizeof(buffer), "%*.*f%*d", maxlength-sigdig-1, sigdig-1, value, maxlength-1, 0);
+
+
+
     std::string result (buffer);  // copy buffer to result
     if (result.find ("e+0") != std::string::npos) result.replace (result.find ("e+0"), 3, "e");
     else if (result.find ("e-0") != std::string::npos) result.replace (result.find ("e-0"), 3, "\x88");  // Font character \x88 is phoenetic long e, using for exponent to negative power  // if (result.find ("e-0") != std::string::npos) 
+    else if (result.find ("e+") != std::string::npos) result.replace (result.find ("e+"), 3, "e");  // For ridiculously large values
     return result;    
 }
 void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int target) {
