@@ -254,8 +254,8 @@ void loop() {
             if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
             tempsensebus.setWaitForConversion (false);  // makes it async
             tempsensebus.requestTemperatures();
-            tempsensebus.setWaitForConversion (true);
-            tempTimer.set(180000);  // Give some time before reading temp
+            // tempsensebus.setWaitForConversion (true);  //
+            tempTimer.set(400000);  // Give some time before reading temp
             temp_status = CONVERT;
         }
         else if (temp_status == CONVERT) {
@@ -1033,44 +1033,44 @@ void loop() {
             }
             else if (dataset_page == BPID) {
                 drange = pressure_max_psi-pressure_min_psi;
-                draw_dynamic(12, (brakeSPID.get_error()), -drange, drange);
-                draw_dynamic(13, (brakeSPID.get_p_term()), -drange, drange);
-                draw_dynamic(14, (brakeSPID.get_i_term()), -drange, drange);
-                draw_dynamic(15, (brakeSPID.get_d_term()), -drange, drange);
-                draw_dynamic(16, (brakeSPID.get_output()), -drange, drange);  // brake_spid_carspeed_delta_adc, -range, range);
+                draw_dynamic(12, brakeSPID.get_error(), -drange, drange);
+                draw_dynamic(13, brakeSPID.get_p_term(), -drange, drange);
+                draw_dynamic(14, brakeSPID.get_i_term(), -drange, drange);
+                draw_dynamic(15, brakeSPID.get_d_term(), -drange, drange);
+                draw_dynamic(16, brakeSPID.get_output(), -drange, drange);  // brake_spid_carspeed_delta_adc, -range, range);
                 draw_dynamic(17, brakeSPID.get_kp(), 0.0, 1.0);
                 draw_dynamic(18, brakeSPID.get_ki_hz(), 0.0, 1.0);
                 draw_dynamic(19, brakeSPID.get_kd_s(), 0.0, 1.0);
             }
             else if (dataset_page == GPID) {
                 drange = tach_govern_rpm-tach_idle_rpm;
-                draw_dynamic(12, (gasSPID.get_error()), -drange, drange);
-                draw_dynamic(13, (gasSPID.get_p_term()), -drange, drange);
-                draw_dynamic(14, (gasSPID.get_i_term()), -drange, drange);
-                draw_dynamic(15, (gasSPID.get_d_term()), -drange, drange);
-                draw_dynamic(16, (gasSPID.get_output()), -drange, drange);  // gas_spid_carspeed_delta_adc, -drange, drange);
+                draw_dynamic(12, gasSPID.get_error(), -drange, drange);
+                draw_dynamic(13, gasSPID.get_p_term(), -drange, drange);
+                draw_dynamic(14, gasSPID.get_i_term(), -drange, drange);
+                draw_dynamic(15, gasSPID.get_d_term(), -drange, drange);
+                draw_dynamic(16, gasSPID.get_output(), -drange, drange);  // gas_spid_carspeed_delta_adc, -drange, drange);
                 draw_dynamic(17, gasSPID.get_kp(), 0.0, 1.0);
                 draw_dynamic(18, gasSPID.get_ki_hz(), 0.0, 1.0);
                 draw_dynamic(19, gasSPID.get_kd_s(), 0.0, 1.0);
             }
             else if (dataset_page == CPID) {
                 drange = carspeed_govern_mph-carspeed_idle_mph;
-                draw_dynamic(12, (cruiseSPID.get_error()), -drange, drange);
-                draw_dynamic(13, (cruiseSPID.get_p_term()), -drange, drange);
-                draw_dynamic(14, (cruiseSPID.get_i_term()), -drange, drange);
-                draw_dynamic(15, (cruiseSPID.get_d_term()), -drange, drange);
-                draw_dynamic(16, (cruiseSPID.get_output()), -drange, drange);  // cruise_spid_carspeed_delta_adc, -drange, drange);
+                draw_dynamic(12, cruiseSPID.get_error(), -drange, drange);
+                draw_dynamic(13, cruiseSPID.get_p_term(), -drange, drange);
+                draw_dynamic(14, cruiseSPID.get_i_term(), -drange, drange);
+                draw_dynamic(15, cruiseSPID.get_d_term(), -drange, drange);
+                draw_dynamic(16, cruiseSPID.get_output(), -drange, drange);  // cruise_spid_carspeed_delta_adc, -drange, drange);
                 draw_dynamic(17, cruiseSPID.get_kp(), 0.0, 1.0);
                 draw_dynamic(18, cruiseSPID.get_ki_hz(), 0.0, 1.0);
                 draw_dynamic(19, cruiseSPID.get_kd_s(), 0.0, 1.0);
             }
             else if (dataset_page == TEMP) {
-                draw_dynamic(12, (temps[AMBIENT]), temp_min, temp_max);
-                draw_dynamic(13, (temps[ENGINE]), temp_min, temp_max);
-                draw_dynamic(14, (temps[WHEEL_FL]), temp_min, temp_max);
-                draw_dynamic(15, (temps[WHEEL_FR]), temp_min, temp_max);
-                draw_dynamic(16, (temps[WHEEL_RL]), temp_min, temp_max);
-                draw_dynamic(17, (temps[WHEEL_RR]), temp_min, temp_max);
+                draw_dynamic(12, temps[AMBIENT], temp_min, temp_max);
+                draw_dynamic(13, temps[ENGINE], temp_min, temp_max);
+                draw_dynamic(14, temps[WHEEL_FL], temp_min, temp_max);
+                draw_dynamic(15, temps[WHEEL_FR], temp_min, temp_max);
+                draw_dynamic(16, temps[WHEEL_RL], temp_min, temp_max);
+                draw_dynamic(17, temps[WHEEL_RR], temp_min, temp_max);
                 draw_dynamic(18, gasSPID.get_open_loop(), -1, -1);
                 draw_dynamic(19, brake_pos_zeropoint_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);   
             }

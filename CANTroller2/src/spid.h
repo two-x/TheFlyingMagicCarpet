@@ -7,11 +7,11 @@
 #include "math.h"  // Just using for signbit() function. Note signbit returns true for negative signed argument
 #include <cmath>
 // Here is the brake PID math
-// Our target is the desired amount of the measured value. The error is what we must add to ourt current value to get there
+// Our target is the desired amount of the measured value. The error is what we must add to our current value to get there
 // We make 3 terms P I and D which add to become our Delta which goes to the actuator.
 // P term scales proportionally to error, however it can never reach the setpoint 
-// I term steadily grows the longer the error is the same sign, adds a boost to P. I coefficient is   
-// D term counteracts fast changes from P (and I), serving to prevent overshooting target.
+// I term steadily grows the longer the error is the same sign,
+// D term counteracts fast changes from P (and I), serving to prevent overshooting target. 
 // Error = Setpoint - ProcessValue
 // Output  =  P + I + D  =  (K * Error) + (K / Tau_I) + (Error - LastError)
 

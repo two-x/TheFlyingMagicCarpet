@@ -177,7 +177,7 @@
 #define adcrange_adc 4095  // = 2^adcbits-1
 #define adcmidscale_adc 2047  // = 2^(adcbits-1)-1
 #define serial_debugging true
-#define timestamp_loop false  // Makes code write out timestamps throughout loop to serial port
+#define timestamp_loop true  // Makes code write out timestamps throughout loop to serial port
 
 // Readily available possibilities we could wire up if we want
 //
@@ -758,7 +758,7 @@ enum temp_status { IDLE, CONVERT, DELAY };
 int32_t temp_status = IDLE;
 double temps[6];
 int32_t temp_detected_device_ct = 0;
-int32_t temperature_precision = 12;  // 9-12 bit resolution
+int32_t temperature_precision = 10;  // 9-12 bit resolution. 12 bit can take up to 750ms to do a conversion
 OneWire onewire (onewire_pin);
 DallasTemperature tempsensebus (&onewire);
 DeviceAddress temp_temp_addr;
@@ -967,14 +967,15 @@ void draw_string_units (int32_t x, int32_t y, const char* text, const char* oldt
 }
 void draw_colons (int32_t x_pos, int32_t first, int32_t last, int32_t color) {
     for (int32_t lineno=first; lineno <= last; lineno++) {
-        tft.drawPixel (x_pos, lineno*disp_line_height_pix+3, color);
-        tft.drawPixel (x_pos, lineno*disp_line_height_pix+7, color);
-        // tft.fillRect (x_pos, (lineno+1)*disp_line_height_pix+3, 2, 2, color);
-        // tft.fillRect (x_pos, (lineno+1)*disp_line_height_pix+7, 2, 2, color);
+        tft.drawPixel (x_pos, lineno*disp_line_height_pix+3, color);  // Tiny microscopic colon dots
+        tft.drawPixel (x_pos, lineno*disp_line_height_pix+7, color);  // Tiny microscopic colon dots
+        // tft.fillRect (x_pos, (lineno+1)*disp_line_height_pix+3, 2, 2, color);  // Big goofy looking colon dots
+        // tft.fillRect (x_pos, (lineno+1)*disp_line_height_pix+7, 2, 2, color);  // Big goofy looking colon dots
     }
 }
 // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
 void draw_fixed (int32_t page, int32_t page_last, bool redraw_tuning_corner) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
+    yield();
     tft.setTextColor (GRY2);
     tft.setTextSize (1);
     // if (redraw_tuning_corner) tft.fillRect(10, 145, 154, 95, BLK); // tft.fillRect(0,145,167,95,BLK);  // Erase old dataset page area - This line alone uses 15 ms
@@ -986,9 +987,10 @@ void draw_fixed (int32_t page, int32_t page_last, bool redraw_tuning_corner) {  
             draw_string_units (104, y_pos, units[lineno], "", GRY2, BLK);
             draw_bargraph_base (124, y_pos+7, disp_bargraph_width);
         }
-        // draw_colons(7+disp_font_width*arraysize(telemetry[0]), 1, disp_fixed_lines+disp_tuning_lines, GRY1);
+        // draw_colons(7+disp_font_width*arraysize(telemetry[0]), 1, disp_fixed_lines+disp_tuning_lines, GRY1);  // I can't decide if I like the colons or not
     }
     for (int32_t lineno=0; lineno < disp_tuning_lines; lineno++)  {  // Step thru lines of dataset page data
+        yield();
         draw_string(12, 12, (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[page][lineno], dataset_page_names[page_last][lineno], GRY2, BLK);
         draw_string_units(104, (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], GRY2, BLK);
         if (redraw_tuning_corner) {
@@ -1003,6 +1005,7 @@ void draw_hyphen (int32_t x_pos, int32_t y_pos, int32_t color) {
     tft.drawFastHLine (x_pos+2, y_pos+3, 3, color);
 }
 void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target) {
+    yield();
     int32_t age_us = (int32_t)((double)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
     int32_t x_base = 59;
     bool polarity = (value >= 0);  // polarity 0=negative, 1=positive
@@ -1024,6 +1027,7 @@ void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32
         draw_string (x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_values[lineno], "", color, BLK);
         disp_age_quanta[lineno] = age_us;
     }
+    yield();
     if (lowlim < hilim) {  // Any value having a given range deserves a bargraph gauge with a needle
         int32_t corner_x = 124;    
         int32_t corner_y = lineno*disp_line_height_pix+disp_vshift_pix-1;
@@ -1052,7 +1056,7 @@ void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32
         disp_needles[lineno] = -1;  // Flag for no needle
     }
 }
-int32_t significant_place (double value) {
+int32_t significant_place (double value) {  // Returns the decimal place of the most significant digit of a given float value, without relying on logarithm math
     int32_t place = 0;
     if (value >= 1) { // int32_t vallog = std::log10(value);  // Can be sped up
         place = 1;
@@ -1069,7 +1073,7 @@ int32_t significant_place (double value) {
     }
     return place;
 }
-std::string abs_itoa (int32_t value, int32_t maxlength) {
+std::string abs_itoa (int32_t value, int32_t maxlength) {  // returns an ascii string representation of a given integer value, using scientific notation if necessary to fit within given width constraint
     value = abs (value);  // This function disregards sign
     if (significant_place(value) <= maxlength) return std::to_string (value);  // If value is short enough, return it
     std::string result;
@@ -1080,7 +1084,7 @@ std::string abs_itoa (int32_t value, int32_t maxlength) {
     if (magnitude >= maxlength) result += "e" + std::to_string (magnitude);
     return result;
 }
-std::string abs_ftoa (double value, int32_t maxlength, int32_t sigdig) {  // sigdig limits number of significant digits  
+std::string abs_ftoa (double value, int32_t maxlength, int32_t sigdig) {  // returns an ascii string representation of a given double value, formatted to efficiently fit withinthe given width constraint
     value = abs (value);  // This function disregards sign
     int32_t place = significant_place (value);  // Learn decimal place of the most significant digit in value
     if (place >= sigdig && place <= maxlength) {  // Then we want simple cast to an integer w/o decimal point (eg 123456, 12345, 1234)
@@ -1103,20 +1107,14 @@ std::string abs_ftoa (double value, int32_t maxlength, int32_t sigdig) {  // sig
     }  // Otherwise we want scientific notation with precision removed as needed to respect maxlength (eg 1.23e4, 1.23e5, but using long e character not e for negative exponents
     if (place <= -10) return std::string ("~0");  // Ridiculously small values just indicate basically zero
     char buffer[maxlength+1];  // Allocate buffer with the maximum required size
-    // snprintf(buffer, sizeof(buffer), "%*.*e", min (sigdig, maxlength - ((place >= 10) ? 5, 4)), value);
-    
-    
     snprintf(buffer, sizeof(buffer), "%*.*f%*d", maxlength-sigdig-1, sigdig-1, value, maxlength-1, 0);
-
-
-
     std::string result (buffer);  // copy buffer to result
-    if (result.find ("e+0") != std::string::npos) result.replace (result.find ("e+0"), 3, "e");
-    else if (result.find ("e-0") != std::string::npos) result.replace (result.find ("e-0"), 3, "\x88");  // Font character \x88 is phoenetic long e, using for exponent to negative power  // if (result.find ("e-0") != std::string::npos) 
+    if (result.find ("e+0") != std::string::npos) result.replace (result.find ("e+0"), 3, "e");  // Remove useless "+0" from exponent
+    else if (result.find ("e-0") != std::string::npos) result.replace (result.find ("e-0"), 3, "\x88");  // For very small scientific notation values, replace the "e-0" with a phoenetic long e character, to indicate negative power  // if (result.find ("e-0") != std::string::npos) 
     else if (result.find ("e+") != std::string::npos) result.replace (result.find ("e+"), 3, "e");  // For ridiculously large values
     return result;    
 }
-void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int target) {
+void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int32_t target) {
     std::string val_string = abs_itoa (value, (int32_t)disp_maxlength);
     // std::cout << "Int: " << value << " -> " << val_string << ", " << ((value >= 0) ? 1 : -1) << std::endl;
     draw_dynamic (lineno, val_string.c_str(), value, lowlim, hilim, (int32_t)target);
@@ -1133,6 +1131,7 @@ void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim) {
     draw_dynamic (lineno, value, lowlim, hilim, -1);
 }
 void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override) {  // color_override = -1 uses default color
+    yield();
     int32_t color = (color_override == -1) ? colorcard[runmode] : color_override;
     int32_t x_new = 8+6*(2+strlen (modecard[runmode]))-3;
     int32_t x_old = 8+6*(2+strlen (modecard[oldmode]))-3;
@@ -1144,9 +1143,11 @@ void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override) {  
 void draw_dataset_page (int32_t page, int32_t page_last) {
     draw_fixed (page, page_last, true);  // Erase and redraw dynamic data corner of screen with names, units etc.
     // for (int32_t lineno=0; lineno<disp_lines; lineno++) draw_hyphen (59, lineno*disp_line_height_pix+disp_vshift_pix, BLK);
+    yield();
     draw_string (83, 83, disp_vshift_pix, pagecard[page], pagecard[page_last], RBLU, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
 }
 void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
+    yield();
     if (selected_val != selected_last) draw_string (12, 12, 12+(selected_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_last], "", GRY2, BLK);
     draw_string (12, 12, 12+(selected_val+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_val], "", (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : GRY2), BLK);
 }
@@ -1161,6 +1162,7 @@ void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensor
     tft.setTextColor (LYEL);
     for (int32_t row = 0; row < arraysize(simgrid); row++) {
         for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
+            yield();
             int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
             int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
             if (strcmp (simgrid[row][col], "    " )) {
@@ -1178,6 +1180,7 @@ void draw_touchgrid (bool side_only) {  // draws edge buttons with names in 'em.
     int32_t namelen = 0;
     tft.setTextColor (WHT);
     for (int32_t row = 0; row < arraysize (side_menu_buttons); row++) {  // Step thru all rows to draw buttons along the left edge
+        yield();
         tft.fillRoundRect (-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, DGRY);
         tft.drawRoundRect (-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, LYEL);
         namelen = 0;
@@ -1185,12 +1188,14 @@ void draw_touchgrid (bool side_only) {  // draws edge buttons with names in 'em.
             if (side_menu_buttons[row][x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
         }
         for (int32_t letter = 0; letter < namelen; letter++) {  // Going letter by letter thru each button name so we can write vertically 
+            yield();
             tft.setCursor (1, ( touch_cell_v_pix*row) + (touch_cell_v_pix/2) - (int32_t)(4.5*((double)namelen-1)) + (disp_font_height+1)*letter); // adjusts vertical offset depending how many letters in the button name and which letter we're on
             tft.println (side_menu_buttons[row][letter]);  // Writes each letter such that the whole name is centered vertically on the button
         }
     }
     if (!side_only) {
         for (int32_t col = 2; col <= 5; col++) {  // Step thru all cols to draw buttons across the top edge
+            yield();
             tft.fillRoundRect (touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
             tft.drawRoundRect (touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // tft.width()-9, 3, 18, (tft.height()/5)-6, 8, LYEL);
             // draw_bool (top_menu_buttons[btn], btn+3);
