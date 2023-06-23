@@ -164,7 +164,7 @@ void setup() {
     neostrip.show(); // Initialize all pixels to 'off'
     neostrip.setBrightness (neopixel_brightness);
 
-    tempsensebus.setWaitForConversion (true);  // Do not block during conversion process
+    tempsensebus.setWaitForConversion (false);  // Do not block during conversion process
     tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
     tempsensebus.begin();
     temp_detected_device_ct = tempsensebus.getDeviceCount();
@@ -246,30 +246,42 @@ void loop() {
     // for (uint8_t x = 0; x < arraysize(temp_addrs); x++) {
     //     temps[x] = get_temp (temp_addrs[x]);
     // }
+    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
 
-    int32_t temp_start, temp_mid, temp_done;
+    double temps[temp_detected_device_ct];
+    uint32_t timecheck;
     if (tempTimer.expired()) {
+        cout << endl << "loop# " << loopno << " stat0:" << temp_status;
         if (temp_status == IDLE) {
             wait_one_loop = true;
             if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
-            tempsensebus.setWaitForConversion (false);  // makes it async
+            timecheck = micros();
+            // tempsensebus.requestTemperaturesByIndex (temp_reading_id);
+            tempsensebus.setWaitForConversion (false);  // Do not block during conversion process
             tempsensebus.requestTemperatures();
-            // tempsensebus.setWaitForConversion (true);  //
-            tempTimer.set(400000);  // Give some time before reading temp
+            // tempsensebus.setWaitForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
+            cout << " my0:" << micros()-timecheck;
+            //tempTimer.set (tempsensebus.millisToWaitForConversion (temperature_precision)*1000);
+            tempTimer.set (800000);         
             temp_status = CONVERT;
         }
         else if (temp_status == CONVERT) {
             wait_one_loop = true;
+            timecheck = micros();
             temps[temp_current_index] = tempsensebus.getTempFByIndex(temp_current_index);
+            cout << " my1:" << micros()-timecheck;
             tempTimer.set(1500000);
             temp_status = DELAY;
         }
         else if (temp_status == DELAY) {
-            // printf ("temps[%ld] = %lf F\n", temp_current_index, temps[temp_current_index]);
+            //printf ("\n loop:%d temps[%ld] = %lf F\n", loopno, temp_current_index, temps[temp_current_index]);
             tempTimer.set(60000);
+            if (++temp_reading_id >= temp_detected_device_ct) temp_reading_id -= temp_detected_device_ct;
             temp_status = IDLE;
         }
+        cout << " stat1:" << temp_status << " id:"  << temp_reading_id << " tmp:" << ((temp_status == IDLE) ? temps[temp_current_index] : -1) << endl;
     }
+    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pst");
 
     // Encoder - takes 10 us to read when no encoder activity
     // Read and interpret encoder switch activity. Encoder rotation is handled in interrupt routine
@@ -329,7 +341,7 @@ void loop() {
         ema_filt (pressure_psi, &pressure_filt_psi, pressure_ema_alpha);  // Sensor EMA filter
     }
 
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //
+    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //
 
     // Controller handling
     //
@@ -390,7 +402,7 @@ void loop() {
         }
     }
 
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "joy");  //
+    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "joy");  //
     
     // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     //
@@ -588,7 +600,7 @@ void loop() {
     }
 
     // cout << "rm:" << runmode << " om:" << oldmode << "vert:" << ctrl_pos_adc[VERT][FILT] << " up?" << (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) << " jc?" << joy_centered << "\n";
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "mod");  //
+    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "mod");  //
 
     // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
     //
@@ -692,7 +704,7 @@ void loop() {
         // Or fopr that matter whenever the carb is out of tune and making the engine diesel after we kill the ign.
     }
 
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");  //
+    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");  //
         
     // Touchscreen handling - takes 800 us to handle every 20ms when the touch timer expires, otherwise 20 us (includes touch timer + encoder handling w/o activity)
     //
@@ -788,7 +800,7 @@ void loop() {
         touch_longpress_valid = true;
     }
 
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tch");  //
+    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tch");  //
 
     // Encoder handling
     //
@@ -818,7 +830,7 @@ void loop() {
         encoder_delta = 0;  // Our responsibility to reset this flag after handling events
     }
     
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "enc");  //
+    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "enc");  //
 
     // Tuning : implement effects of changes made by encoder or touchscreen to simulating, dataset_page, selected_value, or tuning_ctrl
     //
@@ -833,11 +845,7 @@ void loop() {
         disp_dataset_page_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
     }
     if (tuning_ctrl == SELECT) {
-        if (dataset_page >= 4) selected_value = constrain (selected_value, 5, 7);  // Skip unchangeable values for all PID modes
-        else if (dataset_page == JOY) selected_value = constrain (selected_value, 2, 7);  // Skip unchangeable values for joy mode
-        else if (dataset_page == RUN) selected_value = constrain (selected_value, 3, 7);  // Skip unchangeable values for run mode
-        else if (dataset_page == TEMP) selected_value = constrain (selected_value, 6, 7);  // Skip unchangeable values for temp mode
-        else selected_value = constrain (selected_value, 0, arraysize (dataset_page_names[dataset_page])-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
+        selected_value = constrain (selected_value, tuning_first_editable_line[dataset_page], 7);  // Skip unchangeable values for all PID modes
         if (selected_value != selected_value_last) disp_selected_val_dirty = true;
     }
     if (tuning_ctrl != tuning_ctrl_last || disp_dataset_page_dirty) disp_selected_val_dirty = true;
@@ -900,7 +908,7 @@ void loop() {
     }
     // cout << "/(later) spd:" << carspeed_filt_mph << " tach:" << tach_filt_rpm << std::endl;
     
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tun");  //
+    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tun");  //
 
     // Update derived variables values in case they have changed
     ctrl_db_adc[VERT][BOT] = (adcrange_adc-ctrl_lims_adc[ctrl][VERT][DB])/2;  // Lower threshold of vert joy deadband (ADC count 0-4095)
@@ -921,7 +929,7 @@ void loop() {
     syspower_last = syspower;
     ignition_last = ignition; // Make sure this goes after the last comparison
     
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
+    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
 
     // Heartbeat led algorithm
     if (neopixel_heartbeat) { // Make the neopixel into a beating heart, in the color of the current runmode 
@@ -961,7 +969,7 @@ void loop() {
     //     neopixelTimer.reset();
     // }
 
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "hrt");
+    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "hrt");
     
     // Display updates
     //
@@ -1081,7 +1089,7 @@ void loop() {
         }
     }
 
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dis");
+    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dis");
 
     // Do the control loop bookkeeping at the end of each loop
     //
@@ -1104,9 +1112,9 @@ void loop() {
     loopno++;  // I like to count how many loops
     tft_watchdog();
     if (timestamp_loop) {
-        loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");  //
+        // loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");  //
         printf ("\rRM:%ld Lp#%ld us:%5ld ", runmode, loopno, loop_period_us);
-        // for (int32_t x=1; x<loopindex; x++) std::cout << ", " << std::setw(3) << loop_names[x] << x << ": " << std::setw(4) << looptimes_us[x]-looptimes_us[x-1];
+        for (int32_t x=1; x<loopindex; x++) std::cout << ", " << std::setw(3) << loop_names[x] << x << ": " << std::setw(4) << looptimes_us[x]-looptimes_us[x-1];
         if (loop_period_us > 25000) printf ("\n");
     }
     int_counter = 0;

@@ -103,22 +103,19 @@ class Transducer : virtual public Param {
     double* p_max_disp = &max_disp;
     char disp_disp_units[5] = "    ";
     double to_disp_units (double numeric_val) {
-        double temp;
         if (!invert) {
-            temp = b_offset + m_factor * numeric_val;
-            if (dir == _REV) return map (temp, *p_min_disp, *p_max_disp, *p_max_disp, *p_min_disp);
-            return temp;
+            if (dir == _REV) return *p_min_disp + (*p_max_disp - (b_offset + m_factor * numeric_val));
+            return b_offset + m_factor * numeric_val;
         }
         if (numeric_val) {
-            temp = b_offset + m_factor/numeric_val;
-            if (dir == _REV) return map (temp, *p_min_disp, *p_max_disp, *p_max_disp, *p_min_disp);
-            return temp;
+            if (dir == _REV) return *p_min_disp + (*p_max_disp - (b_offset + m_factor/numeric_val));
+            return b_offset + m_factor/numeric_val;
         } 
         printf ("Error: unit conversion refused to divide by zero\n");
         return -1;
     }
     double from_disp_units (double disp_val) {
-        if (dir == _REV) disp_val = map (disp_val, *p_min_disp, *p_max_disp, *p_max_disp, *p_min_disp);
+        if (dir == _REV) disp_val = *p_min_disp + (*p_max_disp - disp_val);
         if (invert && (disp_val != b_offset)) return m_factor / (disp_val - b_offset);
         else if (!invert && m_factor) return (disp_val - b_offset) / m_factor;
         printf ("Error: unit conversion refused to divide by zero\n");

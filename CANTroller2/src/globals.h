@@ -177,7 +177,7 @@
 #define adcrange_adc 4095  // = 2^adcbits-1
 #define adcmidscale_adc 2047  // = 2^(adcbits-1)-1
 #define serial_debugging true
-#define timestamp_loop true  // Makes code write out timestamps throughout loop to serial port
+#define timestamp_loop false  // Makes code write out timestamps throughout loop to serial port
 
 // Readily available possibilities we could wire up if we want
 //
@@ -356,6 +356,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "GasOpnLp",
         "BrkZeroP", },
 };
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 3, 2, 0, 0, 5, 5, 5, 6 };  // first line of each runmode that's editable. All lines after this must also be editable
 char units[disp_fixed_lines][5] = { "mph ", "rpm ", "psi ", "adc ", "adc ", "mph ", "adc ", "rpm ", "\xe5s  ", "\xe5s  ", "\xe5s  " };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "V   ", "in  ", "%   ", "    ", "    ", "    ", "    ", "    " },  // RUN
@@ -756,7 +757,7 @@ enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
 Timer tempTimer (2000000);
 enum temp_status { IDLE, CONVERT, DELAY };
 int32_t temp_status = IDLE;
-double temps[6];
+int32_t temp_reading_id = 0;
 int32_t temp_detected_device_ct = 0;
 int32_t temperature_precision = 10;  // 9-12 bit resolution. 12 bit can take up to 750ms to do a conversion
 OneWire onewire (onewire_pin);
@@ -912,12 +913,36 @@ void draw_bargraph_needle (int32_t n_pos_x, int32_t old_n_pos_x, int32_t pos_y, 
 //     draw_needle_shape (n_pos_x, pos_y, n_color);
 // }  // This function was for when the needle could overlap the target
 void draw_string (int32_t x_new, int32_t x_old, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
-    tft.setCursor (x_old, y);
-    tft.setTextColor (bgcolor);
-    tft.print (oldtext);  // Erase the old content
-    tft.setCursor (x_new, y);
-    tft.setTextColor (color);
-    tft.print (text);  // Draw the new content
+    int32_t oldlen = strlen(oldtext);
+    int32_t newlen = strlen(text);
+    tft.setTextColor (bgcolor);  
+    for (int32_t letter=0; letter < oldlen; letter++) {
+        if (newlen - letter < 1) {
+            tft.setCursor (x_old+disp_font_width*letter, y);
+            tft.print (oldtext[letter]);
+        }
+        else if (oldtext[letter] != text[letter]) {
+            tft.setCursor (x_old+disp_font_width*letter, y);
+            tft.print (oldtext[letter]);
+        }
+    }
+    tft.setTextColor (color);  
+    for (int32_t letter=0; letter < newlen; letter++) {
+        if (oldlen - letter < 1) {
+            tft.setCursor (x_new+disp_font_width*letter, y);
+            tft.print (text[letter]);
+        }
+        else if (oldtext[letter] != text[letter]) {
+            tft.setCursor (x_new+disp_font_width*letter, y);
+            tft.print (text[letter]);
+        }
+    }
+    // tft.setCursor (x_old, y);
+    // tft.setTextColor (bgcolor);
+    // tft.print (oldtext);  // Erase the old content
+    // tft.setCursor (x_new, y);
+    // tft.setTextColor (color);
+    // tft.print (text);  // Draw the new content
 }
 void draw_mmph (int32_t x, int32_t y, int32_t color) {  // This is my cheesy pixel-drawn "mmph" compressed horizontally to 3-char width
     tft.setTextColor (color);
@@ -1289,6 +1314,9 @@ void tft_init (void) {
         tft.fillScreen (BLK);  // Black out the whole screen
         draw_fixed (dataset_page, dataset_page_last, false);
         draw_touchgrid (false);
+        draw_runmode (runmode, oldmode, -1);
+        draw_dataset_page (dataset_page, dataset_page_last);
+        if (simulating) draw_simbuttons (true);
         printf ("Success.\nCaptouch initialization... ");
         if (! touchpanel.begin(40)) printf ("Couldn't start FT6206 touchscreen controller");  // pass in 'sensitivity' coefficient
         else printf ("Capacitive touchscreen started\n");
