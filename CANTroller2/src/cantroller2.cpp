@@ -204,6 +204,11 @@ void setup() {
     //     }
     //     printf ("HotRC radio signal: %setected\n", (!hotrc_radio_detected) ? "Not d" : "D");
     // }
+    
+    // pressure.set_convert ( 1000.0 * 3.3 / (adcrange_adc * (4.5 - 0.55)), 0.0, false);
+    // pressure.set_names ("pressure", "adc ", "psi ");
+    // pressure.set_limits (129.0, 452.0);
+    
     hotrcPanicTimer.reset();
     loopTimer.reset();  // start timer to measure the first loop
     Serial.println (F("Setup finished"));
@@ -259,7 +264,7 @@ void loop() {
             // tempsensebus.requestTemperaturesByIndex (temp_reading_id);
             tempsensebus.setWaitForConversion (false);  // Do not block during conversion process
             tempsensebus.requestTemperatures();
-            // tempsensebus.setWaitForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
+            tempsensebus.setWaitForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
             cout << " my0:" << micros()-timecheck;
             //tempTimer.set (tempsensebus.millisToWaitForConversion (temperature_precision)*1000);
             tempTimer.set (800000);         
@@ -337,8 +342,10 @@ void loop() {
 
     // Brake pressure - takes 72 us to read
     if (!simulating || !sim_pressure) {
-        pressure_psi = convert_units ((double)analogRead (pressure_pin), pressure_convert_psi_per_adc, pressure_convert_invert);  // Brake pressure.  Read sensor, then Remove noise spikes from brake feedback, if reading is otherwise in range
+        pressure_psi = convert_units ((double)analogRead(pressure_pin), pressure_convert_psi_per_adc, pressure_convert_invert);
         ema_filt (pressure_psi, &pressure_filt_psi, pressure_ema_alpha);  // Sensor EMA filter
+        // pressure.set_raw (analogRead (pressure_pin));
+        // ema_filt (pressure.get_val(), &pressure_filt_psi, pressure_ema_alpha);  // Sensor EMA filter
     }
 
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //

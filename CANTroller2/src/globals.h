@@ -177,7 +177,7 @@
 #define adcrange_adc 4095  // = 2^adcbits-1
 #define adcmidscale_adc 2047  // = 2^(adcbits-1)-1
 #define serial_debugging true
-#define timestamp_loop false  // Makes code write out timestamps throughout loop to serial port
+#define timestamp_loop true  // Makes code write out timestamps throughout loop to serial port
 
 // Readily available possibilities we could wire up if we want
 //
@@ -759,7 +759,7 @@ enum temp_status { IDLE, CONVERT, DELAY };
 int32_t temp_status = IDLE;
 int32_t temp_reading_id = 0;
 int32_t temp_detected_device_ct = 0;
-int32_t temperature_precision = 10;  // 9-12 bit resolution. 12 bit can take up to 750ms to do a conversion
+int32_t temperature_precision = 9;  // 9-12 bit resolution. 12 bit can take up to 750ms to do a conversion
 OneWire onewire (onewire_pin);
 DallasTemperature tempsensebus (&onewire);
 DeviceAddress temp_temp_addr;

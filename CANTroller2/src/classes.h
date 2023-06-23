@@ -33,7 +33,7 @@ class Param {
     }
   public:
     bool dirty = true, rounding = true;  // Has value been updated since last time value was displayed
-    int32_t max_precision = 4;
+    int32_t max_precision = 3;
     char disp_name[9] = "unnamed ";
     char disp_units[5] = "    ";
     double* p_val = &val_priv; double* p_min = &min_priv; double* p_max = &max_priv;  // Pointers to value/max/min, could be internal or external reference
@@ -87,6 +87,10 @@ class Param {
         if (dirty) draw_dynamic (lineno, *p_val, *p_min, *p_max, target);
         dirty = false;
     }
+    double get_val () { return *p_val; }
+    double get_min () { return *p_min; }
+    double get_max () { return *p_max; }
+    
 };
 
 // Transducer class has all features of Param class but the inherited Pram::val is considered the "raw" value, whereas this class
@@ -171,6 +175,17 @@ class Transducer : virtual public Param {
         if (set (val_disp + arg_add)) return true;
         return false;
     }
+    bool set_raw (int32_t arg_val) {        
+        Param::set ((double)arg_val);
+        double temp = to_disp_units (*p_val);
+        if (temp != val_disp) {
+            dirty = true;
+            val_disp_last = val_disp;
+            val_disp = temp;
+            return true;
+        }
+        return false;
+    }
     void draw (int32_t lineno) {
         if (dirty) draw_dynamic (lineno, val_disp, *p_min_disp, *p_max_disp, -1);
         dirty = false;
@@ -179,7 +194,17 @@ class Transducer : virtual public Param {
         if (dirty) draw_dynamic (lineno, val_disp, *p_min_disp, *p_max_disp, target);
         dirty = false;
     }
+    double get_val () { return val_disp; }
+    double get_raw () { return *p_val; }
+    double get_min () { return *p_min_disp; }
+    double get_max () { return *p_max_disp; }
+
 };
+
+// class Sensor : virtual public Transducer {
+
+
+// };
 
 class Hotrc {
   public:
