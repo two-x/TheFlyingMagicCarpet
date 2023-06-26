@@ -274,7 +274,6 @@ void loop() {
     int32_t temp_start, temp_mid, temp_done;
     if (false && tempTimer.expired()) {
         if (temp_status == IDLE) {
-            wait_one_loop = true;
             if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
             tempsensebus.setWaitForConversion (false);  // makes it async
             tempsensebus.requestTemperatures();
@@ -283,7 +282,6 @@ void loop() {
             temp_status = CONVERT;
         }
         else if (temp_status == CONVERT) {
-            wait_one_loop = true;  // This next operation takes anywhere from 30-50ms. This leaves no room for display updates during the same loop
             temps[temp_current_index] = tempsensebus.getTempFByIndex(temp_current_index);
             tempTimer.set(1500000);
             temp_status = DELAY;
@@ -299,7 +297,6 @@ void loop() {
     // if (tempTimer.expired()) {
     //     cout << endl << "loop# " << loopno << " stat0:" << temp_status;
     //     if (temp_status == IDLE) {
-    //         wait_one_loop = true;
     //         if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
     //         timecheck = micros();
     //         // tempsensebus.requestTemperaturesByIndex (temp_reading_id);
@@ -312,7 +309,6 @@ void loop() {
     //         temp_status = CONVERT;
     //     }
     //     else if (temp_status == CONVERT) {
-    //         wait_one_loop = true;
     //         timecheck = micros();
     //         temps[temp_current_index] = tempsensebus.getTempFByIndex(temp_current_index);
     //         cout << " my1:" << micros()-timecheck;
@@ -759,8 +755,7 @@ void loop() {
     int32_t touch_x, touch_y, trow, tcol;
     // if (touchPollTimer.expired()) {
     // touchPollTimer.reset();
-    if (touchpanel.touched() == 1 && !wait_one_loop) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
-        wait_one_loop = true;
+    if (touchpanel.touched() == 1 ) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
         touch_accel = 1 << touch_accel_exponent;  // determine value editing rate
         TS_Point touchpoint = touchpanel.getPoint();  // Retreive a point
         touchpoint.x = map (touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
@@ -1023,7 +1018,7 @@ void loop() {
     // Display updates
     //
     procrastinate = false;
-    if (display_enabled && !wait_one_loop) {
+    if (display_enabled ) {
         if (simulating != simulating_last) {
             draw_simbuttons (simulating);  // if we just entered simulator draw the simulator buttons, or if we just left erase them
             simulating_last = simulating;
@@ -1047,7 +1042,6 @@ void loop() {
         if (disp_runmode_dirty || runmode != oldmode || disp_redraw_all) draw_runmode (runmode, oldmode, (runmode == SHUTDOWN) ? shutdown_color : -1);
         disp_runmode_dirty = false;
         if (dispRefreshTimer.expired() && !procrastinate) {
-            wait_one_loop = true;
             dispRefreshTimer.reset();
             int32_t range; double drange;
             draw_dynamic(1, carspeed_filt_mph, 0.0, carspeed_redline_mph, cruiseSPID.get_target());
@@ -1162,8 +1156,6 @@ void loop() {
     // Do the control loop bookkeeping at the end of each loop
     //
     tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
-    wait_one_loop_last = wait_one_loop;
-    wait_one_loop = false;
     button_last = button_it;
     if (runmode != SHUTDOWN) shutdown_complete = false;
     if (runmode != oldmode) we_just_switched_modes = true;  // If changing runmode, set this so new mode logic can perform initial actions
