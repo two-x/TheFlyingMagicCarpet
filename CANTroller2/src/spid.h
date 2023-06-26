@@ -1,24 +1,17 @@
 #ifndef SPID_H
 #define SPID_H
-#undef min
-#undef max
 
 #ifdef DUE
-#include <LibPrintf.h>  // This works on Due but not ESP32
-#endif
-#if ARDUINO >= 100
-  #include "Arduino.h"
-#else
-  #include "WProgram.h"
+    #include <LibPrintf.h>  // This works on Due but not ESP32
 #endif
 #include "math.h"  // Just using for signbit() function. Note signbit returns true for negative signed argument
-
+#include <cmath>
 // Here is the brake PID math
-// Our target is the desired amount of the measured value. The error is what we must add to ourt current value to get there
+// Our target is the desired amount of the measured value. The error is what we must add to our current value to get there
 // We make 3 terms P I and D which add to become our Delta which goes to the actuator.
 // P term scales proportionally to error, however it can never reach the setpoint 
-// I term steadily grows the longer the error is the same sign, adds a boost to P. I coefficient is   
-// D term counteracts fast changes from P (and I), serving to prevent overshooting target.
+// I term steadily grows the longer the error is the same sign,
+// D term counteracts fast changes from P (and I), serving to prevent overshooting target. 
 // Error = Setpoint - ProcessValue
 // Output  =  P + I + D  =  (K * Error) + (K / Tau_I) + (Error - LastError)
 
@@ -28,11 +21,13 @@ class SPID {  // Soren's home-made pid loop
     #define CENTERED 1  // assign to outCenterMode if pid output deviates from a centerpoint 
     #define ERROR_TERM 0  // What the proportional term is proportional_to
     #define SENSED_INPUT 1  // What the proportional term is proportional_to
-    #define FWD 1  // Actuator_direction influences sensed value in the same direction
-    #define REV -1  // Actuator_direction influences sensed value in the opposite direction
+    static const int32_t FWD = 1;  // Actuator_direction influences sensed value in the same direction
+    static const int32_t REV = -1;  // Actuator_direction influences sensed value in the opposite direction
   private:
     double kp_coeff = 0, ki_coeff = 0, kd_coeff = 0, kp, ki_hz, kd_s;
     int32_t actuator_direction;
+    bool rounding = true;
+    int32_t max_precision = 4;
     uint32_t sample_period_ms;
     double target = 0, target_last = 0, error = 0, delta = 0, error_last = 0, p_term = 0, i_term = 0, d_term = 0, open_loop = false;
     double near_target_error_thresh_percent = 0.005;  // Fraction of the input range where if the error has not exceeded in either dir since last zero crossing, it is considered zero (to prevent endless microadjustments) 
@@ -40,7 +35,7 @@ class SPID {  // Soren's home-made pid loop
     double in_min = 0, in_max = 4095, out_min = 0, out_max = 4095, in_center = 2047, out_center = 2047;
     bool out_center_mode = CENTERED, in_center_mode = CENTERED, proportional_to = ERROR_TERM, saturated = false, output_hold = false;
   public:
-    int32_t disp_kp_1k, disp_ki_mhz, disp_kd_ms;  // disp_* are integer version of tuning variables scaled up by *1000, suitable for screen display
+    // int32_t disp_kp_1k, disp_ki_mhz, disp_kd_ms;  // disp_* are integer version of tuning variables scaled up by *1000, suitable for screen display
 
     SPID(double arg_kp, double arg_ki_hz, double arg_kd_s, int32_t direction, int32_t arg_sample_period_ms) {  // , bool arg_in_center_mode, bool arg_out_center_mode
         set_tunings(arg_kp, arg_ki_hz, arg_kd_s);
@@ -60,9 +55,11 @@ class SPID {  // Soren's home-made pid loop
         return false;
     }
     bool set_input(double arg_input) {
-        input = arg_input;
+        input = round (arg_input);
         return constrain_value (&input, in_min, in_max);
     }
+    double round (double val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
+    double round (double val) { return round (val, max_precision); }
     double compute(void) {
         input_last = input;  // store previously computed input
         target_last = target;
@@ -89,10 +86,14 @@ class SPID {  // Soren's home-made pid loop
 
         d_term = kd_coeff * (input - input_last);
         
+        p_term = round (p_term);
+        i_term = round (i_term);
+        d_term = round (d_term);
+
         delta = p_term + i_term - d_term;
 
         output = out_center + delta;
-
+        
         // printf(" ntl2=%-+9.4lf sat=%1d outh=%1d pterm=%-+9.4lf iterm=%-+9.4lf dterm=%-+9.4lf out=%-+9.4lf", near_target_lock, saturated, output_hold, p_term, i_term, d_term, output);
 
         saturated = constrain_value(&output, out_min, out_max);
@@ -107,7 +108,7 @@ class SPID {  // Soren's home-made pid loop
     // }
     void set_target(double arg_target) {
         // printf("SPID::set_target():  received arg_target=%-+9.4lf, in_min=%-+9.4lf, in_max=%-+9.4lf\n", arg_target, in_min, in_max);
-        target = arg_target;
+        target = round (arg_target, max_precision);
         constrain_value (&target, in_min, in_max);
         error = target - input;
     }
@@ -134,9 +135,9 @@ class SPID {  // Soren's home-made pid loop
         // printf(", kd_coeff=%lf", kd_coeff);
         // printf("\n");
 
-        disp_kp_1k = (int32_t)(arg_kp * 1000);  // Scaled integer version of tuning parameters suitable for screen display
-        disp_ki_mhz = (int32_t)(arg_ki_hz * 1000);
-        disp_kd_ms = (int32_t)(arg_kd_s * 1000);
+        // disp_kp_1k = (int32_t)(arg_kp * 1000);  // Scaled integer version of tuning parameters suitable for screen display
+        // disp_ki_mhz = (int32_t)(arg_ki_hz * 1000);
+        // disp_kd_ms = (int32_t)(arg_kd_s * 1000);
     }
     void set_actuator_direction(int32_t direction) {
         if (direction != actuator_direction) {
@@ -212,9 +213,9 @@ class SPID {  // Soren's home-made pid loop
     double get_kp() { return kp; }
     double get_ki_hz() { return ki_hz; }
     double get_kd_s() { return kd_s; }
-    double get_disp_kp_1k() { return disp_kp_1k; }
-    double get_disp_ki_mhz() { return disp_ki_mhz; }
-    double get_disp_kd_ms() { return disp_kd_ms; }
+    // double get_disp_kp_1k() { return disp_kp_1k; }
+    // double get_disp_ki_mhz() { return disp_ki_mhz; }
+    // double get_disp_kd_ms() { return disp_kd_ms; }
     bool get_out_center_mode() { return out_center_mode; }
     bool get_open_loop() { return open_loop; }
     bool get_in_center_mode() { return in_center_mode; }
@@ -225,9 +226,9 @@ class SPID {  // Soren's home-made pid loop
     bool get_out_center() { return out_center; }
     bool get_in_center() { return in_center; }
     bool get_saturated() { return saturated; }
-    double get_p_term() { return p_term; }
-    double get_i_term() { return i_term; }
-    double get_d_term() { return d_term; }
+    double get_p_term() { return ((p_term >= 0.001) ? p_term : 0); }
+    double get_i_term() { return ((i_term >= 0.001) ? p_term : 0); }
+    double get_d_term() { return ((d_term >= 0.001) ? p_term : 0); }
     double get_error() { return error; }
     double get_target() { return target; }
     double get_output() { return output; }
