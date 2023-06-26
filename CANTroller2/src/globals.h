@@ -176,8 +176,11 @@
 #define adcbits 12
 #define adcrange_adc 4095  // = 2^adcbits-1
 #define adcmidscale_adc 2047  // = 2^(adcbits-1)-1
-#define serial_debugging true
-#define timestamp_loop true  // Makes code write out timestamps throughout loop to serial port
+
+// Global settings
+bool serial_debugging = true; 
+bool timestamp_loop = true;  // Makes code write out timestamps throughout loop to serial port
+bool take_temperatures = false;
 
 // Readily available possibilities we could wire up if we want
 //

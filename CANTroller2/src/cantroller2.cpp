@@ -292,38 +292,40 @@ void loop() {
             temp_status = IDLE;
         }
     }
-    // double temps[temp_detected_device_ct];
-    // uint32_t timecheck;
-    // if (tempTimer.expired()) {
-    //     cout << endl << "loop# " << loopno << " stat0:" << temp_status;
-    //     if (temp_status == IDLE) {
-    //         if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
-    //         timecheck = micros();
-    //         // tempsensebus.requestTemperaturesByIndex (temp_reading_id);
-    //         tempsensebus.setWaitForConversion (false);  // Do not block during conversion process
-    //         tempsensebus.requestTemperatures();
-    //         tempsensebus.setWaitForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
-    //         cout << " my0:" << micros()-timecheck;
-    //         //tempTimer.set (tempsensebus.millisToWaitForConversion (temperature_precision)*1000);
-    //         tempTimer.set (800000);         
-    //         temp_status = CONVERT;
-    //     }
-    //     else if (temp_status == CONVERT) {
-    //         timecheck = micros();
-    //         temps[temp_current_index] = tempsensebus.getTempFByIndex(temp_current_index);
-    //         cout << " my1:" << micros()-timecheck;
-    //         tempTimer.set(1500000);
-    //         temp_status = DELAY;
-    //     }
-    //     else if (temp_status == DELAY) {
-    //         //printf ("\n loop:%d temps[%ld] = %lf F\n", loopno, temp_current_index, temps[temp_current_index]);
-    //         tempTimer.set(60000);
-    //         if (++temp_reading_id >= temp_detected_device_ct) temp_reading_id -= temp_detected_device_ct;
-    //         temp_status = IDLE;
-    //     }
-    //     cout << " stat1:" << temp_status << " id:"  << temp_reading_id << " tmp:" << ((temp_status == IDLE) ? temps[temp_current_index] : -1) << endl;
-    // }
-    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pst");
+    double temps[temp_detected_device_ct];
+    uint32_t timecheck;
+    if (take_temperatures && tempTimer.expired()) {
+        cout << endl << "loop# " << loopno << " stat0:" << temp_status;
+        if (temp_status == IDLE) {
+            wait_one_loop = true;
+            if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
+            timecheck = micros();
+            // tempsensebus.requestTemperaturesByIndex (temp_reading_id);
+            tempsensebus.setWaitForConversion (false);  // Do not block during conversion process
+            tempsensebus.requestTemperatures();
+            tempsensebus.setWaitForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
+            cout << " my0:" << micros()-timecheck;
+            //tempTimer.set (tempsensebus.millisToWaitForConversion (temperature_precision)*1000);
+            tempTimer.set (800000);         
+            temp_status = CONVERT;
+        }
+        else if (temp_status == CONVERT) {
+            wait_one_loop = true;
+            timecheck = micros();
+            temps[temp_current_index] = tempsensebus.getTempFByIndex(temp_current_index);
+            cout << " my1:" << micros()-timecheck;
+            tempTimer.set(1500000);
+            temp_status = DELAY;
+        }
+        else if (temp_status == DELAY) {
+            //printf ("\n loop:%d temps[%ld] = %lf F\n", loopno, temp_current_index, temps[temp_current_index]);
+            tempTimer.set(60000);
+            if (++temp_reading_id >= temp_detected_device_ct) temp_reading_id -= temp_detected_device_ct;
+            temp_status = IDLE;
+        }
+        cout << " stat1:" << temp_status << " id:"  << temp_reading_id << " tmp:" << ((temp_status == IDLE) ? temps[temp_current_index] : -1) << endl;
+    }
+    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pst");
 
     // Encoder - takes 10 us to read when no encoder activity
     // Read and interpret encoder switch activity. Encoder rotation is handled in interrupt routine
