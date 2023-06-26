@@ -1,131 +1,276 @@
 #ifndef CLASSES_H
 #define CLASSES_H
-
 #include <stdio.h>
 #include <iostream>
+#include <cmath>
 #include "Arduino.h"
+#include "globals.h"
 // #include "xtensa/core-macros.h"  // access to ccount register for esp32 timing ticks
 using namespace std;
-
-int32_t mycros(void) {  // This is "my" micros() function that returns signed int32
-    uint32_t temp = micros();
-    return (int32_t)(temp &= 0x7fffffff);  // Note this overflows every 35 min due to being only 31 bits. 
-}
 
 // int32_t nanos(void) {  // Uses CCount register of ESP
 //     uint32_t ccount = XTHAL_GET_CCOUNT();
 //     return (int32_t)(temp &= 0x7fffffff);
 // }
 
-// Timer
-// For controlling event timing. Communicates in signed int32 values but uses uint32 under the hood to
-// last 72 minutes between overflows. However you can only time for 36 minutes max.
-// Note: experimenting with use of micros() instead of mycros(), check for errors on overflow and possibly revert
-class Timer {
-  protected:
-    volatile uint32_t start_us;  // start time in us
-    int32_t timeout_us = 0;  // in us
-  public:
-    Timer(void) { start_us = micros(); };
-    Timer(int32_t arg1) { set(arg1); };
-
-    void reset()  { start_us = micros(); }
-    bool expired()  { return (abs((int32_t)(micros() - start_us)) > timeout_us); }
-    int32_t elapsed()  { return abs((int32_t)(micros() - start_us)); }
-    int32_t timeout()  { return (int32_t)timeout_us; }
-    void set(int32_t arg1)  {
-        timeout_us = arg1;
-        start_us = micros();
-    }
-    int32_t remain()  { 
-        uint32_t temp = abs((int32_t)(micros() - start_us));
-        return (timeout_us - (int32_t)temp);
-    }
-};
-
-class TimerESP {
-  protected:
-    volatile uint32_t start_us;  // start time in us
-    int32_t timeout_us = 0;  // in us
-    bool preciseESP = false;
-  public:
-    TimerESP(void) { start_us = micros(); }
-    TimerESP(bool precise) {
-        preciseESP = precise;
-    }
-    TimerESP(int32_t arg1) { set(arg1); }
-
-    void reset()  { start_us = micros(); }
-    bool expired()  { return (abs((int32_t)(micros() - start_us)) > timeout_us); }
-    int32_t elapsed()  { return abs((int32_t)(micros() - start_us)); }
-    int32_t timeout()  { return (int32_t)timeout_us; }
-    void set(int32_t arg1)  {
-        timeout_us = arg1;
-        start_us = micros();
-    }
-    int32_t remain()  { 
-        uint32_t temp = abs((int32_t)(micros() - start_us));
-        return (timeout_us - (int32_t)temp);
-    }
-};
-// class Variable {  // A wrapper for all veriables of consequence in our code.
-//     public:
-//         Variable(int32_t arg1) { int32_t value = arg1; }
-//         Variable(double arg1) { double value = arg1; }
-//         Variable(bool arg1) { bool value = arg1; }
-// }
-
 // Param is a value affecting control, which holds a double value, and can be displayed
 class Param {
-  protected:
+  public:
     bool saturated;
-    double effect_max_val, effect_min_val, last_val, last2_val; //, effect_cent_val;  // Values corresponding to a max/min real world effect (might be numerically reversed)
-    void constrain_it (double* arg_value, double arg_min, double arg_max) {  // This should be called "constrain" not "constrain_it"
-        if (*arg_value < arg_min) *arg_value = arg_min;
-        else if (*arg_value > arg_max) *arg_value = arg_max;
-        else saturated = true;  // No constraint was necessary
-        saturated = false;  // If constraint was necessary
+  protected:
+    double val_priv, min_priv, max_priv;  // To hold val/min/max actual values in case they are passed to us by value. Otherwise if external references used, these are unused.
+    double val_last;
+    bool constrain_it (double* arg_value, double arg_min, double arg_max) {  // This should be called "constrain" not "constrain_it"
+        if (*arg_value < arg_min) {
+            *arg_value = arg_min;
+            return true;  // Constraint was necessary
+        }
+        else if (*arg_value > arg_max) {
+            *arg_value = arg_max;
+            return true;  // Constraint was necessary
+        }
+        return false;  // No constraint was necessary
     }
   public:
-    enum directions { _REV = -1, _FWD = 1 };
-    bool can_sim, can_tune;
-    int32_t dir;  // For the case a lower val causes a higher real-life effect, 
-    char disp_name[9], disp_units[5];
-    double* val; double* min_val; double* max_val;  // Reference to numerical max/min values
-    Param (double* val, const string arg_name, const string arg_units, double* min_val, double* max_val) {
-        set_limits (min_val, max_val);
-        constrain_it (val, *min_val, *max_val);
+    bool dirty = true, rounding = true;  // Has value been updated since last time value was displayed
+    int32_t max_precision = 3;
+    char disp_name[9] = "unnamed ";
+    char disp_units[5] = "    ";
+    double* p_val = &val_priv; double* p_min = &min_priv; double* p_max = &max_priv;  // Pointers to value/max/min, could be internal or external reference
+    Param (double* arg_p_val) { p_val = arg_p_val; }
+    Param (double arg_val) { 
+        val_priv = arg_val;
+        *p_min = arg_val;  // Initialize to given value, presumably call set_limits to change later
+        *p_max = arg_val;  // Initialize to given value, presumably call set_limits to change later
+    }
+    void set_names (const string arg_name, const string arg_units) {
         strcpy(disp_name, arg_name.c_str());
         strcpy(disp_units, arg_units.c_str());
     }
-    Param (double* val, const char* arg_name, const char* arg_units, double effect_min_val, double effect_max_val) {
-        set_limits (effect_min_val, effect_max_val);
-        Param (val, arg_name, arg_units, &effect_min_val, &effect_max_val);
+    double round (double val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
+    double round (double val) { return round (val, max_precision); }
+    void set_limits (double* arg_min, double* arg_max) {  // Use if min/max are external references
+        if (*arg_min > *arg_max) printf ("Error: *min is >= *max\n");
+        else {
+            p_min = arg_min;
+            p_max = arg_max;
+            saturated = constrain_it (p_val, *p_min, *p_min);
+        }
     }
-    Param (double* val, const string arg_name, const string arg_units) {
-        effect_min_val = *val;
-        effect_max_val = *val;
-        Param (val, arg_name, arg_units, &effect_min_val, &effect_max_val);
+    void set_limits (double arg_min, double arg_max) {  // Use if min/max are kept in-class
+        if (arg_min > arg_max) printf ("Error: min is >= max\n");
+        else {
+            min_priv = round (arg_min);
+            max_priv = round (arg_max);
+            saturated = constrain_it (p_val, *p_min, *p_min);
+        }
     }
-    void set_limits (double* min_val, double* arg_max_val) {
-        dir = (*min_val <= *arg_max_val) * 2 - 1;
-        max_val = (dir == _FWD) ? arg_max_val : min_val;
-        if (dir == _REV) min_val = max_val;
+    bool set (double arg_val) {
+        saturated = constrain_it (&arg_val, *p_min, *p_max);
+        if (*p_val != arg_val) {
+            dirty = true;
+            val_last = *p_val;
+            *p_val = arg_val;
+            return true;
+        }
+        return false;
     }
-    void set_limits (double effect_min_val, double effect_max_val) {
-        min_val = &effect_min_val;
-        max_val = &effect_max_val;
-        set_limits (min_val, max_val);
+    bool add (double arg_add) { 
+        if (set (*p_val + arg_add)) return true;
+        return false;
     }
-    void set (double arg_val) {
-        *val = arg_val;
-        constrain_it (val, *min_val, *max_val);
+    void draw (int32_t lineno) {
+        if (dirty) draw_dynamic (lineno, *p_val, *p_min, *p_max, -1);
+        dirty = false;
     }
-    void add (double arg_add) {
-        *val += arg_add;
-        constrain_it (val, *min_val, *max_val);
+    void draw (int32_t lineno, int32_t target) {
+        if (dirty) draw_dynamic (lineno, *p_val, *p_min, *p_max, target);
+        dirty = false;
     }
+    double get_val () { return *p_val; }
+    double get_min () { return *p_min; }
+    double get_max () { return *p_max; }
+    
 };
+
+// Transducer class has all features of Param class but now there is also a "raw" version of the value which represents the sensed
+//    or driven hardware input/output. This class contains unit conversion between the two.
+class Transducer : virtual public Param {
+  public:
+    int32_t _REV = -1, _FWD = 1;  // possible dir values. REV means raw sensed value has the opposite polarity of the real world effect (for example, if we sense fewer us per rotation, the engine is going faster)
+  protected:
+    double val_raw, val_raw_last, min_raw, max_raw;  // To hold val/min/max display values in display units (like V, mph, etc.)
+    double m_factor = 1.0, b_offset = 0.0;  // Multiplier and adder values to plug in for unit conversion math
+    bool invert = false;  // Flag to indicated if unit conversion math should multiply or divide
+    double* p_min_raw = &min_raw;
+    double* p_max_raw = &max_raw;
+    char disp_raw_units[5] = "    ";
+    double from_raw_units (double arg_raw_val) {
+        if (!invert) {
+            if (dir == _REV) return *p_min_raw + (*p_max_raw - (b_offset + m_factor * arg_raw_val));
+            return b_offset + m_factor * arg_raw_val;
+        }
+        if (arg_raw_val) {
+            if (dir == _REV) return *p_min_raw + (*p_max_raw - (b_offset + m_factor/arg_raw_val));
+            return b_offset + m_factor/arg_raw_val;
+        } 
+        printf ("Error: unit conversion refused to divide by zero\n");
+        return -1;
+    }
+    double to_raw_units (double arg_real_val) {
+        if (dir == _REV) arg_real_val = *p_min_raw + (*p_max_raw - arg_real_val);
+        if (invert && (arg_real_val != b_offset)) return m_factor / (arg_real_val - b_offset);
+        else if (!invert && m_factor) return (arg_real_val - b_offset) / m_factor;
+        printf ("Error: unit conversion refused to divide by zero\n");
+        return -1;
+    }
+  public:
+    int32_t dir = _FWD;  // // Belongs in a child class for devices. For the case a lower val causes a higher real-life effect, 
+    Transducer (double arg_raw_val)  // pass in initial value
+      : Param(from_raw_units (arg_raw_val)) {  
+        val_raw = arg_raw_val;
+        min_raw = to_raw_units (*p_min);
+        max_raw = to_raw_units (*p_max);
+    }
+    // Use if the value at *p_val corresponds with a real-world effect having different units and possibly in the opposite direction as the underlying numerical values
+    void set_limits (double* arg_min_raw, double* arg_max_raw) {  // Direction dir applies when disp limits set.  dir is set to reverse if given minimum > maximum
+        if (*arg_min_raw > *arg_max_raw) {
+            dir = _REV;
+            p_min_raw = arg_max_raw;
+            p_max_raw = arg_min_raw;
+        }
+        else {
+            dir = _FWD;
+            p_min_raw = arg_min_raw;
+            p_max_raw = arg_max_raw;
+        }
+        Param::set_limits(from_raw_units(*p_min_raw), from_raw_units(*p_max_raw));
+    }
+    void set_names (const string arg_name, const string arg_units, const string arg_raw_units) {
+        strcpy(disp_name, arg_name.c_str());
+        strcpy(disp_units, arg_units.c_str());
+        strcpy(disp_raw_units, arg_raw_units.c_str());
+    }
+    // Convert units from base numerical value to disp units:  val_raw = m-factor*val_numeric + offset  -or-  val_raw = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
+    void set_convert (double arg_m_factor, double arg_b_offset, bool arg_invert) {
+        m_factor = arg_m_factor;
+        b_offset = arg_b_offset;
+        invert = arg_invert;
+        dir = (to_raw_units (*p_min) <= to_raw_units (*p_max)) ? _FWD : _REV;
+        *p_min_raw = to_raw_units ((dir == _FWD) ? *p_min : *p_max);
+        *p_max_raw = to_raw_units ((dir == _FWD) ? *p_max : *p_min);
+        val_raw = to_raw_units (*p_val);
+        saturated = constrain_it (&val_raw, (*p_min_raw), (*p_max_raw));
+    }
+    bool set_raw (double arg_raw_val) {
+        if (Param::set (from_raw_units(arg_raw_val))) {
+            val_raw_last = val_raw;
+            val_raw = to_raw_units(*p_val);
+            return true;
+        }
+        return false;
+    }
+    bool add_raw (double arg_add) {
+        if (set_raw (val_raw + arg_add)) return true;
+        return false;
+    }
+    bool set (int32_t arg_val) {        
+        Param::set ((double)arg_val);
+        double temp = to_raw_units (*p_val);
+        if (temp != val_raw) {
+            dirty = true;
+            val_raw_last = val_raw;
+            val_raw = temp;
+            return true;
+        }
+        return false;
+    }
+    void draw_raw (int32_t lineno) {
+        if (dirty) draw_dynamic (lineno, val_raw, *p_min_raw, *p_max_raw, -1);
+        dirty = false;
+    }
+    void draw_raw (int32_t lineno, int32_t target) {
+        if (dirty) draw_dynamic (lineno, val_raw, *p_min_raw, *p_max_raw, target);
+        dirty = false;
+    }
+    double get_val_raw () { return val_raw; }
+    double get_min_raw () { return *p_min_raw; }
+    double get_max_raw () { return *p_max_raw; }
+
+};
+
+// class Sensor : virtual public Transducer {
+
+
+// };
+
+class Hotrc {
+  public:
+    int32_t index = 1;
+    int32_t padding = 7;
+    int32_t depth;
+  protected:
+    int32_t avg, min_index, max_index;
+    int32_t history[30];
+    uint32_t sum;
+  public:
+    Hotrc (int32_t arg_val, int32_t arg_padding) {
+        depth = 30;
+        for (int32_t x = 0; x < depth; x++) history[x] = arg_val;
+        avg = arg_val;
+        sum = avg * depth;
+        min_index = 0;
+        max_index = 0;
+        if (arg_padding >= -1) padding = arg_padding;
+    }
+    Hotrc (int32_t val) { Hotrc (val, -1); }    
+    int32_t calc (int32_t val) {
+        sum += val - history[index];
+        avg = sum/depth;
+        if (++index >= depth) index -= depth;  
+        if (val < history[min_index]) min_index = index;
+        else if (index >= depth) for (int32_t x = 0; x <= depth; x++) if (history[x] < history[min_index]) min_index = x;
+        if (val > history[max_index]) max_index = index;
+        else if (index >= depth) for (int32_t x = 0; x <= depth; x++) if (history[x] > history[max_index]) max_index = x;
+        return avg;
+    }
+    void print (void) {
+        std::cout << "Hotrc:" << history[index] << " av:" << avg << " min:" << min_index << " max:" << max_index << std::endl;
+    }
+    int32_t get_min () { return history[min_index]-padding; }
+    int32_t get_max () { return history[max_index]+padding; }
+    int32_t get_pad () { return padding; }
+    int32_t get_avg () { return avg; }
+};
+    // void code_from_globals (void) {
+        // // Code from globals.h maybe to marge into here
+        // bool hotrc_radio_detected = false;
+        // bool hotrc_radio_detected_last = hotrc_radio_detected;
+        // bool hotrc_suppress_next_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
+        // Timer hotrcPulseTimer;  // OK to not be volatile?
+        //
+        // int32_t hotrc_pos_failsafe_min_adc = 450;  // The failsafe setting in the hotrc must be set to a trigger level equal to max amount of trim upward from trigger released.
+        // int32_t hotrc_pos_failsafe_max_adc = 530;
+        // int32_t hotrc_panic_timeout = 1000000;  // how long to receive flameout-range signal from hotrc vertical before panic stopping
+        // Timer hotrcPanicTimer(hotrc_panic_timeout);
+        // //  ---- tunable ----
+        // //double hotrc_pulse_period_us = 1000000.0 / 50;
+        // in setup:
+        // hotrcPanicTimer.reset();
+        //
+        // // Detect loss of radio reception and panic stop
+        //     if (ctrl_pos_adc[VERT][FILT] > hotrc_pos_failsafe_min_adc && ctrl_pos_adc[VERT][FILT] < hotrc_pos_failsafe_max_adc) {
+        //         if (hotrcPanicTimer.expired()) {
+        //             hotrc_radio_detected = false;
+        //             hotrc_suppress_next_event = true;  // reject spurious ch3 switch event upon next hotrc poweron
+        //         }
+        //     }
+        //     hotrcPanicTimer.reset();
+        //     hotrc_radio_detected = true;
+        // }
+        // hotrc_radio_detected_last = hotrc_radio_detected;
+    // }
+
 
 //
 // // Device is a base class for any connected system device or signal
