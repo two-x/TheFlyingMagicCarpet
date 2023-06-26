@@ -12,6 +12,7 @@
 #include "Arduino.h"
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <Adafruit_SleepyDog.h>
 #include <vector>
 #include <string>
 #include <iomanip>
@@ -164,7 +165,7 @@ void setup() {
     neostrip.show(); // Initialize all pixels to 'off'
     neostrip.setBrightness (neopixel_brightness);
 
-    tempsensebus.setWaitForConversion (false);  // Do not block during conversion process
+    tempsensebus.setWaitForConversion (true);  // Do not block during conversion process
     tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
     tempsensebus.begin();
     temp_detected_device_ct = tempsensebus.getDeviceCount();
@@ -176,6 +177,19 @@ void setup() {
         else printf ("Found ghost device : index %d, addr unknown\n", x);  // printAddress (temp_addrs[x]);
         tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
     }
+
+    // tempsensebus.setWaitForConversion (false);  // Do not block during conversion process
+    // tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
+    // tempsensebus.begin();
+    // temp_detected_device_ct = tempsensebus.getDeviceCount();
+    // printf ("Temp sensors: Detected %d devices.\nParasitic power is: ", temp_detected_device_ct);  // , DEC);
+    // printf ((tempsensebus.isParasitePowerMode()) ? "On\n" : "Off\n");
+    // // for (int32_t x = 0; x < arraysize(temp_addrs); x++) {
+    // for (int32_t x = 0; x < temp_detected_device_ct; x++) {
+    //     if (tempsensebus.getAddress (temp_temp_addr, x)) printf ("Found sensor device: index %d, addr %d\n", x, temp_temp_addr);  // temp_addrs[x]
+    //     else printf ("Found ghost device : index %d, addr unknown\n", x);  // printAddress (temp_addrs[x]);
+    //     tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
+    // }
 
     // int32_t start = mycros();
     // tempsensebus.requestTemperatures();
@@ -209,6 +223,8 @@ void setup() {
     // pressure.set_names ("pressure", "adc ", "psi ");
     // pressure.set_limits (129.0, 452.0);
     
+    int32_t watchdog_time_ms = Watchdog.enable(2500);  // Start 2.5 sec watchdog
+    printf ("Watchdog enabled. Timer set to %ld ms.\n", watchdog_time_ms);
     hotrcPanicTimer.reset();
     loopTimer.reset();  // start timer to measure the first loop
     Serial.println (F("Setup finished"));
@@ -231,7 +247,9 @@ void loop() {
     //
     loopindex = 0;  // reset at top of loop
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "top");
-
+    
+    Watchdog.reset();  // Kick the watchdog to keep us alive
+    
     // cout << "(top)) spd:" << carspeed_filt_mph << " tach:" << tach_filt_rpm;
     
     // Update inputs.  Fresh sensor data, and filtering.
@@ -253,40 +271,63 @@ void loop() {
     // }
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
 
-    double temps[temp_detected_device_ct];
-    uint32_t timecheck;
-    if (tempTimer.expired()) {
-        cout << endl << "loop# " << loopno << " stat0:" << temp_status;
+    int32_t temp_start, temp_mid, temp_done;
+    if (false && tempTimer.expired()) {
         if (temp_status == IDLE) {
             wait_one_loop = true;
             if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
-            timecheck = micros();
-            // tempsensebus.requestTemperaturesByIndex (temp_reading_id);
-            tempsensebus.setWaitForConversion (false);  // Do not block during conversion process
+            tempsensebus.setWaitForConversion (false);  // makes it async
             tempsensebus.requestTemperatures();
-            tempsensebus.setWaitForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
-            cout << " my0:" << micros()-timecheck;
-            //tempTimer.set (tempsensebus.millisToWaitForConversion (temperature_precision)*1000);
-            tempTimer.set (800000);         
+            tempsensebus.setWaitForConversion (true);
+            tempTimer.set(180000);  // Give some time before reading temp
             temp_status = CONVERT;
         }
         else if (temp_status == CONVERT) {
-            wait_one_loop = true;
-            timecheck = micros();
+            wait_one_loop = true;  // This next operation takes anywhere from 30-50ms. This leaves no room for display updates during the same loop
             temps[temp_current_index] = tempsensebus.getTempFByIndex(temp_current_index);
-            cout << " my1:" << micros()-timecheck;
             tempTimer.set(1500000);
             temp_status = DELAY;
         }
         else if (temp_status == DELAY) {
-            //printf ("\n loop:%d temps[%ld] = %lf F\n", loopno, temp_current_index, temps[temp_current_index]);
+            printf ("temps[%ld] = %lf F\n", temp_current_index, temps[temp_current_index]);
             tempTimer.set(60000);
-            if (++temp_reading_id >= temp_detected_device_ct) temp_reading_id -= temp_detected_device_ct;
             temp_status = IDLE;
         }
-        cout << " stat1:" << temp_status << " id:"  << temp_reading_id << " tmp:" << ((temp_status == IDLE) ? temps[temp_current_index] : -1) << endl;
     }
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pst");
+    // double temps[temp_detected_device_ct];
+    // uint32_t timecheck;
+    // if (tempTimer.expired()) {
+    //     cout << endl << "loop# " << loopno << " stat0:" << temp_status;
+    //     if (temp_status == IDLE) {
+    //         wait_one_loop = true;
+    //         if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
+    //         timecheck = micros();
+    //         // tempsensebus.requestTemperaturesByIndex (temp_reading_id);
+    //         tempsensebus.setWaitForConversion (false);  // Do not block during conversion process
+    //         tempsensebus.requestTemperatures();
+    //         tempsensebus.setWaitForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
+    //         cout << " my0:" << micros()-timecheck;
+    //         //tempTimer.set (tempsensebus.millisToWaitForConversion (temperature_precision)*1000);
+    //         tempTimer.set (800000);         
+    //         temp_status = CONVERT;
+    //     }
+    //     else if (temp_status == CONVERT) {
+    //         wait_one_loop = true;
+    //         timecheck = micros();
+    //         temps[temp_current_index] = tempsensebus.getTempFByIndex(temp_current_index);
+    //         cout << " my1:" << micros()-timecheck;
+    //         tempTimer.set(1500000);
+    //         temp_status = DELAY;
+    //     }
+    //     else if (temp_status == DELAY) {
+    //         //printf ("\n loop:%d temps[%ld] = %lf F\n", loopno, temp_current_index, temps[temp_current_index]);
+    //         tempTimer.set(60000);
+    //         if (++temp_reading_id >= temp_detected_device_ct) temp_reading_id -= temp_detected_device_ct;
+    //         temp_status = IDLE;
+    //     }
+    //     cout << " stat1:" << temp_status << " id:"  << temp_reading_id << " tmp:" << ((temp_status == IDLE) ? temps[temp_current_index] : -1) << endl;
+    // }
+    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pst");
 
     // Encoder - takes 10 us to read when no encoder activity
     // Read and interpret encoder switch activity. Encoder rotation is handled in interrupt routine
@@ -777,12 +818,12 @@ void loop() {
         }
         else if (simulating) {
             if (tcol==3 && trow==0 && sim_basicsw && !touch_now_touched) basicmodesw = !basicmodesw;  // Pressed the basic mode toggle button. Toggle value, only once per touch
-            else if (tcol==3 && trow==1 && sim_pressure) adj_val (&pressure_filt_psi, touch_accel, pressure_min_psi, pressure_max_psi);   // (+= 25) Pressed the increase brake pressure button
-            else if (tcol==3 && trow==2 && sim_pressure) adj_val (&pressure_filt_psi, -touch_accel, pressure_min_psi, pressure_max_psi); // (-= 25) Pressed the decrease brake pressure button
+            else if (tcol==3 && trow==1 && sim_pressure) adj_val (&pressure_filt_psi, (double)touch_accel, pressure_min_psi, pressure_max_psi);   // (+= 25) Pressed the increase brake pressure button
+            else if (tcol==3 && trow==2 && sim_pressure) adj_val (&pressure_filt_psi, (double)-touch_accel, pressure_min_psi, pressure_max_psi); // (-= 25) Pressed the decrease brake pressure button
             else if (tcol==3 && trow==4 && sim_joy) adj_val (&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (-= 25) Pressed the joystick left button
             else if (tcol==4 && trow==0 && sim_ign && !touch_now_touched) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
-            else if (tcol==4 && trow==1 && sim_tach) adj_val (&tach_filt_rpm, touch_accel, 0, tach_redline_rpm);  // (+= 25) Pressed the increase engine rpm button
-            else if (tcol==4 && trow==2 && sim_tach) adj_val (&tach_filt_rpm, -touch_accel, 0, tach_redline_rpm);  // (-= 25) Pressed the decrease engine rpm button
+            else if (tcol==4 && trow==1 && sim_tach) adj_val (&tach_filt_rpm, (double)touch_accel, 0.0, tach_redline_rpm);  // (+= 25) Pressed the increase engine rpm button
+            else if (tcol==4 && trow==2 && sim_tach) adj_val (&tach_filt_rpm, (double)(-touch_accel), 0.0, tach_redline_rpm);  // (-= 25) Pressed the decrease engine rpm button
             else if (tcol==4 && trow==3 && sim_joy) adj_val (&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (+= 25) Pressed the joystick up button
             else if (tcol==4 && trow==4 && sim_joy) adj_val (&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (-= 25) Pressed the joystick down button
             else if (tcol==5 && trow==0 && sim_syspower) {  // You need to enable syspower simulation, be in sim mode and then long-press the syspower button to toggle it. (Hard to do by accident)/
@@ -791,8 +832,8 @@ void loop() {
                     touch_longpress_valid = false;
                 }
             }
-            else if (tcol==5 && trow==1 && sim_speedo) adj_val (&carspeed_filt_mph, 0.01*touch_accel, 0, carspeed_redline_mph);  // (+= 50) // Pressed the increase vehicle speed button
-            else if (tcol==5 && trow==2 && sim_speedo) adj_val (&carspeed_filt_mph, -0.01*touch_accel, 0, carspeed_redline_mph);  // (-= 50) Pressed the decrease vehicle speed button
+            else if (tcol==5 && trow==1 && sim_speedo) adj_val (&carspeed_filt_mph, 0.01*touch_accel, 0.0, carspeed_redline_mph);  // (+= 50) // Pressed the increase vehicle speed button
+            else if (tcol==5 && trow==2 && sim_speedo) adj_val (&carspeed_filt_mph, -0.01*touch_accel, 0.0, carspeed_redline_mph);  // (-= 50) Pressed the decrease vehicle speed button
             else if (tcol==5 && trow==4 && sim_joy) adj_val (&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (+= 25) Pressed the joystick right button                           
         }
         if (touch_accel_exponent < touch_accel_exponent_max && (touchHoldTimer.elapsed() > (touch_accel_exponent + 1) * touchAccelTimer.timeout())) touch_accel_exponent++; // If timer is > the shift time * exponent, and not already maxed, double the edit speed by incrementing the exponent
@@ -841,7 +882,7 @@ void loop() {
 
     // Tuning : implement effects of changes made by encoder or touchscreen to simulating, dataset_page, selected_value, or tuning_ctrl
     //
-    sim_edit_delta = sim_edit_delta_encoder + sim_edit_delta_touch;  // Allow edits using the encoder or touchscreen
+    sim_edit_delta += sim_edit_delta_encoder + sim_edit_delta_touch;  // Allow edits using the encoder or touchscreen
     sim_edit_delta_touch = 0;
     sim_edit_delta_encoder = 0;
     if (tuning_ctrl != tuning_ctrl_last || dataset_page != dataset_page_last || selected_value != selected_value_last || sim_edit_delta != 0) tuningCtrlTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
@@ -875,10 +916,10 @@ void loop() {
         }
         else if (dataset_page == CAR)  switch (selected_value) {
             case 0:  adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);  break;
-            case 1:  adj_val (&tach_idle_rpm, 0.01*sim_edit_delta, 0, tach_redline_rpm -1);  break;
-            case 2:  adj_val (&tach_redline_rpm, 0.01*sim_edit_delta, tach_idle_rpm, 8000);  break;
+            case 1:  adj_val (&tach_idle_rpm, 0.01*sim_edit_delta, 0, tach_redline_rpm - 1);  break;
+            case 2:  adj_val (&tach_redline_rpm, 0.01*sim_edit_delta, tach_idle_rpm, 8000.0);  break;
             case 3:  adj_val (&carspeed_idle_mph, 0.01*sim_edit_delta, 0, carspeed_redline_mph - 1);  break;
-            case 4:  adj_val (&carspeed_redline_mph, 0.01*sim_edit_delta, carspeed_idle_mph, 30000);  break;
+            case 4:  adj_val (&carspeed_redline_mph, 0.01*sim_edit_delta, carspeed_idle_mph, 30.0);  break;
             case 5:  adj_bool (&ctrl, sim_edit_delta);  break;
             case 6:  if (runmode == CAL) adj_bool (&cal_joyvert_brkmotor, sim_edit_delta);  break;
             case 7:  if (runmode == CAL) adj_bool (&cal_pot_gasservo, (sim_edit_delta < 0 || cal_pot_gas_ready) ? sim_edit_delta : -1);  break;
@@ -912,6 +953,7 @@ void loop() {
             if (selected_value == 6) gasSPID.set_open_loop (sim_edit_delta > 0);
             if (selected_value == 7) adj_val (&brake_pos_zeropoint_in, 0.001*sim_edit_delta, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
         }
+        sim_edit_delta = 0;
     }
     // cout << "/(later) spd:" << carspeed_filt_mph << " tach:" << tach_filt_rpm << std::endl;
     
@@ -980,17 +1022,31 @@ void loop() {
     
     // Display updates
     //
-    if (display_enabled) {
-        if (simulating != simulating_last) draw_simbuttons (simulating);  // if we just entered simulator draw the simulator buttons, or if we just left erase them
-        if (disp_dataset_page_dirty || disp_redraw_all) draw_dataset_page (dataset_page, dataset_page_last);
+    procrastinate = false;
+    if (display_enabled && !wait_one_loop) {
+        if (simulating != simulating_last) {
+            draw_simbuttons (simulating);  // if we just entered simulator draw the simulator buttons, or if we just left erase them
+            simulating_last = simulating;
+            procrastinate = true;  // Waits till next loop to draw changed values
+        }
+        if ((disp_dataset_page_dirty || disp_redraw_all)) {
+            draw_dataset_page (dataset_page, dataset_page_last);
+            disp_dataset_page_dirty = false;
+            dataset_page_last = dataset_page;
+            procrastinate = true;  // Waits till next loop to draw changed values
+        }
+        if ((disp_sidemenu_dirty || disp_redraw_all)) {
+            draw_touchgrid (true);
+            disp_sidemenu_dirty = false;
+            procrastinate = true;  // Waits till next loop to draw changed values
+        }
         if (disp_selected_val_dirty || disp_redraw_all) draw_selected_name (tuning_ctrl, tuning_ctrl_last, selected_value, selected_value_last);
-        if (disp_sidemenu_dirty || disp_redraw_all) draw_touchgrid (true);
-        if (disp_runmode_dirty || runmode != oldmode || disp_redraw_all) draw_runmode (runmode, oldmode, (runmode == SHUTDOWN) ? shutdown_color : -1);
-        disp_dataset_page_dirty = false;
         disp_selected_val_dirty = false;
-        disp_sidemenu_dirty = false;
+        selected_value_last = selected_value;
+        tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
+        if (disp_runmode_dirty || runmode != oldmode || disp_redraw_all) draw_runmode (runmode, oldmode, (runmode == SHUTDOWN) ? shutdown_color : -1);
         disp_runmode_dirty = false;
-        if (dispRefreshTimer.expired() || sim_edit_delta != 0 && !wait_one_loop) {
+        if (dispRefreshTimer.expired() && !procrastinate) {
             wait_one_loop = true;
             dispRefreshTimer.reset();
             int32_t range; double drange;
@@ -1094,20 +1150,20 @@ void loop() {
             draw_bool (ignition, 4);
             draw_bool (syspower, 5);
         }
+        disp_redraw_all = false;
     }
-
+    else {
+        dataset_page_last = dataset_page;
+        selected_value_last = selected_value;
+        simulating_last = simulating;
+    }
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dis");
 
     // Do the control loop bookkeeping at the end of each loop
     //
-    
+    tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
     wait_one_loop_last = wait_one_loop;
     wait_one_loop = false;
-    simulating_last = simulating;
-    tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
-    dataset_page_last = dataset_page;
-    selected_value_last = selected_value;
-    disp_redraw_all = false;
     button_last = button_it;
     if (runmode != SHUTDOWN) shutdown_complete = false;
     if (runmode != oldmode) we_just_switched_modes = true;  // If changing runmode, set this so new mode logic can perform initial actions

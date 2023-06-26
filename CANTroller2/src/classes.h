@@ -93,111 +93,109 @@ class Param {
     
 };
 
-// Transducer class has all features of Param class but the inherited Pram::val is considered the "raw" value, whereas this class
-//    operates on "disp"lay units that are real world human understandable like rpm, mph, angle or percent, rather than adc count
-//    or us pulse width). So this class handles the conversions necessry for that.
+// Transducer class has all features of Param class but now there is also a "raw" version of the value which represents the sensed
+//    or driven hardware input/output. This class contains unit conversion between the two.
 class Transducer : virtual public Param {
   public:
     int32_t _REV = -1, _FWD = 1;  // possible dir values. REV means raw sensed value has the opposite polarity of the real world effect (for example, if we sense fewer us per rotation, the engine is going faster)
   protected:
-    double val_disp, val_disp_last, min_disp, max_disp;  // To hold val/min/max display values in display units (like V, mph, etc.)
+    double val_raw, val_raw_last, min_raw, max_raw;  // To hold val/min/max display values in display units (like V, mph, etc.)
     double m_factor = 1.0, b_offset = 0.0;  // Multiplier and adder values to plug in for unit conversion math
     bool invert = false;  // Flag to indicated if unit conversion math should multiply or divide
-    double* p_min_disp = &min_disp;
-    double* p_max_disp = &max_disp;
-    char disp_disp_units[5] = "    ";
-    double to_disp_units (double numeric_val) {
+    double* p_min_raw = &min_raw;
+    double* p_max_raw = &max_raw;
+    char disp_raw_units[5] = "    ";
+    double from_raw_units (double arg_raw_val) {
         if (!invert) {
-            if (dir == _REV) return *p_min_disp + (*p_max_disp - (b_offset + m_factor * numeric_val));
-            return b_offset + m_factor * numeric_val;
+            if (dir == _REV) return *p_min_raw + (*p_max_raw - (b_offset + m_factor * arg_raw_val));
+            return b_offset + m_factor * arg_raw_val;
         }
-        if (numeric_val) {
-            if (dir == _REV) return *p_min_disp + (*p_max_disp - (b_offset + m_factor/numeric_val));
-            return b_offset + m_factor/numeric_val;
+        if (arg_raw_val) {
+            if (dir == _REV) return *p_min_raw + (*p_max_raw - (b_offset + m_factor/arg_raw_val));
+            return b_offset + m_factor/arg_raw_val;
         } 
         printf ("Error: unit conversion refused to divide by zero\n");
         return -1;
     }
-    double from_disp_units (double disp_val) {
-        if (dir == _REV) disp_val = *p_min_disp + (*p_max_disp - disp_val);
-        if (invert && (disp_val != b_offset)) return m_factor / (disp_val - b_offset);
-        else if (!invert && m_factor) return (disp_val - b_offset) / m_factor;
+    double to_raw_units (double arg_real_val) {
+        if (dir == _REV) arg_real_val = *p_min_raw + (*p_max_raw - arg_real_val);
+        if (invert && (arg_real_val != b_offset)) return m_factor / (arg_real_val - b_offset);
+        else if (!invert && m_factor) return (arg_real_val - b_offset) / m_factor;
         printf ("Error: unit conversion refused to divide by zero\n");
         return -1;
     }
   public:
     int32_t dir = _FWD;  // // Belongs in a child class for devices. For the case a lower val causes a higher real-life effect, 
-    Transducer (double arg_disp_val)  // pass in initial value
-      : Param(from_disp_units (arg_disp_val)) {  
-        val_disp = arg_disp_val;
-        min_disp = to_disp_units (*p_min);
-        max_disp = to_disp_units (*p_max);
+    Transducer (double arg_raw_val)  // pass in initial value
+      : Param(from_raw_units (arg_raw_val)) {  
+        val_raw = arg_raw_val;
+        min_raw = to_raw_units (*p_min);
+        max_raw = to_raw_units (*p_max);
     }
     // Use if the value at *p_val corresponds with a real-world effect having different units and possibly in the opposite direction as the underlying numerical values
-    void set_limits (double* arg_min_disp, double* arg_max_disp) {  // Direction dir applies when disp limits set.  dir is set to reverse if given minimum > maximum
-        if (*arg_min_disp > *arg_max_disp) {
+    void set_limits (double* arg_min_raw, double* arg_max_raw) {  // Direction dir applies when disp limits set.  dir is set to reverse if given minimum > maximum
+        if (*arg_min_raw > *arg_max_raw) {
             dir = _REV;
-            p_min_disp = arg_max_disp;
-            p_max_disp = arg_min_disp;
+            p_min_raw = arg_max_raw;
+            p_max_raw = arg_min_raw;
         }
         else {
             dir = _FWD;
-            p_min_disp = arg_min_disp;
-            p_max_disp = arg_max_disp;
+            p_min_raw = arg_min_raw;
+            p_max_raw = arg_max_raw;
         }
-        Param::set_limits(from_disp_units(*p_min_disp), from_disp_units(*p_max_disp));
+        Param::set_limits(from_raw_units(*p_min_raw), from_raw_units(*p_max_raw));
     }
-    void set_names (const string arg_name, const string arg_raw_units, const string arg_disp_units) {
+    void set_names (const string arg_name, const string arg_units, const string arg_raw_units) {
         strcpy(disp_name, arg_name.c_str());
-        strcpy(disp_units, arg_raw_units.c_str());
-        strcpy(disp_disp_units, arg_disp_units.c_str());
+        strcpy(disp_units, arg_units.c_str());
+        strcpy(disp_raw_units, arg_raw_units.c_str());
     }
-    // Convert units from base numerical value to disp units:  val_disp = m-factor*val_numeric + offset  -or-  val_disp = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
+    // Convert units from base numerical value to disp units:  val_raw = m-factor*val_numeric + offset  -or-  val_raw = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
     void set_convert (double arg_m_factor, double arg_b_offset, bool arg_invert) {
         m_factor = arg_m_factor;
         b_offset = arg_b_offset;
         invert = arg_invert;
-        dir = (to_disp_units (*p_min) <= to_disp_units (*p_max)) ? _FWD : _REV;
-        *p_min_disp = to_disp_units ((dir == _FWD) ? *p_min : *p_max);
-        *p_max_disp = to_disp_units ((dir == _FWD) ? *p_max : *p_min);
-        val_disp = to_disp_units (*p_val);
-        saturated = constrain_it (&val_disp, (*p_min_disp), (*p_max_disp));
+        dir = (to_raw_units (*p_min) <= to_raw_units (*p_max)) ? _FWD : _REV;
+        *p_min_raw = to_raw_units ((dir == _FWD) ? *p_min : *p_max);
+        *p_max_raw = to_raw_units ((dir == _FWD) ? *p_max : *p_min);
+        val_raw = to_raw_units (*p_val);
+        saturated = constrain_it (&val_raw, (*p_min_raw), (*p_max_raw));
     }
-    bool set (double arg_val) {
-        if (Param::set (from_disp_units(arg_val))) {
-            val_disp_last = val_disp;
-            val_disp = to_disp_units(*p_val);
+    bool set_raw (double arg_raw_val) {
+        if (Param::set (from_raw_units(arg_raw_val))) {
+            val_raw_last = val_raw;
+            val_raw = to_raw_units(*p_val);
             return true;
         }
         return false;
     }
-    bool add (double arg_add) {
-        if (set (val_disp + arg_add)) return true;
+    bool add_raw (double arg_add) {
+        if (set_raw (val_raw + arg_add)) return true;
         return false;
     }
-    bool set_raw (int32_t arg_val) {        
+    bool set (int32_t arg_val) {        
         Param::set ((double)arg_val);
-        double temp = to_disp_units (*p_val);
-        if (temp != val_disp) {
+        double temp = to_raw_units (*p_val);
+        if (temp != val_raw) {
             dirty = true;
-            val_disp_last = val_disp;
-            val_disp = temp;
+            val_raw_last = val_raw;
+            val_raw = temp;
             return true;
         }
         return false;
     }
-    void draw (int32_t lineno) {
-        if (dirty) draw_dynamic (lineno, val_disp, *p_min_disp, *p_max_disp, -1);
+    void draw_raw (int32_t lineno) {
+        if (dirty) draw_dynamic (lineno, val_raw, *p_min_raw, *p_max_raw, -1);
         dirty = false;
     }
-    void draw (int32_t lineno, int32_t target) {
-        if (dirty) draw_dynamic (lineno, val_disp, *p_min_disp, *p_max_disp, target);
+    void draw_raw (int32_t lineno, int32_t target) {
+        if (dirty) draw_dynamic (lineno, val_raw, *p_min_raw, *p_max_raw, target);
         dirty = false;
     }
-    double get_val () { return val_disp; }
-    double get_raw () { return *p_val; }
-    double get_min () { return *p_min_disp; }
-    double get_max () { return *p_max_disp; }
+    double get_val_raw () { return val_raw; }
+    double get_min_raw () { return *p_min_raw; }
+    double get_max_raw () { return *p_max_raw; }
 
 };
 

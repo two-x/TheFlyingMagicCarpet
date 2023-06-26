@@ -399,7 +399,7 @@ enum tuning_ctrl_states { OFF, SELECT, EDIT };
 int32_t tuning_ctrl = OFF;
 int32_t tuning_ctrl_last = OFF;
 int32_t dataset_page = RUN;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
-int32_t dataset_page_last = dataset_page;
+int32_t dataset_page_last = TEMP;
 int32_t selected_value = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
 int32_t selected_value_last = 0;
 //  ---- tunable ----
@@ -647,6 +647,7 @@ double loop_freq_hz = 1;  // run loop real time frequency (in Hz)
 volatile int32_t int_counter = 0;  // counts interrupts per loop
 bool wait_one_loop = false;
 bool wait_one_loop_last = false;
+bool procrastinate = false;
 int32_t loopno = 1;
 uint32_t looptimes_us[20];
 bool loop_dirty[20];
@@ -757,14 +758,28 @@ enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
 Timer tempTimer (2000000);
 enum temp_status { IDLE, CONVERT, DELAY };
 int32_t temp_status = IDLE;
-int32_t temp_reading_id = 0;
+double temps[6];
 int32_t temp_detected_device_ct = 0;
-int32_t temperature_precision = 9;  // 9-12 bit resolution. 12 bit can take up to 750ms to do a conversion
+int32_t temperature_precision = 12;  // 9-12 bit resolution
 OneWire onewire (onewire_pin);
 DallasTemperature tempsensebus (&onewire);
 DeviceAddress temp_temp_addr;
 int32_t temp_current_index = 0;
 DeviceAddress temp_addrs[6];
+
+// // Temperature sensor related
+// enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
+// Timer tempTimer (2000000);
+// enum temp_status { IDLE, CONVERT, DELAY };
+// int32_t temp_status = IDLE;
+// int32_t temp_reading_id = 0;
+// int32_t temp_detected_device_ct = 0;
+// int32_t temperature_precision = 9;  // 9-12 bit resolution. 12 bit can take up to 750ms to do a conversion
+// OneWire onewire (onewire_pin);
+// DallasTemperature tempsensebus (&onewire);
+// DeviceAddress temp_temp_addr;
+// int32_t temp_current_index = 0;
+// DeviceAddress temp_addrs[6];
 
 // Interrupt service routines
 //
@@ -1267,6 +1282,11 @@ void adj_val (double* variable, int32_t modify, double low_limit, double high_li
     else if (*variable + modify > high_limit) *variable = high_limit;
     else *variable += modify; 
 }
+void adj_val (double* variable, double modify, double low_limit, double high_limit) {  // sets an int reference to new val constrained to given range
+    if (*variable + modify < low_limit) *variable = low_limit;
+    else if (*variable + modify > high_limit) *variable = high_limit;
+    else *variable += modify; 
+}
 
 void adj_bool (bool* val, int32_t delta) { if (delta != 0) *val = (delta > 0); }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
 
@@ -1312,11 +1332,18 @@ void tft_init (void) {
         for (int32_t row=0; row<arraysize (disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
         for (int32_t row=0; row<arraysize (disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
         tft.fillScreen (BLK);  // Black out the whole screen
-        draw_fixed (dataset_page, dataset_page_last, false);
         draw_touchgrid (false);
-        draw_runmode (runmode, oldmode, -1);
-        draw_dataset_page (dataset_page, dataset_page_last);
-        if (simulating) draw_simbuttons (true);
+        draw_fixed (dataset_page, dataset_page_last, false);
+        disp_redraw_all = true;
+        // disp_dataset_page_dirty = true;
+        // disp_runmode_dirty = true;
+        // disp_sidemenu_dirty = true;
+        //if (simulating) draw_simbuttons (true);
+        
+        // draw_fixed (dataset_page, dataset_page_last, false);
+        // draw_touchgrid (false);
+        // draw_runmode (runmode, oldmode, -1);
+        // draw_dataset_page (dataset_page, dataset_page_last);
         printf ("Success.\nCaptouch initialization... ");
         if (! touchpanel.begin(40)) printf ("Couldn't start FT6206 touchscreen controller");  // pass in 'sensitivity' coefficient
         else printf ("Capacitive touchscreen started\n");
