@@ -32,7 +32,7 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names
         names[index] = loopname;  // names[index], name);
         dirty[index] = false;
     }
-    timesarray[index] = micros();
+    timesarray[index] = esp_timer_get_time();
     index++;
 }
 

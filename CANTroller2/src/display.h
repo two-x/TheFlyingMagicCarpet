@@ -347,7 +347,7 @@ void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32
         disp_polarities[lineno] = polarity;
         dispAgeTimer[lineno].reset();
         disp_age_quanta[lineno] = 0;
-    }
+    }  // to-do: Fix failure to freshen aged coloration of unchanged characters of changed values
     else if (age_us > disp_age_quanta[lineno] && age_us < 11)  {  // As readings age, redraw in new color. This may fail and redraw when the timer overflows? 
         int32_t color;
         if (age_us < 8) color = 0x1fe0 + age_us*0x2000;  // Base of green with red added as you age, until yellow is achieved
