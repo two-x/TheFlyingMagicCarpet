@@ -1,9 +1,5 @@
 #ifndef SPID_H
 #define SPID_H
-
-#ifdef DUE
-    #include <LibPrintf.h>  // This works on Due but not ESP32
-#endif
 #include "math.h"  // Just using for signbit() function. Note signbit returns true for negative signed argument
 #include <cmath>
 // Here is the brake PID math

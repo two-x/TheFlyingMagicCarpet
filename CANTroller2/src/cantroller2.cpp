@@ -32,7 +32,7 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names
         names[index] = loopname;  // names[index], name);
         dirty[index] = false;
     }
-    timesarray[index] = micros();
+    timesarray[index] = esp_timer_get_time();
     index++;
 }
 
@@ -486,15 +486,16 @@ void loop() {
             shutdown_complete = false;
             shutdown_color = LPNK;
             calmode_request = false;
-            if (car_stopped()) {
+            park_the_motors = false;
+            if (!car_stopped()) {
                 if (panic_stop && brakeSPID.get_target() < pressure_panic_initial_psi) brakeSPID.set_target (pressure_panic_initial_psi);
                 if (!panic_stop && brakeSPID.get_target() < pressure_hold_initial_psi) brakeSPID.set_target (pressure_hold_initial_psi);
                 brakeIntervalTimer.reset();
-                sanityTimer.reset();
+                stopcarTimer.reset();
             }
         }
         if (!shutdown_complete) {  // If we haven't yet stopped the car and then released the brakes and gas all the way
-            if (car_stopped() || sanityTimer.expired()) {  // If car has stopped, or timeout expires, then release the brake
+            if (car_stopped() || stopcarTimer.expired()) {  // If car has stopped, or timeout expires, then release the brake
                 if (shutdown_color == LPNK) {  // On first time through here
                     park_the_motors = true;  // Flags the motor parking to happen, only once
                     gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
@@ -535,10 +536,10 @@ void loop() {
             if (car_stopped()) brakeSPID.set_target (pressure_filt_psi + pressure_hold_increment_psi); // If the car is already stopped then just add a touch more pressure and then hold it.
             else if (brakeSPID.get_target() < pressure_hold_initial_psi) brakeSPID.set_target (pressure_hold_initial_psi);  //  These hippies need us to stop the car for them
             brakeIntervalTimer.reset();
-            sanityTimer.reset();
+            stopcarTimer.reset();
             joy_centered = false;  // Fly mode will be locked until the joystick first is put at or below center
         }
-        else if (brakeIntervalTimer.expired() && !sanityTimer.expired()) {  // Each interval the car is still moving, push harder
+        else if (brakeIntervalTimer.expired() && !stopcarTimer.expired()) {  // Each interval the car is still moving, push harder
             if (!car_stopped()) brakeSPID.set_target (brakeSPID.get_target() + pressure_hold_increment_psi);
             brakeIntervalTimer.reset();
         }
@@ -663,10 +664,7 @@ void loop() {
     if (pidTimer.expired() && !(runmode == SHUTDOWN && shutdown_complete)) {  // Recalculate pid and update outputs, at regular intervals
         
         pidTimer.reset();  // reset timer to trigger the next update
-        if ( park_the_motors && ( motorParkTimer.expired() ||  //  When parking motors, IF the timeout expires OR the brake and gas motors are both close enough to the park position ...
-            ( abs(brake_pos_filt_in - brake_pos_park_in) <= brake_pos_margin_in && gasServoTimer.expired() && (gas_pulse_out_us == gas_pulse_idle_us + gas_pulse_park_slack_us) ) ) )
-            park_the_motors = false;  // ... THEN stop trying to park the motors
-        
+
         // Steering
         steer_pulse_out_us = constrain (steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);  // Don't be out of range
         steer_servo.writeMicroseconds (steer_pulse_out_us);   // Write steering value to jaguar servo interface
@@ -700,13 +698,8 @@ void loop() {
         
         // Cruise.  Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
         if (runmode == CRUISE && !cruise_adjusting) gasSPID.set_target (cruiseSPID.compute (carspeed_filt_mph));  // 
-            
-        // cruiseSPID.set_target carspeed_target_mph = constrain (carspeed_target_mph, 0, carspeed_redline_mph);
         // printf ("Cruise PID rm= %+-4ld target=%-+9.4lf", runmode, (double)carspeed_target_mph);
-        // cruiseSPID.compute (carspeed_filt_mph);
-        // tach_target_rpm
         // printf (" output = %-+9.4lf,  %+-4ld\n", cruiseSPID.get_output(), tach_target_rpm);
-        // }
 
         // Gas.  Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
         if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
@@ -716,10 +709,10 @@ void loop() {
         }
         else if (runmode != BASIC) {
             if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) 
-                gas_pulse_out_us = (int32_t)map (pot_filt_percent, pot_min_percent, pot_max_percent, (double)gas_pulse_ccw_max_us, (double)gas_pulse_cw_min_us);
+                gas_pulse_out_us = (int32_t)(map (pot_filt_percent, pot_min_percent, pot_max_percent, (double)gas_pulse_ccw_max_us, (double)gas_pulse_cw_min_us));
             else if (gasSPID.get_open_loop())  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
-                gas_pulse_out_us = (int32_t)map (gasSPID.get_target(), tach_idle_rpm, tach_govern_rpm, (double)gas_pulse_idle_us, (double)gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
-            else gas_pulse_out_us = (int32_t)gasSPID.compute (tach_filt_rpm);  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
+                gas_pulse_out_us = (int32_t)(map (gasSPID.get_target(), tach_idle_rpm, tach_govern_rpm, (double)gas_pulse_idle_us, (double)gas_pulse_govern_us)); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
+            else gas_pulse_out_us = (int32_t)(gasSPID.compute (tach_filt_rpm));  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
             // printf ("Gas PID   rm= %+-4ld target=%-+9.4lf", runmode, (double)tach_target_rpm);
             // printf (" output = %-+9.4lf,  %+-4ld\n", gasSPID.get_output(), gas_pulse_out_us);
         }
@@ -729,6 +722,13 @@ void loop() {
             else gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_idle_us);
             gas_servo.writeMicroseconds (gas_pulse_out_us);  // Write result to servo
         }
+
+        if (park_the_motors) {  //  When parking motors, IF the timeout expires OR the brake and gas motors are both close enough to the park position THEN stop trying to park the motors
+            bool brake_parked = (abs(brake_pos_filt_in - brake_pos_park_in) <= brake_pos_margin_in);
+            bool gas_parked = ((gas_pulse_out_us == gas_pulse_idle_us + gas_pulse_park_slack_us) && gasServoTimer.expired());
+            if ((brake_parked && gas_parked) || motorParkTimer.expired()) park_the_motors = false;
+        }
+        
         pidTimer.reset();  // reset timer to trigger the next update
     }
 
@@ -756,13 +756,13 @@ void loop() {
     if (!ignition && !engine_stopped()) {
         if (diag_ign_error_enabled) { // See if the engine is turning despite the ignition being off
             Serial.println (F("Detected engine rotation in the absense of ignition signal"));  // , tach_filt_rpm, ignition
-            diag_ign_error_enabled = false;
+            diag_ign_error_enabled = false;  // Prevents endless error reporting the same error
         }
-        // I don't think we really need to panic about this, but it does seem curious. Actually this will probably occur when we're sliding
-        // into camp after a ride, and kill the engine before we stop the car. For a fraction of a second the engine would keep turning anyway.
-        // Or fopr that matter whenever the carb is out of tune and making the engine diesel after we kill the ign.
     }
     else diag_ign_error_enabled = true;
+    // I don't think we really need to panic about this, but it does seem curious. Actually this will probably occur like when we're sliding
+    // into camp after a ride, and kill the engine before we stop the car. For a fraction of a second the engine would keep turning anyway.
+    // Or for that matter whenever the carb is out of tune and making the engine diesel after we kill the ign.
 
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");  //
         
@@ -799,7 +799,7 @@ void loop() {
             }
             else if (tuning_ctrl == SELECT) {
                 if (!touch_now_touched) {
-                    if (++selected_value >= arraysize(dataset_page_names[dataset_page])) selected_value -= arraysize(dataset_page_names[dataset_page]);
+                    if (++selected_value >= arraysize (dataset_page_names[dataset_page])) selected_value -= arraysize (dataset_page_names[dataset_page]);
                 }
                 else if (touch_longpress_valid && touchHoldTimer.expired()) {
                     tuning_ctrl = OFF;
@@ -816,13 +816,13 @@ void loop() {
             else if (tuning_ctrl == EDIT) sim_edit_delta_touch = -touch_accel;  // If in edit mode, decrease value
         }
         else if (tcol==0 && trow==4) {  // && trow == 0 . Pressed the simulation mode toggle. Needs long press
-            if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout()) {
+            if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
                 simulating = !simulating;
                 touch_longpress_valid = false;
             }
         }
         else if (tcol==2 && trow==0 && (runmode == CAL || (runmode == SHUTDOWN && shutdown_complete))) {
-            if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout()) {
+            if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
                 calmode_request = true;
                 touch_longpress_valid = false;
             }  // Pressed the basic mode toggle button. Toggle value, only once per touch
@@ -838,7 +838,7 @@ void loop() {
             else if (tcol==4 && trow==3 && sim_joy) adj_val (&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (+= 25) Pressed the joystick up button
             else if (tcol==4 && trow==4 && sim_joy) adj_val (&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (-= 25) Pressed the joystick down button
             else if (tcol==5 && trow==0 && sim_syspower) {  // You need to enable syspower simulation, be in sim mode and then long-press the syspower button to toggle it. (Hard to do by accident)/
-                if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout()) {
+                if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
                     syspower = !syspower;
                     touch_longpress_valid = false;
                 }
@@ -847,7 +847,7 @@ void loop() {
             else if (tcol==5 && trow==2 && sim_speedo) adj_val (&carspeed_filt_mph, -0.005*(double)touch_accel, 0.0, carspeed_redline_mph);  // (-= 50) Pressed the decrease vehicle speed button
             else if (tcol==5 && trow==4 && sim_joy) adj_val (&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (+= 25) Pressed the joystick right button                           
         }
-        if (touch_accel_exponent < touch_accel_exponent_max && (touchHoldTimer.elapsed() > (touch_accel_exponent + 1) * touchAccelTimer.timeout())) touch_accel_exponent++; // If timer is > the shift time * exponent, and not already maxed, double the edit speed by incrementing the exponent
+        if (touch_accel_exponent < touch_accel_exponent_max && (touchHoldTimer.elapsed() > (touch_accel_exponent + 1) * touchAccelTimer.get_timeout())) touch_accel_exponent++; // If timer is > the shift time * exponent, and not already maxed, double the edit speed by incrementing the exponent
         touch_now_touched = true;
     }  // (if touchpanel reads a touch)
     else {  // If not being touched, put momentarily-set simulated button values back to default values
@@ -872,16 +872,16 @@ void loop() {
         else tuning_ctrl = (tuning_ctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
         encoder_sw_action = NONE;  // Our responsibility to reset this flag after handling events
     }
-    if (encoder_delta != 0) {  // Now handle any new rotations
-        if (encoder_spinrate_isr_us >= encoder_spinrate_min_us) {  // Attempt to reject clicks coming in too fast
+    if (encoder_delta) {  // Now handle any new rotations
+        if (encoder_spinrate_isr_us >= encoder_spinrate_min_us) {  // Reject clicks coming in too fast as bounces
             encoder_spinrate_old_us = encoder_spinrate_last_us;  // Store last few spin times for filtering purposes ...
             encoder_spinrate_last_us = encoder_spinrate_us;  // ...
             encoder_spinrate_us = constrain (encoder_spinrate_isr_us, encoder_spinrate_min_us, encoder_accel_thresh_us);
-            int32_t spinrate_temp = (encoder_spinrate_old_us > encoder_spinrate_last_us) ? encoder_spinrate_old_us : encoder_spinrate_last_us;  // Find the slowest of the last 3 detents ...
-            if (spinrate_temp < encoder_spinrate_us) spinrate_temp = encoder_spinrate_us;
-            encoder_edits_per_det = map (spinrate_temp, encoder_spinrate_min_us, encoder_accel_thresh_us, encoder_accel_max, 1);  // if turning faster than 100ms/det, proportionally accelerate the effect of each detent by up to 50x 
+            int32_t encoder_temp = (encoder_spinrate_old_us > encoder_spinrate_last_us) ? encoder_spinrate_old_us : encoder_spinrate_last_us;  // Find the slowest of the last 3 detents ...
+            if (encoder_temp < encoder_spinrate_us) encoder_temp = encoder_spinrate_us;
+            encoder_temp = map (encoder_temp, encoder_spinrate_min_us, encoder_accel_thresh_us, encoder_accel_max, 1);  // if turning faster than 100ms/det, proportionally accelerate the effect of each detent by up to 50x. encoder_temp variable repurposed here to hold # of edits per detent turned
             // encoderSpinspeedTimer.reset();
-            if (tuning_ctrl == EDIT) sim_edit_delta_encoder = encoder_delta * encoder_edits_per_det;  // If a tunable value is being edited, turning the encoder changes the value
+            if (tuning_ctrl == EDIT) sim_edit_delta_encoder = encoder_delta * encoder_temp;  // If a tunable value is being edited, turning the encoder changes the value
             else encoder_delta = constrain (encoder_delta, -1, 1);  // Only change one at a time when selecting or turning pages
             if (tuning_ctrl == SELECT) selected_value += encoder_delta;  // If overflow constrain will fix in general handler below
             else if (tuning_ctrl == OFF) dataset_page += encoder_delta;  // If overflow tconstrain will fix in general below
@@ -970,7 +970,7 @@ void loop() {
     
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tun");  //
 
-    // Update derived variables values in case they have changed
+    // Update derived variables values in case they have changed. Note, there are several other derived variables missing here I think
     ctrl_db_adc[VERT][BOT] = (adcrange_adc-ctrl_lims_adc[ctrl][VERT][DB])/2;  // Lower threshold of vert joy deadband (ADC count 0-4095)
     ctrl_db_adc[VERT][TOP] = (adcrange_adc+ctrl_lims_adc[ctrl][VERT][DB])/2;  // Upper threshold of vert joy deadband (ADC count 0-4095)
     ctrl_db_adc[HORZ][BOT] = (adcrange_adc-ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Lower threshold of horz joy deadband (ADC count 0-4095)
@@ -981,21 +981,21 @@ void loop() {
 
     // Ignition & Panic stop logic and Update output signals
     if (panic_stop && car_stopped()) panic_stop = false;  //  Panic is over cuz car is stopped
-    else if (ctrl == HOTRC && hotrc_radio_detected_last && !hotrc_radio_detected) panic_stop = true;  
-    if (panic_stop) ignition = LOW;  // Kill car if panicking
-    if ((ignition != ignition_last) && (!ignition || !panic_stop)) write_pin (ignition_pin, ignition);  // Turn car off or on, with some conditions
-    if (syspower != syspower_last) syspower_set (syspower);
+    else if (ctrl == HOTRC && hotrc_radio_detected_last && !hotrc_radio_detected) panic_stop = true;  // panic_stop could also have been initiated by the user button
     hotrc_radio_detected_last = hotrc_radio_detected;
-    syspower_last = syspower;
+    if (panic_stop) ignition = LOW;  // Kill car if panicking
+    if ((ignition != ignition_last) && !(ignition && panic_stop)) write_pin (ignition_pin, ignition);  // Turn car off or on, ensuring to never turn on the ignition while panicking
     ignition_last = ignition; // Make sure this goes after the last comparison
+    if (syspower != syspower_last) syspower_set (syspower);
+    syspower_last = syspower;
     
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
 
     // Heartbeat led algorithm
-    if (neopixel_heartbeat && neopixelRefreshTimer.expired()) { // Make the neopixel into a beating heart, in the color of the current runmode 
-        neopixel_heart_color[N_RED] = ((colorcard[runmode] & 0xf800) >> 11) << 3;
-        neopixel_heart_color[N_GRN] = ((colorcard[runmode] & 0x7e0) >> 5) << 2;
-        neopixel_heart_color[N_BLU] = (colorcard[runmode] & 0x1f) << 3;
+    if (neopixel_heartbeat && neopixel_pin >= 0 && neopixelRefreshTimer.expired()) { // Make the neopixel into a beating heart, in the color of the current runmode 
+        neopixel_heart_color[N_RED] = ((((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0xf800) >> 11) << 3;
+        neopixel_heart_color[N_GRN] = ((((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x7e0) >> 5) << 2;
+        neopixel_heart_color[N_BLU] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x1f) << 3;
         neostrip.setPixelColor (0, neostrip.Color (neopixel_heart_color[N_BLU], neopixel_heart_color[N_RED], neopixel_heart_color[N_GRN]));
         if (heartbeatTimer.expired()) {
             heartbeat_pulse = !heartbeat_pulse;
@@ -1005,13 +1005,11 @@ void loop() {
             heartbeatTimer.set (heartbeat_ekg[heartbeat_state]);
         }
         else if (!heartbeat_pulse && neopixel_heart_fade) {
-            neopixel_heart_fade = (int8_t)((double)neopixel_brightness * (1 - (double)neopixelTimer.elapsed()/(double)neopixel_timeout));
+            neopixel_heart_fade = (int8_t)((double)neopixel_brightness * (1 - (double)neopixelTimer.elapsed() / (double)neopixel_timeout));
             if (neopixel_heart_fade < 1) neopixel_heart_fade = 0;
         }
-        if (neopixel_pin >= 0) {
-            neostrip.setBrightness (neopixel_heart_fade);
-            neostrip.show();
-        }
+        neostrip.setBrightness (neopixel_heart_fade);
+        neostrip.show();
         neopixelRefreshTimer.reset();
     }
     else if (heartbeat_led_pin >= 0 && neopixelTimer.expired()) {  // Just make a heartbeat on the native board led
@@ -1022,7 +1020,7 @@ void loop() {
         neostrip.setPixelColor (0, colorwheel (++neopixel_wheel_counter));
         neopixelTimer.reset();
     }
-    write_pin (led_rx_pin, (sim_edit_delta <= 0));  // use these Due lights for whatever, here debugging the touchscreen
+    // write_pin (led_rx_pin, (sim_edit_delta <= 0));  // use these Due lights for whatever, here debugging the touchscreen
     
     // if (!neopixel_heartbeat && neopixelTimer.expired()) {  // Rainbow fade
     //     neopixel_wheel_counter++;
@@ -1058,103 +1056,103 @@ void loop() {
         tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
         if (disp_runmode_dirty || runmode != oldmode || disp_redraw_all) draw_runmode (runmode, oldmode, (runmode == SHUTDOWN) ? shutdown_color : -1);
         disp_runmode_dirty = false;
-        if (dispRefreshTimer.expired() && !procrastinate) {
+        if ((dispRefreshTimer.expired() && !procrastinate) || disp_redraw_all) {
             dispRefreshTimer.reset();
             int32_t range; double drange;
-            draw_dynamic(1, carspeed_filt_mph, 0.0, carspeed_redline_mph, cruiseSPID.get_target());
-            draw_dynamic(2, tach_filt_rpm, 0.0, tach_redline_rpm, gasSPID.get_target());
-            draw_dynamic(3, pressure_filt_psi, pressure_min_psi, pressure_max_psi, brakeSPID.get_target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
-            draw_dynamic(4, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
-            draw_dynamic(5, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-            draw_dynamic(6, cruiseSPID.get_target(), 0.0, carspeed_govern_mph);
-            draw_dynamic(7, brakeSPID.get_target(), pressure_min_psi, pressure_max_psi);
-            draw_dynamic(8, gasSPID.get_target(), 0.0, tach_redline_rpm);
-            draw_dynamic(9, brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
-            draw_dynamic(10, gas_pulse_out_us, gas_pulse_redline_us, gas_pulse_idle_us);
-            draw_dynamic(11, steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);
+            draw_dynamic (1, carspeed_filt_mph, 0.0, carspeed_redline_mph, cruiseSPID.get_target());
+            draw_dynamic (2, tach_filt_rpm, 0.0, tach_redline_rpm, gasSPID.get_target());
+            draw_dynamic (3, pressure_filt_psi, pressure_min_psi, pressure_max_psi, brakeSPID.get_target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
+            draw_dynamic (4, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
+            draw_dynamic (5, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
+            draw_dynamic (6, cruiseSPID.get_target(), 0.0, carspeed_govern_mph);
+            draw_dynamic (7, brakeSPID.get_target(), pressure_min_psi, pressure_max_psi);
+            draw_dynamic (8, gasSPID.get_target(), 0.0, tach_redline_rpm);
+            draw_dynamic (9, brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
+            draw_dynamic (10, gas_pulse_out_us, gas_pulse_redline_us, gas_pulse_idle_us);
+            draw_dynamic (11, steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);
             if (dataset_page == RUN) {
-                draw_dynamic(12, battery_filt_v, 0.0, battery_max_v);
-                draw_dynamic(13, brake_pos_filt_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
-                draw_dynamic(14, pot_filt_percent, pot_min_percent, pot_max_percent);
-                // draw_dynamic(14, brakeSPID.get_proportionality(), -1, -1);
-                draw_dynamic(15, sim_brkpos, -1, -1);
-                draw_dynamic(16, sim_joy, -1, -1);
-                draw_dynamic(17, sim_pressure, -1, -1);
-                draw_dynamic(18, sim_tach, -1, -1);
-                draw_dynamic(19, sim_speedo, -1, -1);
+                draw_dynamic (12, battery_filt_v, 0.0, battery_max_v);
+                draw_dynamic (13, brake_pos_filt_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
+                draw_dynamic (14, pot_filt_percent, pot_min_percent, pot_max_percent);
+                // draw_dynamic (14, brakeSPID.get_proportionality(), -1, -1);
+                draw_dynamic (15, sim_brkpos, -1, -1);
+                draw_dynamic (16, sim_joy, -1, -1);
+                draw_dynamic (17, sim_pressure, -1, -1);
+                draw_dynamic (18, sim_tach, -1, -1);
+                draw_dynamic (19, sim_speedo, -1, -1);
             }
             else if (dataset_page == JOY) {
-                draw_dynamic(12, ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
-                draw_dynamic(13, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-                draw_dynamic(14, ctrl_lims_adc[ctrl][HORZ][MIN], 0, (adcrange_adc-ctrl_lims_adc[ctrl][HORZ][MAX])/2);
-                draw_dynamic(15, ctrl_lims_adc[ctrl][HORZ][MAX], (ctrl_lims_adc[ctrl][HORZ][MIN]-adcrange_adc)/2, adcrange_adc);
-                draw_dynamic(16, ctrl_lims_adc[ctrl][HORZ][DB], 0, (adcmidscale_adc - ctrl_lims_adc[ctrl][HORZ][MIN] > ctrl_lims_adc[ctrl][HORZ][MAX] - adcmidscale_adc) ? 2*(ctrl_lims_adc[ctrl][HORZ][MAX] - adcmidscale_adc) : 2*(adcmidscale_adc - ctrl_lims_adc[ctrl][HORZ][MIN]));
-                draw_dynamic(17, ctrl_lims_adc[ctrl][VERT][MIN], 0, (adcrange_adc-ctrl_lims_adc[ctrl][VERT][MAX])/2);
-                draw_dynamic(18, ctrl_lims_adc[ctrl][VERT][MAX], (ctrl_lims_adc[ctrl][VERT][MIN]-adcrange_adc)/2, adcrange_adc);
-                draw_dynamic(19, ctrl_lims_adc[ctrl][VERT][DB], 0, (adcmidscale_adc - ctrl_lims_adc[ctrl][VERT][MIN] > ctrl_lims_adc[ctrl][VERT][MAX] - adcmidscale_adc) ? 2*(ctrl_lims_adc[ctrl][VERT][MAX] - adcmidscale_adc) : 2*(adcmidscale_adc - ctrl_lims_adc[ctrl][VERT][MIN]));
+                draw_dynamic (12, ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
+                draw_dynamic (13, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
+                draw_dynamic (14, ctrl_lims_adc[ctrl][HORZ][MIN], 0, (adcrange_adc-ctrl_lims_adc[ctrl][HORZ][MAX])/2);
+                draw_dynamic (15, ctrl_lims_adc[ctrl][HORZ][MAX], (ctrl_lims_adc[ctrl][HORZ][MIN]-adcrange_adc)/2, adcrange_adc);
+                draw_dynamic (16, ctrl_lims_adc[ctrl][HORZ][DB], 0, (adcmidscale_adc - ctrl_lims_adc[ctrl][HORZ][MIN] > ctrl_lims_adc[ctrl][HORZ][MAX] - adcmidscale_adc) ? 2*(ctrl_lims_adc[ctrl][HORZ][MAX] - adcmidscale_adc) : 2*(adcmidscale_adc - ctrl_lims_adc[ctrl][HORZ][MIN]));
+                draw_dynamic (17, ctrl_lims_adc[ctrl][VERT][MIN], 0, (adcrange_adc-ctrl_lims_adc[ctrl][VERT][MAX])/2);
+                draw_dynamic (18, ctrl_lims_adc[ctrl][VERT][MAX], (ctrl_lims_adc[ctrl][VERT][MIN]-adcrange_adc)/2, adcrange_adc);
+                draw_dynamic (19, ctrl_lims_adc[ctrl][VERT][DB], 0, (adcmidscale_adc - ctrl_lims_adc[ctrl][VERT][MIN] > ctrl_lims_adc[ctrl][VERT][MAX] - adcmidscale_adc) ? 2*(ctrl_lims_adc[ctrl][VERT][MAX] - adcmidscale_adc) : 2*(adcmidscale_adc - ctrl_lims_adc[ctrl][VERT][MIN]));
             }
             else if (dataset_page == CAR) {
-                draw_dynamic(12, gas_governor_percent, 0, 100);
-                draw_dynamic(13, tach_idle_rpm, 0.0, tach_redline_rpm);
-                draw_dynamic(14, tach_redline_rpm, 0.0, tach_max_rpm);
-                draw_dynamic(15, carspeed_idle_mph, 0.0, carspeed_redline_mph);
-                draw_dynamic(16, carspeed_redline_mph, 0.0, carspeed_max_mph);
-                draw_dynamic(17, ctrl, -1, -1);  // 0 if hotrc
-                draw_dynamic(18, cal_joyvert_brkmotor, -1, -1);
-                draw_dynamic(19, cal_pot_gasservo, -1, -1);
+                draw_dynamic (12, gas_governor_percent, 0, 100);
+                draw_dynamic (13, tach_idle_rpm, 0.0, tach_redline_rpm);
+                draw_dynamic (14, tach_redline_rpm, 0.0, tach_max_rpm);
+                draw_dynamic (15, carspeed_idle_mph, 0.0, carspeed_redline_mph);
+                draw_dynamic (16, carspeed_redline_mph, 0.0, carspeed_max_mph);
+                draw_dynamic (17, ctrl, -1, -1);  // 0 if hotrc
+                draw_dynamic (18, cal_joyvert_brkmotor, -1, -1);
+                draw_dynamic (19, cal_pot_gasservo, -1, -1);
             }
             else if (dataset_page == PWMS) {
-                draw_dynamic(12, steer_pulse_left_us, steer_pulse_stop_us, steer_pulse_left_max_us);
-                draw_dynamic(13, steer_pulse_stop_us, steer_pulse_left_us, steer_pulse_right_us);
-                draw_dynamic(14, steer_pulse_right_us, steer_pulse_right_min_us, steer_pulse_stop_us);
-                draw_dynamic(15, brake_pulse_extend_us, brake_pulse_stop_us, brake_pulse_extend_max_us);
-                draw_dynamic(16, brake_pulse_stop_us, brake_pulse_retract_us, brake_pulse_extend_us);
-                draw_dynamic(17, brake_pulse_retract_us, brake_pulse_retract_min_us, brake_pulse_stop_us);
-                draw_dynamic(18, gas_pulse_idle_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
-                draw_dynamic(19, gas_pulse_redline_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
+                draw_dynamic (12, steer_pulse_left_us, steer_pulse_stop_us, steer_pulse_left_max_us);
+                draw_dynamic (13, steer_pulse_stop_us, steer_pulse_left_us, steer_pulse_right_us);
+                draw_dynamic (14, steer_pulse_right_us, steer_pulse_right_min_us, steer_pulse_stop_us);
+                draw_dynamic (15, brake_pulse_extend_us, brake_pulse_stop_us, brake_pulse_extend_max_us);
+                draw_dynamic (16, brake_pulse_stop_us, brake_pulse_retract_us, brake_pulse_extend_us);
+                draw_dynamic (17, brake_pulse_retract_us, brake_pulse_retract_min_us, brake_pulse_stop_us);
+                draw_dynamic (18, gas_pulse_idle_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
+                draw_dynamic (19, gas_pulse_redline_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
             }
             else if (dataset_page == BPID) {
                 drange = pressure_max_psi-pressure_min_psi;
-                draw_dynamic(12, brakeSPID.get_error(), -drange, drange);
-                draw_dynamic(13, brakeSPID.get_p_term(), -drange, drange);
-                draw_dynamic(14, brakeSPID.get_i_term(), -drange, drange);
-                draw_dynamic(15, brakeSPID.get_d_term(), -drange, drange);
-                draw_dynamic(16, brakeSPID.get_output(), -drange, drange);  // brake_spid_carspeed_delta_adc, -range, range);
-                draw_dynamic(17, brakeSPID.get_kp(), 0.0, 1.0);
-                draw_dynamic(18, brakeSPID.get_ki_hz(), 0.0, 1.0);
-                draw_dynamic(19, brakeSPID.get_kd_s(), 0.0, 1.0);
+                draw_dynamic (12, brakeSPID.get_error(), -drange, drange);
+                draw_dynamic (13, brakeSPID.get_p_term(), -drange, drange);
+                draw_dynamic (14, brakeSPID.get_i_term(), -drange, drange);
+                draw_dynamic (15, brakeSPID.get_d_term(), -drange, drange);
+                draw_dynamic (16, brakeSPID.get_output(), -drange, drange);  // brake_spid_carspeed_delta_adc, -range, range);
+                draw_dynamic (17, brakeSPID.get_kp(), 0.0, 1.0);
+                draw_dynamic (18, brakeSPID.get_ki_hz(), 0.0, 1.0);
+                draw_dynamic (19, brakeSPID.get_kd_s(), 0.0, 1.0);
             }
             else if (dataset_page == GPID) {
                 drange = tach_govern_rpm-tach_idle_rpm;
-                draw_dynamic(12, gasSPID.get_error(), -drange, drange);
-                draw_dynamic(13, gasSPID.get_p_term(), -drange, drange);
-                draw_dynamic(14, gasSPID.get_i_term(), -drange, drange);
-                draw_dynamic(15, gasSPID.get_d_term(), -drange, drange);
-                draw_dynamic(16, gasSPID.get_output(), -drange, drange);  // gas_spid_carspeed_delta_adc, -drange, drange);
-                draw_dynamic(17, gasSPID.get_kp(), 0.0, 1.0);
-                draw_dynamic(18, gasSPID.get_ki_hz(), 0.0, 1.0);
-                draw_dynamic(19, gasSPID.get_kd_s(), 0.0, 1.0);
+                draw_dynamic (12, gasSPID.get_error(), -drange, drange);
+                draw_dynamic (13, gasSPID.get_p_term(), -drange, drange);
+                draw_dynamic (14, gasSPID.get_i_term(), -drange, drange);
+                draw_dynamic (15, gasSPID.get_d_term(), -drange, drange);
+                draw_dynamic (16, gasSPID.get_output(), -drange, drange);  // gas_spid_carspeed_delta_adc, -drange, drange);
+                draw_dynamic (17, gasSPID.get_kp(), 0.0, 1.0);
+                draw_dynamic (18, gasSPID.get_ki_hz(), 0.0, 1.0);
+                draw_dynamic (19, gasSPID.get_kd_s(), 0.0, 1.0);
             }
             else if (dataset_page == CPID) {
                 drange = carspeed_govern_mph-carspeed_idle_mph;
-                draw_dynamic(12, cruiseSPID.get_error(), -drange, drange);
-                draw_dynamic(13, cruiseSPID.get_p_term(), -drange, drange);
-                draw_dynamic(14, cruiseSPID.get_i_term(), -drange, drange);
-                draw_dynamic(15, cruiseSPID.get_d_term(), -drange, drange);
-                draw_dynamic(16, cruiseSPID.get_output(), -drange, drange);  // cruise_spid_carspeed_delta_adc, -drange, drange);
-                draw_dynamic(17, cruiseSPID.get_kp(), 0.0, 1.0);
-                draw_dynamic(18, cruiseSPID.get_ki_hz(), 0.0, 1.0);
-                draw_dynamic(19, cruiseSPID.get_kd_s(), 0.0, 1.0);
+                draw_dynamic (12, cruiseSPID.get_error(), -drange, drange);
+                draw_dynamic (13, cruiseSPID.get_p_term(), -drange, drange);
+                draw_dynamic (14, cruiseSPID.get_i_term(), -drange, drange);
+                draw_dynamic (15, cruiseSPID.get_d_term(), -drange, drange);
+                draw_dynamic (16, cruiseSPID.get_output(), -drange, drange);  // cruise_spid_carspeed_delta_adc, -drange, drange);
+                draw_dynamic (17, cruiseSPID.get_kp(), 0.0, 1.0);
+                draw_dynamic (18, cruiseSPID.get_ki_hz(), 0.0, 1.0);
+                draw_dynamic (19, cruiseSPID.get_kd_s(), 0.0, 1.0);
             }
             else if (dataset_page == TEMP) {
-                draw_dynamic(12, temps[AMBIENT], temp_min, temp_max);
-                draw_dynamic(13, temps[ENGINE], temp_min, temp_max);
-                draw_dynamic(14, temps[WHEEL_FL], temp_min, temp_max);
-                draw_dynamic(15, temps[WHEEL_FR], temp_min, temp_max);
-                draw_dynamic(16, temps[WHEEL_RL], temp_min, temp_max);
-                draw_dynamic(17, temps[WHEEL_RR], temp_min, temp_max);
-                draw_dynamic(18, gasSPID.get_open_loop(), -1, -1);
-                draw_dynamic(19, brake_pos_zeropoint_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);   
+                draw_dynamic (12, temps[AMBIENT], temp_min, temp_max);
+                draw_dynamic (13, temps[ENGINE], temp_min, temp_max);
+                draw_dynamic (14, temps[WHEEL_FL], temp_min, temp_max);
+                draw_dynamic (15, temps[WHEEL_FR], temp_min, temp_max);
+                draw_dynamic (16, temps[WHEEL_RL], temp_min, temp_max);
+                draw_dynamic (17, temps[WHEEL_RR], temp_min, temp_max);
+                draw_dynamic (18, gasSPID.get_open_loop(), -1, -1);
+                draw_dynamic (19, brake_pos_zeropoint_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);   
             }
             draw_bool ((runmode == CAL), 2);
             draw_bool (basicmodesw, 3);

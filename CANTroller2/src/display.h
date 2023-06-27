@@ -1,4 +1,6 @@
 /* Contains code for the LCD touchscreen */
+#ifndef DISPLAY_H
+#define DISPLAY_H
 #include "globals.h"
 
 // display related globals
@@ -125,8 +127,8 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "GasOpnLp",
         "BrkZeroP", },
 };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 3, 2, 0, 0, 5, 5, 5, 6 };  // first line of each runmode that's editable. All lines after this must also be editable
-char units[disp_fixed_lines][5] = { "mph ", "rpm ", "psi ", "adc ", "adc ", "mph ", "adc ", "rpm ", "\xe5s  ", "\xe5s  ", "\xe5s  " };
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 3, 2, 0, 0, 5, 5, 5, 6 };  // first value in each dataset page that's editable. All values after this must also be editable
+char units[disp_fixed_lines][5] = { "mph ", "rpm ", "psi ", "adc ", "adc ", "mph ", "psi ", "rpm ", "\xe5s  ", "\xe5s  ", "\xe5s  " };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "V   ", "in  ", "%   ", "    ", "    ", "    ", "    ", "    " },  // RUN
     { "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // JOY
@@ -334,6 +336,64 @@ void draw_fixed (int32_t page, int32_t page_last, bool redraw_tuning_corner) {  
 void draw_hyphen (int32_t x_pos, int32_t y_pos, int32_t color) {
     tft.drawFastHLine (x_pos+2, y_pos+3, 3, color);
 }
+int32_t significant_place (double value) {  // Returns the decimal place of the most significant digit of a given float value, without relying on logarithm math
+    int32_t place = 0;
+    if (value >= 1) { // int32_t vallog = std::log10(value);  // Can be sped up
+        place = 1;
+        while (value >= 10) {
+            value /= 10;
+            place++;
+        }
+    }
+    else if (value) {  // checking (value) rather than (value != 0.0) can help avoid precision errors caused by digital representation of floating numbers
+        while (value < 1) {
+            value *= 10;
+            place--;
+        }
+    }
+    return place;
+}
+std::string abs_itoa (int32_t value, int32_t maxlength) {  // returns an ascii string representation of a given integer value, using scientific notation if necessary to fit within given width constraint
+    value = abs (value);  // This function disregards sign
+    if (significant_place(value) <= maxlength) return std::to_string (value);  // If value is short enough, return it
+    std::string result;
+    int32_t magnitude = std::log10 (value);  // replace with significant_place function like abs_ftoa uses
+    double scaledValue = value / std::pow (10, magnitude + 1 - maxlength);  // was (10, magnitude - 5);
+    if (scaledValue >= 1.0 && scaledValue < 10.0) result = std::to_string (static_cast<int>(scaledValue));
+    else result = std::to_string (scaledValue);
+    if (magnitude >= maxlength) result += "e" + std::to_string (magnitude);
+    return result;
+}
+std::string abs_ftoa (double value, int32_t maxlength, int32_t sigdig) {  // returns an ascii string representation of a given double value, formatted to efficiently fit withinthe given width constraint
+    value = abs (value);  // This function disregards sign
+    int32_t place = significant_place (value);  // Learn decimal place of the most significant digit in value
+    if (place >= sigdig && place <= maxlength) {  // Then we want simple whole number w/o decimal point (eg 123456, 12345, 1234)
+        std::string result (std::to_string ((int32_t)value));
+        return result;
+    }
+    if (place >= 0 && place < maxlength) {  // Then we want float formatted with enough nonzero digits after the decimal point for our significant digits (eg 123.4, 12.34, 1.234, 0)
+        int32_t length = min (sigdig+1, maxlength);
+        char buffer[length+1];
+        std::snprintf (buffer, length + 1, "%.*g", length - 1, value);
+        std::string result (buffer);  // copy buffer to result
+        return result;
+    }
+    if (place >= 3-maxlength && place < maxlength) {  // Then we want decimal w/o initial '0' limited to 3 significant digits (eg .123, .0123, .00123)
+        std::string result (std::to_string(value));
+        size_t decimalPos = result.find('.');  // Remove any digits to the left of the decimal point
+        if (decimalPos != std::string::npos) result = result.substr(decimalPos);
+        if (result.length() > sigdig) result.resize(sigdig);  // Limit the string length to the desired number of significant digits
+        return result;
+    }  // Otherwise we want scientific notation with precision removed as needed to respect maxlength (eg 1.23e4, 1.23e5, but using long e character not e for negative exponents
+    if (place <= -10) return std::string ("~0");  // Ridiculously small values just indicate basically zero
+    char buffer[maxlength+1];  // Allocate buffer with the maximum required size
+    snprintf(buffer, sizeof(buffer), "%*.*f%*d", maxlength-sigdig-1, sigdig-1, value, maxlength-1, 0);
+    std::string result (buffer);  // copy buffer to result
+    if (result.find ("e+0") != std::string::npos) result.replace (result.find ("e+0"), 3, "e");  // Remove useless "+0" from exponent
+    else if (result.find ("e-0") != std::string::npos) result.replace (result.find ("e-0"), 3, "\x88");  // For very small scientific notation values, replace the "e-0" with a phoenetic long e character, to indicate negative power  // if (result.find ("e-0") != std::string::npos) 
+    else if (result.find ("e+") != std::string::npos) result.replace (result.find ("e+"), 3, "e");  // For ridiculously large values
+    return result;    
+}
 void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target) {
     yield();
     int32_t age_us = (int32_t)((double)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
@@ -347,7 +407,7 @@ void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32
         disp_polarities[lineno] = polarity;
         dispAgeTimer[lineno].reset();
         disp_age_quanta[lineno] = 0;
-    }
+    }  // to-do: Fix failure to freshen aged coloration of unchanged characters of changed values
     else if (age_us > disp_age_quanta[lineno] && age_us < 11)  {  // As readings age, redraw in new color. This may fail and redraw when the timer overflows? 
         int32_t color;
         if (age_us < 8) color = 0x1fe0 + age_us*0x2000;  // Base of green with red added as you age, until yellow is achieved
@@ -385,64 +445,6 @@ void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32
         draw_bargraph_needle (-1, disp_needles[lineno], lineno*disp_line_height_pix+disp_vshift_pix-1, BLK);  // Erase the old needle
         disp_needles[lineno] = -1;  // Flag for no needle
     }
-}
-int32_t significant_place (double value) {  // Returns the decimal place of the most significant digit of a given float value, without relying on logarithm math
-    int32_t place = 0;
-    if (value >= 1) { // int32_t vallog = std::log10(value);  // Can be sped up
-        place = 1;
-        while (value >= 10) {
-            value /= 10;
-            place++;
-        }
-    }
-    else if (value) {  // checking (value) rather than (value != 0.0) can help avoid precision errors caused by digital representation of floating numbers
-        while (value < 1) {
-            value *= 10;
-            place--;
-        }
-    }
-    return place;
-}
-std::string abs_itoa (int32_t value, int32_t maxlength) {  // returns an ascii string representation of a given integer value, using scientific notation if necessary to fit within given width constraint
-    value = abs (value);  // This function disregards sign
-    if (significant_place(value) <= maxlength) return std::to_string (value);  // If value is short enough, return it
-    std::string result;
-    int32_t magnitude = std::log10 (value);
-    double scaledValue = value / std::pow (10, magnitude + 1 - maxlength);  // was (10, magnitude - 5);
-    if (scaledValue >= 1.0 && scaledValue < 10.0) result = std::to_string (static_cast<int>(scaledValue));
-    else result = std::to_string (scaledValue);
-    if (magnitude >= maxlength) result += "e" + std::to_string (magnitude);
-    return result;
-}
-std::string abs_ftoa (double value, int32_t maxlength, int32_t sigdig) {  // returns an ascii string representation of a given double value, formatted to efficiently fit withinthe given width constraint
-    value = abs (value);  // This function disregards sign
-    int32_t place = significant_place (value);  // Learn decimal place of the most significant digit in value
-    if (place >= sigdig && place <= maxlength) {  // Then we want simple cast to an integer w/o decimal point (eg 123456, 12345, 1234)
-        std::string result (std::to_string ((int32_t)value));
-        return result;
-    }
-    if (place >= 0 && place < maxlength) {  // Then we want float formatted with enough nonzero digits after the decimal point for 4 significant digits (eg 123.4, 12.34, 1.234, 0)
-        int32_t length = min (sigdig+1, maxlength);
-        char buffer[length+1];
-        std::snprintf (buffer, length + 1, "%.*g", length - 1, value);
-        std::string result (buffer);  // copy buffer to result
-        return result;
-    }
-    if (place >= 3-maxlength && place < maxlength) {  // Then we want decimal w/o initial '0' limited to 3 significant digits (eg .123, .0123, .00123)
-        std::string result (std::to_string(value));
-        size_t decimalPos = result.find('.');  // Remove any digits to the left of the decimal point
-        if (decimalPos != std::string::npos) result = result.substr(decimalPos);
-        if (result.length() > sigdig) result.resize(sigdig);  // Limit the string length to the desired number of significant digits
-        return result;
-    }  // Otherwise we want scientific notation with precision removed as needed to respect maxlength (eg 1.23e4, 1.23e5, but using long e character not e for negative exponents
-    if (place <= -10) return std::string ("~0");  // Ridiculously small values just indicate basically zero
-    char buffer[maxlength+1];  // Allocate buffer with the maximum required size
-    snprintf(buffer, sizeof(buffer), "%*.*f%*d", maxlength-sigdig-1, sigdig-1, value, maxlength-1, 0);
-    std::string result (buffer);  // copy buffer to result
-    if (result.find ("e+0") != std::string::npos) result.replace (result.find ("e+0"), 3, "e");  // Remove useless "+0" from exponent
-    else if (result.find ("e-0") != std::string::npos) result.replace (result.find ("e-0"), 3, "\x88");  // For very small scientific notation values, replace the "e-0" with a phoenetic long e character, to indicate negative power  // if (result.find ("e-0") != std::string::npos) 
-    else if (result.find ("e+") != std::string::npos) result.replace (result.find ("e+"), 3, "e");  // For ridiculously large values
-    return result;    
 }
 void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int32_t target) {
     std::string val_string = abs_itoa (value, (int32_t)disp_maxlength);
@@ -541,7 +543,7 @@ void tft_init (void) {
         tft.setRotation (1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
         for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
             disp_age_quanta[lineno] = -1;
-            memset (disp_values[lineno],0,strlen (disp_values[lineno]));
+            memset (disp_values[lineno], 0, strlen (disp_values[lineno]));
             disp_polarities[lineno] = 1;
         }
         for (int32_t row=0; row<arraysize (disp_bool_values); row++) disp_bool_values[row] = 1;
@@ -581,3 +583,4 @@ void tft_watchdog (void) {
         }
     }
 }
+#endif  // DISPLAY_H
