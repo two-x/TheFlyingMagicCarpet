@@ -541,7 +541,7 @@ void tft_init (void) {
         tft.setRotation (1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
         for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
             disp_age_quanta[lineno] = -1;
-            memset (disp_values[lineno],0,strlen (disp_values[lineno]));
+            memset (disp_values[lineno], 0, strlen (disp_values[lineno]));
             disp_polarities[lineno] = 1;
         }
         for (int32_t row=0; row<arraysize (disp_bool_values); row++) disp_bool_values[row] = 1;

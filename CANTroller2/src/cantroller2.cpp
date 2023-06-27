@@ -486,7 +486,8 @@ void loop() {
             shutdown_complete = false;
             shutdown_color = LPNK;
             calmode_request = false;
-            if (car_stopped()) {
+            park_the_motors = false;
+            if (!car_stopped()) {
                 if (panic_stop && brakeSPID.get_target() < pressure_panic_initial_psi) brakeSPID.set_target (pressure_panic_initial_psi);
                 if (!panic_stop && brakeSPID.get_target() < pressure_hold_initial_psi) brakeSPID.set_target (pressure_hold_initial_psi);
                 brakeIntervalTimer.reset();
@@ -1058,7 +1059,7 @@ void loop() {
         tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
         if (disp_runmode_dirty || runmode != oldmode || disp_redraw_all) draw_runmode (runmode, oldmode, (runmode == SHUTDOWN) ? shutdown_color : -1);
         disp_runmode_dirty = false;
-        if (dispRefreshTimer.expired() && !procrastinate) {
+        if ((dispRefreshTimer.expired() && !procrastinate) || disp_redraw_all) {
             dispRefreshTimer.reset();
             int32_t range; double drange;
             draw_dynamic(1, carspeed_filt_mph, 0.0, carspeed_redline_mph, cruiseSPID.get_target());
