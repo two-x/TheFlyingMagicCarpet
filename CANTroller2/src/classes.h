@@ -5,6 +5,7 @@
 #include <cmath>
 #include "Arduino.h"
 #include "globals.h"
+#include "display.h"
 // #include "xtensa/core-macros.h"  // access to ccount register for esp32 timing ticks
 using namespace std;
 
