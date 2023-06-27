@@ -45,8 +45,8 @@ class Param {
         *p_max = arg_val;  // Initialize to given value, presumably call set_limits to change later
     }
     void set_names (const string arg_name, const string arg_units) {
-        strcpy(disp_name, arg_name.c_str());
-        strcpy(disp_units, arg_units.c_str());
+        strcpy (disp_name, arg_name.c_str());
+        strcpy (disp_units, arg_units.c_str());
     }
     double round (double val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
     double round (double val) { return round (val, max_precision); }
@@ -208,14 +208,13 @@ class Hotrc {
   public:
     int32_t index = 1;
     int32_t padding = 7;
-    int32_t depth;
+    int32_t depth = 30;
   protected:
     int32_t avg, min_index, max_index;
-    int32_t history[30];
+    int32_t history[30];  // It will not accept history[depth] - wtf
     uint32_t sum;
   public:
     Hotrc (int32_t arg_val, int32_t arg_padding) {
-        depth = 30;
         for (int32_t x = 0; x < depth; x++) history[x] = arg_val;
         avg = arg_val;
         sum = avg * depth;
@@ -235,12 +234,16 @@ class Hotrc {
         return avg;
     }
     void print (void) {
-        std::cout << "Hotrc:" << history[index] << " av:" << avg << " min:" << min_index << " max:" << max_index << std::endl;
+        std::cout << "Hotrc:" << history[index] << " avg:" << avg << " min:" << min_index << " max:" << max_index << std::endl;
     }
     int32_t get_min () { return history[min_index]-padding; }
     int32_t get_max () { return history[max_index]+padding; }
     int32_t get_pad () { return padding; }
     int32_t get_avg () { return avg; }
+};
+
+class Flash {
+
 };
     // void code_from_globals (void) {
         // // Code from globals.h maybe to marge into here
