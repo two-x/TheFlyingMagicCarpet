@@ -196,7 +196,6 @@ class Transducer : virtual public Param {
     double get_val_raw () { return val_raw; }
     double get_min_raw () { return *p_min_raw; }
     double get_max_raw () { return *p_max_raw; }
-
 };
 
 // class Sensor : virtual public Transducer {
