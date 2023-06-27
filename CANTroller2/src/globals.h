@@ -73,7 +73,7 @@
 // - Actions: Release brake, Maintain car speed, Handle joyvert differently, Watch for gesture
 
 // Defines for all the GPIO pins we're using
-#define button_pin 0  // (button0 / strap to 1) - This is one of the buttons on the esp32 board
+#define button_pin 0  // (button0 / strap to 1) - This is the left "Boot" button on the esp32 board
 #define joy_horz_pin 1  // (adc) - Analog input, tells us left-right position of joystick. Take complement of ADC value gives:  Low values for left, High values for right.
 #define joy_vert_pin 2  // (adc) - Analog input, tells us up-down position of joystick. Take complement of ADC value gives:  Low values for down, High values for up.
 #define tft_dc_pin 3  // (strap X) - Output, Assert when sending data to display chip to indicate commands vs. screen data
@@ -82,32 +82,32 @@
 #define brake_pos_pin 6  // (adc) - Analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
 #define pressure_pin 7  // (adc) - Analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V.
 #define i2c_sda_pin 8  // (i2c0 sda / adc) - Hijack these pins for the touchscreen and micro-sd i2c bus
-#define i2c_scl_pin 9  // (i2c0 scl / adc) -  Hijack these pins for the touchscreen and micro-sd i2c bus
+#define i2c_scl_pin 9  // (i2c0 scl / adc) - Hijack these pins for the touchscreen and micro-sd i2c bus
 #define tft_cs_pin 10  // (spi0 cs) -  Output, active low, Chip select allows ILI9341 display chip use of the SPI bus
 #define tft_mosi_pin 11  // (spi0 mosi) - Used as spi interface to tft screen
 #define tft_sclk_pin 12  // (spi0 sclk) - Used as spi interface to tft screen
-#define tft_miso_pin 13  // (spi0 miso) - Used as spi interface to tft screen
+#define tft_miso_pin 13  // (spi0 miso) - Used as spi interface to tft screen. Probably not necessary since I don't think we need to listen to the screen
 #define steer_pwm_pin 14  // (pwm0) - Output, PWM signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
 #define brake_pwm_pin 15  // (pwm1) - Output, PWM signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% is stopped) 
 #define gas_pwm_pin 16  // (pwm1) - Output, PWM signal duty cycle controls throttle target. On Due this is the pin labeled DAC1 (where A13 is on Mega)
-#define hotrc_horz_pin 17  // (pwm0 / tx1) - Hotrc thumb joystick input.
-#define hotrc_vert_pin 18  // (pwm0 / rx1) - Hotrc bidirectional trigger input
-#define syspower_pin 38  // (usb-otg) - Output, flips a relay to power all the tranducers
-#define hotrc_ch4_pin 20  // (usb-otg) - Hotrc Ch3 toggle output, used to toggle cruise mode
-#define hotrc_ch3_pin 21  // (pwm0) - Hotrc Ch4 toggle output, used to panic stop & kill ignition
+#define hotrc_horz_pin 17  // (pwm0 / tx1) - Hotrc Ch1 thumb joystick input.
+#define hotrc_vert_pin 18  // (pwm0 / rx1) - Hotrc Ch2 bidirectional trigger input
+#define onewire_pin 19  // (usb-otg) - Onewire bus for temperature sensor data
+#define hotrc_ch3_pin 20  // (usb-otg) - Hotrc Ch3 toggle output, used to toggle cruise mode
+#define hotrc_ch4_pin 21  // (pwm0) - Hotrc Ch4 toggle output, used to panic stop & kill ignition
 #define tach_pulse_pin 35  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
 #define speedo_pulse_pin 36  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
 #define ignition_pin 37  // (spi-ram / oct-spi) - Output flips a relay to kill the car ignition, active high (no pullup)
-#define onewire_pin 19  // // (spi-ram / oct-spi) - Onewire bus for temperature sensor data
-#define tft_rst_pin 39  // TFT Reset
-#define encoder_b_pin 40  // Int input, The B pin (aka DT pin) of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
-#define encoder_a_pin 41  // Int input, The A pin (aka CLK pin) of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
-#define encoder_sw_pin 42  // Int input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
+#define syspower_pin 38  // (spi-ram / oct-spi) - Output, flips a relay to power all the tranducers
+#define tft_rst_pin 39  // TFT Reset allows us to reboot the screen when it crashes
+#define encoder_b_pin 40  // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
+#define encoder_a_pin 41  // Int input, The A (aka CLK) pin of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
+#define encoder_sw_pin 42  // Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
 #define uart0_tx_pin 43  // (uart0 tx) - Reserve for possible jaguar interface
 #define uart0_rx_pin 44  // (uart0 rx) - Reserve for possible jaguar interface
 #define cruise_sw_pin 45  // (strap to 0) - Input, momentary button low pulse >500ms in fly mode means start cruise mode. Any pulse in cruise mode goes to fly mode. Active low. (needs pullup)
-#define basicmodesw_pin 46  // (strap X) - Input, asserted to tell us to run in basic mode.   (needs pullup)
-#define sdcard_cs_pin 47  // Output, active low, Chip select allows SD card controller chip use of the SPI bus
+#define basicmodesw_pin 46  // (strap X) - Input, asserted to tell us to run in basic mode, active low (needs pullup)
+#define sdcard_cs_pin 47  // Output, chip select allows SD card controller chip use of the SPI bus, active low
 #define neopixel_pin 48  // (rgb led) - Data line to onboard Neopixel WS281x
 
 #define tp_irq_pin -1  // Optional int input so touchpanel can interrupt us (need to modify shield board for this to work)
@@ -145,48 +145,28 @@ bool take_temperatures = false;
 
 // Globals -------------------
 //
-
-// int32_t mycros(void) {  // This is "my" micros() function that returns signed int32
-//     uint32_t temp = micros();
-//     return (int32_t)(temp &= 0x7fffffff);  // Note this overflows every 35 min due to being only 31 bits. 
-// }
-// Timer
-// For controlling event timing. Communicates in signed int32 values but uses uint32 under the hood to
-// last 72 minutes between overflows. However you can only time for 36 minutes max.
-// Note: experimenting with use of micros() instead of mycros(), check for errors on overflow and possibly revert
-class Timer {
+class Timer {  // Timer - Lasts 72 minutes between overflows.
   protected:
-    volatile uint32_t start_us = 0;  // start time in us
-    uint32_t timeout_us = 0;  // in us
-    uint32_t remaining_us;
-    bool enabled = true;
+    volatile uint32_t start_us = 0;
+    volatile uint32_t timeout_us = 0;   
   public:
     Timer (void) { reset(); }
     Timer (uint32_t arg1) { set(arg1); }
-    void reset(void) {
-        start_us = esp_timer_get_time();
-        remaining_us = timeout_us;
-    }
-    void set (uint32_t arg1) {
-        timeout_us = arg1;
-        reset();
-    }
-    uint32_t timeout(void) { return timeout_us; }
-    bool expired(void) { return (esp_timer_get_time() - start_us > timeout_us); }
-    uint32_t elapsed(void) { return (esp_timer_get_time() - start_us); }
-    uint32_t remain(void) { return (start_us + timeout_us - esp_timer_get_time()); }
-    // bool expired(void) { return (enabled) ? (esp_timer_get_time() - start_us > timeout_us) : false; }
-    // uint32_t elapsed(void) { return (enabled) ? (esp_timer_get_time() - start_us) : 0; }
-    // uint32_t remain(void) { return (enabled) ? (start_us + timeout_us - esp_timer_get_time()) : remaining_us; }
-    // void pause(void) {
-    //     remaining_us = remain(); 
-    //     enabled = false;
-    // }  // int32_t pause()
-    // void resume(void) {  // int32_t resume()
-    //     start_us = esp_timer_get_time() - remaining_us;
-    //     enabled = true;
-    // }
+    inline IRAM_ATTR void reset (void) { start_us = esp_timer_get_time(); }
+    inline IRAM_ATTR void set (uint32_t arg1) { timeout_us = arg1; reset(); }
+    inline IRAM_ATTR bool expired (void) { return (esp_timer_get_time() - start_us >= timeout_us); }
+    inline IRAM_ATTR uint32_t elapsed (void) { return (esp_timer_get_time() - start_us); }
+    inline IRAM_ATTR uint32_t remain (void) { return ((start_us + timeout_us) - esp_timer_get_time()); }
+    inline IRAM_ATTR uint32_t get_timeout (void) { return timeout_us; }
 };
+// // These lines add a pause/resume functionality to the Timer class, if we want that
+// uint32_t remaining_us; bool enabled = true;
+// inline void reset (void) { start_us = esp_timer_get_time(); remaining_us = timeout_us; }
+// inline bool expired (void) { return (enabled) ? (esp_timer_get_time() - start_us > timeout_us) : false; }
+// inline uint32_t elapsed (void) { return (enabled) ? (esp_timer_get_time() - start_us) : 0; }
+// inline uint32_t remain (void) { return (enabled) ? (start_us + timeout_us - esp_timer_get_time()) : remaining_us; }
+// inline void pause (void) { remaining_us = remain(); enabled = false; }
+// inline void resume (void) { start_us = esp_timer_get_time() - remaining_us; enabled = true; }
 
 // run state globals
 enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL };
@@ -205,6 +185,7 @@ Timer motorParkTimer;
 Timer gestureFlyTimer;  // Used to keep track of time for gesturing for going in and out of fly/cruise modes
 Timer cruiseSwTimer;
 Timer sleepInactivityTimer (10000000);  // After shutdown how long to wait before powering down to sleep
+Timer stopcarTimer (7000000);  // Allows code to fail in a sensible way after a delay if nothing is happening
 //  ---- tunable ----
 uint32_t motor_park_timeout_us = 3000000;  // If we can't park the motors faster than this, then give up.
 uint32_t gesture_flytimeout_us = 500000;  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
@@ -219,7 +200,6 @@ bool cal_set_hotrc_failsafe_ready = false;
 // generic values
 //  ---- tunable ----
 int32_t default_margin_adc = 12;  // Default margin of error for comparisons of adc values (ADC count 0-4095)
-Timer sanityTimer (7000000);  // Allows code to fail in a sensible way after a delay if nothing is happening
 
 // pid related globals
 //  ---- tunable ----
@@ -283,7 +263,6 @@ bool hotrc_suppress_next_event = true;  // When powered up, the hotrc will trigg
 Timer hotrcPulseTimer;  // OK to not be volatile?
 //  ---- tunable ----
 double hotrc_pulse_period_us = 1000000.0 / 50;
-
 double ctrl_ema_alpha[2] = { 0.005, 0.1 };  // [HOTRC, JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 int32_t ctrl_lims_adc[2][2][3] = { { { 3, 375, 4092 }, { 3, 375, 4092 } }, { { 9, 200, 4085 }, { 9, 200, 4085 } }, }; // [HOTRC, JOY] [HORZ, VERT], [MIN, DEADBAND, MAX] values as ADC counts
 bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
@@ -416,20 +395,27 @@ double carspeed_stop_thresh_mph = 0.01;  // Below which the car is considered st
 uint32_t speedo_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the car is stopped (in us)
 int32_t speedo_delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
             
-// neopixel related
+// neopixel and heartbeat related
 uint8_t neopixel_wheel_counter = 0;
-int8_t neopixel_brightness = 30;
+uint8_t neopixel_brightness = 30;
 Timer neopixelRefreshTimer (20000);
 uint32_t neopixel_timeout = 150000;
 Timer neopixelTimer (neopixel_timeout);
+bool neopixel_heartbeat = (neopixel_pin >= 0);
+uint8_t neopixel_heart_fade = neopixel_brightness;  // brightness during fadeouts
+enum neo_colors { N_RED, N_GRN, N_BLU };
+uint8_t neopixel_heart_color[3] = { 0xff, 0xff, 0xff };
+Timer heartbeatTimer (1000000);
+int32_t heartbeat_state = 0;
+int32_t heartbeat_level = 0;
+int32_t heartbeat_ekg[4] = { 170000, 150000, 530000, 1100000 };
+int32_t heartbeat_pulse = 255;
 
 // diag/monitoring variables
 Timer loopTimer (1000000);  // how long the previous main loop took to run (in us)
 uint32_t loop_period_us = 100000;
 double loop_freq_hz = 1;  // run loop real time frequency (in Hz)
 volatile int32_t int_counter = 0;  // counts interrupts per loop
-bool wait_one_loop = false;
-bool wait_one_loop_last = false;
 bool procrastinate = false;
 int32_t loopno = 1;
 uint32_t looptimes_us[20];
@@ -438,15 +424,6 @@ int32_t loopindex = 0;
 Timer tftResetTimer (100000);
 Timer tftDelayTimer (3000000);
 int32_t timing_tft_reset = 0; 
-Timer heartbeatTimer (1000000);
-int32_t heartbeat_state = 0;
-int32_t heartbeat_level = 0;
-int32_t heartbeat_ekg[4] = { 170000, 150000, 530000, 1100000 };
-int32_t heartbeat_pulse = 255;
-bool neopixel_heartbeat;
-int8_t neopixel_heart_fade = neopixel_brightness;  // brightness during fadeouts
-enum neo_colors { N_RED, N_GRN, N_BLU };
-uint8_t neopixel_heart_color[3] = { 0xff, 0xff, 0xff };
 bool diag_ign_error_enabled = true;
 
 // pushbutton related
@@ -469,7 +446,6 @@ int32_t encoder_state = 0;
 uint32_t encoder_spinrate_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
 uint32_t encoder_spinrate_last_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
 uint32_t encoder_spinrate_old_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
-int32_t encoder_edits_per_det = 1;  // How many edits per detent. How much change happens per rotation detent
 int32_t encoder_sw_action = NONE;  // Flag for encoder handler to know an encoder switch action needs to be handled
 bool encoder_sw = false;  // Remember whether switch is being pressed
 bool encoder_timer_active = false;  // Flag to prevent re-handling long presses if the sw is just kept down
