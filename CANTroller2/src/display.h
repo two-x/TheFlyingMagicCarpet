@@ -1,6 +1,8 @@
 /* Contains code for the LCD touchscreen */
+
 #ifndef DISPLAY_H
 #define DISPLAY_H
+
 #include "globals.h"
 
 // display related globals
@@ -189,398 +191,401 @@ Timer touchAccelTimer (850000);  // Touch hold time per left shift (doubling) of
 // run state globals
 int32_t shutdown_color = colorcard[SHUTDOWN];
 
-// Instantiate objects 
-Adafruit_FT6206 touchpanel = Adafruit_FT6206(); // Touch panel
-Adafruit_ILI9341 tft = Adafruit_ILI9341 (tft_cs_pin, tft_dc_pin);  // LCD screen
+class Display {
+    private:
+        Adafruit_ILI9341 _tft; // LCD screen
+        Timer _tftResetTimer;
+        Timer _tftDelayTimer;
+        int32_t _timing_tft_reset;
+    public:
+        Adafruit_FT6206 touchpanel; // Touch panel
 
-// Functions to write to the screen efficiently
-//
-void draw_bargraph_base (int32_t corner_x, int32_t corner_y, int32_t width) {  // draws a horizontal bargraph scale.  124, y, 40
-    tft.drawFastHLine (corner_x+disp_bargraph_squeeze, corner_y, width-disp_bargraph_squeeze*2, GRY1);
-    for (int32_t offset=0; offset<=2; offset++) tft.drawFastVLine ((corner_x+disp_bargraph_squeeze)+offset*(width/2 - disp_bargraph_squeeze), corner_y-1, 3, WHT);
-}
-void draw_needle_shape (int32_t pos_x, int32_t pos_y, int32_t color) {  // draws a cute little pointy needle
-    tft.drawFastVLine (pos_x-1, pos_y, 2, color);
-    tft.drawFastVLine (pos_x, pos_y, 4, color);
-    tft.drawFastVLine (pos_x+1, pos_y, 2, color);
-}
-void draw_target_shape (int32_t pos_x, int32_t pos_y, int32_t t_color, int32_t r_color) {  // draws a cute little target symbol
-    tft.drawFastVLine (pos_x-1, pos_y+7, 2, t_color);
-    tft.drawFastVLine (pos_x, pos_y+5, 4, t_color);
-    tft.drawFastVLine (pos_x+1, pos_y+7, 2, t_color);
-}
-void draw_bargraph_needle (int32_t n_pos_x, int32_t old_n_pos_x, int32_t pos_y, int32_t n_color) {  // draws a cute little pointy needle
-    draw_needle_shape (old_n_pos_x, pos_y, BLK);
-    draw_needle_shape (n_pos_x, pos_y, n_color);
-}
-// void draw_bargraph_needle_target (int32_t n_pos_x, int32_t old_n_pos_x, int32_t t_pos_x, int32_t old_t_pos_x, int32_t pos_y, int32_t n_color, int32_t t_color, int32_t r_color) {  // draws a needle and target
-//     draw_needle_shape (old_n_pos_x, pos_y, BLK);
-//     draw_target_shape (old_t_pos_x, pos_y, BLK, BLK);
-//     draw_target_shape (t_pos_x, pos_y, t_color, r_color);
-//     draw_needle_shape (n_pos_x, pos_y, n_color);
-// }  // This function was for when the needle could overlap the target
-void draw_string (int32_t x_new, int32_t x_old, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor, bool forced=false) {  // Send in "" for oldtext if erase isn't needed
-    int32_t oldlen = strlen(oldtext);
-    int32_t newlen = strlen(text);
-    tft.setTextColor (bgcolor);  
-    for (int32_t letter=0; letter < oldlen; letter++) {
-        if (newlen - letter < 1) {
-            tft.setCursor (x_old+disp_font_width*letter, y);
-            tft.print (oldtext[letter]);
+        Display(int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0){}
+        void init() {
+            printf ("Init LCD... ");
+            _tft.begin();
+            _tft.setRotation(1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
+            for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
+                disp_age_quanta[lineno] = -1;
+                memset (disp_values[lineno], 0, strlen (disp_values[lineno]));
+                disp_polarities[lineno] = 1;
+            }
+            for (int32_t row=0; row<arraysize (disp_bool_values); row++) disp_bool_values[row] = 1;
+            for (int32_t row=0; row<arraysize (disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
+            for (int32_t row=0; row<arraysize (disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
+            _tft.fillScreen (BLK);  // Black out the whole screen
+            draw_touchgrid (false);
+            draw_fixed (dataset_page, dataset_page_last, false);
+            disp_redraw_all = true;
+            // disp_dataset_page_dirty = true;
+            // disp_runmode_dirty = true;
+            // disp_sidemenu_dirty = true;
+            //if (simulating) draw_simbuttons (true);
+        
+            // draw_fixed (dataset_page, dataset_page_last, false);
+            // draw_touchgrid (false);
+            // draw_runmode (runmode, oldmode, -1);
+            // draw_dataset_page (dataset_page, dataset_page_last);
+            printf ("Success.\nCaptouch initialization... ");
+            if (!touchpanel.begin(40)) printf ("Couldn't start FT6206 touchscreen controller");  // pass in 'sensitivity' coefficient
+            else printf ("Capacitive touchscreen started\n");
         }
-        else if (oldtext[letter] != text[letter]) {
-            tft.setCursor (x_old+disp_font_width*letter, y);
-            tft.print (oldtext[letter]);
-        }
-    }
-    tft.setTextColor (color);  
-    for (int32_t letter=0; letter < newlen; letter++) {
-        if (oldlen - letter < 1) {
-            tft.setCursor (x_new+disp_font_width*letter, y);
-            tft.print (text[letter]);
-        }
-        else if (oldtext[letter] != text[letter] || forced) {
-            tft.setCursor (x_new+disp_font_width*letter, y);
-            tft.print (text[letter]);
-        }
-    }
-    // tft.setCursor (x_old, y);
-    // tft.setTextColor (bgcolor);
-    // tft.print (oldtext);  // Erase the old content
-    // tft.setCursor (x_new, y);
-    // tft.setTextColor (color);
-    // tft.print (text);  // Draw the new content
-}
-void draw_mmph (int32_t x, int32_t y, int32_t color) {  // This is my cheesy pixel-drawn "mmph" compressed horizontally to 3-char width
-    tft.setTextColor (color);
-    tft.setCursor (x, y);
-    tft.print ("m");
-    tft.setCursor (x+4, y);
-    tft.print ("m");  // Overlapping 'mm' complete (x = 0-8)
-    tft.drawFastVLine (x+10, y+2, 6, color);
-    tft.drawPixel (x+11, y+2, color);
-    tft.drawPixel (x+11, y+6, color);
-    tft.drawFastVLine (x+12, y+3, 3, color);  // 'p' complete (x = 10-12)
-    tft.drawFastVLine (x+14, y, 7, color);
-    tft.drawPixel (x+15, y+2, color);
-    tft.drawFastVLine (x+16, y+3, 4, color);  // 'h' complete (x = 14-16)
-}
-void draw_thou (int32_t x, int32_t y, int32_t color) {  // This is my cheesy pixel-drawn "thou" compressed horizontally to 3-char width
-    tft.drawFastVLine (x+1, y+1, 5, color);
-    tft.drawFastHLine (x, y+2, 3, color);
-    tft.drawPixel (x+2, y+6, color);  // 't' complete (x = 0-2)
-    tft.drawFastVLine (x+4, y, 7, color);
-    tft.drawPixel (x+5, y+3, color);
-    tft.drawPixel (x+6, y+2, color);
-    tft.drawFastVLine (x+7, y+3, 4, color);  // 'h' complete (x = 4-7)
-    tft.drawFastVLine (x+9, y+3, 3, color);
-    tft.drawFastHLine (x+10, y+2, 2, color);
-    tft.drawFastHLine (x+10, y+6, 2, color);
-    tft.drawFastVLine (x+12, y+3, 3, color);  // 'o' complete (x = 9-12)
-    tft.drawFastVLine (x+14, y+2, 4, color);
-    tft.drawPixel (x+15, y+6, color);
-    tft.drawFastVLine (x+16, y+2, 5, color);  // 'u' complete (x = 14-16)
-}
-void draw_string_units (int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
-    // if (!strcmp (oldtext, "mmph")) draw_mmph(x, y, bgcolor);
-    // else if (!strcmp (oldtext, "thou")) draw_thou (x, y, bgcolor);
-    // else {
-        tft.setCursor (x, y);
-        tft.setTextColor (bgcolor);
-        tft.print (oldtext);  // Erase the old content
-    // }
-    // if (!strcmp (text, "mmph")) draw_mmph(x, y, color);
-    // else if (!strcmp (text, "thou")) draw_thou (x, y, color);
-    // else {
-        tft.setCursor (x, y);
-        tft.setTextColor (color);
-        tft.print (text);  // Erase the old content
-    // }
-}
-void draw_colons (int32_t x_pos, int32_t first, int32_t last, int32_t color) {
-    for (int32_t lineno=first; lineno <= last; lineno++) {
-        tft.drawPixel (x_pos, lineno*disp_line_height_pix+3, color);  // Tiny microscopic colon dots
-        tft.drawPixel (x_pos, lineno*disp_line_height_pix+7, color);  // Tiny microscopic colon dots
-        // tft.fillRect (x_pos, (lineno+1)*disp_line_height_pix+3, 2, 2, color);  // Big goofy looking colon dots
-        // tft.fillRect (x_pos, (lineno+1)*disp_line_height_pix+7, 2, 2, color);  // Big goofy looking colon dots
-    }
-}
-// draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
-void draw_fixed (int32_t page, int32_t page_last, bool redraw_tuning_corner, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
-    yield();
-    tft.setTextColor (GRY2);
-    tft.setTextSize (1);
-    // if (redraw_tuning_corner) tft.fillRect(10, 145, 154, 95, BLK); // tft.fillRect(0,145,167,95,BLK);  // Erase old dataset page area - This line alone uses 15 ms
-    int32_t y_pos;
-    if (!redraw_tuning_corner) {
-        for (int32_t lineno=0; lineno < disp_fixed_lines; lineno++)  {  // Step thru lines of fixed telemetry data
-            y_pos = (lineno+1)*disp_line_height_pix+disp_vshift_pix;
-            draw_string (12, 12, y_pos, telemetry[lineno], "", GRY2, BLK);
-            draw_string_units (104, y_pos, units[lineno], "", GRY2, BLK);
-            draw_bargraph_base (124, y_pos+7, disp_bargraph_width);
-        }
-        // draw_colons(7+disp_font_width*arraysize(telemetry[0]), 1, disp_fixed_lines+disp_tuning_lines, GRY1);  // I can't decide if I like the colons or not
-    }
-    for (int32_t lineno=0; lineno < disp_tuning_lines; lineno++)  {  // Step thru lines of dataset page data
-        yield();
-        draw_string(12, 12, (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[page][lineno], dataset_page_names[page_last][lineno], GRY2, BLK, forced);
-        draw_string_units(104, (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], GRY2, BLK);
-        if (redraw_tuning_corner) {
-            int32_t corner_y = (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix+7;  // lineno*disp_line_height_pix+disp_vshift_pix-1;
-            draw_bargraph_base (124, corner_y, disp_bargraph_width);
-            if (disp_needles[lineno] >= 0) draw_bargraph_needle (-1, disp_needles[lineno], corner_y-6, BLK);  // Let's draw a needle
-        }
-    }
-}
-// Font character \xfa is little 3-pixel wide hyphen, use for negative numbers 
-void draw_hyphen (int32_t x_pos, int32_t y_pos, int32_t color) {
-    tft.drawFastHLine (x_pos+2, y_pos+3, 3, color);
-}
-int32_t significant_place (double value) {  // Returns the decimal place of the most significant digit of a given float value, without relying on logarithm math
-    int32_t place = 0;
-    if (value >= 1) { // int32_t vallog = std::log10(value);  // Can be sped up
-        place = 1;
-        while (value >= 10) {
-            value /= 10;
-            place++;
-        }
-    }
-    else if (value) {  // checking (value) rather than (value != 0.0) can help avoid precision errors caused by digital representation of floating numbers
-        while (value < 1) {
-            value *= 10;
-            place--;
-        }
-    }
-    return place;
-}
-std::string abs_itoa (int32_t value, int32_t maxlength) {  // returns an ascii string representation of a given integer value, using scientific notation if necessary to fit within given width constraint
-    value = abs (value);  // This function disregards sign
-    if (significant_place(value) <= maxlength) return std::to_string (value);  // If value is short enough, return it
-    std::string result;
-    int32_t magnitude = std::log10 (value);  // replace with significant_place function like abs_ftoa uses
-    double scaledValue = value / std::pow (10, magnitude + 1 - maxlength);  // was (10, magnitude - 5);
-    if (scaledValue >= 1.0 && scaledValue < 10.0) result = std::to_string (static_cast<int>(scaledValue));
-    else result = std::to_string (scaledValue);
-    if (magnitude >= maxlength) result += "e" + std::to_string (magnitude);
-    return result;
-}
-std::string abs_ftoa (double value, int32_t maxlength, int32_t sigdig) {  // returns an ascii string representation of a given double value, formatted to efficiently fit withinthe given width constraint
-    value = abs (value);  // This function disregards sign
-    int32_t place = significant_place (value);  // Learn decimal place of the most significant digit in value
-    if (place >= sigdig && place <= maxlength) {  // Then we want simple whole number w/o decimal point (eg 123456, 12345, 1234)
-        std::string result (std::to_string ((int32_t)value));
-        return result;
-    }
-    if (place >= 0 && place < maxlength) {  // Then we want float formatted with enough nonzero digits after the decimal point for our significant digits (eg 123.4, 12.34, 1.234, 0)
-        int32_t length = min (sigdig+1, maxlength);
-        char buffer[length+1];
-        std::snprintf (buffer, length + 1, "%.*g", length - 1, value);
-        std::string result (buffer);  // copy buffer to result
-        return result;
-    }
-    if (place >= 3-maxlength && place < maxlength) {  // Then we want decimal w/o initial '0' limited to 3 significant digits (eg .123, .0123, .00123)
-        std::string result (std::to_string(value));
-        size_t decimalPos = result.find('.');  // Remove any digits to the left of the decimal point
-        if (decimalPos != std::string::npos) result = result.substr(decimalPos);
-        if (result.length() > sigdig) result.resize(sigdig);  // Limit the string length to the desired number of significant digits
-        return result;
-    }  // Otherwise we want scientific notation with precision removed as needed to respect maxlength (eg 1.23e4, 1.23e5, but using long e character not e for negative exponents
-    if (place <= -10) return std::string ("~0");  // Ridiculously small values just indicate basically zero
-    char buffer[maxlength+1];  // Allocate buffer with the maximum required size
-    snprintf(buffer, sizeof(buffer), "%*.*f%*d", maxlength-sigdig-1, sigdig-1, value, maxlength-1, 0);
-    std::string result (buffer);  // copy buffer to result
-    if (result.find ("e+0") != std::string::npos) result.replace (result.find ("e+0"), 3, "e");  // Remove useless "+0" from exponent
-    else if (result.find ("e-0") != std::string::npos) result.replace (result.find ("e-0"), 3, "\x88");  // For very small scientific notation values, replace the "e-0" with a phoenetic long e character, to indicate negative power  // if (result.find ("e-0") != std::string::npos) 
-    else if (result.find ("e+") != std::string::npos) result.replace (result.find ("e+"), 3, "e");  // For ridiculously large values
-    return result;    
-}
-void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target) {
-    yield();
-    int32_t age_us = (int32_t)((double)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
-    int32_t x_base = 59;
-    bool polarity = (value >= 0);  // polarity 0=negative, 1=positive
-    if (strcmp(disp_values[lineno], disp_string) || disp_redraw_all) {  // If value differs, Erase old value and write new
-        int32_t y_pos = lineno*disp_line_height_pix+disp_vshift_pix;
-        if (polarity != disp_polarities[lineno]) draw_hyphen (x_base, y_pos, (!polarity) ? GRN : BLK);
-        draw_string (x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], GRN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-        strcpy (disp_values[lineno], disp_string);
-        disp_polarities[lineno] = polarity;
-        dispAgeTimer[lineno].reset();
-        disp_age_quanta[lineno] = 0;
-    }  // to-do: Fix failure to freshen aged coloration of unchanged characters of changed values
-    else if (age_us > disp_age_quanta[lineno] && age_us < 11)  {  // As readings age, redraw in new color. This may fail and redraw when the timer overflows? 
-        int32_t color;
-        if (age_us < 8) color = 0x1fe0 + age_us*0x2000;  // Base of green with red added as you age, until yellow is achieved
-        else color = 0xffe0 - (age_us-8) * 0x100;  // Then lose green as you age further
-        int32_t y_pos = (lineno)*disp_line_height_pix+disp_vshift_pix;
-        if (!polarity) draw_hyphen (x_base, y_pos, color);
-        draw_string (x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_values[lineno], "", color, BLK);
-        disp_age_quanta[lineno] = age_us;
-    }
-    yield();
-    if (lowlim < hilim) {  // Any value having a given range deserves a bargraph gauge with a needle
-        int32_t corner_x = 124;    
-        int32_t corner_y = lineno*disp_line_height_pix+disp_vshift_pix-1;
-        int32_t n_pos = map (value, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
-        int32_t ncolor = (n_pos > disp_bargraph_width-disp_bargraph_squeeze || n_pos < disp_bargraph_squeeze) ? DORG : GRN;
-        n_pos = corner_x + constrain (n_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
-        if (target != -1) {  // If target value is given, draw a target on the bargraph too
-            int32_t t_pos = map (target, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
-            int32_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || t_pos < disp_bargraph_squeeze) ? DORG : ( (t_pos != n_pos) ? YEL : GRN );
-            t_pos = corner_x + constrain (t_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
-            if (t_pos != disp_targets[lineno] || (t_pos == n_pos)^(disp_needles[lineno] != disp_targets[lineno]) || disp_redraw_all) {
-                draw_target_shape (disp_targets[lineno], corner_y, BLK, -1);  // Erase old target
-                tft.drawFastHLine (disp_targets[lineno]-(disp_targets[lineno] != corner_x+disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+7, 2+(disp_targets[lineno] != corner_x+disp_bargraph_width-disp_bargraph_squeeze), GRY1);  // Patch bargraph line where old target got erased
-                for (int32_t offset=0; offset<=2; offset++) tft.drawFastVLine ((corner_x+disp_bargraph_squeeze)+offset*(disp_bargraph_width/2 - disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+6, 3, WHT);  // Redraw bargraph graduations in case one got corrupted by target erasure
-                draw_target_shape (t_pos, corner_y, tcolor, -1);  // Draw the new target
-                disp_targets[lineno] = t_pos;  // Remember position of target
+        void watchdog() {
+            if (loop_period_us > 70000 && _timing_tft_reset == 0) _timing_tft_reset = 1;
+            if (_timing_tft_reset == 0) _tftDelayTimer.reset();
+            else if (!_tftDelayTimer.expired()) _tftResetTimer.reset();
+            else if (_timing_tft_reset == 1) {
+                write_pin (tft_rst_pin, LOW);
+                _timing_tft_reset = 2;
+            }
+            else if (_timing_tft_reset == 2 && _tftResetTimer.expired()) {
+                write_pin (tft_rst_pin, HIGH);
+                init();
+                _timing_tft_reset = 0;
             }
         }
-        if (n_pos != disp_needles[lineno] || disp_redraw_all) {
-            draw_bargraph_needle (n_pos, disp_needles[lineno], corner_y, ncolor);  // Let's draw a needle
-            disp_needles[lineno] = n_pos;  // Remember position of needle
+
+        // Functions to write to the screen efficiently
+        //
+        void draw_bargraph_base (int32_t corner_x, int32_t corner_y, int32_t width) {  // draws a horizontal bargraph scale.  124, y, 40
+            _tft.drawFastHLine (corner_x+disp_bargraph_squeeze, corner_y, width-disp_bargraph_squeeze*2, GRY1);
+            for (int32_t offset=0; offset<=2; offset++) _tft.drawFastVLine ((corner_x+disp_bargraph_squeeze)+offset*(width/2 - disp_bargraph_squeeze), corner_y-1, 3, WHT);
         }
-    }
-    else if (disp_needles[lineno] >= 0) {  // If value having no range is drawn over one that did ...
-        draw_bargraph_needle (-1, disp_needles[lineno], lineno*disp_line_height_pix+disp_vshift_pix-1, BLK);  // Erase the old needle
-        disp_needles[lineno] = -1;  // Flag for no needle
-    }
-}
-void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int32_t target) {
-    std::string val_string = abs_itoa (value, (int32_t)disp_maxlength);
-    // std::cout << "Int: " << value << " -> " << val_string << ", " << ((value >= 0) ? 1 : -1) << std::endl;
-    draw_dynamic (lineno, val_string.c_str(), value, lowlim, hilim, (int32_t)target);
-}
-void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim) {
-    draw_dynamic (lineno, value, lowlim, hilim, -1);
-}
-void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim, int32_t target) {
-    std::string val_string = abs_ftoa (value, (int32_t)disp_maxlength, 4);
-    // std::cout << "Flt: " << value << " -> " << val_string << ", " << ((value >= 0) ? 1 : -1) << std::endl;
-    draw_dynamic (lineno, val_string.c_str(), (int32_t)value, (int32_t)lowlim, (int32_t)hilim, target);
-}
-void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim) {
-    draw_dynamic (lineno, value, lowlim, hilim, -1);
-}
-void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override) {  // color_override = -1 uses default color
-    yield();
-    int32_t color = (color_override == -1) ? colorcard[runmode] : color_override;
-    int32_t x_new = 8+6*(2+strlen (modecard[runmode]))-3;
-    int32_t x_old = 8+6*(2+strlen (modecard[oldmode]))-3;
-    draw_string (8+6, 8+6, disp_vshift_pix, modecard[oldmode], "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-    draw_string (x_old, x_old, disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-    draw_string (8+6, 8+6, disp_vshift_pix, modecard[runmode], "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-    draw_string (x_new, x_new, disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-}
-void draw_dataset_page (int32_t page, int32_t page_last, bool forced=false) {
-    draw_fixed (page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
-    // for (int32_t lineno=0; lineno<disp_lines; lineno++) draw_hyphen (59, lineno*disp_line_height_pix+disp_vshift_pix, BLK);
-    yield();
-    draw_string (83, 83, disp_vshift_pix, pagecard[page], pagecard[page_last], RBLU, BLK, forced); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-}
-void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
-    yield();
-    if (selected_val != selected_last) draw_string (12, 12, 12+(selected_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_last], "", GRY2, BLK);
-    draw_string (12, 12, 12+(selected_val+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_val], "", (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : GRY2), BLK);
-}
-void draw_bool (bool value, int32_t col) {  // Draws values of boolean data
-    if ((disp_bool_values[col-2] != value) || disp_redraw_all) {  // If value differs, Erase old value and write new
-        int32_t x_mod = touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - arraysize (top_menu_buttons[col-2]-1)*(disp_font_width>>1) - 2;
-        draw_string (x_mod, x_mod, 0, top_menu_buttons[col-2], "", (value) ? GRN : LGRY, DGRY);
-        disp_bool_values[col-2] = value;
-    }
-}
-void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
-    tft.setTextColor (LYEL);
-    for (int32_t row = 0; row < arraysize(simgrid); row++) {
-        for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
-            yield();
-            int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
-            int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
-            if (strcmp (simgrid[row][col], "    " )) {
-                tft.fillCircle (cntr_x, cntr_y, 19, create ? DGRY : BLK);
-                if (create) {
-                    tft.drawCircle (cntr_x, cntr_y, 19, LYEL);
-                    int32_t x_mod = cntr_x-(arraysize (simgrid[row][col])-1)*(disp_font_width>>1);
-                    draw_string (x_mod, x_mod, cntr_y-(disp_font_height>>1), simgrid[row][col], "", LYEL, DGRY);
+        void draw_needle_shape (int32_t pos_x, int32_t pos_y, int32_t color) {  // draws a cute little pointy needle
+            _tft.drawFastVLine (pos_x-1, pos_y, 2, color);
+            _tft.drawFastVLine (pos_x, pos_y, 4, color);
+            _tft.drawFastVLine (pos_x+1, pos_y, 2, color);
+        }
+        void draw_target_shape (int32_t pos_x, int32_t pos_y, int32_t t_color, int32_t r_color) {  // draws a cute little target symbol
+            _tft.drawFastVLine (pos_x-1, pos_y+7, 2, t_color);
+            _tft.drawFastVLine (pos_x, pos_y+5, 4, t_color);
+            _tft.drawFastVLine (pos_x+1, pos_y+7, 2, t_color);
+        }
+        void draw_bargraph_needle (int32_t n_pos_x, int32_t old_n_pos_x, int32_t pos_y, int32_t n_color) {  // draws a cute little pointy needle
+            draw_needle_shape (old_n_pos_x, pos_y, BLK);
+            draw_needle_shape (n_pos_x, pos_y, n_color);
+        }
+        // void draw_bargraph_needle_target (int32_t n_pos_x, int32_t old_n_pos_x, int32_t t_pos_x, int32_t old_t_pos_x, int32_t pos_y, int32_t n_color, int32_t t_color, int32_t r_color) {  // draws a needle and target
+        //     draw_needle_shape (old_n_pos_x, pos_y, BLK);
+        //     draw_target_shape (old_t_pos_x, pos_y, BLK, BLK);
+        //     draw_target_shape (t_pos_x, pos_y, t_color, r_color);
+        //     draw_needle_shape (n_pos_x, pos_y, n_color);
+        // }  // This function was for when the needle could overlap the target
+        void draw_string (int32_t x_new, int32_t x_old, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor, bool forced=false) {  // Send in "" for oldtext if erase isn't needed
+            int32_t oldlen = strlen(oldtext);
+            int32_t newlen = strlen(text);
+            _tft.setTextColor (bgcolor);  
+            for (int32_t letter=0; letter < oldlen; letter++) {
+                if (newlen - letter < 1) {
+                    _tft.setCursor (x_old+disp_font_width*letter, y);
+                    _tft.print (oldtext[letter]);
+                }
+                else if (oldtext[letter] != text[letter]) {
+                    _tft.setCursor (x_old+disp_font_width*letter, y);
+                    _tft.print (oldtext[letter]);
                 }
             }
-        }     
-    }
-}
-void draw_touchgrid (bool side_only) {  // draws edge buttons with names in 'em. If replace_names, just updates names
-    int32_t namelen = 0;
-    tft.setTextColor (WHT);
-    for (int32_t row = 0; row < arraysize (side_menu_buttons); row++) {  // Step thru all rows to draw buttons along the left edge
-        yield();
-        tft.fillRoundRect (-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, DGRY);
-        tft.drawRoundRect (-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, LYEL);
-        namelen = 0;
-        for (uint32_t x = 0 ; x < arraysize (side_menu_buttons[row]) ; x++ ) {
-            if (side_menu_buttons[row][x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
+            _tft.setTextColor (color);  
+            for (int32_t letter=0; letter < newlen; letter++) {
+                if (oldlen - letter < 1) {
+                    _tft.setCursor (x_new+disp_font_width*letter, y);
+                    _tft.print (text[letter]);
+                }
+                else if (oldtext[letter] != text[letter] || forced) {
+                    _tft.setCursor (x_new+disp_font_width*letter, y);
+                    _tft.print (text[letter]);
+                }
+            }
+            // _tft.setCursor (x_old, y);
+            // _tft.setTextColor (bgcolor);
+            // _tft.print (oldtext);  // Erase the old content
+            // _tft.setCursor (x_new, y);
+            // _tft.setTextColor (color);
+            // _tft.print (text);  // Draw the new content
         }
-        for (int32_t letter = 0; letter < namelen; letter++) {  // Going letter by letter thru each button name so we can write vertically 
+        void draw_mmph (int32_t x, int32_t y, int32_t color) {  // This is my cheesy pixel-drawn "mmph" compressed horizontally to 3-char width
+            _tft.setTextColor (color);
+            _tft.setCursor (x, y);
+            _tft.print ("m");
+            _tft.setCursor (x+4, y);
+            _tft.print ("m");  // Overlapping 'mm' complete (x = 0-8)
+            _tft.drawFastVLine (x+10, y+2, 6, color);
+            _tft.drawPixel (x+11, y+2, color);
+            _tft.drawPixel (x+11, y+6, color);
+            _tft.drawFastVLine (x+12, y+3, 3, color);  // 'p' complete (x = 10-12)
+            _tft.drawFastVLine (x+14, y, 7, color);
+            _tft.drawPixel (x+15, y+2, color);
+            _tft.drawFastVLine (x+16, y+3, 4, color);  // 'h' complete (x = 14-16)
+        }
+        void draw_thou (int32_t x, int32_t y, int32_t color) {  // This is my cheesy pixel-drawn "thou" compressed horizontally to 3-char width
+            _tft.drawFastVLine (x+1, y+1, 5, color);
+            _tft.drawFastHLine (x, y+2, 3, color);
+            _tft.drawPixel (x+2, y+6, color);  // 't' complete (x = 0-2)
+            _tft.drawFastVLine (x+4, y, 7, color);
+            _tft.drawPixel (x+5, y+3, color);
+            _tft.drawPixel (x+6, y+2, color);
+            _tft.drawFastVLine (x+7, y+3, 4, color);  // 'h' complete (x = 4-7)
+            _tft.drawFastVLine (x+9, y+3, 3, color);
+            _tft.drawFastHLine (x+10, y+2, 2, color);
+            _tft.drawFastHLine (x+10, y+6, 2, color);
+            _tft.drawFastVLine (x+12, y+3, 3, color);  // 'o' complete (x = 9-12)
+            _tft.drawFastVLine (x+14, y+2, 4, color);
+            _tft.drawPixel (x+15, y+6, color);
+            _tft.drawFastVLine (x+16, y+2, 5, color);  // 'u' complete (x = 14-16)
+        }
+        void draw_string_units (int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
+            // if (!strcmp (oldtext, "mmph")) draw_mmph(x, y, bgcolor);
+            // else if (!strcmp (oldtext, "thou")) draw_thou (x, y, bgcolor);
+            // else {
+                _tft.setCursor (x, y);
+                _tft.setTextColor (bgcolor);
+                _tft.print (oldtext);  // Erase the old content
+            // }
+            // if (!strcmp (text, "mmph")) draw_mmph(x, y, color);
+            // else if (!strcmp (text, "thou")) draw_thou (x, y, color);
+            // else {
+                _tft.setCursor (x, y);
+                _tft.setTextColor (color);
+                _tft.print (text);  // Erase the old content
+            // }
+        }
+        void draw_colons (int32_t x_pos, int32_t first, int32_t last, int32_t color) {
+            for (int32_t lineno=first; lineno <= last; lineno++) {
+                _tft.drawPixel (x_pos, lineno*disp_line_height_pix+3, color);  // Tiny microscopic colon dots
+                _tft.drawPixel (x_pos, lineno*disp_line_height_pix+7, color);  // Tiny microscopic colon dots
+                // _tft.fillRect (x_pos, (lineno+1)*disp_line_height_pix+3, 2, 2, color);  // Big goofy looking colon dots
+                // _tft.fillRect (x_pos, (lineno+1)*disp_line_height_pix+7, 2, 2, color);  // Big goofy looking colon dots
+            }
+        }
+        // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
+        void draw_fixed (int32_t page, int32_t page_last, bool redraw_tuning_corner, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
             yield();
-            tft.setCursor (1, ( touch_cell_v_pix*row) + (touch_cell_v_pix/2) - (int32_t)(4.5*((double)namelen-1)) + (disp_font_height+1)*letter); // adjusts vertical offset depending how many letters in the button name and which letter we're on
-            tft.println (side_menu_buttons[row][letter]);  // Writes each letter such that the whole name is centered vertically on the button
+            _tft.setTextColor (GRY2);
+            _tft.setTextSize (1);
+            // if (redraw_tuning_corner) _tft.fillRect(10, 145, 154, 95, BLK); // _tft.fillRect(0,145,167,95,BLK);  // Erase old dataset page area - This line alone uses 15 ms
+            int32_t y_pos;
+            if (!redraw_tuning_corner) {
+                for (int32_t lineno=0; lineno < disp_fixed_lines; lineno++)  {  // Step thru lines of fixed telemetry data
+                    y_pos = (lineno+1)*disp_line_height_pix+disp_vshift_pix;
+                    draw_string (12, 12, y_pos, telemetry[lineno], "", GRY2, BLK, forced);
+                    draw_string_units (104, y_pos, units[lineno], "", GRY2, BLK);
+                    draw_bargraph_base (124, y_pos+7, disp_bargraph_width);
+                }
+                // draw_colons(7+disp_font_width*arraysize(telemetry[0]), 1, disp_fixed_lines+disp_tuning_lines, GRY1);  // I can't decide if I like the colons or not
+            }
+            for (int32_t lineno=0; lineno < disp_tuning_lines; lineno++)  {  // Step thru lines of dataset page data
+                yield();
+                draw_string(12, 12, (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[page][lineno], dataset_page_names[page_last][lineno], GRY2, BLK, forced);
+                draw_string_units(104, (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], GRY2, BLK);
+                if (redraw_tuning_corner) {
+                    int32_t corner_y = (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix+7;  // lineno*disp_line_height_pix+disp_vshift_pix-1;
+                    draw_bargraph_base (124, corner_y, disp_bargraph_width);
+                    if (disp_needles[lineno] >= 0) draw_bargraph_needle (-1, disp_needles[lineno], corner_y-6, BLK);  // Let's draw a needle
+                }
+            }
         }
-    }
-    if (!side_only) {
-        for (int32_t col = 2; col <= 5; col++) {  // Step thru all cols to draw buttons across the top edge
+        // Font character \xfa is little 3-pixel wide hyphen, use for negative numbers 
+        void draw_hyphen (int32_t x_pos, int32_t y_pos, int32_t color) {
+            _tft.drawFastHLine (x_pos+2, y_pos+3, 3, color);
+        }
+        void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target) {
             yield();
-            tft.fillRoundRect (touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
-            tft.drawRoundRect (touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // tft.width()-9, 3, 18, (tft.height()/5)-6, 8, LYEL);
-            // draw_bool (top_menu_buttons[btn], btn+3);
+            int32_t age_us = (int32_t)((double)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
+            int32_t x_base = 59;
+            bool polarity = (value >= 0);  // polarity 0=negative, 1=positive
+            if (strcmp(disp_values[lineno], disp_string) || disp_redraw_all) {  // If value differs, Erase old value and write new
+                int32_t y_pos = lineno*disp_line_height_pix+disp_vshift_pix;
+                if (polarity != disp_polarities[lineno]) draw_hyphen (x_base, y_pos, (!polarity) ? GRN : BLK);
+                draw_string (x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], GRN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+                strcpy (disp_values[lineno], disp_string);
+                disp_polarities[lineno] = polarity;
+                dispAgeTimer[lineno].reset();
+                disp_age_quanta[lineno] = 0;
+            }  // to-do: Fix failure to freshen aged coloration of unchanged characters of changed values
+            else if (age_us > disp_age_quanta[lineno] && age_us < 11)  {  // As readings age, redraw in new color. This may fail and redraw when the timer overflows? 
+                int32_t color;
+                if (age_us < 8) color = 0x1fe0 + age_us*0x2000;  // Base of green with red added as you age, until yellow is achieved
+                else color = 0xffe0 - (age_us-8) * 0x100;  // Then lose green as you age further
+                int32_t y_pos = (lineno)*disp_line_height_pix+disp_vshift_pix;
+                if (!polarity) draw_hyphen (x_base, y_pos, color);
+                draw_string (x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_values[lineno], "", color, BLK);
+                disp_age_quanta[lineno] = age_us;
+            }
+            yield();
+            if (lowlim < hilim) {  // Any value having a given range deserves a bargraph gauge with a needle
+                int32_t corner_x = 124;    
+                int32_t corner_y = lineno*disp_line_height_pix+disp_vshift_pix-1;
+                int32_t n_pos = map (value, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+                int32_t ncolor = (n_pos > disp_bargraph_width-disp_bargraph_squeeze || n_pos < disp_bargraph_squeeze) ? DORG : GRN;
+                n_pos = corner_x + constrain (n_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+                if (target != -1) {  // If target value is given, draw a target on the bargraph too
+                    int32_t t_pos = map (target, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+                    int32_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || t_pos < disp_bargraph_squeeze) ? DORG : ( (t_pos != n_pos) ? YEL : GRN );
+                    t_pos = corner_x + constrain (t_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+                    if (t_pos != disp_targets[lineno] || (t_pos == n_pos)^(disp_needles[lineno] != disp_targets[lineno]) || disp_redraw_all) {
+                        draw_target_shape (disp_targets[lineno], corner_y, BLK, -1);  // Erase old target
+                        _tft.drawFastHLine (disp_targets[lineno]-(disp_targets[lineno] != corner_x+disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+7, 2+(disp_targets[lineno] != corner_x+disp_bargraph_width-disp_bargraph_squeeze), GRY1);  // Patch bargraph line where old target got erased
+                        for (int32_t offset=0; offset<=2; offset++) _tft.drawFastVLine ((corner_x+disp_bargraph_squeeze)+offset*(disp_bargraph_width/2 - disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+6, 3, WHT);  // Redraw bargraph graduations in case one got corrupted by target erasure
+                        draw_target_shape (t_pos, corner_y, tcolor, -1);  // Draw the new target
+                        disp_targets[lineno] = t_pos;  // Remember position of target
+                    }
+                }
+                if (n_pos != disp_needles[lineno] || disp_redraw_all) {
+                    draw_bargraph_needle (n_pos, disp_needles[lineno], corner_y, ncolor);  // Let's draw a needle
+                    disp_needles[lineno] = n_pos;  // Remember position of needle
+                }
+            }
+            else if (disp_needles[lineno] >= 0) {  // If value having no range is drawn over one that did ...
+                draw_bargraph_needle (-1, disp_needles[lineno], lineno*disp_line_height_pix+disp_vshift_pix-1, BLK);  // Erase the old needle
+                disp_needles[lineno] = -1;  // Flag for no needle
+            }
         }
-    }
-}
+        int32_t significant_place (double value) {  // Returns the decimal place of the most significant digit of a given float value, without relying on logarithm math
+            int32_t place = 0;
+            if (value >= 1) { // int32_t vallog = std::log10(value);  // Can be sped up
+                place = 1;
+                while (value >= 10) {
+                    value /= 10;
+                    place++;
+                }
+            }
+            else if (value) {  // checking (value) rather than (value != 0.0) can help avoid precision errors caused by digital representation of floating numbers
+                while (value < 1) {
+                    value *= 10;
+                    place--;
+                }
+            }
+            return place;
+        }
+        std::string abs_itoa (int32_t value, int32_t maxlength) {  // returns an ascii string representation of a given integer value, using scientific notation if necessary to fit within given width constraint
+            value = abs (value);  // This function disregards sign
+            if (significant_place(value) <= maxlength) return std::to_string (value);  // If value is short enough, return it
+            std::string result;
+            int32_t magnitude = std::log10 (value);
+            double scaledValue = value / std::pow (10, magnitude + 1 - maxlength);  // was (10, magnitude - 5);
+            if (scaledValue >= 1.0 && scaledValue < 10.0) result = std::to_string (static_cast<int>(scaledValue));
+            else result = std::to_string (scaledValue);
+            if (magnitude >= maxlength) result += "e" + std::to_string (magnitude);
+            return result;
+        }
+        std::string abs_ftoa (double value, int32_t maxlength, int32_t sigdig) {  // returns an ascii string representation of a given double value, formatted to efficiently fit withinthe given width constraint
+            value = abs (value);  // This function disregards sign
+            int32_t place = significant_place (value);  // Learn decimal place of the most significant digit in value
+            if (place >= sigdig && place <= maxlength) {  // Then we want simple cast to an integer w/o decimal point (eg 123456, 12345, 1234)
+                std::string result (std::to_string ((int32_t)value));
+                return result;
+            }
+            if (place >= 0 && place < maxlength) {  // Then we want float formatted with enough nonzero digits after the decimal point for 4 significant digits (eg 123.4, 12.34, 1.234, 0)
+                int32_t length = min (sigdig+1, maxlength);
+                char buffer[length+1];
+                std::snprintf (buffer, length + 1, "%.*g", length - 1, value);
+                std::string result (buffer);  // copy buffer to result
+                return result;
+            }
+            if (place >= 3-maxlength && place < maxlength) {  // Then we want decimal w/o initial '0' limited to 3 significant digits (eg .123, .0123, .00123)
+                std::string result (std::to_string(value));
+                size_t decimalPos = result.find('.');  // Remove any digits to the left of the decimal point
+                if (decimalPos != std::string::npos) result = result.substr(decimalPos);
+                if (result.length() > sigdig) result.resize(sigdig);  // Limit the string length to the desired number of significant digits
+                return result;
+            }  // Otherwise we want scientific notation with precision removed as needed to respect maxlength (eg 1.23e4, 1.23e5, but using long e character not e for negative exponents
+            if (place <= -10) return std::string ("~0");  // Ridiculously small values just indicate basically zero
+            char buffer[maxlength+1];  // Allocate buffer with the maximum required size
+            snprintf(buffer, sizeof(buffer), "%*.*f%*d", maxlength-sigdig-1, sigdig-1, value, maxlength-1, 0);
+            std::string result (buffer);  // copy buffer to result
+            if (result.find ("e+0") != std::string::npos) result.replace (result.find ("e+0"), 3, "e");  // Remove useless "+0" from exponent
+            else if (result.find ("e-0") != std::string::npos) result.replace (result.find ("e-0"), 3, "\x88");  // For very small scientific notation values, replace the "e-0" with a phoenetic long e character, to indicate negative power  // if (result.find ("e-0") != std::string::npos) 
+            else if (result.find ("e+") != std::string::npos) result.replace (result.find ("e+"), 3, "e");  // For ridiculously large values
+            return result;    
+        }
+        void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int32_t target) {
+            std::string val_string = abs_itoa (value, (int32_t)disp_maxlength);
+            // std::cout << "Int: " << value << " -> " << val_string << ", " << ((value >= 0) ? 1 : -1) << std::endl;
+            draw_dynamic (lineno, val_string.c_str(), value, lowlim, hilim, (int32_t)target);
+        }
+        void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim) {
+            draw_dynamic (lineno, value, lowlim, hilim, -1);
+        }
+        void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim, int32_t target) {
+            std::string val_string = abs_ftoa (value, (int32_t)disp_maxlength, 4);
+            // std::cout << "Flt: " << value << " -> " << val_string << ", " << ((value >= 0) ? 1 : -1) << std::endl;
+            draw_dynamic (lineno, val_string.c_str(), (int32_t)value, (int32_t)lowlim, (int32_t)hilim, target);
+        }
+        void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim) {
+            draw_dynamic (lineno, value, lowlim, hilim, -1);
+        }
+        void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override) {  // color_override = -1 uses default color
+            yield();
+            int32_t color = (color_override == -1) ? colorcard[runmode] : color_override;
+            int32_t x_new = 8+6*(2+strlen (modecard[runmode]))-3;
+            int32_t x_old = 8+6*(2+strlen (modecard[oldmode]))-3;
+            draw_string (8+6, 8+6, disp_vshift_pix, modecard[oldmode], "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+            draw_string (x_old, x_old, disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+            draw_string (8+6, 8+6, disp_vshift_pix, modecard[runmode], "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+            draw_string (x_new, x_new, disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+        }
+        void draw_dataset_page (int32_t page, int32_t page_last, bool forced=false) {
+            draw_fixed (page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
+            // for (int32_t lineno=0; lineno<disp_lines; lineno++) draw_hyphen (59, lineno*disp_line_height_pix+disp_vshift_pix, BLK);
+            yield();
+            draw_string (83, 83, disp_vshift_pix, pagecard[page], pagecard[page_last], RBLU, BLK, forced); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+        }
+        void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
+            yield();
+            if (selected_val != selected_last) draw_string (12, 12, 12+(selected_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_last], "", GRY2, BLK);
+            draw_string (12, 12, 12+(selected_val+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_val], "", (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : GRY2), BLK);
+        }
+        void draw_bool (bool value, int32_t col) {  // Draws values of boolean data
+            if ((disp_bool_values[col-2] != value) || disp_redraw_all) {  // If value differs, Erase old value and write new
+                int32_t x_mod = touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - arraysize (top_menu_buttons[col-2]-1)*(disp_font_width>>1) - 2;
+                draw_string (x_mod, x_mod, 0, top_menu_buttons[col-2], "", (value) ? GRN : LGRY, DGRY);
+                disp_bool_values[col-2] = value;
+            }
+        }
+        void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
+            _tft.setTextColor (LYEL);
+            for (int32_t row = 0; row < arraysize(simgrid); row++) {
+                for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
+                    yield();
+                    int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
+                    int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
+                    if (strcmp (simgrid[row][col], "    " )) {
+                        _tft.fillCircle (cntr_x, cntr_y, 19, create ? DGRY : BLK);
+                        if (create) {
+                            _tft.drawCircle (cntr_x, cntr_y, 19, LYEL);
+                            int32_t x_mod = cntr_x-(arraysize (simgrid[row][col])-1)*(disp_font_width>>1);
+                            draw_string (x_mod, x_mod, cntr_y-(disp_font_height>>1), simgrid[row][col], "", LYEL, DGRY);
+                        }
+                    }
+                }     
+            }
+        }
+        void draw_touchgrid (bool side_only) {  // draws edge buttons with names in 'em. If replace_names, just updates names
+            int32_t namelen = 0;
+            _tft.setTextColor (WHT);
+            for (int32_t row = 0; row < arraysize (side_menu_buttons); row++) {  // Step thru all rows to draw buttons along the left edge
+                yield();
+                _tft.fillRoundRect (-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, DGRY);
+                _tft.drawRoundRect (-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, LYEL);
+                namelen = 0;
+                for (uint32_t x = 0 ; x < arraysize (side_menu_buttons[row]) ; x++ ) {
+                    if (side_menu_buttons[row][x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
+                }
+                for (int32_t letter = 0; letter < namelen; letter++) {  // Going letter by letter thru each button name so we can write vertically 
+                    yield();
+                    _tft.setCursor (1, ( touch_cell_v_pix*row) + (touch_cell_v_pix/2) - (int32_t)(4.5*((double)namelen-1)) + (disp_font_height+1)*letter); // adjusts vertical offset depending how many letters in the button name and which letter we're on
+                    _tft.println (side_menu_buttons[row][letter]);  // Writes each letter such that the whole name is centered vertically on the button
+                }
+            }
+            if (!side_only) {
+                for (int32_t col = 2; col <= 5; col++) {  // Step thru all cols to draw buttons across the top edge
+                    yield();
+                    _tft.fillRoundRect (touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
+                    _tft.drawRoundRect (touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // _tft.width()-9, 3, 18, (_tft.height()/5)-6, 8, LYEL);
+                    // draw_bool (top_menu_buttons[btn], btn+3);
+                }
+            }
+        }
+};
 
-void tft_init (void) {
-    if (display_enabled) {
-        printf ("Init LCD... ");
-        // delay (500); // This is needed to allow the screen board enough time after a cold boot before we start trying to talk to it.
-        tft.begin();
-        tft.setRotation (1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
-        for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
-            disp_age_quanta[lineno] = -1;
-            memset (disp_values[lineno], 0, strlen (disp_values[lineno]));
-            disp_polarities[lineno] = 1;
-        }
-        for (int32_t row=0; row<arraysize (disp_bool_values); row++) disp_bool_values[row] = 1;
-        for (int32_t row=0; row<arraysize (disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
-        for (int32_t row=0; row<arraysize (disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
-        tft.fillScreen (BLK);  // Black out the whole screen
-        draw_touchgrid (false);
-        draw_fixed (dataset_page, dataset_page_last, false);
-        disp_redraw_all = true;
-        // disp_dataset_page_dirty = true;
-        // disp_runmode_dirty = true;
-        // disp_sidemenu_dirty = true;
-        //if (simulating) draw_simbuttons (true);
-        
-        // draw_fixed (dataset_page, dataset_page_last, false);
-        // draw_touchgrid (false);
-        // draw_runmode (runmode, oldmode, -1);
-        // draw_dataset_page (dataset_page, dataset_page_last);
-        printf ("Success.\nCaptouch initialization... ");
-        if (! touchpanel.begin(40)) printf ("Couldn't start FT6206 touchscreen controller");  // pass in 'sensitivity' coefficient
-        else printf ("Capacitive touchscreen started\n");
-    }
-}
-void tft_watchdog (void) {
-    if (display_enabled) {
-        if (loop_period_us > 70000 && timing_tft_reset == 0) timing_tft_reset = 1;
-        if (timing_tft_reset == 0) tftDelayTimer.reset();
-        else if (!tftDelayTimer.expired()) tftResetTimer.reset();
-        else if (timing_tft_reset == 1) {
-            write_pin (tft_rst_pin, LOW);
-            timing_tft_reset = 2;
-        }
-        else if (timing_tft_reset == 2 && tftResetTimer.expired()) {
-            write_pin (tft_rst_pin, HIGH);
-            tft_init();
-            timing_tft_reset = 0;
-        }
-    }
-}
-#endif  // DISPLAY_H
+#endif

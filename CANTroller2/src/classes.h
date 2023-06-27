@@ -80,12 +80,12 @@ class Param {
         if (set (*p_val + arg_add)) return true;
         return false;
     }
-    void draw (int32_t lineno) {
-        if (dirty) draw_dynamic (lineno, *p_val, *p_min, *p_max, -1);
+    void draw (Display &d, int32_t lineno) {
+        if (dirty) d.draw_dynamic (lineno, *p_val, *p_min, *p_max, -1);
         dirty = false;
     }
-    void draw (int32_t lineno, int32_t target) {
-        if (dirty) draw_dynamic (lineno, *p_val, *p_min, *p_max, target);
+    void draw (Display &d, int32_t lineno, int32_t target) {
+        if (dirty) d.draw_dynamic (lineno, *p_val, *p_min, *p_max, target);
         dirty = false;
     }
     double get_val () { return *p_val; }
@@ -186,12 +186,12 @@ class Transducer : virtual public Param {
         }
         return false;
     }
-    void draw_raw (int32_t lineno) {
-        if (dirty) draw_dynamic (lineno, val_raw, *p_min_raw, *p_max_raw, -1);
+    void draw_raw (Display &d, int32_t lineno) {
+        if (dirty) d.draw_dynamic (lineno, val_raw, *p_min_raw, *p_max_raw, -1);
         dirty = false;
     }
-    void draw_raw (int32_t lineno, int32_t target) {
-        if (dirty) draw_dynamic (lineno, val_raw, *p_min_raw, *p_max_raw, target);
+    void draw_raw (Display &d, int32_t lineno, int32_t target) {
+        if (dirty) d.draw_dynamic (lineno, val_raw, *p_min_raw, *p_max_raw, target);
         dirty = false;
     }
     double get_val_raw () { return val_raw; }

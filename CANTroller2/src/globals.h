@@ -421,9 +421,6 @@ int32_t loopno = 1;
 uint32_t looptimes_us[20];
 bool loop_dirty[20];
 int32_t loopindex = 0;
-Timer tftResetTimer (100000);
-Timer tftDelayTimer (3000000);
-int32_t timing_tft_reset = 0; 
 bool diag_ign_error_enabled = true;
 
 // pushbutton related
