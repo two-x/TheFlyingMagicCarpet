@@ -181,15 +181,15 @@ bool panic_stop = false;
 bool cruise_gesturing = false;  // Is cruise mode enabled by gesturing?  Otherwise by press of cruise button
 bool cruise_sw_held = false;
 bool cruise_adjusting = false;
-Timer motorParkTimer;
 Timer gestureFlyTimer;  // Used to keep track of time for gesturing for going in and out of fly/cruise modes
 Timer cruiseSwTimer;
 Timer sleepInactivityTimer (10000000);  // After shutdown how long to wait before powering down to sleep
 Timer stopcarTimer (7000000);  // Allows code to fail in a sensible way after a delay if nothing is happening
 //  ---- tunable ----
-uint32_t motor_park_timeout_us = 3000000;  // If we can't park the motors faster than this, then give up.
+uint32_t motor_park_timeout_us = 4000000;  // If we can't park the motors faster than this, then give up.
 uint32_t gesture_flytimeout_us = 500000;  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
 uint32_t cruise_sw_timeout_us = 500000;  // how long do you have to hold down the cruise button to start cruise mode (in us)
+Timer motorParkTimer(motor_park_timeout_us);
 
 // calibration related
 bool cal_joyvert_brkmotor = false;  // Allows direct control of brake motor using controller vert
