@@ -271,8 +271,7 @@ void loop() {
     // }
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
 
-    int32_t temp_start, temp_mid, temp_done;
-    if (false && tempTimer.expired()) {
+    if (take_temperatures && tempTimer.expired()) {
         if (temp_status == IDLE) {
             if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
             tempsensebus.setWaitForConversion (false);  // makes it async
@@ -287,45 +286,45 @@ void loop() {
             temp_status = DELAY;
         }
         else if (temp_status == DELAY) {
-            printf ("temps[%ld] = %lf F\n", temp_current_index, temps[temp_current_index]);
+            // printf ("temps[%ld] = %lf F\n", temp_current_index, temps[temp_current_index]);
             tempTimer.set(60000);
             temp_status = IDLE;
         }
     }
-    double temps[temp_detected_device_ct];
-    uint32_t timecheck;
-    if (take_temperatures && tempTimer.expired()) {
-        cout << endl << "loop# " << loopno << " stat0:" << temp_status;
-        if (temp_status == IDLE) {
-            wait_one_loop = true;
-            if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
-            timecheck = micros();
-            // tempsensebus.requestTemperaturesByIndex (temp_reading_id);
-            tempsensebus.setWaitForConversion (false);  // Do not block during conversion process
-            tempsensebus.requestTemperatures();
-            tempsensebus.setWaitForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
-            cout << " my0:" << micros()-timecheck;
-            //tempTimer.set (tempsensebus.millisToWaitForConversion (temperature_precision)*1000);
-            tempTimer.set (800000);         
-            temp_status = CONVERT;
-        }
-        else if (temp_status == CONVERT) {
-            wait_one_loop = true;
-            timecheck = micros();
-            temps[temp_current_index] = tempsensebus.getTempFByIndex(temp_current_index);
-            cout << " my1:" << micros()-timecheck;
-            tempTimer.set(1500000);
-            temp_status = DELAY;
-        }
-        else if (temp_status == DELAY) {
-            //printf ("\n loop:%d temps[%ld] = %lf F\n", loopno, temp_current_index, temps[temp_current_index]);
-            tempTimer.set(60000);
-            if (++temp_reading_id >= temp_detected_device_ct) temp_reading_id -= temp_detected_device_ct;
-            temp_status = IDLE;
-        }
-        cout << " stat1:" << temp_status << " id:"  << temp_reading_id << " tmp:" << ((temp_status == IDLE) ? temps[temp_current_index] : -1) << endl;
-    }
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pst");
+    // double temps[temp_detected_device_ct];
+    // uint32_t timecheck;
+    // if (take_temperatures && tempTimer.expired()) {
+    //     cout << endl << "loop# " << loopno << " stat0:" << temp_status;
+    //     if (temp_status == IDLE) {
+    //         wait_one_loop = true;
+    //         if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
+    //         timecheck = micros();
+    //         // tempsensebus.requestTemperaturesByIndex (temp_current_index);
+    //         tempsensebus.setWaitForConversion (false);  // Do not block during conversion process
+    //         tempsensebus.requestTemperatures();
+    //         tempsensebus.setWaitForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
+    //         cout << " my0:" << micros()-timecheck;
+    //         //tempTimer.set (tempsensebus.millisToWaitForConversion (temperature_precision)*1000);
+    //         tempTimer.set (800000);         
+    //         temp_status = CONVERT;
+    //     }
+    //     else if (temp_status == CONVERT) {
+    //         wait_one_loop = true;
+    //         timecheck = micros();
+    //         temps[temp_current_index] = tempsensebus.getTempFByIndex(temp_current_index);
+    //         cout << " my1:" << micros()-timecheck;
+    //         tempTimer.set(1500000);
+    //         temp_status = DELAY;
+    //     }
+    //     else if (temp_status == DELAY) {
+    //         //printf ("\n loop:%d temps[%ld] = %lf F\n", loopno, temp_current_index, temps[temp_current_index]);
+    //         tempTimer.set(60000);
+    //         if (++temp_current_index >= temp_detected_device_ct) temp_current_index -= temp_detected_device_ct;
+    //         temp_status = IDLE;
+    //     }
+    //     cout << " stat1:" << temp_status << " id:"  << temp_current_index << " tmp:" << ((temp_status == IDLE) ? temps[temp_current_index] : -1) << endl;
+    // }
+    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pst");
 
     // Encoder - takes 10 us to read when no encoder activity
     // Read and interpret encoder switch activity. Encoder rotation is handled in interrupt routine
@@ -367,16 +366,26 @@ void loop() {
     
     // Tach - takes 22 us to read when no activity
     if (!simulating || !sim_tach) {
-        if (tachPulseTimer.elapsed() < tach_stop_timeout_us) tach_rpm = convert_units ((double)(tach_delta_us), tach_convert_rpm_per_rpus, tach_convert_invert);
-        else tach_rpm = 0;  // If timeout since last magnet is exceeded
-        ema_filt (tach_rpm, &tach_filt_rpm, tach_ema_alpha);  // Sensor EMA filter
+        if (tachPulseTimer.elapsed() < tach_stop_timeout_us) {
+            tach_rpm = convert_units ((double)(tach_delta_us), tach_convert_rpm_per_rpus, tach_convert_invert);
+            ema_filt (tach_rpm, &tach_filt_rpm, tach_ema_alpha);  // Sensor EMA filter
+        }
+        else {
+            tach_rpm = 0;  // If timeout since last magnet is exceeded
+            tach_filt_rpm = 0;
+        }        
     }
     
     // Speedo - takes 14 us to read when no activity
     if (!simulating || !sim_speedo) { 
-        if (speedoPulseTimer.elapsed() < speedo_stop_timeout_us) carspeed_mph = convert_units ((double)(speedo_delta_us), speedo_convert_mph_per_rpus, speedo_convert_invert);  // Update car speed value  
-        else carspeed_mph = 0;     
-        ema_filt (carspeed_mph, &carspeed_filt_mph, carspeed_ema_alpha);  // Sensor EMA filter
+        if (speedoPulseTimer.elapsed() < speedo_stop_timeout_us) {
+            carspeed_mph = convert_units ((double)(speedo_delta_us), speedo_convert_mph_per_rpus, speedo_convert_invert);  // Update car speed value  
+            ema_filt (carspeed_mph, &carspeed_filt_mph, carspeed_ema_alpha);  // Sensor EMA filter
+        }
+        else {
+            carspeed_mph = 0;
+            carspeed_filt_mph = 0;
+        }
     }
 
     // Brake pressure - takes 72 us to read
@@ -398,6 +407,7 @@ void loop() {
             ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_horz_max_us, hotrc_pulse_horz_min_us, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
             ctrl_pos_adc[VERT][RAW] = constrain (ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
             ctrl_pos_adc[HORZ][RAW] = constrain (ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);   
+            // if (ctrl_pos_adc[VERT][RAW] > ctrl_db_adc[VERT][TOP] || ctrl_pos_adc[VERT][RAW] < ctrl_db_adc[VERT][BOT] || ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP] || ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) printf ("%ld %4ld %4ld\n", loopno, ctrl_pos_adc[VERT][RAW], ctrl_pos_adc[VERT][FILT]);
         }
         else {  // If using old joystick
             ctrl_pos_adc[VERT][RAW] = analogRead (joy_vert_pin);  // Read joy vertical
@@ -743,12 +753,16 @@ void loop() {
     //     D) Car is accelerating yet engine is at idle.
     //  11. The control system has nonsensical values in its variables.
     //
-    if (!ignition && ignition_last && !engine_stopped()) { // See if the engine is turning despite the ignition being off
-        Serial.println (F("Detected engine rotation in the absense of ignition signal"));  // , tach_filt_rpm, ignition
+    if (!ignition && !engine_stopped()) {
+        if (diag_ign_error_enabled) { // See if the engine is turning despite the ignition being off
+            Serial.println (F("Detected engine rotation in the absense of ignition signal"));  // , tach_filt_rpm, ignition
+            diag_ign_error_enabled = false;
+        }
         // I don't think we really need to panic about this, but it does seem curious. Actually this will probably occur when we're sliding
         // into camp after a ride, and kill the engine before we stop the car. For a fraction of a second the engine would keep turning anyway.
         // Or fopr that matter whenever the carb is out of tune and making the engine diesel after we kill the ign.
     }
+    else diag_ign_error_enabled = true;
 
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");  //
         
@@ -829,8 +843,8 @@ void loop() {
                     touch_longpress_valid = false;
                 }
             }
-            else if (tcol==5 && trow==1 && sim_speedo) adj_val (&carspeed_filt_mph, 0.01*touch_accel, 0.0, carspeed_redline_mph);  // (+= 50) // Pressed the increase vehicle speed button
-            else if (tcol==5 && trow==2 && sim_speedo) adj_val (&carspeed_filt_mph, -0.01*touch_accel, 0.0, carspeed_redline_mph);  // (-= 50) Pressed the decrease vehicle speed button
+            else if (tcol==5 && trow==1 && sim_speedo) adj_val (&carspeed_filt_mph, 0.005*(double)touch_accel, 0.0, carspeed_redline_mph);  // (+= 50) // Pressed the increase vehicle speed button
+            else if (tcol==5 && trow==2 && sim_speedo) adj_val (&carspeed_filt_mph, -0.005*(double)touch_accel, 0.0, carspeed_redline_mph);  // (-= 50) Pressed the decrease vehicle speed button
             else if (tcol==5 && trow==4 && sim_joy) adj_val (&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (+= 25) Pressed the joystick right button                           
         }
         if (touch_accel_exponent < touch_accel_exponent_max && (touchHoldTimer.elapsed() > (touch_accel_exponent + 1) * touchAccelTimer.timeout())) touch_accel_exponent++; // If timer is > the shift time * exponent, and not already maxed, double the edit speed by incrementing the exponent
@@ -978,7 +992,7 @@ void loop() {
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
 
     // Heartbeat led algorithm
-    if (neopixel_heartbeat) { // Make the neopixel into a beating heart, in the color of the current runmode 
+    if (neopixel_heartbeat && neopixelRefreshTimer.expired()) { // Make the neopixel into a beating heart, in the color of the current runmode 
         neopixel_heart_color[N_RED] = ((colorcard[runmode] & 0xf800) >> 11) << 3;
         neopixel_heart_color[N_GRN] = ((colorcard[runmode] & 0x7e0) >> 5) << 2;
         neopixel_heart_color[N_BLU] = (colorcard[runmode] & 0x1f) << 3;
@@ -998,8 +1012,9 @@ void loop() {
             neostrip.setBrightness (neopixel_heart_fade);
             neostrip.show();
         }
+        neopixelRefreshTimer.reset();
     }
-    else if (neopixelTimer.expired()) {  // Just make a heartbeat on the native board led
+    else if (heartbeat_led_pin >= 0 && neopixelTimer.expired()) {  // Just make a heartbeat on the native board led
         heartbeat_pulse = !heartbeat_pulse;
         if (++heartbeat_state >= arraysize (heartbeat_ekg)) heartbeat_state -= arraysize (heartbeat_ekg);
         heartbeatTimer.set (heartbeat_ekg[heartbeat_state]);
