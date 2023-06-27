@@ -485,6 +485,7 @@ void loop() {
             gasSPID.set_target (tach_idle_rpm);  //  Release the throttle 
             shutdown_complete = false;
             shutdown_color = LPNK;
+            disp_runmode_dirty = true;
             calmode_request = false;
             park_the_motors = false;
             if (!car_stopped()) {
