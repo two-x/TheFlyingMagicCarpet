@@ -36,7 +36,7 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names
     index++;
 }
 
-Hotrc hotrc ( (hotrc_pulse_vert_max_us+hotrc_pulse_vert_min_us)/2 );
+Hotrc hotrc (&ctrl_pos_adc[VERT][FILT], hotrc_pos_failsafe_min_adc, hotrc_pos_failsafe_max_adc, hotrc_pos_failsafe_pad_adc);
     
 void setup() {
     set_pin (heartbeat_led_pin, OUTPUT);
@@ -446,8 +446,9 @@ void loop() {
             hotrc_ch4_sw_event = false;    
         }
         // Detect loss of radio reception and panic stop
-        if (ctrl_pos_adc[VERT][FILT] > hotrc_pos_failsafe_min_us && ctrl_pos_adc[VERT][FILT] < hotrc_pos_failsafe_max_us) {
-            if (hotrcPanicTimer.expired()) {
+        hotrc.calc();
+        if (ctrl_pos_adc[VERT][FILT] > hotrc.get_failsafe_min() && ctrl_pos_adc[VERT][FILT] < hotrc.get_failsafe_max()) {
+            if (hotrc_radio_detected && hotrcPanicTimer.expired()) {
                 hotrc_radio_detected = false;
                 hotrc_suppress_next_event = true;  // reject spurious ch3 switch event upon next hotrc poweron
             }
@@ -646,9 +647,8 @@ void loop() {
         }
         else if (button_it) hotrc.print();
         else if (button_last) {
-            hotrc_pos_failsafe_min_us = hotrc.get_min();
-            hotrc_pos_failsafe_max_us = hotrc.get_max();
-            cout << "\nHotrc failsafe range set!  Min: " << hotrc_pos_failsafe_min_us << "us, Max: " << hotrc_pos_failsafe_max_us << " us, including " << hotrc.get_pad() << " us slop both ways" << std::endl;
+            hotrc.set_failsafe();
+            cout << "\nHotrc failsafe range set!  Min: " << hotrc.get_failsafe_min() << "adc, Max: " << hotrc.get_failsafe_max() << " adc, including " << hotrc.get_pad() << " adc pad both ways" << std::endl;
             cal_set_hotrc_failsafe_ready = false;
         }
     }

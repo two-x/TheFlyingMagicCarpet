@@ -275,11 +275,11 @@ int32_t hotrc_pulse_horz_min_us = 990;  // 1009;
 int32_t hotrc_pulse_horz_max_us = 1990;  // 2003;
 
 // Maybe merging these into Hotrc class
-int32_t hotrc_pos_failsafe_min_us = 450;  // The failsafe setting in the hotrc must be set to a trigger level equal to max amount of trim upward from trigger released.
-int32_t hotrc_pos_failsafe_max_us = 530;
+int32_t hotrc_pos_failsafe_min_adc = 210;  // The failsafe setting in the hotrc must be set to a trigger level equal to max amount of trim upward from trigger released.
+int32_t hotrc_pos_failsafe_max_adc = 368;
+int32_t hotrc_pos_failsafe_pad_adc = 10;
 uint32_t hotrc_panic_timeout = 1000000;  // how long to receive flameout-range signal from hotrc vertical before panic stopping
 Timer hotrcPanicTimer(hotrc_panic_timeout);
-
 
 // steering related
 int32_t steer_pulse_safe_us = 0;

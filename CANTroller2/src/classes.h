@@ -208,38 +208,58 @@ class Hotrc {
   public:
     int32_t index = 1;
     int32_t padding = 7;
-    int32_t depth = 30;
+    int32_t depth = 250;
   protected:
-    int32_t avg, min_index, max_index;
-    int32_t history[30];  // It will not accept history[depth] - wtf
+    int32_t* val;
+    int32_t avg, min_index, max_index, failsafe_min, failsafe_max;
+    int32_t calc_count = 0;
+    int32_t history[250];  // It will not accept history[depth] - wtf
     uint32_t sum;
+    bool detect_ready = false;
   public:
-    Hotrc (int32_t arg_val, int32_t arg_padding) {
-        for (int32_t x = 0; x < depth; x++) history[x] = arg_val;
-        avg = arg_val;
+    Hotrc (int32_t* arg_val, int32_t arg_failsafe_min, int32_t arg_failsafe_max, int32_t arg_padding) {
+        val = arg_val;
+        for (int32_t x = 0; x < depth; x++) history[x] = *val;
+        avg = *val;
         sum = avg * depth;
         min_index = 0;
         max_index = 0;
-        if (arg_padding >= -1) padding = arg_padding;
+        failsafe_min = arg_failsafe_min;
+        failsafe_max = arg_failsafe_max;
+        if (arg_padding != -1) padding = arg_padding;
     }
-    Hotrc (int32_t val) { Hotrc (val, -1); }    
-    int32_t calc (int32_t val) {
-        sum += val - history[index];
+    void set_failsafe (int32_t arg_failsafe_min, int32_t arg_failsafe_max) {
+        failsafe_min = arg_failsafe_min - padding;
+        failsafe_max = arg_failsafe_max + padding;
+    }
+    void set_failsafe (void) {
+        failsafe_min = history[min_index] - padding;
+        failsafe_max = history[max_index] + padding;
+    }
+    void set_pad (int32_t arg_pad) { padding = arg_pad; } 
+    int32_t calc (void) {
+        int32_t nextindex = (index+1) % depth;
+        sum += *val - history[nextindex];
         avg = sum/depth;
-        if (++index >= depth) index -= depth;  
-        if (val < history[min_index]) min_index = index;
-        else if (index >= depth) for (int32_t x = 0; x <= depth; x++) if (history[x] < history[min_index]) min_index = x;
-        if (val > history[max_index]) max_index = index;
-        else if (index >= depth) for (int32_t x = 0; x <= depth; x++) if (history[x] > history[max_index]) max_index = x;
+        int32_t save_min = history[min_index];
+        int32_t save_max = history[max_index];
+        history[nextindex] = *val;
+        if (*val <= save_min) min_index = nextindex;
+        else if (min_index == nextindex) for (int32_t x = 0; x < depth; x++) if (history[x] < history[min_index]) min_index = x;
+        if (*val >= save_max) max_index = nextindex;
+        else if (max_index == nextindex) for (int32_t x = 0; x < depth; x++) if (history[x] > history[max_index]) max_index = x;
+        if (!detect_ready) if (++calc_count >= depth) detect_ready = true;
+        index = nextindex;
         return avg;
     }
-    void print (void) {
-        std::cout << "Hotrc:" << history[index] << " avg:" << avg << " min:" << min_index << " max:" << max_index << std::endl;
-    }
-    int32_t get_min () { return history[min_index]-padding; }
-    int32_t get_max () { return history[max_index]+padding; }
-    int32_t get_pad () { return padding; }
-    int32_t get_avg () { return avg; }
+    void print (void) { std::cout << "Hotrc:" << history[index] << " avg:" << avg << " min[" << min_index << "]:" << history[min_index] << " max[" << max_index << "]:" << history[max_index] << std::endl; }
+    bool connection_lost (void) { return (detect_ready && (history[min_index] < failsafe_min || history[max_index] > failsafe_max)); }
+    int32_t get_min (void) { return history[min_index]-padding; }
+    int32_t get_max (void) { return history[max_index]+padding; }
+    int32_t get_pad (void) { return padding; }
+    int32_t get_avg (void) { return avg; }
+    int32_t get_failsafe_min (void) { return failsafe_min; }
+    int32_t get_failsafe_max (void) { return failsafe_max; }
 };
 
 class Flash {
