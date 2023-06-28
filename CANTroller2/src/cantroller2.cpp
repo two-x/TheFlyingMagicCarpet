@@ -6,9 +6,6 @@
 #include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
 #include <Adafruit_ILI9341.h>  // For interfacing with the TFT LCD controller chip
 #include <Preferences.h>
-#ifdef DUE
-    #include <LibPrintf.h>  // This works on Due but not ESP32
-#endif
 #include <Adafruit_NeoPixel.h>  // Plan to allow control of neopixel LED onboard the esp32
 #include "Arduino.h"
 #include <OneWire.h>
@@ -235,7 +232,7 @@ void setup() {
     printf ("Watchdog enabled. Timer set to %ld ms.\n", watchdog_time_ms);
     hotrcPanicTimer.reset();
     loopTimer.reset();  // start timer to measure the first loop
-    Serial.println (F("Setup finished"));
+    Serial.println (F("Setup done"));
 }
 
 // Main loop.  Each time through we do these eight steps:
@@ -255,20 +252,16 @@ void loop() {
     //
     loopindex = 0;  // reset at top of loop
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "top");
-    
-    Watchdog.reset();  // Kick the watchdog to keep us alive
-    
+       
     // cout << "(top)) spd:" << carspeed_filt_mph << " tach:" << tach_filt_rpm;
     
     // Update inputs.  Fresh sensor data, and filtering.
     //
 
     // Onboard devices - takes 12 us to read
-    if (button_pin >= 0) {  // if encoder sw is being pressed (switch is active low)
-        button_it = !digitalRead (button_pin);
-        // if (button_it != button_last) Serial.println ("button\n");
-    }
-
+    button_last = button_it;
+    button_it = !(read_pin (button_pin));
+    
     // External digital signals - takes 11 us to read
     if (!simulating || !sim_basicsw) basicmodesw = !digitalRead (basicmodesw_pin);   // 1-value because electrical signal is active low
     if (!simulating || !sim_cruisesw) cruise_sw = digitalRead (cruise_sw_pin);
@@ -338,7 +331,7 @@ void loop() {
     // Read and interpret encoder switch activity. Encoder rotation is handled in interrupt routine
     // Encoder handler routines should act whenever encoder_sw_action is true, setting it back to false once handled.
     // When handling press, if encoder_long_clicked is nonzero then press is a long press
-    if (!digitalRead (encoder_sw_pin)) {  // if encoder sw is being pressed (switch is active low)
+    if (!read_pin (encoder_sw_pin)) {  // if encoder sw is being pressed (switch is active low)
         if (!encoder_sw) {  // if the press just occurred
             encoderLongPressTimer.reset();  // start a press timer
             encoder_timer_active = true;  // flag to indicate timing for a possible long press
@@ -408,26 +401,24 @@ void loop() {
 
     // Controller handling
     //
-    // Read horz and vert inputs - takes 40 us to read
-    if (!simulating || !sim_joy) {  // If not simulating or joystick simulation is disabled
-        if (ctrl == HOTRC) {  // If using hotrc handle
+    // Read horz and vert inputs, determine steering pwm output -  - takes 40 us to read. Then, takes 13 us to handle
+    if (!simulating || !sim_joy) {  // Handle HotRC button generated events and detect potential loss of radio signal - takes 15 us to handle
+        if (ctrl == HOTRC) {
             ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_vert_max_us, hotrc_pulse_vert_min_us, ctrl_lims_adc[ctrl][VERT][MAX], ctrl_lims_adc[ctrl][VERT][MIN]);
             ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_horz_max_us, hotrc_pulse_horz_min_us, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
         }
-        else {  // If using old joystick
+        else {
             ctrl_pos_adc[VERT][RAW] = analogRead (joy_vert_pin);  // Read joy vertical
             ctrl_pos_adc[HORZ][RAW] = analogRead (joy_horz_pin);  // Read joy horizontal
         }
         ctrl_pos_adc[VERT][RAW] = constrain (ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
         ctrl_pos_adc[HORZ][RAW] = constrain (ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);   
-        if (ctrl_pos_adc[VERT][RAW] > ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][RAW] < ctrl_db_adc[VERT][TOP])  ctrl_pos_adc[VERT][FILT] = adcmidscale_adc;  // if joy vert is in the deadband, set joy_vert_filt to center value
+        if (ctrl_pos_adc[VERT][RAW] > ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][RAW] < ctrl_db_adc[VERT][TOP]) ctrl_pos_adc[VERT][FILT] = adcmidscale_adc;  // if joy vert is in the deadband, set joy_vert_filt to center value
         else ema_filt (ctrl_pos_adc[VERT][RAW], &ctrl_pos_adc[VERT][FILT], ctrl_ema_alpha[ctrl]);  // otherwise do ema filter to determine joy_vert_filt
-        if (ctrl_pos_adc[HORZ][RAW] > ctrl_db_adc[HORZ][BOT] && ctrl_pos_adc[HORZ][RAW] < ctrl_db_adc[HORZ][TOP])  ctrl_pos_adc[HORZ][FILT] = adcmidscale_adc;  // if joy horz is in the deadband, set joy_horz_filt to center value
+        if (ctrl_pos_adc[HORZ][RAW] > ctrl_db_adc[HORZ][BOT] && ctrl_pos_adc[HORZ][RAW] < ctrl_db_adc[HORZ][TOP]) ctrl_pos_adc[HORZ][FILT] = adcmidscale_adc;  // if joy horz is in the deadband, set joy_horz_filt to center value
         else ema_filt (ctrl_pos_adc[HORZ][RAW], &ctrl_pos_adc[HORZ][FILT], ctrl_ema_alpha[ctrl]);  // otherwise do ema filter to determine joy_horz_filt
     }
- 
-    // Determine steering pwm output - takes 13 us to handle
-    if (runmode != SHUTDOWN || !shutdown_complete)  { // Unless fully shut down at the moment, set the steering output
+    if (runmode != SHUTDOWN || !shutdown_complete) { // Unless fully shut down at the moment, set the steering output
         if (ctrl_pos_adc[HORZ][FILT] >= ctrl_db_adc[HORZ][TOP]) {
             steer_pulse_safe_us = steer_pulse_stop_us + (int32_t)((double)(steer_pulse_right_us - steer_pulse_stop_us) * (1 - ((double)steer_safe_percent * carspeed_filt_mph / ((double)carspeed_redline_mph * 100) )));
             steer_pulse_out_us = map (ctrl_pos_adc[HORZ][FILT], ctrl_db_adc[HORZ][TOP], ctrl_lims_adc[ctrl][HORZ][MAX], steer_pulse_stop_us, steer_pulse_safe_us);  // Figure out the steering setpoint if joy to the right of deadband
@@ -438,7 +429,6 @@ void loop() {
         }
         else steer_pulse_out_us = steer_pulse_stop_us;  // Stop the steering motor if inside the deadband
     }
-    // Handle HotRC button generated events and detect potential loss of radio signal - takes 15 us to handle
     if (ctrl == HOTRC) {
         if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition
             if (hotrc_suppress_next_ch3_event) hotrc_suppress_next_ch3_event = false;
@@ -533,7 +523,7 @@ void loop() {
         else if (sleepInactivityTimer.expired()) {
             // syspower = LOW;  // Power down devices
             // go to sleep?    
-    }
+        }
     }
     else if (runmode == STALL) {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
         if (!engine_stopped()) runmode = HOLD;  // Enter Hold Mode if we started the car
@@ -606,7 +596,7 @@ void loop() {
             cruise_sw_held = true;  // Get into button held state
         }
     }
-    else if (runmode == CRUISE)  {
+    else if (runmode == CRUISE) {
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
             cruiseSPID.set_target (carspeed_filt_mph);
             brakeSPID.set_target (pressure_min_psi);  // Let off the brake and keep it there till out of Cruise mode
@@ -669,6 +659,8 @@ void loop() {
         runmode = SHUTDOWN;
     }
     if (runmode != SHUTDOWN && runmode != BASIC) park_the_motors = false;
+    we_just_switched_modes = (runmode != oldmode);
+    if (we_just_switched_modes) disp_runmode_dirty = true;  // runmode should not be changed after this point in loop
     
     // cout << "rm:" << runmode << " om:" << oldmode << "vert:" << ctrl_pos_adc[VERT][FILT] << " up?" << (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) << " jc?" << joy_centered << "\n";
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "mod");  //
@@ -1077,9 +1069,10 @@ void loop() {
             selected_value_last = selected_value;
             tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
         }
-        if (disp_runmode_dirty || runmode != oldmode || disp_redraw_all) {
+        if (disp_runmode_dirty || disp_redraw_all) {
             screen.draw_runmode (runmode, oldmode, (runmode == SHUTDOWN) ? shutdown_color : -1);
             disp_runmode_dirty = false;
+            oldmode = runmode;  // remember what mode we're in for next time
         }
         if ((dispRefreshTimer.expired() && !procrastinate) || disp_redraw_all) {
             dispRefreshTimer.reset();
@@ -1192,26 +1185,25 @@ void loop() {
         dataset_page_last = dataset_page;
         selected_value_last = selected_value;
         simulating_last = simulating;
+        oldmode = runmode;
     }
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dis");
 
+    // Kick watchdogs
+    Watchdog.reset();  // Kick the watchdog to keep us alive
+    if (display_enabled) screen.watchdog();
+ 
     // Do the control loop bookkeeping at the end of each loop
     //
-    button_last = button_it;
-    we_just_switched_modes = (runmode != oldmode);  // If changing runmode, set this so new mode logic can perform initial actions
-    oldmode = runmode;  // remember what mode we're in for next time
     loop_period_us = loopTimer.elapsed();  // us since beginning of this loop
     loopTimer.reset();
     loop_freq_hz = 1000000.0 / ((loop_period_us) ? (double)loop_period_us : 1);  // Prevent potential divide by zero
     loopno++;  // I like to count how many loops
-    if (display_enabled) {
-        screen.watchdog();
-    }
     if (timestamp_loop) {
         // loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");  //
         printf ("\rRM:%ld Lp#%ld us:%5ld ", runmode, loopno, loop_period_us);
         for (int32_t x=1; x<loopindex; x++) std::cout << ", " << std::setw(3) << loop_names[x] << x << ": " << std::setw(4) << looptimes_us[x]-looptimes_us[x-1];
         if (loop_period_us > 25000) printf ("\n");
     }
-    int_counter = 0;
+    loop_int_count = 0;
 }
