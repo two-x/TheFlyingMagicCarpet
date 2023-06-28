@@ -235,7 +235,7 @@ void setup() {
     printf ("Watchdog enabled. Timer set to %ld ms.\n", watchdog_time_ms);
     hotrcPanicTimer.reset();
     loopTimer.reset();  // start timer to measure the first loop
-    Serial.println (F("Setup finished"));
+    Serial.println (F("Setup done"));
 }
 
 // Main loop.  Each time through we do these eight steps:
@@ -255,9 +255,7 @@ void loop() {
     //
     loopindex = 0;  // reset at top of loop
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "top");
-    
-    Watchdog.reset();  // Kick the watchdog to keep us alive
-    
+       
     // cout << "(top)) spd:" << carspeed_filt_mph << " tach:" << tach_filt_rpm;
     
     // Update inputs.  Fresh sensor data, and filtering.
@@ -265,6 +263,7 @@ void loop() {
 
     // Onboard devices - takes 12 us to read
     if (button_pin >= 0) {  // if encoder sw is being pressed (switch is active low)
+        button_last = button_it;
         button_it = !digitalRead (button_pin);
         // if (button_it != button_last) Serial.println ("button\n");
     }
@@ -669,6 +668,8 @@ void loop() {
         runmode = SHUTDOWN;
     }
     if (runmode != SHUTDOWN && runmode != BASIC) park_the_motors = false;
+    we_just_switched_modes = (runmode != oldmode);
+    if (we_just_switched_modes) disp_runmode_dirty = true;  // runmode should not be changed after this point in loop
     
     // cout << "rm:" << runmode << " om:" << oldmode << "vert:" << ctrl_pos_adc[VERT][FILT] << " up?" << (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) << " jc?" << joy_centered << "\n";
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "mod");  //
@@ -1077,9 +1078,10 @@ void loop() {
             selected_value_last = selected_value;
             tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
         }
-        if (disp_runmode_dirty || runmode != oldmode || disp_redraw_all) {
+        if (disp_runmode_dirty || disp_redraw_all) {
             screen.draw_runmode (runmode, oldmode, (runmode == SHUTDOWN) ? shutdown_color : -1);
             disp_runmode_dirty = false;
+            oldmode = runmode;  // remember what mode we're in for next time
         }
         if ((dispRefreshTimer.expired() && !procrastinate) || disp_redraw_all) {
             dispRefreshTimer.reset();
@@ -1192,26 +1194,25 @@ void loop() {
         dataset_page_last = dataset_page;
         selected_value_last = selected_value;
         simulating_last = simulating;
+        oldmode = runmode;
     }
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dis");
 
+    // Kick watchdogs
+    Watchdog.reset();  // Kick the watchdog to keep us alive
+    if (display_enabled) screen.watchdog();
+ 
     // Do the control loop bookkeeping at the end of each loop
     //
-    button_last = button_it;
-    we_just_switched_modes = (runmode != oldmode);  // If changing runmode, set this so new mode logic can perform initial actions
-    oldmode = runmode;  // remember what mode we're in for next time
     loop_period_us = loopTimer.elapsed();  // us since beginning of this loop
     loopTimer.reset();
     loop_freq_hz = 1000000.0 / ((loop_period_us) ? (double)loop_period_us : 1);  // Prevent potential divide by zero
     loopno++;  // I like to count how many loops
-    if (display_enabled) {
-        screen.watchdog();
-    }
     if (timestamp_loop) {
         // loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");  //
         printf ("\rRM:%ld Lp#%ld us:%5ld ", runmode, loopno, loop_period_us);
         for (int32_t x=1; x<loopindex; x++) std::cout << ", " << std::setw(3) << loop_names[x] << x << ": " << std::setw(4) << looptimes_us[x]-looptimes_us[x-1];
         if (loop_period_us > 25000) printf ("\n");
     }
-    int_counter = 0;
+    loop_int_count = 0;
 }
