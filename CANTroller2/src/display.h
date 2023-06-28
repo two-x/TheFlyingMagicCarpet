@@ -219,7 +219,7 @@ void draw_bargraph_needle (int32_t n_pos_x, int32_t old_n_pos_x, int32_t pos_y, 
 //     draw_target_shape (t_pos_x, pos_y, t_color, r_color);
 //     draw_needle_shape (n_pos_x, pos_y, n_color);
 // }  // This function was for when the needle could overlap the target
-void draw_string (int32_t x_new, int32_t x_old, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
+void draw_string (int32_t x_new, int32_t x_old, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor, bool forced=false) {  // Send in "" for oldtext if erase isn't needed
     int32_t oldlen = strlen(oldtext);
     int32_t newlen = strlen(text);
     tft.setTextColor (bgcolor);  
@@ -239,7 +239,7 @@ void draw_string (int32_t x_new, int32_t x_old, int32_t y, const char* text, con
             tft.setCursor (x_new+disp_font_width*letter, y);
             tft.print (text[letter]);
         }
-        else if (oldtext[letter] != text[letter]) {
+        else if (oldtext[letter] != text[letter] || forced) {
             tft.setCursor (x_new+disp_font_width*letter, y);
             tft.print (text[letter]);
         }
@@ -306,7 +306,7 @@ void draw_colons (int32_t x_pos, int32_t first, int32_t last, int32_t color) {
     }
 }
 // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
-void draw_fixed (int32_t page, int32_t page_last, bool redraw_tuning_corner) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
+void draw_fixed (int32_t page, int32_t page_last, bool redraw_tuning_corner, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
     yield();
     tft.setTextColor (GRY2);
     tft.setTextSize (1);
@@ -323,7 +323,7 @@ void draw_fixed (int32_t page, int32_t page_last, bool redraw_tuning_corner) {  
     }
     for (int32_t lineno=0; lineno < disp_tuning_lines; lineno++)  {  // Step thru lines of dataset page data
         yield();
-        draw_string(12, 12, (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[page][lineno], dataset_page_names[page_last][lineno], GRY2, BLK);
+        draw_string(12, 12, (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[page][lineno], dataset_page_names[page_last][lineno], GRY2, BLK, forced);
         draw_string_units(104, (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], GRY2, BLK);
         if (redraw_tuning_corner) {
             int32_t corner_y = (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix+7;  // lineno*disp_line_height_pix+disp_vshift_pix-1;
@@ -472,11 +472,11 @@ void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override) {  
     draw_string (8+6, 8+6, disp_vshift_pix, modecard[runmode], "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
     draw_string (x_new, x_new, disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
 }
-void draw_dataset_page (int32_t page, int32_t page_last) {
-    draw_fixed (page, page_last, true);  // Erase and redraw dynamic data corner of screen with names, units etc.
+void draw_dataset_page (int32_t page, int32_t page_last, bool forced=false) {
+    draw_fixed (page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
     // for (int32_t lineno=0; lineno<disp_lines; lineno++) draw_hyphen (59, lineno*disp_line_height_pix+disp_vshift_pix, BLK);
     yield();
-    draw_string (83, 83, disp_vshift_pix, pagecard[page], pagecard[page_last], RBLU, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+    draw_string (83, 83, disp_vshift_pix, pagecard[page], pagecard[page_last], RBLU, BLK, forced); // +6*(arraysize(modecard[runmode])+4-namelen)/2
 }
 void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
     yield();
