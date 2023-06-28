@@ -388,7 +388,7 @@ class Display {
         void draw_hyphen (int32_t x_pos, int32_t y_pos, int32_t color) {
             _tft.drawFastHLine (x_pos+2, y_pos+3, 3, color);
         }
-        void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target) {
+        void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target=-1) {
             yield();
             int32_t age_us = (int32_t)((double)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
             int32_t x_base = 59;
@@ -498,23 +498,20 @@ class Display {
             else if (result.find ("e+") != std::string::npos) result.replace (result.find ("e+"), 3, "e");  // For ridiculously large values
             return result;    
         }
-        void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int32_t target) {
+        void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int32_t target=-1) {
             std::string val_string = abs_itoa (value, (int32_t)disp_maxlength);
             // std::cout << "Int: " << value << " -> " << val_string << ", " << ((value >= 0) ? 1 : -1) << std::endl;
             draw_dynamic (lineno, val_string.c_str(), value, lowlim, hilim, (int32_t)target);
         }
-        void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim) {
-            draw_dynamic (lineno, value, lowlim, hilim, -1);
-        }
-        void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim, int32_t target) {
+        void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim, int32_t target=-1) {
             std::string val_string = abs_ftoa (value, (int32_t)disp_maxlength, 4);
             // std::cout << "Flt: " << value << " -> " << val_string << ", " << ((value >= 0) ? 1 : -1) << std::endl;
             draw_dynamic (lineno, val_string.c_str(), (int32_t)value, (int32_t)lowlim, (int32_t)hilim, target);
         }
-        void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim) {
-            draw_dynamic (lineno, value, lowlim, hilim, -1);
+        void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim, double target) {
+            draw_dynamic (lineno, value, lowlim, hilim, (int32_t)target);
         }
-        void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override) {  // color_override = -1 uses default color
+        void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override=-1) {  // color_override = -1 uses default color
             yield();
             int32_t color = (color_override == -1) ? colorcard[runmode] : color_override;
             int32_t x_new = 8+6*(2+strlen (modecard[runmode]))-3;
