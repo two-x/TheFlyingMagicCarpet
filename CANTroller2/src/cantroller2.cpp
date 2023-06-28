@@ -5,6 +5,7 @@
 #include <Servo.h>  // Makes PWM output to control motors (for rudimentary control of our gas and steering)
 #include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
 #include <Adafruit_ILI9341.h>  // For interfacing with the TFT LCD controller chip
+#include <Preferences.h>
 #ifdef DUE
     #include <LibPrintf.h>  // This works on Due but not ESP32
 #endif
@@ -37,6 +38,8 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names
 }
 
 Hotrc hotrc (&ctrl_pos_adc[VERT][FILT], hotrc_pos_failsafe_min_adc, hotrc_pos_failsafe_max_adc, hotrc_pos_failsafe_pad_adc);
+    
+Preferences config;
     
 void setup() {
     set_pin (heartbeat_led_pin, OUTPUT);
@@ -93,6 +96,9 @@ void setup() {
     
     if (display_enabled) {
         delay (500); // This is needed to allow the screen board enough time after a cold boot before we start trying to talk to it.
+        config.begin("FlyByWire", false);
+        dataset_page = config.getUInt("dpage", RUN);
+        dataset_page_last = config.getUInt("dpage", TEMP);
         tft_init();
     }
     //     Serial.print (F("Init LCD... "));
@@ -1046,8 +1052,11 @@ void loop() {
             procrastinate = true;  // Waits till next loop to draw changed values
         }
         if ((disp_dataset_page_dirty || disp_redraw_all)) {
-            draw_dataset_page (dataset_page, dataset_page_last);
+            static bool first = true;
+            draw_dataset_page (dataset_page, dataset_page_last, first);
+            first = false;
             disp_dataset_page_dirty = false;
+            if (dataset_page_last != dataset_page) config.putUInt("dpage", dataset_page);
             dataset_page_last = dataset_page;
             procrastinate = true;  // Waits till next loop to draw changed values
         }
@@ -1168,6 +1177,7 @@ void loop() {
         disp_redraw_all = false;
     }
     else {
+        if (dataset_page_last != dataset_page) config.putUInt("dpage", dataset_page);
         dataset_page_last = dataset_page;
         selected_value_last = selected_value;
         simulating_last = simulating;
