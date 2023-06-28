@@ -147,6 +147,10 @@ void setup() {
     
     Serial.println (F("set up and enabled\n"));
     
+    tach_govern_rpm = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
+    gas_pulse_govern_us = map ((int32_t)(gas_governor_percent*(tach_redline_rpm-tach_idle_rpm)/tach_redline_rpm), 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
+    carspeed_govern_mph = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, carspeed_redline_mph);  // Governor must scale the top vehicle speed proportionally
+
     // Set up the soren pid loops
     brakeSPID.set_output_center ((double)brake_pulse_stop_us);  // Sets actuator centerpoint and puts pid loop in output centerpoint mode. Becasue actuator value is defined as a deviation from a centerpoint
     brakeSPID.set_input_limits (pressure_min_psi, pressure_max_psi);  // Make sure pressure target is in range
@@ -714,13 +718,14 @@ void loop() {
             else if (gasSPID.get_open_loop())  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
                 gas_pulse_out_us = (int32_t)(map (gasSPID.get_target(), tach_idle_rpm, tach_govern_rpm, (double)gas_pulse_idle_us, (double)gas_pulse_govern_us)); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
             else gas_pulse_out_us = (int32_t)(gasSPID.compute (tach_filt_rpm));  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
-            // printf ("Gas PID   rm= %+-4ld target=%-+9.4lf", runmode, (double)tach_target_rpm);
+            // printf ("Gas PID   rm= %+-4ld target=%-+9.4lf", runmode, (double)gasSPID.get_target());
             // printf (" output = %-+9.4lf,  %+-4ld\n", gasSPID.get_output(), gas_pulse_out_us);
         }
         if (runmode != BASIC || park_the_motors) {
             if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo)
                 gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
             else gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_idle_us);
+            // printf (" output = %-+9.4lf,  %+-4ld\n", gasSPID.get_output(), gas_pulse_out_us);
             gas_servo.writeMicroseconds (gas_pulse_out_us);  // Write result to servo
         }
 

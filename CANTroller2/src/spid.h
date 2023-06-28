@@ -20,8 +20,8 @@ class SPID {  // Soren's home-made pid loop
     static const int32_t FWD = 1;  // Actuator_direction influences sensed value in the same direction
     static const int32_t REV = -1;  // Actuator_direction influences sensed value in the opposite direction
   private:
-    double kp_coeff = 0, ki_coeff = 0, kd_coeff = 0, kp, ki_hz, kd_s;
-    int32_t actuator_direction;
+    double kp_coeff = 0.01, ki_coeff = 0.01, kd_coeff = 0.01, kp, ki_hz, kd_s;
+    int32_t actuator_direction = FWD;
     bool rounding = true;
     int32_t max_precision = 4;
     uint32_t sample_period_ms;
@@ -57,12 +57,9 @@ class SPID {  // Soren's home-made pid loop
     double round (double val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
     double round (double val) { return round (val, max_precision); }
     double compute(void) {
-        input_last = input;  // store previously computed input
-        target_last = target;
-        error_last = error;
         error = target - input;
 
-        // printf(" in=%-+9.4lf err=%-+9.4lf errlast=%-+9.4lf ntet=%-+9.4lf kp_co=%-+9.4lf ki_co=%-+9.4lf kd_co=%-+9.4lf kds=%-+9.4lf kd_disp=%ld", input, error, error_last, near_target_error_thresh, kp_coeff, ki_coeff, kd_coeff, kd_s, disp_kd_ms);
+        // printf(" in=%-+9.4lf err=%-+9.4lf errlast=%-+9.4lf ntet=%-+9.4lf kp_co=%-+9.4lf ki_co=%-+9.4lf kd_co=%-+9.4lf kds=%-+9.4lf", input, error, error_last, near_target_error_thresh, kp_coeff, ki_coeff, kd_coeff, kd_s);
 
         // Add a layer of history here, with an additional condition that output only holds if change in error has been small for X time period
         // Also add code to hold output (below in this function) if output_hold = true
@@ -88,11 +85,22 @@ class SPID {  // Soren's home-made pid loop
 
         delta = p_term + i_term - d_term;
 
-        output = out_center + delta;
+        if (out_center_mode == CENTERED) {
+            output = out_center + delta;
+        } else {
+            output = delta;
+        }
         
-        // printf(" ntl2=%-+9.4lf sat=%1d outh=%1d pterm=%-+9.4lf iterm=%-+9.4lf dterm=%-+9.4lf out=%-+9.4lf", near_target_lock, saturated, output_hold, p_term, i_term, d_term, output);
+        // printf(" ntl2=%-+9.4lf sat=%1d outh=%1d pterm=%-+9.4lf iterm=%-+9.4lf dterm=%-+9.4lf out=%-+9.4lf\n", near_target_lock, saturated, output_hold, p_term, i_term, d_term, output);
 
+        printf("uc output: %7.2lf, min: %7.2lf, max:%7.2lf, ", output, out_min, out_max);
         saturated = constrain_value(&output, out_min, out_max);
+        printf("c output: %7.2lf, min: %7.2lf, max:%7.2lf\n", output, out_min, out_max);
+        
+        input_last = input;  // store previously computed input
+        target_last = target;
+        error_last = error;
+
         return output;
     }
     double compute(double arg_input) {
@@ -223,8 +231,8 @@ class SPID {  // Soren's home-made pid loop
     bool get_in_center() { return in_center; }
     bool get_saturated() { return saturated; }
     double get_p_term() { return ((p_term >= 0.001) ? p_term : 0); }
-    double get_i_term() { return ((i_term >= 0.001) ? p_term : 0); }
-    double get_d_term() { return ((d_term >= 0.001) ? p_term : 0); }
+    double get_i_term() { return ((i_term >= 0.001) ? i_term : 0); }
+    double get_d_term() { return ((d_term >= 0.001) ? d_term : 0); }
     double get_error() { return error; }
     double get_target() { return target; }
     double get_output() { return output; }
