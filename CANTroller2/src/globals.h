@@ -152,12 +152,12 @@ class Timer {  // Timer - Lasts 72 minutes between overflows.
   public:
     Timer (void) { reset(); }
     Timer (uint32_t arg1) { set(arg1); }
-    inline IRAM_ATTR void reset (void) { start_us = esp_timer_get_time(); }
-    inline IRAM_ATTR void set (uint32_t arg1) { timeout_us = arg1; reset(); }
-    inline IRAM_ATTR bool expired (void) { return (esp_timer_get_time() - start_us >= timeout_us); }
-    inline IRAM_ATTR uint32_t elapsed (void) { return (esp_timer_get_time() - start_us); }
-    inline IRAM_ATTR uint32_t remain (void) { return ((start_us + timeout_us) - esp_timer_get_time()); }
-    inline IRAM_ATTR uint32_t get_timeout (void) { return timeout_us; }
+    IRAM_ATTR void reset (void) { start_us = esp_timer_get_time(); }
+    IRAM_ATTR void set (uint32_t arg1) { timeout_us = arg1; reset(); }
+    IRAM_ATTR bool expired (void) { return (esp_timer_get_time() - start_us >= timeout_us); }
+    IRAM_ATTR uint32_t elapsed (void) { return (esp_timer_get_time() - start_us); }
+    IRAM_ATTR uint32_t remain (void) { return ((start_us + timeout_us) - esp_timer_get_time()); }
+    IRAM_ATTR uint32_t get_timeout (void) { return timeout_us; }
 };
 // // These lines add a pause/resume functionality to the Timer class, if we want that
 // uint32_t remaining_us; bool enabled = true;
@@ -259,7 +259,8 @@ volatile int32_t hotrc_vert_pulse_us = 1500;
 // Merging these into Hotrc class
 bool hotrc_radio_detected = false;
 bool hotrc_radio_detected_last = hotrc_radio_detected;
-bool hotrc_suppress_next_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
+bool hotrc_suppress_next_ch3_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
+bool hotrc_suppress_next_ch4_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 Timer hotrcPulseTimer;  // OK to not be volatile?
 //  ---- tunable ----
 double hotrc_pulse_period_us = 1000000.0 / 50;
