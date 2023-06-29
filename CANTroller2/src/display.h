@@ -217,15 +217,6 @@ class Display {
             draw_touchgrid (false);
             draw_fixed (dataset_page, dataset_page_last, false);
             disp_redraw_all = true;
-            // disp_dataset_page_dirty = true;
-            // disp_runmode_dirty = true;
-            // disp_sidemenu_dirty = true;
-            //if (simulating) draw_simbuttons (true);
-        
-            // draw_fixed (dataset_page, dataset_page_last, false);
-            // draw_touchgrid (false);
-            // draw_runmode (runmode, oldmode, -1);
-            // draw_dataset_page (dataset_page, dataset_page_last);
             printf ("Success.\nCaptouch initialization... ");
             if (!touchpanel.begin(40)) printf ("Couldn't start FT6206 touchscreen controller");  // pass in 'sensitivity' coefficient
             else printf ("Capacitive touchscreen started\n");
@@ -384,8 +375,7 @@ class Display {
                 }
             }
         }
-        // Font character \xfa is little 3-pixel wide hyphen, use for negative numbers 
-        void draw_hyphen (int32_t x_pos, int32_t y_pos, int32_t color) {
+        void draw_hyphen (int32_t x_pos, int32_t y_pos, int32_t color) {  // Draw minus sign in front of negative numbers
             _tft.drawFastHLine (x_pos+2, y_pos+3, 3, color);
         }
         void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target=-1) {

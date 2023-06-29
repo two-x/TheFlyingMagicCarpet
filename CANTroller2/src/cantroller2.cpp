@@ -35,7 +35,8 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names
 }
 
 Hotrc hotrc (&ctrl_pos_adc[VERT][FILT], hotrc_pos_failsafe_min_adc, hotrc_pos_failsafe_max_adc, hotrc_pos_failsafe_pad_adc);
-    
+// TempSensorBus tempsensors;
+
 Preferences config;
     
 Display screen(tft_cs_pin, tft_dc_pin);
@@ -182,7 +183,7 @@ void setup() {
         else printf ("Found ghost device : index %d, addr unknown\n", x);  // printAddress (temp_addrs[x]);
         tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
     }
-
+    
     // tempsensebus.setWaitForConversion (false);  // Do not block during conversion process
     // tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
     // tempsensebus.begin();
