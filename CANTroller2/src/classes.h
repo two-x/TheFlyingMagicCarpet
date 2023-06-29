@@ -99,9 +99,10 @@ class Param {
 class Device : virtual public Param {  // This class is truly virtual, in that it's not complete to have instances, just multiple children
   public:
     enum sources { _UNDEF, _CONST, _PIN, _TOUCH, _POT, _CALC };  // source of value. _TOUCH when simulated with touchscreen buttons
+    Timer timer();  // Can be used for external purposes
   protected:
     bool can_source[6] = { true, true, false, true, false, false };  // Which types of sources are possible for this device?
-    int32_t pin = -1;
+    int32_t pin = -1, enabled = true;
     int32_t source = _UNDEF;
   public:
     Device (double* arg_p_val_raw) : Param (arg_p_val_raw) {}
@@ -109,9 +110,11 @@ class Device : virtual public Param {  // This class is truly virtual, in that i
     Device (void) : Device ((double)-1.0) {}
     void set_source (int32_t arg_source) { if (can_source[arg_source]) source = arg_source; }
     void set_pin (bool arg_pin) { pin = arg_pin; }
+    void set_enabled (bool arg_enable) { enabled = arg_enable; }
     void set_can_source (int32_t arg_source, bool is_possible) { can_source[arg_source] = is_possible; }
     int32_t get_source (void) { return source; }
     int32_t get_pin (void) { return pin; }
+    bool get_enabled (void) { return enabled; }
     bool get_can_source (int32_t arg_source) { return can_source[arg_source]; }
 };
 
@@ -141,7 +144,7 @@ class Transducer : virtual public Device {
     }
     double raw_to_native (double arg_val_raw) {
         if (dir == _REV) arg_val_raw = *p_min_native + (*p_max_native - arg_val_raw);
-        if (invert && (arg_val_raw != b_offset)) return m_factor / (arg_val_raw - b_offset);
+        if (invert && (arg_val_raw - b_offset)) return m_factor / (arg_val_raw - b_offset);
         else if (!invert && m_factor) return (arg_val_raw - b_offset) / m_factor;
         printf ("Error: unit conversion refused to divide by zero\n");
         return -1;
@@ -233,20 +236,6 @@ class Sensor : virtual public Transducer {
     double ema (double arg_new_val_native) { return ema_alpha * arg_new_val_native + (1 - ema_alpha) * (*p_val_raw); }
     double get_ema_alpha (void) { return ema_alpha; }
 };
-// Sensor (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max)  // std::string& eng_name, 
-// : Transducer (arg_pin, arg_dir) {
-//     set_limits(arg_val_min, arg_val_max);
-// }
-// Sensor (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max, double arg_val_cent)  // std::string& eng_name, 
-// : Sensor (arg_pin, arg_dir, arg_val_min, arg_val_max) {
-//     set_center(arg_val_cent);
-// }
-// Sensor (int32_t arg_pin) 
-// : Device (arg_pin) {}
-// double getval (int32_t arg_hist) {  // returns the output value _RAW or _FILT. Use hist to retreive past values 0 (newest) - 9 (oldest)
-//     if (arg_hist < 0 || arg_hist >= sizeof(vals)) printf ("Transducer::val(): Max value history is past %d values\n", sizeof(vals)-1);            
-//     else return vals[d_val - &vals[0] + sizeof(vals) - arg_hist];
-// }
 
 // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
 class AnalogSensor : virtual public Sensor {
@@ -257,6 +246,85 @@ class AnalogSensor : virtual public Sensor {
         val_native = analogRead(pin);
         set_native (ema ((double)val_native));
     }
+};
+
+class PressureSensor : virtual public AnalogSensor {
+
+};
+
+class TempSensorBus : virtual public Sensor {
+//   public:
+//     enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
+//   protected:
+//     // sample_period 2000000;
+//     enum temp_status { IDLE, CONVERT, DELAY };
+//     int32_t status = IDLE;
+//     int32_t detected_devices = 0;
+//     int32_t precision = 9;  // 9-12 bit resolution
+//     int32_t current_index = 0;
+//     bool blocking_convert = false, verbose = true, read_lock = true;
+//     double sens_lim_min = -67.0;  // Minimum reading of sensor is -25 C = -67 F
+//     double sens_lim_max = 257.0;  // Maximum reading of sensor is 125 C = 257 F
+//     // double roomtemp = 77.0;  // "Room" temperature is 25 C = 77 F
+//   public:
+//     TempSensorBus (int32_t arg_pin) : Sensor() {
+//         set_pin (arg_pin);
+//         set_limits (sens_lim_min, sens_lim_max);
+//         TempSensorBus::init (true);
+//     }
+//     void init (bool read_initial_temps) {
+//         OneWire this->onewire (pin);
+//         DallasTemperature this->tempbus (&pin);
+//         tempbus.setWaitForConversion (true);  // Whether to block during conversion process
+//         tempbus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
+//         tempbus.begin();
+//         detected_devices = tempbus.getDeviceCount();
+//         DeviceAddress this->addrs[detected_devices];
+//         double this->temps[detected_devices];
+//         if (verbose) printf ("Temp sensors: Detected %d devices. Parasitic power: %s\n", temp_detected_device_ct, ((tempbus.isParasitePowerMode()) ? "On" : "Off"));  // , DEC);
+//         if (read_initial_temps) request(true);  // This blocks for over 100ms
+//         DeviceAddress temporary_addr;
+//         for (int32_t index = 0; index < detected_devices; index++) {
+//             int32_t succeed = tempbus.getAddress (temporary_addr, index);
+//             if (verbose) {
+//                 if (succeed) printf ("Found sensor: index %d, addr %d\n", index, temporary_addr);  // temp_addrs[x]
+//                 else printf ("Found ghost device: index %d, addr unknown\n", index);  // printAddress (temp_addrs[x]);
+//             }
+//             tempbus.setResolution (temporary_addr, precision);  // temp_addrs[x]
+//             if (read_initial_temps) read_temp (index);
+//             if (verbose) printf ("Sensor %ld temp: %lf degF\n", index, temps[index]);
+//         }
+//         if (read_initial_temps) {
+//             request(true);
+//             for (int32_t index; index < detected_devices; index++) read_temp (index);
+//             tempbus.setWaitForConversion (blocking_convert);  // makes it async
+//         }
+//     }
+//     void request (bool arg_wait_for_convert=false) {
+//         if (enabled && timer.expired()) {
+//             read_lock = true;
+//             if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
+//             tempbus.setWaitForConversion (arg_wait_for_convert || blocking_convert);  //
+//             tempbus.requestTemperatures();
+//             timer.set (750000 / (1 << (12 - temperature_precision)));  // Give some time before reading temp
+//             tempbus.setWaitForConversion (true);
+//             if (!arg_wait_for_convert && !blocking_convert) timer.set(750000 / (1 << (12 - precision)));  // Give some time before reading temp
+//             temp_status = CONVERT;
+//         }
+//     }
+//     void read_temp (int32_t arg_index) {
+//         if (timer.expired()) {
+//             read_lock = false;
+//             temps[arg_index] = tempbus.getTempFByIndex (arg_index);
+//         }
+//     }
+//     void set_precision (int32_t arg_bits) { precision = constrain (arg_bits, 9, 12); }
+//     int32_t get_precision (void) { return precision; }
+//     bool get_locked (void) {
+//         if (timer.expired()) read_lock = false;
+//         return read_lock;
+//     }
+//     void get_temp (int32_t arg_index) { return (temps[arg_index]); }
 };
 
 class Hotrc {
@@ -312,6 +380,21 @@ class Hotrc {
     int32_t get_failsafe_min (void) { return failsafe_min; }
     int32_t get_failsafe_max (void) { return failsafe_max; }
 };
+
+// Sensor (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max)  // std::string& eng_name, 
+// : Transducer (arg_pin, arg_dir) {
+//     set_limits(arg_val_min, arg_val_max);
+// }
+// Sensor (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max, double arg_val_cent)  // std::string& eng_name, 
+// : Sensor (arg_pin, arg_dir, arg_val_min, arg_val_max) {
+//     set_center(arg_val_cent);
+// }
+// Sensor (int32_t arg_pin) 
+// : Device (arg_pin) {}
+// double getval (int32_t arg_hist) {  // returns the output value _RAW or _FILT. Use hist to retreive past values 0 (newest) - 9 (oldest)
+//     if (arg_hist < 0 || arg_hist >= sizeof(vals)) printf ("Transducer::val(): Max value history is past %d values\n", sizeof(vals)-1);            
+//     else return vals[d_val - &vals[0] + sizeof(vals) - arg_hist];
+// }
 
 // // Device::Transducer::Sensor::PulseSensor are sensors where the value is based on the measured period between successive pulses (eg tach, speedo)
 // class PulseSensor : public Sensor {

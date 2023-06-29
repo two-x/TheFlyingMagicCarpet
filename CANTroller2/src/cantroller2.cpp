@@ -179,7 +179,7 @@ void setup() {
         else printf ("Found ghost device : index %d, addr unknown\n", x);  // printAddress (temp_addrs[x]);
         tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
     }
-
+    
     // tempsensebus.setWaitForConversion (false);  // Do not block during conversion process
     // tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
     // tempsensebus.begin();
@@ -347,27 +347,41 @@ void loop() {
     
     // Tach - takes 22 us to read when no activity
     if (!simulating || !sim_tach) {
-        if (tachPulseTimer.elapsed() < tach_stop_timeout_us) {
-            tach_rpm = convert_units ((double)(tach_delta_us), tach_convert_rpm_per_rpus, tach_convert_invert);
+        if (tach_delta_us) {  // If a valid rotation has happened since last time, delta will have a value
+            tach_buf_delta_us = tach_delta_us;  // Copy delta value (in case another interrupt happens during handling)
+            tach_delta_us = 0;  // Indicates to isr we processed this value
+            tach_rpm = convert_units ((double)(tach_buf_delta_us), tach_convert_rpm_per_rpus, tach_convert_invert);
             ema_filt (tach_rpm, &tach_filt_rpm, tach_ema_alpha);  // Sensor EMA filter
         }
-        else {
-            tach_rpm = 0;  // If timeout since last magnet is exceeded
-            tach_filt_rpm = 0;
+        else if (!engine_stopped() && tachPulseTimer.elapsed() >= tach_stop_timeout_us) {  // If time between pulses is long enough an engine can't run that slow
+            tach_rpm = 0.0;  // If timeout since last magnet is exceeded
+            tach_filt_rpm = 0.0;
         }        
     }
     
     // Speedo - takes 14 us to read when no activity
     if (!simulating || !sim_speedo) { 
-        if (speedoPulseTimer.elapsed() < speedo_stop_timeout_us) {
-            carspeed_mph = convert_units ((double)(speedo_delta_us), speedo_convert_mph_per_rpus, speedo_convert_invert);  // Update car speed value  
+        if (speedo_delta_us) {  // If a valid rotation has happened since last time, delta will have a value
+            speedo_buf_delta_us = speedo_delta_us;  // Copy delta value (in case another interrupt happens during handling)
+            speedo_delta_us = 0;  // Indicates to isr we processed this value
+            carspeed_mph = convert_units ((double)(speedo_buf_delta_us), speedo_convert_mph_per_rpus, speedo_convert_invert);  // Update car speed value  
             ema_filt (carspeed_mph, &carspeed_filt_mph, carspeed_ema_alpha);  // Sensor EMA filter
         }
-        else {
-            carspeed_mph = 0;
-            carspeed_filt_mph = 0;
+        else if (!car_stopped() && speedoPulseTimer.elapsed() >= speedo_stop_timeout_us) {  // If time between pulses is long enough an engine can't run that slow
+            carspeed_mph = 0.0;
+            carspeed_filt_mph = 0.0;
         }
     }
+    // if (!simulating || !sim_speedo) { 
+    //     if (speedoPulseTimer.elapsed() < speedo_stop_timeout_us) {
+    //         carspeed_mph = convert_units ((double)(speedo_delta_us), speedo_convert_mph_per_rpus, speedo_convert_invert);  // Update car speed value  
+    //         ema_filt (carspeed_mph, &carspeed_filt_mph, carspeed_ema_alpha);  // Sensor EMA filter
+    //     }
+    //     else {
+    //         carspeed_mph = 0;
+    //         carspeed_filt_mph = 0;
+    //     }
+    // }
 
     // Brake pressure - takes 72 us to read
     if (!simulating || !sim_pressure) {
@@ -412,14 +426,12 @@ void loop() {
     if (ctrl == HOTRC) {
         if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition
             if (hotrc_suppress_next_ch3_event) hotrc_suppress_next_ch3_event = false;
-            else {
-                ignition = !ignition;
-                hotrc_ch3_sw_event = false;
-            }
+            else ignition = !ignition;
+            hotrc_ch3_sw_event = false;
         }
         if (hotrc_ch4_sw_event) {
             if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
-            if (runmode == FLY) runmode = CRUISE;  // Toggle cruise/fly mode 
+            else if (runmode == FLY) runmode = CRUISE;  // Toggle cruise/fly mode 
             else if (runmode == CRUISE) runmode = FLY;
             hotrc_ch4_sw_event = false;    
         }
@@ -870,15 +882,15 @@ void loop() {
     sim_edit_delta += sim_edit_delta_encoder + sim_edit_delta_touch;  // Allow edits using the encoder or touchscreen
     sim_edit_delta_touch = 0;
     sim_edit_delta_encoder = 0;
-    if (tuning_ctrl != tuning_ctrl_last || dataset_page != dataset_page_last || selected_value != selected_value_last || sim_edit_delta != 0) tuningCtrlTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
-    if (tuning_ctrl != OFF && tuningCtrlTimer.expired()) tuning_ctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
+    if (tuning_ctrl != tuning_ctrl_last || dataset_page != dataset_page_last || selected_value != selected_value_last || sim_edit_delta) tuningCtrlTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
+    else if (tuning_ctrl != OFF && tuningCtrlTimer.expired()) tuning_ctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
     dataset_page = constrain (dataset_page, 0, arraysize(pagecard)-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
     if (dataset_page != dataset_page_last) {
         if (tuning_ctrl == EDIT) tuning_ctrl = SELECT;  // If page is flipped during edit, drop back to select mode
         disp_dataset_page_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
     }
     if (tuning_ctrl == SELECT) {
-        selected_value = constrain (selected_value, tuning_first_editable_line[dataset_page], 7);  // Skip unchangeable values for all PID modes
+        selected_value = constrain (selected_value, tuning_first_editable_line[dataset_page], disp_tuning_lines-1);  // Skip unchangeable values for all PID modes
         if (selected_value != selected_value_last) disp_selected_val_dirty = true;
     }
     if (tuning_ctrl != tuning_ctrl_last || disp_dataset_page_dirty) disp_selected_val_dirty = true;
@@ -991,8 +1003,7 @@ void loop() {
         }
         else if (neopixelTimer.expired()) {  // Rainbow fade
             neopixelTimer.reset();
-            neopixel_wheel_counter++;
-            neostrip.setPixelColor(0, colorwheel(neopixel_wheel_counter));
+            neostrip.setPixelColor(0, colorwheel(++neopixel_wheel_counter));
             neostrip.show();
         }
     }

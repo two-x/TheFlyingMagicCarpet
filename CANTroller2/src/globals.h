@@ -149,28 +149,24 @@ Preferences config;
 
 // Globals -------------------
 //
-class Timer {  // Timer - Lasts 72 minutes between overflows.
+class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
   protected:
     volatile uint32_t start_us = 0;
-    volatile uint32_t timeout_us = 0;   
+    volatile uint32_t timeout_us = 0;
+    volatile uint32_t remain_us;
+    volatile bool enabled = true;
   public:
     Timer (void) { reset(); }
     Timer (uint32_t arg1) { set(arg1); }
-    IRAM_ATTR void reset (void) { start_us = esp_timer_get_time(); }
     IRAM_ATTR void set (uint32_t arg1) { timeout_us = arg1; reset(); }
-    IRAM_ATTR bool expired (void) { return (esp_timer_get_time() - start_us >= timeout_us); }
-    IRAM_ATTR uint32_t elapsed (void) { return (esp_timer_get_time() - start_us); }
-    IRAM_ATTR uint32_t remain (void) { return ((start_us + timeout_us) - esp_timer_get_time()); }
+    IRAM_ATTR void reset (void) { start_us = esp_timer_get_time(); remain_us = timeout_us; }
+    IRAM_ATTR void pause (void) { remain_us = remain(); enabled = false; }
+    IRAM_ATTR void resume (void) { start_us = esp_timer_get_time() - remain_us; enabled = true; }
+    IRAM_ATTR bool expired (void) { return (enabled) ? (esp_timer_get_time() >= start_us + timeout_us): false; }
+    IRAM_ATTR uint32_t elapsed (void) { return (enabled) ? (esp_timer_get_time() - start_us) : (timeout_us - remain_us); }
+    IRAM_ATTR uint32_t remain (void) { return (enabled) ? ((start_us + timeout_us) - esp_timer_get_time()) : remain_us; }
     IRAM_ATTR uint32_t get_timeout (void) { return timeout_us; }
 };
-// // These lines add a pause/resume functionality to the Timer class, if we want that
-// uint32_t remaining_us; bool enabled = true;
-// inline void reset (void) { start_us = esp_timer_get_time(); remaining_us = timeout_us; }
-// inline bool expired (void) { return (enabled) ? (esp_timer_get_time() - start_us > timeout_us) : false; }
-// inline uint32_t elapsed (void) { return (enabled) ? (esp_timer_get_time() - start_us) : 0; }
-// inline uint32_t remain (void) { return (enabled) ? (start_us + timeout_us - esp_timer_get_time()) : remaining_us; }
-// inline void pause (void) { remaining_us = remain(); enabled = false; }
-// inline void resume (void) { start_us = esp_timer_get_time() - remaining_us; enabled = true; }
 
 // run state globals
 enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL };
@@ -259,13 +255,12 @@ volatile bool hotrc_vert_nextval = 0;
 volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
 volatile int32_t hotrc_horz_pulse_us = 1500;
 volatile int32_t hotrc_vert_pulse_us = 1500;
-
+Timer hotrcPulseTimer;  // OK to not be volatile?
 // Merging these into Hotrc class
 bool hotrc_radio_detected = false;
 bool hotrc_radio_detected_last = hotrc_radio_detected;
 bool hotrc_suppress_next_ch3_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 bool hotrc_suppress_next_ch4_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
-Timer hotrcPulseTimer;  // OK to not be volatile?
 //  ---- tunable ----
 double hotrc_pulse_period_us = 1000000.0 / 50;
 double ctrl_ema_alpha[2] = { 0.005, 0.1 };  // [HOTRC, JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
@@ -363,8 +358,10 @@ int32_t gas_pulse_ccw_max_us = 2000;  // Servo ccw limit pulsewidth. Hotrc contr
 int32_t gas_pulse_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_idle_us where to park the servo out of the way so we can drive manually (in us)
 
 // tachometer related
-volatile int32_t tach_delta_us = 0;
 Timer tachPulseTimer;  // OK to not be volatile?
+volatile int32_t tach_delta_us = 0;
+volatile int32_t tach_buf_delta_us = 0;
+volatile uint32_t tach_time_us;
 double tach_rpm = 50;  // Current engine speed, raw as sensed (in rpm)
 double tach_filt_rpm = 50;  // Current engine speed, filtered (in rpm)
 double tach_govern_rpm;  // Create an artificially reduced maximum for the engine speed. This is given a value in the loop
@@ -377,16 +374,18 @@ double tach_idle_rpm = 700.0;  // Min value for engine hz, corresponding to low 
 double tach_max_rpm = 6000.0;  // Max possible engine rotation speed
 double tach_redline_rpm = 4000.0;  // Max value for tach_rpm, pedal to the metal (in rpm)
 double tach_margin_rpm = 15.0;  // Margin of error for checking engine rpm (in rpm)
-double tach_stop_thresh_rpm = 0.01;  // Below which the engine is considered stopped
+double tach_stop_thresh_rpm = 0.01;  // Below which the engine is considered stopped - this is redundant,
 int32_t tach_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
 int32_t tach_delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
 
 // carspeed/speedo related
-volatile int32_t speedo_delta_us = 0;
 double carspeed_govern_mph;  // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
 double carspeed_mph;  // Current car speed, raw as sensed (in mph)
 double carspeed_filt_mph;  // Current car speed, filtered (in mph)
 Timer speedoPulseTimer;  // OK to not be volatile?
+volatile int32_t speedo_delta_us = 0;
+volatile int32_t speedo_buf_delta_us = 0;
+volatile uint32_t speedo_time_us;
 //  ---- tunable ----
 double speedo_convert_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 rot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 gearing * 20*pi in/rot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
 // Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
@@ -498,17 +497,17 @@ DeviceAddress temp_addrs[6];
 // fast as I can move the magnet with my hand, and it works. It would be cleaner to just increment a counter here in the ISR
 // then call mycros() in the main loop and compare with a timer to calculate mph.
 void IRAM_ATTR tach_isr (void) {  // The tach and speedo isrs compare value returned from the mycros() function with the value from the last interrupt to determine period, to get frequency of the vehicle pulley rotations.
-    uint32_t temp_us = tachPulseTimer.elapsed();
-    if (temp_us > tach_delta_abs_min_us) {
+    tach_time_us = tachPulseTimer.elapsed();
+    if (tach_time_us > tach_delta_abs_min_us) {
         tachPulseTimer.reset();
-        tach_delta_us = temp_us;    
+        tach_delta_us = tach_time_us;
     }
 }
 void IRAM_ATTR speedo_isr (void) {  //  A better approach would be to read, reset, and restart a hardware interval timer in the isr.  Better still would be to regularly read a hardware binary counter clocked by the pin - no isr.
-    uint32_t temp_us = speedoPulseTimer.elapsed();
-    if (temp_us > speedo_delta_abs_min_us) {
+    speedo_time_us = speedoPulseTimer.elapsed();
+    if (speedo_time_us > speedo_delta_abs_min_us) {
         speedoPulseTimer.reset();
-        speedo_delta_us = temp_us;    
+        speedo_delta_us = speedo_time_us;    
     }
 }
 void IRAM_ATTR hotrc_vert_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
@@ -521,12 +520,12 @@ void IRAM_ATTR hotrc_horz_isr (void) {  // On falling edge, records high pulse w
 }
 void IRAM_ATTR hotrc_ch3_isr (void) {  // On falling edge, records high pulse width to determine ch3 button toggle state
     hotrc_ch3_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch3 switch true if short pulse, otherwise false
-    if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled
+    if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch3_sw_last = hotrc_ch3_sw;
 }
 void IRAM_ATTR hotrc_ch4_isr (void) {  // On falling edge, records high pulse width to determine ch4 button toggle state
     hotrc_ch4_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch4 switch true if short pulse, otherwise false
-    if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled
+    if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
 
