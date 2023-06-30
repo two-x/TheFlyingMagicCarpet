@@ -426,14 +426,12 @@ void loop() {
     if (ctrl == HOTRC) {
         if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition
             if (hotrc_suppress_next_ch3_event) hotrc_suppress_next_ch3_event = false;
-            else {
-                ignition = !ignition;
-                hotrc_ch3_sw_event = false;
-            }
+            else ignition = !ignition;
+            hotrc_ch3_sw_event = false;
         }
         if (hotrc_ch4_sw_event) {
             if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
-            if (runmode == FLY) runmode = CRUISE;  // Toggle cruise/fly mode 
+            else if (runmode == FLY) runmode = CRUISE;  // Toggle cruise/fly mode 
             else if (runmode == CRUISE) runmode = FLY;
             hotrc_ch4_sw_event = false;    
         }
