@@ -5,7 +5,6 @@
 #include <Servo.h>  // Makes PWM output to control motors (for rudimentary control of our gas and steering)
 #include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
 #include <Adafruit_ILI9341.h>  // For interfacing with the TFT LCD controller chip
-#include <Preferences.h>
 #include <Adafruit_NeoPixel.h>  // Plan to allow control of neopixel LED onboard the esp32
 #include "Arduino.h"
 #include <OneWire.h>
@@ -20,10 +19,6 @@
 #include "ctrl.h"
 using namespace std;
 
-double temp_min = -67.0;  // Minimum reading of sensor is -25 C = -67 F
-double temp_max = 257.0;  // Maximum reading of sensor is 125 C = 257 F
-double temp_room = 77.0;  // "Room" temperature is 25 C = 77 F
-
 std::vector<string> loop_names(20);
 
 void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names, bool dirty[], string loopname) {  // (int32_t timesarray[], int32_t index) {
@@ -36,8 +31,6 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names
 }
 
 Hotrc hotrc (&ctrl_pos_adc[VERT][FILT], hotrc_pos_failsafe_min_adc, hotrc_pos_failsafe_max_adc, hotrc_pos_failsafe_pad_adc);
-    
-Preferences config;
     
 Display screen(tft_cs_pin, tft_dc_pin);
     
