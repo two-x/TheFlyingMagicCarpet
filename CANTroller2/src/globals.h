@@ -1,6 +1,7 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 #include "Arduino.h"
+#include <Preferences.h>
 #include <vector>
 #include <string>
 #include <stdio.h>
@@ -126,6 +127,9 @@ bool serial_debugging = true;
 bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
 bool take_temperatures = false;
 
+// Persistent config storage
+Preferences config;
+    
 // Readily available possibilities we could wire up if we want
 //
 // * Status LEDs (digital out)
@@ -472,6 +476,9 @@ static Servo gas_servo;
 static Adafruit_NeoPixel neostrip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
 
 // Temperature sensor related
+double temp_min = -67.0;  // Minimum reading of sensor is -25 C = -67 F
+double temp_max = 257.0;  // Maximum reading of sensor is 125 C = 257 F
+double temp_room = 77.0;  // "Room" temperature is 25 C = 77 F
 enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
 Timer tempTimer (2000000);
 enum temp_status { IDLE, CONVERT, DELAY };
