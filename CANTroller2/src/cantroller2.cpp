@@ -1,14 +1,7 @@
 // Carpet CANTroller II  Source Code  - For Arduino Due with Adafruit 2.8inch Captouch TFT shield.
 #include <SPI.h>  // SPI serial bus needed to talk to the LCD and the SD card
 #include <Wire.h>  // Contains I2C serial bus, needed to talk to touchscreen chip
-#include <SdFat.h>  // SD card & FAT filesystem library
-#include <Servo.h>  // Makes PWM output to control motors (for rudimentary control of our gas and steering)
-#include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
-#include <Adafruit_ILI9341.h>  // For interfacing with the TFT LCD controller chip
-#include <Adafruit_NeoPixel.h>  // Plan to allow control of neopixel LED onboard the esp32
 #include "Arduino.h"
-#include <OneWire.h>
-#include <DallasTemperature.h>
 #include <Adafruit_SleepyDog.h>
 #include <vector>
 #include <string>
@@ -150,12 +143,16 @@ void setup() {
     carspeed_govern_mph = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, carspeed_redline_mph);  // Governor must scale the top vehicle speed proportionally
 
     // Set up the soren pid loops
-    brakeSPID.set_output_center ((double)brake_pulse_stop_us);  // Sets actuator centerpoint and puts pid loop in output centerpoint mode. Becasue actuator value is defined as a deviation from a centerpoint
-    brakeSPID.set_input_limits (pressure_min_psi, pressure_max_psi);  // Make sure pressure target is in range
+    brakeSPID.set_input_limits (&pressure_min_psi, &pressure_max_psi);  // Make sure pressure target is in range
     brakeSPID.set_output_limits ((double)brake_pulse_retract_us, (double)brake_pulse_extend_us);
-    gasSPID.set_input_limits (tach_idle_rpm, tach_govern_rpm);
+    
+    printf ("CANT: min:%4ld max:%4ld cent:%ld\n", brake_pulse_retract_us, brake_pulse_extend_us, brake_pulse_stop_us);
+
+    brakeSPID.set_output_center ((double)brake_pulse_stop_us);  // Sets actuator centerpoint and puts pid loop in output centerpoint mode. Becasue actuator value is defined as a deviation from a centerpoint
+    
+    gasSPID.set_input_limits (&tach_idle_rpm, &tach_govern_rpm);
     gasSPID.set_output_limits ((double)gas_pulse_govern_us, (double)gas_pulse_idle_us);
-    cruiseSPID.set_input_limits (carspeed_idle_mph, carspeed_govern_mph);
+    cruiseSPID.set_input_limits (&carspeed_idle_mph, &carspeed_govern_mph);
     cruiseSPID.set_output_limits (tach_idle_rpm, tach_govern_rpm);
       
     steer_servo.attach (steer_pwm_pin);
@@ -669,33 +666,33 @@ void loop() {
 
         // Brakes
         if (runmode == CAL && cal_joyvert_brkmotor) {
-            if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) brake_pulse_out_us = map (ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], brake_pulse_stop_us, brake_pulse_extend_us);
-            else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) brake_pulse_out_us = map (ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_db_adc[VERT][BOT], brake_pulse_retract_us, brake_pulse_stop_us);
-            else brake_pulse_out_us = brake_pulse_stop_us;
+            if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) brake_pulse_out_us = (double)map (ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], brake_pulse_stop_us, brake_pulse_extend_us);
+            else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) brake_pulse_out_us = (double)map (ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_db_adc[VERT][BOT], brake_pulse_retract_us, brake_pulse_stop_us);
+            else brake_pulse_out_us = (double)brake_pulse_stop_us;
         }
         else if (park_the_motors) {
             if (brake_pos_filt_in + brake_pos_margin_in <= brake_pos_park_in) brake_pulse_out_us =  // If brake is retracted from park point, extend toward park point, slowing as we approach
-                map ((int32_t)brake_pos_filt_in, (int32_t)brake_pos_park_in, (int32_t)brake_pos_nom_lim_retract_in, brake_pulse_stop_us, brake_pulse_extend_us);
+                (double)map ((int32_t)brake_pos_filt_in, (int32_t)brake_pos_park_in, (int32_t)brake_pos_nom_lim_retract_in, brake_pulse_stop_us, brake_pulse_extend_us);
             else if (brake_pos_filt_in - brake_pos_margin_in >= brake_pos_park_in) brake_pulse_out_us =  // If brake is extended from park point, retract toward park point, slowing as we approach
-                map ((int32_t)brake_pos_filt_in, (int32_t)brake_pos_park_in, (int32_t)brake_pos_nom_lim_extend_in, brake_pulse_stop_us, brake_pulse_retract_us);
+                (double)map ((int32_t)brake_pos_filt_in, (int32_t)brake_pos_park_in, (int32_t)brake_pos_nom_lim_extend_in, brake_pulse_stop_us, brake_pulse_retract_us);
         }
-        else if (runmode != BASIC) brake_pulse_out_us = (int32_t)brakeSPID.compute (pressure_filt_psi);  // Otherwise the pid control is active
+        else if (runmode != BASIC) brake_pulse_out_us = brakeSPID.compute();  // Otherwise the pid control is active
         // printf("Brake PID rm=%-+4ld target=%-+9.4lf", runmode, (double)pressure_target_psi);   
         // printf(" output = %-+9.4lf,  %+-4ld\n", brakeSPID.get_output(), brake_pulse_out_us); 
         if (runmode != BASIC || park_the_motors) {
             if (runmode == CAL && cal_joyvert_brkmotor)  // In Cal mode constrain the motor to its entire range, instead of to the calibrated limits
-                brake_pulse_out_us = constrain (brake_pulse_out_us, brake_pulse_retract_min_us, brake_pulse_extend_max_us);  // Send to the actuator. Refuse to exceed range    
+                brake_pulse_out_us = constrain (brake_pulse_out_us, (double)brake_pulse_retract_min_us, (double)brake_pulse_extend_max_us);  // Send to the actuator. Refuse to exceed range    
             else {  // Prevent any movement of motor which would exceed position limits. Improve this by having the motor actively go back toward position range if position is beyond either limit
-                if ( ((brake_pos_filt_in + brake_pos_margin_in <= brake_pos_nom_lim_retract_in) && (brake_pulse_out_us < brake_pulse_stop_us)) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
-                    ((brake_pos_filt_in - brake_pos_margin_in >= brake_pos_nom_lim_extend_in) && (brake_pulse_out_us > brake_pulse_stop_us)) )  // ... or same thing in the extend direction ...
+                if ( ((brake_pos_filt_in + brake_pos_margin_in <= brake_pos_nom_lim_retract_in) && ((int32_t)brake_pulse_out_us < brake_pulse_stop_us)) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
+                    ((brake_pos_filt_in - brake_pos_margin_in >= brake_pos_nom_lim_extend_in) && ((int32_t)brake_pulse_out_us > brake_pulse_stop_us)) )  // ... or same thing in the extend direction ...
                     brake_pulse_out_us = brake_pulse_stop_us;  // ... then stop the motor
-                brake_pulse_out_us = constrain (brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);  // Send to the actuator. Refuse to exceed range    
+                brake_pulse_out_us = constrain (brake_pulse_out_us, (double)brake_pulse_retract_us, (double)brake_pulse_extend_us);  // Send to the actuator. Refuse to exceed range    
             } 
-            brake_servo.writeMicroseconds (brake_pulse_out_us);  // Write result to jaguar servo interface
+            brake_servo.writeMicroseconds ((int32_t)brake_pulse_out_us);  // Write result to jaguar servo interface
         }
         
         // Cruise.  Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
-        if (runmode == CRUISE && !cruise_adjusting) gasSPID.set_target (cruiseSPID.compute (carspeed_filt_mph));  // 
+        if (runmode == CRUISE && !cruise_adjusting) gasSPID.set_target (cruiseSPID.compute());  // 
         // printf ("Cruise PID rm= %+-4ld target=%-+9.4lf", runmode, (double)carspeed_target_mph);
         // printf (" output = %-+9.4lf,  %+-4ld\n", cruiseSPID.get_output(), tach_target_rpm);
 
@@ -710,7 +707,7 @@ void loop() {
                 gas_pulse_out_us = (int32_t)(map (pot_filt_percent, pot_min_percent, pot_max_percent, (double)gas_pulse_ccw_max_us, (double)gas_pulse_cw_min_us));
             else if (gasSPID.get_open_loop())  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
                 gas_pulse_out_us = (int32_t)(map (gasSPID.get_target(), tach_idle_rpm, tach_govern_rpm, (double)gas_pulse_idle_us, (double)gas_pulse_govern_us)); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
-            else gas_pulse_out_us = (int32_t)(gasSPID.compute (tach_filt_rpm));  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
+            else gas_pulse_out_us = (int32_t)(gasSPID.compute());  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
             // printf ("Gas PID   rm= %+-4ld target=%-+9.4lf", runmode, (double)gasSPID.get_target());
             // printf (" output = %-+9.4lf,  %+-4ld\n", gasSPID.get_output(), gas_pulse_out_us);
         }

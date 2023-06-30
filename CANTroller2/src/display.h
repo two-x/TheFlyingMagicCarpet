@@ -3,6 +3,8 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
+#include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
+#include <Adafruit_ILI9341.h>  // For interfacing with the TFT LCD controller chip
 #include "globals.h"
 
 // display related globals
@@ -163,6 +165,7 @@ int32_t disp_targets[disp_lines];
 int32_t disp_age_quanta[disp_lines];
 Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
 Timer dispRefreshTimer (100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
+uint32_t tft_watchdog_timeout = 100000;
 
 // tuning-ui related globals
 enum tuning_ctrl_states { OFF, SELECT, EDIT };
@@ -225,7 +228,7 @@ class Display {
         }
 
         void watchdog() {
-            if (loop_period_us > 70000 && _timing_tft_reset == 0) _timing_tft_reset = 1;
+            if (loop_period_us > tft_watchdog_timeout && _timing_tft_reset == 0) _timing_tft_reset = 1;
             if (_timing_tft_reset == 0) _tftDelayTimer.reset();
             else if (!_tftDelayTimer.expired()) _tftResetTimer.reset();
             else if (_timing_tft_reset == 1) {
@@ -619,7 +622,7 @@ class Display {
                 draw_dynamic(6, cruiseSPID.get_target(), 0.0, carspeed_govern_mph);
                 draw_dynamic(7, brakeSPID.get_target(), pressure_min_psi, pressure_max_psi);
                 draw_dynamic(8, gasSPID.get_target(), 0.0, tach_redline_rpm);
-                draw_dynamic(9, brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
+                draw_dynamic(9, (int32_t)brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
                 draw_dynamic(10, gas_pulse_out_us, gas_pulse_redline_us, gas_pulse_idle_us);
                 draw_dynamic(11, steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);
                 if (dataset_page == RUN) {

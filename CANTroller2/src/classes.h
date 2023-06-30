@@ -123,8 +123,8 @@ class Device : virtual public Param {  // This class is truly virtual, in that i
 class Transducer : virtual public Device {
   public:
     int32_t _REV = -1, _FWD = 1;  // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, if we sense fewer us per rotation, the engine is going faster)
-  protected:
     double val_native, val_native_last, min_native, max_native;  // To hold val/min/max display values in display units (like V, mph, etc.)
+  protected:
     double m_factor = 1.0, b_offset = 0.0;  // Multiplier and adder values to plug in for unit conversion math
     bool invert = false;  // Flag to indicated if unit conversion math should multiply or divide
     double* p_min_native = &min_native;
