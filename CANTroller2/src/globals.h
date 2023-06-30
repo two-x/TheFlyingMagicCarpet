@@ -421,7 +421,6 @@ Timer loopTimer (1000000);  // how long the previous main loop took to run (in u
 uint32_t loop_period_us = 100000;
 double loop_freq_hz = 1;  // run loop real time frequency (in Hz)
 volatile int32_t loop_int_count = 0;  // counts interrupts per loop
-bool procrastinate = false;
 int32_t loopno = 1;
 uint32_t looptimes_us[20];
 bool loop_dirty[20];

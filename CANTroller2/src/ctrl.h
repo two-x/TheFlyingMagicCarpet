@@ -115,21 +115,21 @@ class Encoder {
 };
 
 #define MAKE_ENCODER(NAME, a_pin, b_pin, sw_pin) \
-Encoder NAME = Encoder(a_pin, b_pin, sw_pin); \
+Encoder NAME = Encoder((a_pin), (b_pin), (sw_pin)); \
 void IRAM_ATTR NAME##_a_isr() { \
-    if (NAME._bounce_danger != Encoder::A) { \
-        if (!NAME._a_stable) { \
-            NAME._spinrate_isr_us = NAME._spinspeedTimer.elapsed(); \
-            NAME._spinspeedTimer.reset(); \
-            NAME._delta += digitalRead(b_pin) ? -1 : 1; \
+    if ((NAME)._bounce_danger != Encoder::A) { \
+        if (!(NAME)._a_stable) { \
+            (NAME)._spinrate_isr_us = (NAME)._spinspeedTimer.elapsed(); \
+            (NAME)._spinspeedTimer.reset(); \
+            (NAME)._delta += digitalRead(b_pin) ? -1 : 1; \
         } \
-        NAME._bounce_danger = Encoder::A; \
+        (NAME)._bounce_danger = Encoder::A; \
     } \
 }; \
 void IRAM_ATTR NAME##_b_isr() { \
-    if (NAME._bounce_danger != Encoder::B) { \
-        NAME._a_stable = digitalRead(a_pin); \
-        NAME._bounce_danger = Encoder::B; \
+    if ((NAME)._bounce_danger != Encoder::B) { \
+        (NAME)._a_stable = digitalRead(a_pin); \
+        (NAME)._bounce_danger = Encoder::B; \
     } \
 };
 
@@ -139,3 +139,11 @@ void IRAM_ATTR NAME##_b_isr() { \
 (NAME).setup();
 
 #endif  // CTRL_H
+
+
+// TODO: if this actually works, post to arduino
+// #define attachPulseInterrupt(pin) \
+// void GetEncoderPulse_##pin(){ /* define a new ISR for each pin */ \
+//     /* do some stuff with using the value of pin, eg, writePin((pin)); */ \
+// } \
+// attachInterrupt(digitalPinToInterrupt((pin)), GetEncoderPulse_##pin, CHANGE);
