@@ -149,28 +149,24 @@ Preferences config;
 
 // Globals -------------------
 //
-class Timer {  // Timer - Lasts 72 minutes between overflows.
+class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
   protected:
     volatile uint32_t start_us = 0;
-    volatile uint32_t timeout_us = 0;   
+    volatile uint32_t timeout_us = 0;
+    volatile uint32_t remain_us;
+    volatile bool enabled = true;
   public:
     Timer (void) { reset(); }
     Timer (uint32_t arg1) { set(arg1); }
-    IRAM_ATTR void reset (void) { start_us = esp_timer_get_time(); }
     IRAM_ATTR void set (uint32_t arg1) { timeout_us = arg1; reset(); }
-    IRAM_ATTR bool expired (void) { return (esp_timer_get_time() - start_us >= timeout_us); }
-    IRAM_ATTR uint32_t elapsed (void) { return (esp_timer_get_time() - start_us); }
-    IRAM_ATTR uint32_t remain (void) { return ((start_us + timeout_us) - esp_timer_get_time()); }
+    IRAM_ATTR void reset (void) { start_us = esp_timer_get_time(); remain_us = timeout_us; }
+    IRAM_ATTR void pause (void) { remain_us = remain(); enabled = false; }
+    IRAM_ATTR void resume (void) { start_us = esp_timer_get_time() - remain_us; enabled = true; }
+    IRAM_ATTR bool expired (void) { return (enabled) ? (esp_timer_get_time() >= start_us + timeout_us): false; }
+    IRAM_ATTR uint32_t elapsed (void) { return (enabled) ? (esp_timer_get_time() - start_us) : (timeout_us - remain_us); }
+    IRAM_ATTR uint32_t remain (void) { return (enabled) ? ((start_us + timeout_us) - esp_timer_get_time()) : remain_us; }
     IRAM_ATTR uint32_t get_timeout (void) { return timeout_us; }
 };
-// // These lines add a pause/resume functionality to the Timer class, if we want that
-// uint32_t remaining_us; bool enabled = true;
-// inline void reset (void) { start_us = esp_timer_get_time(); remaining_us = timeout_us; }
-// inline bool expired (void) { return (enabled) ? (esp_timer_get_time() - start_us > timeout_us) : false; }
-// inline uint32_t elapsed (void) { return (enabled) ? (esp_timer_get_time() - start_us) : 0; }
-// inline uint32_t remain (void) { return (enabled) ? (start_us + timeout_us - esp_timer_get_time()) : remaining_us; }
-// inline void pause (void) { remaining_us = remain(); enabled = false; }
-// inline void resume (void) { start_us = esp_timer_get_time() - remaining_us; enabled = true; }
 
 // run state globals
 enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL };
