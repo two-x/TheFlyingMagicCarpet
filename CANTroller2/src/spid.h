@@ -27,17 +27,24 @@ class SPID {  // Soren's home-made pid loop
     uint32_t sample_period_ms;
     double target = 0, target_last = 0, error = 0, delta = 0, error_last = 0, p_term = 0, i_term = 0, d_term = 0, open_loop = false;
     double near_target_error_thresh_percent = 0.005;  // Fraction of the input range where if the error has not exceeded in either dir since last zero crossing, it is considered zero (to prevent endless microadjustments) 
-    double output = 0, input = 0, input_last = 0, near_target_error_thresh = 0, near_target_lock = (in_max-in_min)/2;
-    double in_min = 0, in_max = 4095, out_min = 0, out_max = 4095, in_center = 2047, out_center = 2047;
+    double input_last = 0, near_target_error_thresh = 0, near_target_lock = 0;
+    double in_center = 2047, out_center = 2047;
+    double* p_input; double* p_in_min; double* p_in_max; double* p_output; double* p_out_min; double* p_out_max;
     bool out_center_mode = CENTERED, in_center_mode = CENTERED, proportional_to = ERROR_TERM, saturated = false, output_hold = false;
   public:
     // int32_t disp_kp_1k, disp_ki_mhz, disp_kd_ms;  // disp_* are integer version of tuning variables scaled up by *1000, suitable for screen display
 
-    SPID(double arg_kp, double arg_ki_hz, double arg_kd_s, int32_t direction, int32_t arg_sample_period_ms) {  // , bool arg_in_center_mode, bool arg_out_center_mode
+    SPID(double* arg_input, double* arg_output, double arg_kp, double arg_ki_hz, double arg_kd_s, int32_t direction, uint32_t arg_sample_period_ms) {  // , bool arg_in_center_mode, bool arg_out_center_mode
+        p_input = arg_input;
+        p_in_min = arg_input;  // This has to point somewhere for now until it gets set
+        p_in_max = arg_input;  // This has to point somewhere for now until it gets set
+        p_output = arg_output;
+        p_out_min = arg_output;  // This has to point somewhere for now until it gets set
+        p_out_max = arg_output;  // This has to point somewhere for now until it gets set
         set_tunings(arg_kp, arg_ki_hz, arg_kd_s);
         set_actuator_direction(direction);
         // set_center_modes(arg_in_center_mode, arg_out_center_mode);
-        sample_period_ms = (uint32_t)arg_sample_period_ms;
+        sample_period_ms = arg_sample_period_ms;
     }
     bool constrain_value (double* value, double min, double max) {  // Constrains referred value to given range, returning 1 if value was out of bounds
         if (*value < min) {  // need to include a margin
@@ -50,14 +57,14 @@ class SPID {  // Soren's home-made pid loop
         }
         return false;
     }
-    bool set_input(double arg_input) {
-        input = round (arg_input);
-        return constrain_value (&input, in_min, in_max);
+    void set_input(double arg_input) {
+        *p_input = round (arg_input);
+        constrain_value (p_input, *p_in_min, *p_in_max);
     }
     double round (double val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
     double round (double val) { return round (val, max_precision); }
     double compute(void) {
-        error = target - input;
+        error = target - *p_input;
 
         // printf(" in=%-+9.4lf err=%-+9.4lf errlast=%-+9.4lf ntet=%-+9.4lf kp_co=%-+9.4lf ki_co=%-+9.4lf kd_co=%-+9.4lf kds=%-+9.4lf", input, error, error_last, near_target_error_thresh, kp_coeff, ki_coeff, kd_coeff, kd_s);
 
@@ -67,17 +74,17 @@ class SPID {  // Soren's home-made pid loop
             near_target_lock = target;
             output_hold = true;
         }
-        else if (abs(near_target_lock - input) > near_target_error_thresh) output_hold = false;
+        else if (abs(near_target_lock - *p_input) > near_target_error_thresh) output_hold = false;
 
         // Add handling for CENTERED controller!!  (our brake)
 
         if (proportional_to == ERROR_TERM) p_term = kp_coeff * error;  // If proportional_to Error (default)
-        else p_term = -kp_coeff * (input - input_last);  // If proportional_to Input (default)
+        else p_term = -kp_coeff * (*p_input - input_last);  // If proportional_to Input (default)
 
-        if (saturated && (output * error * actuator_direction >= 0)) i_term = 0;  // Delete intregal windup if windup is occurring
+        if (saturated && (*p_output * error * actuator_direction >= 0)) i_term = 0;  // Delete intregal windup if windup is occurring
         else i_term += ki_coeff * error;  // Update integral
 
-        d_term = kd_coeff * (input - input_last);
+        d_term = kd_coeff * (*p_input - input_last);
         
         p_term = round (p_term);
         i_term = round (i_term);
@@ -86,35 +93,35 @@ class SPID {  // Soren's home-made pid loop
         delta = p_term + i_term - d_term;
 
         if (out_center_mode == CENTERED) {
-            output = out_center + delta;
+            *p_output = out_center + delta;
         } else {
-            output = delta;
+            *p_output = delta;
         }
         
         // printf(" ntl2=%-+9.4lf sat=%1d outh=%1d pterm=%-+9.4lf iterm=%-+9.4lf dterm=%-+9.4lf out=%-+9.4lf\n", near_target_lock, saturated, output_hold, p_term, i_term, d_term, output);
 
-        printf("uc output: %7.2lf, min: %7.2lf, max:%7.2lf, ", output, out_min, out_max);
-        saturated = constrain_value(&output, out_min, out_max);
-        printf("c output: %7.2lf, min: %7.2lf, max:%7.2lf\n", output, out_min, out_max);
+        printf("uc output: %7.2lf, min: %7.2lf, max:%7.2lf, ", *p_output, *p_out_min, *p_out_max);
+        saturated = constrain_value(p_output, *p_out_min, *p_out_max);
+        printf("c output: %7.2lf, min: %7.2lf, max:%7.2lf\n", *p_output, *p_out_min, *p_out_max);
         
-        input_last = input;  // store previously computed input
+        input_last = *p_input;  // store previously computed input
         target_last = target;
         error_last = error;
 
-        return output;
+        return *p_output;
     }
-    double compute(double arg_input) {
-        set_input(arg_input);
-        return compute();
-    }
+    // double compute(double arg_input) {
+    //     set_input(arg_input);
+    //     return compute();
+    // }
     // void set_saturated(bool arg_saturated) {
     //     saturated = arg_saturated;
     // }
     void set_target(double arg_target) {
-        // printf("SPID::set_target():  received arg_target=%-+9.4lf, in_min=%-+9.4lf, in_max=%-+9.4lf\n", arg_target, in_min, in_max);
+        // printf("SPID::set_target():  received arg_target=%-+9.4lf, *p_in_min=%-+9.4lf, *p_in_max=%-+9.4lf\n", arg_target, *p_in_min, *p_in_max);
         target = round (arg_target, max_precision);
-        constrain_value (&target, in_min, in_max);
-        error = target - input;
+        constrain_value (&target, *p_in_min, *p_in_max);
+        error = target - *p_input;
     }
     void set_tunings(double arg_kp, double arg_ki_hz, double arg_kd_s) {  // Set tuning parameters to negative values if higher actuator values causes lower sensor values and vice versa 
         if (arg_kp < 0 || arg_ki_hz < 0 || arg_kd_s < 0) {  // || ( arg_kp <= 0 && arg_ki_hz <= 0 && arg_kd_s <= 0 ) ) ) {
@@ -151,33 +158,24 @@ class SPID {  // Soren's home-made pid loop
             actuator_direction = direction;
         }
     }
-    void set_input_limits(double arg_min, double arg_max) {
-        // printf("SPID::set_input_limits(arg,arg):  received arg_min=%-+9.4lf, arg_max=%-+9.4lf, nttp=%-+9.4lf\n", arg_min, arg_max, near_target_error_thresh_percent);
-        if (arg_min >= arg_max) {
-            printf ("Warning: SPID::set_input_limits() ignored request to set input minimum limit %lf > maximum limit %lf.\n", arg_min, arg_max);
+   void set_input_limits(double* arg_p_min, double* arg_p_max) {
+        if (*arg_p_min >= *arg_p_max) {
+            printf ("Warning: SPID::set_input_limits() ignored request to set input minimum limit %lf > maximum limit %lf.\n", *arg_p_min, *arg_p_max);
             return;
         }
-        in_min = arg_min;  in_max = arg_max;
-        constrain_value (&input, in_min, in_max);
-        near_target_error_thresh = (in_max - in_min) * near_target_error_thresh_percent;
+        p_in_min = arg_p_min;  p_in_max = arg_p_max;
+        constrain_value (p_input, *p_in_min, *p_in_max);
+        near_target_error_thresh = (*p_in_max - *p_in_min) * near_target_error_thresh_percent;
     }
-    void set_input_limits(double arg_min, double arg_max, double arg_near_target_thresh_percent) {
-        // printf("SPID::set_input_limits(arg,arg,arg):  received arg_min=%-+9.4lf, arg_max=%-+9.4lf, arg_nttp=%-+9.4lf\n", arg_min, arg_max, arg_near_target_thresh_percent);
-        if (arg_near_target_thresh_percent > 1) {
-            printf ("Warning: SPID::set_input_limits() ignored request to set near target error threshold to over 100%%\n");
+    void set_near_target_thresh(double arg_near_target_thresh_percent) { near_target_error_thresh_percent = arg_near_target_thresh_percent; }
+    void set_output_limits(double* p_arg_min, double* p_arg_max) {
+        if (*p_arg_min >= *p_arg_max) {
+            printf ("Warning: SPID::set_output_limits() ignored request to set output minimum limit %lf > maximum limit %lf.\n", *p_arg_min, *p_arg_max);
             return;
         }
-        near_target_error_thresh_percent = arg_near_target_thresh_percent;
-        set_input_limits(arg_min, arg_max);
-    }
-    void set_output_limits(double arg_min, double arg_max) {
-        if (arg_min >= arg_max) {
-            printf ("Warning: SPID::set_output_limits() ignored request to set output minimum limit %lf > maximum limit %lf.\n", arg_min, arg_max);
-            return;
-        }
-        out_min = arg_min;  out_max = arg_max;
-        out_center = (out_min + out_max)/2;
-        constrain_value (&output, out_min, out_max);
+        p_out_min = p_arg_min;  p_out_max = p_arg_max;
+        out_center = (*p_out_min + *p_out_max)/2;
+        constrain_value (p_output, *p_out_min, *p_out_max);
     }
         // if (*myOutput > outMax) *myOutput = outMax;
         // else if (*myOutput < outMin) *myOutput = outMin;
@@ -189,7 +187,7 @@ class SPID {  // Soren's home-made pid loop
         // else if (inputSum < inMin) inputSum = inMin;
     void set_input_center(void) { in_center_mode = RANGED; }  // Call w/o arguments to set input to RANGED mode
     void set_input_center(double arg_in_center) {  // Sets input to CENTERED (centerpoint) mode and takes value of center point. 
-        if (arg_in_center < in_min || arg_in_center > in_max) {
+        if (arg_in_center < *p_in_min || arg_in_center > *p_in_max) {
             printf ("Warning: SPID::set_input_center() ignored request to set input centerpoint outside input range.\n");
             return;
         }
@@ -198,7 +196,7 @@ class SPID {  // Soren's home-made pid loop
     }
     void set_output_center(void) { out_center_mode = RANGED; }  // Call w/o arguments to set output to RANGED mode
     void set_output_center(double arg_out_center) {  // Sets output to CENTERED (centerpoint) mode and takes value of center point. 
-        if (arg_out_center < out_min || arg_out_center > out_max) {
+        if (arg_out_center < *p_out_min || arg_out_center > *p_out_max) {
             printf ("Warning: SPID::set_output_center() ignored request to set output centerpoint outside output range.\n");
             return;
         }
@@ -217,9 +215,6 @@ class SPID {  // Soren's home-made pid loop
     double get_kp() { return kp; }
     double get_ki_hz() { return ki_hz; }
     double get_kd_s() { return kd_s; }
-    // double get_disp_kp_1k() { return disp_kp_1k; }
-    // double get_disp_ki_mhz() { return disp_ki_mhz; }
-    // double get_disp_kd_ms() { return disp_kd_ms; }
     bool get_out_center_mode() { return out_center_mode; }
     bool get_open_loop() { return open_loop; }
     bool get_in_center_mode() { return in_center_mode; }
@@ -235,8 +230,8 @@ class SPID {  // Soren's home-made pid loop
     double get_d_term() { return ((d_term >= 0.001) ? d_term : 0); }
     double get_error() { return error; }
     double get_target() { return target; }
-    double get_output() { return output; }
-    double get_input() { return input; }       
+    double get_output() { return *p_output; }
+    double get_input() { return *p_input; }       
 };
 
 // Instantiate PID loops

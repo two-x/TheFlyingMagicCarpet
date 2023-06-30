@@ -157,8 +157,8 @@ class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
     volatile bool enabled = true;
   public:
     Timer (void) { reset(); }
-    Timer (uint32_t arg1) { set(arg1); }
-    IRAM_ATTR void set (uint32_t arg1) { timeout_us = arg1; reset(); }
+    Timer (uint32_t arg_timeout_us) { set (arg_timeout_us); }
+    IRAM_ATTR void set (uint32_t arg_timeout_us) { timeout_us = arg_timeout_us; reset(); }
     IRAM_ATTR void reset (void) { start_us = esp_timer_get_time(); remain_us = timeout_us; }
     IRAM_ATTR void pause (void) { remain_us = remain(); enabled = false; }
     IRAM_ATTR void resume (void) { start_us = esp_timer_get_time() - remain_us; enabled = true; }
@@ -166,6 +166,7 @@ class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
     IRAM_ATTR uint32_t elapsed (void) { return (enabled) ? (esp_timer_get_time() - start_us) : (timeout_us - remain_us); }
     IRAM_ATTR uint32_t remain (void) { return (enabled) ? ((start_us + timeout_us) - esp_timer_get_time()) : remain_us; }
     IRAM_ATTR uint32_t get_timeout (void) { return timeout_us; }
+    IRAM_ATTR bool get_enabled (void) { return enabled; }
 };
 
 // run state globals
@@ -203,7 +204,7 @@ int32_t default_margin_adc = 12;  // Default margin of error for comparisons of 
 
 // pid related globals
 //  ---- tunable ----
-int32_t pid_period_ms = 50;
+uint32_t pid_period_ms = 50;
 Timer pidTimer (pid_period_ms*1000);  // not actually tunable, just needs value above
 int32_t brake_spid_ctrl_dir = SPID::FWD;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
 double brake_spid_initial_kp = 0.588;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
@@ -251,7 +252,7 @@ enum raw_filt { RAW, FILT };
 bool joy_centered = false;
 int32_t ctrl_db_adc[2][2];  // [HORZ/VERT] [BOT, TOP] - to store the top and bottom deadband values for each axis of selected controller
 int32_t ctrl_pos_adc[2][2] = { { adcmidscale_adc, adcmidscale_adc }, { adcmidscale_adc, adcmidscale_adc} };  // [HORZ/VERT] [RAW/FILT]
-volatile bool hotrc_vert_nextval = 0;
+volatile bool hotrc_vert_preread = 0;
 volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
 volatile int32_t hotrc_horz_pulse_us = 1500;
 volatile int32_t hotrc_vert_pulse_us = 1500;
@@ -463,9 +464,9 @@ SdFat sd;  // SD card filesystem
 SdFile root;  // Directory file.
 SdFile file;  // Use for file creation in folders.
 
-SPID brakeSPID (brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brake_spid_ctrl_dir, pid_period_ms);
-SPID gasSPID (gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, gas_spid_ctrl_dir, pid_period_ms);
-SPID cruiseSPID (cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, cruise_spid_ctrl_dir, pid_period_ms);
+SPID brakeSPID (&pressure_filt_psi, brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brake_spid_ctrl_dir, pid_period_ms);
+SPID gasSPID (&tach_filt_rpm, gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, gas_spid_ctrl_dir, pid_period_ms);
+SPID cruiseSPID (&carspeed_filt_mph, cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, cruise_spid_ctrl_dir, pid_period_ms);
 
 // Servo library lets us set pwm outputs given an on-time pulse width in us
 static Servo steer_servo;
@@ -494,26 +495,25 @@ DeviceAddress temp_addrs[6];
 //
 // The tach and speed use a hall sensor being triggered by a passing magnet once per pulley turn. These ISRs call mycros()
 // on every pulse to know the time since the previous pulse. I tested this on the bench up to about 0.750 mph which is as 
-// fast as I can move the magnet with my hand, and it works. It would be cleaner to just increment a counter here in the ISR
-// then call mycros() in the main loop and compare with a timer to calculate mph.
-void IRAM_ATTR tach_isr (void) {  // The tach and speedo isrs compare value returned from the mycros() function with the value from the last interrupt to determine period, to get frequency of the vehicle pulley rotations.
+// fast as I can move the magnet with my hand, and it works. Update: Janky bench test appeared to work up to 11000 rpm.
+void IRAM_ATTR tach_isr (void) {  // The tach and speedo isrs get the period of the vehicle pulley rotations.
     tach_time_us = tachPulseTimer.elapsed();
-    if (tach_time_us > tach_delta_abs_min_us) {
+    if (tach_time_us > tach_delta_abs_min_us) {  // ignore spurious triggers or bounces
         tachPulseTimer.reset();
         tach_delta_us = tach_time_us;
     }
 }
-void IRAM_ATTR speedo_isr (void) {  //  A better approach would be to read, reset, and restart a hardware interval timer in the isr.  Better still would be to regularly read a hardware binary counter clocked by the pin - no isr.
+void IRAM_ATTR speedo_isr (void) {  //  Handler can get the most recent rotation time at speedo_delta_us
     speedo_time_us = speedoPulseTimer.elapsed();
-    if (speedo_time_us > speedo_delta_abs_min_us) {
+    if (speedo_time_us > speedo_delta_abs_min_us) {  // ignore spurious triggers or bounces
         speedoPulseTimer.reset();
         speedo_delta_us = speedo_time_us;    
     }
 }
 void IRAM_ATTR hotrc_vert_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
-    if (hotrc_vert_nextval) hotrcPulseTimer.reset();
+    if (hotrc_vert_preread) hotrcPulseTimer.reset();
     else hotrc_vert_pulse_us = hotrcPulseTimer.elapsed();
-    hotrc_vert_nextval = !(digitalRead (hotrc_vert_pin));
+    hotrc_vert_preread = !(digitalRead (hotrc_vert_pin));  // Read pin after timer operations to maximize clocking accuracy
 }
 void IRAM_ATTR hotrc_horz_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
     hotrc_horz_pulse_us = hotrcPulseTimer.elapsed();
@@ -558,9 +558,8 @@ inline int32_t map (int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, 
 bool rounding = true;
 double dround (double val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
 
-
-bool car_stopped (void) { return abs(carspeed_filt_mph) < carspeed_stop_thresh_mph; }
-bool engine_stopped (void) { return abs(tach_filt_rpm) < tach_stop_thresh_rpm; }
+bool car_stopped (void) { return (carspeed_filt_mph < carspeed_stop_thresh_mph); }
+bool engine_stopped (void) { return (tach_filt_rpm < tach_stop_thresh_rpm); }
 
 uint32_t colorwheel (uint8_t WheelPos) {
     WheelPos = 255 - WheelPos;
@@ -583,8 +582,7 @@ void ema_filt (int32_t raw, double* filt, double alpha) {
     ema_filt ((double)raw, filt, alpha);
 }
 void ema_filt (int32_t raw, int32_t* filt, double alpha) {
-    // if (!raw) *filt = 0; else
-    *filt = (int32_t)(alpha * (double)raw + (1-alpha) * (double)(*filt));
+    *filt = (int32_t)(alpha * (double)raw + (1 - alpha) * (double)(*filt));
 }
 
 void sd_init() {
@@ -634,16 +632,11 @@ void adj_val (double* variable, double modify, double low_limit, double high_lim
 
 void adj_bool (bool* val, int32_t delta) { if (delta != 0) *val = (delta > 0); }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
 
-void set_pin (int32_t pin, int32_t mode) {  // configures a pin on the condition it exists for the current board
-    if (pin >= 0) pinMode (pin, mode);
-}
-void write_pin (int32_t pin, int32_t val) {  // writes a digital value to a pin on the condition it exists for the current board
-    if (pin >= 0) digitalWrite (pin, val);
-}
-int32_t read_pin (int32_t pin) {  // reads a digital value from a pin on the condition it exists for the current board
-    if (pin >= 0) return digitalRead (pin);
-    return -1;
-}
+// pin operations that first check if pin exists for the current board
+void set_pin (int32_t pin, int32_t mode) { if (pin >= 0) pinMode (pin, mode); }
+void write_pin (int32_t pin, int32_t val) {  if (pin >= 0) digitalWrite (pin, val); }
+int32_t read_pin (int32_t pin) { return (pin >= 0) ? digitalRead (pin) : -1; }
+
 void syspower_set (bool val) {
     if (digitalRead (syspower_pin) != val) {
         write_pin (syspower_pin, val);
