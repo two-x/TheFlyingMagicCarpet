@@ -347,27 +347,41 @@ void loop() {
     
     // Tach - takes 22 us to read when no activity
     if (!simulating || !sim_tach) {
-        if (tachPulseTimer.elapsed() < tach_stop_timeout_us) {
-            tach_rpm = convert_units ((double)(tach_delta_us), tach_convert_rpm_per_rpus, tach_convert_invert);
+        if (tach_delta_us) {  // If a valid rotation has happened since last time, delta will have a value
+            tach_buf_delta_us = tach_delta_us;  // Copy delta value (in case another interrupt happens during handling)
+            tach_delta_us = 0;  // Indicates to isr we processed this value
+            tach_rpm = convert_units ((double)(tach_buf_delta_us), tach_convert_rpm_per_rpus, tach_convert_invert);
             ema_filt (tach_rpm, &tach_filt_rpm, tach_ema_alpha);  // Sensor EMA filter
         }
-        else {
-            tach_rpm = 0;  // If timeout since last magnet is exceeded
-            tach_filt_rpm = 0;
+        else if (!engine_stopped() && tachPulseTimer.elapsed() >= tach_stop_timeout_us) {  // If time between pulses is long enough an engine can't run that slow
+            tach_rpm = 0.0;  // If timeout since last magnet is exceeded
+            tach_filt_rpm = 0.0;
         }        
     }
     
     // Speedo - takes 14 us to read when no activity
     if (!simulating || !sim_speedo) { 
-        if (speedoPulseTimer.elapsed() < speedo_stop_timeout_us) {
-            carspeed_mph = convert_units ((double)(speedo_delta_us), speedo_convert_mph_per_rpus, speedo_convert_invert);  // Update car speed value  
+        if (speedo_delta_us) {  // If a valid rotation has happened since last time, delta will have a value
+            speedo_buf_delta_us = speedo_delta_us;  // Copy delta value (in case another interrupt happens during handling)
+            speedo_delta_us = 0;  // Indicates to isr we processed this value
+            carspeed_mph = convert_units ((double)(speedo_buf_delta_us), speedo_convert_mph_per_rpus, speedo_convert_invert);  // Update car speed value  
             ema_filt (carspeed_mph, &carspeed_filt_mph, carspeed_ema_alpha);  // Sensor EMA filter
         }
-        else {
-            carspeed_mph = 0;
-            carspeed_filt_mph = 0;
+        else if (!car_stopped() && speedoPulseTimer.elapsed() >= speedo_stop_timeout_us) {  // If time between pulses is long enough an engine can't run that slow
+            carspeed_mph = 0.0;
+            carspeed_filt_mph = 0.0;
         }
     }
+    // if (!simulating || !sim_speedo) { 
+    //     if (speedoPulseTimer.elapsed() < speedo_stop_timeout_us) {
+    //         carspeed_mph = convert_units ((double)(speedo_delta_us), speedo_convert_mph_per_rpus, speedo_convert_invert);  // Update car speed value  
+    //         ema_filt (carspeed_mph, &carspeed_filt_mph, carspeed_ema_alpha);  // Sensor EMA filter
+    //     }
+    //     else {
+    //         carspeed_mph = 0;
+    //         carspeed_filt_mph = 0;
+    //     }
+    // }
 
     // Brake pressure - takes 72 us to read
     if (!simulating || !sim_pressure) {
