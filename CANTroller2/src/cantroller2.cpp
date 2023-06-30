@@ -882,15 +882,15 @@ void loop() {
     sim_edit_delta += sim_edit_delta_encoder + sim_edit_delta_touch;  // Allow edits using the encoder or touchscreen
     sim_edit_delta_touch = 0;
     sim_edit_delta_encoder = 0;
-    if (tuning_ctrl != tuning_ctrl_last || dataset_page != dataset_page_last || selected_value != selected_value_last || sim_edit_delta != 0) tuningCtrlTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
-    if (tuning_ctrl != OFF && tuningCtrlTimer.expired()) tuning_ctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
+    if (tuning_ctrl != tuning_ctrl_last || dataset_page != dataset_page_last || selected_value != selected_value_last || sim_edit_delta) tuningCtrlTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
+    else if (tuning_ctrl != OFF && tuningCtrlTimer.expired()) tuning_ctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
     dataset_page = constrain (dataset_page, 0, arraysize(pagecard)-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
     if (dataset_page != dataset_page_last) {
         if (tuning_ctrl == EDIT) tuning_ctrl = SELECT;  // If page is flipped during edit, drop back to select mode
         disp_dataset_page_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
     }
     if (tuning_ctrl == SELECT) {
-        selected_value = constrain (selected_value, tuning_first_editable_line[dataset_page], 7);  // Skip unchangeable values for all PID modes
+        selected_value = constrain (selected_value, tuning_first_editable_line[dataset_page], disp_tuning_lines-1);  // Skip unchangeable values for all PID modes
         if (selected_value != selected_value_last) disp_selected_val_dirty = true;
     }
     if (tuning_ctrl != tuning_ctrl_last || disp_dataset_page_dirty) disp_selected_val_dirty = true;
@@ -1003,8 +1003,7 @@ void loop() {
         }
         else if (neopixelTimer.expired()) {  // Rainbow fade
             neopixelTimer.reset();
-            neopixel_wheel_counter++;
-            neostrip.setPixelColor(0, colorwheel(neopixel_wheel_counter));
+            neostrip.setPixelColor(0, colorwheel(++neopixel_wheel_counter));
             neostrip.show();
         }
     }
