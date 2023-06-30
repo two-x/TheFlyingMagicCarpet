@@ -436,30 +436,6 @@ bool syspower_last = syspower;
 bool basicmodesw = LOW;
 bool cruise_sw = LOW;
 
-// rotary encoder related
-enum encodersw_presses { NONE, SHORT, LONG };
-enum encoder_inputs { A, B };
-Timer encoderSpinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
-int32_t encoder_state = 0;
-uint32_t encoder_spinrate_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
-uint32_t encoder_spinrate_last_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
-uint32_t encoder_spinrate_old_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
-int32_t encoder_sw_action = NONE;  // Flag for encoder handler to know an encoder switch action needs to be handled
-bool encoder_sw = false;  // Remember whether switch is being pressed
-bool encoder_timer_active = false;  // Flag to prevent re-handling long presses if the sw is just kept down
-bool encoder_suppress_click = false;  // Flag to prevent a short click on switch release after successful long press
-bool encoder_b_raw = digitalRead (encoder_b_pin);  // To store value of encoder pin value
-bool encoder_a_raw = digitalRead (encoder_a_pin);
-volatile bool encoder_a_stable = true;  //  Stores the value of encoder A pin as read during B pin transition (where A is stable)
-volatile uint32_t encoder_spinrate_isr_us = 100000;  // Time elapsed between last two detents
-volatile int32_t encoder_bounce_danger = B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
-volatile int32_t encoder_delta = 0;  // Keeps track of un-handled rotary clicks of the encoder.  Positive for CW clicks, Negative for CCW. 
-//  ---- tunable ----
-Timer encoderLongPressTimer(800000);  // Used to time long button presses
-uint32_t encoder_spinrate_min_us = 2500;  // Will reject spins faster than this as an attempt to debounce behavior
-uint32_t encoder_accel_thresh_us = 100000;  // Spins faster than this will be accelerated
-int32_t encoder_accel_max = 50;  // Maximum acceleration factor
-
 // simulator related
 bool simulating_last = false;
 Timer simTimer;
@@ -511,22 +487,6 @@ DeviceAddress temp_addrs[6];
 
 // Interrupt service routines
 //
-void IRAM_ATTR encoder_a_isr (void) {  // When A goes high if B is low, we are CW, otherwise we are CCW -- This ISR intended for encoders like the one on the tan proto board
-    if (encoder_bounce_danger != A) {  // Prevents taking action on any re-triggers after a valid trigger due to bouncing
-        if (!encoder_a_stable) {  // Since A just transitioned, if a_stable is low, this is a rising edge = time to register a turn 
-            encoder_spinrate_isr_us = encoderSpinspeedTimer.elapsed();
-            encoderSpinspeedTimer.reset();
-            encoder_delta += digitalRead (encoder_b_pin) ? -1 : 1;  // Create turn event to be handled later. If B=0, delta=-1 (CCW) turn decreases things
-        }
-        encoder_bounce_danger = A;  // Set to reject A retriggers and enable B trigger
-    }
-}
-void IRAM_ATTR encoder_b_isr (void) {  // On B rising or falling edge, A should have stabilized by now, so don't ignore next A transition
-    if (encoder_bounce_danger != B) {  // Prevents taking action on any re-triggers after a valid trigger due to bouncing
-        encoder_a_stable = digitalRead (encoder_a_pin);  // Input A is stable by the time B changes, so read A value here
-        encoder_bounce_danger = B;  // Set to reject B retriggers and enable A trigger
-    }
-}
 // The tach and speed use a hall sensor being triggered by a passing magnet once per pulley turn. These ISRs call mycros()
 // on every pulse to know the time since the previous pulse. I tested this on the bench up to about 0.750 mph which is as 
 // fast as I can move the magnet with my hand, and it works. It would be cleaner to just increment a counter here in the ISR

@@ -17,6 +17,7 @@
 #include "classes.h"  // Contains our data structures
 #include "spid.h"
 #include "globals.h"
+#include "ctrl.h"
 using namespace std;
 
 double temp_min = -67.0;  // Minimum reading of sensor is -25 C = -67 F
@@ -39,6 +40,9 @@ Hotrc hotrc (&ctrl_pos_adc[VERT][FILT], hotrc_pos_failsafe_min_adc, hotrc_pos_fa
 Preferences config;
     
 Display screen(tft_cs_pin, tft_dc_pin);
+    
+// Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
+MAKE_ENCODER(encoder, encoder_a_pin, encoder_b_pin, encoder_sw_pin);
     
 void setup() {
     set_pin (heartbeat_led_pin, OUTPUT);
@@ -135,12 +139,12 @@ void setup() {
     // sd_init();
     // Serial.println(F("Filesystem started"));
 
+    SETUP_ENCODER(encoder);
+
     // Set up our interrupts
     Serial.print (F("Interrupts... "));
     attachInterrupt (digitalPinToInterrupt(tach_pulse_pin), tach_isr, RISING);
     attachInterrupt (digitalPinToInterrupt(speedo_pulse_pin), speedo_isr, RISING);
-    attachInterrupt (digitalPinToInterrupt(encoder_a_pin), encoder_a_isr, CHANGE);
-    attachInterrupt (digitalPinToInterrupt(encoder_b_pin), encoder_b_isr, CHANGE);
     attachInterrupt (digitalPinToInterrupt(hotrc_vert_pin), hotrc_vert_isr, CHANGE);
     attachInterrupt (digitalPinToInterrupt(hotrc_horz_pin), hotrc_horz_isr, FALLING);
     attachInterrupt (digitalPinToInterrupt(hotrc_ch3_pin), hotrc_ch3_isr, FALLING);
@@ -331,24 +335,7 @@ void loop() {
     // Read and interpret encoder switch activity. Encoder rotation is handled in interrupt routine
     // Encoder handler routines should act whenever encoder_sw_action is true, setting it back to false once handled.
     // When handling press, if encoder_long_clicked is nonzero then press is a long press
-    if (!read_pin (encoder_sw_pin)) {  // if encoder sw is being pressed (switch is active low)
-        if (!encoder_sw) {  // if the press just occurred
-            encoderLongPressTimer.reset();  // start a press timer
-            encoder_timer_active = true;  // flag to indicate timing for a possible long press
-        }
-        else if (encoder_timer_active && encoderLongPressTimer.expired()) {  // If press time exceeds long press threshold
-            encoder_sw_action = LONG;  // Set flag to handle the long press event. Note, routine handling press should clear this
-            encoder_timer_active = false;  // Keeps us from entering this logic again until after next sw release (to prevent repeated long presses)
-            encoder_suppress_click = true;  // Prevents the switch release after a long press from causing a short press
-        }
-        encoder_sw = true;  // Remember a press is in effect
-    }
-    else {  // if encoder sw is not being pressed
-        if (encoder_sw && !encoder_suppress_click) encoder_sw_action = SHORT;  // if the switch was just released, a short press occurred, which must be handled
-        encoder_timer_active = false;  // Allows detection of next long press event
-        encoder_sw = false;  // Remember press is not in effect
-        encoder_suppress_click = false;  // End click suppression
-    }
+    encoder.update();
 
     // Potentiometer - takes 400 us to read & convert (?!)
     pot_percent = convert_units ((double)analogRead (pot_wipe_pin), pot_convert_percent_per_adc, pot_convert_invert);  // Potentiometer
@@ -870,32 +857,18 @@ void loop() {
 
     // Encoder handling
     //
-    if (encoder_sw_action != NONE) {  // First deal with any unhandled switch press events
-        if (encoder_sw_action == SHORT)  {  // if short press
+    uint32_t encoder_sw_action = encoder.handleSwitchAction();
+    if (encoder_sw_action != Encoder::NONE) {  // First deal with any unhandled switch press events
+        if (encoder_sw_action == Encoder::SHORT)  {  // if short press
             if (tuning_ctrl == EDIT) tuning_ctrl = SELECT;  // If we were editing a value drop back to select mode
             else if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If we were selecting a variable start editing its value
             else ;  // Unless tuning, short press now does nothing. I envision it should switch desktops from our current analysis interface to a different runtime display 
         }
         else tuning_ctrl = (tuning_ctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
-        encoder_sw_action = NONE;  // Our responsibility to reset this flag after handling events
     }
-    if (encoder_delta) {  // Now handle any new rotations
-        if (encoder_spinrate_isr_us >= encoder_spinrate_min_us) {  // Reject clicks coming in too fast as bounces
-            encoder_spinrate_old_us = encoder_spinrate_last_us;  // Store last few spin times for filtering purposes ...
-            encoder_spinrate_last_us = encoder_spinrate_us;  // ...
-            encoder_spinrate_us = constrain (encoder_spinrate_isr_us, encoder_spinrate_min_us, encoder_accel_thresh_us);
-            if (tuning_ctrl == EDIT) {
-                int32_t encoder_temp = (encoder_spinrate_old_us > encoder_spinrate_last_us) ? encoder_spinrate_old_us : encoder_spinrate_last_us;  // Find the slowest of the last 3 detents ...
-                if (encoder_temp < encoder_spinrate_us) encoder_temp = encoder_spinrate_us;
-                encoder_temp = map (encoder_temp, encoder_spinrate_min_us, encoder_accel_thresh_us, encoder_accel_max, 1);  // if turning faster than 100ms/det, proportionally accelerate the effect of each detent by up to 50x. encoder_temp variable repurposed here to hold # of edits per detent turned
-                sim_edit_delta_encoder = encoder_delta * encoder_temp;  // If a tunable value is being edited, turning the encoder changes the value
-            }
-            else encoder_delta = constrain (encoder_delta, -1, 1);  // Only change one at a time when selecting or turning pages
-            if (tuning_ctrl == SELECT) selected_value += encoder_delta;  // If overflow constrain will fix in general handler below
-            else if (tuning_ctrl == OFF) dataset_page += encoder_delta;  // If overflow tconstrain will fix in general below
-        }
-        encoder_delta = 0;  // Our responsibility to reset this flag after handling events
-    }
+    if (tuning_ctrl == EDIT) sim_edit_delta_encoder = encoder.handleTuning();
+    else if (tuning_ctrl == SELECT) selected_value += encoder.handleSelection();  // If overflow constrain will fix in general handler below
+    else if (tuning_ctrl == OFF) dataset_page += encoder.handleSelection();  // If overflow tconstrain will fix in general below
     
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "enc");  //
 
