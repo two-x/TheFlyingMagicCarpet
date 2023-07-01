@@ -1,6 +1,7 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 #include "Arduino.h"
+#include <Preferences.h>
 #include <vector>
 #include <string>
 #include <stdio.h>
@@ -123,9 +124,12 @@
 
 // Global settings
 bool serial_debugging = true; 
-bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
+bool timestamp_loop = true;  // Makes code write out timestamps throughout loop to serial port
 bool take_temperatures = false;
 
+// Persistent config storage
+Preferences config;
+    
 // Readily available possibilities we could wire up if we want
 //
 // * Status LEDs (digital out)
@@ -145,28 +149,25 @@ bool take_temperatures = false;
 
 // Globals -------------------
 //
-class Timer {  // Timer - Lasts 72 minutes between overflows.
+class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
   protected:
     volatile uint32_t start_us = 0;
-    volatile uint32_t timeout_us = 0;   
+    volatile uint32_t timeout_us = 0;
+    volatile uint32_t remain_us;
+    volatile bool enabled = true;
   public:
     Timer (void) { reset(); }
-    Timer (uint32_t arg1) { set(arg1); }
-    inline IRAM_ATTR void reset (void) { start_us = esp_timer_get_time(); }
-    inline IRAM_ATTR void set (uint32_t arg1) { timeout_us = arg1; reset(); }
-    inline IRAM_ATTR bool expired (void) { return (esp_timer_get_time() - start_us >= timeout_us); }
-    inline IRAM_ATTR uint32_t elapsed (void) { return (esp_timer_get_time() - start_us); }
-    inline IRAM_ATTR uint32_t remain (void) { return ((start_us + timeout_us) - esp_timer_get_time()); }
-    inline IRAM_ATTR uint32_t get_timeout (void) { return timeout_us; }
+    Timer (uint32_t arg_timeout_us) { set (arg_timeout_us); }
+    IRAM_ATTR void set (uint32_t arg_timeout_us) { timeout_us = arg_timeout_us; reset(); }
+    IRAM_ATTR void reset (void) { start_us = esp_timer_get_time(); remain_us = timeout_us; }
+    IRAM_ATTR void pause (void) { remain_us = remain(); enabled = false; }
+    IRAM_ATTR void resume (void) { start_us = esp_timer_get_time() - remain_us; enabled = true; }
+    IRAM_ATTR bool expired (void) { return (enabled) ? (esp_timer_get_time() >= start_us + timeout_us): false; }
+    IRAM_ATTR uint32_t elapsed (void) { return (enabled) ? (esp_timer_get_time() - start_us) : (timeout_us - remain_us); }
+    IRAM_ATTR uint32_t remain (void) { return (enabled) ? ((start_us + timeout_us) - esp_timer_get_time()) : remain_us; }
+    IRAM_ATTR uint32_t get_timeout (void) { return timeout_us; }
+    IRAM_ATTR bool get_enabled (void) { return enabled; }
 };
-// // These lines add a pause/resume functionality to the Timer class, if we want that
-// uint32_t remaining_us; bool enabled = true;
-// inline void reset (void) { start_us = esp_timer_get_time(); remaining_us = timeout_us; }
-// inline bool expired (void) { return (enabled) ? (esp_timer_get_time() - start_us > timeout_us) : false; }
-// inline uint32_t elapsed (void) { return (enabled) ? (esp_timer_get_time() - start_us) : 0; }
-// inline uint32_t remain (void) { return (enabled) ? (start_us + timeout_us - esp_timer_get_time()) : remaining_us; }
-// inline void pause (void) { remaining_us = remain(); enabled = false; }
-// inline void resume (void) { start_us = esp_timer_get_time() - remaining_us; enabled = true; }
 
 // run state globals
 enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL };
@@ -203,7 +204,7 @@ int32_t default_margin_adc = 12;  // Default margin of error for comparisons of 
 
 // pid related globals
 //  ---- tunable ----
-int32_t pid_period_ms = 50;
+uint32_t pid_period_ms = 50;
 Timer pidTimer (pid_period_ms*1000);  // not actually tunable, just needs value above
 int32_t brake_spid_ctrl_dir = SPID::FWD;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
 double brake_spid_initial_kp = 0.588;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
@@ -251,16 +252,16 @@ enum raw_filt { RAW, FILT };
 bool joy_centered = false;
 int32_t ctrl_db_adc[2][2];  // [HORZ/VERT] [BOT, TOP] - to store the top and bottom deadband values for each axis of selected controller
 int32_t ctrl_pos_adc[2][2] = { { adcmidscale_adc, adcmidscale_adc }, { adcmidscale_adc, adcmidscale_adc} };  // [HORZ/VERT] [RAW/FILT]
-volatile bool hotrc_vert_nextval = 0;
+volatile bool hotrc_vert_preread = 0;
 volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
 volatile int32_t hotrc_horz_pulse_us = 1500;
 volatile int32_t hotrc_vert_pulse_us = 1500;
-
+Timer hotrcPulseTimer;  // OK to not be volatile?
 // Merging these into Hotrc class
 bool hotrc_radio_detected = false;
 bool hotrc_radio_detected_last = hotrc_radio_detected;
-bool hotrc_suppress_next_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
-Timer hotrcPulseTimer;  // OK to not be volatile?
+bool hotrc_suppress_next_ch3_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
+bool hotrc_suppress_next_ch4_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 //  ---- tunable ----
 double hotrc_pulse_period_us = 1000000.0 / 50;
 double ctrl_ema_alpha[2] = { 0.005, 0.1 };  // [HOTRC, JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
@@ -293,8 +294,8 @@ int32_t steer_pulse_left_max_us = 2500;  // Longest pulsewidth acceptable to jag
 int32_t steer_safe_percent = 72;  // Sterring is slower at high speed. How strong is this effect 
 
 // brake pressure related
-double pressure_psi;
-double pressure_filt_psi;  // Stores new setpoint to give to the pid loop (brake)
+double pressure_psi = 201;
+double pressure_filt_psi = 202;  // Stores new setpoint to give to the pid loop (brake)
 // Param pressure (&pressure_adc, "Pressure:", "adc ", 658, 2100);
 //  ---- tunable ----
 double pressure_convert_psi_per_adc = 1000.0 * 3.3 / ( adcrange_adc * (4.5 - 0.5) );  // 1000 psi * 3.3 v / (4095 adc * (v-max v - v-min v)) = 0.2 psi/adc 
@@ -311,7 +312,7 @@ double pressure_panic_increment_psi = 25;  // Incremental pressure added periodi
 // max pedal bent 1154
 
 // brake actuator motor related
-int32_t brake_pulse_out_us;  // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
+double brake_pulse_out_us;  // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
 //  ---- tunable ----
 Timer brakeIntervalTimer (500000);  // How much time between increasing brake force during auto-stop if car still moving?
 int32_t brake_increment_interval_us = 500000;  // How often to apply increment during auto-stopping (in us)
@@ -346,8 +347,8 @@ double brake_pos_margin_in = .029;  //
 // int32_t brake_pos_margin_adc = 10;  //    
 
 // throttle servo related
-int32_t gas_pulse_out_us;  // pid loop output to send to the actuator (gas)
-int32_t gas_pulse_govern_us;  // Governor must scale the pulse range proportionally. This is given a value in the loop
+int32_t gas_pulse_out_us = 1501;  // pid loop output to send to the actuator (gas)
+int32_t gas_pulse_govern_us = 1502;  // Governor must scale the pulse range proportionally. This is given a value in the loop
 //  ---- tunable ----
 Timer gasServoTimer (500000);  // We expect the servo to find any new position within this time
 int32_t gas_governor_percent = 95;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
@@ -358,10 +359,12 @@ int32_t gas_pulse_ccw_max_us = 2000;  // Servo ccw limit pulsewidth. Hotrc contr
 int32_t gas_pulse_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_idle_us where to park the servo out of the way so we can drive manually (in us)
 
 // tachometer related
-volatile int32_t tach_delta_us = 0;
 Timer tachPulseTimer;  // OK to not be volatile?
-double tach_rpm = 50;  // Current engine speed, raw as sensed (in rpm)
-double tach_filt_rpm = 50;  // Current engine speed, filtered (in rpm)
+volatile int32_t tach_delta_us = 0;
+volatile int32_t tach_buf_delta_us = 0;
+volatile uint32_t tach_time_us;
+double tach_rpm = 50.0;  // Current engine speed, raw as sensed (in rpm)
+double tach_filt_rpm = 50.0;  // Current engine speed, filtered (in rpm)
 double tach_govern_rpm;  // Create an artificially reduced maximum for the engine speed. This is given a value in the loop
 //  ---- tunable ----
 double tach_convert_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min
@@ -372,16 +375,18 @@ double tach_idle_rpm = 700.0;  // Min value for engine hz, corresponding to low 
 double tach_max_rpm = 6000.0;  // Max possible engine rotation speed
 double tach_redline_rpm = 4000.0;  // Max value for tach_rpm, pedal to the metal (in rpm)
 double tach_margin_rpm = 15.0;  // Margin of error for checking engine rpm (in rpm)
-double tach_stop_thresh_rpm = 0.01;  // Below which the engine is considered stopped
+double tach_stop_thresh_rpm = 0.01;  // Below which the engine is considered stopped - this is redundant,
 int32_t tach_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
 int32_t tach_delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
 
 // carspeed/speedo related
-volatile int32_t speedo_delta_us = 0;
 double carspeed_govern_mph;  // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
-double carspeed_mph;  // Current car speed, raw as sensed (in mph)
-double carspeed_filt_mph;  // Current car speed, filtered (in mph)
+double carspeed_mph = 1.01;  // Current car speed, raw as sensed (in mph)
+double carspeed_filt_mph = 1.02;  // Current car speed, filtered (in mph)
 Timer speedoPulseTimer;  // OK to not be volatile?
+volatile int32_t speedo_delta_us = 0;
+volatile int32_t speedo_buf_delta_us = 0;
+volatile uint32_t speedo_time_us;
 //  ---- tunable ----
 double speedo_convert_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 rot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 gearing * 20*pi in/rot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
 // Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
@@ -413,17 +418,13 @@ int32_t heartbeat_pulse = 255;
 
 // diag/monitoring variables
 Timer loopTimer (1000000);  // how long the previous main loop took to run (in us)
-uint32_t loop_period_us = 100000;
+uint32_t loop_period_us = 10000;
 double loop_freq_hz = 1;  // run loop real time frequency (in Hz)
-volatile int32_t int_counter = 0;  // counts interrupts per loop
-bool procrastinate = false;
+volatile int32_t loop_int_count = 0;  // counts interrupts per loop
 int32_t loopno = 1;
 uint32_t looptimes_us[20];
 bool loop_dirty[20];
 int32_t loopindex = 0;
-Timer tftResetTimer (100000);
-Timer tftDelayTimer (3000000);
-int32_t timing_tft_reset = 0; 
 bool diag_ign_error_enabled = true;
 
 // pushbutton related
@@ -437,30 +438,6 @@ bool syspower = HIGH;
 bool syspower_last = syspower;
 bool basicmodesw = LOW;
 bool cruise_sw = LOW;
-
-// rotary encoder related
-enum encodersw_presses { NONE, SHORT, LONG };
-enum encoder_inputs { A, B };
-Timer encoderSpinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
-int32_t encoder_state = 0;
-uint32_t encoder_spinrate_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
-uint32_t encoder_spinrate_last_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
-uint32_t encoder_spinrate_old_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
-int32_t encoder_sw_action = NONE;  // Flag for encoder handler to know an encoder switch action needs to be handled
-bool encoder_sw = false;  // Remember whether switch is being pressed
-bool encoder_timer_active = false;  // Flag to prevent re-handling long presses if the sw is just kept down
-bool encoder_suppress_click = false;  // Flag to prevent a short click on switch release after successful long press
-bool encoder_b_raw = digitalRead (encoder_b_pin);  // To store value of encoder pin value
-bool encoder_a_raw = digitalRead (encoder_a_pin);
-volatile bool encoder_a_stable = true;  //  Stores the value of encoder A pin as read during B pin transition (where A is stable)
-volatile uint32_t encoder_spinrate_isr_us = 100000;  // Time elapsed between last two detents
-volatile int32_t encoder_bounce_danger = B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
-volatile int32_t encoder_delta = 0;  // Keeps track of un-handled rotary clicks of the encoder.  Positive for CW clicks, Negative for CCW. 
-//  ---- tunable ----
-Timer encoderLongPressTimer(800000);  // Used to time long button presses
-uint32_t encoder_spinrate_min_us = 2500;  // Will reject spins faster than this as an attempt to debounce behavior
-uint32_t encoder_accel_thresh_us = 100000;  // Spins faster than this will be accelerated
-int32_t encoder_accel_max = 50;  // Maximum acceleration factor
 
 // simulator related
 bool simulating_last = false;
@@ -487,9 +464,9 @@ SdFat sd;  // SD card filesystem
 SdFile root;  // Directory file.
 SdFile file;  // Use for file creation in folders.
 
-SPID brakeSPID (brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brake_spid_ctrl_dir, pid_period_ms);
-SPID gasSPID (gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, gas_spid_ctrl_dir, pid_period_ms);
-SPID cruiseSPID (cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, cruise_spid_ctrl_dir, pid_period_ms);
+SPID brakeSPID (&pressure_filt_psi, brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brake_spid_ctrl_dir, pid_period_ms);
+SPID gasSPID (&tach_filt_rpm, gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, gas_spid_ctrl_dir, pid_period_ms);
+SPID cruiseSPID (&carspeed_filt_mph, cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, cruise_spid_ctrl_dir, pid_period_ms);
 
 // Servo library lets us set pwm outputs given an on-time pulse width in us
 static Servo steer_servo;
@@ -498,6 +475,9 @@ static Servo gas_servo;
 static Adafruit_NeoPixel neostrip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
 
 // Temperature sensor related
+double temp_min = -67.0;  // Minimum reading of sensor is -25 C = -67 F
+double temp_max = 257.0;  // Maximum reading of sensor is 125 C = 257 F
+double temp_room = 77.0;  // "Room" temperature is 25 C = 77 F
 enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
 Timer tempTimer (2000000);
 enum temp_status { IDLE, CONVERT, DELAY };
@@ -513,56 +493,39 @@ DeviceAddress temp_addrs[6];
 
 // Interrupt service routines
 //
-void IRAM_ATTR encoder_a_isr (void) {  // When A goes high if B is low, we are CW, otherwise we are CCW -- This ISR intended for encoders like the one on the tan proto board
-    if (encoder_bounce_danger != A) {  // Prevents taking action on any re-triggers after a valid trigger due to bouncing
-        if (!encoder_a_stable) {  // Since A just transitioned, if a_stable is low, this is a rising edge = time to register a turn 
-            encoder_spinrate_isr_us = encoderSpinspeedTimer.elapsed();
-            encoderSpinspeedTimer.reset();
-            encoder_delta += digitalRead (encoder_b_pin) ? -1 : 1;  // Create turn event to be handled later. If B=0, delta=-1 (CCW) turn decreases things
-        }
-        encoder_bounce_danger = A;  // Set to reject A retriggers and enable B trigger
-    }
-}
-void IRAM_ATTR encoder_b_isr (void) {  // On B rising or falling edge, A should have stabilized by now, so don't ignore next A transition
-    if (encoder_bounce_danger != B) {  // Prevents taking action on any re-triggers after a valid trigger due to bouncing
-        encoder_a_stable = digitalRead (encoder_a_pin);  // Input A is stable by the time B changes, so read A value here
-        encoder_bounce_danger = B;  // Set to reject B retriggers and enable A trigger
-    }
-}
 // The tach and speed use a hall sensor being triggered by a passing magnet once per pulley turn. These ISRs call mycros()
 // on every pulse to know the time since the previous pulse. I tested this on the bench up to about 0.750 mph which is as 
-// fast as I can move the magnet with my hand, and it works. It would be cleaner to just increment a counter here in the ISR
-// then call mycros() in the main loop and compare with a timer to calculate mph.
-void IRAM_ATTR tach_isr (void) {  // The tach and speedo isrs compare value returned from the mycros() function with the value from the last interrupt to determine period, to get frequency of the vehicle pulley rotations.
-    uint32_t temp_us = tachPulseTimer.elapsed();
-    if (temp_us > tach_delta_abs_min_us) {
+// fast as I can move the magnet with my hand, and it works. Update: Janky bench test appeared to work up to 11000 rpm.
+void IRAM_ATTR tach_isr (void) {  // The tach and speedo isrs get the period of the vehicle pulley rotations.
+    tach_time_us = tachPulseTimer.elapsed();
+    if (tach_time_us > tach_delta_abs_min_us) {  // ignore spurious triggers or bounces
         tachPulseTimer.reset();
-        tach_delta_us = temp_us;    
+        tach_delta_us = tach_time_us;
     }
 }
-void IRAM_ATTR speedo_isr (void) {  //  A better approach would be to read, reset, and restart a hardware interval timer in the isr.  Better still would be to regularly read a hardware binary counter clocked by the pin - no isr.
-    uint32_t temp_us = speedoPulseTimer.elapsed();
-    if (temp_us > speedo_delta_abs_min_us) {
+void IRAM_ATTR speedo_isr (void) {  //  Handler can get the most recent rotation time at speedo_delta_us
+    speedo_time_us = speedoPulseTimer.elapsed();
+    if (speedo_time_us > speedo_delta_abs_min_us) {  // ignore spurious triggers or bounces
         speedoPulseTimer.reset();
-        speedo_delta_us = temp_us;    
+        speedo_delta_us = speedo_time_us;    
     }
 }
 void IRAM_ATTR hotrc_vert_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
-    if (hotrc_vert_nextval) hotrcPulseTimer.reset();
+    if (hotrc_vert_preread) hotrcPulseTimer.reset();
     else hotrc_vert_pulse_us = hotrcPulseTimer.elapsed();
-    hotrc_vert_nextval = !(digitalRead (hotrc_vert_pin));
+    hotrc_vert_preread = !(digitalRead (hotrc_vert_pin));  // Read pin after timer operations to maximize clocking accuracy
 }
 void IRAM_ATTR hotrc_horz_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
     hotrc_horz_pulse_us = hotrcPulseTimer.elapsed();
 }
 void IRAM_ATTR hotrc_ch3_isr (void) {  // On falling edge, records high pulse width to determine ch3 button toggle state
     hotrc_ch3_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch3 switch true if short pulse, otherwise false
-    if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled
+    if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch3_sw_last = hotrc_ch3_sw;
 }
 void IRAM_ATTR hotrc_ch4_isr (void) {  // On falling edge, records high pulse width to determine ch4 button toggle state
     hotrc_ch4_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch4 switch true if short pulse, otherwise false
-    if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled
+    if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
 
@@ -595,9 +558,8 @@ inline int32_t map (int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, 
 bool rounding = true;
 double dround (double val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
 
-
-bool car_stopped (void) { return abs(carspeed_filt_mph) < carspeed_stop_thresh_mph; }
-bool engine_stopped (void) { return abs(tach_filt_rpm) < tach_stop_thresh_rpm; }
+bool car_stopped (void) { return (carspeed_filt_mph < carspeed_stop_thresh_mph); }
+bool engine_stopped (void) { return (tach_filt_rpm < tach_stop_thresh_rpm); }
 
 uint32_t colorwheel (uint8_t WheelPos) {
     WheelPos = 255 - WheelPos;
@@ -620,8 +582,7 @@ void ema_filt (int32_t raw, double* filt, double alpha) {
     ema_filt ((double)raw, filt, alpha);
 }
 void ema_filt (int32_t raw, int32_t* filt, double alpha) {
-    // if (!raw) *filt = 0; else
-    *filt = (int32_t)(alpha * (double)raw + (1-alpha) * (double)(*filt));
+    *filt = (int32_t)(alpha * (double)raw + (1 - alpha) * (double)(*filt));
 }
 
 void sd_init() {
@@ -671,16 +632,11 @@ void adj_val (double* variable, double modify, double low_limit, double high_lim
 
 void adj_bool (bool* val, int32_t delta) { if (delta != 0) *val = (delta > 0); }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
 
-void set_pin (int32_t pin, int32_t mode) {  // configures a pin on the condition it exists for the current board
-    if (pin >= 0) pinMode (pin, mode);
-}
-void write_pin (int32_t pin, int32_t val) {  // writes a digital value to a pin on the condition it exists for the current board
-    if (pin >= 0) digitalWrite (pin, val);
-}
-int32_t read_pin (int32_t pin) {  // reads a digital value from a pin on the condition it exists for the current board
-    if (pin >= 0) return digitalRead (pin);
-    return -1;
-}
+// pin operations that first check if pin exists for the current board
+void set_pin (int32_t pin, int32_t mode) { if (pin >= 0) pinMode (pin, mode); }
+void write_pin (int32_t pin, int32_t val) {  if (pin >= 0) digitalWrite (pin, val); }
+int32_t read_pin (int32_t pin) { return (pin >= 0) ? digitalRead (pin) : -1; }
+
 void syspower_set (bool val) {
     if (digitalRead (syspower_pin) != val) {
         write_pin (syspower_pin, val);
