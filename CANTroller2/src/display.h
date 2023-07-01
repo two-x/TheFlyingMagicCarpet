@@ -620,7 +620,7 @@ class Display {
                 draw_dynamic(6, cruiseSPID.get_target(), 0.0, carspeed_govern_mph);
                 draw_dynamic(7, brakeSPID.get_target(), pressure_min_psi, pressure_max_psi);
                 draw_dynamic(8, gasSPID.get_target(), 0.0, tach_redline_rpm);
-                draw_dynamic(9, brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
+                draw_dynamic(9, (int32_t)brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
                 draw_dynamic(10, gas_pulse_out_us, gas_pulse_redline_us, gas_pulse_idle_us);
                 draw_dynamic(11, steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);
                 if (dataset_page == RUN) {

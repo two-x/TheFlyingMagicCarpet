@@ -38,8 +38,6 @@ class SPID {  // Soren's home-made pid loop
 
     SPID(double* arg_input, double arg_kp, double arg_ki_hz, double arg_kd_s, int32_t direction, uint32_t arg_sample_period_ms) {  // , bool arg_in_center_mode, bool arg_out_center_mode
         p_input = arg_input;
-        // *p_in_min = *arg_input;  // This has to point somewhere for now until it gets set
-        // *p_in_max = *arg_input;  // This has to point somewhere for now until it gets set
         set_tunings(arg_kp, arg_ki_hz, arg_kd_s);
         set_actuator_direction(direction);
         // set_center_modes(arg_in_center_mode, arg_out_center_mode);
