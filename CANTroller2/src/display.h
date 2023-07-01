@@ -3,6 +3,8 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
+#include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
+#include <Adafruit_ILI9341.h>  // For interfacing with the TFT LCD controller chip
 #include "globals.h"
 
 // display related globals

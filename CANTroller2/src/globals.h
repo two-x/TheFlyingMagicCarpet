@@ -1,5 +1,10 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
+#include <SdFat.h>  // SD card & FAT filesystem library
+#include <Servo.h>  // Makes PWM output to control motors (for rudimentary control of our gas and steering)
+#include <Adafruit_NeoPixel.h>  // Plan to allow control of neopixel LED onboard the esp32
+#include <OneWire.h>
+#include <DallasTemperature.h>
 #include "Arduino.h"
 #include <Preferences.h>
 #include <vector>

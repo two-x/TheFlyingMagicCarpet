@@ -1,14 +1,7 @@
 // Carpet CANTroller II  Source Code  - For Arduino Due with Adafruit 2.8inch Captouch TFT shield.
 #include <SPI.h>  // SPI serial bus needed to talk to the LCD and the SD card
 #include <Wire.h>  // Contains I2C serial bus, needed to talk to touchscreen chip
-#include <SdFat.h>  // SD card & FAT filesystem library
-#include <Servo.h>  // Makes PWM output to control motors (for rudimentary control of our gas and steering)
-#include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
-#include <Adafruit_ILI9341.h>  // For interfacing with the TFT LCD controller chip
-#include <Adafruit_NeoPixel.h>  // Plan to allow control of neopixel LED onboard the esp32
 #include "Arduino.h"
-#include <OneWire.h>
-#include <DallasTemperature.h>
 #include <Adafruit_SleepyDog.h>
 #include <vector>
 #include <string>
