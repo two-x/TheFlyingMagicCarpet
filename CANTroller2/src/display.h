@@ -163,6 +163,7 @@ int32_t disp_targets[disp_lines];
 int32_t disp_age_quanta[disp_lines];
 Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
 Timer dispRefreshTimer (100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
+uint32_t tft_watchdog_timeout = 100000;
 
 // tuning-ui related globals
 enum tuning_ctrl_states { OFF, SELECT, EDIT };
@@ -225,7 +226,7 @@ class Display {
         }
 
         void watchdog() {
-            if (loop_period_us > 70000 && _timing_tft_reset == 0) _timing_tft_reset = 1;
+            if (loop_period_us > tft_watchdog_timeout && _timing_tft_reset == 0) _timing_tft_reset = 1;
             if (_timing_tft_reset == 0) _tftDelayTimer.reset();
             else if (!_tftDelayTimer.expired()) _tftResetTimer.reset();
             else if (_timing_tft_reset == 1) {
