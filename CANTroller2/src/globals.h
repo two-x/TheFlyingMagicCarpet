@@ -294,8 +294,8 @@ int32_t steer_pulse_left_max_us = 2500;  // Longest pulsewidth acceptable to jag
 int32_t steer_safe_percent = 72;  // Sterring is slower at high speed. How strong is this effect 
 
 // brake pressure related
-double pressure_psi;
-double pressure_filt_psi;  // Stores new setpoint to give to the pid loop (brake)
+double pressure_psi = 201;
+double pressure_filt_psi = 202;  // Stores new setpoint to give to the pid loop (brake)
 // Param pressure (&pressure_adc, "Pressure:", "adc ", 658, 2100);
 //  ---- tunable ----
 double pressure_convert_psi_per_adc = 1000.0 * 3.3 / ( adcrange_adc * (4.5 - 0.5) );  // 1000 psi * 3.3 v / (4095 adc * (v-max v - v-min v)) = 0.2 psi/adc 
@@ -312,7 +312,7 @@ double pressure_panic_increment_psi = 25;  // Incremental pressure added periodi
 // max pedal bent 1154
 
 // brake actuator motor related
-int32_t brake_pulse_out_us;  // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
+double brake_pulse_out_us;  // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
 //  ---- tunable ----
 Timer brakeIntervalTimer (500000);  // How much time between increasing brake force during auto-stop if car still moving?
 int32_t brake_increment_interval_us = 500000;  // How often to apply increment during auto-stopping (in us)
@@ -347,8 +347,8 @@ double brake_pos_margin_in = .029;  //
 // int32_t brake_pos_margin_adc = 10;  //    
 
 // throttle servo related
-int32_t gas_pulse_out_us;  // pid loop output to send to the actuator (gas)
-int32_t gas_pulse_govern_us;  // Governor must scale the pulse range proportionally. This is given a value in the loop
+int32_t gas_pulse_out_us = 1501;  // pid loop output to send to the actuator (gas)
+int32_t gas_pulse_govern_us = 1502;  // Governor must scale the pulse range proportionally. This is given a value in the loop
 //  ---- tunable ----
 Timer gasServoTimer (500000);  // We expect the servo to find any new position within this time
 int32_t gas_governor_percent = 95;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
@@ -363,8 +363,8 @@ Timer tachPulseTimer;  // OK to not be volatile?
 volatile int32_t tach_delta_us = 0;
 volatile int32_t tach_buf_delta_us = 0;
 volatile uint32_t tach_time_us;
-double tach_rpm = 50;  // Current engine speed, raw as sensed (in rpm)
-double tach_filt_rpm = 50;  // Current engine speed, filtered (in rpm)
+double tach_rpm = 50.0;  // Current engine speed, raw as sensed (in rpm)
+double tach_filt_rpm = 50.0;  // Current engine speed, filtered (in rpm)
 double tach_govern_rpm;  // Create an artificially reduced maximum for the engine speed. This is given a value in the loop
 //  ---- tunable ----
 double tach_convert_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min
@@ -381,8 +381,8 @@ int32_t tach_delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm
 
 // carspeed/speedo related
 double carspeed_govern_mph;  // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
-double carspeed_mph;  // Current car speed, raw as sensed (in mph)
-double carspeed_filt_mph;  // Current car speed, filtered (in mph)
+double carspeed_mph = 1.01;  // Current car speed, raw as sensed (in mph)
+double carspeed_filt_mph = 1.02;  // Current car speed, filtered (in mph)
 Timer speedoPulseTimer;  // OK to not be volatile?
 volatile int32_t speedo_delta_us = 0;
 volatile int32_t speedo_buf_delta_us = 0;

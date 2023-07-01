@@ -25,27 +25,58 @@ class SPID {  // Soren's home-made pid loop
     bool rounding = true;
     int32_t max_precision = 4;
     uint32_t sample_period_ms;
+    double output, out_min, out_max;
     double target = 0, target_last = 0, error = 0, delta = 0, error_last = 0, p_term = 0, i_term = 0, d_term = 0, open_loop = false;
     double near_target_error_thresh_percent = 0.005;  // Fraction of the input range where if the error has not exceeded in either dir since last zero crossing, it is considered zero (to prevent endless microadjustments) 
     double input_last = 0, near_target_error_thresh = 0, near_target_lock = 0;
     double in_center = 2047, out_center = 2047;
-    double* p_input; double* p_in_min; double* p_in_max; double* p_output; double* p_out_min; double* p_out_max;
+    double* p_input; double* p_in_min; double* p_in_max; double* p_output = &output; double* p_out_min = &out_min; double* p_out_max = &out_max;
     bool out_center_mode = CENTERED, in_center_mode = CENTERED, proportional_to = ERROR_TERM, saturated = false, output_hold = false;
+    // Transducer* in_device; Transducer* out_device;
   public:
     // int32_t disp_kp_1k, disp_ki_mhz, disp_kd_ms;  // disp_* are integer version of tuning variables scaled up by *1000, suitable for screen display
 
-    SPID(double* arg_input, double* arg_output, double arg_kp, double arg_ki_hz, double arg_kd_s, int32_t direction, uint32_t arg_sample_period_ms) {  // , bool arg_in_center_mode, bool arg_out_center_mode
+    SPID(double* arg_input, double arg_kp, double arg_ki_hz, double arg_kd_s, int32_t direction, uint32_t arg_sample_period_ms) {  // , bool arg_in_center_mode, bool arg_out_center_mode
         p_input = arg_input;
-        p_in_min = arg_input;  // This has to point somewhere for now until it gets set
-        p_in_max = arg_input;  // This has to point somewhere for now until it gets set
-        p_output = arg_output;
-        p_out_min = arg_output;  // This has to point somewhere for now until it gets set
-        p_out_max = arg_output;  // This has to point somewhere for now until it gets set
+        // *p_in_min = *arg_input;  // This has to point somewhere for now until it gets set
+        // *p_in_max = *arg_input;  // This has to point somewhere for now until it gets set
         set_tunings(arg_kp, arg_ki_hz, arg_kd_s);
         set_actuator_direction(direction);
         // set_center_modes(arg_in_center_mode, arg_out_center_mode);
         sample_period_ms = arg_sample_period_ms;
+        printf ("Con1: min (%ld): %4lf max (%ld): %4lf\n", p_out_min, *p_out_min, p_out_max, *p_out_max);
     }
+ 
+ // SPID brakeSPID (&pressure_filt_psi, brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brake_spid_ctrl_dir, pid_period_ms);
+
+    SPID(double* arg_input, double* arg_output, double arg_kp, double arg_ki_hz, double arg_kd_s, int32_t direction, uint32_t arg_sample_period_ms) {  // , bool arg_in_center_mode, bool arg_out_center_mode
+        p_input = arg_input;
+        *p_in_min = *arg_input;  // This has to point somewhere for now until it gets set
+        *p_in_max = *arg_input;  // This has to point somewhere for now until it gets set
+        p_output = arg_output;
+        *p_out_min = *arg_output;  // This has to point somewhere for now until it gets set
+        *p_out_max = *arg_output;  // This has to point somewhere for now until it gets set
+        set_tunings(arg_kp, arg_ki_hz, arg_kd_s);
+        set_actuator_direction(direction);
+        // set_center_modes(arg_in_center_mode, arg_out_center_mode);
+        sample_period_ms = arg_sample_period_ms;
+        printf ("Con2: min (%ld): %4lf max (%ld): %4lf\n", p_out_min, *p_out_min, p_out_max, *p_out_max, p_out_max);
+
+    }
+    // SPID(Transducer* arg_in_device, Transducer* arg_out_device, double arg_kp, double arg_ki_hz, double arg_kd_s, int32_t direction, uint32_t arg_sample_period_ms) {
+    //     in_device = arg_in_device;
+    //     p_input = &in_device->val_native;
+    //     p_in_min = &in_device->min_native;  // This has to point somewhere for now until it gets set
+    //     p_in_max = &in_device->max_native;  // This has to point somewhere for now until it gets set
+    //     out_device = arg_out_device;
+    //     p_output = &out_device->val_native;
+    //     p_out_min = &out_device->min_native;  // This has to point somewhere for now until it gets set
+    //     p_out_max = &out_device->max_native;  // This has to point somewhere for now until it gets set
+    //     set_tunings(arg_kp, arg_ki_hz, arg_kd_s);
+    //     set_actuator_direction(direction);
+    //     // set_center_modes(arg_in_center_mode, arg_out_center_mode);
+    //     sample_period_ms = arg_sample_period_ms;
+    // }
     bool constrain_value (double* value, double min, double max) {  // Constrains referred value to given range, returning 1 if value was out of bounds
         if (*value < min) {  // need to include a margin
             *value = min;
@@ -168,12 +199,25 @@ class SPID {  // Soren's home-made pid loop
         near_target_error_thresh = (*p_in_max - *p_in_min) * near_target_error_thresh_percent;
     }
     void set_near_target_thresh(double arg_near_target_thresh_percent) { near_target_error_thresh_percent = arg_near_target_thresh_percent; }
+    void set_output_limits(double arg_min, double arg_max) {
+        if (arg_min >= arg_max) {
+            printf ("Warning: SPID::set_output_limits() ignored request to set output minimum limit %lf > maximum limit %lf.\n", arg_min, arg_max);
+            return;
+        }
+        *p_out_min = arg_min;
+        *p_out_max = arg_max;
+        out_center = (*p_out_min + *p_out_max)/2;
+        printf ("Limit: min:%4lf max:%4lf cent:%lf\n", *p_out_min, *p_out_max, out_center);
+
+        constrain_value (p_output, *p_out_min, *p_out_max);
+    }
     void set_output_limits(double* p_arg_min, double* p_arg_max) {
         if (*p_arg_min >= *p_arg_max) {
             printf ("Warning: SPID::set_output_limits() ignored request to set output minimum limit %lf > maximum limit %lf.\n", *p_arg_min, *p_arg_max);
             return;
         }
-        p_out_min = p_arg_min;  p_out_max = p_arg_max;
+        p_out_min = p_arg_min;
+        p_out_max = p_arg_max;
         out_center = (*p_out_min + *p_out_max)/2;
         constrain_value (p_output, *p_out_min, *p_out_max);
     }
@@ -196,6 +240,9 @@ class SPID {  // Soren's home-made pid loop
     }
     void set_output_center(void) { out_center_mode = RANGED; }  // Call w/o arguments to set output to RANGED mode
     void set_output_center(double arg_out_center) {  // Sets output to CENTERED (centerpoint) mode and takes value of center point. 
+        
+        printf ("Set_Cent: min (%ld): %4lf max (%ld): %4lf cent:%lf\n", p_out_min, *p_out_min, p_out_max, *p_out_max, arg_out_center);
+    
         if (arg_out_center < *p_out_min || arg_out_center > *p_out_max) {
             printf ("Warning: SPID::set_output_center() ignored request to set output centerpoint outside output range.\n");
             return;
