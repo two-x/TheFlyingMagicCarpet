@@ -990,7 +990,7 @@ void loop() {
             }
             else if (!heartbeat_pulse && neopixel_heart_fade) {
                 neopixel_heart_fade = (int8_t)((double)neopixel_brightness * (1 - (double)neopixelTimer.elapsed() / (double)neopixel_timeout));
-                if (neopixel_heart_fade < 1) neopixel_heart_fade = 0;
+                if (neopixelTimer.expired() || neopixel_heart_fade < 1) neopixel_heart_fade = 0;
             }
             int32_t neocolor_last, neoheartfade_last;
             if (neocolor != neocolor_last || neopixel_heart_fade != neoheartfade_last) {
