@@ -453,7 +453,9 @@ class Hotrc {
 //     : Sensor(arg_pin, arg_dir, arg_val_min, arg_val_max, arg_val_cent)  {}
 
 // };
-// // Device::Transducer::ServoPWM is a base class for control system actuators, ie anything that turns signals into real world physical change
+
+// // ServoPWM is a base class for our type of actuators, where by varying a pulse width (in us), motors move.
+// //    e.g. the gas, brake and steering motors. The gas motor is an actual servo, the others are controlled with servo signaling via jaguars.
 // class ServoPWM : virtual public Transducer {
 //   protected:
 //     static Servo servo;
@@ -468,7 +470,9 @@ class Hotrc {
 //     }
 // };
 
-// // Device::Transducer::ServoPWM::JagMotor is a class specifically for the brake linear actuator motor
+// // JagMotor is a class specifically for the brake and steering motors. The jaguar stops the motor when receiving 1500 us pulse,
+// //    and varies the speed in one direction if pulse is 1500 to (max~2500) us, the other direction if pulse is 1500 to (min~500) us.
+// //    Effectively the difference is these have a center value.
 // class JagMotor : public ServoPWM {
 //   protected:
 //     static Servo servo;

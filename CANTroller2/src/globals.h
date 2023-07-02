@@ -129,7 +129,7 @@
 
 // Global settings
 bool serial_debugging = true; 
-bool timestamp_loop = true;  // Makes code write out timestamps throughout loop to serial port
+bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
 bool take_temperatures = false;
 
 // Persistent config storage
@@ -408,7 +408,6 @@ int32_t speedo_delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph,
 // neopixel and heartbeat related
 uint8_t neopixel_wheel_counter = 0;
 uint8_t neopixel_brightness = 30;
-Timer neopixelRefreshTimer (20000);
 uint32_t neopixel_timeout = 150000;
 Timer neopixelTimer (neopixel_timeout);
 bool neopixel_heartbeat = (neopixel_pin >= 0);
