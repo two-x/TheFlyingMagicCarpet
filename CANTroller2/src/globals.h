@@ -147,11 +147,6 @@ Preferences config;
 // * Mule starter (digital out)
 // * E-brake handle position (digital in)
 
-// LCD is 2.8in diagonal, 240x320 pixels
-// LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
-// Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
-// Color picker websites: http://www.barth-dev.de/online/rgb565 , https://chrishewett.com/blog/true-rgb565-colour-picker/
-
 // Globals -------------------
 //
 class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
