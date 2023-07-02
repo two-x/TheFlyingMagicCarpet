@@ -977,25 +977,28 @@ void loop() {
     // Heartbeat led algorithm
     if (neopixel_pin >= 0) {
         if (neopixel_heartbeat) {
-            if (neopixelRefreshTimer.expired()) { // Make the neopixel into a beating heart, in the color of the current runmode 
-                neopixelRefreshTimer.reset();
-                neopixel_heart_color[N_RED] = ((((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0xf800) >> 11) << 3;
-                neopixel_heart_color[N_GRN] = ((((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x7e0) >> 5) << 2;
-                neopixel_heart_color[N_BLU] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x1f) << 3;
-                neostrip.setPixelColor (0, neostrip.Color (neopixel_heart_color[N_BLU], neopixel_heart_color[N_RED], neopixel_heart_color[N_GRN]));
-                if (heartbeatTimer.expired()) {
-                    heartbeat_pulse = !heartbeat_pulse;
-                    if (heartbeat_pulse) neopixel_heart_fade = neopixel_brightness;
-                    else neopixelTimer.reset();
-                    if (++heartbeat_state >= arraysize (heartbeat_ekg)) heartbeat_state -= arraysize (heartbeat_ekg);
-                    heartbeatTimer.set (heartbeat_ekg[heartbeat_state]);
-                }
-                else if (!heartbeat_pulse && neopixel_heart_fade) {
-                    neopixel_heart_fade = (int8_t)((double)neopixel_brightness * (1 - (double)neopixelTimer.elapsed() / (double)neopixel_timeout));
-                    if (neopixel_heart_fade < 1) neopixel_heart_fade = 0;
-                }
+            neopixel_heart_color[N_RED] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0xf800) >> 8;
+            neopixel_heart_color[N_GRN] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x7e0) >> 3;
+            neopixel_heart_color[N_BLU] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x1f) << 3;
+            int32_t neocolor = neostrip.Color (neopixel_heart_color[N_BLU], neopixel_heart_color[N_RED], neopixel_heart_color[N_GRN]);
+            if (heartbeatTimer.expired()) {
+                heartbeat_pulse = !heartbeat_pulse;
+                if (heartbeat_pulse) neopixel_heart_fade = neopixel_brightness;
+                else neopixelTimer.reset();
+                if (++heartbeat_state >= arraysize (heartbeat_ekg)) heartbeat_state -= arraysize (heartbeat_ekg);
+                heartbeatTimer.set (heartbeat_ekg[heartbeat_state]);
+            }
+            else if (!heartbeat_pulse && neopixel_heart_fade) {
+                neopixel_heart_fade = (int8_t)((double)neopixel_brightness * (1 - (double)neopixelTimer.elapsed() / (double)neopixel_timeout));
+                if (neopixelTimer.expired() || neopixel_heart_fade < 1) neopixel_heart_fade = 0;
+            }
+            int32_t neocolor_last, neoheartfade_last;
+            if (neocolor != neocolor_last || neopixel_heart_fade != neoheartfade_last) {
+                neostrip.setPixelColor (0, neocolor);
                 neostrip.setBrightness (neopixel_heart_fade);
                 neostrip.show();
+                neocolor_last = neocolor;
+                neoheartfade_last = neopixel_heart_fade;
             }
         }
         else if (neopixelTimer.expired()) {  // Rainbow fade

@@ -61,7 +61,7 @@ class SPID {  // Soren's home-made pid loop
         printf ("Con2: min (%ld): %4lf max (%ld): %4lf\n", p_out_min, *p_out_min, p_out_max, *p_out_max, p_out_max);
 
     }
-    // SPID(Transducer* arg_in_device, Transducer* arg_out_device, double arg_kp, double arg_ki_hz, double arg_kd_s, int32_t direction, uint32_t arg_sample_period_ms) {
+    // SPID(Sensor* arg_in_device, ServoPWM* arg_out_device, double arg_kp, double arg_ki_hz, double arg_kd_s, int32_t direction, uint32_t arg_sample_period_ms) {
     //     in_device = arg_in_device;
     //     p_input = &in_device->val_native;
     //     p_in_min = &in_device->min_native;  // This has to point somewhere for now until it gets set
@@ -71,7 +71,7 @@ class SPID {  // Soren's home-made pid loop
     //     p_out_min = &out_device->min_native;  // This has to point somewhere for now until it gets set
     //     p_out_max = &out_device->max_native;  // This has to point somewhere for now until it gets set
     //     set_tunings(arg_kp, arg_ki_hz, arg_kd_s);
-    //     set_actuator_direction(direction);
+    //     set_actuator_direction(out_device.get_direction());
     //     // set_center_modes(arg_in_center_mode, arg_out_center_mode);
     //     sample_period_ms = arg_sample_period_ms;
     // }
@@ -129,9 +129,9 @@ class SPID {  // Soren's home-made pid loop
         
         // printf(" ntl2=%-+9.4lf sat=%1d outh=%1d pterm=%-+9.4lf iterm=%-+9.4lf dterm=%-+9.4lf out=%-+9.4lf\n", near_target_lock, saturated, output_hold, p_term, i_term, d_term, output);
 
-        printf("uc output: %7.2lf, min: %7.2lf, max:%7.2lf, ", *p_output, *p_out_min, *p_out_max);
+        // printf("uc output: %7.2lf, min: %7.2lf, max:%7.2lf, ", *p_output, *p_out_min, *p_out_max);
         saturated = constrain_value(p_output, *p_out_min, *p_out_max);
-        printf("c output: %7.2lf, min: %7.2lf, max:%7.2lf\n", *p_output, *p_out_min, *p_out_max);
+        // printf("c output: %7.2lf, min: %7.2lf, max:%7.2lf\n", *p_output, *p_out_min, *p_out_max);
         
         input_last = *p_input;  // store previously computed input
         target_last = target;

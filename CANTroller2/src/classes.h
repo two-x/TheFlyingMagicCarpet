@@ -36,7 +36,7 @@ class Param {
     bool dirty = true, rounding = true;  // Has value been updated since last time value was displayed
     int32_t max_precision = 3;
     char disp_name[9] = "unnamed ";
-    char disp_units[5] = "    ";
+    char disp_raw_units[5] = "    ";
     double* p_val_raw = &val_raw; double* p_min_raw = &min_raw; double* p_max_raw = &max_raw;  // Pointers to value/max/min, could be internal or external reference
     Param (double* arg_p_val_raw) { p_val_raw = arg_p_val_raw; }
     Param (double arg_val_raw) { 
@@ -47,7 +47,7 @@ class Param {
     Param (void) { Param((double)-1.0); }
     void set_names (const string arg_name, const string arg_units) {
         strcpy (disp_name, arg_name.c_str());
-        strcpy (disp_units, arg_units.c_str());
+        strcpy (disp_raw_units, arg_units.c_str());
     }
     double round (double val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
     double round (double val) { return round (val, max_precision); }
@@ -89,7 +89,7 @@ class Param {
     double get_min_raw () { return *p_min_raw; }
     double get_max_raw () { return *p_max_raw; }
     char* get_name () { return disp_name; }
-    char* get_units () { return disp_units; }
+    char* get_units () { return disp_raw_units; }
     
     
 };
@@ -174,7 +174,7 @@ class Transducer : virtual public Device {
     }
     void set_names (const string arg_name, const string arg_units_raw, const string arg_units_native) {
         strcpy (disp_name, arg_name.c_str());
-        strcpy (disp_units, arg_units_raw.c_str());
+        strcpy (disp_raw_units, arg_units_raw.c_str());
         strcpy (disp_native_units, arg_units_native.c_str());
     }
     // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
@@ -211,11 +211,7 @@ class Transducer : virtual public Device {
         }
         return false;
     }
-    void draw_native (Display &d, int32_t lineno) {
-        if (dirty) d.draw_dynamic (lineno, val_native, *p_min_native, *p_max_native, -1);
-        dirty = false;
-    }
-    void draw_native (Display &d, int32_t lineno, int32_t target) {
+    void draw_native (Display &d, int32_t lineno, int32_t target=-1) {
         if (dirty) d.draw_dynamic (lineno, val_native, *p_min_native, *p_max_native, target);
         dirty = false;
     }
@@ -230,21 +226,20 @@ class Sensor : virtual public Transducer {
     double ema_alpha = 0.1;
     double val_filt;
   public:
-    Sensor (double arg_val_native) : Transducer (arg_val_native) { val_filt = ema (arg_val_native); }
-    Sensor (void) : Transducer() {}
+    Sensor (double arg_val_native) : Transducer (arg_val_native) { val_filt = arg_val_native; }
     void set_ema_alpha (double arg_alpha) { ema_alpha = arg_alpha; }
-    double ema (double arg_new_val_native) { return ema_alpha * arg_new_val_native + (1 - ema_alpha) * (*p_val_raw); }
+    void ema (double arg_new_val_native) { val_filt = ema_alpha * arg_new_val_native + (1 - ema_alpha) * (val_filt); }
     double get_ema_alpha (void) { return ema_alpha; }
+    double get_filt (void) { return val_filt; }
 };
 
 // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
 class AnalogSensor : virtual public Sensor {
   public:
     AnalogSensor (int32_t arg_val_native) : Sensor (arg_val_native) {}
-    AnalogSensor (void) : Sensor() {}
     void read() {
         val_native = analogRead(pin);
-        set_native (ema ((double)val_native));
+        ema ((double)val_native);
     }
 };
 
@@ -453,7 +448,9 @@ class Hotrc {
 //     : Sensor(arg_pin, arg_dir, arg_val_min, arg_val_max, arg_val_cent)  {}
 
 // };
-// // Device::Transducer::ServoPWM is a base class for control system actuators, ie anything that turns signals into real world physical change
+
+// // ServoPWM is a base class for our type of actuators, where by varying a pulse width (in us), motors move.
+// //    e.g. the gas, brake and steering motors. The gas motor is an actual servo, the others are controlled with servo signaling via jaguars.
 // class ServoPWM : virtual public Transducer {
 //   protected:
 //     static Servo servo;
@@ -468,7 +465,9 @@ class Hotrc {
 //     }
 // };
 
-// // Device::Transducer::ServoPWM::JagMotor is a class specifically for the brake linear actuator motor
+// // JagMotor is a class specifically for the brake and steering motors. The jaguar stops the motor when receiving 1500 us pulse,
+// //    and varies the speed in one direction if pulse is 1500 to (max~2500) us, the other direction if pulse is 1500 to (min~500) us.
+// //    Effectively the difference is these have a center value.
 // class JagMotor : public ServoPWM {
 //   protected:
 //     static Servo servo;

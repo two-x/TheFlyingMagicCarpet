@@ -129,8 +129,8 @@
 
 // Global settings
 bool serial_debugging = true; 
-bool timestamp_loop = true;  // Makes code write out timestamps throughout loop to serial port
-bool take_temperatures = false;
+bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
+bool take_temperatures = true;
 
 // Persistent config storage
 Preferences config;
@@ -146,11 +146,6 @@ Preferences config;
 // * Serial interface to the lighting controller (if we can think of a reason)
 // * Mule starter (digital out)
 // * E-brake handle position (digital in)
-
-// LCD is 2.8in diagonal, 240x320 pixels
-// LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
-// Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
-// Color picker websites: http://www.barth-dev.de/online/rgb565 , https://chrishewett.com/blog/true-rgb565-colour-picker/
 
 // Globals -------------------
 //
@@ -408,7 +403,6 @@ int32_t speedo_delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph,
 // neopixel and heartbeat related
 uint8_t neopixel_wheel_counter = 0;
 uint8_t neopixel_brightness = 30;
-Timer neopixelRefreshTimer (20000);
 uint32_t neopixel_timeout = 150000;
 Timer neopixelTimer (neopixel_timeout);
 bool neopixel_heartbeat = (neopixel_pin >= 0);

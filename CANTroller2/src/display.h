@@ -19,7 +19,7 @@
 #define DCYN 0x0575  //
 #define MGT  0xf81f
 #define ORG  0xfca0
-#define DORG 0xfa40  // Dark orange
+#define DORG 0xfa40  // Dark orange aka brown
 #define YEL  0xffe0
 #define LYEL 0xfff8
 #define WHT  0xffff
@@ -30,6 +30,11 @@
 #define PNK  0xfcf3  // Pink is the best color
 #define DPNK 0xfa8a  // We need all shades of pink
 #define LPNK 0xfe18  // Especially light pink, the champagne of pinks
+
+// LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
+// Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
+// Color picker websites: http://www.barth-dev.de/online/rgb565 , https://chrishewett.com/blog/true-rgb565-colour-picker/
+// LCD is 2.8in diagonal, 240x320 pixels
 
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
 #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
@@ -262,12 +267,6 @@ class Display {
             draw_needle_shape (old_n_pos_x, pos_y, BLK);
             draw_needle_shape (n_pos_x, pos_y, n_color);
         }
-        // void draw_bargraph_needle_target (int32_t n_pos_x, int32_t old_n_pos_x, int32_t t_pos_x, int32_t old_t_pos_x, int32_t pos_y, int32_t n_color, int32_t t_color, int32_t r_color) {  // draws a needle and target
-        //     draw_needle_shape (old_n_pos_x, pos_y, BLK);
-        //     draw_target_shape (old_t_pos_x, pos_y, BLK, BLK);
-        //     draw_target_shape (t_pos_x, pos_y, t_color, r_color);
-        //     draw_needle_shape (n_pos_x, pos_y, n_color);
-        // }  // This function was for when the needle could overlap the target
         void draw_string (int32_t x_new, int32_t x_old, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor, bool forced=false) {  // Send in "" for oldtext if erase isn't needed
             int32_t oldlen = strlen(oldtext);
             int32_t newlen = strlen(text);
@@ -293,12 +292,6 @@ class Display {
                     _tft.print (text[letter]);
                 }
             }
-            // _tft.setCursor (x_old, y);
-            // _tft.setTextColor (bgcolor);
-            // _tft.print (oldtext);  // Erase the old content
-            // _tft.setCursor (x_new, y);
-            // _tft.setTextColor (color);
-            // _tft.print (text);  // Draw the new content
         }
         void draw_mmph (int32_t x, int32_t y, int32_t color) {  // This is my cheesy pixel-drawn "mmph" compressed horizontally to 3-char width
             _tft.setTextColor (color);
@@ -331,20 +324,12 @@ class Display {
             _tft.drawFastVLine (x+16, y+2, 5, color);  // 'u' complete (x = 14-16)
         }
         void draw_string_units (int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
-            // if (!strcmp (oldtext, "mmph")) draw_mmph(x, y, bgcolor);
-            // else if (!strcmp (oldtext, "thou")) draw_thou (x, y, bgcolor);
-            // else {
-                _tft.setCursor (x, y);
-                _tft.setTextColor (bgcolor);
-                _tft.print (oldtext);  // Erase the old content
-            // }
-            // if (!strcmp (text, "mmph")) draw_mmph(x, y, color);
-            // else if (!strcmp (text, "thou")) draw_thou (x, y, color);
-            // else {
-                _tft.setCursor (x, y);
-                _tft.setTextColor (color);
-                _tft.print (text);  // Erase the old content
-            // }
+            _tft.setCursor (x, y);
+            _tft.setTextColor (bgcolor);
+            _tft.print (oldtext);  // Erase the old content
+            _tft.setCursor (x, y);
+            _tft.setTextColor (color);
+            _tft.print (text);  // Erase the old content
         }
         void draw_colons (int32_t x_pos, int32_t first, int32_t last, int32_t color) {
             for (int32_t lineno=first; lineno <= last; lineno++) {
@@ -356,7 +341,7 @@ class Display {
         }
         // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
         void draw_fixed (int32_t page, int32_t page_last, bool redraw_tuning_corner, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
-            yield();
+            yield();  // experiment
             _tft.setTextColor (GRY2);
             _tft.setTextSize (1);
             // if (redraw_tuning_corner) _tft.fillRect(10, 145, 154, 95, BLK); // _tft.fillRect(0,145,167,95,BLK);  // Erase old dataset page area - This line alone uses 15 ms
@@ -371,7 +356,7 @@ class Display {
                 // draw_colons(7+disp_font_width*arraysize(telemetry[0]), 1, disp_fixed_lines+disp_tuning_lines, GRY1);  // I can't decide if I like the colons or not
             }
             for (int32_t lineno=0; lineno < disp_tuning_lines; lineno++)  {  // Step thru lines of dataset page data
-                yield();
+                yield();  // experiment
                 draw_string(12, 12, (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[page][lineno], dataset_page_names[page_last][lineno], GRY2, BLK, forced);
                 draw_string_units(104, (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], GRY2, BLK);
                 if (redraw_tuning_corner) {
@@ -385,7 +370,7 @@ class Display {
             _tft.drawFastHLine (x_pos+2, y_pos+3, 3, color);
         }
         void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target=-1) {
-            yield();
+            yield();  // experiment
             int32_t age_us = (int32_t)((double)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
             int32_t x_base = 59;
             bool polarity = (value >= 0);  // polarity 0=negative, 1=positive
@@ -407,7 +392,7 @@ class Display {
                 draw_string (x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_values[lineno], "", color, BLK);
                 disp_age_quanta[lineno] = age_us;
             }
-            yield();
+            yield();  // experiment
             if (lowlim < hilim) {  // Any value having a given range deserves a bargraph gauge with a needle
                 int32_t corner_x = 124;    
                 int32_t corner_y = lineno*disp_line_height_pix+disp_vshift_pix-1;
@@ -457,7 +442,7 @@ class Display {
             value = abs (value);  // This function disregards sign
             if (significant_place(value) <= maxlength) return std::to_string (value);  // If value is short enough, return it
             std::string result;
-            int32_t magnitude = std::log10 (value);
+            int32_t magnitude = std::log10 (value);  // check how slow is log() function? Compare performance vs. multiple divides ( see abs_ftoa() )
             double scaledValue = value / std::pow (10, magnitude + 1 - maxlength);  // was (10, magnitude - 5);
             if (scaledValue >= 1.0 && scaledValue < 10.0) result = std::to_string (static_cast<int>(scaledValue));
             else result = std::to_string (scaledValue);
