@@ -224,6 +224,11 @@ double gas_spid_initial_ki_hz = 0.015;  // PID integral frequency factor (gas). 
 double gas_spid_initial_kd_s = 0.022;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
 int32_t gas_spid_ctrl_dir = SPID::REV;  // 0 = fwd, 1 = rev.
 
+// starter related
+bool starter = LOW;
+bool starter_last = LOW;
+bool sim_starter = false;
+
 // mule battery related
 double battery_adc = adcmidscale_adc;
 double battery_v = 10.0;
