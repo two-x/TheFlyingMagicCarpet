@@ -104,8 +104,8 @@
 #define hotrc_horz_pin 17  // (pwm0 / tx1) - Hotrc Ch1 thumb joystick input.
 #define hotrc_vert_pin 18  // (pwm0 / rx1) - Hotrc Ch2 bidirectional trigger input
 #define onewire_pin 19  // (usb-otg) - Onewire bus for temperature sensor data
-#define ctrl_cruise_ch3_pin 20  // (usb-otg) - Cruise control, either momentary button (joystick - Active low, needs pullup) or Hotrc Ch3 PWM toggle signal
-#define ctrl_ign_ch4_pin 21  // (pwm0) - Ignition control, either toggle button (joystick - Active high, needs pulldown) or Hotrc Ch4 PWM toggle signal
+#define ctrl_ign_ch3_pin 20  // (usb-otg) - Ignition control, either toggle button (joystick - Active high, needs pulldown) or Hotrc Ch3 PWM toggle signal
+#define ctrl_cruise_ch4_pin 21  // (pwm0) - Cruise control, either momentary button (joystick - Active low, needs pullup) or Hotrc Ch4 PWM toggle signal
 #define tach_pulse_pin 35  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
 #define speedo_pulse_pin 36  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
 #define ignition_pin 37  // (spi-ram / oct-spi) - Output flips a relay to kill the car ignition, active high (no pullup)
@@ -528,7 +528,7 @@ void IRAM_ATTR speedo_isr (void) {  //  Handler can get the most recent rotation
 int32_t hotrc_ch3_pulse_us, hotrc_ch4_pulse_us;
 uint32_t mcpwm_unit0_capture, mcpwm_unit1_capture, mcpwm_unit2_capture;
 uint32_t mcpwm_unit0_capture_last, mcpwm_unit1_capture_last, mcpwm_unit2_capture_last;
-int32_t hotrc_ch4_preread;
+int32_t hotrc_ch3_preread;
 
 void IRAM_ATTR hotrc_isr (void) {
     mcpwm_unit0_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_0, MCPWM_SELECT_CAP0);
@@ -548,20 +548,21 @@ void IRAM_ATTR hotrc_isr (void) {
 //     hotrc_vert_pulse_us = (int32_t)(mcpwm_unit1_capture - mcpwm_unit1_capture_last);
 //     mcpwm_unit1_capture_last = mcpwm_unit1_capture;
 // }
+
 void IRAM_ATTR hotrc_ch3_isr (void) {  // On falling edge, records high pulse width to determine ch3 button toggle state
-    hotrc_ch3_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch3 switch true if short pulse, otherwise false
-    if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
-    hotrc_ch3_sw_last = hotrc_ch3_sw;
+    if (hotrc_ch3_preread) hotrcPulseTimer.reset();
+    else {
+        hotrc_ch3_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch3 switch true if short pulse, otherwise false
+        if (hotrc_ch4_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
+        hotrc_ch3_sw_last = hotrc_ch3_sw;
+    }
+    hotrc_ch3_preread = !(digitalRead (ctrl_ign_ch3_pin));  // Read pin after timer operations to maximize clocking accuracy
 }
 
 void IRAM_ATTR hotrc_ch4_isr (void) {  // On falling edge, records high pulse width to determine ch4 button toggle state
-    if (hotrc_ch4_preread) hotrcPulseTimer.reset();
-    else {
-        hotrc_ch4_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch4 switch true if short pulse, otherwise false
-        if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
-        hotrc_ch4_sw_last = hotrc_ch4_sw;
-    }
-    hotrc_ch4_preread = !(digitalRead (ctrl_ign_ch4_pin));  // Read pin after timer operations to maximize clocking accuracy
+    hotrc_ch4_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch4 switch true if short pulse, otherwise false
+    if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
+    hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
 
 // void IRAM_ATTR hotrc_vert_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
