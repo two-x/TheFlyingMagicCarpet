@@ -344,7 +344,7 @@ void loop() {
     }
     else brake_pos_filt_in = (brake_pos_nom_lim_retract_in + brake_pos_zeropoint_in)/2;  // To keep brake position in legal range during simulation
     
-    if (!simulating && !sim_starter) starter = read_pin (starter_pin);
+    if (!simulating || !sim_starter) starter = read_pin (starter_pin);
 
     // Tach - takes 22 us to read when no activity
     if (!simulating || !sim_tach) {
