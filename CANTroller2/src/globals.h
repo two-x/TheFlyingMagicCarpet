@@ -525,54 +525,49 @@ void IRAM_ATTR speedo_isr (void) {  //  Handler can get the most recent rotation
     }
 }
 
-int32_t hotrc_ch3_pulse_us, hotrc_ch4_pulse_us;
-uint32_t mcpwm_unit0_capture, mcpwm_unit1_capture, mcpwm_unit2_capture;
-uint32_t mcpwm_unit0_capture_last, mcpwm_unit1_capture_last, mcpwm_unit2_capture_last;
-int32_t hotrc_ch3_preread;
-
-void IRAM_ATTR hotrc_isr (void) {
-    mcpwm_unit0_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_0, MCPWM_SELECT_CAP0);
-    mcpwm_unit1_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_1, MCPWM_SELECT_CAP0);
-    hotrc_horz_pulse_us = (int32_t)(mcpwm_unit0_capture - mcpwm_unit0_capture_last);
-    hotrc_vert_pulse_us = (int32_t)(mcpwm_unit1_capture - mcpwm_unit1_capture_last);
-    mcpwm_unit0_capture_last = mcpwm_unit0_capture;
-    mcpwm_unit1_capture_last = mcpwm_unit1_capture;
-}
-// void IRAM_ATTR hotrc_ch1_isr (void) {
+// Attempt to use MCPWM input capture pulse width timer unit to get precise hotrc readings
+// int32_t hotrc_ch3_pulse_us, hotrc_ch4_pulse_us;
+// uint32_t mcpwm_unit0_capture, mcpwm_unit1_capture, mcpwm_unit2_capture;
+// uint32_t mcpwm_unit0_capture_last, mcpwm_unit1_capture_last, mcpwm_unit2_capture_last;
+// int32_t hotrc_ch3_preread;
+// void IRAM_ATTR hotrc_isr (void) {
 //     mcpwm_unit0_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_0, MCPWM_SELECT_CAP0);
-//     hotrc_horz_pulse_us = (int32_t)(mcpwm_unit0_capture - mcpwm_unit0_capture_last);
-//     mcpwm_unit0_capture_last = mcpwm_unit0_capture;
-// }
-// void IRAM_ATTR hotrc_ch2_isr (void) {
 //     mcpwm_unit1_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_1, MCPWM_SELECT_CAP0);
+//     hotrc_horz_pulse_us = (int32_t)(mcpwm_unit0_capture - mcpwm_unit0_capture_last);
 //     hotrc_vert_pulse_us = (int32_t)(mcpwm_unit1_capture - mcpwm_unit1_capture_last);
+//     mcpwm_unit0_capture_last = mcpwm_unit0_capture;
 //     mcpwm_unit1_capture_last = mcpwm_unit1_capture;
 // }
+// // // Separate attempt to use timers to measure pulses
+// // void IRAM_ATTR hotrc_ch1_isr (void) {
+// //     mcpwm_unit0_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_0, MCPWM_SELECT_CAP0);
+// //     hotrc_horz_pulse_us = (int32_t)(mcpwm_unit0_capture - mcpwm_unit0_capture_last);
+// //     mcpwm_unit0_capture_last = mcpwm_unit0_capture;
+// // }
+// // void IRAM_ATTR hotrc_ch2_isr (void) {
+// //     mcpwm_unit1_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_1, MCPWM_SELECT_CAP0);
+// //     hotrc_vert_pulse_us = (int32_t)(mcpwm_unit1_capture - mcpwm_unit1_capture_last);
+// //     mcpwm_unit1_capture_last = mcpwm_unit1_capture;
+// // }
 
-void IRAM_ATTR hotrc_ch3_isr (void) {  // On falling edge, records high pulse width to determine ch3 button toggle state
-    if (hotrc_ch3_preread) hotrcPulseTimer.reset();
-    else {
-        hotrc_ch3_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch3 switch true if short pulse, otherwise false
-        if (hotrc_ch4_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
-        hotrc_ch3_sw_last = hotrc_ch3_sw;
-    }
-    hotrc_ch3_preread = !(digitalRead (hotrc_ch3_ign_pin));  // Read pin after timer operations to maximize clocking accuracy
+void IRAM_ATTR hotrc_vert_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
+    if (hotrc_vert_preread) hotrcPulseTimer.reset();
+    else hotrc_vert_pulse_us = hotrcPulseTimer.elapsed();
+    hotrc_vert_preread = !(digitalRead (hotrc_ch2_vert_pin));  // Read pin after timer operations to maximize clocking accuracy
 }
-
+void IRAM_ATTR hotrc_horz_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
+    hotrc_horz_pulse_us = hotrcPulseTimer.elapsed();
+}
+void IRAM_ATTR hotrc_ch3_isr (void) {  // On falling edge, records high pulse width to determine ch4 button toggle state
+    hotrc_ch3_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch4 switch true if short pulse, otherwise false
+    if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
+    hotrc_ch3_sw_last = hotrc_ch3_sw;
+}
 void IRAM_ATTR hotrc_ch4_isr (void) {  // On falling edge, records high pulse width to determine ch4 button toggle state
     hotrc_ch4_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch4 switch true if short pulse, otherwise false
     if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
-
-// void IRAM_ATTR hotrc_vert_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
-//     if (hotrc_vert_preread) hotrcPulseTimer.reset();
-//     else hotrc_vert_pulse_us = hotrcPulseTimer.elapsed();
-//     hotrc_vert_preread = !(digitalRead (hotrc_ch2_vert_pin));  // Read pin after timer operations to maximize clocking accuracy
-// }
-// void IRAM_ATTR hotrc_horz_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
-//     hotrc_horz_pulse_us = hotrcPulseTimer.elapsed();
-// }
 
 // Utility functions
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays

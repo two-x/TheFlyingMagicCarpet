@@ -150,30 +150,33 @@ void setup() {
     attachInterrupt (digitalPinToInterrupt(speedo_pulse_pin), speedo_isr, RISING);
 
     if (ctrl == HOTRC) {
+        attachInterrupt (digitalPinToInterrupt(hotrc_ch2_vert_pin), hotrc_vert_isr, CHANGE);
+        attachInterrupt (digitalPinToInterrupt(hotrc_ch1_horz_pin), hotrc_horz_isr, FALLING);
+        attachInterrupt (digitalPinToInterrupt(hotrc_ch3_ign_pin), hotrc_ch3_isr, FALLING);
+        attachInterrupt (digitalPinToInterrupt(hotrc_ch4_cruise_pin), hotrc_ch4_isr, FALLING);
+        
+        // Attempt to use MCPWM input capture pulse width timer unit to get precise hotrc readings
         // https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/peripherals/mcpwm.html#capture
         // https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/kconfig.html#mcpwm-configuration
         // https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/kconfig.html#mcpwm-configuration
-        
-        // attachInterrupt (digitalPinToInterrupt(hotrc_ch2_vert_pin), hotrc_vert_isr, CHANGE);
-        // attachInterrupt (digitalPinToInterrupt(hotrc_ch1_horz_pin), hotrc_horz_isr, FALLING);
-        attachInterrupt (digitalPinToInterrupt(hotrc_ch4_cruise_pin), hotrc_ch4_isr, FALLING);
-        attachInterrupt (digitalPinToInterrupt(hotrc_ch3_ign_pin), hotrc_ch3_isr, CHANGE);
-        
-        // Configure MCPWM GPIOs
-        mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, hotrc_ch1_horz_pin);
-        mcpwm_gpio_init(MCPWM_UNIT_1, MCPWM0A, hotrc_ch2_vert_pin);
-        // Configure MCPWM units 0 and 1
-        mcpwm_config_t pwm_config;
-        pwm_config.frequency = 0;  // Set frequency to 0 for input mode
-        pwm_config.cmpr_a = 0;  // Set duty cycle to 0 for input mode
-        pwm_config.counter_mode = MCPWM_UP_COUNTER;
-        pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
-        mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);
-        mcpwm_init(MCPWM_UNIT_1, MCPWM_TIMER_0, &pwm_config);
-        // mcpwm_capture_enable(MCPWM_UNIT_0, MCPWM_SELECT_CAP0, MCPWM_POS_EDGE, 0);
-        // mcpwm_capture_enable(MCPWM_UNIT_1, MCPWM_SELECT_CAP0, MCPWM_POS_EDGE, 0);
-        // mcpwm_capture_set_cb(MCPWM_UNIT_0, MCPWM_SELECT_CAP0, hotrc_ch1_isr, NULL);
-        // mcpwm_capture_set_cb(MCPWM_UNIT_1, MCPWM_SELECT_CAP0, hotrc_ch2_isr, NULL);
+        // // Configure MCPWM GPIOs
+        // mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, hotrc_ch1_horz_pin);
+        // mcpwm_gpio_init(MCPWM_UNIT_1, MCPWM0A, hotrc_ch2_vert_pin);
+        // // Configure MCPWM units 0 and 1
+        // mcpwm_config_t pwm_config;
+        // pwm_config.frequency = 0;  // Set frequency to 0 for input mode
+        // pwm_config.cmpr_a = 0;  // Set duty cycle to 0 for input mode
+        // pwm_config.counter_mode = MCPWM_UP_COUNTER;
+        // pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
+        // mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);
+        // mcpwm_init(MCPWM_UNIT_1, MCPWM_TIMER_0, &pwm_config);
+        // // mcpwm_capture_enable(MCPWM_UNIT_0, MCPWM_SELECT_CAP0, MCPWM_POS_EDGE, 0);
+        // // mcpwm_capture_enable(MCPWM_UNIT_1, MCPWM_SELECT_CAP0, MCPWM_POS_EDGE, 0);
+        // // mcpwm_capture_set_cb(MCPWM_UNIT_0, MCPWM_SELECT_CAP0, hotrc_ch1_isr, NULL);
+        // // mcpwm_capture_set_cb(MCPWM_UNIT_1, MCPWM_SELECT_CAP0, hotrc_ch2_isr, NULL);
+        // Ch3 and Ch4 interrupts work with slower timers
+        // attachInterrupt (digitalPinToInterrupt(hotrc_ch3_ign_pin), hotrc_ch3_isr, CHANGE);
+        // attachInterrupt (digitalPinToInterrupt(hotrc_ch4_cruise_pin), hotrc_ch4_isr, FALLING);
     }
     Serial.println (F("set up and enabled\n"));
     
