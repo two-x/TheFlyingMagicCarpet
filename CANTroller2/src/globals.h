@@ -130,7 +130,7 @@
 // Global settings
 bool serial_debugging = true; 
 bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
-bool take_temperatures = false;
+bool take_temperatures = true;
 
 // Persistent config storage
 Preferences config;

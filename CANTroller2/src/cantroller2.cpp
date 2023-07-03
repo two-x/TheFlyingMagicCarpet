@@ -977,8 +977,8 @@ void loop() {
     // Heartbeat led algorithm
     if (neopixel_pin >= 0) {
         if (neopixel_heartbeat) {
-            neopixel_heart_color[N_RED] = ((((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0xf800) >> 11) << 3;
-            neopixel_heart_color[N_GRN] = ((((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x7e0) >> 5) << 2;
+            neopixel_heart_color[N_RED] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0xf800) >> 8;
+            neopixel_heart_color[N_GRN] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x7e0) >> 3;
             neopixel_heart_color[N_BLU] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x1f) << 3;
             int32_t neocolor = neostrip.Color (neopixel_heart_color[N_BLU], neopixel_heart_color[N_RED], neopixel_heart_color[N_GRN]);
             if (heartbeatTimer.expired()) {
