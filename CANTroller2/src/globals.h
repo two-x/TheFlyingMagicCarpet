@@ -13,10 +13,10 @@
 #include <iostream>
 #include <string>
 #include <iomanip>
-#include <stdio.h>  // MCPWM pulse measurement code
-#include "freertos/FreeRTOS.h"  // MCPWM pulse measurement code
-#include "freertos/task.h"  // MCPWM pulse measurement code
-#include "driver/mcpwm.h"  // MCPWM pulse measurement code
+// #include <stdio.h>  // MCPWM pulse measurement code
+// #include "freertos/FreeRTOS.h"  // MCPWM pulse measurement code
+// #include "freertos/task.h"  // MCPWM pulse measurement code
+// #include "driver/mcpwm.h"  // MCPWM pulse measurement code
 
 // #include "classes.h"
 #include "spid.h"
@@ -85,8 +85,8 @@
 
 // Defines for all the GPIO pins we're using
 #define button_pin 0  // (button0 / strap to 1) - This is the left "Boot" button on the esp32 board
-#define joy_horz_pin 1  // (adc) - Either analog left-right input (joystick), or Hotrc Ch1 thumb joystick PWM signal.
-#define joy_vert_pin 2  // (adc) - Either analog up-down input (joystick), or Hotrc Ch2 bidirectional trigger signal.
+#define joy_horz_pin 1  // (adc) - Either analog left-right input (joystick)
+#define joy_vert_pin 2  // (adc) - Either analog up-down input (joystick)
 #define tft_dc_pin 3  // (strap X) - Output, Assert when sending data to display chip to indicate commands vs. screen data
 #define battery_pin 4  // (adc) -  Analog input, mule battery voltage level, full scale is 15.638V
 #define pot_wipe_pin 5  // (adc) - Analog in from 20k pot. Use 1% series R=22k to 5V on wipe=CW-0ohm side, and R=15k to gnd on wipe-CCW-0ohm side. Gives wipe range of 1.315V (CCW) to 3.070V (CW) with 80 uA draw.
@@ -101,11 +101,11 @@
 #define steer_pwm_pin 14  // (pwm0) - Output, PWM signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
 #define brake_pwm_pin 15  // (pwm1) - Output, PWM signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% is stopped) 
 #define gas_pwm_pin 16  // (pwm1) - Output, PWM signal duty cycle controls throttle target. On Due this is the pin labeled DAC1 (where A13 is on Mega)
-#define hotrc_horz_pin 17  // (pwm0 / tx1) - Hotrc Ch1 thumb joystick input.
-#define hotrc_vert_pin 18  // (pwm0 / rx1) - Hotrc Ch2 bidirectional trigger input
+#define hotrc_ch1_horz_pin 17  // (pwm0 / tx1) - Hotrc Ch1 thumb joystick input.
+#define hotrc_ch2_vert_pin 18  // (pwm0 / rx1) - Hotrc Ch2 bidirectional trigger input
 #define onewire_pin 19  // (usb-otg) - Onewire bus for temperature sensor data
-#define ctrl_cruise_ch3_pin 20  // (usb-otg) - Cruise control, either momentary button (joystick - Active low, needs pullup) or Hotrc Ch3 PWM toggle signal
-#define ctrl_ign_ch4_pin 21  // (pwm0) - Ignition control, either toggle button (joystick - Active high, needs pulldown) or Hotrc Ch4 PWM toggle signal
+#define hotrc_ch3_ign_pin 20  // (usb-otg) - Ignition control, Hotrc Ch3 PWM toggle signal
+#define hotrc_ch4_cruise_pin 21  // (pwm0) - Cruise control, Hotrc Ch4 PWM toggle signal
 #define tach_pulse_pin 35  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
 #define speedo_pulse_pin 36  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
 #define ignition_pin 37  // (spi-ram / oct-spi) - Output flips a relay to kill the car ignition, active high (no pullup)
@@ -114,8 +114,8 @@
 #define encoder_b_pin 40  // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define encoder_a_pin 41  // Int input, The A (aka CLK) pin of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
 #define encoder_sw_pin 42  // Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
-#define uart0_tx_pin 43  // (uart0 tx) - Reserve for possible jaguar interface
-#define uart0_rx_pin 44  // (uart0 rx) - Reserve for possible jaguar interface
+#define joy_ign_btn_pin 43  // (uart0 tx) - Joystick ignition button. Reserve for possible jaguar interface
+#define joy_cruise_btn_pin 44  // (uart0 rx) - Joystick cruise button. Reserve for possible jaguar interface
 #define starter_pin 45  // (strap to 0) - Input, active high when vehicle starter is engaged (needs pulldown)
 #define basicmodesw_pin 46  // (strap X) - Input, asserted to tell us to run in basic mode, active low (needs pullup)
 #define sdcard_cs_pin 47  // Output, chip select allows SD card controller chip use of the SPI bus, active low
@@ -252,9 +252,10 @@ double pot_min_percent = 0;  //
 double pot_max_percent = 100;  //
 //  ---- tunable ----
 double pot_min_adc = 0;  // TUNED 230603 - Used only in determining theconversion factor
-double pot_max_adc = 4005;  // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
-double pot_convert_percent_per_adc = 100/(pot_max_adc - pot_min_adc);  // 100 % / (3996 adc - 0 adc) = 0.025 %/adc
+double pot_max_adc = 4090;  // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
+double pot_convert_percent_per_adc = (pot_max_percent - pot_min_percent)/(pot_max_adc - pot_min_adc);  // 100 % / (3996 adc - 0 adc) = 0.025 %/adc
 bool pot_convert_invert = false;
+double pot_convert_offset = -0.08;
 int32_t pot_convert_polarity = SPID::FWD;
 double pot_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 
@@ -291,8 +292,8 @@ int32_t hotrc_pulse_horz_min_us = 990;  // 1009;
 int32_t hotrc_pulse_horz_max_us = 1990;  // 2003;
 
 // Maybe merging these into Hotrc class
-int32_t hotrc_pos_failsafe_min_adc = 210;  // The failsafe setting in the hotrc must be set to a trigger level equal to max amount of trim upward from trigger released.
-int32_t hotrc_pos_failsafe_max_adc = 368;
+int32_t hotrc_pos_failsafe_min_adc = 140;  // The failsafe setting in the hotrc must be set to a trigger level equal to max amount of trim upward from trigger released.
+int32_t hotrc_pos_failsafe_max_adc = 320;
 int32_t hotrc_pos_failsafe_pad_adc = 10;
 uint32_t hotrc_panic_timeout = 1000000;  // how long to receive flameout-range signal from hotrc vertical before panic stopping
 Timer hotrcPanicTimer(hotrc_panic_timeout);
@@ -525,53 +526,49 @@ void IRAM_ATTR speedo_isr (void) {  //  Handler can get the most recent rotation
     }
 }
 
-int32_t hotrc_ch3_pulse_us, hotrc_ch4_pulse_us;
-uint32_t mcpwm_unit0_capture, mcpwm_unit1_capture, mcpwm_unit2_capture;
-uint32_t mcpwm_unit0_capture_last, mcpwm_unit1_capture_last, mcpwm_unit2_capture_last;
-int32_t hotrc_ch4_preread;
-
-void IRAM_ATTR hotrc_isr (void) {
-    mcpwm_unit0_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_0, MCPWM_SELECT_CAP0);
-    mcpwm_unit1_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_1, MCPWM_SELECT_CAP0);
-    hotrc_horz_pulse_us = (int32_t)(mcpwm_unit0_capture - mcpwm_unit0_capture_last);
-    hotrc_vert_pulse_us = (int32_t)(mcpwm_unit1_capture - mcpwm_unit1_capture_last);
-    mcpwm_unit0_capture_last = mcpwm_unit0_capture;
-    mcpwm_unit1_capture_last = mcpwm_unit1_capture;
-}
-// void IRAM_ATTR hotrc_ch1_isr (void) {
+// Attempt to use MCPWM input capture pulse width timer unit to get precise hotrc readings
+// int32_t hotrc_ch3_pulse_us, hotrc_ch4_pulse_us;
+// uint32_t mcpwm_unit0_capture, mcpwm_unit1_capture, mcpwm_unit2_capture;
+// uint32_t mcpwm_unit0_capture_last, mcpwm_unit1_capture_last, mcpwm_unit2_capture_last;
+// int32_t hotrc_ch3_preread;
+// void IRAM_ATTR hotrc_isr (void) {
 //     mcpwm_unit0_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_0, MCPWM_SELECT_CAP0);
-//     hotrc_horz_pulse_us = (int32_t)(mcpwm_unit0_capture - mcpwm_unit0_capture_last);
-//     mcpwm_unit0_capture_last = mcpwm_unit0_capture;
-// }
-// void IRAM_ATTR hotrc_ch2_isr (void) {
 //     mcpwm_unit1_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_1, MCPWM_SELECT_CAP0);
+//     hotrc_horz_pulse_us = (int32_t)(mcpwm_unit0_capture - mcpwm_unit0_capture_last);
 //     hotrc_vert_pulse_us = (int32_t)(mcpwm_unit1_capture - mcpwm_unit1_capture_last);
+//     mcpwm_unit0_capture_last = mcpwm_unit0_capture;
 //     mcpwm_unit1_capture_last = mcpwm_unit1_capture;
 // }
+// // // Separate attempt to use timers to measure pulses
+// // void IRAM_ATTR hotrc_ch1_isr (void) {
+// //     mcpwm_unit0_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_0, MCPWM_SELECT_CAP0);
+// //     hotrc_horz_pulse_us = (int32_t)(mcpwm_unit0_capture - mcpwm_unit0_capture_last);
+// //     mcpwm_unit0_capture_last = mcpwm_unit0_capture;
+// // }
+// // void IRAM_ATTR hotrc_ch2_isr (void) {
+// //     mcpwm_unit1_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_1, MCPWM_SELECT_CAP0);
+// //     hotrc_vert_pulse_us = (int32_t)(mcpwm_unit1_capture - mcpwm_unit1_capture_last);
+// //     mcpwm_unit1_capture_last = mcpwm_unit1_capture;
+// // }
+
+void IRAM_ATTR hotrc_vert_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
+    if (hotrc_vert_preread) hotrcPulseTimer.reset();
+    else hotrc_vert_pulse_us = hotrcPulseTimer.elapsed();
+    hotrc_vert_preread = !(digitalRead (hotrc_ch2_vert_pin));  // Read pin after timer operations to maximize clocking accuracy
+}
+void IRAM_ATTR hotrc_horz_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
+    hotrc_horz_pulse_us = hotrcPulseTimer.elapsed();
+}
 void IRAM_ATTR hotrc_ch3_isr (void) {  // On falling edge, records high pulse width to determine ch3 button toggle state
     hotrc_ch3_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch3 switch true if short pulse, otherwise false
     if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch3_sw_last = hotrc_ch3_sw;
 }
-
 void IRAM_ATTR hotrc_ch4_isr (void) {  // On falling edge, records high pulse width to determine ch4 button toggle state
-    if (hotrc_ch4_preread) hotrcPulseTimer.reset();
-    else {
-        hotrc_ch4_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch4 switch true if short pulse, otherwise false
-        if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
-        hotrc_ch4_sw_last = hotrc_ch4_sw;
-    }
-    hotrc_ch4_preread = !(digitalRead (ctrl_ign_ch4_pin));  // Read pin after timer operations to maximize clocking accuracy
+    hotrc_ch4_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch4 switch true if short pulse, otherwise false
+    if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
+    hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
-
-// void IRAM_ATTR hotrc_vert_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
-//     if (hotrc_vert_preread) hotrcPulseTimer.reset();
-//     else hotrc_vert_pulse_us = hotrcPulseTimer.elapsed();
-//     hotrc_vert_preread = !(digitalRead (hotrc_vert_pin));  // Read pin after timer operations to maximize clocking accuracy
-// }
-// void IRAM_ATTR hotrc_horz_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
-//     hotrc_horz_pulse_us = hotrcPulseTimer.elapsed();
-// }
 
 // Utility functions
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays
@@ -694,8 +691,8 @@ void syspower_set (bool val) {
 //     return tempF;
 // }
 
-double convert_units (double from_units, double convert_factor, bool invert) {
-    return ((invert) ? 1/from_units : from_units) * convert_factor;
+double convert_units (double from_units, double convert_factor, bool invert, double offset = 0.0) {
+    return ((invert) ? 1/from_units : from_units) * convert_factor + offset;
 }
 
 // TaskHandle_t Task1;
