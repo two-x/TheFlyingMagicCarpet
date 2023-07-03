@@ -80,8 +80,8 @@
 
 // Defines for all the GPIO pins we're using
 #define button_pin 0  // (button0 / strap to 1) - This is the left "Boot" button on the esp32 board
-#define joy_horz_pin 1  // (adc) - Analog input, tells us left-right position of joystick. Take complement of ADC value gives:  Low values for left, High values for right.
-#define joy_vert_pin 2  // (adc) - Analog input, tells us up-down position of joystick. Take complement of ADC value gives:  Low values for down, High values for up.
+#define joy_horz_pin 1  // (adc) - Either analog left-right input (joystick), or Hotrc Ch1 thumb joystick PWM signal.
+#define joy_vert_pin 2  // (adc) - Either analog up-down input (joystick), or Hotrc Ch2 bidirectional trigger signal.
 #define tft_dc_pin 3  // (strap X) - Output, Assert when sending data to display chip to indicate commands vs. screen data
 #define battery_pin 4  // (adc) -  Analog input, mule battery voltage level, full scale is 15.638V
 #define pot_wipe_pin 5  // (adc) - Analog in from 20k pot. Use 1% series R=22k to 5V on wipe=CW-0ohm side, and R=15k to gnd on wipe-CCW-0ohm side. Gives wipe range of 1.315V (CCW) to 3.070V (CW) with 80 uA draw.
@@ -90,17 +90,17 @@
 #define i2c_sda_pin 8  // (i2c0 sda / adc) - Hijack these pins for the touchscreen and micro-sd i2c bus
 #define i2c_scl_pin 9  // (i2c0 scl / adc) - Hijack these pins for the touchscreen and micro-sd i2c bus
 #define tft_cs_pin 10  // (spi0 cs) -  Output, active low, Chip select allows ILI9341 display chip use of the SPI bus
-#define tft_mosi_pin 11  // (spi0 mosi) - Used as spi interface to tft screen
-#define tft_sclk_pin 12  // (spi0 sclk) - Used as spi interface to tft screen
-#define tft_miso_pin 13  // (spi0 miso) - Used as spi interface to tft screen. Probably not necessary since I don't think we need to listen to the screen
+#define tft_mosi_pin 11  // (spi0 mosi) - Used as spi interface data to sd card and tft screen
+#define tft_sclk_pin 12  // (spi0 sclk) - Used as spi interface clock for sd card and tft screen
+#define tft_miso_pin 13  // (spi0 miso) - Used as spi interface data from sd card and possibly (?) tft screen
 #define steer_pwm_pin 14  // (pwm0) - Output, PWM signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
 #define brake_pwm_pin 15  // (pwm1) - Output, PWM signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% is stopped) 
 #define gas_pwm_pin 16  // (pwm1) - Output, PWM signal duty cycle controls throttle target. On Due this is the pin labeled DAC1 (where A13 is on Mega)
 #define hotrc_horz_pin 17  // (pwm0 / tx1) - Hotrc Ch1 thumb joystick input.
 #define hotrc_vert_pin 18  // (pwm0 / rx1) - Hotrc Ch2 bidirectional trigger input
 #define onewire_pin 19  // (usb-otg) - Onewire bus for temperature sensor data
-#define hotrc_ch3_pin 20  // (usb-otg) - Hotrc Ch3 toggle output, used to toggle cruise mode
-#define hotrc_ch4_pin 21  // (pwm0) - Hotrc Ch4 toggle output, used to panic stop & kill ignition
+#define ctrl_cruise_ch3_pin 20  // (usb-otg) - Cruise control, either momentary button (joystick - Active low, needs pullup) or Hotrc Ch3 PWM toggle signal
+#define ctrl_ign_ch4_pin 21  // (pwm0) - Ignition control, either toggle button (joystick - Active high, needs pulldown) or Hotrc Ch4 PWM toggle signal
 #define tach_pulse_pin 35  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
 #define speedo_pulse_pin 36  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
 #define ignition_pin 37  // (spi-ram / oct-spi) - Output flips a relay to kill the car ignition, active high (no pullup)
@@ -111,10 +111,15 @@
 #define encoder_sw_pin 42  // Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
 #define uart0_tx_pin 43  // (uart0 tx) - Reserve for possible jaguar interface
 #define uart0_rx_pin 44  // (uart0 rx) - Reserve for possible jaguar interface
-#define cruise_sw_pin 45  // (strap to 0) - Input, momentary button low pulse >500ms in fly mode means start cruise mode. Any pulse in cruise mode goes to fly mode. Active low. (needs pullup)
+#define starter_pin 45  // (strap to 0) - Input, active high when vehicle starter is engaged (needs pulldown)
 #define basicmodesw_pin 46  // (strap X) - Input, asserted to tell us to run in basic mode, active low (needs pullup)
 #define sdcard_cs_pin 47  // Output, chip select allows SD card controller chip use of the SPI bus, active low
 #define neopixel_pin 48  // (rgb led) - Data line to onboard Neopixel WS281x
+
+// #define ctrl_horz_ch1_pin 1  // (adc) - Either analog left-right input (joystick), or Hotrc Ch1 thumb joystick PWM signal.
+// #define ctrl_vert_ch2_pin 2  // (adc) - Either analog up-down input (joystick), or Hotrc Ch2 bidirectional trigger signal.
+// #define unused 17  // (pwm0 / tx1) - 
+// #define unused 18  // (pwm0 / rx1) -  
 
 #define tp_irq_pin -1  // Optional int input so touchpanel can interrupt us (need to modify shield board for this to work)
 #define tft_ledk_pin -1  // (spi-ram / oct-spi) - Output, Optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)

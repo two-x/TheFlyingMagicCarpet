@@ -50,15 +50,13 @@ void setup() {
     set_pin (battery_pin, INPUT);
     set_pin (hotrc_horz_pin, INPUT);
     set_pin (hotrc_vert_pin, INPUT);
-    set_pin (hotrc_ch3_pin, INPUT);
-    set_pin (hotrc_ch4_pin, INPUT);
     set_pin (neopixel_pin, OUTPUT);
     set_pin (sdcard_cs_pin, OUTPUT);
     set_pin (tft_cs_pin, OUTPUT);
     set_pin (pot_wipe_pin, INPUT);
     set_pin (button_pin, INPUT_PULLUP);    
     set_pin (syspower_pin, OUTPUT);
-    set_pin (cruise_sw_pin, INPUT_PULLUP);
+    set_pin (starter_pin, INPUT_PULLDOWN);
     set_pin (tp_irq_pin, INPUT_PULLUP);
     set_pin (led_rx_pin, OUTPUT);
     set_pin (encoder_pwr_pin, OUTPUT);
@@ -66,6 +64,8 @@ void setup() {
     // set_pin (led_tx_pin, OUTPUT);
     // set_pin (tft_ledk_pin, OUTPUT);
     // set_pin (onewire_pin, OUTPUT);
+    set_pin (ctrl_cruise_ch3_pin, (ctrl == JOY) ? INPUT_PULLUP : INPUT);
+    set_pin (ctrl_ign_ch4_pin, (ctrl == JOY) ? INPUT_PULLDOWN : INPUT);        
 
     write_pin (ignition_pin, ignition);
     write_pin (tft_cs_pin, HIGH);   // Prevent bus contention
@@ -131,11 +131,13 @@ void setup() {
     Serial.print (F("Interrupts... "));
     attachInterrupt (digitalPinToInterrupt(tach_pulse_pin), tach_isr, RISING);
     attachInterrupt (digitalPinToInterrupt(speedo_pulse_pin), speedo_isr, RISING);
-    attachInterrupt (digitalPinToInterrupt(hotrc_vert_pin), hotrc_vert_isr, CHANGE);
-    attachInterrupt (digitalPinToInterrupt(hotrc_horz_pin), hotrc_horz_isr, FALLING);
-    attachInterrupt (digitalPinToInterrupt(hotrc_ch3_pin), hotrc_ch3_isr, FALLING);
-    attachInterrupt (digitalPinToInterrupt(hotrc_ch4_pin), hotrc_ch4_isr, FALLING);
-    
+    if (ctrl == HOTRC) {
+        attachInterrupt (digitalPinToInterrupt(hotrc_vert_pin), hotrc_vert_isr, CHANGE);
+        attachInterrupt (digitalPinToInterrupt(hotrc_horz_pin), hotrc_horz_isr, FALLING);
+        attachInterrupt (digitalPinToInterrupt(ctrl_cruise_ch3_pin), hotrc_ch3_isr, FALLING);
+        attachInterrupt (digitalPinToInterrupt(ctrl_ign_ch4_pin), hotrc_ch4_isr, FALLING);
+    }
+
     Serial.println (F("set up and enabled\n"));
     
     tach_govern_rpm = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
@@ -258,7 +260,7 @@ void loop() {
     
     // External digital signals - takes 11 us to read
     if (!simulating || !sim_basicsw) basicmodesw = !digitalRead (basicmodesw_pin);   // 1-value because electrical signal is active low
-    if (!simulating || !sim_cruisesw) cruise_sw = digitalRead (cruise_sw_pin);
+    if (ctrl == JOY && (!simulating || !sim_cruisesw)) cruise_sw = digitalRead (ctrl_cruise_ch3_pin);
 
     // Temperature sensors
     // for (uint8_t x = 0; x < arraysize(temp_addrs); x++) {
@@ -420,17 +422,12 @@ void loop() {
         }
         else steer_pulse_out_us = steer_pulse_stop_us;  // Stop the steering motor if inside the deadband
     }
-    if (ctrl == HOTRC) {
+    if (ctrl == JOY && (!simulating || !sim_ign)) ignition = read_pin (ctrl_ign_ch4_pin);
+    else if (ctrl == HOTRC) {
         if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition
             if (hotrc_suppress_next_ch3_event) hotrc_suppress_next_ch3_event = false;
-            else ignition = !ignition;
+            else if (!simulating || !sim_ign) ignition = !ignition;
             hotrc_ch3_sw_event = false;
-        }
-        if (hotrc_ch4_sw_event) {
-            if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
-            else if (runmode == FLY) runmode = CRUISE;  // Toggle cruise/fly mode 
-            else if (runmode == CRUISE) runmode = FLY;
-            hotrc_ch4_sw_event = false;    
         }
         // Detect loss of radio reception and panic stop
         hotrc.calc();
@@ -534,7 +531,7 @@ void loop() {
             brakeIntervalTimer.reset();
         }
         if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
-        else if (joy_centered) runmode = FLY; // Enter Fly Mode upon joystick movement from center to above center
+        else if (joy_centered && (ctrl == JOY || hotrc_radio_detected)) runmode = FLY; // Enter Fly Mode upon joystick movement from center to above center
     }
     else if (runmode == FLY) {
         if (we_just_switched_modes) {
@@ -545,7 +542,8 @@ void loop() {
             hotrc_ch4_sw_event = false;
         }
         if (car_stopped() && ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) runmode = HOLD;  // Go to Hold Mode if we have braked to a stop  // && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT]
-        else  {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
+        else if (ctrl == HOTRC && !hotrc_radio_detected) runmode = HOLD;
+        else {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])  {  // If we are trying to accelerate
                 gasSPID.set_target (map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][TOP], (double)ctrl_lims_adc[ctrl][VERT][MAX], tach_idle_rpm, tach_govern_rpm));
             }
@@ -557,32 +555,39 @@ void loop() {
         }
         // Cruise mode can be entered by pressing a physical momentary button, or by holding the brake on full for a half second. Which epends on the cruise_gesturing flag.
         // The gesture involves pushing the joystick from the center to the top, then to the bottom, then back to center, quickly enough.
-        if (cruise_gesturing) {  // If we are configured to use joystick gestures to go to cruise mode, the gesture is 
-            if (!gesture_progress && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][TOP])  { // Re-zero gesture timer for potential new gesture whenever joystick at center
-                gestureFlyTimer.reset();
-            }
-            if (gestureFlyTimer.expired()) gesture_progress = 0; // If gesture timeout has expired, cancel any in-progress gesture
-            else {  // Otherwise check for successful gesture motions
-                if (!gesture_progress && ctrl_pos_adc[VERT][FILT] >= ctrl_lims_adc[ctrl][VERT][MAX] - default_margin_adc)  { // If joystick quickly pushed to top, step 1 of gesture is successful
-                    gesture_progress++;
+        if (ctrl == HOTRC && hotrc_ch4_sw_event) {
+            if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
+            else runmode == CRUISE;
+            hotrc_ch4_sw_event = false;    
+        }
+        else if (ctrl == JOY) {
+            if (cruise_gesturing) {  // If we are configured to use joystick gestures to go to cruise mode, the gesture is 
+                if (!gesture_progress && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][TOP])  { // Re-zero gesture timer for potential new gesture whenever joystick at center
                     gestureFlyTimer.reset();
                 }
-                else if (gesture_progress == 1 && ctrl_pos_adc[VERT][FILT] <= ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc)  { // If joystick then quickly pushed to bottom, step 2 succeeds
-                    gesture_progress++;
-                    gestureFlyTimer.reset();
+                if (gestureFlyTimer.expired()) gesture_progress = 0; // If gesture timeout has expired, cancel any in-progress gesture
+                else {  // Otherwise check for successful gesture motions
+                    if (!gesture_progress && ctrl_pos_adc[VERT][FILT] >= ctrl_lims_adc[ctrl][VERT][MAX] - default_margin_adc)  { // If joystick quickly pushed to top, step 1 of gesture is successful
+                        gesture_progress++;
+                        gestureFlyTimer.reset();
+                    }
+                    else if (gesture_progress == 1 && ctrl_pos_adc[VERT][FILT] <= ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc)  { // If joystick then quickly pushed to bottom, step 2 succeeds
+                        gesture_progress++;
+                        gestureFlyTimer.reset();
+                    }
+                    else if (gesture_progress == 2 && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][TOP]) { // If joystick then quickly returned to center, go to Cruise mode
+                        runmode = CRUISE;
+                    }        
                 }
-                else if (gesture_progress == 2 && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][TOP]) { // If joystick then quickly returned to center, go to Cruise mode
-                    runmode = CRUISE;
-                }        
             }
-        }
-        if (!cruise_sw) {  // If button not currently pressed
-            if (cruise_sw_held && cruiseSwTimer.expired()) runmode = CRUISE;  // After a long press of sufficient length, upon release enter Cruise mode
-            cruise_sw_held = false;  // Cancel button held state
-        }
-        else if (!cruise_sw_held) {  // If the button just now got pressed
-            cruiseSwTimer.reset(); // Start hold time timer
-            cruise_sw_held = true;  // Get into button held state
+            if (!cruise_sw) {  // If button not currently pressed
+                if (cruise_sw_held && cruiseSwTimer.expired()) runmode = CRUISE;  // After a long press of sufficient length, upon release enter Cruise mode
+                cruise_sw_held = false;  // Cancel button held state
+            }
+            else if (!cruise_sw_held) {  // If the button just now got pressed
+                cruiseSwTimer.reset(); // Start hold time timer
+                cruise_sw_held = true;  // Get into button held state
+            }
         }
     }
     else if (runmode == CRUISE) {
@@ -608,15 +613,22 @@ void loop() {
         // This old gesture trigger drops to Fly mode if joystick moved quickly from center to bottom
         // if (ctrl_pos_adc[VERT][FILT] <= ctrl_lims_adc[ctrl][VERT][MIN]+default_margin_adc && abs(mycros() - gesture_timer_us) < gesture_flytimeout_us)  runmode = FLY;  // If joystick quickly pushed to bottom 
         // printf ("hotvpuls=%ld, hothpuls=%ld, joyvfilt=%ld, joyvmin+marg=%ld, timer=%ld\n", hotrc_vert_pulse_us, hotrc_horz_pulse_us, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc, gesture_timer_us);
-        if (ctrl_pos_adc[VERT][FILT] > ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
-        else if (gestureFlyTimer.expired()) runmode = FLY;  // New gesture to drop to fly mode is hold the brake all the way down for 500 ms
-        if (cruise_sw) cruise_sw_held = true;  // Pushing cruise button sets up return to fly mode
-        else if (cruise_sw_held) {  // Release of button drops us back to fly mode
-            cruise_sw_held = false;
-            runmode = FLY;
+        if (ctrl == HOTRC && hotrc_ch4_sw_event) {
+            if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
+            else runmode == FLY;
+            hotrc_ch4_sw_event = false;    
+        }
+        else if (ctrl == JOY) {
+            if (ctrl_pos_adc[VERT][FILT] > ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
+            else if (gestureFlyTimer.expired()) runmode = FLY;  // New gesture to drop to fly mode is hold the brake all the way down for 500 ms
+            if (cruise_sw) cruise_sw_held = true;  // Pushing cruise button sets up return to fly mode
+            else if (cruise_sw_held) {  // Release of button drops us back to fly mode
+                cruise_sw_held = false;
+                runmode = FLY;
+            }
         }
         if (car_stopped()) {  // In case we slam into a brick wall, get out of cruise mode
-            if (serial_debugging) Serial.println (F("Error: Car stopped or taken out of gear in cruise mode"));  // , carspeed_filt_mph, neutral
+            if (serial_debugging) Serial.println (F("Error: Car stopped in cruise mode"));  // , carspeed_filt_mph, neutral
             runmode = HOLD;  // Back to Hold Mode  
         }
     }
@@ -963,11 +975,14 @@ void loop() {
     carspeed_govern_mph = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, carspeed_redline_mph);  // Governor must scale the top vehicle speed proportionally
 
     // Ignition & Panic stop logic and Update output signals
-    if (panic_stop && car_stopped()) panic_stop = false;  //  Panic is over cuz car is stopped
-    else if (ctrl == HOTRC && hotrc_radio_detected_last && !hotrc_radio_detected) panic_stop = true;  // panic_stop could also have been initiated by the user button
+    if (!car_stopped()) {
+        if (ctrl == HOTRC && hotrc_radio_detected_last && !hotrc_radio_detected) panic_stop = true;  // panic_stop could also have been initiated by the user button
+        if (!ignition && ignition_last) panic_stop = true;
+    }
+    else if (panic_stop) panic_stop = false;  // Cancel panic if car is stopped
     hotrc_radio_detected_last = hotrc_radio_detected;
     if (panic_stop) ignition = LOW;  // Kill car if panicking
-    if ((ignition != ignition_last) && !(ignition && panic_stop)) write_pin (ignition_pin, ignition);  // Turn car off or on, ensuring to never turn on the ignition while panicking
+    if (ignition != ignition_last) write_pin (ignition_pin, ignition);  // Turn car off or on, ensuring to never turn on the ignition while panicking
     ignition_last = ignition; // Make sure this goes after the last comparison
     if (syspower != syspower_last) syspower_set (syspower);
     syspower_last = syspower;
