@@ -101,11 +101,11 @@
 #define steer_pwm_pin 14  // (pwm0) - Output, PWM signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
 #define brake_pwm_pin 15  // (pwm1) - Output, PWM signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% is stopped) 
 #define gas_pwm_pin 16  // (pwm1) - Output, PWM signal duty cycle controls throttle target. On Due this is the pin labeled DAC1 (where A13 is on Mega)
-#define hotrc_horz_pin 17  // (pwm0 / tx1) - Hotrc Ch1 thumb joystick input.
-#define hotrc_vert_pin 18  // (pwm0 / rx1) - Hotrc Ch2 bidirectional trigger input
+#define hotrc_ch1_horz_pin 17  // (pwm0 / tx1) - Hotrc Ch1 thumb joystick input.
+#define hotrc_ch2_vert_pin 18  // (pwm0 / rx1) - Hotrc Ch2 bidirectional trigger input
 #define onewire_pin 19  // (usb-otg) - Onewire bus for temperature sensor data
-#define ctrl_ign_ch3_pin 20  // (usb-otg) - Ignition control, either toggle button (joystick - Active high, needs pulldown) or Hotrc Ch3 PWM toggle signal
-#define ctrl_cruise_ch4_pin 21  // (pwm0) - Cruise control, either momentary button (joystick - Active low, needs pullup) or Hotrc Ch4 PWM toggle signal
+#define hotrc_ch3_ign_pin 20  // (usb-otg) - Ignition control, either toggle button (joystick - Active high, needs pulldown) or Hotrc Ch3 PWM toggle signal
+#define hotrc_ch4_cruise_pin 21  // (pwm0) - Cruise control, either momentary button (joystick - Active low, needs pullup) or Hotrc Ch4 PWM toggle signal
 #define tach_pulse_pin 35  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
 #define speedo_pulse_pin 36  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
 #define ignition_pin 37  // (spi-ram / oct-spi) - Output flips a relay to kill the car ignition, active high (no pullup)
@@ -114,8 +114,8 @@
 #define encoder_b_pin 40  // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define encoder_a_pin 41  // Int input, The A (aka CLK) pin of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
 #define encoder_sw_pin 42  // Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
-#define uart0_tx_pin 43  // (uart0 tx) - Reserve for possible jaguar interface
-#define uart0_rx_pin 44  // (uart0 rx) - Reserve for possible jaguar interface
+#define joy_ign_btn_pin 43  // (uart0 tx) - Joystick ignition button. Reserve for possible jaguar interface
+#define joy_cruise_btn_pin 44  // (uart0 rx) - Joystick cruise button. Reserve for possible jaguar interface
 #define starter_pin 45  // (strap to 0) - Input, active high when vehicle starter is engaged (needs pulldown)
 #define basicmodesw_pin 46  // (strap X) - Input, asserted to tell us to run in basic mode, active low (needs pullup)
 #define sdcard_cs_pin 47  // Output, chip select allows SD card controller chip use of the SPI bus, active low
@@ -556,7 +556,7 @@ void IRAM_ATTR hotrc_ch3_isr (void) {  // On falling edge, records high pulse wi
         if (hotrc_ch4_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
         hotrc_ch3_sw_last = hotrc_ch3_sw;
     }
-    hotrc_ch3_preread = !(digitalRead (ctrl_ign_ch3_pin));  // Read pin after timer operations to maximize clocking accuracy
+    hotrc_ch3_preread = !(digitalRead (hotrc_ch3_ign_pin));  // Read pin after timer operations to maximize clocking accuracy
 }
 
 void IRAM_ATTR hotrc_ch4_isr (void) {  // On falling edge, records high pulse width to determine ch4 button toggle state
@@ -568,7 +568,7 @@ void IRAM_ATTR hotrc_ch4_isr (void) {  // On falling edge, records high pulse wi
 // void IRAM_ATTR hotrc_vert_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
 //     if (hotrc_vert_preread) hotrcPulseTimer.reset();
 //     else hotrc_vert_pulse_us = hotrcPulseTimer.elapsed();
-//     hotrc_vert_preread = !(digitalRead (hotrc_vert_pin));  // Read pin after timer operations to maximize clocking accuracy
+//     hotrc_vert_preread = !(digitalRead (hotrc_ch2_vert_pin));  // Read pin after timer operations to maximize clocking accuracy
 // }
 // void IRAM_ATTR hotrc_horz_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
 //     hotrc_horz_pulse_us = hotrcPulseTimer.elapsed();

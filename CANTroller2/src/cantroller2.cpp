@@ -48,8 +48,8 @@ void setup() {
     set_pin (pressure_pin, INPUT);
     set_pin (brake_pos_pin, INPUT);
     set_pin (battery_pin, INPUT);
-    set_pin (hotrc_horz_pin, INPUT);
-    set_pin (hotrc_vert_pin, INPUT);
+    set_pin (hotrc_ch1_horz_pin, INPUT);
+    set_pin (hotrc_ch2_vert_pin, INPUT);
     set_pin (neopixel_pin, OUTPUT);
     set_pin (sdcard_cs_pin, OUTPUT);
     set_pin (tft_cs_pin, OUTPUT);
@@ -61,12 +61,14 @@ void setup() {
     set_pin (led_rx_pin, OUTPUT);
     set_pin (encoder_pwr_pin, OUTPUT);
     set_pin (tft_rst_pin, OUTPUT);
+    set_pin (hotrc_ch3_ign_pin, INPUT);
+    set_pin (hotrc_ch4_cruise_pin, INPUT);
+    set_pin (joy_ign_btn_pin, INPUT_PULLDOWN);
+    set_pin (joy_cruise_btn_pin, INPUT_PULLUP);
     // set_pin (led_tx_pin, OUTPUT);
     // set_pin (tft_ledk_pin, OUTPUT);
     // set_pin (onewire_pin, OUTPUT);
-    set_pin (ctrl_ign_ch3_pin, (ctrl == JOY) ? INPUT_PULLDOWN : INPUT);        
-    set_pin (ctrl_cruise_ch4_pin, (ctrl == JOY) ? INPUT_PULLUP : INPUT);
-
+    
     write_pin (ignition_pin, ignition);
     write_pin (tft_cs_pin, HIGH);   // Prevent bus contention
     write_pin (sdcard_cs_pin, HIGH);   // Prevent bus contention
@@ -152,14 +154,14 @@ void setup() {
         // https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/kconfig.html#mcpwm-configuration
         // https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/kconfig.html#mcpwm-configuration
         
-        // attachInterrupt (digitalPinToInterrupt(hotrc_vert_pin), hotrc_vert_isr, CHANGE);
-        // attachInterrupt (digitalPinToInterrupt(hotrc_horz_pin), hotrc_horz_isr, FALLING);
-        attachInterrupt (digitalPinToInterrupt(ctrl_cruise_ch4_pin), hotrc_ch4_isr, FALLING);
-        attachInterrupt (digitalPinToInterrupt(ctrl_ign_ch3_pin), hotrc_ch3_isr, CHANGE);
+        // attachInterrupt (digitalPinToInterrupt(hotrc_ch2_vert_pin), hotrc_vert_isr, CHANGE);
+        // attachInterrupt (digitalPinToInterrupt(hotrc_ch1_horz_pin), hotrc_horz_isr, FALLING);
+        attachInterrupt (digitalPinToInterrupt(hotrc_ch4_cruise_pin), hotrc_ch4_isr, FALLING);
+        attachInterrupt (digitalPinToInterrupt(hotrc_ch3_ign_pin), hotrc_ch3_isr, CHANGE);
         
         // Configure MCPWM GPIOs
-        mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, hotrc_horz_pin);
-        mcpwm_gpio_init(MCPWM_UNIT_1, MCPWM0A, hotrc_vert_pin);
+        mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, hotrc_ch1_horz_pin);
+        mcpwm_gpio_init(MCPWM_UNIT_1, MCPWM0A, hotrc_ch2_vert_pin);
         // Configure MCPWM units 0 and 1
         mcpwm_config_t pwm_config;
         pwm_config.frequency = 0;  // Set frequency to 0 for input mode
@@ -295,7 +297,7 @@ void loop() {
     
     // External digital signals - takes 11 us to read
     if (!simulating || !sim_basicsw) basicmodesw = !digitalRead (basicmodesw_pin);   // 1-value because electrical signal is active low
-    if (ctrl == JOY && (!simulating || !sim_cruisesw)) cruise_sw = digitalRead (ctrl_cruise_ch4_pin);
+    if (ctrl == JOY && (!simulating || !sim_cruisesw)) cruise_sw = digitalRead (joy_cruise_btn_pin);
 
     // Temperature sensors
     // for (uint8_t x = 0; x < arraysize(temp_addrs); x++) {
@@ -459,7 +461,7 @@ void loop() {
         }
         else steer_pulse_out_us = steer_pulse_stop_us;  // Stop the steering motor if inside the deadband
     }
-    if (ctrl == JOY && (!simulating || !sim_ign)) ignition = read_pin (ctrl_ign_ch3_pin);
+    if (ctrl == JOY && (!simulating || !sim_ign)) ignition = read_pin (joy_ign_btn_pin);
     else if (ctrl == HOTRC) {
         if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition
             if (hotrc_suppress_next_ch3_event) hotrc_suppress_next_ch3_event = false;
