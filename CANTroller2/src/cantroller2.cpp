@@ -2,10 +2,10 @@
 #include <SPI.h>  // SPI serial bus needed to talk to the LCD and the SD card
 #include <Wire.h>  // Contains I2C serial bus, needed to talk to touchscreen chip
 #include "Arduino.h"
-#include <Adafruit_SleepyDog.h>
+#include <Adafruit_SleepyDog.h>  // Watchdog
 #include <vector>
 #include <string>
-#include <iomanip>
+#include <iomanip>  // Formatting cout
 #include "classes.h"  // Contains our data structures
 #include "spid.h"
 #include "globals.h"
@@ -127,17 +127,52 @@ void setup() {
 
     SETUP_ENCODER(encoder);
 
-    // Set up our interrupts
-    Serial.print (F("Interrupts... "));
-    attachInterrupt (digitalPinToInterrupt(tach_pulse_pin), tach_isr, RISING);
-    attachInterrupt (digitalPinToInterrupt(speedo_pulse_pin), speedo_isr, RISING);
+    // Configure MCPWM GPIOs
+    //
+    // The four channel inputs can be connected to any available GPIO pins on the ESP32, but the specific MCPWM unit and
+    // output channels are used to configure the MCPWM GPIOs and input capture. Here's the mapping used in the code:
+    // INPUT_PIN_1 is connected to MCPWM0A (MCPWM unit 0, output channel A).
+    // INPUT_PIN_2 is connected to MCPWM1A (MCPWM unit 0, output channel B).
+    // INPUT_PIN_3 is connected to MCPWM2A (MCPWM unit 0, output channel C).
+    // INPUT_PIN_4 is connected to MCPWM3A (MCPWM unit 0, output channel D).
+    // You can change these mappings according to your specific pin assignments. Ensure that the MCPWM GPIOs you select are compatible with input capture functionality.
+
+    // This depends on the fact all four signals go generating low-going edge triggers simultaneously.
     if (ctrl == HOTRC) {
-        attachInterrupt (digitalPinToInterrupt(hotrc_vert_pin), hotrc_vert_isr, CHANGE);
-        attachInterrupt (digitalPinToInterrupt(hotrc_horz_pin), hotrc_horz_isr, FALLING);
-        attachInterrupt (digitalPinToInterrupt(ctrl_cruise_ch3_pin), hotrc_ch3_isr, FALLING);
-        attachInterrupt (digitalPinToInterrupt(ctrl_ign_ch4_pin), hotrc_ch4_isr, FALLING);
+        
     }
 
+    // Set up our interrupts
+    Serial.print (F("Pulse timers and interrupts ... "));
+    attachInterrupt (digitalPinToInterrupt(tach_pulse_pin), tach_isr, RISING);
+    attachInterrupt (digitalPinToInterrupt(speedo_pulse_pin), speedo_isr, RISING);
+
+    if (ctrl == HOTRC) {
+        // https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/peripherals/mcpwm.html#capture
+        // https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/kconfig.html#mcpwm-configuration
+        // https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/kconfig.html#mcpwm-configuration
+        
+        // attachInterrupt (digitalPinToInterrupt(hotrc_vert_pin), hotrc_vert_isr, CHANGE);
+        // attachInterrupt (digitalPinToInterrupt(hotrc_horz_pin), hotrc_horz_isr, FALLING);
+        attachInterrupt (digitalPinToInterrupt(ctrl_cruise_ch3_pin), hotrc_ch3_isr, FALLING);
+        attachInterrupt (digitalPinToInterrupt(ctrl_ign_ch4_pin), hotrc_ch4_isr, CHANGE);
+        
+        // Configure MCPWM GPIOs
+        mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, hotrc_horz_pin);
+        mcpwm_gpio_init(MCPWM_UNIT_1, MCPWM0A, hotrc_vert_pin);
+        // Configure MCPWM units 0 and 1
+        mcpwm_config_t pwm_config;
+        pwm_config.frequency = 0;  // Set frequency to 0 for input mode
+        pwm_config.cmpr_a = 0;  // Set duty cycle to 0 for input mode
+        pwm_config.counter_mode = MCPWM_UP_COUNTER;
+        pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
+        mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);
+        mcpwm_init(MCPWM_UNIT_1, MCPWM_TIMER_0, &pwm_config);
+        // mcpwm_capture_enable(MCPWM_UNIT_0, MCPWM_SELECT_CAP0, MCPWM_POS_EDGE, 0);
+        // mcpwm_capture_enable(MCPWM_UNIT_1, MCPWM_SELECT_CAP0, MCPWM_POS_EDGE, 0);
+        // mcpwm_capture_set_cb(MCPWM_UNIT_0, MCPWM_SELECT_CAP0, hotrc_ch1_isr, NULL);
+        // mcpwm_capture_set_cb(MCPWM_UNIT_1, MCPWM_SELECT_CAP0, hotrc_ch2_isr, NULL);
+    }
     Serial.println (F("set up and enabled\n"));
     
     tach_govern_rpm = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
