@@ -370,7 +370,7 @@ void loop() {
     encoder.update();
 
     // Potentiometer - takes 400 us to read & convert (?!)
-    pot_percent = convert_units ((double)analogRead (pot_wipe_pin), pot_convert_percent_per_adc, pot_convert_invert);  // Potentiometer
+    pot_percent = convert_units ((double)analogRead (pot_wipe_pin), pot_convert_percent_per_adc, pot_convert_invert, pot_convert_offset);  // Potentiometer
     ema_filt (pot_percent, &pot_filt_percent, pot_ema_alpha);
     
     // Voltage of vehicle battery - takes 70 us to read, convert, and filter
@@ -996,7 +996,9 @@ void loop() {
             if (selected_value == 6) cruiseSPID.set_tunings (cruiseSPID.get_kp(), cruiseSPID.get_ki_hz()+0.001*(double)sim_edit_delta, cruiseSPID.get_kd_s());
             if (selected_value == 7) cruiseSPID.set_tunings (cruiseSPID.get_kp(), cruiseSPID.get_ki_hz(), cruiseSPID.get_kd_s()+0.001*(double)sim_edit_delta);
         }
-        else if (dataset_page == TEMP) {
+        else if (dataset_page == TEMP) {        
+            if (selected_value == 4) adj_val (&hotrc_pos_failsafe_min_adc, sim_edit_delta, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
+            if (selected_value == 5) adj_val (&hotrc_pos_failsafe_max_adc, sim_edit_delta, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);       
             if (selected_value == 6) gasSPID.set_open_loop (sim_edit_delta > 0);
             if (selected_value == 7) adj_val (&brake_pos_zeropoint_in, 0.001*sim_edit_delta, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
         }

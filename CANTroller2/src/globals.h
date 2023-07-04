@@ -13,10 +13,10 @@
 #include <iostream>
 #include <string>
 #include <iomanip>
-#include <stdio.h>  // MCPWM pulse measurement code
-#include "freertos/FreeRTOS.h"  // MCPWM pulse measurement code
-#include "freertos/task.h"  // MCPWM pulse measurement code
-#include "driver/mcpwm.h"  // MCPWM pulse measurement code
+// #include <stdio.h>  // MCPWM pulse measurement code
+// #include "freertos/FreeRTOS.h"  // MCPWM pulse measurement code
+// #include "freertos/task.h"  // MCPWM pulse measurement code
+// #include "driver/mcpwm.h"  // MCPWM pulse measurement code
 
 // #include "classes.h"
 #include "spid.h"
@@ -104,8 +104,8 @@
 #define hotrc_ch1_horz_pin 17  // (pwm0 / tx1) - Hotrc Ch1 thumb joystick input.
 #define hotrc_ch2_vert_pin 18  // (pwm0 / rx1) - Hotrc Ch2 bidirectional trigger input
 #define onewire_pin 19  // (usb-otg) - Onewire bus for temperature sensor data
-#define hotrc_ch3_ign_pin 20  // (usb-otg) - Ignition control, either toggle button (joystick - Active high, needs pulldown) or Hotrc Ch3 PWM toggle signal
-#define hotrc_ch4_cruise_pin 21  // (pwm0) - Cruise control, either momentary button (joystick - Active low, needs pullup) or Hotrc Ch4 PWM toggle signal
+#define hotrc_ch3_ign_pin 20  // (usb-otg) - Ignition control, Hotrc Ch3 PWM toggle signal
+#define hotrc_ch4_cruise_pin 21  // (pwm0) - Cruise control, Hotrc Ch4 PWM toggle signal
 #define tach_pulse_pin 35  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
 #define speedo_pulse_pin 36  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
 #define ignition_pin 37  // (spi-ram / oct-spi) - Output flips a relay to kill the car ignition, active high (no pullup)
@@ -252,9 +252,10 @@ double pot_min_percent = 0;  //
 double pot_max_percent = 100;  //
 //  ---- tunable ----
 double pot_min_adc = 0;  // TUNED 230603 - Used only in determining theconversion factor
-double pot_max_adc = 4005;  // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
-double pot_convert_percent_per_adc = 100/(pot_max_adc - pot_min_adc);  // 100 % / (3996 adc - 0 adc) = 0.025 %/adc
+double pot_max_adc = 4090;  // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
+double pot_convert_percent_per_adc = (pot_max_percent - pot_min_percent)/(pot_max_adc - pot_min_adc);  // 100 % / (3996 adc - 0 adc) = 0.025 %/adc
 bool pot_convert_invert = false;
+double pot_convert_offset = -0.08;
 int32_t pot_convert_polarity = SPID::FWD;
 double pot_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 
@@ -291,8 +292,8 @@ int32_t hotrc_pulse_horz_min_us = 990;  // 1009;
 int32_t hotrc_pulse_horz_max_us = 1990;  // 2003;
 
 // Maybe merging these into Hotrc class
-int32_t hotrc_pos_failsafe_min_adc = 210;  // The failsafe setting in the hotrc must be set to a trigger level equal to max amount of trim upward from trigger released.
-int32_t hotrc_pos_failsafe_max_adc = 368;
+int32_t hotrc_pos_failsafe_min_adc = 140;  // The failsafe setting in the hotrc must be set to a trigger level equal to max amount of trim upward from trigger released.
+int32_t hotrc_pos_failsafe_max_adc = 320;
 int32_t hotrc_pos_failsafe_pad_adc = 10;
 uint32_t hotrc_panic_timeout = 1000000;  // how long to receive flameout-range signal from hotrc vertical before panic stopping
 Timer hotrcPanicTimer(hotrc_panic_timeout);
@@ -690,8 +691,8 @@ void syspower_set (bool val) {
 //     return tempF;
 // }
 
-double convert_units (double from_units, double convert_factor, bool invert) {
-    return ((invert) ? 1/from_units : from_units) * convert_factor;
+double convert_units (double from_units, double convert_factor, bool invert, double offset = 0.0) {
+    return ((invert) ? 1/from_units : from_units) * convert_factor + offset;
 }
 
 // TaskHandle_t Task1;
