@@ -85,8 +85,8 @@
 
 // Defines for all the GPIO pins we're using
 #define button_pin 0  // (button0 / strap to 1) - This is the left "Boot" button on the esp32 board
-#define joy_horz_pin 1  // (adc) - Either analog left-right input (joystick), or Hotrc Ch1 thumb joystick PWM signal.
-#define joy_vert_pin 2  // (adc) - Either analog up-down input (joystick), or Hotrc Ch2 bidirectional trigger signal.
+#define joy_horz_pin 1  // (adc) - Either analog left-right input (joystick)
+#define joy_vert_pin 2  // (adc) - Either analog up-down input (joystick)
 #define tft_dc_pin 3  // (strap X) - Output, Assert when sending data to display chip to indicate commands vs. screen data
 #define battery_pin 4  // (adc) -  Analog input, mule battery voltage level, full scale is 15.638V
 #define pot_wipe_pin 5  // (adc) - Analog in from 20k pot. Use 1% series R=22k to 5V on wipe=CW-0ohm side, and R=15k to gnd on wipe-CCW-0ohm side. Gives wipe range of 1.315V (CCW) to 3.070V (CW) with 80 uA draw.
@@ -559,8 +559,8 @@ void IRAM_ATTR hotrc_vert_isr (void) {  // On falling edge, records high pulse w
 void IRAM_ATTR hotrc_horz_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
     hotrc_horz_pulse_us = hotrcPulseTimer.elapsed();
 }
-void IRAM_ATTR hotrc_ch3_isr (void) {  // On falling edge, records high pulse width to determine ch4 button toggle state
-    hotrc_ch3_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch4 switch true if short pulse, otherwise false
+void IRAM_ATTR hotrc_ch3_isr (void) {  // On falling edge, records high pulse width to determine ch3 button toggle state
+    hotrc_ch3_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch3 switch true if short pulse, otherwise false
     if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch3_sw_last = hotrc_ch3_sw;
 }
