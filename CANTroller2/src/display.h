@@ -52,6 +52,9 @@
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
 
+// string* pagecard = new string[8];  // How we might allocate on the heap instead of in the stack
+// string* modecard = new string[7];
+
 char pagecard[8][5] = { "Run ", "Joy ", "Car ", "PWMs", "Bpid", "Gpid", "Cpid", "Temp" };
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, CYN, MBLU };
@@ -129,14 +132,14 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "  Kd (D)", },
     {   " Tmp Amb",  // TEMP
         " Tmp Eng",
-        "Tmp WhFL",
-        "Tmp WhFR",
-        "Tmp WhRL",
-        "Tmp WhRR",
+        "Tmp WhRL",  // "Tmp WhFL",
+        "Tmp WhRR",  // "Tmp WhFR",
+        "RadioMin",
+        "RadioMax",
         "GasOpnLp",
         "BrkZeroP", },
 };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 3, 2, 0, 0, 5, 5, 5, 6 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 3, 2, 0, 0, 5, 5, 5, 4 };  // first value in each dataset page that's editable. All values after this must also be editable
 char units[disp_fixed_lines][5] = { "mph ", "rpm ", "psi ", "adc ", "adc ", "mph ", "psi ", "rpm ", "\xe5s  ", "\xe5s  ", "\xe5s  " };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "V   ", "in  ", "%   ", "    ", "    ", "    ", "    ", "    " },  // RUN
@@ -146,7 +149,7 @@ char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "Hz  ", "sec " },  // BPID
     { "mph ", "mph ", "mph ", "mph ", "mph ", "    ", "Hz  ", "sec " },  // GPID
     { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "Hz  ", "sec " },  // CPID
-    { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "    ", "in  " },  // TEMP
+    { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\xe5s  ", "\xe5s  ", "    ", "in  " },  // TEMP
     // { "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "    ", "    " },  // TEMP
 };
 char simgrid[4][3][5] = {
@@ -467,16 +470,17 @@ class Display {
                 std::string result (std::to_string(value));
                 size_t decimalPos = result.find('.');  // Remove any digits to the left of the decimal point
                 if (decimalPos != std::string::npos) result = result.substr(decimalPos);
-                if (result.length() > sigdig) result.resize(sigdig);  // Limit the string length to the desired number of significant digits
+                if (result.length() > sigdig) result.resize(sigdig+1);  // Limit the string length to the desired number of significant digits
                 return result;
             }  // Otherwise we want scientific notation with precision removed as needed to respect maxlength (eg 1.23e4, 1.23e5, but using long e character not e for negative exponents
-            if (place <= -10) return std::string ("~0");  // Ridiculously small values just indicate basically zero
             char buffer[maxlength+1];  // Allocate buffer with the maximum required size
-            snprintf(buffer, sizeof(buffer), "%*.*f%*d", maxlength-sigdig-1, sigdig-1, value, maxlength-1, 0);
+            int32_t sigdigless = sigdig - 1 - (place <= -10);  // was: if (place <= -10) return std::string ("~0");  // Ridiculously small values just indicate basically zero
+            snprintf(buffer, sizeof(buffer), "%*.*f%*d", maxlength-sigdigless, sigdigless, value, maxlength-1, 0);
             std::string result (buffer);  // copy buffer to result
             if (result.find ("e+0") != std::string::npos) result.replace (result.find ("e+0"), 3, "e");  // Remove useless "+0" from exponent
             else if (result.find ("e-0") != std::string::npos) result.replace (result.find ("e-0"), 3, "\x88");  // For very small scientific notation values, replace the "e-0" with a phoenetic long e character, to indicate negative power  // if (result.find ("e-0") != std::string::npos) 
             else if (result.find ("e+") != std::string::npos) result.replace (result.find ("e+"), 3, "e");  // For ridiculously large values
+            else if (result.find ("e-") != std::string::npos) result.replace (result.find ("e-"), 3, "\x88");  // For ridiculously small values
             return result;    
         }
         void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim, int32_t hilim, int32_t target=-1) {
@@ -485,7 +489,7 @@ class Display {
             draw_dynamic (lineno, val_string.c_str(), value, lowlim, hilim, (int32_t)target);
         }
         void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim, int32_t target=-1) {
-            std::string val_string = abs_ftoa (value, (int32_t)disp_maxlength, 4);
+            std::string val_string = abs_ftoa (value, (int32_t)disp_maxlength, 3);
             // std::cout << "Flt: " << value << " -> " << val_string << ", " << ((value >= 0) ? 1 : -1) << std::endl;
             draw_dynamic (lineno, val_string.c_str(), (int32_t)value, (int32_t)lowlim, (int32_t)hilim, target);
         }
@@ -687,10 +691,12 @@ class Display {
                 else if (dataset_page == TEMP) {
                     draw_dynamic(12, temps[AMBIENT], temp_min, temp_max);
                     draw_dynamic(13, temps[ENGINE], temp_min, temp_max);
-                    draw_dynamic(14, temps[WHEEL_FL], temp_min, temp_max);
-                    draw_dynamic(15, temps[WHEEL_FR], temp_min, temp_max);
-                    draw_dynamic(16, temps[WHEEL_RL], temp_min, temp_max);
-                    draw_dynamic(17, temps[WHEEL_RR], temp_min, temp_max);
+                    // draw_dynamic(14, temps[WHEEL_FL], temp_min, temp_max);
+                    // draw_dynamic(15, temps[WHEEL_FR], temp_min, temp_max);
+                    draw_dynamic(14, temps[WHEEL_RL], temp_min, temp_max);
+                    draw_dynamic(15, temps[WHEEL_RR], temp_min, temp_max);
+                    draw_dynamic(16, hotrc_pos_failsafe_min_adc, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
+                    draw_dynamic(17, hotrc_pos_failsafe_max_adc, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
                     draw_dynamic(18, gasSPID.get_open_loop(), -1, -1);
                     draw_dynamic(19, brake_pos_zeropoint_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);   
                 }

@@ -2,10 +2,10 @@
 #include <SPI.h>  // SPI serial bus needed to talk to the LCD and the SD card
 #include <Wire.h>  // Contains I2C serial bus, needed to talk to touchscreen chip
 #include "Arduino.h"
-#include <Adafruit_SleepyDog.h>
+#include <Adafruit_SleepyDog.h>  // Watchdog
 #include <vector>
 #include <string>
-#include <iomanip>
+#include <iomanip>  // Formatting cout
 #include "classes.h"  // Contains our data structures
 #include "spid.h"
 #include "globals.h"
@@ -48,25 +48,27 @@ void setup() {
     set_pin (pressure_pin, INPUT);
     set_pin (brake_pos_pin, INPUT);
     set_pin (battery_pin, INPUT);
-    set_pin (hotrc_horz_pin, INPUT);
-    set_pin (hotrc_vert_pin, INPUT);
-    set_pin (hotrc_ch3_pin, INPUT);
-    set_pin (hotrc_ch4_pin, INPUT);
+    set_pin (hotrc_ch1_horz_pin, INPUT);
+    set_pin (hotrc_ch2_vert_pin, INPUT);
     set_pin (neopixel_pin, OUTPUT);
     set_pin (sdcard_cs_pin, OUTPUT);
     set_pin (tft_cs_pin, OUTPUT);
     set_pin (pot_wipe_pin, INPUT);
     set_pin (button_pin, INPUT_PULLUP);    
     set_pin (syspower_pin, OUTPUT);
-    set_pin (cruise_sw_pin, INPUT_PULLUP);
+    set_pin (starter_pin, INPUT_PULLDOWN);
     set_pin (tp_irq_pin, INPUT_PULLUP);
     set_pin (led_rx_pin, OUTPUT);
     set_pin (encoder_pwr_pin, OUTPUT);
     set_pin (tft_rst_pin, OUTPUT);
+    set_pin (hotrc_ch3_ign_pin, INPUT);
+    set_pin (hotrc_ch4_cruise_pin, INPUT);
+    set_pin (joy_ign_btn_pin, INPUT_PULLDOWN);
+    set_pin (joy_cruise_btn_pin, INPUT_PULLUP);
     // set_pin (led_tx_pin, OUTPUT);
     // set_pin (tft_ledk_pin, OUTPUT);
     // set_pin (onewire_pin, OUTPUT);
-
+    
     write_pin (ignition_pin, ignition);
     write_pin (tft_cs_pin, HIGH);   // Prevent bus contention
     write_pin (sdcard_cs_pin, HIGH);   // Prevent bus contention
@@ -127,15 +129,55 @@ void setup() {
 
     SETUP_ENCODER(encoder);
 
+    // Configure MCPWM GPIOs
+    //
+    // The four channel inputs can be connected to any available GPIO pins on the ESP32, but the specific MCPWM unit and
+    // output channels are used to configure the MCPWM GPIOs and input capture. Here's the mapping used in the code:
+    // INPUT_PIN_1 is connected to MCPWM0A (MCPWM unit 0, output channel A).
+    // INPUT_PIN_2 is connected to MCPWM1A (MCPWM unit 0, output channel B).
+    // INPUT_PIN_3 is connected to MCPWM2A (MCPWM unit 0, output channel C).
+    // INPUT_PIN_4 is connected to MCPWM3A (MCPWM unit 0, output channel D).
+    // You can change these mappings according to your specific pin assignments. Ensure that the MCPWM GPIOs you select are compatible with input capture functionality.
+
+    // This depends on the fact all four signals go generating low-going edge triggers simultaneously.
+    if (ctrl == HOTRC) {
+        
+    }
+
     // Set up our interrupts
-    Serial.print (F("Interrupts... "));
+    Serial.print (F("Pulse timers and interrupts ... "));
     attachInterrupt (digitalPinToInterrupt(tach_pulse_pin), tach_isr, RISING);
     attachInterrupt (digitalPinToInterrupt(speedo_pulse_pin), speedo_isr, RISING);
-    attachInterrupt (digitalPinToInterrupt(hotrc_vert_pin), hotrc_vert_isr, CHANGE);
-    attachInterrupt (digitalPinToInterrupt(hotrc_horz_pin), hotrc_horz_isr, FALLING);
-    attachInterrupt (digitalPinToInterrupt(hotrc_ch3_pin), hotrc_ch3_isr, FALLING);
-    attachInterrupt (digitalPinToInterrupt(hotrc_ch4_pin), hotrc_ch4_isr, FALLING);
-    
+
+    if (ctrl == HOTRC) {
+        attachInterrupt (digitalPinToInterrupt(hotrc_ch2_vert_pin), hotrc_vert_isr, CHANGE);
+        attachInterrupt (digitalPinToInterrupt(hotrc_ch1_horz_pin), hotrc_horz_isr, FALLING);
+        attachInterrupt (digitalPinToInterrupt(hotrc_ch3_ign_pin), hotrc_ch3_isr, FALLING);
+        attachInterrupt (digitalPinToInterrupt(hotrc_ch4_cruise_pin), hotrc_ch4_isr, FALLING);
+        
+        // Attempt to use MCPWM input capture pulse width timer unit to get precise hotrc readings
+        // https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/peripherals/mcpwm.html#capture
+        // https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/kconfig.html#mcpwm-configuration
+        // https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/kconfig.html#mcpwm-configuration
+        // // Configure MCPWM GPIOs
+        // mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, hotrc_ch1_horz_pin);
+        // mcpwm_gpio_init(MCPWM_UNIT_1, MCPWM0A, hotrc_ch2_vert_pin);
+        // // Configure MCPWM units 0 and 1
+        // mcpwm_config_t pwm_config;
+        // pwm_config.frequency = 0;  // Set frequency to 0 for input mode
+        // pwm_config.cmpr_a = 0;  // Set duty cycle to 0 for input mode
+        // pwm_config.counter_mode = MCPWM_UP_COUNTER;
+        // pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
+        // mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);
+        // mcpwm_init(MCPWM_UNIT_1, MCPWM_TIMER_0, &pwm_config);
+        // // mcpwm_capture_enable(MCPWM_UNIT_0, MCPWM_SELECT_CAP0, MCPWM_POS_EDGE, 0);
+        // // mcpwm_capture_enable(MCPWM_UNIT_1, MCPWM_SELECT_CAP0, MCPWM_POS_EDGE, 0);
+        // // mcpwm_capture_set_cb(MCPWM_UNIT_0, MCPWM_SELECT_CAP0, hotrc_ch1_isr, NULL);
+        // // mcpwm_capture_set_cb(MCPWM_UNIT_1, MCPWM_SELECT_CAP0, hotrc_ch2_isr, NULL);
+        // Ch3 and Ch4 interrupts work with slower timers
+        // attachInterrupt (digitalPinToInterrupt(hotrc_ch3_ign_pin), hotrc_ch3_isr, CHANGE);
+        // attachInterrupt (digitalPinToInterrupt(hotrc_ch4_cruise_pin), hotrc_ch4_isr, FALLING);
+    }
     Serial.println (F("set up and enabled\n"));
     
     tach_govern_rpm = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
@@ -258,7 +300,7 @@ void loop() {
     
     // External digital signals - takes 11 us to read
     if (!simulating || !sim_basicsw) basicmodesw = !digitalRead (basicmodesw_pin);   // 1-value because electrical signal is active low
-    if (!simulating || !sim_cruisesw) cruise_sw = digitalRead (cruise_sw_pin);
+    if (ctrl == JOY && (!simulating || !sim_cruisesw)) cruise_sw = digitalRead (joy_cruise_btn_pin);
 
     // Temperature sensors
     // for (uint8_t x = 0; x < arraysize(temp_addrs); x++) {
@@ -328,7 +370,7 @@ void loop() {
     encoder.update();
 
     // Potentiometer - takes 400 us to read & convert (?!)
-    pot_percent = convert_units ((double)analogRead (pot_wipe_pin), pot_convert_percent_per_adc, pot_convert_invert);  // Potentiometer
+    pot_percent = convert_units ((double)analogRead (pot_wipe_pin), pot_convert_percent_per_adc, pot_convert_invert, pot_convert_offset);  // Potentiometer
     ema_filt (pot_percent, &pot_filt_percent, pot_ema_alpha);
     
     // Voltage of vehicle battery - takes 70 us to read, convert, and filter
@@ -342,6 +384,8 @@ void loop() {
     }
     else brake_pos_filt_in = (brake_pos_nom_lim_retract_in + brake_pos_zeropoint_in)/2;  // To keep brake position in legal range during simulation
     
+    if (!simulating || !sim_starter) starter = read_pin (starter_pin);
+
     // Tach - takes 22 us to read when no activity
     if (!simulating || !sim_tach) {
         if (tach_delta_us) {  // If a valid rotation has happened since last time, delta will have a value
@@ -420,17 +464,12 @@ void loop() {
         }
         else steer_pulse_out_us = steer_pulse_stop_us;  // Stop the steering motor if inside the deadband
     }
-    if (ctrl == HOTRC) {
+    if (ctrl == JOY && (!simulating || !sim_ign)) ignition = read_pin (joy_ign_btn_pin);
+    else if (ctrl == HOTRC) {
         if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition
             if (hotrc_suppress_next_ch3_event) hotrc_suppress_next_ch3_event = false;
-            else ignition = !ignition;
+            else if (!simulating || !sim_ign) ignition = !ignition;
             hotrc_ch3_sw_event = false;
-        }
-        if (hotrc_ch4_sw_event) {
-            if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
-            else if (runmode == FLY) runmode = CRUISE;  // Toggle cruise/fly mode 
-            else if (runmode == CRUISE) runmode = FLY;
-            hotrc_ch4_sw_event = false;    
         }
         // Detect loss of radio reception and panic stop
         hotrc.calc();
@@ -454,7 +493,7 @@ void loop() {
     // printf("mode: %d, panic: %d, vpos: %4ld, min: %4ld, max: %4ld, elaps: %6ld", runmode, panic_stop, ctrl_pos_adc[VERT][FILT], hotrc_pos_failsafe_min_us, hotrc_pos_failsafe_max_us, hotrcPanicTimer.elapsed());
     if (basicmodesw) runmode = BASIC;  // if basicmode switch on --> Basic Mode
     else if (runmode != CAL && (panic_stop || !ignition)) runmode = SHUTDOWN;
-    else if (runmode != CAL && runmode != SHUTDOWN && engine_stopped()) runmode = STALL;  // otherwise if engine not running --> Stall Mode
+    else if (runmode != CAL && (starter || engine_stopped())) runmode = STALL;  // otherwise if engine not running --> Stall Mode
     
     if (runmode == BASIC) {  // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering stell works.
         if (we_just_switched_modes) {  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
@@ -515,9 +554,9 @@ void loop() {
         }
     }
     else if (runmode == STALL) {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
-        if (!engine_stopped()) runmode = HOLD;  // Enter Hold Mode if we started the car
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) brakeSPID.set_target (pressure_min_psi);  // If in deadband or being pushed up, no pressure target
         else brakeSPID.set_target (map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][BOT], (double)ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi));  // Scale joystick value to pressure adc setpoint
+        if (!starter && !engine_stopped()) runmode = HOLD;  // Enter Hold Mode if we started the car
         // Throttle behavior is handled in pid section
     }
     else if (runmode == HOLD) {
@@ -529,12 +568,12 @@ void loop() {
             stopcarTimer.reset();
             joy_centered = false;  // Fly mode will be locked until the joystick first is put at or below center
         }
-        else if (brakeIntervalTimer.expired() && !stopcarTimer.expired()) {  // Each interval the car is still moving, push harder
+        if (brakeIntervalTimer.expired() && !stopcarTimer.expired()) {  // Each interval the car is still moving, push harder
             if (!car_stopped()) brakeSPID.set_target (brakeSPID.get_target() + pressure_hold_increment_psi);
             brakeIntervalTimer.reset();
         }
         if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
-        else if (joy_centered) runmode = FLY; // Enter Fly Mode upon joystick movement from center to above center
+        else if (joy_centered && (ctrl == JOY || hotrc_radio_detected)) runmode = FLY; // Enter Fly Mode upon joystick movement from center to above center
     }
     else if (runmode == FLY) {
         if (we_just_switched_modes) {
@@ -542,10 +581,10 @@ void loop() {
             gestureFlyTimer.set (gesture_flytimeout_us); // Initialize gesture timer to already-expired value
             cruise_sw_held = false;
             cruiseSwTimer.reset();
-            hotrc_ch4_sw_event = false;
         }
         if (car_stopped() && ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) runmode = HOLD;  // Go to Hold Mode if we have braked to a stop  // && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT]
-        else  {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
+        else if (ctrl == HOTRC && !hotrc_radio_detected) runmode = HOLD;  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
+        else {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])  {  // If we are trying to accelerate
                 gasSPID.set_target (map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][TOP], (double)ctrl_lims_adc[ctrl][VERT][MAX], tach_idle_rpm, tach_govern_rpm));
             }
@@ -555,34 +594,41 @@ void loop() {
             }
             else brakeSPID.set_target (pressure_min_psi);  // Default when joystick not pressed   
         }
-        // Cruise mode can be entered by pressing a physical momentary button, or by holding the brake on full for a half second. Which epends on the cruise_gesturing flag.
+        // Cruise mode can be entered by pressing a controller button, or by holding the brake on full for a half second. Which epends on the cruise_gesturing flag.
         // The gesture involves pushing the joystick from the center to the top, then to the bottom, then back to center, quickly enough.
-        if (cruise_gesturing) {  // If we are configured to use joystick gestures to go to cruise mode, the gesture is 
-            if (!gesture_progress && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][TOP])  { // Re-zero gesture timer for potential new gesture whenever joystick at center
-                gestureFlyTimer.reset();
-            }
-            if (gestureFlyTimer.expired()) gesture_progress = 0; // If gesture timeout has expired, cancel any in-progress gesture
-            else {  // Otherwise check for successful gesture motions
-                if (!gesture_progress && ctrl_pos_adc[VERT][FILT] >= ctrl_lims_adc[ctrl][VERT][MAX] - default_margin_adc)  { // If joystick quickly pushed to top, step 1 of gesture is successful
-                    gesture_progress++;
+        if (ctrl == JOY) {
+            if (cruise_gesturing) {  // If we are configured to use joystick gestures to go to cruise mode, the gesture is 
+                if (!gesture_progress && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][TOP])  { // Re-zero gesture timer for potential new gesture whenever joystick at center
                     gestureFlyTimer.reset();
                 }
-                else if (gesture_progress == 1 && ctrl_pos_adc[VERT][FILT] <= ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc)  { // If joystick then quickly pushed to bottom, step 2 succeeds
-                    gesture_progress++;
-                    gestureFlyTimer.reset();
+                if (gestureFlyTimer.expired()) gesture_progress = 0; // If gesture timeout has expired, cancel any in-progress gesture
+                else {  // Otherwise check for successful gesture motions
+                    if (!gesture_progress && ctrl_pos_adc[VERT][FILT] >= ctrl_lims_adc[ctrl][VERT][MAX] - default_margin_adc)  { // If joystick quickly pushed to top, step 1 of gesture is successful
+                        gesture_progress++;
+                        gestureFlyTimer.reset();
+                    }
+                    else if (gesture_progress == 1 && ctrl_pos_adc[VERT][FILT] <= ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc)  { // If joystick then quickly pushed to bottom, step 2 succeeds
+                        gesture_progress++;
+                        gestureFlyTimer.reset();
+                    }
+                    else if (gesture_progress == 2 && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][TOP]) { // If joystick then quickly returned to center, go to Cruise mode
+                        runmode = CRUISE;
+                    }        
                 }
-                else if (gesture_progress == 2 && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][TOP]) { // If joystick then quickly returned to center, go to Cruise mode
-                    runmode = CRUISE;
-                }        
+            }
+            if (!cruise_sw) {  // If button not currently pressed
+                if (cruise_sw_held && cruiseSwTimer.expired()) runmode = CRUISE;  // After a long press of sufficient length, upon release enter Cruise mode
+                cruise_sw_held = false;  // Cancel button held state
+            }
+            else if (!cruise_sw_held) {  // If the button just now got pressed
+                cruiseSwTimer.reset(); // Start hold time timer
+                cruise_sw_held = true;  // Get into button held state
             }
         }
-        if (!cruise_sw) {  // If button not currently pressed
-            if (cruise_sw_held && cruiseSwTimer.expired()) runmode = CRUISE;  // After a long press of sufficient length, upon release enter Cruise mode
-            cruise_sw_held = false;  // Cancel button held state
-        }
-        else if (!cruise_sw_held) {  // If the button just now got pressed
-            cruiseSwTimer.reset(); // Start hold time timer
-            cruise_sw_held = true;  // Get into button held state
+        else if (hotrc_ch4_sw_event) {  // if HOTRC
+            if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
+            else runmode == CRUISE;
+            hotrc_ch4_sw_event = false;    
         }
     }
     else if (runmode == CRUISE) {
@@ -591,7 +637,6 @@ void loop() {
             brakeSPID.set_target (pressure_min_psi);  // Let off the brake and keep it there till out of Cruise mode
             gestureFlyTimer.reset();  // reset gesture timer
             cruise_sw_held = false;
-            hotrc_ch4_sw_event = false;
             cruise_adjusting = false;
         }
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) {  // When joystick vert above center, increase the throttle target proportional to how far off center
@@ -608,15 +653,22 @@ void loop() {
         // This old gesture trigger drops to Fly mode if joystick moved quickly from center to bottom
         // if (ctrl_pos_adc[VERT][FILT] <= ctrl_lims_adc[ctrl][VERT][MIN]+default_margin_adc && abs(mycros() - gesture_timer_us) < gesture_flytimeout_us)  runmode = FLY;  // If joystick quickly pushed to bottom 
         // printf ("hotvpuls=%ld, hothpuls=%ld, joyvfilt=%ld, joyvmin+marg=%ld, timer=%ld\n", hotrc_vert_pulse_us, hotrc_horz_pulse_us, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc, gesture_timer_us);
-        if (ctrl_pos_adc[VERT][FILT] > ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
-        else if (gestureFlyTimer.expired()) runmode = FLY;  // New gesture to drop to fly mode is hold the brake all the way down for 500 ms
-        if (cruise_sw) cruise_sw_held = true;  // Pushing cruise button sets up return to fly mode
-        else if (cruise_sw_held) {  // Release of button drops us back to fly mode
-            cruise_sw_held = false;
-            runmode = FLY;
+        if (ctrl == JOY) {
+            if (ctrl_pos_adc[VERT][FILT] > ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
+            else if (gestureFlyTimer.expired()) runmode = FLY;  // New gesture to drop to fly mode is hold the brake all the way down for 500 ms
+            if (cruise_sw) cruise_sw_held = true;  // Pushing cruise button sets up return to fly mode
+            else if (cruise_sw_held) {  // Release of button drops us back to fly mode
+                cruise_sw_held = false;
+                runmode = FLY;
+            }
+        }
+        else if (hotrc_ch4_sw_event) {  // if HOTRC
+            if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
+            else runmode == FLY;
+            hotrc_ch4_sw_event = false;
         }
         if (car_stopped()) {  // In case we slam into a brick wall, get out of cruise mode
-            if (serial_debugging) Serial.println (F("Error: Car stopped or taken out of gear in cruise mode"));  // , carspeed_filt_mph, neutral
+            if (serial_debugging) Serial.println (F("Error: Car stopped in cruise mode"));  // , carspeed_filt_mph, neutral
             runmode = HOLD;  // Back to Hold Mode  
         }
     }
@@ -699,7 +751,8 @@ void loop() {
         // Gas.  Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
         if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
-            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_idle_us;  // If in deadband or being pushed down, we want idle
+            if (starter) gas_pulse_out_us = gas_pulse_govern_us;
+            else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_idle_us;  // If in deadband or being pushed down, we want idle
             else gas_pulse_out_us = map (ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_idle_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
         }
         else if (runmode != BASIC) {
@@ -943,7 +996,9 @@ void loop() {
             if (selected_value == 6) cruiseSPID.set_tunings (cruiseSPID.get_kp(), cruiseSPID.get_ki_hz()+0.001*(double)sim_edit_delta, cruiseSPID.get_kd_s());
             if (selected_value == 7) cruiseSPID.set_tunings (cruiseSPID.get_kp(), cruiseSPID.get_ki_hz(), cruiseSPID.get_kd_s()+0.001*(double)sim_edit_delta);
         }
-        else if (dataset_page == TEMP) {
+        else if (dataset_page == TEMP) {        
+            if (selected_value == 4) adj_val (&hotrc_pos_failsafe_min_adc, sim_edit_delta, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
+            if (selected_value == 5) adj_val (&hotrc_pos_failsafe_max_adc, sim_edit_delta, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);       
             if (selected_value == 6) gasSPID.set_open_loop (sim_edit_delta > 0);
             if (selected_value == 7) adj_val (&brake_pos_zeropoint_in, 0.001*sim_edit_delta, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
         }
@@ -963,11 +1018,14 @@ void loop() {
     carspeed_govern_mph = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, carspeed_redline_mph);  // Governor must scale the top vehicle speed proportionally
 
     // Ignition & Panic stop logic and Update output signals
-    if (panic_stop && car_stopped()) panic_stop = false;  //  Panic is over cuz car is stopped
-    else if (ctrl == HOTRC && hotrc_radio_detected_last && !hotrc_radio_detected) panic_stop = true;  // panic_stop could also have been initiated by the user button
+    if (!car_stopped()) {
+        if (ctrl == HOTRC && hotrc_radio_detected_last && !hotrc_radio_detected) panic_stop = true;  // panic_stop could also have been initiated by the user button
+        if (!ignition && ignition_last) panic_stop = true;
+    }
+    else if (panic_stop) panic_stop = false;  // Cancel panic if car is stopped
     hotrc_radio_detected_last = hotrc_radio_detected;
     if (panic_stop) ignition = LOW;  // Kill car if panicking
-    if ((ignition != ignition_last) && !(ignition && panic_stop)) write_pin (ignition_pin, ignition);  // Turn car off or on, ensuring to never turn on the ignition while panicking
+    if (ignition != ignition_last) write_pin (ignition_pin, ignition);  // Turn car off or on, ensuring to never turn on the ignition while panicking
     ignition_last = ignition; // Make sure this goes after the last comparison
     if (syspower != syspower_last) syspower_set (syspower);
     syspower_last = syspower;
@@ -977,8 +1035,8 @@ void loop() {
     // Heartbeat led algorithm
     if (neopixel_pin >= 0) {
         if (neopixel_heartbeat) {
-            neopixel_heart_color[N_RED] = ((((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0xf800) >> 11) << 3;
-            neopixel_heart_color[N_GRN] = ((((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x7e0) >> 5) << 2;
+            neopixel_heart_color[N_RED] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0xf800) >> 8;
+            neopixel_heart_color[N_GRN] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x7e0) >> 3;
             neopixel_heart_color[N_BLU] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x1f) << 3;
             int32_t neocolor = neostrip.Color (neopixel_heart_color[N_BLU], neopixel_heart_color[N_RED], neopixel_heart_color[N_GRN]);
             if (heartbeatTimer.expired()) {
