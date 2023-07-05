@@ -43,7 +43,7 @@ class SPID {  // Soren's home-made pid loop
         set_actuator_direction(direction);
         // set_center_modes(arg_in_center_mode, arg_out_center_mode);
         sample_period_ms = arg_sample_period_ms;
-        printf ("Con1: min (%ld): %4lf max (%ld): %4lf\n", p_out_min, *p_out_min, p_out_max, *p_out_max);
+        printf ("SPID Constructor1: min (%ld): %4lf max (%ld): %4lf\n", p_out_min, *p_out_min, p_out_max, *p_out_max);
     }
  
  // SPID brakeSPID (&pressure_filt_psi, brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brake_spid_ctrl_dir, pid_period_ms);
@@ -59,8 +59,7 @@ class SPID {  // Soren's home-made pid loop
         set_actuator_direction(direction);
         // set_center_modes(arg_in_center_mode, arg_out_center_mode);
         sample_period_ms = arg_sample_period_ms;
-        printf ("Con2: min (%ld): %4lf max (%ld): %4lf\n", p_out_min, *p_out_min, p_out_max, *p_out_max, p_out_max);
-
+        printf ("SPID Constructor2: min (%ld): %4lf max (%ld): %4lf\n", p_out_min, *p_out_min, p_out_max, *p_out_max, p_out_max);
     }
     // SPID(Sensor* arg_in_device, ServoPWM* arg_out_device, double arg_kp, double arg_ki_hz, double arg_kd_s, int32_t direction, uint32_t arg_sample_period_ms) {
     //     in_device = arg_in_device;
@@ -76,16 +75,17 @@ class SPID {  // Soren's home-made pid loop
     //     // set_center_modes(arg_in_center_mode, arg_out_center_mode);
     //     sample_period_ms = arg_sample_period_ms;
     // }
-    bool constrain_value (double* value, double min, double max) {  // Constrains referred value to given range, returning 1 if value was out of bounds
-        if (*value < min) {  // need to include a margin
+    bool constrain_value (double* value, double min, double max, double margin = 0.0) {  // Constrains referred value to given range, returning 1 if value was beyond range + margins
+        bool sat = false;
+        if (*value < min) {
+            if (*value < min - margin) sat = true;
             *value = min;
-            return true;
         }
-        if (*value > max) {  // need to include a margin
+        else if (*value > max) {
+            if (*value > max + margin) sat = true;
             *value = max;
-            return true;
         }
-        return false;
+        return sat;
     }
     void set_input(double arg_input) {
         *p_input = round (arg_input);
@@ -94,11 +94,11 @@ class SPID {  // Soren's home-made pid loop
     double round (double val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
     double round (double val) { return round (val, max_precision); }
     double clamp_value (double arg_value) {  // If output is overshooting in the same direction as the error and the integral term is contributing, reset i_term
-        // This is supposed to also only happen if saturated, but I took that out
-        bool err_sign = signbit (error) ^ (actuator_direction < 0);
-        if (signbit (arg_value) != err_sign) return 0;  // Textbook says this should have && saturated
-        // if ((signbit (*p_output) == err_sign) && (signbit (arg_value) == err_sign)) return 0;  // Textbook says this should have && saturated
-        return arg_value;
+        bool err_sign = signbit (error) ^ (actuator_direction < 0);  // reverse error value sign if actuator direction is reversed
+        if (signbit (arg_value) == err_sign) return 0;  // (&& saturated)  if sign of arg_value is the same as that of error, then zero arg_value
+        return arg_value;  // otherwise return arg_value unmolested
+        // Textbook says saturation is also a precondition of clamping, but I left it out because that doesn't make sense to me right now
+        // if ((signbit (*p_output) == err_sign) && (signbit (arg_value) == err_sign)) // Considering also checking output sign is also the same
     }
     double compute(void) {
         myinput = *p_input;
@@ -107,21 +107,22 @@ class SPID {  // Soren's home-made pid loop
         i_term += ki_coeff * error;  // Update integral
         if (clamp_integral) i_term = clamp_value(i_term);
         if (proportional_to == ERROR_TERM) {  // If proportional_to Error (default)
-            saturated = constrain_value (&i_term, *p_out_min, *p_out_max);  // Constrain i_term before adding p_term
+            saturated = constrain_value (&i_term, *p_out_min, *p_out_max);  // Constrain i_term before adding p_term. Todo: Pass margin into constrain() for saturation determination
             p_term = kp_coeff * error;
             *p_output = i_term + p_term;
         }
         else if (proportional_to == SENSED_INPUT) {  // If proportional_to Input
             p_term = -kp_coeff * (myinput - input_last);  // p_term is based on input change (with opposite sign) rather than distance from target
             *p_output = i_term + p_term;
-            saturated = constrain_value (p_output, *p_out_min, *p_out_max);  // Constrain combined i_term + p_term
+            saturated = constrain_value (p_output, *p_out_min, *p_out_max);  // Constrain combined i_term + p_term.  Todo: Pass margin into constrain() for saturation determination
         }
         d_term = -kd_coeff * (myinput - input_last);  // Note d_term is opposite sign to input change
         *p_output += d_term;  // Include d_term in output
-        saturated = constrain_value (p_output, *p_out_min, *p_out_max);  // Constrain output to range
+        saturated = constrain_value (p_output, *p_out_min, *p_out_max);  // Constrain output to range. Todo: Pass margin into constrain() for saturation determination
         input_last = myinput;  // store previously computed input
         target_last = mytarget;
-        error_last = error;
+        printf(" in=%-+9.4lf lst=%-+9.4lf err=%-+9.4lf tgt=%-+9.4lf", myinput, input_last, error, mytarget);
+        printf(" pt=%-+9.4lf it=%-+9.4lf dt=%-+9.4lf out=%-+9.4lf\n", p_term, i_term, d_term, output);
         return *p_output;
     }
     // Comments related to compute() function
@@ -163,14 +164,18 @@ class SPID {  // Soren's home-made pid loop
         kp = arg_kp;  ki_hz = arg_ki_hz;  kd_s = arg_kd_s;
         kp_coeff = arg_kp;
         ki_coeff = arg_ki_hz * sample_period_s;
-        
+        if (sample_period_s) kd_coeff = arg_kd_s / sample_period_s;
+        else {
+            printf ("set_tunings refused to divide by zero to set kd_coeff\n");
+            kd_coeff = 0;
+        }
+    }
         // printf("dispkds=%ld", disp_kd_ms);
         // printf(", kds=%lf", kd_s);
         // printf(", speriodms=%ld", sample_period_ms);
         // printf(", speriods=%lf", sample_period_s);
         // printf(", argkds=%lf", arg_kd_s);
 
-        kd_coeff = arg_kd_s; //  / sample_period_s;
         // if (arg_kd_s != 0) kd_coeff = arg_kd_s /(((double)sample_period_ms)/1000);  // ??? yes, all those parentheses are needed or kd_coeff is infinite (due to div/0?)
         // else kd_coeff = 0;
         
@@ -180,7 +185,6 @@ class SPID {  // Soren's home-made pid loop
         // disp_kp_1k = (int32_t)(arg_kp * 1000);  // Scaled integer version of tuning parameters suitable for screen display
         // disp_ki_mhz = (int32_t)(arg_ki_hz * 1000);
         // disp_kd_ms = (int32_t)(arg_kd_s * 1000);
-    }
     void set_actuator_direction(int32_t direction) {
         if (direction != actuator_direction) {
             kp_coeff = (0 - kp_coeff);
@@ -191,7 +195,7 @@ class SPID {  // Soren's home-made pid loop
     }
    void set_input_limits(double* arg_p_min, double* arg_p_max) {
         if (*arg_p_min >= *arg_p_max) {
-            printf ("Warning: SPID::set_input_limits() ignored request to set input minimum limit %lf > maximum limit %lf.\n", *arg_p_min, *arg_p_max);
+            printf ("SPID ignored attempt to set input min %lf > max %lf.\n", *arg_p_min, *arg_p_max);
             return;
         }
         p_in_min = arg_p_min;  p_in_max = arg_p_max;
@@ -201,6 +205,7 @@ class SPID {  // Soren's home-made pid loop
     void set_near_target_thresh(double arg_near_target_thresh_percent) { near_target_error_thresh_percent = arg_near_target_thresh_percent; }
     void set_output_limits(double arg_min, double arg_max) {
         if (arg_min >= arg_max) {
+            printf ("SPID ignored attempt to set output min %lf > max %lf.\n", arg_min, arg_max);
             printf ("Warning: SPID::set_output_limits() ignored request to set output minimum limit %lf > maximum limit %lf.\n", arg_min, arg_max);
             return;
         }

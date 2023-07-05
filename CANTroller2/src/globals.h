@@ -221,12 +221,12 @@ int32_t default_margin_adc = 12;  // Default margin of error for comparisons of 
 
 // pid related globals
 //  ---- tunable ----
-uint32_t pid_period_ms = 50;
+uint32_t pid_period_ms = 100;
 Timer pidTimer (pid_period_ms*1000);  // not actually tunable, just needs value above
 int32_t brake_spid_ctrl_dir = SPID::FWD;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
 double brake_spid_initial_kp = 0.588;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-double brake_spid_initial_ki_hz = 0.193;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-double brake_spid_initial_kd_s = 0.252;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+double brake_spid_initial_ki_hz = 0.013;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+double brake_spid_initial_kd_s = 1.130;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
 double cruise_spid_initial_kp = 0.157;  // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
 double cruise_spid_initial_ki_hz = 0.035;  // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
 double cruise_spid_initial_kd_s = 0.044;  // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
@@ -287,7 +287,7 @@ bool hotrc_suppress_next_ch3_event = true;  // When powered up, the hotrc will t
 bool hotrc_suppress_next_ch4_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 //  ---- tunable ----
 double hotrc_pulse_period_us = 1000000.0 / 50;
-double ctrl_ema_alpha[2] = { 0.005, 0.1 };  // [HOTRC, JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+double ctrl_ema_alpha[2] = { 0.01, 0.1 };  // [HOTRC, JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 int32_t ctrl_lims_adc[2][2][3] = { { { 3, 375, 4092 }, { 3, 375, 4092 } }, { { 9, 200, 4085 }, { 9, 200, 4085 } }, }; // [HOTRC, JOY] [HORZ, VERT], [MIN, DEADBAND, MAX] values as ADC counts
 bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
 // Limits of what pulsewidth the hotrc receiver puts out
