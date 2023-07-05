@@ -161,7 +161,9 @@ void setup() {
     gasSPID.set_output_limits ((double)gas_pulse_govern_us, (double)gas_pulse_idle_us);
     cruiseSPID.set_input_limits (&speedo_idle_mph, &speedo_govern_mph);
     cruiseSPID.set_output_limits (tach_idle_rpm, tach_govern_rpm);
-      
+    
+    gasSPID.set_open_loop(1);  // Added temporarily to debug brake pid
+
     steer_servo.attach (steer_pwm_pin);
     brake_servo.attach (brake_pwm_pin);
     gas_servo.attach (gas_pwm_pin);

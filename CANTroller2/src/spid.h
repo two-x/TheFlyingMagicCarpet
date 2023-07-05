@@ -104,21 +104,45 @@ class SPID {  // Soren's home-made pid loop
         myinput = *p_input;
         mytarget = target;
         error = mytarget - myinput;
+        if (out_center_mode) *p_output = out_center;
+        else *p_output = *p_out_min;
+
+        printf("in:%4.0lf tg:%4.0lf er:%4.0lf i1:%4.0lf", myinput, mytarget, error, i_term);
+        
         i_term += ki_coeff * error;  // Update integral
+        printf(" i2:%4.0lf", i_term);
+
         if (clamp_integral) i_term = clamp_value(i_term);
+        printf(" i3:%4.0lf", i_term);
+
         if (proportional_to == ERROR_TERM) {  // If proportional_to Error (default)
-            saturated = constrain_value (&i_term, *p_out_min, *p_out_max);  // Constrain i_term before adding p_term. Todo: Pass margin into constrain() for saturation determination
+            // if (out_center_mode) saturated = constrain_value (&i_term, out_center-*p_out_min, *p_out_max-out_center);  // Constrain i_term before adding p_term. Todo: Pass margin into constrain() for saturation determination
+            // else
+            saturated = constrain_value (&i_term, *p_out_min-*p_out_max, *p_out_max-*p_out_min);  // Constrain i_term before adding p_term. Todo: Pass margin into constrain() for saturation determination
+            
+            printf(" i4:%4.0lf s1:%d", i_term, saturated);
+
             p_term = kp_coeff * error;
-            *p_output = i_term + p_term;
+            printf(" p:%4.0lf", p_term);
+
+            *p_output += i_term + p_term;
+            printf(" o1:%4.0lf", *p_output);
+
         }
         else if (proportional_to == SENSED_INPUT) {  // If proportional_to Input
             p_term = -kp_coeff * (myinput - input_last);  // p_term is based on input change (with opposite sign) rather than distance from target
-            *p_output = i_term + p_term;
+            *p_output += i_term + p_term;
             saturated = constrain_value (p_output, *p_out_min, *p_out_max);  // Constrain combined i_term + p_term.  Todo: Pass margin into constrain() for saturation determination
         }
         d_term = -kd_coeff * (myinput - input_last);  // Note d_term is opposite sign to input change
+        printf(" d:%4.0lf", d_term);
+
         *p_output += d_term;  // Include d_term in output
+        printf(" o2:%4.0lf", *p_output);
+
         saturated = constrain_value (p_output, *p_out_min, *p_out_max);  // Constrain output to range. Todo: Pass margin into constrain() for saturation determination
+        printf(" o3:%4.0lf s2:%d\n", *p_output, saturated);
+
         input_last = myinput;  // store previously computed input
         target_last = mytarget;
         // printf(" in=%-+9.4lf lst=%-+9.4lf err=%-+9.4lf tgt=%-+9.4lf", myinput, input_last, error, mytarget);
