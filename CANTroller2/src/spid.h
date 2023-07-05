@@ -4,7 +4,7 @@
 #include <cmath>
 // Here is the brake PID math
 // Our target is the desired amount of the measured value. The error is what we must add to our current value to get there
-// We make 3 terms P I and D which add to become our Delta which goes to the actuator.
+// We make 3 terms P I and D which add to become our output which goes to the actuator.
 // P term scales proportionally to error, however it can never reach the setpoint 
 // I term steadily grows the longer the error is the same sign,
 // D term counteracts fast changes from P (and I), serving to prevent overshooting target. 
@@ -19,6 +19,7 @@ class SPID {  // Soren's home-made pid loop
     #define SENSED_INPUT 1  // What the proportional term is proportional_to
     static const int32_t FWD = 1;  // Actuator_direction influences sensed value in the same direction
     static const int32_t REV = -1;  // Actuator_direction influences sensed value in the opposite direction
+    bool clamp_integral = true;  // Squashes integral windup if pushing the wrong direction 
   private:
     double kp_coeff = 0.01, ki_coeff = 0.01, kd_coeff = 0.01, kp, ki_hz, kd_s;
     int32_t actuator_direction = FWD;
@@ -26,9 +27,9 @@ class SPID {  // Soren's home-made pid loop
     int32_t max_precision = 4;
     uint32_t sample_period_ms;
     double output, out_min, out_max;
-    double target = 0, target_last = 0, error = 0, delta = 0, error_last = 0, p_term = 0, i_term = 0, d_term = 0, open_loop = false;
+    double target = 0, target_last = 0, error = 0, error_last = 0, p_term = 0, i_term = 0, d_term = 0, open_loop = false;
     double near_target_error_thresh_percent = 0.005;  // Fraction of the input range where if the error has not exceeded in either dir since last zero crossing, it is considered zero (to prevent endless microadjustments) 
-    double input_last = 0, near_target_error_thresh = 0, near_target_lock = 0;
+    double myinput, mytarget, input_last = 0, near_target_error_thresh = 0, near_target_lock = 0;
     double in_center = 2047, out_center = 2047;
     double* p_input; double* p_in_min; double* p_in_max; double* p_output = &output; double* p_out_min = &out_min; double* p_out_max = &out_max;
     bool out_center_mode = CENTERED, in_center_mode = CENTERED, proportional_to = ERROR_TERM, saturated = false, output_hold = false;
@@ -92,60 +93,61 @@ class SPID {  // Soren's home-made pid loop
     }
     double round (double val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
     double round (double val) { return round (val, max_precision); }
+    double clamp_value (double arg_value) {  // If output is overshooting in the same direction as the error and the integral term is contributing, reset i_term
+        // This is supposed to also only happen if saturated, but I took that out
+        bool err_sign = signbit (error) ^ (actuator_direction < 0);
+        if (signbit (arg_value) != err_sign) return 0;  // Textbook says this should have && saturated
+        // if ((signbit (*p_output) == err_sign) && (signbit (arg_value) == err_sign)) return 0;  // Textbook says this should have && saturated
+        return arg_value;
+    }
     double compute(void) {
-        error = target - *p_input;
-
-        // printf(" in=%-+9.4lf err=%-+9.4lf errlast=%-+9.4lf ntet=%-+9.4lf kp_co=%-+9.4lf ki_co=%-+9.4lf kd_co=%-+9.4lf kds=%-+9.4lf", input, error, error_last, near_target_error_thresh, kp_coeff, ki_coeff, kd_coeff, kd_s);
-
-        // Add a layer of history here, with an additional condition that output only holds if change in error has been small for X time period
-        // Also add code to hold output (below in this function) if output_hold = true
-        if (signbit(error_last) != signbit(error) && abs(error_last - error) < near_target_error_thresh) {
-            near_target_lock = target;
-            output_hold = true;
+        myinput = *p_input;
+        mytarget = target;
+        error = mytarget - myinput;
+        i_term += ki_coeff * error;  // Update integral
+        if (clamp_integral) i_term = clamp_value(i_term);
+        if (proportional_to == ERROR_TERM) {  // If proportional_to Error (default)
+            saturated = constrain_value (&i_term, *p_out_min, *p_out_max);  // Constrain i_term before adding p_term
+            p_term = kp_coeff * error;
+            *p_output = i_term + p_term;
         }
-        else if (abs(near_target_lock - *p_input) > near_target_error_thresh) output_hold = false;
-
-        // Add handling for CENTERED controller!!  (our brake)
-
-        if (proportional_to == ERROR_TERM) p_term = kp_coeff * error;  // If proportional_to Error (default)
-        else p_term = -kp_coeff * (*p_input - input_last);  // If proportional_to Input (default)
-
-        if (saturated && (*p_output * error * actuator_direction >= 0)) i_term = 0;  // Delete intregal windup if windup is occurring
-        else i_term += ki_coeff * error;  // Update integral
-
-        d_term = kd_coeff * (*p_input - input_last);
-        
-        p_term = round (p_term);
-        i_term = round (i_term);
-        d_term = round (d_term);
-
-        delta = p_term + i_term - d_term;
-
-        if (out_center_mode == CENTERED) {
-            *p_output = out_center + delta;
-        } else {
-            *p_output = delta;
+        else if (proportional_to == SENSED_INPUT) {  // If proportional_to Input
+            p_term = -kp_coeff * (myinput - input_last);  // p_term is based on input change (with opposite sign) rather than distance from target
+            *p_output = i_term + p_term;
+            saturated = constrain_value (p_output, *p_out_min, *p_out_max);  // Constrain combined i_term + p_term
         }
-        
-        // printf(" ntl2=%-+9.4lf sat=%1d outh=%1d pterm=%-+9.4lf iterm=%-+9.4lf dterm=%-+9.4lf out=%-+9.4lf\n", near_target_lock, saturated, output_hold, p_term, i_term, d_term, output);
-
-        // printf("uc output: %7.2lf, min: %7.2lf, max:%7.2lf, ", *p_output, *p_out_min, *p_out_max);
-        saturated = constrain_value(p_output, *p_out_min, *p_out_max);
-        // printf("c output: %7.2lf, min: %7.2lf, max:%7.2lf\n", *p_output, *p_out_min, *p_out_max);
-        
-        input_last = *p_input;  // store previously computed input
-        target_last = target;
+        d_term = -kd_coeff * (myinput - input_last);  // Note d_term is opposite sign to input change
+        *p_output += d_term;  // Include d_term in output
+        saturated = constrain_value (p_output, *p_out_min, *p_out_max);  // Constrain output to range
+        input_last = myinput;  // store previously computed input
+        target_last = mytarget;
         error_last = error;
-
         return *p_output;
     }
-    // double compute(double arg_input) {
-    //     set_input(arg_input);
-    //     return compute();
+    // Comments related to compute() function
+    // printf(" in=%-+9.4lf err=%-+9.4lf errlast=%-+9.4lf ntet=%-+9.4lf kp_co=%-+9.4lf ki_co=%-+9.4lf kd_co=%-+9.4lf kds=%-+9.4lf", input, error, error_last, near_target_error_thresh, kp_coeff, ki_coeff, kd_coeff, kd_s);
+    //
+    // Add a layer of history here, with an additional condition that output only holds if change in error has been small for X time period
+    // Also add code to hold output (below in this function) if output_hold = true
+    // if (signbit(error_last) != signbit(error) && abs(error_last - error) < near_target_error_thresh) {
+    //     near_target_lock = target;
+    //     output_hold = true;
     // }
-    // void set_saturated(bool arg_saturated) {
-    //     saturated = arg_saturated;
-    // }
+    // else if (abs(near_target_lock - myinput) > near_target_error_thresh) output_hold = false;
+    //
+    //
+    // p_term = round (p_term);
+    // i_term = round (i_term);
+    // d_term = round (d_term);
+    //
+    // Add handling for CENTERED controller!!  (our brake)
+    // if (out_center_mode == CENTERED) *p_output += out_center;
+    //
+    // printf(" ntl2=%-+9.4lf sat=%1d outh=%1d pterm=%-+9.4lf iterm=%-+9.4lf dterm=%-+9.4lf out=%-+9.4lf\n", near_target_lock, saturated, output_hold, p_term, i_term, d_term, output);
+    //
+    // printf("uc output: %7.2lf, min: %7.2lf, max:%7.2lf, ", *p_output, *p_out_min, *p_out_max);
+    // printf("c output: %7.2lf, min: %7.2lf, max:%7.2lf\n", *p_output, *p_out_min, *p_out_max);
+
     void set_target(double arg_target) {
         // printf("SPID::set_target():  received arg_target=%-+9.4lf, *p_in_min=%-+9.4lf, *p_in_max=%-+9.4lf\n", arg_target, *p_in_min, *p_in_max);
         target = round (arg_target, max_precision);
@@ -168,7 +170,7 @@ class SPID {  // Soren's home-made pid loop
         // printf(", speriods=%lf", sample_period_s);
         // printf(", argkds=%lf", arg_kd_s);
 
-        kd_coeff = arg_kd_s;  // / sample_period_s;
+        kd_coeff = arg_kd_s; //  / sample_period_s;
         // if (arg_kd_s != 0) kd_coeff = arg_kd_s /(((double)sample_period_ms)/1000);  // ??? yes, all those parentheses are needed or kd_coeff is infinite (due to div/0?)
         // else kd_coeff = 0;
         

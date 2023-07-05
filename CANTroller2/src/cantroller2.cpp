@@ -65,10 +65,7 @@ void setup() {
     set_pin (hotrc_ch4_cruise_pin, INPUT);
     set_pin (joy_ign_btn_pin, INPUT_PULLDOWN);
     set_pin (joy_cruise_btn_pin, INPUT_PULLUP);
-    // set_pin (led_tx_pin, OUTPUT);
-    // set_pin (tft_ledk_pin, OUTPUT);
-    // set_pin (onewire_pin, OUTPUT);
-    
+        
     write_pin (ignition_pin, ignition);
     write_pin (tft_cs_pin, HIGH);   // Prevent bus contention
     write_pin (sdcard_cs_pin, HIGH);   // Prevent bus contention
@@ -77,8 +74,7 @@ void setup() {
     write_pin (syspower_pin, syspower);
     write_pin (encoder_pwr_pin, HIGH);
     write_pin (tft_rst_pin, HIGH);
-    // write_pin (led_tx_pin, HIGH);  // Off
-    
+     
     analogReadResolution (adcbits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
     Serial.begin (115200);  // Open serial port
     // printf("Serial port open\n");  // This works on Due but not ESP32
@@ -117,7 +113,7 @@ void setup() {
     // }
     neostrip.begin();  // start datastream
     neostrip.show();  // Turn off the pixel
-    neostrip.setBrightness (neopixel_brightness);  // It truly is incredibly bright
+    neostrip.setBrightness (neo_brightness_max);  // It truly is incredibly bright
     // 230417 removing sdcard init b/c boot is hanging here unless I insert this one precious SD card
     // Serial.print(F("Initializing filesystem...  "));  // SD card is pretty straightforward, a single call. 
     // if (! sd.begin(usd_cs_pin, SD_SCK_MHZ(25))) {   // ESP32 requires 25 mhz limit
@@ -179,10 +175,9 @@ void setup() {
         // attachInterrupt (digitalPinToInterrupt(hotrc_ch4_cruise_pin), hotrc_ch4_isr, FALLING);
     }
     Serial.println (F("set up and enabled\n"));
-    
-    tach_govern_rpm = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
-    gas_pulse_govern_us = map ((int32_t)(gas_governor_percent*(tach_redline_rpm-tach_idle_rpm)/tach_redline_rpm), 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
-    carspeed_govern_mph = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, carspeed_redline_mph);  // Governor must scale the top vehicle speed proportionally
+
+    calc_deadbands();    
+    calc_governor();
 
     // Set up the soren pid loops
     brakeSPID.set_input_limits (&pressure_min_psi, &pressure_max_psi);  // Make sure pressure target is in range
@@ -201,10 +196,10 @@ void setup() {
     brake_servo.attach (brake_pwm_pin);
     gas_servo.attach (gas_pwm_pin);
 
-    neopixel_heartbeat = (neopixel_pin >= 0);
+    neo_heartbeat = (neopixel_pin >= 0);
     neostrip.begin();
     neostrip.show(); // Initialize all pixels to 'off'
-    neostrip.setBrightness (neopixel_brightness);
+    neostrip.setBrightness (neo_brightness_max);
 
     tempsensebus.setWaitForConversion (true);  // Whether to block during conversion process
     tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
@@ -288,7 +283,7 @@ void loop() {
     //
     loopindex = 0;  // reset at top of loop
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "top");
-       
+
     // cout << "(top)) spd:" << carspeed_filt_mph << " tach:" << tach_filt_rpm;
     
     // Update inputs.  Fresh sensor data, and filtering.
@@ -370,7 +365,7 @@ void loop() {
     encoder.update();
 
     // Potentiometer - takes 400 us to read & convert (?!)
-    pot_percent = convert_units ((double)analogRead (pot_wipe_pin), pot_convert_percent_per_adc, pot_convert_invert, pot_convert_offset);  // Potentiometer
+    pot_percent = convert_units ((double)analogRead (pot_wipe_pin), pot_convert_percent_per_adc, pot_convert_invert, 0.0, pot_convert_offset);  // Potentiometer
     ema_filt (pot_percent, &pot_filt_percent, pot_ema_alpha);
     
     // Voltage of vehicle battery - takes 70 us to read, convert, and filter
@@ -426,7 +421,8 @@ void loop() {
 
     // Brake pressure - takes 72 us to read
     if (!simulating || !sim_pressure) {
-        pressure_psi = convert_units ((double)analogRead(pressure_pin), pressure_convert_psi_per_adc, pressure_convert_invert);
+        pressure_adc = analogRead (pressure_pin);
+        pressure_psi = convert_units ((double)pressure_adc, pressure_convert_psi_per_adc, pressure_convert_invert, (double)pressure_min_adc);
         ema_filt (pressure_psi, &pressure_filt_psi, pressure_ema_alpha);  // Sensor EMA filter
         // pressure.set_raw (analogRead (pressure_pin));
         // ema_filt (pressure.get_val(), &pressure_filt_psi, pressure_ema_alpha);  // Sensor EMA filter
@@ -464,11 +460,11 @@ void loop() {
         }
         else steer_pulse_out_us = steer_pulse_stop_us;  // Stop the steering motor if inside the deadband
     }
-    if (ctrl == JOY && (!simulating || !sim_ign)) ignition = read_pin (joy_ign_btn_pin);
+    if (ctrl == JOY) ignition = read_pin (joy_ign_btn_pin);
     else if (ctrl == HOTRC) {
         if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition
             if (hotrc_suppress_next_ch3_event) hotrc_suppress_next_ch3_event = false;
-            else if (!simulating || !sim_ign) ignition = !ignition;
+            else ignition = !ignition;
             hotrc_ch3_sw_event = false;
         }
         // Detect loss of radio reception and panic stop
@@ -696,12 +692,12 @@ void loop() {
         }
     }
     else { // Obviously this should never happen
-        if (serial_debugging) Serial.println (F("Error: Invalid runmode entered"));  // ,  runmode
+        if (serial_debugging) Serial.println (F("Error: Invalid runmode entered"));
         runmode = SHUTDOWN;
     }
     if (runmode != SHUTDOWN && runmode != BASIC) park_the_motors = false;
+    if (runmode != oldmode) disp_runmode_dirty = true;  // runmode should not be changed after this point in loop
     we_just_switched_modes = (runmode != oldmode);
-    if (we_just_switched_modes) disp_runmode_dirty = true;  // runmode should not be changed after this point in loop
     
     // cout << "rm:" << runmode << " om:" << oldmode << "vert:" << ctrl_pos_adc[VERT][FILT] << " up?" << (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) << " jc?" << joy_centered << "\n";
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "mod");  //
@@ -729,8 +725,8 @@ void loop() {
                 (double)map ((int32_t)brake_pos_filt_in, (int32_t)brake_pos_park_in, (int32_t)brake_pos_nom_lim_extend_in, brake_pulse_stop_us, brake_pulse_retract_us);
         }
         else if (runmode != BASIC) brake_pulse_out_us = brakeSPID.compute();  // Otherwise the pid control is active
-        // printf("Brake PID rm=%-+4ld target=%-+9.4lf", runmode, (double)pressure_target_psi);   
-        // printf(" output = %-+9.4lf,  %+-4ld\n", brakeSPID.get_output(), brake_pulse_out_us); 
+        printf("Brake PID rm=%-+4ld target=%-+9.4lf", runmode, brakeSPID.get_target());   
+        printf(" output = %-+9.4lf,  %+-4ld\n", brakeSPID.get_output(), brake_pulse_out_us); 
         if (runmode != BASIC || park_the_motors) {
             if (runmode == CAL && cal_joyvert_brkmotor)  // In Cal mode constrain the motor to its entire range, instead of to the calibrated limits
                 brake_pulse_out_us = constrain (brake_pulse_out_us, (double)brake_pulse_retract_min_us, (double)brake_pulse_extend_max_us);  // Send to the actuator. Refuse to exceed range    
@@ -777,7 +773,6 @@ void loop() {
             bool gas_parked = ((gas_pulse_out_us == gas_pulse_idle_us + gas_pulse_park_slack_us) && gasServoTimer.expired());
             if ((brake_parked && gas_parked) || motorParkTimer.expired()) park_the_motors = false;
         }
-        
         pidTimer.reset();  // reset timer to trigger the next update
     }
 
@@ -818,8 +813,6 @@ void loop() {
     // Touchscreen handling - takes 800 us to handle every 20ms when the touch timer expires, otherwise 20 us (includes touch timer + encoder handling w/o activity)
     //
     int32_t touch_x, touch_y, trow, tcol;
-    // if (touchPollTimer.expired()) {
-    // touchPollTimer.reset();
     if (screen.touchpanel.touched() == 1 ) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
         touch_accel = 1 << touch_accel_exponent;  // determine value editing rate
         TS_Point touchpoint = screen.touchpanel.getPoint();  // Retreive a point
@@ -881,7 +874,7 @@ void loop() {
             else if (tcol==3 && trow==1 && sim_pressure) adj_val (&pressure_filt_psi, (double)touch_accel, pressure_min_psi, pressure_max_psi);   // (+= 25) Pressed the increase brake pressure button
             else if (tcol==3 && trow==2 && sim_pressure) adj_val (&pressure_filt_psi, (double)-touch_accel, pressure_min_psi, pressure_max_psi); // (-= 25) Pressed the decrease brake pressure button
             else if (tcol==3 && trow==4 && sim_joy) adj_val (&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (-= 25) Pressed the joystick left button
-            else if (tcol==4 && trow==0 && sim_ign && !touch_now_touched) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
+            else if (tcol==4 && trow==0 && !touch_now_touched) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
             else if (tcol==4 && trow==1 && sim_tach) adj_val (&tach_filt_rpm, (double)touch_accel, 0.0, tach_redline_rpm);  // (+= 25) Pressed the increase engine rpm button
             else if (tcol==4 && trow==2 && sim_tach) adj_val (&tach_filt_rpm, (double)(-touch_accel), 0.0, tach_redline_rpm);  // (-= 25) Pressed the decrease engine rpm button
             else if (tcol==4 && trow==3 && sim_joy) adj_val (&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (+= 25) Pressed the joystick up button
@@ -907,7 +900,6 @@ void loop() {
         touchHoldTimer.reset();
         touch_longpress_valid = true;
     }
-
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tch");  //
 
     // Encoder handling
@@ -924,7 +916,7 @@ void loop() {
     if (tuning_ctrl == EDIT) sim_edit_delta_encoder = encoder.handleTuning();
     else if (tuning_ctrl == SELECT) selected_value += encoder.handleSelection();  // If overflow constrain will fix in general handler below
     else if (tuning_ctrl == OFF) dataset_page += encoder.handleSelection();  // If overflow tconstrain will fix in general below
-    
+
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "enc");  //
 
     // Tuning : implement effects of changes made by encoder or touchscreen to simulating, dataset_page, selected_value, or tuning_ctrl
@@ -944,79 +936,73 @@ void loop() {
         if (selected_value != selected_value_last) disp_selected_val_dirty = true;
     }
     if (tuning_ctrl != tuning_ctrl_last || disp_dataset_page_dirty) disp_selected_val_dirty = true;
+    bool adj;
+    adj = false;
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
-        if (dataset_page == RUN)  switch (selected_value) {
-            // case 2:  brakeSPID.set_proportionality((sim_edit_delta > 0) ? ERROR_TERM : SENSED_INPUT);  break;
-            case 3:  adj_bool (&sim_brkpos, sim_edit_delta);  break;
-            case 4:  adj_bool (&sim_joy, sim_edit_delta);  break;
-            case 5:  adj_bool (&sim_pressure, sim_edit_delta);  break;
-            case 6:  adj_bool (&sim_tach, sim_edit_delta);  break;
-            case 7:  adj_bool (&sim_speedo, sim_edit_delta);  break;
+        if (dataset_page == RUN) {
+            if (selected_value == 3) adj_bool (&sim_brkpos, sim_edit_delta);
+            else if (selected_value == 4) adj_bool (&sim_joy, sim_edit_delta);
+            else if (selected_value == 5) adj_bool (&sim_pressure, sim_edit_delta);
+            else if (selected_value == 6) adj_bool (&sim_tach, sim_edit_delta);
+            else if (selected_value == 7) adj_bool (&sim_speedo, sim_edit_delta);
         }
-        else if (dataset_page == JOY)  switch (selected_value) {
-            case 2:  adj_val (&ctrl_lims_adc[ctrl][HORZ][MIN], sim_edit_delta, 0, adcmidscale_adc - ctrl_lims_adc[ctrl][HORZ][DB] / 2 - 1);  break;
-            case 3:  adj_val (&ctrl_lims_adc[ctrl][HORZ][MAX], sim_edit_delta, adcmidscale_adc + ctrl_lims_adc[ctrl][HORZ][DB] / 2 + 1, adcrange_adc);  break;
-            case 4:  adj_val (&ctrl_lims_adc[ctrl][HORZ][DB], sim_edit_delta, 0, (adcmidscale_adc - ctrl_lims_adc[ctrl][HORZ][MIN] > ctrl_lims_adc[ctrl][HORZ][MAX] - adcmidscale_adc) ? 2*(ctrl_lims_adc[ctrl][HORZ][MAX] - adcmidscale_adc) : 2*(adcmidscale_adc - ctrl_lims_adc[ctrl][HORZ][MIN]));  break;
-            case 5:  adj_val (&ctrl_lims_adc[ctrl][VERT][MIN], sim_edit_delta, 0, adcmidscale_adc - ctrl_lims_adc[ctrl][VERT][DB] / 2 - 1);  break;
-            case 6:  adj_val (&ctrl_lims_adc[ctrl][VERT][MAX], sim_edit_delta, adcmidscale_adc + ctrl_lims_adc[ctrl][VERT][DB] / 2 + 1, adcrange_adc);  break;
-            case 7:  adj_val (&ctrl_lims_adc[ctrl][VERT][DB], sim_edit_delta, 0, (adcmidscale_adc - ctrl_lims_adc[ctrl][VERT][MIN] > ctrl_lims_adc[ctrl][VERT][MAX] - adcmidscale_adc) ? 2*(ctrl_lims_adc[ctrl][VERT][MAX] - adcmidscale_adc) : 2*(adcmidscale_adc - ctrl_lims_adc[ctrl][VERT][MIN]));  break;
+        else if (dataset_page == JOY) {
+            if (selected_value == 2) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][MIN], sim_edit_delta, 0, adcmidscale_adc - ctrl_lims_adc[ctrl][HORZ][DB] / 2 - 1);
+            else if (selected_value == 3) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][MAX], sim_edit_delta, adcmidscale_adc + ctrl_lims_adc[ctrl][HORZ][DB] / 2 + 1, adcrange_adc);
+            else if (selected_value == 4) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][DB], sim_edit_delta, 0, (adcmidscale_adc - ctrl_lims_adc[ctrl][HORZ][MIN] > ctrl_lims_adc[ctrl][HORZ][MAX] - adcmidscale_adc) ? 2*(ctrl_lims_adc[ctrl][HORZ][MAX] - adcmidscale_adc) : 2*(adcmidscale_adc - ctrl_lims_adc[ctrl][HORZ][MIN]));
+            else if (selected_value == 5) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][MIN], sim_edit_delta, 0, adcmidscale_adc - ctrl_lims_adc[ctrl][VERT][DB] / 2 - 1);
+            else if (selected_value == 6) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][MAX], sim_edit_delta, adcmidscale_adc + ctrl_lims_adc[ctrl][VERT][DB] / 2 + 1, adcrange_adc);
+            else if (selected_value == 7) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][DB], sim_edit_delta, 0, (adcmidscale_adc - ctrl_lims_adc[ctrl][VERT][MIN] > ctrl_lims_adc[ctrl][VERT][MAX] - adcmidscale_adc) ? 2*(ctrl_lims_adc[ctrl][VERT][MAX] - adcmidscale_adc) : 2*(adcmidscale_adc - ctrl_lims_adc[ctrl][VERT][MIN]));
+            if (adj) calc_deadbands();  // update derived variables relevant to changes made
         }
-        else if (dataset_page == CAR)  switch (selected_value) {
-            case 0:  adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);  break;
-            case 1:  adj_val (&tach_idle_rpm, 0.01*sim_edit_delta, 0, tach_redline_rpm - 1);  break;
-            case 2:  adj_val (&tach_redline_rpm, 0.01*sim_edit_delta, tach_idle_rpm, 8000.0);  break;
-            case 3:  adj_val (&carspeed_idle_mph, 0.01*sim_edit_delta, 0, carspeed_redline_mph - 1);  break;
-            case 4:  adj_val (&carspeed_redline_mph, 0.01*sim_edit_delta, carspeed_idle_mph, 30.0);  break;
-            case 5:  adj_bool (&ctrl, sim_edit_delta);  break;
-            case 6:  if (runmode == CAL) adj_bool (&cal_joyvert_brkmotor, sim_edit_delta);  break;
-            case 7:  if (runmode == CAL) adj_bool (&cal_pot_gasservo, (sim_edit_delta < 0 || cal_pot_gas_ready) ? sim_edit_delta : -1);  break;
-        }
-        else if (dataset_page == PWMS)  switch (selected_value) {
-            case 0:  adj_val (&steer_pulse_left_us, sim_edit_delta, steer_pulse_stop_us + 1, steer_pulse_left_max_us);  break;
-            case 1:  adj_val (&steer_pulse_stop_us, sim_edit_delta, steer_pulse_right_us + 1, steer_pulse_left_us - 1);  break;
-            case 2:  adj_val (&steer_pulse_right_us, sim_edit_delta, steer_pulse_right_min_us, steer_pulse_stop_us - 1);  break;
-            case 3:  adj_val (&brake_pulse_extend_us, sim_edit_delta, brake_pulse_stop_us + 1, brake_pulse_extend_max_us);  break;
-            case 4:  adj_val (&brake_pulse_stop_us, sim_edit_delta, brake_pulse_retract_us + 1, brake_pulse_extend_us - 1);  break;
-            case 5:  adj_val (&brake_pulse_retract_us, sim_edit_delta, brake_pulse_retract_min_us, brake_pulse_stop_us -1);  break;
-            case 6:  adj_val (&gas_pulse_idle_us, sim_edit_delta, gas_pulse_redline_us + 1, gas_pulse_ccw_max_us - gas_pulse_park_slack_us);  break;
-            case 7:  adj_val (&gas_pulse_redline_us, sim_edit_delta, gas_pulse_cw_min_us, gas_pulse_idle_us - 1);  break;
+        else if (dataset_page == CAR) {
+            if (selected_value == 0) {
+                adj = adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);
+                if (adj) calc_governor();  // update derived variables relevant to changes made
+            }
+            else if (selected_value == 1) adj_val (&tach_idle_rpm, 0.01*sim_edit_delta, 0, tach_redline_rpm - 1);
+            else if (selected_value == 2) adj_val (&tach_redline_rpm, 0.01*sim_edit_delta, tach_idle_rpm, 8000.0);
+            else if (selected_value == 3) adj_val (&carspeed_idle_mph, 0.01*sim_edit_delta, 0, carspeed_redline_mph - 1);
+            else if (selected_value == 4) adj_val (&carspeed_redline_mph, 0.01*sim_edit_delta, carspeed_idle_mph, 30.0);
+            else if (selected_value == 5) gasSPID.set_open_loop (sim_edit_delta > 0);
+            else if (selected_value == 6 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor, sim_edit_delta);
+            else if (selected_value == 7 && runmode == CAL) adj_bool (&cal_pot_gasservo, (sim_edit_delta < 0 || cal_pot_gas_ready) ? sim_edit_delta : -1);
+      }
+        else if (dataset_page == PWMS) {
+            if (selected_value == 0) adj_val (&steer_pulse_left_us, sim_edit_delta, steer_pulse_stop_us + 1, steer_pulse_left_max_us);
+            else if (selected_value == 1) adj_val (&steer_pulse_stop_us, sim_edit_delta, steer_pulse_right_us + 1, steer_pulse_left_us - 1);
+            else if (selected_value == 2) adj_val (&steer_pulse_right_us, sim_edit_delta, steer_pulse_right_min_us, steer_pulse_stop_us - 1);
+            else if (selected_value == 3) adj_val (&brake_pulse_extend_us, sim_edit_delta, brake_pulse_stop_us + 1, brake_pulse_extend_max_us);
+            else if (selected_value == 4) adj_val (&brake_pulse_stop_us, sim_edit_delta, brake_pulse_retract_us + 1, brake_pulse_extend_us - 1);
+            else if (selected_value == 5) adj_val (&brake_pulse_retract_us, sim_edit_delta, brake_pulse_retract_min_us, brake_pulse_stop_us -1);
+            else if (selected_value == 6) adj_val (&gas_pulse_idle_us, sim_edit_delta, gas_pulse_redline_us + 1, gas_pulse_ccw_max_us - gas_pulse_park_slack_us);
+            else if (selected_value == 7) adj_val (&gas_pulse_redline_us, sim_edit_delta, gas_pulse_cw_min_us, gas_pulse_idle_us - 1);
         }
         else if (dataset_page == BPID) {
             if (selected_value == 5) brakeSPID.set_tunings (brakeSPID.get_kp()+0.001*(double)sim_edit_delta, brakeSPID.get_ki_hz(), brakeSPID.get_kd_s());
-            if (selected_value == 6) brakeSPID.set_tunings (brakeSPID.get_kp(), brakeSPID.get_ki_hz()+0.001*(double)sim_edit_delta, brakeSPID.get_kd_s());
-            if (selected_value == 7) brakeSPID.set_tunings (brakeSPID.get_kp(), brakeSPID.get_ki_hz(), brakeSPID.get_kd_s()+0.001*(double)sim_edit_delta);
+            else if (selected_value == 6) brakeSPID.set_tunings (brakeSPID.get_kp(), brakeSPID.get_ki_hz()+0.001*(double)sim_edit_delta, brakeSPID.get_kd_s());
+            else if (selected_value == 7) brakeSPID.set_tunings (brakeSPID.get_kp(), brakeSPID.get_ki_hz(), brakeSPID.get_kd_s()+0.001*(double)sim_edit_delta);
         }
         else if (dataset_page == GPID) {
             if (selected_value == 5) gasSPID.set_tunings (gasSPID.get_kp()+0.001*(double)sim_edit_delta, gasSPID.get_ki_hz(), gasSPID.get_kd_s());
-            if (selected_value == 6) gasSPID.set_tunings (gasSPID.get_kp(), gasSPID.get_ki_hz()+0.001*(double)sim_edit_delta, gasSPID.get_kd_s());
-            if (selected_value == 7) gasSPID.set_tunings (gasSPID.get_kp(), gasSPID.get_ki_hz(), gasSPID.get_kd_s()+0.001*(double)sim_edit_delta);
+            else if (selected_value == 6) gasSPID.set_tunings (gasSPID.get_kp(), gasSPID.get_ki_hz()+0.001*(double)sim_edit_delta, gasSPID.get_kd_s());
+            else if (selected_value == 7) gasSPID.set_tunings (gasSPID.get_kp(), gasSPID.get_ki_hz(), gasSPID.get_kd_s()+0.001*(double)sim_edit_delta);
         }
         else if (dataset_page == CPID) {
             if (selected_value == 5) cruiseSPID.set_tunings (cruiseSPID.get_kp()+0.001*(double)sim_edit_delta, cruiseSPID.get_ki_hz(), cruiseSPID.get_kd_s());
-            if (selected_value == 6) cruiseSPID.set_tunings (cruiseSPID.get_kp(), cruiseSPID.get_ki_hz()+0.001*(double)sim_edit_delta, cruiseSPID.get_kd_s());
-            if (selected_value == 7) cruiseSPID.set_tunings (cruiseSPID.get_kp(), cruiseSPID.get_ki_hz(), cruiseSPID.get_kd_s()+0.001*(double)sim_edit_delta);
+            else if (selected_value == 6) cruiseSPID.set_tunings (cruiseSPID.get_kp(), cruiseSPID.get_ki_hz()+0.001*(double)sim_edit_delta, cruiseSPID.get_kd_s());
+            else if (selected_value == 7) cruiseSPID.set_tunings (cruiseSPID.get_kp(), cruiseSPID.get_ki_hz(), cruiseSPID.get_kd_s()+0.001*(double)sim_edit_delta);
         }
         else if (dataset_page == TEMP) {        
-            if (selected_value == 4) adj_val (&hotrc_pos_failsafe_min_adc, sim_edit_delta, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-            if (selected_value == 5) adj_val (&hotrc_pos_failsafe_max_adc, sim_edit_delta, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);       
-            if (selected_value == 6) gasSPID.set_open_loop (sim_edit_delta > 0);
-            if (selected_value == 7) adj_val (&brake_pos_zeropoint_in, 0.001*sim_edit_delta, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
+            if (selected_value == 4) adj_val (&pressure_adc, sim_edit_delta, pressure_min_adc, pressure_max_adc);
+            else if (selected_value == 5) adj_val (&hotrc_pos_failsafe_min_adc, sim_edit_delta, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
+            else if (selected_value == 6) adj_val (&hotrc_pos_failsafe_max_adc, sim_edit_delta, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
+            else if (selected_value == 7) adj_val (&brake_pos_zeropoint_in, 0.001*sim_edit_delta, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
         }
         sim_edit_delta = 0;
     }
-    // cout << "/(later) spd:" << carspeed_filt_mph << " tach:" << tach_filt_rpm << std::endl;
-    
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tun");  //
-
-    // Update derived variables values in case they have changed. Note, there are several other derived variables missing here I think
-    ctrl_db_adc[VERT][BOT] = (adcrange_adc-ctrl_lims_adc[ctrl][VERT][DB])/2;  // Lower threshold of vert joy deadband (ADC count 0-4095)
-    ctrl_db_adc[VERT][TOP] = (adcrange_adc+ctrl_lims_adc[ctrl][VERT][DB])/2;  // Upper threshold of vert joy deadband (ADC count 0-4095)
-    ctrl_db_adc[HORZ][BOT] = (adcrange_adc-ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Lower threshold of horz joy deadband (ADC count 0-4095)
-    ctrl_db_adc[HORZ][TOP] = (adcrange_adc+ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Upper threshold of horz joy deadband (ADC count 0-4095)
-    tach_govern_rpm = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
-    gas_pulse_govern_us = map ((int32_t)(gas_governor_percent*(tach_redline_rpm-tach_idle_rpm)/tach_redline_rpm), 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
-    carspeed_govern_mph = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, carspeed_redline_mph);  // Governor must scale the top vehicle speed proportionally
-
+    
     // Ignition & Panic stop logic and Update output signals
     if (!car_stopped()) {
         if (ctrl == HOTRC && hotrc_radio_detected_last && !hotrc_radio_detected) panic_stop = true;  // panic_stop could also have been initiated by the user button
@@ -1029,39 +1015,38 @@ void loop() {
     ignition_last = ignition; // Make sure this goes after the last comparison
     if (syspower != syspower_last) syspower_set (syspower);
     syspower_last = syspower;
-    
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
 
     // Heartbeat led algorithm
     if (neopixel_pin >= 0) {
-        if (neopixel_heartbeat) {
-            neopixel_heart_color[N_RED] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0xf800) >> 8;
-            neopixel_heart_color[N_GRN] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x7e0) >> 3;
-            neopixel_heart_color[N_BLU] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x1f) << 3;
-            int32_t neocolor = neostrip.Color (neopixel_heart_color[N_BLU], neopixel_heart_color[N_RED], neopixel_heart_color[N_GRN]);
+        if (neo_heartbeat) {
+            neo_heartcolor[N_RED] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0xf800) >> 8;
+            neo_heartcolor[N_GRN] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x7e0) >> 3;
+            neo_heartcolor[N_BLU] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x1f) << 3;
+            int32_t neocolor = neostrip.Color (neo_heartcolor[N_BLU], neo_heartcolor[N_RED], neo_heartcolor[N_GRN]);
             if (heartbeatTimer.expired()) {
                 heartbeat_pulse = !heartbeat_pulse;
-                if (heartbeat_pulse) neopixel_heart_fade = neopixel_brightness;
-                else neopixelTimer.reset();
+                if (heartbeat_pulse) neo_brightness = neo_brightness_max;
+                else neoTimer.reset();
                 if (++heartbeat_state >= arraysize (heartbeat_ekg)) heartbeat_state -= arraysize (heartbeat_ekg);
                 heartbeatTimer.set (heartbeat_ekg[heartbeat_state]);
             }
-            else if (!heartbeat_pulse && neopixel_heart_fade) {
-                neopixel_heart_fade = (int8_t)((double)neopixel_brightness * (1 - (double)neopixelTimer.elapsed() / (double)neopixel_timeout));
-                if (neopixelTimer.expired() || neopixel_heart_fade < 1) neopixel_heart_fade = 0;
+            else if (!heartbeat_pulse && neo_brightness) {
+                neo_brightness = (int8_t)((double)neo_brightness_max * (1 - (double)neoTimer.elapsed() / (double)neo_timeout));
+                if (neoTimer.expired() || neo_brightness < 1) neo_brightness = 0;
             }
             int32_t neocolor_last, neoheartfade_last;
-            if (neocolor != neocolor_last || neopixel_heart_fade != neoheartfade_last) {
+            if (neocolor != neocolor_last || neo_brightness != neoheartfade_last) {
                 neostrip.setPixelColor (0, neocolor);
-                neostrip.setBrightness (neopixel_heart_fade);
+                neostrip.setBrightness (neo_brightness);
                 neostrip.show();
                 neocolor_last = neocolor;
-                neoheartfade_last = neopixel_heart_fade;
+                neoheartfade_last = neo_brightness;
             }
         }
-        else if (neopixelTimer.expired()) {  // Rainbow fade
-            neopixelTimer.reset();
-            neostrip.setPixelColor(0, colorwheel(++neopixel_wheel_counter));
+        else if (neoTimer.expired()) {  // Rainbow fade
+            neoTimer.reset();
+            neostrip.setPixelColor(0, colorwheel(++neo_wheelcounter));
             neostrip.show();
         }
     }
@@ -1071,16 +1056,10 @@ void loop() {
         heartbeatTimer.set (heartbeat_ekg[heartbeat_state]);
         write_pin (heartbeat_led_pin, heartbeat_pulse);
     }
-
-    // write_pin (led_rx_pin, (sim_edit_delta <= 0));  // use these Due lights for whatever, here debugging the touchscreen
-    
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "hrt");
     
     // Display updates
-    //
-    if (display_enabled ) {
-        screen.update();
-    }
+    if (display_enabled) screen.update();
     else {
         if (dataset_page_last != dataset_page) config.putUInt("dpage", dataset_page);
         dataset_page_last = dataset_page;
