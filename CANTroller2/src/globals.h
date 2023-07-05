@@ -318,7 +318,6 @@ int32_t steer_safe_percent = 72;  // Sterring is slower at high speed. How stron
 
 // brake pressure related
 int32_t pressure_adc;
-double pressure_filt_psi = 202;  // Stores new setpoint to give to the pid loop (brake)
 // Param pressure (&pressure_adc, "Pressure:", "adc ", 658, 2100);
 //  ---- tunable ----
 int32_t pressure_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
@@ -336,7 +335,8 @@ double pressure_hold_increment_psi = 10;  // Incremental pressure added periodic
 double pressure_panic_initial_psi = 250;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
 double pressure_panic_increment_psi = 25;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 // max pedal bent 1154
-double pressure_psi = pressure_min_psi;
+double pressure_psi = (pressure_min_psi+pressure_max_psi)/2;
+double pressure_filt_psi = pressure_psi;  // Stores new setpoint to give to the pid loop (brake)
 
 
 // brake actuator motor related
