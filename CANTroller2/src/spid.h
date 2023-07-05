@@ -19,7 +19,7 @@ class SPID {  // Soren's home-made pid loop
     #define SENSED_INPUT 1  // What the proportional term is proportional_to
     static const int32_t FWD = 1;  // Actuator_direction influences sensed value in the same direction
     static const int32_t REV = -1;  // Actuator_direction influences sensed value in the opposite direction
-    bool clamp_integral = true;  // Squashes integral windup if pushing the wrong direction 
+    bool clamp_integral = false;  // Squashes integral windup if pushing the wrong direction 
   private:
     double kp_coeff = 0.01, ki_coeff = 0.01, kd_coeff = 0.01, kp, ki_hz, kd_s;
     int32_t actuator_direction = FWD;

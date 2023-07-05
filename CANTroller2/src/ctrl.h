@@ -27,11 +27,11 @@ class Encoder {
 
     public:
         enum sw_presses { NONE, SHORT, LONG };
-        enum _inputs { A, B };
+        enum _inputs { ENC_A, ENC_B };
 
         volatile uint32_t _spinrate_isr_us = 100000;  // Time elapsed between last two detents
         volatile bool _a_stable = true;  //  Stores the value of encoder A pin as read during B pin transition (where A is stable)
-        volatile int32_t _bounce_danger = B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
+        volatile int32_t _bounce_danger = ENC_B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
         volatile int32_t _delta = 0;  // Keeps track of un-handled rotary clicks of the encoder.  Positive for CW clicks, Negative for CCW. 
 
         uint8_t _a_pin;
@@ -54,8 +54,8 @@ class Encoder {
         void update() {
             // Encoder - takes 10 us to read when no encoder activity
             // Read and interpret encoder switch activity. Encoder rotation is handled in interrupt routine
-            // Encoder handler routines should act whenever encoder_sw_action is true, setting it back to false once handled.
-            // When handling press, if encoder_long_clicked is nonzero then press is a long press
+            // Encoder handler routines should act whenever encoder_sw_action is SHORT or LONG, setting it back to
+            // NONE once handled. When handling press, if encoder_long_clicked is nonzero then press is a long press
             if (!read_pin(_sw_pin)) {  // if encoder sw is being pressed (switch is active low)
                 if (!_sw) {  // if the press just occurred
                     _longPressTimer.reset();  // start a press timer
@@ -114,22 +114,23 @@ class Encoder {
         }
 };
 
+// This trickery lets us keep the ISR code here in the same file as the encoder class
 #define MAKE_ENCODER(NAME, a_pin, b_pin, sw_pin) \
 Encoder NAME = Encoder((a_pin), (b_pin), (sw_pin)); \
 void IRAM_ATTR NAME##_a_isr() { \
-    if ((NAME)._bounce_danger != Encoder::A) { \
+    if ((NAME)._bounce_danger != Encoder::ENC_A) { \
         if (!(NAME)._a_stable) { \
             (NAME)._spinrate_isr_us = (NAME)._spinspeedTimer.elapsed(); \
             (NAME)._spinspeedTimer.reset(); \
             (NAME)._delta += digitalRead(b_pin) ? -1 : 1; \
         } \
-        (NAME)._bounce_danger = Encoder::A; \
+        (NAME)._bounce_danger = Encoder::ENC_A; \
     } \
 }; \
 void IRAM_ATTR NAME##_b_isr() { \
-    if ((NAME)._bounce_danger != Encoder::B) { \
+    if ((NAME)._bounce_danger != Encoder::ENC_B) { \
         (NAME)._a_stable = digitalRead(a_pin); \
-        (NAME)._bounce_danger = Encoder::B; \
+        (NAME)._bounce_danger = Encoder::ENC_B; \
     } \
 };
 

@@ -267,13 +267,13 @@ int32_t pot_convert_polarity = SPID::FWD;
 double pot_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 
 // controller related
-enum ctrls { HOTRC };  // This is a bad hack. Since JOY is already enum'd as 1 for dataset pages
+enum ctrls { HOTRC, JOY, SIM };  // This is a bad hack. Since JOY is already enum'd as 1 for dataset pages
 enum ctrl_axes { HORZ, VERT };
 enum ctrl_thresh { MIN, DB, MAX };
 enum ctrl_edge { BOT, TOP };
 enum raw_filt { RAW, FILT };
 bool joy_centered = false;
-int32_t ctrl_db_adc[2][2];  // [HORZ/VERT] [BOT, TOP] - to store the top and bottom deadband values for each axis of selected controller
+int32_t ctrl_db_adc[2][2];  // [HORZ/VERT] [BOT/TOP] - to store the top and bottom deadband values for each axis of selected controller
 int32_t ctrl_pos_adc[2][2] = { { adcmidscale_adc, adcmidscale_adc }, { adcmidscale_adc, adcmidscale_adc} };  // [HORZ/VERT] [RAW/FILT]
 volatile bool hotrc_vert_preread = 0;
 volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
@@ -287,8 +287,8 @@ bool hotrc_suppress_next_ch3_event = true;  // When powered up, the hotrc will t
 bool hotrc_suppress_next_ch4_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 //  ---- tunable ----
 double hotrc_pulse_period_us = 1000000.0 / 50;
-double ctrl_ema_alpha[2] = { 0.01, 0.1 };  // [HOTRC, JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-int32_t ctrl_lims_adc[2][2][3] = { { { 3, 375, 4092 }, { 3, 375, 4092 } }, { { 9, 200, 4085 }, { 9, 200, 4085 } }, }; // [HOTRC, JOY] [HORZ, VERT], [MIN, DEADBAND, MAX] values as ADC counts
+double ctrl_ema_alpha[2] = { 0.01, 0.1 };  // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+int32_t ctrl_lims_adc[2][2][3] = { { { 3, 375, 4092 }, { 3, 375, 4092 } }, { { 9, 200, 4085 }, { 9, 200, 4085 } }, }; // [HOTRC/JOY] [HORZ/VERT], [MIN/DEADBAND/MAX] values as ADC counts
 bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
 // Limits of what pulsewidth the hotrc receiver puts out
 // For some funky reason I was unable to initialize these in an array format !?!?!
@@ -318,7 +318,6 @@ int32_t steer_safe_percent = 72;  // Sterring is slower at high speed. How stron
 
 // brake pressure related
 int32_t pressure_adc;
-double pressure_psi;
 double pressure_filt_psi = 202;  // Stores new setpoint to give to the pid loop (brake)
 // Param pressure (&pressure_adc, "Pressure:", "adc ", 658, 2100);
 //  ---- tunable ----
@@ -337,6 +336,8 @@ double pressure_hold_increment_psi = 10;  // Incremental pressure added periodic
 double pressure_panic_initial_psi = 250;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
 double pressure_panic_increment_psi = 25;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 // max pedal bent 1154
+double pressure_psi = pressure_min_psi;
+
 
 // brake actuator motor related
 double brake_pulse_out_us;  // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
@@ -390,9 +391,9 @@ Timer tachPulseTimer;  // OK to not be volatile?
 volatile int32_t tach_delta_us = 0;
 volatile int32_t tach_buf_delta_us = 0;
 volatile uint32_t tach_time_us;
-double tach_rpm = 50.0;  // Current engine speed, raw as sensed (in rpm)
+double tach_rpm = 50.0;  // Current engine speed, raw value converted to rpm (in rpm)
 double tach_filt_rpm = 50.0;  // Current engine speed, filtered (in rpm)
-double tach_govern_rpm;  // Create an artificially reduced maximum for the engine speed. This is given a value in the loop
+double tach_govern_rpm;  // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
 //  ---- tunable ----
 double tach_convert_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min
 bool tach_convert_invert = true;
@@ -407,9 +408,9 @@ int32_t tach_stop_timeout_us = 400000;  // Time after last magnet pulse when we 
 int32_t tach_delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
 
 // carspeed/speedo related
-double carspeed_govern_mph;  // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
-double carspeed_mph = 1.01;  // Current car speed, raw as sensed (in mph)
-double carspeed_filt_mph = 1.02;  // Current car speed, filtered (in mph)
+double speedo_govern_mph;  // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
+double speedo_mph = 1.01;  // Current car speed, raw as sensed (in mph)
+double speedo_filt_mph = 1.02;  // Current car speed, filtered (in mph)
 Timer speedoPulseTimer;  // OK to not be volatile?
 volatile int32_t speedo_delta_us = 0;
 volatile int32_t speedo_buf_delta_us = 0;
@@ -419,11 +420,11 @@ double speedo_convert_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 
 // Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
 bool speedo_convert_invert = true;
 int32_t speedo_convert_polarity = SPID::FWD;      
-double carspeed_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-double carspeed_idle_mph = 4.50;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
-double carspeed_redline_mph = 15.0;  // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
-double carspeed_max_mph = 25.0;  // What is max speed car can ever go
-double carspeed_stop_thresh_mph = 0.01;  // Below which the car is considered stopped
+double speedo_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+double speedo_idle_mph = 4.50;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
+double speedo_redline_mph = 15.0;  // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
+double speedo_max_mph = 25.0;  // What is max speed car can ever go
+double speedo_stop_thresh_mph = 0.01;  // Below which the car is considered stopped
 uint32_t speedo_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the car is stopped (in us)
 int32_t speedo_delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
             
@@ -491,7 +492,7 @@ SdFile file;  // Use for file creation in folders.
 
 SPID brakeSPID (&pressure_filt_psi, brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brake_spid_ctrl_dir, pid_period_ms);
 SPID gasSPID (&tach_filt_rpm, gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, gas_spid_ctrl_dir, pid_period_ms);
-SPID cruiseSPID (&carspeed_filt_mph, cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, cruise_spid_ctrl_dir, pid_period_ms);
+SPID cruiseSPID (&speedo_filt_mph, cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, cruise_spid_ctrl_dir, pid_period_ms);
 
 // Servo library lets us set pwm outputs given an on-time pulse width in us
 static Servo steer_servo;
@@ -609,7 +610,7 @@ inline int32_t map (int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, 
 bool rounding = true;
 double dround (double val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
 
-bool car_stopped (void) { return (carspeed_filt_mph < carspeed_stop_thresh_mph); }
+bool car_stopped (void) { return (speedo_filt_mph < speedo_stop_thresh_mph); }
 bool engine_stopped (void) { return (tach_filt_rpm < tach_stop_thresh_rpm); }
 
 uint32_t colorwheel (uint8_t WheelPos) {
@@ -631,7 +632,7 @@ void calc_deadbands (void) {
 void calc_governor (void) {
     tach_govern_rpm = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
     gas_pulse_govern_us = map ((int32_t)(gas_governor_percent*(tach_redline_rpm-tach_idle_rpm)/tach_redline_rpm), 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
-    carspeed_govern_mph = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, carspeed_redline_mph);  // Governor must scale the top vehicle speed proportionally
+    speedo_govern_mph = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, speedo_redline_mph);  // Governor must scale the top vehicle speed proportionally
 }
 // Exponential Moving Average filter : Smooth out noise on inputs. 0 < alpha < 1 where lower = smoother and higher = more responsive
 // Pass in a fresh raw value, address of filtered value, and alpha factor, filtered value will get updated
