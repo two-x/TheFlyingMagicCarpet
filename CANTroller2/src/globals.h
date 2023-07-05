@@ -179,6 +179,13 @@ class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
     IRAM_ATTR bool get_enabled (void) { return enabled; }
 };
 
+double convert_units (double from_units, double convert_factor, bool invert, double in_offset = 0.0, double out_offset = 0.0) {
+    if (!invert) return out_offset + convert_factor * (from_units - in_offset);
+    if (from_units - in_offset) return out_offset + convert_factor / (from_units - in_offset);
+    printf ("convert_units refused to divide by zero: %lf, %lf, %d, %lf, %lf", from_units, convert_factor, invert, in_offset, out_offset);
+    return -1;
+}
+
 // run state globals
 enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL };
 int32_t runmode = SHUTDOWN;
@@ -310,20 +317,24 @@ int32_t steer_pulse_left_max_us = 2500;  // Longest pulsewidth acceptable to jag
 int32_t steer_safe_percent = 72;  // Sterring is slower at high speed. How strong is this effect 
 
 // brake pressure related
-double pressure_psi = 201;
+int32_t pressure_adc;
+double pressure_psi;
 double pressure_filt_psi = 202;  // Stores new setpoint to give to the pid loop (brake)
 // Param pressure (&pressure_adc, "Pressure:", "adc ", 658, 2100);
 //  ---- tunable ----
-double pressure_convert_psi_per_adc = 1000.0 * 3.3 / ( adcrange_adc * (4.5 - 0.5) );  // 1000 psi * 3.3 v / (4095 adc * (v-max v - v-min v)) = 0.2 psi/adc 
+int32_t pressure_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
+int32_t pressure_sensor_max_adc = adcrange_adc; // Sensor reading max, limited by adc Vmax. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as chris can push (wimp)
+int32_t pressure_max_adc = 2080; // Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
+double pressure_convert_psi_per_adc = 1000.0 * (3.3 - 0.554) / ( (pressure_sensor_max_adc - pressure_min_adc) * (4.5 - 0.554) );  // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
 bool pressure_convert_invert = false;
-int32_t pressure_convert_polarity = SPID::FWD;
+// int32_t pressure_convert_polarity = SPID::FWD;
 double pressure_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 double pressure_margin_psi = 2.5;  // Margin of error when comparing brake pressure adc values (psi)
-double pressure_min_psi = 129;  // TUNED 230602 - Brake pressure when brakes are effectively off. Sensor min = 0.5V, scaled by 3.3/4.5V is 0.36V of 3.3V (ADC count 0-4095). 230430 measured 658 adc (0.554V) = no brakes
-double pressure_max_psi = 452;  // TUNED 230602 - Highest possible pressure achievable by the actuator (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as chris can push (wimp)
-double pressure_hold_initial_psi = 200;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
+double pressure_min_psi = 0.0;  // TUNED 230602 - Brake pressure when brakes are effectively off. Sensor min = 0.5V, scaled by 3.3/4.5V is 0.36V of 3.3V (ADC count 0-4095). 
+double pressure_max_psi = convert_units (pressure_max_adc - pressure_min_adc, pressure_convert_psi_per_adc, pressure_convert_invert);  // TUNED 230602 - Highest possible pressure achievable by the actuator 
+double pressure_hold_initial_psi = 150;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
 double pressure_hold_increment_psi = 10;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
-double pressure_panic_initial_psi = 300;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
+double pressure_panic_initial_psi = 250;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
 double pressure_panic_increment_psi = 25;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 // max pedal bent 1154
 
@@ -417,14 +428,14 @@ uint32_t speedo_stop_timeout_us = 400000;  // Time after last magnet pulse when 
 int32_t speedo_delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
             
 // neopixel and heartbeat related
-uint8_t neopixel_wheel_counter = 0;
-uint8_t neopixel_brightness = 30;
-uint32_t neopixel_timeout = 150000;
-Timer neopixelTimer (neopixel_timeout);
-bool neopixel_heartbeat = (neopixel_pin >= 0);
-uint8_t neopixel_heart_fade = neopixel_brightness;  // brightness during fadeouts
+uint8_t neo_wheelcounter = 0;
+uint8_t neo_brightness_max = 21;
+uint32_t neo_timeout = 150000;
+Timer neoTimer (neo_timeout);
+bool neo_heartbeat = (neopixel_pin >= 0);
+uint8_t neo_brightness = neo_brightness_max;  // brightness during fadeouts
 enum neo_colors { N_RED, N_GRN, N_BLU };
-uint8_t neopixel_heart_color[3] = { 0xff, 0xff, 0xff };
+uint8_t neo_heartcolor[3] = { 0xff, 0xff, 0xff };
 Timer heartbeatTimer (1000000);
 int32_t heartbeat_state = 0;
 int32_t heartbeat_level = 0;
@@ -467,9 +478,8 @@ bool sim_tach = true;
 bool sim_speedo = true;
 bool sim_brkpos = false;
 bool sim_basicsw = true;
-bool sim_ign = true;
 bool sim_cruisesw = true;
-bool sim_pressure = false;
+bool sim_pressure = true;
 bool sim_syspower = true;
 
 SdFat sd;  // SD card filesystem
@@ -612,7 +622,17 @@ uint32_t colorwheel (uint8_t WheelPos) {
     WheelPos -= 170;
     return neostrip.Color (WheelPos * 3, 255 - WheelPos * 3, 0);
 }
-
+void calc_deadbands (void) {
+    ctrl_db_adc[VERT][BOT] = (adcrange_adc-ctrl_lims_adc[ctrl][VERT][DB])/2;  // Lower threshold of vert joy deadband (ADC count 0-4095)
+    ctrl_db_adc[VERT][TOP] = (adcrange_adc+ctrl_lims_adc[ctrl][VERT][DB])/2;  // Upper threshold of vert joy deadband (ADC count 0-4095)
+    ctrl_db_adc[HORZ][BOT] = (adcrange_adc-ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Lower threshold of horz joy deadband (ADC count 0-4095)
+    ctrl_db_adc[HORZ][TOP] = (adcrange_adc+ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Upper threshold of horz joy deadband (ADC count 0-4095)
+}
+void calc_governor (void) {
+    tach_govern_rpm = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
+    gas_pulse_govern_us = map ((int32_t)(gas_governor_percent*(tach_redline_rpm-tach_idle_rpm)/tach_redline_rpm), 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
+    carspeed_govern_mph = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, carspeed_redline_mph);  // Governor must scale the top vehicle speed proportionally
+}
 // Exponential Moving Average filter : Smooth out noise on inputs. 0 < alpha < 1 where lower = smoother and higher = more responsive
 // Pass in a fresh raw value, address of filtered value, and alpha factor, filtered value will get updated
 void ema_filt (double raw, double* filt, double alpha) {
@@ -655,20 +675,26 @@ void sd_init() {
 }
 
 // int* x is c++ style, int *x is c style
-void adj_val (int32_t* variable, int32_t modify, int32_t low_limit, int32_t high_limit) {  // sets an int reference to new val constrained to given range
+bool adj_val (int32_t* variable, int32_t modify, int32_t low_limit, int32_t high_limit) {  // sets an int reference to new val constrained to given range
+    int32_t oldval = *variable;
     if (*variable + modify < low_limit) *variable = low_limit;
     else if (*variable + modify > high_limit) *variable = high_limit;
-    else *variable += modify; 
+    else *variable += modify;
+    return (*variable != oldval);
 }
-void adj_val (double* variable, int32_t modify, double low_limit, double high_limit) {  // sets an int reference to new val constrained to given range
+bool adj_val (double* variable, int32_t modify, double low_limit, double high_limit) {  // sets an int reference to new val constrained to given range
+    double oldval = *variable;
     if (*variable + modify < low_limit) *variable = low_limit;
     else if (*variable + modify > high_limit) *variable = high_limit;
     else *variable += modify; 
+    return (*variable != oldval);
 }
-void adj_val (double* variable, double modify, double low_limit, double high_limit) {  // sets an int reference to new val constrained to given range
+bool adj_val (double* variable, double modify, double low_limit, double high_limit) {  // sets an int reference to new val constrained to given range
+    double oldval = *variable;
     if (*variable + modify < low_limit) *variable = low_limit;
     else if (*variable + modify > high_limit) *variable = high_limit;
     else *variable += modify; 
+    return (*variable != oldval);
 }
 
 void adj_bool (bool* val, int32_t delta) { if (delta != 0) *val = (delta > 0); }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
@@ -690,10 +716,6 @@ void syspower_set (bool val) {
 //     // if (tempF == DEVICE_DISCONNECTED_C) printf ("Error: Could not read temperature\n");
 //     return tempF;
 // }
-
-double convert_units (double from_units, double convert_factor, bool invert, double offset = 0.0) {
-    return ((invert) ? 1/from_units : from_units) * convert_factor + offset;
-}
 
 // TaskHandle_t Task1;
 // void codeForTask1 (void * parameter) {

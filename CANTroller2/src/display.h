@@ -95,7 +95,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "Eng RedL",
         "Spd Idle",
         "Spd RedL",
-        "Joystck?",
+        "GasOpnLp",
         " Cal Brk",
         " Cal Gas", },
     {   "Str Left",  // PWMS
@@ -134,9 +134,9 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         " Tmp Eng",
         "Tmp WhRL",  // "Tmp WhFL",
         "Tmp WhRR",  // "Tmp WhFR",
+        "Pres ADC",
         "RadioMin",
         "RadioMax",
-        "GasOpnLp",
         "BrkZeroP", },
 };
 int32_t tuning_first_editable_line[disp_tuning_lines] = { 3, 2, 0, 0, 5, 5, 5, 4 };  // first value in each dataset page that's editable. All values after this must also be editable
@@ -149,7 +149,7 @@ char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "Hz  ", "sec " },  // BPID
     { "mph ", "mph ", "mph ", "mph ", "mph ", "    ", "Hz  ", "sec " },  // GPID
     { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "Hz  ", "sec " },  // CPID
-    { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\xe5s  ", "\xe5s  ", "    ", "in  " },  // TEMP
+    { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "adc ", "\xe5s  ", "\xe5s  ", "in  " },  // TEMP
     // { "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "    ", "    " },  // TEMP
 };
 char simgrid[4][3][5] = {
@@ -641,7 +641,8 @@ class Display {
                     draw_dynamic(14, tach_redline_rpm, 0.0, tach_max_rpm);
                     draw_dynamic(15, carspeed_idle_mph, 0.0, carspeed_redline_mph);
                     draw_dynamic(16, carspeed_redline_mph, 0.0, carspeed_max_mph);
-                    draw_dynamic(17, ctrl, -1, -1);  // 0 if hotrc
+                    draw_dynamic(17, gasSPID.get_open_loop(), -1, -1);
+                    // draw_dynamic(17, ctrl, -1, -1);  // 0 if hotrc
                     draw_dynamic(18, cal_joyvert_brkmotor, -1, -1);
                     draw_dynamic(19, cal_pot_gasservo, -1, -1);
                 }
@@ -695,9 +696,9 @@ class Display {
                     // draw_dynamic(15, temps[WHEEL_FR], temp_min, temp_max);
                     draw_dynamic(14, temps[WHEEL_RL], temp_min, temp_max);
                     draw_dynamic(15, temps[WHEEL_RR], temp_min, temp_max);
-                    draw_dynamic(16, hotrc_pos_failsafe_min_adc, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-                    draw_dynamic(17, hotrc_pos_failsafe_max_adc, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-                    draw_dynamic(18, gasSPID.get_open_loop(), -1, -1);
+                    draw_dynamic(16, pressure_adc, pressure_min_adc, pressure_max_adc);
+                    draw_dynamic(17, hotrc_pos_failsafe_min_adc, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
+                    draw_dynamic(18, hotrc_pos_failsafe_max_adc, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
                     draw_dynamic(19, brake_pos_zeropoint_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);   
                 }
                 draw_bool((runmode == CAL), 2);
