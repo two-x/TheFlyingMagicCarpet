@@ -179,6 +179,13 @@ class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
     IRAM_ATTR bool get_enabled (void) { return enabled; }
 };
 
+double convert_units (double from_units, double convert_factor, bool invert, double in_offset = 0.0, double out_offset = 0.0) {
+    if (!invert) return out_offset + convert_factor * (from_units - in_offset);
+    if (from_units - in_offset) return out_offset + convert_factor / (from_units - in_offset);
+    printf ("convert_units refused to divide by zero: %lf, %lf, %d, %lf, %lf", from_units, convert_factor, invert, in_offset, out_offset);
+    return -1;
+}
+
 // run state globals
 enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL };
 int32_t runmode = SHUTDOWN;
@@ -214,16 +221,22 @@ int32_t default_margin_adc = 12;  // Default margin of error for comparisons of 
 
 // pid related globals
 //  ---- tunable ----
-uint32_t pid_period_ms = 50;
-Timer pidTimer (pid_period_ms*1000);  // not actually tunable, just needs value above
+uint32_t steer_pid_period_ms = 150;  // (Not actually a pid) Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+Timer steerPidTimer (steer_pid_period_ms*1000);  // not actually tunable, just needs value above
+uint32_t brake_pid_period_ms = 150;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+Timer brakePidTimer (brake_pid_period_ms*1000);  // not actually tunable, just needs value above
 int32_t brake_spid_ctrl_dir = SPID::FWD;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
 double brake_spid_initial_kp = 0.588;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-double brake_spid_initial_ki_hz = 0.193;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-double brake_spid_initial_kd_s = 0.252;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+double brake_spid_initial_ki_hz = 0.013;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+double brake_spid_initial_kd_s = 1.130;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+uint32_t cruise_pid_period_ms = 100;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+Timer cruisePidTimer (cruise_pid_period_ms*1000);  // not actually tunable, just needs value above
 double cruise_spid_initial_kp = 0.157;  // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
 double cruise_spid_initial_ki_hz = 0.035;  // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
 double cruise_spid_initial_kd_s = 0.044;  // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
 int32_t cruise_spid_ctrl_dir = SPID::FWD;  // 1 = fwd, 0 = rev.
+uint32_t gas_pid_period_ms = 250;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+Timer gasPidTimer (gas_pid_period_ms*1000);  // not actually tunable, just needs value above
 double gas_spid_initial_kp = 0.245;  // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
 double gas_spid_initial_ki_hz = 0.015;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
 double gas_spid_initial_kd_s = 0.022;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
@@ -260,13 +273,13 @@ int32_t pot_convert_polarity = SPID::FWD;
 double pot_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 
 // controller related
-enum ctrls { HOTRC };  // This is a bad hack. Since JOY is already enum'd as 1 for dataset pages
+enum ctrls { HOTRC, JOY, SIM };  // This is a bad hack. Since JOY is already enum'd as 1 for dataset pages
 enum ctrl_axes { HORZ, VERT };
 enum ctrl_thresh { MIN, DB, MAX };
 enum ctrl_edge { BOT, TOP };
 enum raw_filt { RAW, FILT };
 bool joy_centered = false;
-int32_t ctrl_db_adc[2][2];  // [HORZ/VERT] [BOT, TOP] - to store the top and bottom deadband values for each axis of selected controller
+int32_t ctrl_db_adc[2][2];  // [HORZ/VERT] [BOT/TOP] - to store the top and bottom deadband values for each axis of selected controller
 int32_t ctrl_pos_adc[2][2] = { { adcmidscale_adc, adcmidscale_adc }, { adcmidscale_adc, adcmidscale_adc} };  // [HORZ/VERT] [RAW/FILT]
 volatile bool hotrc_vert_preread = 0;
 volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
@@ -280,8 +293,8 @@ bool hotrc_suppress_next_ch3_event = true;  // When powered up, the hotrc will t
 bool hotrc_suppress_next_ch4_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 //  ---- tunable ----
 double hotrc_pulse_period_us = 1000000.0 / 50;
-double ctrl_ema_alpha[2] = { 0.005, 0.1 };  // [HOTRC, JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-int32_t ctrl_lims_adc[2][2][3] = { { { 3, 375, 4092 }, { 3, 375, 4092 } }, { { 9, 200, 4085 }, { 9, 200, 4085 } }, }; // [HOTRC, JOY] [HORZ, VERT], [MIN, DEADBAND, MAX] values as ADC counts
+double ctrl_ema_alpha[2] = { 0.01, 0.1 };  // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+int32_t ctrl_lims_adc[2][2][3] = { { { 3, 375, 4092 }, { 3, 375, 4092 } }, { { 9, 200, 4085 }, { 9, 200, 4085 } }, }; // [HOTRC/JOY] [HORZ/VERT], [MIN/DEADBAND/MAX] values as ADC counts
 bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
 // Limits of what pulsewidth the hotrc receiver puts out
 // For some funky reason I was unable to initialize these in an array format !?!?!
@@ -310,22 +323,27 @@ int32_t steer_pulse_left_max_us = 2500;  // Longest pulsewidth acceptable to jag
 int32_t steer_safe_percent = 72;  // Sterring is slower at high speed. How strong is this effect 
 
 // brake pressure related
-double pressure_psi = 201;
-double pressure_filt_psi = 202;  // Stores new setpoint to give to the pid loop (brake)
+int32_t pressure_adc;
 // Param pressure (&pressure_adc, "Pressure:", "adc ", 658, 2100);
 //  ---- tunable ----
-double pressure_convert_psi_per_adc = 1000.0 * 3.3 / ( adcrange_adc * (4.5 - 0.5) );  // 1000 psi * 3.3 v / (4095 adc * (v-max v - v-min v)) = 0.2 psi/adc 
+int32_t pressure_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
+int32_t pressure_sensor_max_adc = adcrange_adc; // Sensor reading max, limited by adc Vmax. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as chris can push (wimp)
+int32_t pressure_max_adc = 2080; // Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
+double pressure_convert_psi_per_adc = 1000.0 * (3.3 - 0.554) / ( (pressure_sensor_max_adc - pressure_min_adc) * (4.5 - 0.554) );  // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
 bool pressure_convert_invert = false;
-int32_t pressure_convert_polarity = SPID::FWD;
+// int32_t pressure_convert_polarity = SPID::FWD;
 double pressure_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 double pressure_margin_psi = 2.5;  // Margin of error when comparing brake pressure adc values (psi)
-double pressure_min_psi = 129;  // TUNED 230602 - Brake pressure when brakes are effectively off. Sensor min = 0.5V, scaled by 3.3/4.5V is 0.36V of 3.3V (ADC count 0-4095). 230430 measured 658 adc (0.554V) = no brakes
-double pressure_max_psi = 452;  // TUNED 230602 - Highest possible pressure achievable by the actuator (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as chris can push (wimp)
-double pressure_hold_initial_psi = 200;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
+double pressure_min_psi = 0.0;  // TUNED 230602 - Brake pressure when brakes are effectively off. Sensor min = 0.5V, scaled by 3.3/4.5V is 0.36V of 3.3V (ADC count 0-4095). 
+double pressure_max_psi = convert_units (pressure_max_adc - pressure_min_adc, pressure_convert_psi_per_adc, pressure_convert_invert);  // TUNED 230602 - Highest possible pressure achievable by the actuator 
+double pressure_hold_initial_psi = 150;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
 double pressure_hold_increment_psi = 10;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
-double pressure_panic_initial_psi = 300;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
+double pressure_panic_initial_psi = 250;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
 double pressure_panic_increment_psi = 25;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 // max pedal bent 1154
+double pressure_psi = (pressure_min_psi+pressure_max_psi)/2;
+double pressure_filt_psi = pressure_psi;  // Stores new setpoint to give to the pid loop (brake)
+
 
 // brake actuator motor related
 double brake_pulse_out_us;  // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
@@ -379,9 +397,9 @@ Timer tachPulseTimer;  // OK to not be volatile?
 volatile int32_t tach_delta_us = 0;
 volatile int32_t tach_buf_delta_us = 0;
 volatile uint32_t tach_time_us;
-double tach_rpm = 50.0;  // Current engine speed, raw as sensed (in rpm)
+double tach_rpm = 50.0;  // Current engine speed, raw value converted to rpm (in rpm)
 double tach_filt_rpm = 50.0;  // Current engine speed, filtered (in rpm)
-double tach_govern_rpm;  // Create an artificially reduced maximum for the engine speed. This is given a value in the loop
+double tach_govern_rpm;  // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
 //  ---- tunable ----
 double tach_convert_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min
 bool tach_convert_invert = true;
@@ -396,9 +414,9 @@ int32_t tach_stop_timeout_us = 400000;  // Time after last magnet pulse when we 
 int32_t tach_delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
 
 // carspeed/speedo related
-double carspeed_govern_mph;  // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
-double carspeed_mph = 1.01;  // Current car speed, raw as sensed (in mph)
-double carspeed_filt_mph = 1.02;  // Current car speed, filtered (in mph)
+double speedo_govern_mph;  // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
+double speedo_mph = 1.01;  // Current car speed, raw as sensed (in mph)
+double speedo_filt_mph = 1.02;  // Current car speed, filtered (in mph)
 Timer speedoPulseTimer;  // OK to not be volatile?
 volatile int32_t speedo_delta_us = 0;
 volatile int32_t speedo_buf_delta_us = 0;
@@ -408,23 +426,23 @@ double speedo_convert_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 
 // Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
 bool speedo_convert_invert = true;
 int32_t speedo_convert_polarity = SPID::FWD;      
-double carspeed_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-double carspeed_idle_mph = 4.50;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
-double carspeed_redline_mph = 15.0;  // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
-double carspeed_max_mph = 25.0;  // What is max speed car can ever go
-double carspeed_stop_thresh_mph = 0.01;  // Below which the car is considered stopped
+double speedo_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+double speedo_idle_mph = 4.50;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
+double speedo_redline_mph = 15.0;  // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
+double speedo_max_mph = 25.0;  // What is max speed car can ever go
+double speedo_stop_thresh_mph = 0.01;  // Below which the car is considered stopped
 uint32_t speedo_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the car is stopped (in us)
 int32_t speedo_delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
             
 // neopixel and heartbeat related
-uint8_t neopixel_wheel_counter = 0;
-uint8_t neopixel_brightness = 30;
-uint32_t neopixel_timeout = 150000;
-Timer neopixelTimer (neopixel_timeout);
-bool neopixel_heartbeat = (neopixel_pin >= 0);
-uint8_t neopixel_heart_fade = neopixel_brightness;  // brightness during fadeouts
+uint8_t neo_wheelcounter = 0;
+uint8_t neo_brightness_max = 21;
+uint32_t neo_timeout = 150000;
+Timer neoTimer (neo_timeout);
+bool neo_heartbeat = (neopixel_pin >= 0);
+uint8_t neo_brightness = neo_brightness_max;  // brightness during fadeouts
 enum neo_colors { N_RED, N_GRN, N_BLU };
-uint8_t neopixel_heart_color[3] = { 0xff, 0xff, 0xff };
+uint8_t neo_heartcolor[3] = { 0xff, 0xff, 0xff };
 Timer heartbeatTimer (1000000);
 int32_t heartbeat_state = 0;
 int32_t heartbeat_level = 0;
@@ -443,8 +461,12 @@ int32_t loopindex = 0;
 bool diag_ign_error_enabled = true;
 
 // pushbutton related
+enum sw_presses { NONE, SHORT, LONG };  // used by encoder sw and button algorithms
 bool button_last = 0;
 bool button_it = 0;
+bool btn_press_timer_active = false;
+bool btn_press_suppress_click = false;
+bool btn_press_action = NONE;
 
 // external signal related
 bool ignition = LOW;
@@ -467,9 +489,8 @@ bool sim_tach = true;
 bool sim_speedo = true;
 bool sim_brkpos = false;
 bool sim_basicsw = true;
-bool sim_ign = true;
 bool sim_cruisesw = true;
-bool sim_pressure = false;
+bool sim_pressure = true;
 bool sim_syspower = true;
 
 SdFat sd;  // SD card filesystem
@@ -479,9 +500,9 @@ SdFat sd;  // SD card filesystem
 SdFile root;  // Directory file.
 SdFile file;  // Use for file creation in folders.
 
-SPID brakeSPID (&pressure_filt_psi, brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brake_spid_ctrl_dir, pid_period_ms);
-SPID gasSPID (&tach_filt_rpm, gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, gas_spid_ctrl_dir, pid_period_ms);
-SPID cruiseSPID (&carspeed_filt_mph, cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, cruise_spid_ctrl_dir, pid_period_ms);
+SPID brakeSPID (&pressure_filt_psi, brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brake_spid_ctrl_dir, brake_pid_period_ms);
+SPID gasSPID (&tach_filt_rpm, gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, gas_spid_ctrl_dir, gas_pid_period_ms);
+SPID cruiseSPID (&speedo_filt_mph, cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, cruise_spid_ctrl_dir, cruise_pid_period_ms);
 
 // Servo library lets us set pwm outputs given an on-time pulse width in us
 static Servo steer_servo;
@@ -599,7 +620,7 @@ inline int32_t map (int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, 
 bool rounding = true;
 double dround (double val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
 
-bool car_stopped (void) { return (carspeed_filt_mph < carspeed_stop_thresh_mph); }
+bool car_stopped (void) { return (speedo_filt_mph < speedo_stop_thresh_mph); }
 bool engine_stopped (void) { return (tach_filt_rpm < tach_stop_thresh_rpm); }
 
 uint32_t colorwheel (uint8_t WheelPos) {
@@ -612,7 +633,17 @@ uint32_t colorwheel (uint8_t WheelPos) {
     WheelPos -= 170;
     return neostrip.Color (WheelPos * 3, 255 - WheelPos * 3, 0);
 }
-
+void calc_deadbands (void) {
+    ctrl_db_adc[VERT][BOT] = (adcrange_adc-ctrl_lims_adc[ctrl][VERT][DB])/2;  // Lower threshold of vert joy deadband (ADC count 0-4095)
+    ctrl_db_adc[VERT][TOP] = (adcrange_adc+ctrl_lims_adc[ctrl][VERT][DB])/2;  // Upper threshold of vert joy deadband (ADC count 0-4095)
+    ctrl_db_adc[HORZ][BOT] = (adcrange_adc-ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Lower threshold of horz joy deadband (ADC count 0-4095)
+    ctrl_db_adc[HORZ][TOP] = (adcrange_adc+ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Upper threshold of horz joy deadband (ADC count 0-4095)
+}
+void calc_governor (void) {
+    tach_govern_rpm = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
+    gas_pulse_govern_us = map ((int32_t)(gas_governor_percent*(tach_redline_rpm-tach_idle_rpm)/tach_redline_rpm), 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
+    speedo_govern_mph = map ((double)gas_governor_percent, 0.0, 100.0, 0.0, speedo_redline_mph);  // Governor must scale the top vehicle speed proportionally
+}
 // Exponential Moving Average filter : Smooth out noise on inputs. 0 < alpha < 1 where lower = smoother and higher = more responsive
 // Pass in a fresh raw value, address of filtered value, and alpha factor, filtered value will get updated
 void ema_filt (double raw, double* filt, double alpha) {
@@ -655,20 +686,26 @@ void sd_init() {
 }
 
 // int* x is c++ style, int *x is c style
-void adj_val (int32_t* variable, int32_t modify, int32_t low_limit, int32_t high_limit) {  // sets an int reference to new val constrained to given range
+bool adj_val (int32_t* variable, int32_t modify, int32_t low_limit, int32_t high_limit) {  // sets an int reference to new val constrained to given range
+    int32_t oldval = *variable;
     if (*variable + modify < low_limit) *variable = low_limit;
     else if (*variable + modify > high_limit) *variable = high_limit;
-    else *variable += modify; 
+    else *variable += modify;
+    return (*variable != oldval);
 }
-void adj_val (double* variable, int32_t modify, double low_limit, double high_limit) {  // sets an int reference to new val constrained to given range
+bool adj_val (double* variable, int32_t modify, double low_limit, double high_limit) {  // sets an int reference to new val constrained to given range
+    double oldval = *variable;
     if (*variable + modify < low_limit) *variable = low_limit;
     else if (*variable + modify > high_limit) *variable = high_limit;
     else *variable += modify; 
+    return (*variable != oldval);
 }
-void adj_val (double* variable, double modify, double low_limit, double high_limit) {  // sets an int reference to new val constrained to given range
+bool adj_val (double* variable, double modify, double low_limit, double high_limit) {  // sets an int reference to new val constrained to given range
+    double oldval = *variable;
     if (*variable + modify < low_limit) *variable = low_limit;
     else if (*variable + modify > high_limit) *variable = high_limit;
     else *variable += modify; 
+    return (*variable != oldval);
 }
 
 void adj_bool (bool* val, int32_t delta) { if (delta != 0) *val = (delta > 0); }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
@@ -677,6 +714,12 @@ void adj_bool (bool* val, int32_t delta) { if (delta != 0) *val = (delta > 0); }
 void set_pin (int32_t pin, int32_t mode) { if (pin >= 0) pinMode (pin, mode); }
 void write_pin (int32_t pin, int32_t val) {  if (pin >= 0) digitalWrite (pin, val); }
 int32_t read_pin (int32_t pin) { return (pin >= 0) ? digitalRead (pin) : -1; }
+
+void all_pids_set_enable (bool arg_enabled) {
+    brakeSPID.set_enable (arg_enabled);
+    gasSPID.set_enable (arg_enabled);
+    cruiseSPID.set_enable (arg_enabled);
+}
 
 void syspower_set (bool val) {
     if (digitalRead (syspower_pin) != val) {
@@ -690,10 +733,6 @@ void syspower_set (bool val) {
 //     // if (tempF == DEVICE_DISCONNECTED_C) printf ("Error: Could not read temperature\n");
 //     return tempF;
 // }
-
-double convert_units (double from_units, double convert_factor, bool invert, double offset = 0.0) {
-    return ((invert) ? 1/from_units : from_units) * convert_factor + offset;
-}
 
 // TaskHandle_t Task1;
 // void codeForTask1 (void * parameter) {

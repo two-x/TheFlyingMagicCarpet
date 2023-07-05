@@ -58,7 +58,7 @@
 char pagecard[8][5] = { "Run ", "Joy ", "Car ", "PWMs", "Bpid", "Gpid", "Cpid", "Temp" };
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, CYN, MBLU };
-enum dataset_pages { RUN, JOY, CAR, PWMS, BPID, GPID, CPID, TEMP };
+enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_BPID, PG_GPID, PG_CPID, PG_TEMP };
 
 char telemetry[disp_fixed_lines][9] = {  
     "   Speed",
@@ -74,7 +74,7 @@ char telemetry[disp_fixed_lines][9] = {
     "SteerPWM",
 };
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
-    {   " Battery",  // RUN
+    {   " Battery",  // PG_RUN
         " Brk Pos",
         "     Pot",
         "SimBkPos",
@@ -82,7 +82,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "Sim Pres",
         "Sim Tach",
         " Sim Spd", },
-    {   "Horz Raw",  // JOY
+    {   "Horz Raw",  // PG_JOY
         "Vert Raw",
         "Horz Min",
         "Horz Max",
@@ -90,15 +90,15 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "Vert Min",
         "Vert Max",
         " Vert DZ", },
-    {   "Governor",  // CAR
+    {   "Governor",  // PG_CAR
         "Eng Idle",
         "Eng RedL",
         "Spd Idle",
         "Spd RedL",
-        "Joystck?",
+        "GasOpnLp",
         " Cal Brk",
         " Cal Gas", },
-    {   "Str Left",  // PWMS
+    {   "Str Left",  // PG_PWMS
         "Str Stop",
         "Str Rght",
         "Brk Extd",
@@ -106,7 +106,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "Brk Retr",
         "Gas Idle",
         "Gas RedL", },
-    {   "Pres Err",  // BPID
+    {   "Pres Err",  // PG_BPID
         "  P Term",
         "  I Term",
         "  D Term",
@@ -114,7 +114,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "  Kp (P)",
         "  Ki (I)",
         "  Kd (D)", },
-    {   " Eng Err",  // GPID
+    {   " Eng Err",  // PG_GPID
         "  P Term",
         "  I Term",
         "  D Term",
@@ -122,7 +122,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "  Kp (P)",
         "  Ki (I)",
         "  Kd (D)" },
-    {   " Spd Err",  // CPID
+    {   " Spd Err",  // PG_CPID
         "  P Term",
         "  I Term",
         "  D Term",
@@ -130,27 +130,27 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "  Kp (P)",
         "  Ki (I)",
         "  Kd (D)", },
-    {   " Tmp Amb",  // TEMP
+    {   " Tmp Amb",  // PG_TEMP
         " Tmp Eng",
         "Tmp WhRL",  // "Tmp WhFL",
         "Tmp WhRR",  // "Tmp WhFR",
+        "Pres ADC",
         "RadioMin",
         "RadioMax",
-        "GasOpnLp",
         "BrkZeroP", },
 };
 int32_t tuning_first_editable_line[disp_tuning_lines] = { 3, 2, 0, 0, 5, 5, 5, 4 };  // first value in each dataset page that's editable. All values after this must also be editable
 char units[disp_fixed_lines][5] = { "mph ", "rpm ", "psi ", "adc ", "adc ", "mph ", "psi ", "rpm ", "\xe5s  ", "\xe5s  ", "\xe5s  " };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
-    { "V   ", "in  ", "%   ", "    ", "    ", "    ", "    ", "    " },  // RUN
-    { "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // JOY
-    { "%   ", "rpm ", "rpm ", "mph ", "mph ", "    ", "    ", "    " },  // CAR
-    { "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  " },  // PWM
-    { "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "Hz  ", "sec " },  // BPID
-    { "mph ", "mph ", "mph ", "mph ", "mph ", "    ", "Hz  ", "sec " },  // GPID
-    { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "Hz  ", "sec " },  // CPID
-    { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\xe5s  ", "\xe5s  ", "    ", "in  " },  // TEMP
-    // { "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "    ", "    " },  // TEMP
+    { "V   ", "in  ", "%   ", "    ", "    ", "    ", "    ", "    " },  // PG_RUN
+    { "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
+    { "%   ", "rpm ", "rpm ", "mph ", "mph ", "    ", "    ", "    " },  // PG_CAR
+    { "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  " },  // PG_PWMS
+    { "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "Hz  ", "sec " },  // PG_BPID
+    { "mph ", "mph ", "mph ", "mph ", "mph ", "    ", "Hz  ", "sec " },  // PG_GPID
+    { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "Hz  ", "sec " },  // PG_CPID
+    { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "adc ", "\xe5s  ", "\xe5s  ", "in  " },  // PG_TEMP
+    // { "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "    ", "    " },  // PG_TEMP
 };
 char simgrid[4][3][5] = {
     { "prs\x18", "rpm\x18", "car\x18" },
@@ -173,14 +173,15 @@ int32_t disp_targets[disp_lines];
 int32_t disp_age_quanta[disp_lines];
 Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
 Timer dispRefreshTimer (100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
+Timer dispResetButtonTimer (500000);  // How long to press esp32 "boot" button before screen will reset and redraw
 uint32_t tft_watchdog_timeout = 100000;
 
 // tuning-ui related globals
 enum tuning_ctrl_states { OFF, SELECT, EDIT };
 int32_t tuning_ctrl = OFF;
 int32_t tuning_ctrl_last = OFF;
-int32_t dataset_page = RUN;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
-int32_t dataset_page_last = TEMP;
+int32_t dataset_page = PG_RUN;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
+int32_t dataset_page_last = PG_TEMP;
 int32_t selected_value = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
 int32_t selected_value_last = 0;
 //  ---- tunable ----
@@ -216,6 +217,7 @@ class Display {
 
         void init() {
             printf ("Init LCD... ");
+            yield();
             _tft.begin();
             _tft.setRotation(1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
             for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
@@ -226,9 +228,13 @@ class Display {
             for (int32_t row=0; row<arraysize (disp_bool_values); row++) disp_bool_values[row] = 1;
             for (int32_t row=0; row<arraysize (disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
             for (int32_t row=0; row<arraysize (disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
+            yield();
             _tft.fillScreen (BLK);  // Black out the whole screen
+            yield();
             draw_touchgrid (false);
+            yield();
             draw_fixed (dataset_page, dataset_page_last, false);
+            yield();
             _disp_redraw_all = true;
             printf ("Success.\nCaptouch initialization... ");
             if (!touchpanel.begin(40)) printf ("Couldn't start FT6206 touchscreen controller");  // pass in 'sensitivity' coefficient
@@ -468,14 +474,14 @@ class Display {
             }
             if (place >= 3-maxlength && place < maxlength) {  // Then we want decimal w/o initial '0' limited to 3 significant digits (eg .123, .0123, .00123)
                 std::string result (std::to_string(value));
-                size_t decimalPos = result.find('.');  // Remove any digits to the left of the decimal point
-                if (decimalPos != std::string::npos) result = result.substr(decimalPos);
-                if (result.length() > sigdig) result.resize(sigdig+1);  // Limit the string length to the desired number of significant digits
+                size_t decimalPos = result.find ('.');  // Remove any digits to the left of the decimal point
+                if (decimalPos != std::string::npos) result = result.substr (decimalPos);
+                if (result.length() > sigdig) result.resize (sigdig+1);  // Limit the string length to the desired number of significant digits
                 return result;
             }  // Otherwise we want scientific notation with precision removed as needed to respect maxlength (eg 1.23e4, 1.23e5, but using long e character not e for negative exponents
             char buffer[maxlength+1];  // Allocate buffer with the maximum required size
             int32_t sigdigless = sigdig - 1 - (place <= -10);  // was: if (place <= -10) return std::string ("~0");  // Ridiculously small values just indicate basically zero
-            snprintf(buffer, sizeof(buffer), "%*.*f%*d", maxlength-sigdigless, sigdigless, value, maxlength-1, 0);
+            snprintf (buffer, sizeof (buffer), "%*.*f%*d", maxlength-sigdigless, sigdigless, value, maxlength-1, 0);
             std::string result (buffer);  // copy buffer to result
             if (result.find ("e+0") != std::string::npos) result.replace (result.find ("e+0"), 3, "e");  // Remove useless "+0" from exponent
             else if (result.find ("e-0") != std::string::npos) result.replace (result.find ("e-0"), 3, "\x88");  // For very small scientific notation values, replace the "e-0" with a phoenetic long e character, to indicate negative power  // if (result.find ("e-0") != std::string::npos) 
@@ -603,18 +609,18 @@ class Display {
             if ((dispRefreshTimer.expired() && !_procrastinate) || _disp_redraw_all) {
                 dispRefreshTimer.reset();
                 double drange;
-                draw_dynamic(1, carspeed_filt_mph, 0.0, carspeed_redline_mph, cruiseSPID.get_target());
+                draw_dynamic(1, speedo_filt_mph, 0.0, speedo_redline_mph, cruiseSPID.get_target());
                 draw_dynamic(2, tach_filt_rpm, 0.0, tach_redline_rpm, gasSPID.get_target());
                 draw_dynamic(3, pressure_filt_psi, pressure_min_psi, pressure_max_psi, brakeSPID.get_target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
                 draw_dynamic(4, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
                 draw_dynamic(5, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-                draw_dynamic(6, cruiseSPID.get_target(), 0.0, carspeed_govern_mph);
+                draw_dynamic(6, cruiseSPID.get_target(), 0.0, speedo_govern_mph);
                 draw_dynamic(7, brakeSPID.get_target(), pressure_min_psi, pressure_max_psi);
                 draw_dynamic(8, gasSPID.get_target(), 0.0, tach_redline_rpm);
                 draw_dynamic(9, (int32_t)brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
                 draw_dynamic(10, gas_pulse_out_us, gas_pulse_redline_us, gas_pulse_idle_us);
                 draw_dynamic(11, steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);
-                if (dataset_page == RUN) {
+                if (dataset_page == PG_RUN) {
                     draw_dynamic(12, battery_filt_v, 0.0, battery_max_v);
                     draw_dynamic(13, brake_pos_filt_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
                     draw_dynamic(14, pot_filt_percent, pot_min_percent, pot_max_percent);
@@ -625,7 +631,7 @@ class Display {
                     draw_dynamic(18, sim_tach, -1, -1);
                     draw_dynamic(19, sim_speedo, -1, -1);
                 }
-                else if (dataset_page == JOY) {
+                else if (dataset_page == PG_JOY) {
                     draw_dynamic(12, ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
                     draw_dynamic(13, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
                     draw_dynamic(14, ctrl_lims_adc[ctrl][HORZ][MIN], 0, (adcrange_adc-ctrl_lims_adc[ctrl][HORZ][MAX])/2);
@@ -635,17 +641,18 @@ class Display {
                     draw_dynamic(18, ctrl_lims_adc[ctrl][VERT][MAX], (ctrl_lims_adc[ctrl][VERT][MIN]-adcrange_adc)/2, adcrange_adc);
                     draw_dynamic(19, ctrl_lims_adc[ctrl][VERT][DB], 0, (adcmidscale_adc - ctrl_lims_adc[ctrl][VERT][MIN] > ctrl_lims_adc[ctrl][VERT][MAX] - adcmidscale_adc) ? 2*(ctrl_lims_adc[ctrl][VERT][MAX] - adcmidscale_adc) : 2*(adcmidscale_adc - ctrl_lims_adc[ctrl][VERT][MIN]));
                 }
-                else if (dataset_page == CAR) {
+                else if (dataset_page == PG_CAR) {
                     draw_dynamic(12, gas_governor_percent, 0, 100);
                     draw_dynamic(13, tach_idle_rpm, 0.0, tach_redline_rpm);
                     draw_dynamic(14, tach_redline_rpm, 0.0, tach_max_rpm);
-                    draw_dynamic(15, carspeed_idle_mph, 0.0, carspeed_redline_mph);
-                    draw_dynamic(16, carspeed_redline_mph, 0.0, carspeed_max_mph);
-                    draw_dynamic(17, ctrl, -1, -1);  // 0 if hotrc
+                    draw_dynamic(15, speedo_idle_mph, 0.0, speedo_redline_mph);
+                    draw_dynamic(16, speedo_redline_mph, 0.0, speedo_max_mph);
+                    draw_dynamic(17, gasSPID.get_open_loop(), -1, -1);
+                    // draw_dynamic(17, ctrl, -1, -1);  // 0 if hotrc
                     draw_dynamic(18, cal_joyvert_brkmotor, -1, -1);
                     draw_dynamic(19, cal_pot_gasservo, -1, -1);
                 }
-                else if (dataset_page == PWMS) {
+                else if (dataset_page == PG_PWMS) {
                     draw_dynamic(12, steer_pulse_left_us, steer_pulse_stop_us, steer_pulse_left_max_us);
                     draw_dynamic(13, steer_pulse_stop_us, steer_pulse_left_us, steer_pulse_right_us);
                     draw_dynamic(14, steer_pulse_right_us, steer_pulse_right_min_us, steer_pulse_stop_us);
@@ -655,49 +662,49 @@ class Display {
                     draw_dynamic(18, gas_pulse_idle_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
                     draw_dynamic(19, gas_pulse_redline_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
                 }
-                else if (dataset_page == BPID) {
-                    drange = pressure_max_psi-pressure_min_psi;
-                    draw_dynamic(12, brakeSPID.get_error(), -drange, drange);
+                else if (dataset_page == PG_BPID) {
+                    drange = brake_pulse_extend_us-brake_pulse_retract_us;
+                    draw_dynamic(12, brakeSPID.get_error(), pressure_min_psi-pressure_max_psi, pressure_max_psi-pressure_min_psi);
                     draw_dynamic(13, brakeSPID.get_p_term(), -drange, drange);
                     draw_dynamic(14, brakeSPID.get_i_term(), -drange, drange);
                     draw_dynamic(15, brakeSPID.get_d_term(), -drange, drange);
-                    draw_dynamic(16, brakeSPID.get_output(), -drange, drange);  // brake_spid_carspeed_delta_adc, -range, range);
+                    draw_dynamic(16, brakeSPID.get_output(), (double)brake_pulse_retract_us, (double)brake_pulse_extend_us);  // brake_spid_speedo_delta_adc, -range, range);
                     draw_dynamic(17, brakeSPID.get_kp(), 0.0, 2.0);
                     draw_dynamic(18, brakeSPID.get_ki_hz(), 0.0, 2.0);
                     draw_dynamic(19, brakeSPID.get_kd_s(), 0.0, 2.0);
                 }
-                else if (dataset_page == GPID) {
-                    drange = tach_govern_rpm-tach_idle_rpm;
-                    draw_dynamic(12, gasSPID.get_error(), -drange, drange);
+                else if (dataset_page == PG_GPID) {
+                    drange = gas_pulse_idle_us-gas_pulse_govern_us;
+                    draw_dynamic(12, gasSPID.get_error(), tach_idle_rpm-tach_govern_rpm, tach_govern_rpm-tach_idle_rpm);
                     draw_dynamic(13, gasSPID.get_p_term(), -drange, drange);
                     draw_dynamic(14, gasSPID.get_i_term(), -drange, drange);
                     draw_dynamic(15, gasSPID.get_d_term(), -drange, drange);
-                    draw_dynamic(16, gasSPID.get_output(), -drange, drange);  // gas_spid_carspeed_delta_adc, -drange, drange);
+                    draw_dynamic(16, gasSPID.get_output(), (double)gas_pulse_idle_us, (double)gas_pulse_govern_us);  // gas_spid_speedo_delta_adc, -drange, drange);
                     draw_dynamic(17, gasSPID.get_kp(), 0.0, 2.0);
                     draw_dynamic(18, gasSPID.get_ki_hz(), 0.0, 2.0);
                     draw_dynamic(19, gasSPID.get_kd_s(), 0.0, 2.0);
                 }
-                else if (dataset_page == CPID) {
-                    drange = carspeed_govern_mph-carspeed_idle_mph;
-                    draw_dynamic(12, cruiseSPID.get_error(), -drange, drange);
+                else if (dataset_page == PG_CPID) {
+                    drange = tach_govern_rpm-tach_idle_rpm;
+                    draw_dynamic(12, cruiseSPID.get_error(), speedo_idle_mph-speedo_govern_mph, speedo_govern_mph-speedo_idle_mph);
                     draw_dynamic(13, cruiseSPID.get_p_term(), -drange, drange);
                     draw_dynamic(14, cruiseSPID.get_i_term(), -drange, drange);
                     draw_dynamic(15, cruiseSPID.get_d_term(), -drange, drange);
-                    draw_dynamic(16, cruiseSPID.get_output(), -drange, drange);  // cruise_spid_carspeed_delta_adc, -drange, drange);
+                    draw_dynamic(16, cruiseSPID.get_output(), tach_idle_rpm, tach_govern_rpm);  // cruise_spid_speedo_delta_adc, -drange, drange);
                     draw_dynamic(17, cruiseSPID.get_kp(), 0.0, 2.0);
                     draw_dynamic(18, cruiseSPID.get_ki_hz(), 0.0, 2.0);
                     draw_dynamic(19, cruiseSPID.get_kd_s(), 0.0, 2.0);
                 }
-                else if (dataset_page == TEMP) {
+                else if (dataset_page == PG_TEMP) {
                     draw_dynamic(12, temps[AMBIENT], temp_min, temp_max);
                     draw_dynamic(13, temps[ENGINE], temp_min, temp_max);
                     // draw_dynamic(14, temps[WHEEL_FL], temp_min, temp_max);
                     // draw_dynamic(15, temps[WHEEL_FR], temp_min, temp_max);
                     draw_dynamic(14, temps[WHEEL_RL], temp_min, temp_max);
                     draw_dynamic(15, temps[WHEEL_RR], temp_min, temp_max);
-                    draw_dynamic(16, hotrc_pos_failsafe_min_adc, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-                    draw_dynamic(17, hotrc_pos_failsafe_max_adc, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-                    draw_dynamic(18, gasSPID.get_open_loop(), -1, -1);
+                    draw_dynamic(16, pressure_adc, pressure_min_adc, pressure_max_adc);
+                    draw_dynamic(17, hotrc_pos_failsafe_min_adc, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
+                    draw_dynamic(18, hotrc_pos_failsafe_max_adc, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
                     draw_dynamic(19, brake_pos_zeropoint_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);   
                 }
                 draw_bool((runmode == CAL), 2);
@@ -710,4 +717,4 @@ class Display {
         }
 };
 
-#endif
+#endif  // DISPLAY_H
