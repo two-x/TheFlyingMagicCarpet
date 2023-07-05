@@ -221,16 +221,22 @@ int32_t default_margin_adc = 12;  // Default margin of error for comparisons of 
 
 // pid related globals
 //  ---- tunable ----
-uint32_t pid_period_ms = 100;
-Timer pidTimer (pid_period_ms*1000);  // not actually tunable, just needs value above
+uint32_t steer_pid_period_ms = 150;  // (Not actually a pid) Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+Timer steerPidTimer (steer_pid_period_ms*1000);  // not actually tunable, just needs value above
+uint32_t brake_pid_period_ms = 150;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+Timer brakePidTimer (brake_pid_period_ms*1000);  // not actually tunable, just needs value above
 int32_t brake_spid_ctrl_dir = SPID::FWD;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
 double brake_spid_initial_kp = 0.588;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
 double brake_spid_initial_ki_hz = 0.013;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
 double brake_spid_initial_kd_s = 1.130;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+uint32_t cruise_pid_period_ms = 100;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+Timer cruisePidTimer (cruise_pid_period_ms*1000);  // not actually tunable, just needs value above
 double cruise_spid_initial_kp = 0.157;  // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
 double cruise_spid_initial_ki_hz = 0.035;  // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
 double cruise_spid_initial_kd_s = 0.044;  // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
 int32_t cruise_spid_ctrl_dir = SPID::FWD;  // 1 = fwd, 0 = rev.
+uint32_t gas_pid_period_ms = 250;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+Timer gasPidTimer (gas_pid_period_ms*1000);  // not actually tunable, just needs value above
 double gas_spid_initial_kp = 0.245;  // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
 double gas_spid_initial_ki_hz = 0.015;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
 double gas_spid_initial_kd_s = 0.022;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
@@ -494,9 +500,9 @@ SdFat sd;  // SD card filesystem
 SdFile root;  // Directory file.
 SdFile file;  // Use for file creation in folders.
 
-SPID brakeSPID (&pressure_filt_psi, brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brake_spid_ctrl_dir, pid_period_ms);
-SPID gasSPID (&tach_filt_rpm, gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, gas_spid_ctrl_dir, pid_period_ms);
-SPID cruiseSPID (&speedo_filt_mph, cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, cruise_spid_ctrl_dir, pid_period_ms);
+SPID brakeSPID (&pressure_filt_psi, brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brake_spid_ctrl_dir, brake_pid_period_ms);
+SPID gasSPID (&tach_filt_rpm, gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, gas_spid_ctrl_dir, gas_pid_period_ms);
+SPID cruiseSPID (&speedo_filt_mph, cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, cruise_spid_ctrl_dir, cruise_pid_period_ms);
 
 // Servo library lets us set pwm outputs given an on-time pulse width in us
 static Servo steer_servo;
@@ -708,6 +714,12 @@ void adj_bool (bool* val, int32_t delta) { if (delta != 0) *val = (delta > 0); }
 void set_pin (int32_t pin, int32_t mode) { if (pin >= 0) pinMode (pin, mode); }
 void write_pin (int32_t pin, int32_t val) {  if (pin >= 0) digitalWrite (pin, val); }
 int32_t read_pin (int32_t pin) { return (pin >= 0) ? digitalRead (pin) : -1; }
+
+void all_pids_set_enable (bool arg_enabled) {
+    brakeSPID.set_enable (arg_enabled);
+    gasSPID.set_enable (arg_enabled);
+    cruiseSPID.set_enable (arg_enabled);
+}
 
 void syspower_set (bool val) {
     if (digitalRead (syspower_pin) != val) {
