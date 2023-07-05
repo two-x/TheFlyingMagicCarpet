@@ -455,8 +455,12 @@ int32_t loopindex = 0;
 bool diag_ign_error_enabled = true;
 
 // pushbutton related
+enum sw_presses { NONE, SHORT, LONG };  // used by encoder sw and button algorithms
 bool button_last = 0;
 bool button_it = 0;
+bool btn_press_timer_active = false;
+bool btn_press_suppress_click = false;
+bool btn_press_action = NONE;
 
 // external signal related
 bool ignition = LOW;

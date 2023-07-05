@@ -227,9 +227,29 @@ void loop() {
     // Update inputs.  Fresh sensor data, and filtering.
     //
 
-    // Onboard devices - takes 12 us to read
+    // ESP32 "boot" button.  This is not working (?)
     button_last = button_it;
-    button_it = !(read_pin (button_pin));
+    if (!read_pin (button_pin)) {
+        if (!button_it) {  // If press just occurred
+            dispResetButtonTimer.reset();  // Looks like someone just pushed the esp32 "boot" button
+            btn_press_timer_active = true;  // flag to indicate timing for a possible long press
+        }
+        else if (btn_press_timer_active && dispResetButtonTimer.expired()) {
+            btn_press_action = LONG;  // Set flag to handle the long press event. Note, routine handling press should clear this
+            btn_press_timer_active = false;  // Clear timer active flag
+            btn_press_suppress_click = true;  // Prevents the switch release after a long press from causing a short press
+        }
+        button_it = true;  // Store press is in effect
+    }
+    else {  // if button is not being pressed
+        btn_press_action = NONE;  // Any button action handling needs to happen in the same loop or is lost
+        if (button_it && !btn_press_suppress_click) btn_press_action = SHORT;  // if the button was just released, a short press occurred, which must be handled
+        btn_press_timer_active = false;  // Clear timer active flag
+        button_it = false;  // Store press is not in effect
+        btn_press_suppress_click = false;  // End click suppression
+    }
+    // if (btn_press_action != NONE) 
+    // printf ("it:%d ac:%ld lst:%d ta:%d sc:%d el:%ld\n", button_it, btn_press_action, button_last, btn_press_timer_active, btn_press_suppress_click, dispResetButtonTimer.elapsed());
     
     // External digital signals - takes 11 us to read
     if (!simulating || !sim_basicsw) basicmodesw = !digitalRead (basicmodesw_pin);   // 1-value because electrical signal is active low
@@ -600,14 +620,11 @@ void loop() {
             double temp = map (pot_filt_percent, pot_min_percent, pot_max_percent, (double)gas_pulse_ccw_max_us, (double)gas_pulse_cw_min_us);
             if (temp <= (double)gas_pulse_idle_us && temp >= (double)gas_pulse_redline_us) cal_pot_gas_ready = true;
         }
-        if (!cal_set_hotrc_failsafe_ready) {
-            if (button_it && !button_last) cal_set_hotrc_failsafe_ready = true;
-        }
-        else if (button_it) hotrc.print();
-        else if (button_last) {
+        if (btn_press_action == SHORT) {
             hotrc.set_failsafe();
-            cout << "\nHotrc failsafe range set!  Min: " << hotrc.get_failsafe_min() << "adc, Max: " << hotrc.get_failsafe_max() << " adc, including " << hotrc.get_pad() << " adc pad both ways" << std::endl;
-            cal_set_hotrc_failsafe_ready = false;
+            hotrc.print();  // Also perhaps write values to flash
+            std::cout << "\nHotrc failsafe range set!  Min: " << hotrc.get_failsafe_min() << "adc, Max: " << hotrc.get_failsafe_max() << " adc, including " << hotrc.get_pad() << " adc pad both ways" << std::endl;
+            btn_press_action = NONE;
         }
     }
     else { // Obviously this should never happen
@@ -938,10 +955,13 @@ void loop() {
         syspower_set (syspower);
         syspower_last = syspower;
     }
+    if (btn_press_action == LONG) {
+        screen.init();
+        btn_press_action = NONE;
+    }
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
 
-    // Heartbeat led algorithm
-    if (neopixel_pin >= 0) {
+    if (neopixel_pin >= 0) {  // Heartbeat led algorithm
         if (neo_heartbeat) {
             neo_heartcolor[N_RED] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0xf800) >> 8;
             neo_heartcolor[N_GRN] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x7e0) >> 3;
@@ -994,7 +1014,7 @@ void loop() {
 
     // Kick watchdogs
     Watchdog.reset();  // Kick the watchdog to keep us alive
-    if (display_enabled) screen.watchdog();
+    // if (display_enabled) screen.watchdog();
  
     // Do the control loop bookkeeping at the end of each loop
     //

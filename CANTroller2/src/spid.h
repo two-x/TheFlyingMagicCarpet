@@ -121,8 +121,8 @@ class SPID {  // Soren's home-made pid loop
         saturated = constrain_value (p_output, *p_out_min, *p_out_max);  // Constrain output to range. Todo: Pass margin into constrain() for saturation determination
         input_last = myinput;  // store previously computed input
         target_last = mytarget;
-        printf(" in=%-+9.4lf lst=%-+9.4lf err=%-+9.4lf tgt=%-+9.4lf", myinput, input_last, error, mytarget);
-        printf(" pt=%-+9.4lf it=%-+9.4lf dt=%-+9.4lf out=%-+9.4lf\n", p_term, i_term, d_term, output);
+        // printf(" in=%-+9.4lf lst=%-+9.4lf err=%-+9.4lf tgt=%-+9.4lf", myinput, input_last, error, mytarget);
+        // printf(" pt=%-+9.4lf it=%-+9.4lf dt=%-+9.4lf out=%-+9.4lf\n", p_term, i_term, d_term, output);
         return *p_output;
     }
     // Comments related to compute() function
