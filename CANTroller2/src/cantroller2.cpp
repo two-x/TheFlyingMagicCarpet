@@ -435,18 +435,20 @@ void loop() {
     if (runmode == BASIC) {  // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         if (we_just_switched_modes) {  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
             // syspower = HIGH;  // Power up devices if not already
+            all_pids_set_enable (false);
             gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
+            gasSPID.set_enable (false);
+            cruiseSPID.set_enable (false);
             motorParkTimer.reset();  // Set a timer to timebox this effort
             park_the_motors = true;  // Flags the motor parking to happen
         }
         if (!engine_stopped() && !basicmodesw) runmode = HOLD;  // If we turned off the basic mode switch with engine running, go to Hold mode. If engine is not running, we'll end up in Stall Mode automatically
     }
     else if (runmode == SHUTDOWN) { // In shutdown mode we stop the car if it's moving then park the motors.
-        if (ignition && !panic_stop) {
-            // syspower = HIGH;  // Power up devices if not already
-            runmode = STALL;
-        }
-        else if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
+        if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
+            brakeSPID.set_enable (true);
+            gasSPID.set_enable (true);
+            cruiseSPID.set_enable (false);
             gasSPID.set_target (tach_idle_rpm);  //  Release the throttle 
             shutdown_complete = false;
             shutdown_color = LPNK;
@@ -460,9 +462,15 @@ void loop() {
                 stopcarTimer.reset();
             }
         }
+        if (ignition && !panic_stop) {
+            // syspower = HIGH;  // Power up devices if not already
+            runmode = STALL;
+        }
         if (!shutdown_complete) {  // If we haven't yet stopped the car and then released the brakes and gas all the way
             if (car_stopped() || stopcarTimer.expired()) {  // If car has stopped, or timeout expires, then release the brake
                 if (shutdown_color == LPNK) {  // On first time through here
+                    brakeSPID.set_enable (false);
+                    gasSPID.set_enable (false);
                     park_the_motors = true;  // Flags the motor parking to happen, only once
                     gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
                     motorParkTimer.reset();  // Set a timer to timebox this effort
@@ -491,6 +499,7 @@ void loop() {
         }
     }
     else if (runmode == STALL) {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
+        if (we_just_switched_modes) all_pids_set_enable (false);
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) brakeSPID.set_target (pressure_min_psi);  // If in deadband or being pushed up, no pressure target
         else brakeSPID.set_target (map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][BOT], (double)ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi));  // Scale joystick value to pressure adc setpoint
         if (!starter && !engine_stopped()) runmode = HOLD;  // Enter Hold Mode if we started the car
@@ -498,6 +507,9 @@ void loop() {
     }
     else if (runmode == HOLD) {
         if (we_just_switched_modes) {  // Release throttle and push brake upon entering hold mode
+            brakeSPID.set_enable (true);
+            gasSPID.set_enable (true);
+            cruiseSPID.set_enable (false);
             gasSPID.set_target (tach_idle_rpm);  // Let off gas (if gas using PID mode)
             if (car_stopped()) brakeSPID.set_target (pressure_filt_psi + pressure_hold_increment_psi); // If the car is already stopped then just add a touch more pressure and then hold it.
             else if (brakeSPID.get_target() < pressure_hold_initial_psi) brakeSPID.set_target (pressure_hold_initial_psi);  //  These hippies need us to stop the car for them
@@ -514,6 +526,7 @@ void loop() {
     }
     else if (runmode == FLY) {
         if (we_just_switched_modes) {
+            all_pids_set_enable (true);
             gesture_progress = 0;
             gestureFlyTimer.set (gesture_flytimeout_us); // Initialize gesture timer to already-expired value
             cruise_sw_held = false;
@@ -611,6 +624,7 @@ void loop() {
     }
     else if (runmode == CAL) {
         if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
+            all_pids_set_enable (false);
             calmode_request = false;
             cal_pot_gas_ready = false;
             cal_pot_gasservo = false;
@@ -642,15 +656,16 @@ void loop() {
 
     // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
     //
-    if (pidTimer.expired() && !(runmode == SHUTDOWN && shutdown_complete)) {  // Recalculate pid and update outputs, at regular intervals
-        
-        pidTimer.reset();  // reset timer to trigger the next update
-
-        // Steering
+    
+    // Steering - Update motor output
+    if (steerPidTimer.expired()) {
+        steerPidTimer.reset();
         steer_pulse_out_us = constrain (steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);  // Don't be out of range
         steer_servo.writeMicroseconds (steer_pulse_out_us);   // Write steering value to jaguar servo interface
-
-        // Brakes
+    }
+    // Brakes - Update motor output
+    if (brakePidTimer.expired()) {
+        brakePidTimer.reset();
         if (runmode == CAL && cal_joyvert_brkmotor) {
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) brake_pulse_out_us = (double)map (ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], brake_pulse_stop_us, brake_pulse_extend_us);
             else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) brake_pulse_out_us = (double)map (ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_db_adc[VERT][BOT], brake_pulse_retract_us, brake_pulse_stop_us);
@@ -663,8 +678,6 @@ void loop() {
                 (double)map ((int32_t)brake_pos_filt_in, (int32_t)brake_pos_park_in, (int32_t)brake_pos_nom_lim_extend_in, brake_pulse_stop_us, brake_pulse_retract_us);
         }
         else if (runmode != BASIC) brake_pulse_out_us = brakeSPID.compute();  // Otherwise the pid control is active
-        // printf("Brake PID rm=%-+4ld target=%-+9.4lf", runmode, brakeSPID.get_target());   
-        // printf(" output = %-+9.4lf,  %+-4ld\n", brakeSPID.get_output(), brake_pulse_out_us); 
         if (runmode != BASIC || park_the_motors) {
             if (runmode == CAL && cal_joyvert_brkmotor)  // In Cal mode constrain the motor to its entire range, instead of to the calibrated limits
                 brake_pulse_out_us = constrain (brake_pulse_out_us, (double)brake_pulse_retract_min_us, (double)brake_pulse_extend_max_us);  // Send to the actuator. Refuse to exceed range    
@@ -676,13 +689,15 @@ void loop() {
             } 
             brake_servo.writeMicroseconds ((int32_t)brake_pulse_out_us);  // Write result to jaguar servo interface
         }
-        
-        // Cruise.  Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
-        if (runmode == CRUISE && !cruise_adjusting) gasSPID.set_target (cruiseSPID.compute());  // 
-        // printf ("Cruise PID rm= %+-4ld target=%-+9.4lf", runmode, (double)speedo_target_mph);
-        // printf (" output = %-+9.4lf,  %+-4ld\n", cruiseSPID.get_output(), tach_target_rpm);
-
-        // Gas.  Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
+    }
+    // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
+    if (cruisePidTimer.expired() && runmode == CRUISE && !cruise_adjusting) {
+        cruisePidTimer.reset();
+        gasSPID.set_target (cruiseSPID.compute());  // 
+    }
+    // Gas - Update servo output. Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
+    if (gasPidTimer.expired()) {
+        gasPidTimer.reset();
         if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
             if (starter) gas_pulse_out_us = gas_pulse_govern_us;
@@ -705,13 +720,11 @@ void loop() {
             // printf (" output = %-+9.4lf,  %+-4ld\n", gasSPID.get_output(), gas_pulse_out_us);
             gas_servo.writeMicroseconds (gas_pulse_out_us);  // Write result to servo
         }
-
-        if (park_the_motors) {  //  When parking motors, IF the timeout expires OR the brake and gas motors are both close enough to the park position THEN stop trying to park the motors
-            bool brake_parked = (abs(brake_pos_filt_in - brake_pos_park_in) <= brake_pos_margin_in);
-            bool gas_parked = ((gas_pulse_out_us == gas_pulse_idle_us + gas_pulse_park_slack_us) && gasServoTimer.expired());
-            if ((brake_parked && gas_parked) || motorParkTimer.expired()) park_the_motors = false;
-        }
-        pidTimer.reset();  // reset timer to trigger the next update
+    }
+    if (park_the_motors) {  //  When parking motors, IF the timeout expires OR the brake and gas motors are both close enough to the park position THEN stop trying to park the motors
+        bool brake_parked = (abs(brake_pos_filt_in - brake_pos_park_in) <= brake_pos_margin_in);
+        bool gas_parked = ((gas_pulse_out_us == gas_pulse_idle_us + gas_pulse_park_slack_us) && gasServoTimer.expired());
+        if ((brake_parked && gas_parked) || motorParkTimer.expired()) park_the_motors = false;
     }
 
     // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
