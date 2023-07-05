@@ -173,6 +173,7 @@ int32_t disp_targets[disp_lines];
 int32_t disp_age_quanta[disp_lines];
 Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
 Timer dispRefreshTimer (100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
+Timer dispResetButtonTimer (500000);  // How long to press esp32 "boot" button before screen will reset and redraw
 uint32_t tft_watchdog_timeout = 100000;
 
 // tuning-ui related globals
@@ -216,6 +217,7 @@ class Display {
 
         void init() {
             printf ("Init LCD... ");
+            yield();
             _tft.begin();
             _tft.setRotation(1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
             for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
@@ -226,9 +228,13 @@ class Display {
             for (int32_t row=0; row<arraysize (disp_bool_values); row++) disp_bool_values[row] = 1;
             for (int32_t row=0; row<arraysize (disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
             for (int32_t row=0; row<arraysize (disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
+            yield();
             _tft.fillScreen (BLK);  // Black out the whole screen
+            yield();
             draw_touchgrid (false);
+            yield();
             draw_fixed (dataset_page, dataset_page_last, false);
+            yield();
             _disp_redraw_all = true;
             printf ("Success.\nCaptouch initialization... ");
             if (!touchpanel.begin(40)) printf ("Couldn't start FT6206 touchscreen controller");  // pass in 'sensitivity' coefficient
