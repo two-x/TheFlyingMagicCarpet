@@ -22,6 +22,8 @@
 #include "spid.h"
 // #include "disp.h"
 
+// #undef CAP_TOUCH
+
 // Here are the different runmodes documented
 //
 // ** Basic Mode **
@@ -92,8 +94,13 @@
 #define pot_wipe_pin 5  // (adc) - Analog in from 20k pot. Use 1% series R=22k to 5V on wipe=CW-0ohm side, and R=15k to gnd on wipe-CCW-0ohm side. Gives wipe range of 1.315V (CCW) to 3.070V (CW) with 80 uA draw.
 #define brake_pos_pin 6  // (adc) - Analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
 #define pressure_pin 7  // (adc) - Analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V.
-#define i2c_sda_pin 8  // (i2c0 sda / adc) - Hijack these pins for the touchscreen and micro-sd i2c bus
-#define i2c_scl_pin 9  // (i2c0 scl / adc) - Hijack these pins for the touchscreen and micro-sd i2c bus
+#ifdef CAP_TOUCH
+    #define i2c_sda_pin 8  // (i2c0 sda / adc) - Hijack these pins for the touchscreen and micro-sd i2c bus
+    #define i2c_scl_pin 9  // (i2c0 scl / adc) - Hijack these pins for the touchscreen and micro-sd i2c bus
+#else
+    #define unused_pin 8  // (i2c0 scl / adc) - With resistive touchscreen this pin is freed up
+    #define touch_cs_pin 9  // (i2c0 scl / adc) - Use as chip select for resistive touchscreen
+#endif
 #define tft_cs_pin 10  // (spi0 cs) -  Output, active low, Chip select allows ILI9341 display chip use of the SPI bus
 #define tft_mosi_pin 11  // (spi0 mosi) - Used as spi interface data to sd card and tft screen
 #define tft_sclk_pin 12  // (spi0 sclk) - Used as spi interface clock for sd card and tft screen
@@ -471,6 +478,7 @@ bool btn_press_action = NONE;
 // external signal related
 bool ignition = LOW;
 bool ignition_last = ignition;
+bool ignition_output_enabled = false;  // disallows configuration of ignition pin as an output until hotrc detected
 bool syspower = HIGH;
 bool syspower_last = syspower;
 bool basicmodesw = LOW;

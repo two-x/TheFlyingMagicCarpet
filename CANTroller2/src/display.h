@@ -3,8 +3,20 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
-#include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
-#include <Adafruit_ILI9341.h>  // For interfacing with the TFT LCD controller chip
+// #define CAP_TOUCH
+
+#ifdef CAP_TOUCH
+    #include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
+    bool cap_touch = true;
+#else
+    #include <XPT2046_Touchscreen.h>
+    bool cap_touch = false;
+#endif
+
+// #include <font_Arial.h> // from ILI9341_t3
+// #include <SPI.h>
+#include <Adafruit_ILI9341.h>
+// #include <ILI9341_t3.h>  // A different tft library that came with the resistive touchscreen
 #include "globals.h"
 
 // display related globals
@@ -201,19 +213,27 @@ Timer touchAccelTimer (850000);  // Touch hold time per left shift (doubling) of
 
 // run state globals
 int32_t shutdown_color = colorcard[SHUTDOWN];
+#ifdef CAP_TOUCH
+    Adafruit_FT6206 ts;  // 2.8in Touch panel on TFT shield
+#else
+    // XPT2046_Touchscreen ts (9);  // 3.2in resistive touch panel
+    XPT2046_Touchscreen ts (touch_cs_pin);  // 3.2in resistive touch panel
+#endif
 
 class Display {
     private:
+        // Adafruit_ILI9341 _tft (tft_cs_pin, tft_dc_pin, tft_rst_pin); // LCD screen
         Adafruit_ILI9341 _tft; // LCD screen
+        
+        // ILI9341_t3 _tft;
         Timer _tftResetTimer;
         Timer _tftDelayTimer;
         int32_t _timing_tft_reset;
-        bool _procrastinate = false;
+        bool _procrastinate = false, reset_finished = false;
         bool _disp_redraw_all = true;
     public:
-        Adafruit_FT6206 touchpanel; // Touch panel
 
-        Display(int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0){}
+        Display (int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0){}
 
         void init() {
             printf ("Init LCD... ");
@@ -236,16 +256,17 @@ class Display {
             draw_fixed (dataset_page, dataset_page_last, false);
             yield();
             _disp_redraw_all = true;
-            printf ("Success.\nCaptouch initialization... ");
-            if (!touchpanel.begin(40)) printf ("Couldn't start FT6206 touchscreen controller");  // pass in 'sensitivity' coefficient
-            else printf ("Capacitive touchscreen started\n");
+            printf ("Success.\nTouchscreen initialization... ");
+            ts.begin();
+            // if (!ts.begin(40)) printf ("Couldn't start touchscreen controller");  // pass in 'sensitivity' coefficient
+            printf ("Touchscreen started\n");
         }
-
-        void watchdog() {
-            if (loop_period_us > tft_watchdog_timeout && _timing_tft_reset == 0) _timing_tft_reset = 1;
-            if (_timing_tft_reset == 0) _tftDelayTimer.reset();
-            else if (!_tftDelayTimer.expired()) _tftResetTimer.reset();
-            else if (_timing_tft_reset == 1) {
+        bool tft_reset() {  // call to begin a tft reset, and continue to call every loop until returns true (or get_reset_finished() returns true), then stop
+            if (reset_finished) {
+                reset_finished = false;
+                _timing_tft_reset = 1;
+             }
+            if (_timing_tft_reset == 1) {
                 write_pin (tft_rst_pin, LOW);
                 _timing_tft_reset = 2;
             }
@@ -253,8 +274,16 @@ class Display {
                 write_pin (tft_rst_pin, HIGH);
                 init();
                 _timing_tft_reset = 0;
+                reset_finished = true;
             }
+            return reset_finished;
         }
+        void watchdog() {  // Call in every loop to perform a reset upon detection of blocked loops and 
+            if (loop_period_us > tft_watchdog_timeout && _timing_tft_reset == 0) _timing_tft_reset = 1;
+            if (_timing_tft_reset == 0 || !_tftDelayTimer.expired()) _tftDelayTimer.reset();
+            else tft_reset();
+        }
+        bool get_reset_finished() { return reset_finished; }
 
         // Functions to write to the screen efficiently
         //

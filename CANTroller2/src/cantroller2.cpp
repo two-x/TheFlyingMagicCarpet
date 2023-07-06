@@ -39,7 +39,7 @@ void setup() {
     set_pin (steer_pwm_pin, OUTPUT);
     set_pin (tft_dc_pin, OUTPUT);
     set_pin (gas_pwm_pin, OUTPUT);
-    set_pin (ignition_pin, OUTPUT);  // drives relay to turn on/off car. Active high
+    // set_pin (ignition_pin, OUTPUT);  // drives relay to turn on/off car. Active high
     set_pin (basicmodesw_pin, INPUT_PULLUP);
     set_pin (tach_pulse_pin, INPUT_PULLUP);
     set_pin (speedo_pulse_pin, INPUT_PULLUP);
@@ -66,7 +66,7 @@ void setup() {
     set_pin (joy_ign_btn_pin, INPUT_PULLDOWN);
     set_pin (joy_cruise_btn_pin, INPUT_PULLUP);
         
-    write_pin (ignition_pin, ignition);
+    // write_pin (ignition_pin, ignition);
     write_pin (tft_cs_pin, HIGH);   // Prevent bus contention
     write_pin (sdcard_cs_pin, HIGH);   // Prevent bus contention
     write_pin (tft_dc_pin, LOW);
@@ -421,6 +421,10 @@ void loop() {
         else {
             hotrcPanicTimer.reset();
             hotrc_radio_detected = true;
+            if (!ignition_output_enabled) {
+                set_pin (ignition_pin, OUTPUT);  // do NOT plug in the joystick when using the hotrc to avoid ign contention
+                ignition_output_enabled = true;
+            }
         }
     }
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "joy");  //
@@ -764,9 +768,11 @@ void loop() {
     // Touchscreen handling - takes 800 us to handle every 20ms when the touch timer expires, otherwise 20 us (includes touch timer + encoder handling w/o activity)
     //
     int32_t touch_x, touch_y, trow, tcol;
-    if (screen.touchpanel.touched() == 1 ) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
+    // if (screen.ts.touched() == 1 ) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
+    if (ts.touched() == 1 ) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
         touch_accel = 1 << touch_accel_exponent;  // determine value editing rate
-        TS_Point touchpoint = screen.touchpanel.getPoint();  // Retreive a point
+        // TS_Point touchpoint = screen.ts.getPoint();  // Retreive a point
+        TS_Point touchpoint = ts.getPoint();  // Retreive a point
         touchpoint.x = map (touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
         touchpoint.y = map (touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);  // Rotate touch coordinates to match tft coordinates
         touch_y = disp_height_pix-touchpoint.x; // touch point y coordinate in pixels, from origin at top left corner
@@ -842,7 +848,7 @@ void loop() {
         }
         if (touch_accel_exponent < touch_accel_exponent_max && (touchHoldTimer.elapsed() > (touch_accel_exponent + 1) * touchAccelTimer.get_timeout())) touch_accel_exponent++; // If timer is > the shift time * exponent, and not already maxed, double the edit speed by incrementing the exponent
         touch_now_touched = true;
-    }  // (if screen.touchpanel reads a touch)
+    }  // (if screen.ts reads a touch)
     else {  // If not being touched, put momentarily-set simulated button values back to default values
         if (simulating) cruise_sw = false;  // // Makes this button effectively momentary
         sim_edit_delta_touch = 0;  // Stop changing value
@@ -960,20 +966,23 @@ void loop() {
         else if (!ignition && ignition_last) panic_stop = true;
     }
     else if (panic_stop) panic_stop = false;  // Cancel panic if car is stopped
-    hotrc_radio_detected_last = hotrc_radio_detected;
-    if (panic_stop) ignition = LOW;  // Kill car if panicking
-    if (ignition != ignition_last) {
-        write_pin (ignition_pin, ignition);  // Turn car off or on, ensuring to never turn on the ignition while panicking
-        ignition_last = ignition; // Make sure this goes after the last comparison
+    if (ctrl != JOY) {  // When using joystick, ignition is controlled with button, not the code
+        hotrc_radio_detected_last = hotrc_radio_detected;
+        if (panic_stop) ignition = LOW;  // Kill car if panicking
+        if ((ignition != ignition_last) && ignition_output_enabled) {  // Whenever ignition state changes, assuming we're allowed to write to the pin
+            write_pin (ignition_pin, !ignition);  // Turn car off or on (ign output is active low), ensuring to never turn on the ignition while panicking
+            ignition_last = ignition;  // Make sure this goes after the last comparison
+        }
     }
     if (syspower != syspower_last) {
         syspower_set (syspower);
         syspower_last = syspower;
     }
     if (btn_press_action == LONG) {
-        screen.init();
+        screen.tft_reset();
         btn_press_action = NONE;
     }
+    if (!screen.get_reset_finished()) screen.tft_reset();  // If resetting tft, keep calling tft_reset until complete
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
 
     if (neopixel_pin >= 0) {  // Heartbeat led algorithm
