@@ -29,7 +29,7 @@ Display screen(tft_cs_pin, tft_dc_pin);
     
 // Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 MAKE_ENCODER(encoder, encoder_a_pin, encoder_b_pin, encoder_sw_pin);
-    
+
 void setup() {
     set_pin (heartbeat_led_pin, OUTPUT);
     set_pin (encoder_a_pin, INPUT_PULLUP);
@@ -39,7 +39,7 @@ void setup() {
     set_pin (steer_pwm_pin, OUTPUT);
     set_pin (tft_dc_pin, OUTPUT);
     set_pin (gas_pwm_pin, OUTPUT);
-    set_pin (ignition_pin, OUTPUT);  // drives relay to turn on/off car. Active high
+    // set_pin (ignition_pin, OUTPUT);  // drives relay to turn on/off car. Active high
     set_pin (basicmodesw_pin, INPUT_PULLUP);
     set_pin (tach_pulse_pin, INPUT_PULLUP);
     set_pin (speedo_pulse_pin, INPUT_PULLUP);
@@ -55,7 +55,6 @@ void setup() {
     set_pin (tft_cs_pin, OUTPUT);
     set_pin (pot_wipe_pin, INPUT);
     set_pin (button_pin, INPUT_PULLUP);    
-    set_pin (syspower_pin, OUTPUT);
     set_pin (starter_pin, INPUT_PULLDOWN);
     set_pin (tp_irq_pin, INPUT_PULLUP);
     set_pin (led_rx_pin, OUTPUT);
@@ -66,15 +65,22 @@ void setup() {
     set_pin (joy_ign_btn_pin, INPUT_PULLDOWN);
     set_pin (joy_cruise_btn_pin, INPUT_PULLUP);
         
-    write_pin (ignition_pin, ignition);
+    // write_pin (ignition_pin, ignition);
     write_pin (tft_cs_pin, HIGH);   // Prevent bus contention
     write_pin (sdcard_cs_pin, HIGH);   // Prevent bus contention
     write_pin (tft_dc_pin, LOW);
     write_pin (led_rx_pin, LOW);  // Light up
-    write_pin (syspower_pin, syspower);
     write_pin (encoder_pwr_pin, HIGH);
     write_pin (tft_rst_pin, HIGH);
-     
+    
+    // This bit is here as a way of autdetecting soren's breadboard, since his LCD is wired upside-down.
+    // Soren put a strong external pulldown on the pin, so it'll read low for autodetection. 
+    set_pin (syspower_pin, INPUT);  // Using weak ESP pullup to ensure this doesn't turn on syspower on the car
+    flip_the_screen = !(read_pin (syspower_pin));  // Will cause the LCD to be upside down
+    // Then set the put as an output as normal.
+    set_pin (syspower_pin, OUTPUT);
+    write_pin (syspower_pin, syspower);
+
     analogReadResolution (adcbits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
     Serial.begin (115200);  // Open serial port
     // printf("Serial port open\n");  // This works on Due but not ESP32
@@ -363,14 +369,15 @@ void loop() {
     }
 
     // Brake pressure - takes 72 us to read
-    if (!simulating || !sim_pressure) {
+    if (simulating && pot_pressure) pressure_filt_psi = map (pot_filt_percent, 0.0, 100.0, pressure_min_psi, pressure_max_psi);
+    else if (!simulating && !sim_pressure) {
         pressure_adc = analogRead (pressure_pin);
         pressure_psi = convert_units ((double)pressure_adc, pressure_convert_psi_per_adc, pressure_convert_invert, (double)pressure_min_adc);
         ema_filt (pressure_psi, &pressure_filt_psi, pressure_ema_alpha);  // Sensor EMA filter
         // pressure.set_raw (analogRead (pressure_pin));
         // ema_filt (pressure.get_val(), &pressure_filt_psi, pressure_ema_alpha);  // Sensor EMA filter
     }
-
+    
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //
 
     // Controller handling
@@ -421,6 +428,10 @@ void loop() {
         else {
             hotrcPanicTimer.reset();
             hotrc_radio_detected = true;
+            if (!ignition_output_enabled) {
+                set_pin (ignition_pin, OUTPUT);  // do NOT plug in the joystick when using the hotrc to avoid ign contention
+                ignition_output_enabled = true;
+            }
         }
     }
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "joy");  //
@@ -435,7 +446,7 @@ void loop() {
     if (runmode == BASIC) {  // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         if (we_just_switched_modes) {  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
             // syspower = HIGH;  // Power up devices if not already
-            all_pids_set_enable (false);
+            enable_pids (0, 0, 0);
             gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
             gasSPID.set_enable (false);
             cruiseSPID.set_enable (false);
@@ -446,9 +457,7 @@ void loop() {
     }
     else if (runmode == SHUTDOWN) { // In shutdown mode we stop the car if it's moving then park the motors.
         if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
-            brakeSPID.set_enable (true);
-            gasSPID.set_enable (true);
-            cruiseSPID.set_enable (false);
+            enable_pids (1, 1, 0);
             gasSPID.set_target (tach_idle_rpm);  //  Release the throttle 
             shutdown_complete = false;
             shutdown_color = LPNK;
@@ -469,6 +478,7 @@ void loop() {
         if (!shutdown_complete) {  // If we haven't yet stopped the car and then released the brakes and gas all the way
             if (car_stopped() || stopcarTimer.expired()) {  // If car has stopped, or timeout expires, then release the brake
                 if (shutdown_color == LPNK) {  // On first time through here
+                    enable_pids (0, 0, 0);
                     brakeSPID.set_enable (false);
                     gasSPID.set_enable (false);
                     park_the_motors = true;  // Flags the motor parking to happen, only once
@@ -499,7 +509,7 @@ void loop() {
         }
     }
     else if (runmode == STALL) {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
-        if (we_just_switched_modes) all_pids_set_enable (false);
+        if (we_just_switched_modes) enable_pids (0, 0, 0);
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) brakeSPID.set_target (pressure_min_psi);  // If in deadband or being pushed up, no pressure target
         else brakeSPID.set_target (map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][BOT], (double)ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi));  // Scale joystick value to pressure adc setpoint
         if (!starter && !engine_stopped()) runmode = HOLD;  // Enter Hold Mode if we started the car
@@ -507,9 +517,7 @@ void loop() {
     }
     else if (runmode == HOLD) {
         if (we_just_switched_modes) {  // Release throttle and push brake upon entering hold mode
-            brakeSPID.set_enable (true);
-            gasSPID.set_enable (true);
-            cruiseSPID.set_enable (false);
+            enable_pids (1, 1, 0);
             gasSPID.set_target (tach_idle_rpm);  // Let off gas (if gas using PID mode)
             if (car_stopped()) brakeSPID.set_target (pressure_filt_psi + pressure_hold_increment_psi); // If the car is already stopped then just add a touch more pressure and then hold it.
             else if (brakeSPID.get_target() < pressure_hold_initial_psi) brakeSPID.set_target (pressure_hold_initial_psi);  //  These hippies need us to stop the car for them
@@ -526,7 +534,7 @@ void loop() {
     }
     else if (runmode == FLY) {
         if (we_just_switched_modes) {
-            all_pids_set_enable (true);
+            enable_pids (1, 1, 1);
             gesture_progress = 0;
             gestureFlyTimer.set (gesture_flytimeout_us); // Initialize gesture timer to already-expired value
             cruise_sw_held = false;
@@ -583,6 +591,7 @@ void loop() {
     }
     else if (runmode == CRUISE) {
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
+            enable_pids (1, 1, 1);
             cruiseSPID.set_target (speedo_filt_mph);
             brakeSPID.set_target (pressure_min_psi);  // Let off the brake and keep it there till out of Cruise mode
             gestureFlyTimer.reset();  // reset gesture timer
@@ -624,7 +633,7 @@ void loop() {
     }
     else if (runmode == CAL) {
         if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
-            all_pids_set_enable (false);
+            enable_pids (0, 0, 0);
             calmode_request = false;
             cal_pot_gas_ready = false;
             cal_pot_gasservo = false;
@@ -764,16 +773,32 @@ void loop() {
     // Touchscreen handling - takes 800 us to handle every 20ms when the touch timer expires, otherwise 20 us (includes touch timer + encoder handling w/o activity)
     //
     int32_t touch_x, touch_y, trow, tcol;
-    if (screen.touchpanel.touched() == 1 ) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
+    // if (screen.ts.touched() == 1 ) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
+    if (ts.touched()) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
         touch_accel = 1 << touch_accel_exponent;  // determine value editing rate
-        TS_Point touchpoint = screen.touchpanel.getPoint();  // Retreive a point
-        touchpoint.x = map (touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
-        touchpoint.y = map (touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);  // Rotate touch coordinates to match tft coordinates
-        touch_y = disp_height_pix-touchpoint.x; // touch point y coordinate in pixels, from origin at top left corner
-        touch_x = touchpoint.y; // touch point x coordinate in pixels, from origin at top left corner
+        // TS_Point touchpoint = screen.ts.getPoint();  // Retreive a point
+        TS_Point touchpoint = ts.getPoint();  // Retreive a point
+        #ifdef CAP_TOUCH
+            touchpoint.x = map (touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
+            touchpoint.y = map (touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);  // Rotate touch coordinates to match tft coordinates
+            touch_y = disp_height_pix-touchpoint.x; // touch point y coordinate in pixels, from origin at top left corner
+            touch_x = touchpoint.y; // touch point x coordinate in pixels, from origin at top left corner
+        #else
+            touch_x = constrain (touchpoint.x, 355, 3968);
+            touch_y = constrain (touchpoint.y, 230, 3930);
+            
+            touch_x = map (touch_x, 355, 3968, 0, disp_width_pix);
+            touch_y = map (touch_y, 230, 3930, 0, disp_height_pix);
+            if (!flip_the_screen) {
+                touch_x = disp_width_pix - touch_x;
+                touch_y = disp_height_pix - touch_y;
+            }
+        #endif
+        std::cout << "Touch: ptx:" << touchpoint.x << ", pty:" << touchpoint.y << ", ptz:" << touchpoint.z << " x:" << touch_x << ", y:" << touch_y << std::endl;
+        // std::cout << "Touch: ptx:" << touchpoint.x << ", pty:" << touchpoint.y << " x:" << touch_x << ", y:" << touch_y << ", z:" << touchpoint.z << std::endl;
+        
         trow = constrain((touch_y + touch_fudge)/touch_cell_v_pix, 0, 4);  // The -8 seems to be needed or the vertical touch seems off (?)
         tcol = (touch_x-touch_margin_h_pix)/touch_cell_h_pix;
-        // else printf("Touch: x:%ld, y:%ld, row:%ld, col:%ld\n", touch_x, touch_y, trow, tcol);
         // Take appropriate touchscreen actions depending how we're being touched
         if (tcol==0 && trow==0 && !touch_now_touched) {
             if (++dataset_page >= arraysize(pagecard)) dataset_page -= arraysize(pagecard);  // Displayed dataset page can also be changed outside of simulator
@@ -803,7 +828,7 @@ void loop() {
         else if (tcol==0 && trow==2) {  // Pressed the increase value button, for real time tuning of variables
             if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change value yet
             else if (tuning_ctrl == EDIT) sim_edit_delta_touch = touch_accel;  // If in edit mode, increase value
-        }   
+        }
         else if (tcol==0 && trow==3) {  // Pressed the decrease value button, for real time tuning of variables
             if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change value yet
             else if (tuning_ctrl == EDIT) sim_edit_delta_touch = -touch_accel;  // If in edit mode, decrease value
@@ -842,7 +867,7 @@ void loop() {
         }
         if (touch_accel_exponent < touch_accel_exponent_max && (touchHoldTimer.elapsed() > (touch_accel_exponent + 1) * touchAccelTimer.get_timeout())) touch_accel_exponent++; // If timer is > the shift time * exponent, and not already maxed, double the edit speed by incrementing the exponent
         touch_now_touched = true;
-    }  // (if screen.touchpanel reads a touch)
+    }  // (if screen.ts reads a touch)
     else {  // If not being touched, put momentarily-set simulated button values back to default values
         if (simulating) cruise_sw = false;  // // Makes this button effectively momentary
         sim_edit_delta_touch = 0;  // Stop changing value
@@ -960,20 +985,23 @@ void loop() {
         else if (!ignition && ignition_last) panic_stop = true;
     }
     else if (panic_stop) panic_stop = false;  // Cancel panic if car is stopped
-    hotrc_radio_detected_last = hotrc_radio_detected;
-    if (panic_stop) ignition = LOW;  // Kill car if panicking
-    if (ignition != ignition_last) {
-        write_pin (ignition_pin, ignition);  // Turn car off or on, ensuring to never turn on the ignition while panicking
-        ignition_last = ignition; // Make sure this goes after the last comparison
+    if (ctrl != JOY) {  // When using joystick, ignition is controlled with button, not the code
+        hotrc_radio_detected_last = hotrc_radio_detected;
+        if (panic_stop) ignition = LOW;  // Kill car if panicking
+        if ((ignition != ignition_last) && ignition_output_enabled) {  // Whenever ignition state changes, assuming we're allowed to write to the pin
+            write_pin (ignition_pin, !ignition);  // Turn car off or on (ign output is active low), ensuring to never turn on the ignition while panicking
+            ignition_last = ignition;  // Make sure this goes after the last comparison
+        }
     }
     if (syspower != syspower_last) {
         syspower_set (syspower);
         syspower_last = syspower;
     }
     if (btn_press_action == LONG) {
-        screen.init();
+        screen.tft_reset();
         btn_press_action = NONE;
     }
+    if (!screen.get_reset_finished()) screen.tft_reset();  // If resetting tft, keep calling tft_reset until complete
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
 
     if (neopixel_pin >= 0) {  // Heartbeat led algorithm

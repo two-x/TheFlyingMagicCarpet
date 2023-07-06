@@ -22,6 +22,8 @@
 #include "spid.h"
 // #include "disp.h"
 
+// #undef CAP_TOUCH
+
 // Here are the different runmodes documented
 //
 // ** Basic Mode **
@@ -92,8 +94,13 @@
 #define pot_wipe_pin 5  // (adc) - Analog in from 20k pot. Use 1% series R=22k to 5V on wipe=CW-0ohm side, and R=15k to gnd on wipe-CCW-0ohm side. Gives wipe range of 1.315V (CCW) to 3.070V (CW) with 80 uA draw.
 #define brake_pos_pin 6  // (adc) - Analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
 #define pressure_pin 7  // (adc) - Analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V.
-#define i2c_sda_pin 8  // (i2c0 sda / adc) - Hijack these pins for the touchscreen and micro-sd i2c bus
-#define i2c_scl_pin 9  // (i2c0 scl / adc) - Hijack these pins for the touchscreen and micro-sd i2c bus
+#ifdef CAP_TOUCH
+    #define i2c_sda_pin 8  // (i2c0 sda / adc) - Hijack these pins for the touchscreen and micro-sd i2c bus
+    #define i2c_scl_pin 9  // (i2c0 scl / adc) - Hijack these pins for the touchscreen and micro-sd i2c bus
+#else
+    #define touch_irq_pin 8  // (i2c0 scl / adc) - With resistive touchscreen this pin is freed up
+    #define touch_cs_pin 9  // (i2c0 scl / adc) - Use as chip select for resistive touchscreen
+#endif
 #define tft_cs_pin 10  // (spi0 cs) -  Output, active low, Chip select allows ILI9341 display chip use of the SPI bus
 #define tft_mosi_pin 11  // (spi0 mosi) - Used as spi interface data to sd card and tft screen
 #define tft_sclk_pin 12  // (spi0 sclk) - Used as spi interface clock for sd card and tft screen
@@ -221,21 +228,21 @@ int32_t default_margin_adc = 12;  // Default margin of error for comparisons of 
 
 // pid related globals
 //  ---- tunable ----
-uint32_t steer_pid_period_ms = 150;  // (Not actually a pid) Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+uint32_t steer_pid_period_ms = 185;  // (Not actually a pid) Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer steerPidTimer (steer_pid_period_ms*1000);  // not actually tunable, just needs value above
-uint32_t brake_pid_period_ms = 150;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+uint32_t brake_pid_period_ms = 185;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer brakePidTimer (brake_pid_period_ms*1000);  // not actually tunable, just needs value above
-int32_t brake_spid_ctrl_dir = SPID::FWD;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
-double brake_spid_initial_kp = 0.588;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-double brake_spid_initial_ki_hz = 0.013;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+int32_t brake_spid_ctrl_dir = SPID::REV;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
+double brake_spid_initial_kp = 2.18;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+double brake_spid_initial_ki_hz = 0.215;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
 double brake_spid_initial_kd_s = 1.130;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-uint32_t cruise_pid_period_ms = 100;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+uint32_t cruise_pid_period_ms = 300;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer cruisePidTimer (cruise_pid_period_ms*1000);  // not actually tunable, just needs value above
 double cruise_spid_initial_kp = 0.157;  // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
 double cruise_spid_initial_ki_hz = 0.035;  // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
 double cruise_spid_initial_kd_s = 0.044;  // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
 int32_t cruise_spid_ctrl_dir = SPID::FWD;  // 1 = fwd, 0 = rev.
-uint32_t gas_pid_period_ms = 250;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+uint32_t gas_pid_period_ms = 225;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer gasPidTimer (gas_pid_period_ms*1000);  // not actually tunable, just needs value above
 double gas_spid_initial_kp = 0.245;  // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
 double gas_spid_initial_ki_hz = 0.015;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
@@ -273,7 +280,7 @@ int32_t pot_convert_polarity = SPID::FWD;
 double pot_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 
 // controller related
-enum ctrls { HOTRC, JOY, SIM };  // This is a bad hack. Since JOY is already enum'd as 1 for dataset pages
+enum ctrls { HOTRC, JOY, SIM };  // Possible sources of gas, brake, steering commands
 enum ctrl_axes { HORZ, VERT };
 enum ctrl_thresh { MIN, DB, MAX };
 enum ctrl_edge { BOT, TOP };
@@ -324,7 +331,7 @@ int32_t steer_safe_percent = 72;  // Sterring is slower at high speed. How stron
 
 // brake pressure related
 int32_t pressure_adc;
-// Param pressure (&pressure_adc, "Pressure:", "adc ", 658, 2100);
+// AnalogSensor pressure (&pressure_adc, "Pressure:", "adc ", 658, 2100);
 //  ---- tunable ----
 int32_t pressure_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
 int32_t pressure_sensor_max_adc = adcrange_adc; // Sensor reading max, limited by adc Vmax. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as chris can push (wimp)
@@ -337,13 +344,12 @@ double pressure_margin_psi = 2.5;  // Margin of error when comparing brake press
 double pressure_min_psi = 0.0;  // TUNED 230602 - Brake pressure when brakes are effectively off. Sensor min = 0.5V, scaled by 3.3/4.5V is 0.36V of 3.3V (ADC count 0-4095). 
 double pressure_max_psi = convert_units (pressure_max_adc - pressure_min_adc, pressure_convert_psi_per_adc, pressure_convert_invert);  // TUNED 230602 - Highest possible pressure achievable by the actuator 
 double pressure_hold_initial_psi = 150;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
-double pressure_hold_increment_psi = 10;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
+double pressure_hold_increment_psi = 15;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 double pressure_panic_initial_psi = 250;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
 double pressure_panic_increment_psi = 25;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 // max pedal bent 1154
 double pressure_psi = (pressure_min_psi+pressure_max_psi)/2;
 double pressure_filt_psi = pressure_psi;  // Stores new setpoint to give to the pid loop (brake)
-
 
 // brake actuator motor related
 double brake_pulse_out_us;  // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
@@ -471,6 +477,7 @@ bool btn_press_action = NONE;
 // external signal related
 bool ignition = LOW;
 bool ignition_last = ignition;
+bool ignition_output_enabled = false;  // disallows configuration of ignition pin as an output until hotrc detected
 bool syspower = HIGH;
 bool syspower_last = syspower;
 bool basicmodesw = LOW;
@@ -492,6 +499,7 @@ bool sim_basicsw = true;
 bool sim_cruisesw = true;
 bool sim_pressure = true;
 bool sim_syspower = true;
+bool pot_pressure = true;  // Use the pot to simulate the brake pressure
 
 SdFat sd;  // SD card filesystem
 #define approot "cantroller2020"
@@ -715,10 +723,10 @@ void set_pin (int32_t pin, int32_t mode) { if (pin >= 0) pinMode (pin, mode); }
 void write_pin (int32_t pin, int32_t val) {  if (pin >= 0) digitalWrite (pin, val); }
 int32_t read_pin (int32_t pin) { return (pin >= 0) ? digitalRead (pin) : -1; }
 
-void all_pids_set_enable (bool arg_enabled) {
-    brakeSPID.set_enable (arg_enabled);
-    gasSPID.set_enable (arg_enabled);
-    cruiseSPID.set_enable (arg_enabled);
+void enable_pids (int32_t en_brake, int32_t en_gas, int32_t en_cruise) {  // pass in 0 (disable), 1 (enable), or -1 (leave it alone) for each pid loop
+    if (en_brake != -1) brakeSPID.set_enable ((bool)en_brake);
+    if (en_gas != -1) gasSPID.set_enable ((bool)en_gas);
+    if (en_cruise != -1) cruiseSPID.set_enable ((bool)en_cruise);
 }
 
 void syspower_set (bool val) {
