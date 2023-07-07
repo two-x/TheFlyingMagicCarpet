@@ -15,7 +15,10 @@
 
 // #include <font_Arial.h> // from ILI9341_t3
 // #include <SPI.h>
+
 #include <Adafruit_ILI9341.h>
+// #include <TFT_eSPI.h>
+
 // #include <ILI9341_t3.h>  // A different tft library that came with the resistive touchscreen
 #include "globals.h"
 
@@ -213,17 +216,19 @@ Timer touchAccelTimer (850000);  // Touch hold time per left shift (doubling) of
 
 // run state globals
 int32_t shutdown_color = colorcard[SHUTDOWN];
+
 #ifdef CAP_TOUCH
-    Adafruit_FT6206 ts;  // 2.8in Touch panel on TFT shield
+    Adafruit_FT6206 ts;  // 2.8in cap touch panel on tft lcd
 #else
-    XPT2046_Touchscreen ts (touch_cs_pin, touch_irq_pin);  // 3.2in resistive touch panel
+    XPT2046_Touchscreen ts (touch_cs_pin, touch_irq_pin);  // 3.2in resistive touch panel on tft lcd
 #endif
 
 class Display {
     private:
         // Adafruit_ILI9341 _tft (tft_cs_pin, tft_dc_pin, tft_rst_pin); // LCD screen
         Adafruit_ILI9341 _tft; // LCD screen
-        
+        // TFT_eSPI _tft; // LCD screen
+
         // ILI9341_t3 _tft;
         Timer _tftResetTimer;
         Timer _tftDelayTimer;
