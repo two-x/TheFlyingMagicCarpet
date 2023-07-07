@@ -11,6 +11,9 @@
 // Error = Setpoint - ProcessValue
 // Output  =  P + I + D  =  (K * Error) + (K / Tau_I) + (Error - LastError)
 
+// PID tuning
+// https://www.youtube.com/watch?v=VVOi2dbtxC0&ab_channel=EEVblog
+
 class SPID {  // Soren's home-made pid loop
   public:
     #define RANGED 0  // assign to outCenterMode if pid output just spans a range, rather than deviating from a centerpoint 
@@ -35,9 +38,9 @@ class SPID {  // Soren's home-made pid loop
   public:
     SPID (double* arg_input, double arg_kp, double arg_ki_hz, double arg_kd_s, int32_t arg_dir, uint32_t arg_period_ms) {  // , bool arg_in_center_mode, bool arg_out_center_mode
         p_input = arg_input;
+        sample_period_ms = arg_period_ms;
         set_tunings(arg_kp, arg_ki_hz, arg_kd_s);
         set_actuator_direction(arg_dir);
-        sample_period_ms = arg_period_ms;
     }
     SPID (double* arg_input, double* arg_output, double arg_kp, double arg_ki_hz, double arg_kd_s, int32_t arg_dir, uint32_t arg_period_ms) {  // , bool arg_in_center_mode, bool arg_out_center_mode
         p_output = arg_output;
@@ -73,9 +76,9 @@ class SPID {  // Soren's home-made pid loop
     }
     double round (double val, int32_t digits = 4) { return (rounding) ? (std::round (val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
     // Clamp. Returns 0 if saturated and signs of (value - center) and error are the same (or in case of reverse actuator, different).
-    double clamp_value (double arg_value, double arg_center) {  // If output is overshooting in the same direction as the error and the integral term is contributing, reset i_term
-        bool val_sign = signbit (arg_value - arg_center) ^ (actuator_direction < 0);  // reverse error value sign if actuator direction is reversed
-        if ((signbit (error) != val_sign) && saturated) return 0;  // (&& saturated)  if sign of arg_value is the same as that of error, then zero arg_value
+    double clamp_it (double arg_value, double arg_center) {  // If output is overshooting in the same direction as the error and the integral term is contributing, reset i_term
+        bool val_sign = signbit (arg_value - arg_center) ^ (actuator_direction < 0);  // reverse value sign if actuator direction is reversed
+        if ((signbit (error) == val_sign) && saturated) return 0;  // Clamp value if it is saturated and going in the direction that would further widen the error
         return arg_value;  // otherwise return arg_value unmolested
     }
     double compute (void) {
@@ -83,14 +86,14 @@ class SPID {  // Soren's home-made pid loop
         myinput = *p_input;
         mytarget = target;
         error = mytarget - myinput;
-        myoutput = out_center;
+        myoutput = *p_output;  // =out_center (?),  = output_last (?)
         
         printf ("in:%4.0lf tg:%4.0lf er:%4.0lf i1:%4.0lf", myinput, mytarget, error, i_term);
         
         i_term += ki_coeff * error;  // Update integral
         printf (" i2:%4.0lf", i_term);
 
-        if (clamp_integral) i_term = clamp_value(i_term, 0.0);
+        if (clamp_integral) i_term = clamp_it(i_term, 0.0);
         printf (" i3:%4.0lf", i_term);
 
         if (proportional_to == ERROR_TERM) {  // If proportional_to Error (default). Note in this mode kp_coeff is the same sign as the actuator direction
@@ -254,12 +257,13 @@ class SPID {  // Soren's home-made pid loop
         }
     }
     void set_sample_period (uint32_t arg_period_ms) {
-        if (arg_period_ms) {
+        if (sample_period_ms) {
             double ratio = (double)arg_period_ms / (double)sample_period_ms;
             ki_coeff *= ratio;
             kd_coeff /= ratio;
             sample_period_ms = arg_period_ms;
         }
+        else printf ("SPID refusing to divide by zero setting sample period\n");
     }
     void set_open_loop (bool arg_open_loop) { open_loop = arg_open_loop; }
     void set_enable (bool arg_enable) {
