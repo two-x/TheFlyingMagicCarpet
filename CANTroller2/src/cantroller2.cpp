@@ -363,14 +363,15 @@ void loop() {
     }
 
     // Brake pressure - takes 72 us to read
-    if (!simulating || !sim_pressure) {
+    if (simulating && pot_pressure) pressure_filt_psi = map (pot_filt_percent, 0.0, 100.0, pressure_min_psi, pressure_max_psi);
+    else if (!simulating && !sim_pressure) {
         pressure_adc = analogRead (pressure_pin);
         pressure_psi = convert_units ((double)pressure_adc, pressure_convert_psi_per_adc, pressure_convert_invert, (double)pressure_min_adc);
         ema_filt (pressure_psi, &pressure_filt_psi, pressure_ema_alpha);  // Sensor EMA filter
         // pressure.set_raw (analogRead (pressure_pin));
         // ema_filt (pressure.get_val(), &pressure_filt_psi, pressure_ema_alpha);  // Sensor EMA filter
     }
-
+    
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //
 
     // Controller handling
@@ -771,7 +772,7 @@ void loop() {
         touch_accel = 1 << touch_accel_exponent;  // determine value editing rate
         // TS_Point touchpoint = screen.ts.getPoint();  // Retreive a point
         TS_Point touchpoint = ts.getPoint();  // Retreive a point
-        printf("Touch: x:%ld, y:%ld, z:%ld\n", touchpoint.x, touchpoint.y, touchpoint.z); //, , row:%ld, col:%ld\n", touchpoint.x, touchpoint.y, trow, tcol);
+        // printf("Touch: x:%ld, y:%ld, z:%ld\n", touchpoint.x, touchpoint.y, touchpoint.z); //, , row:%ld, col:%ld\n", touchpoint.x, touchpoint.y, trow, tcol);
         touchpoint.x = map (touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
         touchpoint.y = map (touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);  // Rotate touch coordinates to match tft coordinates
         touch_y = disp_height_pix-touchpoint.x; // touch point y coordinate in pixels, from origin at top left corner
@@ -807,7 +808,7 @@ void loop() {
         else if (tcol==0 && trow==2) {  // Pressed the increase value button, for real time tuning of variables
             if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change value yet
             else if (tuning_ctrl == EDIT) sim_edit_delta_touch = touch_accel;  // If in edit mode, increase value
-        }   
+        }
         else if (tcol==0 && trow==3) {  // Pressed the decrease value button, for real time tuning of variables
             if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change value yet
             else if (tuning_ctrl == EDIT) sim_edit_delta_touch = -touch_accel;  // If in edit mode, decrease value

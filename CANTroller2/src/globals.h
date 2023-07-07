@@ -280,7 +280,7 @@ int32_t pot_convert_polarity = SPID::FWD;
 double pot_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 
 // controller related
-enum ctrls { HOTRC, JOY, SIM };  // This is a bad hack. Since JOY is already enum'd as 1 for dataset pages
+enum ctrls { HOTRC, JOY, SIM };  // Possible sources of gas, brake, steering commands
 enum ctrl_axes { HORZ, VERT };
 enum ctrl_thresh { MIN, DB, MAX };
 enum ctrl_edge { BOT, TOP };
@@ -331,7 +331,7 @@ int32_t steer_safe_percent = 72;  // Sterring is slower at high speed. How stron
 
 // brake pressure related
 int32_t pressure_adc;
-// Param pressure (&pressure_adc, "Pressure:", "adc ", 658, 2100);
+// AnalogSensor pressure (&pressure_adc, "Pressure:", "adc ", 658, 2100);
 //  ---- tunable ----
 int32_t pressure_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
 int32_t pressure_sensor_max_adc = adcrange_adc; // Sensor reading max, limited by adc Vmax. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as chris can push (wimp)
@@ -344,13 +344,12 @@ double pressure_margin_psi = 2.5;  // Margin of error when comparing brake press
 double pressure_min_psi = 0.0;  // TUNED 230602 - Brake pressure when brakes are effectively off. Sensor min = 0.5V, scaled by 3.3/4.5V is 0.36V of 3.3V (ADC count 0-4095). 
 double pressure_max_psi = convert_units (pressure_max_adc - pressure_min_adc, pressure_convert_psi_per_adc, pressure_convert_invert);  // TUNED 230602 - Highest possible pressure achievable by the actuator 
 double pressure_hold_initial_psi = 150;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
-double pressure_hold_increment_psi = 10;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
+double pressure_hold_increment_psi = 15;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 double pressure_panic_initial_psi = 250;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
 double pressure_panic_increment_psi = 25;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 // max pedal bent 1154
 double pressure_psi = (pressure_min_psi+pressure_max_psi)/2;
 double pressure_filt_psi = pressure_psi;  // Stores new setpoint to give to the pid loop (brake)
-
 
 // brake actuator motor related
 double brake_pulse_out_us;  // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
@@ -500,6 +499,7 @@ bool sim_basicsw = true;
 bool sim_cruisesw = true;
 bool sim_pressure = true;
 bool sim_syspower = true;
+bool pot_pressure = true;  // Use the pot to simulate the brake pressure
 
 SdFat sd;  // SD card filesystem
 #define approot "cantroller2020"
