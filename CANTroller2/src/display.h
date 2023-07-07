@@ -467,7 +467,7 @@ class Display {
                 disp_needles[lineno] = -1;  // Flag for no needle
             }
         }
-        int32_t significant_place (double value) {  // Returns the decimal place of the most significant digit of a given float value, without relying on logarithm math
+        int32_t significant_place (double value) {  // Returns the decimal place of the most significant digit of a given double value, without relying on logarithm math
             int32_t place = 0;
             if (value >= 1) { // int32_t vallog = std::log10(value);  // Can be sped up
                 place = 1;
@@ -476,7 +476,7 @@ class Display {
                     place++;
                 }
             }
-            else if (value) {  // checking (value) rather than (value != 0.0) can help avoid precision errors caused by digital representation of floating numbers
+            else if (value) {  // checking (value) rather than (value != 0.0) can help avoid precision errors caused by digital representation of doubleing numbers
                 while (value < 1) {
                     value *= 10;
                     place--;
@@ -502,7 +502,7 @@ class Display {
                 std::string result (std::to_string ((int32_t)value));
                 return result;
             }
-            if (place >= 0 && place < maxlength) {  // Then we want float formatted with enough nonzero digits after the decimal point for 4 significant digits (eg 123.4, 12.34, 1.234, 0)
+            if (place >= 0 && place < maxlength) {  // Then we want double formatted with enough nonzero digits after the decimal point for 4 significant digits (eg 123.4, 12.34, 1.234, 0)
                 int32_t length = min (sigdig+1, maxlength);
                 char buffer[length+1];
                 std::snprintf (buffer, length + 1, "%.*g", length - 1, value);
