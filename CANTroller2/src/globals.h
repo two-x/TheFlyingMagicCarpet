@@ -19,7 +19,8 @@
 // #include "driver/mcpwm.h"  // MCPWM pulse measurement code
 
 // #include "classes.h"
-#include "spid.h"
+#include "qpid.h"
+// #include "spid.h"
 // #include "disp.h"
 
 // #undef CAP_TOUCH
@@ -350,6 +351,7 @@ double pressure_panic_increment_psi = 25;  // Incremental pressure added periodi
 // max pedal bent 1154
 double pressure_psi = (pressure_min_psi+pressure_max_psi)/2;
 double pressure_filt_psi = pressure_psi;  // Stores new setpoint to give to the pid loop (brake)
+double pressure_target_psi;
 
 // brake actuator motor related
 double brake_pulse_out_us;  // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
@@ -403,6 +405,7 @@ Timer tachPulseTimer;  // OK to not be volatile?
 volatile int32_t tach_delta_us = 0;
 volatile int32_t tach_buf_delta_us = 0;
 volatile uint32_t tach_time_us;
+double tach_target_rpm;
 double tach_rpm = 50.0;  // Current engine speed, raw value converted to rpm (in rpm)
 double tach_filt_rpm = 50.0;  // Current engine speed, filtered (in rpm)
 double tach_govern_rpm;  // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
@@ -420,6 +423,7 @@ int32_t tach_stop_timeout_us = 400000;  // Time after last magnet pulse when we 
 int32_t tach_delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
 
 // carspeed/speedo related
+double speedo_target_mph;
 double speedo_govern_mph;  // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
 double speedo_mph = 1.01;  // Current car speed, raw as sensed (in mph)
 double speedo_filt_mph = 1.02;  // Current car speed, filtered (in mph)
@@ -512,7 +516,12 @@ SdFile file;  // Use for file creation in folders.
 // SPID gasSPID (&tach_filt_rpm, gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, gas_spid_ctrl_dir, gas_pid_period_ms);
 // SPID cruiseSPID (&speedo_filt_mph, cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, cruise_spid_ctrl_dir, cruise_pid_period_ms);
 
-QuickPID brakeQPID (&pressure_filt_psi, brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brake_spid_ctrl_dir, brake_pid_period_ms);
+QPID brakeQPID (&pressure_filt_psi, &brake_pulse_out_us, &pressure_target_psi);
+QPID gasQPID (&tach_filt_rpm, &gas_pulse_out_us, &tach_target_rpm);
+QPID cruiseQPID (&speedo_filt_mph, &tach_target_rpm, &speedo_target_mph);
+
+// brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brake_spid_ctrl_dir, brake_pid_period_ms);
+
 // SPID gasSPID (&tach_filt_rpm, gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, gas_spid_ctrl_dir, gas_pid_period_ms);
 // SPID cruiseSPID (&speedo_filt_mph, cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, cruise_spid_ctrl_dir, cruise_pid_period_ms);
 
