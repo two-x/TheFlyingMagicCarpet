@@ -7,7 +7,9 @@
 #include <string>
 #include <iomanip>  // Formatting cout
 #include "classes.h"  // Contains our data structures
-#include "spid.h"
+// #include "spid.h"
+// #include <QuickPID.h>
+#include "qpid.h"  // This is quickpid library except i have to edit some of it
 #include "globals.h"
 #include "ctrl.h"
 using namespace std;
@@ -1043,7 +1045,7 @@ void loop() {
     //
     loop_period_us = loopTimer.elapsed();  // us since beginning of this loop
     loopTimer.reset();
-    loop_freq_hz = 1000000.0 / ((loop_period_us) ? (double)loop_period_us : 1);  // Prevent potential divide by zero
+    loop_freq_hz = 1000000.0 / ((loop_period_us) ? loop_period_us : 1);  // Prevent potential divide by zero
     loopno++;  // I like to count how many loops
     if (timestamp_loop) {
         // loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");  //
