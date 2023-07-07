@@ -3,7 +3,7 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
-// #define CAP_TOUCH
+#define CAP_TOUCH
 
 #ifdef CAP_TOUCH
     #include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip

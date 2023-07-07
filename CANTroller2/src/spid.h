@@ -23,11 +23,10 @@ class SPID {  // Soren's home-made pid loop
   private:
     double kp_coeff = 0.01, ki_coeff = 0.01, kd_coeff = 0.01, kp, ki_hz, kd_s;
     int32_t actuator_direction = FWD;
-    bool rounding = true, open_loop = false, enabled = false, never_enabled = true;
-    int32_t max_precision = 4;
+    bool rounding = false, open_loop = false, enabled = false, never_enabled = true;
     uint32_t sample_period_ms;
-    double output, out_min, out_max, target, target_last, error, error_last, output_last, p_term, i_term, d_term, saturation_margin, saturation_margin_percent = 5.0;
-    double near_target_error_thresh_ratio = 0.005;  // Fraction of the input range where if the error has not exceeded in either dir since last zero crossing, it is considered zero (to prevent endless microadjustments) 
+    double output, out_min, out_max, target, target_last, error, error_last, output_last, p_term, i_term, d_term, saturation_margin;
+    double saturation_margin_percent = 10.0, near_target_error_thresh_ratio = 0.005;  // Fraction of the input range where if the error has not exceeded in either dir since last zero crossing, it is considered zero (to prevent endless microadjustments) 
     double myinput, mytarget, myoutput, input_last = 0, near_target_error_thresh = 0, near_target_lock = 0;
     double in_center = 2047, out_center = 2047;
     double* p_input; double* p_in_min; double* p_in_max; double* p_output = &output; double* p_out_min = &out_min; double* p_out_max = &out_max;
@@ -38,13 +37,10 @@ class SPID {  // Soren's home-made pid loop
         p_input = arg_input;
         set_tunings(arg_kp, arg_ki_hz, arg_kd_s);
         set_actuator_direction(arg_dir);
-        // set_center_modes(arg_in_center_mode, arg_out_center_mode);
         sample_period_ms = arg_period_ms;
     }
     SPID (double* arg_input, double* arg_output, double arg_kp, double arg_ki_hz, double arg_kd_s, int32_t arg_dir, uint32_t arg_period_ms) {  // , bool arg_in_center_mode, bool arg_out_center_mode
         p_output = arg_output;
-        *p_in_min = *arg_input;  // This has to point somewhere for now until it gets set
-        *p_in_max = *arg_input;  // This has to point somewhere for now until it gets set
         *p_out_min = *arg_output;  // This has to point somewhere for now until it gets set
         *p_out_max = *arg_output;  // This has to point somewhere for now until it gets set
         SPID (arg_input, arg_kp, arg_ki_hz, arg_kd_s, arg_dir, arg_period_ms);
@@ -65,28 +61,22 @@ class SPID {  // Soren's home-made pid loop
     // }
     bool constrain_value (double* value, double min, double max, double margin = 0.0) {  // Constrains referred value to given range, returning 1 if value was beyond range + margins
         bool sat = false;
-        if (*value < min) {
-            if (*value < min + margin) sat = true;
-            *value = min;
+        if (*value < min + margin) {
+            sat = true;
+            if (*value < min) *value = min;
         }
-        else if (*value > max) {
-            if (*value > max - margin) sat = true;
-            *value = max;
+        else if (*value > max - margin) {
+            sat = true;
+            if (*value > max) *value = max;
         }
         return sat;
     }
-    void set_input (double arg_input) {
-        *p_input = round (arg_input);
-        constrain_value (p_input, *p_in_min, *p_in_max);
-    }
-    double round (double val, int32_t digits) { return (rounding) ? (std::round (val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
-    double round (double val) { return round (val, max_precision); }
+    double round (double val, int32_t digits = 4) { return (rounding) ? (std::round (val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
+    // Clamp. Returns 0 if saturated and signs of (value - center) and error are the same (or in case of reverse actuator, different).
     double clamp_value (double arg_value, double arg_center) {  // If output is overshooting in the same direction as the error and the integral term is contributing, reset i_term
-        bool err_sign = signbit (error) ^ (actuator_direction < 0);  // reverse error value sign if actuator direction is reversed
-        if ((signbit (arg_value - arg_center) != err_sign) && saturated) return 0;  // (&& saturated)  if sign of arg_value is the same as that of error, then zero arg_value
+        bool val_sign = signbit (arg_value - arg_center) ^ (actuator_direction < 0);  // reverse error value sign if actuator direction is reversed
+        if ((signbit (error) != val_sign) && saturated) return 0;  // (&& saturated)  if sign of arg_value is the same as that of error, then zero arg_value
         return arg_value;  // otherwise return arg_value unmolested
-        // Textbook says saturation is also a precondition of clamping, but I left it out because that doesn't make sense to me right now
-        // if ((signbit (*p_output) == err_sign) && (signbit (arg_value) == err_sign)) // Considering also checking output sign is also the same
     }
     double compute (void) {
         if (!enabled) return *p_output;
@@ -139,7 +129,7 @@ class SPID {  // Soren's home-made pid loop
         target_last = mytarget;
         // printf (" in=%-+9.4lf lst=%-+9.4lf err=%-+9.4lf tgt=%-+9.4lf", myinput, input_last, error, mytarget);
         // printf (" pt=%-+9.4lf it=%-+9.4lf dt=%-+9.4lf out=%-+9.4lf\n", p_term, i_term, d_term, output);
-        *p_output = myoutput;
+        *p_output = round (myoutput);
         return *p_output;
     }
     // Comments related to compute() function
@@ -165,10 +155,13 @@ class SPID {  // Soren's home-made pid loop
     //
     // printf ("uc output: %7.2lf, min: %7.2lf, max:%7.2lf, ", *p_output, *p_out_min, *p_out_max);
     // printf ("c output: %7.2lf, min: %7.2lf, max:%7.2lf\n", *p_output, *p_out_min, *p_out_max);
-
+    void set_input (double arg_input) {
+        *p_input = round (arg_input);
+        constrain_value (p_input, *p_in_min, *p_in_max);
+    }
     void set_target (double arg_target) {
         // printf ("SPID::set_target():  received arg_target=%-+9.4lf, *p_in_min=%-+9.4lf, *p_in_max=%-+9.4lf\n", arg_target, *p_in_min, *p_in_max);
-        target = round (arg_target, max_precision);
+        target = round (arg_target);
         constrain_value (&target, *p_in_min, *p_in_max);
         error = target - *p_input;
     }
