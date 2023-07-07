@@ -439,7 +439,7 @@ void loop() {
     if (runmode == BASIC) {  // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         if (we_just_switched_modes) {  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
             // syspower = HIGH;  // Power up devices if not already
-            all_pids_set_enable (false);
+            enable_pids (0, 0, 0);
             gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
             gasSPID.set_enable (false);
             cruiseSPID.set_enable (false);
@@ -450,9 +450,7 @@ void loop() {
     }
     else if (runmode == SHUTDOWN) { // In shutdown mode we stop the car if it's moving then park the motors.
         if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
-            brakeSPID.set_enable (true);
-            gasSPID.set_enable (true);
-            cruiseSPID.set_enable (false);
+            enable_pids (1, 1, 0);
             gasSPID.set_target (tach_idle_rpm);  //  Release the throttle 
             shutdown_complete = false;
             shutdown_color = LPNK;
@@ -473,6 +471,7 @@ void loop() {
         if (!shutdown_complete) {  // If we haven't yet stopped the car and then released the brakes and gas all the way
             if (car_stopped() || stopcarTimer.expired()) {  // If car has stopped, or timeout expires, then release the brake
                 if (shutdown_color == LPNK) {  // On first time through here
+                    enable_pids (0, 0, 0);
                     brakeSPID.set_enable (false);
                     gasSPID.set_enable (false);
                     park_the_motors = true;  // Flags the motor parking to happen, only once
@@ -503,7 +502,7 @@ void loop() {
         }
     }
     else if (runmode == STALL) {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
-        if (we_just_switched_modes) all_pids_set_enable (false);
+        if (we_just_switched_modes) enable_pids (0, 0, 0);
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) brakeSPID.set_target (pressure_min_psi);  // If in deadband or being pushed up, no pressure target
         else brakeSPID.set_target (map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][BOT], (double)ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi));  // Scale joystick value to pressure adc setpoint
         if (!starter && !engine_stopped()) runmode = HOLD;  // Enter Hold Mode if we started the car
@@ -511,9 +510,7 @@ void loop() {
     }
     else if (runmode == HOLD) {
         if (we_just_switched_modes) {  // Release throttle and push brake upon entering hold mode
-            brakeSPID.set_enable (true);
-            gasSPID.set_enable (true);
-            cruiseSPID.set_enable (false);
+            enable_pids (1, 1, 0);
             gasSPID.set_target (tach_idle_rpm);  // Let off gas (if gas using PID mode)
             if (car_stopped()) brakeSPID.set_target (pressure_filt_psi + pressure_hold_increment_psi); // If the car is already stopped then just add a touch more pressure and then hold it.
             else if (brakeSPID.get_target() < pressure_hold_initial_psi) brakeSPID.set_target (pressure_hold_initial_psi);  //  These hippies need us to stop the car for them
@@ -530,7 +527,7 @@ void loop() {
     }
     else if (runmode == FLY) {
         if (we_just_switched_modes) {
-            all_pids_set_enable (true);
+            enable_pids (1, 1, 1);
             gesture_progress = 0;
             gestureFlyTimer.set (gesture_flytimeout_us); // Initialize gesture timer to already-expired value
             cruise_sw_held = false;
@@ -587,6 +584,7 @@ void loop() {
     }
     else if (runmode == CRUISE) {
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
+            enable_pids (1, 1, 1);
             cruiseSPID.set_target (speedo_filt_mph);
             brakeSPID.set_target (pressure_min_psi);  // Let off the brake and keep it there till out of Cruise mode
             gestureFlyTimer.reset();  // reset gesture timer
@@ -628,7 +626,7 @@ void loop() {
     }
     else if (runmode == CAL) {
         if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
-            all_pids_set_enable (false);
+            enable_pids (0, 0, 0);
             calmode_request = false;
             cal_pot_gas_ready = false;
             cal_pot_gasservo = false;
@@ -769,17 +767,17 @@ void loop() {
     //
     int32_t touch_x, touch_y, trow, tcol;
     // if (screen.ts.touched() == 1 ) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
-    if (ts.touched() == 1 ) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
+    if (ts.touched()) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
         touch_accel = 1 << touch_accel_exponent;  // determine value editing rate
         // TS_Point touchpoint = screen.ts.getPoint();  // Retreive a point
         TS_Point touchpoint = ts.getPoint();  // Retreive a point
+        printf("Touch: x:%ld, y:%ld, z:%ld\n", touchpoint.x, touchpoint.y, touchpoint.z); //, , row:%ld, col:%ld\n", touchpoint.x, touchpoint.y, trow, tcol);
         touchpoint.x = map (touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
         touchpoint.y = map (touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);  // Rotate touch coordinates to match tft coordinates
         touch_y = disp_height_pix-touchpoint.x; // touch point y coordinate in pixels, from origin at top left corner
         touch_x = touchpoint.y; // touch point x coordinate in pixels, from origin at top left corner
         trow = constrain((touch_y + touch_fudge)/touch_cell_v_pix, 0, 4);  // The -8 seems to be needed or the vertical touch seems off (?)
         tcol = (touch_x-touch_margin_h_pix)/touch_cell_h_pix;
-        // else printf("Touch: x:%ld, y:%ld, row:%ld, col:%ld\n", touch_x, touch_y, trow, tcol);
         // Take appropriate touchscreen actions depending how we're being touched
         if (tcol==0 && trow==0 && !touch_now_touched) {
             if (++dataset_page >= arraysize(pagecard)) dataset_page -= arraysize(pagecard);  // Displayed dataset page can also be changed outside of simulator

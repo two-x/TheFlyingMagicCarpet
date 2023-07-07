@@ -216,8 +216,7 @@ int32_t shutdown_color = colorcard[SHUTDOWN];
 #ifdef CAP_TOUCH
     Adafruit_FT6206 ts;  // 2.8in Touch panel on TFT shield
 #else
-    // XPT2046_Touchscreen ts (9);  // 3.2in resistive touch panel
-    XPT2046_Touchscreen ts (touch_cs_pin);  // 3.2in resistive touch panel
+    XPT2046_Touchscreen ts (touch_cs_pin, touch_irq_pin);  // 3.2in resistive touch panel
 #endif
 
 class Display {
