@@ -166,23 +166,27 @@ void setup() {
     
     // gasQPID.set_open_loop(1);  // Added temporarily to debug brake pid
 
-    brakeQPID.SetMode (brakeQPID.Control::timer);
+    brakeQPID.SetMode (QPID::Control::timer);
     brakeQPID.SetOutputLimits ((double)brake_pulse_retract_us, (double)brake_pulse_extend_us);
-    brakeQPID.SetTunings (brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brakeQPID.pMode::pOnError, brakeQPID.dMode::dOnMeas, brakeQPID.iAwMode::iAwClamp);
+    brakeQPID.SetTunings (brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, 
+                          QPID::pMode::pOnError, QPID::dMode::dOnMeas, QPID::iAwMode::iAwClamp);
     brakeQPID.SetSampleTimeUs (1000 * brake_pid_period_ms);
-    brakeQPID.SetControllerDirection (brakeQPID.Action::reverse);
+    brakeQPID.SetControllerDirection (QPID::Action::reverse);
 
-    gasQPID.SetMode (gasQPID.Control::timer);
+    gasQPID.SetMode (QPID::Control::manual);  // No PID action
+    // gasQPID.SetMode (QPID::Control::timer);  // We call Compute() on our pwn timer
     gasQPID.SetOutputLimits ((double)gas_pulse_redline_us, (double)gas_pulse_idle_us);
-    gasQPID.SetTunings (gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, gasQPID.pMode::pOnError, gasQPID.dMode::dOnMeas, gasQPID.iAwMode::iAwClamp);
+    gasQPID.SetTunings (gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, 
+                        QPID::pMode::pOnError, QPID::dMode::dOnMeas, QPID::iAwMode::iAwClamp);
     gasQPID.SetSampleTimeUs (1000 * gas_pid_period_ms);
-    gasQPID.SetControllerDirection (gasQPID.Action::reverse);
+    gasQPID.SetControllerDirection (QPID::Action::reverse);
     
-    cruiseQPID.SetMode (cruiseQPID.Control::timer);
+    cruiseQPID.SetMode (QPID::Control::timer);
     cruiseQPID.SetOutputLimits ((double)tach_govern_rpm, (double)tach_idle_rpm);
-    cruiseQPID.SetTunings (cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, cruiseQPID.pMode::pOnError, cruiseQPID.dMode::dOnMeas, cruiseQPID.iAwMode::iAwClamp);
+    cruiseQPID.SetTunings (cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, 
+                           QPID::pMode::pOnError, QPID::dMode::dOnMeas, QPID::iAwMode::iAwClamp);
     cruiseQPID.SetSampleTimeUs (1000 * cruise_pid_period_ms);
-    cruiseQPID.SetControllerDirection (cruiseQPID.Action::direct);
+    cruiseQPID.SetControllerDirection (QPID::Action::direct);
 
     steer_servo.attach (steer_pwm_pin);
     brake_servo.attach (brake_pwm_pin);
@@ -519,7 +523,7 @@ void loop() {
         }
     }
     else if (runmode == STALL) {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
-        if (we_just_switched_modes) enable_pids (0, 0, 0);
+        // if (we_just_switched_modes) enable_pids (0, 0, 0);
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) pressure_target_psi = pressure_min_psi;  // If in deadband or being pushed up, no pressure target
         else pressure_target_psi = map ((double)ctrl_pos_adc[VERT][FILT], (double)ctrl_db_adc[VERT][BOT], (double)ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi);  // Scale joystick value to pressure adc setpoint
         if (!starter && !engine_stopped()) runmode = HOLD;  // Enter Hold Mode if we started the car
@@ -696,7 +700,7 @@ void loop() {
             else if (brake_pos_filt_in - brake_pos_margin_in >= brake_pos_park_in) brake_pulse_out_us =  // If brake is extended from park point, retract toward park point, slowing as we approach
                 (double)map ((int32_t)brake_pos_filt_in, (int32_t)brake_pos_park_in, (int32_t)brake_pos_nom_lim_extend_in, brake_pulse_stop_us, brake_pulse_retract_us);
         }
-        else if (runmode != BASIC) brake_pulse_out_us = brakeQPID.compute();  // Otherwise the pid control is active
+        else if (runmode != BASIC) brakeQPID.Compute();  // Otherwise the pid control is active
         if (runmode != BASIC || park_the_motors) {
             if (runmode == CAL && cal_joyvert_brkmotor)  // In Cal mode constrain the motor to its entire range, instead of to the calibrated limits
                 brake_pulse_out_us = constrain (brake_pulse_out_us, (double)brake_pulse_retract_min_us, (double)brake_pulse_extend_max_us);  // Send to the actuator. Refuse to exceed range    
@@ -712,7 +716,7 @@ void loop() {
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
     if (cruisePidTimer.expired() && runmode == CRUISE && !cruise_adjusting) {
         cruisePidTimer.reset();
-        tach_target_rpm = cruiseQPID.compute();  // 
+        cruiseQPID.Compute();  // 
     }
     // Gas - Update servo output. Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
     if (gasPidTimer.expired()) {
@@ -726,9 +730,9 @@ void loop() {
         else if (runmode != BASIC) {
             if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) 
                 gas_pulse_out_us = (int32_t)(map (pot_filt_percent, pot_min_percent, pot_max_percent, (double)gas_pulse_ccw_max_us, (double)gas_pulse_cw_min_us));
-            else if (gasQPID.get_open_loop())  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
+            else if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual)  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
                 gas_pulse_out_us = (int32_t)(map (tach_target_rpm, tach_idle_rpm, tach_govern_rpm, (double)gas_pulse_idle_us, (double)gas_pulse_govern_us)); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
-            else gas_pulse_out_us = (int32_t)(gasQPID.compute());  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
+            else gasQPID.Compute();  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
             // printf ("Gas PID   rm= %+-4ld target=%-+9.4lf", runmode, (double)tach_target_rpm);
             // printf (" output = %-+9.4lf,  %+-4ld\n", gasQPID.get_output(), gas_pulse_out_us);
         }
@@ -936,7 +940,7 @@ void loop() {
             else if (selected_value == 2) adj_val (&tach_redline_rpm, 0.01*sim_edit_delta, tach_idle_rpm, 8000.0);
             else if (selected_value == 3) adj_val (&speedo_idle_mph, 0.01*sim_edit_delta, 0, speedo_redline_mph - 1);
             else if (selected_value == 4) adj_val (&speedo_redline_mph, 0.01*sim_edit_delta, speedo_idle_mph, 30.0);
-            else if (selected_value == 5) gasQPID.set_open_loop (sim_edit_delta > 0);
+            else if (selected_value == 5) gas_open_loop = (sim_edit_delta > 0);
             else if (selected_value == 6 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor, sim_edit_delta);
             else if (selected_value == 7 && runmode == CAL) adj_bool (&cal_pot_gasservo, (sim_edit_delta < 0 || cal_pot_gas_ready) ? sim_edit_delta : -1);
       }
@@ -951,19 +955,19 @@ void loop() {
             else if (selected_value == 7) adj_val (&gas_pulse_redline_us, sim_edit_delta, gas_pulse_cw_min_us, gas_pulse_idle_us - 1);
         }
         else if (dataset_page == PG_BPID) {
-            if (selected_value == 5) brakeQPID.set_tunings (brakeQPID.get_kp()+0.001*(double)sim_edit_delta, brakeQPID.get_ki_hz(), brakeQPID.get_kd_s());
-            else if (selected_value == 6) brakeQPID.set_tunings (brakeQPID.get_kp(), brakeQPID.get_ki_hz()+0.001*(double)sim_edit_delta, brakeQPID.get_kd_s());
-            else if (selected_value == 7) brakeQPID.set_tunings (brakeQPID.get_kp(), brakeQPID.get_ki_hz(), brakeQPID.get_kd_s()+0.001*(double)sim_edit_delta);
+            if (selected_value == 5) brakeQPID.SetKp (brakeQPID.GetKp() + 0.001 * (double)sim_edit_delta);
+            else if (selected_value == 6) brakeQPID.SetKi (brakeQPID.GetKi() + 0.001 * (double)sim_edit_delta);
+            else if (selected_value == 7) brakeQPID.SetKd (brakeQPID.GetKd() + 0.001 * (double)sim_edit_delta);
         }
         else if (dataset_page == PG_GPID) {
-            if (selected_value == 5) gasQPID.set_tunings (gasQPID.get_kp()+0.001*(double)sim_edit_delta, gasQPID.get_ki_hz(), gasQPID.get_kd_s());
-            else if (selected_value == 6) gasQPID.set_tunings (gasQPID.get_kp(), gasQPID.get_ki_hz()+0.001*(double)sim_edit_delta, gasQPID.get_kd_s());
-            else if (selected_value == 7) gasQPID.set_tunings (gasQPID.get_kp(), gasQPID.get_ki_hz(), gasQPID.get_kd_s()+0.001*(double)sim_edit_delta);
+            if (selected_value == 5) gasQPID.SetKp (gasQPID.GetKp() + 0.001 * (double)sim_edit_delta);
+            else if (selected_value == 6) gasQPID.SetKi (gasQPID.GetKi() + 0.001 * (double)sim_edit_delta);
+            else if (selected_value == 7) gasQPID.SetKd (gasQPID.GetKd() + 0.001 * (double)sim_edit_delta);
         }
         else if (dataset_page == PG_CPID) {
-            if (selected_value == 5) cruiseQPID.set_tunings (cruiseQPID.get_kp()+0.001*(double)sim_edit_delta, cruiseQPID.get_ki_hz(), cruiseQPID.get_kd_s());
-            else if (selected_value == 6) cruiseQPID.set_tunings (cruiseQPID.get_kp(), cruiseQPID.get_ki_hz()+0.001*(double)sim_edit_delta, cruiseQPID.get_kd_s());
-            else if (selected_value == 7) cruiseQPID.set_tunings (cruiseQPID.get_kp(), cruiseQPID.get_ki_hz(), cruiseQPID.get_kd_s()+0.001*(double)sim_edit_delta);
+            if (selected_value == 5) cruiseQPID.SetKp (cruiseQPID.GetKp() + 0.001 * (double)sim_edit_delta);
+            else if (selected_value == 6) cruiseQPID.SetKi (cruiseQPID.GetKi() + 0.001 * (double)sim_edit_delta);
+            else if (selected_value == 7) cruiseQPID.SetKd (cruiseQPID.GetKd() + 0.001 * (double)sim_edit_delta);
         }
         else if (dataset_page == PG_TEMP) {        
             if (selected_value == 4) adj_val (&pressure_adc, sim_edit_delta, pressure_min_adc, pressure_max_adc);

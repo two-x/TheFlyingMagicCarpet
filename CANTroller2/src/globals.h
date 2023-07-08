@@ -233,7 +233,7 @@ uint32_t steer_pid_period_ms = 185;  // (Not actually a pid) Needs to be long en
 Timer steerPidTimer (steer_pid_period_ms*1000);  // not actually tunable, just needs value above
 uint32_t brake_pid_period_ms = 185;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer brakePidTimer (brake_pid_period_ms*1000);  // not actually tunable, just needs value above
-int32_t brake_spid_ctrl_dir = SPID::REV;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
+// int32_t brake_spid_ctrl_dir = SPID::REV;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
 double brake_spid_initial_kp = 2.18;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
 double brake_spid_initial_ki_hz = 0.215;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
 double brake_spid_initial_kd_s = 1.130;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
@@ -242,14 +242,14 @@ Timer cruisePidTimer (cruise_pid_period_ms*1000);  // not actually tunable, just
 double cruise_spid_initial_kp = 0.157;  // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
 double cruise_spid_initial_ki_hz = 0.035;  // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
 double cruise_spid_initial_kd_s = 0.044;  // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
-int32_t cruise_spid_ctrl_dir = SPID::FWD;  // 1 = fwd, 0 = rev.
+// int32_t cruise_spid_ctrl_dir = SPID::FWD;  // 1 = fwd, 0 = rev.
 uint32_t gas_pid_period_ms = 225;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer gasPidTimer (gas_pid_period_ms*1000);  // not actually tunable, just needs value above
 double gas_spid_initial_kp = 0.245;  // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
 double gas_spid_initial_ki_hz = 0.015;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
 double gas_spid_initial_kd_s = 0.022;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
-int32_t gas_spid_ctrl_dir = SPID::REV;  // 0 = fwd, 1 = rev.
-
+// int32_t gas_spid_ctrl_dir = SPID::REV;  // 0 = fwd, 1 = rev.
+bool gas_open_loop = true;
 // starter related
 bool starter = LOW;
 bool starter_last = LOW;
@@ -263,7 +263,7 @@ double battery_filt_v = 10.0;
 double battery_max_v = 16.0;  // The max vehicle voltage we can sense. Design resistor divider to match. Must exceed max V possible.
 double battery_convert_v_per_adc = battery_max_v/adcrange_adc;
 bool battery_convert_invert = false;
-int32_t battery_convert_polarity = SPID::FWD;
+int32_t battery_convert_polarity = 1;  // Forward
 double battery_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 
 // potentiometer related
@@ -277,7 +277,7 @@ double pot_max_adc = 4090;  // TUNED 230613 - adc max measured = ?, or 9x.? % of
 double pot_convert_percent_per_adc = (pot_max_percent - pot_min_percent)/(pot_max_adc - pot_min_adc);  // 100 % / (3996 adc - 0 adc) = 0.025 %/adc
 bool pot_convert_invert = false;
 double pot_convert_offset = -0.08;
-int32_t pot_convert_polarity = SPID::FWD;
+int32_t pot_convert_polarity = 1;  // Forward
 double pot_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 
 // controller related
@@ -371,7 +371,7 @@ double brake_pos_filt_in;
 //  ---- tunable ----
 double brake_pos_convert_in_per_adc = 3.3 * 10000.0 / (5.0 * adcrange_adc * 557);  // 3.3 v * 10k ohm / (5 v * 4095 adc * 557 ohm/in) = 0.0029 in/adc = 2.89 m-in/adc 
 bool brake_pos_convert_invert = false;
-int32_t brake_pos_convert_polarity = SPID::FWD;
+int32_t brake_pos_convert_polarity = 1;  // Forward
 double brake_pos_ema_alpha = 0.25;
 double brake_pos_abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
 double brake_pos_nom_lim_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
@@ -412,7 +412,7 @@ double tach_govern_rpm;  // Software engine governor creates an artificially red
 //  ---- tunable ----
 double tach_convert_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min
 bool tach_convert_invert = true;
-int32_t tach_convert_polarity = SPID::FWD;      
+int32_t tach_convert_polarity = 1;  // Forward      
 double tach_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 double tach_idle_rpm = 700.0;  // Min value for engine hz, corresponding to low idle (in rpm)
 double tach_max_rpm = 6000.0;  // Max possible engine rotation speed
@@ -435,7 +435,7 @@ volatile uint32_t speedo_time_us;
 double speedo_convert_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 rot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 gearing * 20*pi in/rot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
 // Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
 bool speedo_convert_invert = true;
-int32_t speedo_convert_polarity = SPID::FWD;      
+int32_t speedo_convert_polarity = 1;  // Forward      
 double speedo_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 double speedo_idle_mph = 4.50;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
 double speedo_redline_mph = 15.0;  // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
@@ -736,11 +736,11 @@ void set_pin (int32_t pin, int32_t mode) { if (pin >= 0) pinMode (pin, mode); }
 void write_pin (int32_t pin, int32_t val) {  if (pin >= 0) digitalWrite (pin, val); }
 int32_t read_pin (int32_t pin) { return (pin >= 0) ? digitalRead (pin) : -1; }
 
-void enable_pids (int32_t en_brake, int32_t en_gas, int32_t en_cruise) {  // pass in 0 (disable), 1 (enable), or -1 (leave it alone) for each pid loop
-    if (en_brake != -1) brakeSPID.set_enable ((bool)en_brake);
-    if (en_gas != -1) gasSPID.set_enable ((bool)en_gas);
-    if (en_cruise != -1) cruiseSPID.set_enable ((bool)en_cruise);
-}
+// void enable_pids (int32_t en_brake, int32_t en_gas, int32_t en_cruise) {  // pass in 0 (disable), 1 (enable), or -1 (leave it alone) for each pid loop
+//     if (en_brake != -1) brakeSPID.set_enable ((bool)en_brake);
+//     if (en_gas != -1) gasSPID.set_enable ((bool)en_gas);
+//     if (en_cruise != -1) cruiseSPID.set_enable ((bool)en_cruise);
+// }
 
 void syspower_set (bool val) {
     if (digitalRead (syspower_pin) != val) {
