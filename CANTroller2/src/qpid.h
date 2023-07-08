@@ -27,7 +27,7 @@ class QPID {
     QPID(double *Input, double *Output, double *Setpoint, double Kp, double Ki, double Kd, Action Action);
 
     // Simplified constructor which uses defaults for remaining parameters.
-    QPID(double *Input, double *Output, double *Setpoint);
+    // QPID(double *Input, double *Output, double *Setpoint);
     
     // Simplified constructor which uses defaults for remaining parameters.
     QPID(double *Input, int32_t *Output, double *Setpoint);
@@ -51,6 +51,11 @@ class QPID {
 
     // Overload for specifying proportional ratio.
     void SetTunings(double Kp, double Ki, double Kd, pMode pMode, dMode dMode, iAwMode iAwMode);
+
+    // Soren: I wrote these to facilitate changing only one tuning parameter at a time
+    void SetKp(double Kp);
+    void SetKi(double Ki);
+    void SetKd(double Kd);
 
     // Sets the controller direction or action. Direct means the output will increase when the error is positive.
     // Reverse means the output will decrease when the error is positive.
@@ -83,6 +88,7 @@ class QPID {
     void Reset();             // Clears pTerm, iTerm, dTerm and outputSum values
 
     // PID Query functions ****************************************************************************************
+    double GetError();  // Soren added
     double GetKp();            // proportional gain
     double GetKi();            // integral gain
     double GetKd();            // derivative gain
@@ -189,27 +195,27 @@ QPID::QPID(double* Input, double* Output, double* Setpoint,
 /* Constructor *********************************************************************
    Simplified constructor which uses defaults for remaining parameters.
  **********************************************************************************/
-QPID::QPID(double* Input, double* Output, double* Setpoint)
-  : QPID::QPID(Input, Output, Setpoint,
-                       dispKp = 0,
-                       dispKi = 0,
-                       dispKd = 0,
-                       pmode = pMode::pOnError,
-                       dmode = dMode::dOnMeas,
-                       iawmode = iAwMode::iAwCondition,
-                       action = Action::direct) {
-}
+// QPID::QPID(double* Input, double* Output, double* Setpoint)
+//   : QPID::QPID(Input, Output, Setpoint,
+//                        dispKp = 0,
+//                        dispKi = 0,
+//                        dispKd = 0,
+//                        pmode = pMode::pOnError,
+//                        dmode = dMode::dOnMeas,
+//                        iawmode = iAwMode::iAwCondition,
+//                        action = Action::direct) {
+// }
 
-QPID::QPID(double* Input, int32_t* Output, double* Setpoint) {  // SC
+QPID::QPID(double* Input, int32_t* IntOutput, double* Setpoint) {  // SC
   int32_output = true;  // SC
 
-  double Kp = 0, double Ki = 0, double Kd = 0;
+  double Kp = 0, Ki = 0, Kd = 0;
   pMode pMode = pMode::pOnError;
   dMode dMode = dMode::dOnMeas;
   iAwMode iAwMode = iAwMode::iAwCondition;
   Action Action = Action::direct;
 
-  myIntOutput = Output;
+  myIntOutput = IntOutput;
   myInput = Input;
   mySetpoint = Setpoint;
   mode = Control::manual;
@@ -305,6 +311,11 @@ void QPID::SetTunings(double Kp, double Ki, double Kd,
 void QPID::SetTunings(double Kp, double Ki, double Kd) {
   SetTunings(Kp, Ki, Kd, pmode, dmode, iawmode);
 }
+
+// Soren: I wrote these to facilitate changing only one tuning parameter at a time
+void QPID::SetKp(double Kp) { SetTunings(Kp, dispKi, dispKd, pmode, dmode, iawmode); }
+void QPID::SetKi(double Ki) { SetTunings(dispKp, Ki, dispKd, pmode, dmode, iawmode); }
+void QPID::SetKd(double Kd) { SetTunings(dispKp, dispKi, Kd, pmode, dmode, iawmode); }
 
 /* SetSampleTime(.)***********************************************************
   Sets the period, in microseconds, at which the calculation is performed.
@@ -430,41 +441,18 @@ void QPID::SetOutputSum(double sum) {
 /* Status Functions************************************************************
   These functions query the internal state of the PID.
 ******************************************************************************/
-double QPID::GetKp() {
-  return dispKp;
-}
-double QPID::GetKi() {
-  return dispKi;
-}
-double QPID::GetKd() {
-  return dispKd;
-}
-double QPID::GetPterm() {
-  return pTerm;
-}
-double QPID::GetIterm() {
-  return iTerm;
-}
-double QPID::GetDterm() {
-  return dTerm;
-}
-double QPID::GetOutputSum() {
-  return outputSum;
-}
-uint8_t QPID::GetMode() {
-  return static_cast<uint8_t>(mode);
-}
-uint8_t QPID::GetDirection() {
-  return static_cast<uint8_t>(action);
-}
-uint8_t QPID::GetPmode() {
-  return static_cast<uint8_t>(pmode);
-}
-uint8_t QPID::GetDmode() {
-  return static_cast<uint8_t>(dmode);
-}
-uint8_t QPID::GetAwMode() {
-  return static_cast<uint8_t>(iawmode);
-}
+double QPID::GetError() { return error; }  // Soren added
+double QPID::GetKp() { return dispKp; }
+double QPID::GetKi() { return dispKi; }
+double QPID::GetKd() { return dispKd; }
+double QPID::GetPterm() { return pTerm; }
+double QPID::GetIterm() { return iTerm; }
+double QPID::GetDterm() { return dTerm; }
+double QPID::GetOutputSum() { return outputSum; }
+uint8_t QPID::GetMode() { return static_cast<uint8_t>(mode); }
+uint8_t QPID::GetDirection() { return static_cast<uint8_t>(action); }
+uint8_t QPID::GetPmode() { return static_cast<uint8_t>(pmode); }
+uint8_t QPID::GetDmode() { return static_cast<uint8_t>(dmode); }
+uint8_t QPID::GetAwMode() { return static_cast<uint8_t>(iawmode); }
 
 #endif // QPID.h
