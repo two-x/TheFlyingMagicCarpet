@@ -29,7 +29,7 @@ Display screen(tft_cs_pin, tft_dc_pin);
     
 // Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 MAKE_ENCODER(encoder, encoder_a_pin, encoder_b_pin, encoder_sw_pin);
-    
+
 void setup() {
     set_pin (heartbeat_led_pin, OUTPUT);
     set_pin (encoder_a_pin, INPUT_PULLUP);
@@ -55,7 +55,6 @@ void setup() {
     set_pin (tft_cs_pin, OUTPUT);
     set_pin (pot_wipe_pin, INPUT);
     set_pin (button_pin, INPUT_PULLUP);    
-    set_pin (syspower_pin, OUTPUT);
     set_pin (starter_pin, INPUT_PULLDOWN);
     set_pin (tp_irq_pin, INPUT_PULLUP);
     set_pin (led_rx_pin, OUTPUT);
@@ -71,10 +70,17 @@ void setup() {
     write_pin (sdcard_cs_pin, HIGH);   // Prevent bus contention
     write_pin (tft_dc_pin, LOW);
     write_pin (led_rx_pin, LOW);  // Light up
-    write_pin (syspower_pin, syspower);
     write_pin (encoder_pwr_pin, HIGH);
     write_pin (tft_rst_pin, HIGH);
-     
+    
+    // This bit is here as a way of autdetecting soren's breadboard, since his LCD is wired upside-down.
+    // Soren put a strong external pulldown on the pin, so it'll read low for autodetection. 
+    set_pin (syspower_pin, INPUT_PULLUP);  // Using weak ESP pullup to ensure this doesn't turn on syspower on the car
+    flip_the_screen = !(read_pin (syspower_pin));  // Will cause the LCD to be upside down
+    // Then set the put as an output as normal.
+    set_pin (syspower_pin, OUTPUT);
+    write_pin (syspower_pin, syspower);
+
     analogReadResolution (adcbits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
     Serial.begin (115200);  // Open serial port
     // printf("Serial port open\n");  // This works on Due but not ESP32
@@ -772,11 +778,25 @@ void loop() {
         touch_accel = 1 << touch_accel_exponent;  // determine value editing rate
         // TS_Point touchpoint = screen.ts.getPoint();  // Retreive a point
         TS_Point touchpoint = ts.getPoint();  // Retreive a point
-        // printf("Touch: x:%ld, y:%ld, z:%ld\n", touchpoint.x, touchpoint.y, touchpoint.z); //, , row:%ld, col:%ld\n", touchpoint.x, touchpoint.y, trow, tcol);
-        touchpoint.x = map (touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
-        touchpoint.y = map (touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);  // Rotate touch coordinates to match tft coordinates
-        touch_y = disp_height_pix-touchpoint.x; // touch point y coordinate in pixels, from origin at top left corner
-        touch_x = touchpoint.y; // touch point x coordinate in pixels, from origin at top left corner
+        #ifdef CAP_TOUCH
+            touchpoint.x = map (touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
+            touchpoint.y = map (touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);  // Rotate touch coordinates to match tft coordinates
+            touch_y = disp_height_pix-touchpoint.x; // touch point y coordinate in pixels, from origin at top left corner
+            touch_x = touchpoint.y; // touch point x coordinate in pixels, from origin at top left corner
+        #else
+            touch_x = constrain (touchpoint.x, 355, 3968);
+            touch_y = constrain (touchpoint.y, 230, 3930);
+            
+            touch_x = map (touch_x, 355, 3968, 0, disp_width_pix);
+            touch_y = map (touch_y, 230, 3930, 0, disp_height_pix);
+            if (!flip_the_screen) {
+                touch_x = disp_width_pix - touch_x;
+                touch_y = disp_height_pix - touch_y;
+            }
+        #endif
+        std::cout << "Touch: ptx:" << touchpoint.x << ", pty:" << touchpoint.y << ", ptz:" << touchpoint.z << " x:" << touch_x << ", y:" << touch_y << std::endl;
+        // std::cout << "Touch: ptx:" << touchpoint.x << ", pty:" << touchpoint.y << " x:" << touch_x << ", y:" << touch_y << ", z:" << touchpoint.z << std::endl;
+        
         trow = constrain((touch_y + touch_fudge)/touch_cell_v_pix, 0, 4);  // The -8 seems to be needed or the vertical touch seems off (?)
         tcol = (touch_x-touch_margin_h_pix)/touch_cell_h_pix;
         // Take appropriate touchscreen actions depending how we're being touched
