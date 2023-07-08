@@ -3,14 +3,16 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
-#define CAP_TOUCH
+// #define CAP_TOUCH
 
+bool flip_the_screen = false;
 #ifdef CAP_TOUCH
     #include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
     bool cap_touch = true;
 #else
     #include <XPT2046_Touchscreen.h>
     bool cap_touch = false;
+
 #endif
 
 // #include <font_Arial.h> // from ILI9341_t3
@@ -243,7 +245,9 @@ class Display {
             printf ("Init LCD... ");
             yield();
             _tft.begin();
-            _tft.setRotation(1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
+            _tft.setRotation( (flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Lt, 3: Landscape, USB=Top-Lt
+            printf ("TFT Setrotation: %d\n", flip_the_screen ? 3 : 1);
+
             for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
                 disp_age_quanta[lineno] = -1;
                 memset (disp_values[lineno], 0, strlen (disp_values[lineno]));
