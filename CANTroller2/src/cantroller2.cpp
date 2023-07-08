@@ -75,7 +75,7 @@ void setup() {
     
     // This bit is here as a way of autdetecting soren's breadboard, since his LCD is wired upside-down.
     // Soren put a strong external pulldown on the pin, so it'll read low for autodetection. 
-    set_pin (syspower_pin, INPUT_PULLUP);  // Using weak ESP pullup to ensure this doesn't turn on syspower on the car
+    set_pin (syspower_pin, INPUT);  // Using weak ESP pullup to ensure this doesn't turn on syspower on the car
     flip_the_screen = !(read_pin (syspower_pin));  // Will cause the LCD to be upside down
     // Then set the put as an output as normal.
     set_pin (syspower_pin, OUTPUT);
