@@ -186,7 +186,17 @@ class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
         start_us = esp_timer_get_time();
     }
     IRAM_ATTR bool expired (void) {
-        return esp_timer_get_time() - start_us >= timeout_us;
+        int64_t current_time = esp_timer_get_time();
+        int64_t target_time = start_us + timeout_us;
+
+        // Check for overflow
+        if (target_time < start_us) {
+            // Overflow occurred
+            return (current_time < start_us) && (current_time >= target_time);
+        } else {
+            // No overflow
+            return current_time >= target_time;
+        }
     }
     IRAM_ATTR uint32_t elapsed (void) {
         return esp_timer_get_time() - start_us;
