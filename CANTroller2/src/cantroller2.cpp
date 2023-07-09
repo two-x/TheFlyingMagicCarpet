@@ -77,10 +77,9 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
     // This bit is here as a way of autdetecting soren's breadboard, since his LCD is wired upside-down.
     // Soren put a strong external pulldown on the pin, so it'll read low for autodetection. 
-    set_pin (syspower_pin, INPUT);  // Using weak ESP pullup to ensure this doesn't turn on syspower on the car
+    set_pin (syspower_pin, INPUT);  // Temporarily use this pin to read a pullup/down resistor to configure screen flip
     flip_the_screen = !(read_pin (syspower_pin));  // Will cause the LCD to be upside down
-    // Then set the put as an output as normal.
-    set_pin (syspower_pin, OUTPUT);
+    set_pin (syspower_pin, OUTPUT);  // Then set the put as an output as normal.
     write_pin (syspower_pin, syspower);
 
     for (int32_t x=0; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
