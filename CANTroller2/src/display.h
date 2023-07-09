@@ -733,8 +733,8 @@ class Display {
                     // draw_dynamic(15, temps[WHEEL_FR], temp_min, temp_max);
                     // draw_dynamic(16, temps[WHEEL_RL], temp_min, temp_max);
                     draw_dynamic(14, temps[WHEEL_RR], temp_min, temp_max);
-                    draw_dynamic(16, pressure_adc, pressure_min_adc, pressure_max_adc);
-                    draw_dynamic(15, hotrc_vert_pulse_us, hotrc_pulse_vert_min_us, hotrc_pulse_vert_max_us);  // Programmed centerpoint is 230 adc
+                    draw_dynamic(15, pressure_adc, pressure_min_adc, pressure_max_adc);
+                    draw_dynamic(16, hotrc_vert_pulse_us, hotrc_pulse_vert_min_us, hotrc_pulse_vert_max_us);  // Programmed centerpoint is 230 adc
                     draw_dynamic(17, hotrc_pos_failsafe_min_adc, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
                     draw_dynamic(18, hotrc_pos_failsafe_max_adc, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
                     draw_dynamic(19, brake_pos_zeropoint_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);   
