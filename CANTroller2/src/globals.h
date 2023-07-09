@@ -23,7 +23,8 @@
 // #include "spid.h"
 // #include "disp.h"
 
-// #undef CAP_TOUCH
+// #define CAP_TOUCH
+bool flip_the_screen = false;
 
 // Here are the different runmodes documented
 //
@@ -468,6 +469,7 @@ int32_t loopno = 1;
 uint32_t looptimes_us[20];
 bool loop_dirty[20];
 int32_t loopindex = 0;
+bool booted = false;
 bool diag_ign_error_enabled = true;
 
 // pushbutton related

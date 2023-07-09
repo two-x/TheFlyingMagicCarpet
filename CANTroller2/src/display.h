@@ -2,16 +2,9 @@
 
 #ifndef DISPLAY_H
 #define DISPLAY_H
-
-#define CAP_TOUCH
-
-#ifdef CAP_TOUCH
-    #include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
-    bool cap_touch = true;
-#else
-    #include <XPT2046_Touchscreen.h>
-    bool cap_touch = false;
-#endif
+    
+// #include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
+// #include <XPT2046_Touchscreen.h>  // For the resistive touchscreen. Include both and attempt to autodetect
 
 // #include <font_Arial.h> // from ILI9341_t3
 // #include <SPI.h>
@@ -147,14 +140,14 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "  Kd (D)", },
     {   " Tmp Amb",  // PG_TEMP
         " Tmp Eng",
-        "Tmp WhRL",  // "Tmp WhFL",
-        "Tmp WhRR",  // "Tmp WhFR",
+        "Tmp WhRR",  // "Tmp WhFL", "Tmp WhFR", "Tmp WhRL" 
         "Pres ADC",
+        "HRC Vert",
         "RadioMin",
         "RadioMax",
         "BrkZeroP", },
 };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 3, 2, 0, 0, 5, 5, 5, 4 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 3, 2, 0, 0, 5, 5, 5, 5 };  // first value in each dataset page that's editable. All values after this must also be editable
 char units[disp_fixed_lines][5] = { "adc ", "mph ", "mph ", "rpm ", "rpm ", "\xe5s  ", "psi ", "psi ", "\xe5s  ", "adc ", "\xe5s  " };
 
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
@@ -165,7 +158,7 @@ char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "Hz  ", "sec " },  // PG_BPID
     { "mph ", "mph ", "mph ", "mph ", "mph ", "    ", "Hz  ", "sec " },  // PG_GPID
     { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "Hz  ", "sec " },  // PG_CPID
-    { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "adc ", "\xe5s  ", "\xe5s  ", "in  " },  // PG_TEMP
+    { "\x09""F  ", "\x09""F  ", "\x09""F  ", "adc ", "\xe5s  ", "adc ", "adc ", "in  " },  // PG_TEMP
     // { "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "    ", "    " },  // PG_TEMP
 };
 char simgrid[4][3][5] = {
@@ -219,9 +212,13 @@ Timer touchAccelTimer (850000);  // Touch hold time per left shift (doubling) of
 int32_t shutdown_color = colorcard[SHUTDOWN];
 
 #ifdef CAP_TOUCH
+    #include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
     Adafruit_FT6206 ts;  // 2.8in cap touch panel on tft lcd
+    bool cap_touch = true;
 #else
+    #include <XPT2046_Touchscreen.h>
     XPT2046_Touchscreen ts (touch_cs_pin, touch_irq_pin);  // 3.2in resistive touch panel on tft lcd
+    bool cap_touch = false;
 #endif
 
 class Display {
@@ -244,7 +241,7 @@ class Display {
             printf ("Init LCD... ");
             yield();
             _tft.begin();
-            _tft.setRotation(1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
+            _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
             for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
                 disp_age_quanta[lineno] = -1;
                 memset (disp_values[lineno], 0, strlen (disp_values[lineno]));
@@ -734,9 +731,10 @@ class Display {
                     draw_dynamic(13, temps[ENGINE], temp_min, temp_max);
                     // draw_dynamic(14, temps[WHEEL_FL], temp_min, temp_max);
                     // draw_dynamic(15, temps[WHEEL_FR], temp_min, temp_max);
-                    draw_dynamic(14, temps[WHEEL_RL], temp_min, temp_max);
-                    draw_dynamic(15, temps[WHEEL_RR], temp_min, temp_max);
+                    // draw_dynamic(16, temps[WHEEL_RL], temp_min, temp_max);
+                    draw_dynamic(14, temps[WHEEL_RR], temp_min, temp_max);
                     draw_dynamic(16, pressure_adc, pressure_min_adc, pressure_max_adc);
+                    draw_dynamic(15, hotrc_vert_pulse_us, hotrc_pulse_vert_min_us, hotrc_pulse_vert_max_us);  // Programmed centerpoint is 230 adc
                     draw_dynamic(17, hotrc_pos_failsafe_min_adc, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
                     draw_dynamic(18, hotrc_pos_failsafe_max_adc, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
                     draw_dynamic(19, brake_pos_zeropoint_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);   

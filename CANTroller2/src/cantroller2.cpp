@@ -32,7 +32,7 @@ Display screen(tft_cs_pin, tft_dc_pin);
 // Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 MAKE_ENCODER(encoder, encoder_a_pin, encoder_b_pin, encoder_sw_pin);
     
-void setup() {
+void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (heartbeat_led_pin, OUTPUT);
     set_pin (encoder_a_pin, INPUT_PULLUP);
     set_pin (encoder_b_pin, INPUT_PULLUP);
@@ -57,7 +57,6 @@ void setup() {
     set_pin (tft_cs_pin, OUTPUT);
     set_pin (pot_wipe_pin, INPUT);
     set_pin (button_pin, INPUT_PULLUP);    
-    set_pin (syspower_pin, OUTPUT);
     set_pin (starter_pin, INPUT_PULLDOWN);
     set_pin (tp_irq_pin, INPUT_PULLUP);
     set_pin (led_rx_pin, OUTPUT);
@@ -73,14 +72,17 @@ void setup() {
     write_pin (sdcard_cs_pin, HIGH);   // Prevent bus contention
     write_pin (tft_dc_pin, LOW);
     write_pin (led_rx_pin, LOW);  // Light up
-    write_pin (syspower_pin, syspower);
     write_pin (encoder_pwr_pin, HIGH);
     write_pin (tft_rst_pin, HIGH);
-     
-    analogReadResolution (adcbits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
-    Serial.begin (115200);  // Open serial port
-    // printf("Serial port open\n");  // This works on Due but not ESP32
-    
+
+    // This bit is here as a way of autdetecting soren's breadboard, since his LCD is wired upside-down.
+    // Soren put a strong external pulldown on the pin, so it'll read low for autodetection. 
+    set_pin (syspower_pin, INPUT);  // Using weak ESP pullup to ensure this doesn't turn on syspower on the car
+    flip_the_screen = !(read_pin (syspower_pin));  // Will cause the LCD to be upside down
+    // Then set the put as an output as normal.
+    set_pin (syspower_pin, OUTPUT);
+    write_pin (syspower_pin, syspower);
+
     for (int32_t x=0; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
     
     if (display_enabled) {
@@ -230,8 +232,12 @@ void setup() {
     printf ("Watchdog enabled. Timer set to %ld ms.\n", watchdog_time_ms);
     hotrcPanicTimer.reset();
     loopTimer.reset();  // start timer to measure the first loop
+    booted = true;
     Serial.println (F("Setup done"));
 }
+
+// void init (void) {     
+// }
 
 // Main loop.  Each time through we do these eight steps:
 //
@@ -249,7 +255,9 @@ void loop() {
     loopindex = 0;  // reset at top of loop
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "top");
     // cout << "(top)) spd:" << speedo_filt_mph << " tach:" << tach_filt_rpm;
-    
+
+    // if (!booted) init();  // Initialize - If this is our first loop, initialize everything
+
     // Update inputs.  Fresh sensor data, and filtering.
     //
 
@@ -792,11 +800,23 @@ void loop() {
         touch_accel = 1 << touch_accel_exponent;  // determine value editing rate
         // TS_Point touchpoint = screen.ts.getPoint();  // Retreive a point
         TS_Point touchpoint = ts.getPoint();  // Retreive a point
-        // printf("Touch: x:%ld, y:%ld, z:%ld\n", touchpoint.x, touchpoint.y, touchpoint.z); //, , row:%ld, col:%ld\n", touchpoint.x, touchpoint.y, trow, tcol);
-        touchpoint.x = map (touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
-        touchpoint.y = map (touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);  // Rotate touch coordinates to match tft coordinates
-        touch_y = disp_height_pix-touchpoint.x; // touch point y coordinate in pixels, from origin at top left corner
-        touch_x = touchpoint.y; // touch point x coordinate in pixels, from origin at top left corner
+        #ifdef CAP_TOUCH
+            touchpoint.x = map (touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
+            touchpoint.y = map (touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);  // Rotate touch coordinates to match tft coordinates
+            touch_y = disp_height_pix-touchpoint.x; // touch point y coordinate in pixels, from origin at top left corner
+            touch_x = touchpoint.y; // touch point x coordinate in pixels, from origin at top left corner
+        #else
+            touch_x = constrain (touchpoint.x, 355, 3968);
+            touch_y = constrain (touchpoint.y, 230, 3930);
+            touch_x = map (touch_x, 355, 3968, 0, disp_width_pix);
+            touch_y = map (touch_y, 230, 3930, 0, disp_height_pix);
+            if (!flip_the_screen) {
+                touch_x = disp_width_pix - touch_x;
+                touch_y = disp_height_pix - touch_y;
+            }
+        #endif
+        // std::cout << "Touch: fs:" << flip_the_screen << " ptx:" << touchpoint.x << ", pty:" << touchpoint.y << ", ptz:" << touchpoint.z << " x:" << touch_x << ", y:" << touch_y << std::endl;
+        // std::cout << "Touch: ptx:" << touchpoint.x << ", pty:" << touchpoint.y << " x:" << touch_x << ", y:" << touch_y << ", z:" << touchpoint.z << std::endl;
         trow = constrain((touch_y + touch_fudge)/touch_cell_v_pix, 0, 4);  // The -8 seems to be needed or the vertical touch seems off (?)
         tcol = (touch_x-touch_margin_h_pix)/touch_cell_h_pix;
         // Take appropriate touchscreen actions depending how we're being touched
@@ -970,8 +990,8 @@ void loop() {
             else if (selected_value == 7) cruiseQPID.SetKd (cruiseQPID.GetKd() + 0.001 * (double)sim_edit_delta);
         }
         else if (dataset_page == PG_TEMP) {        
-            if (selected_value == 4) adj_val (&pressure_adc, sim_edit_delta, pressure_min_adc, pressure_max_adc);
-            else if (selected_value == 5) adj_val (&hotrc_pos_failsafe_min_adc, sim_edit_delta, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
+            // if (selected_value == 4) adj_val (&pressure_adc, sim_edit_delta, pressure_min_adc, pressure_max_adc);
+            if (selected_value == 5) adj_val (&hotrc_pos_failsafe_min_adc, sim_edit_delta, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
             else if (selected_value == 6) adj_val (&hotrc_pos_failsafe_max_adc, sim_edit_delta, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
             else if (selected_value == 7) adj_val (&brake_pos_zeropoint_in, 0.001*sim_edit_delta, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
         }
