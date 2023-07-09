@@ -172,20 +172,26 @@ class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
   protected:
     volatile uint32_t start_us = 0;
     volatile uint32_t timeout_us = 0;
-    volatile uint32_t remain_us;
-    volatile bool enabled = true;
   public:
-    Timer (void) { reset(); }
-    Timer (uint32_t arg_timeout_us) { set (arg_timeout_us); }
-    IRAM_ATTR void set (uint32_t arg_timeout_us) { timeout_us = arg_timeout_us; reset(); }
-    IRAM_ATTR void reset (void) { start_us = esp_timer_get_time(); remain_us = timeout_us; }
-    IRAM_ATTR void pause (void) { remain_us = remain(); enabled = false; }
-    IRAM_ATTR void resume (void) { start_us = esp_timer_get_time() - remain_us; enabled = true; }
-    IRAM_ATTR bool expired (void) { return (enabled) ? (esp_timer_get_time() >= start_us + timeout_us): false; }
-    IRAM_ATTR uint32_t elapsed (void) { return (enabled) ? (esp_timer_get_time() - start_us) : (timeout_us - remain_us); }
-    IRAM_ATTR uint32_t remain (void) { return (enabled) ? ((start_us + timeout_us) - esp_timer_get_time()) : remain_us; }
+    Timer (void) {
+        reset();
+    }
+    Timer (uint32_t arg_timeout_us) {
+        set (arg_timeout_us);
+    }
+    IRAM_ATTR void set (uint32_t arg_timeout_us) {
+        timeout_us = arg_timeout_us; reset();
+    }
+    IRAM_ATTR void reset (void) {
+        start_us = esp_timer_get_time();
+    }
+    IRAM_ATTR bool expired (void) {
+        return esp_timer_get_time() - start_us >= timeout_us;
+    }
+    IRAM_ATTR uint32_t elapsed (void) {
+        return esp_timer_get_time() - start_us;
+    }
     IRAM_ATTR uint32_t get_timeout (void) { return timeout_us; }
-    IRAM_ATTR bool get_enabled (void) { return enabled; }
 };
 
 double convert_units (double from_units, double convert_factor, bool invert, double in_offset = 0.0, double out_offset = 0.0) {
