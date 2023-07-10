@@ -148,7 +148,7 @@ bool flip_the_screen = false;
 
 // Global settings
 bool serial_debugging = true; 
-bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
+bool timestamp_loop = true;  // Makes code write out timestamps throughout loop to serial port
 bool take_temperatures = true;
 
 // Persistent config storage
@@ -566,21 +566,28 @@ static Servo gas_servo;
 static Adafruit_NeoPixel neostrip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
 
 // Temperature sensor related
+long temp, temp_last;
+static int temp_secs = 0;
+static byte temp_data[2];
+static int16_t temp_raw;
+
+
 double temp_min = -67.0;  // Minimum reading of sensor is -25 C = -67 F
 double temp_max = 257.0;  // Maximum reading of sensor is 125 C = 257 F
 double temp_room = 77.0;  // "Room" temperature is 25 C = 77 F
 enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
 Timer tempTimer (2000000);
-enum temp_status { IDLE, CONVERT, DELAY };
-int32_t temp_status = IDLE;
 double temps[6];
 int32_t temp_detected_device_ct = 0;
 int32_t temperature_precision = 12;  // 9-12 bit resolution
 OneWire onewire (onewire_pin);
-DallasTemperature tempsensebus (&onewire);
 DeviceAddress temp_temp_addr;
 int32_t temp_current_index = 0;
 DeviceAddress temp_addrs[6];
+
+// enum temp_status { IDLE, CONVERT, DELAY };
+// int32_t temp_status = IDLE;
+// DallasTemperature tempsensebus (&onewire);
 
 // Interrupt service routines
 //
@@ -781,6 +788,29 @@ void syspower_set (bool val) {
         write_pin (syspower_pin, val);
         // delay (val * 500);
     }
+}
+long temp_peef (void) {
+    // if (millis() % 1000 == 0) {
+    onewire.reset();
+    onewire.write(0xCC);        // All Devices present - Skip ROM ID
+    onewire.write(0xBE);         // Read Scratchpad
+    temp_data[0] = onewire.read();
+    temp_data[1] = onewire.read();
+    temp_raw = (temp_data[1] << 8) | temp_data[0];
+    temp_last = temp;
+    temp = ((long)temp_raw * 180 / 16 + 3205) / 10;
+    temp_secs++;
+    delay(10);
+    if (abs(temp_last-temp) >= 20 && temp_last != 0) {
+        // Serial.println("Bad-T-" + String(f));
+        temp = temp_last;
+    }
+    onewire.reset();
+    onewire.write(0xCC);        // All Devices present - Skip ROM ID
+    onewire.write(0x44);        // start conversion, with parasite power on at the end
+    printf ("\nTemp: %s.%s °F\n", String(temp/10), String(temp%10));
+    // }
+    return temp;
 }
 
 // double get_temp (DeviceAddress arg_addr) {  // function to print the temperature for a device
