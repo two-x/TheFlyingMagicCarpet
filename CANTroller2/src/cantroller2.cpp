@@ -156,43 +156,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     calc_deadbands();
     calc_governor();
 
-    // Set up the soren pid loops
-    // brakeQPID.set_input_limits (&pressure_min_psi, &pressure_max_psi);  // Make sure pressure target is in range
-    // brakeQPID.set_output_limits ((float)brake_pulse_retract_us, (float)brake_pulse_extend_us);
-    
-    // printf ("CANT: min:%4ld max:%4ld cent:%ld\n", brake_pulse_retract_us, brake_pulse_extend_us, brake_pulse_stop_us);
-
-    // brakeQPID.set_output_center ((float)brake_pulse_stop_us);  // Sets actuator centerpoint and puts pid loop in output centerpoint mode. Becasue actuator value is defined as a deviation from a centerpoint
-    
-    // gasQPID.set_input_limits (&tach_idle_rpm, &tach_govern_rpm);
-    // gasQPID.set_output_limits ((float)gas_pulse_govern_us, (float)gas_pulse_idle_us);
-    // cruiseQPID.set_input_limits (&speedo_idle_mph, &speedo_govern_mph);
-    // cruiseQPID.set_output_limits (tach_idle_rpm, tach_govern_rpm);
-    
-    // gasQPID.set_open_loop(1);  // Added temporarily to debug brake pid
-
-    // brakeQPID.SetMode (QPID::Control::timer);
-    // brakeQPID.SetOutputLimits ((float)brake_pulse_retract_us, (float)brake_pulse_extend_us);
-    // brakeQPID.SetTunings (brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, 
-    //                       QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwClamp);
-    // brakeQPID.SetSampleTimeUs (1000 * brake_pid_period_ms);
-    // brakeQPID.SetControllerDirection (QPID::Action::reverse);
-
-    // gasQPID.SetMode (QPID::Control::manual);  // No PID action
-    // // gasQPID.SetMode (QPID::Control::timer);  // We call Compute() on our pwn timer
-    // gasQPID.SetOutputLimits ((float)gas_pulse_redline_us, (float)gas_pulse_idle_us);
-    // gasQPID.SetTunings (gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, 
-    //                     QPID::pMode::pOnErrorMeas, QPID::dMode::dOnMeas, QPID::iAwMode::iAwClamp);
-    // gasQPID.SetSampleTimeUs (1000 * gas_pid_period_ms);
-    // gasQPID.SetControllerDirection (QPID::Action::reverse);
-    
-    // cruiseQPID.SetMode (QPID::Control::timer);
-    // cruiseQPID.SetOutputLimits ((float)tach_govern_rpm, (float)tach_idle_rpm);
-    // cruiseQPID.SetTunings (cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, 
-    //                        QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwClamp);
-    // cruiseQPID.SetSampleTimeUs (1000 * cruise_pid_period_ms);
-    // cruiseQPID.SetControllerDirection (QPID::Action::direct);
-
     steer_servo.attach (steer_pwm_pin);
     brake_servo.attach (brake_pwm_pin);
     gas_servo.attach (gas_pwm_pin);
@@ -202,23 +165,28 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     neostrip.show(); // Initialize all pixels to 'off'
     neostrip.setBrightness (neo_brightness_max);
 
+    // Peef setup
+    // onewire.reset();
+    // onewire.write(0xCC);        // All Devices present - Skip ROM ID
+    // onewire.write(0x44);        // start conversion, with parasite power on at the end
 
-    onewire.reset();
-    onewire.write(0xCC);        // All Devices present - Skip ROM ID
-    onewire.write(0x44);        // start conversion, with parasite power on at the end
-
-    // tempsensebus.setWaitForConversion (true);  // Whether to block during conversion process
-    // tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
-    // tempsensebus.begin();
-    // temp_detected_device_ct = tempsensebus.getDeviceCount();
-    // printf ("Temp sensors: Detected %d devices.\nParasitic power is: ", temp_detected_device_ct);  // , DEC);
-    // printf ((tempsensebus.isParasitePowerMode()) ? "On\n" : "Off\n");
-    // // for (int32_t x = 0; x < arraysize(temp_addrs); x++) {
-    // for (int32_t x = 0; x < temp_detected_device_ct; x++) {
-    //     if (tempsensebus.getAddress (temp_temp_addr, x)) printf ("Found sensor device: index %d, addr %d\n", x, temp_temp_addr);  // temp_addrs[x]
-    //     else printf ("Found ghost device : index %d, addr unknown\n", x);  // printAddress (temp_addrs[x]);
-    //     tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
-    // }
+    tempsensebus.setWaitForConversion (false);  // Whether to block during conversion process
+    tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
+    tempsensebus.begin();
+    temp_detected_device_ct = tempsensebus.getDeviceCount();
+    printf ("Temp sensors: Detected %d devices.\nParasitic power is: ", temp_detected_device_ct);  // , DEC);
+    printf ((tempsensebus.isParasitePowerMode()) ? "On\n" : "Off\n");
+    // for (int32_t x = 0; x < arraysize(temp_addrs); x++) {
+    for (int32_t index = 0; index < temp_detected_device_ct; index++) {
+        if (tempsensebus.getAddress (temp_temp_addr, index)) {
+            for (int8_t addrbyte = 0; addrbyte < arraysize(temp_temp_addr); addrbyte++) {
+                temp_addrs[index][addrbyte] = temp_temp_addr[addrbyte];
+            }
+            tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
+            printf ("Found sensor device: index %d, addr 0x%x\n", index, temp_temp_addr);  // temp_addrs[x]
+        }
+        else printf ("Found ghost device : index %d, addr unknown\n", index);  // printAddress (temp_addrs[x]);
+    }
     
     // xTaskCreatePinnedToCore ( codeForTask1, "Task_1", 1000, NULL, 1, &Task1, 0);
     // if (ctrl == HOTRC) {  // Look for evidence of a normal (not failsafe) hotrc signal. If it's not yet powered on, we will ignore its spurious poweron ignition event
@@ -300,29 +268,12 @@ void loop() {
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
 
     // Temperature sensors
-    if (take_temperatures) {  // && tempTimer.expired()) {
-        long tempread = temp_peef();
-        if (tempread != 10000) temps[0] = (float)tempread;
-    }
-        // if (temp_status == IDLE) {
-        //     if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
-        //     tempsensebus.setWaitForConversion (false);  // makes it async
-        //     tempsensebus.requestTemperatures();
-        //     tempsensebus.setWaitForConversion (true);
-        //     tempTimer.set(750000 / (1 << (12 - temperature_precision)));  // Give some time before reading temp
-        //     temp_status = CONVERT;
-        // }
-        // else if (temp_status == CONVERT) {
-        //     temps[temp_current_index] = tempsensebus.getTempFByIndex(temp_current_index);
-        //     tempTimer.set(1500000);
-        //     temp_status = DELAY;
-        // }
-        // else if (temp_status == DELAY) {
-        //     // printf ("temps[%ld] = %lf F\n", temp_current_index, temps[temp_current_index]);
-        //     tempTimer.set(60000);
-        //     temp_status = IDLE;
-        // }
+    // if (take_temperatures) {  // && tempTimer.expired()) {
+    //     long tempread = temp_peef();
+    //     if (tempread != 10000) temps[0] = (float)tempread;
     // }
+    
+    temp_soren();
     
     // float temps[temp_detected_device_ct];
     // uint32_t timecheck;
@@ -833,8 +784,8 @@ void loop() {
                 touch_y = disp_height_pix - touch_y;
             }
         #endif
-        std::cout << "Touch: fs:" << flip_the_screen << " ptx:" << touchpoint.x << ", pty:" << touchpoint.y << ", ptz:" << touchpoint.z << " x:" << touch_x << ", y:" << touch_y << std::endl;
-        std::cout << "Touch: ptx:" << touchpoint.x << ", pty:" << touchpoint.y << " x:" << touch_x << ", y:" << touch_y << ", z:" << touchpoint.z << std::endl;
+        // std::cout << "Touch: fs:" << flip_the_screen << " ptx:" << touchpoint.x << ", pty:" << touchpoint.y << ", ptz:" << touchpoint.z << " x:" << touch_x << ", y:" << touch_y << std::endl;
+        // std::cout << "Touch: ptx:" << touchpoint.x << ", pty:" << touchpoint.y << " x:" << touch_x << ", y:" << touch_y << ", z:" << touchpoint.z << std::endl;
         trow = constrain((touch_y + touch_fudge)/touch_cell_v_pix, 0, 4);  // The -8 seems to be needed or the vertical touch seems off (?)
         tcol = (touch_x-touch_margin_h_pix)/touch_cell_h_pix;
         // Take appropriate touchscreen actions depending how we're being touched
@@ -1106,9 +1057,19 @@ void loop() {
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");    
     if (timestamp_loop) {
         // loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");  //
-        std::cout << "\rRM:" << runmode << " us:" << esp_timer_get_time() << " Lp#" << loopno << " us:" << loop_period_us;
-        for (int32_t x=1; x<loopindex; x++) std::cout << " " << std::setw(3) << loop_names[x] << x << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1];
-        if (loop_period_us > 25000) printf ("\n");
+        if (loop_period_us > 25000) {
+            std::cout << "RM:" << runmode << " us:" << esp_timer_get_time() << " Lp#" << loopno << " us:" << loop_period_us;
+            for (int32_t x=1; x<loopindex; x++) std::cout << " " << std::setw(3) << loop_names[x] << x << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1];
+            std::cout << std::endl;
+        }
+        // else {
+        //     std::cout << loop_report;
+        //     loop_report("");
+        // }
+
+        // std::cout << "\rRM:" << runmode << " us:" << esp_timer_get_time() << " Lp#" << loopno << " us:" << loop_period_us;
+        // for (int32_t x=1; x<loopindex; x++) std::cout << " " << std::setw(3) << loop_names[x] << x << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1];
+        // if (loop_period_us > 25000) printf ("\n");
     }
     loop_int_count = 0;
 }
