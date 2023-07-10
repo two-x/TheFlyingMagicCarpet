@@ -170,11 +170,11 @@ Preferences config;
 
 // Globals -------------------
 //
-class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
+class Timer {
   protected:
-    volatile uint32_t start_us = 0;
+    volatile uint64_t start_us = 0;
     volatile uint32_t timeout_us = 0;
-    volatile int64_t target_time = 0;
+    volatile uint64_t target_time = 0;
   public:
     Timer (void) {
         reset();
@@ -187,17 +187,12 @@ class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
         reset();
     }
     IRAM_ATTR void reset (void) {
-        target_time = start_us + timeout_us;
         start_us = esp_timer_get_time();
+        target_time = start_us + timeout_us;
     }
     IRAM_ATTR bool expired (void) {
         int64_t current_time = esp_timer_get_time();
-
-        // Check for no overflow first
-        if (current_time >= start_us && current_time < target_time) {
-            return false;
-        }
-        return true;
+        return (current_time >= target_time);
     }
     IRAM_ATTR uint32_t elapsed (void) {
         return esp_timer_get_time() - start_us;
