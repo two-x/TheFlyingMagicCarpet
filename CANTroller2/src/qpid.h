@@ -19,19 +19,19 @@ class QPID {
     QPID();
 
     // Constructor. Links the PID to Input, Output, Setpoint, initial tuning parameters and control modes.
-    QPID(double *Input, double *Output, double *Setpoint, double Min, double Max, double Kp, double Ki, double Kd,  // Soren edit
+    QPID(float *Input, float *Output, float *Setpoint, float Min, float Max, float Kp, float Ki, float Kd,  // Soren edit
          pMode pMode, dMode dMode, iAwMode iAwMode, Action Action, uint32_t SampleTimeUs, Control Mode);  // Soren edit
 
-    // Constructor allowing use of integer instead of double output value. Soren
-    QPID(double *Input, int32_t *Output, double *Setpoint, double Min, double Max, double Kp, double Ki, double Kd,  // Soren
+    // Constructor allowing use of integer instead of float output value. Soren
+    QPID(float *Input, int32_t *Output, float *Setpoint, float Min, float Max, float Kp, float Ki, float Kd,  // Soren
          pMode pMode, dMode dMode, iAwMode iAwMode, Action Action, uint32_t SampleTimeUs, Control Mode);  // Soren
 
     // Overload constructor links the PID to Input, Output, Setpoint, tuning parameters and control Action.
     // Uses defaults for remaining parameters.
-    // QPID(double *Input, double *Output, double *Setpoint, double Kp, double Ki, double Kd, Action Action);
+    // QPID(float *Input, float *Output, float *Setpoint, float Kp, float Ki, float Kd, Action Action);
 
     // Simplified constructor which uses defaults for remaining parameters.
-    // QPID(double *Input, double *Output, double *Setpoint);
+    // QPID(float *Input, float *Output, float *Setpoint);
     
     // Sets PID mode to manual (0), automatic (1), timer (2) or toggle manual/automatic (3).
     void SetMode(Control Mode);
@@ -42,21 +42,21 @@ class QPID {
     bool Compute();
 
     // Sets and clamps the output to a specific range (0-255 by default).
-    void SetOutputLimits(double Min, double Max);
+    void SetOutputLimits(float Min, float Max);
 
     // available but not commonly used functions ******************************************************************
 
     // While most users will set the tunings once in the constructor, this function gives the user the option of
     // changing tunings during runtime for Adaptive control.
-    void SetTunings(double Kp, double Ki, double Kd);
+    void SetTunings(float Kp, float Ki, float Kd);
 
     // Overload for specifying proportional ratio.
-    void SetTunings(double Kp, double Ki, double Kd, pMode pMode, dMode dMode, iAwMode iAwMode);
+    void SetTunings(float Kp, float Ki, float Kd, pMode pMode, dMode dMode, iAwMode iAwMode);
 
     // Soren: I wrote these to facilitate changing only one tuning parameter at a time
-    void SetKp(double Kp);
-    void SetKi(double Ki);
-    void SetKd(double Kd);
+    void SetKp(float Kp);
+    void SetKi(float Ki);
+    void SetKd(float Kd);
 
     // Sets the controller direction or action. Direct means the output will increase when the error is positive.
     // Reverse means the output will decrease when the error is positive.
@@ -83,44 +83,44 @@ class QPID {
     void SetAntiWindupMode(uint8_t IawMode);
 
     // sets the output summation value
-    void SetOutputSum(double sum);
+    void SetOutputSum(float sum);
 
     void Initialize();        // Ensure a bumpless transfer from manual to automatic mode
     void Reset();             // Clears pTerm, iTerm, dTerm and outputSum values
 
     // PID Query functions ****************************************************************************************
-    double GetError();  // Soren added
-    double GetKp();            // proportional gain
-    double GetKi();            // integral gain
-    double GetKd();            // derivative gain
-    double GetPterm();         // proportional component of output
-    double GetIterm();         // integral component of output
-    double GetDterm();         // derivative component of output
-    double GetOutputSum();     // summation of all pid term components
+    float GetError();  // Soren added
+    float GetKp();            // proportional gain
+    float GetKi();            // integral gain
+    float GetKd();            // derivative gain
+    float GetPterm();         // proportional component of output
+    float GetIterm();         // integral component of output
+    float GetDterm();         // derivative component of output
+    float GetOutputSum();     // summation of all pid term components
     uint8_t GetMode();        // manual (0), automatic (1), timer (2) or toggle manual/automatic (3)
     uint8_t GetDirection();   // direct (0), reverse (1)
     uint8_t GetPmode();       // pOnError (0), pOnMeas (1), pOnErrorMeas (2)
     uint8_t GetDmode();       // dOnError (0), dOnMeas (1)
     uint8_t GetAwMode();      // iAwCondition (0, iAwClamp (1), iAwOff (2)
 
-    double outputSum;          // Internal integral sum
+    float outputSum;          // Internal integral sum
 
   private:
 
-    double dispKp = 0;   // for defaults and display
-    double dispKi = 0;
-    double dispKd = 0;
-    double pTerm;
-    double iTerm;
-    double dTerm;
+    float dispKp = 0;   // for defaults and display
+    float dispKi = 0;
+    float dispKd = 0;
+    float pTerm;
+    float iTerm;
+    float dTerm;
 
-    double kp;           // (P)roportional Tuning Parameter
-    double ki;           // (I)ntegral Tuning Parameter
-    double kd;           // (D)erivative Tuning Parameter
+    float kp;           // (P)roportional Tuning Parameter
+    float ki;           // (I)ntegral Tuning Parameter
+    float kd;           // (D)erivative Tuning Parameter
 
-    double *myInput;     // Pointers to the Input, Output, and Setpoint variables. This creates a
-    double *myOutput;    // hard link between the variables and the PID, freeing the user from having
-    double *mySetpoint;  // to constantly tell us what these values are. With pointers we'll just know.
+    float *myInput;     // Pointers to the Input, Output, and Setpoint variables. This creates a
+    float *myOutput;    // hard link between the variables and the PID, freeing the user from having
+    float *mySetpoint;  // to constantly tell us what these values are. With pointers we'll just know.
 
     Control mode = Control::manual;
     Action action = Action::direct;
@@ -129,7 +129,7 @@ class QPID {
     iAwMode iawmode = iAwMode::iAwCondition;
 
     uint32_t sampleTimeUs, lastTime;
-    double outMin, outMax, error, lastError, lastInput;
+    float outMin, outMax, error, lastError, lastInput;
     
     int32_t *myIntOutput;  // SC
     bool int32_output = false;  // SC
@@ -147,9 +147,9 @@ class QPID {
 QPID::QPID() {}
 
 // Constructor that allows all parameters to get set
-QPID::QPID(double* Input, double* Output, double* Setpoint,
-                   double Min, double Max,
-                   double Kp = 0, double Ki = 0, double Kd = 0,
+QPID::QPID(float* Input, float* Output, float* Setpoint,
+                   float Min, float Max,
+                   float Kp = 0, float Ki = 0, float Kd = 0,
                    pMode pMode = pMode::pOnError,
                    dMode dMode = dMode::dOnMeas,
                    iAwMode iAwMode = iAwMode::iAwCondition,
@@ -169,10 +169,10 @@ QPID::QPID(double* Input, double* Output, double* Setpoint,
   lastTime = micros() - sampleTimeUs;
 }
 
-// Constructor allowing use of integer instead of double output value. Soren
-QPID::QPID(double* Input, int32_t* IntOutput, double* Setpoint,  // Soren
-                   double Min, double Max,
-                   double Kp = 0, double Ki = 0, double Kd = 0,
+// Constructor allowing use of integer instead of float output value. Soren
+QPID::QPID(float* Input, int32_t* IntOutput, float* Setpoint,  // Soren
+                   float Min, float Max,
+                   float Kp = 0, float Ki = 0, float Kd = 0,
                    pMode pMode = pMode::pOnError,
                    dMode dMode = dMode::dOnMeas,
                    iAwMode iAwMode = iAwMode::iAwCondition,
@@ -204,16 +204,16 @@ bool QPID::Compute() {
   uint32_t timeChange = (now - lastTime);
   if (mode == Control::timer || timeChange >= sampleTimeUs) {
 
-    double input = *myInput;
-    double dInput = input - lastInput;
+    float input = *myInput;
+    float dInput = input - lastInput;
     if (action == Action::reverse) dInput = -dInput;
 
     error = *mySetpoint - input;
     if (action == Action::reverse) error = -error;
-    double dError = error - lastError;
+    float dError = error - lastError;
 
-    double peTerm = kp * error;
-    double pmTerm = kp * dInput;
+    float peTerm = kp * error;
+    float pmTerm = kp * dInput;
     if (pmode == pMode::pOnError) pmTerm = 0;
     else if (pmode == pMode::pOnMeas) peTerm = 0;
     else { //pOnErrorMeas
@@ -228,7 +228,7 @@ bool QPID::Compute() {
     //condition anti-windup (default)
     if (iawmode == iAwMode::iAwCondition) {
       bool aw = false;
-      double iTermOut = (peTerm - pmTerm) + ki * (iTerm + error);
+      float iTermOut = (peTerm - pmTerm) + ki * (iTerm + error);
       if (iTermOut > outMax && dError > 0) aw = true;
       else if (iTermOut < outMin && dError < 0) aw = true;
       if (aw && ki) iTerm = constrain(iTermOut, -outMax, outMax);
@@ -255,7 +255,7 @@ bool QPID::Compute() {
   it's called automatically from the constructor, but tunings can also
   be adjusted on the fly during normal operation.
 ******************************************************************************/
-void QPID::SetTunings(double Kp, double Ki, double Kd,
+void QPID::SetTunings(float Kp, float Ki, float Kd,
                           pMode pMode = pMode::pOnError,
                           dMode dMode = dMode::dOnMeas,
                           iAwMode iAwMode = iAwMode::iAwCondition) {
@@ -264,7 +264,7 @@ void QPID::SetTunings(double Kp, double Ki, double Kd,
   if (Ki == 0) outputSum = 0;
   pmode = pMode; dmode = dMode; iawmode = iAwMode;
   dispKp = Kp; dispKi = Ki; dispKd = Kd;
-  double SampleTimeSec = (double)sampleTimeUs / 1000000;
+  float SampleTimeSec = (float)sampleTimeUs / 1000000;
   kp = Kp;
   ki = Ki * SampleTimeSec;
   kd = Kd / SampleTimeSec;
@@ -273,21 +273,21 @@ void QPID::SetTunings(double Kp, double Ki, double Kd,
 /* SetTunings(...)************************************************************
   Set Tunings using the last remembered pMode, dMode and iAwMode settings.
 ******************************************************************************/
-void QPID::SetTunings(double Kp, double Ki, double Kd) {
+void QPID::SetTunings(float Kp, float Ki, float Kd) {
   SetTunings(Kp, Ki, Kd, pmode, dmode, iawmode);
 }
 
 // Soren: I wrote these to facilitate changing only one tuning parameter at a time
-void QPID::SetKp(double Kp) { SetTunings(Kp, dispKi, dispKd, pmode, dmode, iawmode); }
-void QPID::SetKi(double Ki) { SetTunings(dispKp, Ki, dispKd, pmode, dmode, iawmode); }
-void QPID::SetKd(double Kd) { SetTunings(dispKp, dispKi, Kd, pmode, dmode, iawmode); }
+void QPID::SetKp(float Kp) { SetTunings(Kp, dispKi, dispKd, pmode, dmode, iawmode); }
+void QPID::SetKi(float Ki) { SetTunings(dispKp, Ki, dispKd, pmode, dmode, iawmode); }
+void QPID::SetKd(float Kd) { SetTunings(dispKp, dispKi, Kd, pmode, dmode, iawmode); }
 
 /* SetSampleTime(.)***********************************************************
   Sets the period, in microseconds, at which the calculation is performed.
 ******************************************************************************/
 void QPID::SetSampleTimeUs(uint32_t NewSampleTimeUs) {
   if (NewSampleTimeUs > 0) {
-    double ratio  = (double)NewSampleTimeUs / (double)sampleTimeUs;
+    float ratio  = (float)NewSampleTimeUs / (float)sampleTimeUs;
     ki *= ratio;
     kd /= ratio;
     sampleTimeUs = NewSampleTimeUs;
@@ -298,13 +298,13 @@ void QPID::SetSampleTimeUs(uint32_t NewSampleTimeUs) {
   The PID controller is designed to vary its output within a given range.
   By default this range is 0-255, the Arduino PWM range.
 ******************************************************************************/
-void QPID::SetOutputLimits(double Min, double Max) {
+void QPID::SetOutputLimits(float Min, float Max) {
   if (Min >= Max) return;
   outMin = Min;
   outMax = Max;
 
   if (mode != Control::manual) {
-    if (int32_output) *myIntOutput = (int32_t)constrain((double)*myIntOutput, outMin, outMax);  // Soren
+    if (int32_output) *myIntOutput = (int32_t)constrain((float)*myIntOutput, outMin, outMax);  // Soren
     else *myOutput = constrain(*myOutput, outMin, outMax);  // Soren
     outputSum = constrain(outputSum, outMin, outMax);
   }
@@ -337,7 +337,7 @@ void QPID::SetMode(uint8_t Mode) {
   from manual to automatic mode.
 ******************************************************************************/
 void QPID::Initialize() {
-  outputSum = (double)*myOutput;  // SC
+  outputSum = (float)*myOutput;  // SC
   lastInput = *myInput;
   outputSum = constrain(outputSum, outMin, outMax);
 }
@@ -399,21 +399,21 @@ void QPID::Reset() {
 }
 
 // sets the output summation value
-void QPID::SetOutputSum(double sum) {
+void QPID::SetOutputSum(float sum) {
   outputSum = sum;
 }
 
 /* Status Functions************************************************************
   These functions query the internal state of the PID.
 ******************************************************************************/
-double QPID::GetError() { return error; }  // Soren added
-double QPID::GetKp() { return dispKp; }
-double QPID::GetKi() { return dispKi; }
-double QPID::GetKd() { return dispKd; }
-double QPID::GetPterm() { return pTerm; }
-double QPID::GetIterm() { return iTerm; }
-double QPID::GetDterm() { return dTerm; }
-double QPID::GetOutputSum() { return outputSum; }
+float QPID::GetError() { return error; }  // Soren added
+float QPID::GetKp() { return dispKp; }
+float QPID::GetKi() { return dispKi; }
+float QPID::GetKd() { return dispKd; }
+float QPID::GetPterm() { return pTerm; }
+float QPID::GetIterm() { return iTerm; }
+float QPID::GetDterm() { return dTerm; }
+float QPID::GetOutputSum() { return outputSum; }
 uint8_t QPID::GetMode() { return static_cast<uint8_t>(mode); }
 uint8_t QPID::GetDirection() { return static_cast<uint8_t>(action); }
 uint8_t QPID::GetPmode() { return static_cast<uint8_t>(pmode); }

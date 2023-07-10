@@ -1,5 +1,5 @@
-#ifndef CTRL_H
-#define CTRL_H
+#ifndef UICTRL_H
+#define UICTRL_H
 
 #include "globals.h"
 
@@ -139,7 +139,7 @@ void IRAM_ATTR NAME##_b_isr() { \
 (NAME)._b_isr = &NAME##_b_isr; \
 (NAME).setup();
 
-#endif  // CTRL_H
+#endif  // UICTRL_H
 
 
 // TODO: if this actually works, post to arduino

@@ -411,7 +411,7 @@ class Display {
         }
         void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target=-1) {
             yield();  // experiment
-            int32_t age_us = (int32_t)((double)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
+            int32_t age_us = (int32_t)((float)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
             int32_t x_base = 59;
             bool polarity = (value >= 0);  // polarity 0=negative, 1=positive
             if (strcmp(disp_values[lineno], disp_string) || _disp_redraw_all) {  // If value differs, Erase old value and write new
@@ -461,7 +461,7 @@ class Display {
                 disp_needles[lineno] = -1;  // Flag for no needle
             }
         }
-        int32_t significant_place (double value) {  // Returns the decimal place of the most significant digit of a given double value, without relying on logarithm math
+        int32_t significant_place (float value) {  // Returns the decimal place of the most significant digit of a given float value, without relying on logarithm math
             int32_t place = 0;
             if (value >= 1) { // int32_t vallog = std::log10(value);  // Can be sped up
                 place = 1;
@@ -470,7 +470,7 @@ class Display {
                     place++;
                 }
             }
-            else if (value) {  // checking (value) rather than (value != 0.0) can help avoid precision errors caused by digital representation of doubleing numbers
+            else if (value) {  // checking (value) rather than (value != 0.0) can help avoid precision errors caused by digital representation of floating numbers
                 while (value < 1) {
                     value *= 10;
                     place--;
@@ -483,20 +483,20 @@ class Display {
             if (significant_place(value) <= maxlength) return std::to_string (value);  // If value is short enough, return it
             std::string result;
             int32_t magnitude = std::log10 (value);  // check how slow is log() function? Compare performance vs. multiple divides ( see abs_ftoa() )
-            double scaledValue = value / std::pow (10, magnitude + 1 - maxlength);  // was (10, magnitude - 5);
+            float scaledValue = value / std::pow (10, magnitude + 1 - maxlength);  // was (10, magnitude - 5);
             if (scaledValue >= 1.0 && scaledValue < 10.0) result = std::to_string (static_cast<int>(scaledValue));
             else result = std::to_string (scaledValue);
             if (magnitude >= maxlength) result += "e" + std::to_string (magnitude);
             return result;
         }
-        std::string abs_ftoa (double value, int32_t maxlength, int32_t sigdig) {  // returns an ascii string representation of a given double value, formatted to efficiently fit withinthe given width constraint
+        std::string abs_ftoa (float value, int32_t maxlength, int32_t sigdig) {  // returns an ascii string representation of a given float value, formatted to efficiently fit withinthe given width constraint
             value = abs (value);  // This function disregards sign
             int32_t place = significant_place (value);  // Learn decimal place of the most significant digit in value
             if (place >= sigdig && place <= maxlength) {  // Then we want simple cast to an integer w/o decimal point (eg 123456, 12345, 1234)
                 std::string result (std::to_string ((int32_t)value));
                 return result;
             }
-            if (place >= 0 && place < maxlength) {  // Then we want double formatted with enough nonzero digits after the decimal point for 4 significant digits (eg 123.4, 12.34, 1.234, 0)
+            if (place >= 0 && place < maxlength) {  // Then we want float formatted with enough nonzero digits after the decimal point for 4 significant digits (eg 123.4, 12.34, 1.234, 0)
                 int32_t length = min (sigdig+1, maxlength);
                 char buffer[length+1];
                 std::snprintf (buffer, length + 1, "%.*g", length - 1, value);
@@ -525,12 +525,12 @@ class Display {
             // std::cout << "Int: " << value << " -> " << val_string << ", " << ((value >= 0) ? 1 : -1) << std::endl;
             draw_dynamic (lineno, val_string.c_str(), value, lowlim, hilim, (int32_t)target);
         }
-        void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim, int32_t target=-1) {
+        void draw_dynamic (int32_t lineno, float value, float lowlim, float hilim, int32_t target=-1) {
             std::string val_string = abs_ftoa (value, (int32_t)disp_maxlength, 3);
             // std::cout << "Flt: " << value << " -> " << val_string << ", " << ((value >= 0) ? 1 : -1) << std::endl;
             draw_dynamic (lineno, val_string.c_str(), (int32_t)value, (int32_t)lowlim, (int32_t)hilim, target);
         }
-        void draw_dynamic (int32_t lineno, double value, double lowlim, double hilim, double target) {
+        void draw_dynamic (int32_t lineno, float value, float lowlim, float hilim, float target) {
             draw_dynamic (lineno, value, lowlim, hilim, (int32_t)target);
         }
         void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override=-1) {  // color_override = -1 uses default color
@@ -592,7 +592,7 @@ class Display {
                 }
                 for (int32_t letter = 0; letter < namelen; letter++) {  // Going letter by letter thru each button name so we can write vertically 
                     yield();
-                    _tft.setCursor (1, ( touch_cell_v_pix*row) + (touch_cell_v_pix/2) - (int32_t)(4.5*((double)namelen-1)) + (disp_font_height+1)*letter); // adjusts vertical offset depending how many letters in the button name and which letter we're on
+                    _tft.setCursor (1, ( touch_cell_v_pix*row) + (touch_cell_v_pix/2) - (int32_t)(4.5*((float)namelen-1)) + (disp_font_height+1)*letter); // adjusts vertical offset depending how many letters in the button name and which letter we're on
                     _tft.println (side_menu_buttons[row][letter]);  // Writes each letter such that the whole name is centered vertically on the button
                 }
             }
@@ -639,7 +639,7 @@ class Display {
             }
             if ((dispRefreshTimer.expired() && !_procrastinate) || _disp_redraw_all) {
                 dispRefreshTimer.reset();
-                double drange;
+                float drange;
                 draw_dynamic(1, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
                 draw_dynamic(2, speedo_filt_mph, 0.0, speedo_redline_mph, speedo_target_mph);
                 draw_dynamic(3, speedo_target_mph, 0.0, speedo_govern_mph);
@@ -699,8 +699,8 @@ class Display {
                     draw_dynamic(13, brakeQPID.GetPterm(), -drange, drange);
                     draw_dynamic(14, brakeQPID.GetIterm(), -drange, drange);
                     draw_dynamic(15, brakeQPID.GetDterm(), -drange, drange);
-                    // draw_dynamic(16, brake_pulse_out_us, (double)brake_pulse_retract_us, (double)brake_pulse_extend_us);  // brake_spid_speedo_delta_adc, -range, range);
-                    draw_dynamic(16, brakeQPID.GetOutputSum(), (double)brake_pulse_retract_us, (double)brake_pulse_extend_us);  // brake_spid_speedo_delta_adc, -range, range);
+                    // draw_dynamic(16, brake_pulse_out_us, (float)brake_pulse_retract_us, (float)brake_pulse_extend_us);  // brake_spid_speedo_delta_adc, -range, range);
+                    draw_dynamic(16, brakeQPID.GetOutputSum(), (float)brake_pulse_retract_us, (float)brake_pulse_extend_us);  // brake_spid_speedo_delta_adc, -range, range);
                     draw_dynamic(17, brakeQPID.GetKp(), 0.0, 2.0);
                     draw_dynamic(18, brakeQPID.GetKi(), 0.0, 2.0);
                     draw_dynamic(19, brakeQPID.GetKd(), 0.0, 2.0);
@@ -712,7 +712,7 @@ class Display {
                     draw_dynamic(14, gasQPID.GetIterm(), -drange, drange);
                     draw_dynamic(15, gasQPID.GetDterm(), -drange, drange);
                     // draw_dynamic(16, gas_pulse_out_us, gas_pulse_idle_us, gas_pulse_govern_us);  // gas_spid_speedo_delta_adc, -drange, drange);
-                    draw_dynamic(16, gasQPID.GetOutputSum(), (double)gas_pulse_idle_us, (double)gas_pulse_govern_us);
+                    draw_dynamic(16, gasQPID.GetOutputSum(), (float)gas_pulse_idle_us, (float)gas_pulse_govern_us);
                     draw_dynamic(17, gasQPID.GetKp(), 0.0, 2.0);
                     draw_dynamic(18, gasQPID.GetKi(), 0.0, 2.0);
                     draw_dynamic(19, gasQPID.GetKd(), 0.0, 2.0);
