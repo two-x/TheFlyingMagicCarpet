@@ -12,6 +12,7 @@ class QPID {
     enum class pMode : uint8_t {pOnError, pOnMeas, pOnErrorMeas};     // proportional mode
     enum class dMode : uint8_t {dOnError, dOnMeas};                   // derivative mode
     enum class iAwMode : uint8_t {iAwCondition, iAwClamp, iAwOff};    // integral anti-windup mode
+    enum class centMode : uint8_t {range, center, centerStrict};    // integral anti-windup mode
 
     // commonly used functions ************************************************************************************
 
@@ -20,11 +21,11 @@ class QPID {
 
     // Constructor. Links the PID to Input, Output, Setpoint, initial tuning parameters and control modes.
     QPID(float *Input, float *Output, float *Setpoint, float Min, float Max, float Kp, float Ki, float Kd,  // Soren edit
-         pMode pMode, dMode dMode, iAwMode iAwMode, Action Action, uint32_t SampleTimeUs, Control Mode);  // Soren edit
+         pMode pMode, dMode dMode, iAwMode iAwMode, Action Action, uint32_t SampleTimeUs, Control Mode, centMode CentMode, float Center);  // Soren edit
 
     // Constructor allowing use of integer instead of float output value. Soren
     QPID(float *Input, int32_t *Output, float *Setpoint, float Min, float Max, float Kp, float Ki, float Kd,  // Soren
-         pMode pMode, dMode dMode, iAwMode iAwMode, Action Action, uint32_t SampleTimeUs, Control Mode);  // Soren
+         pMode pMode, dMode dMode, iAwMode iAwMode, Action Action, uint32_t SampleTimeUs, Control Mode, centMode CentMode, float Center);  // Soren
 
     // Overload constructor links the PID to Input, Output, Setpoint, tuning parameters and control Action.
     // Uses defaults for remaining parameters.
@@ -43,6 +44,9 @@ class QPID {
 
     // Sets and clamps the output to a specific range (0-255 by default).
     void SetOutputLimits(float Min, float Max);
+
+    void SetCentMode(centMode CentMode);  // Soren
+    void SetCenter(float Center);  // Soren
 
     // available but not commonly used functions ******************************************************************
 
@@ -102,6 +106,9 @@ class QPID {
     uint8_t GetPmode();       // pOnError (0), pOnMeas (1), pOnErrorMeas (2)
     uint8_t GetDmode();       // dOnError (0), dOnMeas (1)
     uint8_t GetAwMode();      // iAwCondition (0, iAwClamp (1), iAwOff (2)
+    uint8_t GetCentMode();  // Soren
+    float GetCenter();  // Soren
+
 
     float outputSum;          // Internal integral sum
 
@@ -127,10 +134,12 @@ class QPID {
     pMode pmode = pMode::pOnError;
     dMode dmode = dMode::dOnMeas;
     iAwMode iawmode = iAwMode::iAwCondition;
+    centMode centmode = centMode::range;
 
     uint32_t sampleTimeUs, lastTime;
     float outMin, outMax, error, lastError, lastInput;
-    
+    float center;  // Soren
+
     int32_t *myIntOutput;  // SC
     bool int32_output = false;  // SC
 
@@ -155,7 +164,9 @@ QPID::QPID(float* Input, float* Output, float* Setpoint,
                    iAwMode iAwMode = iAwMode::iAwCondition,
                    Action Action = Action::direct,
                    uint32_t SampleTimeUs = 100000,
-                   Control Mode = Control::manual) {
+                   Control Mode = Control::manual,
+                   centMode CentMode = centMode::range, float Center = 1000000) {  // Soren
+
 
   int32_output = false;  // Soren
   myOutput = Output;
@@ -163,6 +174,9 @@ QPID::QPID(float* Input, float* Output, float* Setpoint,
   mySetpoint = Setpoint;
   mode = Mode;
   QPID::SetOutputLimits(Min, Max);  // same default as Arduino PWM limit - Soren edit
+  QPID::SetCentMode(CentMode);  // Soren
+  if (centmode != QPID::centMode::range && Center != 1000000) SetCenter(Center);  // Soren
+  else SetCenter(outMin);  // Soren
   sampleTimeUs = SampleTimeUs;              // Soren edit
   QPID::SetControllerDirection(Action);
   QPID::SetTunings(Kp, Ki, Kd, pMode, dMode, iAwMode);
@@ -178,7 +192,8 @@ QPID::QPID(float* Input, int32_t* IntOutput, float* Setpoint,  // Soren
                    iAwMode iAwMode = iAwMode::iAwCondition,
                    Action Action = Action::direct,
                    uint32_t SampleTimeUs = 100000,
-                   Control Mode = Control::manual) {
+                   Control Mode = Control::manual,
+                   centMode CentMode = centMode::range, float Center = 1000000) {  // Soren
 
   int32_output = true;  // Soren
   myIntOutput = IntOutput;  // Soren
@@ -186,6 +201,9 @@ QPID::QPID(float* Input, int32_t* IntOutput, float* Setpoint,  // Soren
   mySetpoint = Setpoint;
   mode = Mode;
   QPID::SetOutputLimits(Min, Max);  // same default as Arduino PWM limit - Soren edit
+  QPID::SetCentMode(CentMode);  // Soren
+  if (centmode != QPID::centMode::range && Center != 1000000) SetCenter(Center);  // Soren
+  else SetCenter(outMin);  // Soren
   sampleTimeUs = SampleTimeUs;              // Soren edit
   QPID::SetControllerDirection(Action);
   QPID::SetTunings(Kp, Ki, Kd, pMode, dMode, iAwMode);
@@ -234,6 +252,8 @@ bool QPID::Compute() {
       if (aw && ki) iTerm = constrain(iTermOut, -outMax, outMax);
     }
 
+    if (centmode == centMode::centerStrict && error * lastError < 0) outputSum = center;  // Soren - Recenters any old integral when error crosses zero
+    
     // by default, compute output as per PID_v1
     outputSum += iTerm;                                                 // include integral amount
     if (iawmode == iAwMode::iAwOff) outputSum -= pmTerm;                // include pmTerm (no anti-windup)
@@ -309,6 +329,16 @@ void QPID::SetOutputLimits(float Min, float Max) {
     outputSum = constrain(outputSum, outMin, outMax);
   }
 }
+
+void QPID::SetCentMode(centMode CentMode) {  // Soren
+  centmode = CentMode;
+}
+
+void QPID::SetCenter(float Center) {  // Soren
+  if (outMin > Center || outMax < Center) return;
+  center = Center;
+}
+
 
 /* SetMode(.)*****************************************************************
   Sets the controller mode to manual (0), automatic (1) or timer (2)
@@ -419,5 +449,8 @@ uint8_t QPID::GetDirection() { return static_cast<uint8_t>(action); }
 uint8_t QPID::GetPmode() { return static_cast<uint8_t>(pmode); }
 uint8_t QPID::GetDmode() { return static_cast<uint8_t>(dmode); }
 uint8_t QPID::GetAwMode() { return static_cast<uint8_t>(iawmode); }
+uint8_t QPID::GetCentMode() { return static_cast<uint8_t>(centmode); }
+float QPID::GetCenter() { return center; }
+
 
 #endif // QPID.h

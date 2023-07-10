@@ -539,19 +539,22 @@ QPID brakeQPID (&pressure_filt_psi, &brake_pulse_out_us, &pressure_target_psi,
                 (float)brake_pulse_retract_us, (float)brake_pulse_extend_us,
                 brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,
                 QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwClamp,
-                QPID::Action::reverse, 1000*brake_pid_period_ms, QPID::Control::timer);
+                QPID::Action::reverse, 1000*brake_pid_period_ms, QPID::Control::timer,
+                QPID::centMode::centerStrict, brake_pulse_stop_us);
 
 QPID gasQPID (&tach_filt_rpm, &gas_pulse_out_us, &tach_target_rpm,
               (float)gas_pulse_redline_us, (float)gas_pulse_idle_us,
               gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s,
               QPID::pMode::pOnErrorMeas, QPID::dMode::dOnMeas, QPID::iAwMode::iAwClamp,
-              QPID::Action::reverse, 1000*gas_pid_period_ms, QPID::Control::manual);  // QPID::Control::timer
+              QPID::Action::reverse, 1000*gas_pid_period_ms, QPID::Control::manual,  // QPID::Control::timer
+              QPID::centMode::range);
 
 QPID cruiseQPID (&speedo_filt_mph, &tach_target_rpm, &speedo_target_mph,
                  (float)tach_govern_rpm, (float)tach_idle_rpm,
                  cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s,
                  QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwClamp,
-                 QPID::Action::direct, 1000*cruise_pid_period_ms, QPID::Control::timer);
+                 QPID::Action::direct, 1000*cruise_pid_period_ms, QPID::Control::timer,
+                 QPID::centMode::range);
 
 // Servo library lets us set pwm outputs given an on-time pulse width in us
 static Servo steer_servo;
