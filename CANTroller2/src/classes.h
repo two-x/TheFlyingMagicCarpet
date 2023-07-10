@@ -247,6 +247,73 @@ class PressureSensor : virtual public AnalogSensor {
 
 };
 
+// class TempByPeef {
+//   public:
+//     #include <OneWire.h>
+//     static int secs = 0;
+//     static byte data[2];
+//     static long f;
+//     static long pf;
+//     static int16_t raw;
+
+
+//     TempByPeef (OneWire* onewire_bus) {
+//         ds.reset();
+//         ds.write(0xCC);        // All Devices present - Skip ROM ID
+//         ds.write(0x44);        // start conversion, with parasite power on at the end
+//     }
+
+// };
+
+// #include <OneWire.h>
+
+// static int secs = 0;
+// static byte data[2];
+// static long f;
+// static long pf;
+// static int16_t raw;
+
+
+// OneWire  ds(14);  // pin - a 4.7K resistor is necessary
+
+// void setup(void){
+//   Serial.begin(115200);
+//   Serial.println();
+//   Serial.println("Ready");
+
+//   ds.reset();
+//   ds.write(0xCC);        // All Devices present - Skip ROM ID
+//   ds.write(0x44);        // start conversion, with parasite power on at the end
+
+// }
+
+// void loop(void){
+//   if (millis() % 1000 == 0){
+//     ds.reset();
+//     ds.write(0xCC);        // All Devices present - Skip ROM ID
+//     ds.write(0xBE);         // Read Scratchpad
+//     data[0] = ds.read();
+//     data[1] = ds.read();
+//     raw = (data[1] << 8) | data[0];
+//     pf = f;
+//     f = ((long)raw * 180 / 16 + 3205) / 10;
+//     secs++;
+//     delay(10);
+//     if (abs(pf-f) >= 20 && pf != 0) {
+//       Serial.println("Bad-T-" + String(f));
+//       f = pf;
+//     }
+//     ds.reset();
+//     ds.write(0xCC);        // All Devices present - Skip ROM ID
+//     ds.write(0x44);        // start conversion, with parasite power on at the end
+
+//     Serial.println(String(f/10) + "." + String(f%10) + "°f");
+//   }
+
+//   yield();
+// }
+
+
 class TempSensorBus : virtual public Sensor {
 //   public:
 //     enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
