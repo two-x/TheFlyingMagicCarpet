@@ -94,10 +94,10 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "Vert Raw",
         "Horz Min",
         "Horz Max",
-        " Horz DZ",
+        " Horz DB",
         "Vert Min",
         "Vert Max",
-        " Vert DZ", },
+        " Vert DB", },
     {   "Governor",  // PG_CAR
         "Eng Idle",
         "Eng RedL",
@@ -665,12 +665,12 @@ class Display {
                 else if (dataset_page == PG_JOY) {
                     draw_dynamic(12, ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
                     draw_dynamic(13, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-                    draw_dynamic(14, ctrl_lims_adc[ctrl][HORZ][MIN], 0, (adcrange_adc-ctrl_lims_adc[ctrl][HORZ][MAX])/2);
-                    draw_dynamic(15, ctrl_lims_adc[ctrl][HORZ][MAX], (ctrl_lims_adc[ctrl][HORZ][MIN]-adcrange_adc)/2, adcrange_adc);
-                    draw_dynamic(16, ctrl_lims_adc[ctrl][HORZ][DB], 0, (adcmidscale_adc - ctrl_lims_adc[ctrl][HORZ][MIN] > ctrl_lims_adc[ctrl][HORZ][MAX] - adcmidscale_adc) ? 2*(ctrl_lims_adc[ctrl][HORZ][MAX] - adcmidscale_adc) : 2*(adcmidscale_adc - ctrl_lims_adc[ctrl][HORZ][MIN]));
-                    draw_dynamic(17, ctrl_lims_adc[ctrl][VERT][MIN], 0, (adcrange_adc-ctrl_lims_adc[ctrl][VERT][MAX])/2);
-                    draw_dynamic(18, ctrl_lims_adc[ctrl][VERT][MAX], (ctrl_lims_adc[ctrl][VERT][MIN]-adcrange_adc)/2, adcrange_adc);
-                    draw_dynamic(19, ctrl_lims_adc[ctrl][VERT][DB], 0, (adcmidscale_adc - ctrl_lims_adc[ctrl][VERT][MIN] > ctrl_lims_adc[ctrl][VERT][MAX] - adcmidscale_adc) ? 2*(ctrl_lims_adc[ctrl][VERT][MAX] - adcmidscale_adc) : 2*(adcmidscale_adc - ctrl_lims_adc[ctrl][VERT][MIN]));
+                    draw_dynamic(14, ctrl_lims_adc[ctrl][HORZ][MIN], 0, ctrl_lims_adc[ctrl][HORZ][MAX]);
+                    draw_dynamic(15, ctrl_lims_adc[ctrl][HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][MIN], adcrange_adc);
+                    draw_dynamic(16, adcmidscale_adc+ctrl_lims_adc[ctrl][HORZ][DB], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
+                    draw_dynamic(17, ctrl_lims_adc[ctrl][VERT][MIN], 0, ctrl_lims_adc[ctrl][VERT][MAX]);
+                    draw_dynamic(18, ctrl_lims_adc[ctrl][VERT][MAX], ctrl_lims_adc[ctrl][VERT][MIN], adcrange_adc);
+                    draw_dynamic(19, adcmidscale_adc+ctrl_lims_adc[ctrl][VERT][DB], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
                 }
                 else if (dataset_page == PG_CAR) {
                     draw_dynamic(12, gas_governor_percent, 0, 100);
