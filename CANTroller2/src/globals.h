@@ -584,9 +584,12 @@ OneWire onewire (onewire_pin);
 DeviceAddress temp_temp_addr;
 int32_t temp_current_index = 0;
 DeviceAddress temp_addrs[6];
-
-// enum temp_status { IDLE, CONVERT, DELAY };
-// int32_t temp_status = IDLE;
+enum temp_status : bool { CONVERT, READ };
+temp_status temp_state = CONVERT;
+uint32_t temp_times[2] = { 2000000, 10000 };
+    
+// enum temp_status { IDLE, CONVERT, READ };
+// int32_t temp_status = READ;
 // DallasTemperature tempsensebus (&onewire);
 
 // Interrupt service routines
@@ -791,26 +794,34 @@ void syspower_set (bool val) {
 }
 long temp_peef (void) {
     // if (millis() % 1000 == 0) {
-    onewire.reset();
-    onewire.write(0xCC);        // All Devices present - Skip ROM ID
-    onewire.write(0xBE);         // Read Scratchpad
-    temp_data[0] = onewire.read();
-    temp_data[1] = onewire.read();
-    temp_raw = (temp_data[1] << 8) | temp_data[0];
-    temp_last = temp;
-    temp = ((long)temp_raw * 180 / 16 + 3205) / 10;
-    temp_secs++;
-    delay(10);
-    if (abs(temp_last-temp) >= 20 && temp_last != 0) {
-        // Serial.println("Bad-T-" + String(f));
-        temp = temp_last;
+    if (tempTimer.expired()) {
+        if (temp_state == READ) {
+            // delay(10);
+            if (abs(temp_last-temp) >= 20 && temp_last != 0) {
+                // Serial.println("Bad-T-" + String(f));
+                temp = temp_last;
+            }
+            onewire.reset();
+            onewire.write(0xCC);        // All Devices present - Skip ROM ID
+            onewire.write(0x44);        // start conversion, with parasite power on at the end
+            printf ("\nTemp: %s.%s °F\n", String(temp/10), String(temp%10));
+            temp_state = CONVERT;
+            tempTimer.set (temp_times[temp_state]);
+            return temp;
+        }  // else CONVERT
+        onewire.reset();
+        onewire.write(0xCC);        // All Devices present - Skip ROM ID
+        onewire.write(0xBE);         // Read Scratchpad
+        temp_data[0] = onewire.read();
+        temp_data[1] = onewire.read();
+        temp_raw = (temp_data[1] << 8) | temp_data[0];
+        temp_last = temp;
+        temp = ((long)temp_raw * 180 / 16 + 3205) / 10;
+        temp_secs++;
+        temp_state = READ;
+        tempTimer.set (temp_times[temp_state]);
     }
-    onewire.reset();
-    onewire.write(0xCC);        // All Devices present - Skip ROM ID
-    onewire.write(0x44);        // start conversion, with parasite power on at the end
-    printf ("\nTemp: %s.%s °F\n", String(temp/10), String(temp%10));
-    // }
-    return temp;
+    return 10000;  // Invalid value
 }
 
 // double get_temp (DeviceAddress arg_addr) {  // function to print the temperature for a device
