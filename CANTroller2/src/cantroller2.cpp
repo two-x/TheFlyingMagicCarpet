@@ -202,18 +202,23 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     neostrip.show(); // Initialize all pixels to 'off'
     neostrip.setBrightness (neo_brightness_max);
 
-    tempsensebus.setWaitForConversion (true);  // Whether to block during conversion process
-    tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
-    tempsensebus.begin();
-    temp_detected_device_ct = tempsensebus.getDeviceCount();
-    printf ("Temp sensors: Detected %d devices.\nParasitic power is: ", temp_detected_device_ct);  // , DEC);
-    printf ((tempsensebus.isParasitePowerMode()) ? "On\n" : "Off\n");
-    // for (int32_t x = 0; x < arraysize(temp_addrs); x++) {
-    for (int32_t x = 0; x < temp_detected_device_ct; x++) {
-        if (tempsensebus.getAddress (temp_temp_addr, x)) printf ("Found sensor device: index %d, addr %d\n", x, temp_temp_addr);  // temp_addrs[x]
-        else printf ("Found ghost device : index %d, addr unknown\n", x);  // printAddress (temp_addrs[x]);
-        tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
-    }
+
+    onewire.reset();
+    onewire.write(0xCC);        // All Devices present - Skip ROM ID
+    onewire.write(0x44);        // start conversion, with parasite power on at the end
+
+    // tempsensebus.setWaitForConversion (true);  // Whether to block during conversion process
+    // tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
+    // tempsensebus.begin();
+    // temp_detected_device_ct = tempsensebus.getDeviceCount();
+    // printf ("Temp sensors: Detected %d devices.\nParasitic power is: ", temp_detected_device_ct);  // , DEC);
+    // printf ((tempsensebus.isParasitePowerMode()) ? "On\n" : "Off\n");
+    // // for (int32_t x = 0; x < arraysize(temp_addrs); x++) {
+    // for (int32_t x = 0; x < temp_detected_device_ct; x++) {
+    //     if (tempsensebus.getAddress (temp_temp_addr, x)) printf ("Found sensor device: index %d, addr %d\n", x, temp_temp_addr);  // temp_addrs[x]
+    //     else printf ("Found ghost device : index %d, addr unknown\n", x);  // printAddress (temp_addrs[x]);
+    //     tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
+    // }
     
     // xTaskCreatePinnedToCore ( codeForTask1, "Task_1", 1000, NULL, 1, &Task1, 0);
     // if (ctrl == HOTRC) {  // Look for evidence of a normal (not failsafe) hotrc signal. If it's not yet powered on, we will ignore its spurious poweron ignition event
@@ -296,25 +301,30 @@ void loop() {
 
     // Temperature sensors
     if (take_temperatures && tempTimer.expired()) {
-        if (temp_status == IDLE) {
-            if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
-            tempsensebus.setWaitForConversion (false);  // makes it async
-            tempsensebus.requestTemperatures();
-            tempsensebus.setWaitForConversion (true);
-            tempTimer.set(750000 / (1 << (12 - temperature_precision)));  // Give some time before reading temp
-            temp_status = CONVERT;
-        }
-        else if (temp_status == CONVERT) {
-            temps[temp_current_index] = tempsensebus.getTempFByIndex(temp_current_index);
-            tempTimer.set(1500000);
-            temp_status = DELAY;
-        }
-        else if (temp_status == DELAY) {
-            // printf ("temps[%ld] = %lf F\n", temp_current_index, temps[temp_current_index]);
-            tempTimer.set(60000);
-            temp_status = IDLE;
-        }
+        tempTimer.reset();
+        long tempread = temp_peef();
+        temps[0] = (double)tempread;
     }
+        // if (temp_status == IDLE) {
+        //     if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
+        //     tempsensebus.setWaitForConversion (false);  // makes it async
+        //     tempsensebus.requestTemperatures();
+        //     tempsensebus.setWaitForConversion (true);
+        //     tempTimer.set(750000 / (1 << (12 - temperature_precision)));  // Give some time before reading temp
+        //     temp_status = CONVERT;
+        // }
+        // else if (temp_status == CONVERT) {
+        //     temps[temp_current_index] = tempsensebus.getTempFByIndex(temp_current_index);
+        //     tempTimer.set(1500000);
+        //     temp_status = DELAY;
+        // }
+        // else if (temp_status == DELAY) {
+        //     // printf ("temps[%ld] = %lf F\n", temp_current_index, temps[temp_current_index]);
+        //     tempTimer.set(60000);
+        //     temp_status = IDLE;
+        // }
+    // }
+    
     // double temps[temp_detected_device_ct];
     // uint32_t timecheck;
     // if (take_temperatures && tempTimer.expired()) {
@@ -824,8 +834,8 @@ void loop() {
                 touch_y = disp_height_pix - touch_y;
             }
         #endif
-        // std::cout << "Touch: fs:" << flip_the_screen << " ptx:" << touchpoint.x << ", pty:" << touchpoint.y << ", ptz:" << touchpoint.z << " x:" << touch_x << ", y:" << touch_y << std::endl;
-        // std::cout << "Touch: ptx:" << touchpoint.x << ", pty:" << touchpoint.y << " x:" << touch_x << ", y:" << touch_y << ", z:" << touchpoint.z << std::endl;
+        std::cout << "Touch: fs:" << flip_the_screen << " ptx:" << touchpoint.x << ", pty:" << touchpoint.y << ", ptz:" << touchpoint.z << " x:" << touch_x << ", y:" << touch_y << std::endl;
+        std::cout << "Touch: ptx:" << touchpoint.x << ", pty:" << touchpoint.y << " x:" << touch_x << ", y:" << touch_y << ", z:" << touchpoint.z << std::endl;
         trow = constrain((touch_y + touch_fudge)/touch_cell_v_pix, 0, 4);  // The -8 seems to be needed or the vertical touch seems off (?)
         tcol = (touch_x-touch_margin_h_pix)/touch_cell_h_pix;
         // Take appropriate touchscreen actions depending how we're being touched
