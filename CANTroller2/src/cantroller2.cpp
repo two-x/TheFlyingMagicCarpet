@@ -300,10 +300,9 @@ void loop() {
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
 
     // Temperature sensors
-    if (take_temperatures && tempTimer.expired()) {
-        tempTimer.reset();
+    if (take_temperatures) {  // && tempTimer.expired()) {
         long tempread = temp_peef();
-        temps[0] = (double)tempread;
+        if (tempread != 10000) temps[0] = (double)tempread;
     }
         // if (temp_status == IDLE) {
         //     if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
@@ -423,7 +422,7 @@ void loop() {
         // ema_filt (pressure.get_val(), &pressure_filt_psi, pressure_ema_alpha);  // Sensor EMA filter
     }
     
-    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //
+    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //
 
     // Controller handling
     //
@@ -1081,7 +1080,7 @@ void loop() {
         heartbeatTimer.set (heartbeat_ekg[heartbeat_state]);
         write_pin (heartbeat_led_pin, heartbeat_pulse);
     }
-    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "hrt");
+    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "hrt");
     
     // Display updates
     if (display_enabled) screen.update();
@@ -1092,7 +1091,7 @@ void loop() {
         simulating_last = simulating;
         oldmode = runmode;
     }
-    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dis");
+    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dis");
 
     // Kick watchdogs
     Watchdog.reset();  // Kick the watchdog to keep us alive
@@ -1104,10 +1103,11 @@ void loop() {
     loopTimer.reset();
     loop_freq_hz = 1000000.0 / ((loop_period_us) ? loop_period_us : 1);  // Prevent potential divide by zero
     loopno++;  // I like to count how many loops
+    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");    
     if (timestamp_loop) {
         // loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");  //
-        printf ("\rRM:%ld us:%ld Lp#%ld us:%5ld ", runmode, esp_timer_get_time(), loopno, loop_period_us);
-        for (int32_t x=1; x<loopindex; x++) std::cout << ", " << std::setw(3) << loop_names[x] << x << ": " << std::setw(4) << looptimes_us[x]-looptimes_us[x-1];
+        std::cout << "\rRM:" << runmode << " us:" << esp_timer_get_time() << " Lp#" << loopno << " us:" << loop_period_us;
+        for (int32_t x=1; x<loopindex; x++) std::cout << " " << std::setw(3) << loop_names[x] << x << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1];
         if (loop_period_us > 25000) printf ("\n");
     }
     loop_int_count = 0;
