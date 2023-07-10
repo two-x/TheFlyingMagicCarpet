@@ -180,7 +180,8 @@ class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
         set (arg_timeout_us);
     }
     IRAM_ATTR void set (uint32_t arg_timeout_us) {
-        timeout_us = arg_timeout_us; reset();
+        timeout_us = arg_timeout_us;
+        reset();
     }
     IRAM_ATTR void reset (void) {
         start_us = esp_timer_get_time();
@@ -289,8 +290,9 @@ double pot_filt_percent = pot_percent;
 double pot_min_percent = 0;  //
 double pot_max_percent = 100;  //
 //  ---- tunable ----
-double pot_min_adc = 0;  // TUNED 230603 - Used only in determining theconversion factor
-double pot_max_adc = 4090;  // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
+int32_t pot_adc = adcmidscale_adc;
+double pot_min_adc = 300;  // TUNED 230603 - Used only in determining theconversion factor
+double pot_max_adc = 4095;  // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
 double pot_convert_percent_per_adc = (pot_max_percent - pot_min_percent)/(pot_max_adc - pot_min_adc);  // 100 % / (3996 adc - 0 adc) = 0.025 %/adc
 bool pot_convert_invert = false;
 double pot_convert_offset = -0.08;
@@ -318,7 +320,7 @@ bool hotrc_suppress_next_ch3_event = true;  // When powered up, the hotrc will t
 bool hotrc_suppress_next_ch4_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 //  ---- tunable ----
 double hotrc_pulse_period_us = 1000000.0 / 50;
-double ctrl_ema_alpha[2] = { 0.01, 0.1 };  // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+double ctrl_ema_alpha[2] = { 0.007, 0.1 };  // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 int32_t ctrl_lims_adc[2][2][3] = { { { 3, 375, 4092 }, { 3, 375, 4092 } }, { { 9, 200, 4085 }, { 9, 200, 4085 } }, }; // [HOTRC/JOY] [HORZ/VERT], [MIN/DEADBAND/MAX] values as ADC counts
 bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
 // Limits of what pulsewidth the hotrc receiver puts out
@@ -534,9 +536,23 @@ SdFile file;  // Use for file creation in folders.
 // SPID gasSPID (&tach_filt_rpm, gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, gas_spid_ctrl_dir, gas_pid_period_ms);
 // SPID cruiseSPID (&speedo_filt_mph, cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, cruise_spid_ctrl_dir, cruise_pid_period_ms);
 
-QPID brakeQPID (&pressure_filt_psi, &brake_pulse_out_us, &pressure_target_psi);
-QPID gasQPID (&tach_filt_rpm, &gas_pulse_out_us, &tach_target_rpm);
-QPID cruiseQPID (&speedo_filt_mph, &tach_target_rpm, &speedo_target_mph);
+QPID brakeQPID (&pressure_filt_psi, &brake_pulse_out_us, &pressure_target_psi,
+                (double)brake_pulse_retract_us, (double)brake_pulse_extend_us,
+                brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,
+                QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwClamp,
+                QPID::Action::reverse, 1000*brake_pid_period_ms, QPID::Control::timer);
+
+QPID gasQPID (&tach_filt_rpm, &gas_pulse_out_us, &tach_target_rpm,
+              (double)gas_pulse_redline_us, (double)gas_pulse_idle_us,
+              gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s,
+              QPID::pMode::pOnErrorMeas, QPID::dMode::dOnMeas, QPID::iAwMode::iAwClamp,
+              QPID::Action::reverse, 1000*gas_pid_period_ms, QPID::Control::manual);  // QPID::Control::timer
+
+QPID cruiseQPID (&speedo_filt_mph, &tach_target_rpm, &speedo_target_mph,
+                 (double)tach_govern_rpm, (double)tach_idle_rpm,
+                 cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s,
+                 QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwClamp,
+                 QPID::Action::direct, 1000*cruise_pid_period_ms, QPID::Control::timer);
 
 // brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brake_spid_ctrl_dir, brake_pid_period_ms);
 
