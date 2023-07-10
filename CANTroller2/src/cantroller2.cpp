@@ -82,6 +82,10 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (syspower_pin, OUTPUT);  // Then set the put as an output as normal.
     write_pin (syspower_pin, syspower);
 
+    analogReadResolution (adcbits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
+    Serial.begin (115200);  // Open serial port
+    // printf("Serial port open\n");  // This works on Due but not ESP32
+    
     for (int32_t x=0; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
     
     if (display_enabled) {
@@ -167,27 +171,27 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     
     // gasQPID.set_open_loop(1);  // Added temporarily to debug brake pid
 
-    brakeQPID.SetMode (QPID::Control::timer);
-    brakeQPID.SetOutputLimits ((double)brake_pulse_retract_us, (double)brake_pulse_extend_us);
-    brakeQPID.SetTunings (brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, 
-                          QPID::pMode::pOnError, QPID::dMode::dOnMeas, QPID::iAwMode::iAwClamp);
-    brakeQPID.SetSampleTimeUs (1000 * brake_pid_period_ms);
-    brakeQPID.SetControllerDirection (QPID::Action::reverse);
+    // brakeQPID.SetMode (QPID::Control::timer);
+    // brakeQPID.SetOutputLimits ((double)brake_pulse_retract_us, (double)brake_pulse_extend_us);
+    // brakeQPID.SetTunings (brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, 
+    //                       QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwClamp);
+    // brakeQPID.SetSampleTimeUs (1000 * brake_pid_period_ms);
+    // brakeQPID.SetControllerDirection (QPID::Action::reverse);
 
-    gasQPID.SetMode (QPID::Control::manual);  // No PID action
-    // gasQPID.SetMode (QPID::Control::timer);  // We call Compute() on our pwn timer
-    gasQPID.SetOutputLimits ((double)gas_pulse_redline_us, (double)gas_pulse_idle_us);
-    gasQPID.SetTunings (gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, 
-                        QPID::pMode::pOnError, QPID::dMode::dOnMeas, QPID::iAwMode::iAwClamp);
-    gasQPID.SetSampleTimeUs (1000 * gas_pid_period_ms);
-    gasQPID.SetControllerDirection (QPID::Action::reverse);
+    // gasQPID.SetMode (QPID::Control::manual);  // No PID action
+    // // gasQPID.SetMode (QPID::Control::timer);  // We call Compute() on our pwn timer
+    // gasQPID.SetOutputLimits ((double)gas_pulse_redline_us, (double)gas_pulse_idle_us);
+    // gasQPID.SetTunings (gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, 
+    //                     QPID::pMode::pOnErrorMeas, QPID::dMode::dOnMeas, QPID::iAwMode::iAwClamp);
+    // gasQPID.SetSampleTimeUs (1000 * gas_pid_period_ms);
+    // gasQPID.SetControllerDirection (QPID::Action::reverse);
     
-    cruiseQPID.SetMode (QPID::Control::timer);
-    cruiseQPID.SetOutputLimits ((double)tach_govern_rpm, (double)tach_idle_rpm);
-    cruiseQPID.SetTunings (cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, 
-                           QPID::pMode::pOnError, QPID::dMode::dOnMeas, QPID::iAwMode::iAwClamp);
-    cruiseQPID.SetSampleTimeUs (1000 * cruise_pid_period_ms);
-    cruiseQPID.SetControllerDirection (QPID::Action::direct);
+    // cruiseQPID.SetMode (QPID::Control::timer);
+    // cruiseQPID.SetOutputLimits ((double)tach_govern_rpm, (double)tach_idle_rpm);
+    // cruiseQPID.SetTunings (cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, 
+    //                        QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwClamp);
+    // cruiseQPID.SetSampleTimeUs (1000 * cruise_pid_period_ms);
+    // cruiseQPID.SetControllerDirection (QPID::Action::direct);
 
     steer_servo.attach (steer_pwm_pin);
     brake_servo.attach (brake_pwm_pin);
@@ -349,8 +353,14 @@ void loop() {
     encoder.update();  // Read encoder input signals
 
     // Potentiometer - takes 400 us to read & convert (?!)
-    pot_percent = convert_units ((double)analogRead (pot_wipe_pin), pot_convert_percent_per_adc, pot_convert_invert, 0.0, pot_convert_offset);  // Potentiometer
+    int32_t pot_adc_last;
+    pot_adc_last = pot_adc;
+    pot_adc = analogRead (pot_wipe_pin);
+    // pot_percent = convert_units ((double)pot_adc, pot_convert_percent_per_adc, pot_convert_invert, 0.0, pot_convert_offset);  // Potentiometer
+    pot_percent = map ((double)pot_adc, (double)pot_min_adc, (double)pot_max_adc, pot_min_percent, pot_max_percent);
+    pot_percent = constrain (pot_percent, pot_min_percent, pot_max_percent);
     ema_filt (pot_percent, &pot_filt_percent, pot_ema_alpha);
+    // if (pot_adc != pot_adc_last) printf ("pot adc:%ld pot%%:%lf filt:%lf\n", pot_adc, pot_percent, pot_filt_percent); 
     
     // Voltage of vehicle battery - takes 70 us to read, convert, and filter
     battery_v = convert_units ((double)analogRead (battery_pin), battery_convert_v_per_adc, battery_convert_invert);

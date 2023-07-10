@@ -127,7 +127,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "  P Term",
         "  I Term",
         "  D Term",
-        " PID Out",
+        " Out Sum",
         "  Kp (P)",
         "  Ki (I)",
         "  Kd (D)", },
@@ -135,7 +135,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "  P Term",
         "  I Term",
         "  D Term",
-        " PID Out",
+        " Out Sum",
         "  Kp (P)",
         "  Ki (I)",
         "  Kd (D)" },
@@ -143,7 +143,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "  P Term",
         "  I Term",
         "  D Term",
-        " PID Out",
+        " Out Sum",
         "  Kp (P)",
         "  Ki (I)",
         "  Kd (D)", },
@@ -708,7 +708,8 @@ class Display {
                     draw_dynamic(13, brakeQPID.GetPterm(), -drange, drange);
                     draw_dynamic(14, brakeQPID.GetIterm(), -drange, drange);
                     draw_dynamic(15, brakeQPID.GetDterm(), -drange, drange);
-                    draw_dynamic(16, brake_pulse_out_us, (double)brake_pulse_retract_us, (double)brake_pulse_extend_us);  // brake_spid_speedo_delta_adc, -range, range);
+                    // draw_dynamic(16, brake_pulse_out_us, (double)brake_pulse_retract_us, (double)brake_pulse_extend_us);  // brake_spid_speedo_delta_adc, -range, range);
+                    draw_dynamic(16, brakeQPID.GetOutputSum(), (double)brake_pulse_retract_us, (double)brake_pulse_extend_us);  // brake_spid_speedo_delta_adc, -range, range);
                     draw_dynamic(17, brakeQPID.GetKp(), 0.0, 2.0);
                     draw_dynamic(18, brakeQPID.GetKi(), 0.0, 2.0);
                     draw_dynamic(19, brakeQPID.GetKd(), 0.0, 2.0);
@@ -719,7 +720,8 @@ class Display {
                     draw_dynamic(13, gasQPID.GetPterm(), -drange, drange);
                     draw_dynamic(14, gasQPID.GetIterm(), -drange, drange);
                     draw_dynamic(15, gasQPID.GetDterm(), -drange, drange);
-                    draw_dynamic(16, gas_pulse_out_us, gas_pulse_idle_us, gas_pulse_govern_us);  // gas_spid_speedo_delta_adc, -drange, drange);
+                    // draw_dynamic(16, gas_pulse_out_us, gas_pulse_idle_us, gas_pulse_govern_us);  // gas_spid_speedo_delta_adc, -drange, drange);
+                    draw_dynamic(16, gasQPID.GetOutputSum(), (double)gas_pulse_idle_us, (double)gas_pulse_govern_us);
                     draw_dynamic(17, gasQPID.GetKp(), 0.0, 2.0);
                     draw_dynamic(18, gasQPID.GetKi(), 0.0, 2.0);
                     draw_dynamic(19, gasQPID.GetKd(), 0.0, 2.0);
@@ -730,7 +732,8 @@ class Display {
                     draw_dynamic(13, cruiseQPID.GetPterm(), -drange, drange);
                     draw_dynamic(14, cruiseQPID.GetIterm(), -drange, drange);
                     draw_dynamic(15, cruiseQPID.GetDterm(), -drange, drange);
-                    draw_dynamic(16, tach_target_rpm, tach_idle_rpm, tach_govern_rpm);  // cruise_spid_speedo_delta_adc, -drange, drange);
+                    // draw_dynamic(16, tach_target_rpm, tach_idle_rpm, tach_govern_rpm);  // cruise_spid_speedo_delta_adc, -drange, drange);
+                    draw_dynamic(16, cruiseQPID.GetOutputSum(), tach_idle_rpm, tach_govern_rpm);  // cruise_spid_speedo_delta_adc, -drange, drange);
                     draw_dynamic(17, cruiseQPID.GetKp(), 0.0, 2.0);
                     draw_dynamic(18, cruiseQPID.GetKi(), 0.0, 2.0);
                     draw_dynamic(19, cruiseQPID.GetKd(), 0.0, 2.0);

@@ -19,19 +19,20 @@ class QPID {
     QPID();
 
     // Constructor. Links the PID to Input, Output, Setpoint, initial tuning parameters and control modes.
-    QPID(double *Input, double *Output, double *Setpoint, double Kp, double Ki, double Kd,
-             pMode pMode, dMode dMode, iAwMode iAwMode, Action Action);
+    QPID(double *Input, double *Output, double *Setpoint, double Min, double Max, double Kp, double Ki, double Kd,  // Soren edit
+         pMode pMode, dMode dMode, iAwMode iAwMode, Action Action, uint32_t SampleTimeUs, Control Mode);  // Soren edit
+
+    // Constructor allowing use of integer instead of double output value. Soren
+    QPID(double *Input, int32_t *Output, double *Setpoint, double Min, double Max, double Kp, double Ki, double Kd,  // Soren
+         pMode pMode, dMode dMode, iAwMode iAwMode, Action Action, uint32_t SampleTimeUs, Control Mode);  // Soren
 
     // Overload constructor links the PID to Input, Output, Setpoint, tuning parameters and control Action.
     // Uses defaults for remaining parameters.
-    QPID(double *Input, double *Output, double *Setpoint, double Kp, double Ki, double Kd, Action Action);
+    // QPID(double *Input, double *Output, double *Setpoint, double Kp, double Ki, double Kd, Action Action);
 
     // Simplified constructor which uses defaults for remaining parameters.
     // QPID(double *Input, double *Output, double *Setpoint);
     
-    // Simplified constructor which uses defaults for remaining parameters.
-    QPID(double *Input, int32_t *Output, double *Setpoint);
-
     // Sets PID mode to manual (0), automatic (1), timer (2) or toggle manual/automatic (3).
     void SetMode(Control Mode);
     void SetMode(uint8_t Mode);
@@ -143,90 +144,54 @@ class QPID {
    Based on the Arduino PID_v1 Library. Licensed under the MIT License.
  **********************************************************************************/
 
-// #if ARDUINO >= 100
-// #include "Arduino.h"
-// #else
-// #include "WProgram.h"
-// #endif
-
-// #include "QPID.h"
-
 QPID::QPID() {}
 
-/* Constructor ********************************************************************
-   The parameters specified here are those for for which we can't set up
-   reliable defaults, so we need to have the user set them.
- **********************************************************************************/
-
+// Constructor that allows all parameters to get set
 QPID::QPID(double* Input, double* Output, double* Setpoint,
+                   double Min, double Max,
                    double Kp = 0, double Ki = 0, double Kd = 0,
                    pMode pMode = pMode::pOnError,
                    dMode dMode = dMode::dOnMeas,
                    iAwMode iAwMode = iAwMode::iAwCondition,
-                   Action Action = Action::direct) {
+                   Action Action = Action::direct,
+                   uint32_t SampleTimeUs = 100000,
+                   Control Mode = Control::manual) {
 
+  int32_output = false;  // Soren
   myOutput = Output;
   myInput = Input;
   mySetpoint = Setpoint;
-  mode = Control::manual;
-
-  QPID::SetOutputLimits(0, 255);  // same default as Arduino PWM limit
-  sampleTimeUs = 100000;              // 0.1 sec default
+  mode = Mode;
+  QPID::SetOutputLimits(Min, Max);  // same default as Arduino PWM limit - Soren edit
+  sampleTimeUs = SampleTimeUs;              // Soren edit
   QPID::SetControllerDirection(Action);
   QPID::SetTunings(Kp, Ki, Kd, pMode, dMode, iAwMode);
-
   lastTime = micros() - sampleTimeUs;
-
-  int32_output = false;
 }
 
-/* Constructor *********************************************************************
-   To allow using pOnError, dOnMeas and iAwCondition without explicitly saying so.
- **********************************************************************************/
-QPID::QPID(double* Input, double* Output, double* Setpoint,
-                   double Kp, double Ki, double Kd, Action Action)
-  : QPID::QPID(Input, Output, Setpoint, Kp, Ki, Kd,
-                       pmode = pMode::pOnError,
-                       dmode = dMode::dOnMeas,
-                       iawmode = iAwMode::iAwCondition,
-                       action = Action) {
-}
+// Constructor allowing use of integer instead of double output value. Soren
+QPID::QPID(double* Input, int32_t* IntOutput, double* Setpoint,  // Soren
+                   double Min, double Max,
+                   double Kp = 0, double Ki = 0, double Kd = 0,
+                   pMode pMode = pMode::pOnError,
+                   dMode dMode = dMode::dOnMeas,
+                   iAwMode iAwMode = iAwMode::iAwCondition,
+                   Action Action = Action::direct,
+                   uint32_t SampleTimeUs = 100000,
+                   Control Mode = Control::manual) {
 
-/* Constructor *********************************************************************
-   Simplified constructor which uses defaults for remaining parameters.
- **********************************************************************************/
-// QPID::QPID(double* Input, double* Output, double* Setpoint)
-//   : QPID::QPID(Input, Output, Setpoint,
-//                        dispKp = 0,
-//                        dispKi = 0,
-//                        dispKd = 0,
-//                        pmode = pMode::pOnError,
-//                        dmode = dMode::dOnMeas,
-//                        iawmode = iAwMode::iAwCondition,
-//                        action = Action::direct) {
-// }
-
-QPID::QPID(double* Input, int32_t* IntOutput, double* Setpoint) {  // SC
-  int32_output = true;  // SC
-
-  double Kp = 0, Ki = 0, Kd = 0;
-  pMode pMode = pMode::pOnError;
-  dMode dMode = dMode::dOnMeas;
-  iAwMode iAwMode = iAwMode::iAwCondition;
-  Action Action = Action::direct;
-
-  myIntOutput = IntOutput;
+  int32_output = true;  // Soren
+  myIntOutput = IntOutput;  // Soren
   myInput = Input;
   mySetpoint = Setpoint;
-  mode = Control::manual;
-
-  QPID::SetOutputLimits(0, 255);  // same default as Arduino PWM limit
-  sampleTimeUs = 100000;              // 0.1 sec default
+  mode = Mode;
+  QPID::SetOutputLimits(Min, Max);  // same default as Arduino PWM limit - Soren edit
+  sampleTimeUs = SampleTimeUs;              // Soren edit
   QPID::SetControllerDirection(Action);
   QPID::SetTunings(Kp, Ki, Kd, pMode, dMode, iAwMode);
-
   lastTime = micros() - sampleTimeUs;
 }
+
 
 /* Compute() ***********************************************************************
    This function should be called every time "void loop()" executes. The function
@@ -255,8 +220,8 @@ bool QPID::Compute() {
       peTerm *= 0.5f;
       pmTerm *= 0.5f;
     }
-    pTerm = peTerm - pmTerm; // used by GetDterm()
-    iTerm = ki  * error;
+    pTerm = peTerm - pmTerm;
+    iTerm = ki * error;
     if (dmode == dMode::dOnError) dTerm = kd * dError;
     else dTerm = -kd * dInput; // dOnMeas
 
@@ -274,7 +239,7 @@ bool QPID::Compute() {
     if (iawmode == iAwMode::iAwOff) outputSum -= pmTerm;                // include pmTerm (no anti-windup)
     else outputSum = constrain(outputSum - pmTerm, outMin, outMax);     // include pmTerm and clamp
     
-    if (int32_output) *myIntOutput = (int32_t)(constrain(outputSum + peTerm + dTerm, outMin, outMax));  // SC
+    if (int32_output) *myIntOutput = (int32_t)(constrain(outputSum + peTerm + dTerm, outMin, outMax));  // Soren
     else *myOutput = constrain(outputSum + peTerm + dTerm, outMin, outMax);  // include dTerm, clamp and drive output
 
     lastError = error;
@@ -339,8 +304,8 @@ void QPID::SetOutputLimits(double Min, double Max) {
   outMax = Max;
 
   if (mode != Control::manual) {
-    if (int32_output) *myIntOutput = (int32_t)constrain((double)*myIntOutput, outMin, outMax);  // SC
-    else *myOutput = constrain(*myOutput, outMin, outMax);  // SC
+    if (int32_output) *myIntOutput = (int32_t)constrain((double)*myIntOutput, outMin, outMax);  // Soren
+    else *myOutput = constrain(*myOutput, outMin, outMax);  // Soren
     outputSum = constrain(outputSum, outMin, outMax);
   }
 }
