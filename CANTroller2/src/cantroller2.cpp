@@ -1106,7 +1106,7 @@ void loop() {
     loopno++;  // I like to count how many loops
     if (timestamp_loop) {
         // loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");  //
-        printf ("\rRM:%ld Lp#%ld us:%5ld ", runmode, loopno, loop_period_us);
+        printf ("\rRM:%ld us:%ld Lp#%ld us:%5ld ", runmode, esp_timer_get_time(), loopno, loop_period_us);
         for (int32_t x=1; x<loopindex; x++) std::cout << ", " << std::setw(3) << loop_names[x] << x << ": " << std::setw(4) << looptimes_us[x]-looptimes_us[x-1];
         if (loop_period_us > 25000) printf ("\n");
     }
