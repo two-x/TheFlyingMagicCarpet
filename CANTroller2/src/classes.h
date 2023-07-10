@@ -14,14 +14,14 @@ using namespace std;
 //     return (int32_t)(temp &= 0x7fffffff);
 // }
 
-// Param is a value, possibly constrained between min/max limits, which holds a double value representing a "raw" (aka unfiltered) quantity, which can be displayed
+// Param is a value, possibly constrained between min/max limits, which holds a float value representing a "raw" (aka unfiltered) quantity, which can be displayed
 class Param {
   public:
     bool saturated;
   protected:
-    double val_raw, min_raw, max_raw;  // To hold val/min/max actual values in case they are passed to us by value. Otherwise if external references used, these are unused.
-    double val_raw_last;
-    bool constrain_it (double* arg_val, double arg_min, double arg_max) {  // This should be called "constrain" not "constrain_it"
+    float val_raw, min_raw, max_raw;  // To hold val/min/max actual values in case they are passed to us by value. Otherwise if external references used, these are unused.
+    float val_raw_last;
+    bool constrain_it (float* arg_val, float arg_min, float arg_max) {  // This should be called "constrain" not "constrain_it"
         if (*arg_val < arg_min) {
             *arg_val = arg_min;
             return true;  // Constraint was necessary
@@ -37,21 +37,21 @@ class Param {
     int32_t max_precision = 3;
     char disp_name[9] = "unnamed ";
     char disp_raw_units[5] = "    ";
-    double* p_val_raw = &val_raw; double* p_min_raw = &min_raw; double* p_max_raw = &max_raw;  // Pointers to value/max/min, could be internal or external reference
-    Param (double* arg_p_val_raw) { p_val_raw = arg_p_val_raw; }
-    Param (double arg_val_raw) { 
+    float* p_val_raw = &val_raw; float* p_min_raw = &min_raw; float* p_max_raw = &max_raw;  // Pointers to value/max/min, could be internal or external reference
+    Param (float* arg_p_val_raw) { p_val_raw = arg_p_val_raw; }
+    Param (float arg_val_raw) { 
         val_raw = arg_val_raw;
         *p_min_raw = arg_val_raw;  // Initialize to given value, presumably call set_limits to change later
         *p_max_raw = arg_val_raw;  // Initialize to given value, presumably call set_limits to change later
     }
-    Param (void) { Param((double)-1.0); }
+    Param (void) { Param((float)-1.0); }
     void set_names (const string arg_name, const string arg_units) {
         strcpy (disp_name, arg_name.c_str());
         strcpy (disp_raw_units, arg_units.c_str());
     }
-    double round (double val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
-    double round (double val) { return round (val, max_precision); }
-    void set_limits_raw (double* arg_min_raw, double* arg_max_raw) {  // Use if min/max are external references
+    float round (float val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
+    float round (float val) { return round (val, max_precision); }
+    void set_limits_raw (float* arg_min_raw, float* arg_max_raw) {  // Use if min/max are external references
         if (*arg_min_raw > *arg_max_raw) printf ("Error: *min is >= *max\n");
         else {
             p_min_raw = arg_min_raw;
@@ -59,7 +59,7 @@ class Param {
             saturated = constrain_it (p_val_raw, *p_min_raw, *p_max_raw);
         }
     }
-    void set_limits_raw (double arg_raw_min, double arg_raw_max) {  // Use if min/max are kept in-class
+    void set_limits_raw (float arg_raw_min, float arg_raw_max) {  // Use if min/max are kept in-class
         if (arg_raw_min > arg_raw_max) printf ("Error: min is >= max\n");
         else {
             min_raw = round (arg_raw_min);
@@ -67,7 +67,7 @@ class Param {
             saturated = constrain_it (p_val_raw, *p_min_raw, *p_max_raw);
         }
     }
-    bool set_raw (double arg_val_raw) {
+    bool set_raw (float arg_val_raw) {
         saturated = constrain_it (&arg_val_raw, *p_min_raw, *p_max_raw);
         if (*p_val_raw != arg_val_raw) {
             dirty = true;
@@ -77,7 +77,7 @@ class Param {
         }
         return false;
     }
-    bool add_raw (double arg_add_raw) { 
+    bool add_raw (float arg_add_raw) { 
         if (set_raw (*p_val_raw + arg_add_raw)) return true;
         return false;
     }
@@ -85,9 +85,9 @@ class Param {
         if (dirty) display.draw_dynamic (lineno, *p_val_raw, *p_min_raw, *p_max_raw, target);
         dirty = false;
     }
-    double get_raw () { return *p_val_raw; }
-    double get_min_raw () { return *p_min_raw; }
-    double get_max_raw () { return *p_max_raw; }
+    float get_raw () { return *p_val_raw; }
+    float get_min_raw () { return *p_min_raw; }
+    float get_max_raw () { return *p_max_raw; }
     char* get_name () { return disp_name; }
     char* get_units () { return disp_raw_units; }
     
@@ -105,9 +105,9 @@ class Device : virtual public Param {  // This class is truly virtual, in that i
     int32_t pin = -1, enabled = true;
     int32_t source = _UNDEF;
   public:
-    Device (double* arg_p_val_raw) : Param (arg_p_val_raw) {}
-    Device (double arg_val_raw) : Param (arg_val_raw) {}
-    Device (void) : Device ((double)-1.0) {}
+    Device (float* arg_p_val_raw) : Param (arg_p_val_raw) {}
+    Device (float arg_val_raw) : Param (arg_val_raw) {}
+    Device (void) : Device ((float)-1.0) {}
     void set_source (int32_t arg_source) { if (can_source[arg_source]) source = arg_source; }
     void set_pin (bool arg_pin) { pin = arg_pin; }
     void set_enabled (bool arg_enable) { enabled = arg_enable; }
@@ -123,14 +123,14 @@ class Device : virtual public Param {  // This class is truly virtual, in that i
 class Transducer : virtual public Device {
   public:
     int32_t _REV = -1, _FWD = 1;  // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, if we sense fewer us per rotation, the engine is going faster)
-    double val_native, val_native_last, min_native, max_native;  // To hold val/min/max display values in display units (like V, mph, etc.)
+    float val_native, val_native_last, min_native, max_native;  // To hold val/min/max display values in display units (like V, mph, etc.)
   protected:
-    double m_factor = 1.0, b_offset = 0.0;  // Multiplier and adder values to plug in for unit conversion math
+    float m_factor = 1.0, b_offset = 0.0;  // Multiplier and adder values to plug in for unit conversion math
     bool invert = false;  // Flag to indicated if unit conversion math should multiply or divide
-    double* p_min_native = &min_native;
-    double* p_max_native = &max_native;
+    float* p_min_native = &min_native;
+    float* p_max_native = &max_native;
     char disp_native_units[5] = "    ";
-    double native_to_raw (double arg_val_native) {
+    float native_to_raw (float arg_val_native) {
         if (!invert) {
             if (dir == _REV) return *p_min_native + (*p_max_native - (b_offset + m_factor * arg_val_native));
             return b_offset + m_factor * arg_val_native;
@@ -142,7 +142,7 @@ class Transducer : virtual public Device {
         printf ("Error: unit conversion refused to divide by zero\n");
         return -1;
     }
-    double raw_to_native (double arg_val_raw) {
+    float raw_to_native (float arg_val_raw) {
         if (dir == _REV) arg_val_raw = *p_min_native + (*p_max_native - arg_val_raw);
         if (invert && (arg_val_raw - b_offset)) return m_factor / (arg_val_raw - b_offset);
         else if (!invert && m_factor) return (arg_val_raw - b_offset) / m_factor;
@@ -151,15 +151,15 @@ class Transducer : virtual public Device {
     }
   public:
     int32_t dir = _FWD;  // // Belongs in a child class for devices. For the case a lower val causes a higher real-life effect, 
-    Transducer (double arg_val_native) : Device() {  
+    Transducer (float arg_val_native) : Device() {  
         val_native = arg_val_native;
         set_raw (native_to_raw (arg_val_native));
         min_native = raw_to_native (*p_min_raw);
         max_native = raw_to_native (*p_max_raw);
     }
-    Transducer (void) { Transducer((double)-1.0); }
+    Transducer (void) { Transducer((float)-1.0); }
     // Use if the value at *p_val_raw corresponds with a real-world effect having different units and possibly in the opposite direction as the underlying numerical values
-    void set_limits (double* arg_min_native, double* arg_max_native) {  // Direction dir applies when disp limits set.  dir is set to reverse if given minimum > maximum
+    void set_limits (float* arg_min_native, float* arg_max_native) {  // Direction dir applies when disp limits set.  dir is set to reverse if given minimum > maximum
         if (*arg_min_native > *arg_max_native) {
             dir = _REV;
             p_min_native = arg_max_native;
@@ -178,7 +178,7 @@ class Transducer : virtual public Device {
         strcpy (disp_native_units, arg_units_native.c_str());
     }
     // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
-    void set_convert (double arg_m_factor, double arg_b_offset, bool arg_invert) {
+    void set_convert (float arg_m_factor, float arg_b_offset, bool arg_invert) {
         m_factor = arg_m_factor;
         b_offset = arg_b_offset;
         invert = arg_invert;
@@ -188,7 +188,7 @@ class Transducer : virtual public Device {
         val_native = raw_to_native (*p_val_raw);
         saturated = constrain_it (&val_native, (*p_min_native), (*p_max_native));
     }
-    bool set_native (double arg_val_native) {
+    bool set_native (float arg_val_native) {
         if (Param::set_raw (native_to_raw (arg_val_native))) {
             val_native_last = val_native;
             val_native = raw_to_native (*p_val_raw);
@@ -196,13 +196,13 @@ class Transducer : virtual public Device {
         }
         return false;
     }
-    bool add_native (double arg_add) {
+    bool add_native (float arg_add) {
         if (set_native (val_native + arg_add)) return true;
         return false;
     }
     bool set_raw (int32_t arg_val_raw) {        
-        Param::set_raw ((double)arg_val_raw);
-        double temp = raw_to_native (*p_val_raw);
+        Param::set_raw ((float)arg_val_raw);
+        float temp = raw_to_native (*p_val_raw);
         if (temp != val_native) {
             dirty = true;
             val_native_last = val_native;
@@ -215,22 +215,22 @@ class Transducer : virtual public Device {
         if (dirty) d.draw_dynamic (lineno, val_native, *p_min_native, *p_max_native, target);
         dirty = false;
     }
-    double get_native () { return val_native; }
-    double get_min_native () { return *p_min_native; }
-    double get_max_native () { return *p_max_native; }
+    float get_native () { return val_native; }
+    float get_min_native () { return *p_min_native; }
+    float get_max_native () { return *p_max_native; }
 };
 
 // Sensor class - is a base class for control system sensors, ie anything that measures real world data or electrical signals 
 class Sensor : virtual public Transducer {
   protected:
-    double ema_alpha = 0.1;
-    double val_filt;
+    float ema_alpha = 0.1;
+    float val_filt;
   public:
-    Sensor (double arg_val_native) : Transducer (arg_val_native) { val_filt = arg_val_native; }
-    void set_ema_alpha (double arg_alpha) { ema_alpha = arg_alpha; }
-    void ema (double arg_new_val_native) { val_filt = ema_alpha * arg_new_val_native + (1 - ema_alpha) * (val_filt); }
-    double get_ema_alpha (void) { return ema_alpha; }
-    double get_filt (void) { return val_filt; }
+    Sensor (float arg_val_native) : Transducer (arg_val_native) { val_filt = arg_val_native; }
+    void set_ema_alpha (float arg_alpha) { ema_alpha = arg_alpha; }
+    void ema (float arg_new_val_native) { val_filt = ema_alpha * arg_new_val_native + (1 - ema_alpha) * (val_filt); }
+    float get_ema_alpha (void) { return ema_alpha; }
+    float get_filt (void) { return val_filt; }
 };
 
 // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
@@ -239,7 +239,7 @@ class AnalogSensor : virtual public Sensor {
     AnalogSensor (int32_t arg_val_native) : Sensor (arg_val_native) {}
     void read() {
         val_native = analogRead(pin);
-        ema ((double)val_native);
+        ema ((float)val_native);
     }
 };
 
@@ -325,9 +325,9 @@ class TempSensorBus : virtual public Sensor {
 //     int32_t precision = 9;  // 9-12 bit resolution
 //     int32_t current_index = 0;
 //     bool blocking_convert = false, verbose = true, read_lock = true;
-//     double sens_lim_min = -67.0;  // Minimum reading of sensor is -25 C = -67 F
-//     double sens_lim_max = 257.0;  // Maximum reading of sensor is 125 C = 257 F
-//     // double roomtemp = 77.0;  // "Room" temperature is 25 C = 77 F
+//     float sens_lim_min = -67.0;  // Minimum reading of sensor is -25 C = -67 F
+//     float sens_lim_max = 257.0;  // Maximum reading of sensor is 125 C = 257 F
+//     // float roomtemp = 77.0;  // "Room" temperature is 25 C = 77 F
 //   public:
 //     TempSensorBus (int32_t arg_pin) : Sensor() {
 //         set_pin (arg_pin);
@@ -342,7 +342,7 @@ class TempSensorBus : virtual public Sensor {
 //         tempbus.begin();
 //         detected_devices = tempbus.getDeviceCount();
 //         DeviceAddress this->addrs[detected_devices];
-//         double this->temps[detected_devices];
+//         float this->temps[detected_devices];
 //         if (verbose) printf ("Temp sensors: Detected %d devices. Parasitic power: %s\n", temp_detected_device_ct, ((tempbus.isParasitePowerMode()) ? "On" : "Off"));  // , DEC);
 //         if (read_initial_temps) request(true);  // This blocks for over 100ms
 //         DeviceAddress temporary_addr;
@@ -443,17 +443,17 @@ class Hotrc {
     int32_t get_failsafe_max (void) { return failsafe_max; }
 };
 
-// Sensor (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max)  // std::string& eng_name, 
+// Sensor (int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max)  // std::string& eng_name, 
 // : Transducer (arg_pin, arg_dir) {
 //     set_limits(arg_val_min, arg_val_max);
 // }
-// Sensor (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max, double arg_val_cent)  // std::string& eng_name, 
+// Sensor (int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max, float arg_val_cent)  // std::string& eng_name, 
 // : Sensor (arg_pin, arg_dir, arg_val_min, arg_val_max) {
 //     set_center(arg_val_cent);
 // }
 // Sensor (int32_t arg_pin) 
 // : Device (arg_pin) {}
-// double getval (int32_t arg_hist) {  // returns the output value _RAW or _FILT. Use hist to retreive past values 0 (newest) - 9 (oldest)
+// float getval (int32_t arg_hist) {  // returns the output value _RAW or _FILT. Use hist to retreive past values 0 (newest) - 9 (oldest)
 //     if (arg_hist < 0 || arg_hist >= sizeof(vals)) printf ("Transducer::val(): Max value history is past %d values\n", sizeof(vals)-1);            
 //     else return vals[d_val - &vals[0] + sizeof(vals) - arg_hist];
 // }
@@ -484,7 +484,7 @@ class Hotrc {
 //     }
 //     void calc() {
 //         if (val_source != _TOUCH && val_source != _POT) {
-//             double val_temp;
+//             float val_temp;
 //             if (PulseTimer.elapsed() < stop_timeout_us) {
 //                 if (delta_us <= 0) printf ("Warning: PulseSensor::calc sees delta_us <= 0\n");
 //                 else val_temp = conversion_factor/delta_us;
@@ -502,7 +502,7 @@ class Hotrc {
 //   protected:
 //     Timer PulseTimer;  // OK to not be volatile?
 //   public:
-//     InPWM(int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max, double arg_val_cent)
+//     InPWM(int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max, float arg_val_cent)
 //     : Sensor(arg_pin, arg_dir, arg_val_min, arg_val_max, arg_val_cent)  {}
 
 // };
@@ -511,7 +511,7 @@ class Hotrc {
 //   protected:
 //     Timer PulseTimer;  // OK to not be volatile?
 //   public:
-//     InPWMToggle(int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max, double arg_val_cent)
+//     InPWMToggle(int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max, float arg_val_cent)
 //     : Sensor(arg_pin, arg_dir, arg_val_min, arg_val_max, arg_val_cent)  {}
 
 // };
@@ -522,7 +522,7 @@ class Hotrc {
 //   protected:
 //     static Servo servo;
 //   public:
-//     ServoPWM (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max) {  // std::string& eng_name, 
+//     ServoPWM (int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max) {  // std::string& eng_name, 
 //         Transducer (arg_pin, arg_dir);
 //         servo.attach(pin);
 //         set_limits(arg_val_min, arg_val_max);
@@ -539,7 +539,7 @@ class Hotrc {
 //   protected:
 //     static Servo servo;
 //   public:
-//     JagMotor (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max)  // std::string& eng_name, 
+//     JagMotor (int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max)  // std::string& eng_name, 
 //     : ServoPWM(arg_pin, arg_dir, arg_val_min, arg_val_max) {}
 // };
 
@@ -614,18 +614,18 @@ class Hotrc {
 // class Transducer : virtual public Device {
 //   protected:
 //     bool centermode, saturated;
-//     double vhist[5];  // vals[] is some past values, [0] beling most recent. 
-//     void hist_init (double arg_val) {
+//     float vhist[5];  // vals[] is some past values, [0] beling most recent. 
+//     void hist_init (float arg_val) {
 //         for (int x = 0; x < sizeof(vals); x++) vhist[x] = arg_val;
 //     }
-//     void new_val (double new_val) {
+//     void new_val (float new_val) {
 //         for (int x = sizeof(vhist)-1; x >= 1; x--) vhist[x] = vhist[x-1];
 //         vhist[0] = *val;
 //         *val = new_val;
 //     }
 //   public:
 //     enum relativity { ABSOLUTE, RELATIVE };
-//     double val_cent, val_margin;
+//     float val_cent, val_margin;
 //     Transducer (int32_t arg_pin) 
 //     : Device (arg_pin) { // std::string& eng_name, 
 //         centermode = ABSOLUTE;
@@ -634,7 +634,7 @@ class Hotrc {
 //         // set_limits(arg_val_min, arg_val_max);
 //         hist_init(0);
 //     }
-//     void set_center (double arg_val_cent) {
+//     void set_center (float arg_val_cent) {
 //         if (arg_val_cent <= min_val || arg_val_cent >= max_val) {
 //             printf ("Transducer::set_limits(): Centerpoint must fall within min/max limits\n");
 //             return;
@@ -644,11 +644,11 @@ class Hotrc {
 //             centermode = RELATIVE;
 //         }
 //     }
-//     void set (double val) {
+//     void set (float val) {
 //     }
 // };
-// // Transducer (int32_t arg_pin, bool arg_dir, double arg_val_min, double arg_val_max) { // std::string& eng_name, 
-// void add_val (double arg_add_val) {  // 
+// // Transducer (int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max) { // std::string& eng_name, 
+// void add_val (float arg_add_val) {  // 
 //     assign_val(*d_val + arg_add_val);
 // }
 
