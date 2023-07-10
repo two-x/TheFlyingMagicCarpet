@@ -4,7 +4,8 @@
 #include <Servo.h>  // Makes PWM output to control motors (for rudimentary control of our gas and steering)
 #include <Adafruit_NeoPixel.h>  // Plan to allow control of neopixel LED onboard the esp32
 #include <OneWire.h>
-#include <DallasTemperature.h>
+#include "temp.h"
+// #include <DallasTemperature.h>
 #include "Arduino.h"
 #include <Preferences.h>
 #include <vector>
@@ -12,6 +13,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <string>
+// #include <sstream.h>  // For saving error strings to print on emptier loops
 #include <iomanip>
 // #include <stdio.h>  // MCPWM pulse measurement code
 // #include "freertos/FreeRTOS.h"  // MCPWM pulse measurement code
@@ -148,7 +150,7 @@ bool flip_the_screen = false;
 
 // Global settings
 bool serial_debugging = true; 
-bool timestamp_loop = true;  // Makes code write out timestamps throughout loop to serial port
+bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
 bool take_temperatures = true;
 
 // Persistent config storage
@@ -489,6 +491,7 @@ bool loop_dirty[20];
 int32_t loopindex = 0;
 bool booted = false;
 bool diag_ign_error_enabled = true;
+// std::stringstream loop_report;
 
 // pushbutton related
 enum sw_presses { NONE, SHORT, LONG };  // used by encoder sw and button algorithms
@@ -532,10 +535,6 @@ SdFat sd;  // SD card filesystem
 SdFile root;  // Directory file.
 SdFile file;  // Use for file creation in folders.
 
-// SPID brakeSPID (&pressure_filt_psi, brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brake_spid_ctrl_dir, brake_pid_period_ms);
-// SPID gasSPID (&tach_filt_rpm, gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, gas_spid_ctrl_dir, gas_pid_period_ms);
-// SPID cruiseSPID (&speedo_filt_mph, cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, cruise_spid_ctrl_dir, cruise_pid_period_ms);
-
 QPID brakeQPID (&pressure_filt_psi, &brake_pulse_out_us, &pressure_target_psi,
                 (float)brake_pulse_retract_us, (float)brake_pulse_extend_us,
                 brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,
@@ -554,11 +553,6 @@ QPID cruiseQPID (&speedo_filt_mph, &tach_target_rpm, &speedo_target_mph,
                  QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwClamp,
                  QPID::Action::direct, 1000*cruise_pid_period_ms, QPID::Control::timer);
 
-// brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s, brake_spid_ctrl_dir, brake_pid_period_ms);
-
-// SPID gasSPID (&tach_filt_rpm, gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, gas_spid_ctrl_dir, gas_pid_period_ms);
-// SPID cruiseSPID (&speedo_filt_mph, cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s, cruise_spid_ctrl_dir, cruise_pid_period_ms);
-
 // Servo library lets us set pwm outputs given an on-time pulse width in us
 static Servo steer_servo;
 static Servo brake_servo;
@@ -566,29 +560,32 @@ static Servo gas_servo;
 static Adafruit_NeoPixel neostrip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
 
 // Temperature sensor related
-long temp, temp_last;
-static int temp_secs = 0;
-static byte temp_data[2];
-static int16_t temp_raw;
+long temp, temp_last;  // peef variables
+static int temp_secs = 0;  // peef variables
+static byte temp_data[2];  // peef variables
+static int16_t temp_raw;  // peef variables
+
 float temp_min = -67.0;  // Minimum reading of sensor is -25 C = -67 F
 float temp_max = 257.0;  // Maximum reading of sensor is 125 C = 257 F
 float temp_room = 77.0;  // "Room" temperature is 25 C = 77 F
 enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
-Timer tempTimer (2000000);
 float temps[6];
 int32_t temp_detected_device_ct = 0;
 int32_t temperature_precision = 12;  // 9-12 bit resolution
 OneWire onewire (onewire_pin);
-DeviceAddress temp_temp_addr;
+// uint64_t temp_temp_addr;
 int32_t temp_current_index = 0;
-DeviceAddress temp_addrs[6];
+// uint64_t temp_addrs[6];
 enum temp_status : bool { CONVERT, READ };
 temp_status temp_state = CONVERT;
-uint32_t temp_times[2] = { 2000000, 10000 };
-    
+uint32_t temp_times[2] = { 2000000, 10000 };  // Peef delay was 10000 (10ms)
+int32_t temp_timeout = 2000000;
+Timer tempTimer (temp_timeout);
+
+DeviceAddress temp_temp_addr;
+DeviceAddress temp_addrs[6];
 // enum temp_status { IDLE, CONVERT, READ };
-// int32_t temp_status = READ;
-// DallasTemperature tempsensebus (&onewire);
+DallasSensor tempsensebus (&onewire);
 
 // Interrupt service routines
 //
@@ -763,14 +760,6 @@ bool adj_val (float* variable, float modify, float low_limit, float high_limit) 
     else *variable += modify; 
     return (*variable != oldval);
 }
-// bool adj_val (float* variable, int32_t modify, float low_limit, float high_limit) {  // sets an int reference to new val constrained to given range
-//     float oldval = *variable;
-//     if (*variable + modify < low_limit) *variable = low_limit;
-//     else if (*variable + modify > high_limit) *variable = high_limit;
-//     else *variable += modify; 
-//     return (*variable != oldval);
-// }
-
 void adj_bool (bool* val, int32_t delta) { if (delta != 0) *val = (delta > 0); }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
 
 // pin operations that first check if pin exists for the current board
@@ -802,9 +791,9 @@ long temp_peef (void) {
             onewire.reset();
             onewire.write(0xCC);        // All Devices present - Skip ROM ID
             onewire.write(0x44);        // start conversion, with parasite power on at the end
-            printf ("\nTemp: %s.%s °F\n", String(temp/10), String(temp%10));
-            temp_state = CONVERT;
+            // printf ("\nTemp: %s.%s °F\n", String(temp/10), String(temp%10));
             tempTimer.set (temp_times[temp_state]);
+            temp_state = CONVERT;
             return temp;
         }  // else CONVERT
         onewire.reset();
@@ -816,10 +805,34 @@ long temp_peef (void) {
         temp_last = temp;
         temp = ((long)temp_raw * 180 / 16 + 3205) / 10;
         temp_secs++;
-        temp_state = READ;
         tempTimer.set (temp_times[temp_state]);
+        temp_state = READ;
     }
     return 10000;  // Used as invalid value flag
+}
+
+void temp_soren (void) {
+    if (take_temperatures && tempTimer.expired()) {
+        // int64_t check1 = esp_timer_get_time();  // Soren
+        // int64_t check2;        
+        if (temp_state == CONVERT) {
+            tempsensebus.requestTemperatures();
+            // check2 = esp_timer_get_time();  // 2460us
+            // std::cout << "TSoren CONV req:" << check2-check1;
+            tempTimer.set (tempsensebus.microsToWaitForConversion(temperature_precision));  // 50 us . / (1 << (12 - temperature_precision)));  // Give some time before reading temp
+            // check1 = esp_timer_get_time();
+    	    // std::cout << " set:" << check1-check2 << std::endl;
+            temp_state = READ;
+        }
+        else if (temp_state == READ) {
+            temps[temp_current_index] = tempsensebus.getTempF(temp_addrs[temp_current_index]);  // 12800 us
+            // check2 = esp_timer_get_time();
+            // std::cout << "TSoren READ get:" << check2-check1 << std::endl;    
+            tempTimer.set (temp_timeout);
+            temp_state = CONVERT;
+            if (++temp_current_index >= temp_detected_device_ct) temp_current_index -= temp_detected_device_ct;  // replace 1 with arraysize(temps)
+        }
+    }
 }
 
 // float get_temp (DeviceAddress arg_addr) {  // function to print the temperature for a device
