@@ -12,7 +12,7 @@ class QPID {
     enum class pMode : uint8_t {pOnError, pOnMeas, pOnErrorMeas};     // proportional mode
     enum class dMode : uint8_t {dOnError, dOnMeas};                   // derivative mode
     enum class iAwMode : uint8_t {iAwCondition, iAwClamp, iAwOff};    // integral anti-windup mode
-    enum class centMode : uint8_t {range, center, centerStrict};    // integral anti-windup mode
+    enum class centMode : uint8_t {range, center, centerStrict};    // Soren - Allows a defined output zero point
 
     // commonly used functions ************************************************************************************
 
@@ -335,8 +335,7 @@ void QPID::SetCentMode(centMode CentMode) {  // Soren
 }
 
 void QPID::SetCenter(float Center) {  // Soren
-  if (outMin > Center || outMax < Center) return;
-  center = Center;
+  if (outMin <= Center && outMax >= Center) center = Center;
 }
 
 
