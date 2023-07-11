@@ -1,3 +1,5 @@
+// Stolen DallasTemperature library, modified to allow use of timers rather than blocking delays
+
 #ifndef TEMP_H
 #define TEMP_H
 
