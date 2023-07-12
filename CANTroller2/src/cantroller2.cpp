@@ -33,7 +33,6 @@ Display screen(tft_cs_pin, tft_dc_pin);
 MAKE_ENCODER(encoder, encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 
 void setup() {  // Setup just configures pins (and detects touchscreen type)
-    set_pin (heartbeat_led_pin, OUTPUT);
     set_pin (encoder_a_pin, INPUT_PULLUP);
     set_pin (encoder_b_pin, INPUT_PULLUP);
     set_pin (encoder_sw_pin, INPUT_PULLUP);  // The esp32 pullup is too weak. Use resistor
@@ -58,22 +57,22 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (pot_wipe_pin, INPUT);
     set_pin (button_pin, INPUT_PULLUP);    
     set_pin (starter_pin, INPUT_PULLDOWN);
-    set_pin (tp_irq_pin, INPUT_PULLUP);
-    set_pin (led_rx_pin, OUTPUT);
-    set_pin (encoder_pwr_pin, OUTPUT);
+    set_pin (touch_irq_pin, INPUT_PULLUP);
     set_pin (tft_rst_pin, OUTPUT);
     set_pin (hotrc_ch3_ign_pin, INPUT);
     set_pin (hotrc_ch4_cruise_pin, INPUT);
-    set_pin (joy_ign_btn_pin, INPUT_PULLDOWN);
-    set_pin (joy_cruise_btn_pin, INPUT_PULLUP);
         
-    // write_pin (ignition_pin, ignition);
     write_pin (tft_cs_pin, HIGH);   // Prevent bus contention
     write_pin (sdcard_cs_pin, HIGH);   // Prevent bus contention
     write_pin (tft_dc_pin, LOW);
-    write_pin (led_rx_pin, LOW);  // Light up
-    write_pin (encoder_pwr_pin, HIGH);
     write_pin (tft_rst_pin, HIGH);
+
+    // This bit is here as a way of autdetecting the controller type. It starts HEADLESS. If HIGH is read here then JOY,
+    // otherwise the pulldown R in the divider will enable HOTRC once radio is detected.
+    set_pin (ignition_pin, INPUT);  // Temporarily use this pin to read a pullup/down resistor to detect controller type
+    ctrl = (read_pin (ignition_pin) ? JOY : HEADLESS);
+    if (ctrl == HEADLESS) set_pin (ignition_pin, OUTPUT);  // Then set the put as an output as normal.
+    write_pin (ignition_pin, LOW);  // Initialize to ignition off
 
     // This bit is here as a way of autdetecting soren's breadboard, since his LCD is wired upside-down.
     // Soren put a strong external pulldown on the pin, so it'll read low for autodetection. 
@@ -84,12 +83,12 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
     analogReadResolution (adcbits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
     Serial.begin (115200);  // Open serial port
+    delay (800);  //  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     // printf("Serial port open\n");  // This works on Due but not ESP32
     
     for (int32_t x=0; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
     
     if (display_enabled) {
-        delay (500); // This is needed to allow the screen board enough time after a cold boot before we start trying to talk to it.
         config.begin("FlyByWire", false);
         dataset_page = config.getUInt("dpage", PG_RUN);
         dataset_page_last = config.getUInt("dpage", PG_TEMP);
@@ -263,7 +262,7 @@ void loop() {
     
     // External digital signals - takes 11 us to read
     if (!simulating || !sim_basicsw) basicmodesw = !digitalRead (basicmodesw_pin);   // 1-value because electrical signal is active low
-    if (ctrl == JOY && (!simulating || !sim_cruisesw)) cruise_sw = digitalRead (joy_cruise_btn_pin);
+    // if (ctrl == JOY && (!simulating || !sim_cruisesw)) cruise_sw = digitalRead (joy_cruise_btn_pin);
 
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
 
@@ -336,7 +335,8 @@ void loop() {
     if (!simulating || !sim_starter) starter = read_pin (starter_pin);
 
     // Tach - takes 22 us to read when no activity
-    if (!simulating || !sim_tach) {
+    if (simulating && sim_tach && pot_overload == tach) tach_filt_rpm = map (pot_filt_percent, 0.0, 100.0, tach_idle_rpm, tach_govern_rpm);
+    else if (!simulating || !sim_tach) {
         if (tach_delta_us) {  // If a valid rotation has happened since last time, delta will have a value
             tach_buf_delta_us = tach_delta_us;  // Copy delta value (in case another interrupt happens during handling)
             tach_delta_us = 0;  // Indicates to isr we processed this value
@@ -350,7 +350,8 @@ void loop() {
     }
     
     // Speedo - takes 14 us to read when no activity
-    if (!simulating || !sim_speedo) { 
+    if (simulating && sim_speedo && pot_overload == speedo) speedo_filt_mph = map (pot_filt_percent, 0.0, 100.0, speedo_idle_mph, speedo_govern_mph);
+    else if (!simulating || !sim_speedo) { 
         if (speedo_delta_us) {  // If a valid rotation has happened since last time, delta will have a value
             speedo_buf_delta_us = speedo_delta_us;  // Copy delta value (in case another interrupt happens during handling)
             speedo_delta_us = 0;  // Indicates to isr we processed this value
@@ -364,7 +365,7 @@ void loop() {
     }
 
     // Brake pressure - takes 72 us to read
-    if (simulating && pot_pressure) pressure_filt_psi = map (pot_filt_percent, 0.0, 100.0, pressure_min_psi, pressure_max_psi);
+    if (simulating && sim_pressure && pot_overload == pressure) pressure_filt_psi = map (pot_filt_percent, 0.0, 100.0, pressure_min_psi, pressure_max_psi);
     else if (!simulating && !sim_pressure) {
         pressure_adc = analogRead (pressure_pin);
         pressure_psi = convert_units ((float)pressure_adc, pressure_convert_psi_per_adc, pressure_convert_invert, (float)pressure_min_adc);
@@ -405,7 +406,7 @@ void loop() {
         }
         else steer_pulse_out_us = steer_pulse_stop_us;  // Stop the steering motor if inside the deadband
     }
-    if (ctrl == JOY) ignition = read_pin (joy_ign_btn_pin);
+    if (ctrl == JOY) ignition = read_pin (ignition_pin);
     else if (ctrl == HOTRC) {
         if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition
             if (hotrc_suppress_next_ch3_event) hotrc_suppress_next_ch3_event = false;
@@ -424,8 +425,8 @@ void loop() {
             hotrcPanicTimer.reset();
             hotrc_radio_detected = true;
             if (!ignition_output_enabled) {
-                set_pin (ignition_pin, OUTPUT);  // do NOT plug in the joystick when using the hotrc to avoid ign contention
                 ignition_output_enabled = true;
+                set_pin (ignition_pin, OUTPUT);  // do NOT plug in the joystick when using the hotrc to avoid ign contention
             }
         }
     }
@@ -530,6 +531,7 @@ void loop() {
             gestureFlyTimer.set (gesture_flytimeout_us); // Initialize gesture timer to already-expired value
             cruise_sw_held = false;
             cruiseSwTimer.reset();
+            cruise_request = false;
         }
         if (car_stopped() && ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) runmode = HOLD;  // Go to Hold Mode if we have braked to a stop  // && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT]
         else if (ctrl == HOTRC && !(simulating && sim_joy) && !hotrc_radio_detected) runmode = HOLD;  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
@@ -565,14 +567,15 @@ void loop() {
                     }        
                 }
             }
-            if (!cruise_sw) {  // If button not currently pressed
-                if (cruise_sw_held && cruiseSwTimer.expired()) runmode = CRUISE;  // After a long press of sufficient length, upon release enter Cruise mode
-                cruise_sw_held = false;  // Cancel button held state
-            }
-            else if (!cruise_sw_held) {  // If the button just now got pressed
-                cruiseSwTimer.reset(); // Start hold time timer
-                cruise_sw_held = true;  // Get into button held state
-            }
+            if (cruise_request) runmode = CRUISE;
+            // if (!cruise_sw) {  // If button not currently pressed
+            //     if (cruise_sw_held && cruiseSwTimer.expired()) runmode = CRUISE;  // After a long press of sufficient length, upon release enter Cruise mode
+            //     cruise_sw_held = false;  // Cancel button held state
+            // }
+            // else if (!cruise_sw_held) {  // If the button just now got pressed
+            //     cruiseSwTimer.reset(); // Start hold time timer
+            //     cruise_sw_held = true;  // Get into button held state
+            // }
         }
         else if (ctrl == HOTRC && hotrc_ch4_sw_event) {
             if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
@@ -588,6 +591,7 @@ void loop() {
             gestureFlyTimer.reset();  // reset gesture timer
             cruise_sw_held = false;
             cruise_adjusting = false;
+            cruise_request = false;
         }
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) {  // When joystick vert above center, increase the throttle target proportional to how far off center
             cruise_adjusting = true;  // Suspend pid loop control of gas
@@ -606,11 +610,12 @@ void loop() {
         if (ctrl == JOY) {
             if (ctrl_pos_adc[VERT][FILT] > ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
             else if (gestureFlyTimer.expired()) runmode = FLY;  // New gesture to drop to fly mode is hold the brake all the way down for 500 ms
-            if (cruise_sw) cruise_sw_held = true;  // Pushing cruise button sets up return to fly mode
-            else if (cruise_sw_held) {  // Release of button drops us back to fly mode
-                cruise_sw_held = false;
-                runmode = FLY;
-            }
+            if (cruise_request) runmode = CRUISE;
+            // if (cruise_sw) cruise_sw_held = true;  // Pushing cruise button sets up return to fly mode
+            // else if (cruise_sw_held) {  // Release of button drops us back to fly mode
+            //     cruise_sw_held = false;
+            //     runmode = FLY;
+            // }
         }
         else if (ctrl == HOTRC && hotrc_ch4_sw_event) {
             if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
@@ -874,7 +879,8 @@ void loop() {
         if (encoder_sw_action == Encoder::SHORT)  {  // if short press
             if (tuning_ctrl == EDIT) tuning_ctrl = SELECT;  // If we were editing a value drop back to select mode
             else if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If we were selecting a variable start editing its value
-            else ;  // Unless tuning, short press now does nothing. I envision it should switch desktops from our current analysis interface to a different runtime display 
+            else if (ctrl == JOY && (!simulating || !sim_cruisesw) && (runmode == FLY || runmode == CRUISE)) cruise_request = true;
+            // I envision pushing encoder switch while not tuning could switch desktops from our current analysis interface to a different runtime display 
         }
         else tuning_ctrl = (tuning_ctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
     }
@@ -960,7 +966,8 @@ void loop() {
         }
         else if (dataset_page == PG_TEMP) {        
             // if (selected_value == 4) adj_val (&pressure_adc, sim_edit_delta, pressure_min_adc, pressure_max_adc);
-            if (selected_value == 5) adj_val (&hotrc_pos_failsafe_min_adc, sim_edit_delta, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
+            if (selected_value == 4) adj_val (&pot_overload, sim_edit_delta, 0, 3);
+            else if (selected_value == 5) adj_val (&hotrc_pos_failsafe_min_adc, sim_edit_delta, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
             else if (selected_value == 6) adj_val (&hotrc_pos_failsafe_max_adc, sim_edit_delta, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
             else if (selected_value == 7) adj_val (&brake_pos_zeropoint_in, 0.001*sim_edit_delta, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
         }
@@ -971,10 +978,11 @@ void loop() {
     // Ignition & Panic stop logic and Update output signals
     if (!car_stopped()) {
         if (ctrl == HOTRC && !(simulating && sim_joy) && !hotrc_radio_detected && hotrc_radio_detected_last) panic_stop = true;  // panic_stop could also have been initiated by the user button
-        else if (!ignition && ignition_last) panic_stop = true;
+        else if (ctrl == JOY && !ignition && ignition_last) panic_stop = true;
+        // else if (ctrl == JOY && !(simulating && sim_joy) && !ignition && ignition_last) panic_stop = true;
     }
     else if (panic_stop) panic_stop = false;  // Cancel panic if car is stopped
-    if (ctrl != JOY) {  // When using joystick, ignition is controlled with button, not the code
+    if (ctrl == HOTRC) {  // When using joystick, ignition is controlled with button and we read it. With Hotrc, we control ignition
         hotrc_radio_detected_last = hotrc_radio_detected;
         if (panic_stop) ignition = LOW;  // Kill car if panicking
         if ((ignition != ignition_last) && ignition_output_enabled) {  // Whenever ignition state changes, assuming we're allowed to write to the pin
@@ -1025,12 +1033,12 @@ void loop() {
             neostrip.show();
         }
     }
-    else if (heartbeat_led_pin >= 0) {  // Just make a heartbeat on the native board led
-        heartbeat_pulse = !heartbeat_pulse;
-        if (++heartbeat_state >= arraysize (heartbeat_ekg)) heartbeat_state -= arraysize (heartbeat_ekg);
-        heartbeatTimer.set (heartbeat_ekg[heartbeat_state]);
-        write_pin (heartbeat_led_pin, heartbeat_pulse);
-    }
+    // else if (heartbeat_led_pin >= 0) {  // Just make a heartbeat on the native board led
+    //     heartbeat_pulse = !heartbeat_pulse;
+    //     if (++heartbeat_state >= arraysize (heartbeat_ekg)) heartbeat_state -= arraysize (heartbeat_ekg);
+    //     heartbeatTimer.set (heartbeat_ekg[heartbeat_state]);
+    //     write_pin (heartbeat_led_pin, heartbeat_pulse);
+    // }
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "hrt");
     
     // Display updates
