@@ -19,8 +19,8 @@ class Param {
   public:
     bool saturated;
   protected:
-    float val_raw, min_raw, max_raw;  // To hold val/min/max actual values in case they are passed to us by value. Otherwise if external references used, these are unused.
-    float val_raw_last;
+    float val, min, max;  // To hold val/min/max actual values in case they are passed to us by value. Otherwise if external references used, these are unused.
+    float val_last;
     bool constrain_it (float* arg_val, float arg_min, float arg_max) {  // This should be called "constrain" not "constrain_it"
         if (*arg_val < arg_min) {
             *arg_val = arg_min;
@@ -36,83 +36,78 @@ class Param {
     bool dirty = true, rounding = true;  // Has value been updated since last time value was displayed
     int32_t max_precision = 3;
     char disp_name[9] = "unnamed ";
-    char disp_raw_units[5] = "    ";
-    float* p_val_raw = &val_raw; float* p_min_raw = &min_raw; float* p_max_raw = &max_raw;  // Pointers to value/max/min, could be internal or external reference
-    Param (float* arg_p_val_raw) { p_val_raw = arg_p_val_raw; }
-    Param (float arg_val_raw) { 
-        val_raw = arg_val_raw;
-        *p_min_raw = arg_val_raw;  // Initialize to given value, presumably call set_limits to change later
-        *p_max_raw = arg_val_raw;  // Initialize to given value, presumably call set_limits to change later
+    char disp_units[5] = "    ";
+    float* p_val = &val; float* p_min = &min; float* p_max = &max;  // Pointers to value/max/min, could be internal or external reference
+    Param (float* arg_p_val) { p_val = arg_p_val; }
+    Param (float arg_val) { 
+        val = arg_val;
+        *p_min = arg_val;  // Initialize to given value, presumably call set_limits to change later
+        *p_max = arg_val;  // Initialize to given value, presumably call set_limits to change later
     }
     Param (void) { Param((float)-1.0); }
     void set_names (const string arg_name, const string arg_units) {
         strcpy (disp_name, arg_name.c_str());
-        strcpy (disp_raw_units, arg_units.c_str());
+        strcpy (disp_units, arg_units.c_str());
     }
     float round (float val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
     float round (float val) { return round (val, max_precision); }
-    void set_limits_raw (float* arg_min_raw, float* arg_max_raw) {  // Use if min/max are external references
-        if (*arg_min_raw > *arg_max_raw) printf ("Error: *min is >= *max\n");
+    void set_limits (float* arg_min, float* arg_max) {  // Use if min/max are external references
+        if (*arg_min > *arg_max) printf ("Error: *min is >= *max\n");
         else {
-            p_min_raw = arg_min_raw;
-            p_max_raw = arg_max_raw;
-            saturated = constrain_it (p_val_raw, *p_min_raw, *p_max_raw);
+            p_min = arg_min;
+            p_max = arg_max;
+            saturated = constrain_it (p_val, *p_min, *p_max);
         }
     }
-    void set_limits_raw (float arg_raw_min, float arg_raw_max) {  // Use if min/max are kept in-class
-        if (arg_raw_min > arg_raw_max) printf ("Error: min is >= max\n");
+    void set_limits (float arg_min, float arg_max) {  // Use if min/max are kept in-class
+        if (arg_min > arg_max) printf ("Error: min is >= max\n");
         else {
-            min_raw = round (arg_raw_min);
-            max_raw = round (arg_raw_max);
-            saturated = constrain_it (p_val_raw, *p_min_raw, *p_max_raw);
+            min = round (arg_min);
+            max = round (arg_max);
+            saturated = constrain_it (p_val, *p_min, *p_max);
         }
     }
-    bool set_raw (float arg_val_raw) {
-        saturated = constrain_it (&arg_val_raw, *p_min_raw, *p_max_raw);
-        if (*p_val_raw != arg_val_raw) {
+    bool set (float arg_val) {
+        saturated = constrain_it (&arg_val, *p_min, *p_max);
+        if (*p_val != arg_val) {
             dirty = true;
-            val_raw_last = *p_val_raw;
-            *p_val_raw = arg_val_raw;
+            val_last = *p_val;
+            *p_val = arg_val;
             return true;
         }
         return false;
     }
-    bool add_raw (float arg_add_raw) { 
-        if (set_raw (*p_val_raw + arg_add_raw)) return true;
+    bool add (float arg_add) { 
+        if (set (*p_val + arg_add)) return true;
         return false;
     }
     void draw_name (Display &display, int32_t lineno, int32_t target=-1) {
-        if (dirty) display.draw_dynamic (lineno, *p_val_raw, *p_min_raw, *p_max_raw, target);
+        if (dirty) display.draw_dynamic (lineno, *p_val, *p_min, *p_max, target);
         dirty = false;
     }
-    float get_raw () { return *p_val_raw; }
-    float get_min_raw () { return *p_min_raw; }
-    float get_max_raw () { return *p_max_raw; }
+    float get () { return *p_val; }
+    float get_min () { return *p_min; }
+    float get_max () { return *p_max; }
     char* get_name () { return disp_name; }
-    char* get_units () { return disp_raw_units; }
-    
-    
+    char* get_units () { return disp_units; }
 };
 
 // Device class - is a base class for any connected system device or signal
 // This is a Param with the added concept of simulatability, and association with a physical pin
-class Device : virtual public Param {  // This class is truly virtual, in that it's not complete to have instances, just multiple children
+class Device {  // This class is truly virtual, in that it's not complete to have instances, just multiple children
   public:
-    enum sources { _UNDEF, _CONST, _PIN, _TOUCH, _POT, _CALC };  // source of value. _TOUCH when simulated with touchscreen buttons
+    enum sources {_UNDEF, _FIXED, _PIN, _TOUCH, _POT, _CALC};  // controller mode
     Timer timer();  // Can be used for external purposes
   protected:
     bool can_source[6] = { true, true, false, true, false, false };  // Which types of sources are possible for this device?
     int32_t pin = -1, enabled = true;
     int32_t source = _UNDEF;
   public:
-    Device (float* arg_p_val_raw) : Param (arg_p_val_raw) {}
-    Device (float arg_val_raw) : Param (arg_val_raw) {}
-    Device (void) : Device ((float)-1.0) {}
     void set_source (int32_t arg_source) { if (can_source[arg_source]) source = arg_source; }
     void set_pin (bool arg_pin) { pin = arg_pin; }
     void set_enabled (bool arg_enable) { enabled = arg_enable; }
     void set_can_source (int32_t arg_source, bool is_possible) { can_source[arg_source] = is_possible; }
-    int32_t get_source (void) { return source; }
+    uint8_t get_source (void) { return static_cast<uint8_t>(source); }
     int32_t get_pin (void) { return pin; }
     bool get_enabled (void) { return enabled; }
     bool get_can_source (int32_t arg_source) { return can_source[arg_source]; }
@@ -120,132 +115,133 @@ class Device : virtual public Param {  // This class is truly virtual, in that i
 
 // Transducer class has all features of Device class but now there is also a "native" version of the value which represents the sensed
 //    or driven hardware input/output. This class contains unit conversion between the two.
-class Transducer : virtual public Device {
-  public:
-    int32_t _REV = -1, _FWD = 1;  // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, if we sense fewer us per rotation, the engine is going faster)
-    float val_native, val_native_last, min_native, max_native;  // To hold val/min/max display values in display units (like V, mph, etc.)
-  protected:
-    float m_factor = 1.0, b_offset = 0.0;  // Multiplier and adder values to plug in for unit conversion math
-    bool invert = false;  // Flag to indicated if unit conversion math should multiply or divide
-    float* p_min_native = &min_native;
-    float* p_max_native = &max_native;
-    char disp_native_units[5] = "    ";
-    float native_to_raw (float arg_val_native) {
-        if (!invert) {
-            if (dir == _REV) return *p_min_native + (*p_max_native - (b_offset + m_factor * arg_val_native));
-            return b_offset + m_factor * arg_val_native;
-        }
-        if (arg_val_native) {
-            if (dir == _REV) return *p_min_native + (*p_max_native - (b_offset + m_factor / arg_val_native));
-            return b_offset + m_factor/arg_val_native;
-        } 
-        printf ("Error: unit conversion refused to divide by zero\n");
-        return -1;
-    }
-    float raw_to_native (float arg_val_raw) {
-        if (dir == _REV) arg_val_raw = *p_min_native + (*p_max_native - arg_val_raw);
-        if (invert && (arg_val_raw - b_offset)) return m_factor / (arg_val_raw - b_offset);
-        else if (!invert && m_factor) return (arg_val_raw - b_offset) / m_factor;
-        printf ("Error: unit conversion refused to divide by zero\n");
-        return -1;
-    }
-  public:
-    int32_t dir = _FWD;  // // Belongs in a child class for devices. For the case a lower val causes a higher real-life effect, 
-    Transducer (float arg_val_native) : Device() {  
-        val_native = arg_val_native;
-        set_raw (native_to_raw (arg_val_native));
-        min_native = raw_to_native (*p_min_raw);
-        max_native = raw_to_native (*p_max_raw);
-    }
-    Transducer (void) { Transducer((float)-1.0); }
-    // Use if the value at *p_val_raw corresponds with a real-world effect having different units and possibly in the opposite direction as the underlying numerical values
-    void set_limits (float* arg_min_native, float* arg_max_native) {  // Direction dir applies when disp limits set.  dir is set to reverse if given minimum > maximum
-        if (*arg_min_native > *arg_max_native) {
-            dir = _REV;
-            p_min_native = arg_max_native;
-            p_max_native = arg_min_native;
-        }
-        else {
-            dir = _FWD;
-            p_min_native = arg_min_native;
-            p_max_native = arg_max_native;
-        }
-        Param::set_limits_raw(native_to_raw(*p_min_native), native_to_raw(*p_max_native));
-    }
-    void set_names (const string arg_name, const string arg_units_raw, const string arg_units_native) {
-        strcpy (disp_name, arg_name.c_str());
-        strcpy (disp_raw_units, arg_units_raw.c_str());
-        strcpy (disp_native_units, arg_units_native.c_str());
-    }
-    // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
-    void set_convert (float arg_m_factor, float arg_b_offset, bool arg_invert) {
-        m_factor = arg_m_factor;
-        b_offset = arg_b_offset;
-        invert = arg_invert;
-        dir = (raw_to_native (*p_min_raw) <= raw_to_native (*p_max_raw)) ? _FWD : _REV;
-        *p_min_native = raw_to_native ((dir == _FWD) ? *p_min_raw : *p_max_raw);
-        *p_max_native = raw_to_native ((dir == _FWD) ? *p_max_raw : *p_min_raw);
-        val_native = raw_to_native (*p_val_raw);
-        saturated = constrain_it (&val_native, (*p_min_native), (*p_max_native));
-    }
-    bool set_native (float arg_val_native) {
-        if (Param::set_raw (native_to_raw (arg_val_native))) {
-            val_native_last = val_native;
-            val_native = raw_to_native (*p_val_raw);
-            return true;
-        }
-        return false;
-    }
-    bool add_native (float arg_add) {
-        if (set_native (val_native + arg_add)) return true;
-        return false;
-    }
-    bool set_raw (int32_t arg_val_raw) {        
-        Param::set_raw ((float)arg_val_raw);
-        float temp = raw_to_native (*p_val_raw);
-        if (temp != val_native) {
-            dirty = true;
-            val_native_last = val_native;
-            val_native = temp;
-            return true;
-        }
-        return false;
-    }
-    void draw_native (Display &d, int32_t lineno, int32_t target=-1) {
-        if (dirty) d.draw_dynamic (lineno, val_native, *p_min_native, *p_max_native, target);
-        dirty = false;
-    }
-    float get_native () { return val_native; }
-    float get_min_native () { return *p_min_native; }
-    float get_max_native () { return *p_max_native; }
-};
+// class Transducer : virtual public Device {
+//   public:
+//     int32_t _REV = -1, _FWD = 1;  // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, if we sense fewer us per rotation, the engine is going faster)
+//     float val_native, val_native_last, min_native, max_native;  // To hold val/min/max display values in display units (like V, mph, etc.)
+//   protected:
+//     float m_factor = 1.0, b_offset = 0.0;  // Multiplier and adder values to plug in for unit conversion math
+//     bool invert = false;  // Flag to indicated if unit conversion math should multiply or divide
+//     Param human, min_human, max_human;
+//     Param native, min_native, max_native;
+//     float* p_min_native = &min_native;
+//     float* p_max_native = &max_native;
+//     char disp_native_units[5] = "    ";
+//     float native_to_raw (float arg_val_native) {
+//         if (!invert) {
+//             if (dir == _REV) return *p_min_native + (*p_max_native - (b_offset + m_factor * arg_val_native));
+//             return b_offset + m_factor * arg_val_native;
+//         }
+//         if (arg_val_native) {
+//             if (dir == _REV) return *p_min_native + (*p_max_native - (b_offset + m_factor / arg_val_native));
+//             return b_offset + m_factor/arg_val_native;
+//         } 
+//         printf ("Error: unit conversion refused to divide by zero\n");
+//         return -1;
+//     }
+//     float raw_to_native (float arg_val_raw) {
+//         if (dir == _REV) arg_val_raw = *p_min_native + (*p_max_native - arg_val_raw);
+//         if (invert && (arg_val_raw - b_offset)) return m_factor / (arg_val_raw - b_offset);
+//         else if (!invert && m_factor) return (arg_val_raw - b_offset) / m_factor;
+//         printf ("Error: unit conversion refused to divide by zero\n");
+//         return -1;
+//     }
+//   public:
+//     int32_t dir = _FWD;  // // Belongs in a child class for devices. For the case a lower val causes a higher real-life effect, 
+//     // Use if the value at *p_val_raw corresponds with a real-world effect having different units and possibly in the opposite direction as the underlying numerical values
+//     void set_limits (float* arg_min_native, float* arg_max_native) {  // Direction dir applies when disp limits set.  dir is set to reverse if given minimum > maximum
+//         if (*arg_min_native > *arg_max_native) {
+//             dir = _REV;
+//             p_min_native = arg_max_native;
+//             p_max_native = arg_min_native;
+//         }
+//         else {
+//             dir = _FWD;
+//             p_min_native = arg_min_native;
+//             p_max_native = arg_max_native;
+//         }
+//         Param::set_limits_raw(native_to_raw(*p_min_native), native_to_raw(*p_max_native));
+//     }
+//     void set_names (const string arg_name, const string arg_units_raw, const string arg_units_native) {
+//         strcpy (disp_name, arg_name.c_str());
+//         strcpy (disp_raw_units, arg_units_raw.c_str());
+//         strcpy (disp_native_units, arg_units_native.c_str());
+//     }
+//     // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
+//     void set_convert (float arg_m_factor, float arg_b_offset, bool arg_invert) {
+//         m_factor = arg_m_factor;
+//         b_offset = arg_b_offset;
+//         invert = arg_invert;
+//         dir = (raw_to_native (*p_min_raw) <= raw_to_native (*p_max_raw)) ? _FWD : _REV;
+//         *p_min_native = raw_to_native ((dir == _FWD) ? *p_min_raw : *p_max_raw);
+//         *p_max_native = raw_to_native ((dir == _FWD) ? *p_max_raw : *p_min_raw);
+//         val_native = raw_to_native (*p_val_raw);
+//         saturated = constrain_it (&val_native, (*p_min_native), (*p_max_native));
+//     }
+//     bool set_native (float arg_val_native) {
+//         if (Param::set_raw (native_to_raw (arg_val_native))) {
+//             val_native_last = val_native;
+//             val_native = raw_to_native (*p_val_raw);
+//             return true;
+//         }
+//         return false;
+//     }
+//     bool add_native (float arg_add) {
+//         if (set_native (val_native + arg_add)) return true;
+//         return false;
+//     }
+//     bool set_raw (int32_t arg_val_raw) {        
+//         Param::set_raw ((float)arg_val_raw);
+//         float temp = raw_to_native (*p_val_raw);
+//         if (temp != val_native) {
+//             dirty = true;
+//             val_native_last = val_native;
+//             val_native = temp;
+//             return true;
+//         }
+//         return false;
+//     }
+//     void draw_native (Display &d, int32_t lineno, int32_t target=-1) {
+//         if (dirty) d.draw_dynamic (lineno, val_native, *p_min_native, *p_max_native, target);
+//         dirty = false;
+//     }
+//     float get_native () { return val_native; }
+//     float get_min_native () { return *p_min_native; }
+//     float get_max_native () { return *p_max_native; }
+// };
 
-// Sensor class - is a base class for control system sensors, ie anything that measures real world data or electrical signals 
-class Sensor : virtual public Transducer {
-  protected:
-    float ema_alpha = 0.1;
-    float val_filt;
-  public:
-    Sensor (float arg_val_native) : Transducer (arg_val_native) { val_filt = arg_val_native; }
-    void set_ema_alpha (float arg_alpha) { ema_alpha = arg_alpha; }
-    void ema (float arg_new_val_native) { val_filt = ema_alpha * arg_new_val_native + (1 - ema_alpha) * (val_filt); }
-    float get_ema_alpha (void) { return ema_alpha; }
-    float get_filt (void) { return val_filt; }
-};
+// // Sensor class - is a base class for control system sensors, ie anything that measures real world data or electrical signals 
+// class Sensor : virtual public Transducer {
+//   protected:
+//     float ema_alpha = 0.1;
+//     float val_filt;
+//   public:
+//     Sensor (float arg_val_native) { 
+//         val_native = arg_val_native;
+//         set_raw (native_to_raw (arg_val_native));
+//         min_native = raw_to_native (*p_min_raw);
+//         max_native = raw_to_native (*p_max_raw);
+//         val_filt = arg_val_native;
+//     }  
+//     void set_ema_alpha (float arg_alpha) { ema_alpha = arg_alpha; }
+//     void ema (float arg_new_val_native) { val_filt = ema_alpha * arg_new_val_native + (1 - ema_alpha) * (val_filt); }
+//     float get_ema_alpha (void) { return ema_alpha; }
+//     float get_filt (void) { return val_filt; }
+// };
 
-// class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
-class AnalogSensor : virtual public Sensor {
-  public:
-    AnalogSensor (int32_t arg_val_native) : Sensor (arg_val_native) {}
-    void read() {
-        val_native = analogRead(pin);
-        ema ((float)val_native);
-    }
-};
+// // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
+// class AnalogSensor : virtual public Sensor {
+//   public:
+//     AnalogSensor (int32_t arg_val_native) : Sensor (arg_val_native) {}
+//     void read() {
+//         val_native = analogRead(pin);
+//         ema ((float)val_native);
+//     }
+// };
 
-class PressureSensor : virtual public AnalogSensor {
+// class PressureSensor : virtual public AnalogSensor {
 
-};
+// };
 
 // class TempByPeef {
 //   public:
@@ -314,7 +310,7 @@ class PressureSensor : virtual public AnalogSensor {
 // }
 
 
-class TempSensorBus : virtual public Sensor {
+// class TempSensorBus : virtual public Sensor {
 //   public:
 //     enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
 //   protected:
@@ -387,7 +383,7 @@ class TempSensorBus : virtual public Sensor {
 //         return read_lock;
 //     }
 //     void get_temp (int32_t arg_index) { return (temps[arg_index]); }
-};
+// };
 
 class Hotrc {
   protected:

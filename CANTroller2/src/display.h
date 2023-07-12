@@ -139,15 +139,15 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "  Ki (I)",
         "  Kd (D)", },
     {   " Tmp Amb",  // PG_TEMP
-        " Tmp Eng",
-        "Tmp WhRR",  // "Tmp WhFL", "Tmp WhFR", "Tmp WhRL" 
+        " Tmp Eng",  // "Tmp WhRR", "Tmp WhFL", "Tmp WhFR", "Tmp WhRL" 
+        " Pot Sim",
         "Pres ADC",
         "HRC Vert",
         "RadioMin",
         "RadioMax",
         "BrkZeroP", },
 };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 3, 2, 0, 0, 5, 5, 5, 5 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 3, 2, 0, 0, 5, 5, 5, 4 };  // first value in each dataset page that's editable. All values after this must also be editable
 char units[disp_fixed_lines][5] = { "adc ", "mph ", "mph ", "rpm ", "rpm ", "\xe5s  ", "psi ", "psi ", "\xe5s  ", "adc ", "\xe5s  " };
 
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
@@ -678,7 +678,8 @@ class Display {
                     draw_dynamic(14, tach_redline_rpm, 0.0, tach_max_rpm);
                     draw_dynamic(15, speedo_idle_mph, 0.0, speedo_redline_mph);
                     draw_dynamic(16, speedo_redline_mph, 0.0, speedo_max_mph);
-                    draw_dynamic(17, (gasQPID.GetMode() == (uint8_t)QPID::Control::manual), -1, -1);
+                    draw_dynamic(17, gas_open_loop, -1, -1);
+                    // draw_dynamic(17, (gasQPID.GetMode() == (uint8_t)QPID::Control::manual), -1, -1);
                     // draw_dynamic(17, ctrl, -1, -1);  // 0 if hotrc
                     draw_dynamic(18, cal_joyvert_brkmotor, -1, -1);
                     draw_dynamic(19, cal_pot_gasservo, -1, -1);
@@ -735,7 +736,8 @@ class Display {
                     // draw_dynamic(14, temps[WHEEL_FL], temp_min, temp_max);
                     // draw_dynamic(15, temps[WHEEL_FR], temp_min, temp_max);
                     // draw_dynamic(16, temps[WHEEL_RL], temp_min, temp_max);
-                    draw_dynamic(14, temps[WHEEL_RR], temp_min, temp_max);
+                    // draw_dynamic(14, temps[WHEEL_RR], temp_min, temp_max);
+                    draw_dynamic(14, pot_overload, -1, -1);
                     draw_dynamic(15, pressure_adc, pressure_min_adc, pressure_max_adc);
                     draw_dynamic(16, hotrc_vert_pulse_us, hotrc_pulse_vert_min_us, hotrc_pulse_vert_max_us);  // Programmed centerpoint is 230 adc
                     draw_dynamic(17, hotrc_pos_failsafe_min_adc, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
