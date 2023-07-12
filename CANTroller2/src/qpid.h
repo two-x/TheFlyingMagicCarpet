@@ -166,8 +166,6 @@ QPID::QPID(float* Input, float* Output, float* Setpoint,
                    uint32_t SampleTimeUs = 100000,
                    Control Mode = Control::manual,
                    centMode CentMode = centMode::range, float Center = 1000000) {  // Soren
-
-
   int32_output = false;  // Soren
   myOutput = Output;
   myInput = Input;
@@ -175,7 +173,10 @@ QPID::QPID(float* Input, float* Output, float* Setpoint,
   mode = Mode;
   QPID::SetOutputLimits(Min, Max);  // same default as Arduino PWM limit - Soren edit
   QPID::SetCentMode(CentMode);  // Soren
-  if (centmode != QPID::centMode::range && Center != 1000000) SetCenter(Center);  // Soren
+  if (centmode != QPID::centMode::range && Center != 1000000) {
+    SetCenter(Center);  // Soren
+    outputSum = Center;
+  }
   else SetCenter(outMin);  // Soren
   sampleTimeUs = SampleTimeUs;              // Soren edit
   QPID::SetControllerDirection(Action);
@@ -194,7 +195,6 @@ QPID::QPID(float* Input, int32_t* IntOutput, float* Setpoint,  // Soren
                    uint32_t SampleTimeUs = 100000,
                    Control Mode = Control::manual,
                    centMode CentMode = centMode::range, float Center = 1000000) {  // Soren
-
   int32_output = true;  // Soren
   myIntOutput = IntOutput;  // Soren
   myInput = Input;
@@ -202,7 +202,10 @@ QPID::QPID(float* Input, int32_t* IntOutput, float* Setpoint,  // Soren
   mode = Mode;
   QPID::SetOutputLimits(Min, Max);  // same default as Arduino PWM limit - Soren edit
   QPID::SetCentMode(CentMode);  // Soren
-  if (centmode != QPID::centMode::range && Center != 1000000) SetCenter(Center);  // Soren
+  if (centmode != QPID::centMode::range && Center != 1000000) {
+    SetCenter(Center);  // Soren
+    outputSum = Center;
+  }
   else SetCenter(outMin);  // Soren
   sampleTimeUs = SampleTimeUs;              // Soren edit
   QPID::SetControllerDirection(Action);

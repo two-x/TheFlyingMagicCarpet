@@ -90,7 +90,7 @@ bool flip_the_screen = false;
 // - Actions: Release brake, Maintain car speed, Handle joyvert differently, Watch for gesture
 
 // Defines for all the GPIO pins we're using
-#define button_pin 0  // (button0 / strap to 1) - This is the left "Boot" button on the esp32 board
+#define button_pin 0  // (button0 / strap to 1) - This is the "Boot" button on the esp32 board
 #define joy_horz_pin 1  // (adc) - Either analog left-right input (joystick)
 #define joy_vert_pin 2  // (adc) - Either analog up-down input (joystick)
 #define tft_dc_pin 3  // (strap X) - Output, Assert when sending data to display chip to indicate commands vs. screen data
@@ -99,13 +99,13 @@ bool flip_the_screen = false;
 #define brake_pos_pin 6  // (adc) - Analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
 #define pressure_pin 7  // (adc) - Analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V.
 #ifdef CAP_TOUCH
-    #define i2c_sda_pin 8  // (i2c0 sda / adc) - Hijack these pins for the touchscreen and micro-sd i2c bus
-    #define i2c_scl_pin 9  // (i2c0 scl / adc) - Hijack these pins for the touchscreen and micro-sd i2c bus
+    #define i2c_sda_pin 8  // (i2c0 sda / adc) - i2c bus for the cap touch screen, airspeed sensor, lighting board
+    #define i2c_scl_pin 9  // (i2c0 scl / adc) - i2c bus for the cap touch screen, airspeed sensor, lighting board
 #else
-    #define touch_irq_pin 8  // (i2c0 scl / adc) - With resistive touchscreen this pin is freed up
-    #define touch_cs_pin 9  // (i2c0 scl / adc) - Use as chip select for resistive touchscreen
+    #define touch_irq_pin 8  // (i2c0 sda / adc) - Use as chip select for resistive touchscreen
+    #define touch_cs_pin 9  // (i2c0 scl / adc) - Touch occurence interrupt signal (seems to be needed for resistive touchscreen)
 #endif
-#define tft_cs_pin 10  // (spi0 cs) -  Output, active low, Chip select allows ILI9341 display chip use of the SPI bus
+#define tft_cs_pin 10  // (spi0 cs) - Output, active low, Chip select allows ILI9341 display chip use of the SPI bus
 #define tft_mosi_pin 11  // (spi0 mosi) - Used as spi interface data to sd card and tft screen
 #define tft_sclk_pin 12  // (spi0 sclk) - Used as spi interface clock for sd card and tft screen
 #define tft_miso_pin 13  // (spi0 miso) - Used as spi interface data from sd card and possibly (?) tft screen
@@ -119,30 +119,20 @@ bool flip_the_screen = false;
 #define hotrc_ch4_cruise_pin 21  // (pwm0) - Cruise control, Hotrc Ch4 PWM toggle signal
 #define tach_pulse_pin 35  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
 #define speedo_pulse_pin 36  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
-#define ignition_pin 37  // (spi-ram / oct-spi) - Output flips a relay to kill the car ignition, active high (no pullup)
+#define ignition_pin 37  // (spi-ram / oct-spi) - Output (Hotrc) flips a relay to kill the car ignition, or Input (Joystick) detects panic ignition kill
 #define syspower_pin 38  // (spi-ram / oct-spi) - Output, flips a relay to power all the tranducers
 #define tft_rst_pin 39  // TFT Reset allows us to reboot the screen when it crashes
 #define encoder_b_pin 40  // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define encoder_a_pin 41  // Int input, The A (aka CLK) pin of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
 #define encoder_sw_pin 42  // Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
-#define joy_ign_btn_pin 43  // (uart0 tx) - Joystick ignition button. Reserve for possible jaguar interface
-#define joy_cruise_btn_pin 44  // (uart0 rx) - Joystick cruise button. Reserve for possible jaguar interface
+#define uart_tx_pin 43  // "TX" (uart0 tx) - Reserve uart for potential connection to jaguar controllers
+#define uart_rx_pin 44  // "RX" (uart0 rx) - Reserve uart for potential connection to jaguar controllers
 #define starter_pin 45  // (strap to 0) - Input, active high when vehicle starter is engaged (needs pulldown)
 #define basicmodesw_pin 46  // (strap X) - Input, asserted to tell us to run in basic mode, active low (needs pullup)
 #define sdcard_cs_pin 47  // Output, chip select allows SD card controller chip use of the SPI bus, active low
 #define neopixel_pin 48  // (rgb led) - Data line to onboard Neopixel WS281x
 
-// #define ctrl_horz_ch1_pin 1  // (adc) - Either analog left-right input (joystick), or Hotrc Ch1 thumb joystick PWM signal.
-// #define ctrl_vert_ch2_pin 2  // (adc) - Either analog up-down input (joystick), or Hotrc Ch2 bidirectional trigger signal.
-// #define unused 17  // (pwm0 / tx1) - 
-// #define unused 18  // (pwm0 / rx1) -  
-
-#define tp_irq_pin -1  // Optional int input so touchpanel can interrupt us (need to modify shield board for this to work)
 #define tft_ledk_pin -1  // (spi-ram / oct-spi) - Output, Optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
-#define encoder_pwr_pin -1
-#define led_rx_pin -1  // Unused on esp32
-#define led_tx_pin -1  // Unused on esp32
-#define heartbeat_led_pin -1
 
 #define adcbits 12
 #define adcrange_adc 4095  // = 2^adcbits-1
@@ -223,6 +213,7 @@ bool shutdown_complete = false;  // Shutdown mode has completed its work and can
 bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
 bool park_the_motors = false;  // Indicates we should release the brake & gas so the pedals can be used manually without interference
 bool calmode_request = false;
+bool cruise_request = false;
 bool panic_stop = false;
 bool cruise_gesturing = false;  // Is cruise mode enabled by gesturing?  Otherwise by press of cruise button
 bool cruise_sw_held = false;
@@ -254,8 +245,8 @@ Timer steerPidTimer (steer_pid_period_ms*1000);  // not actually tunable, just n
 uint32_t brake_pid_period_ms = 185;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer brakePidTimer (brake_pid_period_ms*1000);  // not actually tunable, just needs value above
 // int32_t brake_spid_ctrl_dir = SPID::REV;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
-float brake_spid_initial_kp = 2.18;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-float brake_spid_initial_ki_hz = 0.215;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+float brake_spid_initial_kp = 2.110;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+float brake_spid_initial_ki_hz = 0.873;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
 float brake_spid_initial_kd_s = 1.130;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
 uint32_t cruise_pid_period_ms = 300;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer cruisePidTimer (cruise_pid_period_ms*1000);  // not actually tunable, just needs value above
@@ -269,7 +260,7 @@ float gas_spid_initial_kp = 0.245;  // PID proportional coefficient (gas) How mu
 float gas_spid_initial_ki_hz = 0.015;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
 float gas_spid_initial_kd_s = 0.022;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
 // int32_t gas_spid_ctrl_dir = SPID::REV;  // 0 = fwd, 1 = rev.
-bool gas_open_loop = true;
+bool gas_open_loop = false;
 // starter related
 bool starter = LOW;
 bool starter_last = LOW;
@@ -302,7 +293,7 @@ int32_t pot_convert_polarity = 1;  // Forward
 float pot_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 
 // controller related
-enum ctrls { HOTRC, JOY, SIM };  // Possible sources of gas, brake, steering commands
+enum ctrls { HEADLESS, HOTRC, JOY, SIM };  // Possible sources of gas, brake, steering commands
 enum ctrl_axes { HORZ, VERT };
 enum ctrl_thresh { MIN, DB, MAX };
 enum ctrl_edge { BOT, TOP };
@@ -324,7 +315,7 @@ bool hotrc_suppress_next_ch4_event = true;  // When powered up, the hotrc will t
 float hotrc_pulse_period_us = 1000000.0 / 50;
 float ctrl_ema_alpha[2] = { 0.007, 0.1 };  // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 int32_t ctrl_lims_adc[2][2][3] = { { { 3, 375, 4092 }, { 3, 375, 4092 } }, { { 9, 200, 4085 }, { 9, 200, 4085 } }, }; // [HOTRC/JOY] [HORZ/VERT], [MIN/DEADBAND/MAX] values as ADC counts
-bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
+bool ctrl = HEADLESS;  // Use HotRC controller to drive instead of joystick?
 // Limits of what pulsewidth the hotrc receiver puts out
 // For some funky reason I was unable to initialize these in an array format !?!?!
 // int32_t hotrc_pulse_lims_us[2][2];  // = { { 1009, 2003 }, { 1009, 2003 } };  // [HORZ/VERT] [MIN/MAX]  // These are the limits of hotrc vert and horz high pulse
@@ -518,15 +509,17 @@ int32_t sim_edit_delta_touch = 0;
 int32_t sim_edit_delta_encoder = 0;
 //  ---- tunable ----
 bool simulating = false;
+// enum sources { _PIN, _TOUCH, _POT };
+enum pot_overload { none, pressure, tach, speedo };  // , joy, brkpos, pressure, basicsw, cruisesw, syspower }
+int32_t pot_overload = tach;  // Use the pot to simulate one of the sensors
 bool sim_joy = false;
 bool sim_tach = true;
 bool sim_speedo = true;
-bool sim_brkpos = false;
+bool sim_brkpos = true;
 bool sim_basicsw = true;
 bool sim_cruisesw = true;
-bool sim_pressure = true;
+bool sim_pressure = false;
 bool sim_syspower = true;
-bool pot_pressure = true;  // Use the pot to simulate the brake pressure
 
 SdFat sd;  // SD card filesystem
 #define approot "cantroller2020"
@@ -546,7 +539,7 @@ QPID gasQPID (&tach_filt_rpm, &gas_pulse_out_us, &tach_target_rpm,
               (float)gas_pulse_redline_us, (float)gas_pulse_idle_us,
               gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s,
               QPID::pMode::pOnErrorMeas, QPID::dMode::dOnMeas, QPID::iAwMode::iAwClamp,
-              QPID::Action::reverse, 1000*gas_pid_period_ms, QPID::Control::manual,  // QPID::Control::timer
+              QPID::Action::reverse, 1000*gas_pid_period_ms, QPID::Control::timer,
               QPID::centMode::range);
 
 QPID cruiseQPID (&speedo_filt_mph, &tach_target_rpm, &speedo_target_mph,
