@@ -852,5 +852,12 @@ void temp_soren (void) {
 //         }
 //     }
 // }
+void task_for_core_0(void * pvParameters) {
+    // This task will run on Core 0, while Arduino runs tasks on core 1 by default eg loop, setup etc
+        for(;;) {
+            printf("Task1 running on core %d\n", xPortGetCoreID());
+            delay(1000); // delay to prevent the task from using 100% of the CPU
+        }
+    }
 
 #endif  // GLOBALS_H

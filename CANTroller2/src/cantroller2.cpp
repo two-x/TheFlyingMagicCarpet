@@ -198,6 +198,14 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     //     }
     //     printf ("HotRC radio signal: %setected\n", (!hotrc_radio_detected) ? "Not d" : "D");
     // }
+    xTaskCreatePinnedToCore(
+        task_for_core_0,   /* Function to implement the task */
+        "Task_1", /* Name of the task */
+        10000,       /* Stack size in words */
+        NULL,        /* Task input parameter */
+        1,           /* Priority of the task */
+        NULL,        /* Task handle. */
+        0);          /* Core where the task should run */
     
     // pressure.set_convert ( 1000.0 * 3.3 / (adcrange_adc * (4.5 - 0.55)), 0.0, false);
     // pressure.set_names ("pressure", "adc ", "psi ");
