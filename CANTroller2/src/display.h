@@ -149,12 +149,12 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "  Kd (D)", },
     {   " Tmp Amb",  // PG_TEMP
         " Tmp Eng",  // "Tmp WhRR", "Tmp WhFL", "Tmp WhFR", "Tmp WhRL" 
-        " Pot Sim",
-        "Pres ADC",
+        "HRC Horz",
         "HRC Vert",
         "RadioMin",
         "RadioMax",
-        "BrkZeroP", },
+        " Pot Sim",
+        "Pres ADC", },  // "BrkZeroP" }
 };
 int32_t tuning_first_editable_line[disp_tuning_lines] = { 3, 2, 0, 0, 5, 5, 5, 4 };  // first value in each dataset page that's editable. All values after this must also be editable
 char units[disp_fixed_lines][5] = { "adc ", "mph ", "mph ", "rpm ", "rpm ", "\xe5s  ", "psi ", "psi ", "\xe5s  ", "adc ", "\xe5s  " };
@@ -167,7 +167,7 @@ char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "Hz  ", "sec " },  // PG_BPID
     { "mph ", "mph ", "mph ", "mph ", "mph ", "    ", "Hz  ", "sec " },  // PG_GPID
     { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "Hz  ", "sec " },  // PG_CPID
-    { "\x09""F  ", "\x09""F  ", "\x09""F  ", "adc ", "\xe5s  ", "adc ", "adc ", "in  " },  // PG_TEMP
+    { "\x09""F  ", "\x09""F  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "    ", "adc " },  // PG_TEMP
     // { "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "    ", "    " },  // PG_TEMP
 };
 char simgrid[4][3][5] = {
@@ -746,12 +746,15 @@ class Display {
                     // draw_dynamic(15, temps[WHEEL_FR], temp_min, temp_max);
                     // draw_dynamic(16, temps[WHEEL_RL], temp_min, temp_max);
                     // draw_dynamic(14, temps[WHEEL_RR], temp_min, temp_max);
-                    draw_dynamic(14, pot_overload, -1, -1);
-                    draw_dynamic(15, pressure_adc, pressure_min_adc, pressure_max_adc);
-                    draw_dynamic(16, hotrc_vert_pulse_us, hotrc_pulse_vert_min_us, hotrc_pulse_vert_max_us);  // Programmed centerpoint is 230 adc
-                    draw_dynamic(17, hotrc_pos_failsafe_min_adc, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-                    draw_dynamic(18, hotrc_pos_failsafe_max_adc, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-                    draw_dynamic(19, brake_pos_zeropoint_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);   
+                    draw_dynamic(14, hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][MIN], hotrc_pulse_lims_us[HORZ][MAX]);  // Programmed centerpoint is 230 adc
+                    draw_dynamic(15, hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);  // Programmed centerpoint is 230 adc
+                    // draw_dynamic(18, hotrc_ch3_pulse_us, hotrc_pulse_lims_us[CH3][MIN], hotrc_pulse_lims_us[CH3][MAX]);  // Programmed centerpoint is 230 adc
+                    // draw_dynamic(19, hotrc_ch4_pulse_us, hotrc_pulse_lims_us[CH4][MIN], hotrc_pulse_lims_us[CH4][MAX]);  // Programmed centerpoint is 230 adc
+                    draw_dynamic(16, hotrc_pulse_failsafe_min_us, hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);
+                    draw_dynamic(17, hotrc_pulse_failsafe_max_us, hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);
+                    draw_dynamic(18, pot_overload, -1, -1);
+                    draw_dynamic(19, pressure_adc, pressure_min_adc, pressure_max_adc);                    
+                    // draw_dynamic(19, brake_pos_zeropoint_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);   
                 }
                 draw_bool((runmode == CAL), 2);
                 draw_bool((runmode == BASIC), 3);

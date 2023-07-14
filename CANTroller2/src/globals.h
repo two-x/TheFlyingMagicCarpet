@@ -6,6 +6,8 @@
 #include <OneWire.h>
 #include "temp.h"
 // #include <DallasTemperature.h>
+#include <Wire.h>
+#include <SparkFun_FS3000_Arduino_Library.h>  // For airflow sensor  http://librarymanager/All#SparkFun_FS3000
 #include "Arduino.h"
 #include <Preferences.h>
 #include <vector>
@@ -294,18 +296,14 @@ float pot_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more cont
 
 // controller related
 enum ctrls { HEADLESS, HOTRC, JOY, SIM };  // Possible sources of gas, brake, steering commands
-enum ctrl_axes { HORZ, VERT };
-enum ctrl_thresh { MIN, DB, MAX };
+enum ctrl_axes { HORZ, VERT, CH3, CH4 };
+enum ctrl_thresh { MIN, CENT, MAX, DB };
 enum ctrl_edge { BOT, TOP };
 enum raw_filt { RAW, FILT };
 bool joy_centered = false;
 int32_t ctrl_db_adc[2][2];  // [HORZ/VERT] [BOT/TOP] - to store the top and bottom deadband values for each axis of selected controller
 int32_t ctrl_pos_adc[2][2] = { { adcmidscale_adc, adcmidscale_adc }, { adcmidscale_adc, adcmidscale_adc} };  // [HORZ/VERT] [RAW/FILT]
-volatile bool hotrc_vert_preread = 0;
-volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
-volatile int32_t hotrc_horz_pulse_us = 1500;
-volatile int32_t hotrc_vert_pulse_us = 1500;
-Timer hotrcPulseTimer;  // OK to not be volatile?
+// Timer hotrcPulseTimer;  // OK to not be volatile?
 // Merging these into Hotrc class
 bool hotrc_radio_detected = false;
 bool hotrc_radio_detected_last = hotrc_radio_detected;
@@ -313,22 +311,36 @@ bool hotrc_suppress_next_ch3_event = true;  // When powered up, the hotrc will t
 bool hotrc_suppress_next_ch4_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 //  ---- tunable ----
 float hotrc_pulse_period_us = 1000000.0 / 50;
-float ctrl_ema_alpha[2] = { 0.007, 0.1 };  // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-int32_t ctrl_lims_adc[2][2][3] = { { { 3, 375, 4092 }, { 3, 375, 4092 } }, { { 9, 200, 4085 }, { 9, 200, 4085 } }, }; // [HOTRC/JOY] [HORZ/VERT], [MIN/DEADBAND/MAX] values as ADC counts
-bool ctrl = HEADLESS;  // Use HotRC controller to drive instead of joystick?
+float ctrl_ema_alpha[2] = { 0.1, 0.01 };  // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+int32_t ctrl_lims_adc[2][2][4] = { { { 0, adcmidscale_adc, adcrange_adc, 350 }, { 0, adcmidscale_adc, adcrange_adc, 350 } }, { { 9, adcmidscale_adc, 4085, 200 }, { 9, adcmidscale_adc, 4085, 200 } } }; // [HOTRC/JOY] [HORZ/VERT], [MIN/CENT/MAX/DB] values as microseconds (hotrc) or adc counts (joystick)
+bool ctrl;  // Use HotRC controller to drive instead of joystick?
+// bool ctrl = HEADLESS;
 // Limits of what pulsewidth the hotrc receiver puts out
-// For some funky reason I was unable to initialize these in an array format !?!?!
 // int32_t hotrc_pulse_lims_us[2][2];  // = { { 1009, 2003 }, { 1009, 2003 } };  // [HORZ/VERT] [MIN/MAX]  // These are the limits of hotrc vert and horz high pulse
-int32_t hotrc_pulse_vert_min_us = 990;  // 1009;
-int32_t hotrc_pulse_vert_max_us = 1990;  // 2003;
-int32_t hotrc_pulse_horz_min_us = 990;  // 1009;
-int32_t hotrc_pulse_horz_max_us = 1990;  // 2003;
+int32_t hotrc_pulse_lims_us[4][3] = { { 970-1, 1470-2, 1970-3 }, { 1080-1, 1580-2, 2080-3 }, { 1200-1, 1500-2, 1800-3 }, { 1300-1, 1500-2, 1700-3 } };  // [HORZ/VERT/CH3/CH4] [MIN/CENT/MAX]  // These are the l
+volatile int64_t hotrc_timer_start;
+volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
+volatile bool hotrc_vert_preread = true;
+volatile int64_t hotrc_vert_pulse_us = (int64_t)hotrc_pulse_lims_us[VERT][CENT];
+volatile int64_t hotrc_horz_pulse_us = (int64_t)hotrc_pulse_lims_us[HORZ][CENT];
+//volatile uint32_t hotrc_vert_pulse_us = 0;
+int32_t hotrc_horz_pulse_filt_us = (int32_t)hotrc_horz_pulse_us;
+int32_t hotrc_vert_pulse_filt_us = (int32_t)hotrc_vert_pulse_us;
+int32_t intcount = 0;
+
+// hw_timer_t *hotrc_vert_timer = NULL;
+// volatile uint32_t hotrc_vert_width_us = 0;
+// volatile bool hotrc_vert_pulse_started = false;
+// volatile uint64_t hotrc_vert_pulse_start_us = 0;
+
+// volatile int64_t hotrc_vert_pulse_us = (int64_t)hotrc_pulse_lims_us[VERT][CENT];
+// int32_t hotrc_vert_pulse_filt_us = (int32_t)hotrc_vert_pulse_us;
 
 // Maybe merging these into Hotrc class
-int32_t hotrc_pos_failsafe_min_adc = 140;  // The failsafe setting in the hotrc must be set to a trigger level equal to max amount of trim upward from trigger released.
-int32_t hotrc_pos_failsafe_max_adc = 320;
-int32_t hotrc_pos_failsafe_pad_adc = 10;
-uint32_t hotrc_panic_timeout = 1000000;  // how long to receive flameout-range signal from hotrc vertical before panic stopping
+int32_t hotrc_pulse_failsafe_min_us = 780;  // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
+int32_t hotrc_pulse_failsafe_max_us = 980;  // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
+int32_t hotrc_pulse_failsafe_pad_us = 10;
+uint32_t hotrc_panic_timeout = 500000;  // how long to receive flameout-range signal from hotrc vertical before panic stopping
 Timer hotrcPanicTimer(hotrc_panic_timeout);
 
 // steering related
@@ -444,7 +456,8 @@ volatile int32_t speedo_delta_us = 0;
 volatile int32_t speedo_buf_delta_us = 0;
 volatile uint32_t speedo_time_us;
 //  ---- tunable ----
-float speedo_convert_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 rot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 gearing * 20*pi in/rot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
+float speedo_convert_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280); // 5280 ft/mi * 12 in/ft * 1/(20*pi) whlrot/in * 19.85 pulrot/whlrot = 20017 pulrot/mile
+// 1 pulrot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 whlrot/pulrot * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
 // Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
 bool speedo_convert_invert = true;
 int32_t speedo_convert_polarity = 1;  // Forward      
@@ -627,25 +640,47 @@ void IRAM_ATTR speedo_isr (void) {  //  Handler can get the most recent rotation
 // //     hotrc_vert_pulse_us = (int32_t)(mcpwm_unit1_capture - mcpwm_unit1_capture_last);
 // //     mcpwm_unit1_capture_last = mcpwm_unit1_capture;
 // // }
+void IRAM_ATTR hotrc_horz_isr (void) {  // On falling edge, records high pulse width to determine ch1 steering slider position
+    hotrc_horz_pulse_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
+}
+    // if (hotrc_vert_preread) hotrc_timer_start = esp_timer_get_time();  // hotrcPulseTimer.reset();
+    // else hotrc_vert_pulse_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
+    // hotrc_vert_preread = !(digitalRead (hotrc_ch2_horz_pin));  // Read pin after timer operations to maximize clocking accuracy
 
-void IRAM_ATTR hotrc_vert_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
-    if (hotrc_vert_preread) hotrcPulseTimer.reset();
-    else hotrc_vert_pulse_us = hotrcPulseTimer.elapsed();
-    hotrc_vert_preread = !(digitalRead (hotrc_ch2_vert_pin));  // Read pin after timer operations to maximize clocking accuracy
+    // intcount++;
+    // // hotrc_horz_pulse_us = esp_timer_get_time() - hotrc_timer_start;
+
+void IRAM_ATTR hotrc_vert_isr (void) {  // Triggers on both edges. Sets timer on rising edge (for all channels) and reads it on falling to determine ch2 trigger position
+    hotrc_vert_pulse_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
 }
-void IRAM_ATTR hotrc_horz_isr (void) {  // On falling edge, records high pulse width to determine ch2 steering slider position
-    hotrc_horz_pulse_us = hotrcPulseTimer.elapsed();
-}
+
+// void IRAM_ATTR hotrc_vert_isr() {
+//   hotrc_vert_pulse_us = (uint32_t)timerRead(hotrc_vert_timer);
+//   timerStop(hotrc_vert_timer);
+//   timerAlarmWrite(hotrc_vert_timer, 0xFFFFFFFF, true);  // Reset the alarm value
+//   timerRestart(hotrc_vert_timer);
+// }
+
 void IRAM_ATTR hotrc_ch3_isr (void) {  // On falling edge, records high pulse width to determine ch3 button toggle state
-    hotrc_ch3_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch3 switch true if short pulse, otherwise false
+    hotrc_ch3_sw = (esp_timer_get_time() - hotrc_timer_start <= 1500);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
     if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch3_sw_last = hotrc_ch3_sw;
 }
-void IRAM_ATTR hotrc_ch4_isr (void) {  // On falling edge, records high pulse width to determine ch4 button toggle state
-    hotrc_ch4_sw = (hotrcPulseTimer.elapsed() <= 1500);  // Ch4 switch true if short pulse, otherwise false
-    if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
-    hotrc_ch4_sw_last = hotrc_ch4_sw;
+void IRAM_ATTR hotrc_ch4_isr (void) {  // Triggers on both edges. Sets timer on rising edge (for all channels) and reads it on falling to determine ch4 button toggle state
+    // portDISABLE_INTERRUPTS();
+    if (hotrc_vert_preread) hotrc_timer_start = esp_timer_get_time();  // hotrcPulseTimer.reset();
+    else {
+        hotrc_ch4_sw = (esp_timer_get_time() - hotrc_timer_start <= 1500);  // Ch4 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH4][CENT]
+        if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
+        hotrc_ch4_sw_last = hotrc_ch4_sw;
+    }
+    // portENABLE_INTERRUPTS();
+    hotrc_vert_preread = !(digitalRead (hotrc_ch4_cruise_pin));  // Read pin after timer operations to maximize clocking accuracy
+    intcount++;
 }
+// if (hotrc_vert_preread) hotrc_timer_start = esp_timer_get_time();  // hotrcPulseTimer.reset();
+// else hotrc_vert_pulse_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
+// hotrc_vert_preread = !(digitalRead (hotrc_ch2_vert_pin));  // Read pin after timer operations to maximize clocking accuracy
 
 // Utility functions
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays
@@ -690,10 +725,10 @@ uint32_t colorwheel (uint8_t WheelPos) {
     return neostrip.Color (WheelPos * 3, 255 - WheelPos * 3, 0);
 }
 void calc_deadbands (void) {
-    ctrl_db_adc[VERT][BOT] = (adcrange_adc-ctrl_lims_adc[ctrl][VERT][DB])/2;  // Lower threshold of vert joy deadband (ADC count 0-4095)
-    ctrl_db_adc[VERT][TOP] = (adcrange_adc+ctrl_lims_adc[ctrl][VERT][DB])/2;  // Upper threshold of vert joy deadband (ADC count 0-4095)
-    ctrl_db_adc[HORZ][BOT] = (adcrange_adc-ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Lower threshold of horz joy deadband (ADC count 0-4095)
-    ctrl_db_adc[HORZ][TOP] = (adcrange_adc+ctrl_lims_adc[ctrl][HORZ][DB])/2;  // Upper threshold of horz joy deadband (ADC count 0-4095)
+    ctrl_db_adc[VERT][BOT] = ctrl_lims_adc[ctrl][VERT][CENT]-ctrl_lims_adc[ctrl][VERT][DB]/2;  // Lower threshold of vert joy deadband (ADC count 0-4095)
+    ctrl_db_adc[VERT][TOP] = ctrl_lims_adc[ctrl][VERT][CENT]+ctrl_lims_adc[ctrl][VERT][DB]/2;  // Upper threshold of vert joy deadband (ADC count 0-4095)
+    ctrl_db_adc[HORZ][BOT] = ctrl_lims_adc[ctrl][HORZ][CENT]-ctrl_lims_adc[ctrl][HORZ][DB]/2;  // Lower threshold of horz joy deadband (ADC count 0-4095)
+    ctrl_db_adc[HORZ][TOP] = ctrl_lims_adc[ctrl][HORZ][CENT]+ctrl_lims_adc[ctrl][HORZ][DB]/2;  // Upper threshold of horz joy deadband (ADC count 0-4095)
 }
 void calc_governor (void) {
     tach_govern_rpm = map ((float)gas_governor_percent, 0.0, 100.0, 0.0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
@@ -851,6 +886,40 @@ void temp_soren (void) {
 //             tempTimer.reset();
 //         }
 //     }
+// }
+
+// chatgpt says I can use hardware timers to measure vert and horz pulsewidths like this:
+
+// hw_timer_t *pulse_timer = NULL;
+// volatile uint32_t pulse_width_us = 0;
+// volatile bool pulse_started = false;
+// volatile uint64_t pulse_start_time = 0;
+
+// void IRAM_ATTR pulse_isr() {
+//   if (pulse_started) {
+//     pulse_width_us = (uint32_t)((esp_timer_get_time() - pulse_start_time) / 1000);
+//     pulse_started = false;
+//   } else {
+//     pulse_start_time = esp_timer_get_time();
+//     pulse_started = true;
+//   }
+// }
+
+// void setup() {
+//   // Initialize the pulse measurement timer
+//   pulse_timer = timerBegin(0, 80, true);
+//   timerAttachInterrupt(pulse_timer, &pulse_isr, true);
+//   timerAlarmWrite(pulse_timer, 100, true); // Set a suitable period for the timer (e.g., 100 microseconds)
+//   timerAlarmEnable(pulse_timer);
+
+//   // Configure the input pin for pulse measurement
+//   pinMode(INPUT_PIN, INPUT);
+// }
+
+// void loop() {
+//   // Read the pulse width value
+//   uint32_t current_pulse_width = pulse_width_us;
+//   delay(100);
 // }
 
 #endif  // GLOBALS_H
