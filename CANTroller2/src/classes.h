@@ -389,8 +389,8 @@ class Hotrc {
   protected:
     int32_t* val;
     int32_t avg, min_index, max_index, failsafe_min, failsafe_max;
-    int32_t depth = 250, index = 1, padding = 7, calc_count = 0;
-    int32_t history[250];  // It will not accept history[depth] - wtf
+    int32_t depth = 100, index = 1, padding = 7, calc_count = 0;
+    int32_t history[100];  // It will not accept history[depth] - wtf
     uint32_t sum;
     bool detect_ready = false;
   public:
