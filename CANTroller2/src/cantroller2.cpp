@@ -25,7 +25,7 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names
     index++;
 }
 
-Hotrc hotrc (&ctrl_pos_adc[VERT][FILT], hotrc_pos_failsafe_min_adc, hotrc_pos_failsafe_max_adc, hotrc_pos_failsafe_pad_adc);
+Hotrc hotrc (&hotrc_vert_pulse_filt_us, hotrc_pulse_failsafe_min_us, hotrc_pulse_failsafe_max_us, hotrc_pulse_failsafe_pad_us);
     
 Display screen(tft_cs_pin, tft_dc_pin);
     
@@ -44,24 +44,26 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (basicmodesw_pin, INPUT_PULLUP);
     set_pin (tach_pulse_pin, INPUT_PULLUP);
     set_pin (speedo_pulse_pin, INPUT_PULLUP);
-    set_pin (joy_horz_pin, INPUT);
-    set_pin (joy_vert_pin, INPUT);
     set_pin (pressure_pin, INPUT);
     set_pin (brake_pos_pin, INPUT);
-    set_pin (battery_pin, INPUT);
+    set_pin (ign_batt_pin, INPUT);
     set_pin (hotrc_ch1_horz_pin, INPUT);
     set_pin (hotrc_ch2_vert_pin, INPUT);
     set_pin (neopixel_pin, OUTPUT);
     set_pin (sdcard_cs_pin, OUTPUT);
     set_pin (tft_cs_pin, OUTPUT);
     set_pin (pot_wipe_pin, INPUT);
-    set_pin (button_pin, INPUT_PULLUP);    
+    set_pin (button_pin, INPUT_PULLUP);
     set_pin (starter_pin, INPUT_PULLDOWN);
-    set_pin (touch_irq_pin, INPUT_PULLUP);
-    set_pin (tft_rst_pin, OUTPUT);
     set_pin (hotrc_ch3_ign_pin, INPUT);
     set_pin (hotrc_ch4_cruise_pin, INPUT);
-        
+
+    set_pin (joy_horz_pin, INPUT);
+    set_pin (joy_vert_pin, INPUT);
+    
+    set_pin (touch_irq_pin, INPUT_PULLUP);
+    set_pin (tft_rst_pin, OUTPUT);
+
     write_pin (tft_cs_pin, HIGH);   // Prevent bus contention
     write_pin (sdcard_cs_pin, HIGH);   // Prevent bus contention
     write_pin (tft_dc_pin, LOW);
@@ -69,11 +71,15 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
     // This bit is here as a way of autdetecting the controller type. It starts HEADLESS. If HIGH is read here then JOY,
     // otherwise the pulldown R in the divider will enable HOTRC once radio is detected.
-    set_pin (ignition_pin, INPUT);  // Temporarily use this pin to read a pullup/down resistor to detect controller type
-    ctrl = (read_pin (ignition_pin) ? JOY : HEADLESS);
-    if (ctrl == HEADLESS) set_pin (ignition_pin, OUTPUT);  // Then set the put as an output as normal.
-    write_pin (ignition_pin, LOW);  // Initialize to ignition off
-
+    set_pin (ign_batt_pin, INPUT);  
+    // Temporarily use this pin to read a pullup/down resistor to detect controller type
+    // ctrl = (read_pin (ignition_pin) ? JOY : HOTRC);  // HEADLESS
+    // if (ctrl == HEADLESS) set_pin (ignition_pin, OUTPUT);  // Then set the put as an output as normal.
+    // if (ctrl == HOTRC) { set_pin (ignition_pin, OUTPUT);  // Then set the put as an output as normal.
+    // write_pin (ignition_pin, LOW); } // Initialize to ignition off
+    set_pin (ign_out_pin, OUTPUT);
+    write_pin (ign_out_pin, LOW);
+    
     // This bit is here as a way of autdetecting soren's breadboard, since his LCD is wired upside-down.
     // Soren put a strong external pulldown on the pin, so it'll read low for autodetection. 
     set_pin (syspower_pin, INPUT);  // Temporarily use this pin to read a pullup/down resistor to configure screen flip
@@ -141,16 +147,28 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     // attachInterrupt (digitalPinToInterrupt(hotrc_ch4_cruise_pin), hotrc_ch4_isr, FALLING);
 
     // Set up our interrupts
-    Serial.print (F("Pulse timers and interrupts ... "));
     attachInterrupt (digitalPinToInterrupt(tach_pulse_pin), tach_isr, RISING);
     attachInterrupt (digitalPinToInterrupt(speedo_pulse_pin), speedo_isr, RISING);
+    
+    printf ("ctrl=%ld\n");
     if (ctrl == HOTRC) {
-        attachInterrupt (digitalPinToInterrupt (hotrc_ch2_vert_pin), hotrc_vert_isr, CHANGE);
+        
+        // hotrc_vert_timer = timerBegin(1, 80, true); // Use timer 0 for the pulse measurement
+        // timerAttachInterrupt(hotrc_vert_timer, &hotrc_vert_isr, true);
+        // timerAlarmWrite(hotrc_vert_timer, 0xFFFFFFFF, true); // Set a large initial alarm value
+        // timerRestart(hotrc_vert_timer);
+        // timerInputCaptureSingle(hotrc_vert_timer, hotrc_ch2_vert_pin, FALLING); // Capture on falling edge
+        
+        // ledcAttachPin(hotrc_ch2_vert_pin, 1); // Use LEDC channel 0 for input capture
+        // ledcSetup(1, 1, 1); // Use LEDC channel 0 with a resolution of 1 bit
+        // ledcAttachPinTone(hotrc_ch2_vert_pin, 1); // Capture on falling edge
+
+        attachInterrupt (digitalPinToInterrupt (hotrc_ch2_vert_pin), hotrc_vert_isr, FALLING);
         attachInterrupt (digitalPinToInterrupt (hotrc_ch1_horz_pin), hotrc_horz_isr, FALLING);
         attachInterrupt (digitalPinToInterrupt (hotrc_ch3_ign_pin), hotrc_ch3_isr, FALLING);
-        attachInterrupt (digitalPinToInterrupt (hotrc_ch4_cruise_pin), hotrc_ch4_isr, FALLING);
+        attachInterrupt (digitalPinToInterrupt (hotrc_ch4_cruise_pin), hotrc_ch4_isr, CHANGE);
     }
-    Serial.println (F("set up and enabled\n"));
+    Serial.println (F("Interrupts set up and enabled\n"));
 
     calc_deadbands();
     calc_governor();
@@ -321,10 +339,6 @@ void loop() {
     ema_filt (pot_percent, &pot_filt_percent, pot_ema_alpha);
     // if (pot_adc != pot_adc_last) printf ("pot adc:%ld pot%%:%lf filt:%lf\n", pot_adc, pot_percent, pot_filt_percent); 
     
-    // Voltage of vehicle battery - takes 70 us to read, convert, and filter
-    battery_v = convert_units ((float)analogRead (battery_pin), battery_convert_v_per_adc, battery_convert_invert);
-    ema_filt (battery_v, &battery_filt_v, battery_ema_alpha);  // Apply EMA filter
-
        // Brake position - takes 70 us to read, convert, and filter
     if (!simulating || !sim_brkpos) {
         brake_pos_in = convert_units ((float)analogRead (brake_pos_pin), brake_pos_convert_in_per_adc, brake_pos_convert_invert);
@@ -335,35 +349,33 @@ void loop() {
     if (!simulating || !sim_starter) starter = read_pin (starter_pin);
 
     // Tach - takes 22 us to read when no activity
-    if (simulating && sim_tach && pot_overload == tach) tach_filt_rpm = map (pot_filt_percent, 0.0, 100.0, tach_idle_rpm, tach_govern_rpm);
+    if (simulating && sim_tach && pot_overload == tach) tach_filt_rpm = map (pot_filt_percent, 0.0, 100.0, 0.0, tach_govern_rpm);
     else if (!simulating || !sim_tach) {
-        if (tach_delta_us) {  // If a valid rotation has happened since last time, delta will have a value
-            tach_buf_delta_us = tach_delta_us;  // Copy delta value (in case another interrupt happens during handling)
-            tach_delta_us = 0;  // Indicates to isr we processed this value
-            tach_rpm = convert_units ((float)(tach_buf_delta_us), tach_convert_rpm_per_rpus, tach_convert_invert);
+        if (tach_us) {  // If a valid rotation has happened since last time, delta will have a value
+            tach_buf_us = (int32_t)tach_us;  // Copy delta value (in case another interrupt happens during handling)
+            tach_us = 0;  // Indicates to isr we processed this value
+            tach_rpm = convert_units ((float)(tach_buf_us), tach_convert_rpm_per_rpus, tach_convert_invert);
             ema_filt (tach_rpm, &tach_filt_rpm, tach_ema_alpha);  // Sensor EMA filter
         }
-        else if (!engine_stopped() && tachPulseTimer.elapsed() >= tach_stop_timeout_us) {  // If time between pulses is long enough an engine can't run that slow
+        else if (engine_stopped()) {  // If time between pulses is long enough an engine can't run that slow
             tach_rpm = 0.0;  // If timeout since last magnet is exceeded
             tach_filt_rpm = 0.0;
         }        
     }
-    
     // Speedo - takes 14 us to read when no activity
-    if (simulating && sim_speedo && pot_overload == speedo) speedo_filt_mph = map (pot_filt_percent, 0.0, 100.0, speedo_idle_mph, speedo_govern_mph);
+    if (simulating && sim_speedo && pot_overload == speedo) speedo_filt_mph = map (pot_filt_percent, 0.0, 100.0, 0.0, speedo_govern_mph);
     else if (!simulating || !sim_speedo) { 
-        if (speedo_delta_us) {  // If a valid rotation has happened since last time, delta will have a value
-            speedo_buf_delta_us = speedo_delta_us;  // Copy delta value (in case another interrupt happens during handling)
-            speedo_delta_us = 0;  // Indicates to isr we processed this value
-            speedo_mph = convert_units ((float)(speedo_buf_delta_us), speedo_convert_mph_per_rpus, speedo_convert_invert);  // Update car speed value  
+        if (speedo_us) {  // If a valid rotation has happened since last time, delta will have a value
+            speedo_buf_us = (int32_t)speedo_us;  // Copy delta value (in case another interrupt happens during handling)
+            speedo_us = 0;  // Indicates to isr we processed this value
+            speedo_mph = convert_units ((float)(speedo_buf_us), speedo_convert_mph_per_rpus, speedo_convert_invert);  // Update car speed value  
             ema_filt (speedo_mph, &speedo_filt_mph, speedo_ema_alpha);  // Sensor EMA filter
         }
-        else if (!car_stopped() && speedoPulseTimer.elapsed() >= speedo_stop_timeout_us) {  // If time between pulses is long enough an engine can't run that slow
+        else if (car_stopped()) {  // If time between pulses is long enough an engine can't run that slow
             speedo_mph = 0.0;
             speedo_filt_mph = 0.0;
         }
     }
-
     // Brake pressure - takes 72 us to read
     if (simulating && sim_pressure && pot_overload == pressure) pressure_filt_psi = map (pot_filt_percent, 0.0, 100.0, pressure_min_psi, pressure_max_psi);
     else if (!simulating && !sim_pressure) {
@@ -373,63 +385,113 @@ void loop() {
         // pressure.set_raw (analogRead (pressure_pin));
         // ema_filt (pressure.get_val(), &pressure_filt_psi, pressure_ema_alpha);  // Sensor EMA filter
     }
-    
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //
 
     // Controller handling
     //
     // Read horz and vert inputs, determine steering pwm output -  - takes 40 us to read. Then, takes 13 us to handle
+    // std::cout << "164:" << hotrc_horz_pulse_us << " 264:" << hotrc_vert_pulse_us;
+    if (ctrl != JOY) {
+        hotrc_horz_pulse_us = (int32_t)hotrc_horz_pulse_64_us;
+        hotrc_vert_pulse_us = (int32_t)hotrc_vert_pulse_64_us;  // replace with update history array
+    }
     if (!simulating || !sim_joy) {  // Handle HotRC button generated events and detect potential loss of radio signal - takes 15 us to handle
-        if (ctrl == HOTRC) {
-            ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_vert_max_us, hotrc_pulse_vert_min_us, ctrl_lims_adc[ctrl][VERT][MAX], ctrl_lims_adc[ctrl][VERT][MIN]);
-            ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_horz_max_us, hotrc_pulse_horz_min_us, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
+        if (ctrl != JOY) {
+            // printf (" 1R:%4ld 2R:%4ld 1A:%4ld 2A:%4ld", hotrc_horz_pulse_us, hotrc_vert_pulse_us, hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us);
+            
+            ema_filt (hotrc_horz_pulse_us, &hotrc_horz_pulse_filt_us, ctrl_ema_alpha[ctrl]);  // Used to detect loss of radio
+            
+            ema_filt (hotrc_vert_pulse_us, &hotrc_vert_pulse_filt_us, ctrl_ema_alpha[ctrl]);  // Used to detect loss of radio
+            // printf (" 1B:%4ld 2B:%4ld", hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us);
         }
-        else {
+        if (ctrl == HOTRC) {
+            // hotrc_horz_pulse_filt_us = constrain (hotrc_horz_pulse_filt_us, hotrc_pulse_lims_us[HORZ][MIN], hotrc_pulse_lims_us[HORZ][MAX]);
+            // hotrc_vert_pulse_filt_us = constrain (hotrc_vert_pulse_filt_us, hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);
+            // // ctrl_pos_adc[HORZ][FILT] = map (hotrc_horz_pulse_filt_us, hotrc_pulse_lims_us[HORZ][MIN], hotrc_pulse_lims_us[HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
+            // // ctrl_pos_adc[VERT][FILT] = map (hotrc_vert_pulse_filt_us, hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX], ctrl_lims_adc[ctrl][VERT][MAX], ctrl_lims_adc[ctrl][VERT][MIN]);
+            // if (hotrc_horz_pulse_filt_us >= hotrc_pulse_lims_us[HORZ][CENT])  // Steering: Convert from pulse us to joystick adc equivalent, when pushing left, or right
+            //      ctrl_pos_adc[HORZ][FILT] = map (hotrc_horz_pulse_filt_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MAX]);
+            // else ctrl_pos_adc[HORZ][FILT] = map (hotrc_horz_pulse_filt_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MIN]);
+            // if (hotrc_vert_pulse_filt_us >= hotrc_pulse_lims_us[VERT][CENT])  // Trigger: Convert from pulse us to joystick adc equivalent, when pushing down
+            //      ctrl_pos_adc[VERT][FILT] = map (hotrc_vert_pulse_filt_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MAX], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MIN]);
+            // else ctrl_pos_adc[VERT][FILT] = map (hotrc_vert_pulse_filt_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MIN], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MAX]);
+            // ctrl_pos_adc[HORZ][RAW] = ctrl_pos_adc[HORZ][FILT];  // raw value isn't used I think but just in case
+            // ctrl_pos_adc[VERT][RAW] = ctrl_pos_adc[VERT][FILT];  // raw value isn't used I think but just in case
+            
+            if (hotrc_horz_pulse_us >= hotrc_pulse_lims_us[HORZ][CENT])  // Steering: Convert from pulse us to joystick adc equivalent, when pushing left, or right
+                 ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MAX]);
+            else ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MIN]);
+            if (hotrc_vert_pulse_us >= hotrc_pulse_lims_us[VERT][CENT])  // Trigger: Convert from pulse us to joystick adc equivalent, when pushing down
+                 ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MAX], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MAX]);
+            else ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MIN], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MIN]);  
+        }
+        else if (ctrl == JOY) {
             ctrl_pos_adc[VERT][RAW] = analogRead (joy_vert_pin);  // Read joy vertical
             ctrl_pos_adc[HORZ][RAW] = analogRead (joy_horz_pin);  // Read joy horizontal
+            // ema_filt (ctrl_pos_adc[VERT][RAW], &ctrl_pos_adc[VERT][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_vert_filt
+            // ema_filt (ctrl_pos_adc[HORZ][RAW], &ctrl_pos_adc[HORZ][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_horz_filt
+
         }
-        ctrl_pos_adc[VERT][RAW] = constrain (ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-        ctrl_pos_adc[HORZ][RAW] = constrain (ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);   
-        if (ctrl_pos_adc[VERT][RAW] > ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][RAW] < ctrl_db_adc[VERT][TOP]) ctrl_pos_adc[VERT][FILT] = adcmidscale_adc;  // if joy vert is in the deadband, set joy_vert_filt to center value
-        else ema_filt (ctrl_pos_adc[VERT][RAW], &ctrl_pos_adc[VERT][FILT], ctrl_ema_alpha[ctrl]);  // otherwise do ema filter to determine joy_vert_filt
-        if (ctrl_pos_adc[HORZ][RAW] > ctrl_db_adc[HORZ][BOT] && ctrl_pos_adc[HORZ][RAW] < ctrl_db_adc[HORZ][TOP]) ctrl_pos_adc[HORZ][FILT] = adcmidscale_adc;  // if joy horz is in the deadband, set joy_horz_filt to center value
-        else ema_filt (ctrl_pos_adc[HORZ][RAW], &ctrl_pos_adc[HORZ][FILT], ctrl_ema_alpha[ctrl]);  // otherwise do ema filter to determine joy_horz_filt
+        ema_filt (ctrl_pos_adc[VERT][RAW], &ctrl_pos_adc[VERT][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_vert_filt
+        ema_filt (ctrl_pos_adc[HORZ][RAW], &ctrl_pos_adc[HORZ][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_horz_filt
+        ctrl_pos_adc[VERT][FILT] = constrain (ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
+        ctrl_pos_adc[HORZ][FILT] = constrain (ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
+
+        if (ctrl_pos_adc[VERT][RAW] > ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][RAW] < ctrl_db_adc[VERT][TOP]) {
+            ctrl_pos_adc[VERT][FILT] = ctrl_pos_adc[VERT][CENT];  // if joy vert is in the deadband, set joy_vert_filt to center value
+            hotrc_vert_pulse_filt_us = hotrc_pulse_lims_us[VERT][CENT];
+        }
+        if (ctrl_pos_adc[HORZ][RAW] > ctrl_db_adc[HORZ][BOT] && ctrl_pos_adc[HORZ][RAW] < ctrl_db_adc[HORZ][TOP]) {
+            ctrl_pos_adc[HORZ][FILT] = ctrl_pos_adc[HORZ][CENT];  // if joy horz is in the deadband, set joy_horz_filt to center value
+            hotrc_horz_pulse_filt_us = hotrc_pulse_lims_us[HORZ][CENT];
+        }
     }
     if (runmode != SHUTDOWN || !shutdown_complete) { // Unless fully shut down at the moment, set the steering output
-        if (ctrl_pos_adc[HORZ][FILT] >= ctrl_db_adc[HORZ][TOP]) {
+        if (ctrl_pos_adc[HORZ][FILT] >= ctrl_db_adc[HORZ][TOP]) {  // If above the top edge of the deadband, turning right
             steer_pulse_safe_us = steer_pulse_stop_us + (int32_t)((float)(steer_pulse_right_us - steer_pulse_stop_us) * (1 - ((float)steer_safe_percent * speedo_filt_mph / ((float)speedo_redline_mph * 100) )));
             steer_pulse_out_us = map (ctrl_pos_adc[HORZ][FILT], ctrl_db_adc[HORZ][TOP], ctrl_lims_adc[ctrl][HORZ][MAX], steer_pulse_stop_us, steer_pulse_safe_us);  // Figure out the steering setpoint if joy to the right of deadband
         }
-        else if (ctrl_pos_adc[HORZ][FILT] <= ctrl_db_adc[HORZ][BOT]) {
+        else if (ctrl_pos_adc[HORZ][FILT] <= ctrl_db_adc[HORZ][BOT]) {  // If below the bottom edge of the deadband, turning left
             steer_pulse_safe_us = steer_pulse_stop_us - (int32_t)((float)(steer_pulse_stop_us - steer_pulse_left_us) * (1 - ((float)steer_safe_percent * speedo_filt_mph / ((float)speedo_redline_mph * 100) )));
             steer_pulse_out_us = map (ctrl_pos_adc[HORZ][FILT], ctrl_db_adc[HORZ][BOT], ctrl_lims_adc[ctrl][HORZ][MIN], steer_pulse_stop_us, steer_pulse_safe_us);  // Figure out the steering setpoint if joy to the left of deadband
         }
         else steer_pulse_out_us = steer_pulse_stop_us;  // Stop the steering motor if inside the deadband
     }
-    if (ctrl == JOY) ignition = read_pin (ignition_pin);
+
+    // Voltage of vehicle battery - takes 70 us to read, convert, and filter
+    ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
+    // battery_v = convert_units ((float)analogRead (battery_pin), battery_convert_v_per_adc, battery_convert_invert);
+    // ema_filt (battery_v, &battery_filt_v, battery_ema_alpha);  // Apply EMA filter
+
+    if (ctrl == JOY) ignition = ignition_sense;
     else if (ctrl == HOTRC) {
         if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition
             if (hotrc_suppress_next_ch3_event) hotrc_suppress_next_ch3_event = false;
             else ignition = !ignition;
             hotrc_ch3_sw_event = false;
         }
-        hotrc.calc();  // Detect loss of radio reception and panic stop
-        if (ctrl_pos_adc[VERT][FILT] > hotrc.get_failsafe_min() && ctrl_pos_adc[VERT][FILT] < hotrc.get_failsafe_max()) {
+        hotrc.calc();  // Add latest vert pulse reading into history log and calculate avg value for detecting loss of radio reception
+        // hotrc.print();
+        if (hotrc_vert_pulse_us > hotrc.get_failsafe_min() && hotrc_vert_pulse_us < hotrc.get_failsafe_max()) {
             if (hotrc_radio_detected && hotrcPanicTimer.expired()) {
                 hotrc_radio_detected = false;
-                hotrc_suppress_next_ch3_event = true;  // reject spurious ch3 switch event upon next hotrc poweron
-                hotrc_suppress_next_ch4_event = true;  // reject spurious ch4 switch event upon next hotrc poweron
+                // hotrc_suppress_next_ch3_event = true;  // reject spurious ch3 switch event upon next hotrc poweron
+                // hotrc_suppress_next_ch4_event = true;  // reject spurious ch4 switch event upon next hotrc poweron
             }
         }
         else {
             hotrcPanicTimer.reset();
             hotrc_radio_detected = true;
-            if (!ignition_output_enabled) {
+            if (!ignition_output_enabled) {  // Ignition stays low until the hotrc is detected here, then output is allowed
                 ignition_output_enabled = true;
-                set_pin (ignition_pin, OUTPUT);  // do NOT plug in the joystick when using the hotrc to avoid ign contention
+                // set_pin (ignition_pin, OUTPUT);  // do NOT plug in the joystick when using the hotrc to avoid ign contention
             }
         }
     }
+    // printf (" 1C:%4ld 2C:%4ld 1ctR:%4ld 2ctR:%4ld 1ctF:%4ld 2ctF:%4ld c:%ld i:%ld \n", hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us, ctrl_pos_adc[HORZ][RAW], ctrl_pos_adc[VERT][RAW], ctrl_pos_adc[HORZ][FILT], ctrl_pos_adc[VERT][FILT], ctrl, intcount);
+    // hotrc.calc();  // Add latest vert pulse reading into history log and calculate avg value for detecting loss of radio reception
+    // hotrc.print();
+
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "joy");  //
     
     // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
@@ -547,7 +609,13 @@ void loop() {
         }
         // Cruise mode can be entered by pressing a controller button, or by holding the brake on full for a half second. Which epends on the cruise_gesturing flag.
         // The gesture involves pushing the joystick from the center to the top, then to the bottom, then back to center, quickly enough.
-        if (ctrl == JOY) {
+        if (ctrl == HOTRC && hotrc_ch4_sw_event) {
+            if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
+            else runmode == CRUISE;
+            hotrc_ch4_sw_event = false;    
+        }
+        else if (ctrl == JOY) {
+            if (cruise_request) runmode = CRUISE;
             if (cruise_gesturing) {  // If we are configured to use joystick gestures to go to cruise mode, the gesture is 
                 if (!gesture_progress && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][TOP])  { // Re-zero gesture timer for potential new gesture whenever joystick at center
                     gestureFlyTimer.reset();
@@ -567,7 +635,6 @@ void loop() {
                     }        
                 }
             }
-            if (cruise_request) runmode = CRUISE;
             // if (!cruise_sw) {  // If button not currently pressed
             //     if (cruise_sw_held && cruiseSwTimer.expired()) runmode = CRUISE;  // After a long press of sufficient length, upon release enter Cruise mode
             //     cruise_sw_held = false;  // Cancel button held state
@@ -576,11 +643,6 @@ void loop() {
             //     cruiseSwTimer.reset(); // Start hold time timer
             //     cruise_sw_held = true;  // Get into button held state
             // }
-        }
-        else if (ctrl == HOTRC && hotrc_ch4_sw_event) {
-            if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
-            else runmode == CRUISE;
-            hotrc_ch4_sw_event = false;    
         }
     }
     else if (runmode == CRUISE) {
@@ -677,10 +739,10 @@ void loop() {
             else brake_pulse_out_us = (float)brake_pulse_stop_us;
         }
         else if (park_the_motors) {
-            if (brake_pos_filt_in + brake_pos_margin_in <= brake_pos_park_in) brake_pulse_out_us =  // If brake is retracted from park point, extend toward park point, slowing as we approach
-                (float)map ((int32_t)brake_pos_filt_in, (int32_t)brake_pos_park_in, (int32_t)brake_pos_nom_lim_retract_in, brake_pulse_stop_us, brake_pulse_extend_us);
-            else if (brake_pos_filt_in - brake_pos_margin_in >= brake_pos_park_in) brake_pulse_out_us =  // If brake is extended from park point, retract toward park point, slowing as we approach
-                (float)map ((int32_t)brake_pos_filt_in, (int32_t)brake_pos_park_in, (int32_t)brake_pos_nom_lim_extend_in, brake_pulse_stop_us, brake_pulse_retract_us);
+            if (brake_pos_filt_in + brake_pos_margin_in <= brake_pos_park_in)  // If brake is retracted from park point, extend toward park point, slowing as we approach
+                brake_pulse_out_us = (float)map ((int32_t)brake_pos_filt_in, (int32_t)brake_pos_park_in, (int32_t)brake_pos_nom_lim_retract_in, brake_pulse_stop_us, brake_pulse_extend_us);
+            else if (brake_pos_filt_in - brake_pos_margin_in >= brake_pos_park_in)  // If brake is extended from park point, retract toward park point, slowing as we approach
+                brake_pulse_out_us = (float)map ((int32_t)brake_pos_filt_in, (int32_t)brake_pos_park_in, (int32_t)brake_pos_nom_lim_extend_in, brake_pulse_stop_us, brake_pulse_retract_us);
         }
         else if (runmode != BASIC) brakeQPID.Compute();  // Otherwise the pid control is active
         if (runmode != BASIC || park_the_motors) {
@@ -688,7 +750,7 @@ void loop() {
                 brake_pulse_out_us = constrain (brake_pulse_out_us, (float)brake_pulse_retract_min_us, (float)brake_pulse_extend_max_us);  // Send to the actuator. Refuse to exceed range    
             else {  // Prevent any movement of motor which would exceed position limits. Improve this by having the motor actively go back toward position range if position is beyond either limit
                 if ( ((brake_pos_filt_in + brake_pos_margin_in <= brake_pos_nom_lim_retract_in) && ((int32_t)brake_pulse_out_us < brake_pulse_stop_us)) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
-                    ((brake_pos_filt_in - brake_pos_margin_in >= brake_pos_nom_lim_extend_in) && ((int32_t)brake_pulse_out_us > brake_pulse_stop_us)) )  // ... or same thing in the extend direction ...
+                     ((brake_pos_filt_in - brake_pos_margin_in >= brake_pos_nom_lim_extend_in) && ((int32_t)brake_pulse_out_us > brake_pulse_stop_us)) )  // ... or same thing in the extend direction ...
                     brake_pulse_out_us = brake_pulse_stop_us;  // ... then stop the motor
                 brake_pulse_out_us = constrain (brake_pulse_out_us, (float)brake_pulse_retract_us, (float)brake_pulse_extend_us);  // Send to the actuator. Refuse to exceed range    
             } 
@@ -769,8 +831,10 @@ void loop() {
     // Touchscreen handling - takes 800 us to handle every 20ms when the touch timer expires, otherwise 20 us (includes touch timer + encoder handling w/o activity)
     //
     int32_t touch_x, touch_y, trow, tcol;
+    bool get_touched;
     // if (screen.ts.touched() == 1 ) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
-    if (ts.touched()) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
+    get_touched = (touch_irq_pin == 255) ? ts.touched() : ts.tirqTouched();
+    if (get_touched) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
         touch_accel = 1 << touch_accel_exponent;  // determine value editing rate
         // TS_Point touchpoint = screen.ts.getPoint();  // Retreive a point
         TS_Point touchpoint = ts.getPoint();  // Retreive a point
@@ -918,12 +982,12 @@ void loop() {
             else if (selected_value == 7) adj_bool (&sim_speedo, sim_edit_delta);
         }
         else if (dataset_page == PG_JOY) {
-            if (selected_value == 2) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][MIN], sim_edit_delta, 0, adcmidscale_adc - ctrl_lims_adc[ctrl][HORZ][DB] / 2 - 1);
-            else if (selected_value == 3) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][MAX], sim_edit_delta, adcmidscale_adc + ctrl_lims_adc[ctrl][HORZ][DB] / 2 + 1, adcrange_adc);
-            else if (selected_value == 4) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][DB], sim_edit_delta, 0, (adcmidscale_adc - ctrl_lims_adc[ctrl][HORZ][MIN] > ctrl_lims_adc[ctrl][HORZ][MAX] - adcmidscale_adc) ? 2*(ctrl_lims_adc[ctrl][HORZ][MAX] - adcmidscale_adc) : 2*(adcmidscale_adc - ctrl_lims_adc[ctrl][HORZ][MIN]));
-            else if (selected_value == 5) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][MIN], sim_edit_delta, 0, adcmidscale_adc - ctrl_lims_adc[ctrl][VERT][DB] / 2 - 1);
-            else if (selected_value == 6) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][MAX], sim_edit_delta, adcmidscale_adc + ctrl_lims_adc[ctrl][VERT][DB] / 2 + 1, adcrange_adc);
-            else if (selected_value == 7) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][DB], sim_edit_delta, 0, (adcmidscale_adc - ctrl_lims_adc[ctrl][VERT][MIN] > ctrl_lims_adc[ctrl][VERT][MAX] - adcmidscale_adc) ? 2*(ctrl_lims_adc[ctrl][VERT][MAX] - adcmidscale_adc) : 2*(adcmidscale_adc - ctrl_lims_adc[ctrl][VERT][MIN]));
+            if (selected_value == 2) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][MIN], sim_edit_delta, 0, ctrl_lims_adc[ctrl][HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][DB] / 2 - 1);
+            else if (selected_value == 3) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][MAX], sim_edit_delta, ctrl_lims_adc[ctrl][HORZ][CENT] + ctrl_lims_adc[ctrl][HORZ][DB] / 2 + 1, ctrl_lims_adc[ctrl][HORZ][CENT]);
+            else if (selected_value == 4) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][DB], sim_edit_delta, 0, (ctrl_lims_adc[ctrl][HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][MIN] > ctrl_lims_adc[ctrl][HORZ][MAX] - ctrl_lims_adc[ctrl][HORZ][CENT]) ? 2*(ctrl_lims_adc[ctrl][HORZ][MAX] - ctrl_lims_adc[ctrl][HORZ][CENT]) : 2*(ctrl_lims_adc[ctrl][HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][MIN]));
+            else if (selected_value == 5) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][MIN], sim_edit_delta, 0, ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][DB] / 2 - 1);
+            else if (selected_value == 6) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][MAX], sim_edit_delta, ctrl_lims_adc[ctrl][VERT][CENT] + ctrl_lims_adc[ctrl][VERT][DB] / 2 + 1, ctrl_lims_adc[ctrl][VERT][CENT]);
+            else if (selected_value == 7) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][DB], sim_edit_delta, 0, (ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][MIN] > ctrl_lims_adc[ctrl][VERT][MAX] - ctrl_lims_adc[ctrl][VERT][CENT]) ? 2*(ctrl_lims_adc[ctrl][VERT][MAX] - ctrl_lims_adc[ctrl][VERT][CENT]) : 2*(ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][MIN]));
             if (adj) calc_deadbands();  // update derived variables relevant to changes made
         }
         else if (dataset_page == PG_CAR) {
@@ -965,20 +1029,21 @@ void loop() {
             else if (selected_value == 7) cruiseQPID.SetKd (cruiseQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }
         else if (dataset_page == PG_TEMP) {        
-            // if (selected_value == 4) adj_val (&pressure_adc, sim_edit_delta, pressure_min_adc, pressure_max_adc);
-            if (selected_value == 4) adj_val (&pot_overload, sim_edit_delta, 0, 3);
-            else if (selected_value == 5) adj_val (&hotrc_pos_failsafe_min_adc, sim_edit_delta, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-            else if (selected_value == 6) adj_val (&hotrc_pos_failsafe_max_adc, sim_edit_delta, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-            else if (selected_value == 7) adj_val (&brake_pos_zeropoint_in, 0.001*sim_edit_delta, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
+            // if (selected_value == 4) 
+            if (selected_value == 5) adj_val (&hotrc_pulse_failsafe_min_us, sim_edit_delta, 700, hotrc_pulse_failsafe_max_us - 1);
+            else if (selected_value == 6) adj_val (&hotrc_pulse_failsafe_max_us, sim_edit_delta, hotrc_pulse_failsafe_min_us + 1, hotrc_pulse_lims_us[VERT][MIN] - 1);
+            else if (selected_value == 4) adj_val (&pot_overload, sim_edit_delta, 0, 3);
+            else if (selected_value == 7) adj_val (&pressure_adc, sim_edit_delta, pressure_min_adc, pressure_max_adc);
+            // else if (selected_value == 7) adj_val (&brake_pos_zeropoint_in, 0.001*sim_edit_delta, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
         }
         sim_edit_delta = 0;
     }
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tun");  //
-    
+
     // Ignition & Panic stop logic and Update output signals
     if (!car_stopped()) {
-        if (ctrl == HOTRC && !(simulating && sim_joy) && !hotrc_radio_detected && hotrc_radio_detected_last) panic_stop = true;  // panic_stop could also have been initiated by the user button
-        else if (ctrl == JOY && !ignition && ignition_last) panic_stop = true;
+        if (ctrl == HOTRC && !(simulating && sim_joy) && !hotrc_radio_detected) panic_stop = true;  // panic_stop could also have been initiated by the user button   && hotrc_radio_detected_last 
+        else if (ctrl == JOY && !ignition) panic_stop = true;
         // else if (ctrl == JOY && !(simulating && sim_joy) && !ignition && ignition_last) panic_stop = true;
     }
     else if (panic_stop) panic_stop = false;  // Cancel panic if car is stopped
@@ -986,7 +1051,7 @@ void loop() {
         hotrc_radio_detected_last = hotrc_radio_detected;
         if (panic_stop) ignition = LOW;  // Kill car if panicking
         if ((ignition != ignition_last) && ignition_output_enabled) {  // Whenever ignition state changes, assuming we're allowed to write to the pin
-            write_pin (ignition_pin, !ignition);  // Turn car off or on (ign output is active low), ensuring to never turn on the ignition while panicking
+            write_pin (ign_out_pin, !ignition);  // Turn car off or on (ign output is active low), ensuring to never turn on the ignition while panicking
             ignition_last = ignition;  // Make sure this goes after the last comparison
         }
     }
