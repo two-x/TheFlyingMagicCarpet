@@ -217,7 +217,8 @@ int32_t shutdown_color = colorcard[SHUTDOWN];
     bool cap_touch = true;
 #else
     #include <XPT2046_Touchscreen.h>
-    XPT2046_Touchscreen ts (touch_cs_pin, touch_irq_pin);  // 3.2in resistive touch panel on tft lcd
+    // XPT2046_Touchscreen ts (touch_cs_pin, touch_irq_pin);  // 3.2in resistive touch panel on tft lcd
+    XPT2046_Touchscreen ts (touch_cs_pin);  // 3.2in resistive touch panel on tft lcd
     bool cap_touch = false;
 #endif
 
