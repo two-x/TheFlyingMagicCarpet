@@ -136,8 +136,8 @@ bool flip_the_screen = false;
 #define neopixel_pin 48  // (rgb led) - Data line to onboard Neopixel WS281x
 
 #define tft_ledk_pin -1  // Output, optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
-#define touch_irq_pin -1  // Input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays)
-#define tft_rst_pin -1  // TFT Reset allows us to reboot the screen when it crashes
+#define touch_irq_pin 255  // Input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - Set to 255 if not used
+#define tft_rst_pin -1  // TFT Reset allows us to reboot the screen hardware when it crashes
 
 #define adcbits 12
 #define adcrange_adc 4095  // = 2^adcbits-1
@@ -261,9 +261,9 @@ float cruise_spid_initial_kd_s = 0.044;  // PID derivative time factor (cruise).
 // int32_t cruise_spid_ctrl_dir = SPID::FWD;  // 1 = fwd, 0 = rev.
 uint32_t gas_pid_period_ms = 225;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer gasPidTimer (gas_pid_period_ms*1000);  // not actually tunable, just needs value above
-float gas_spid_initial_kp = 0.245;  // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
-float gas_spid_initial_ki_hz = 0.015;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
-float gas_spid_initial_kd_s = 0.022;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
+float gas_spid_initial_kp = 0.256;  // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
+float gas_spid_initial_ki_hz = 0.042;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
+float gas_spid_initial_kd_s = 0.111;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
 // int32_t gas_spid_ctrl_dir = SPID::REV;  // 0 = fwd, 1 = rev.
 bool gas_open_loop = false;
 // starter related
@@ -304,8 +304,6 @@ enum ctrl_thresh { MIN, CENT, MAX, DB };
 enum ctrl_edge { BOT, TOP };
 enum raw_filt { RAW, FILT };
 bool joy_centered = false;
-int32_t ctrl_db_adc[2][2];  // [HORZ/VERT] [BOT/TOP] - to store the top and bottom deadband values for each axis of selected controller
-int32_t ctrl_pos_adc[2][2] = { { adcmidscale_adc, adcmidscale_adc }, { adcmidscale_adc, adcmidscale_adc} };  // [HORZ/VERT] [RAW/FILT]
 // Timer hotrcPulseTimer;  // OK to not be volatile?
 // Merging these into Hotrc class
 bool hotrc_radio_detected = false;
@@ -316,7 +314,7 @@ bool hotrc_suppress_next_ch4_event = true;  // When powered up, the hotrc will t
 float hotrc_pulse_period_us = 1000000.0 / 50;
 float ctrl_ema_alpha[2] = { 0.1, 0.01 };  // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 int32_t ctrl_lims_adc[2][2][4] = { { { 0, adcmidscale_adc, adcrange_adc, 350 }, { 0, adcmidscale_adc, adcrange_adc, 350 } }, { { 9, adcmidscale_adc, 4085, 200 }, { 9, adcmidscale_adc, 4085, 200 } } }; // [HOTRC/JOY] [HORZ/VERT], [MIN/CENT/MAX/DB] values as microseconds (hotrc) or adc counts (joystick)
-bool ctrl;  // Use HotRC controller to drive instead of joystick?
+bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
 // bool ctrl = HEADLESS;
 // Limits of what pulsewidth the hotrc receiver puts out
 // int32_t hotrc_pulse_lims_us[2][2];  // = { { 1009, 2003 }, { 1009, 2003 } };  // [HORZ/VERT] [MIN/MAX]  // These are the limits of hotrc vert and horz high pulse
@@ -324,12 +322,25 @@ int32_t hotrc_pulse_lims_us[4][3] = { { 970-1, 1470-2, 1970-3 }, { 1080-1, 1580-
 volatile int64_t hotrc_timer_start;
 volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
 volatile bool hotrc_isr_pin_preread = true;
-volatile int64_t hotrc_vert_pulse_us = (int64_t)hotrc_pulse_lims_us[VERT][CENT];
-volatile int64_t hotrc_horz_pulse_us = (int64_t)hotrc_pulse_lims_us[HORZ][CENT];
+volatile int64_t hotrc_horz_pulse_64_us = (int64_t)hotrc_pulse_lims_us[HORZ][CENT];
+volatile int64_t hotrc_vert_pulse_64_us = (int64_t)hotrc_pulse_lims_us[VERT][CENT];
 //volatile uint32_t hotrc_vert_pulse_us = 0;
-int32_t hotrc_horz_pulse_filt_us = (int32_t)hotrc_horz_pulse_us;
-int32_t hotrc_vert_pulse_filt_us = (int32_t)hotrc_vert_pulse_us;
+int32_t hotrc_horz_pulse_us = (int32_t)hotrc_horz_pulse_64_us;
+int32_t hotrc_vert_pulse_us;  // = (int32_t)hotrc_vert_pulse_64_us;
+
+int32_t hotrc_horz_pulse_filt_us = hotrc_horz_pulse_us;
+int32_t hotrc_vert_pulse_filt_us = hotrc_vert_pulse_us;
+
 int32_t intcount = 0;
+int32_t ctrl_db_adc[2][2];  // [HORZ/VERT] [BOT/TOP] - to store the top and bottom deadband values for each axis of selected controller
+int32_t ctrl_pos_adc[2][2];  // [HORZ/VERT] [RAW/FILT] - holds most current controller values
+
+int32_t hotrc_pulse_failsafe_min_us = 780;  // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
+int32_t hotrc_pulse_failsafe_max_us = 980;  // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
+int32_t hotrc_pulse_failsafe_pad_us = 10;
+uint32_t hotrc_panic_timeout = 500000;  // how long to receive flameout-range signal from hotrc vertical before panic stopping
+Timer hotrcPanicTimer(hotrc_panic_timeout);
+// int32_t ctrl_pos_adc[2][2] = { { ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][CENT] }, { ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][CENT]} };  // [HORZ/VERT] [RAW/FILT] initialize to centerpoint
 
 // hw_timer_t *hotrc_vert_timer = NULL;
 // volatile uint32_t hotrc_vert_width_us = 0;
@@ -340,11 +351,7 @@ int32_t intcount = 0;
 // int32_t hotrc_vert_pulse_filt_us = (int32_t)hotrc_vert_pulse_us;
 
 // Maybe merging these into Hotrc class
-int32_t hotrc_pulse_failsafe_min_us = 780;  // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
-int32_t hotrc_pulse_failsafe_max_us = 980;  // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
-int32_t hotrc_pulse_failsafe_pad_us = 10;
-uint32_t hotrc_panic_timeout = 500000;  // how long to receive flameout-range signal from hotrc vertical before panic stopping
-Timer hotrcPanicTimer(hotrc_panic_timeout);
+
 
 // steering related
 int32_t steer_pulse_safe_us = 0;
@@ -633,10 +640,10 @@ void IRAM_ATTR speedo_isr (void) {  //  Handler can get the most recent rotation
 //     }
 // }
 void IRAM_ATTR hotrc_horz_isr (void) {  // On falling edge, records high pulse width to determine ch1 steering slider position
-    hotrc_horz_pulse_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
+    hotrc_horz_pulse_64_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
 }
 void IRAM_ATTR hotrc_vert_isr (void) {  // On falling edge, Sets timer on rising edge (for all channels) and reads it on falling to determine ch2 trigger position
-    hotrc_vert_pulse_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
+    hotrc_vert_pulse_64_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
 }
 void IRAM_ATTR hotrc_ch3_isr (void) {  // On falling edge, records high pulse width to determine ch3 button toggle state
     hotrc_ch3_sw = (esp_timer_get_time() - hotrc_timer_start <= 1500);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
@@ -651,6 +658,7 @@ void IRAM_ATTR hotrc_ch4_isr (void) {  // Triggers on both edges. Sets timer on 
         hotrc_ch4_sw_last = hotrc_ch4_sw;
     }
     hotrc_isr_pin_preread = !(digitalRead (hotrc_ch4_cruise_pin));  // Read pin after timer operations to maximize clocking accuracy
+    intcount++;
 }
 
 // Attempt to use MCPWM input capture pulse width timer unit to get precise hotrc readings
@@ -816,9 +824,9 @@ bool adj_val (float* variable, float modify, float low_limit, float high_limit) 
 void adj_bool (bool* val, int32_t delta) { if (delta != 0) *val = (delta > 0); }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
 
 // pin operations that first check if pin exists for the current board
-void set_pin (int32_t pin, int32_t mode) { if (pin >= 0) pinMode (pin, mode); }
-void write_pin (int32_t pin, int32_t val) {  if (pin >= 0) digitalWrite (pin, val); }
-int32_t read_pin (int32_t pin) { return (pin >= 0) ? digitalRead (pin) : -1; }
+void set_pin (int32_t pin, int32_t mode) { if (pin >= 0 && pin != 255) pinMode (pin, mode); }
+void write_pin (int32_t pin, int32_t val) {  if (pin >= 0 && pin != 255) digitalWrite (pin, val); }
+int32_t read_pin (int32_t pin) { return (pin >= 0 && pin != 255) ? digitalRead (pin) : -1; }
 
 // void enable_pids (int32_t en_brake, int32_t en_gas, int32_t en_cruise) {  // pass in 0 (disable), 1 (enable), or -1 (leave it alone) for each pid loop
 //     if (en_brake != -1) brakeSPID.set_enable ((bool)en_brake);
