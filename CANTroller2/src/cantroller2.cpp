@@ -26,13 +26,9 @@ HotrcManager hotrcVertManager (22);
     
 Display screen(tft_cs_pin, tft_dc_pin);
     
-// Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
-MAKE_ENCODER(encoder, encoder_a_pin, encoder_b_pin, encoder_sw_pin);
-
+Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
+    
 void setup() {  // Setup just configures pins (and detects touchscreen type)
-    set_pin (encoder_a_pin, INPUT_PULLUP);
-    set_pin (encoder_b_pin, INPUT_PULLUP);
-    set_pin (encoder_sw_pin, INPUT_PULLUP);  // The esp32 pullup is too weak. Use resistor
     set_pin (brake_pwm_pin, OUTPUT);
     set_pin (steer_pwm_pin, OUTPUT);
     set_pin (tft_dc_pin, OUTPUT);
@@ -56,6 +52,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     
     set_pin (touch_irq_pin, INPUT_PULLUP);
     set_pin (tft_rst_pin, OUTPUT);
+
 
     write_pin (tft_cs_pin, HIGH);   // Prevent bus contention
     write_pin (sdcard_cs_pin, HIGH);   // Prevent bus contention
@@ -114,7 +111,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     // sd_init();
     // Serial.println(F("Filesystem started"));
 
-    SETUP_ENCODER(encoder);
+    encoder.setup();
 
     // Configure MCPWM GPIOs
     //
@@ -181,7 +178,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     neostrip.begin();
     neostrip.show(); // Initialize all pixels to 'off'
     neostrip.setBrightness (neo_brightness_max);
-
     i2c_init (i2c_sda_pin, i2c_scl_pin);
     bool airflow_detected = false;
     for (int32_t i=0; i<i2c_devicecount; i++) if (i2c_addrs[i] == 0x28) airflow_detected = true;

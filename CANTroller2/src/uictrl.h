@@ -2,17 +2,28 @@
 #define UICTRL_H
 
 #include "globals.h"
+#include "FunctionalInterrupt.h"
 
 class Encoder {
     private:
+        enum _inputs { ENC_A, ENC_B };
+
         // class vars
         //  ---- tunable ----
+        // TODO: these are all currently private const, if we ever actually want to tune them live we would need to change this
         static const uint32_t _spinrate_min_us = 2500;  // Will reject spins faster than this as an attempt to debounce behavior
         static const uint32_t _accel_thresh_us = 100000;  // Spins faster than this will be accelerated
         static const int32_t _accel_max = 50;  // Maximum acceleration factor
         static const uint32_t _longPressTime = 800000;
 
         // instance vars
+        volatile uint32_t _spinrate_isr_us = 100000;  // Time elapsed between last two detents
+        volatile bool _a_stable = true;  //  Stores the value of encoder A pin as read during B pin transition (where A is stable)
+        volatile int32_t _bounce_danger = ENC_B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
+        volatile int32_t _delta = 0;  // Keeps track of un-handled rotary clicks of the encoder.  Positive for CW clicks, Negative for CCW. 
+
+        uint8_t _a_pin;
+        uint8_t _b_pin;
         uint8_t _sw_pin;
         int32_t _state = 0;
         int32_t _sw_action = NONE;  // Flag for encoder handler to know an encoder switch action needs to be handled
@@ -22,23 +33,30 @@ class Encoder {
         bool _sw = false;  // Remember whether switch is being pressed
         bool _timer_active = false;  // Flag to prevent re-handling long presses if the sw is just kept down
         bool _suppress_click = false;  // Flag to prevent a short click on switch release after successful long press
+        Timer _spinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
         //  ---- tunable ----
         Timer _longPressTimer;  // Used to time long button presses
 
+        void IRAM_ATTR _a_isr() {
+            if (_bounce_danger != Encoder::ENC_A) {
+                if (!_a_stable) {
+                    _spinrate_isr_us = _spinspeedTimer.elapsed();
+                    _spinspeedTimer.reset();
+                    _delta += digitalRead(_b_pin) ? -1 : 1;
+                }
+                _bounce_danger = Encoder::ENC_A;
+            }
+        }
+
+        void IRAM_ATTR _b_isr() {
+            if (_bounce_danger != Encoder::ENC_B) {
+                _a_stable = digitalRead(_a_pin);
+                _bounce_danger = Encoder::ENC_B;
+            }
+        }
+
     public:
         enum sw_presses { NONE, SHORT, LONG };
-        enum _inputs { ENC_A, ENC_B };
-
-        volatile uint32_t _spinrate_isr_us = 100000;  // Time elapsed between last two detents
-        volatile bool _a_stable = true;  //  Stores the value of encoder A pin as read during B pin transition (where A is stable)
-        volatile int32_t _bounce_danger = ENC_B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
-        volatile int32_t _delta = 0;  // Keeps track of un-handled rotary clicks of the encoder.  Positive for CW clicks, Negative for CCW. 
-
-        uint8_t _a_pin;
-        uint8_t _b_pin;
-        void (*_a_isr)();
-        void (*_b_isr)();
-        Timer _spinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
 
         Encoder(uint8_t a, uint8_t b, uint8_t sw) : _a_pin(a), _b_pin(b), _sw_pin(sw), _longPressTimer(_longPressTime){}
         
@@ -47,8 +65,11 @@ class Encoder {
         }
     
         void setup() {
-            attachInterrupt(digitalPinToInterrupt(_a_pin), _a_isr, CHANGE); \
-            attachInterrupt(digitalPinToInterrupt(_b_pin), _b_isr, CHANGE);
+            set_pin(_a_pin, INPUT_PULLUP);
+            set_pin(_b_pin, INPUT_PULLUP);
+            set_pin(_sw_pin, INPUT_PULLUP);  // The esp32 pullup is too weak. Use resistor
+            attachInterrupt(digitalPinToInterrupt(_a_pin), [this]{ _a_isr(); }, CHANGE); \
+            attachInterrupt(digitalPinToInterrupt(_b_pin), [this]{ _b_isr(); }, CHANGE);
         }
 
         void update() {
@@ -114,37 +135,4 @@ class Encoder {
         }
 };
 
-// This trickery lets us keep the ISR code here in the same file as the encoder class
-#define MAKE_ENCODER(NAME, a_pin, b_pin, sw_pin) \
-Encoder NAME = Encoder((a_pin), (b_pin), (sw_pin)); \
-void IRAM_ATTR NAME##_a_isr() { \
-    if ((NAME)._bounce_danger != Encoder::ENC_A) { \
-        if (!(NAME)._a_stable) { \
-            (NAME)._spinrate_isr_us = (NAME)._spinspeedTimer.elapsed(); \
-            (NAME)._spinspeedTimer.reset(); \
-            (NAME)._delta += digitalRead(b_pin) ? -1 : 1; \
-        } \
-        (NAME)._bounce_danger = Encoder::ENC_A; \
-    } \
-}; \
-void IRAM_ATTR NAME##_b_isr() { \
-    if ((NAME)._bounce_danger != Encoder::ENC_B) { \
-        (NAME)._a_stable = digitalRead(a_pin); \
-        (NAME)._bounce_danger = Encoder::ENC_B; \
-    } \
-};
-
-#define SETUP_ENCODER(NAME) \
-(NAME)._a_isr = &NAME##_a_isr; \
-(NAME)._b_isr = &NAME##_b_isr; \
-(NAME).setup();
-
-#endif  // UICTRL_H
-
-
-// TODO: if this actually works, post to arduino
-// #define attachPulseInterrupt(pin) \
-// void GetEncoderPulse_##pin(){ /* define a new ISR for each pin */ \
-//     /* do some stuff with using the value of pin, eg, writePin((pin)); */ \
-// } \
-// attachInterrupt(digitalPinToInterrupt((pin)), GetEncoderPulse_##pin, CHANGE);
+#endif
