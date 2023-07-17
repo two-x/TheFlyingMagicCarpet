@@ -2,28 +2,8 @@
 #define PIN_H
 
 #include <cstdint>
+#include "Arduino.h"
  
-/**
- * @brief Pin class handles pin numbering and pin operations.
- */
-class Pin {
-public:
-  Pin(PinNumber pin_num);
-  Pin(PinNumber pin_num, uint8_t mode);
-  static const uint8_t NUM_PINS = 48; // Total number of pins on the board
-  void set_pin(PinNumber pin_num);
-  void set_mode(uint8_t mode);
-  void digital_write(uint8_t value);
-  uint8_t digital_read() const;
-  void attach_interrupt(void (*isr)(), int mode);
-
-private:
-  PinNumber pin_num_;
-  uint8_t pin_mode_;
-
-  void validate_pin_number(int pin_num);
-};
-
 enum class PinNumber
 {
     GPIO_DISABLED = -1,
@@ -77,4 +57,27 @@ enum class PinNumber
     GPIO_NUM_47 = 47,
     GPIO_NUM_48 = 48
 };
+
+/**
+ * @brief Pin class handles pin numbering and pin operations.
+ */
+class Pin {
+public:
+  Pin();
+  Pin(PinNumber pin_num);
+  Pin(PinNumber pin_num, uint8_t mode);
+  static const uint8_t NUM_PINS = 48; // Total number of pins on the board
+  void set_pin(PinNumber pin_num);
+  void set_mode(uint8_t mode);
+  void digital_write(uint8_t value);
+  uint8_t digital_read() const;
+  void attach_interrupt(void (*isr)(), int mode);
+
+private:
+  PinNumber pin_num_;
+  uint8_t pin_mode_;
+
+  void validate_pin_number(int pin_num);
+};
+
 #endif

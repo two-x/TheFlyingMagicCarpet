@@ -1,5 +1,7 @@
-#include "pin.h"
 #include "Arduino.h"
+#include "pin.h"
+
+Pin::Pin(){}
 
 Pin::Pin(PinNumber pin_num) {
   set_pin(pin_num);

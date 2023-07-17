@@ -1,8 +1,12 @@
+#ifndef PINS_H 
+#define PINS_H
+
 #include "pin.h"
 
 class Pins {
 public:
 
+  Pins();
   void init();
   
   Pin button;
@@ -45,3 +49,4 @@ public:
   Pin tft_ledk;
   Pin touch_irq;
 };
+#endif // PINS_H

@@ -1,6 +1,9 @@
-#include "Pins.h"
 #include "Arduino.h"
+#include "pins.h"
+#include "pin.h"
+// #include "globals.h"
 
+Pins::Pins(){}
 void Pins::init() {
 
     Pin button(PinNumber::GPIO_NUM_0, INPUT_PULLUP); // (button0 / strap to 1) - This is the "Boot" button on the esp32 board
@@ -42,4 +45,18 @@ void Pins::init() {
     Pin tft_rst(PinNumber::GPIO_DISABLED); // TFT Reset allows us to reboot the screen hardware when it crashes
     Pin tft_ledk(PinNumber::GPIO_DISABLED); // Output, optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
     Pin touch_irq(PinNumber::GPIO_DISABLED); // Input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - Set to 255 if not used // TODO check on this, it seems that -1 is better
+
+    tft_cs.digital_write(HIGH);   // Prevent bus contention
+    sdcard_cs.digital_write(HIGH);   // Prevent bus contention
+    tft_dc.digital_write(LOW);
+    tft_rst.digital_write(HIGH);
+    ign_out.digital_write(LOW);
+
+    // This bit is here as a way of autdetecting soren's breadboard, since his LCD is wired upside-down.
+    // Soren put a strong external pulldown on the pin, so it'll read low for autodetection. 
+    syspower.set_mode(INPUT); // Temporarily use syspower pin to read a pullup/down resistor to configure screen flip
+    // flip_the_screen = !syspower.digital_read();  // Will cause the LCD to be upside down TODO figure out how to use this without race conditions from setup()
+    syspower.set_mode(OUTPUT); // Then set the put as an output as normal.
+    syspower.digital_write(HIGH);
+
 }

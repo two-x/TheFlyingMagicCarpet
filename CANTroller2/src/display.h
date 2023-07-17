@@ -156,7 +156,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         " Pot Sim",
         "Pres ADC", },  // "BrkZeroP" }
 };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 3, 2, 0, 0, 5, 5, 5, 5 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 3, 2, 0, 0, 5, 5, 5, 4 };  // first value in each dataset page that's editable. All values after this must also be editable
 char units[disp_fixed_lines][5] = { "adc ", "mph ", "mph ", "rpm ", "rpm ", "\xe5s  ", "psi ", "psi ", "\xe5s  ", "adc ", "\xe5s  " };
 
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {

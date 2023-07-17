@@ -26,9 +26,11 @@
 #include "qpid.h"
 // #include "spid.h"
 // #include "disp.h"
+#include "pins.h"
 
 // #define CAP_TOUCH
 bool flip_the_screen = false;
+Pins pins;
 
 // Here are the different runmodes documented
 //
