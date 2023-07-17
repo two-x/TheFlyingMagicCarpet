@@ -303,7 +303,7 @@ int32_t pot_convert_polarity = 1;  // Forward
 float pot_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 
 // controller related
-enum ctrls { HEADLESS, HOTRC, JOY, SIM };  // Possible sources of gas, brake, steering commands
+enum ctrls { HOTRC, JOY, SIM, HEADLESS };  // Possible sources of gas, brake, steering commands
 enum ctrl_axes { HORZ, VERT, CH3, CH4 };
 enum ctrl_thresh { MIN, CENT, MAX, DB };
 enum ctrl_edge { BOT, TOP };
@@ -317,13 +317,14 @@ bool hotrc_suppress_next_ch3_event = true;  // When powered up, the hotrc will t
 bool hotrc_suppress_next_ch4_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 //  ---- tunable ----
 float hotrc_pulse_period_us = 1000000.0 / 50;
-float ctrl_ema_alpha[2] = { 0.1, 0.01 };  // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+float ctrl_ema_alpha[2] = { 0.04, 0.01 };  // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 int32_t ctrl_lims_adc[2][2][4] = { { { 0, adcmidscale_adc, adcrange_adc, 350 }, { 0, adcmidscale_adc, adcrange_adc, 350 } }, { { 9, adcmidscale_adc, 4085, 200 }, { 9, adcmidscale_adc, 4085, 200 } } }; // [HOTRC/JOY] [HORZ/VERT], [MIN/CENT/MAX/DB] values as microseconds (hotrc) or adc counts (joystick)
 bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
 // bool ctrl = HEADLESS;
 // Limits of what pulsewidth the hotrc receiver puts out
 // int32_t hotrc_pulse_lims_us[2][2];  // = { { 1009, 2003 }, { 1009, 2003 } };  // [HORZ/VERT] [MIN/MAX]  // These are the limits of hotrc vert and horz high pulse
 int32_t hotrc_pulse_lims_us[4][3] = { { 970-1, 1470-2, 1970-3 }, { 1080-1, 1580-2, 2080-3 }, { 1200-1, 1500-2, 1800-3 }, { 1300-1, 1500-2, 1700-3 } };  // [HORZ/VERT/CH3/CH4] [MIN/CENT/MAX]  // These are the l
+float hotrc_mapratio[2][2]; // [HORZ/VERT] [MIN/MAX]
 volatile int64_t hotrc_timer_start;
 volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
 volatile bool hotrc_isr_pin_preread = true;
@@ -735,6 +736,12 @@ inline int32_t map (int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, 
     if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
     return out_max;  // Instead of dividing by zero, return the highest valid result
 }
+inline float mapfast (float x, float in_min, float out_min, float range_ratio) {
+    return out_min + (x - in_min) * range_ratio;
+}
+inline int32_t mapfast (int32_t x, int32_t in_min, int32_t out_min, float range_ratio) {
+    return (int32_t)(out_min + (x - in_min) * range_ratio);
+}
 bool rounding = true;
 float dround (float val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
 
@@ -751,17 +758,29 @@ uint32_t colorwheel (uint8_t WheelPos) {
     WheelPos -= 170;
     return neostrip.Color (WheelPos * 3, 255 - WheelPos * 3, 0);
 }
-void calc_deadbands (void) {
+void calc_ctrl_lims (void) {
     ctrl_db_adc[VERT][BOT] = ctrl_lims_adc[ctrl][VERT][CENT]-ctrl_lims_adc[ctrl][VERT][DB]/2;  // Lower threshold of vert joy deadband (ADC count 0-4095)
     ctrl_db_adc[VERT][TOP] = ctrl_lims_adc[ctrl][VERT][CENT]+ctrl_lims_adc[ctrl][VERT][DB]/2;  // Upper threshold of vert joy deadband (ADC count 0-4095)
     ctrl_db_adc[HORZ][BOT] = ctrl_lims_adc[ctrl][HORZ][CENT]-ctrl_lims_adc[ctrl][HORZ][DB]/2;  // Lower threshold of horz joy deadband (ADC count 0-4095)
     ctrl_db_adc[HORZ][TOP] = ctrl_lims_adc[ctrl][HORZ][CENT]+ctrl_lims_adc[ctrl][HORZ][DB]/2;  // Upper threshold of horz joy deadband (ADC count 0-4095)
+
+    for (int32_t axis=HORZ; axis<=VERT; axis++) for (int32_t dir=MIN; dir<=MAX; dir+=2) {
+        float denom = hotrc_pulse_lims_us[axis][dir] - ctrl_lims_adc[HOTRC][axis][CENT];
+        if (denom) hotrc_mapratio[HORZ][MIN] = ((float)(ctrl_lims_adc[HOTRC][axis][dir] - ctrl_lims_adc[HOTRC][axis][CENT])) / denom;
+    }
 }
 void calc_governor (void) {
     tach_govern_rpm = map ((float)gas_governor_percent, 0.0, 100.0, 0.0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
     gas_pulse_govern_us = map ((int32_t)(gas_governor_percent*(tach_redline_rpm-tach_idle_rpm)/tach_redline_rpm), 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
     speedo_govern_mph = map ((float)gas_governor_percent, 0.0, 100.0, 0.0, speedo_redline_mph);  // Governor must scale the top vehicle speed proportionally
 }
+int32_t hotrc_spike_filter (int32_t raw_reading) {
+    return raw_reading;
+    // write function here to push argument into a LIFO array, replace any 1-4 long series of array
+    // values which are close to each other (abs w/i 30) but over 60 away from values on either side,
+    // with the average of the non-anomalous values, then pop a value to return.
+}
+
 // Exponential Moving Average filter : Smooth out noise on inputs. 0 < alpha < 1 where lower = smoother and higher = more responsive
 // Pass in a fresh raw value, address of filtered value, and alpha factor, filtered value will get updated
 void ema_filt (float raw, float* filt, float alpha) {
@@ -772,7 +791,7 @@ void ema_filt (int32_t raw, float* filt, float alpha) {
     ema_filt ((float)raw, filt, alpha);
 }
 void ema_filt (int32_t raw, int32_t* filt, float alpha) {
-    *filt = (int32_t)(alpha * (float)raw + (1 - alpha) * (float)(*filt));
+    *filt = (int32_t)(alpha * (float)raw + (1 - alpha) * (float)(*filt) + 0.5);  // Adding 0.5 to offset all the int rounding down
 }
 
 void sd_init() {

@@ -173,7 +173,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     }
     Serial.println (F("Interrupts set up and enabled\n"));
 
-    calc_deadbands();
+    calc_ctrl_lims();
     calc_governor();
 
     steer_servo.attach (steer_pwm_pin);
@@ -393,19 +393,20 @@ void loop() {
     // Controller handling
     //
     // Read horz and vert inputs, determine steering pwm output -  - takes 40 us to read. Then, takes 13 us to handle
-    // std::cout << "164:" << hotrc_horz_pulse_us << " 264:" << hotrc_vert_pulse_us;
     if (ctrl != JOY) {
-        hotrc_horz_pulse_us = (int32_t)hotrc_horz_pulse_64_us;
-        hotrc_vert_pulse_us = (int32_t)hotrc_vert_pulse_64_us;  // replace with update history array
+        hotrc_horz_pulse_us = hotrc_spike_filter ((int32_t)hotrc_horz_pulse_64_us);
+        hotrc_vert_pulse_us = hotrc_spike_filter ((int32_t)hotrc_vert_pulse_64_us);  // replace with update history array
     }
-    if (!simulating || !sim_joy) {  // Handle HotRC button generated events and detect potential loss of radio signal - takes 15 us to handle
+
+    std::cout << "164:" << hotrc_horz_pulse_us << " 264:" << hotrc_vert_pulse_us;
+    
+    if (!simulating || !sim_joy) {  // Handle HotRC button generated events and detect potential loss of radio signal
         if (ctrl != JOY) {
             // printf (" 1R:%4ld 2R:%4ld 1A:%4ld 2A:%4ld", hotrc_horz_pulse_us, hotrc_vert_pulse_us, hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us);
             
-            ema_filt (hotrc_horz_pulse_us, &hotrc_horz_pulse_filt_us, ctrl_ema_alpha[ctrl]);  // Used to detect loss of radio
-            
+            // ema_filt (hotrc_horz_pulse_us, &hotrc_horz_pulse_filt_us, ctrl_ema_alpha[ctrl]);  // Used to detect loss of radio
             ema_filt (hotrc_vert_pulse_us, &hotrc_vert_pulse_filt_us, ctrl_ema_alpha[ctrl]);  // Used to detect loss of radio
-            // printf (" 1B:%4ld 2B:%4ld", hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us);
+            printf (" 1B:%4ld 2B:%4ld", hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us);
         }
         if (ctrl == HOTRC) {
             // hotrc_horz_pulse_filt_us = constrain (hotrc_horz_pulse_filt_us, hotrc_pulse_lims_us[HORZ][MIN], hotrc_pulse_lims_us[HORZ][MAX]);
@@ -421,19 +422,26 @@ void loop() {
             // ctrl_pos_adc[HORZ][RAW] = ctrl_pos_adc[HORZ][FILT];  // raw value isn't used I think but just in case
             // ctrl_pos_adc[VERT][RAW] = ctrl_pos_adc[VERT][FILT];  // raw value isn't used I think but just in case
             
-            if (hotrc_horz_pulse_us >= hotrc_pulse_lims_us[HORZ][CENT])  // Steering: Convert from pulse us to joystick adc equivalent, when pushing left, or right
-                 ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MAX]);
-            else ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MIN]);
-            if (hotrc_vert_pulse_us >= hotrc_pulse_lims_us[VERT][CENT])  // Trigger: Convert from pulse us to joystick adc equivalent, when pushing down
-                 ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MAX], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MAX]);
-            else ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MIN], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MIN]);  
-        }
+            // if (hotrc_horz_pulse_us >= hotrc_pulse_lims_us[HORZ][CENT])  // Steering: Convert from pulse us to joystick adc equivalent, when pushing right, else pushing left
+            //      ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MAX]);
+            // else ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MIN]);
+            // if (hotrc_vert_pulse_us >= hotrc_pulse_lims_us[VERT][CENT])  // Trigger: Convert from pulse us to joystick adc equivalent, for trigger pull, else trigger push
+            //      ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MAX], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MAX]);
+            // else ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MIN], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MIN]);  
+        
+            if (hotrc_horz_pulse_us >= hotrc_pulse_lims_us[HORZ][CENT])  // Steering: Convert from pulse us to joystick adc equivalent, when pushing right, else pushing left
+                 ctrl_pos_adc[HORZ][RAW] = mapfast (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][CENT], hotrc_mapratio[HORZ][MAX]);
+            else ctrl_pos_adc[HORZ][RAW] = mapfast (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][CENT], hotrc_mapratio[HORZ][MIN]);
+            if (hotrc_vert_pulse_us >= hotrc_pulse_lims_us[VERT][CENT])  // Trigger: Convert from pulse us to joystick adc equivalent, for trigger pull, else trigger push
+                 ctrl_pos_adc[VERT][RAW] = mapfast (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], ctrl_lims_adc[ctrl][VERT][CENT], hotrc_mapratio[VERT][MAX]);
+            else ctrl_pos_adc[VERT][RAW] = mapfast (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], ctrl_lims_adc[ctrl][VERT][CENT], hotrc_mapratio[VERT][MIN]);
+\
+        }  // (out_max - out_min) / (in_max - in_min)
         else if (ctrl == JOY) {
             ctrl_pos_adc[VERT][RAW] = analogRead (joy_vert_pin);  // Read joy vertical
             ctrl_pos_adc[HORZ][RAW] = analogRead (joy_horz_pin);  // Read joy horizontal
             // ema_filt (ctrl_pos_adc[VERT][RAW], &ctrl_pos_adc[VERT][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_vert_filt
             // ema_filt (ctrl_pos_adc[HORZ][RAW], &ctrl_pos_adc[HORZ][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_horz_filt
-
         }
         ema_filt (ctrl_pos_adc[VERT][RAW], &ctrl_pos_adc[VERT][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_vert_filt
         ema_filt (ctrl_pos_adc[HORZ][RAW], &ctrl_pos_adc[HORZ][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_horz_filt
@@ -442,11 +450,11 @@ void loop() {
 
         if (ctrl_pos_adc[VERT][RAW] > ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][RAW] < ctrl_db_adc[VERT][TOP]) {
             ctrl_pos_adc[VERT][FILT] = ctrl_pos_adc[VERT][CENT];  // if joy vert is in the deadband, set joy_vert_filt to center value
-            if (ctrl == HOTRC) hotrc_vert_pulse_filt_us = hotrc_pulse_lims_us[VERT][CENT];
+            // if (ctrl == HOTRC) hotrc_vert_pulse_filt_us = hotrc_pulse_lims_us[VERT][CENT];
         }
         if (ctrl_pos_adc[HORZ][RAW] > ctrl_db_adc[HORZ][BOT] && ctrl_pos_adc[HORZ][RAW] < ctrl_db_adc[HORZ][TOP]) {
             ctrl_pos_adc[HORZ][FILT] = ctrl_pos_adc[HORZ][CENT];  // if joy horz is in the deadband, set joy_horz_filt to center value
-            if (ctrl == HOTRC) hotrc_horz_pulse_filt_us = hotrc_pulse_lims_us[HORZ][CENT];
+            // if (ctrl == HOTRC) hotrc_horz_pulse_filt_us = hotrc_pulse_lims_us[HORZ][CENT];
         }
     }
     if (runmode != SHUTDOWN || !shutdown_complete) { // Unless fully shut down at the moment, set the steering output
@@ -478,25 +486,20 @@ void loop() {
             else flycruise_toggle_request = true;
             hotrc_ch4_sw_event = false;    
         }
-        hotrc.calc();  // Add latest vert pulse reading into history log and calculate avg value for detecting loss of radio reception
+        // hotrc.calc();  // Add latest vert pulse reading into history log and calculate avg value for detecting loss of radio reception
         // hotrc.print();
-        if (hotrc_vert_pulse_us > hotrc.get_failsafe_min() && hotrc_vert_pulse_us < hotrc.get_failsafe_max()) {
-            if (hotrc_radio_detected && hotrcPanicTimer.expired()) {
-                hotrc_radio_detected = false;
-                // hotrc_suppress_next_ch3_event = true;  // reject spurious ch3 switch event upon next hotrc poweron
-                // hotrc_suppress_next_ch4_event = true;  // reject spurious ch4 switch event upon next hotrc poweron
-            }
-        }
-        else {
+        // if (hotrc_vert_pulse_us < hotrc.get_failsafe_min() || hotrc_vert_pulse_us > hotrc.get_failsafe_max()) {
+        if (hotrc_vert_pulse_us > hotrc_pulse_failsafe_max_us) {
             hotrcPanicTimer.reset();
             hotrc_radio_detected = true;
-            if (!ignition_output_enabled) {  // Ignition stays low until the hotrc is detected here, then output is allowed
-                ignition_output_enabled = true;
-                // set_pin (ignition_pin, OUTPUT);  // do NOT plug in the joystick when using the hotrc to avoid ign contention
-            }
+            if (!ignition_output_enabled) ignition_output_enabled = true; // Ignition stays low until the hotrc is detected here, then output is allowed
+            // set_pin (ignition_pin, OUTPUT);  // do NOT plug in the joystick when using the hotrc to avoid ign contention
         }
+        else if (hotrc_radio_detected && hotrcPanicTimer.expired()) hotrc_radio_detected = false;
+        // hotrc_suppress_next_ch3_event = true;  // reject spurious ch3 switch event upon next hotrc poweron
+        // hotrc_suppress_next_ch4_event = true;  // reject spurious ch4 switch event upon next hotrc poweron
     }
-    // printf (" 1C:%4ld 2C:%4ld 1ctR:%4ld 2ctR:%4ld 1ctF:%4ld 2ctF:%4ld c:%ld i:%ld \n", hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us, ctrl_pos_adc[HORZ][RAW], ctrl_pos_adc[VERT][RAW], ctrl_pos_adc[HORZ][FILT], ctrl_pos_adc[VERT][FILT], ctrl, intcount);
+    printf (" 1C:%4ld 2C:%4ld 1ctR:%4ld 2ctR:%4ld 1ctF:%4ld 2ctF:%4ld c:%ld i:%ld \n", hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us, ctrl_pos_adc[HORZ][RAW], ctrl_pos_adc[VERT][RAW], ctrl_pos_adc[HORZ][FILT], ctrl_pos_adc[VERT][FILT], ctrl, intcount);
     // hotrc.calc();  // Add latest vert pulse reading into history log and calculate avg value for detecting loss of radio reception
     // hotrc.print();
 
@@ -1000,7 +1003,7 @@ void loop() {
             else if (selected_value == 5) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][MIN], sim_edit_delta, 0, ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][DB] / 2 - 1);
             else if (selected_value == 6) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][MAX], sim_edit_delta, ctrl_lims_adc[ctrl][VERT][CENT] + ctrl_lims_adc[ctrl][VERT][DB] / 2 + 1, ctrl_lims_adc[ctrl][VERT][CENT]);
             else if (selected_value == 7) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][DB], sim_edit_delta, 0, (ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][MIN] > ctrl_lims_adc[ctrl][VERT][MAX] - ctrl_lims_adc[ctrl][VERT][CENT]) ? 2*(ctrl_lims_adc[ctrl][VERT][MAX] - ctrl_lims_adc[ctrl][VERT][CENT]) : 2*(ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][MIN]));
-            if (adj) calc_deadbands();  // update derived variables relevant to changes made
+            if (adj) calc_ctrl_lims();  // update derived variables relevant to changes made
         }
         else if (dataset_page == PG_CAR) {
             if (selected_value == 0) {

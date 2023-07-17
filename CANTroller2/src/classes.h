@@ -405,11 +405,11 @@ class Hotrc {
         failsafe_max = arg_failsafe_max;
         if (arg_padding != -1) padding = arg_padding;
     }
-    void set_failsafe (int32_t arg_failsafe_min, int32_t arg_failsafe_max) {
+    void set_failsafe (int32_t arg_failsafe_min, int32_t arg_failsafe_max) {  // for manual set failsafe values
         failsafe_min = arg_failsafe_min - padding;
         failsafe_max = arg_failsafe_max + padding;
     }
-    void set_failsafe (void) {
+    void set_failsafe (void) {  // intended to call from calibration routine while handle is at failsafe value
         failsafe_min = history[min_index] - padding;
         failsafe_max = history[max_index] + padding;
     }
