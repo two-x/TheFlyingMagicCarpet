@@ -385,59 +385,125 @@ class Device {  // This class is truly virtual, in that it's not complete to hav
 //     void get_temp (int32_t arg_index) { return (temps[arg_index]); }
 // };
 
-class Hotrc {
+class HotrcManager {
   protected:
-    int32_t* val;
-    int32_t avg, min_index, max_index, failsafe_min, failsafe_max;
-    int32_t depth = 100, index = 1, padding = 7, calc_count = 0;
-    int32_t history[100];  // It will not accept history[depth] - wtf
-    uint32_t sum;
-    bool detect_ready = false;
+    bool spike_signbit;
+    int32_t spike_cliff, spike_length, this_delta, interpolated_slope, loopindex, previndex;
+    int32_t prespike_index = -1;
+    int32_t index = 1;  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
+    int32_t depth = 6;  // Longest spike the filter can detect
+    int32_t filt_history[6];  // Values after filtering.  It didn't accept filt_history[depth] - wtf
+    int32_t raw_history[6];  // Copies of the values read (don't need separate buffer, but useful to debug the filter)
   public:
-    Hotrc (int32_t* arg_val, int32_t arg_failsafe_min, int32_t arg_failsafe_max, int32_t arg_padding) {
-        val = arg_val;
-        for (int32_t x = 0; x < depth; x++) history[x] = *val;
-        avg = *val;
-        sum = avg * depth;
-        min_index = 0;
-        max_index = 0;
-        failsafe_min = arg_failsafe_min;
-        failsafe_max = arg_failsafe_max;
-        if (arg_padding != -1) padding = arg_padding;
+    HotrcManager (int32_t spike_threshold) { spike_cliff = spike_threshold; }
+    
+    // Spike filter pushes new hotrc readings into a LIFO array, replaces any well-defined spikes with values 
+    // interpolated from before and after the spike. Also smooths out abrupt value changes that don't recover later
+    int32_t spike_filter (int32_t new_val) {  // pushes next val in, massages any detected spikes, returns massaged past value
+        previndex = (depth + index - 1) % depth;  // previndex is where the incoming new value will be stored
+        this_delta = new_val - filt_history[previndex];  // Value change since last reading
+        // if (button_it) printf (" %1ld%1ld:%4ld ", index, previndex, this_delta);
+        if (button_it) printf ("%s", (prespike_index != -1) ? "*" : " ");
+        if (std::abs(this_delta) > spike_cliff) {  // If new value is a cliff edge (start or end of a spike)
+            if (prespike_index == -1) {  // If this cliff edge is the start of a new spike
+                if (button_it) printf ("A-");
+                prespike_index = previndex;  // save index of last good value just before the cliff
+                spike_signbit = signbit (this_delta);  // Save cliff steepness
+            }
+            else if (spike_signbit == signbit (this_delta)) {  // If this cliff edge deepens an in-progress spike
+                if (button_it) printf ("B");
+                inject_interpolations (previndex, filt_history[previndex]);  // Smoothly grade the values from before the last cliff to previous value
+                prespike_index = previndex;  // Consider this cliff edge the start of the spike instead
+            }
+            else {  // If this cliff edge is a recovery of the existing spike
+                if (button_it) printf ("C");
+                // !! Linearly interpolate replacement values for the spike values between the two edges
+                inject_interpolations (index, new_val);  // Fill in the spike with interpolated values
+                prespike_index = -1;  // Cancel the current spike
+            }
+        }
+        else if (prespike_index == index) {  // If a current spike lasted thru our whole buffer
+            if (button_it) printf ("D");
+            inject_interpolations (previndex, filt_history[previndex]);  // Smoothly grade the whole buffer
+            prespike_index = -1;  // Cancel the current spike
+        }
+        else {
+            if (button_it) printf ("E-");
+        }  // If the new value is not a cliff edge (any action needed?)
+        int32_t returnval = filt_history[index];  // Save the incumbent value at current index (oldest value) into buffer
+        filt_history[index] = new_val;
+        raw_history[index] = new_val;
+        index = (index + 1) % depth;  // Update index for next time
+        return returnval;  // Return the saved old value
     }
-    void set_failsafe (int32_t arg_failsafe_min, int32_t arg_failsafe_max) {  // for manual set failsafe values
-        failsafe_min = arg_failsafe_min - padding;
-        failsafe_max = arg_failsafe_max + padding;
+    void inject_interpolations (int32_t endspike_index, int32_t endspike_val) {  // Replaces values between indexes with linear interpolated values
+        spike_length = ((depth + endspike_index - prespike_index) % depth) - 1;  // Equal to the spiking values count plus one
+        if (button_it) printf ("%1ld", spike_length);
+        if (!spike_length) return;  // Two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
+        interpolated_slope = (endspike_val - filt_history[prespike_index]) / spike_length;
+        loopindex = 0;
+        while (++loopindex <= spike_length) {  // Total loop count is spike_length minus one
+            filt_history[(prespike_index + loopindex) % depth] = filt_history[prespike_index] + loopindex * interpolated_slope;
+        }
     }
-    void set_failsafe (void) {  // intended to call from calibration routine while handle is at failsafe value
-        failsafe_min = history[min_index] - padding;
-        failsafe_max = history[max_index] + padding;
+    int32_t get_next_rawval () {  // helps to debug the filter from outside the class
+        return raw_history[index];
     }
-    void set_pad (int32_t arg_pad) { padding = arg_pad; } 
-    int32_t calc (void) {
-        int32_t nextindex = (index+1) % depth;
-        sum += *val - history[nextindex];
-        avg = sum/depth;
-        int32_t save_min = history[min_index];
-        int32_t save_max = history[max_index];
-        history[nextindex] = *val;
-        if (*val <= save_min) min_index = nextindex;
-        else if (min_index == nextindex) for (int32_t x = 0; x < depth; x++) if (history[x] < history[min_index]) min_index = x;
-        if (*val >= save_max) max_index = nextindex;
-        else if (max_index == nextindex) for (int32_t x = 0; x < depth; x++) if (history[x] > history[max_index]) max_index = x;
-        if (!detect_ready) if (++calc_count >= depth) detect_ready = true;
-        index = nextindex;
-        return avg;
-    }
-    void print (void) { std::cout << "Hotrc:" << history[index] << " avg:" << avg << " min[" << min_index << "]:" << history[min_index] << " max[" << max_index << "]:" << history[max_index] << std::endl; }
-    bool connection_lost (void) { return (detect_ready && (history[min_index] < failsafe_min || history[max_index] > failsafe_max)); }
-    int32_t get_min (void) { return history[min_index]-padding; }
-    int32_t get_max (void) { return history[max_index]+padding; }
-    int32_t get_pad (void) { return padding; }
-    int32_t get_avg (void) { return avg; }
-    int32_t get_failsafe_min (void) { return failsafe_min; }
-    int32_t get_failsafe_max (void) { return failsafe_max; }
 };
+
+// class Hotrc {
+//   protected:
+//     int32_t* val;
+//     int32_t avg, min_index, max_index, failsafe_min, failsafe_max;
+//     int32_t depth = 100, index = 1, padding = 7, calc_count = 0;
+//     int32_t history[100];  // It will not accept history[depth] - wtf
+//     uint32_t sum;
+//     bool detect_ready = false;
+//   public:
+//     Hotrc (int32_t* arg_val, int32_t arg_failsafe_min, int32_t arg_failsafe_max, int32_t arg_padding) {
+//         val = arg_val;
+//         for (int32_t x = 0; x < depth; x++) history[x] = *val;
+//         avg = *val;
+//         sum = avg * depth;
+//         min_index = 0;
+//         max_index = 0;
+//         failsafe_min = arg_failsafe_min;
+//         failsafe_max = arg_failsafe_max;
+//         if (arg_padding != -1) padding = arg_padding;
+//     }
+//     void set_failsafe (int32_t arg_failsafe_min, int32_t arg_failsafe_max) {  // for manual set failsafe values
+//         failsafe_min = arg_failsafe_min - padding;
+//         failsafe_max = arg_failsafe_max + padding;
+//     }
+//     void set_failsafe (void) {  // intended to call from calibration routine while handle is at failsafe value
+//         failsafe_min = history[min_index] - padding;
+//         failsafe_max = history[max_index] + padding;
+//     }
+//     void set_pad (int32_t arg_pad) { padding = arg_pad; } 
+//     int32_t calc (void) {
+//         int32_t nextindex = (index+1) % depth;
+//         sum += *val - history[nextindex];
+//         avg = sum/depth;
+//         int32_t save_min = history[min_index];
+//         int32_t save_max = history[max_index];
+//         history[nextindex] = *val;
+//         if (*val <= save_min) min_index = nextindex;
+//         else if (min_index == nextindex) for (int32_t x = 0; x < depth; x++) if (history[x] < history[min_index]) min_index = x;
+//         if (*val >= save_max) max_index = nextindex;
+//         else if (max_index == nextindex) for (int32_t x = 0; x < depth; x++) if (history[x] > history[max_index]) max_index = x;
+//         if (!detect_ready) if (++calc_count >= depth) detect_ready = true;
+//         index = nextindex;
+//         return avg;
+//     }
+//     void print (void) { std::cout << "Hotrc:" << history[index] << " avg:" << avg << " min[" << min_index << "]:" << history[min_index] << " max[" << max_index << "]:" << history[max_index] << std::endl; }
+//     bool connection_lost (void) { return (detect_ready && (history[min_index] < failsafe_min || history[max_index] > failsafe_max)); }
+//     int32_t get_min (void) { return history[min_index]-padding; }
+//     int32_t get_max (void) { return history[max_index]+padding; }
+//     int32_t get_pad (void) { return padding; }
+//     int32_t get_avg (void) { return avg; }
+//     int32_t get_failsafe_min (void) { return failsafe_min; }
+//     int32_t get_failsafe_max (void) { return failsafe_max; }
+// };
 
 // Sensor (int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max)  // std::string& eng_name, 
 // : Transducer (arg_pin, arg_dir) {
