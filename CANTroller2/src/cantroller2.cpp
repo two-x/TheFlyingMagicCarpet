@@ -360,7 +360,7 @@ void loop() {
             tach_rpm = convert_units ((float)(tach_buf_us), tach_convert_rpm_per_rpus, tach_convert_invert);
             ema_filt (tach_rpm, &tach_filt_rpm, tach_ema_alpha);  // Sensor EMA filter
         }
-        if (tach_rpm < tach_stop_thresh_rpm || (int32_t)(tach_timer_read_us - tach_timer_start_us) >= tach_stop_timeout_us) {  // If time between pulses is long enough an engine can't run that slow
+        if (tach_rpm < tach_stop_thresh_rpm || (uint32_t)(tach_timer_read_us - tach_timer_start_us) >= tach_stop_timeout_us) {  // If time between pulses is long enough an engine can't run that slow
             tach_rpm = 0.0;  // If timeout since last magnet is exceeded
             tach_filt_rpm = 0.0;
         }        
@@ -374,7 +374,7 @@ void loop() {
             speedo_mph = convert_units ((float)(speedo_buf_us), speedo_convert_mph_per_rpus, speedo_convert_invert);  // Update car speed value  
             ema_filt (speedo_mph, &speedo_filt_mph, speedo_ema_alpha);  // Sensor EMA filter
         }
-        if (speedo_mph < speedo_stop_thresh_mph || (int32_t)(speedo_timer_read_us - speedo_timer_start_us) >= speedo_stop_timeout_us) {  // If time between pulses is long enough, consider the car is stopped
+        if (speedo_mph < speedo_stop_thresh_mph || (uint32_t)(speedo_timer_read_us - speedo_timer_start_us) >= speedo_stop_timeout_us) {  // If time between pulses is long enough, consider the car is stopped
             speedo_mph = 0.0;
             speedo_filt_mph = 0.0;
         }
@@ -1135,7 +1135,7 @@ void loop() {
  
     // Do the control loop bookkeeping at the end of each loop
     //
-    loop_period_us = loopTimer.elapsed();  // us since beginning of this loop
+    loop_period_us = (uint32_t)loopTimer.elapsed();  // us since beginning of this loop
     loopTimer.reset();
     loop_freq_hz = 1000000.0 / ((loop_period_us) ? loop_period_us : 1);  // Prevent potential divide by zero
     loopno++;  // I like to count how many loops
