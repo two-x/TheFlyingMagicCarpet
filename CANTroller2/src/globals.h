@@ -217,6 +217,7 @@ int32_t gesture_progress = 0;  // How many steps of the Cruise Mode gesture have
 bool shutdown_complete = false;  // Shutdown mode has completed its work and can stop activity
 bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
 bool park_the_motors = false;  // Indicates we should release the brake & gas so the pedals can be used manually without interference
+bool car_initially_moved = false;  // Whether car has moved at all since entering fly mode
 bool calmode_request = false;
 bool cruise_request = false;
 bool panic_stop = false;
@@ -269,7 +270,7 @@ bool gas_open_loop = false;
 // starter related
 bool starter = LOW;
 bool starter_last = LOW;
-bool sim_starter = false;
+// bool sim_starter = false;
 
 // mule battery related
 float battery_adc = adcmidscale_adc;
@@ -485,7 +486,7 @@ int64_t speedo_delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph,
             
 // neopixel and heartbeat related
 uint8_t neo_wheelcounter = 0;
-uint8_t neo_brightness_max = 21;
+uint8_t neo_brightness_max = 15;
 uint32_t neo_timeout = 150000;
 Timer neoTimer (neo_timeout);
 bool neo_heartbeat = (neopixel_pin >= 0);
@@ -547,8 +548,9 @@ bool sim_speedo = true;
 bool sim_brkpos = true;
 bool sim_basicsw = true;
 bool sim_cruisesw = true;
-bool sim_pressure = false;
+bool sim_pressure = true;
 bool sim_syspower = true;
+bool sim_starter = true;
 
 SdFat sd;  // SD card filesystem
 #define approot "cantroller2020"
@@ -732,18 +734,9 @@ inline int32_t map (int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, 
 bool rounding = true;
 float dround (float val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
 
-bool car_stopped (void) {
-    static bool stopped = false;
-    if (speedo_filt_mph >= speedo_stop_thresh_mph) stopped = false;
-    else if (!stopped && (int32_t)(speedo_timer_read_us - speedo_timer_start_us) >= speedo_stop_timeout_us) stopped = true; 
-    return stopped; 
-}
-bool engine_stopped (void) {
-    static bool stopped = false;
-    if (tach_filt_rpm < tach_stop_thresh_rpm) stopped = false;
-    else if (!stopped && (int32_t)(tach_timer_read_us - tach_timer_start_us) >= tach_stop_timeout_us) stopped = true; 
-    return stopped; 
-}
+bool car_stopped (void) { return (speedo_filt_mph < speedo_stop_thresh_mph); }  // Moved logic that was here to the main loop
+bool engine_stopped (void) { return (tach_filt_rpm < tach_stop_thresh_rpm); }  // Note due to weird float math stuff, can not just check if tach == 0.0
+
 uint32_t colorwheel (uint8_t WheelPos) {
     WheelPos = 255 - WheelPos;
     if (WheelPos < 85) return neostrip.Color (255 - WheelPos * 3, 0, WheelPos * 3);
