@@ -442,11 +442,11 @@ void loop() {
 
         if (ctrl_pos_adc[VERT][RAW] > ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][RAW] < ctrl_db_adc[VERT][TOP]) {
             ctrl_pos_adc[VERT][FILT] = ctrl_pos_adc[VERT][CENT];  // if joy vert is in the deadband, set joy_vert_filt to center value
-            hotrc_vert_pulse_filt_us = hotrc_pulse_lims_us[VERT][CENT];
+            if (ctrl == HOTRC) hotrc_vert_pulse_filt_us = hotrc_pulse_lims_us[VERT][CENT];
         }
         if (ctrl_pos_adc[HORZ][RAW] > ctrl_db_adc[HORZ][BOT] && ctrl_pos_adc[HORZ][RAW] < ctrl_db_adc[HORZ][TOP]) {
             ctrl_pos_adc[HORZ][FILT] = ctrl_pos_adc[HORZ][CENT];  // if joy horz is in the deadband, set joy_horz_filt to center value
-            hotrc_horz_pulse_filt_us = hotrc_pulse_lims_us[HORZ][CENT];
+            if (ctrl == HOTRC) hotrc_horz_pulse_filt_us = hotrc_pulse_lims_us[HORZ][CENT];
         }
     }
     if (runmode != SHUTDOWN || !shutdown_complete) { // Unless fully shut down at the moment, set the steering output
@@ -472,6 +472,11 @@ void loop() {
             if (hotrc_suppress_next_ch3_event) hotrc_suppress_next_ch3_event = false;
             else ignition = !ignition;
             hotrc_ch3_sw_event = false;
+        }
+        if (hotrc_ch4_sw_event) {
+            if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
+            else flycruise_toggle_request = true;
+            hotrc_ch4_sw_event = false;    
         }
         hotrc.calc();  // Add latest vert pulse reading into history log and calculate avg value for detecting loss of radio reception
         // hotrc.print();
@@ -597,7 +602,7 @@ void loop() {
             gestureFlyTimer.set (gesture_flytimeout_us); // Initialize gesture timer to already-expired value
             cruise_sw_held = false;
             cruiseSwTimer.reset();
-            cruise_request = false;
+            flycruise_toggle_request = false;
             car_initially_moved = !car_stopped();  // note whether car moving going into fly mode (usually not), this turns true once it has initially got moving
         }
         if (!car_initially_moved) {
@@ -618,13 +623,8 @@ void loop() {
         }
         // Cruise mode can be entered by pressing a controller button, or by holding the brake on full for a half second. Which epends on the cruise_gesturing flag.
         // The gesture involves pushing the joystick from the center to the top, then to the bottom, then back to center, quickly enough.
-        if (ctrl == HOTRC && hotrc_ch4_sw_event) {
-            if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
-            else runmode == CRUISE;
-            hotrc_ch4_sw_event = false;    
-        }
-        else if (ctrl == JOY) {
-            if (cruise_request) runmode = CRUISE;
+        if (flycruise_toggle_request) runmode = CRUISE;
+        if (ctrl == JOY) {
             if (cruise_gesturing) {  // If we are configured to use joystick gestures to go to cruise mode, the gesture is 
                 if (!gesture_progress && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][TOP])  { // Re-zero gesture timer for potential new gesture whenever joystick at center
                     gestureFlyTimer.reset();
@@ -653,6 +653,10 @@ void loop() {
             //     cruise_sw_held = true;  // Get into button held state
             // }
         }
+        // else if (flycruise_toggle_request) {
+        //     flycruise_toggle_request = false;
+        //     runmode = CRUISE;
+        // }
     }
     else if (runmode == CRUISE) {
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
@@ -662,7 +666,7 @@ void loop() {
             gestureFlyTimer.reset();  // reset gesture timer
             cruise_sw_held = false;
             cruise_adjusting = false;
-            cruise_request = false;
+            flycruise_toggle_request = false;
         }
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) {  // When joystick vert above center, increase the throttle target proportional to how far off center
             cruise_adjusting = true;  // Suspend pid loop control of gas
@@ -678,21 +682,20 @@ void loop() {
         // This old gesture trigger drops to Fly mode if joystick moved quickly from center to bottom
         // if (ctrl_pos_adc[VERT][FILT] <= ctrl_lims_adc[ctrl][VERT][MIN]+default_margin_adc && abs(mycros() - gesture_timer_us) < gesture_flytimeout_us)  runmode = FLY;  // If joystick quickly pushed to bottom 
         // printf ("hotvpuls=%ld, hothpuls=%ld, joyvfilt=%ld, joyvmin+marg=%ld, timer=%ld\n", hotrc_vert_pulse_us, hotrc_horz_pulse_us, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc, gesture_timer_us);
+        if (flycruise_toggle_request) runmode = FLY;
         if (ctrl == JOY) {
             if (ctrl_pos_adc[VERT][FILT] > ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
             else if (gestureFlyTimer.expired()) runmode = FLY;  // New gesture to drop to fly mode is hold the brake all the way down for 500 ms
-            if (cruise_request) runmode = CRUISE;
             // if (cruise_sw) cruise_sw_held = true;  // Pushing cruise button sets up return to fly mode
             // else if (cruise_sw_held) {  // Release of button drops us back to fly mode
             //     cruise_sw_held = false;
             //     runmode = FLY;
             // }
         }
-        else if (ctrl == HOTRC && hotrc_ch4_sw_event) {
-            if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
-            else runmode == FLY;
-            hotrc_ch4_sw_event = false;
-        }
+        // else if (flycruise_toggle_request) {
+        //     flycruise_toggle_request = false;
+        //     runmode = FLY;
+        // }
         if (car_stopped()) {  // In case we slam into a brick wall, get out of cruise mode
             if (serial_debugging) Serial.println (F("Error: Car stopped in cruise mode"));  // , speedo_filt_mph, neutral
             runmode = HOLD;  // Back to Hold Mode  
@@ -952,7 +955,7 @@ void loop() {
         if (encoder_sw_action == Encoder::SHORT)  {  // if short press
             if (tuning_ctrl == EDIT) tuning_ctrl = SELECT;  // If we were editing a value drop back to select mode
             else if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If we were selecting a variable start editing its value
-            else if (ctrl == JOY && (!simulating || !sim_cruisesw) && (runmode == FLY || runmode == CRUISE)) cruise_request = true;
+            else if (ctrl == JOY && (!simulating || !sim_cruisesw) && (runmode == FLY || runmode == CRUISE)) flycruise_toggle_request = true;
             // I envision pushing encoder switch while not tuning could switch desktops from our current analysis interface to a different runtime display 
         }
         else tuning_ctrl = (tuning_ctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
