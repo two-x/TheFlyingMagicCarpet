@@ -34,7 +34,6 @@ MAKE_ENCODER(encoder, encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 
 void setup() {  // Setup just configures pins (and detects touchscreen type)
     pins.init();
-    
     analogReadResolution (adcbits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
     Serial.begin (115200);  // Open serial port
     delay (800);  //  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
@@ -48,6 +47,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         dataset_page_last = config.getUInt("dpage", PG_TEMP);
         screen.init();
     }
+    printf("Baud rate: %d\n", Serial.baudRate());
     neostrip.begin();  // start datastream
     neostrip.show();  // Turn off the pixel
     neostrip.setBrightness (neo_brightness_max);  // It truly is incredibly bright
@@ -196,6 +196,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 void loop() {
     loopindex = 0;  // reset at top of loop
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "top");
+    // printf("joy_horz value: %d joy_vert value: %d\n", pins.joy_horz.digital_read(), pins.joy_vert.digital_read());
     // cout << "(top)) spd:" << speedo_filt_mph << " tach:" << tach_filt_rpm;
 
     // if (!booted) init();  // Initialize - If this is our first loop, initialize everything

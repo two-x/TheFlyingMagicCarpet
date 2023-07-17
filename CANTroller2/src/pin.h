@@ -7,6 +7,7 @@
 enum class PinNumber
 {
     GPIO_DISABLED = -1,
+    GPIO_TOUCH = 255,
     GPIO_NUM_0 = 0,
     GPIO_NUM_1 = 1,
     GPIO_NUM_2 = 2,
@@ -68,6 +69,7 @@ public:
   Pin(PinNumber pin_num, uint8_t mode);
   static const uint8_t NUM_PINS = 48; // Total number of pins on the board
   void set_pin(PinNumber pin_num);
+  uint8_t get_pin();
   void set_mode(uint8_t mode);
   void digital_write(uint8_t value);
   uint8_t digital_read() const;
