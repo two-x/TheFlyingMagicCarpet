@@ -351,13 +351,13 @@ void loop() {
     // Tach - takes 22 us to read when no activity
     if (simulating && sim_tach && pot_overload == tach) tach_filt_rpm = map (pot_filt_percent, 0.0, 100.0, 0.0, tach_govern_rpm);
     else if (!simulating || !sim_tach) {
-        if (tach_us) {  // If a valid rotation has happened since last time, delta will have a value
-            tach_buf_us = (int32_t)tach_us;  // Copy delta value (in case another interrupt happens during handling)
-            tach_us = 0;  // Indicates to isr we processed this value
+        tach_buf_us = (int32_t)tach_us;  // Copy delta value (in case another interrupt happens during handling)
+        tach_us = 0;  // Indicates to isr we processed this value
+        if (tach_buf_us) {  // If a valid rotation has happened since last time, delta will have a value
             tach_rpm = convert_units ((float)(tach_buf_us), tach_convert_rpm_per_rpus, tach_convert_invert);
             ema_filt (tach_rpm, &tach_filt_rpm, tach_ema_alpha);  // Sensor EMA filter
         }
-        else if (engine_stopped()) {  // If time between pulses is long enough an engine can't run that slow
+        if (tach_rpm < tach_stop_thresh_rpm || (int32_t)(tach_timer_read_us - tach_timer_start_us) >= tach_stop_timeout_us) {  // If time between pulses is long enough an engine can't run that slow
             tach_rpm = 0.0;  // If timeout since last magnet is exceeded
             tach_filt_rpm = 0.0;
         }        
@@ -365,13 +365,13 @@ void loop() {
     // Speedo - takes 14 us to read when no activity
     if (simulating && sim_speedo && pot_overload == speedo) speedo_filt_mph = map (pot_filt_percent, 0.0, 100.0, 0.0, speedo_govern_mph);
     else if (!simulating || !sim_speedo) { 
-        if (speedo_us) {  // If a valid rotation has happened since last time, delta will have a value
-            speedo_buf_us = (int32_t)speedo_us;  // Copy delta value (in case another interrupt happens during handling)
-            speedo_us = 0;  // Indicates to isr we processed this value
+        speedo_buf_us = (int32_t)speedo_us;  // Copy delta value (in case another interrupt happens during handling)
+        speedo_us = 0;  // Indicates to isr we processed this value
+        if (speedo_buf_us) {  // If a valid rotation has happened since last time, delta will have a value
             speedo_mph = convert_units ((float)(speedo_buf_us), speedo_convert_mph_per_rpus, speedo_convert_invert);  // Update car speed value  
             ema_filt (speedo_mph, &speedo_filt_mph, speedo_ema_alpha);  // Sensor EMA filter
         }
-        else if (car_stopped()) {  // If time between pulses is long enough an engine can't run that slow
+        if (speedo_mph < speedo_stop_thresh_mph || (int32_t)(speedo_timer_read_us - speedo_timer_start_us) >= speedo_stop_timeout_us) {  // If time between pulses is long enough, consider the car is stopped
             speedo_mph = 0.0;
             speedo_filt_mph = 0.0;
         }
@@ -584,7 +584,8 @@ void loop() {
             brakeIntervalTimer.reset();
         }
         if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
-        else if (joy_centered && (ctrl == JOY || hotrc_radio_detected)) runmode = FLY; // Enter Fly Mode upon joystick movement from center to above center
+        else if (joy_centered && (ctrl == JOY || hotrc_radio_detected)) runmode = FLY; // Enter Fly Mode upon joystick movement from center to above center.
+        // Possibly add "&& car_stopped()" to above check?
     }
     else if (runmode == FLY) {
         if (we_just_switched_modes) {
@@ -594,9 +595,14 @@ void loop() {
             cruise_sw_held = false;
             cruiseSwTimer.reset();
             cruise_request = false;
+            car_initially_moved = !car_stopped();  // note whether car moving going into fly mode (usually not), this turns true once it has initially got moving
         }
-        if (car_stopped() && ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) runmode = HOLD;  // Go to Hold Mode if we have braked to a stop  // && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT]
-        else if (ctrl == HOTRC && !(simulating && sim_joy) && !hotrc_radio_detected) runmode = HOLD;  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
+        if (!car_initially_moved) {
+            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) runmode = HOLD;  // Must keep pulling trigger until car moves, or drop back to hold mode
+            else if (!car_stopped()) car_initially_moved = true;  // Once car moves, we're allowed to stay in fly mode
+        }
+        else if (car_stopped()) runmode = HOLD;  // Go to Hold Mode if we have come to a stop  // && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT]
+        if (ctrl == HOTRC && !(simulating && sim_joy) && !hotrc_radio_detected) runmode = HOLD;  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
         else {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])  {  // If we are trying to accelerate
                 tach_target_rpm = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], tach_idle_rpm, tach_govern_rpm);
