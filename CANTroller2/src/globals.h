@@ -167,39 +167,43 @@ Preferences config;
 //
 class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
   protected:
-    volatile uint32_t start_us = 0;
-    volatile uint32_t timeout_us = 0;
+    volatile int64_t start_us = 0;
+    volatile int64_t timeout_us = 0;
   public:
     Timer (void) {
         reset();
     }
     Timer (uint32_t arg_timeout_us) {
-        set (arg_timeout_us);
+        set ((int64_t)arg_timeout_us);
     }
-    IRAM_ATTR void set (uint32_t arg_timeout_us) {
+    IRAM_ATTR void set (int64_t arg_timeout_us) {
         timeout_us = arg_timeout_us;
         reset();
+    }
+    IRAM_ATTR void set (uint32_t arg_timeout_us) {
+        set ((int64_t)arg_timeout_us);
     }
     IRAM_ATTR void reset (void) {
         start_us = esp_timer_get_time();
     }
     IRAM_ATTR bool expired (void) {
-        int64_t current_time = esp_timer_get_time();
-        int64_t target_time = start_us + timeout_us;
-
-        // Check for overflow
-        if (target_time < start_us) {
-            // Overflow occurred
-            return (current_time < start_us) && (current_time >= target_time);
-        } else {
-            // No overflow
-            return current_time >= target_time;
-        }
+        return (esp_timer_get_time() > start_us + timeout_us);
     }
-    IRAM_ATTR uint32_t elapsed (void) {
+        // int64_t current_time = esp_timer_get_time();
+        // int64_t target_time = start_us + timeout_us;
+
+        // // Check for overflow
+        // if (target_time < start_us) {
+        //     // Overflow occurred
+        //     return (current_time < start_us) && (current_time >= target_time);
+        // } else {
+        //     // No overflow
+        //     return current_time >= target_time;
+        // }
+    IRAM_ATTR int64_t elapsed (void) {
         return esp_timer_get_time() - start_us;
     }
-    IRAM_ATTR uint32_t get_timeout (void) { return timeout_us; }
+    IRAM_ATTR int64_t get_timeout (void) { return timeout_us; }
 };
 
 float convert_units (float from_units, float convert_factor, bool invert, float in_offset = 0.0, float out_offset = 0.0) {
@@ -455,8 +459,8 @@ float tach_idle_rpm = 700.0;  // Min value for engine hz, corresponding to low i
 float tach_max_rpm = 6000.0;  // Max possible engine rotation speed
 float tach_redline_rpm = 4000.0;  // Max value for tach_rpm, pedal to the metal (in rpm)
 float tach_margin_rpm = 15.0;  // Margin of error for checking engine rpm (in rpm)
-float tach_stop_thresh_rpm = 0.01;  // Below which the engine is considered stopped - this is redundant,
-int32_t tach_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
+float tach_stop_thresh_rpm = 0.1;  // Below which the engine is considered stopped - this is redundant,
+uint32_t tach_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
 int64_t tach_delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
 
 // carspeed/speedo related
@@ -480,8 +484,8 @@ float speedo_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more
 float speedo_idle_mph = 4.50;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
 float speedo_redline_mph = 15.0;  // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
 float speedo_max_mph = 25.0;  // What is max speed car can ever go
-float speedo_stop_thresh_mph = 0.01;  // Below which the car is considered stopped
-int32_t speedo_stop_timeout_us = 600000;  // Time after last magnet pulse when we can assume the car is stopped (in us)
+float speedo_stop_thresh_mph = 0.1;  // Below which the car is considered stopped
+uint32_t speedo_stop_timeout_us = 600000;  // Time after last magnet pulse when we can assume the car is stopped (in us)
 int64_t speedo_delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
             
 // neopixel and heartbeat related
@@ -496,7 +500,7 @@ uint8_t neo_heartcolor[3] = { 0xff, 0xff, 0xff };
 Timer heartbeatTimer (1000000);
 int32_t heartbeat_state = 0;
 int32_t heartbeat_level = 0;
-int32_t heartbeat_ekg[4] = { 170000, 150000, 530000, 1100000 };
+uint32_t heartbeat_ekg[4] = { 170000, 150000, 530000, 1100000 };
 int32_t heartbeat_pulse = 255;
 
 // diag/monitoring variables
@@ -606,7 +610,7 @@ int32_t temp_current_index = 0;
 enum temp_status : bool { CONVERT, READ };
 temp_status temp_state = CONVERT;
 uint32_t temp_times[2] = { 2000000, 10000 };  // Peef delay was 10000 (10ms)
-int32_t temp_timeout = 2000000;
+uint32_t temp_timeout = 2000000;
 Timer tempTimer (temp_timeout);
 
 DeviceAddress temp_temp_addr;
