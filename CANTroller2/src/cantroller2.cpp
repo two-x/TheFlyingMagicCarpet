@@ -33,63 +33,8 @@ Display screen(tft_cs_pin, tft_dc_pin);
 MAKE_ENCODER(encoder, encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 
 void setup() {  // Setup just configures pins (and detects touchscreen type)
-    set_pin (encoder_a_pin, INPUT_PULLUP);
-    set_pin (encoder_b_pin, INPUT_PULLUP);
-    set_pin (encoder_sw_pin, INPUT_PULLUP);  // The esp32 pullup is too weak. Use resistor
-    set_pin (brake_pwm_pin, OUTPUT);
-    set_pin (steer_pwm_pin, OUTPUT);
-    set_pin (tft_dc_pin, OUTPUT);
-    set_pin (gas_pwm_pin, OUTPUT);
-    // set_pin (ignition_pin, OUTPUT);  // drives relay to turn on/off car. Active high
-    set_pin (basicmodesw_pin, INPUT_PULLUP);
-    set_pin (tach_pulse_pin, INPUT_PULLUP);
-    set_pin (speedo_pulse_pin, INPUT_PULLUP);
-    set_pin (pressure_pin, INPUT);
-    set_pin (brake_pos_pin, INPUT);
-    set_pin (ign_batt_pin, INPUT);
-    set_pin (hotrc_ch1_horz_pin, INPUT);
-    set_pin (hotrc_ch2_vert_pin, INPUT);
-    set_pin (neopixel_pin, OUTPUT);
-    set_pin (sdcard_cs_pin, OUTPUT);
-    set_pin (tft_cs_pin, OUTPUT);
-    set_pin (pot_wipe_pin, INPUT);
-    set_pin (button_pin, INPUT_PULLUP);
-    set_pin (starter_pin, INPUT_PULLDOWN);
-    set_pin (hotrc_ch3_ign_pin, INPUT);
-    set_pin (hotrc_ch4_cruise_pin, INPUT);
-
-    set_pin (joy_horz_pin, INPUT);
-    set_pin (joy_vert_pin, INPUT);
+    pins.init();
     
-    set_pin (touch_irq_pin, INPUT_PULLUP);
-    set_pin (tft_rst_pin, OUTPUT);
-
-    write_pin (tft_cs_pin, HIGH);   // Prevent bus contention
-    write_pin (sdcard_cs_pin, HIGH);   // Prevent bus contention
-    write_pin (tft_dc_pin, LOW);
-    write_pin (tft_rst_pin, HIGH);
-
-    // This bit is here as a way of autdetecting the controller type. It starts HEADLESS. If HIGH is read here then JOY,
-    // otherwise the pulldown R in the divider will enable HOTRC once radio is detected.
-    set_pin (ign_batt_pin, INPUT);  
-    // Temporarily use this pin to read a pullup/down resistor to detect controller type
-    // ctrl = (read_pin (ignition_pin) ? JOY : HOTRC);  // HEADLESS
-    // if (ctrl == HEADLESS) set_pin (ignition_pin, OUTPUT);  // Then set the put as an output as normal.
-    // if (ctrl == HOTRC) { set_pin (ignition_pin, OUTPUT);  // Then set the put as an output as normal.
-    // write_pin (ignition_pin, LOW); } // Initialize to ignition off
-    set_pin (ign_out_pin, OUTPUT);
-    write_pin (ign_out_pin, LOW);
-    
-    // This bit is here as a way of autdetecting soren's breadboard, since his LCD is wired upside-down.
-    // Soren put a strong external pulldown on the pin, so it'll read low for autodetection. 
-    
-    // Disabling automatic screen flip detection due to it makes Anders board crash
-    // set_pin (syspower_pin, INPUT);  // Temporarily use this pin to read a pullup/down resistor to configure screen flip
-    // flip_the_screen = !(read_pin (syspower_pin));  // Will cause the LCD to be upside down
-    
-    set_pin (syspower_pin, OUTPUT);  // Then set the put as an output as normal.
-    write_pin (syspower_pin, syspower);
-
     analogReadResolution (adcbits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
     Serial.begin (115200);  // Open serial port
     delay (800);  //  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
@@ -150,8 +95,9 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     // attachInterrupt (digitalPinToInterrupt(hotrc_ch4_cruise_pin), hotrc_ch4_isr, FALLING);
 
     // Set up our interrupts
-    attachInterrupt (digitalPinToInterrupt(tach_pulse_pin), tach_isr, RISING);
-    attachInterrupt (digitalPinToInterrupt(speedo_pulse_pin), speedo_isr, RISING);
+    // Attach interrupts using Pin method
+    pins.tach_pulse.attach_interrupt(tach_isr, RISING);
+    pins.speedo_pulse.attach_interrupt(speedo_isr, RISING); 
     
     printf ("ctrl=%ld\n");
     if (ctrl == HOTRC) {
@@ -166,10 +112,10 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         // ledcSetup(1, 1, 1); // Use LEDC channel 0 with a resolution of 1 bit
         // ledcAttachPinTone(hotrc_ch2_vert_pin, 1); // Capture on falling edge
 
-        attachInterrupt (digitalPinToInterrupt (hotrc_ch2_vert_pin), hotrc_vert_isr, FALLING);
-        attachInterrupt (digitalPinToInterrupt (hotrc_ch1_horz_pin), hotrc_horz_isr, FALLING);
-        attachInterrupt (digitalPinToInterrupt (hotrc_ch3_ign_pin), hotrc_ch3_isr, FALLING);
-        attachInterrupt (digitalPinToInterrupt (hotrc_ch4_cruise_pin), hotrc_ch4_isr, CHANGE);
+        pins.hotrc_ch2_vert.attach_interrupt(hotrc_vert_isr, FALLING);
+        pins.hotrc_ch1_horz.attach_interrupt(hotrc_horz_isr, FALLING);
+        pins.hotrc_ch3_ign.attach_interrupt(hotrc_ch3_isr, FALLING);
+        pins.hotrc_ch4_cruise.attach_interrupt(hotrc_ch4_isr, CHANGE);
     }
     Serial.println (F("Interrupts set up and enabled\n"));
 
@@ -259,7 +205,7 @@ void loop() {
 
     // ESP32 "boot" button.  This is not working (?)
     button_last = button_it;
-    if (!read_pin (button_pin)) {
+    if (!pins.button.digital_read()) {
         if (!button_it) {  // If press just occurred
             dispResetButtonTimer.reset();  // Looks like someone just pushed the esp32 "boot" button
             btn_press_timer_active = true;  // flag to indicate timing for a possible long press
@@ -349,7 +295,7 @@ void loop() {
     }
     else brake_pos_filt_in = (brake_pos_nom_lim_retract_in + brake_pos_zeropoint_in)/2;  // To keep brake position in legal range during simulation
     
-    if (!simulating || !sim_starter) starter = read_pin (starter_pin);
+    if (!simulating || !sim_starter) starter = pins.starter.digital_read();
 
     // Tach - takes 22 us to read when no activity
     if (simulating && sim_tach && pot_overload == tach) tach_filt_rpm = map (pot_filt_percent, 0.0, 100.0, 0.0, tach_govern_rpm);
@@ -1063,7 +1009,7 @@ void loop() {
         hotrc_radio_detected_last = hotrc_radio_detected;
         if (panic_stop) ignition = LOW;  // Kill car if panicking
         if ((ignition != ignition_last) && ignition_output_enabled) {  // Whenever ignition state changes, assuming we're allowed to write to the pin
-            write_pin (ign_out_pin, !ignition);  // Turn car off or on (ign output is active low), ensuring to never turn on the ignition while panicking
+            pins.ign_out.digital_write(!ignition);  // Turn car off or on (ign output is active low), ensuring to never turn on the ignition while panicking
             ignition_last = ignition;  // Make sure this goes after the last comparison
         }
     }

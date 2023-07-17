@@ -8,50 +8,25 @@
  */
 class Pin {
 public:
-  Pin(PinNumber pin_num, PinMode mode);
+  Pin(PinNumber pin_num);
+  Pin(PinNumber pin_num, uint8_t mode);
   static const uint8_t NUM_PINS = 48; // Total number of pins on the board
-
-  void set_mode(PinMode mode);
+  void set_pin(PinNumber pin_num);
+  void set_mode(uint8_t mode);
   void digital_write(uint8_t value);
   uint8_t digital_read() const;
-  void attach_interrupt(void (*isr)(), InterruptMode mode);
+  void attach_interrupt(void (*isr)(), int mode);
 
 private:
   PinNumber pin_num_;
-  PinMode pin_mode_;
+  uint8_t pin_mode_;
 
   void validate_pin_number(int pin_num);
 };
 
-void initialize_pins();
-
-enum class PinMode
-{
-    INPUT = 0x01,
-    OUTPUT = 0x03,
-    PULLUP = 0x04,
-    INPUT_PULLUP = 0x05,
-    PULLDOWN = 0x08,
-    INPUT_PULLDOWN = 0x09,
-    OPEN_DRAIN = 0x10,
-    OUTPUT_OPEN_DRAIN = 0x12,
-    ANALOG = 0xC0
-};
-
-enum class InterruptMode {
-  DISABLED = 0x00,
-  RISING = 0x01,
-  FALLING = 0x02,
-  CHANGE = 0x03,
-  ONLOW = 0x04,
-  ONHIGH = 0x05,
-  ONLOW_WE = 0x0C,
-  ONHIGH_WE = 0x0D
-};
-
 enum class PinNumber
 {
-    DISABLED = -1,
+    GPIO_DISABLED = -1,
     GPIO_NUM_0 = 0,
     GPIO_NUM_1 = 1,
     GPIO_NUM_2 = 2,
