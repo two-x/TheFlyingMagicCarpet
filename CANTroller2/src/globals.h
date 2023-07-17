@@ -871,7 +871,7 @@ long temp_peef (void) {
 }
 
 void temp_soren (void) {
-    if (take_temperatures && tempTimer.expired()) {
+    if (take_temperatures && temp_detected_device_ct && tempTimer.expired()) {
         // int64_t check1 = esp_timer_get_time();  // Soren
         // int64_t check2;        
         if (temp_state == CONVERT) {
