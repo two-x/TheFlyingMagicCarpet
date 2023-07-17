@@ -82,8 +82,11 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     
     // This bit is here as a way of autdetecting soren's breadboard, since his LCD is wired upside-down.
     // Soren put a strong external pulldown on the pin, so it'll read low for autodetection. 
-    set_pin (syspower_pin, INPUT);  // Temporarily use this pin to read a pullup/down resistor to configure screen flip
-    flip_the_screen = !(read_pin (syspower_pin));  // Will cause the LCD to be upside down
+    
+    // Disabling automatic screen flip detection due to it makes Anders board crash
+    // set_pin (syspower_pin, INPUT);  // Temporarily use this pin to read a pullup/down resistor to configure screen flip
+    // flip_the_screen = !(read_pin (syspower_pin));  // Will cause the LCD to be upside down
+    
     set_pin (syspower_pin, OUTPUT);  // Then set the put as an output as normal.
     write_pin (syspower_pin, syspower);
 
