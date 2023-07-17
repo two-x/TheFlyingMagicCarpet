@@ -506,6 +506,8 @@ void loop() {
             // syspower = HIGH;  // Power up devices if not already
             // enable_pids (0, 0, 0);
             gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
+            // gasSPID.set_enable (false);
+            // cruiseSPID.set_enable (false);
             motorParkTimer.reset();  // Set a timer to timebox this effort
             park_the_motors = true;  // Flags the motor parking to happen
         }
