@@ -1,7 +1,7 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 #include <SdFat.h>  // SD card & FAT filesystem library
-#include <Servo.h>  // Makes PWM output to control motors (for rudimentary control of our gas and steering)
+#include <ESP32Servo.h>  // Makes PWM output to control motors (for rudimentary control of our gas and steering)
 #include <Adafruit_NeoPixel.h>  // Plan to allow control of neopixel LED onboard the esp32
 #include <OneWire.h>
 #include "temp.h"
@@ -102,12 +102,12 @@ bool flip_the_screen = false;
 #define joy_horz_pin 1  // (adc) - Either analog left-right input (joystick)
 #define joy_vert_pin 2  // (adc) - Either analog up-down input (joystick)
 #define tft_dc_pin 3  // (adc* / strap X) - Output, Assert when sending data to display chip to indicate commands vs. screen data
-#define ign_batt_pin 4  // (adc) -  Analog input, ignition signal and battery voltage sense, full scale is 15.638V
+#define ign_batt_pin 4  // (adc) - Analog input, ignition signal and battery voltage sense, full scale is 15.638V
 #define pot_wipe_pin 5  // (adc) - Analog in from 20k pot. Use 1% series R=22k to 5V on wipe=CW-0ohm side, and R=15k to gnd on wipe-CCW-0ohm side. Gives wipe range of 1.315V (CCW) to 3.070V (CW) with 80 uA draw.
 #define brake_pos_pin 6  // (adc) - Analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
 #define pressure_pin 7  // (adc) - Analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V.
-#define i2c_sda_pin 8  // (i2c0 sda / adc) - i2c bus for airspeed sensor, lighting board, cap touch screen
-#define i2c_scl_pin 9  // (i2c0 scl / adc) - i2c bus for airspeed sensor, lighting board, cap touch screen
+#define i2c_sda_pin 8  // (i2c0 sda / adc) - i2c bus for airspeed sensor, lighting board, cap touchscreen
+#define i2c_scl_pin 9  // (i2c0 scl / adc) - i2c bus for airspeed sensor, lighting board, cap touchscreen
 #define tft_cs_pin 10  // (spi0 cs / adc*) - Output, active low, Chip select allows ILI9341 display chip use of the SPI bus
 #define tft_mosi_pin 11  // (spi0 mosi / adc*) - Used as spi interface data to sd card and tft screen
 #define tft_sclk_pin 12  // (spi0 sclk / adc*) - Used as spi interface clock for sd card and tft screen
@@ -123,21 +123,21 @@ bool flip_the_screen = false;
 #define tach_pulse_pin 35  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
 #define speedo_pulse_pin 36  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
 #define ign_out_pin 37  // (spi-ram / oct-spi) - Output for Hotrc to a relay to kill the car ignition. Note, Joystick ign button overrides this if connected and pressed
-#define syspower_pin 38  // (spi-ram / oct-spi) - Output, flips a relay to power all the tranducers
+#define syspower_pin 38  // (spi-ram / oct-spi) - Output, flips a relay to power all the tranducers. This is actually the neopixel pin on all v1.1 devkit boards.
 #define touch_cs_pin 39  // Use as chip select for resistive touchscreen
 #define encoder_b_pin 40  // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define encoder_a_pin 41  // Int input, The A (aka CLK) pin of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
 #define encoder_sw_pin 42  // Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
-#define uart_tx_pin 43  // "TX" (uart0 tx) - Serial monitor terminal and potentially a better connection to jaguar controllers
-#define uart_rx_pin 44  // "RX" (uart0 rx) - Serial monitor terminal and potentially a better connection to jaguar controllers
+#define uart_tx_pin 43  // "TX" (uart0 tx) - Needed for serial monitor
+#define uart_rx_pin 44  // "RX" (uart0 rx) - Needed for serial monitor. In theory we could dual-purpose this for certain things, as we haven't yet needed to accept input over the serial monitor
 #define starter_pin 45  // (strap to 0) - Input, active high when vehicle starter is engaged (needs pulldown)
 #define basicmodesw_pin 46  // (strap X) - Input, asserted to tell us to run in basic mode, active low (needs pullup)
 #define sdcard_cs_pin 47  // Output, chip select allows SD card controller chip use of the SPI bus, active low
-#define neopixel_pin 48  // (rgb led) - Data line to onboard Neopixel WS281x
+#define neopixel_pin 48  // (rgb led) - Data line to onboard Neopixel WS281x (on all v1 devkit boards)
 
 #define tft_ledk_pin -1  // Output, optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
 #define touch_irq_pin 255  // Input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - Set to 255 if not used
-#define tft_rst_pin -1  // TFT Reset allows us to reboot the screen hardware when it crashes
+#define tft_rst_pin -1  // TFT Reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
 
 #define adcbits 12
 #define adcrange_adc 4095  // = 2^adcbits-1
@@ -365,11 +365,11 @@ Timer hotrcPanicTimer(hotrc_panic_timeout);
 int32_t steer_pulse_safe_us = 0;
 int32_t steer_pulse_out_us;  // pid loop output to send to the actuator (steering)
 //  ---- tunable ----
-int32_t steer_pulse_right_min_us = 500;  // Smallest pulsewidth acceptable to jaguar
-int32_t steer_pulse_right_us = 800;  // Steering pulsewidth corresponding to full-speed right steering (in us)
+int32_t steer_pulse_right_min_us = 500;  // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
+int32_t steer_pulse_right_us = 670;  // Steering pulsewidth corresponding to full-speed right steering (in us). Default setting for jaguar is max 670us
 int32_t steer_pulse_stop_us = 1500;  // Steering pulsewidth corresponding to zero steering motor movement (in us)
-int32_t steer_pulse_left_us = 2200;  // Steering pulsewidth corresponding to full-speed left steering (in us)
-int32_t steer_pulse_left_max_us = 2500;  // Longest pulsewidth acceptable to jaguar
+int32_t steer_pulse_left_us = 2330;  // Steering pulsewidth corresponding to full-speed left steering (in us). Default setting for jaguar is max 2330us
+int32_t steer_pulse_left_max_us = 2500;  // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
 int32_t steer_safe_percent = 72;  // Sterring is slower at high speed. How strong is this effect 
 
 // brake pressure related
@@ -400,11 +400,11 @@ float brake_pulse_out_us;  // sets the pulse on-time of the brake control signal
 //  ---- tunable ----
 Timer brakeIntervalTimer (500000);  // How much time between increasing brake force during auto-stop if car still moving?
 int32_t brake_increment_interval_us = 500000;  // How often to apply increment during auto-stopping (in us)
-int32_t brake_pulse_retract_min_us = 500;  // Smallest pulsewidth acceptable to jaguar
-int32_t brake_pulse_retract_us = 650;  // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us)
+int32_t brake_pulse_retract_min_us = 500;  // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
+int32_t brake_pulse_retract_us = 670;  // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
 int32_t brake_pulse_stop_us = 1500;  // Brake pulsewidth corresponding to center point where motor movement stops (in us)
-int32_t brake_pulse_extend_us = 2350;  // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us)
-int32_t brake_pulse_extend_max_us = 2500;  // Longest pulsewidth acceptable to jaguar
+int32_t brake_pulse_extend_us = 2330;  // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
+int32_t brake_pulse_extend_max_us = 2500;  // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
 int32_t brake_pulse_margin_us = 40; // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated 
 
 // brake actuator position related
@@ -436,10 +436,10 @@ int32_t gas_pulse_govern_us = 1502;  // Governor must scale the pulse range prop
 //  ---- tunable ----
 Timer gasServoTimer (500000);  // We expect the servo to find any new position within this time
 int32_t gas_governor_percent = 95;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
-int32_t gas_pulse_cw_min_us = 1000;  // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
+int32_t gas_pulse_cw_min_us = 500;  // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
 int32_t gas_pulse_redline_us = 1400;  // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
 int32_t gas_pulse_idle_us = 1800;  // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
-int32_t gas_pulse_ccw_max_us = 2000;  // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
+int32_t gas_pulse_ccw_max_us = 2500;  // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
 int32_t gas_pulse_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_idle_us where to park the servo out of the way so we can drive manually (in us)
 
 // tachometer related
@@ -459,8 +459,8 @@ bool tach_convert_invert = true;
 int32_t tach_convert_polarity = 1;  // Forward      
 float tach_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 float tach_idle_rpm = 700.0;  // Min value for engine hz, corresponding to low idle (in rpm)
-float tach_max_rpm = 6000.0;  // Max possible engine rotation speed
-float tach_redline_rpm = 4000.0;  // Max value for tach_rpm, pedal to the metal (in rpm)
+float tach_max_rpm = 7000.0;  // Max possible engine rotation speed
+float tach_redline_rpm = 5000.0;  // Max value for tach_rpm, pedal to the metal (in rpm). 20000 rotations/mile * 15 mi/hr * 1/60 hr/min = 5000 rpm
 float tach_margin_rpm = 15.0;  // Margin of error for checking engine rpm (in rpm)
 float tach_stop_thresh_rpm = 0.1;  // Below which the engine is considered stopped - this is redundant,
 uint32_t tach_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
@@ -589,9 +589,9 @@ QPID cruiseQPID (&speedo_filt_mph, &tach_target_rpm, &speedo_target_mph,
                  QPID::centMode::range);
 
 // Servo library lets us set pwm outputs given an on-time pulse width in us
-static Servo steer_servo;
-static Servo brake_servo;
 static Servo gas_servo;
+static Servo brake_servo;
+static Servo steer_servo;
 static Adafruit_NeoPixel neostrip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
 
 // Temperature sensor related

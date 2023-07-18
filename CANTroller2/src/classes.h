@@ -407,7 +407,7 @@ class HotrcManager {
         if (std::abs(this_delta) > spike_cliff) {  // If new value is a cliff edge (start or end of a spike)
             if (prespike_index == -1) {  // If this cliff edge is the start of a new spike
                 // if (button_it) printf ("A ");
-                prespike_index = previndex;  // save index of last good value just before the cliff
+                prespike_index = previndex;  // save index of last good value just before the cliffgit push
                 spike_signbit = signbit (this_delta);  // Save cliff steepness
             }
             else if (spike_signbit == signbit (this_delta)) {  // If this cliff edge deepens an in-progress spike
