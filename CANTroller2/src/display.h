@@ -56,8 +56,8 @@
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
 #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
 #define disp_lines 20  // Max lines of text displayable at line height = disp_line_height_pix
-#define disp_fixed_lines 11  // Lines of static variables/values always displayed
-#define disp_tuning_lines 8  // Lines of dynamic variables/values in dataset pages 
+#define disp_fixed_lines 8  // Lines of static variables/values always displayed
+#define disp_tuning_lines 11  // Lines of dynamic variables/values in dataset pages 
 #define disp_line_height_pix 12  // Pixel height of each text line. Screen can fit 16x 15-pixel or 20x 12-pixel lines
 #define disp_vshift_pix 2  // Unknown.  Note: At smallest text size, characters are 5x7 pix + pad on rt and bot for 6x8 pix.
 #define disp_font_height 8
@@ -80,12 +80,9 @@ enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_BPID, PG_GPID, PG_CPID,
 char telemetry[disp_fixed_lines][9] = {  
     "Joy Vert",
     "   Speed",
-    " Spd Tgt",
     "    Tach",
-    "Tach Tgt",
     " Gas PWM",
     "Brk Pres",   
-    " Brk Tgt",
     " Brk PWM",
     "Joy Horz",
     "SteerPWM",
@@ -94,6 +91,9 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
     {   " Battery",  // PG_RUN
         " Brk Pos",
         "     Pot",
+        "      - ",
+        "      - ",
+        "      - ",
         "SimBkPos",
         " Sim Joy",
         "Sim Pres",
@@ -101,13 +101,19 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         " Sim Spd", },
     {   "Horz Raw",  // PG_JOY
         "Vert Raw",
+        "      - ",
+        "      - ",
+        "      - ",
         "Horz Min",
         "Horz Max",
         " Horz DB",
         "Vert Min",
         "Vert Max",
         " Vert DB", },
-    {   "Governor",  // PG_CAR
+    {   "      - ",  // PG_CAR
+        "      - ",
+        "      - ",
+        "Governor",
         "Eng Idle",
         "Eng RedL",
         "Spd Idle",
@@ -115,7 +121,10 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "GasOpnLp",
         " Cal Brk",
         " Cal Gas", },
-    {   "Str Left",  // PG_PWMS
+    {   "      - ",  // PG_PWMS
+        "      - ",
+        "      - ",
+        "Str Left",
         "Str Stop",
         "Str Rght",
         "Brk Extd",
@@ -123,51 +132,63 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "Brk Retr",
         "Gas Idle",
         "Gas RedL", },
-    {   "Pres Err",  // PG_BPID
+    {   "Pres Tgt",  // PG_BPID
+        "Pres Err",
         "  P Term",
         "  I Term",
         "  D Term",
         " Out Sum",
+        "      - ",
+        "      - ",
         "  Kp (P)",
         "  Ki (I)",
         "  Kd (D)", },
-    {   " Eng Err",  // PG_GPID
+    {   "Tach Tgt",  // PG_GPID
+        " Eng Err",
         "  P Term",
         "  I Term",
         "  D Term",
         " Out Sum",
+        "      - ",
+        "      - ",
         "  Kp (P)",
         "  Ki (I)",
         "  Kd (D)" },
-    {   " Spd Err",  // PG_CPID
+    {   "SpeedTgt",  // PG_CPID
+        " Spd Err",
         "  P Term",
         "  I Term",
         "  D Term",
         " Out Sum",
+        "      - ",
+        "      - ",
         "  Kp (P)",
         "  Ki (I)",
         "  Kd (D)", },
     {   " Tmp Amb",  // PG_TEMP
-        " Tmp Eng",  // "Tmp WhRR", "Tmp WhFL", "Tmp WhFR", "Tmp WhRL" 
-        "HRC Horz",
+        " Tmp Eng",
+        "Tmp WhRR",
+        "Tmp WhFL",
+        "Tmp WhFR",
+        "HRC Horz",  // "Tmp WhRL"
         "HRC Vert",
         "RadioMin",
         "RadioMax",
         " Pot Sim",
         "Pres ADC", },  // "BrkZeroP" }
 };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 3, 2, 0, 0, 5, 5, 5, 4 };  // first value in each dataset page that's editable. All values after this must also be editable
-char units[disp_fixed_lines][5] = { "adc ", "mph ", "mph ", "rpm ", "rpm ", "\xe5s  ", "psi ", "psi ", "\xe5s  ", "adc ", "\xe5s  " };
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 6, 5, 3, 3, 8, 8, 8, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
+char units[disp_fixed_lines][5] = { "adc ", "mph ", "rpm ", "\xe5s  ", "psi ", "\xe5s  ", "adc ", "\xe5s  " };
 
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
-    { "V   ", "in  ", "%   ", "    ", "    ", "    ", "    ", "    " },  // PG_RUN
-    { "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
-    { "%   ", "rpm ", "rpm ", "mph ", "mph ", "    ", "    ", "    " },  // PG_CAR
-    { "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  " },  // PG_PWMS
-    { "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "Hz  ", "sec " },  // PG_BPID
-    { "mph ", "mph ", "mph ", "mph ", "mph ", "    ", "Hz  ", "sec " },  // PG_GPID
-    { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "Hz  ", "sec " },  // PG_CPID
-    { "\x09""F  ", "\x09""F  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "    ", "adc " },  // PG_TEMP
+    { "V   ", "in  ", "%   ", "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    " },  // PG_RUN
+    { "adc ", "adc ", "    ", "    ", "    ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
+    { "    ", "    ", "    ", "%   ", "rpm ", "rpm ", "mph ", "mph ", "    ", "    ", "    " },  // PG_CAR
+    { "    ", "    ", "    ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  " },  // PG_PWMS
+    { "psi ", "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "    ", "    ", "Hz  ", "s " },  // PG_BPID
+    { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "    ", "    ", "Hz  ", "s " },  // PG_GPID
+    { "mph ", "mph ", "mph ", "mph ", "mph ", "mph ", "    ", "    ", "    ", "Hz  ", "s " },  // PG_CPID
+    { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "    ", "adc " },  // PG_TEMP
     // { "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "    ", "    " },  // PG_TEMP
 };
 char simgrid[4][3][5] = {
@@ -195,6 +216,7 @@ Timer dispResetButtonTimer (500000);  // How long to press esp32 "boot" button b
 uint32_t tft_watchdog_timeout = 100000;
 
 // tuning-ui related globals
+enum disp_draw { ERASE = -1 };
 enum tuning_ctrl_states { OFF, SELECT, EDIT };
 int32_t tuning_ctrl = OFF;
 int32_t tuning_ctrl_last = OFF;
@@ -213,8 +235,8 @@ int32_t touch_accel = 1 << touch_accel_exponent;  // Touch acceleration level, w
 int32_t touch_fudge = 0;  // -8
 //  ---- tunable ----
 int32_t touch_accel_exponent_max = 8;  // Never edit values faster than this. 2^8 = 256 change in value per update
-Timer touchPollTimer (35000);  // Timer for regular touchscreen sampling
-Timer touchHoldTimer (1000000);  // For timing touch long presses
+// Timer touchPollTimer (35000);  // Timer for regular touchscreen sampling
+Timer touchHoldTimer (800000);  // For timing touch long presses
 Timer touchAccelTimer (850000);  // Touch hold time per left shift (doubling) of touch_accel
 
 // run state globals
@@ -424,7 +446,7 @@ class Display {
             int32_t age_us = (int32_t)((float)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
             int32_t x_base = 59;
             bool polarity = (value >= 0);  // polarity 0=negative, 1=positive
-            if (strcmp(disp_values[lineno], disp_string) || _disp_redraw_all) {  // If value differs, Erase old value and write new
+            if (strcmp(disp_values[lineno], disp_string) || value == 1234567 || _disp_redraw_all) {  // If value differs, Erase old value and write new
                 int32_t y_pos = lineno*disp_line_height_pix+disp_vshift_pix;
                 if (polarity != disp_polarities[lineno]) draw_hyphen (x_base, y_pos, (!polarity) ? GRN : BLK);
                 draw_string (x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], GRN, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
@@ -543,6 +565,10 @@ class Display {
         void draw_dynamic (int32_t lineno, float value, float lowlim, float hilim, float target) {
             draw_dynamic (lineno, value, lowlim, hilim, (int32_t)target);
         }
+        void draw_dynamic (int32_t lineno, int32_t erasure) {
+            std::string val_string = "";
+            if (erasure == ERASE) draw_dynamic (lineno, val_string.c_str(), 1234567, -1, -1, -1);
+        }
         void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override=-1) {  // color_override = -1 uses default color
             yield();
             int32_t color = (color_override == -1) ? colorcard[runmode] : color_override;
@@ -652,19 +678,19 @@ class Display {
                 float drange;
                 draw_dynamic(1, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
                 draw_dynamic(2, speedo_filt_mph, 0.0, speedo_redline_mph, speedo_target_mph);
-                draw_dynamic(3, speedo_target_mph, 0.0, speedo_govern_mph);
-                draw_dynamic(4, tach_filt_rpm, 0.0, tach_redline_rpm, tach_target_rpm);
-                draw_dynamic(5, tach_target_rpm, 0.0, tach_redline_rpm);
-                draw_dynamic(6, gas_pulse_out_us, gas_pulse_redline_us, gas_pulse_idle_us);
-                draw_dynamic(7, pressure_filt_psi, pressure_min_psi, pressure_max_psi, pressure_target_psi);  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
-                draw_dynamic(8, pressure_target_psi, pressure_min_psi, pressure_max_psi);
-                draw_dynamic(9, (int32_t)brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
-                draw_dynamic(10, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
-                draw_dynamic(11, steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);
+                draw_dynamic(3, tach_filt_rpm, 0.0, tach_redline_rpm, tach_target_rpm);
+                draw_dynamic(4, gas_pulse_out_us, gas_pulse_redline_us, gas_pulse_idle_us);
+                draw_dynamic(5, pressure_filt_psi, pressure_min_psi, pressure_max_psi, pressure_target_psi);  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
+                draw_dynamic(6, (int32_t)brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
+                draw_dynamic(7, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
+                draw_dynamic(8, steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);
                 if (dataset_page == PG_RUN) {
-                    draw_dynamic(12, battery_filt_v, 0.0, battery_max_v);
-                    draw_dynamic(13, brake_pos_filt_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
-                    draw_dynamic(14, pot_filt_percent, pot_min_percent, pot_max_percent);
+                    draw_dynamic(9, battery_filt_v, 0.0, battery_max_v);
+                    draw_dynamic(10, brake_pos_filt_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
+                    draw_dynamic(11, pot_filt_percent, pot_min_percent, pot_max_percent);
+                    draw_dynamic(12, ERASE);
+                    draw_dynamic(13, ERASE);
+                    draw_dynamic(14, ERASE);
                     // draw_dynamic (14, brakeSPID.get_proportionality(), -1, -1);
                     draw_dynamic(15, sim_brkpos, -1, -1);
                     draw_dynamic(16, sim_joy, -1, -1);
@@ -673,8 +699,11 @@ class Display {
                     draw_dynamic(19, sim_speedo, -1, -1);
                 }
                 else if (dataset_page == PG_JOY) {
-                    draw_dynamic(12, ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
-                    draw_dynamic(13, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
+                    draw_dynamic(9, ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
+                    draw_dynamic(10, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
+                    draw_dynamic(11, ERASE);
+                    draw_dynamic(12, ERASE);
+                    draw_dynamic(13, ERASE);
                     draw_dynamic(14, ctrl_lims_adc[ctrl][HORZ][MIN], 0, ctrl_lims_adc[ctrl][HORZ][MAX]);
                     draw_dynamic(15, ctrl_lims_adc[ctrl][HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][MIN], adcrange_adc);
                     draw_dynamic(16, ctrl_lims_adc[ctrl][HORZ][DB], 0, 2*(min (ctrl_lims_adc[ctrl][HORZ][CENT]-ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]-ctrl_lims_adc[ctrl][HORZ][CENT]) -1));
@@ -683,6 +712,9 @@ class Display {
                     draw_dynamic(19, ctrl_lims_adc[ctrl][VERT][DB], 0, 2*(min (ctrl_lims_adc[ctrl][VERT][CENT]-ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]-ctrl_lims_adc[ctrl][VERT][CENT]) -1));
                 }
                 else if (dataset_page == PG_CAR) {
+                    draw_dynamic(9, ERASE);
+                    draw_dynamic(10, ERASE);
+                    draw_dynamic(11, ERASE);
                     draw_dynamic(12, gas_governor_percent, 0, 100);
                     draw_dynamic(13, tach_idle_rpm, 0.0, tach_redline_rpm);
                     draw_dynamic(14, tach_redline_rpm, 0.0, tach_max_rpm);
@@ -695,6 +727,9 @@ class Display {
                     draw_dynamic(19, cal_pot_gasservo, -1, -1);
                 }
                 else if (dataset_page == PG_PWMS) {
+                    draw_dynamic(9, ERASE);
+                    draw_dynamic(10, ERASE);
+                    draw_dynamic(11, ERASE);
                     draw_dynamic(12, steer_pulse_left_us, steer_pulse_stop_us, steer_pulse_left_max_us);
                     draw_dynamic(13, steer_pulse_stop_us, steer_pulse_left_us, steer_pulse_right_us);
                     draw_dynamic(14, steer_pulse_right_us, steer_pulse_right_min_us, steer_pulse_stop_us);
@@ -706,46 +741,55 @@ class Display {
                 }
                 else if (dataset_page == PG_BPID) {
                     drange = brake_pulse_extend_us-brake_pulse_retract_us;
-                    draw_dynamic(12, brakeQPID.GetError(), pressure_min_psi-pressure_max_psi, pressure_max_psi-pressure_min_psi);
-                    draw_dynamic(13, brakeQPID.GetPterm(), -drange, drange);
-                    draw_dynamic(14, brakeQPID.GetIterm(), -drange, drange);
-                    draw_dynamic(15, brakeQPID.GetDterm(), -drange, drange);
+                    draw_dynamic(9, pressure_target_psi, pressure_min_psi, pressure_max_psi);
+                    draw_dynamic(10, brakeQPID.GetError(), pressure_min_psi-pressure_max_psi, pressure_max_psi-pressure_min_psi);
+                    draw_dynamic(11, brakeQPID.GetPterm(), -drange, drange);
+                    draw_dynamic(12, brakeQPID.GetIterm(), -drange, drange);
+                    draw_dynamic(13, brakeQPID.GetDterm(), -drange, drange);
                     // draw_dynamic(16, brake_pulse_out_us, (float)brake_pulse_retract_us, (float)brake_pulse_extend_us);  // brake_spid_speedo_delta_adc, -range, range);
-                    draw_dynamic(16, brakeQPID.GetOutputSum(), (float)brake_pulse_retract_us, (float)brake_pulse_extend_us);  // brake_spid_speedo_delta_adc, -range, range);
+                    draw_dynamic(14, brakeQPID.GetOutputSum(), (float)brake_pulse_retract_us, (float)brake_pulse_extend_us);  // brake_spid_speedo_delta_adc, -range, range);
+                    draw_dynamic(15, ERASE);
+                    draw_dynamic(16, ERASE);
                     draw_dynamic(17, brakeQPID.GetKp(), 0.0, 2.0);
                     draw_dynamic(18, brakeQPID.GetKi(), 0.0, 2.0);
                     draw_dynamic(19, brakeQPID.GetKd(), 0.0, 2.0);
                 }
                 else if (dataset_page == PG_GPID) {
                     drange = gas_pulse_idle_us-gas_pulse_govern_us;
-                    draw_dynamic(12, gasQPID.GetError(), tach_idle_rpm-tach_govern_rpm, tach_govern_rpm-tach_idle_rpm);
-                    draw_dynamic(13, gasQPID.GetPterm(), -drange, drange);
-                    draw_dynamic(14, gasQPID.GetIterm(), -drange, drange);
-                    draw_dynamic(15, gasQPID.GetDterm(), -drange, drange);
+                    draw_dynamic(9, tach_target_rpm, 0.0, tach_redline_rpm);
+                    draw_dynamic(10, gasQPID.GetError(), tach_idle_rpm-tach_govern_rpm, tach_govern_rpm-tach_idle_rpm);
+                    draw_dynamic(11, gasQPID.GetPterm(), -drange, drange);
+                    draw_dynamic(12, gasQPID.GetIterm(), -drange, drange);
+                    draw_dynamic(13, gasQPID.GetDterm(), -drange, drange);
                     // draw_dynamic(16, gas_pulse_out_us, gas_pulse_idle_us, gas_pulse_govern_us);  // gas_spid_speedo_delta_adc, -drange, drange);
-                    draw_dynamic(16, gasQPID.GetOutputSum(), (float)gas_pulse_idle_us, (float)gas_pulse_govern_us);
+                    draw_dynamic(14, gasQPID.GetOutputSum(), (float)gas_pulse_idle_us, (float)gas_pulse_govern_us);
+                    draw_dynamic(15, ERASE);
+                    draw_dynamic(16, ERASE);
                     draw_dynamic(17, gasQPID.GetKp(), 0.0, 2.0);
                     draw_dynamic(18, gasQPID.GetKi(), 0.0, 2.0);
                     draw_dynamic(19, gasQPID.GetKd(), 0.0, 2.0);
                 }
                 else if (dataset_page == PG_CPID) {
                     drange = tach_govern_rpm-tach_idle_rpm;
-                    draw_dynamic(12, cruiseQPID.GetError(), speedo_idle_mph-speedo_govern_mph, speedo_govern_mph-speedo_idle_mph);
-                    draw_dynamic(13, cruiseQPID.GetPterm(), -drange, drange);
-                    draw_dynamic(14, cruiseQPID.GetIterm(), -drange, drange);
-                    draw_dynamic(15, cruiseQPID.GetDterm(), -drange, drange);
+                    draw_dynamic(9, speedo_target_mph, 0.0, speedo_govern_mph);
+                    draw_dynamic(10, cruiseQPID.GetError(), speedo_idle_mph-speedo_govern_mph, speedo_govern_mph-speedo_idle_mph);
+                    draw_dynamic(11, cruiseQPID.GetPterm(), -drange, drange);
+                    draw_dynamic(12, cruiseQPID.GetIterm(), -drange, drange);
+                    draw_dynamic(13, cruiseQPID.GetDterm(), -drange, drange);
                     // draw_dynamic(16, tach_target_rpm, tach_idle_rpm, tach_govern_rpm);  // cruise_spid_speedo_delta_adc, -drange, drange);
-                    draw_dynamic(16, cruiseQPID.GetOutputSum(), tach_idle_rpm, tach_govern_rpm);  // cruise_spid_speedo_delta_adc, -drange, drange);
+                    draw_dynamic(14, cruiseQPID.GetOutputSum(), tach_idle_rpm, tach_govern_rpm);  // cruise_spid_speedo_delta_adc, -drange, drange);
+                    draw_dynamic(15, ERASE);
+                    draw_dynamic(16, ERASE);
                     draw_dynamic(17, cruiseQPID.GetKp(), 0.0, 2.0);
                     draw_dynamic(18, cruiseQPID.GetKi(), 0.0, 2.0);
                     draw_dynamic(19, cruiseQPID.GetKd(), 0.0, 2.0);
                 }
                 else if (dataset_page == PG_TEMP) {
-                    draw_dynamic(12, temps[AMBIENT], temp_min, temp_max);
-                    draw_dynamic(13, temps[ENGINE], temp_min, temp_max);
-                    // draw_dynamic(14, temps[WHEEL_FL], temp_min, temp_max);
-                    // draw_dynamic(15, temps[WHEEL_FR], temp_min, temp_max);
-                    // draw_dynamic(16, temps[WHEEL_RL], temp_min, temp_max);
+                    draw_dynamic(9, temps[AMBIENT], temp_min, temp_max);
+                    draw_dynamic(10, temps[ENGINE], temp_min, temp_max);
+                    draw_dynamic(11, temps[WHEEL_FL], temp_min, temp_max);
+                    draw_dynamic(12, temps[WHEEL_FR], temp_min, temp_max);
+                    draw_dynamic(13, temps[WHEEL_RL], temp_min, temp_max);
                     // draw_dynamic(14, temps[WHEEL_RR], temp_min, temp_max);
                     draw_dynamic(14, hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][MIN], hotrc_pulse_lims_us[HORZ][MAX]);  // Programmed centerpoint is 230 adc
                     draw_dynamic(15, hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);  // Programmed centerpoint is 230 adc

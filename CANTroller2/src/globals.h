@@ -225,6 +225,7 @@ bool car_initially_moved = false;  // Whether car has moved at all since enterin
 bool calmode_request = false;
 bool panic_stop = false;
 bool flycruise_toggle_request = false;
+int32_t flycruise_vert_margin_adc = 25;  // Default margin of error for comparisons of adc values (ADC count 0-4095)
 bool cruise_gesturing = false;  // Is cruise mode enabled by gesturing?  Otherwise by press of cruise button
 bool cruise_sw_held = false;
 bool cruise_adjusting = false;
@@ -234,8 +235,10 @@ Timer sleepInactivityTimer (10000000);  // After shutdown how long to wait befor
 Timer stopcarTimer (7000000);  // Allows code to fail in a sensible way after a delay if nothing is happening
 //  ---- tunable ----
 uint32_t motor_park_timeout_us = 4000000;  // If we can't park the motors faster than this, then give up.
-uint32_t gesture_flytimeout_us = 500000;  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
+uint32_t gesture_flytimeout_us = 400000;  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
 uint32_t cruise_sw_timeout_us = 500000;  // how long do you have to hold down the cruise button to start cruise mode (in us)
+uint32_t cruise_antiglitch_timeout_us = 350000;  // Target speed won't change until manual adjustment is outside deadboand for longer than this 
+Timer cruiseAntiglitchTimer(cruise_antiglitch_timeout_us);
 Timer motorParkTimer(motor_park_timeout_us);
 
 // calibration related
@@ -243,10 +246,6 @@ bool cal_joyvert_brkmotor = false;  // Allows direct control of brake motor usin
 bool cal_pot_gasservo = false;  // Allows direct control of gas servo using pot
 bool cal_pot_gas_ready = false;  // To avoid immediately overturning gas pot, first pot must be turned to valid range
 bool cal_set_hotrc_failsafe_ready = false;  
-
-// generic values
-//  ---- tunable ----
-int32_t default_margin_adc = 12;  // Default margin of error for comparisons of adc values (ADC count 0-4095)
 
 // pid related globals
 //  ---- tunable ----

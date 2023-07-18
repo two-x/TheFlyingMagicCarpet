@@ -449,7 +449,7 @@ void loop() {
     }
     else steer_pulse_out_us = steer_pulse_stop_us;  // Stop the steering motor if inside the deadband
     
-    if (button_it) printf ("hrz: %ld | saf: %ld | out %ld", ctrl_pos_adc[HORZ][FILT], steer_pulse_safe_us, steer_pulse_out_us);
+    // if (button_it) printf ("hrz: %ld | saf: %ld | out %ld", ctrl_pos_adc[HORZ][FILT], steer_pulse_safe_us, steer_pulse_out_us);
 
     // Voltage of vehicle battery
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
@@ -604,20 +604,20 @@ void loop() {
         if (flycruise_toggle_request) runmode = CRUISE;
         if (ctrl == JOY) {
             if (cruise_gesturing) {  // If we are configured to use joystick gestures to go to cruise mode, the gesture is 
-                if (!gesture_progress && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][TOP])  { // Re-zero gesture timer for potential new gesture whenever joystick at center
+                if (!gesture_progress && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][TOP]) {  // Re-zero gesture timer for potential new gesture whenever joystick at center
                     gestureFlyTimer.reset();
                 }
                 if (gestureFlyTimer.expired()) gesture_progress = 0; // If gesture timeout has expired, cancel any in-progress gesture
                 else {  // Otherwise check for successful gesture motions
-                    if (!gesture_progress && ctrl_pos_adc[VERT][FILT] >= ctrl_lims_adc[ctrl][VERT][MAX] - default_margin_adc)  { // If joystick quickly pushed to top, step 1 of gesture is successful
+                    if (!gesture_progress && ctrl_pos_adc[VERT][FILT] >= ctrl_lims_adc[ctrl][VERT][MAX] - flycruise_vert_margin_adc) {  // If joystick quickly pushed to top, step 1 of gesture is successful
                         gesture_progress++;
                         gestureFlyTimer.reset();
                     }
-                    else if (gesture_progress == 1 && ctrl_pos_adc[VERT][FILT] <= ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc)  { // If joystick then quickly pushed to bottom, step 2 succeeds
+                    else if (gesture_progress == 1 && ctrl_pos_adc[VERT][FILT] <= ctrl_lims_adc[ctrl][VERT][MIN] + flycruise_vert_margin_adc) {  // If joystick then quickly pushed to bottom, step 2 succeeds
                         gesture_progress++;
                         gestureFlyTimer.reset();
                     }
-                    else if (gesture_progress == 2 && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][TOP]) { // If joystick then quickly returned to center, go to Cruise mode
+                    else if (gesture_progress == 2 && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][TOP]) {  // If joystick then quickly returned to center, go to Cruise mode
                         runmode = CRUISE;
                     }        
                 }
@@ -651,25 +651,23 @@ void loop() {
             tach_target_rpm = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], tach_idle_rpm, tach_filt_rpm);
         }
         else cruise_adjusting = false;  // if joystick at center
-        if (cruise_adjusting) speedo_target_mph = speedo_filt_mph;
         
-        // This old gesture trigger drops to Fly mode if joystick moved quickly from center to bottom
-        // if (ctrl_pos_adc[VERT][FILT] <= ctrl_lims_adc[ctrl][VERT][MIN]+default_margin_adc && abs(mycros() - gesture_timer_us) < gesture_flytimeout_us)  runmode = FLY;  // If joystick quickly pushed to bottom 
-        // printf ("hotvpuls=%ld, hothpuls=%ld, joyvfilt=%ld, joyvmin+marg=%ld, timer=%ld\n", hotrc_vert_pulse_us, hotrc_horz_pulse_us, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc, gesture_timer_us);
+        if (!cruise_adjusting) cruiseAntiglitchTimer.reset();
+        else if (cruiseAntiglitchTimer.expired()) speedo_target_mph = speedo_filt_mph;
+
         if (flycruise_toggle_request) runmode = FLY;
-        if (ctrl == JOY) {
-            if (ctrl_pos_adc[VERT][FILT] > ctrl_lims_adc[ctrl][VERT][MIN] + default_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
-            else if (gestureFlyTimer.expired()) runmode = FLY;  // New gesture to drop to fly mode is hold the brake all the way down for 500 ms
-            // if (cruise_sw) cruise_sw_held = true;  // Pushing cruise button sets up return to fly mode
-            // else if (cruise_sw_held) {  // Release of button drops us back to fly mode
-            //     cruise_sw_held = false;
-            //     runmode = FLY;
-            // }
-        }
-        if (car_stopped()) {  // In case we slam into a brick wall, get out of cruise mode
-            if (serial_debugging) Serial.println (F("Error: Car stopped in cruise mode"));  // , speedo_filt_mph, neutral
-            runmode = HOLD;  // Back to Hold Mode  
-        }
+        if (ctrl_pos_adc[VERT][FILT] > ctrl_lims_adc[ctrl][VERT][MIN] + flycruise_vert_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
+        else if (gestureFlyTimer.expired()) runmode = FLY;  // New gesture to drop to fly mode is hold the brake all the way down for 500 ms
+        // This old gesture trigger drops to Fly mode if joystick moved quickly from center to bottom
+        // if (ctrl_pos_adc[VERT][FILT] <= ctrl_lims_adc[ctrl][VERT][MIN]+flycruise_vert_margin_adc && abs(mycros() - gesture_timer_us) < gesture_flytimeout_us)  runmode = FLY;  // If joystick quickly pushed to bottom 
+        // printf ("hotvpuls=%ld, hothpuls=%ld, joyvfilt=%ld, joyvmin+marg=%ld, timer=%ld\n", hotrc_vert_pulse_us, hotrc_horz_pulse_us, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN] + flycruise_vert_margin_adc, gesture_timer_us);
+        // 
+        // if (cruise_sw) cruise_sw_held = true;  // Pushing cruise button sets up return to fly mode
+        // else if (cruise_sw_held) {  // Release of button drops us back to fly mode
+        //     cruise_sw_held = false;
+        //     runmode = FLY;
+        // }
+        if (car_stopped()) runmode = HOLD;  // In case we slam into a brick wall, get out of cruise mode
     }
     else if (runmode == CAL) {
         if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
@@ -711,7 +709,7 @@ void loop() {
         steerPidTimer.reset();
         steer_pulse_out_us = constrain (steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);  // Don't be out of range
         steer_servo.writeMicroseconds (steer_pulse_out_us);   // Write steering value to jaguar servo interface
-        if (button_it) printf ("Str:%4lf", (int32_t)steer_pulse_out_us);
+        if (button_it) printf ("Str:%4ld", (int32_t)steer_pulse_out_us);
 
     }
     // Brakes - Update motor output
@@ -959,65 +957,65 @@ void loop() {
     adj = false;
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == PG_RUN) {
-            if (selected_value == 3) adj_bool (&sim_brkpos, sim_edit_delta);
-            else if (selected_value == 4) adj_bool (&sim_joy, sim_edit_delta);
-            else if (selected_value == 5) adj_bool (&sim_pressure, sim_edit_delta);
-            else if (selected_value == 6) adj_bool (&sim_tach, sim_edit_delta);
-            else if (selected_value == 7) adj_bool (&sim_speedo, sim_edit_delta);
+            if (selected_value == 6) adj_bool (&sim_brkpos, sim_edit_delta);
+            else if (selected_value == 7) adj_bool (&sim_joy, sim_edit_delta);
+            else if (selected_value == 8) adj_bool (&sim_pressure, sim_edit_delta);
+            else if (selected_value == 9) adj_bool (&sim_tach, sim_edit_delta);
+            else if (selected_value == 10) adj_bool (&sim_speedo, sim_edit_delta);
         }
         else if (dataset_page == PG_JOY) {
-            if (selected_value == 2) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][MIN], sim_edit_delta, 0, ctrl_lims_adc[ctrl][HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][DB] / 2 - 1);
-            else if (selected_value == 3) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][MAX], sim_edit_delta, ctrl_lims_adc[ctrl][HORZ][CENT] + ctrl_lims_adc[ctrl][HORZ][DB] / 2 + 1, ctrl_lims_adc[ctrl][HORZ][CENT]);
-            else if (selected_value == 4) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][DB], sim_edit_delta, 0, (ctrl_lims_adc[ctrl][HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][MIN] > ctrl_lims_adc[ctrl][HORZ][MAX] - ctrl_lims_adc[ctrl][HORZ][CENT]) ? 2*(ctrl_lims_adc[ctrl][HORZ][MAX] - ctrl_lims_adc[ctrl][HORZ][CENT]) : 2*(ctrl_lims_adc[ctrl][HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][MIN]));
-            else if (selected_value == 5) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][MIN], sim_edit_delta, 0, ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][DB] / 2 - 1);
-            else if (selected_value == 6) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][MAX], sim_edit_delta, ctrl_lims_adc[ctrl][VERT][CENT] + ctrl_lims_adc[ctrl][VERT][DB] / 2 + 1, ctrl_lims_adc[ctrl][VERT][CENT]);
-            else if (selected_value == 7) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][DB], sim_edit_delta, 0, (ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][MIN] > ctrl_lims_adc[ctrl][VERT][MAX] - ctrl_lims_adc[ctrl][VERT][CENT]) ? 2*(ctrl_lims_adc[ctrl][VERT][MAX] - ctrl_lims_adc[ctrl][VERT][CENT]) : 2*(ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][MIN]));
+            if (selected_value == 5) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][MIN], sim_edit_delta, 0, ctrl_lims_adc[ctrl][HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][DB] / 2 - 1);
+            else if (selected_value == 6) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][MAX], sim_edit_delta, ctrl_lims_adc[ctrl][HORZ][CENT] + ctrl_lims_adc[ctrl][HORZ][DB] / 2 + 1, ctrl_lims_adc[ctrl][HORZ][CENT]);
+            else if (selected_value == 7) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][DB], sim_edit_delta, 0, (ctrl_lims_adc[ctrl][HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][MIN] > ctrl_lims_adc[ctrl][HORZ][MAX] - ctrl_lims_adc[ctrl][HORZ][CENT]) ? 2*(ctrl_lims_adc[ctrl][HORZ][MAX] - ctrl_lims_adc[ctrl][HORZ][CENT]) : 2*(ctrl_lims_adc[ctrl][HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][MIN]));
+            else if (selected_value == 8) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][MIN], sim_edit_delta, 0, ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][DB] / 2 - 1);
+            else if (selected_value == 9) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][MAX], sim_edit_delta, ctrl_lims_adc[ctrl][VERT][CENT] + ctrl_lims_adc[ctrl][VERT][DB] / 2 + 1, ctrl_lims_adc[ctrl][VERT][CENT]);
+            else if (selected_value == 10) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][DB], sim_edit_delta, 0, (ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][MIN] > ctrl_lims_adc[ctrl][VERT][MAX] - ctrl_lims_adc[ctrl][VERT][CENT]) ? 2*(ctrl_lims_adc[ctrl][VERT][MAX] - ctrl_lims_adc[ctrl][VERT][CENT]) : 2*(ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][MIN]));
             if (adj) calc_ctrl_lims();  // update derived variables relevant to changes made
         }
         else if (dataset_page == PG_CAR) {
-            if (selected_value == 0) {
+            if (selected_value == 3) {
                 adj = adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);
                 if (adj) calc_governor();  // update derived variables relevant to changes made
             }
-            else if (selected_value == 1) adj_val (&tach_idle_rpm, 0.01*(float)sim_edit_delta, 0, tach_redline_rpm - 1);
-            else if (selected_value == 2) adj_val (&tach_redline_rpm, 0.01*(float)sim_edit_delta, tach_idle_rpm, 8000);
-            else if (selected_value == 3) adj_val (&speedo_idle_mph, 0.01*(float)sim_edit_delta, 0, speedo_redline_mph - 1);
-            else if (selected_value == 4) adj_val (&speedo_redline_mph, 0.01*(float)sim_edit_delta, speedo_idle_mph, 30);
-            else if (selected_value == 5) gas_open_loop = (sim_edit_delta > 0);
-            else if (selected_value == 6 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor, sim_edit_delta);
-            else if (selected_value == 7 && runmode == CAL) adj_bool (&cal_pot_gasservo, (sim_edit_delta < 0 || cal_pot_gas_ready) ? sim_edit_delta : -1);
+            else if (selected_value == 4) adj_val (&tach_idle_rpm, 0.01*(float)sim_edit_delta, 0, tach_redline_rpm - 1);
+            else if (selected_value == 5) adj_val (&tach_redline_rpm, 0.01*(float)sim_edit_delta, tach_idle_rpm, 8000);
+            else if (selected_value == 6) adj_val (&speedo_idle_mph, 0.01*(float)sim_edit_delta, 0, speedo_redline_mph - 1);
+            else if (selected_value == 7) adj_val (&speedo_redline_mph, 0.01*(float)sim_edit_delta, speedo_idle_mph, 30);
+            else if (selected_value == 8) gas_open_loop = (sim_edit_delta > 0);
+            else if (selected_value == 9 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor, sim_edit_delta);
+            else if (selected_value == 10 && runmode == CAL) adj_bool (&cal_pot_gasservo, (sim_edit_delta < 0 || cal_pot_gas_ready) ? sim_edit_delta : -1);
       }
         else if (dataset_page == PG_PWMS) {
-            if (selected_value == 0) adj_val (&steer_pulse_left_us, sim_edit_delta, steer_pulse_stop_us + 1, steer_pulse_left_max_us);
-            else if (selected_value == 1) adj_val (&steer_pulse_stop_us, sim_edit_delta, steer_pulse_right_us + 1, steer_pulse_left_us - 1);
-            else if (selected_value == 2) adj_val (&steer_pulse_right_us, sim_edit_delta, steer_pulse_right_min_us, steer_pulse_stop_us - 1);
-            else if (selected_value == 3) adj_val (&brake_pulse_extend_us, sim_edit_delta, brake_pulse_stop_us + 1, brake_pulse_extend_max_us);
-            else if (selected_value == 4) adj_val (&brake_pulse_stop_us, sim_edit_delta, brake_pulse_retract_us + 1, brake_pulse_extend_us - 1);
-            else if (selected_value == 5) adj_val (&brake_pulse_retract_us, sim_edit_delta, brake_pulse_retract_min_us, brake_pulse_stop_us -1);
-            else if (selected_value == 6) adj_val (&gas_pulse_idle_us, sim_edit_delta, gas_pulse_redline_us + 1, gas_pulse_ccw_max_us - gas_pulse_park_slack_us);
-            else if (selected_value == 7) adj_val (&gas_pulse_redline_us, sim_edit_delta, gas_pulse_cw_min_us, gas_pulse_idle_us - 1);
+            if (selected_value == 3) adj_val (&steer_pulse_left_us, sim_edit_delta, steer_pulse_stop_us + 1, steer_pulse_left_max_us);
+            else if (selected_value == 4) adj_val (&steer_pulse_stop_us, sim_edit_delta, steer_pulse_right_us + 1, steer_pulse_left_us - 1);
+            else if (selected_value == 5) adj_val (&steer_pulse_right_us, sim_edit_delta, steer_pulse_right_min_us, steer_pulse_stop_us - 1);
+            else if (selected_value == 6) adj_val (&brake_pulse_extend_us, sim_edit_delta, brake_pulse_stop_us + 1, brake_pulse_extend_max_us);
+            else if (selected_value == 7) adj_val (&brake_pulse_stop_us, sim_edit_delta, brake_pulse_retract_us + 1, brake_pulse_extend_us - 1);
+            else if (selected_value == 8) adj_val (&brake_pulse_retract_us, sim_edit_delta, brake_pulse_retract_min_us, brake_pulse_stop_us -1);
+            else if (selected_value == 9) adj_val (&gas_pulse_idle_us, sim_edit_delta, gas_pulse_redline_us + 1, gas_pulse_ccw_max_us - gas_pulse_park_slack_us);
+            else if (selected_value == 10) adj_val (&gas_pulse_redline_us, sim_edit_delta, gas_pulse_cw_min_us, gas_pulse_idle_us - 1);
         }
         else if (dataset_page == PG_BPID) {
-            if (selected_value == 5) brakeQPID.SetKp (brakeQPID.GetKp() + 0.001 * (float)sim_edit_delta);
-            else if (selected_value == 6) brakeQPID.SetKi (brakeQPID.GetKi() + 0.001 * (float)sim_edit_delta);
-            else if (selected_value == 7) brakeQPID.SetKd (brakeQPID.GetKd() + 0.001 * (float)sim_edit_delta);
+            if (selected_value == 8) brakeQPID.SetKp (brakeQPID.GetKp() + 0.001 * (float)sim_edit_delta);
+            else if (selected_value == 9) brakeQPID.SetKi (brakeQPID.GetKi() + 0.001 * (float)sim_edit_delta);
+            else if (selected_value == 10) brakeQPID.SetKd (brakeQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }
         else if (dataset_page == PG_GPID) {
-            if (selected_value == 5) gasQPID.SetKp (gasQPID.GetKp() + 0.001 * (float)sim_edit_delta);
-            else if (selected_value == 6) gasQPID.SetKi (gasQPID.GetKi() + 0.001 * (float)sim_edit_delta);
-            else if (selected_value == 7) gasQPID.SetKd (gasQPID.GetKd() + 0.001 * (float)sim_edit_delta);
+            if (selected_value == 8) gasQPID.SetKp (gasQPID.GetKp() + 0.001 * (float)sim_edit_delta);
+            else if (selected_value == 9) gasQPID.SetKi (gasQPID.GetKi() + 0.001 * (float)sim_edit_delta);
+            else if (selected_value == 10) gasQPID.SetKd (gasQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }
         else if (dataset_page == PG_CPID) {
-            if (selected_value == 5) cruiseQPID.SetKp (cruiseQPID.GetKp() + 0.001 * (float)sim_edit_delta);
-            else if (selected_value == 6) cruiseQPID.SetKi (cruiseQPID.GetKi() + 0.001 * (float)sim_edit_delta);
-            else if (selected_value == 7) cruiseQPID.SetKd (cruiseQPID.GetKd() + 0.001 * (float)sim_edit_delta);
+            if (selected_value == 8) cruiseQPID.SetKp (cruiseQPID.GetKp() + 0.001 * (float)sim_edit_delta);
+            else if (selected_value == 9) cruiseQPID.SetKi (cruiseQPID.GetKi() + 0.001 * (float)sim_edit_delta);
+            else if (selected_value == 10) cruiseQPID.SetKd (cruiseQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }
         else if (dataset_page == PG_TEMP) {        
             // if (selected_value == 4) 
-            if (selected_value == 5) adj_val (&hotrc_pulse_failsafe_min_us, sim_edit_delta, 700, hotrc_pulse_failsafe_max_us - 1);
-            else if (selected_value == 6) adj_val (&hotrc_pulse_failsafe_max_us, sim_edit_delta, hotrc_pulse_failsafe_min_us + 1, hotrc_pulse_lims_us[VERT][MIN] - 1);
-            else if (selected_value == 4) adj_val (&pot_overload, sim_edit_delta, 0, 3);
-            else if (selected_value == 7) adj_val (&pressure_adc, sim_edit_delta, pressure_min_adc, pressure_max_adc);
+            if (selected_value == 7) adj_val (&hotrc_pulse_failsafe_min_us, sim_edit_delta, 700, hotrc_pulse_failsafe_max_us - 1);
+            else if (selected_value == 8) adj_val (&hotrc_pulse_failsafe_max_us, sim_edit_delta, hotrc_pulse_failsafe_min_us + 1, hotrc_pulse_lims_us[VERT][MIN] - 1);
+            else if (selected_value == 9) adj_val (&pot_overload, sim_edit_delta, 0, 3);
+            else if (selected_value == 10) adj_val (&pressure_adc, sim_edit_delta, pressure_min_adc, pressure_max_adc);
             // else if (selected_value == 7) adj_val (&brake_pos_zeropoint_in, 0.001*sim_edit_delta, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
         }
         sim_edit_delta = 0;
