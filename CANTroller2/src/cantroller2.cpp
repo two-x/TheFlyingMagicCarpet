@@ -25,8 +25,8 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names
     index++;
 }
 
-HotrcManager hotrcHorzManager (45);
-HotrcManager hotrcVertManager (45);
+HotrcManager hotrcHorzManager (22);
+HotrcManager hotrcVertManager (22);
 //Hotrc hotrc (&hotrc_vert_pulse_filt_us, hotrc_pulse_failsafe_min_us, hotrc_pulse_failsafe_max_us, hotrc_pulse_failsafe_pad_us);
     
 Display screen(tft_cs_pin, tft_dc_pin);
@@ -396,79 +396,45 @@ void loop() {
     //
     // Read horz and vert inputs, determine steering pwm output -  - takes 40 us to read. Then, takes 13 us to handle
     if (ctrl != JOY) {
-        // hotrc_horz_pulse_us = hotrcManager.spike_filter ((int32_t)hotrc_horz_pulse_64_us);
-        // hotrc_vert_pulse_us = hotrcManager.spike_filter ((int32_t)hotrc_vert_pulse_64_us);
         hotrc_horz_pulse_us = (int32_t)hotrc_horz_pulse_64_us;
         hotrc_vert_pulse_us = (int32_t)hotrc_vert_pulse_64_us;
-    
-        if (button_it) printf ("liv H:%4ld V:%4ld | new H:%4ld V:%4ld | spk (", hotrc_horz_pulse_us, hotrc_vert_pulse_us, hotrcHorzManager.get_next_rawval(), hotrcVertManager.get_next_rawval());
-
+        // if (button_it) printf ("liv H:%4ld V:%4ld | new H:%4ld V:%4ld | spk (", hotrc_horz_pulse_us, hotrc_vert_pulse_us, hotrcHorzManager.get_next_rawval(), hotrcVertManager.get_next_rawval());
         hotrc_horz_pulse_us = hotrcHorzManager.spike_filter (hotrc_horz_pulse_us);
-        
-        if (button_it) printf (" ");
-
-        hotrc_vert_pulse_us = hotrcVertManager.spike_filter (hotrc_vert_pulse_us);
-    
-        if (button_it) printf (") H:%4ld V:%4ld", hotrc_horz_pulse_us, hotrc_vert_pulse_us);    
+        hotrc_vert_pulse_us = hotrcVertManager.spike_filter (hotrc_vert_pulse_us); 
+        // if (button_it) printf (") H:%4ld V:%4ld", hotrc_horz_pulse_us, hotrc_vert_pulse_us);    
     }
-
-    
     if (!simulating || !sim_joy) {  // Handle HotRC button generated events and detect potential loss of radio signal
         if (ctrl != JOY) {
-            // printf (" 1R:%4ld 2R:%4ld 1A:%4ld 2A:%4ld", hotrc_horz_pulse_us, hotrc_vert_pulse_us, hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us);
-            
-            // ema_filt (hotrc_horz_pulse_us, &hotrc_horz_pulse_filt_us, ctrl_ema_alpha[ctrl]);  // Used to detect loss of radio
-            ema_filt (hotrc_vert_pulse_us, &hotrc_vert_pulse_filt_us, ctrl_ema_alpha[ctrl]);  // Used to detect loss of radio
+            ema_filt (hotrc_horz_pulse_us, &hotrc_horz_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Just here for debugging. Do not need filtered horz value
+            ema_filt (hotrc_vert_pulse_us, &hotrc_vert_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Used to detect loss of radio
             if (button_it) printf (" | ema H:%4ld V:%4ld", hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us);
         }
         if (ctrl == HOTRC) {
-            // hotrc_horz_pulse_filt_us = constrain (hotrc_horz_pulse_filt_us, hotrc_pulse_lims_us[HORZ][MIN], hotrc_pulse_lims_us[HORZ][MAX]);
-            // hotrc_vert_pulse_filt_us = constrain (hotrc_vert_pulse_filt_us, hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);
-            // // ctrl_pos_adc[HORZ][FILT] = map (hotrc_horz_pulse_filt_us, hotrc_pulse_lims_us[HORZ][MIN], hotrc_pulse_lims_us[HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
-            // // ctrl_pos_adc[VERT][FILT] = map (hotrc_vert_pulse_filt_us, hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX], ctrl_lims_adc[ctrl][VERT][MAX], ctrl_lims_adc[ctrl][VERT][MIN]);
-            // if (hotrc_horz_pulse_filt_us >= hotrc_pulse_lims_us[HORZ][CENT])  // Steering: Convert from pulse us to joystick adc equivalent, when pushing left, or right
-            //      ctrl_pos_adc[HORZ][FILT] = map (hotrc_horz_pulse_filt_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MAX]);
-            // else ctrl_pos_adc[HORZ][FILT] = map (hotrc_horz_pulse_filt_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MIN]);
-            // if (hotrc_vert_pulse_filt_us >= hotrc_pulse_lims_us[VERT][CENT])  // Trigger: Convert from pulse us to joystick adc equivalent, when pushing down
-            //      ctrl_pos_adc[VERT][FILT] = map (hotrc_vert_pulse_filt_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MAX], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MIN]);
-            // else ctrl_pos_adc[VERT][FILT] = map (hotrc_vert_pulse_filt_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MIN], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MAX]);
-            // ctrl_pos_adc[HORZ][RAW] = ctrl_pos_adc[HORZ][FILT];  // raw value isn't used I think but just in case
-            // ctrl_pos_adc[VERT][RAW] = ctrl_pos_adc[VERT][FILT];  // raw value isn't used I think but just in case
-            
             if (hotrc_horz_pulse_us >= hotrc_pulse_lims_us[HORZ][CENT])  // Steering: Convert from pulse us to joystick adc equivalent, when pushing right, else pushing left
                  ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MAX]);
             else ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MIN]);
             if (hotrc_vert_pulse_us >= hotrc_pulse_lims_us[VERT][CENT])  // Trigger: Convert from pulse us to joystick adc equivalent, for trigger pull, else trigger push
                  ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MAX], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MAX]);
             else ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MIN], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MIN]);  
-        
-            // if (hotrc_horz_pulse_us >= hotrc_pulse_lims_us[HORZ][CENT])  // Steering: Convert from pulse us to joystick adc equivalent, when pushing right, else pushing left
-            //      ctrl_pos_adc[HORZ][RAW] = mapfast (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][CENT], hotrc_mapratio[HORZ][MAX]);
-            // else ctrl_pos_adc[HORZ][RAW] = mapfast (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][CENT], hotrc_mapratio[HORZ][MIN]);
-            // if (hotrc_vert_pulse_us >= hotrc_pulse_lims_us[VERT][CENT])  // Trigger: Convert from pulse us to joystick adc equivalent, for trigger pull, else trigger push
-            //      ctrl_pos_adc[VERT][RAW] = mapfast (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], ctrl_lims_adc[ctrl][VERT][CENT], hotrc_mapratio[VERT][MAX]);
-            // else ctrl_pos_adc[VERT][RAW] = mapfast (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], ctrl_lims_adc[ctrl][VERT][CENT], hotrc_mapratio[VERT][MIN]);
-
-        }  // (out_max - out_min) / (in_max - in_min)
+        }
         else if (ctrl == JOY) {
             ctrl_pos_adc[VERT][RAW] = analogRead (joy_vert_pin);  // Read joy vertical
             ctrl_pos_adc[HORZ][RAW] = analogRead (joy_horz_pin);  // Read joy horizontal
-            // ema_filt (ctrl_pos_adc[VERT][RAW], &ctrl_pos_adc[VERT][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_vert_filt
-            // ema_filt (ctrl_pos_adc[HORZ][RAW], &ctrl_pos_adc[HORZ][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_horz_filt
         }
+        // if (button_it) printf (" | Craw0 H:%4ld V:%4ld", ctrl_pos_adc[HORZ][RAW], ctrl_pos_adc[VERT][RAW]);
+        // if (button_it) printf (" | Cflt0 H:%4ld V:%4ld", ctrl_pos_adc[HORZ][FILT], ctrl_pos_adc[VERT][FILT]);
         ema_filt (ctrl_pos_adc[VERT][RAW], &ctrl_pos_adc[VERT][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_vert_filt
         ema_filt (ctrl_pos_adc[HORZ][RAW], &ctrl_pos_adc[HORZ][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_horz_filt
         ctrl_pos_adc[VERT][FILT] = constrain (ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
         ctrl_pos_adc[HORZ][FILT] = constrain (ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
-
-        if (ctrl_pos_adc[VERT][RAW] > ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][RAW] < ctrl_db_adc[VERT][TOP]) {
-            ctrl_pos_adc[VERT][FILT] = ctrl_pos_adc[VERT][CENT];  // if joy vert is in the deadband, set joy_vert_filt to center value
-            // if (ctrl == HOTRC) hotrc_vert_pulse_filt_us = hotrc_pulse_lims_us[VERT][CENT];
+        // if (button_it) printf (" | Cflt1 H:%4ld V:%4ld", ctrl_pos_adc[HORZ][FILT], ctrl_pos_adc[VERT][FILT]);
+        if ((ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) && (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP])) {
+            ctrl_pos_adc[VERT][FILT] = ctrl_lims_adc[ctrl][VERT][CENT];  // if joy vert is in the deadband, set joy_vert_filt to center value
         }
-        if (ctrl_pos_adc[HORZ][RAW] > ctrl_db_adc[HORZ][BOT] && ctrl_pos_adc[HORZ][RAW] < ctrl_db_adc[HORZ][TOP]) {
-            ctrl_pos_adc[HORZ][FILT] = ctrl_pos_adc[HORZ][CENT];  // if joy horz is in the deadband, set joy_horz_filt to center value
-            // if (ctrl == HOTRC) hotrc_horz_pulse_filt_us = hotrc_pulse_lims_us[HORZ][CENT];
+        if ((ctrl_pos_adc[HORZ][FILT] > ctrl_db_adc[HORZ][BOT]) && (ctrl_pos_adc[HORZ][FILT] < ctrl_db_adc[HORZ][TOP])) {
+            ctrl_pos_adc[HORZ][FILT] = ctrl_lims_adc[ctrl][HORZ][CENT];  // if joy horz is in the deadband, set joy_horz_filt to center value
         }
+        // if (button_it) printf (" | Cflt2 H:%4ld V:%4ld\n", ctrl_pos_adc[HORZ][FILT], ctrl_pos_adc[VERT][FILT]);
     }
     if (runmode != SHUTDOWN || !shutdown_complete) { // Unless fully shut down at the moment, set the steering output
         if (ctrl_pos_adc[HORZ][FILT] >= ctrl_db_adc[HORZ][TOP]) {  // If above the top edge of the deadband, turning right
@@ -482,10 +448,8 @@ void loop() {
         else steer_pulse_out_us = steer_pulse_stop_us;  // Stop the steering motor if inside the deadband
     }
 
-    // Voltage of vehicle battery - takes 70 us to read, convert, and filter
+    // Voltage of vehicle battery
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
-    // battery_v = convert_units ((float)analogRead (battery_pin), battery_convert_v_per_adc, battery_convert_invert);
-    // ema_filt (battery_v, &battery_filt_v, battery_ema_alpha);  // Apply EMA filter
 
     if (ctrl == JOY) ignition = ignition_sense;
     else if (ctrl == HOTRC) {
@@ -499,9 +463,6 @@ void loop() {
             else flycruise_toggle_request = true;
             hotrc_ch4_sw_event = false;    
         }
-        // hotrc.calc();  // Add latest vert pulse reading into history log and calculate avg value for detecting loss of radio reception
-        // hotrc.print();
-        // if (hotrc_vert_pulse_us < hotrc.get_failsafe_min() || hotrc_vert_pulse_us > hotrc.get_failsafe_max()) {
         if (hotrc_vert_pulse_us > hotrc_pulse_failsafe_max_us) {
             hotrcPanicTimer.reset();
             hotrc_radio_detected = true;
@@ -512,9 +473,7 @@ void loop() {
         // hotrc_suppress_next_ch3_event = true;  // reject spurious ch3 switch event upon next hotrc poweron
         // hotrc_suppress_next_ch4_event = true;  // reject spurious ch4 switch event upon next hotrc poweron
     }
-    if (button_it) printf (" | flt H:%4ld V:%4ld | Craw H:%5ld V:%5ld | Cflt H:%4ld V:%4ld\n", hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us, ctrl_pos_adc[HORZ][RAW], ctrl_pos_adc[VERT][RAW], ctrl_pos_adc[HORZ][FILT], ctrl_pos_adc[VERT][FILT]);
-    // hotrc.calc();  // Add latest vert pulse reading into history log and calculate avg value for detecting loss of radio reception
-    // hotrc.print();
+    
 
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "joy");  //
     
@@ -669,10 +628,6 @@ void loop() {
             //     cruise_sw_held = true;  // Get into button held state
             // }
         }
-        // else if (flycruise_toggle_request) {
-        //     flycruise_toggle_request = false;
-        //     runmode = CRUISE;
-        // }
     }
     else if (runmode == CRUISE) {
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
@@ -708,10 +663,6 @@ void loop() {
             //     runmode = FLY;
             // }
         }
-        // else if (flycruise_toggle_request) {
-        //     flycruise_toggle_request = false;
-        //     runmode = FLY;
-        // }
         if (car_stopped()) {  // In case we slam into a brick wall, get out of cruise mode
             if (serial_debugging) Serial.println (F("Error: Car stopped in cruise mode"));  // , speedo_filt_mph, neutral
             runmode = HOLD;  // Back to Hold Mode  
@@ -751,15 +702,15 @@ void loop() {
 
     // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
     //
-    
+
     // Steering - Update motor output
-    if (steerPidTimer.expired()) {
+    if (steerPidTimer.expired() && !(runmode == SHUTDOWN && shutdown_complete)) {
         steerPidTimer.reset();
         steer_pulse_out_us = constrain (steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);  // Don't be out of range
         steer_servo.writeMicroseconds (steer_pulse_out_us);   // Write steering value to jaguar servo interface
     }
     // Brakes - Update motor output
-    if (brakePidTimer.expired()) {
+    if (brakePidTimer.expired() && !(runmode == SHUTDOWN && shutdown_complete)) {
         brakePidTimer.reset();
         if (runmode == CAL && cal_joyvert_brkmotor) {
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) brake_pulse_out_us = (float)map (ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], brake_pulse_stop_us, brake_pulse_extend_us);
@@ -791,7 +742,7 @@ void loop() {
         cruiseQPID.Compute();  // 
     }
     // Gas - Update servo output. Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
-    if (gasPidTimer.expired()) {
+    if (gasPidTimer.expired() && !(runmode == SHUTDOWN && shutdown_complete)) {
         gasPidTimer.reset();
         if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
@@ -859,10 +810,8 @@ void loop() {
     // Touchscreen handling - takes 800 us to handle every 20ms when the touch timer expires, otherwise 20 us (includes touch timer + encoder handling w/o activity)
     //
     int32_t touch_x, touch_y, trow, tcol;
-    bool get_touched;
     // if (screen.ts.touched() == 1 ) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
-    get_touched = (touch_irq_pin == 255) ? ts.touched() : ts.tirqTouched();
-    if (get_touched) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
+    if (ts.touched()) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
         touch_accel = 1 << touch_accel_exponent;  // determine value editing rate
         // TS_Point touchpoint = screen.ts.getPoint();  // Retreive a point
         TS_Point touchpoint = ts.getPoint();  // Retreive a point
@@ -902,9 +851,8 @@ void loop() {
                 selected_value++;  // and move to next selection
             }
             else if (tuning_ctrl == SELECT) {
-                if (!touch_now_touched) {
-                    if (++selected_value >= arraysize (dataset_page_names[dataset_page])) selected_value -= arraysize (dataset_page_names[dataset_page]);
-                }
+                if (!touch_now_touched) selected_value = (selected_value + 1) % arraysize (dataset_page_names[dataset_page]);
+                    // if (++selected_value >= arraysize (dataset_page_names[dataset_page])) selected_value -= arraysize (dataset_page_names[dataset_page]);
                 else if (touch_longpress_valid && touchHoldTimer.expired()) {
                     tuning_ctrl = OFF;
                     touch_longpress_valid = false;
@@ -936,7 +884,7 @@ void loop() {
             else if (tcol==3 && trow==1 && sim_pressure) adj_val (&pressure_filt_psi, (float)touch_accel, pressure_min_psi, pressure_max_psi);   // (+= 25) Pressed the increase brake pressure button
             else if (tcol==3 && trow==2 && sim_pressure) adj_val (&pressure_filt_psi, (float)(-touch_accel), pressure_min_psi, pressure_max_psi); // (-= 25) Pressed the decrease brake pressure button
             else if (tcol==3 && trow==4 && sim_joy) adj_val (&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (-= 25) Pressed the joystick left button
-            else if (tcol==4 && trow==0 && !touch_now_touched) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
+            else if (tcol==4 && trow==0 && sim_ignition && !touch_now_touched) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
             else if (tcol==4 && trow==1 && sim_tach) adj_val (&tach_filt_rpm, (float)touch_accel, 0.0, tach_redline_rpm);  // (+= 25) Pressed the increase engine rpm button
             else if (tcol==4 && trow==2 && sim_tach) adj_val (&tach_filt_rpm, (float)(-touch_accel), 0.0, tach_redline_rpm);  // (-= 25) Pressed the decrease engine rpm button
             else if (tcol==4 && trow==3 && sim_joy) adj_val (&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (+= 25) Pressed the joystick up button
@@ -1163,11 +1111,6 @@ void loop() {
             for (int32_t x=1; x<loopindex; x++) std::cout << " " << std::setw(3) << loop_names[x] << x << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1];
             std::cout << std::endl;
         }
-        // else {
-        //     std::cout << loop_report;
-        //     loop_report("");
-        // }
-
         // std::cout << "\rRM:" << runmode << " us:" << esp_timer_get_time() << " Lp#" << loopno << " us:" << loop_period_us;
         // for (int32_t x=1; x<loopindex; x++) std::cout << " " << std::setw(3) << loop_names[x] << x << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1];
         // if (loop_period_us > 25000) printf ("\n");

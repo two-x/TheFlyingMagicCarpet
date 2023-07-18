@@ -317,8 +317,8 @@ bool hotrc_suppress_next_ch3_event = true;  // When powered up, the hotrc will t
 bool hotrc_suppress_next_ch4_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 //  ---- tunable ----
 float hotrc_pulse_period_us = 1000000.0 / 50;
-float ctrl_ema_alpha[2] = { 0.01, 0.01 };  // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-int32_t ctrl_lims_adc[2][2][4] = { { { 0, adcmidscale_adc, adcrange_adc, 350 }, { 0, adcmidscale_adc, adcrange_adc, 350 } }, { { 9, adcmidscale_adc, 4085, 200 }, { 9, adcmidscale_adc, 4085, 200 } } }; // [HOTRC/JOY] [HORZ/VERT], [MIN/CENT/MAX/DB] values as microseconds (hotrc) or adc counts (joystick)
+float ctrl_ema_alpha[2] = { 0.05, 0.05 };  // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+int32_t ctrl_lims_adc[2][2][4] = { { { 0, adcmidscale_adc, adcrange_adc, 42 }, { 0, adcmidscale_adc, adcrange_adc, 42 } }, { { 9, adcmidscale_adc, 4085, 50 }, { 9, adcmidscale_adc, 4085, 50 } } }; // [HOTRC/JOY] [HORZ/VERT], [MIN/CENT/MAX/DB] values as microseconds (hotrc) or adc counts (joystick)
 bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
 // bool ctrl = HEADLESS;
 // Limits of what pulsewidth the hotrc receiver puts out
@@ -326,6 +326,7 @@ bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
 int32_t hotrc_pulse_lims_us[4][3] = { { 970-1, 1470-3, 1970-3 }, { 1080-1, 1580-3, 2080-3 }, { 1200-1, 1500-2, 1800-3 }, { 1300-1, 1500-2, 1700-3 } };  // [HORZ/VERT/CH3/CH4] [MIN/CENT/MAX]  // These are the l
 int32_t hotrc_spike_buffer[2][3];
 // float hotrc_mapratio[2][3]; // [HORZ/VERT] [MIN/-/MAX]
+
 volatile int64_t hotrc_timer_start;
 volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
 volatile bool hotrc_isr_pin_preread = true;
@@ -531,7 +532,7 @@ bool ignition = LOW;
 bool ignition_last = ignition;
 bool ignition_output_enabled = false;  // disallows configuration of ignition pin as an output until hotrc detected
 bool ignition_sense = ignition;
-float ignition_on_thresh_v = 6.5;  // Below this voltage ignition is considered off
+float ignition_on_thresh_v = 2.0;  // Below this voltage ignition is considered off
 bool syspower = HIGH;
 bool syspower_last = syspower;
 bool basicmodesw = LOW;
@@ -557,6 +558,7 @@ bool sim_cruisesw = true;
 bool sim_pressure = true;
 bool sim_syspower = true;
 bool sim_starter = true;
+bool sim_ignition = true;
 
 SdFat sd;  // SD card filesystem
 #define approot "cantroller2020"
@@ -640,13 +642,7 @@ void IRAM_ATTR speedo_isr (void) {  //  Handler can get the most recent rotation
         speedo_timer_start_us = speedo_timer_read_us;
         speedo_us = speedo_time_us;
     }
-}// void IRAM_ATTR speedo_isr (void) {  //  Handler can get the most recent rotation time at speedo_us
-//     speedo_time_us = speedoPulseTimer.elapsed();
-//     if (speedo_time_us > speedo_delta_abs_min_us) {  // ignore spurious triggers or bounces
-//         speedoPulseTimer.reset();
-//         speedo_us = speedo_time_us;    
-//     }
-// }
+}
 void IRAM_ATTR hotrc_horz_isr (void) {  // On falling edge, records high pulse width to determine ch1 steering slider position
     hotrc_horz_pulse_64_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
 }
@@ -666,8 +662,7 @@ void IRAM_ATTR hotrc_ch4_isr (void) {  // Triggers on both edges. Sets timer on 
         hotrc_ch4_sw_last = hotrc_ch4_sw;
     }
     hotrc_isr_pin_preread = !(digitalRead (hotrc_ch4_cruise_pin));  // Read pin after timer operations to maximize clocking accuracy
-    intcount++;
-}
+}  // intcount++;
 
 // Attempt to use MCPWM input capture pulse width timer unit to get precise hotrc readings
 // int32_t hotrc_ch3_pulse_us, hotrc_ch4_pulse_us;
@@ -707,17 +702,10 @@ void IRAM_ATTR hotrc_ch4_isr (void) {  // Triggers on both edges. Sets timer on 
 //   timerRestart(hotrc_vert_timer);
 // }
 
-// if (hotrc_vert_preread) hotrc_timer_start = esp_timer_get_time();  // hotrcPulseTimer.reset();
-// else hotrc_vert_pulse_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
-// hotrc_vert_preread = !(digitalRead (hotrc_ch2_vert_pin));  // Read pin after timer operations to maximize clocking accuracy
-
 // Utility functions
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays
 #define floor(amt, lim) ((amt <= lim) ? lim : amt)
 #define ceiling(amt, lim) ((amt >= lim) ? lim : amt)
-// #define constrain(amt,low,high) ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
-// #define min(a, b) ( (a <= b) ? a : b)
-// #define max(a, b) ( (a >= b) ? a : b)
 #undef max
 inline float max (float a, float b) { return (a > b) ? a : b; }
 inline int32_t max (int32_t a, int32_t b) { return (a > b) ? a : b; }
@@ -774,14 +762,6 @@ void calc_governor (void) {
     gas_pulse_govern_us = map ((int32_t)(gas_governor_percent*(tach_redline_rpm-tach_idle_rpm)/tach_redline_rpm), 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
     speedo_govern_mph = map ((float)gas_governor_percent, 0.0, 100.0, 0.0, speedo_redline_mph);  // Governor must scale the top vehicle speed proportionally
 }
-int32_t hotrc_spike_filter (int32_t raw_reading) {
-    return raw_reading;
-
-    // write function here to push argument into a LIFO array, replace any 1-4 long series of array
-    // values which are close to each other (abs w/i 30) but over 60 away from values on either side,
-    // with the average of the non-anomalous values, then pop a value to return.
-}
-
 // Exponential Moving Average filter : Smooth out noise on inputs. 0 < alpha < 1 where lower = smoother and higher = more responsive
 // Pass in a fresh raw value, address of filtered value, and alpha factor, filtered value will get updated
 void ema_filt (float raw, float* filt, float alpha) {
@@ -853,6 +833,9 @@ int32_t read_pin (int32_t pin) { return (pin >= 0 && pin != 255) ? digitalRead (
 //     if (en_gas != -1) gasSPID.set_enable ((bool)en_gas);
 //     if (en_cruise != -1) cruiseSPID.set_enable ((bool)en_cruise);
 // }
+
+// battery_v = convert_units ((float)analogRead (battery_pin), battery_convert_v_per_adc, battery_convert_invert);
+// ema_filt (battery_v, &battery_filt_v, battery_ema_alpha);  // Apply EMA filter
 bool read_battery_ignition (void) {  //Updates battery voltage and returns ignition on/off
     battery_adc = analogRead (ign_batt_pin);
     battery_v = convert_units (battery_adc, battery_convert_v_per_adc, battery_convert_invert);

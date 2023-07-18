@@ -391,44 +391,44 @@ class HotrcManager {
     int32_t spike_cliff, spike_length, this_delta, interpolated_slope, loopindex, previndex;
     int32_t prespike_index = -1;
     int32_t index = 1;  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
-    int32_t depth = 6;  // Longest spike the filter can detect
-    int32_t filt_history[6];  // Values after filtering.  It didn't accept filt_history[depth] - wtf
-    int32_t raw_history[6];  // Copies of the values read (don't need separate buffer, but useful to debug the filter)
+    int32_t depth = 9;  // Longest spike the filter can detect
+    int32_t filt_history[9];  // Values after filtering.  It didn't accept filt_history[depth] - wtf
+    int32_t raw_history[9];  // Copies of the values read (don't need separate buffer, but useful to debug the filter)
   public:
     HotrcManager (int32_t spike_threshold) { spike_cliff = spike_threshold; }
     
     // Spike filter pushes new hotrc readings into a LIFO array, replaces any well-defined spikes with values 
     // interpolated from before and after the spike. Also smooths out abrupt value changes that don't recover later
-    int32_t spike_filter (int32_t new_val) {  // pushes next val in, massages any detected spikes, returns massaged past value
+    int32_t spike_filter (int32_t new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
         previndex = (depth + index - 1) % depth;  // previndex is where the incoming new value will be stored
         this_delta = new_val - filt_history[previndex];  // Value change since last reading
         // if (button_it) printf (" %1ld%1ld:%4ld ", index, previndex, this_delta);
-        if (button_it) printf ("%s", (prespike_index != -1) ? "*" : " ");
+        // if (button_it) printf ("%s", (prespike_index != -1) ? "^" : " ");
         if (std::abs(this_delta) > spike_cliff) {  // If new value is a cliff edge (start or end of a spike)
             if (prespike_index == -1) {  // If this cliff edge is the start of a new spike
-                if (button_it) printf ("A-");
+                // if (button_it) printf ("A ");
                 prespike_index = previndex;  // save index of last good value just before the cliff
                 spike_signbit = signbit (this_delta);  // Save cliff steepness
             }
             else if (spike_signbit == signbit (this_delta)) {  // If this cliff edge deepens an in-progress spike
-                if (button_it) printf ("B");
+                // if (button_it) printf ("B");
                 inject_interpolations (previndex, filt_history[previndex]);  // Smoothly grade the values from before the last cliff to previous value
                 prespike_index = previndex;  // Consider this cliff edge the start of the spike instead
             }
             else {  // If this cliff edge is a recovery of the existing spike
-                if (button_it) printf ("C");
+                // if (button_it) printf ("C");
                 // !! Linearly interpolate replacement values for the spike values between the two edges
                 inject_interpolations (index, new_val);  // Fill in the spike with interpolated values
                 prespike_index = -1;  // Cancel the current spike
             }
         }
         else if (prespike_index == index) {  // If a current spike lasted thru our whole buffer
-            if (button_it) printf ("D");
+            // if (button_it) printf ("D");
             inject_interpolations (previndex, filt_history[previndex]);  // Smoothly grade the whole buffer
             prespike_index = -1;  // Cancel the current spike
         }
         else {
-            if (button_it) printf ("E-");
+            // if (button_it) printf ("E ");
         }  // If the new value is not a cliff edge (any action needed?)
         int32_t returnval = filt_history[index];  // Save the incumbent value at current index (oldest value) into buffer
         filt_history[index] = new_val;
@@ -438,11 +438,11 @@ class HotrcManager {
     }
     void inject_interpolations (int32_t endspike_index, int32_t endspike_val) {  // Replaces values between indexes with linear interpolated values
         spike_length = ((depth + endspike_index - prespike_index) % depth) - 1;  // Equal to the spiking values count plus one
-        if (button_it) printf ("%1ld", spike_length);
+        // if (button_it) printf ("%1ld", spike_length);
         if (!spike_length) return;  // Two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
         interpolated_slope = (endspike_val - filt_history[prespike_index]) / spike_length;
         loopindex = 0;
-        while (++loopindex <= spike_length) {  // Total loop count is spike_length minus one
+        while (++loopindex <= spike_length) {  // Total loop count is spike_length minus one (or not?)
             filt_history[(prespike_index + loopindex) % depth] = filt_history[prespike_index] + loopindex * interpolated_slope;
         }
     }

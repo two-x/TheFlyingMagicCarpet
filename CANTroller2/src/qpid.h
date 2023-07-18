@@ -181,7 +181,7 @@ QPID::QPID(float* Input, float* Output, float* Setpoint,
   sampleTimeUs = SampleTimeUs;              // Soren edit
   QPID::SetControllerDirection(Action);
   QPID::SetTunings(Kp, Ki, Kd, pMode, dMode, iAwMode);
-  lastTime = esp_timer_get_time() - sampleTimeUs;  // Soren edit
+  lastTime = micros() - sampleTimeUs;  // Soren edit
 }
 
 // Constructor allowing use of integer instead of float output value. Soren
@@ -210,7 +210,7 @@ QPID::QPID(float* Input, int32_t* IntOutput, float* Setpoint,  // Soren
   sampleTimeUs = SampleTimeUs;              // Soren edit
   QPID::SetControllerDirection(Action);
   QPID::SetTunings(Kp, Ki, Kd, pMode, dMode, iAwMode);
-  lastTime = esp_timer_get_time() - sampleTimeUs;  // Soren edit
+  lastTime = micros() - sampleTimeUs;  // Soren edit
 }
 
 
@@ -221,7 +221,7 @@ QPID::QPID(float* Input, int32_t* IntOutput, float* Setpoint,  // Soren
  **********************************************************************************/
 bool QPID::Compute() {
   if (mode == Control::manual) return false;
-  uint32_t now = esp_timer_get_time();  // Soren edit
+  uint32_t now = micros();  // Soren edit
   uint32_t timeChange = (now - lastTime);
   if (mode == Control::timer || timeChange >= sampleTimeUs) {
 
@@ -425,7 +425,7 @@ void QPID::SetAntiWindupMode(uint8_t IawMode) {
 }
 
 void QPID::Reset() {
-  lastTime = esp_timer_get_time() - sampleTimeUs;  // Soren edit
+  lastTime = micros() - sampleTimeUs;  // Soren edit
   lastInput = 0;
   outputSum = 0;
   pTerm = 0;
