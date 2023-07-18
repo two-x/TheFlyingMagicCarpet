@@ -397,16 +397,13 @@ void loop() {
     //
     // Read horz and vert inputs, determine steering pwm output -  - takes 40 us to read. Then, takes 13 us to handle
     if (ctrl != JOY) {
-        hotrc_horz_pulse_us = (int32_t)hotrc_horz_pulse_64_us;
-        hotrc_vert_pulse_us = (int32_t)hotrc_vert_pulse_64_us;
-        // if (button_it) printf ("liv H:%4ld V:%4ld | new H:%4ld V:%4ld | spk (", hotrc_horz_pulse_us, hotrc_vert_pulse_us, hotrcHorzManager.get_next_rawval(), hotrcVertManager.get_next_rawval());
-        hotrc_horz_pulse_us = hotrcHorzManager.spike_filter (hotrc_horz_pulse_us);
-        hotrc_vert_pulse_us = hotrcVertManager.spike_filter (hotrc_vert_pulse_us); 
-        // if (button_it) printf (") H:%4ld V:%4ld", hotrc_horz_pulse_us, hotrc_vert_pulse_us);    
+        hotrc_horz_pulse_us = hotrcHorzManager.spike_filter ((int32_t)hotrc_horz_pulse_64_us);
+        hotrc_vert_pulse_us = hotrcHorzManager.spike_filter ((int32_t)hotrc_vert_pulse_64_us);
+        // if (button_it) printf ("spk H:%4ld V:%4ld", hotrc_horz_pulse_us, hotrc_vert_pulse_us);
     }
     if (!simulating || !sim_joy) {  // Handle HotRC button generated events and detect potential loss of radio signal
         if (ctrl != JOY) {
-            ema_filt (hotrc_horz_pulse_us, &hotrc_horz_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Just here for debugging. Do not need filtered horz value
+            // ema_filt (hotrc_horz_pulse_us, &hotrc_horz_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Just here for debugging. Do not need filtered horz value
             ema_filt (hotrc_vert_pulse_us, &hotrc_vert_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Used to detect loss of radio
             // if (button_it) printf (" | ema H:%4ld V:%4ld", hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us);
         }
@@ -429,10 +426,10 @@ void loop() {
         ctrl_pos_adc[VERT][FILT] = constrain (ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
         ctrl_pos_adc[HORZ][FILT] = constrain (ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
         // if (button_it) printf (" | Cflt1 H:%4ld V:%4ld", ctrl_pos_adc[HORZ][FILT], ctrl_pos_adc[VERT][FILT]);
-        if ((ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) && (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP])) {
+        if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) {
             ctrl_pos_adc[VERT][FILT] = ctrl_lims_adc[ctrl][VERT][CENT];  // if joy vert is in the deadband, set joy_vert_filt to center value
         }
-        if ((ctrl_pos_adc[HORZ][FILT] > ctrl_db_adc[HORZ][BOT]) && (ctrl_pos_adc[HORZ][FILT] < ctrl_db_adc[HORZ][TOP])) {
+        if (ctrl_pos_adc[HORZ][FILT] > ctrl_db_adc[HORZ][BOT] && ctrl_pos_adc[HORZ][FILT] < ctrl_db_adc[HORZ][TOP]) {
             ctrl_pos_adc[HORZ][FILT] = ctrl_lims_adc[ctrl][HORZ][CENT];  // if joy horz is in the deadband, set joy_horz_filt to center value
         }
         // if (button_it) printf (" | Cflt2 H:%4ld V:%4ld\n", ctrl_pos_adc[HORZ][FILT], ctrl_pos_adc[VERT][FILT]);
@@ -440,11 +437,11 @@ void loop() {
 
     // Steering
     if (ctrl_pos_adc[HORZ][FILT] >= ctrl_db_adc[HORZ][TOP]) {  // If above the top edge of the deadband, turning right
-        steer_pulse_safe_us = steer_pulse_stop_us + (int32_t)((float)(steer_pulse_right_us - steer_pulse_stop_us) * (1 - ((float)steer_safe_percent * speedo_filt_mph / ((float)speedo_redline_mph * 100) )));
+        steer_pulse_safe_us = steer_pulse_stop_us + (int32_t)((float)(steer_pulse_right_us - steer_pulse_stop_us) * (1 - ((float)steer_safe_percent * speedo_filt_mph) / ((float)speedo_redline_mph * 100) ));
         steer_pulse_out_us = map (ctrl_pos_adc[HORZ][FILT], ctrl_db_adc[HORZ][TOP], ctrl_lims_adc[ctrl][HORZ][MAX], steer_pulse_stop_us, steer_pulse_safe_us);  // Figure out the steering setpoint if joy to the right of deadband
     }
     else if (ctrl_pos_adc[HORZ][FILT] <= ctrl_db_adc[HORZ][BOT]) {  // If below the bottom edge of the deadband, turning left
-        steer_pulse_safe_us = steer_pulse_stop_us - (int32_t)((float)(steer_pulse_stop_us - steer_pulse_left_us) * (1 - ((float)steer_safe_percent * speedo_filt_mph / ((float)speedo_redline_mph * 100) )));
+        steer_pulse_safe_us = steer_pulse_stop_us - (int32_t)((float)(steer_pulse_stop_us - steer_pulse_left_us) * (1 - ((float)steer_safe_percent * speedo_filt_mph) / ((float)speedo_redline_mph * 100) ));
         steer_pulse_out_us = map (ctrl_pos_adc[HORZ][FILT], ctrl_db_adc[HORZ][BOT], ctrl_lims_adc[ctrl][HORZ][MIN], steer_pulse_stop_us, steer_pulse_safe_us);  // Figure out the steering setpoint if joy to the left of deadband
     }
     else steer_pulse_out_us = steer_pulse_stop_us;  // Stop the steering motor if inside the deadband
@@ -490,7 +487,6 @@ void loop() {
     if (runmode == BASIC) {  // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         if (we_just_switched_modes) {  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
             // syspower = HIGH;  // Power up devices if not already
-            // enable_pids (0, 0, 0);
             gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
             motorParkTimer.reset();  // Set a timer to timebox this effort
             park_the_motors = true;  // Flags the motor parking to happen
@@ -499,7 +495,6 @@ void loop() {
     }
     else if (runmode == SHUTDOWN) { // In shutdown mode we stop the car if it's moving then park the motors.
         if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
-            // enable_pids (1, 1, 0);
             tach_target_rpm = tach_idle_rpm;  //  Release the throttle 
             shutdown_complete = false;
             shutdown_color = LPNK;
@@ -513,9 +508,9 @@ void loop() {
                 stopcarTimer.reset();
             }
         }
-        if (ignition && !panic_stop) {
+        if (ignition && !panic_stop && !engine_stopped()) {
             // syspower = HIGH;  // Power up devices if not already
-            runmode = STALL;
+            runmode = HOLD;  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
         }
         if (!shutdown_complete) {  // If we haven't yet stopped the car and then released the brakes and gas all the way
             if (car_stopped() || stopcarTimer.expired()) {  // If car has stopped, or timeout expires, then release the brake
@@ -557,7 +552,6 @@ void loop() {
     }
     else if (runmode == HOLD) {
         if (we_just_switched_modes) {  // Release throttle and push brake upon entering hold mode
-            // enable_pids (1, 1, 0);
             tach_target_rpm = tach_idle_rpm;  // Let off gas (if gas using PID mode)
             if (car_stopped()) pressure_target_psi = pressure_filt_psi + pressure_hold_increment_psi; // If the car is already stopped then just add a touch more pressure and then hold it.
             else if (pressure_target_psi < pressure_hold_initial_psi) pressure_target_psi = pressure_hold_initial_psi;  //  These hippies need us to stop the car for them
@@ -575,29 +569,28 @@ void loop() {
     }
     else if (runmode == FLY) {
         if (we_just_switched_modes) {
-            // enable_pids (1, 1, 1);
             gesture_progress = 0;
             gestureFlyTimer.set (gesture_flytimeout_us); // Initialize gesture timer to already-expired value
             cruise_sw_held = false;
-            cruiseSwTimer.reset();
+            // cruiseSwTimer.reset();
             flycruise_toggle_request = false;
             car_initially_moved = !car_stopped();  // note whether car moving going into fly mode (usually not), this turns true once it has initially got moving
         }
         if (!car_initially_moved) {
-            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) runmode = HOLD;  // Must keep pulling trigger until car moves, or drop back to hold mode
+            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) runmode = HOLD;  // Must keep pulling trigger until car moves, or it drops back to hold mode
             else if (!car_stopped()) car_initially_moved = true;  // Once car moves, we're allowed to stay in fly mode
         }
-        else if (car_stopped()) runmode = HOLD;  // Go to Hold Mode if we have come to a stop  // && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT]
+        else if (car_stopped()) runmode = HOLD;  // Go to Hold Mode if we have come to a stop after moving  // && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT]
         if (ctrl == HOTRC && !(simulating && sim_joy) && !hotrc_radio_detected) runmode = HOLD;  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
         else {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
-            if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])  {  // If we are trying to accelerate
+            if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])  {  // If we are trying to accelerate, scale joystick value to determine gas setpoint
                 tach_target_rpm = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], tach_idle_rpm, tach_govern_rpm);
             }
-            else tach_target_rpm = tach_idle_rpm;  // Let off gas (if gas using PID mode)
-            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT])  {  // If we are trying to brake, scale joystick value to determine pressure adc setpoint
+            else tach_target_rpm = tach_idle_rpm;  // Else let off gas (if gas using PID mode)
+            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT])  {  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
                 pressure_target_psi = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi);
             }
-            else pressure_target_psi = pressure_min_psi;  // Default when joystick not pressed   
+            else pressure_target_psi = pressure_min_psi;  // Else let off the brake   
         }
         // Cruise mode can be entered by pressing a controller button, or by holding the brake on full for a half second. Which epends on the cruise_gesturing flag.
         // The gesture involves pushing the joystick from the center to the top, then to the bottom, then back to center, quickly enough.
@@ -622,6 +615,7 @@ void loop() {
                     }        
                 }
             }
+            // This was when the thought was to add a momentary button to the joystick to toggle cruise <-> fly mode
             // if (!cruise_sw) {  // If button not currently pressed
             //     if (cruise_sw_held && cruiseSwTimer.expired()) runmode = CRUISE;  // After a long press of sufficient length, upon release enter Cruise mode
             //     cruise_sw_held = false;  // Cancel button held state
@@ -657,11 +651,13 @@ void loop() {
 
         if (flycruise_toggle_request) runmode = FLY;
         if (ctrl_pos_adc[VERT][FILT] > ctrl_lims_adc[ctrl][VERT][MIN] + flycruise_vert_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
-        else if (gestureFlyTimer.expired()) runmode = FLY;  // New gesture to drop to fly mode is hold the brake all the way down for 500 ms
+        else if (gestureFlyTimer.expired()) runmode = FLY;  // New gesture to drop to fly mode is hold the brake all the way down for more than X ms
+        // 
         // This old gesture trigger drops to Fly mode if joystick moved quickly from center to bottom
         // if (ctrl_pos_adc[VERT][FILT] <= ctrl_lims_adc[ctrl][VERT][MIN]+flycruise_vert_margin_adc && abs(mycros() - gesture_timer_us) < gesture_flytimeout_us)  runmode = FLY;  // If joystick quickly pushed to bottom 
         // printf ("hotvpuls=%ld, hothpuls=%ld, joyvfilt=%ld, joyvmin+marg=%ld, timer=%ld\n", hotrc_vert_pulse_us, hotrc_horz_pulse_us, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN] + flycruise_vert_margin_adc, gesture_timer_us);
         // 
+        // This was when the thought was to add a momentary button to the joystick to toggle cruise <-> fly mode
         // if (cruise_sw) cruise_sw_held = true;  // Pushing cruise button sets up return to fly mode
         // else if (cruise_sw_held) {  // Release of button drops us back to fly mode
         //     cruise_sw_held = false;
@@ -669,8 +665,8 @@ void loop() {
         // }
         if (car_stopped()) runmode = HOLD;  // In case we slam into a brick wall, get out of cruise mode
     }
-    else if (runmode == CAL) {
-        if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
+    else if (runmode == CAL) {  // Calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration. Don't use it unless you know how.
+        if (we_just_switched_modes) {  // Entering Cal mode: From shutdown mode once shutdown is complete, open simulator and long-press the Cal button. Each feature starts disabled but can be enabled with the tuner.
             // enable_pids (0, 0, 0);
             calmode_request = false;
             cal_pot_gas_ready = false;
@@ -909,7 +905,7 @@ void loop() {
         touch_now_touched = true;
     }  // (if screen.ts reads a touch)
     else {  // If not being touched, put momentarily-set simulated button values back to default values
-        if (simulating) cruise_sw = false;  // // Makes this button effectively momentary
+        if (simulating && sim_cruisesw) cruise_sw = false;  // // Makes this button effectively momentary
         sim_edit_delta_touch = 0;  // Stop changing value
         touch_now_touched = false;  // remember last touch state
         touch_accel_exponent = 0;
@@ -925,7 +921,7 @@ void loop() {
         if (encoder_sw_action == Encoder::SHORT)  {  // if short press
             if (tuning_ctrl == EDIT) tuning_ctrl = SELECT;  // If we were editing a value drop back to select mode
             else if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If we were selecting a variable start editing its value
-            else if (ctrl == JOY && (!simulating || !sim_cruisesw) && (runmode == FLY || runmode == CRUISE)) flycruise_toggle_request = true;
+            else if (ctrl == JOY && (!simulating || !sim_cruisesw)) flycruise_toggle_request = true;  // Unless tuning, when using old joystick allow use of short encoder press to toggle fly/cruise modes
             // I envision pushing encoder switch while not tuning could switch desktops from our current analysis interface to a different runtime display 
         }
         else tuning_ctrl = (tuning_ctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning

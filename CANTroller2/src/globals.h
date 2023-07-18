@@ -230,7 +230,7 @@ bool cruise_gesturing = false;  // Is cruise mode enabled by gesturing?  Otherwi
 bool cruise_sw_held = false;
 bool cruise_adjusting = false;
 Timer gestureFlyTimer;  // Used to keep track of time for gesturing for going in and out of fly/cruise modes
-Timer cruiseSwTimer;
+// Timer cruiseSwTimer;  // Was used to require a medium-length hold time pushing cruise button to switch modes
 Timer sleepInactivityTimer (10000000);  // After shutdown how long to wait before powering down to sleep
 Timer stopcarTimer (7000000);  // Allows code to fail in a sensible way after a delay if nothing is happening
 //  ---- tunable ----
@@ -553,7 +553,7 @@ bool sim_tach = true;
 bool sim_speedo = true;
 bool sim_brkpos = true;
 bool sim_basicsw = true;
-bool sim_cruisesw = true;
+bool sim_cruisesw = false;
 bool sim_pressure = true;
 bool sim_syspower = true;
 bool sim_starter = true;
