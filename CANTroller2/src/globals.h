@@ -24,6 +24,7 @@
 
 // #include "classes.h"
 #include "qpid.h"
+#include "driver/rmt.h"
 // #include "spid.h"
 // #include "disp.h"
 
@@ -165,6 +166,9 @@ Preferences config;
 
 // Globals -------------------
 //
+
+static RingbufHandle_t rb = NULL;
+
 class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
   protected:
     volatile int64_t start_us = 0;
@@ -657,8 +661,15 @@ void IRAM_ATTR speedo_isr (void) {  //  Handler can get the most recent rotation
         speedo_us = speedo_time_us;
     }
 }
-void IRAM_ATTR hotrc_horz_isr (void) {  // On falling edge, records high pulse width to determine ch1 steering slider position
-    hotrc_horz_pulse_64_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
+void read_hotrc_horz_rmt_pulse() {
+    size_t rx_size = 0;
+    rmt_item32_t* item = (rmt_item32_t*) xRingbufferReceive(rb, &rx_size, 0);
+    
+    if(item != NULL && rx_size == sizeof(rmt_item32_t)) {
+        uint32_t pulse_width = item->duration0 + item->duration1;
+        hotrc_horz_pulse_64_us =  pulse_width;
+        vRingbufferReturnItem(rb, (void*) item);
+    }
 }
 void IRAM_ATTR hotrc_vert_isr (void) {  // On falling edge, Sets timer on rising edge (for all channels) and reads it on falling to determine ch2 trigger position
     hotrc_vert_pulse_64_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
