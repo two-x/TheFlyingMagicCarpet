@@ -93,102 +93,102 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "     Pot",
         "      - ",
         "      - ",
-        "      - ",
         "SimBkPos",
         " Sim Joy",
         "Sim Pres",
         "Sim Tach",
-        " Sim Spd", },
+        "SimSpeed",
+        "SimW/Pot", },
     {   "Horz Raw",  // PG_JOY
         "Vert Raw",
-        "      - ",
-        "      - ",
-        "      - ",
+        "HRC Horz", 
+        "HRC Vert",
+        "HNoRadio",
         "Horz Min",
         "Horz Max",
         " Horz DB",
         "Vert Min",
         "Vert Max",
         " Vert DB", },
-    {   "      - ",  // PG_CAR
+    {   "Pres ADC",  // PG_CAR
+        "      - ",
         "      - ",
         "      - ",
         "Governor",
+        "Str Safe",
         "Eng Idle",
         "Eng RedL",
         "Spd Idle",
         "Spd RedL",
-        "GasOpnLp",
-        " Cal Brk",
-        " Cal Gas", },
+        "BrkPos0P", },
     {   "      - ",  // PG_PWMS
         "      - ",
         "      - ",
-        "Str Left",
-        "Str Stop",
-        "Str Rght",
+        "Steer Lt",
+        "SteerStp",
+        "Steer Rt",
         "Brk Extd",
         "Brk Stop",
         "Brk Retr",
         "Gas Idle",
-        "Gas RedL", },
+        "Gas RdLn", },
     {   "Pres Tgt",  // PG_BPID
         "Pres Err",
         "  P Term",
         "  I Term",
         "  D Term",
-        " Out Sum",
+        "Integral",
         "      - ",
         "      - ",
         "  Kp (P)",
         "  Ki (I)",
         "  Kd (D)", },
     {   "Tach Tgt",  // PG_GPID
-        " Eng Err",
+        "Tach Err",
         "  P Term",
         "  I Term",
         "  D Term",
-        " Out Sum",
+        "Integral",
         "      - ",
-        "      - ",
+        "OpenLoop",
         "  Kp (P)",
         "  Ki (I)",
         "  Kd (D)" },
     {   "SpeedTgt",  // PG_CPID
-        " Spd Err",
+        "SpeedErr",
         "  P Term",
         "  I Term",
         "  D Term",
-        " Out Sum",
-        "      - ",
+        "Integral",
+        "Tach Tgt",
         "      - ",
         "  Kp (P)",
         "  Ki (I)",
         "  Kd (D)", },
-    {   " Tmp Amb",  // PG_TEMP
-        " Tmp Eng",
-        "Tmp WhRR",
-        "Tmp WhFL",
-        "Tmp WhFR",
-        "HRC Horz",  // "Tmp WhRL"
-        "HRC Vert",
-        "RadioMin",
-        "RadioMax",
-        " Pot Sim",
-        "Pres ADC", },  // "BrkZeroP" }
+    {   "Temp Amb",  // PG_TEMP
+        "Temp Eng",
+        "TempWhRR",
+        "TempWhFL",
+        "TempWhFR",
+        "TempWhRL",
+        "      - ",
+        "      - ",
+        "      - ",
+        " Cal Brk",
+        " Cal Gas", },
 };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 6, 5, 3, 3, 8, 8, 8, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 5, 4, 4, 3, 8, 7, 8, 9 };  // first value in each dataset page that's editable. All values after this must also be editable
 char units[disp_fixed_lines][5] = { "adc ", "mph ", "rpm ", "\xe5s  ", "psi ", "\xe5s  ", "adc ", "\xe5s  " };
 
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "V   ", "in  ", "%   ", "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    " },  // PG_RUN
-    { "adc ", "adc ", "    ", "    ", "    ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
-    { "    ", "    ", "    ", "%   ", "rpm ", "rpm ", "mph ", "mph ", "    ", "    ", "    " },  // PG_CAR
-    { "    ", "    ", "    ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  " },  // PG_PWMS
+    { "adc ", "adc ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
+    { "adc ", "    ", "    ", "    ", "%   ", "%   ", "rpm ", "rpm ", "mph ", "mph ", "in  " },  // PG_CAR
+    { "adc ", "    ", "    ", "    ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  " },  // PG_PWMS
     { "psi ", "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "    ", "    ", "Hz  ", "s " },  // PG_BPID
     { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "    ", "    ", "Hz  ", "s " },  // PG_GPID
-    { "mph ", "mph ", "mph ", "mph ", "mph ", "mph ", "    ", "    ", "    ", "Hz  ", "s " },  // PG_CPID
-    { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "    ", "adc " },  // PG_TEMP
+    { "mph ", "mph ", "mph ", "mph ", "mph ", "mph ", "rpm ", "    ", "    ", "Hz  ", "s " },  // PG_CPID
+    { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "    ", "    ", "    ", "    ", "    " },  // PG_TEMP
     // { "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "    ", "    " },  // PG_TEMP
 };
 char simgrid[4][3][5] = {
@@ -690,20 +690,19 @@ class Display {
                     draw_dynamic(11, pot_filt_percent, pot_min_percent, pot_max_percent);
                     draw_dynamic(12, ERASE);
                     draw_dynamic(13, ERASE);
-                    draw_dynamic(14, ERASE);
-                    // draw_dynamic (14, brakeSPID.get_proportionality(), -1, -1);
-                    draw_dynamic(15, sim_brkpos, -1, -1);
-                    draw_dynamic(16, sim_joy, -1, -1);
-                    draw_dynamic(17, sim_pressure, -1, -1);
-                    draw_dynamic(18, sim_tach, -1, -1);
-                    draw_dynamic(19, sim_speedo, -1, -1);
+                    draw_dynamic(14, sim_brkpos, -1, -1);
+                    draw_dynamic(15, sim_joy, -1, -1);
+                    draw_dynamic(16, sim_pressure, -1, -1);
+                    draw_dynamic(17, sim_tach, -1, -1);
+                    draw_dynamic(18, sim_speedo, -1, -1);
+                    draw_dynamic(19, pot_overload, -1, -1);
                 }
                 else if (dataset_page == PG_JOY) {
                     draw_dynamic(9, ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
                     draw_dynamic(10, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-                    draw_dynamic(11, ERASE);
-                    draw_dynamic(12, ERASE);
-                    draw_dynamic(13, ERASE);
+                    draw_dynamic(11, hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][MIN], hotrc_pulse_lims_us[HORZ][MAX]);  // Programmed centerpoint is 230 adc
+                    draw_dynamic(12, hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);  // Programmed centerpoint is 230 adc
+                    draw_dynamic(13, hotrc_pulse_failsafe_max_us, hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);
                     draw_dynamic(14, ctrl_lims_adc[ctrl][HORZ][MIN], 0, ctrl_lims_adc[ctrl][HORZ][MAX]);
                     draw_dynamic(15, ctrl_lims_adc[ctrl][HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][MIN], adcrange_adc);
                     draw_dynamic(16, ctrl_lims_adc[ctrl][HORZ][DB], 0, 2*(min (ctrl_lims_adc[ctrl][HORZ][CENT]-ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]-ctrl_lims_adc[ctrl][HORZ][CENT]) -1));
@@ -712,19 +711,17 @@ class Display {
                     draw_dynamic(19, ctrl_lims_adc[ctrl][VERT][DB], 0, 2*(min (ctrl_lims_adc[ctrl][VERT][CENT]-ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]-ctrl_lims_adc[ctrl][VERT][CENT]) -1));
                 }
                 else if (dataset_page == PG_CAR) {
-                    draw_dynamic(9, ERASE);
+                    draw_dynamic(9, pressure_adc, pressure_min_adc, pressure_max_adc);                    
                     draw_dynamic(10, ERASE);
                     draw_dynamic(11, ERASE);
-                    draw_dynamic(12, gas_governor_percent, 0, 100);
-                    draw_dynamic(13, tach_idle_rpm, 0.0, tach_redline_rpm);
-                    draw_dynamic(14, tach_redline_rpm, 0.0, tach_max_rpm);
-                    draw_dynamic(15, speedo_idle_mph, 0.0, speedo_redline_mph);
-                    draw_dynamic(16, speedo_redline_mph, 0.0, speedo_max_mph);
-                    draw_dynamic(17, gas_open_loop, -1, -1);
-                    // draw_dynamic(17, (gasQPID.GetMode() == (uint8_t)QPID::Control::manual), -1, -1);
-                    // draw_dynamic(17, ctrl, -1, -1);  // 0 if hotrc
-                    draw_dynamic(18, cal_joyvert_brkmotor, -1, -1);
-                    draw_dynamic(19, cal_pot_gasservo, -1, -1);
+                    draw_dynamic(12, ERASE);
+                    draw_dynamic(13, gas_governor_percent, 0, 100);
+                    draw_dynamic(14, steer_safe_percent, 0, 100);
+                    draw_dynamic(15, tach_idle_rpm, 0.0, tach_redline_rpm);
+                    draw_dynamic(16, tach_redline_rpm, 0.0, tach_max_rpm);
+                    draw_dynamic(17, speedo_idle_mph, 0.0, speedo_redline_mph);
+                    draw_dynamic(18, speedo_redline_mph, 0.0, speedo_max_mph);
+                    draw_dynamic(19, brake_pos_zeropoint_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
                 }
                 else if (dataset_page == PG_PWMS) {
                     draw_dynamic(9, ERASE);
@@ -746,7 +743,6 @@ class Display {
                     draw_dynamic(11, brakeQPID.GetPterm(), -drange, drange);
                     draw_dynamic(12, brakeQPID.GetIterm(), -drange, drange);
                     draw_dynamic(13, brakeQPID.GetDterm(), -drange, drange);
-                    // draw_dynamic(16, brake_pulse_out_us, (float)brake_pulse_retract_us, (float)brake_pulse_extend_us);  // brake_spid_speedo_delta_adc, -range, range);
                     draw_dynamic(14, brakeQPID.GetOutputSum(), (float)brake_pulse_retract_us, (float)brake_pulse_extend_us);  // brake_spid_speedo_delta_adc, -range, range);
                     draw_dynamic(15, ERASE);
                     draw_dynamic(16, ERASE);
@@ -761,10 +757,9 @@ class Display {
                     draw_dynamic(11, gasQPID.GetPterm(), -drange, drange);
                     draw_dynamic(12, gasQPID.GetIterm(), -drange, drange);
                     draw_dynamic(13, gasQPID.GetDterm(), -drange, drange);
-                    // draw_dynamic(16, gas_pulse_out_us, gas_pulse_idle_us, gas_pulse_govern_us);  // gas_spid_speedo_delta_adc, -drange, drange);
                     draw_dynamic(14, gasQPID.GetOutputSum(), (float)gas_pulse_idle_us, (float)gas_pulse_govern_us);
                     draw_dynamic(15, ERASE);
-                    draw_dynamic(16, ERASE);
+                    draw_dynamic(16, gas_open_loop, -1, -1);
                     draw_dynamic(17, gasQPID.GetKp(), 0.0, 2.0);
                     draw_dynamic(18, gasQPID.GetKi(), 0.0, 2.0);
                     draw_dynamic(19, gasQPID.GetKd(), 0.0, 2.0);
@@ -776,9 +771,8 @@ class Display {
                     draw_dynamic(11, cruiseQPID.GetPterm(), -drange, drange);
                     draw_dynamic(12, cruiseQPID.GetIterm(), -drange, drange);
                     draw_dynamic(13, cruiseQPID.GetDterm(), -drange, drange);
-                    // draw_dynamic(16, tach_target_rpm, tach_idle_rpm, tach_govern_rpm);  // cruise_spid_speedo_delta_adc, -drange, drange);
                     draw_dynamic(14, cruiseQPID.GetOutputSum(), tach_idle_rpm, tach_govern_rpm);  // cruise_spid_speedo_delta_adc, -drange, drange);
-                    draw_dynamic(15, ERASE);
+                    draw_dynamic(15, tach_target_rpm, 0.0, tach_redline_rpm);
                     draw_dynamic(16, ERASE);
                     draw_dynamic(17, cruiseQPID.GetKp(), 0.0, 2.0);
                     draw_dynamic(18, cruiseQPID.GetKi(), 0.0, 2.0);
@@ -790,16 +784,12 @@ class Display {
                     draw_dynamic(11, temps[WHEEL_FL], temp_min, temp_max);
                     draw_dynamic(12, temps[WHEEL_FR], temp_min, temp_max);
                     draw_dynamic(13, temps[WHEEL_RL], temp_min, temp_max);
-                    // draw_dynamic(14, temps[WHEEL_RR], temp_min, temp_max);
-                    draw_dynamic(14, hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][MIN], hotrc_pulse_lims_us[HORZ][MAX]);  // Programmed centerpoint is 230 adc
-                    draw_dynamic(15, hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);  // Programmed centerpoint is 230 adc
-                    // draw_dynamic(18, hotrc_ch3_pulse_us, hotrc_pulse_lims_us[CH3][MIN], hotrc_pulse_lims_us[CH3][MAX]);  // Programmed centerpoint is 230 adc
-                    // draw_dynamic(19, hotrc_ch4_pulse_us, hotrc_pulse_lims_us[CH4][MIN], hotrc_pulse_lims_us[CH4][MAX]);  // Programmed centerpoint is 230 adc
-                    draw_dynamic(16, hotrc_pulse_failsafe_min_us, hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);
-                    draw_dynamic(17, hotrc_pulse_failsafe_max_us, hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);
-                    draw_dynamic(18, pot_overload, -1, -1);
-                    draw_dynamic(19, pressure_adc, pressure_min_adc, pressure_max_adc);                    
-                    // draw_dynamic(19, brake_pos_zeropoint_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);   
+                    draw_dynamic(14, temps[WHEEL_RR], temp_min, temp_max);
+                    draw_dynamic(15, ERASE);
+                    draw_dynamic(16, ERASE);
+                    draw_dynamic(17, ERASE);
+                    draw_dynamic(18, cal_joyvert_brkmotor, -1, -1);
+                    draw_dynamic(19, cal_pot_gasservo, -1, -1);
                 }
                 draw_bool((runmode == CAL), 2);
                 draw_bool((runmode == BASIC), 3);
