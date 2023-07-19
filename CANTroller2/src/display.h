@@ -167,10 +167,10 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "  Kd (D)", },
     {   "Temp Amb",  // PG_TEMP
         "Temp Eng",
-        "TempWhRR",
         "TempWhFL",
         "TempWhFR",
         "TempWhRL",
+        "TempWhRR",
         "      - ",
         "      - ",
         "      - ",
