@@ -1053,11 +1053,11 @@ void loop() {
                 heartbeat_pulse = !heartbeat_pulse;
                 if (heartbeat_pulse) neo_brightness = neo_brightness_max;
                 else neoTimer.reset();
-                if (++heartbeat_state >= arraysize (heartbeat_ekg)) heartbeat_state -= arraysize (heartbeat_ekg);
-                heartbeatTimer.set (heartbeat_ekg[heartbeat_state]);
+                if (++heartbeat_state >= arraysize (heartbeat_ekg_us)) heartbeat_state -= arraysize (heartbeat_ekg_us);
+                heartbeatTimer.set (heartbeat_ekg_us[heartbeat_state]);
             }
             else if (!heartbeat_pulse && neo_brightness) {
-                neo_brightness = (int8_t)((float)neo_brightness_max * (1 - (float)neoTimer.elapsed() / (float)neo_timeout));
+                neo_brightness = (int8_t)((float)neo_brightness_max * (1 - (float)neoTimer.elapsed() / (float)neo_timeout_us));
                 if (neoTimer.expired() || neo_brightness < 1) neo_brightness = 0;
             }
             int32_t neocolor_last, neobright_last;
@@ -1077,8 +1077,8 @@ void loop() {
     }
     // else if (heartbeat_led_pin >= 0) {  // Just make a heartbeat on the native board led
     //     heartbeat_pulse = !heartbeat_pulse;
-    //     if (++heartbeat_state >= arraysize (heartbeat_ekg)) heartbeat_state -= arraysize (heartbeat_ekg);
-    //     heartbeatTimer.set (heartbeat_ekg[heartbeat_state]);
+    //     if (++heartbeat_state >= arraysize (heartbeat_ekg_us)) heartbeat_state -= arraysize (heartbeat_ekg_us);
+    //     heartbeatTimer.set (heartbeat_ekg_us[heartbeat_state]);
     //     write_pin (heartbeat_led_pin, heartbeat_pulse);
     // }
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "hrt");

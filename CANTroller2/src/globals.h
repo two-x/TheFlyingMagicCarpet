@@ -247,6 +247,9 @@ bool cal_pot_gasservo = false;  // Allows direct control of gas servo using pot
 bool cal_pot_gas_ready = false;  // To avoid immediately overturning gas pot, first pot must be turned to valid range
 bool cal_set_hotrc_failsafe_ready = false;  
 
+// airflow related
+
+
 // pid related globals
 //  ---- tunable ----
 uint32_t steer_pid_period_ms = 185;  // (Not actually a pid) Needs to be long enough for motor to cause change in measurement, but higher means less responsive
@@ -345,8 +348,8 @@ int32_t ctrl_pos_adc[2][2];  // [HORZ/VERT] [RAW/FILT] - holds most current cont
 int32_t hotrc_pulse_failsafe_min_us = 780;  // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
 int32_t hotrc_pulse_failsafe_max_us = 980;  // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
 int32_t hotrc_pulse_failsafe_pad_us = 10;
-uint32_t hotrc_panic_timeout = 500000;  // how long to receive flameout-range signal from hotrc vertical before panic stopping
-Timer hotrcPanicTimer(hotrc_panic_timeout);
+uint32_t hotrc_panic_timeout_us = 500000;  // how long to receive flameout-range signal from hotrc vertical before panic stopping
+Timer hotrcPanicTimer(hotrc_panic_timeout_us);
 // int32_t ctrl_pos_adc[2][2] = { { ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][CENT] }, { ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][CENT]} };  // [HORZ/VERT] [RAW/FILT] initialize to centerpoint
 
 // hw_timer_t *hotrc_vert_timer = NULL;
@@ -493,8 +496,8 @@ int64_t speedo_delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph,
 // neopixel and heartbeat related
 uint8_t neo_wheelcounter = 0;
 uint8_t neo_brightness_max = 15;
-uint32_t neo_timeout = 150000;
-Timer neoTimer (neo_timeout);
+uint32_t neo_timeout_us = 150000;
+Timer neoTimer (neo_timeout_us);
 bool neo_heartbeat = (neopixel_pin >= 0);
 uint8_t neo_brightness = neo_brightness_max;  // brightness during fadeouts
 enum neo_colors { N_RED, N_GRN, N_BLU };
@@ -502,7 +505,7 @@ uint8_t neo_heartcolor[3] = { 0xff, 0xff, 0xff };
 Timer heartbeatTimer (1000000);
 int32_t heartbeat_state = 0;
 int32_t heartbeat_level = 0;
-uint32_t heartbeat_ekg[4] = { 170000, 150000, 530000, 1100000 };
+uint32_t heartbeat_ekg_us[4] = { 170000, 150000, 530000, 1100000 };
 int32_t heartbeat_pulse = 255;
 
 // diag/monitoring variables
@@ -612,9 +615,9 @@ int32_t temp_current_index = 0;
 // uint64_t temp_addrs[6];
 enum temp_status : bool { CONVERT, READ };
 temp_status temp_state = CONVERT;
-uint32_t temp_times[2] = { 2000000, 10000 };  // Peef delay was 10000 (10ms)
-uint32_t temp_timeout = 2000000;
-Timer tempTimer (temp_timeout);
+uint32_t temp_times_us[2] = { 2000000, 10000 };  // Peef delay was 10000 (10ms)
+uint32_t temp_timeout_us = 2000000;
+Timer tempTimer (temp_timeout_us);
 
 DeviceAddress temp_temp_addr;
 DeviceAddress temp_addrs[6];
@@ -860,7 +863,7 @@ long temp_peef (void) {
             onewire.write(0xCC);        // All Devices present - Skip ROM ID
             onewire.write(0x44);        // start conversion, with parasite power on at the end
             // printf ("\nTemp: %s.%s °F\n", String(temp/10), String(temp%10));
-            tempTimer.set (temp_times[temp_state]);
+            tempTimer.set (temp_times_us[temp_state]);
             temp_state = CONVERT;
             return temp;
         }  // else CONVERT
@@ -873,7 +876,7 @@ long temp_peef (void) {
         temp_last = temp;
         temp = ((long)temp_raw * 180 / 16 + 3205) / 10;
         temp_secs++;
-        tempTimer.set (temp_times[temp_state]);
+        tempTimer.set (temp_times_us[temp_state]);
         temp_state = READ;
     }
     return 10000;  // Used as invalid value flag
@@ -896,7 +899,7 @@ void temp_soren (void) {
             temps[temp_current_index] = tempsensebus.getTempF(temp_addrs[temp_current_index]);  // 12800 us
             // check2 = esp_timer_get_time();
             // std::cout << "TSoren READ get:" << check2-check1 << std::endl;    
-            tempTimer.set (temp_timeout);
+            tempTimer.set (temp_timeout_us);
             temp_state = CONVERT;
             if (++temp_current_index >= temp_detected_device_ct) temp_current_index -= temp_detected_device_ct;  // replace 1 with arraysize(temps)
         }

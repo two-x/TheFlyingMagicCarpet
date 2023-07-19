@@ -189,7 +189,6 @@ char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "    ", "    ", "Hz  ", "s " },  // PG_GPID
     { "mph ", "mph ", "mph ", "mph ", "mph ", "mph ", "rpm ", "    ", "    ", "Hz  ", "s " },  // PG_CPID
     { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "    ", "    ", "    ", "    ", "    " },  // PG_TEMP
-    // { "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "\x09 F ", "    ", "    " },  // PG_TEMP
 };
 char simgrid[4][3][5] = {
     { "prs\x18", "rpm\x18", "car\x18" },
@@ -197,7 +196,7 @@ char simgrid[4][3][5] = {
     { "    ", " \x1e  ", "    " },
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
 };
-char side_menu_buttons[5][4] = { "PAG", "SEL", "\x18  ", "\x19  ", "SIM" };  // Pad shorter names with spaces on the right
+char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
 bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
@@ -213,7 +212,7 @@ int32_t disp_age_quanta[disp_lines];
 Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
 Timer dispRefreshTimer (100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
 Timer dispResetButtonTimer (500000);  // How long to press esp32 "boot" button before screen will reset and redraw
-uint32_t tft_watchdog_timeout = 100000;
+uint32_t tft_watchdog_timeout_us = 100000;
 
 // tuning-ui related globals
 enum disp_draw { ERASE = -1 };
@@ -313,7 +312,7 @@ class Display {
             return reset_finished;
         }
         void watchdog() {  // Call in every loop to perform a reset upon detection of blocked loops and 
-            if (loop_period_us > tft_watchdog_timeout && _timing_tft_reset == 0) _timing_tft_reset = 1;
+            if (loop_period_us > tft_watchdog_timeout_us && _timing_tft_reset == 0) _timing_tft_reset = 1;
             if (_timing_tft_reset == 0 || !_tftDelayTimer.expired()) _tftDelayTimer.reset();
             else tft_reset();
         }
