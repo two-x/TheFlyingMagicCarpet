@@ -260,8 +260,7 @@ void loop() {
     // Update inputs.  Fresh sensor data, and filtering.
     //
 
-    // ESP32 "boot" button.  This is not working (?)
-    button_last = button_it;
+    // ESP32 "boot" button. generates btn_press_action flags of LONG or SHORT presses which can be handled wherever. Handler must reset btn_press_action = NONE
     if (!read_pin (button_pin)) {
         if (!button_it) {  // If press just occurred
             dispResetButtonTimer.reset();  // Looks like someone just pushed the esp32 "boot" button
@@ -275,8 +274,8 @@ void loop() {
         button_it = true;  // Store press is in effect
     }
     else {  // if button is not being pressed
-        btn_press_action = NONE;  // Any button action handling needs to happen in the same loop or is lost
         if (button_it && !btn_press_suppress_click) btn_press_action = SHORT;  // if the button was just released, a short press occurred, which must be handled
+        // else btn_press_action = NONE;  // This auto-resets the button action flag, but any button action handling needs to happen in this same loop or event will be lost
         btn_press_timer_active = false;  // Clear timer active flag
         button_it = false;  // Store press is not in effect
         btn_press_suppress_click = false;  // End click suppression
@@ -290,49 +289,8 @@ void loop() {
 
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
 
-    // Temperature sensors
-    // if (take_temperatures) {  // && tempTimer.expired()) {
-    //     long tempread = temp_peef();
-    //     if (tempread != 10000) temps[0] = (float)tempread;
-    // }
+    if (take_temperatures) temp_soren();
     
-    temp_soren();
-    
-    // float temps[temp_detected_device_ct];
-    // uint32_t timecheck;
-    // if (take_temperatures && tempTimer.expired()) {
-    //     cout << endl << "loop# " << loopno << " stat0:" << temp_status;
-    //     if (temp_status == IDLE) {
-    //         wait_one_loop = true;
-    //         if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
-    //         timecheck = micros();
-    //         // tempsensebus.requestTemperaturesByIndex (temp_current_index);
-    //         tempsensebus.setWaitForConversion (false);  // Do not block during conversion process
-    //         tempsensebus.requestTemperatures();
-    //         tempsensebus.setWaitForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
-    //         cout << " my0:" << micros()-timecheck;
-    //         //tempTimer.set (tempsensebus.millisToWaitForConversion (temperature_precision)*1000);
-    //         tempTimer.set (800000);         
-    //         temp_status = CONVERT;
-    //     }
-    //     else if (temp_status == CONVERT) {
-    //         wait_one_loop = true;
-    //         timecheck = micros();
-    //         temps[temp_current_index] = tempsensebus.getTempFByIndex(temp_current_index);
-    //         cout << " my1:" << micros()-timecheck;
-    //         tempTimer.set(1500000);
-    //         temp_status = DELAY;
-    //     }
-    //     else if (temp_status == DELAY) {
-    //         //printf ("\n loop:%d temps[%ld] = %lf F\n", loopno, temp_current_index, temps[temp_current_index]);
-    //         tempTimer.set(60000);
-    //         if (++temp_current_index >= temp_detected_device_ct) temp_current_index -= temp_detected_device_ct;
-    //         temp_status = IDLE;
-    //     }
-    //     cout << " stat1:" << temp_status << " id:"  << temp_current_index << " tmp:" << ((temp_status == IDLE) ? temps[temp_current_index] : -1) << endl;
-    // }
-    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pst");
-
     encoder.update();  // Read encoder input signals
 
     // Potentiometer - takes 400 us to read & convert (?!)
@@ -544,11 +502,9 @@ void loop() {
         }
     }
     else if (runmode == STALL) {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
-        // if (we_just_switched_modes) enable_pids (0, 0, 0);
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) pressure_target_psi = pressure_min_psi;  // If in deadband or being pushed up, no pressure target
         else pressure_target_psi = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi);  // Scale joystick value to pressure adc setpoint
         if (!starter && !engine_stopped()) runmode = HOLD;  // Enter Hold Mode if we started the car
-        // Throttle behavior is handled in pid section
     }
     else if (runmode == HOLD) {
         if (we_just_switched_modes) {  // Release throttle and push brake upon entering hold mode
@@ -560,7 +516,7 @@ void loop() {
             joy_centered = false;  // Fly mode will be locked until the joystick first is put at or below center
         }
         if (brakeIntervalTimer.expired() && !stopcarTimer.expired()) {  // Each interval the car is still moving, push harder
-            if (!car_stopped()) pressure_target_psi = pressure_target_psi + pressure_hold_increment_psi;
+            if (!car_stopped()) pressure_target_psi += pressure_hold_increment_psi;
             brakeIntervalTimer.reset();
         }
         if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
@@ -574,7 +530,7 @@ void loop() {
             cruise_sw_held = false;
             // cruiseSwTimer.reset();
             flycruise_toggle_request = false;
-            car_initially_moved = !car_stopped();  // note whether car moving going into fly mode (usually not), this turns true once it has initially got moving
+            car_initially_moved = !car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
         }
         if (!car_initially_moved) {
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) runmode = HOLD;  // Must keep pulling trigger until car moves, or it drops back to hold mode
@@ -628,7 +584,6 @@ void loop() {
     }
     else if (runmode == CRUISE) {
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
-            // enable_pids (1, 1, 1);
             speedo_target_mph = speedo_filt_mph;
             pressure_target_psi = pressure_min_psi;  // Let off the brake and keep it there till out of Cruise mode
             gestureFlyTimer.reset();  // reset gesture timer
@@ -666,7 +621,7 @@ void loop() {
         if (car_stopped()) runmode = HOLD;  // In case we slam into a brick wall, get out of cruise mode
     }
     else if (runmode == CAL) {  // Calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration. Don't use it unless you know how.
-        if (we_just_switched_modes) {  // Entering Cal mode: From shutdown mode once shutdown is complete, open simulator and long-press the Cal button. Each feature starts disabled but can be enabled with the tuner.
+        if (we_just_switched_modes) {  // Entering Cal mode: From fully shut down state, open simulator and long-press the Cal button. Each feature starts disabled but can be enabled with the tuner.
             // enable_pids (0, 0, 0);
             calmode_request = false;
             cal_pot_gas_ready = false;
@@ -715,6 +670,7 @@ void loop() {
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) brake_pulse_out_us = (float)map (ctrl_pos_adc[VERT][FILT], ctrl_db_adc[VERT][TOP], ctrl_lims_adc[ctrl][VERT][MAX], brake_pulse_stop_us, brake_pulse_extend_us);
             else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) brake_pulse_out_us = (float)map (ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_db_adc[VERT][BOT], brake_pulse_retract_us, brake_pulse_stop_us);
             else brake_pulse_out_us = (float)brake_pulse_stop_us;
+            brake_pulse_out_us = constrain (brake_pulse_out_us, (float)brake_pulse_retract_min_us, (float)brake_pulse_extend_max_us);  // Constrain to full potential range when calibrating. Caution don't break anything!
         }
         else if (park_the_motors) {
             if (brake_pos_filt_in + brake_pos_margin_in <= brake_pos_park_in)  // If brake is retracted from park point, extend toward park point, slowing as we approach
@@ -724,14 +680,11 @@ void loop() {
         }
         else if (runmode != BASIC) brakeQPID.Compute();  // Otherwise the pid control is active
         if (runmode != BASIC || park_the_motors) {
-            if (runmode == CAL && cal_joyvert_brkmotor)  // In Cal mode constrain the motor to its entire range, instead of to the calibrated limits
-                brake_pulse_out_us = constrain (brake_pulse_out_us, (float)brake_pulse_retract_min_us, (float)brake_pulse_extend_max_us);  // Send to the actuator. Refuse to exceed range    
-            else {  // Prevent any movement of motor which would exceed position limits. Improve this by having the motor actively go back toward position range if position is beyond either limit
-                if ( ((brake_pos_filt_in + brake_pos_margin_in <= brake_pos_nom_lim_retract_in) && ((int32_t)brake_pulse_out_us < brake_pulse_stop_us)) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
-                     ((brake_pos_filt_in - brake_pos_margin_in >= brake_pos_nom_lim_extend_in) && ((int32_t)brake_pulse_out_us > brake_pulse_stop_us)) )  // ... or same thing in the extend direction ...
-                    brake_pulse_out_us = brake_pulse_stop_us;  // ... then stop the motor
+            if (!(runmode == CAL && cal_joyvert_brkmotor))  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
                 brake_pulse_out_us = constrain (brake_pulse_out_us, (float)brake_pulse_retract_us, (float)brake_pulse_extend_us);  // Send to the actuator. Refuse to exceed range    
-            } 
+            if (((brake_pos_filt_in + brake_pos_margin_in <= brake_pos_nom_lim_retract_in) && ((int32_t)brake_pulse_out_us < brake_pulse_stop_us)) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
+                ((brake_pos_filt_in - brake_pos_margin_in >= brake_pos_nom_lim_extend_in) && ((int32_t)brake_pulse_out_us > brake_pulse_stop_us)))  // ... or same thing in the extend direction ...
+                    brake_pulse_out_us = brake_pulse_stop_us;  // ... then stop the motor
             brake_servo.writeMicroseconds ((int32_t)brake_pulse_out_us);  // Write result to jaguar servo interface
             if (button_it) printf (" Brk:%4ld", (int32_t)brake_pulse_out_us);
         }
@@ -875,14 +828,14 @@ void loop() {
                 touch_longpress_valid = false;
             }
         }
-        else if (tcol==2 && trow==0 && (runmode == CAL || (runmode == SHUTDOWN && shutdown_complete))) {
-            if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
-                calmode_request = true;
-                touch_longpress_valid = false;
-            }  // Pressed the basic mode toggle button. Toggle value, only once per touch
-        }
         else if (simulating) {
-            if (tcol==3 && trow==0 && sim_basicsw && !touch_now_touched) basicmodesw = !basicmodesw;  // Pressed the basic mode toggle button. Toggle value, only once per touch
+            if (tcol==2 && trow==0 && (runmode == CAL || (runmode == SHUTDOWN && shutdown_complete))) {
+                if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
+                    calmode_request = true;
+                    touch_longpress_valid = false;
+                }  // Pressed the basic mode toggle button. Toggle value, only once per touch
+            }
+            else if (tcol==3 && trow==0 && sim_basicsw && !touch_now_touched) basicmodesw = !basicmodesw;  // Pressed the basic mode toggle button. Toggle value, only once per touch
             else if (tcol==3 && trow==1 && sim_pressure) adj_val (&pressure_filt_psi, (float)touch_accel, pressure_min_psi, pressure_max_psi);   // (+= 25) Pressed the increase brake pressure button
             else if (tcol==3 && trow==2 && sim_pressure) adj_val (&pressure_filt_psi, (float)(-touch_accel), pressure_min_psi, pressure_max_psi); // (-= 25) Pressed the decrease brake pressure button
             else if (tcol==3 && trow==4 && sim_joy) adj_val (&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (-= 25) Pressed the joystick left button

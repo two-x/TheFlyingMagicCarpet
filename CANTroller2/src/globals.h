@@ -736,8 +736,8 @@ inline int32_t map (int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, 
 bool rounding = true;
 float dround (float val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
 
-bool car_stopped (void) { return (speedo_filt_mph < speedo_stop_thresh_mph); }  // Moved logic that was here to the main loop
-bool engine_stopped (void) { return (tach_filt_rpm < tach_stop_thresh_rpm); }  // Note due to weird float math stuff, can not just check if tach == 0.0
+bool inline car_stopped (void) { return (speedo_filt_mph < speedo_stop_thresh_mph); }  // Moved logic that was here to the main loop
+bool inline engine_stopped (void) { return (tach_filt_rpm < tach_stop_thresh_rpm); }  // Note due to weird float math stuff, can not just check if tach == 0.0
 
 uint32_t colorwheel (uint8_t WheelPos) {
     WheelPos = 255 - WheelPos;
@@ -775,7 +775,7 @@ void ema_filt (int32_t raw, float* filt, float alpha) {
 }
 void ema_filt (int32_t raw, int32_t* filt, float alpha) {
     // if (button_it) printf (" r:%4ld f0:%4ld", raw, *filt);
-    *filt = (int32_t)(alpha * (float)raw + (1 - alpha) * (float)(*filt) + 0.5);  // Adding 0.5 to compensate for the average loss due to int casting roundoff
+    *filt = (int32_t)(alpha * (float)raw + (1 - alpha) * (float)(*filt) + 0.5);  // (?) Adding 0.5 to compensate for the average loss due to int casting roundoff
     // if (button_it) printf (" f1:%4ld a:%f", *filt, alpha);
 
 }
@@ -883,7 +883,7 @@ long temp_peef (void) {
 }
 
 void temp_soren (void) {
-    if (take_temperatures && temp_detected_device_ct && tempTimer.expired()) {
+    if (temp_detected_device_ct && tempTimer.expired()) {
         // int64_t check1 = esp_timer_get_time();  // Soren
         // int64_t check2;        
         if (temp_state == CONVERT) {
