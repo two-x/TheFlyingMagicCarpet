@@ -27,6 +27,7 @@
 #include "driver/rmt.h"
 // #include "spid.h"
 // #include "disp.h"
+#include "RMT_Input.h"
 
 // #define CAP_TOUCH
 bool flip_the_screen = false;
@@ -167,7 +168,11 @@ Preferences config;
 // Globals -------------------
 //
 
-static RingbufHandle_t rb = NULL;
+// Declare Hotrc RMT Inputs in global scope
+RMTInput hotrc_horz(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_horz_pin)); 
+RMTInput hotrc_vert(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_vert_pin)); 
+RMTInput hotrc_ch3(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_ign_pin)); 
+RMTInput hotrc_ch4(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_cruise_pin)); 
 
 class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
   protected:
@@ -661,20 +666,24 @@ void IRAM_ATTR speedo_isr (void) {  //  Handler can get the most recent rotation
         speedo_us = speedo_time_us;
     }
 }
-void read_hotrc_horz_rmt_pulse() {
-    size_t rx_size = 0;
-    rmt_item32_t* item = (rmt_item32_t*) xRingbufferReceive(rb, &rx_size, 0);
-    
-    if(item != NULL && rx_size == sizeof(rmt_item32_t)) {
-        uint32_t pulse_width = item->duration0 + item->duration1;
-        hotrc_horz_pulse_64_us =  pulse_width;
-        vRingbufferReturnItem(rb, (void*) item);
+void handle_hotrc_vert(int32_t pulse_width) {
+    // reads return 0 if the buffer is empty eg bc our loop is running faster than the rmt is getting pulses
+    if (pulse_width > 0) {
+        hotrc_vert_pulse_64_us = pulse_width;
     }
 }
-void IRAM_ATTR hotrc_vert_isr (void) {  // On falling edge, Sets timer on rising edge (for all channels) and reads it on falling to determine ch2 trigger position
-    hotrc_vert_pulse_64_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
+void handle_hotrc_horz(int32_t pulse_width) {
+    if (pulse_width > 0) {
+        hotrc_vert_pulse_64_us = pulse_width;
+    }
 }
-void IRAM_ATTR hotrc_ch3_isr (void) {  // On falling edge, records high pulse width to determine ch3 button toggle state
+
+// TODO handle hotrc_ch3 and ch4
+// void handle_hotrc_ch3(int32_t pulse_width) {
+//     // handle here
+// }
+
+void IRAM_ATTR hotrc_ch3_isr (int32_t pulse_width) {  // On falling edge, records high pulse width to determine ch3 button toggle state
     hotrc_ch3_sw = (esp_timer_get_time() - hotrc_timer_start <= 1500);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
     if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch3_sw_last = hotrc_ch3_sw;

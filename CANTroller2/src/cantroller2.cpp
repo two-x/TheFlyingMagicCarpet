@@ -49,15 +49,12 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (pressure_pin, INPUT);
     set_pin (brake_pos_pin, INPUT);
     set_pin (ign_batt_pin, INPUT);
-    set_pin (hotrc_ch2_vert_pin, INPUT);
     set_pin (neopixel_pin, OUTPUT);
     set_pin (sdcard_cs_pin, OUTPUT);
     set_pin (tft_cs_pin, OUTPUT);
     set_pin (pot_wipe_pin, INPUT);
     set_pin (button_pin, INPUT_PULLUP);
     set_pin (starter_pin, INPUT_PULLDOWN);
-    set_pin (hotrc_ch3_ign_pin, INPUT);
-    set_pin (hotrc_ch4_cruise_pin, INPUT);
 
     set_pin (joy_horz_pin, INPUT);
     set_pin (joy_vert_pin, INPUT);
@@ -97,81 +94,11 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     // printf("Serial port open\n");  // This works on Due but not ESP32
     
     // Set up 4 RMT receivers, one per channel
+    hotrc_vert.init();
+    hotrc_horz.init();
+    hotrc_ch3.init();
+    hotrc_ch4.init();
 
-    // The APB clock on the ESP32 runs at 80 MHz, so each tick is 12.5 ns
-    // A threshold of 100 ticks corresponds to a duration of 1.25 µs. 
-    // Any pulse shorter than this will be ignored.
-    // For example, if you know that your remote control sends pulses that are at least 2 µs long,
-    // and there is at least 200 µs of idle time between transmissions, 
-    // you could set the filter threshold to 160 (to ignore any noise shorter than 2 µs) 
-    // and the idle threshold to 16000 (to detect an idle period longer than 200 µs)
-        
-    rmt_config_t rmt_rx;
-    rmt_rx.channel = RMT_CHANNEL_4; 
-    rmt_rx.clk_div = 80; // Clock divider
-    rmt_rx.mem_block_num = 1;
-    rmt_rx.rmt_mode = RMT_MODE_RX;
-    rmt_rx.rx_config.filter_en = true; // Enable the filter
-    rmt_rx.rx_config.filter_ticks_thresh = 100; // Set the filter threshold
-    rmt_rx.rx_config.idle_threshold = 3000; // Set the idle threshold
-
-    // Configure the RMT for each pin
-    rmt_rx.gpio_num = (gpio_num_t)hotrc_ch1_horz_pin;
-    esp_err_t config_result = rmt_config(&rmt_rx);
-    if(config_result != ESP_OK) {
-        Serial.printf("Failed to configure RMT: %d\n", config_result);
-        while(1); // halt execution
-    }
-    
-    esp_err_t install_result = rmt_driver_install(rmt_rx.channel, 1000, 0);
-    if(install_result != ESP_OK) {
-        Serial.printf("Failed to install RMT driver: %d\n", install_result);
-        while(1); // halt execution
-    }
-
-    // Get the RMT RX ringbuffer
-    rmt_get_ringbuf_handle(rmt_rx.channel, &rb);
-    if(rb == NULL) {
-        Serial.println("Failed to initialize ring buffer");
-        while(1); // halt execution
-    }
-
-    // Enable receivers 
-    esp_err_t start_result = rmt_rx_start(rmt_rx.channel, 1);
-    if(start_result != ESP_OK) {
-        Serial.printf("Failed to start RMT receiver: %d\n", start_result);
-        while(1); // halt execution
-    }
-
-    /* ========================================
-    // TODO Repeat for other 3 channels
-    // this should work, note there's only 8 channels. For some reason channels 0-3 don't work.
-    // Array of pins
-    #define NUM_CHANNELS 4
-    gpio_num_t pins[NUM_CHANNELS] = {gpio_num_t(hotrc_ch1_horz_pin), gpio_num_t(hotrc_ch2_vert_pin), gpio_num_t(hotrc_ch3_ign_pin), gpio_num_t(hotrc_ch4_cruise_pin)};
-
-    // Array of RMT configurations
-    rmt_config_t rmt_configs[NUM_CHANNELS];
-
-    for (int i = 0; i < NUM_CHANNELS; i++) {
-        rmt_configs[i].channel = (rmt_channel_t)(RMT_CHANNEL_4 + i); // Start from channel 4
-        rmt_configs[i].clk_div = 80;
-        rmt_configs[i].mem_block_num = 1;
-        rmt_configs[i].rmt_mode = RMT_MODE_RX;
-        rmt_configs[i].rx_config.filter_en = true;
-        rmt_configs[i].rx_config.filter_ticks_thresh = 100;
-        rmt_configs[i].rx_config.idle_threshold = 12000;
-        rmt_configs[i].gpio_num = pins[i];
-
-        // Configure the RMT
-        rmt_config(&rmt_configs[i]);
-        rmt_driver_install(rmt_configs[i].channel, 1000, 0);
-
-        // Start the receiver
-        rmt_rx_start(rmt_configs[i].channel, 1);
-    }
-    ======================================== */
-    
     for (int32_t x=0; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
     
     if (display_enabled) {
@@ -242,9 +169,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         // ledcSetup(1, 1, 1); // Use LEDC channel 0 with a resolution of 1 bit
         // ledcAttachPinTone(hotrc_ch2_vert_pin, 1); // Capture on falling edge
 
-        attachInterrupt (digitalPinToInterrupt (hotrc_ch2_vert_pin), hotrc_vert_isr, FALLING);
-        attachInterrupt (digitalPinToInterrupt (hotrc_ch3_ign_pin), hotrc_ch3_isr, FALLING);
-        attachInterrupt (digitalPinToInterrupt (hotrc_ch4_cruise_pin), hotrc_ch4_isr, CHANGE);
+        // attachInterrupt (digitalPinToInterrupt (hotrc_ch3_ign_pin), hotrc_ch3_isr, FALLING);
+        // attachInterrupt (digitalPinToInterrupt (hotrc_ch4_cruise_pin), hotrc_ch4_isr, CHANGE);
     }
     Serial.println (F("Interrupts set up and enabled\n"));
 
@@ -346,7 +272,13 @@ void loop() {
     // Update inputs.  Fresh sensor data, and filtering.
     //
     // Read RMT pulse widths
-    read_hotrc_horz_rmt_pulse();
+    
+    int32_t hotrc_vert_pulse_width_us = hotrc_vert.readPulseWidth();
+    int32_t hotrc_horz_pulse_width_us = hotrc_horz.readPulseWidth();    
+    int32_t hotrc_ch3_pulse_width_us = hotrc_ch3.readPulseWidth();
+    int32_t hotrc_ch4_pulse_width_us = hotrc_ch4.readPulseWidth();
+    
+    printf("vert: %4d horz: %4d ch3: %4d ch4: %4d\n", hotrc_vert_pulse_width_us, hotrc_horz_pulse_width_us, hotrc_ch3_pulse_width_us, hotrc_ch4_pulse_width_us);
 
     // ESP32 "boot" button. generates btn_press_action flags of LONG or SHORT presses which can be handled wherever. Handler must reset btn_press_action = NONE
     if (!read_pin (button_pin)) {
