@@ -155,7 +155,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     attachInterrupt (digitalPinToInterrupt(tach_pulse_pin), tach_isr, RISING);
     attachInterrupt (digitalPinToInterrupt(speedo_pulse_pin), speedo_isr, RISING);
     
-    printf ("ctrl=%ld\n");
     if (ctrl == HOTRC) {
         
         // hotrc_vert_timer = timerBegin(1, 80, true); // Use timer 0 for the pulse measurement
@@ -188,11 +187,24 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     neostrip.show(); // Initialize all pixels to 'off'
     neostrip.setBrightness (neo_brightness_max);
 
+    i2c_init (i2c_sda_pin, i2c_scl_pin);
+    bool airflow_detected = false;
+    for (int32_t i=0; i<i2c_devicecount; i++) if (i2c_addrs[i] == 0x28) airflow_detected = true;
+    printf ("Airflow sensor is ... %sDetected\n", (airflow_detected) ? "" : "Not ");
+
+    if (airflow_detected) {
+        if (airflow_sensor.begin() == false) {  // Begin communication with air flow sensor) over I2C
+            Serial.println("The sensor did not respond. Please check wiring.");
+            while(1); //Freeze
+        }
+        airflow_sensor.setRange(AIRFLOW_RANGE_15_MPS);
+        Serial.println("Sensor is connected properly.");
+    }
+  
     // Peef setup
     // onewire.reset();
     // onewire.write(0xCC);        // All Devices present - Skip ROM ID
     // onewire.write(0x44);        // start conversion, with parasite power on at the end
-
     tempsensebus.setWaitForConversion (false);  // Whether to block during conversion process
     tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
     tempsensebus.begin();
@@ -325,6 +337,12 @@ void loop() {
             tach_rpm = 0.0;  // If timeout since last magnet is exceeded
             tach_filt_rpm = 0.0;
         }        
+    }
+    // Airflow sensor
+    if (simulating && sim_airflow && pot_overload == airflow) airflow_filt_mph = map (pot_filt_percent, 0.0, 100.0, 0.0, airflow_max_mph);
+    else if (!simulating || !sim_airflow) {
+        // airflow_mph = airflow.readMilesPerHour(); // note, this returns a float from 0-33.55 for the FS3000-1015 
+        ema_filt (airflow_mph, &airflow_filt_mph, airflow_ema_alpha);  // Sensor EMA filter
     }
     // Speedo - takes 14 us to read when no activity
     if (simulating && sim_speedo && pot_overload == speedo) speedo_filt_mph = map (pot_filt_percent, 0.0, 100.0, 0.0, speedo_govern_mph);
@@ -906,7 +924,8 @@ void loop() {
     adj = false;
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == PG_RUN) {
-            if (selected_value == 5) adj_bool (&sim_brkpos, sim_edit_delta);
+            if (selected_value == 4) adj_bool (&sim_airflow, sim_edit_delta);
+            else if (selected_value == 5) adj_bool (&sim_brkpos, sim_edit_delta);
             else if (selected_value == 6) adj_bool (&sim_joy, sim_edit_delta);
             else if (selected_value == 7) adj_bool (&sim_pressure, sim_edit_delta);
             else if (selected_value == 8) adj_bool (&sim_tach, sim_edit_delta);
@@ -924,11 +943,12 @@ void loop() {
             if (adj) calc_ctrl_lims();  // update derived variables relevant to changes made
         }
         else if (dataset_page == PG_CAR) {
-            if (selected_value == 4) {
+            if (selected_value == 3) {
                 adj = adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);
                 if (adj) calc_governor();  // update derived variables relevant to changes made
             }
-            else if (selected_value == 5) adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
+            else if (selected_value == 4) adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
+            else if (selected_value == 5) adj_val (&airflow_max_mph, 0.01*(float)sim_edit_delta, 0, airflow_abs_max_mph);
             else if (selected_value == 6) adj_val (&tach_idle_rpm, 0.01*(float)sim_edit_delta, 0, tach_redline_rpm - 1);
             else if (selected_value == 7) adj_val (&tach_redline_rpm, 0.01*(float)sim_edit_delta, tach_idle_rpm, 8000);
             else if (selected_value == 8) adj_val (&speedo_idle_mph, 0.01*(float)sim_edit_delta, 0, speedo_redline_mph - 1);

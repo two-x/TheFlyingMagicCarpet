@@ -88,11 +88,11 @@ char telemetry[disp_fixed_lines][9] = {
     "SteerPWM",
 }; 
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
-    {   " Battery",  // PG_RUN
+    {   " Airflow",  // PG_RUN
         " Brk Pos",
+        " Battery",
         "     Pot",
-        "      - ",
-        "      - ",
+        "SimAirFl",
         "SimBkPos",
         " Sim Joy",
         "Sim Pres",
@@ -113,9 +113,9 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
     {   "Pres ADC",  // PG_CAR
         "      - ",
         "      - ",
-        "      - ",
         "Governor",
         "Str Safe",
+        "AirFlMax",
         "Eng Idle",
         "Eng RedL",
         "Spd Idle",
@@ -177,13 +177,13 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         " Cal Brk",
         " Cal Gas", },
 };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 5, 4, 4, 3, 8, 7, 8, 9 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 4, 4, 3, 3, 8, 7, 8, 9 };  // first value in each dataset page that's editable. All values after this must also be editable
 char units[disp_fixed_lines][5] = { "adc ", "mph ", "rpm ", "\xe5s  ", "psi ", "\xe5s  ", "adc ", "\xe5s  " };
 
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
-    { "V   ", "in  ", "%   ", "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    " },  // PG_RUN
+    { "mph ", "in  ", "V   ", "%   ", "    ", "    ", "    ", "    ", "    ", "    ", "    " },  // PG_RUN
     { "adc ", "adc ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
-    { "adc ", "    ", "    ", "    ", "%   ", "%   ", "rpm ", "rpm ", "mph ", "mph ", "in  " },  // PG_CAR
+    { "adc ", "    ", "    ", "%   ", "%   ", "mph ", "rpm ", "rpm ", "mph ", "mph ", "in  " },  // PG_CAR
     { "adc ", "    ", "    ", "    ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  " },  // PG_PWMS
     { "psi ", "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "    ", "    ", "Hz  ", "s " },  // PG_BPID
     { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "    ", "    ", "Hz  ", "s " },  // PG_GPID
@@ -684,11 +684,11 @@ class Display {
                 draw_dynamic(7, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
                 draw_dynamic(8, steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);
                 if (dataset_page == PG_RUN) {
-                    draw_dynamic(9, battery_filt_v, 0.0, battery_max_v);
+                    draw_dynamic(9, airflow_filt_mph, airflow_min_mph, airflow_max_mph);
                     draw_dynamic(10, brake_pos_filt_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
-                    draw_dynamic(11, pot_filt_percent, pot_min_percent, pot_max_percent);
-                    draw_dynamic(12, ERASE);
-                    draw_dynamic(13, ERASE);
+                    draw_dynamic(11, battery_filt_v, 0.0, battery_max_v);
+                    draw_dynamic(12, pot_filt_percent, pot_min_percent, pot_max_percent);
+                    draw_dynamic(13, sim_airflow, -1, -1);
                     draw_dynamic(14, sim_brkpos, -1, -1);
                     draw_dynamic(15, sim_joy, -1, -1);
                     draw_dynamic(16, sim_pressure, -1, -1);
@@ -713,9 +713,9 @@ class Display {
                     draw_dynamic(9, pressure_adc, pressure_min_adc, pressure_max_adc);                    
                     draw_dynamic(10, ERASE);
                     draw_dynamic(11, ERASE);
-                    draw_dynamic(12, ERASE);
-                    draw_dynamic(13, gas_governor_percent, 0, 100);
-                    draw_dynamic(14, steer_safe_percent, 0, 100);
+                    draw_dynamic(12, gas_governor_percent, 0, 100);
+                    draw_dynamic(13, steer_safe_percent, 0, 100);
+                    draw_dynamic(14, airflow_max_mph, 0.0, airflow_abs_max_mph);
                     draw_dynamic(15, tach_idle_rpm, 0.0, tach_redline_rpm);
                     draw_dynamic(16, tach_redline_rpm, 0.0, tach_max_rpm);
                     draw_dynamic(17, speedo_idle_mph, 0.0, speedo_redline_mph);

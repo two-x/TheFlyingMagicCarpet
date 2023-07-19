@@ -247,9 +247,6 @@ bool cal_pot_gasservo = false;  // Allows direct control of gas servo using pot
 bool cal_pot_gas_ready = false;  // To avoid immediately overturning gas pot, first pot must be turned to valid range
 bool cal_set_hotrc_failsafe_ready = false;  
 
-// airflow related
-
-
 // pid related globals
 //  ---- tunable ----
 uint32_t steer_pid_period_ms = 185;  // (Not actually a pid) Needs to be long enough for motor to cause change in measurement, but higher means less responsive
@@ -362,6 +359,20 @@ Timer hotrcPanicTimer(hotrc_panic_timeout_us);
 
 // Maybe merging these into Hotrc class
 
+// I2C related
+int32_t i2c_devicecount = 0;
+uint8_t i2c_addrs[10];
+
+// airflow related
+float airflow_mph = 0.0;
+float airflow_filt_mph = airflow_mph;
+float airflow_min_mph = 0.0;
+float airflow_max_mph = 33.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)
+// What diameter intake hose will reduce airspeed to abs max?  2.7 times the xsectional area. Current area is 6.38 cm2. New diameter = 4.68 cm (min).
+// Need to adapt to 5in tube (ugh!) unless math is wrong
+float airflow_abs_max_mph = 33.55;
+float airflow_ema_alpha = 0.2;
+FS3000 airflow_sensor;
 
 // steering related
 int32_t steer_pulse_safe_us = 0;
@@ -549,7 +560,7 @@ int32_t sim_edit_delta_encoder = 0;
 //  ---- tunable ----
 bool simulating = false;
 // enum sources { _PIN, _TOUCH, _POT };
-enum pot_overload { none, pressure, tach, speedo };  // , joy, brkpos, pressure, basicsw, cruisesw, syspower }
+enum pot_overload { none, pressure, tach, speedo, brkpos, airflow };  // , joy, brkpos, pressure, basicsw, cruisesw, syspower }
 int32_t pot_overload = speedo;  // Use the pot to simulate one of the sensors
 bool sim_joy = false;
 bool sim_tach = true;
@@ -561,6 +572,7 @@ bool sim_pressure = true;
 bool sim_syspower = true;
 bool sim_starter = true;
 bool sim_ignition = true;
+bool sim_airflow = true;
 
 SdFat sd;  // SD card filesystem
 #define approot "cantroller2020"
@@ -904,6 +916,24 @@ void temp_soren (void) {
             if (++temp_current_index >= temp_detected_device_ct) temp_current_index -= temp_detected_device_ct;  // replace 1 with arraysize(temps)
         }
     }
+}
+
+void i2c_init (int32_t sda, int32_t scl) {
+    Wire.begin (sda, scl);  // I2c bus needed for airflow sensor
+    byte error, address;
+    printf ("I2C scanning ...");
+    i2c_devicecount = 0;
+    for (address = 1; address < 127; address++ ) {
+        Wire.beginTransmission (address);
+        error = Wire.endTransmission();
+        if (error == 0) {
+            printf (" Found addr: 0x%s%x", (address < 16) ? "0" : "", address);
+            i2c_addrs[i2c_devicecount++] = address;
+        }
+        else if (error==4) printf (" Error addr: 0x%s%x", (address < 16) ? "0" : "", address);
+    }
+    if (i2c_devicecount == 0) printf ("No devices found\n");
+    else printf (" Done\n");
 }
 
 // float get_temp (DeviceAddress arg_addr) {  // function to print the temperature for a device
