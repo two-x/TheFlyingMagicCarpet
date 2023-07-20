@@ -676,12 +676,12 @@ void handle_hotrc_horz(int32_t pulse_width) {
     }
 }
 void hotrc_ch3_update (void) {  // 
-    hotrc_ch3_sw = (hotrc_ch3.readPulseWidth(true) <= 1500.0);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
+    hotrc_ch3_sw = (hotrc_ch3.readPulseWidth(true) <= 1500);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
     if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch3_sw_last = hotrc_ch3_sw;
 }
 void hotrc_ch4_update (void) {  // 
-    hotrc_ch4_sw = (hotrc_ch4.readPulseWidth(true) <= 1500.0);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
+    hotrc_ch4_sw = (hotrc_ch4.readPulseWidth(true) <= 1500);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
     if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }

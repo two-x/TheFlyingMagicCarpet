@@ -55,15 +55,16 @@ void RMTInput::init()
   }
 }
 
-float RMTInput::readPulseWidth(bool reject_zeroes=false)
+int32_t RMTInput::readPulseWidth(bool persistence)  // persistence means the last reading will be returned until a newer one is gathered. Otherwise 0 if no reading
 {
   size_t rx_size = 0;
   rmt_item32_t *item = (rmt_item32_t *)xRingbufferReceive(rb_, &rx_size, 0);
   if (item != NULL && rx_size == sizeof(rmt_item32_t))
   {
-    uint32_t pulse_width = item->duration0 + item->duration1;
+    pulse_width = item->duration0 + item->duration1;
     vRingbufferReturnItem(rb_, (void *)item);
-    if (!reject_zeroes || pulse_width > 0) pulse_width_last = (float)pulse_width * scale_factor;
+    if (!persistence || pulse_width > 0) pulse_width_last = pulse_width * scale_factor;
   }
-  return pulse_width_last; // No data
+  else pulse_width = 0;
+  return (persistence) ? pulse_width_last : pulse_width; // No data
 }

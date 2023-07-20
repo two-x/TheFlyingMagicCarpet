@@ -375,8 +375,8 @@ void loop() {
     // Read horz and vert inputs, determine steering pwm output -  - takes 40 us to read. Then, takes 13 us to handle
     if (ctrl != JOY) {
         if (hotrc_source == ESP_RMT) {  // Read RMT pulse widths
-            hotrc_vert_pulse_us = (int32_t)hotrc_vert.readPulseWidth(true);
-            hotrc_horz_pulse_us = (int32_t)hotrc_horz.readPulseWidth(true);  
+            hotrc_vert_pulse_us = (int32_t)hotrc_vert.readPulseWidth();
+            hotrc_horz_pulse_us = (int32_t)hotrc_horz.readPulseWidth();  
             hotrc_ch3_update();
             hotrc_ch4_update();
         }
