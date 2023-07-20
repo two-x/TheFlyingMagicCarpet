@@ -341,11 +341,7 @@ volatile bool hotrc_isr_pin_preread = true;
 volatile int64_t hotrc_horz_pulse_64_us = (int64_t)hotrc_pulse_lims_us[HORZ][CENT];
 volatile int64_t hotrc_vert_pulse_64_us = (int64_t)hotrc_pulse_lims_us[VERT][CENT];
 //volatile uint32_t hotrc_vert_pulse_us = 0;
-int32_t hotrc_horz_pulse_us = (int32_t)hotrc_horz_pulse_64_us;
-int32_t hotrc_vert_pulse_us;  // = (int32_t)hotrc_vert_pulse_64_us;
-
-int32_t hotrc_horz_pulse_filt_us = hotrc_horz_pulse_us;
-int32_t hotrc_vert_pulse_filt_us = hotrc_vert_pulse_us;
+int32_t hotrc_horz_pulse_us, hotrc_vert_pulse_us, hotrc_ch3_pulse_us, hotrc_ch4_pulse_us, hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us;
 
 int32_t intcount = 0;
 int32_t ctrl_db_adc[2][2];  // [HORZ/VERT] [BOT/TOP] - to store the top and bottom deadband values for each axis of selected controller
