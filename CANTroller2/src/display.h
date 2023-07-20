@@ -92,11 +92,11 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         " Brk Pos",
         " Battery",
         "     Pot",
-        "SimAirFl",
-        "SimBkPos",
-        " Sim Joy",
+        "Sim Ctrl",
         "Sim Pres",
+        "SimBkPos",
         "Sim Tach",
+        "SimAirFl",
         "SimSpeed",
         "SimW/Pot", },
     {   "Horz Raw",  // PG_JOY
@@ -114,24 +114,24 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "      - ",
         "      - ",
         "Governor",
-        "Str Safe",
+        "SteerSaf",
         "AirFlMax",
-        "Eng Idle",
-        "Eng RedL",
+        "TachIdle",
+        "TachRedL",
         "Spd Idle",
         "Spd RedL",
-        "BrkPos0P", },
+        "BkPos0Pt", },
     {   "      - ",  // PG_PWMS
         "      - ",
         "      - ",
         "Steer Lt",
         "SteerStp",
         "Steer Rt",
-        "Brk Extd",
-        "Brk Stop",
-        "Brk Retr",
-        "Gas Idle",
-        "Gas RdLn", },
+        "BrakExtd",
+        "BrakStop",
+        "BrakRetr",
+        "TachIdle",
+        "TachRedL", },
     {   "Pres Tgt",  // PG_BPID
         "Pres Err",
         "  P Term",
@@ -165,12 +165,12 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "  Kp (P)",
         "  Ki (I)",
         "  Kd (D)", },
-    {   "Temp Amb",  // PG_TEMP
-        "Temp Eng",
-        "TempWhFL",
-        "TempWhFR",
-        "TempWhRL",
-        "TempWhRR",
+    {   " Ambient",  // PG_TEMP
+        " Coolant",
+        "Axl FrLt",
+        "Axl FrRt",
+        "Axl RrLt",
+        "Axl RrRt",
         "      - ",
         "      - ",
         "      - ",
@@ -688,11 +688,11 @@ class Display {
                     draw_dynamic(10, brake_pos_filt_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
                     draw_dynamic(11, battery_filt_v, 0.0, battery_max_v);
                     draw_dynamic(12, pot_filt_percent, pot_min_percent, pot_max_percent);
-                    draw_dynamic(13, sim_airflow, -1, -1);
-                    draw_dynamic(14, sim_brkpos, -1, -1);
-                    draw_dynamic(15, sim_joy, -1, -1);
-                    draw_dynamic(16, sim_pressure, -1, -1);
-                    draw_dynamic(17, sim_tach, -1, -1);
+                    draw_dynamic(13, sim_joy, -1, -1);
+                    draw_dynamic(14, sim_pressure, -1, -1);
+                    draw_dynamic(15, sim_brkpos, -1, -1);
+                    draw_dynamic(16, sim_tach, -1, -1);
+                    draw_dynamic(17, sim_airflow, -1, -1);
                     draw_dynamic(18, sim_speedo, -1, -1);
                     draw_dynamic(19, pot_overload, -1, -1);
                 }
