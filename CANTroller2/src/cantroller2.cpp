@@ -271,6 +271,7 @@ void loop() {
 
     // Update inputs.  Fresh sensor data, and filtering.
     //
+
     // ESP32 "boot" button. generates btn_press_action flags of LONG or SHORT presses which can be handled wherever. Handler must reset btn_press_action = NONE
     if (!read_pin (button_pin)) {
         if (!button_it) {  // If press just occurred
@@ -370,24 +371,20 @@ void loop() {
 
     // Controller handling
     //
-    bool use_rmt = true;
 
     // Read horz and vert inputs, determine steering pwm output -  - takes 40 us to read. Then, takes 13 us to handle
     if (ctrl != JOY) {
-        if (use_rmt) {
-            // Read RMT pulse widths
-
-            int32_t hotrc_vert_pulse_us = hotrc_vert.readPulseWidth();
-            int32_t hotrc_horz_pulse_us = hotrc_horz.readPulseWidth();    
-            int32_t hotrc_ch3_pulse_us = hotrc_ch3.readPulseWidth();
-            int32_t hotrc_ch4_pulse_us = hotrc_ch4.readPulseWidth();
+        if (hotrc_source == ESP_RMT) {  // Read RMT pulse widths
+            hotrc_vert_pulse_us = (int32_t)hotrc_vert.readPulseWidth(true);
+            hotrc_horz_pulse_us = (int32_t)hotrc_horz.readPulseWidth(true);  
+            hotrc_ch3_update();
+            hotrc_ch4_update();
         }
         else {
             hotrc_horz_pulse_us = hotrcHorzManager.spike_filter ((int32_t)hotrc_horz_pulse_64_us);
             hotrc_vert_pulse_us = hotrcHorzManager.spike_filter ((int32_t)hotrc_vert_pulse_64_us);
         }
         if (button_it) printf ("hrc H:%4ld V:%4ld", hotrc_horz_pulse_us, hotrc_vert_pulse_us);
-        if (use_rmt && button_it) printf (" | 3:%4ld 4:%4ld", hotrc_ch3_pulse_us, hotrc_ch4_pulse_us);
         if (button_it) printf ("\n");
     }
     if (!simulating || !sim_joy) {  // Handle HotRC button generated events and detect potential loss of radio signal
@@ -462,8 +459,6 @@ void loop() {
         // hotrc_suppress_next_ch3_event = true;  // reject spurious ch3 switch event upon next hotrc poweron
         // hotrc_suppress_next_ch4_event = true;  // reject spurious ch4 switch event upon next hotrc poweron
     }
-    
-
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "joy");  //
     
     // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity

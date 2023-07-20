@@ -55,7 +55,7 @@ void RMTInput::init()
   }
 }
 
-uint32_t RMTInput::readPulseWidth()
+float RMTInput::readPulseWidth(bool reject_zeroes=false)
 {
   size_t rx_size = 0;
   rmt_item32_t *item = (rmt_item32_t *)xRingbufferReceive(rb_, &rx_size, 0);
@@ -63,8 +63,7 @@ uint32_t RMTInput::readPulseWidth()
   {
     uint32_t pulse_width = item->duration0 + item->duration1;
     vRingbufferReturnItem(rb_, (void *)item);
-    return pulse_width;
+    if (!reject_zeroes || pulse_width > 0) pulse_width_last = (float)pulse_width * scale_factor;
   }
-
-  return 0; // No data
+  return pulse_width_last; // No data
 }

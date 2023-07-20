@@ -316,6 +316,7 @@ enum ctrl_axes { HORZ, VERT, CH3, CH4 };
 enum ctrl_thresh { MIN, CENT, MAX, DB };
 enum ctrl_edge { BOT, TOP };
 enum raw_filt { RAW, FILT };
+enum hotrc_sources { MICROS, ESP_RMT };
 bool joy_centered = false;
 // Timer hotrcPulseTimer;  // OK to not be volatile?
 // Merging these into Hotrc class
@@ -327,7 +328,8 @@ bool hotrc_suppress_next_ch4_event = true;  // When powered up, the hotrc will t
 float hotrc_pulse_period_us = 1000000.0 / 50;
 float ctrl_ema_alpha[2] = { 0.05, 0.05 };  // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 int32_t ctrl_lims_adc[2][2][4] = { { { 0, adcmidscale_adc, adcrange_adc, 42 }, { 0, adcmidscale_adc, adcrange_adc, 42 } }, { { 9, adcmidscale_adc, 4085, 50 }, { 9, adcmidscale_adc, 4085, 50 } } }; // [HOTRC/JOY] [HORZ/VERT], [MIN/CENT/MAX/DB] values as microseconds (hotrc) or adc counts (joystick)
-bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
+int32_t ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
+int32_t hotrc_source = ESP_RMT;
 // bool ctrl = HEADLESS;
 // Limits of what pulsewidth the hotrc receiver puts out
 // int32_t hotrc_pulse_lims_us[2][3];  // = { { 1009, 0, 2003 }, { 1009, 0, 2003 } };  // [HORZ/VERT] [MIN/-/MAX]  // These are the limits of hotrc vert and horz high pulse
@@ -673,26 +675,36 @@ void handle_hotrc_horz(int32_t pulse_width) {
         hotrc_vert_pulse_64_us = pulse_width;
     }
 }
+void hotrc_ch3_update (void) {  // 
+    hotrc_ch3_sw = (hotrc_ch3.readPulseWidth(true) <= 1500.0);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
+    if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
+    hotrc_ch3_sw_last = hotrc_ch3_sw;
+}
+void hotrc_ch4_update (void) {  // 
+    hotrc_ch4_sw = (hotrc_ch4.readPulseWidth(true) <= 1500.0);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
+    if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
+    hotrc_ch4_sw_last = hotrc_ch4_sw;
+}
 
 // TODO handle hotrc_ch3 and ch4
 // void handle_hotrc_ch3(int32_t pulse_width) {
 //     // handle here
 // }
 
-void IRAM_ATTR hotrc_ch3_isr (int32_t pulse_width) {  // On falling edge, records high pulse width to determine ch3 button toggle state
-    hotrc_ch3_sw = (esp_timer_get_time() - hotrc_timer_start <= 1500);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
-    if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
-    hotrc_ch3_sw_last = hotrc_ch3_sw;
-}
-void IRAM_ATTR hotrc_ch4_isr (void) {  // Triggers on both edges. Sets timer on rising edge (for all channels) and reads it on falling to determine ch4 button toggle state
-    if (hotrc_isr_pin_preread) hotrc_timer_start = esp_timer_get_time();  // hotrcPulseTimer.reset();
-    else {
-        hotrc_ch4_sw = (esp_timer_get_time() - hotrc_timer_start <= 1500);  // Ch4 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH4][CENT]
-        if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
-        hotrc_ch4_sw_last = hotrc_ch4_sw;
-    }
-    hotrc_isr_pin_preread = !(digitalRead (hotrc_ch4_cruise_pin));  // Read pin after timer operations to maximize clocking accuracy
-}  // intcount++;
+// void IRAM_ATTR hotrc_ch3_isr (int32_t pulse_width) {  // On falling edge, records high pulse width to determine ch3 button toggle state
+//     hotrc_ch3_sw = (esp_timer_get_time() - hotrc_timer_start <= 1500);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
+//     if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
+//     hotrc_ch3_sw_last = hotrc_ch3_sw;
+// }
+// void IRAM_ATTR hotrc_ch4_isr (void) {  // Triggers on both edges. Sets timer on rising edge (for all channels) and reads it on falling to determine ch4 button toggle state
+//     if (hotrc_isr_pin_preread) hotrc_timer_start = esp_timer_get_time();  // hotrcPulseTimer.reset();
+//     else {
+//         hotrc_ch4_sw = (esp_timer_get_time() - hotrc_timer_start <= 1500);  // Ch4 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH4][CENT]
+//         if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
+//         hotrc_ch4_sw_last = hotrc_ch4_sw;
+//     }
+//     hotrc_isr_pin_preread = !(digitalRead (hotrc_ch4_cruise_pin));  // Read pin after timer operations to maximize clocking accuracy
+// }  // intcount++;
 
 // Attempt to use MCPWM input capture pulse width timer unit to get precise hotrc readings
 // int32_t hotrc_ch3_pulse_us, hotrc_ch4_pulse_us;

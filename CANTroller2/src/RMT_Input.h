@@ -8,11 +8,12 @@ public:
 
   void init();
 
-  uint32_t readPulseWidth();
+  float readPulseWidth(bool reject_zeroes);
 
 private:
   rmt_channel_t channel_;
   gpio_num_t gpio_;
-
+  float pulse_width_last;
+  float scale_factor = 0.625;
   RingbufHandle_t rb_;
 };
