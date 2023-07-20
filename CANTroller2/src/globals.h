@@ -28,7 +28,7 @@
 // #include "disp.h"
 
 // #define CAP_TOUCH
-bool flip_the_screen = false;
+extern bool flip_the_screen;
 
 // Here are the different runmodes documented
 //
@@ -144,12 +144,12 @@ bool flip_the_screen = false;
 #define adcmidscale_adc 2047  // = 2^(adcbits-1)-1
 
 // Global settings
-bool serial_debugging = true; 
-bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
-bool take_temperatures = true;
+extern bool serial_debugging;
+extern bool timestamp_loop;
+extern bool take_temperatures;
 
 // Persistent config storage
-Preferences config;
+extern Preferences config;
     
 // Readily available possibilities we could wire up if we want
 //
@@ -165,141 +165,127 @@ Preferences config;
 
 // Globals -------------------
 //
-class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
+class Timer {
   protected:
-    volatile int64_t start_us = 0;
-    volatile int64_t timeout_us = 0;
+    volatile int64_t start_us;
+    volatile int64_t timeout_us;
+    
   public:
-    Timer (void) {
-        reset();
-    }
-    Timer (uint32_t arg_timeout_us) {
-        set ((int64_t)arg_timeout_us);
-    }
-    IRAM_ATTR void set (int64_t arg_timeout_us) {
-        timeout_us = arg_timeout_us;
-        reset();
-    }
-    IRAM_ATTR void set (uint32_t arg_timeout_us) {
-        set ((int64_t)arg_timeout_us);
-    }
-    IRAM_ATTR void reset (void) {
-        start_us = esp_timer_get_time();
-    }
-    IRAM_ATTR bool expired (void) {
-        return (esp_timer_get_time() > start_us + timeout_us);
-    }
-        // int64_t current_time = esp_timer_get_time();
-        // int64_t target_time = start_us + timeout_us;
-
-        // // Check for overflow
-        // if (target_time < start_us) {
-        //     // Overflow occurred
-        //     return (current_time < start_us) && (current_time >= target_time);
-        // } else {
-        //     // No overflow
-        //     return current_time >= target_time;
-        // }
-    IRAM_ATTR int64_t elapsed (void) {
-        return esp_timer_get_time() - start_us;
-    }
-    IRAM_ATTR int64_t get_timeout (void) { return timeout_us; }
+    Timer();
+    Timer(uint32_t arg_timeout_us);
+    
+    void set(int64_t arg_timeout_us);
+    void set(uint32_t arg_timeout_us);
+    
+    void reset();
+    
+    bool expired();
+    
+    int64_t elapsed();
+    int64_t get_timeout();
 };
 
-float convert_units (float from_units, float convert_factor, bool invert, float in_offset = 0.0, float out_offset = 0.0) {
-    if (!invert) return out_offset + convert_factor * (from_units - in_offset);
-    if (from_units - in_offset) return out_offset + convert_factor / (from_units - in_offset);
-    printf ("convert_units refused to divide by zero: %lf, %lf, %d, %lf, %lf", from_units, convert_factor, invert, in_offset, out_offset);
-    return -1;
-}
+extern float convert_units(float from_units, float convert_factor, bool invert, float in_offset = 0.0, float out_offset = 0.0);
 
 // run state globals
 enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL };
-int32_t runmode = SHUTDOWN;
-int32_t oldmode = BASIC;  // So we can tell when the mode has just changed. start as different to trigger_mode start algo
-int32_t gesture_progress = 0;  // How many steps of the Cruise Mode gesture have you completed successfully (from Fly Mode)
-bool shutdown_complete = false;  // Shutdown mode has completed its work and can stop activity
-bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
-bool park_the_motors = false;  // Indicates we should release the brake & gas so the pedals can be used manually without interference
-bool car_initially_moved = false;  // Whether car has moved at all since entering fly mode
-bool calmode_request = false;
-bool panic_stop = false;
-bool flycruise_toggle_request = false;
-int32_t flycruise_vert_margin_adc = 25;  // Default margin of error for comparisons of adc values (ADC count 0-4095)
-bool cruise_gesturing = false;  // Is cruise mode enabled by gesturing?  Otherwise by press of cruise button
-bool cruise_sw_held = false;
-bool cruise_adjusting = false;
-Timer gestureFlyTimer;  // Used to keep track of time for gesturing for going in and out of fly/cruise modes
-// Timer cruiseSwTimer;  // Was used to require a medium-length hold time pushing cruise button to switch modes
-Timer sleepInactivityTimer (10000000);  // After shutdown how long to wait before powering down to sleep
-Timer stopcarTimer (7000000);  // Allows code to fail in a sensible way after a delay if nothing is happening
-//  ---- tunable ----
-uint32_t motor_park_timeout_us = 4000000;  // If we can't park the motors faster than this, then give up.
-uint32_t gesture_flytimeout_us = 400000;  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
-uint32_t cruise_sw_timeout_us = 500000;  // how long do you have to hold down the cruise button to start cruise mode (in us)
-uint32_t cruise_antiglitch_timeout_us = 350000;  // Target speed won't change until manual adjustment is outside deadboand for longer than this 
-Timer cruiseAntiglitchTimer(cruise_antiglitch_timeout_us);
-Timer motorParkTimer(motor_park_timeout_us);
+
+extern int32_t runmode;
+extern int32_t oldmode;  
+
+extern int32_t gesture_progress;
+
+extern bool shutdown_complete; 
+extern bool we_just_switched_modes;
+extern bool park_the_motors;
+extern bool car_initially_moved;
+extern bool calmode_request;
+extern bool panic_stop;
+extern bool flycruise_toggle_request;
+
+extern int32_t flycruise_vert_margin_adc;
+
+extern bool cruise_gesturing;
+extern bool cruise_sw_held;
+extern bool cruise_adjusting;
+
+extern Timer gestureFlyTimer;
+extern Timer sleepInactivityTimer;
+extern Timer stopcarTimer;
+
+// ---- tunable ----  
+extern uint32_t motor_park_timeout_us;
+extern uint32_t gesture_flytimeout_us;
+extern uint32_t cruise_sw_timeout_us;  
+extern uint32_t cruise_antiglitch_timeout_us;
+
+extern Timer cruiseAntiglitchTimer;
+extern Timer motorParkTimer;
 
 // calibration related
-bool cal_joyvert_brkmotor = false;  // Allows direct control of brake motor using controller vert
-bool cal_pot_gasservo = false;  // Allows direct control of gas servo using pot
-bool cal_pot_gas_ready = false;  // To avoid immediately overturning gas pot, first pot must be turned to valid range
-bool cal_set_hotrc_failsafe_ready = false;  
+extern bool cal_joyvert_brkmotor;  
+extern bool cal_pot_gasservo;
+extern bool cal_pot_gas_ready;
+extern bool cal_set_hotrc_failsafe_ready;
 
 // pid related globals
-//  ---- tunable ----
-uint32_t steer_pid_period_ms = 185;  // (Not actually a pid) Needs to be long enough for motor to cause change in measurement, but higher means less responsive
-Timer steerPidTimer (steer_pid_period_ms*1000);  // not actually tunable, just needs value above
-uint32_t brake_pid_period_ms = 185;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
-Timer brakePidTimer (brake_pid_period_ms*1000);  // not actually tunable, just needs value above
-// int32_t brake_spid_ctrl_dir = SPID::REV;  // 0 = fwd, 1 = rev. Because a higher value on the brake actuator pulsewidth causes a decrease in pressure value
-float brake_spid_initial_kp = 2.110;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-float brake_spid_initial_ki_hz = 0.873;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-float brake_spid_initial_kd_s = 1.130;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-uint32_t cruise_pid_period_ms = 300;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
-Timer cruisePidTimer (cruise_pid_period_ms*1000);  // not actually tunable, just needs value above
-float cruise_spid_initial_kp = 0.157;  // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
-float cruise_spid_initial_ki_hz = 0.035;  // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
-float cruise_spid_initial_kd_s = 0.044;  // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
-// int32_t cruise_spid_ctrl_dir = SPID::FWD;  // 1 = fwd, 0 = rev.
-uint32_t gas_pid_period_ms = 225;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
-Timer gasPidTimer (gas_pid_period_ms*1000);  // not actually tunable, just needs value above
-float gas_spid_initial_kp = 0.256;  // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
-float gas_spid_initial_ki_hz = 0.042;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
-float gas_spid_initial_kd_s = 0.111;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
-// int32_t gas_spid_ctrl_dir = SPID::REV;  // 0 = fwd, 1 = rev.
-bool gas_open_loop = false;
+// ---- tunable ----
+extern uint32_t steer_pid_period_ms;  
+extern Timer steerPidTimer;
+extern uint32_t brake_pid_period_ms;
+extern Timer brakePidTimer;
+// extern int32_t brake_spid_ctrl_dir;
+extern float brake_spid_initial_kp;
+extern float brake_spid_initial_ki_hz;
+extern float brake_spid_initial_kd_s;
+extern uint32_t cruise_pid_period_ms;
+extern Timer cruisePidTimer;
+extern float cruise_spid_initial_kp;
+extern float cruise_spid_initial_ki_hz;
+extern float cruise_spid_initial_kd_s;
+// extern int32_t cruise_spid_ctrl_dir;
+extern uint32_t gas_pid_period_ms; 
+extern Timer gasPidTimer;
+extern float gas_spid_initial_kp;
+extern float gas_spid_initial_ki_hz;
+extern float gas_spid_initial_kd_s;
+// extern int32_t gas_spid_ctrl_dir;
+extern bool gas_open_loop;
+
 // starter related
-bool starter = LOW;
-bool starter_last = LOW;
-// bool sim_starter = false;
+extern bool starter;
+extern bool starter_last;
+
+// extern bool sim_starter;
+
 
 // mule battery related
-float battery_adc = adcmidscale_adc;
-float battery_v = 10.0;
-float battery_filt_v = 10.0;
-//  ---- tunable ----
-float battery_max_v = 16.0;  // The max vehicle voltage we can sense. Design resistor divider to match. Must exceed max V possible.
-float battery_convert_v_per_adc = battery_max_v/adcrange_adc;
-bool battery_convert_invert = false;
-int32_t battery_convert_polarity = 1;  // Forward
-float battery_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+extern float battery_adc; 
+extern float battery_v;
+extern float battery_filt_v;
 
-// potentiometer related
-float pot_percent = 50;
-float pot_filt_percent = pot_percent;
-float pot_min_percent = 0;  //
-float pot_max_percent = 100;  //
-//  ---- tunable ----
-int32_t pot_adc = adcmidscale_adc;
-float pot_min_adc = 300;  // TUNED 230603 - Used only in determining theconversion factor
-float pot_max_adc = 4095;  // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
-float pot_convert_percent_per_adc = (pot_max_percent - pot_min_percent)/(pot_max_adc - pot_min_adc);  // 100 % / (3996 adc - 0 adc) = 0.025 %/adc
-bool pot_convert_invert = false;
-float pot_convert_offset = -0.08;
-int32_t pot_convert_polarity = 1;  // Forward
-float pot_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+// tunable
+extern float battery_max_v;  
+extern float battery_convert_v_per_adc;
+extern bool battery_convert_invert;
+extern int32_t battery_convert_polarity;
+extern float battery_ema_alpha;
+
+// potentiometer related  
+extern float pot_percent;
+extern float pot_filt_percent;
+extern float pot_min_percent;
+extern float pot_max_percent;
+
+// tunable
+extern int32_t pot_adc;
+extern float pot_min_adc;
+extern float pot_max_adc;
+extern float pot_convert_percent_per_adc;
+extern bool pot_convert_invert;
+extern float pot_convert_offset; 
+extern int32_t pot_convert_polarity;
+extern float pot_ema_alpha;
 
 // controller related
 enum ctrls { HOTRC, JOY, SIM, HEADLESS };  // Possible sources of gas, brake, steering commands
@@ -307,50 +293,60 @@ enum ctrl_axes { HORZ, VERT, CH3, CH4 };
 enum ctrl_thresh { MIN, CENT, MAX, DB };
 enum ctrl_edge { BOT, TOP };
 enum raw_filt { RAW, FILT };
-bool joy_centered = false;
-// Timer hotrcPulseTimer;  // OK to not be volatile?
-// Merging these into Hotrc class
-bool hotrc_radio_detected = false;
-bool hotrc_radio_detected_last = hotrc_radio_detected;
-bool hotrc_suppress_next_ch3_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
-bool hotrc_suppress_next_ch4_event = true;  // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
-//  ---- tunable ----
-float hotrc_pulse_period_us = 1000000.0 / 50;
-float ctrl_ema_alpha[2] = { 0.05, 0.05 };  // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-int32_t ctrl_lims_adc[2][2][4] = { { { 0, adcmidscale_adc, adcrange_adc, 42 }, { 0, adcmidscale_adc, adcrange_adc, 42 } }, { { 9, adcmidscale_adc, 4085, 50 }, { 9, adcmidscale_adc, 4085, 50 } } }; // [HOTRC/JOY] [HORZ/VERT], [MIN/CENT/MAX/DB] values as microseconds (hotrc) or adc counts (joystick)
-bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
-// bool ctrl = HEADLESS;
-// Limits of what pulsewidth the hotrc receiver puts out
-// int32_t hotrc_pulse_lims_us[2][3];  // = { { 1009, 0, 2003 }, { 1009, 0, 2003 } };  // [HORZ/VERT] [MIN/-/MAX]  // These are the limits of hotrc vert and horz high pulse
-int32_t hotrc_pulse_lims_us[4][3] = { { 970-1, 1470-3, 1970-3 }, { 1080-1, 1580-3, 2080-3 }, { 1200-1, 1500-2, 1800-3 }, { 1300-1, 1500-2, 1700-3 } };  // [HORZ/VERT/CH3/CH4] [MIN/CENT/MAX]  // These are the l
-int32_t hotrc_spike_buffer[2][3];
-// float hotrc_mapratio[2][3]; // [HORZ/VERT] [MIN/-/MAX]
 
-volatile int64_t hotrc_timer_start;
-volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
-volatile bool hotrc_isr_pin_preread = true;
-volatile int64_t hotrc_horz_pulse_64_us = (int64_t)hotrc_pulse_lims_us[HORZ][CENT];
-volatile int64_t hotrc_vert_pulse_64_us = (int64_t)hotrc_pulse_lims_us[VERT][CENT];
-//volatile uint32_t hotrc_vert_pulse_us = 0;
-int32_t hotrc_horz_pulse_us = (int32_t)hotrc_horz_pulse_64_us;
-int32_t hotrc_vert_pulse_us;  // = (int32_t)hotrc_vert_pulse_64_us;
+extern bool joy_centered;
 
-int32_t hotrc_horz_pulse_filt_us = hotrc_horz_pulse_us;
-int32_t hotrc_vert_pulse_filt_us = hotrc_vert_pulse_us;
+// extern Timer hotrcPulseTimer;  
 
-int32_t intcount = 0;
-int32_t ctrl_db_adc[2][2];  // [HORZ/VERT] [BOT/TOP] - to store the top and bottom deadband values for each axis of selected controller
-int32_t ctrl_pos_adc[2][2];  // [HORZ/VERT] [RAW/FILT] - holds most current controller values
+extern bool hotrc_radio_detected;
+extern bool hotrc_radio_detected_last;
+extern bool hotrc_suppress_next_ch3_event;  
+extern bool hotrc_suppress_next_ch4_event;
 
-int32_t hotrc_pulse_failsafe_min_us = 780;  // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
-int32_t hotrc_pulse_failsafe_max_us = 980;  // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
-int32_t hotrc_pulse_failsafe_pad_us = 10;
-uint32_t hotrc_panic_timeout_us = 500000;  // how long to receive flameout-range signal from hotrc vertical before panic stopping
-Timer hotrcPanicTimer(hotrc_panic_timeout_us);
-// int32_t ctrl_pos_adc[2][2] = { { ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][CENT] }, { ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][CENT]} };  // [HORZ/VERT] [RAW/FILT] initialize to centerpoint
+// tunable
+extern float hotrc_pulse_period_us;
+extern float ctrl_ema_alpha[2];  
+
+extern int32_t ctrl_lims_adc[2][2][4];
+
+extern bool ctrl;  
+
+// extern int32_t hotrc_pulse_lims_us[2][3];
+
+extern int32_t hotrc_pulse_lims_us[4][3];
+
+extern int32_t hotrc_spike_buffer[2][3];
+
+// extern float hotrc_mapratio[2][3];
+
+
+extern volatile int64_t hotrc_timer_start;
+extern volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
+extern volatile bool hotrc_isr_pin_preread;
+extern volatile int64_t hotrc_horz_pulse_64_us;
+extern volatile int64_t hotrc_vert_pulse_64_us;
+
+extern int32_t hotrc_horz_pulse_us;
+extern int32_t hotrc_vert_pulse_us;  
+
+extern int32_t hotrc_horz_pulse_filt_us;
+extern int32_t hotrc_vert_pulse_filt_us;
+
+extern int32_t intcount;
+extern int32_t ctrl_db_adc[2][2];  // [HORZ/VERT] [BOT/TOP] - to store the top and bottom deadband values for each axis of selected controller
+extern int32_t ctrl_pos_adc[2][2];  // [HORZ/VERT] [RAW/FILT] - holds most current controller values
+
+extern int32_t hotrc_pulse_failsafe_min_us;
+extern int32_t hotrc_pulse_failsafe_max_us;
+
+extern int32_t hotrc_pulse_failsafe_pad_us;  
+extern uint32_t hotrc_panic_timeout_us;
+
+extern Timer hotrcPanicTimer;
+
 
 // hw_timer_t *hotrc_vert_timer = NULL;
-// volatile uint32_t hotrc_vert_width_us = 0;
+// volatile uint32_t hotrc_vert_width_us = 0; 
 // volatile bool hotrc_vert_pulse_started = false;
 // volatile uint64_t hotrc_vert_pulse_start_us = 0;
 
@@ -359,362 +355,270 @@ Timer hotrcPanicTimer(hotrc_panic_timeout_us);
 
 // Maybe merging these into Hotrc class
 
-// I2C related
-int32_t i2c_devicecount = 0;
-uint8_t i2c_addrs[10];
+// I2C related  
+extern int32_t i2c_devicecount;
+extern uint8_t i2c_addrs[10];
 
 // airflow related
-float airflow_mph = 0.0;
-float airflow_filt_mph = airflow_mph;
-float airflow_min_mph = 0.0;
-float airflow_max_mph = 33.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)
-// What diameter intake hose will reduce airspeed to abs max?  2.7 times the xsectional area. Current area is 6.38 cm2. New diameter = 4.68 cm (min).
-// Need to adapt to 5in tube (ugh!) unless math is wrong
-float airflow_abs_max_mph = 33.55;
-float airflow_ema_alpha = 0.2;
-FS3000 airflow_sensor;
+extern float airflow_mph;
+extern float airflow_filt_mph;
+extern float airflow_min_mph;
+extern float airflow_max_mph;
+extern float airflow_abs_max_mph;
+extern float airflow_ema_alpha;
+extern FS3000 airflow_sensor;
 
 // steering related
-int32_t steer_pulse_safe_us = 0;
-int32_t steer_pulse_out_us;  // pid loop output to send to the actuator (steering)
-//  ---- tunable ----
-int32_t steer_pulse_right_min_us = 500;  // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
-int32_t steer_pulse_right_us = 670;  // Steering pulsewidth corresponding to full-speed right steering (in us). Default setting for jaguar is max 670us
-int32_t steer_pulse_stop_us = 1500;  // Steering pulsewidth corresponding to zero steering motor movement (in us)
-int32_t steer_pulse_left_us = 2330;  // Steering pulsewidth corresponding to full-speed left steering (in us). Default setting for jaguar is max 2330us
-int32_t steer_pulse_left_max_us = 2500;  // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
-int32_t steer_safe_percent = 72;  // Sterring is slower at high speed. How strong is this effect 
+extern int32_t steer_pulse_safe_us;
+extern int32_t steer_pulse_out_us;  
+
+// tunable
+extern int32_t steer_pulse_right_min_us;
+extern int32_t steer_pulse_right_us;
+extern int32_t steer_pulse_stop_us;
+extern int32_t steer_pulse_left_us; 
+extern int32_t steer_pulse_left_max_us;
+extern int32_t steer_safe_percent;
 
 // brake pressure related
-int32_t pressure_adc;
-// AnalogSensor pressure (&pressure_adc, "Pressure:", "adc ", 658, 2100);
-//  ---- tunable ----
-int32_t pressure_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
-int32_t pressure_sensor_max_adc = adcrange_adc; // Sensor reading max, limited by adc Vmax. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as chris can push (wimp)
-int32_t pressure_max_adc = 2080; // Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
-float pressure_convert_psi_per_adc = 1000.0 * (3.3 - 0.554) / ( (pressure_sensor_max_adc - pressure_min_adc) * (4.5 - 0.554) );  // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
-bool pressure_convert_invert = false;
-// int32_t pressure_convert_polarity = SPID::FWD;
-float pressure_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-float pressure_margin_psi = 2.5;  // Margin of error when comparing brake pressure adc values (psi)
-float pressure_min_psi = 0.0;  // TUNED 230602 - Brake pressure when brakes are effectively off. Sensor min = 0.5V, scaled by 3.3/4.5V is 0.36V of 3.3V (ADC count 0-4095). 
-float pressure_max_psi = convert_units (pressure_max_adc - pressure_min_adc, pressure_convert_psi_per_adc, pressure_convert_invert);  // TUNED 230602 - Highest possible pressure achievable by the actuator 
-float pressure_hold_initial_psi = 150;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
-float pressure_hold_increment_psi = 15;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
-float pressure_panic_initial_psi = 250;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
-float pressure_panic_increment_psi = 25;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
-// max pedal bent 1154
-float pressure_psi = (pressure_min_psi+pressure_max_psi)/2;
-float pressure_filt_psi = pressure_psi;  // Stores new setpoint to give to the pid loop (brake)
-float pressure_target_psi;
+extern int32_t pressure_adc;
+
+// tunable  
+extern int32_t pressure_min_adc;
+extern int32_t pressure_sensor_max_adc; 
+extern int32_t pressure_max_adc;
+extern float pressure_convert_psi_per_adc;
+extern bool pressure_convert_invert;
+extern float pressure_ema_alpha;
+extern float pressure_margin_psi;
+extern float pressure_min_psi;
+extern float pressure_max_psi;
+extern float pressure_hold_initial_psi;
+extern float pressure_hold_increment_psi;
+extern float pressure_panic_initial_psi;
+extern float pressure_panic_increment_psi;
+
+extern float pressure_psi;
+extern float pressure_filt_psi;  
+extern float pressure_target_psi;
 
 // brake actuator motor related
-float brake_pulse_out_us;  // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
-//  ---- tunable ----
-Timer brakeIntervalTimer (500000);  // How much time between increasing brake force during auto-stop if car still moving?
-int32_t brake_increment_interval_us = 500000;  // How often to apply increment during auto-stopping (in us)
-int32_t brake_pulse_retract_min_us = 500;  // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
-int32_t brake_pulse_retract_us = 670;  // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
-int32_t brake_pulse_stop_us = 1500;  // Brake pulsewidth corresponding to center point where motor movement stops (in us)
-int32_t brake_pulse_extend_us = 2330;  // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
-int32_t brake_pulse_extend_max_us = 2500;  // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
-int32_t brake_pulse_margin_us = 40; // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated 
+extern float brake_pulse_out_us;  
+
+// tunable
+extern Timer brakeIntervalTimer;
+extern int32_t brake_increment_interval_us;
+extern int32_t brake_pulse_retract_min_us;
+extern int32_t brake_pulse_retract_us;
+extern int32_t brake_pulse_stop_us;
+extern int32_t brake_pulse_extend_us;
+extern int32_t brake_pulse_extend_max_us;
+extern int32_t brake_pulse_margin_us;
 
 // brake actuator position related
-float brake_pos_in;
-float brake_pos_filt_in;
-//  ---- tunable ----
-float brake_pos_convert_in_per_adc = 3.3 * 10000.0 / (5.0 * adcrange_adc * 557);  // 3.3 v * 10k ohm / (5 v * 4095 adc * 557 ohm/in) = 0.0029 in/adc = 2.89 m-in/adc 
-bool brake_pos_convert_invert = false;
-int32_t brake_pos_convert_polarity = 1;  // Forward
-float brake_pos_ema_alpha = 0.25;
-float brake_pos_abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
-float brake_pos_nom_lim_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-float brake_pos_zeropoint_in = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
-float brake_pos_park_in = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
-float brake_pos_nom_lim_extend_in = 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-float brake_pos_abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
-float brake_pos_margin_in = .029;  //
-// int32_t brake_pos_abs_min_retract_adc = 116;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. (ADC count 0-4095)
-// int32_t brake_pos_nom_lim_retract_adc = 175;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (ADC count 0-4095)
-// int32_t brake_pos_zeropoint_adc = 1100;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (ADC count 0-4095)
-// int32_t brake_pos_park_adc = 1465;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (ADC count 0-4095)
-// int32_t brake_pos_nom_lim_extend_adc = 1600;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (ADC count 0-4095)
-// int32_t brake_pos_abs_max_extend_adc = 2872;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (ADC count 0-4095)
-// int32_t brake_pos_margin_adc = 10;  //    
+extern float brake_pos_in;
+extern float brake_pos_filt_in;
+
+// tunable
+extern float brake_pos_convert_in_per_adc;  
+extern bool brake_pos_convert_invert;
+extern int32_t brake_pos_convert_polarity;
+extern float brake_pos_ema_alpha;
+extern float brake_pos_abs_min_retract_in;
+extern float brake_pos_nom_lim_retract_in;
+extern float brake_pos_zeropoint_in;
+extern float brake_pos_park_in;
+extern float brake_pos_nom_lim_extend_in;
+extern float brake_pos_abs_max_extend_in;
+extern float brake_pos_margin_in;
 
 // throttle servo related
-int32_t gas_pulse_out_us = 1501;  // pid loop output to send to the actuator (gas)
-int32_t gas_pulse_govern_us = 1502;  // Governor must scale the pulse range proportionally. This is given a value in the loop
-//  ---- tunable ----
-Timer gasServoTimer (500000);  // We expect the servo to find any new position within this time
-int32_t gas_governor_percent = 95;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
-int32_t gas_pulse_cw_min_us = 500;  // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
-int32_t gas_pulse_redline_us = 1400;  // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
-int32_t gas_pulse_idle_us = 1800;  // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
-int32_t gas_pulse_ccw_max_us = 2500;  // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
-int32_t gas_pulse_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_idle_us where to park the servo out of the way so we can drive manually (in us)
+extern int32_t gas_pulse_out_us;
+extern int32_t gas_pulse_govern_us;
+
+// tunable
+extern Timer gasServoTimer;
+extern int32_t gas_governor_percent;  
+extern int32_t gas_pulse_cw_min_us;
+extern int32_t gas_pulse_redline_us;
+extern int32_t gas_pulse_idle_us;
+extern int32_t gas_pulse_ccw_max_us;
+extern int32_t gas_pulse_park_slack_us;
 
 // tachometer related
-// Timer tachPulseTimer;  // OK to not be volatile?
-volatile int64_t tach_us = 0;
-int32_t tach_buf_us = 0;
-volatile int64_t tach_timer_start_us = 0;
-volatile int64_t tach_time_us;
-volatile int64_t tach_timer_read_us = 0;
-float tach_target_rpm;
-float tach_rpm = 50.0;  // Current engine speed, raw value converted to rpm (in rpm)
-float tach_filt_rpm = 50.0;  // Current engine speed, filtered (in rpm)
-float tach_govern_rpm;  // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
-//  ---- tunable ----
-float tach_convert_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
-bool tach_convert_invert = true;
-int32_t tach_convert_polarity = 1;  // Forward      
-float tach_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-float tach_idle_rpm = 700.0;  // Min value for engine hz, corresponding to low idle (in rpm)
-float tach_max_rpm = 7000.0;  // Max possible engine rotation speed
-float tach_redline_rpm = 5000.0;  // Max value for tach_rpm, pedal to the metal (in rpm). 20000 rotations/mile * 15 mi/hr * 1/60 hr/min = 5000 rpm
-float tach_margin_rpm = 15.0;  // Margin of error for checking engine rpm (in rpm)
-float tach_stop_thresh_rpm = 0.1;  // Below which the engine is considered stopped - this is redundant,
-uint32_t tach_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
-int64_t tach_delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
+extern volatile int64_t tach_us;
+extern int32_t tach_buf_us;
+extern volatile int64_t tach_timer_start_us;
+extern volatile int64_t tach_time_us;  
+extern volatile int64_t tach_timer_read_us;
+extern float tach_target_rpm;
+extern float tach_rpm;
+extern float tach_filt_rpm;
+extern float tach_govern_rpm;
 
-// carspeed/speedo related
-float speedo_target_mph;
-float speedo_govern_mph;  // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
-float speedo_mph = 1.01;  // Current car speed, raw as sensed (in mph)
-float speedo_filt_mph = 1.02;  // Current car speed, filtered (in mph)
-// Timer speedoPulseTimer;  // OK to not be volatile?
-volatile int64_t speedo_us = 0;
-int32_t speedo_buf_us = 0;
-volatile int64_t speedo_timer_start_us = 0;
-volatile int64_t speedo_time_us;
-volatile int64_t speedo_timer_read_us = 0;
-//  ---- tunable ----
-float speedo_convert_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280); // 5280 ft/mi * 12 in/ft * 1/(20*pi) whlrot/in * 19.85 pulrot/whlrot = 20017 pulrot/mile
-// 1 pulrot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 whlrot/pulrot * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
-// Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
-bool speedo_convert_invert = true;
-int32_t speedo_convert_polarity = 1;  // Forward      
-float speedo_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-float speedo_idle_mph = 4.50;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
-float speedo_redline_mph = 15.0;  // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
-float speedo_max_mph = 25.0;  // What is max speed car can ever go
-float speedo_stop_thresh_mph = 0.1;  // Below which the car is considered stopped
-uint32_t speedo_stop_timeout_us = 600000;  // Time after last magnet pulse when we can assume the car is stopped (in us)
-int64_t speedo_delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
+// tunable
+extern float tach_convert_rpm_per_rpus;
+extern bool tach_convert_invert;
+extern int32_t tach_convert_polarity;
+extern float tach_ema_alpha;
+extern float tach_idle_rpm;
+extern float tach_max_rpm;
+extern float tach_redline_rpm;
+extern float tach_margin_rpm;  
+extern float tach_stop_thresh_rpm;
+extern uint32_t tach_stop_timeout_us;
+extern int64_t tach_delta_abs_min_us;
+
+// carspeed/speedo related 
+extern float speedo_target_mph;
+extern float speedo_govern_mph;
+extern float speedo_mph;
+extern float speedo_filt_mph;
+
+extern volatile int64_t speedo_us;
+extern int32_t speedo_buf_us;
+extern volatile int64_t speedo_timer_start_us;
+extern volatile int64_t speedo_time_us;
+extern volatile int64_t speedo_timer_read_us;
+
+// tunable
+extern float speedo_convert_mph_per_rpus;
+extern bool speedo_convert_invert;
+extern int32_t speedo_convert_polarity;  
+extern float speedo_ema_alpha;
+extern float speedo_idle_mph;
+extern float speedo_redline_mph;
+extern float speedo_max_mph;
+extern float speedo_stop_thresh_mph;
+extern uint32_t speedo_stop_timeout_us;
+extern int64_t speedo_delta_abs_min_us;
             
 // neopixel and heartbeat related
-uint8_t neo_wheelcounter = 0;
-uint8_t neo_brightness_max = 15;
-uint32_t neo_timeout_us = 150000;
-Timer neoTimer (neo_timeout_us);
-bool neo_heartbeat = (neopixel_pin >= 0);
-uint8_t neo_brightness = neo_brightness_max;  // brightness during fadeouts
+extern uint8_t neo_wheelcounter;
+extern uint8_t neo_brightness_max;
+extern uint32_t neo_timeout_us;
+extern Timer neoTimer;
+extern bool neo_heartbeat;
+extern uint8_t neo_brightness;
 enum neo_colors { N_RED, N_GRN, N_BLU };
-uint8_t neo_heartcolor[3] = { 0xff, 0xff, 0xff };
-Timer heartbeatTimer (1000000);
-int32_t heartbeat_state = 0;
-int32_t heartbeat_level = 0;
-uint32_t heartbeat_ekg_us[4] = { 170000, 150000, 530000, 1100000 };
-int32_t heartbeat_pulse = 255;
+extern uint8_t neo_heartcolor[3];
+extern Timer heartbeatTimer;  
+extern int32_t heartbeat_state;
+extern int32_t heartbeat_level;
+extern uint32_t heartbeat_ekg_us[4];
+extern int32_t heartbeat_pulse;
 
 // diag/monitoring variables
-Timer loopTimer (1000000);  // how long the previous main loop took to run (in us)
-uint32_t loop_period_us = 10000;
-float loop_freq_hz = 1;  // run loop real time frequency (in Hz)
-volatile int32_t loop_int_count = 0;  // counts interrupts per loop
-int32_t loopno = 1;
-uint32_t looptimes_us[20];
-bool loop_dirty[20];
-int32_t loopindex = 0;
-bool booted = false;
-bool diag_ign_error_enabled = true;
-// std::stringstream loop_report;
+extern Timer loopTimer;
+extern uint32_t loop_period_us;
+extern float loop_freq_hz;
+extern volatile int32_t loop_int_count;
+extern int32_t loopno;
+extern uint32_t looptimes_us[20];
+extern bool loop_dirty[20]; 
+extern int32_t loopindex;
+extern bool booted;
+extern bool diag_ign_error_enabled;
 
-// pushbutton related
-enum sw_presses { NONE, SHORT, LONG };  // used by encoder sw and button algorithms
-bool button_last = 0;
-bool button_it = 0;
-bool btn_press_timer_active = false;
-bool btn_press_suppress_click = false;
-bool btn_press_action = NONE;
+// pushbutton related  
+enum sw_presses { NONE, SHORT, LONG }; // used by encoder sw and button algorithms
+extern bool button_last;
+extern bool button_it;
+extern bool btn_press_timer_active;
+extern bool btn_press_suppress_click;
+extern bool btn_press_action;
 
 // external signal related
-bool ignition = LOW;
-bool ignition_last = ignition;
-bool ignition_output_enabled = false;  // disallows configuration of ignition pin as an output until hotrc detected
-bool ignition_sense = ignition;
-float ignition_on_thresh_v = 2.0;  // Below this voltage ignition is considered off
-bool syspower = HIGH;
-bool syspower_last = syspower;
-bool basicmodesw = LOW;
-bool cruise_sw = LOW;
+extern bool ignition;
+extern bool ignition_last;
+extern bool ignition_output_enabled;  
+extern bool ignition_sense;
+extern float ignition_on_thresh_v;
+extern bool syspower;
+extern bool syspower_last;
+extern bool basicmodesw;
+extern bool cruise_sw;
 
 // simulator related
-bool simulating_last = false;
-Timer simTimer;
-int32_t sim_edit_delta = 0;
-int32_t sim_edit_delta_touch = 0;
-int32_t sim_edit_delta_encoder = 0;
-//  ---- tunable ----
-bool simulating = false;
+extern bool simulating_last;
+extern Timer simTimer;
+extern int32_t sim_edit_delta;
+extern int32_t sim_edit_delta_touch;
+extern int32_t sim_edit_delta_encoder;
+
+// tunable
+extern bool simulating;
 // enum sources { _PIN, _TOUCH, _POT };
 enum pot_overload { none, pressure, tach, speedo, brkpos, airflow };  // , joy, brkpos, pressure, basicsw, cruisesw, syspower }
-int32_t pot_overload = speedo;  // Use the pot to simulate one of the sensors
-bool sim_joy = false;
-bool sim_tach = true;
-bool sim_speedo = true;
-bool sim_brkpos = true;
-bool sim_basicsw = true;
-bool sim_cruisesw = false;
-bool sim_pressure = true;
-bool sim_syspower = true;
-bool sim_starter = true;
-bool sim_ignition = true;
-bool sim_airflow = true;
+extern int32_t pot_overload;
+extern bool sim_joy;
+extern bool sim_tach;
+extern bool sim_speedo;
+extern bool sim_brkpos;
+extern bool sim_basicsw;
+extern bool sim_cruisesw;
+extern bool sim_pressure; 
+extern bool sim_syspower;
+extern bool sim_starter;
+extern bool sim_ignition;
+extern bool sim_airflow;
 
-SdFat sd;  // SD card filesystem
+extern SdFat sd;
 #define approot "cantroller2020"
 #define logfile "log.txt"
-#define error(msg) sd.errorHalt(F(msg))  // Error messages stored in flash.
-SdFile root;  // Directory file.
-SdFile file;  // Use for file creation in folders.
+#define error(msg) sd.errorHalt(F(msg))  
+extern SdFile root;
+extern SdFile file;
 
-QPID brakeQPID (&pressure_filt_psi, &brake_pulse_out_us, &pressure_target_psi,
-                (float)brake_pulse_retract_us, (float)brake_pulse_extend_us,
-                brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,
-                QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwClamp,
-                QPID::Action::reverse, 1000*brake_pid_period_ms, QPID::Control::timer,
-                QPID::centMode::centerStrict, brake_pulse_stop_us);
 
-QPID gasQPID (&tach_filt_rpm, &gas_pulse_out_us, &tach_target_rpm,
-              (float)gas_pulse_redline_us, (float)gas_pulse_idle_us,
-              gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s,
-              QPID::pMode::pOnErrorMeas, QPID::dMode::dOnMeas, QPID::iAwMode::iAwClamp,
-              QPID::Action::reverse, 1000*gas_pid_period_ms, QPID::Control::timer,
-              QPID::centMode::range);
+extern QPID brakeQPID;
 
-QPID cruiseQPID (&speedo_filt_mph, &tach_target_rpm, &speedo_target_mph,
-                 (float)tach_govern_rpm, (float)tach_idle_rpm,
-                 cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s,
-                 QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwClamp,
-                 QPID::Action::direct, 1000*cruise_pid_period_ms, QPID::Control::timer,
-                 QPID::centMode::range);
+extern QPID gasQPID;
 
-// Servo library lets us set pwm outputs given an on-time pulse width in us
-static Servo gas_servo;
-static Servo brake_servo;
-static Servo steer_servo;
-static Adafruit_NeoPixel neostrip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
+extern QPID cruiseQPID;
 
-// Temperature sensor related
-long temp, temp_last;  // peef variables
-static int temp_secs = 0;  // peef variables
-static byte temp_data[2];  // peef variables
-static int16_t temp_raw;  // peef variables
+extern Servo gas_servo;
+extern Servo brake_servo;
+extern Servo steer_servo;
+extern Adafruit_NeoPixel neostrip;
 
-float temp_min = -67.0;  // Minimum reading of sensor is -25 C = -67 F
-float temp_max = 257.0;  // Maximum reading of sensor is 125 C = 257 F
-float temp_room = 77.0;  // "Room" temperature is 25 C = 77 F
+// Temperature sensor related  
+extern long temp;
+extern long temp_last;
+// static int temp_secs; // static variables only for within file not global -bobby
+// static byte temp_data[2];
+// static int16_t temp_raw;
+
+
+// Temperature related
+extern float temp_min;  
+extern float temp_max;
+extern float temp_room;
 enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
-float temps[6];
-int32_t temp_detected_device_ct = 0;
-int32_t temperature_precision = 12;  // 9-12 bit resolution
-OneWire onewire (onewire_pin);
-// uint64_t temp_temp_addr;
-int32_t temp_current_index = 0;
-// uint64_t temp_addrs[6];
-enum temp_status : bool { CONVERT, READ };
-temp_status temp_state = CONVERT;
-uint32_t temp_times_us[2] = { 2000000, 10000 };  // Peef delay was 10000 (10ms)
-uint32_t temp_timeout_us = 2000000;
-Timer tempTimer (temp_timeout_us);
+extern float temps[6];
+extern int32_t temp_detected_device_ct;
+extern int32_t temperature_precision;
+extern OneWire onewire; 
+extern int32_t temp_current_index;
+enum temp_status {CONVERT, READ};
+extern temp_status temp_state;
+extern uint32_t temp_times_us[2];
+extern uint32_t temp_timeout_us;
+extern Timer tempTimer;
 
-DeviceAddress temp_temp_addr;
-DeviceAddress temp_addrs[6];
-// enum temp_status { IDLE, CONVERT, READ };
-DallasSensor tempsensebus (&onewire);
+extern DeviceAddress temp_temp_addr;
+extern DeviceAddress temp_addrs[6];  
+extern DallasSensor tempsensebus;
 
-// Interrupt service routines
-//
-// The tach and speed use a hall sensor being triggered by a passing magnet once per pulley turn. These ISRs call mycros()
-// on every pulse to know the time since the previous pulse. I tested this on the bench up to about 0.750 mph which is as 
-// fast as I can move the magnet with my hand, and it works. Update: Janky bench test appeared to work up to 11000 rpm.
-void IRAM_ATTR tach_isr (void) {  // The tach and speedo isrs get the period of the vehicle pulley rotations.
-    tach_timer_read_us = esp_timer_get_time();
-    tach_time_us = tach_timer_read_us - tach_timer_start_us;
-    if (tach_time_us > tach_delta_abs_min_us) {  // ignore spurious triggers or bounces
-        tach_timer_start_us = tach_timer_read_us;
-        tach_us = tach_time_us;
-    }
-}
-void IRAM_ATTR speedo_isr (void) {  //  Handler can get the most recent rotation time at speedo_us
-    speedo_timer_read_us = esp_timer_get_time();
-    speedo_time_us = speedo_timer_read_us - speedo_timer_start_us;
-    if (speedo_time_us > speedo_delta_abs_min_us) {  // ignore spurious triggers or bounces
-        speedo_timer_start_us = speedo_timer_read_us;
-        speedo_us = speedo_time_us;
-    }
-}
-void IRAM_ATTR hotrc_horz_isr (void) {  // On falling edge, records high pulse width to determine ch1 steering slider position
-    hotrc_horz_pulse_64_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
-}
-void IRAM_ATTR hotrc_vert_isr (void) {  // On falling edge, Sets timer on rising edge (for all channels) and reads it on falling to determine ch2 trigger position
-    hotrc_vert_pulse_64_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
-}
-void IRAM_ATTR hotrc_ch3_isr (void) {  // On falling edge, records high pulse width to determine ch3 button toggle state
-    hotrc_ch3_sw = (esp_timer_get_time() - hotrc_timer_start <= 1500);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
-    if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
-    hotrc_ch3_sw_last = hotrc_ch3_sw;
-}
-void IRAM_ATTR hotrc_ch4_isr (void) {  // Triggers on both edges. Sets timer on rising edge (for all channels) and reads it on falling to determine ch4 button toggle state
-    if (hotrc_isr_pin_preread) hotrc_timer_start = esp_timer_get_time();  // hotrcPulseTimer.reset();
-    else {
-        hotrc_ch4_sw = (esp_timer_get_time() - hotrc_timer_start <= 1500);  // Ch4 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH4][CENT]
-        if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
-        hotrc_ch4_sw_last = hotrc_ch4_sw;
-    }
-    hotrc_isr_pin_preread = !(digitalRead (hotrc_ch4_cruise_pin));  // Read pin after timer operations to maximize clocking accuracy
-}  // intcount++;
+// Interrupt handlers
+extern void IRAM_ATTR tach_isr(void);
+extern void IRAM_ATTR speedo_isr(void);
 
-// Attempt to use MCPWM input capture pulse width timer unit to get precise hotrc readings
-// int32_t hotrc_ch3_pulse_us, hotrc_ch4_pulse_us;
-// uint32_t mcpwm_unit0_capture, mcpwm_unit1_capture, mcpwm_unit2_capture;
-// uint32_t mcpwm_unit0_capture_last, mcpwm_unit1_capture_last, mcpwm_unit2_capture_last;
-// int32_t hotrc_ch3_preread;
-// void IRAM_ATTR hotrc_isr (void) {
-//     mcpwm_unit0_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_0, MCPWM_SELECT_CAP0);
-//     mcpwm_unit1_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_1, MCPWM_SELECT_CAP0);
-//     hotrc_horz_pulse_us = (int32_t)(mcpwm_unit0_capture - mcpwm_unit0_capture_last);
-//     hotrc_vert_pulse_us = (int32_t)(mcpwm_unit1_capture - mcpwm_unit1_capture_last);
-//     mcpwm_unit0_capture_last = mcpwm_unit0_capture;
-//     mcpwm_unit1_capture_last = mcpwm_unit1_capture;
-// }
-// // // Separate attempt to use timers to measure pulses
-// // void IRAM_ATTR hotrc_ch1_isr (void) {
-// //     mcpwm_unit0_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_0, MCPWM_SELECT_CAP0);
-// //     hotrc_horz_pulse_us = (int32_t)(mcpwm_unit0_capture - mcpwm_unit0_capture_last);
-// //     mcpwm_unit0_capture_last = mcpwm_unit0_capture;
-// // }
-// // void IRAM_ATTR hotrc_ch2_isr (void) {
-// //     mcpwm_unit1_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_1, MCPWM_SELECT_CAP0);
-// //     hotrc_vert_pulse_us = (int32_t)(mcpwm_unit1_capture - mcpwm_unit1_capture_last);
-// //     mcpwm_unit1_capture_last = mcpwm_unit1_capture;
-// // }
-    // if (hotrc_vert_preread) hotrc_timer_start = esp_timer_get_time();  // hotrcPulseTimer.reset();
-    // else hotrc_vert_pulse_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
-    // hotrc_vert_preread = !(digitalRead (hotrc_ch2_horz_pin));  // Read pin after timer operations to maximize clocking accuracy
+extern void IRAM_ATTR hotrc_horz_isr(void);
+extern void IRAM_ATTR hotrc_vert_isr(void);  
+extern void IRAM_ATTR hotrc_ch3_isr(void);
+extern void IRAM_ATTR hotrc_ch4_isr(void);
 
-    // intcount++;
-    // // hotrc_horz_pulse_us = esp_timer_get_time() - hotrc_timer_start;
-
-// void IRAM_ATTR hotrc_vert_isr() {
-//   hotrc_vert_pulse_us = (uint32_t)timerRead(hotrc_vert_timer);
-//   timerStop(hotrc_vert_timer);
-//   timerAlarmWrite(hotrc_vert_timer, 0xFFFFFFFF, true);  // Reset the alarm value
-//   timerRestart(hotrc_vert_timer);
-// }
 
 // Utility functions
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays
@@ -745,251 +649,38 @@ inline int32_t map (int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, 
 // inline int32_t mapfast (int32_t x, int32_t in_min, int32_t out_min, float range_ratio) {
 //     return (int32_t)(out_min + (x - in_min) * range_ratio);
 // }
-bool rounding = true;
-float dround (float val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
+extern bool rounding;
+extern float dround (float val, int32_t digits);
 
 bool inline car_stopped (void) { return (speedo_filt_mph < speedo_stop_thresh_mph); }  // Moved logic that was here to the main loop
 bool inline engine_stopped (void) { return (tach_filt_rpm < tach_stop_thresh_rpm); }  // Note due to weird float math stuff, can not just check if tach == 0.0
 
-uint32_t colorwheel (uint8_t WheelPos) {
-    WheelPos = 255 - WheelPos;
-    if (WheelPos < 85) return neostrip.Color (255 - WheelPos * 3, 0, WheelPos * 3);
-    if (WheelPos < 170) {
-        WheelPos -= 85;
-        return neostrip.Color (0, WheelPos * 3, 255 - WheelPos * 3);
-    }
-    WheelPos -= 170;
-    return neostrip.Color (WheelPos * 3, 255 - WheelPos * 3, 0);
-}
-void calc_ctrl_lims (void) {
-    ctrl_db_adc[VERT][BOT] = ctrl_lims_adc[ctrl][VERT][CENT]-ctrl_lims_adc[ctrl][VERT][DB]/2;  // Lower threshold of vert joy deadband (ADC count 0-4095)
-    ctrl_db_adc[VERT][TOP] = ctrl_lims_adc[ctrl][VERT][CENT]+ctrl_lims_adc[ctrl][VERT][DB]/2;  // Upper threshold of vert joy deadband (ADC count 0-4095)
-    ctrl_db_adc[HORZ][BOT] = ctrl_lims_adc[ctrl][HORZ][CENT]-ctrl_lims_adc[ctrl][HORZ][DB]/2;  // Lower threshold of horz joy deadband (ADC count 0-4095)
-    ctrl_db_adc[HORZ][TOP] = ctrl_lims_adc[ctrl][HORZ][CENT]+ctrl_lims_adc[ctrl][HORZ][DB]/2;  // Upper threshold of horz joy deadband (ADC count 0-4095)
-    // for (int32_t axis=HORZ; axis<=VERT; axis++) for (int32_t dir=MIN; dir<=MAX; dir+=2) {
-    //     float denom = hotrc_pulse_lims_us[axis][dir] - ctrl_lims_adc[HOTRC][axis][CENT];
-    //     if (denom) hotrc_mapratio[HORZ][MIN] = ((float)(ctrl_lims_adc[HOTRC][axis][dir] - ctrl_lims_adc[HOTRC][axis][CENT])) / denom;
-    // }
-}
-void calc_governor (void) {
-    tach_govern_rpm = map ((float)gas_governor_percent, 0.0, 100.0, 0.0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
-    gas_pulse_govern_us = map ((int32_t)(gas_governor_percent*(tach_redline_rpm-tach_idle_rpm)/tach_redline_rpm), 0, 100, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
-    speedo_govern_mph = map ((float)gas_governor_percent, 0.0, 100.0, 0.0, speedo_redline_mph);  // Governor must scale the top vehicle speed proportionally
-}
-// Exponential Moving Average filter : Smooth out noise on inputs. 0 < alpha < 1 where lower = smoother and higher = more responsive
-// Pass in a fresh raw value, address of filtered value, and alpha factor, filtered value will get updated
-void ema_filt (float raw, float* filt, float alpha) {
-    // if (!raw) *filt = 0.0; else
-    *filt = alpha * raw + (1 - alpha) * (*filt);
-}
-void ema_filt (int32_t raw, float* filt, float alpha) {
-    ema_filt ((float)raw, filt, alpha);
-}
-void ema_filt (int32_t raw, int32_t* filt, float alpha) {
-    // if (button_it) printf (" r:%4ld f0:%4ld", raw, *filt);
-    *filt = (int32_t)(alpha * (float)raw + (1 - alpha) * (float)(*filt) + 0.5);  // (?) Adding 0.5 to compensate for the average loss due to int casting roundoff
-    // if (button_it) printf (" f1:%4ld a:%f", *filt, alpha);
+extern uint32_t colorwheel (uint8_t WheelPos);
+extern void calc_ctrl_lims (void);
 
-}
+extern void calc_governor(void);
+extern void ema_filt(float raw, float* filt, float alpha);  
+extern void ema_filt(int32_t raw, float* filt, float alpha);
+extern void ema_filt(int32_t raw, int32_t* filt, float alpha);
+extern void sd_init();
 
-void sd_init() {
-    if (!sd.begin (sdcard_cs_pin, SD_SCK_MHZ (50))) sd.initErrorHalt();  // Initialize at highest supported speed that is not over 50 mhz. Go lower if errors.
-    if (!root.open ("/")) error("open root failed");
-    if (!sd.exists (approot)) { 
-        if (sd.mkdir (approot)) Serial.println (F("Created approot directory\n"));  // cout << F("Created approot directory\n");
-        else error("Create approot failed");
-    }
-    // Change volume working directory to Folder1.
-    // if (sd.chdir(approot)) {
-    //    cout << F("\nList of files in appdir:\n");
-    //    char *apppath = (char*)malloc((arraysize(appdir)+2)*sizeof(char));
-    //        sd.ls(strcat("/",approot, LS_R);
-    // }
-    // else {
-    //     error("Chdir approot failed\n");
-    // }    
-    // if (!file.open(logfile, O_WRONLY | O_CREAT)) {
-    //     error("Open logfile failed\n");
-    // }
-    // file.close();
-    // Serial.println(F("Filesystem init finished\n"));  // cout << F("Filesystem init finished\n");
-    // for (byte a = 10; a >= 1; a--) {
-    //     char fileName[12];
-    //     sprintf(fileName, "%d.txt", a);
-    //     file = sd.open(fileName, FILE_WRITE); //create file
-    // }
-}
+extern bool adj_val(int32_t* variable, int32_t modify, int32_t low_limit, int32_t high_limit);
+extern bool adj_val(float* variable, float modify, float low_limit, float high_limit);
+extern void adj_bool(bool* val, int32_t delta);
 
-// int* x is c++ style, int *x is c style
-bool adj_val (int32_t* variable, int32_t modify, int32_t low_limit, int32_t high_limit) {  // sets an int reference to new val constrained to given range
-    int32_t oldval = *variable;
-    if (*variable + modify < low_limit) *variable = low_limit;
-    else if (*variable + modify > high_limit) *variable = high_limit;
-    else *variable += modify;
-    return (*variable != oldval);
-}
-bool adj_val (float* variable, float modify, float low_limit, float high_limit) {  // sets an int reference to new val constrained to given range
-    float oldval = *variable;
-    if (*variable + modify < low_limit) *variable = low_limit;
-    else if (*variable + modify > high_limit) *variable = high_limit;
-    else *variable += modify; 
-    return (*variable != oldval);
-}
-void adj_bool (bool* val, int32_t delta) { if (delta != 0) *val = (delta > 0); }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
+extern void set_pin(int32_t pin, int32_t mode);
+extern void write_pin(int32_t pin, int32_t val);  
+extern int32_t read_pin(int32_t pin);
 
-// pin operations that first check if pin exists for the current board
-void set_pin (int32_t pin, int32_t mode) { if (pin >= 0 && pin != 255) pinMode (pin, mode); }
-void write_pin (int32_t pin, int32_t val) {  if (pin >= 0 && pin != 255) digitalWrite (pin, val); }
-int32_t read_pin (int32_t pin) { return (pin >= 0 && pin != 255) ? digitalRead (pin) : -1; }
+// void enable_pids(int32_t en_brake, int32_t en_gas, int32_t en_cruise);
 
-// void enable_pids (int32_t en_brake, int32_t en_gas, int32_t en_cruise) {  // pass in 0 (disable), 1 (enable), or -1 (leave it alone) for each pid loop
-//     if (en_brake != -1) brakeSPID.set_enable ((bool)en_brake);
-//     if (en_gas != -1) gasSPID.set_enable ((bool)en_gas);
-//     if (en_cruise != -1) cruiseSPID.set_enable ((bool)en_cruise);
-// }
+extern bool read_battery_ignition(void);
+extern void syspower_set(bool val);
+extern long temp_peef(void);
 
-// battery_v = convert_units ((float)analogRead (battery_pin), battery_convert_v_per_adc, battery_convert_invert);
-// ema_filt (battery_v, &battery_filt_v, battery_ema_alpha);  // Apply EMA filter
-bool read_battery_ignition (void) {  //Updates battery voltage and returns ignition on/off
-    battery_adc = analogRead (ign_batt_pin);
-    battery_v = convert_units (battery_adc, battery_convert_v_per_adc, battery_convert_invert);
-    ema_filt (battery_v, &battery_filt_v, battery_ema_alpha);  // Apply EMA filter
-    return (battery_filt_v > ignition_on_thresh_v);
-}
-void syspower_set (bool val) {
-    if (digitalRead (syspower_pin) != val) {
-        write_pin (syspower_pin, val);
-        // delay (val * 500);
-    }
-}
-long temp_peef (void) {
-    // if (millis() % 1000 == 0) {
-    if (tempTimer.expired()) {
-        if (temp_state == READ) {
-            // delay(10);
-            if (abs(temp_last-temp) >= 20 && temp_last != 0) {
-                // Serial.println("Bad-T-" + String(f));
-                temp = temp_last;
-            }
-            onewire.reset();
-            onewire.write(0xCC);        // All Devices present - Skip ROM ID
-            onewire.write(0x44);        // start conversion, with parasite power on at the end
-            // printf ("\nTemp: %s.%s °F\n", String(temp/10), String(temp%10));
-            tempTimer.set (temp_times_us[temp_state]);
-            temp_state = CONVERT;
-            return temp;
-        }  // else CONVERT
-        onewire.reset();
-        onewire.write(0xCC);        // All Devices present - Skip ROM ID
-        onewire.write(0xBE);         // Read Scratchpad
-        temp_data[0] = onewire.read();
-        temp_data[1] = onewire.read();
-        temp_raw = (temp_data[1] << 8) | temp_data[0];
-        temp_last = temp;
-        temp = ((long)temp_raw * 180 / 16 + 3205) / 10;
-        temp_secs++;
-        tempTimer.set (temp_times_us[temp_state]);
-        temp_state = READ;
-    }
-    return 10000;  // Used as invalid value flag
-}
 
-void temp_soren (void) {
-    if (temp_detected_device_ct && tempTimer.expired()) {
-        // int64_t check1 = esp_timer_get_time();  // Soren
-        // int64_t check2;        
-        if (temp_state == CONVERT) {
-            tempsensebus.requestTemperatures();
-            // check2 = esp_timer_get_time();  // 2460us
-            // std::cout << "TSoren CONV req:" << check2-check1;
-            tempTimer.set (tempsensebus.microsToWaitForConversion(temperature_precision));  // 50 us . / (1 << (12 - temperature_precision)));  // Give some time before reading temp
-            // check1 = esp_timer_get_time();
-    	    // std::cout << " set:" << check1-check2 << std::endl;
-            temp_state = READ;
-        }
-        else if (temp_state == READ) {
-            temps[temp_current_index] = tempsensebus.getTempF(temp_addrs[temp_current_index]);  // 12800 us
-            // check2 = esp_timer_get_time();
-            // std::cout << "TSoren READ get:" << check2-check1 << std::endl;    
-            tempTimer.set (temp_timeout_us);
-            temp_state = CONVERT;
-            if (++temp_current_index >= temp_detected_device_ct) temp_current_index -= temp_detected_device_ct;  // replace 1 with arraysize(temps)
-        }
-    }
-}
+extern void temp_soren(void);
 
-void i2c_init (int32_t sda, int32_t scl) {
-    Wire.begin (sda, scl);  // I2c bus needed for airflow sensor
-    byte error, address;
-    printf ("I2C scanning ...");
-    i2c_devicecount = 0;
-    for (address = 1; address < 127; address++ ) {
-        Wire.beginTransmission (address);
-        error = Wire.endTransmission();
-        if (error == 0) {
-            printf (" Found addr: 0x%s%x", (address < 16) ? "0" : "", address);
-            i2c_addrs[i2c_devicecount++] = address;
-        }
-        else if (error==4) printf (" Error addr: 0x%s%x", (address < 16) ? "0" : "", address);
-    }
-    if (i2c_devicecount == 0) printf ("No devices found\n");
-    else printf (" Done\n");
-}
-
-// float get_temp (DeviceAddress arg_addr) {  // function to print the temperature for a device
-//     float tempF = tempsensebus.getTempF (arg_addr);
-//     // if (tempF == DEVICE_DISCONNECTED_C) printf ("Error: Could not read temperature\n");
-//     return tempF;
-// }
-
-// TaskHandle_t Task1;
-// void codeForTask1 (void * parameter) {
-//     for(;;) {
-//         if (tempTimer.expired()) {
-//             int32_t start = mycros();
-//             tempsensebus.setWaitForConversion (false);  // makes it async
-//             tempsensebus.requestTemperatures();
-//             int32_t mid = mycros();
-//             temps[0] = tempsensebus.getTempCByIndex(0);
-//             int32_t done = mycros();
-//             printf ("Temp: %lf, took %ld + %ld = %ld us.\n", temps[0], mid-start, done-mid, done-start);
-//             tempTimer.reset();
-//         }
-//     }
-// }
-
-// chatgpt says I can use hardware timers to measure vert and horz pulsewidths like this:
-
-// hw_timer_t *pulse_timer = NULL;
-// volatile uint32_t pulse_width_us = 0;
-// volatile bool pulse_started = false;
-// volatile uint64_t pulse_start_time = 0;
-
-// void IRAM_ATTR pulse_isr() {
-//   if (pulse_started) {
-//     pulse_width_us = (uint32_t)((esp_timer_get_time() - pulse_start_time) / 1000);
-//     pulse_started = false;
-//   } else {
-//     pulse_start_time = esp_timer_get_time();
-//     pulse_started = true;
-//   }
-// }
-
-// void setup() {
-//   // Initialize the pulse measurement timer
-//   pulse_timer = timerBegin(0, 80, true);
-//   timerAttachInterrupt(pulse_timer, &pulse_isr, true);
-//   timerAlarmWrite(pulse_timer, 100, true); // Set a suitable period for the timer (e.g., 100 microseconds)
-//   timerAlarmEnable(pulse_timer);
-
-//   // Configure the input pin for pulse measurement
-//   pinMode(INPUT_PIN, INPUT);
-// }
-
-// void loop() {
-//   // Read the pulse width value
-//   uint32_t current_pulse_width = pulse_width_us;
-//   delay(100);
-// }
+extern void i2c_init(int32_t sda, int32_t scl);
 
 #endif  // GLOBALS_H
