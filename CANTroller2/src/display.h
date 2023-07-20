@@ -9,12 +9,12 @@
 #ifdef CAP_TOUCH
     #include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
     Adafruit_FT6206 ts;  // 2.8in cap touch panel on tft lcd
-    bool cap_touch = true;
+    extern bool cap_touch;
 #else
     #include <XPT2046_Touchscreen.h>
-    XPT2046_Touchscreen ts (touch_cs_pin, touch_irq_pin);  // 3.2in resistive touch panel on tft lcd
-    // XPT2046_Touchscreen ts (touch_cs_pin);  // 3.2in resistive touch panel on tft lcd
-    bool cap_touch = false;
+    extern XPT2046_Touchscreen ts;  // 3.2in resistive touch panel on tft lcd
+    //extern XPT2046_Touchscreen ts (touch_cs_pin);  // 3.2in resistive touch panel on tft lcd
+    extern bool cap_touch;
 #endif // CAP_TOUCH
 
 class Display
@@ -113,173 +113,64 @@ public:
 // string* pagecard = new string[8];  // How we might allocate on the heap instead of in the stack
 // string* modecard = new string[7];
 
-char pagecard[8][5] = { "Run ", "Joy ", "Car ", "PWMs", "Bpid", "Gpid", "Cpid", "Temp" };
-char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
-int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, CYN, MBLU };
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_BPID, PG_GPID, PG_CPID, PG_TEMP };
 
-char telemetry[disp_fixed_lines][9] = {  
-    "Joy Vert",
-    "   Speed",
-    "    Tach",
-    " Gas PWM",
-    "Brk Pres",   
-    " Brk PWM",
-    "Joy Horz",
-    "SteerPWM",
-}; 
-char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
-    {   " Airflow",  // PG_RUN
-        " Brk Pos",
-        " Battery",
-        "     Pot",
-        "SimAirFl",
-        "SimBkPos",
-        " Sim Joy",
-        "Sim Pres",
-        "Sim Tach",
-        "SimSpeed",
-        "SimW/Pot", },
-    {   "Horz Raw",  // PG_JOY
-        "Vert Raw",
-        "HRC Horz", 
-        "HRC Vert",
-        "HNoRadio",
-        "Horz Min",
-        "Horz Max",
-        " Horz DB",
-        "Vert Min",
-        "Vert Max",
-        " Vert DB", },
-    {   "Pres ADC",  // PG_CAR
-        "      - ",
-        "      - ",
-        "Governor",
-        "Str Safe",
-        "AirFlMax",
-        "Eng Idle",
-        "Eng RedL",
-        "Spd Idle",
-        "Spd RedL",
-        "BrkPos0P", },
-    {   "      - ",  // PG_PWMS
-        "      - ",
-        "      - ",
-        "Steer Lt",
-        "SteerStp",
-        "Steer Rt",
-        "Brk Extd",
-        "Brk Stop",
-        "Brk Retr",
-        "Gas Idle",
-        "Gas RdLn", },
-    {   "Pres Tgt",  // PG_BPID
-        "Pres Err",
-        "  P Term",
-        "  I Term",
-        "  D Term",
-        "Integral",
-        "      - ",
-        "      - ",
-        "  Kp (P)",
-        "  Ki (I)",
-        "  Kd (D)", },
-    {   "Tach Tgt",  // PG_GPID
-        "Tach Err",
-        "  P Term",
-        "  I Term",
-        "  D Term",
-        "Integral",
-        "      - ",
-        "OpenLoop",
-        "  Kp (P)",
-        "  Ki (I)",
-        "  Kd (D)" },
-    {   "SpeedTgt",  // PG_CPID
-        "SpeedErr",
-        "  P Term",
-        "  I Term",
-        "  D Term",
-        "Integral",
-        "Tach Tgt",
-        "      - ",
-        "  Kp (P)",
-        "  Ki (I)",
-        "  Kd (D)", },
-    {   "Temp Amb",  // PG_TEMP
-        "Temp Eng",
-        "TempWhFL",
-        "TempWhFR",
-        "TempWhRL",
-        "TempWhRR",
-        "      - ",
-        "      - ",
-        "      - ",
-        " Cal Brk",
-        " Cal Gas", },
-};
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 4, 4, 3, 3, 8, 7, 8, 9 };  // first value in each dataset page that's editable. All values after this must also be editable
-char units[disp_fixed_lines][5] = { "adc ", "mph ", "rpm ", "\xe5s  ", "psi ", "\xe5s  ", "adc ", "\xe5s  " };
+extern const char pagecard[8][5];
+extern const char modecard[7][7];  
+extern const int32_t colorcard[7];
+extern const char telemetry[8][9];
+extern const char dataset_page_names[8][11][9]; 
+extern const int32_t tuning_first_editable_line[11];
+extern const char units[8][5];
+extern const char tuneunits[8][11][5];
+extern const char simgrid[4][3][5];
 
-char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
-    { "mph ", "in  ", "V   ", "%   ", "    ", "    ", "    ", "    ", "    ", "    ", "    " },  // PG_RUN
-    { "adc ", "adc ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
-    { "adc ", "    ", "    ", "%   ", "%   ", "mph ", "rpm ", "rpm ", "mph ", "mph ", "in  " },  // PG_CAR
-    { "adc ", "    ", "    ", "    ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  ", "\xe5s  " },  // PG_PWMS
-    { "psi ", "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "    ", "    ", "Hz  ", "s " },  // PG_BPID
-    { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "    ", "    ", "Hz  ", "s " },  // PG_GPID
-    { "mph ", "mph ", "mph ", "mph ", "mph ", "mph ", "rpm ", "    ", "    ", "Hz  ", "s " },  // PG_CPID
-    { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "    ", "    ", "    ", "    ", "    " },  // PG_TEMP
-};
-char simgrid[4][3][5] = {
-    { "prs\x18", "rpm\x18", "car\x18" },
-    { "prs\x19", "rpm\x19", "car\x19" },
-    { "    ", " \x1e  ", "    " },
-    { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
-};
-char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
-char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
-char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
-bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
-bool display_enabled = true;  // Should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
-bool disp_bool_values[6];
-bool disp_selected_val_dirty = true;
-bool disp_dataset_page_dirty = true;
-bool disp_sidemenu_dirty = true;
-bool disp_runmode_dirty = true;
-int32_t disp_needles[disp_lines];
-int32_t disp_targets[disp_lines];
-int32_t disp_age_quanta[disp_lines];
-Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
-Timer dispRefreshTimer (100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
-Timer dispResetButtonTimer (500000);  // How long to press esp32 "boot" button before screen will reset and redraw
-uint32_t tft_watchdog_timeout_us = 100000;
+#define disp_fixed_lines 8
+#define disp_tuning_lines 11
 
-// tuning-ui related globals
+extern char side_menu_buttons[5][4];  
+extern char top_menu_buttons[4][6];
+extern char disp_values[disp_lines][disp_maxlength+1];
+extern bool disp_polarities[disp_lines];  
+extern bool display_enabled;
+extern bool disp_bool_values[6];
+extern bool disp_selected_val_dirty;
+extern bool disp_dataset_page_dirty;
+extern bool disp_sidemenu_dirty;
+extern bool disp_runmode_dirty;
+extern int32_t disp_needles[disp_lines];
+extern int32_t disp_targets[disp_lines];
+extern int32_t disp_age_quanta[disp_lines];
+extern Timer dispAgeTimer[disp_lines];
+extern Timer dispRefreshTimer;
+extern Timer dispResetButtonTimer;
+extern uint32_t tft_watchdog_timeout_us;
+
 enum disp_draw { ERASE = -1 };
 enum tuning_ctrl_states { OFF, SELECT, EDIT };
-int32_t tuning_ctrl = OFF;
-int32_t tuning_ctrl_last = OFF;
-int32_t dataset_page = PG_RUN;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
-int32_t dataset_page_last = PG_TEMP;
-int32_t selected_value = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
-int32_t selected_value_last = 0;
-//  ---- tunable ----
-Timer tuningCtrlTimer (25000000);  // This times out edit mode after a a long period of inactivity
+extern int32_t tuning_ctrl;
+extern int32_t tuning_ctrl_last;
+extern int32_t dataset_page;
+extern int32_t dataset_page_last;  
+extern int32_t selected_value;
+extern int32_t selected_value_last;
+extern Timer tuningCtrlTimer;
 
-// touchscreen related
-bool touch_now_touched = false;  // Is a touch event in progress
-bool touch_longpress_valid = true;
-int32_t touch_accel_exponent = 0;  // Will edit values by +/- 2^touch_accel_exponent per touch_period interval
-int32_t touch_accel = 1 << touch_accel_exponent;  // Touch acceleration level, which increases the longer you hold. Each edit update chages value by this
-int32_t touch_fudge = 0;  // -8
-//  ---- tunable ----
-int32_t touch_accel_exponent_max = 8;  // Never edit values faster than this. 2^8 = 256 change in value per update
-// Timer touchPollTimer (35000);  // Timer for regular touchscreen sampling
-Timer touchHoldTimer (800000);  // For timing touch long presses
-Timer touchAccelTimer (850000);  // Touch hold time per left shift (doubling) of touch_accel
+// Booleans
+extern bool touch_now_touched;  
+extern bool touch_longpress_valid;
 
-// run state globals
-int32_t shutdown_color = colorcard[SHUTDOWN];
+// Integers
+extern int32_t touch_accel_exponent;
+extern int32_t touch_accel;
+extern int32_t touch_fudge;
+extern int32_t touch_accel_exponent_max;
+
+// Timers  
+extern Timer touchHoldTimer;
+extern Timer touchAccelTimer;
+
+// Integer arrays
+extern int32_t shutdown_color;
 
 #endif // DISPLAY_H
