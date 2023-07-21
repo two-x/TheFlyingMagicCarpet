@@ -12,6 +12,9 @@
 #include "qpid.h"  // This is quickpid library except i have to edit some of it
 #include "globals.h"
 #include "uictrl.h"
+#include "lvgl_display.h"
+#include <lvgl.h>
+
 using namespace std;
 
 std::vector<string> loop_names(20);
@@ -29,7 +32,7 @@ HotrcManager hotrcHorzManager (22);
 HotrcManager hotrcVertManager (22);
 //Hotrc hotrc (&hotrc_vert_pulse_filt_us, hotrc_pulse_failsafe_min_us, hotrc_pulse_failsafe_max_us, hotrc_pulse_failsafe_pad_us);
     
-Display screen(tft_cs_pin, tft_dc_pin);
+// Display screen(tft_cs_pin, tft_dc_pin);
     
 // Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 MAKE_ENCODER(encoder, encoder_a_pin, encoder_b_pin, encoder_sw_pin);
@@ -99,12 +102,15 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     
     for (int32_t x=0; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
     
-    if (display_enabled) {
-        config.begin("FlyByWire", false);
-        dataset_page = config.getUInt("dpage", PG_RUN);
-        dataset_page_last = config.getUInt("dpage", PG_TEMP);
-        screen.init();
-    }
+    // if (display_enabled) {
+    //     config.begin("FlyByWire", false);
+    //     dataset_page = config.getUInt("dpage", PG_RUN);
+    //     dataset_page_last = config.getUInt("dpage", PG_TEMP);
+    //     screen.init();
+    // }
+    lvgl_init();
+    create_hello_world_label();
+
     neostrip.begin();  // start datastream
     neostrip.show();  // Turn off the pixel
     neostrip.setBrightness (neo_brightness_max);  // It truly is incredibly bright
@@ -265,6 +271,10 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 void loop() {
     loopindex = 0;  // reset at top of loop
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "top");
+    // Run the LVGL task handler
+    lv_task_handler();
+    delay(5); // Delay for 5 milliseconds
+
     // cout << "(top)) spd:" << speedo_filt_mph << " tach:" << tach_filt_rpm;
 
     // if (!booted) init();  // Initialize - If this is our first loop, initialize everything
@@ -985,11 +995,11 @@ void loop() {
         syspower_set (syspower);
         syspower_last = syspower;
     }
-    if (btn_press_action == LONG) {
-        screen.tft_reset();
-        btn_press_action = NONE;
-    }
-    if (!screen.get_reset_finished()) screen.tft_reset();  // If resetting tft, keep calling tft_reset until complete
+    // if (btn_press_action == LONG) {
+    //     screen.tft_reset();
+    //     btn_press_action = NONE;
+    // }
+    // if (!screen.get_reset_finished()) screen.tft_reset();  // If resetting tft, keep calling tft_reset until complete
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
 
     if (neopixel_pin >= 0) {  // Heartbeat led algorithm
@@ -1033,14 +1043,14 @@ void loop() {
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "hrt");
     
     // Display updates
-    if (display_enabled) screen.update();
-    else {
-        if (dataset_page_last != dataset_page) config.putUInt ("dpage", dataset_page);
-        dataset_page_last = dataset_page;
-        selected_value_last = selected_value;
-        simulating_last = simulating;
-        oldmode = runmode;
-    }
+    // if (display_enabled) screen.update();
+    // else {
+    //     if (dataset_page_last != dataset_page) config.putUInt ("dpage", dataset_page);
+    //     dataset_page_last = dataset_page;
+    //     selected_value_last = selected_value;
+    //     simulating_last = simulating;
+    //     oldmode = runmode;
+    // }
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dis");
 
     // Kick watchdogs
