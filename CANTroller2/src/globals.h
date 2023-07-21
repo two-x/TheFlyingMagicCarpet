@@ -7,14 +7,9 @@
 #include "temp.h"
 #include <Wire.h>
 #include <SparkFun_FS3000_Arduino_Library.h>  // For airflow sensor  http://librarymanager/All#SparkFun_FS3000
-#include "Arduino.h"
 #include <Preferences.h>
-#include <vector>
-#include <string>
 #include <stdio.h>
 #include <iostream>
-#include <string>
-#include <iomanip>
 // #include <DallasTemperature.h>
 // #include <stdio.h>  // MCPWM pulse measurement code
 // #include "freertos/FreeRTOS.h"  // MCPWM pulse measurement code
