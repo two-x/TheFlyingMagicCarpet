@@ -191,7 +191,10 @@ bool car_initially_moved = false;  // Whether car has moved at all since enterin
 bool calmode_request = false;
 bool joy_centered = false;
 bool panic_stop = false;
+bool remote_starting = false;
+bool remote_starting_last = false;
 bool flycruise_toggle_request = false;
+bool remote_start_toggle_request = false;
 int32_t flycruise_vert_margin_adc = 25;  // Margin of error for determining hard brake value for dropping out of cruise mode
 bool cruise_gesturing = false;  // Is cruise mode enabled by gesturing?  Otherwise by press of cruise button
 bool cruise_sw_held = false;
@@ -265,7 +268,7 @@ static Adafruit_NeoPixel neostrip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ80
 // pushbutton related
 enum sw_presses { NONE, SHORT, LONG };  // used by encoder sw and button algorithms
 bool button_last = 0;
-bool button_it = 0;
+bool boot_button = 0;
 bool btn_press_timer_active = false;
 bool btn_press_suppress_click = false;
 bool btn_press_action = NONE;
