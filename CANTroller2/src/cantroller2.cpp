@@ -274,7 +274,7 @@ void loop() {
 
     // ESP32 "boot" button. generates btn_press_action flags of LONG or SHORT presses which can be handled wherever. Handler must reset btn_press_action = NONE
     if (!read_pin (button_pin)) {
-        if (!button_it) {  // If press just occurred
+        if (!boot_button) {  // If press just occurred
             dispResetButtonTimer.reset();  // Looks like someone just pushed the esp32 "boot" button
             btn_press_timer_active = true;  // flag to indicate timing for a possible long press
         }
@@ -283,20 +283,20 @@ void loop() {
             btn_press_timer_active = false;  // Clear timer active flag
             btn_press_suppress_click = true;  // Prevents the switch release after a long press from causing a short press
         }
-        button_it = true;  // Store press is in effect
+        boot_button = true;  // Store press is in effect
     }
     else {  // if button is not being pressed
-        if (button_it && !btn_press_suppress_click) btn_press_action = SHORT;  // if the button was just released, a short press occurred, which must be handled
+        if (boot_button && !btn_press_suppress_click) btn_press_action = SHORT;  // if the button was just released, a short press occurred, which must be handled
         // else btn_press_action = NONE;  // This auto-resets the button action flag, but any button action handling needs to happen in this same loop or event will be lost
         btn_press_timer_active = false;  // Clear timer active flag
-        button_it = false;  // Store press is not in effect
+        boot_button = false;  // Store press is not in effect
         btn_press_suppress_click = false;  // End click suppression
     }
     // if (btn_press_action != NONE) 
-    // printf ("it:%d ac:%ld lst:%d ta:%d sc:%d el:%ld\n", button_it, btn_press_action, button_last, btn_press_timer_active, btn_press_suppress_click, dispResetButtonTimer.elapsed());
+    // printf ("it:%d ac:%ld lst:%d ta:%d sc:%d el:%ld\n", boot_button, btn_press_action, button_last, btn_press_timer_active, btn_press_suppress_click, dispResetButtonTimer.elapsed());
     
     // External digital signals - takes 11 us to read
-    if (!simulating || !sim_basicsw) basicmodesw = !digitalRead (basicmodesw_pin);   // 1-value because electrical signal is active low
+    if (!(simulating && sim_basicsw)) basicmodesw = !digitalRead (basicmodesw_pin);   // 1-value because electrical signal is active low
     // if (ctrl == JOY && (!simulating || !sim_cruisesw)) cruise_sw = digitalRead (joy_cruise_btn_pin);
 
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
@@ -316,13 +316,13 @@ void loop() {
     // if (pot_adc != pot_adc_last) printf ("pot adc:%ld pot%%:%lf filt:%lf\n", pot_adc, pot_percent, pot_filt_percent); 
     
        // Brake position - takes 70 us to read, convert, and filter
-    if (!simulating || !sim_brkpos) {
+    if (!(simulating && !sim_brkpos)) {
         brake_pos_in = convert_units ((float)analogRead (brake_pos_pin), brake_pos_convert_in_per_adc, brake_pos_convert_invert);
         ema_filt (brake_pos_in, &brake_pos_filt_in, brake_pos_ema_alpha);
     }
     else brake_pos_filt_in = (brake_pos_nom_lim_retract_in + brake_pos_zeropoint_in)/2;  // To keep brake position in legal range during simulation
     
-    if (!simulating || !sim_starter) starter = read_pin (starter_pin);
+    if (!(simulating && sim_starter)) starter = read_pin (starter_pin);
 
     // Tach - takes 22 us to read when no activity
     if (simulating && sim_tach && pot_overload == tach) tach_filt_rpm = map (pot_filt_percent, 0.0, 100.0, 0.0, tach_govern_rpm);
@@ -369,6 +369,9 @@ void loop() {
     }
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //
 
+    // Read the car ignition signal, and while we're at it measure the vehicle battery voltage off ign signal
+    ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
+
     // Controller handling
     //
 
@@ -377,21 +380,19 @@ void loop() {
         if (hotrc_source == ESP_RMT) {  // Read RMT pulse widths
             hotrc_vert_pulse_us = (int32_t)hotrc_vert.readPulseWidth();
             hotrc_horz_pulse_us = (int32_t)hotrc_horz.readPulseWidth();  
-            hotrc_ch3_update();
-            hotrc_ch4_update();
         }
         else {
             hotrc_horz_pulse_us = hotrcHorzManager.spike_filter ((int32_t)hotrc_horz_pulse_64_us);
             hotrc_vert_pulse_us = hotrcHorzManager.spike_filter ((int32_t)hotrc_vert_pulse_64_us);
         }
-        if (button_it) printf ("hrc H:%4ld V:%4ld", hotrc_horz_pulse_us, hotrc_vert_pulse_us);
-        if (button_it) printf ("\n");
+        if (boot_button) printf ("hrc H:%4ld V:%4ld", hotrc_horz_pulse_us, hotrc_vert_pulse_us);
+        if (boot_button) printf ("\n");
     }
-    if (!simulating || !sim_joy) {  // Handle HotRC button generated events and detect potential loss of radio signal
+    if (!(simulating && sim_joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
         if (ctrl != JOY) {
             // ema_filt (hotrc_horz_pulse_us, &hotrc_horz_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Just here for debugging. Do not need filtered horz value
             ema_filt (hotrc_vert_pulse_us, &hotrc_vert_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Used to detect loss of radio
-            // if (button_it) printf (" | ema H:%4ld V:%4ld", hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us);
+            // if (boot_button) printf (" | ema H:%4ld V:%4ld", hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us);
         }
         if (ctrl == HOTRC) {
             if (hotrc_horz_pulse_us >= hotrc_pulse_lims_us[HORZ][CENT])  // Steering: Convert from pulse us to joystick adc equivalent, when pushing right, else pushing left
@@ -405,28 +406,26 @@ void loop() {
             ctrl_pos_adc[VERT][RAW] = analogRead (joy_vert_pin);  // Read joy vertical
             ctrl_pos_adc[HORZ][RAW] = analogRead (joy_horz_pin);  // Read joy horizontal
         }
-        // if (button_it) printf (" | Craw0 H:%4ld V:%4ld", ctrl_pos_adc[HORZ][RAW], ctrl_pos_adc[VERT][RAW]);
-        // if (button_it) printf (" | Cflt0 H:%4ld V:%4ld", ctrl_pos_adc[HORZ][FILT], ctrl_pos_adc[VERT][FILT]);
+        // if (boot_button) printf (" | Craw0 H:%4ld V:%4ld", ctrl_pos_adc[HORZ][RAW], ctrl_pos_adc[VERT][RAW]);
+        // if (boot_button) printf (" | Cflt0 H:%4ld V:%4ld", ctrl_pos_adc[HORZ][FILT], ctrl_pos_adc[VERT][FILT]);
         ema_filt (ctrl_pos_adc[VERT][RAW], &ctrl_pos_adc[VERT][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_vert_filt
         ema_filt (ctrl_pos_adc[HORZ][RAW], &ctrl_pos_adc[HORZ][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_horz_filt
         ctrl_pos_adc[VERT][FILT] = constrain (ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
         ctrl_pos_adc[HORZ][FILT] = constrain (ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
-        // if (button_it) printf (" | Cflt1 H:%4ld V:%4ld", ctrl_pos_adc[HORZ][FILT], ctrl_pos_adc[VERT][FILT]);
+        // if (boot_button) printf (" | Cflt1 H:%4ld V:%4ld", ctrl_pos_adc[HORZ][FILT], ctrl_pos_adc[VERT][FILT]);
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) {
             ctrl_pos_adc[VERT][FILT] = ctrl_lims_adc[ctrl][VERT][CENT];  // if joy vert is in the deadband, set joy_vert_filt to center value
         }
         if (ctrl_pos_adc[HORZ][FILT] > ctrl_db_adc[HORZ][BOT] && ctrl_pos_adc[HORZ][FILT] < ctrl_db_adc[HORZ][TOP]) {
             ctrl_pos_adc[HORZ][FILT] = ctrl_lims_adc[ctrl][HORZ][CENT];  // if joy horz is in the deadband, set joy_horz_filt to center value
         }
-        // if (button_it) printf (" | Cflt2 H:%4ld V:%4ld\n", ctrl_pos_adc[HORZ][FILT], ctrl_pos_adc[VERT][FILT]);
+        // if (boot_button) printf (" | Cflt2 H:%4ld V:%4ld\n", ctrl_pos_adc[HORZ][FILT], ctrl_pos_adc[VERT][FILT]);
     }    
-    // if (button_it) printf ("hrz: %ld | saf: %ld | out %ld", ctrl_pos_adc[HORZ][FILT], steer_pulse_safe_us, steer_pulse_out_us);
-
-    // Voltage of vehicle battery
-    ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
-
+    // if (boot_button) printf ("hrz: %ld | saf: %ld | out %ld", ctrl_pos_adc[HORZ][FILT], steer_pulse_safe_us, steer_pulse_out_us);
     if (ctrl == JOY) ignition = ignition_sense;
     else if (ctrl == HOTRC) {
+        hotrc_ch3_update();
+        hotrc_ch4_update();
         if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition
             if (hotrc_suppress_next_ch3_event) hotrc_suppress_next_ch3_event = false;
             else ignition = !ignition;
@@ -434,7 +433,9 @@ void loop() {
         }
         if (hotrc_ch4_sw_event) {
             if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
-            else flycruise_toggle_request = true;
+            else if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
+            else if (runmode == STALL) remote_start_toggle_request = true;
+            else {}   // There's no reason pushing the ch4 button when in other modes can't do something different.  That would go here
             hotrc_ch4_sw_event = false;    
         }
         if (hotrc_vert_pulse_us > hotrc_pulse_failsafe_max_us) {
@@ -517,9 +518,14 @@ void loop() {
         }
     }
     else if (runmode == STALL) {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
+        if (we_just_switched_modes) remote_starting = false;
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) pressure_target_psi = pressure_min_psi;  // If in deadband or being pushed up, no pressure target
         else pressure_target_psi = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi);  // Scale joystick value to pressure adc setpoint
         if (!starter && !engine_stopped()) runmode = HOLD;  // Enter Hold Mode if we started the car
+        if (remote_start_toggle_request) {
+            remote_starting = !remote_starting;
+            remote_start_toggle_request = false;
+        }
     }
     else if (runmode == HOLD) {
         if (we_just_switched_modes) {  // Release throttle and push brake upon entering hold mode
@@ -641,6 +647,7 @@ void loop() {
         if (serial_debugging) Serial.println (F("Error: Invalid runmode entered"));
         runmode = SHUTDOWN;
     }
+    if (runmode != STALL) remote_starting = false;
     if (runmode != SHUTDOWN && runmode != BASIC) park_the_motors = false;
     if (runmode != oldmode) disp_runmode_dirty = true;  // runmode should not be changed after this point in loop
     we_just_switched_modes = (runmode != oldmode);
@@ -665,7 +672,7 @@ void loop() {
         else steer_pulse_out_us = steer_pulse_stop_us;  // Stop the steering motor if inside the deadband
         steer_pulse_out_us = constrain (steer_pulse_out_us, steer_pulse_right_us, steer_pulse_left_us);  // Don't be out of range
         steer_servo.writeMicroseconds (steer_pulse_out_us);   // Write steering value to jaguar servo interface
-        if (button_it) printf ("Str:%4ld", (int32_t)steer_pulse_out_us);
+        if (boot_button) printf ("Str:%4ld", (int32_t)steer_pulse_out_us);
     }
     // Brakes - Determine motor output and write it to motor
     if (brakePidTimer.expired() && !(runmode == SHUTDOWN && shutdown_complete)) {
@@ -690,7 +697,7 @@ void loop() {
                  brake_pulse_out_us = constrain (brake_pulse_out_us, (float)brake_pulse_retract_min_us, (float)brake_pulse_extend_max_us);  // Constrain to full potential range when calibrating. Caution don't break anything!
             else brake_pulse_out_us = constrain (brake_pulse_out_us, (float)brake_pulse_retract_us, (float)brake_pulse_extend_us);  // Send to the actuator. Refuse to exceed range    
             brake_servo.writeMicroseconds ((int32_t)brake_pulse_out_us);  // Write result to jaguar servo interface
-            if (button_it) printf (" Brk:%4ld", (int32_t)brake_pulse_out_us);
+            if (boot_button) printf (" Brk:%4ld", (int32_t)brake_pulse_out_us);
         }
     }
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
@@ -723,7 +730,7 @@ void loop() {
                 gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_idle_us);
             // printf (" output = %-+9.4lf,  %+-4ld\n", gasQPID.get_output(), gas_pulse_out_us);
             gas_servo.writeMicroseconds (gas_pulse_out_us);  // Write result to servo
-            if (button_it) printf (" Gas:%4ld\n", (int32_t)gas_pulse_out_us);
+            if (boot_button) printf (" Gas:%4ld\n", (int32_t)gas_pulse_out_us);
         }
     }
     if (park_the_motors) {  //  When parking motors, IF the timeout expires OR the brake and gas motors are both close enough to the park position THEN stop trying to park the motors
@@ -991,6 +998,20 @@ void loop() {
             ignition_last = ignition;  // Make sure this goes after the last comparison
         }
     }
+    if (remote_starting != remote_starting_last) {
+        if (remote_starting) {
+            set_pin (starter_pin, OUTPUT);
+            write_pin (starter_pin, HIGH);
+        }
+        else {
+            write_pin (starter_pin, LOW);
+            set_pin (starter_pin, INPUT_PULLDOWN);
+        }
+        starter = remote_starting;
+        remote_starting_last = remote_starting;
+    }
+    cout << "starter:" << starter << " starting:" << remote_starting << endl;;
+
     if (syspower != syspower_last) {
         syspower_set (syspower);
         syspower_last = syspower;
