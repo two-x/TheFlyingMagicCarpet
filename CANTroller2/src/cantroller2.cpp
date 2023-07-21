@@ -1,14 +1,9 @@
 // Carpet CANTroller II  Source Code  - For Arduino Due with Adafruit 2.8inch Captouch TFT shield.
 #include <SPI.h>  // SPI serial bus needed to talk to the LCD and the SD card
-#include <Wire.h>  // Contains I2C serial bus, needed to talk to touchscreen chip
-#include "Arduino.h"
 #include <Adafruit_SleepyDog.h>  // Watchdog
 #include <vector>
-#include <string>
 #include <iomanip>  // Formatting cout
 #include "classes.h"  // Contains our data structures
-// #include "spid.h"
-// #include <QuickPID.h>
 #include "qpid.h"  // This is quickpid library except i have to edit some of it
 #include "globals.h"
 #include "uictrl.h"
