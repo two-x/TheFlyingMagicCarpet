@@ -21,6 +21,8 @@
 // #include "freertos/task.h"  // MCPWM pulse measurement code
 // #include "driver/mcpwm.h"  // MCPWM pulse measurement code
 #include "qpid.h"
+#include "driver/rmt.h"
+#include "RMT_Input.h"
 
 // #define CAP_TOUCH
 bool flip_the_screen = false;
@@ -143,11 +145,19 @@ bool serial_debugging = true;
 bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
 bool take_temperatures = true;
 
-Preferences config;  // Persistent config storage
+// Persistent config storage
+Preferences config;
 
-class Timer {
-  private:
-    volatile int64_t start_us, timeout_us;
+// Declare Hotrc RMT Inputs in global scope
+RMTInput hotrc_horz(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_horz_pin)); 
+RMTInput hotrc_vert(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_vert_pin)); 
+RMTInput hotrc_ch3(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_ign_pin)); 
+RMTInput hotrc_ch4(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_cruise_pin)); 
+
+class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
+  protected:
+    volatile int64_t start_us = 0;
+    volatile int64_t timeout_us = 0;
   public:
     Timer (void) { reset(); }
     Timer (uint32_t arg_timeout_us) { set ((int64_t)arg_timeout_us); }
@@ -165,6 +175,9 @@ float convert_units (float from_units, float convert_factor, bool invert, float 
     printf ("convert_units refused to divide by zero: %lf, %lf, %d, %lf, %lf", from_units, convert_factor, invert, in_offset, out_offset);
     return -1;
 }
+
+// Globals -------------------
+//
 
 // run state machine related
 enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL };
@@ -323,11 +336,13 @@ enum ctrl_axes { HORZ, VERT, CH3, CH4 };
 enum ctrl_thresh { MIN, CENT, MAX, DB };
 enum ctrl_edge { BOT, TOP };
 enum ctrl_vals { RAW, FILT };
+enum hotrc_sources { MICROS, ESP_RMT };
 float ctrl_ema_alpha[2] = { 0.05, 0.1 };  // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 int32_t ctrl_lims_adc[2][2][4] = { { { 0, adcmidscale_adc, adcrange_adc, 42 }, { 0, adcmidscale_adc, adcrange_adc, 42 } }, { { 9, adcmidscale_adc, 4085, 50 }, { 9, adcmidscale_adc, 4085, 50 } } }; // [HOTRC/JOY] [HORZ/VERT], [MIN/CENT/MAX/DB] values as microseconds (hotrc) or adc counts (joystick)
 int32_t ctrl_db_adc[2][2];  // [HORZ/VERT] [BOT/TOP] - to store the top and bottom deadband values for each axis of selected controller
 int32_t ctrl_pos_adc[2][2];  // [HORZ/VERT] [RAW/FILT] - holds most current controller values
 bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
+int32_t hotrc_source = ESP_RMT;
 
 int32_t hotrc_pulse_lims_us[4][3] = { { 970-1, 1470-3, 1970-3 }, { 1080-1, 1580-3, 2080-3 }, { 1200-1, 1500-2, 1800-3 }, { 1300-1, 1500-2, 1700-3 } };  // [HORZ/VERT/CH3/CH4] [MIN/CENT/MAX]  // These are the l
 int32_t hotrc_spike_buffer[2][3];
@@ -545,27 +560,85 @@ void IRAM_ATTR speedo_isr (void) {  //  Handler can get the most recent rotation
         speedo_us = speedo_time_us;
     }
 }
-
-void IRAM_ATTR hotrc_horz_isr (void) {  // On falling edge, records high pulse width to determine ch1 steering slider position
-    hotrc_horz_pulse_64_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
+void handle_hotrc_vert(int32_t pulse_width) {
+    // reads return 0 if the buffer is empty eg bc our loop is running faster than the rmt is getting pulses
+    if (pulse_width > 0) {
+        hotrc_vert_pulse_64_us = pulse_width;
+    }
 }
-void IRAM_ATTR hotrc_vert_isr (void) {  // On falling edge, Sets timer on rising edge (for all channels) and reads it on falling to determine ch2 trigger position
-    hotrc_vert_pulse_64_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
+void handle_hotrc_horz(int32_t pulse_width) {
+    if (pulse_width > 0) {
+        hotrc_vert_pulse_64_us = pulse_width;
+    }
 }
-void IRAM_ATTR hotrc_ch3_isr (void) {  // On falling edge, records high pulse width to determine ch3 button toggle state
-    hotrc_ch3_sw = (esp_timer_get_time() - hotrc_timer_start <= 1500);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
+void hotrc_ch3_update (void) {  // 
+    hotrc_ch3_sw = (hotrc_ch3.readPulseWidth(true) <= 1500);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
     if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch3_sw_last = hotrc_ch3_sw;
 }
-void IRAM_ATTR hotrc_ch4_isr (void) {  // Triggers on both edges. Sets timer on rising edge (for all channels) and reads it on falling to determine ch4 button toggle state
-    if (hotrc_isr_pin_preread) hotrc_timer_start = esp_timer_get_time();  // hotrcPulseTimer.reset();
-    else {
-        hotrc_ch4_sw = (esp_timer_get_time() - hotrc_timer_start <= 1500);  // Ch4 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH4][CENT]
-        if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
-        hotrc_ch4_sw_last = hotrc_ch4_sw;
-    }
-    hotrc_isr_pin_preread = !(digitalRead (hotrc_ch4_cruise_pin));  // Read pin after timer operations to maximize clocking accuracy
-}  // intcount++;
+void hotrc_ch4_update (void) {  // 
+    hotrc_ch4_sw = (hotrc_ch4.readPulseWidth(true) <= 1500);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
+    if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
+    hotrc_ch4_sw_last = hotrc_ch4_sw;
+}
+
+// TODO handle hotrc_ch3 and ch4
+// void handle_hotrc_ch3(int32_t pulse_width) {
+//     // handle here
+// }
+
+// void IRAM_ATTR hotrc_ch3_isr (int32_t pulse_width) {  // On falling edge, records high pulse width to determine ch3 button toggle state
+//     hotrc_ch3_sw = (esp_timer_get_time() - hotrc_timer_start <= 1500);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
+//     if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
+//     hotrc_ch3_sw_last = hotrc_ch3_sw;
+// }
+// void IRAM_ATTR hotrc_ch4_isr (void) {  // Triggers on both edges. Sets timer on rising edge (for all channels) and reads it on falling to determine ch4 button toggle state
+//     if (hotrc_isr_pin_preread) hotrc_timer_start = esp_timer_get_time();  // hotrcPulseTimer.reset();
+//     else {
+//         hotrc_ch4_sw = (esp_timer_get_time() - hotrc_timer_start <= 1500);  // Ch4 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH4][CENT]
+//         if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
+//         hotrc_ch4_sw_last = hotrc_ch4_sw;
+//     }
+//     hotrc_isr_pin_preread = !(digitalRead (hotrc_ch4_cruise_pin));  // Read pin after timer operations to maximize clocking accuracy
+// }  // intcount++;
+
+// Attempt to use MCPWM input capture pulse width timer unit to get precise hotrc readings
+// int32_t hotrc_ch3_pulse_us, hotrc_ch4_pulse_us;
+// uint32_t mcpwm_unit0_capture, mcpwm_unit1_capture, mcpwm_unit2_capture;
+// uint32_t mcpwm_unit0_capture_last, mcpwm_unit1_capture_last, mcpwm_unit2_capture_last;
+// int32_t hotrc_ch3_preread;
+// void IRAM_ATTR hotrc_isr (void) {
+//     mcpwm_unit0_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_0, MCPWM_SELECT_CAP0);
+//     mcpwm_unit1_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_1, MCPWM_SELECT_CAP0);
+//     hotrc_horz_pulse_us = (int32_t)(mcpwm_unit0_capture - mcpwm_unit0_capture_last);
+//     hotrc_vert_pulse_us = (int32_t)(mcpwm_unit1_capture - mcpwm_unit1_capture_last);
+//     mcpwm_unit0_capture_last = mcpwm_unit0_capture;
+//     mcpwm_unit1_capture_last = mcpwm_unit1_capture;
+// }
+// // // Separate attempt to use timers to measure pulses
+// // void IRAM_ATTR hotrc_ch1_isr (void) {
+// //     mcpwm_unit0_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_0, MCPWM_SELECT_CAP0);
+// //     hotrc_horz_pulse_us = (int32_t)(mcpwm_unit0_capture - mcpwm_unit0_capture_last);
+// //     mcpwm_unit0_capture_last = mcpwm_unit0_capture;
+// // }
+// // void IRAM_ATTR hotrc_ch2_isr (void) {
+// //     mcpwm_unit1_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_1, MCPWM_SELECT_CAP0);
+// //     hotrc_vert_pulse_us = (int32_t)(mcpwm_unit1_capture - mcpwm_unit1_capture_last);
+// //     mcpwm_unit1_capture_last = mcpwm_unit1_capture;
+// // }
+    // if (hotrc_vert_preread) hotrc_timer_start = esp_timer_get_time();  // hotrcPulseTimer.reset();
+    // else hotrc_vert_pulse_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
+    // hotrc_vert_preread = !(digitalRead (hotrc_ch2_horz_pin));  // Read pin after timer operations to maximize clocking accuracy
+
+    // intcount++;
+    // // hotrc_horz_pulse_us = esp_timer_get_time() - hotrc_timer_start;
+
+// void IRAM_ATTR hotrc_vert_isr() {
+//   hotrc_vert_pulse_us = (uint32_t)timerRead(hotrc_vert_timer);
+//   timerStop(hotrc_vert_timer);
+//   timerAlarmWrite(hotrc_vert_timer, 0xFFFFFFFF, true);  // Reset the alarm value
+//   timerRestart(hotrc_vert_timer);
+// }
 
 // Utility functions
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays

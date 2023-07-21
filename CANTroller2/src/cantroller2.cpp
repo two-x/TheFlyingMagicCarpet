@@ -49,16 +49,12 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (pressure_pin, INPUT);
     set_pin (brake_pos_pin, INPUT);
     set_pin (ign_batt_pin, INPUT);
-    set_pin (hotrc_ch1_horz_pin, INPUT);
-    set_pin (hotrc_ch2_vert_pin, INPUT);
     set_pin (neopixel_pin, OUTPUT);
     set_pin (sdcard_cs_pin, OUTPUT);
     set_pin (tft_cs_pin, OUTPUT);
     set_pin (pot_wipe_pin, INPUT);
     set_pin (button_pin, INPUT_PULLUP);
     set_pin (starter_pin, INPUT_PULLDOWN);
-    set_pin (hotrc_ch3_ign_pin, INPUT);
-    set_pin (hotrc_ch4_cruise_pin, INPUT);
 
     set_pin (joy_horz_pin, INPUT);
     set_pin (joy_vert_pin, INPUT);
@@ -97,6 +93,12 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     delay (800);  //  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     // printf("Serial port open\n");  // This works on Due but not ESP32
     
+    // Set up 4 RMT receivers, one per channel
+    hotrc_vert.init();
+    hotrc_horz.init();
+    hotrc_ch3.init();
+    hotrc_ch4.init();
+
     for (int32_t x=0; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
     
     if (display_enabled) {
@@ -167,10 +169,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         // ledcSetup(1, 1, 1); // Use LEDC channel 0 with a resolution of 1 bit
         // ledcAttachPinTone(hotrc_ch2_vert_pin, 1); // Capture on falling edge
 
-        attachInterrupt (digitalPinToInterrupt (hotrc_ch2_vert_pin), hotrc_vert_isr, FALLING);
-        attachInterrupt (digitalPinToInterrupt (hotrc_ch1_horz_pin), hotrc_horz_isr, FALLING);
-        attachInterrupt (digitalPinToInterrupt (hotrc_ch3_ign_pin), hotrc_ch3_isr, FALLING);
-        attachInterrupt (digitalPinToInterrupt (hotrc_ch4_cruise_pin), hotrc_ch4_isr, CHANGE);
+        // attachInterrupt (digitalPinToInterrupt (hotrc_ch3_ign_pin), hotrc_ch3_isr, FALLING);
+        // attachInterrupt (digitalPinToInterrupt (hotrc_ch4_cruise_pin), hotrc_ch4_isr, CHANGE);
     }
     Serial.println (F("Interrupts set up and enabled\n"));
 
@@ -371,11 +371,21 @@ void loop() {
 
     // Controller handling
     //
+
     // Read horz and vert inputs, determine steering pwm output -  - takes 40 us to read. Then, takes 13 us to handle
     if (ctrl != JOY) {
-        hotrc_horz_pulse_us = hotrcHorzManager.spike_filter ((int32_t)hotrc_horz_pulse_64_us);
-        hotrc_vert_pulse_us = hotrcHorzManager.spike_filter ((int32_t)hotrc_vert_pulse_64_us);
-        // if (button_it) printf ("spk H:%4ld V:%4ld", hotrc_horz_pulse_us, hotrc_vert_pulse_us);
+        if (hotrc_source == ESP_RMT) {  // Read RMT pulse widths
+            hotrc_vert_pulse_us = (int32_t)hotrc_vert.readPulseWidth();
+            hotrc_horz_pulse_us = (int32_t)hotrc_horz.readPulseWidth();  
+            hotrc_ch3_update();
+            hotrc_ch4_update();
+        }
+        else {
+            hotrc_horz_pulse_us = hotrcHorzManager.spike_filter ((int32_t)hotrc_horz_pulse_64_us);
+            hotrc_vert_pulse_us = hotrcHorzManager.spike_filter ((int32_t)hotrc_vert_pulse_64_us);
+        }
+        if (button_it) printf ("hrc H:%4ld V:%4ld", hotrc_horz_pulse_us, hotrc_vert_pulse_us);
+        if (button_it) printf ("\n");
     }
     if (!simulating || !sim_joy) {  // Handle HotRC button generated events and detect potential loss of radio signal
         if (ctrl != JOY) {
