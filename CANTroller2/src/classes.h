@@ -16,13 +16,22 @@ using namespace std;
 
 // TODO: move this to display.h and figure out a cleaner way to do it
 class Drawable {
+    protected:
+        virtual void draw_me(Display &display, int32_t lineno, int32_t target=-1);
     public:
         char disp_name[9] = "unnamed ";
         char disp_units[5] = "    ";
+        bool dirty = true;
 
     void set_names (const string arg_name, const string arg_units) {
         strcpy(disp_name, arg_name.c_str());
         strcpy(disp_units, arg_units.c_str());
+    }
+
+    void draw(Display &display, int32_t lineno, int32_t target=-1) {
+        if (dirty)
+            draw_me(display, lineno, target);
+        dirty = false;
     }
 
     char* get_name() { return disp_name; }
@@ -30,12 +39,12 @@ class Drawable {
 };
 
 // Param is a value, possibly constrained between min/max limits, which holds a float value representing a "raw" (aka unfiltered) quantity, which can be displayed
-class Param : Drawable {
+class Param : public Drawable {
   protected:
-    float val, min, max;  // To hold val/min/max actual values in case they are passed to us by value. Otherwise if external references used, these are unused.
+    float val, min, max;  // To hold val/min/max actual values in case they are passed to us by value. Otherwise if external references used, min/max are unused.
     float val_last;
 
-    bool constrain(float* arg_val, float arg_min, float arg_max) {
+    static bool constrain(float* arg_val, float arg_min, float arg_max) {
         if (*arg_val < arg_min) {
             *arg_val = arg_min;
             return true;  // Constraint was necessary
@@ -46,22 +55,27 @@ class Param : Drawable {
         }
         return false;  // No constraint was necessary
     }
+    
+    // NOTE: do we even need these still?
+    float round(float val, int32_t digits) {
+        return rounding ? std::round(val * std::pow(10, digits)) / std::pow(10, digits) : val;
+    }
+    float round(float val) { return round(val, max_precision); }
+
+    void draw_me(Display &display, int32_t lineno, int32_t target=-1) {
+        if (dirty)
+            display.draw_dynamic(lineno, val, *p_min, *p_max, target);
+        dirty = false;
+    }
 
   public:
     bool saturated;
-    bool dirty = true;
     bool rounding = true;  // Has value been updated since last time value was displayed
     int32_t max_precision = 3;
 
-    float* p_val = &val;
     float* p_min = &min;
     float* p_max = &max;  // Pointers to value/max/min, could be internal or external reference
 
-    Param(float* arg_p_val) {
-        p_val = arg_p_val;
-        *p_min = *arg_p_val;  // Initialize to given value, presumably call set_limits to change later
-        *p_max = *arg_p_val;  // Initialize to given value, presumably call set_limits to change later
-    }
     Param(float arg_val) { 
         val = arg_val;
         *p_min = arg_val;  // Initialize to given value, presumably call set_limits to change later
@@ -69,88 +83,80 @@ class Param : Drawable {
     }
     Param() = delete; // should always pass an arg when making a Param
 
-    float round(float val, int32_t digits) {
-        return rounding ? std::round(val * std::pow(10, digits)) / std::pow(10, digits) : val;
-    }
-    float round(float val) { return round(val, max_precision); }
-
-    void set_limits(float* arg_min, float* arg_max) {  // Use if min/max are external references
-        if (*arg_min > *arg_max)
-            printf("Error: *min is >= *max\n");
-        else {
-            p_min = arg_min;
-            p_max = arg_max;
-            saturated = constrain(p_val, *p_min, *p_max);
-        }
-    }
     void set_limits(float arg_min, float arg_max) {  // Use if min/max are kept in-class
         if (arg_min > arg_max)
             printf("Error: min is >= max\n");
         else {
             min = round(arg_min);
             max = round(arg_max);
-            saturated = constrain(p_val, *p_min, *p_max);
+            p_min = &min;
+            p_max = &max;
+            saturated = constrain(&val, *p_min, *p_max);
         }
+    }
+    void set_limits(float* arg_min, float* arg_max) {  // Use if min/max are external references
+        if (*arg_min > *arg_max)
+            printf("Error: *min is >= *max\n");
+        else {
+            p_min = arg_min;
+            p_max = arg_max;
+            saturated = constrain(&val, *p_min, *p_max);
+        }
+    }
+    void set_limits(const Param &minParam, const Param &maxParam) {
+        set_limits(minParam.val, maxParam.val);
     }
 
     bool set(float arg_val) {
         saturated = constrain(&arg_val, *p_min, *p_max);
-        if (*p_val != arg_val) {
+        if (val != arg_val) {
             dirty = true;
-            val_last = *p_val;
-            *p_val = arg_val;
+            val_last = val;
+            val = arg_val;
             return true;
         }
         return false;
     }
 
-    bool add(float arg_add) { 
-        if (set(*p_val + arg_add))
-            return true;
-        return false;
+    bool add(float arg_add) {
+        return set(val + arg_add);
     }
 
-    void draw_name(Display &display, int32_t lineno, int32_t target=-1) {
-        if (dirty)
-            display.draw_dynamic(lineno, *p_val, *p_min, *p_max, target);
-        dirty = false;
-    }
-
-    float get() { return *p_val; }
+    float get() { return val; }
     float get_min() { return *p_min; }
     float get_max() { return *p_max; }
 };
 
 // Device class - is a base class for any connected system device or signal associated with a pin
-class Device : Drawable {  // This class is truly virtual, in that it's not complete to have instances, just multiple children
+class Device {  // This class is truly virtual, in that it's not complete to have instances, just multiple children
   protected:
-    bool can_source[6] = { true, true, false, true, false, false };  // Which types of sources are possible for this device?
-    uint8_t source = UNDEF;
-    uint8_t pin = -1;
-    bool enabled = true;
+    bool _can_source[6] = { true, true, false, true, false, false };  // Which types of sources are possible for this device?
+    uint8_t _source = UNDEF;
+    uint8_t _pin = -1;
+    bool _enabled = true;
   public:
     enum sources {UNDEF, FIXED, PIN, TOUCH, POT, CALC};  // controller mode
 
+    Timer timer;  // Can be used for external purposes
+
     Device() = delete; // should always be created with a pin
-    Device(uint8_t arg_pin) : pin(arg_pin) {}
+    Device(uint8_t arg_pin) : _pin(arg_pin) {}
 
-    Timer timer();  // Can be used for external purposes
-
-    bool can_source(int32_t arg_source) { return can_source[arg_source]; }
+    bool can_source(int32_t arg_source) { return _can_source[arg_source]; }
     bool set_source(int32_t arg_source) {
-        if (can_source[arg_source]) {
-            source = arg_source;
+        if (_can_source[arg_source]) {
+            _source = arg_source;
             return true;
         } 
         return false;
     }
 
-    void set_pin(bool arg_pin) { pin = arg_pin; }
-    void set_enabled(bool arg_enable) { enabled = arg_enable; }
-    void set_can_source(int32_t arg_source, bool is_possible) { can_source[arg_source] = is_possible; }
-    uint8_t source() { return static_cast<uint8_t>(source); }
-    int32_t pin() { return pin; }
-    bool enabled() { return enabled; }
+    void set_pin(bool arg_pin) { _pin = arg_pin; }
+    void set_enabled(bool arg_enable) { _enabled = arg_enable; }
+    void set_can_source(int32_t arg_source, bool is_possible) { _can_source[arg_source] = is_possible; }
+    uint8_t source() { return static_cast<uint8_t>(_source); }
+    int32_t pin() { return _pin; }
+    bool enabled() { return _enabled; }
 };
 
 // Transducer class has all features of Device class but now there is also a "native" version of the value which represents the sensed
