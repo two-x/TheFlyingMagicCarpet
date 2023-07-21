@@ -11,6 +11,5 @@
 void disp_flush(lv_disp_drv_t * disp, const lv_area_t * area, lv_color_t * color_p);
 void lvgl_init();
 void create_hello_world_label();
-void toggle_screen_colors();
 
 #endif
