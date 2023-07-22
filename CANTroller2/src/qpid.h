@@ -11,7 +11,7 @@ class QPID {
     enum class Action : uint8_t {direct, reverse};                    // controller action
     enum class pMode : uint8_t {pOnError, pOnMeas, pOnErrorMeas};     // proportional mode
     enum class dMode : uint8_t {dOnError, dOnMeas};                   // derivative mode
-    enum class iAwMode : uint8_t {iAwCondition, iAwClamp, iAwOff};    // integral anti-windup mode
+    enum class iAwMode : uint8_t {iAwCondition, iAwClamp, iAwOff, iAwRound, iAwRoundCond};    // integral anti-windup mode  // Soren edit
     enum class centMode : uint8_t {range, center, centerStrict};    // Soren - Allows a defined output zero point
 
     // commonly used functions ************************************************************************************
@@ -247,14 +247,17 @@ bool QPID::Compute() {
     else dTerm = -kd * dInput; // dOnMeas
 
     //condition anti-windup (default)
-    if (iawmode == iAwMode::iAwCondition) {
+    if (iawmode == iAwMode::iAwCondition || iawmode == iAwMode::iAwRoundCond) {
       bool aw = false;
       float iTermOut = (peTerm - pmTerm) + ki * (iTerm + error);
       if (iTermOut > outMax && dError > 0) aw = true;
       else if (iTermOut < outMin && dError < 0) aw = true;
       if (aw && ki) iTerm = constrain(iTermOut, -outMax, outMax);
     }
-
+    else if ((iawmode == iAwMode::iAwRound || iawmode == iAwMode::iAwRoundCond) && error < 0.001 && error > -0.001) {
+        error = 0.0;
+        if (centmode == centMode::centerStrict) outputSum = center;     
+    }
     if (centmode == centMode::centerStrict && error * lastError < 0) outputSum = center;  // Soren - Recenters any old integral when error crosses zero
     
     // by default, compute output as per PID_v1
