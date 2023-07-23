@@ -643,7 +643,7 @@ class Display {
                 draw_dynamic(2, speedo_filt_mph, 0.0, speedo_redline_mph, speedo_target_mph);
                 draw_dynamic(3, tach_filt_rpm, 0.0, tach_redline_rpm, tach_target_rpm);
                 draw_dynamic(4, gas_pulse_out_us, gas_pulse_redline_us, gas_pulse_idle_us);
-                draw_dynamic(5, pressure_filt_psi, pressure_min_psi, pressure_max_psi, pressure_target_psi);  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
+                draw_dynamic(5, pressure_sensor.get_filtered_value(), pressure_sensor.get_min_human(), pressure_sensor.get_max_human(), pressure_target_psi);  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
                 draw_dynamic(6, brake_out_percent, brake_extend_percent, brake_retract_percent);
                 draw_dynamic(7, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
                 draw_dynamic(8, steer_out_percent, steer_left_percent, steer_right_percent);
@@ -674,7 +674,7 @@ class Display {
                     draw_dynamic(19, ctrl_lims_adc[ctrl][VERT][DB], 0, 2*(min (ctrl_lims_adc[ctrl][VERT][CENT]-ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]-ctrl_lims_adc[ctrl][VERT][CENT]) -1));
                 }
                 else if (dataset_page == PG_CAR) {
-                    draw_dynamic(9, pressure_adc, pressure_min_adc, pressure_max_adc);                    
+                    draw_dynamic(9, pressure_sensor.get_native(), pressure_sensor.get_min_native(), pressure_sensor.get_max_native());                    
                     draw_eraseval(10);
                     draw_eraseval(11);
                     draw_dynamic(12, gas_governor_percent, 0.0, 100.0);
@@ -707,8 +707,8 @@ class Display {
                 }
                 else if (dataset_page == PG_BPID) {
                     drange = brake_pulse_extend_us-brake_pulse_retract_us;
-                    draw_dynamic(9, pressure_target_psi, pressure_min_psi, pressure_max_psi);
-                    draw_dynamic(10, brakeQPID.GetError(), pressure_min_psi-pressure_max_psi, pressure_max_psi-pressure_min_psi);
+                    draw_dynamic(9, pressure_target_psi, pressure_sensor.get_min_human(), pressure_sensor.get_max_human());
+                    draw_dynamic(10, brakeQPID.GetError(), pressure_sensor.get_min_human()-pressure_sensor.get_max_human(), pressure_sensor.get_max_human()-pressure_sensor.get_min_human());
                     draw_dynamic(11, brakeQPID.GetPterm(), -drange, drange);
                     draw_dynamic(12, brakeQPID.GetIterm(), -drange, drange);
                     draw_dynamic(13, brakeQPID.GetDterm(), -drange, drange);

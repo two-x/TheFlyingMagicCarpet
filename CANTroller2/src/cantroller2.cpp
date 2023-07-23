@@ -4,9 +4,9 @@
 #include <Adafruit_SleepyDog.h>  // Watchdog
 #include <vector>
 #include <iomanip>  // Formatting cout
-#include "classes.h"  // Contains our data structures
 #include "qpid.h"  // This is quickpid library except i have to edit some of it
 #include "globals.h"
+#include "display.h"
 #include "uictrl.h"
 #include "TouchScreen.h"
 using namespace std;
@@ -28,13 +28,30 @@ Display screen;
 TouchScreen ts(touch_cs_pin, touch_irq_pin);
 Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
     
+#define RUN_TESTS 0
+#if RUN_TESTS
+#include "tests.h"
+void run_tests() {
+        printf("Running tests...\n");
+        delay(5000);
+        test_Param();
+        printf("Tests complete.\n");
+        for(;;) {} // loop forever
+}
+#else
+void run_tests() {}
+#endif
+
 void setup() {  // Setup just configures pins (and detects touchscreen type)
+    if (RUN_TESTS) {
+        run_tests();
+    }    
+
     set_pin (tft_dc_pin, OUTPUT);
     set_pin (gas_pwm_pin, OUTPUT);
     set_pin (basicmodesw_pin, INPUT_PULLUP);
     set_pin (tach_pulse_pin, INPUT_PULLUP);
     set_pin (speedo_pulse_pin, INPUT_PULLUP);
-    set_pin (pressure_pin, INPUT);
     set_pin (brake_pos_pin, INPUT);
     set_pin (neopixel_pin, OUTPUT);
     set_pin (sdcard_cs_pin, OUTPUT);
@@ -87,8 +104,17 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         ts.init();
     }
 
-    printf ("Encoder setup..\n");
+    printf("Encoder setup..\n");
     encoder.setup();
+
+    printf("Device setup..\n");
+    pressure_sensor.setup();
+    if (simulating && sim_pressure)
+        if (pot_overload == pressure)
+            pressure_sensor.set_source(ControllerMode::POT);
+        else
+            pressure_sensor.set_source(ControllerMode::TOUCH);
+
 
     // Set up our interrupts
     printf ("Attach interrupts..\n");
@@ -97,6 +123,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
     printf ("Attach servos..\n");
     // Servo() argument 2 is channel (0-15) of the esp timer (?). set to Servo::CHANNEL_NOT_ATTACHED to auto grab a channel
+    // gas_servo.setup();
+    // gas_servo.set_native_limits();  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     gas_servo.attach (gas_pwm_pin, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     steer_servo.attach (steer_pwm_pin, steer_pulse_right_us, steer_pulse_left_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
     brake_servo.attach (brake_pwm_pin, brake_pulse_retract_us, brake_pulse_extend_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
@@ -135,6 +163,18 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         }
         else printf ("  ghost device #%d, addr unknown\n", index);  // printAddress (temp_addrs[x]);
     }  // Need algorithm to recognize addresses of detected devices in known vehicle locations
+    
+    // xTaskCreatePinnedToCore ( codeForTask1, "Task_1", 1000, NULL, 1, &Task1, 0);
+    // if (ctrl == HOTRC) {  // Look for evidence of a normal (not failsafe) hotrc signal. If it's not yet powered on, we will ignore its spurious poweron ignition event
+    //     int32_t temp = hotrc_vert_pulse_us;
+    //     hotrc_radio_detected = ((ctrl_lims_adc[HOTRC][VERT][MIN] <= temp && temp < hotrc_pos_failsafe_min_us) || (hotrc_pos_failsafe_max_us < temp && temp <= ctrl_lims_adc[HOTRC][VERT][MAX]));
+    //     for (int32_t x = 0; x < 4; x++) {
+    //         delay (20);
+    //         if (!((ctrl_lims_adc[HOTRC][VERT][MIN] < temp && temp < hotrc_pos_failsafe_min_us) || (hotrc_pos_failsafe_max_us < temp && temp < ctrl_lims_adc[HOTRC][VERT][MAX]))
+    //             || (hotrcPulseTimer.elapsed() > (int32_t)(hotrc_pulse_period_us*2.5))) hotrc_radio_detected = false;
+    //     }
+    //     printf ("HotRC radio signal: %setected\n", (!hotrc_radio_detected) ? "Not d" : "D");
+    // }
     
     int32_t watchdog_time_ms = Watchdog.enable(2500);  // Start 2.5 sec watchdog
     printf ("Enable watchdog.. timer set to %ld ms\n", watchdog_time_ms);
@@ -239,15 +279,9 @@ void loop() {
             speedo_filt_mph = 0.0;
         }
     }
+
     // Brake pressure - takes 72 us to read
-    if (sim_pressure && pot_overload == pressure) pressure_filt_psi = map (pot_filt_percent, 0.0, 100.0, pressure_min_psi, pressure_max_psi);
-    else if (!(simulating && sim_pressure)) {
-        pressure_adc = analogRead (pressure_pin);
-        pressure_psi = convert_units ((float)pressure_adc, pressure_convert_psi_per_adc, pressure_convert_invert, (float)pressure_min_adc);
-        ema_filt (pressure_psi, &pressure_filt_psi, pressure_ema_alpha);  // Sensor EMA filter
-        // pressure.set_raw (analogRead (pressure_pin));
-        // ema_filt (pressure.get_val(), &pressure_filt_psi, pressure_ema_alpha);  // Sensor EMA filter
-    }
+    pressure_sensor.read();
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //
 
     // Read the car ignition signal, and while we're at it measure the vehicle battery voltage off ign signal
@@ -392,14 +426,14 @@ void loop() {
             remote_starting = false;
             remote_start_toggle_request = false;
         }
-        if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) pressure_target_psi = pressure_min_psi;  // If in deadband or being pushed up, no pressure target
-        else pressure_target_psi = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi);  // Scale joystick value to pressure adc setpoint
+        if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) pressure_target_psi = pressure_sensor.get_min_human();  // If in deadband or being pushed up, no pressure target
+        else pressure_target_psi = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], pressure_sensor.get_min_human(), pressure_sensor.get_max_human());  // Scale joystick value to pressure adc setpoint
         if (!starter && !engine_stopped()) runmode = HOLD;  // If we started the car, enter hold mode once starter is released
     }
     else if (runmode == HOLD) {
         if (we_just_switched_modes) {  // Release throttle and push brake upon entering hold mode
             tach_target_rpm = tach_idle_rpm;  // Let off gas (if gas using PID mode)
-            if (car_stopped()) pressure_target_psi = pressure_filt_psi + pressure_hold_increment_psi; // If the car is already stopped then just add a touch more pressure and then hold it.
+            if (car_stopped()) pressure_target_psi = pressure_sensor.get_filtered_value() + pressure_hold_increment_psi; // If the car is already stopped then just add a touch more pressure and then hold it.
             else if (pressure_target_psi < pressure_hold_initial_psi) pressure_target_psi = pressure_hold_initial_psi;  //  These hippies need us to stop the car for them
             brakeIntervalTimer.reset();
             stopcarTimer.reset();
@@ -433,9 +467,9 @@ void loop() {
             }
             else tach_target_rpm = tach_idle_rpm;  // Else let off gas (if gas using PID mode)
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT])  {  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
-                pressure_target_psi = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi);
+                pressure_target_psi = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], pressure_sensor.get_min_human(), pressure_sensor.get_max_human());
             }
-            else pressure_target_psi = pressure_min_psi;  // Else let off the brake   
+            else pressure_target_psi = pressure_sensor.get_min_human();  // Else let off the brake   
         }
         // Cruise mode can be entered by pressing a controller button, or by holding the brake on full for a half second. Which epends on the cruise_gesturing flag.
         // The gesture involves pushing the joystick from the center to the top, then to the bottom, then back to center, quickly enough.
@@ -474,7 +508,7 @@ void loop() {
     else if (runmode == CRUISE) {
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
             speedo_target_mph = speedo_filt_mph;
-            pressure_target_psi = pressure_min_psi;  // Let off the brake and keep it there till out of Cruise mode
+            pressure_target_psi = pressure_sensor.get_min_human();  // Let off the brake and keep it there till out of Cruise mode
             gestureFlyTimer.reset();  // reset gesture timer
             cruise_sw_held = false;
             cruise_adjusting = false;
@@ -707,12 +741,31 @@ void loop() {
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == PG_RUN) {
             if (selected_value == 4) adj_bool (&sim_joy, sim_edit_delta);
-            else if (selected_value == 5) adj_bool (&sim_pressure, sim_edit_delta);
+            // else if (selected_value == 5) adj_bool (&sim_pressure, sim_edit_delta);
+            else if (selected_value == 5) {
+                 adj_bool(&sim_pressure, sim_edit_delta);
+                 if (simulating && sim_pressure)
+                    if (pot_overload == pressure)
+                        pressure_sensor.set_source(ControllerMode::POT);
+                    else
+                        pressure_sensor.set_source(ControllerMode::TOUCH);
+                else
+                    pressure_sensor.set_source(ControllerMode::PIN); 
+            }
             else if (selected_value == 6) adj_bool (&sim_brkpos, sim_edit_delta);
             else if (selected_value == 7) adj_bool (&sim_tach, sim_edit_delta);
             else if (selected_value == 8) adj_bool (&sim_airflow, sim_edit_delta);
             else if (selected_value == 9) adj_bool (&sim_speedo, sim_edit_delta);
-            else if (selected_value == 10) adj_val (&pot_overload, sim_edit_delta, 0, arraysize(sensorcard)-1);
+            else if (selected_value == 10) {
+                adj_val(&pot_overload, sim_edit_delta, 0, arraysize(sensorcard)-1);
+                if (pot_overload == pressure && simulating && sim_pressure)
+                    pressure_sensor.set_source(ControllerMode::POT);
+                if (pot_overload != pressure)
+                    if (simulating && sim_pressure)
+                        pressure_sensor.set_source(ControllerMode::TOUCH);
+                    else
+                        pressure_sensor.set_source(ControllerMode::PIN);
+            }
         }
         else if (dataset_page == PG_JOY) {
             if (selected_value == 4) adj_val (&hotrc_pulse_failsafe_max_us, sim_edit_delta, hotrc_pulse_failsafe_min_us + 1, hotrc_pulse_lims_us[VERT][MIN] - 1);

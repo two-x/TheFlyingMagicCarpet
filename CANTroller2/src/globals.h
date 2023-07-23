@@ -19,6 +19,9 @@
 #include "driver/rmt.h"
 #include "RMT_Input.h"
 
+#include "utils.h"
+#include "devices.h"
+
 // #define CAP_TOUCH
 bool flip_the_screen = false;
 
@@ -152,33 +155,6 @@ RMTInput hotrc_horz(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_horz_pin));
 RMTInput hotrc_vert(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_vert_pin)); 
 RMTInput hotrc_ch3(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_ign_pin)); 
 RMTInput hotrc_ch4(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_cruise_pin)); 
-
-class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
-  protected:
-    volatile int64_t start_us = 0;
-    volatile int64_t timeout_us = 0;
-  public:
-    Timer (void) { reset(); }
-    Timer (uint32_t arg_timeout_us) { set ((int64_t)arg_timeout_us); }
-    void IRAM_ATTR set (int64_t arg_timeout_us) { timeout_us = arg_timeout_us; reset(); }
-    void IRAM_ATTR set (uint32_t arg_timeout_us) { set ((int64_t)arg_timeout_us); }
-    void IRAM_ATTR reset (void) { start_us = esp_timer_get_time(); }
-    bool IRAM_ATTR expired (void) { return (esp_timer_get_time() > start_us + timeout_us); }
-    bool IRAM_ATTR expireset (void) {  // Like expired() but automatically resets if expired
-        if (esp_timer_get_time() <= start_us + timeout_us) return false;
-        reset();
-        return true;
-    }    
-    int64_t IRAM_ATTR elapsed (void) { return esp_timer_get_time() - start_us; }
-    int64_t IRAM_ATTR get_timeout (void) { return timeout_us; }
-};
-
-float convert_units (float from_units, float convert_factor, bool invert, float in_offset = 0.0, float out_offset = 0.0) {
-    if (!invert) return out_offset + convert_factor * (from_units - in_offset);
-    if (from_units - in_offset) return out_offset + convert_factor / (from_units - in_offset);
-    printf ("convert_units refused to divide by zero: %lf, %lf, %d, %lf, %lf", from_units, convert_factor, invert, in_offset, out_offset);
-    return -1;
-}
 
 // Globals -------------------
 //
@@ -409,22 +385,11 @@ float steer_pulse_left_us = 2330;  // Steering pulsewidth corresponding to full-
 float steer_pulse_left_max_us = 2500;  // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
 
 // brake pressure related
-int32_t pressure_adc;
-int32_t pressure_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
-int32_t pressure_sensor_max_adc = adcrange_adc; // Sensor reading max, limited by adc Vmax. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as chris can push (wimp)
-int32_t pressure_max_adc = 2080; // Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
-float pressure_convert_psi_per_adc = 1000.0 * (3.3 - 0.554) / ( (pressure_sensor_max_adc - pressure_min_adc) * (4.5 - 0.554) );  // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
-bool pressure_convert_invert = false;
-float pressure_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-float pressure_margin_psi = 2.5;  // Margin of error when comparing brake pressure adc values (psi)
-float pressure_min_psi = 0.0;  // TUNED 230602 - Brake pressure when brakes are effectively off. Sensor min = 0.5V, scaled by 3.3/4.5V is 0.36V of 3.3V (ADC count 0-4095). 
-float pressure_max_psi = convert_units (pressure_max_adc - pressure_min_adc, pressure_convert_psi_per_adc, pressure_convert_invert);  // TUNED 230602 - Highest possible pressure achievable by the actuator 
+PressureSensor pressure_sensor(pressure_pin, &pot_filt_percent);
 float pressure_hold_initial_psi = 150;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
 float pressure_hold_increment_psi = 15;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 float pressure_panic_initial_psi = 250;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
 float pressure_panic_increment_psi = 25;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
-float pressure_psi = (pressure_min_psi+pressure_max_psi)/2;
-float pressure_filt_psi = pressure_psi;  // Stores new setpoint to give to the pid loop (brake)
 float pressure_target_psi;
 
 // brake actuator motor related
@@ -544,7 +509,7 @@ Timer brakePidTimer (brake_pid_period_us);  // not actually tunable, just needs 
 float brake_spid_initial_kp = 0.253;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
 float brake_spid_initial_ki_hz = 0.057;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
 float brake_spid_initial_kd_s = 0.100;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-QPID brakeQPID (&pressure_filt_psi, &brake_out_percent, &pressure_target_psi,  // input, target, output variable references
+QPID brakeQPID (pressure_sensor.get_filtered_value_ptr().get(), &brake_out_percent, &pressure_target_psi,  // input, target, output variable references
     brake_extend_percent, brake_retract_percent,  // output min, max
     brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,  // Kp, Ki, and Kd tuning constants
     QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwRound, QPID::Action::direct,  // settings  // iAwRoundCond, iAwClamp
@@ -640,15 +605,6 @@ inline int32_t min (int32_t a, int32_t b) { return (a < b) ? a : b; }
 inline float constrain (float amt, float low, float high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline int32_t constrain (int32_t amt, int32_t low, int32_t high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline uint32_t constrain (uint32_t amt, uint32_t low, uint32_t high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
-#undef map
-inline float map (float x, float in_min, float in_max, float out_min, float out_max) {
-    if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
-    return out_max;  // Instead of dividing by zero, return the highest valid result
-}
-inline int32_t map (int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, int32_t out_max) {
-    if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
-    return out_max;  // Instead of dividing by zero, return the highest valid result
-}
 bool rounding = true;
 float dround (float val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
 
@@ -740,11 +696,6 @@ bool adj_val (float* variable, float modify, float low_limit, float high_limit) 
     return (*variable != oldval);
 }
 void adj_bool (bool* val, int32_t delta) { if (delta != 0) *val = (delta > 0); }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
-
-// pin operations that first check if pin exists for the current board
-void set_pin (int32_t pin, int32_t mode) { if (pin >= 0 && pin != 255) pinMode (pin, mode); }
-void write_pin (int32_t pin, int32_t val) {  if (pin >= 0 && pin != 255) digitalWrite (pin, val); }
-int32_t read_pin (int32_t pin) { return (pin >= 0 && pin != 255) ? digitalRead (pin) : -1; }
 
 // battery_v = convert_units ((float)analogRead (battery_pin), battery_convert_v_per_adc, battery_convert_invert);
 // ema_filt (battery_v, &battery_filt_v, battery_ema_alpha);  // Apply EMA filter
