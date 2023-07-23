@@ -122,6 +122,15 @@ public:
                 if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
                     simulating = !simulating;
                     touch_longpress_valid = false;
+                
+                    // update device modes
+                    if (simulating && sim_pressure)
+                        if (pot_overload == pressure)
+                            pressure_sensor.set_source(ControllerMode::POT);
+                        else
+                            pressure_sensor.set_source(ControllerMode::TOUCH);
+                    else
+                        pressure_sensor.set_source(ControllerMode::PIN);
                 }
             }
             else if (simulating) {
@@ -132,8 +141,8 @@ public:
                     }
                 }  
                 else if (tcol == 3 && trow == 0 && sim_basicsw && !touch_now_touched) basicmodesw = !basicmodesw;
-                else if (tcol == 3 && trow == 1 && sim_pressure) adj_val(&pressure_filt_psi, (float)touch_accel, pressure_min_psi, pressure_max_psi);
-                else if (tcol == 3 && trow == 2 && sim_pressure) adj_val(&pressure_filt_psi, (float)(-touch_accel), pressure_min_psi, pressure_max_psi);
+                else if (tcol == 3 && trow == 1 && sim_pressure && pressure_sensor.source() == ControllerMode::TOUCH) pressure_sensor.add_human((float)touch_accel); // (+= 25) Pressed the increase brake pressure button
+                else if (tcol == 3 && trow == 2 && sim_pressure && pressure_sensor.source() == ControllerMode::TOUCH) pressure_sensor.add_human((float)(-touch_accel)); // (-= 25) Pressed the decrease brake pressure button
                 else if (tcol == 3 && trow == 4 && sim_joy) adj_val(&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
                 else if (tcol == 4 && trow == 0 && sim_ignition && !touch_now_touched) ignition = !ignition;
                 else if (tcol == 4 && trow == 1 && sim_tach) adj_val(&tach_filt_rpm, (float)touch_accel, 0.0, tach_redline_rpm);

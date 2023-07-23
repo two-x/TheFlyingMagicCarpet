@@ -2,6 +2,7 @@
 #include <stdint.h>
 #ifndef QPID_h
 #define QPID_h
+#include "Arduino.h"
 
 class QPID {
 
