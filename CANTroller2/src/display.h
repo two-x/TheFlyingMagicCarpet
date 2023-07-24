@@ -3,25 +3,12 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
-// #define CAP_TOUCH
-
-// bool flip_the_screen = false;
-// #ifdef CAP_TOUCH
-//     #include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
-//     bool cap_touch = true;
-// #else
-//     #include <XPT2046_Touchscreen.h>
-//     bool cap_touch = false;
-
-// #endif
-
 // #include <font_Arial.h> // from ILI9341_t3
 // #include <SPI.h>
 
 // #include <Adafruit_ILI9341.h>
 #include <TFT_eSPI.h>
 
-// #include <ILI9341_t3.h>  // A different tft library that came with the resistive touchscreen
 #include "globals.h"
 
 // display related globals
@@ -229,31 +216,8 @@ int32_t selected_value_last = 0;
 //  ---- tunable ----
 Timer tuningCtrlTimer (25000000);  // This times out edit mode after a a long period of inactivity
 
-// touchscreen related
-bool touch_now_touched = false;  // Is a touch event in progress
-bool touch_longpress_valid = true;
-int32_t touch_accel_exponent = 0;  // Will edit values by +/- 2^touch_accel_exponent per touch_period interval
-int32_t touch_accel = 1 << touch_accel_exponent;  // Touch acceleration level, which increases the longer you hold. Each edit update chages value by this
-int32_t touch_fudge = 0;  // -8
-//  ---- tunable ----
-int32_t touch_accel_exponent_max = 8;  // Never edit values faster than this. 2^8 = 256 change in value per update
-// Timer touchPollTimer (35000);  // Timer for regular touchscreen sampling
-Timer touchHoldTimer (800000);  // For timing touch long presses
-Timer touchAccelTimer (850000);  // Touch hold time per left shift (doubling) of touch_accel
-
 // run state globals
 int32_t shutdown_color = colorcard[SHUTDOWN];
-
-#ifdef CAP_TOUCH
-    #include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
-    Adafruit_FT6206 ts;  // 2.8in cap touch panel on tft lcd
-    bool cap_touch = true;
-#else
-    #include <XPT2046_Touchscreen.h>
-    XPT2046_Touchscreen ts (touch_cs_pin, touch_irq_pin);  // 3.2in resistive touch panel on tft lcd
-    // XPT2046_Touchscreen ts (touch_cs_pin);  // 3.2in resistive touch panel on tft lcd
-    bool cap_touch = false;
-#endif
 
 class Display {
     private:
@@ -293,10 +257,6 @@ class Display {
             draw_fixed (dataset_page, dataset_page_last, false);
             yield();
             _disp_redraw_all = true;
-            printf ("Success.\nTouchscreen initialization... ");
-            ts.begin();
-            // if (!ts.begin(40)) printf ("Couldn't start touchscreen controller");  // pass in 'sensitivity' coefficient
-            printf ("Touchscreen started\n");
         }
         bool tft_reset() {  // call to begin a tft reset, and continue to call every loop until returns true (or get_reset_finished() returns true), then stop
             if (reset_finished) {
