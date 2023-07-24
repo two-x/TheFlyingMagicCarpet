@@ -137,7 +137,7 @@ bool flip_the_screen = false;
 
 // Globals -------------------
 bool serial_debugging = true; 
-bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
+bool timestamp_loop = true;  // Makes code write out timestamps throughout loop to serial port
 bool take_temperatures = true;
 
 // Persistent config storage

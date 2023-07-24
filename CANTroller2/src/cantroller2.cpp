@@ -1001,7 +1001,7 @@ void loop() {
         starter = remote_starting;
         remote_starting_last = remote_starting;
     }
-    cout << "starter:" << starter << " starting:" << remote_starting << endl;;
+    // cout << "starter:" << starter << " starting:" << remote_starting << endl;;
 
     if (syspower != syspower_last) {
         syspower_set (syspower);
@@ -1078,14 +1078,14 @@ void loop() {
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");    
     if (timestamp_loop) {
         // loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");  //
-        if (loop_period_us > 25000) {
-            std::cout << "RM:" << runmode << " us:" << esp_timer_get_time() << " Lp#" << loopno << " us:" << loop_period_us;
+        if (true) {
+            std::cout << "Lp#" << loopno << " us:" << loop_period_us;
             for (int32_t x=1; x<loopindex; x++) std::cout << " " << std::setw(3) << loop_names[x] << x << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1];
-            std::cout << std::endl;
+            std::cout << "\n";
+            // if (loop_period_us > 20000) printf ("\n");
         }
         // std::cout << "\rRM:" << runmode << " us:" << esp_timer_get_time() << " Lp#" << loopno << " us:" << loop_period_us;
         // for (int32_t x=1; x<loopindex; x++) std::cout << " " << std::setw(3) << loop_names[x] << x << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1];
-        // if (loop_period_us > 25000) printf ("\n");
     }
     loop_int_count = 0;
 }
