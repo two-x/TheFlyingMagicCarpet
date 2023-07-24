@@ -1,5 +1,3 @@
-#include <globals.h> // should we split out Timer and not include globals? 
-#include "display.h"
 #ifdef CAP_TOUCH
     #include <Adafruit_FT6206.h>  // For interfacing with the capacitive touchscreen controller chip
 #else
