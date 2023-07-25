@@ -101,6 +101,7 @@ class QPID {
     float GetIterm();         // integral component of output
     float GetDterm();         // derivative component of output
     float GetOutputSum();     // summation of all pid term components
+    float GetOutputRange();     // Soren - range of output
     uint8_t GetMode();        // manual (0), automatic (1), timer (2) or toggle manual/automatic (3)
     uint8_t GetDirection();   // direct (0), reverse (1)
     uint8_t GetPmode();       // pOnError (0), pOnMeas (1), pOnErrorMeas (2)
@@ -143,9 +144,8 @@ class QPID {
     int32_t *myIntOutput;  // Soren
     bool int32_output = false;  // Soren
 
-}; // class QPID
-
-// End of .h file, start of .cpp file
+};  // End of quickpid.h library file. From here down was originally quickpid.cpp
+//===================================================================================
 
 /**********************************************************************************
    QPID Library for Arduino - Version 3.1.9
@@ -227,10 +227,10 @@ bool QPID::Compute() {
 
     float input = *myInput;
     float dInput = input - lastInput;
-    if (action == Action::reverse) dInput = -dInput;
+    if (action == Action::reverse) dInput = -dInput;  // Soren
 
     error = *mySetpoint - input;
-    if (action == Action::reverse) error = -error;
+    if (action == Action::reverse) error = -error;  // Soren
     float dError = error - lastError;
 
     float peTerm = kp * error;
@@ -246,8 +246,7 @@ bool QPID::Compute() {
     if (dmode == dMode::dOnError) dTerm = kd * dError;
     else dTerm = -kd * dInput; // dOnMeas
 
-    //condition anti-windup (default)
-    if (iawmode == iAwMode::iAwCondition || iawmode == iAwMode::iAwRoundCond) {
+    if (iawmode == iAwMode::iAwCondition || iawmode == iAwMode::iAwRoundCond) {  // condition anti-windup (default)
       bool aw = false;
       float iTermOut = (peTerm - pmTerm) + ki * (iTerm + error);
       if (iTermOut > outMax && dError > 0) aw = true;
@@ -260,20 +259,19 @@ bool QPID::Compute() {
     }
     if (centmode == centMode::centerStrict && error * lastError < 0) outputSum = center;  // Soren - Recenters any old integral when error crosses zero
     
-    // by default, compute output as per PID_v1
-    outputSum += iTerm;                                                 // include integral amount
+    outputSum += iTerm;  // by default, compute output as per PID_v1    // include integral amount
     if (iawmode == iAwMode::iAwOff) outputSum -= pmTerm;                // include pmTerm (no anti-windup)
     else outputSum = constrain(outputSum - pmTerm, outMin, outMax);     // include pmTerm and clamp
     
     if (int32_output) *myIntOutput = (int32_t)(constrain(outputSum + peTerm + dTerm, outMin, outMax));  // Soren
     else *myOutput = constrain(outputSum + peTerm + dTerm, outMin, outMax);  // include dTerm, clamp and drive output
 
-    lastError = error;
+    lastError = error;  // Soren
     lastInput = input;
     lastTime = now;
     return true;
   }
-  else return false;
+  else return false;  // If class is handling the timing and this time was a nop
 }
 
 /* SetTunings(....)************************************************************
@@ -286,7 +284,7 @@ void QPID::SetTunings(float Kp, float Ki, float Kd,
                           dMode dMode = dMode::dOnMeas,
                           iAwMode iAwMode = iAwMode::iAwCondition) {
 
-  if (Kp < 0 || Ki < 0 || Kd < 0) return;
+  if (Kp < 0 || Ki < 0 || Kd < 0 || !sampleTimeUs) return;  // Soren - added divide by zero protection
   if (Ki == 0) outputSum = 0;
   pmode = pMode; dmode = dMode; iawmode = iAwMode;
   dispKp = Kp; dispKi = Ki; dispKd = Kd;
@@ -312,7 +310,7 @@ void QPID::SetKd(float Kd) { SetTunings(dispKp, dispKi, Kd, pmode, dmode, iawmod
   Sets the period, in microseconds, at which the calculation is performed.
 ******************************************************************************/
 void QPID::SetSampleTimeUs(uint32_t NewSampleTimeUs) {
-  if (NewSampleTimeUs > 0) {
+  if (NewSampleTimeUs > 0 && sampleTimeUs) {  // Soren - added more divide by zero protection
     float ratio  = (float)NewSampleTimeUs / (float)sampleTimeUs;
     ki *= ratio;
     kd /= ratio;
@@ -326,8 +324,7 @@ void QPID::SetSampleTimeUs(uint32_t NewSampleTimeUs) {
 ******************************************************************************/
 void QPID::SetOutputLimits(float Min, float Max) {
   if (Min >= Max) return;
-  outMin = Min;
-  outMax = Max;
+  outMin = Min; outMax = Max;
 
   if (mode != Control::manual) {
     if (int32_output) *myIntOutput = (int32_t)constrain((float)*myIntOutput, outMin, outMax);  // Soren
@@ -336,17 +333,9 @@ void QPID::SetOutputLimits(float Min, float Max) {
   }
 }
 
-void QPID::SetCentMode(centMode CentMode) {  // Soren
-  centmode = CentMode;  // Soren
-}
-
-void QPID::SetCenter(float Center) {  // Soren
-  if (outMin <= Center && outMax >= Center) {  // Soren
-    center = Center;  // Soren
-    if (centmode == centMode::range) centmode = centMode::centerStrict;  // Soren
-  }
-}
-
+void QPID::SetCentMode(centMode CentMode) { centmode = CentMode; }  // Soren
+void QPID::SetCenter(float Center) { if (outMin <= Center && outMax >= Center) center = Center; }  // Soren
+// if (centmode == centMode::range) centmode = centMode::centerStrict;  // Soren - does definition of center imply to use center mode?
 
 /* SetMode(.)*****************************************************************
   Sets the controller mode to manual (0), automatic (1) or timer (2)
@@ -452,6 +441,7 @@ float QPID::GetPterm() { return pTerm; }
 float QPID::GetIterm() { return iTerm; }
 float QPID::GetDterm() { return dTerm; }
 float QPID::GetOutputSum() { return outputSum; }
+float QPID::GetOutputRange() { return outMax - outMin; }  // Soren
 uint8_t QPID::GetMode() { return static_cast<uint8_t>(mode); }
 uint8_t QPID::GetDirection() { return static_cast<uint8_t>(action); }
 uint8_t QPID::GetPmode() { return static_cast<uint8_t>(pmode); }
@@ -459,6 +449,5 @@ uint8_t QPID::GetDmode() { return static_cast<uint8_t>(dmode); }
 uint8_t QPID::GetAwMode() { return static_cast<uint8_t>(iawmode); }
 uint8_t QPID::GetCentMode() { return static_cast<uint8_t>(centmode); }  // Soren
 float QPID::GetCenter() { return center; }  // Soren
-
 
 #endif // QPID.h

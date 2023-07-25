@@ -574,8 +574,8 @@ class Display {
                     int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
                     if (strcmp (simgrid[row][col], "    " )) {
                         _tft.fillCircle (cntr_x, cntr_y, 19, create ? DGRY : BLK);
+                        _tft.drawCircle (cntr_x, cntr_y, 19, create ? LYEL : BLK);
                         if (create) {
-                            _tft.drawCircle (cntr_x, cntr_y, 19, LYEL);
                             int32_t x_mod = cntr_x-(arraysize (simgrid[row][col])-1)*(disp_font_width>>1);
                             draw_string (x_mod, x_mod, cntr_y-(disp_font_height>>1), simgrid[row][col], "", LYEL, DGRY);
                         }
@@ -613,7 +613,6 @@ class Display {
         void update() {
             if (simulating != simulating_last || _disp_redraw_all) {
                 draw_simbuttons(simulating);  // if we just entered simulator draw the simulator buttons, or if we just left erase them
-                simulating_last = simulating;
                 _procrastinate = true;  // Waits till next loop to draw changed values
             }
             if ((disp_dataset_page_dirty || _disp_redraw_all)) {
@@ -622,7 +621,6 @@ class Display {
                 first = false;
                 disp_dataset_page_dirty = false;
                 if (dataset_page_last != dataset_page) config.putUInt("dpage", dataset_page);
-                dataset_page_last = dataset_page;
                 _procrastinate = true;  // Waits till next loop to draw changed values
             }
             if ((disp_sidemenu_dirty || _disp_redraw_all)) {
@@ -633,13 +631,10 @@ class Display {
             if (disp_selected_val_dirty || _disp_redraw_all) {
                 draw_selected_name(tuning_ctrl, tuning_ctrl_last, selected_value, selected_value_last);
                 disp_selected_val_dirty = false;
-                selected_value_last = selected_value;
-                tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
             }
             if (disp_runmode_dirty || _disp_redraw_all) {
                 draw_runmode(runmode, oldmode, (runmode == SHUTDOWN) ? shutdown_color : -1);
                 disp_runmode_dirty = false;
-                oldmode = runmode;  // remember what mode we're in for next time
             }
             if ((dispRefreshTimer.expired() && !_procrastinate) || _disp_redraw_all) {
                 dispRefreshTimer.reset();
@@ -717,7 +712,7 @@ class Display {
                     draw_dynamic(11, brakeQPID.GetPterm(), -drange, drange);
                     draw_dynamic(12, brakeQPID.GetIterm(), -drange, drange);
                     draw_dynamic(13, brakeQPID.GetDterm(), -drange, drange);
-                    draw_dynamic(14, brakeQPID.GetOutputSum(), (float)brake_pulse_retract_us, (float)brake_pulse_extend_us);  // brake_spid_speedo_delta_adc, -range, range);
+                    draw_dynamic(14, brakeQPID.GetOutputSum(), -brakeQPID.GetOutputRange(), brakeQPID.GetOutputRange());  // brake_spid_speedo_delta_adc, -range, range);
                     draw_eraseval(15);
                     draw_eraseval(16);
                     draw_dynamic(17, brakeQPID.GetKp(), 0.0, 2.0);
@@ -731,7 +726,7 @@ class Display {
                     draw_dynamic(11, gasQPID.GetPterm(), -drange, drange);
                     draw_dynamic(12, gasQPID.GetIterm(), -drange, drange);
                     draw_dynamic(13, gasQPID.GetDterm(), -drange, drange);
-                    draw_dynamic(14, gasQPID.GetOutputSum(), (float)gas_pulse_idle_us, (float)gas_pulse_govern_us);
+                    draw_dynamic(14, gasQPID.GetOutputSum(), -gasQPID.GetOutputRange(), gasQPID.GetOutputRange());
                     draw_eraseval(15);
                     draw_truth(16, gas_open_loop, 1);
                     draw_dynamic(17, gasQPID.GetKp(), 0.0, 2.0);
@@ -745,7 +740,7 @@ class Display {
                     draw_dynamic(11, cruiseQPID.GetPterm(), -drange, drange);
                     draw_dynamic(12, cruiseQPID.GetIterm(), -drange, drange);
                     draw_dynamic(13, cruiseQPID.GetDterm(), -drange, drange);
-                    draw_dynamic(14, cruiseQPID.GetOutputSum(), tach_idle_rpm, tach_govern_rpm);  // cruise_spid_speedo_delta_adc, -drange, drange);
+                    draw_dynamic(14, cruiseQPID.GetOutputSum(), -cruiseQPID.GetOutputRange(), cruiseQPID.GetOutputRange());  // cruise_spid_speedo_delta_adc, -drange, drange);
                     draw_dynamic(15, tach_target_rpm, 0.0, tach_redline_rpm);
                     draw_eraseval(16);
                     draw_dynamic(17, cruiseQPID.GetKp(), 0.0, 2.0);
