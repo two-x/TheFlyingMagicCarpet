@@ -137,7 +137,7 @@ bool flip_the_screen = false;
 
 // Globals -------------------
 bool serial_debugging = true; 
-bool timestamp_loop = true;  // Makes code write out timestamps throughout loop to serial port
+bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
 bool take_temperatures = true;
 
 #define pwm_jaguars true
@@ -247,6 +247,8 @@ bool cal_set_hotrc_failsafe_ready = false;
 // diag/monitoring variables
 Timer loopTimer(1000000);  // how long the previous main loop took to run (in us)
 uint32_t loop_period_us;
+uint64_t looptime_sum_us;
+uint32_t looptime_avg_us;
 float loop_freq_hz = 1;  // run loop real time frequency (in Hz)
 volatile int32_t loop_int_count = 0;  // counts interrupts per loop
 int32_t loopno = 1;

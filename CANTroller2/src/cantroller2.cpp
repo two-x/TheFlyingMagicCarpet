@@ -312,7 +312,7 @@ void loop() {
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
 
     if (take_temperatures) temp_soren();
-    if (simulating && sim_coolant && pot_overload == coolant) temps_f[ENGINE] = map (pot_filt_percent, 0.0, 100.0, temp_sensor_min_f, temp_sensor_max_f);
+    if (sim_coolant && pot_overload == coolant) temps_f[ENGINE] = map (pot_filt_percent, 0.0, 100.0, temp_sensor_min_f, temp_sensor_max_f);
     
     encoder.update();  // Read encoder input signals
 
@@ -383,6 +383,7 @@ void loop() {
 
     // Read the car ignition signal, and while we're at it measure the vehicle battery voltage off ign signal
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
+    if (sim_battery && pot_overload == coolant) battery_filt_v = map (pot_filt_percent, 0.0, 100.0, 0.0, battery_max_v);
 
     // Controller handling
     //
@@ -1030,7 +1031,9 @@ void loop() {
     loopno++;  // I like to count how many loops
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");    
     if (timestamp_loop) {
-        std::cout <<"\rLp#" << loopno << " us:" << loop_period_us;  //  " us:" << esp_timer_get_time() << 
+        // looptime_sum_us += loop_period_us;
+        // if (loopno) looptime_avg_us = looptime_sum_us / loopno;
+        std::cout <<"\rLp#" << loopno << " us:" << loop_period_us; // << " avg:" << looptime_avg_us;  //  " us:" << esp_timer_get_time() << 
         for (int32_t x=1; x<loopindex; x++) std::cout << " " << std::setw(3) << loop_names[x] << x << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1];
         if (loop_period_us > 20000) std::cout << std::endl;
     }
