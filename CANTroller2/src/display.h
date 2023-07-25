@@ -6,10 +6,14 @@
 // #include <font_Arial.h> // from ILI9341_t3
 // #include <SPI.h>
 
-// #include <Adafruit_ILI9341.h>
-#include <TFT_eSPI.h>
-
 #include "globals.h"
+
+#define USE_TFT_DISPLAY_DRIVER // comment this out to use Adafruit display driver
+#ifdef USE_TFT_DISPLAY_DRIVER
+  #include <TFT_eSPI.h>
+#else 
+  #include <Adafruit_ILI9341.h>
+#endif
 
 // display related globals
 #define BLK  0x0000
@@ -221,11 +225,12 @@ int32_t shutdown_color = colorcard[SHUTDOWN];
 
 class Display {
     private:
-        // Adafruit_ILI9341 _tft (tft_cs_pin, tft_dc_pin, tft_rst_pin); // LCD screen
-        // Adafruit_ILI9341 _tft; // LCD screen
-        TFT_eSPI _tft; // LCD screen
-
-        // ILI9341_t3 _tft;
+        #ifdef USE_TFT_DISPLAY_DRIVER
+            TFT_eSPI _tft; // LCD screen
+        #else
+            Adafruit_ILI9341 _tft; // LCD screen
+        #endif
+        
         Timer _tftResetTimer;
         Timer _tftDelayTimer;
         int32_t _timing_tft_reset;
@@ -233,8 +238,11 @@ class Display {
         bool _disp_redraw_all = true;
     public:
 
-        Display (int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0){}
-        Display () : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0){}
+        #ifdef USE_TFT_DISPLAY_DRIVER
+            Display () : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0){}
+        #else
+            Display (int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0){}
+        #endif        
 
         void init() {
             printf ("Init LCD... ");
