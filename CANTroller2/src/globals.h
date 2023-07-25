@@ -179,7 +179,7 @@ float convert_units (float from_units, float convert_factor, bool invert, float 
 #ifdef pwm_jaguars
     static Servo brake_servo;
     static Servo steer_servo;
-#else
+#else  // jaguars controlled over asynchronous serial port
     #include <HardwareSerial.h>
     HardwareSerial jagPort(1);  // Open serisl port to communicate with jaguar controllers for steering & brake motors
 #endif
@@ -478,7 +478,7 @@ float speedo_convert_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 *
     // 5280 ft/mi * 12 in/ft * 1/(20*pi) whlrot/in * 19.85 pulrot/whlrot = 20017 pulrot/mile
     // Mule gearing:  Total -19.845x (lo) ( Converter: -3.5x to -0.96x Tranny -3.75x (lo), -1.821x (hi), Final drive -5.4x )
 bool speedo_convert_invert = true;
-int32_t speedo_convert_polarity = 1;  // Forward      
+int32_t speedo_convert_polarity = 1;  // Forward
 float speedo_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 float speedo_idle_mph = 4.50;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
 float speedo_redline_mph = 15.0;  // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
@@ -530,7 +530,7 @@ float airflow_target_mph = airflow_mph;
 float airflow_min_mph = 0.0;
 float airflow_max_mph = 33.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)
 float airflow_idle_mph = airflow_max_mph * tach_idle_rpm / tach_redline_rpm;
-// What diameter intake hose will reduce airspeed to abs max?  2.7 times the xsectional area. Current area is 6.38 cm2. New diameter = 4.68 cm (min). So, need to adapt to 5in tube (ugh!) unless math is wrong
+// What diameter intake hose will reduce airspeed to abs max?  2.7 times the xsectional area. Current area is 6.38 cm2. New diameter = 4.68 cm (min). So, need to adapt to 2.5in + tube
 float airflow_abs_max_mph = 33.55;
 float airflow_ema_alpha = 0.2;
 FS3000 airflow_sensor;

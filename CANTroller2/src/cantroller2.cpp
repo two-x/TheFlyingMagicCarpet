@@ -7,6 +7,7 @@
 #include "qpid.h"  // This is quickpid library except i have to edit some of it
 #include "globals.h"
 #include "uictrl.h"
+#include "TouchScreen.h"
 using namespace std;
 
 std::vector<string> loop_names(20);
@@ -24,7 +25,8 @@ HotrcManager hotrcHorzManager (22);
 HotrcManager hotrcVertManager (22);
 //Hotrc hotrc (&hotrc_vert_pulse_filt_us, hotrc_pulse_failsafe_min_us, hotrc_pulse_failsafe_max_us, hotrc_pulse_failsafe_pad_us);
     
-Display screen(tft_cs_pin, tft_dc_pin);
+Display screen;
+TouchScreen ts(touch_cs_pin, touch_irq_pin);
     
 Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
     
@@ -103,6 +105,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         dataset_page = config.getUInt("dpage", PG_RUN);
         dataset_page_last = config.getUInt("dpage", PG_TEMP);
         screen.init();
+        ts.init();
     }
     neostrip.begin();  // start datastream
     neostrip.show();  // Turn off the pixel
@@ -324,7 +327,7 @@ void loop() {
     // if (pot_adc != pot_adc_last) printf ("pot adc:%ld pot%%:%lf filt:%lf\n", pot_adc, pot_percent, pot_filt_percent); 
     
     // Brake position - takes 70 us to read, convert, and filter
-    if (simulating && sim_brkpos && pot_overload == brkpos) brake_pos_filt_in = map (pot_filt_percent, 0.0, 100.0, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
+    if (sim_brkpos && pot_overload == brkpos) brake_pos_filt_in = map (pot_filt_percent, 0.0, 100.0, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
     else if (!(simulating && sim_brkpos)) {
         brake_pos_in = convert_units ((float)analogRead (brake_pos_pin), brake_pos_convert_in_per_adc, brake_pos_convert_invert);
         ema_filt (brake_pos_in, &brake_pos_filt_in, brake_pos_ema_alpha);
@@ -334,7 +337,7 @@ void loop() {
     if (!(simulating && sim_starter)) starter = read_pin (starter_pin);
 
     // Tach - takes 22 us to read when no activity
-    if (simulating && sim_tach && pot_overload == tach) tach_filt_rpm = map (pot_filt_percent, 0.0, 100.0, 0.0, tach_govern_rpm);
+    if (sim_tach && pot_overload == tach) tach_filt_rpm = map (pot_filt_percent, 0.0, 100.0, 0.0, tach_govern_rpm);
     else if (!(simulating && sim_tach)) {
         tach_buf_us = (int32_t)tach_us;  // Copy delta value (in case another interrupt happens during handling)
         tach_us = 0;  // Indicates to isr we processed this value
@@ -348,13 +351,13 @@ void loop() {
         }        
     }
     // Airflow sensor
-    if (simulating && sim_airflow && pot_overload == airflow) airflow_filt_mph = map (pot_filt_percent, 0.0, 100.0, 0.0, airflow_max_mph);
+    if (sim_airflow && pot_overload == airflow) airflow_filt_mph = map (pot_filt_percent, 0.0, 100.0, 0.0, airflow_max_mph);
     else if (airflow_detected && !(simulating && sim_airflow)) {
         airflow_mph = airflow_sensor.readMilesPerHour(); // note, this returns a float from 0-33.55 for the FS3000-1015 
         ema_filt (airflow_mph, &airflow_filt_mph, airflow_ema_alpha);  // Sensor EMA filter
     }
     // Speedo - takes 14 us to read when no activity
-    if (simulating && sim_speedo && pot_overload == speedo) speedo_filt_mph = map (pot_filt_percent, 0.0, 100.0, 0.0, speedo_govern_mph);
+    if (sim_speedo && pot_overload == speedo) speedo_filt_mph = map (pot_filt_percent, 0.0, 100.0, 0.0, speedo_govern_mph);
     else if (!(simulating && sim_speedo)) { 
         speedo_buf_us = (int32_t)speedo_us;  // Copy delta value (in case another interrupt happens during handling)
         speedo_us = 0;  // Indicates to isr we processed this value
@@ -368,7 +371,7 @@ void loop() {
         }
     }
     // Brake pressure - takes 72 us to read
-    if (simulating && pot_overload == pressure) pressure_filt_psi = map (pot_filt_percent, 0.0, 100.0, pressure_min_psi, pressure_max_psi);
+    if (sim_pressure && pot_overload == pressure) pressure_filt_psi = map (pot_filt_percent, 0.0, 100.0, pressure_min_psi, pressure_max_psi);
     else if (!(simulating && sim_pressure)) {
         pressure_adc = analogRead (pressure_pin);
         pressure_psi = convert_units ((float)pressure_adc, pressure_convert_psi_per_adc, pressure_convert_invert, (float)pressure_min_adc);
@@ -434,7 +437,7 @@ void loop() {
 
     // Voltage of vehicle battery
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
-    if (simulating && sim_battery && pot_overload == battery) battery_filt_v = map (pot_filt_percent, 0.0, 100.0, 0.0, battery_max_v);
+    if (sim_battery && pot_overload == battery) battery_filt_v = map (pot_filt_percent, 0.0, 100.0, 0.0, battery_max_v);
 
     if (ctrl == JOY) ignition = ignition_sense;
     else if (ctrl == HOTRC) {
@@ -812,109 +815,8 @@ void loop() {
 
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");  //
         
-    // Touchscreen handling - takes 800 us to handle every 20ms when the touch timer expires, otherwise 20 us (includes touch timer + encoder handling w/o activity)
-    //
-    int32_t touch_x, touch_y, trow, tcol;
-    // if (screen.ts.touched() == 1 ) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
-    if (ts.touched()) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
-        touch_accel = 1 << touch_accel_exponent;  // determine value editing rate
-        // TS_Point touchpoint = screen.ts.getPoint();  // Retreive a point
-        TS_Point touchpoint = ts.getPoint();  // Retreive a point
-        #ifdef CAP_TOUCH
-            touchpoint.x = map (touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);  // Rotate touch coordinates to match tft coordinates
-            touchpoint.y = map (touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);  // Rotate touch coordinates to match tft coordinates
-            touch_y = disp_height_pix-touchpoint.x; // touch point y coordinate in pixels, from origin at top left corner
-            touch_x = touchpoint.y; // touch point x coordinate in pixels, from origin at top left corner
-        #else
-            touch_x = constrain (touchpoint.x, 355, 3968);
-            touch_y = constrain (touchpoint.y, 230, 3930);
-            touch_x = map (touch_x, 355, 3968, 0, disp_width_pix);
-            touch_y = map (touch_y, 230, 3930, 0, disp_height_pix);
-            if (!flip_the_screen) {
-                touch_x = disp_width_pix - touch_x;
-                touch_y = disp_height_pix - touch_y;
-            }
-        #endif
-        // std::cout << "Touch: fs:" << flip_the_screen << " ptx:" << touchpoint.x << ", pty:" << touchpoint.y << ", ptz:" << touchpoint.z << " x:" << touch_x << ", y:" << touch_y << std::endl;
-        // std::cout << "Touch: ptx:" << touchpoint.x << ", pty:" << touchpoint.y << " x:" << touch_x << ", y:" << touch_y << ", z:" << touchpoint.z << std::endl;
-        trow = constrain((touch_y + touch_fudge)/touch_cell_v_pix, 0, 4);  // The -8 seems to be needed or the vertical touch seems off (?)
-        tcol = (touch_x-touch_margin_h_pix)/touch_cell_h_pix;
-        // Take appropriate touchscreen actions depending how we're being touched
-        if (tcol==0 && trow==0 && !touch_now_touched) {
-            if (++dataset_page >= arraysize(pagecard)) dataset_page -= arraysize(pagecard);  // Displayed dataset page can also be changed outside of simulator
-        }
-        else if (tcol==0 && trow==1) {  // Long touch to enter/exit editing mode, if in editing mode, press to change selection of item to edit
-            if (tuning_ctrl == OFF) {
-                selected_value = 0;  // if entering select mode from off mode, select first variable
-                if (touch_longpress_valid && touchHoldTimer.expired()) {
-                    tuning_ctrl = SELECT;
-                    touch_longpress_valid = false;
-                }
-            }
-            else if (tuning_ctrl == EDIT && !touch_now_touched) {
-                tuning_ctrl = SELECT;  // drop back to select mode
-                selected_value++;  // and move to next selection
-            }
-            else if (tuning_ctrl == SELECT) {
-                if (!touch_now_touched) selected_value = (selected_value + 1) % arraysize (dataset_page_names[dataset_page]);
-                    // if (++selected_value >= arraysize (dataset_page_names[dataset_page])) selected_value -= arraysize (dataset_page_names[dataset_page]);
-                else if (touch_longpress_valid && touchHoldTimer.expired()) {
-                    tuning_ctrl = OFF;
-                    touch_longpress_valid = false;
-                }
-            }
-        }
-        else if (tcol==0 && trow==2) {  // Pressed the increase value button, for real time tuning of variables
-            if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change value yet
-            else if (tuning_ctrl == EDIT) sim_edit_delta_touch = touch_accel;  // If in edit mode, increase value
-        }
-        else if (tcol==0 && trow==3) {  // Pressed the decrease value button, for real time tuning of variables
-            if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change value yet
-            else if (tuning_ctrl == EDIT) sim_edit_delta_touch = -touch_accel;  // If in edit mode, decrease value
-        }
-        else if (tcol==0 && trow==4) {  // && trow == 0 . Pressed the simulation mode toggle. Needs long press
-            if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
-                simulating = !simulating;
-                touch_longpress_valid = false;
-            }
-        }
-        else if (simulating) {
-            if (tcol==2 && trow==0 && (runmode == CAL || (runmode == SHUTDOWN && shutdown_complete))) {
-                if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
-                    calmode_request = true;
-                    touch_longpress_valid = false;
-                }  // Pressed the basic mode toggle button. Toggle value, only once per touch
-            }
-            else if (tcol==3 && trow==0 && sim_basicsw && !touch_now_touched) basicmodesw = !basicmodesw;  // Pressed the basic mode toggle button. Toggle value, only once per touch
-            else if (tcol==3 && trow==1 && sim_pressure) adj_val (&pressure_filt_psi, (float)touch_accel, pressure_min_psi, pressure_max_psi);   // (+= 25) Pressed the increase brake pressure button
-            else if (tcol==3 && trow==2 && sim_pressure) adj_val (&pressure_filt_psi, (float)(-touch_accel), pressure_min_psi, pressure_max_psi); // (-= 25) Pressed the decrease brake pressure button
-            else if (tcol==3 && trow==4 && sim_joy) adj_val (&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (-= 25) Pressed the joystick left button
-            else if (tcol==4 && trow==0 && sim_ignition && !touch_now_touched) ignition = !ignition; // Pressed the ignition switch toggle button. Toggle value, only once per touch
-            else if (tcol==4 && trow==1 && sim_tach) adj_val (&tach_filt_rpm, (float)touch_accel, 0.0, tach_redline_rpm);  // (+= 25) Pressed the increase engine rpm button
-            else if (tcol==4 && trow==2 && sim_tach) adj_val (&tach_filt_rpm, (float)(-touch_accel), 0.0, tach_redline_rpm);  // (-= 25) Pressed the decrease engine rpm button
-            else if (tcol==4 && trow==3 && sim_joy) adj_val (&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (+= 25) Pressed the joystick up button
-            else if (tcol==4 && trow==4 && sim_joy) adj_val (&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);  // (-= 25) Pressed the joystick down button
-            else if (tcol==5 && trow==0 && sim_syspower) {  // You need to enable syspower simulation, be in sim mode and then long-press the syspower button to toggle it. (Hard to do by accident)/
-                if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
-                    syspower = !syspower;
-                    touch_longpress_valid = false;
-                }
-            }
-            else if (tcol==5 && trow==1 && sim_speedo) adj_val (&speedo_filt_mph, 0.005*(float)touch_accel, 0.0, speedo_redline_mph);  // (+= 50) // Pressed the increase vehicle speed button
-            else if (tcol==5 && trow==2 && sim_speedo) adj_val (&speedo_filt_mph, -0.005*(float)touch_accel, 0.0, speedo_redline_mph);  // (-= 50) Pressed the decrease vehicle speed button
-            else if (tcol==5 && trow==4 && sim_joy) adj_val (&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);  // (+= 25) Pressed the joystick right button                           
-        }
-        if (touch_accel_exponent < touch_accel_exponent_max && (touchHoldTimer.elapsed() > (touch_accel_exponent + 1) * touchAccelTimer.get_timeout())) touch_accel_exponent++; // If timer is > the shift time * exponent, and not already maxed, float the edit speed by incrementing the exponent
-        touch_now_touched = true;
-    }  // (if screen.ts reads a touch)
-    else {  // If not being touched, put momentarily-set simulated button values back to default values
-        if (simulating && sim_cruisesw) cruise_sw = false;  // // Makes this button effectively momentary
-        sim_edit_delta_touch = 0;  // Stop changing value
-        touch_now_touched = false;  // remember last touch state
-        touch_accel_exponent = 0;
-        touchHoldTimer.reset();
-        touch_longpress_valid = true;
-    }
+    ts.handleTouch(); // Handle touch events and actions
+    ts.printTouchInfo(); 
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tch");  //
 
     // Encoder handling
