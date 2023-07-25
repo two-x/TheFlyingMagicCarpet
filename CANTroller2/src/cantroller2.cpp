@@ -24,8 +24,14 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names
 HotrcManager hotrcHorzManager (22);
 HotrcManager hotrcVertManager (22);
 //Hotrc hotrc (&hotrc_vert_pulse_filt_us, hotrc_pulse_failsafe_min_us, hotrc_pulse_failsafe_max_us, hotrc_pulse_failsafe_pad_us);
-    
-Display screen;
+
+
+#ifdef USE_TFT_DISPLAY_DRIVER
+    Display screen; // TFT-eSPI video driver
+#else    
+    Display screen(tft_cs_pin, tft_dc_pin); // Adafruit video driver
+#endif
+
 TouchScreen ts(touch_cs_pin, touch_irq_pin);
     
 Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
