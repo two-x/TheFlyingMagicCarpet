@@ -191,9 +191,6 @@ float convert_units (float from_units, float convert_factor, bool invert, float 
     HardwareSerial jagPort(1);  // Open serisl port to communicate with jaguar controllers for steering & brake motors
 #endif
 
-// int32_t rm_old;
-// bool st_old, ign_old, flyreq_old, startreq_old;
-
 // run state machine related
 enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL };
 int32_t runmode = SHUTDOWN;
@@ -791,7 +788,7 @@ long temp_peef (void) {  // Peef's algorithm somewhat modified by Soren
         tempTimer.set (temp_times_us[temp_state]);
         temp_state = READ;
     }
-    return 9930;  // Otherwise just return the temperature of the surface of the sun
+    return 9930;  // Otherwise just return the sun's surface temperature
 }
 
 void temp_soren (void) {

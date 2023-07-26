@@ -336,17 +336,6 @@ void loop() {
     
     // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     //
-
-    // if (runmode != rm_old) printf ("rm:%ld %ld ", rm_old, runmode);
-    // if (starter != st_old) printf ("st:%d ", starter);
-    // if (ignition != ign_old) printf ("ign:%d ", ignition);
-    // if (flycruise_toggle_request != flyreq_old) printf ("flyreq:%d ", flycruise_toggle_request);
-    // if (remote_start_toggle_request != startreq_old) printf ("startreq:%d ", remote_start_toggle_request);
-    // rm_old = runmode;
-    // st_old = starter;
-    // ign_old = ignition;
-    // flyreq_old = flycruise_toggle_request;
-    // startreq_old = remote_start_toggle_request;
     
     if (runmode == BASIC) {  // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         if (we_just_switched_modes) {  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
