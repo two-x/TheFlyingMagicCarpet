@@ -9,7 +9,7 @@
 #include "display.h"
 #include "uictrl.h"
 #include "TouchScreen.h"
-#include "RunModeManager.h"
+#include "tasks.h"
 using namespace std;
 
 std::vector<string> loop_names(20);
@@ -26,7 +26,7 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names
 HotrcManager hotrcHorzManager (6);
 HotrcManager hotrcVertManager (6);
 // Declare runModeManger as global
-RunModeManager runModeManager;
+
 
 Display screen;
 
@@ -168,7 +168,17 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     hotrcPanicTimer.reset();
     loopTimer.reset();  // start timer to measure the first loop
     booted = true;
-    printf ("Setup done\n");
+
+    // Create tasks
+    // xTaskCreate(inputTask, "Input", 128, NULL, 1, &inputTaskHandle);
+    // xTaskCreate(controlTask, "Control", 128, NULL, 1, &controlTaskHandle);
+    // xTaskCreate(outputTask, "Output", 128, NULL, 1, &outputTaskHandle);
+    xTaskCreate(modeControlTask, "ModeControl", 128, NULL, 1, &modeControlTaskHandle);
+    // xTaskCreate(displayTask, "Display", 128, NULL, 1, &displayTaskHandle);
+    
+    // Start scheduler
+    vTaskStartScheduler();  
+    Serial.println (F("Setup done"));
 }
 
 void loop() {
@@ -201,14 +211,6 @@ void loop() {
     }
     // printf ("it:%d ac:%ld lst:%d ta:%d sc:%d el:%ld\n", boot_button, boot_button_action, boot_button_last, boot_button_timer_active, boot_button_suppress_click, dispResetButtonTimer.elapsed());
     
-    // External digital signals - takes 11 us to read
-    if (!(simulating && sim_basicsw)) basicmodesw = !digitalRead (basicmodesw_pin);   // 1-value because electrical signal is active low
-    // if (ctrl == JOY && (!simulating || !sim_cruisesw)) cruise_sw = digitalRead (joy_cruise_btn_pin);
-
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
-
-    if (take_temperatures) temp_soren();
-    if (sim_coolant && pot_overload == coolant) temps_f[ENGINE] = map (pot_filt_percent, 0.0, 100.0, temp_sensor_min_f, temp_sensor_max_f);
     
     encoder.update();  // Read encoder input signals
 
@@ -366,7 +368,7 @@ void loop() {
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "joy");  //
     
     // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
-    runmode = runModeManager.handle_runmode();
+    // runmode = runModeManager.handle_runmode();
 
     // cout << "rm:" << runmode << " om:" << oldmode << "vert:" << ctrl_pos_adc[VERT][FILT] << " up?" << (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) << " jc?" << joy_centered << "\n";
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "mod");  //
