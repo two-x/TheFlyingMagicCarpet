@@ -391,22 +391,19 @@ void loop() {
     // Read horz and vert inputs, determine steering pwm output -  - takes 40 us to read. Then, takes 13 us to handle
     if (ctrl != JOY) {
         if (hotrc_source == ESP_RMT) {  // Read RMT pulse widths
-            hotrc_vert_pulse_us = (int32_t)hotrc_vert.readPulseWidth();
             hotrc_horz_pulse_us = (int32_t)hotrc_horz.readPulseWidth();  
+            hotrc_vert_pulse_us = (int32_t)hotrc_vert.readPulseWidth();
         }
         else {
             hotrc_horz_pulse_us = hotrcHorzManager.spike_filter ((int32_t)hotrc_horz_pulse_64_us);
-            hotrc_vert_pulse_us = hotrcHorzManager.spike_filter ((int32_t)hotrc_vert_pulse_64_us);
+            hotrc_vert_pulse_us = hotrcVertManager.spike_filter ((int32_t)hotrc_vert_pulse_64_us);
         }
-        // if (boot_button) printf ("hrc H:%4ld V:%4ld", hotrc_horz_pulse_us, hotrc_vert_pulse_us);
-        // if (boot_button) printf ("\n");
+        ema_filt (hotrc_vert_pulse_us, &hotrc_vert_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Used to detect loss of radio
+        // if (boot_button) printf ("hrc H:%4ld V:%4ld\n", hotrc_horz_pulse_us, hotrc_vert_pulse_us);
+        // ema_filt (hotrc_horz_pulse_us, &hotrc_horz_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Just here for debugging. Do not need filtered horz value
+        // if (boot_button) printf (" | ema H:%4ld V:%4ld", hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us);
     }
     if (!(simulating && sim_joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
-        if (ctrl != JOY) {
-            // ema_filt (hotrc_horz_pulse_us, &hotrc_horz_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Just here for debugging. Do not need filtered horz value
-            ema_filt (hotrc_vert_pulse_us, &hotrc_vert_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Used to detect loss of radio
-            // if (boot_button) printf (" | ema H:%4ld V:%4ld", hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us);
-        }
         if (ctrl == HOTRC) {
             if (hotrc_horz_pulse_us >= hotrc_pulse_lims_us[HORZ][CENT])  // Steering: Convert from pulse us to joystick adc equivalent, when pushing right, else pushing left
                  ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MAX]);
@@ -444,7 +441,7 @@ void loop() {
     else if (ctrl == HOTRC) {
         hotrc_ch3_update();
         hotrc_ch4_update();
-        if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition
+        if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
             if (hotrc_suppress_next_ch3_event) hotrc_suppress_next_ch3_event = false;
             else ignition = !ignition;
             hotrc_ch3_sw_event = false;
@@ -668,12 +665,11 @@ void loop() {
     else if (runmode != CAL && (panic_stop || !ignition)) runmode = SHUTDOWN;
     else if (runmode != CAL && (starter || engine_stopped())) runmode = STALL;  // otherwise if engine not running --> Stall Mode
 
-    if (runmode != oldmode) {  // runmode should not be changed after this point in loop
+    we_just_switched_modes = (runmode != oldmode);  // runmode should not be changed after this point in loop
+    if (we_just_switched_modes) {
         disp_runmode_dirty = true;
-        we_just_switched_modes = true;
         syspower = HIGH;
     }
-    
     // cout << "rm:" << runmode << " om:" << oldmode << "vert:" << ctrl_pos_adc[VERT][FILT] << " up?" << (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) << " jc?" << joy_centered << "\n";
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "mod");  //
 
@@ -698,8 +694,7 @@ void loop() {
         #else
             // Send command over serial port
         #endif
-
-        if (boot_button) printf ("JoyH:%4ld, safadj:%4.0lf out:%4.0lf puls:%4.0lf\n", ctrl_pos_adc[HORZ][FILT], steer_safe_adj_percent, steer_out_percent, steer_pulse_out_us);
+        // if (boot_button) printf ("JoyH:%4ld, safadj:%4.0lf out:%4.0lf puls:%4.0lf\n", ctrl_pos_adc[HORZ][FILT], steer_safe_adj_percent, steer_out_percent, steer_pulse_out_us);
     }
     // Brakes - Determine motor output and write it to motor
     if (brakePidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
@@ -732,17 +727,12 @@ void loop() {
             #else
                 // Send command over serial port
             #endif
-            
             // if (boot_button) printf ("JoyH:%4ld, safadj:%4.0lf out:%4.0lf puls:%4.0lf", ctrl_pos_adc[HORZ][FILT], steer_safe_adj_percent, steer_out_percent, steer_pulse_out_us);
-
             // if (boot_button) printf (" Brk:%4ld", (int32_t)brake_pulse_out_us);
         }
     }
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
-    if (runmode == CRUISE && !cruise_adjusting && cruisePidTimer.expired()) {
-        cruisePidTimer.reset();
-        cruiseQPID.Compute();  // Cruise mode is simpler because it doesn't have to deal with an actuator. It's output is simply the target value for the gas PID
-    }
+    if (runmode == CRUISE && !cruise_adjusting && cruisePidTimer.expireset()) cruiseQPID.Compute();  // Cruise mode is simpler because it doesn't have to deal with an actuator. It's output is simply the target value for the gas PID
     // Gas - Update servo output. Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
     if (gasPidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
         if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
@@ -813,7 +803,7 @@ void loop() {
         
     ts.handleTouch(); // Handle touch events and actions
     // ts.printTouchInfo(); 
-    
+
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tch");  //
 
     // Encoder handling
@@ -990,25 +980,17 @@ void loop() {
                 neobright_last = neo_brightness;
             }
         }
-        else if (neoTimer.expired()) {  // Rainbow fade
-            neoTimer.reset();
+        else if (neoTimer.expireset()) {  // Rainbow fade
             neostrip.setPixelColor (0, colorwheel(++neo_wheelcounter));
             neostrip.show();
         }
     }
-    // else if (heartbeat_led_pin >= 0) {  // Just make a heartbeat on the native board led
-    //     heartbeat_pulse = !heartbeat_pulse;
-    //     if (++heartbeat_state >= arraysize (heartbeat_ekg_us)) heartbeat_state -= arraysize (heartbeat_ekg_us);
-    //     heartbeatTimer.set (heartbeat_ekg_us[heartbeat_state]);
-    //     write_pin (heartbeat_led_pin, heartbeat_pulse);
-    // }
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "hrt");
     
     // Display updates
     if (display_enabled) screen.update();
     else if (dataset_page_last != dataset_page) config.putUInt ("dpage", dataset_page);
     
-    if (oldmode == runmode) we_just_switched_modes = false;
     oldmode = runmode;  // remember what mode we're in for next time
     dataset_page_last = dataset_page;
     selected_value_last = selected_value;

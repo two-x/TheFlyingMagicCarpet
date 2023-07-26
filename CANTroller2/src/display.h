@@ -712,7 +712,7 @@ class Display {
                     draw_dynamic(11, brakeQPID.GetPterm(), -drange, drange);
                     draw_dynamic(12, brakeQPID.GetIterm(), -drange, drange);
                     draw_dynamic(13, brakeQPID.GetDterm(), -drange, drange);
-                    draw_dynamic(14, brakeQPID.GetOutputSum(), (float)brake_pulse_retract_us, (float)brake_pulse_extend_us);  // brake_spid_speedo_delta_adc, -range, range);
+                    draw_dynamic(14, brakeQPID.GetOutputSum(), -brakeQPID.GetOutputRange(), brakeQPID.GetOutputRange());  // brake_spid_speedo_delta_adc, -range, range);
                     draw_eraseval(15);
                     draw_eraseval(16);
                     draw_dynamic(17, brakeQPID.GetKp(), 0.0, 2.0);
@@ -726,7 +726,7 @@ class Display {
                     draw_dynamic(11, gasQPID.GetPterm(), -drange, drange);
                     draw_dynamic(12, gasQPID.GetIterm(), -drange, drange);
                     draw_dynamic(13, gasQPID.GetDterm(), -drange, drange);
-                    draw_dynamic(14, gasQPID.GetOutputSum(), (float)gas_pulse_idle_us, (float)gas_pulse_govern_us);
+                    draw_dynamic(14, gasQPID.GetOutputSum(), -gasQPID.GetOutputRange(), gasQPID.GetOutputRange());
                     draw_eraseval(15);
                     draw_truth(16, gas_open_loop, 1);
                     draw_dynamic(17, gasQPID.GetKp(), 0.0, 2.0);
@@ -740,7 +740,7 @@ class Display {
                     draw_dynamic(11, cruiseQPID.GetPterm(), -drange, drange);
                     draw_dynamic(12, cruiseQPID.GetIterm(), -drange, drange);
                     draw_dynamic(13, cruiseQPID.GetDterm(), -drange, drange);
-                    draw_dynamic(14, cruiseQPID.GetOutputSum(), tach_idle_rpm, tach_govern_rpm);  // cruise_spid_speedo_delta_adc, -drange, drange);
+                    draw_dynamic(14, cruiseQPID.GetOutputSum(), -cruiseQPID.GetOutputRange(), cruiseQPID.GetOutputRange());  // cruise_spid_speedo_delta_adc, -drange, drange);
                     draw_dynamic(15, tach_target_rpm, 0.0, tach_redline_rpm);
                     draw_eraseval(16);
                     draw_dynamic(17, cruiseQPID.GetKp(), 0.0, 2.0);
