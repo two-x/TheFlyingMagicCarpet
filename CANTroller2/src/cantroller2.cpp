@@ -1,4 +1,5 @@
-// Carpet CANTroller II  Source Code  - For Arduino Due with Adafruit 2.8inch Captouch TFT shield.
+// Carpet CANTroller II  Source Code  - For ESP32-S3-DevKitC-1-N8
+
 #include <SPI.h>  // SPI serial bus needed to talk to the LCD and the SD card
 #include <Adafruit_SleepyDog.h>  // Watchdog
 #include <vector>
@@ -22,84 +23,62 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names
 }
 
 HotrcManager hotrcHorzManager (22);
-HotrcManager hotrcVertManager (22);
-//Hotrc hotrc (&hotrc_vert_pulse_filt_us, hotrc_pulse_failsafe_min_us, hotrc_pulse_failsafe_max_us, hotrc_pulse_failsafe_pad_us);
-    
+HotrcManager hotrcVertManager (22);    
 Display screen;
 TouchScreen ts(touch_cs_pin, touch_irq_pin);
-    
 Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
     
 void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (tft_dc_pin, OUTPUT);
     set_pin (gas_pwm_pin, OUTPUT);
-    // set_pin (ignition_pin, OUTPUT);  // drives relay to turn on/off car. Active high
     set_pin (basicmodesw_pin, INPUT_PULLUP);
     set_pin (tach_pulse_pin, INPUT_PULLUP);
     set_pin (speedo_pulse_pin, INPUT_PULLUP);
     set_pin (pressure_pin, INPUT);
     set_pin (brake_pos_pin, INPUT);
-    set_pin (ign_batt_pin, INPUT);
     set_pin (neopixel_pin, OUTPUT);
     set_pin (sdcard_cs_pin, OUTPUT);
     set_pin (tft_cs_pin, OUTPUT);
     set_pin (pot_wipe_pin, INPUT);
     set_pin (button_pin, INPUT_PULLUP);
     set_pin (starter_pin, INPUT_PULLDOWN);
-
     set_pin (joy_horz_pin, INPUT);
     set_pin (joy_vert_pin, INPUT);
-    
     set_pin (touch_irq_pin, INPUT_PULLUP);
-    set_pin (tft_rst_pin, OUTPUT);
-
-
-    write_pin (tft_cs_pin, HIGH);   // Prevent bus contention
-    write_pin (sdcard_cs_pin, HIGH);   // Prevent bus contention
-    write_pin (tft_dc_pin, LOW);
-    write_pin (tft_rst_pin, HIGH);
-
-    // This bit is here as a way of autdetecting the controller type. It starts HEADLESS. If HIGH is read here then JOY,
-    // otherwise the pulldown R in the divider will enable HOTRC once radio is detected.
-    set_pin (ign_batt_pin, INPUT);  
-    // Temporarily use this pin to read a pullup/down resistor to detect controller type
-    // ctrl = (read_pin (ignition_pin) ? JOY : HOTRC);  // HEADLESS
-    // if (ctrl == HEADLESS) set_pin (ignition_pin, OUTPUT);  // Then set the put as an output as normal.
-    // if (ctrl == HOTRC) { set_pin (ignition_pin, OUTPUT);  // Then set the put as an output as normal.
-    // write_pin (ignition_pin, LOW); } // Initialize to ignition off
+    set_pin (ign_batt_pin, INPUT);
     set_pin (ign_out_pin, OUTPUT);
-    write_pin (ign_out_pin, LOW);
-    
-    // This bit is here as a way of autdetecting soren's breadboard, since his LCD is wired upside-down.
-    // Soren put a strong external pulldown on the pin, so it'll read low for autodetection. 
-    
-    // Disabling automatic screen flip detection due to it makes Anders board crash
-    // set_pin (syspower_pin, INPUT);  // Temporarily use this pin to read a pullup/down resistor to configure screen flip
-    // flip_the_screen = !(read_pin (syspower_pin));  // Will cause the LCD to be upside down
-    
     set_pin (syspower_pin, OUTPUT);  // Then set the put as an output as normal.
-    write_pin (syspower_pin, syspower);
-
     #ifdef pwm_jaguars
         set_pin (brake_pwm_pin, OUTPUT);
         set_pin (steer_pwm_pin, OUTPUT);
     #else
         // Init serial port uart 1
     #endif
-
     analogReadResolution (adcbits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
-    Serial.begin (115200);  // Open serial port
-    delay (800);  //  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
-    // printf("Serial port open\n");  // This works on Due but not ESP32
+
+    write_pin (tft_cs_pin, HIGH);   // Prevent bus contention
+    write_pin (sdcard_cs_pin, HIGH);   // Prevent bus contention
+    write_pin (tft_dc_pin, LOW);
+    write_pin (ign_out_pin, LOW);
+    write_pin (syspower_pin, syspower);
+
+    // Calculate some derived variables
+    calc_ctrl_lims();
+    calc_governor();
+    for (int32_t x=0; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
+
+    Serial.begin (115200);  // Open console serial port
+    delay (800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
+    printf ("Console started..\n");
     
     // Set up 4 RMT receivers, one per channel
+    printf ("Init rmt for hotrc..\n");
     hotrc_vert.init();
     hotrc_horz.init();
     hotrc_ch3.init();
     hotrc_ch4.init();
-
-    for (int32_t x=0; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
     
+    printf ("Init display..\n");
     if (display_enabled) {
         config.begin("FlyByWire", false);
         dataset_page = config.getUInt("dpage", PG_RUN);
@@ -107,177 +86,68 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         screen.init();
         ts.init();
     }
-    neostrip.begin();  // start datastream
-    neostrip.show();  // Turn off the pixel
-    neostrip.setBrightness (neo_brightness_max);  // It truly is incredibly bright
-    // 230417 removing sdcard init b/c boot is hanging here unless I insert this one precious SD card
-    // Serial.print(F("Initializing filesystem...  "));  // SD card is pretty straightforward, a single call. 
-    // if (! sd.begin(usd_cs_pin, SD_SCK_MHZ(25))) {   // ESP32 requires 25 mhz limit
-    //     Serial.println(F("SD begin() failed"));
-    //     for(;;); // Fatal error, do not continue
-    // }
-    // sd_init();
-    // Serial.println(F("Filesystem started"));
 
+    printf ("Encoder setup..\n");
     encoder.setup();
 
-    // Configure MCPWM GPIOs
-    //
-    // The four channel inputs can be connected to any available GPIO pins on the ESP32, but the specific MCPWM unit and
-    // output channels are used to configure the MCPWM GPIOs and input capture. Here's the mapping used in the code:
-    // INPUT_PIN_1 is connected to MCPWM0A (MCPWM unit 0, output channel A).
-    // INPUT_PIN_2 is connected to MCPWM1A (MCPWM unit 0, output channel B).
-    // INPUT_PIN_3 is connected to MCPWM2A (MCPWM unit 0, output channel C).
-    // INPUT_PIN_4 is connected to MCPWM3A (MCPWM unit 0, output channel D).
-    // You can change these mappings according to your specific pin assignments. Ensure that the MCPWM GPIOs you select are compatible with input capture functionality.
-    // Attempt to use MCPWM input capture pulse width timer unit to get precise hotrc readings
-    // https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/peripherals/mcpwm.html#capture
-    // https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/kconfig.html#mcpwm-configuration
-    // https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/kconfig.html#mcpwm-configuration
-    // // Configure MCPWM GPIOs
-    // mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, hotrc_ch1_horz_pin);
-    // mcpwm_gpio_init(MCPWM_UNIT_1, MCPWM0A, hotrc_ch2_vert_pin);
-    // // Configure MCPWM units 0 and 1
-    // mcpwm_config_t pwm_config;
-    // pwm_config.frequency = 0;  // Set frequency to 0 for input mode
-    // pwm_config.cmpr_a = 0;  // Set duty cycle to 0 for input mode
-    // pwm_config.counter_mode = MCPWM_UP_COUNTER;
-    // pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
-    // mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);
-    // mcpwm_init(MCPWM_UNIT_1, MCPWM_TIMER_0, &pwm_config);
-    // // mcpwm_capture_enable(MCPWM_UNIT_0, MCPWM_SELECT_CAP0, MCPWM_POS_EDGE, 0);
-    // // mcpwm_capture_enable(MCPWM_UNIT_1, MCPWM_SELECT_CAP0, MCPWM_POS_EDGE, 0);
-    // // mcpwm_capture_set_cb(MCPWM_UNIT_0, MCPWM_SELECT_CAP0, hotrc_ch1_isr, NULL);
-    // // mcpwm_capture_set_cb(MCPWM_UNIT_1, MCPWM_SELECT_CAP0, hotrc_ch2_isr, NULL);
-    // Ch3 and Ch4 interrupts work with slower timers
-    // attachInterrupt (digitalPinToInterrupt(hotrc_ch3_ign_pin), hotrc_ch3_isr, CHANGE);
-    // attachInterrupt (digitalPinToInterrupt(hotrc_ch4_cruise_pin), hotrc_ch4_isr, FALLING);
-
     // Set up our interrupts
+    printf ("Attach interrupts..\n");
     attachInterrupt (digitalPinToInterrupt(tach_pulse_pin), tach_isr, RISING);
     attachInterrupt (digitalPinToInterrupt(speedo_pulse_pin), speedo_isr, RISING);
-    
-    if (ctrl == HOTRC) {
-        
-        // hotrc_vert_timer = timerBegin(1, 80, true); // Use timer 0 for the pulse measurement
-        // timerAttachInterrupt(hotrc_vert_timer, &hotrc_vert_isr, true);
-        // timerAlarmWrite(hotrc_vert_timer, 0xFFFFFFFF, true); // Set a large initial alarm value
-        // timerRestart(hotrc_vert_timer);
-        // timerInputCaptureSingle(hotrc_vert_timer, hotrc_ch2_vert_pin, FALLING); // Capture on falling edge
-        
-        // ledcAttachPin(hotrc_ch2_vert_pin, 1); // Use LEDC channel 0 for input capture
-        // ledcSetup(1, 1, 1); // Use LEDC channel 0 with a resolution of 1 bit
-        // ledcAttachPinTone(hotrc_ch2_vert_pin, 1); // Capture on falling edge
 
-        // attachInterrupt (digitalPinToInterrupt (hotrc_ch3_ign_pin), hotrc_ch3_isr, FALLING);
-        // attachInterrupt (digitalPinToInterrupt (hotrc_ch4_cruise_pin), hotrc_ch4_isr, CHANGE);
-    }
-    Serial.println (F("Interrupts set up and enabled\n"));
-
-    calc_ctrl_lims();
-    calc_governor();
-
+    printf ("Attach servos..\n");
     // Servo() argument 2 is channel (0-15) of the esp timer (?). set to Servo::CHANNEL_NOT_ATTACHED to auto grab a channel
-    
-    printf ("Attaching servos ...");
     gas_servo.attach (gas_pwm_pin, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     steer_servo.attach (steer_pwm_pin, steer_pulse_right_us, steer_pulse_left_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
     brake_servo.attach (brake_pwm_pin, brake_pulse_retract_us, brake_pulse_extend_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
-
-    printf ("done\nInit neopixel ...");
     
+    printf ("Init neopixel..");
     neo_heartbeat = (neopixel_pin >= 0);
-    neostrip.begin();
-    neostrip.show(); // Initialize all pixels to 'off'
-    neostrip.setBrightness (neo_brightness_max);
-    printf ("done\n");
-
+    neostrip.begin();  // start datastream
+    neostrip.show();  // Turn off the pixel
+    neostrip.setBrightness (neo_brightness_max);  // It truly is incredibly bright
+    
+    printf ("Init i2c..");
     i2c_init (i2c_sda_pin, i2c_scl_pin);
     // printf ("done\n");
-
     for (int32_t i=0; i<i2c_devicecount; i++) if (i2c_addrs[i] == 0x28) airflow_detected = true;
-    printf ("Airflow sensor is ... %sDetected\n", (airflow_detected) ? "" : "Not ");
-
+    printf ("Airflow sensor.. %sdetected. sensor is", (airflow_detected) ? "" : "not ");
     if (airflow_detected) {
-        if (airflow_sensor.begin() == false) {  // Begin communication with air flow sensor) over I2C
-            Serial.println("The sensor did not respond. Please check wiring.");
-            while(1); //Freeze
-        }
+        if (airflow_sensor.begin() == false) printf (" not");  // Begin communication with air flow sensor) over I2C 
         airflow_sensor.setRange(AIRFLOW_RANGE_15_MPS);
-        Serial.println("Sensor is connected properly.");
+        printf (" responding properly\n");
     }
-  
-    // Peef setup
-    // onewire.reset();
-    // onewire.write(0xCC);        // All Devices present - Skip ROM ID
-    // onewire.write(0x44);        // start conversion, with parasite power on at the end
+
+    printf ("Temp sensors..");
     tempsensebus.setWaitForConversion (false);  // Whether to block during conversion process
     tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
     tempsensebus.begin();
     temp_detected_device_ct = tempsensebus.getDeviceCount();
-    printf ("Temp sensors: Detected %d devices.\nParasitic power is: ", temp_detected_device_ct);  // , DEC);
-    printf ((tempsensebus.isParasitePowerMode()) ? "On\n" : "Off\n");
-    // for (int32_t x = 0; x < arraysize(temp_addrs); x++) {
+    printf (" detected %d devices, parasitic power is %s\n", temp_detected_device_ct, (tempsensebus.isParasitePowerMode()) ? "on" : "off");  // , DEC);
     int32_t temp_unknown_index = 0;
-    for (int32_t index = 0; index < temp_detected_device_ct; index++) {
+    for (int32_t index = 0; index < temp_detected_device_ct; index++) {  // for (int32_t x = 0; x < arraysize(temp_addrs); x++) {
         if (tempsensebus.getAddress (temp_temp_addr, index)) {
             for (int8_t addrbyte = 0; addrbyte < arraysize(temp_temp_addr); addrbyte++) {
                 temp_addrs[index][addrbyte] = temp_temp_addr[addrbyte];
             }
             tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
-            printf ("Found sensor device: index %d, addr 0x%x\n", index, temp_temp_addr);  // temp_addrs[x]
+            printf ("  found sensor #%d, addr 0x%x\n", index, temp_temp_addr);  // temp_addrs[x]
         }
-        else printf ("Found ghost device : index %d, addr unknown\n", index);  // printAddress (temp_addrs[x]);
-    }
-    // Assign purpose to the detected device addresses based on whether we recognize them
-    
-    // we_are_live =
-
-    // xTaskCreatePinnedToCore ( codeForTask1, "Task_1", 1000, NULL, 1, &Task1, 0);
-    // if (ctrl == HOTRC) {  // Look for evidence of a normal (not failsafe) hotrc signal. If it's not yet powered on, we will ignore its spurious poweron ignition event
-    //     int32_t temp = hotrc_vert_pulse_us;
-    //     hotrc_radio_detected = ((ctrl_lims_adc[HOTRC][VERT][MIN] <= temp && temp < hotrc_pos_failsafe_min_us) || (hotrc_pos_failsafe_max_us < temp && temp <= ctrl_lims_adc[HOTRC][VERT][MAX]));
-    //     for (int32_t x = 0; x < 4; x++) {
-    //         delay (20);
-    //         if (!((ctrl_lims_adc[HOTRC][VERT][MIN] < temp && temp < hotrc_pos_failsafe_min_us) || (hotrc_pos_failsafe_max_us < temp && temp < ctrl_lims_adc[HOTRC][VERT][MAX]))
-    //             || (hotrcPulseTimer.elapsed() > (int32_t)(hotrc_pulse_period_us*2.5))) hotrc_radio_detected = false;
-    //     }
-    //     printf ("HotRC radio signal: %setected\n", (!hotrc_radio_detected) ? "Not d" : "D");
-    // }
-    
-    // pressure.set_convert ( 1000.0 * 3.3 / (adcrange_adc * (4.5 - 0.55)), 0.0, false);
-    // pressure.set_names ("pressure", "adc ", "psi ");
-    // pressure.set_limits (129.0, 452.0);
+        else printf ("  ghost device #%d, addr unknown\n", index);  // printAddress (temp_addrs[x]);
+    }  // Need algorithm to recognize addresses of detected devices in known vehicle locations
     
     int32_t watchdog_time_ms = Watchdog.enable(2500);  // Start 2.5 sec watchdog
-    printf ("Watchdog enabled. Timer set to %ld ms.\n", watchdog_time_ms);
+    printf ("Enable watchdog.. timer set to %ld ms\n", watchdog_time_ms);
     hotrcPanicTimer.reset();
     loopTimer.reset();  // start timer to measure the first loop
     booted = true;
-    Serial.println (F("Setup done"));
+    printf ("Setup done\n");
 }
 
-// void init (void) {     
-// }
-
-// Main loop.  Each time through we do these eight steps:
-//
-// 0) Beginning-of-the-loop nonsense
-// 1) Gather new telemetry and filter the signals
-// 2) Check if our current runmode has been overridden by certain specific conditions
-// 3) Read joystick horizontal and determine new steering setpoint
-// 4) Do actions based on which runmode we are in (including gas & brake setpoint), and possibly change runmode 
-// 5) Step the PID loops and update the actuation outputs
-// 6) Service the user interface
-// 7) Log to SD card
-// 8) Do the control loop bookkeeping at the end of each loop
-//   
 void loop() {
     loopindex = 0;  // reset at top of loop
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "top");
     // cout << "(top)) spd:" << speedo_filt_mph << " tach:" << tach_filt_rpm;
-
-    // if (!booted) init();  // Initialize - If this is our first loop, initialize everything
 
     // Update inputs.  Fresh sensor data, and filtering.
     //
@@ -297,12 +167,11 @@ void loop() {
     }
     else {  // if button is not being pressed
         if (boot_button && !boot_button_suppress_click) boot_button_action = SHORT;  // if the button was just released, a short press occurred, which must be handled
-        // else boot_button_action = NONE;  // This auto-resets the button action flag, but any button action handling needs to happen in this same loop or event will be lost
+        // else boot_button_action = NONE;  // This would auto-reset the button action flag but require it get handled in this loop. Otherwise the handler must set this
         boot_button_timer_active = false;  // Clear timer active flag
         boot_button = false;  // Store press is not in effect
         boot_button_suppress_click = false;  // End click suppression
     }
-    // if (boot_button_action != NONE) 
     // printf ("it:%d ac:%ld lst:%d ta:%d sc:%d el:%ld\n", boot_button, boot_button_action, boot_button_last, boot_button_timer_active, boot_button_suppress_click, dispResetButtonTimer.elapsed());
     
     // External digital signals - takes 11 us to read
@@ -463,12 +332,21 @@ void loop() {
         // hotrc_suppress_next_ch3_event = true;  // reject spurious ch3 switch event upon next hotrc poweron
         // hotrc_suppress_next_ch4_event = true;  // reject spurious ch4 switch event upon next hotrc poweron
     }
-
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "joy");  //
     
     // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     //
-    // printf("mode: %d, panic: %d, vpos: %4ld, min: %4ld, max: %4ld, elaps: %6ld", runmode, panic_stop, ctrl_pos_adc[VERT][FILT], hotrc_pos_failsafe_min_us, hotrc_pos_failsafe_max_us, hotrcPanicTimer.elapsed());
+
+    // if (runmode != rm_old) printf ("rm:%ld %ld ", rm_old, runmode);
+    // if (starter != st_old) printf ("st:%d ", starter);
+    // if (ignition != ign_old) printf ("ign:%d ", ignition);
+    // if (flycruise_toggle_request != flyreq_old) printf ("flyreq:%d ", flycruise_toggle_request);
+    // if (remote_start_toggle_request != startreq_old) printf ("startreq:%d ", remote_start_toggle_request);
+    // rm_old = runmode;
+    // st_old = starter;
+    // ign_old = ignition;
+    // flyreq_old = flycruise_toggle_request;
+    // startreq_old = remote_start_toggle_request;
     
     if (runmode == BASIC) {  // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         if (we_just_switched_modes) {  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
@@ -493,14 +371,11 @@ void loop() {
                 stopcarTimer.reset();
             }
         }
-        else if (ignition && !panic_stop && !engine_stopped()) {  // Using "else" here so we spend at leasat 1 loop in shutdown mode, allows us to see the transitions onscreen
-            // syspower = HIGH;  // Power up devices if not already
+        else if ((car_stopped() || !require_car_stopped_before_driving) && ignition && !panic_stop && !engine_stopped() && !starter)
             runmode = HOLD;  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
-        }
         if (!shutdown_complete) {  // If we haven't yet stopped the car and then released the brakes and gas all the way
             if (car_stopped() || stopcarTimer.expired()) {  // If car has stopped, or timeout expires, then release the brake
                 if (shutdown_color == LPNK) {  // On first time through here
-                    // enable_pids (0, 0, 0);
                     park_the_motors = true;  // Flags the motor parking to happen, only once
                     gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
                     motorParkTimer.reset();  // Set a timer to timebox this effort
@@ -517,12 +392,10 @@ void loop() {
             else if (brakeIntervalTimer.expireset())
                 pressure_target_psi = pressure_target_psi + (panic_stop) ? pressure_panic_increment_psi : pressure_hold_increment_psi;  // Slowly add more brakes until car stops
         }
-        else if (calmode_request) {  // if fully shut down and cal mode requested
-            runmode = CAL;
-        }
+        else if (calmode_request) runmode = CAL;  // if fully shut down and cal mode requested, go to cal mode
         else if (sleepInactivityTimer.expired()) {
             syspower = LOW; // Power down devices to save battery
-            // go to sleep?    
+            // go to sleep, would happen here 
         }
     }
     else if (runmode == STALL) {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
@@ -555,7 +428,7 @@ void loop() {
             gesture_progress = 0;
             gestureFlyTimer.set (gesture_flytimeout_us); // Initialize gesture timer to already-expired value
             cruise_sw_held = false;
-            // cruiseSwTimer.reset();
+            // cruiseSwTimer.reset();  // Needed if momentary cruise button is used to go to cruise mode
             flycruise_toggle_request = false;
             car_initially_moved = !car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
         }
@@ -630,14 +503,12 @@ void loop() {
         }
         else cruise_adjusting = false;  // When joystick at center, the target speed stays locked to the value it was when joystick goes to center
         
-        // Anti-glitch timer attempts to keep very short joystick sensor glitches from going into adjust mode
-        // May be unneccesary now that our readings are stable.  Remove?  Anyway, need to review the logic
-        if (!cruise_adjusting) cruiseAntiglitchTimer.reset();
-        else if (cruiseAntiglitchTimer.expired()) speedo_target_mph = speedo_filt_mph;
+        if (!cruise_adjusting) cruiseAntiglitchTimer.reset();  // Anti-glitch timer attempts to keep very short joystick sensor glitches from going into adjust mode
+        else if (cruiseAntiglitchTimer.expired()) speedo_target_mph = speedo_filt_mph;  // May be unneccesary now that our readings are stable.  Remove?  Anyway, need to review the logic
 
         if (flycruise_toggle_request) runmode = FLY;  // Go to fly mode if hotrc ch4 button pushed
 
-        // If joystick is held full-brake for more than FlyTimer timeout, driver could be confused & panicking, drop to fly mode so fly mode will push the brakes
+        // If joystick is held full-brake for more than X, driver could be confused & panicking, drop to fly mode so fly mode will push the brakes
         if (ctrl_pos_adc[VERT][FILT] > ctrl_lims_adc[ctrl][VERT][MIN] + flycruise_vert_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
         else if (gestureFlyTimer.expired()) runmode = FLY;  // New gesture to drop to fly mode is hold the brake all the way down for more than X ms
         
@@ -651,13 +522,14 @@ void loop() {
             cal_joyvert_brkmotor = false;
         }
         else if (calmode_request) runmode = SHUTDOWN;
+        
         if (!cal_pot_gas_ready) {
             float temp = map (pot_filt_percent, pot_min_percent, pot_max_percent, (float)gas_pulse_ccw_max_us, (float)gas_pulse_cw_min_us);
             if (temp <= (float)gas_pulse_idle_us && temp >= (float)gas_pulse_redline_us) cal_pot_gas_ready = true;
         }
     }
     else { // Obviously this should never happen
-        if (serial_debugging) Serial.println (F("Error: Invalid runmode entered"));
+        if (serial_debugging) printf ("Error: Invalid runmode entered\n");
         runmode = SHUTDOWN;
     }
     

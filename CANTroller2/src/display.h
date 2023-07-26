@@ -574,8 +574,8 @@ class Display {
                     int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
                     if (strcmp (simgrid[row][col], "    " )) {
                         _tft.fillCircle (cntr_x, cntr_y, 19, create ? DGRY : BLK);
+                        _tft.drawCircle (cntr_x, cntr_y, 19, create ? LYEL : BLK);
                         if (create) {
-                            _tft.drawCircle (cntr_x, cntr_y, 19, LYEL);
                             int32_t x_mod = cntr_x-(arraysize (simgrid[row][col])-1)*(disp_font_width>>1);
                             draw_string (x_mod, x_mod, cntr_y-(disp_font_height>>1), simgrid[row][col], "", LYEL, DGRY);
                         }

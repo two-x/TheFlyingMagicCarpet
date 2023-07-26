@@ -140,6 +140,7 @@ bool serial_debugging = true;
 bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
 bool take_temperatures = true;
 bool keep_system_powered = true;  // Use true during development
+bool require_car_stopped_before_driving = false;  // May be a smart prerequisite, may be us putting obstacles in our way
 
 #define pwm_jaguars true
 
@@ -190,6 +191,9 @@ float convert_units (float from_units, float convert_factor, bool invert, float 
     HardwareSerial jagPort(1);  // Open serisl port to communicate with jaguar controllers for steering & brake motors
 #endif
 
+// int32_t rm_old;
+// bool st_old, ign_old, flyreq_old, startreq_old;
+
 // run state machine related
 enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL };
 int32_t runmode = SHUTDOWN;
@@ -212,8 +216,8 @@ bool cruise_sw_held = false;
 bool cruise_adjusting = false;
 Timer gestureFlyTimer;  // Used to keep track of time for gesturing for going in and out of fly/cruise modes
 // Timer cruiseSwTimer;  // Was used to require a medium-length hold time pushing cruise button to switch modes
-Timer sleepInactivityTimer (10000000);  // After shutdown how long to wait before powering down to sleep
-Timer stopcarTimer (7000000);  // Allows code to fail in a sensible way after a delay if nothing is happening
+Timer sleepInactivityTimer (15000000);  // After shutdown how long to wait before powering down to sleep
+Timer stopcarTimer (8000000);  // Allows code to fail in a sensible way after a delay if nothing is happening
 uint32_t motor_park_timeout_us = 4000000;  // If we can't park the motors faster than this, then give up.
 uint32_t gesture_flytimeout_us = 400000;  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
 uint32_t cruise_sw_timeout_us = 500000;  // how long do you have to hold down the cruise button to start cruise mode (in us)
