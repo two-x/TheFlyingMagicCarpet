@@ -282,28 +282,28 @@ void loop() {
     // Update inputs.  Fresh sensor data, and filtering.
     //
 
-    // ESP32 "boot" button. generates btn_press_action flags of LONG or SHORT presses which can be handled wherever. Handler must reset btn_press_action = NONE
+    // ESP32 "boot" button. generates boot_button_action flags of LONG or SHORT presses which can be handled wherever. Handler must reset boot_button_action = NONE
     if (!read_pin (button_pin)) {
         if (!boot_button) {  // If press just occurred
             dispResetButtonTimer.reset();  // Looks like someone just pushed the esp32 "boot" button
-            btn_press_timer_active = true;  // flag to indicate timing for a possible long press
+            boot_button_timer_active = true;  // flag to indicate timing for a possible long press
         }
-        else if (btn_press_timer_active && dispResetButtonTimer.expired()) {
-            btn_press_action = LONG;  // Set flag to handle the long press event. Note, routine handling press should clear this
-            btn_press_timer_active = false;  // Clear timer active flag
-            btn_press_suppress_click = true;  // Prevents the switch release after a long press from causing a short press
+        else if (boot_button_timer_active && dispResetButtonTimer.expired()) {
+            boot_button_action = LONG;  // Set flag to handle the long press event. Note, routine handling press should clear this
+            boot_button_timer_active = false;  // Clear timer active flag
+            boot_button_suppress_click = true;  // Prevents the switch release after a long press from causing a short press
         }
         boot_button = true;  // Store press is in effect
     }
     else {  // if button is not being pressed
-        if (boot_button && !btn_press_suppress_click) btn_press_action = SHORT;  // if the button was just released, a short press occurred, which must be handled
-        // else btn_press_action = NONE;  // This auto-resets the button action flag, but any button action handling needs to happen in this same loop or event will be lost
-        btn_press_timer_active = false;  // Clear timer active flag
+        if (boot_button && !boot_button_suppress_click) boot_button_action = SHORT;  // if the button was just released, a short press occurred, which must be handled
+        // else boot_button_action = NONE;  // This auto-resets the button action flag, but any button action handling needs to happen in this same loop or event will be lost
+        boot_button_timer_active = false;  // Clear timer active flag
         boot_button = false;  // Store press is not in effect
-        btn_press_suppress_click = false;  // End click suppression
+        boot_button_suppress_click = false;  // End click suppression
     }
-    // if (btn_press_action != NONE) 
-    // printf ("it:%d ac:%ld lst:%d ta:%d sc:%d el:%ld\n", boot_button, btn_press_action, boot_button_last, btn_press_timer_active, btn_press_suppress_click, dispResetButtonTimer.elapsed());
+    // if (boot_button_action != NONE) 
+    // printf ("it:%d ac:%ld lst:%d ta:%d sc:%d el:%ld\n", boot_button, boot_button_action, boot_button_last, boot_button_timer_active, boot_button_suppress_click, dispResetButtonTimer.elapsed());
     
     // External digital signals - takes 11 us to read
     if (!(simulating && sim_basicsw)) basicmodesw = !digitalRead (basicmodesw_pin);   // 1-value because electrical signal is active low
@@ -472,13 +472,9 @@ void loop() {
     // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     //
     // printf("mode: %d, panic: %d, vpos: %4ld, min: %4ld, max: %4ld, elaps: %6ld", runmode, panic_stop, ctrl_pos_adc[VERT][FILT], hotrc_pos_failsafe_min_us, hotrc_pos_failsafe_max_us, hotrcPanicTimer.elapsed());
-    if (basicmodesw) runmode = BASIC;  // if basicmode switch on --> Basic Mode
-    else if (runmode != CAL && (panic_stop || !ignition)) runmode = SHUTDOWN;
-    else if (runmode != CAL && (starter || engine_stopped())) runmode = STALL;  // otherwise if engine not running --> Stall Mode
     
     if (runmode == BASIC) {  // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         if (we_just_switched_modes) {  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
-            // syspower = HIGH;  // Power up devices if not already
             gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
             motorParkTimer.reset();  // Set a timer to timebox this effort
             park_the_motors = true;  // Flags the motor parking to happen
@@ -521,29 +517,25 @@ void loop() {
                     sleepInactivityTimer.reset();
                 }
             }
-            else if (brakeIntervalTimer.expired()) {
+            else if (brakeIntervalTimer.expireset())
                 pressure_target_psi = pressure_target_psi + (panic_stop) ? pressure_panic_increment_psi : pressure_hold_increment_psi;  // Slowly add more brakes until car stops
-                brakeIntervalTimer.reset();  
-            }
         }
         else if (calmode_request) {  // if fully shut down and cal mode requested
-            // syspower = HIGH;  // Power up devices if not already
             runmode = CAL;
         }
         else if (sleepInactivityTimer.expired()) {
-            // syspower = LOW;  // Power down devices
+            syspower = LOW; // Power down devices to save battery
             // go to sleep?    
         }
     }
     else if (runmode == STALL) {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
-        if (we_just_switched_modes) remote_starting = false;
-        if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) pressure_target_psi = pressure_min_psi;  // If in deadband or being pushed up, no pressure target
-        else pressure_target_psi = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi);  // Scale joystick value to pressure adc setpoint
-        if (!starter && !engine_stopped()) runmode = HOLD;  // Enter Hold Mode if we started the car
-        if (remote_start_toggle_request) {
-            remote_starting = !remote_starting;
+        if (we_just_switched_modes) {
+            remote_starting = false;
             remote_start_toggle_request = false;
         }
+        if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) pressure_target_psi = pressure_min_psi;  // If in deadband or being pushed up, no pressure target
+        else pressure_target_psi = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], pressure_min_psi, pressure_max_psi);  // Scale joystick value to pressure adc setpoint
+        if (!starter && !engine_stopped()) runmode = HOLD;  // If we started the car, enter hold mode once starter is released
     }
     else if (runmode == HOLD) {
         if (we_just_switched_modes) {  // Release throttle and push brake upon entering hold mode
@@ -554,9 +546,8 @@ void loop() {
             stopcarTimer.reset();
             joy_centered = false;  // Fly mode will be locked until the joystick first is put at or below center
         }
-        if (brakeIntervalTimer.expired() && !stopcarTimer.expired()) {  // Each interval the car is still moving, push harder
-            if (!car_stopped()) pressure_target_psi += pressure_hold_increment_psi;
-            brakeIntervalTimer.reset();
+        if (brakeIntervalTimer.expireset() && !car_stopped() && !stopcarTimer.expired()) {  // Each interval the car is still moving, push harder
+            pressure_target_psi += pressure_hold_increment_psi;
         }
         if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
         else if (joy_centered && (ctrl == JOY || hotrc_radio_detected)) runmode = FLY; // Enter Fly Mode upon joystick movement from center to above center.
@@ -672,9 +663,16 @@ void loop() {
         if (serial_debugging) Serial.println (F("Error: Invalid runmode entered"));
         runmode = SHUTDOWN;
     }
-    if (runmode != STALL) remote_starting = false;
-    if (runmode != oldmode) disp_runmode_dirty = true;
-    we_just_switched_modes = (runmode != oldmode);  // runmode should not be changed after this point in loop
+    
+    if (basicmodesw) runmode = BASIC;  // if basicmode switch on --> Basic Mode
+    else if (runmode != CAL && (panic_stop || !ignition)) runmode = SHUTDOWN;
+    else if (runmode != CAL && (starter || engine_stopped())) runmode = STALL;  // otherwise if engine not running --> Stall Mode
+
+    if (runmode != oldmode) {  // runmode should not be changed after this point in loop
+        disp_runmode_dirty = true;
+        we_just_switched_modes = true;
+        syspower = HIGH;
+    }
     
     // cout << "rm:" << runmode << " om:" << oldmode << "vert:" << ctrl_pos_adc[VERT][FILT] << " up?" << (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) << " jc?" << joy_centered << "\n";
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "mod");  //
@@ -683,8 +681,7 @@ void loop() {
     //
 
     // Steering - Determine motor output and send to the motor
-    if (steerPidTimer.expired() && !(runmode == SHUTDOWN && shutdown_complete)) {
-        steerPidTimer.reset();
+    if (steerPidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
         if (ctrl_pos_adc[HORZ][FILT] >= ctrl_db_adc[HORZ][TOP])  // If above the top edge of the deadband, turning right
             steer_out_percent = map ((float)ctrl_pos_adc[HORZ][FILT], (float)ctrl_db_adc[HORZ][TOP], (float)ctrl_lims_adc[ctrl][HORZ][MAX], steer_stop_percent, steer_safe (steer_right_percent));  // Figure out the steering setpoint if joy to the right of deadband
         else if (ctrl_pos_adc[HORZ][FILT] <= ctrl_db_adc[HORZ][BOT])  // If below the bottom edge of the deadband, turning left
@@ -705,8 +702,7 @@ void loop() {
         if (boot_button) printf ("JoyH:%4ld, safadj:%4.0lf out:%4.0lf puls:%4.0lf\n", ctrl_pos_adc[HORZ][FILT], steer_safe_adj_percent, steer_out_percent, steer_pulse_out_us);
     }
     // Brakes - Determine motor output and write it to motor
-    if (brakePidTimer.expired() && !(runmode == SHUTDOWN && shutdown_complete)) {
-        brakePidTimer.reset();
+    if (brakePidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
         if (runmode == CAL && cal_joyvert_brkmotor) {
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], brake_stop_percent, brake_retract_percent);
             else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], brake_extend_percent, brake_stop_percent);
@@ -748,8 +744,7 @@ void loop() {
         cruiseQPID.Compute();  // Cruise mode is simpler because it doesn't have to deal with an actuator. It's output is simply the target value for the gas PID
     }
     // Gas - Update servo output. Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
-    if (gasPidTimer.expired() && !(runmode == SHUTDOWN && shutdown_complete)) {
-        gasPidTimer.reset();
+    if (gasPidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
         if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
             // if (starter) gas_pulse_out_us = gas_pulse_govern_us;  // Fully open throttle during starting engine
@@ -817,7 +812,8 @@ void loop() {
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");  //
         
     ts.handleTouch(); // Handle touch events and actions
-    ts.printTouchInfo(); 
+    // ts.printTouchInfo(); 
+    
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tch");  //
 
     // Encoder handling
@@ -883,8 +879,8 @@ void loop() {
                 if (adj) calc_governor();  // update derived variables relevant to changes made
             }
             else if (selected_value == 4) {
-                adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
-                calc_ctrl_lims();
+                adj = adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
+                if (adj) calc_ctrl_lims();
             }
             else if (selected_value == 5) adj_val (&airflow_max_mph, 0.01*(float)sim_edit_delta, 0, airflow_abs_max_mph);
             else if (selected_value == 6) adj_val (&tach_idle_rpm, 0.01*(float)sim_edit_delta, 0, tach_redline_rpm - 1);
@@ -943,7 +939,7 @@ void loop() {
             ignition_last = ignition;  // Make sure this goes after the last comparison
         }
     }
-    if (remote_starting != remote_starting_last) {
+    if (runmode == STALL && remote_start_toggle_request) {
         if (remote_starting) {
             set_pin (starter_pin, OUTPUT);
             write_pin (starter_pin, HIGH);
@@ -953,17 +949,17 @@ void loop() {
             set_pin (starter_pin, INPUT_PULLDOWN);
         }
         starter = remote_starting;
-        remote_starting_last = remote_starting;
+        remote_start_toggle_request = false;
     }
     // cout << "starter:" << starter << " starting:" << remote_starting << endl;;
 
     if (syspower != syspower_last) {
-        syspower_set (syspower);
+        syspower = syspower_set (syspower);
         syspower_last = syspower;
     }
-    if (btn_press_action == LONG) {
+    if (boot_button_action == LONG) {
         screen.tft_reset();
-        btn_press_action = NONE;
+        boot_button_action = NONE;
     }
     if (!screen.get_reset_finished()) screen.tft_reset();  // If resetting tft, keep calling tft_reset until complete
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
@@ -1010,13 +1006,15 @@ void loop() {
     
     // Display updates
     if (display_enabled) screen.update();
-    else {
-        if (dataset_page_last != dataset_page) config.putUInt ("dpage", dataset_page);
-        dataset_page_last = dataset_page;
-        selected_value_last = selected_value;
-        simulating_last = simulating;
-        oldmode = runmode;
-    }
+    else if (dataset_page_last != dataset_page) config.putUInt ("dpage", dataset_page);
+    
+    if (oldmode == runmode) we_just_switched_modes = false;
+    oldmode = runmode;  // remember what mode we're in for next time
+    dataset_page_last = dataset_page;
+    selected_value_last = selected_value;
+    tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
+    simulating_last = simulating;
+
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dis");
 
     // Kick watchdogs

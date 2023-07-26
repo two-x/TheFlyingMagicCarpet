@@ -613,7 +613,6 @@ class Display {
         void update() {
             if (simulating != simulating_last || _disp_redraw_all) {
                 draw_simbuttons(simulating);  // if we just entered simulator draw the simulator buttons, or if we just left erase them
-                simulating_last = simulating;
                 _procrastinate = true;  // Waits till next loop to draw changed values
             }
             if ((disp_dataset_page_dirty || _disp_redraw_all)) {
@@ -622,7 +621,6 @@ class Display {
                 first = false;
                 disp_dataset_page_dirty = false;
                 if (dataset_page_last != dataset_page) config.putUInt("dpage", dataset_page);
-                dataset_page_last = dataset_page;
                 _procrastinate = true;  // Waits till next loop to draw changed values
             }
             if ((disp_sidemenu_dirty || _disp_redraw_all)) {
@@ -633,13 +631,10 @@ class Display {
             if (disp_selected_val_dirty || _disp_redraw_all) {
                 draw_selected_name(tuning_ctrl, tuning_ctrl_last, selected_value, selected_value_last);
                 disp_selected_val_dirty = false;
-                selected_value_last = selected_value;
-                tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
             }
             if (disp_runmode_dirty || _disp_redraw_all) {
                 draw_runmode(runmode, oldmode, (runmode == SHUTDOWN) ? shutdown_color : -1);
                 disp_runmode_dirty = false;
-                oldmode = runmode;  // remember what mode we're in for next time
             }
             if ((dispRefreshTimer.expired() && !_procrastinate) || _disp_redraw_all) {
                 dispRefreshTimer.reset();

@@ -139,6 +139,7 @@ bool flip_the_screen = false;
 bool serial_debugging = true; 
 bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
 bool take_temperatures = true;
+bool keep_system_powered = true;  // Use true during development
 
 #define pwm_jaguars true
 
@@ -162,6 +163,11 @@ class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes
     void IRAM_ATTR set (uint32_t arg_timeout_us) { set ((int64_t)arg_timeout_us); }
     void IRAM_ATTR reset (void) { start_us = esp_timer_get_time(); }
     bool IRAM_ATTR expired (void) { return (esp_timer_get_time() > start_us + timeout_us); }
+    bool IRAM_ATTR expireset (void) {  // Like expired() but automatically resets if expired
+        if (esp_timer_get_time() <= start_us + timeout_us) return false;
+        reset();
+        return true;
+    }    
     int64_t IRAM_ATTR elapsed (void) { return esp_timer_get_time() - start_us; }
     int64_t IRAM_ATTR get_timeout (void) { return timeout_us; }
 };
@@ -278,9 +284,9 @@ static Adafruit_NeoPixel neostrip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ80
 enum sw_presses { NONE, SHORT, LONG };  // used by encoder sw and button algorithms
 bool boot_button_last = 0;
 bool boot_button = 0;
-bool btn_press_timer_active = false;
-bool btn_press_suppress_click = false;
-bool btn_press_action = NONE;
+bool boot_button_timer_active = false;
+bool boot_button_suppress_click = false;
+bool boot_button_action = NONE;
 
 // external digital input and output signal related
 bool ignition = LOW;
@@ -306,9 +312,9 @@ enum temp_lims { DISP_MIN, NOM_MIN, NOM_MAX, WARNING, ALARM, DISP_MAX };  // Pos
 float temp_lims_f[3][6] { { 0.0,  45.0, 115.0, 120.0, 130.0, 220.0 },  // [AMBIENT][NOM_MIN/NOM_MAX/WARNING/ALARM]
                           { 0.0, 178.0, 198.0, 202.0, 205.0, 220.0 },  // [ENGINE][NOM_MIN/NOM_MAX/WARNING/ALARM]
                           { 0.0,  50.0, 120.0, 130.0, 140.0, 220.0 }, };  // [WHEEL][NOM_MIN/NOM_MAX/WARNING/ALARM] (applies to all wheels)
+float temp_room = 77.0;  // "Room" temperature is 25 C = 77 F  Who cares?
 float temp_sensor_min_f = -67.0;  // Minimum reading of sensor is -25 C = -67 F
 float temp_sensor_max_f = 257.0;  // Maximum reading of sensor is 125 C = 257 F
-// float temp_room = 77.0;  // "Room" temperature is 25 C = 77 F  Who cares?
 float temps_f[6];  // Array stores most recent readings for all sensors
 int32_t temp_detected_device_ct = 0;
 int32_t temperature_precision = 12;  // 9-12 bit resolution
@@ -321,13 +327,6 @@ uint32_t temp_timeout_us = 2000000;
 Timer tempTimer (temp_timeout_us);
 DeviceAddress temp_temp_addr;
 DeviceAddress temp_addrs[6];  // Store the These are our finalHard code to the actual sensor addresses for the corresponding sense location on the car
-// DeviceAddress temp_vehicle_addrs[6] =  // Hard code to the actual sensor addresses for the corresponding sense location on the car
-//     { 0x0000000000000000,  // AMBIENT
-//       0x0000000000000000,  // ENGINE
-//       0x0000000000000000,  // WHEEL_FL
-//       0x0000000000000000,  // WHEEL_FL
-//       0x0000000000000000,  // WHEEL_RL
-//       0x0000000000000000 };  // WHEEL_RR
 DallasSensor tempsensebus (&onewire);
 
 // mule battery related
@@ -445,11 +444,6 @@ float brake_pulse_retract_us = 670;  // Brake pulsewidth corresponding to full-s
 float brake_pulse_stop_us = 1500;  // Brake pulsewidth corresponding to center point where motor movement stops (in us)
 float brake_pulse_extend_us = 2330;  // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
 float brake_pulse_extend_max_us = 2330;  // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
-// float brake_pulse_margin_us = 40; // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated 
-// don't convert, just map the brake.  Using conversion ratio only to scale pid constants
-// //  (1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
-// bool brake_motor_convert_invert = false;
-// int32_t brake_motor_convert_polarity = -1;  // Reverse
 
 // brake actuator position related
 float brake_pos_in;
@@ -545,24 +539,15 @@ Timer steerPidTimer (steer_pid_period_us);  // not actually tunable, just needs 
 // Brake : Controls the brake motor to achieve the desired brake fluid pressure
 uint32_t brake_pid_period_us = 185000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer brakePidTimer (brake_pid_period_us);  // not actually tunable, just needs value above
-
 // float brake_perc_per_us = (100.0 - (-100.0)) / (brake_pulse_extend_us - brake_pulse_retract_us);  // (100 - 0) percent / (us-max - us-min) us = 1/8.3 = 0.12 percent/us
-float brake_spid_initial_kp = 2.110 * 0.12;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-float brake_spid_initial_ki_hz = 0.473 * 0.12;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-float brake_spid_initial_kd_s = 0.830 * 0.12;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+float brake_spid_initial_kp = 0.253;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+float brake_spid_initial_ki_hz = 0.057;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+float brake_spid_initial_kd_s = 0.100;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
 QPID brakeQPID (&pressure_filt_psi, &brake_out_percent, &pressure_target_psi,  // input, target, output variable references
     brake_extend_percent, brake_retract_percent,  // output min, max
     brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,  // Kp, Ki, and Kd tuning constants
     QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwRound, QPID::Action::direct,  // settings  // iAwRoundCond, iAwClamp
     brake_pid_period_us, QPID::Control::timer, QPID::centMode::centerStrict, brake_stop_percent);  // period, more settings
-// float brake_spid_initial_kp = 2.110;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-// float brake_spid_initial_ki_hz = 0.873;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-// float brake_spid_initial_kd_s = 1.130;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-// QPID brakeQPID (&pressure_filt_psi, &brake_pulse_out_us, &pressure_target_psi,  // input, target, output variable references
-//     brake_pulse_retract_us, brake_pulse_extend_us,  // output min, max
-//     brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,  // Kp, Ki, and Kd tuning constants
-//     QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwClamp, QPID::Action::reverse,  // settings
-//     brake_pid_period_us, QPID::Control::timer, QPID::centMode::centerStrict, brake_pulse_stop_us);  // period, more settings
     
 // Gas : Controls the throttle to achieve the desired intake airflow and engine rpm
 uint32_t gas_pid_period_us = 225000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
@@ -639,64 +624,6 @@ void hotrc_ch4_update (void) {  //
     if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
-
-// TODO handle hotrc_ch3 and ch4
-// void handle_hotrc_ch3(int32_t pulse_width) {
-//     // handle here
-// }
-
-// void IRAM_ATTR hotrc_ch3_isr (int32_t pulse_width) {  // On falling edge, records high pulse width to determine ch3 button toggle state
-//     hotrc_ch3_sw = (esp_timer_get_time() - hotrc_timer_start <= 1500);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
-//     if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
-//     hotrc_ch3_sw_last = hotrc_ch3_sw;
-// }
-// void IRAM_ATTR hotrc_ch4_isr (void) {  // Triggers on both edges. Sets timer on rising edge (for all channels) and reads it on falling to determine ch4 button toggle state
-//     if (hotrc_isr_pin_preread) hotrc_timer_start = esp_timer_get_time();  // hotrcPulseTimer.reset();
-//     else {
-//         hotrc_ch4_sw = (esp_timer_get_time() - hotrc_timer_start <= 1500);  // Ch4 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH4][CENT]
-//         if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
-//         hotrc_ch4_sw_last = hotrc_ch4_sw;
-//     }
-//     hotrc_isr_pin_preread = !(digitalRead (hotrc_ch4_cruise_pin));  // Read pin after timer operations to maximize clocking accuracy
-// }  // intcount++;
-
-// Attempt to use MCPWM input capture pulse width timer unit to get precise hotrc readings
-// int32_t hotrc_ch3_pulse_us, hotrc_ch4_pulse_us;
-// uint32_t mcpwm_unit0_capture, mcpwm_unit1_capture, mcpwm_unit2_capture;
-// uint32_t mcpwm_unit0_capture_last, mcpwm_unit1_capture_last, mcpwm_unit2_capture_last;
-// int32_t hotrc_ch3_preread;
-// void IRAM_ATTR hotrc_isr (void) {
-//     mcpwm_unit0_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_0, MCPWM_SELECT_CAP0);
-//     mcpwm_unit1_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_1, MCPWM_SELECT_CAP0);
-//     hotrc_horz_pulse_us = (int32_t)(mcpwm_unit0_capture - mcpwm_unit0_capture_last);
-//     hotrc_vert_pulse_us = (int32_t)(mcpwm_unit1_capture - mcpwm_unit1_capture_last);
-//     mcpwm_unit0_capture_last = mcpwm_unit0_capture;
-//     mcpwm_unit1_capture_last = mcpwm_unit1_capture;
-// }
-// // // Separate attempt to use timers to measure pulses
-// // void IRAM_ATTR hotrc_ch1_isr (void) {
-// //     mcpwm_unit0_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_0, MCPWM_SELECT_CAP0);
-// //     hotrc_horz_pulse_us = (int32_t)(mcpwm_unit0_capture - mcpwm_unit0_capture_last);
-// //     mcpwm_unit0_capture_last = mcpwm_unit0_capture;
-// // }
-// // void IRAM_ATTR hotrc_ch2_isr (void) {
-// //     mcpwm_unit1_capture = mcpwm_capture_signal_get_value(MCPWM_UNIT_1, MCPWM_SELECT_CAP0);
-// //     hotrc_vert_pulse_us = (int32_t)(mcpwm_unit1_capture - mcpwm_unit1_capture_last);
-// //     mcpwm_unit1_capture_last = mcpwm_unit1_capture;
-// // }
-    // if (hotrc_vert_preread) hotrc_timer_start = esp_timer_get_time();  // hotrcPulseTimer.reset();
-    // else hotrc_vert_pulse_us = esp_timer_get_time() - hotrc_timer_start;  // hotrcPulseTimer.elapsed();
-    // hotrc_vert_preread = !(digitalRead (hotrc_ch2_horz_pin));  // Read pin after timer operations to maximize clocking accuracy
-
-    // intcount++;
-    // // hotrc_horz_pulse_us = esp_timer_get_time() - hotrc_timer_start;
-
-// void IRAM_ATTR hotrc_vert_isr() {
-//   hotrc_vert_pulse_us = (uint32_t)timerRead(hotrc_vert_timer);
-//   timerStop(hotrc_vert_timer);
-//   timerAlarmWrite(hotrc_vert_timer, 0xFFFFFFFF, true);  // Reset the alarm value
-//   timerRestart(hotrc_vert_timer);
-// }
 
 // Utility functions
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays
@@ -826,11 +753,10 @@ bool read_battery_ignition (void) {  //Updates battery voltage and returns ignit
     ema_filt (battery_v, &battery_filt_v, battery_ema_alpha);  // Apply EMA filter
     return (battery_filt_v > ignition_on_thresh_v);
 }
-void syspower_set (bool val) {
-    if (digitalRead (syspower_pin) != val) {
-        write_pin (syspower_pin, val);
-        // delay (val * 500);
-    }
+bool syspower_set (bool val) {
+    bool really_power = keep_system_powered | val;
+    write_pin (syspower_pin, really_power);  // delay (val * 500);
+    return really_power;
 }
 long temp_peef (void) {  // Peef's algorithm somewhat modified by Soren
     long temp_temp;
