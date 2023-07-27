@@ -410,8 +410,10 @@ void loop() {
                     sleepInactivityTimer.reset();
                 }
             }
-            else if (brakeIntervalTimer.expireset())
+            else if (brakeIntervalTimer.expireset()) {
                 pressure_target_psi = pressure_target_psi + (panic_stop) ? pressure_panic_increment_psi : pressure_hold_increment_psi;  // Slowly add more brakes until car stops
+                tach_target_rpm = tach_idle_rpm;  // Keep target updated to possibly changing idle value
+            }
         }
         else if (calmode_request) runmode = CAL;  // if fully shut down and cal mode requested, go to cal mode
         else if (sleepInactivityTimer.expired()) {
@@ -437,8 +439,9 @@ void loop() {
             stopcarTimer.reset();
             joy_centered = false;  // Fly mode will be locked until the joystick first is put at or below center
         }
-        if (brakeIntervalTimer.expireset() && !car_stopped() && !stopcarTimer.expired()) {  // Each interval the car is still moving, push harder
-            pressure_target_psi += pressure_hold_increment_psi;
+        if (brakeIntervalTimer.expireset()) {  // On an interval ...
+            tach_target_rpm = tach_idle_rpm;  // Keep target updated to possibly changing idle value
+            if (!car_stopped() && !stopcarTimer.expired()) pressure_target_psi = min (pressure_target_psi + pressure_hold_increment_psi, pressure_sensor.get_max_human());  // If the car is still moving, push harder
         }
         if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
         else if (joy_centered && (ctrl == JOY || hotrc_radio_detected)) runmode = FLY; // Enter Fly Mode upon joystick movement from center to above center.
@@ -629,9 +632,12 @@ void loop() {
             // if (boot_button) printf (" Brk:%4ld", (int32_t)brake_pulse_out_us);
         }
     }
+    
+    update_tach_idle();  // Adjust idle speed value based on engine temperature
+
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
     if (runmode == CRUISE && !cruise_adjusting && cruisePidTimer.expireset()) cruiseQPID.Compute();
-    
+
     // Gas - Update servo output. Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
     if (gasPidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
         if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
@@ -780,21 +786,20 @@ void loop() {
             if (adj) calc_ctrl_lims();  // update derived variables relevant to changes made
         }
         else if (dataset_page == PG_CAR) {
-            if (selected_value == 3) {
-                adj = adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);
-                if (adj) calc_governor();  // update derived variables relevant to changes made
-            }
-            else if (selected_value == 4) {
-                adj = adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
-                if (adj) calc_ctrl_lims();
-            }
-            else if (selected_value == 5) adj_val (&airflow_max_mph, 0.01*(float)sim_edit_delta, 0, airflow_abs_max_mph);
-            else if (selected_value == 6) adj_val (&tach_idle_rpm, 0.01*(float)sim_edit_delta, 0, tach_redline_rpm - 1);
-            else if (selected_value == 7) adj_val (&tach_redline_rpm, 0.01*(float)sim_edit_delta, tach_idle_rpm, 8000);
+            if (selected_value == 2) adj = adj_val (&tach_idle_hot_min_rpm, 0.1*(float)sim_edit_delta, tach_idle_abs_min_rpm, tach_idle_cold_max_rpm - 1);
+            else if (selected_value == 3) adj = adj_val (&tach_idle_cold_max_rpm, 0.1*(float)sim_edit_delta, tach_idle_hot_min_rpm + 1, tach_idle_abs_max_rpm);
+            else if (selected_value == 4) adj = adj_val (&tach_redline_rpm, 0.1*(float)sim_edit_delta, tach_idle_rpm, tach_max_rpm);
+            else if (selected_value == 5) adj = adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);
+            else if (selected_value == 6) adj = adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
+            else if (selected_value == 7) adj_val (&airflow_max_mph, 0.01*(float)sim_edit_delta, 0, airflow_abs_max_mph);
             else if (selected_value == 8) adj_val (&speedo_idle_mph, 0.01*(float)sim_edit_delta, 0, speedo_redline_mph - 1);
             else if (selected_value == 9) adj_val (&speedo_redline_mph, 0.01*(float)sim_edit_delta, speedo_idle_mph, 30);
-            else if (selected_value == 10) adj_val (&brake_pos_zeropoint_in, 0.001*sim_edit_delta, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
-
+            else if (selected_value == 10) adj_val (&brake_pos_zeropoint_in, 0.001*(float)sim_edit_delta, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
+            if (adj) {
+                update_tach_idle(1);
+                calc_governor();
+                calc_ctrl_lims();
+            }
       }
         else if (dataset_page == PG_PWMS) {
             if (selected_value == 3) adj_val (&steer_pulse_left_us, sim_edit_delta, steer_pulse_stop_us + 1, steer_pulse_left_max_us);
