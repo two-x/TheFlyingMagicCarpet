@@ -25,7 +25,11 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names
 HotrcManager hotrcHorzManager (22);
 HotrcManager hotrcVertManager (22);    
 Display screen;
+#ifdef CAP_TOUCH
+TouchScreen ts;
+#else
 TouchScreen ts(touch_cs_pin, touch_irq_pin);
+#endif
 Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
     
 #define RUN_TESTS 0
