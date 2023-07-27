@@ -358,7 +358,7 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
     void read() {
         switch (this->_source) {
             case ControllerMode::PIN: 
-                this->native.set(analogRead(this->_pin));
+                this->set_native(analogRead(this->_pin));
                 this->ema(this->human.get()); // filtered values are kept in human format
                 break;
             case ControllerMode::TOUCH:
