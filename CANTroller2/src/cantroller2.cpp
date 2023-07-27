@@ -113,12 +113,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
     printf("Device setup..\n");
     pressure_sensor.setup();
-    if (simulating && sim_pressure)
-        if (pot_overload == pressure)
-            pressure_sensor.set_source(ControllerMode::POT);
-        else
-            pressure_sensor.set_source(ControllerMode::TOUCH);
-
 
     // Set up our interrupts
     printf ("Attach interrupts..\n");
@@ -748,13 +742,11 @@ void loop() {
             // else if (selected_value == 5) adj_bool (&sim_pressure, sim_edit_delta);
             else if (selected_value == 5) {
                  adj_bool(&sim_pressure, sim_edit_delta);
-                 if (simulating && sim_pressure)
-                    if (pot_overload == pressure)
-                        pressure_sensor.set_source(ControllerMode::POT);
-                    else
+                 if (pot_overload != pressure)
+                    if (simulating && sim_pressure)
                         pressure_sensor.set_source(ControllerMode::TOUCH);
-                else
-                    pressure_sensor.set_source(ControllerMode::PIN); 
+                    else
+                        pressure_sensor.set_source(ControllerMode::PIN); 
             }
             else if (selected_value == 6) adj_bool (&sim_brkpos, sim_edit_delta);
             else if (selected_value == 7) adj_bool (&sim_tach, sim_edit_delta);
@@ -762,9 +754,9 @@ void loop() {
             else if (selected_value == 9) adj_bool (&sim_speedo, sim_edit_delta);
             else if (selected_value == 10) {
                 adj_val(&pot_overload, sim_edit_delta, 0, arraysize(sensorcard)-1);
-                if (pot_overload == pressure && simulating && sim_pressure)
+                if (pot_overload == pressure)
                     pressure_sensor.set_source(ControllerMode::POT);
-                if (pot_overload != pressure)
+                else
                     if (simulating && sim_pressure)
                         pressure_sensor.set_source(ControllerMode::TOUCH);
                     else
