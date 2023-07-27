@@ -524,7 +524,7 @@ float gas_spid_initial_kd_s = 0.091;  // PID derivative time factor (gas). How m
 bool gas_open_loop = false;
 static Servo gas_servo;
 QPID gasQPID (&tach_filt_rpm, &gas_pulse_out_us, &tach_target_rpm,  // input, target, output variable references
-    (float)gas_pulse_redline_us, (float)gas_pulse_idle_us,  // output min, max
+    gas_pulse_redline_us, gas_pulse_idle_us,  // output min, max
     gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s,  // Kp, Ki, and Kd tuning constants
     QPID::pMode::pOnErrorMeas, QPID::dMode::dOnMeas, QPID::iAwMode::iAwRound, QPID::Action::reverse,  // settings
     gas_pid_period_us, QPID::Control::timer, QPID::centMode::range);  // period, more settings
@@ -532,14 +532,15 @@ QPID gasQPID (&tach_filt_rpm, &gas_pulse_out_us, &tach_target_rpm,  // input, ta
 // Cruise : is active on demand while driving. It controls the throttle target to achieve the desired vehicle speed
 uint32_t cruise_pid_period_us = 300000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer cruisePidTimer (cruise_pid_period_us);  // not actually tunable, just needs value above
-float cruise_spid_initial_kp = 0.157;  // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
-float cruise_spid_initial_ki_hz = 0.035;  // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
-float cruise_spid_initial_kd_s = 0.044;  // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
+float cruise_spid_initial_kp = 5.57;  // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
+float cruise_spid_initial_ki_hz = 1.335;  // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
+float cruise_spid_initial_kd_s = 1.844;  // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
 QPID cruiseQPID (&speedo_filt_mph, &tach_target_rpm, &speedo_target_mph,  // input, target, output variable references
-    (float)tach_idle_rpm, (float)tach_govern_rpm,  // output min, max
+    tach_idle_rpm, tach_govern_rpm,  // output min, max
     cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s,  // Kp, Ki, and Kd tuning constants
     QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwRound, QPID::Action::direct,  // settings
-    cruise_pid_period_us, QPID::Control::timer, QPID::centMode::range);  // period, more settings
+    cruise_pid_period_us, QPID::Control::timer, QPID::centMode::range);
+    // QPID::centMode::centerStrict, (tach_govern_rpm + tach_idle_rpm)/2);  // period, more settings
 
 SdFat sd;  // SD card filesystem
 #define approot "cantroller2020"
