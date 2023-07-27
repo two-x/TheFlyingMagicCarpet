@@ -532,82 +532,6 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
 //   yield();
 // }
 
-
-// class TempSensorBus : virtual public Sensor {
-//   public:
-//     enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
-//   protected:
-//     // sample_period 2000000;
-//     enum temp_status { IDLE, CONVERT, DELAY };
-//     int32_t status = IDLE;
-//     int32_t detected_devices = 0;
-//     int32_t precision = 9;  // 9-12 bit resolution
-//     int32_t current_index = 0;
-//     bool blocking_convert = false, verbose = true, read_lock = true;
-//     float sens_lim_min = -67.0;  // Minimum reading of sensor is -25 C = -67 F
-//     float sens_lim_max = 257.0;  // Maximum reading of sensor is 125 C = 257 F
-//     // float roomtemp = 77.0;  // "Room" temperature is 25 C = 77 F
-//   public:
-//     TempSensorBus (int32_t arg_pin) : Sensor() {
-//         set_pin (arg_pin);
-//         set_limits (sens_lim_min, sens_lim_max);
-//         TempSensorBus::init (true);
-//     }
-//     void init (bool read_initial_temps) {
-//         OneWire this->onewire (pin);
-//         DallasTemperature this->tempbus (&pin);
-//         tempbus.setWaitForConversion (true);  // Whether to block during conversion process
-//         tempbus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
-//         tempbus.begin();
-//         detected_devices = tempbus.getDeviceCount();
-//         DeviceAddress this->addrs[detected_devices];
-//         float this->temps[detected_devices];
-//         if (verbose) printf ("Temp sensors: Detected %d devices. Parasitic power: %s\n", temp_detected_device_ct, ((tempbus.isParasitePowerMode()) ? "On" : "Off"));  // , DEC);
-//         if (read_initial_temps) request(true);  // This blocks for over 100ms
-//         DeviceAddress temporary_addr;
-//         for (int32_t index = 0; index < detected_devices; index++) {
-//             int32_t succeed = tempbus.getAddress (temporary_addr, index);
-//             if (verbose) {
-//                 if (succeed) printf ("Found sensor: index %d, addr %d\n", index, temporary_addr);  // temp_addrs[x]
-//                 else printf ("Found ghost device: index %d, addr unknown\n", index);  // printAddress (temp_addrs[x]);
-//             }
-//             tempbus.setResolution (temporary_addr, precision);  // temp_addrs[x]
-//             if (read_initial_temps) read_temp (index);
-//             if (verbose) printf ("Sensor %ld temp: %lf degF\n", index, temps[index]);
-//         }
-//         if (read_initial_temps) {
-//             request(true);
-//             for (int32_t index; index < detected_devices; index++) read_temp (index);
-//             tempbus.setWaitForConversion (blocking_convert);  // makes it async
-//         }
-//     }
-//     void request (bool arg_wait_for_convert=false) {
-//         if (enabled && timer.expired()) {
-//             read_lock = true;
-//             if (++temp_current_index >= 2) temp_current_index -= 2;  // replace 1 with arraysize(temps)
-//             tempbus.setWaitForConversion (arg_wait_for_convert || blocking_convert);  //
-//             tempbus.requestTemperatures();
-//             timer.set (750000 / (1 << (12 - temperature_precision)));  // Give some time before reading temp
-//             tempbus.setWaitForConversion (true);
-//             if (!arg_wait_for_convert && !blocking_convert) timer.set(750000 / (1 << (12 - precision)));  // Give some time before reading temp
-//             temp_status = CONVERT;
-//         }
-//     }
-//     void read_temp (int32_t arg_index) {
-//         if (timer.expired()) {
-//             read_lock = false;
-//             temps[arg_index] = tempbus.getTempFByIndex (arg_index);
-//         }
-//     }
-//     void set_precision (int32_t arg_bits) { precision = constrain (arg_bits, 9, 12); }
-//     int32_t get_precision (void) { return precision; }
-//     bool get_locked (void) {
-//         if (timer.expired()) read_lock = false;
-//         return read_lock;
-//     }
-//     void get_temp (int32_t arg_index) { return (temps[arg_index]); }
-// };
-
 class HotrcManager {
   protected:
     bool spike_signbit;
@@ -619,40 +543,29 @@ class HotrcManager {
     int32_t raw_history[9];  // Copies of the values read (don't need separate buffer, but useful to debug the filter)
   public:
     HotrcManager (int32_t spike_threshold) { spike_cliff = spike_threshold; }
-    
-    // Spike filter pushes new hotrc readings into a LIFO array, replaces any well-defined spikes with values 
-    // interpolated from before and after the spike. Also smooths out abrupt value changes that don't recover later
+    // Spike filter pushes new hotrc readings into a LIFO ring buffer, replaces any well-defined spikes with values 
+    // interpolated from before and after the spike. Also smoothes out abrupt value changes that don't recover later
     int32_t spike_filter (int32_t new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
         previndex = (depth + index - 1) % depth;  // previndex is where the incoming new value will be stored
         this_delta = new_val - filt_history[previndex];  // Value change since last reading
-        // if (button_it) printf (" %1ld%1ld:%4ld ", index, previndex, this_delta);
-        // if (button_it) printf ("%s", (prespike_index != -1) ? "^" : " ");
         if (std::abs(this_delta) > spike_cliff) {  // If new value is a cliff edge (start or end of a spike)
             if (prespike_index == -1) {  // If this cliff edge is the start of a new spike
-                // if (button_it) printf ("A ");
                 prespike_index = previndex;  // save index of last good value just before the cliffgit push
                 spike_signbit = signbit (this_delta);  // Save cliff steepness
             }
             else if (spike_signbit == signbit (this_delta)) {  // If this cliff edge deepens an in-progress spike
-                // if (button_it) printf ("B");
                 inject_interpolations (previndex, filt_history[previndex]);  // Smoothly grade the values from before the last cliff to previous value
                 prespike_index = previndex;  // Consider this cliff edge the start of the spike instead
             }
             else {  // If this cliff edge is a recovery of the existing spike
-                // if (button_it) printf ("C");
-                // !! Linearly interpolate replacement values for the spike values between the two edges
                 inject_interpolations (index, new_val);  // Fill in the spike with interpolated values
                 prespike_index = -1;  // Cancel the current spike
             }
         }
         else if (prespike_index == index) {  // If a current spike lasted thru our whole buffer
-            // if (button_it) printf ("D");
             inject_interpolations (previndex, filt_history[previndex]);  // Smoothly grade the whole buffer
             prespike_index = -1;  // Cancel the current spike
         }
-        else {
-            // if (button_it) printf ("E ");
-        }  // If the new value is not a cliff edge (any action needed?)
         int32_t returnval = filt_history[index];  // Save the incumbent value at current index (oldest value) into buffer
         filt_history[index] = new_val;
         raw_history[index] = new_val;
@@ -673,60 +586,6 @@ class HotrcManager {
         return raw_history[index];
     }
 };
-
-// class Hotrc {
-//   protected:
-//     int32_t* val;
-//     int32_t avg, min_index, max_index, failsafe_min, failsafe_max;
-//     int32_t depth = 100, index = 1, padding = 7, calc_count = 0;
-//     int32_t history[100];  // It will not accept history[depth] - wtf
-//     uint32_t sum;
-//     bool detect_ready = false;
-//   public:
-//     Hotrc (int32_t* arg_val, int32_t arg_failsafe_min, int32_t arg_failsafe_max, int32_t arg_padding) {
-//         val = arg_val;
-//         for (int32_t x = 0; x < depth; x++) history[x] = *val;
-//         avg = *val;
-//         sum = avg * depth;
-//         min_index = 0;
-//         max_index = 0;
-//         failsafe_min = arg_failsafe_min;
-//         failsafe_max = arg_failsafe_max;
-//         if (arg_padding != -1) padding = arg_padding;
-//     }
-//     void set_failsafe (int32_t arg_failsafe_min, int32_t arg_failsafe_max) {  // for manual set failsafe values
-//         failsafe_min = arg_failsafe_min - padding;
-//         failsafe_max = arg_failsafe_max + padding;
-//     }
-//     void set_failsafe (void) {  // intended to call from calibration routine while handle is at failsafe value
-//         failsafe_min = history[min_index] - padding;
-//         failsafe_max = history[max_index] + padding;
-//     }
-//     void set_pad (int32_t arg_pad) { padding = arg_pad; } 
-//     int32_t calc (void) {
-//         int32_t nextindex = (index+1) % depth;
-//         sum += *val - history[nextindex];
-//         avg = sum/depth;
-//         int32_t save_min = history[min_index];
-//         int32_t save_max = history[max_index];
-//         history[nextindex] = *val;
-//         if (*val <= save_min) min_index = nextindex;
-//         else if (min_index == nextindex) for (int32_t x = 0; x < depth; x++) if (history[x] < history[min_index]) min_index = x;
-//         if (*val >= save_max) max_index = nextindex;
-//         else if (max_index == nextindex) for (int32_t x = 0; x < depth; x++) if (history[x] > history[max_index]) max_index = x;
-//         if (!detect_ready) if (++calc_count >= depth) detect_ready = true;
-//         index = nextindex;
-//         return avg;
-//     }
-//     void print (void) { std::cout << "Hotrc:" << history[index] << " avg:" << avg << " min[" << min_index << "]:" << history[min_index] << " max[" << max_index << "]:" << history[max_index] << std::endl; }
-//     bool connection_lost (void) { return (detect_ready && (history[min_index] < failsafe_min || history[max_index] > failsafe_max)); }
-//     int32_t get_min (void) { return history[min_index]-padding; }
-//     int32_t get_max (void) { return history[max_index]+padding; }
-//     int32_t get_pad (void) { return padding; }
-//     int32_t get_avg (void) { return avg; }
-//     int32_t get_failsafe_min (void) { return failsafe_min; }
-//     int32_t get_failsafe_max (void) { return failsafe_max; }
-// };
 
 // Sensor (int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max)  // std::string& eng_name, 
 // : Transducer (arg_pin, arg_dir) {
