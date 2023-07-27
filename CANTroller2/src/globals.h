@@ -481,8 +481,12 @@ float tach_margin_rpm = 15.0;  // Margin of error for checking engine rpm (in rp
 float tach_stop_thresh_rpm = 0.1;  // Below which the engine is considered stopped - this is redundant,
 uint32_t tach_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
 int64_t tach_delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
-float tach_idle_min_rpm = 475;  // Idle speed at nom_max engine temp
-float tach_idle_max_rpm = 800;  // Idle speed at nom_min engine temp
+float tach_idle_abs_min_rpm = 450.0;  // Low limit of idle speed adjustability
+float tach_idle_hot_min_rpm = 550.0;  // Idle speed at nom_max engine temp
+float tach_idle_cold_max_rpm = 775.0;  // Idle speed at nom_min engine temp
+float tach_idle_abs_max_rpm = 950.0;  // High limit of idle speed adjustability
+Timer tachIdleTimer (5000000);  // How often to update tach idle value based on engine temperature
+
 
 // airflow related
 bool airflow_detected = false;
@@ -638,6 +642,13 @@ float steer_safe (float endpoint) {
     return steer_stop_percent + (endpoint - steer_stop_percent) * (1 - steer_safe_ratio * speedo_filt_mph / speedo_redline_mph);
     // return steer_pulse_stop_us + (endpoint - steer_pulse_stop_us) * map (speedo_filt_mph, 0.0, speedo_redline_mph, 1.0, steer_safe_ratio);
     // return steer_stop_percent + (endpoint - steer_stop_percent) * (1 - steer_safe_ratio * speedo_filt_mph / speedo_redline_mph);
+}
+void update_tach_idle (bool force = 0) {
+    if (tachIdleTimer.expireset() || force) {
+        tach_idle_rpm = map (temps_f[ENGINE], temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][NOM_MAX], tach_idle_cold_max_rpm, tach_idle_hot_min_rpm);
+        tach_idle_rpm = constrain (tach_idle_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm);
+        cruiseQPID.SetOutputLimits (tach_idle_rpm, cruiseQPID.GetOutputMax());
+    }
 }
 
 // Exponential Moving Average filter : Smooth out noise on inputs. 0 < alpha < 1 where lower = smoother and higher = more responsive

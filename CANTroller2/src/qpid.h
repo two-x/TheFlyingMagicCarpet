@@ -102,7 +102,9 @@ class QPID {
     float GetIterm();         // integral component of output
     float GetDterm();         // derivative component of output
     float GetOutputSum();     // summation of all pid term components
-    float GetOutputRange();     // Soren - range of output
+    float GetOutputRange();   // Soren - range of output
+    float GetOutputMin();     // Soren
+    float GetOutputMax();     // Soren
     uint8_t GetMode();        // manual (0), automatic (1), timer (2) or toggle manual/automatic (3)
     uint8_t GetDirection();   // direct (0), reverse (1)
     uint8_t GetPmode();       // pOnError (0), pOnMeas (1), pOnErrorMeas (2)
@@ -442,6 +444,8 @@ float QPID::GetPterm() { return pTerm; }
 float QPID::GetIterm() { return iTerm; }
 float QPID::GetDterm() { return dTerm; }
 float QPID::GetOutputSum() { return outputSum; }
+float QPID::GetOutputMin() { return outMin; }  // Soren
+float QPID::GetOutputMax() { return outMax; }  // Soren
 float QPID::GetOutputRange() { return outMax - outMin; }  // Soren
 uint8_t QPID::GetMode() { return static_cast<uint8_t>(mode); }
 uint8_t QPID::GetDirection() { return static_cast<uint8_t>(action); }

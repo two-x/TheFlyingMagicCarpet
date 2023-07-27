@@ -101,13 +101,13 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "Vert Max",
         " Vert DB", },
     {   "Pres ADC",  // PG_CAR
-        "      - ",
-        "      - ",
+        "TachIdle",
+        "Tach Hot",
+        "TachCold",
+        "TachRedL",
         "Governor",
         "SteerSaf",
         "AirFlMax",
-        "TachIdle",
-        "TachRedL",
         "Spd Idle",
         "Spd RedL",
         "BkPos0Pt", },
@@ -167,13 +167,13 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         " Cal Brk",
         " Cal Gas", },
 };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 4, 4, 3, 3, 8, 7, 8, 9 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 4, 4, 2, 3, 8, 7, 8, 9 };  // first value in each dataset page that's editable. All values after this must also be editable
 char units[disp_fixed_lines][5] = { "adc ", "mph ", "rpm ", "us  ", "psi ", "%   ", "adc ", "%   " };
 
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "mph ", "in  ", "V   ", "%   ", "    ", "    ", "    ", "    ", "    ", "    ", "    " },  // PG_RUN
     { "adc ", "adc ", "us  ", "us  ", "us  ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
-    { "adc ", "    ", "    ", "%   ", "%   ", "mph ", "rpm ", "rpm ", "mph ", "mph ", "in  " },  // PG_CAR
+    { "adc ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%   ", "mph ", "mph ", "mph ", "in  " },  // PG_CAR
     { "us  ", "us  ", "    ", "    ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PG_PWMS
     { "psi ", "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "    ", "    ", "Hz  ", "s " },  // PG_BPID
     { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "    ", "    ", "Hz  ", "s " },  // PG_GPID
@@ -675,13 +675,13 @@ class Display {
                 }
                 else if (dataset_page == PG_CAR) {
                     draw_dynamic(9, pressure_sensor.get_native(), pressure_sensor.get_min_native(), pressure_sensor.get_max_native());                    
-                    draw_eraseval(10);
-                    draw_eraseval(11);
-                    draw_dynamic(12, gas_governor_percent, 0.0, 100.0);
-                    draw_dynamic(13, steer_safe_percent, 0.0, 100.0);
-                    draw_dynamic(14, airflow_max_mph, 0.0, airflow_abs_max_mph);
-                    draw_dynamic(15, tach_idle_rpm, 0.0, tach_redline_rpm);
-                    draw_dynamic(16, tach_redline_rpm, 0.0, tach_max_rpm);
+                    draw_dynamic(10, tach_idle_rpm, 0.0, tach_redline_rpm);
+                    draw_dynamic(11, tach_idle_hot_min_rpm, 0.0, tach_redline_rpm); 
+                    draw_dynamic(12, tach_idle_cold_max_rpm, 0.0, tach_redline_rpm); 
+                    draw_dynamic(13, tach_redline_rpm, 0.0, tach_max_rpm);
+                    draw_dynamic(14, gas_governor_percent, 0.0, 100.0);
+                    draw_dynamic(15, steer_safe_percent, 0.0, 100.0);
+                    draw_dynamic(16, airflow_max_mph, 0.0, airflow_abs_max_mph);
                     draw_dynamic(17, speedo_idle_mph, 0.0, speedo_redline_mph);
                     draw_dynamic(18, speedo_redline_mph, 0.0, speedo_max_mph);
                     draw_dynamic(19, brake_pos_zeropoint_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
