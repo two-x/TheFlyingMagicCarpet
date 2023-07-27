@@ -246,7 +246,7 @@ private:
         else if (calmode_request) updateMode(SHUTDOWN);
         
         if (!cal_pot_gas_ready) {
-            float temp = map (pot_filt_percent, pot_min_percent, pot_max_percent, (float)gas_pulse_ccw_max_us, (float)gas_pulse_cw_min_us);
+            float temp = map (pot.get_filtered_value(), pot.get_min_human(), pot.get_max_human(), (float)gas_pulse_ccw_max_us, (float)gas_pulse_cw_min_us);
             if (temp <= (float)gas_pulse_idle_us && temp >= (float)gas_pulse_redline_us) cal_pot_gas_ready = true;
         }
     }
