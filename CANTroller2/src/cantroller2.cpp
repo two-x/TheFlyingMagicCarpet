@@ -507,6 +507,8 @@ void loop() {
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
             speedo_target_mph = speedo_filt_mph;
             pressure_target_psi = pressure_sensor.get_min_human();  // Let off the brake and keep it there till out of Cruise mode
+            tach_target_rpm = tach_filt_rpm;  // Start off with target set to current tach value
+            // cruiseQPID.SetCenter (tach_filt_rpm);
             gestureFlyTimer.reset();  // reset gesture timer
             cruise_sw_held = false;
             cruise_adjusting = false;
@@ -522,8 +524,11 @@ void loop() {
             cruise_adjusting = true;  // Suspend pid loop control of gas
             tach_target_rpm = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], tach_idle_rpm, tach_adjustpoint_rpm);
         }
-        else cruise_adjusting = false;  // When joystick at center, the target speed stays locked to the value it was when joystick goes to center
-        
+        else if (cruise_adjusting) {  // When joystick at center, the target speed stays locked to the value it was when joystick goes to center
+            tach_target_rpm = tach_filt_rpm;
+            // cruiseQPID.SetCenter (tach_filt_rpm);
+            cruise_adjusting = false;
+        }
         if (!cruise_adjusting) cruiseAntiglitchTimer.reset();  // Anti-glitch timer attempts to keep very short joystick sensor glitches from going into adjust mode
         else if (cruiseAntiglitchTimer.expired()) speedo_target_mph = speedo_filt_mph;  // May be unneccesary now that our readings are stable.  Remove?  Anyway, need to review the logic
 
@@ -625,7 +630,8 @@ void loop() {
         }
     }
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
-    if (runmode == CRUISE && !cruise_adjusting && cruisePidTimer.expireset()) cruiseQPID.Compute();  // Cruise mode is simpler because it doesn't have to deal with an actuator. It's output is simply the target value for the gas PID
+    if (runmode == CRUISE && !cruise_adjusting && cruisePidTimer.expireset()) cruiseQPID.Compute();
+    
     // Gas - Update servo output. Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
     if (gasPidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
         if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
