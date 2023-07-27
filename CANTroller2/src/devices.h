@@ -347,12 +347,221 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
     std::shared_ptr<HUMAN_T> get_filtered_value_ptr() { return _val_filt.get_ptr(); } // NOTE: should just be public?
 };
 
+// TODO: add Potentiometer
+class Potentiometer : public Sensor<int32_t, float> {
+    protected:
+        // Multiplier and adder values to plug in for unit conversion math
+        float _m_factor;
+        float _b_offset;  
+        bool _invert;  // Flag to indicated if unit conversion math should multiply or divide
+
+        virtual float from_native(int32_t arg_val_native) {
+            float arg_val_f = static_cast<float>(arg_val_native);
+            float min_f = static_cast<float>(native.get_min());
+            float max_f = static_cast<float>(native.get_max());
+            return map(arg_val_f, min_f, max_f, human.get_min(), human.get_max());
+        }
+    
+        virtual int32_t to_native(float arg_val_human) {
+            float min_f = static_cast<float>(native.get_min());
+            float max_f = static_cast<float>(native.get_max());
+            return static_cast<int32_t>(map(arg_val_human, human.get_min(), human.get_max(), min_f, max_f));
+        }
+    public:
+        static constexpr float percent_min = 0.0, percent_max = 100;
+        static constexpr int32_t adc_min = 300; // TUNED 230603 - Used only in determining theconversion factor
+        static constexpr int32_t adc_max = 4095; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
+
+        static constexpr float initial_percent_per_adc = (percent_max - percent_min) / (adc_max - adc_min);  // 100 % / (3996 adc - 0 adc) = 0.025 %/adc
+        static constexpr float initial_ema_alpha = 0.1;
+        static constexpr float initial_offset = -0.08;
+        static constexpr bool initial_invert = false;
+
+        Potentiometer(uint8_t arg_pin) : Sensor<int32_t, float>(arg_pin) {
+            _ema_alpha = initial_ema_alpha;
+            _m_factor = initial_percent_per_adc;
+            _b_offset = initial_offset;
+            _invert = initial_invert;
+            native.set_limits(adc_min, adc_max);
+            human.set_limits(percent_min, percent_max);
+            set_native(adcmidscale_adc);
+            set_can_source(ControllerMode::PIN, true);
+        }
+
+        void setup() {
+            set_pin(_pin, INPUT);
+            set_source(ControllerMode::PIN);
+        }
+    
+        void read() {
+            set_native(analogRead(_pin));
+            ema(human.get());
+        }
+
+        // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
+        void set_convert(float arg_m_factor, float arg_b_offset, bool arg_invert) {
+            _m_factor = arg_m_factor;
+            _b_offset = arg_b_offset;
+            _invert = arg_invert;
+            set_native(native.get());
+        }
+};
+
+    // if (pot_adc != pot_adc_last) printf ("pot adc:%ld pot%%:%lf filt:%lf\n", pot_adc, pot_percent, pot_filt_percent); 
+    // TODO: maybe even a SimulationManager class?
+    // class SimulationManager {
+    //     Map<string,pair<bool,Device>> _devices;
+    //     bool _simulating;
+    //     Potentiometer _pot;
+    //     string _pot_overload;
+    //     enable() {
+    //         // loop through _devices
+    //             // sim, d = pair
+    //             // if sim then d.set_source(TOUCH)
+    //         _simulating = true;
+    //     }
+    //     disable() {
+    //         // loop through _devices
+    //             // restore original mode
+    //         _simulating = false;
+    //     }
+    //     toggle() {
+    //         if _simulating disable() else enable();
+    //     }
+    //     register_device() {
+    //         // pair = sim, d, mode
+    //         // add pair to devices (or update)
+    //     }
+    //     set_pot_overload() {
+    //         // set prev overloaded device mode (either TOUCH or default)
+    //         // set new overloaded device mode to POT
+    //     }
+    //     get_device_list();
+    // }
+    
+// TODO: add description
+// class BrakePositionSensor : public AnalogSensor<int32_t, float> {
+//     protected:
+//         // Multiplier and adder values to plug in for unit conversion math
+//         float _m_factor;
+//         float _b_offset;  
+//         bool _invert;  // Flag to indicated if unit conversion math should multiply or divide
+// 
+//         // uh-oh, it looks like we've got a circular dependency here. maybe the one-val approach is a no-go?
+//         virtual float from_native(int32_t arg_val_native) {
+//             float arg_val_f = static_cast<float>(arg_val_native);
+//             float min_f = static_cast<float>(native.get_min());
+//             float max_f = static_cast<float>(native.get_max());
+//             float ret = -1;
+//             if (!_invert) {
+//                 if (dir == TransducerDirection::REV) {
+//                     ret = min_f + (max_f - (_b_offset + (_m_factor * arg_val_f)));
+//                 }
+//                 ret = _b_offset + (_m_factor * arg_val_f);
+//             } else if (arg_val_f) { // NOTE: isn't 0.0 a valid value tho?
+//                 if (dir == TransducerDirection::REV) {
+//                     ret = min_f + (max_f - (_b_offset + (_m_factor / arg_val_f)));
+//                 }
+//                 ret = _b_offset + (_m_factor / arg_val_f);
+//             } else {
+//                 printf ("Error: unit conversion refused to divide by zero\n");
+//                 // NOTE: hmmmm, couldn't -1 be a valid value in some caes?
+//             }
+//             return ret;
+//         }
+// 
+//         // okay if we don't allow setting limits using native values, then this can work, since we can use to_native to set
+//         // the native limits, and then use that to implement from native. but still, that means we'd either be caching the limits
+//         // (not much of a savings) or re-calculating every time. maybe if it happens rarely...? What about outgoing devices, where
+//         // the native val is downsream?
+//         virtual int32_t to_native(float arg_val_human) {
+//             float arg_val_f = static_cast<float>(arg_val_human);
+//             float min_f = static_cast<float>(human.get_min());
+//             float max_f = static_cast<float>(human.get_max());
+//             float ret = -1;
+//             if (dir == TransducerDirection::REV) {
+//                 arg_val_f = min_f + (max_f - arg_val_f);
+//             }
+//             if (_invert && (arg_val_f - _b_offset)) {
+//                 ret = _m_factor / (arg_val_f - _b_offset);
+//             } else if (!_invert && _m_factor) {
+//                 ret = (arg_val_f - _b_offset) / _m_factor;
+//             } else {
+//                 printf ("Error: unit conversion refused to divide by zero\n");
+//                 // NOTE: hmmmm, couldn't -1 be a valid value in some caes?
+//             }
+//             return ret;
+//         }
+// 
+//     public:
+// // native Param
+// float brake_pos_in;
+// 
+// // filt Param
+// float brake_pos_filt_in;
+// 
+// // initial in per adc
+// float brake_pos_convert_in_per_adc = 3.3 * 10000.0 / (5.0 * adcrange_adc * 557);  // 3.3 v * 10k ohm * 1/5 1/v * 1/4095 1/adc * 1/557 in/ohm = 0.0029 in/adc
+// 
+// // initial invert
+// bool brake_pos_convert_invert = false;
+// int32_t brake_pos_convert_polarity = 1;  // Forward
+// 
+// // initial alpha
+// float brake_pos_ema_alpha = 0.25;
+// float brake_pos_abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
+// float brake_pos_nom_lim_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
+// float brake_pos_zeropoint_in = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
+// float brake_pos_park_in = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
+// float brake_pos_nom_lim_extend_in = 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
+// float brake_pos_abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
+// float brake_pos_margin_in = .029;  //
+//         // NOTE: for now lets keep all the config stuff here in the class. could also read in values from a config file at some point.
+//         static constexpr int32_t min_adc_range = 0;
+//         static constexpr int32_t max_adc_range = 4095;
+//         static constexpr int32_t min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
+//         static constexpr int32_t max_adc = 2080; // Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
+// 
+//         // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
+//         static constexpr float initial_psi_per_adc = 1000.0 * (3.3 - 0.554) / ( (max_adc_range - min_adc) * (4.5 - 0.554) ); 
+//         static constexpr float initial_ema_alpha = 0.1;
+//         static constexpr float initial_offset = 0.0;
+//         static constexpr bool initial_invert = false;
+// 
+//         PressureSensor(uint8_t arg_pin, float* pot_arg=nullptr) : AnalogSensor<int32_t, float>(arg_pin) {
+//             _ema_alpha = initial_ema_alpha;
+//             _m_factor = initial_psi_per_adc;
+//             _b_offset = initial_offset;
+//             _invert = initial_invert;
+//             native.set_limits(min_adc, max_adc);
+//             human.set_limits(from_native(native.get_min()), from_native(native.get_max()));
+//             set_native(min_adc);
+//             set_can_source(ControllerMode::PIN, true);
+//             if (pot_arg)
+//                 enable_pot_input(pot_arg);
+//         }
+//         PressureSensor() = delete;
+// 
+//         void setup() {
+//             set_pin(_pin, INPUT);
+//             set_source(ControllerMode::PIN);
+//         }
+//     
+//         // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
+//         void set_convert(float arg_m_factor, float arg_b_offset, bool arg_invert) {
+//             _m_factor = arg_m_factor;
+//             _b_offset = arg_b_offset;
+//             _invert = arg_invert;
+//             set_native(native.get());
+//         }
+// };
+
 // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
 template<typename NATIVE_T, typename HUMAN_T>
 class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
   protected:
     // NOTE: pot could be an actual Device as well...
-    float *_pot_val; // to pull input from the pot if we're in simulation mode
+    std::shared_ptr<float> _pot_val; // to pull input from the pot if we're in simulation mode
   public:
     AnalogSensor(uint8_t arg_pin) : Sensor<NATIVE_T, HUMAN_T>(arg_pin) {}
     void read() {
@@ -365,12 +574,12 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
                 this->_val_filt.set(this->human.get());
                 break;
             case ControllerMode::POT:
-                this->human.set(map(*this->_pot_val, 0.0, 100.0, this->human.get_min(), this->human.get_max()));
+                this->human.set(map(*this->_pot_val, Potentiometer::percent_min, Potentiometer::percent_max, this->human.get_min(), this->human.get_max()));
                 this->_val_filt.set(this->human.get());
                 break;
         } // take no action in other modes
     }
-    void enable_pot_input(float *pot_val_arg) {
+    void enable_pot_input(std::shared_ptr<float> pot_val_arg) {
         this->set_can_source(ControllerMode::POT, true);
         _pot_val = pot_val_arg;
     }
@@ -438,7 +647,7 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
         static constexpr float initial_offset = 0.0;
         static constexpr bool initial_invert = false;
 
-        PressureSensor(uint8_t arg_pin, float* pot_arg=nullptr) : AnalogSensor<int32_t, float>(arg_pin) {
+        PressureSensor(uint8_t arg_pin, std::shared_ptr<float> pot_arg=nullptr) : AnalogSensor<int32_t, float>(arg_pin) {
             _ema_alpha = initial_ema_alpha;
             _m_factor = initial_psi_per_adc;
             _b_offset = initial_offset;

@@ -651,7 +651,7 @@ class Display {
                     draw_dynamic(9, airflow_filt_mph, airflow_min_mph, airflow_max_mph);
                     draw_dynamic(10, brake_pos_filt_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
                     draw_dynamic(11, battery_filt_v, 0.0, battery_max_v);
-                    draw_dynamic(12, pot_filt_percent, pot_min_percent, pot_max_percent);
+                    draw_dynamic(12, pot.get_filtered_value(), pot.get_min_human(), pot.get_max_human());
                     draw_truth(13, sim_joy, 0);
                     draw_truth(14, sim_pressure, 0);
                     draw_truth(15, sim_brkpos, 0);

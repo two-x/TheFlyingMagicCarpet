@@ -6,6 +6,11 @@
 #include <cstdint> // for uint types
 #include <cstdio> // for printf
 
+/* Value Defines */
+#define adcbits 12
+#define adcrange_adc 4095  // = 2^adcbits-1
+#define adcmidscale_adc 2047  // = 2^(adcbits-1)-1
+
 // pin operations that first check if pin exists for the current board
 void set_pin(int32_t pin, int32_t mode) { if (pin >= 0 && pin != 255) pinMode (pin, mode); }
 void write_pin(int32_t pin, int32_t val) {  if (pin >= 0 && pin != 255) digitalWrite (pin, val); }

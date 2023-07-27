@@ -60,7 +60,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (neopixel_pin, OUTPUT);
     set_pin (sdcard_cs_pin, OUTPUT);
     set_pin (tft_cs_pin, OUTPUT);
-    set_pin (pot_wipe_pin, INPUT);
     set_pin (button_pin, INPUT_PULLUP);
     set_pin (starter_pin, INPUT_PULLDOWN);
     set_pin (joy_horz_pin, INPUT);
@@ -110,6 +109,9 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
     printf("Encoder setup..\n");
     encoder.setup();
+    
+    printf("Pot setup..\n");
+    pot.setup();
 
     printf("Device setup..\n");
     pressure_sensor.setup();
@@ -219,22 +221,16 @@ void loop() {
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
 
     if (take_temperatures) temp_soren();
-    if (sim_coolant && pot_overload == coolant) temps_f[ENGINE] = map (pot_filt_percent, 0.0, 100.0, temp_sensor_min_f, temp_sensor_max_f);
+    if (sim_coolant && pot_overload == coolant) temps_f[ENGINE] = map (pot.get_filtered_value(), 0.0, 100.0, temp_sensor_min_f, temp_sensor_max_f);
     
     encoder.update();  // Read encoder input signals
 
-    // Potentiometer - takes 400 us to read & convert (?!)
-    int32_t pot_adc_last;
-    pot_adc_last = pot_adc;
-    pot_adc = analogRead (pot_wipe_pin);
-    // pot_percent = convert_units ((float)pot_adc, pot_convert_percent_per_adc, pot_convert_invert, 0.0, pot_convert_offset);  // Potentiometer
-    pot_percent = map ((float)pot_adc, (float)pot_min_adc, (float)pot_max_adc, pot_min_percent, pot_max_percent);
-    pot_percent = constrain (pot_percent, pot_min_percent, pot_max_percent);
-    ema_filt (pot_percent, &pot_filt_percent, pot_ema_alpha);
-    // if (pot_adc != pot_adc_last) printf ("pot adc:%ld pot%%:%lf filt:%lf\n", pot_adc, pot_percent, pot_filt_percent); 
+    pot.read();
     
     // Brake position - takes 70 us to read, convert, and filter
-    if (sim_brkpos && pot_overload == brkpos) brake_pos_filt_in = map (pot_filt_percent, 0.0, 100.0, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
+    // (bs) replace with read()
+    // brake_pos_sensor.read();
+    if (sim_brkpos && pot_overload == brkpos) brake_pos_filt_in = map (pot.get_filtered_value(), 0.0, 100.0, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
     else if (!(simulating && sim_brkpos)) {
         brake_pos_in = convert_units ((float)analogRead (brake_pos_pin), brake_pos_convert_in_per_adc, brake_pos_convert_invert);
         ema_filt (brake_pos_in, &brake_pos_filt_in, brake_pos_ema_alpha);
@@ -244,7 +240,7 @@ void loop() {
     if (!(simulating && sim_starter)) starter = read_pin (starter_pin);
 
     // Tach - takes 22 us to read when no activity
-    if (sim_tach && pot_overload == tach) tach_filt_rpm = map (pot_filt_percent, 0.0, 100.0, 0.0, tach_govern_rpm);
+    if (sim_tach && pot_overload == tach) tach_filt_rpm = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, tach_govern_rpm);
     else if (!(simulating && sim_tach)) {
         tach_buf_us = (int32_t)tach_us;  // Copy delta value (in case another interrupt happens during handling)
         tach_us = 0;  // Indicates to isr we processed this value
@@ -258,13 +254,13 @@ void loop() {
         }        
     }
     // Airflow sensor
-    if (sim_airflow && pot_overload == airflow) airflow_filt_mph = map (pot_filt_percent, 0.0, 100.0, 0.0, airflow_max_mph);
+    if (sim_airflow && pot_overload == airflow) airflow_filt_mph = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, airflow_max_mph);
     else if (airflow_detected && !(simulating && sim_airflow)) {
         airflow_mph = airflow_sensor.readMilesPerHour(); // note, this returns a float from 0-33.55 for the FS3000-1015 
         ema_filt (airflow_mph, &airflow_filt_mph, airflow_ema_alpha);  // Sensor EMA filter
     }
     // Speedo - takes 14 us to read when no activity
-    if (sim_speedo && pot_overload == speedo) speedo_filt_mph = map (pot_filt_percent, 0.0, 100.0, 0.0, speedo_govern_mph);
+    if (sim_speedo && pot_overload == speedo) speedo_filt_mph = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, speedo_govern_mph);
     else if (!(simulating && sim_speedo)) { 
         speedo_buf_us = (int32_t)speedo_us;  // Copy delta value (in case another interrupt happens during handling)
         speedo_us = 0;  // Indicates to isr we processed this value
@@ -284,7 +280,7 @@ void loop() {
 
     // Read the car ignition signal, and while we're at it measure the vehicle battery voltage off ign signal
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
-    if (sim_battery && pot_overload == coolant) battery_filt_v = map (pot_filt_percent, 0.0, 100.0, 0.0, battery_max_v);
+    if (sim_battery && pot_overload == coolant) battery_filt_v = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, battery_max_v);
 
     // Controller handling
     //
@@ -336,7 +332,7 @@ void loop() {
 
     // Voltage of vehicle battery
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
-    if (sim_battery && pot_overload == battery) battery_filt_v = map (pot_filt_percent, 0.0, 100.0, 0.0, battery_max_v);
+    if (sim_battery && pot_overload == battery) battery_filt_v = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, battery_max_v);
 
     if (ctrl == JOY) ignition = ignition_sense;
     else if (ctrl == HOTRC) {
@@ -545,7 +541,7 @@ void loop() {
         else if (calmode_request) runmode = SHUTDOWN;
         
         if (!cal_pot_gas_ready) {
-            float temp = map (pot_filt_percent, pot_min_percent, pot_max_percent, (float)gas_pulse_ccw_max_us, (float)gas_pulse_cw_min_us);
+            float temp = map (pot.get_filtered_value(), pot.get_min_human(), pot.get_max_human(), (float)gas_pulse_ccw_max_us, (float)gas_pulse_cw_min_us);
             if (temp <= (float)gas_pulse_idle_us && temp >= (float)gas_pulse_redline_us) cal_pot_gas_ready = true;
         }
     }
@@ -636,7 +632,7 @@ void loop() {
         }
         else if (runmode != BASIC) {
             if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) {
-                gas_pulse_out_us = map (pot_filt_percent, pot_min_percent, pot_max_percent, gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
+                gas_pulse_out_us = map (pot.get_filtered_value(), pot.get_min_human(), pot.get_max_human(), gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
                 gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
             }            
             else if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual)  // This isn't really open loop, more like simple proportional control, with output set proportional to target 

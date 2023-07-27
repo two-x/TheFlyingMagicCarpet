@@ -134,10 +134,6 @@ bool flip_the_screen = false;
 #define touch_irq_pin 255  // Input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - Set to 255 if not used
 #define tft_rst_pin -1  // TFT Reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
 
-#define adcbits 12
-#define adcrange_adc 4095  // = 2^adcbits-1
-#define adcmidscale_adc 2047  // = 2^(adcbits-1)-1
-
 // Globals -------------------
 bool serial_debugging = true; 
 bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
@@ -317,6 +313,7 @@ int32_t battery_convert_polarity = 1;  // Forward
 float battery_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 
 // potentiometer related
+Potentiometer pot(pot_wipe_pin);
 float pot_percent = 50;
 float pot_filt_percent = pot_percent;
 float pot_min_percent = 0;  //
@@ -385,7 +382,7 @@ float steer_pulse_left_us = 2330;  // Steering pulsewidth corresponding to full-
 float steer_pulse_left_max_us = 2500;  // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
 
 // brake pressure related
-PressureSensor pressure_sensor(pressure_pin, &pot_filt_percent);
+PressureSensor pressure_sensor(pressure_pin, pot.get_filtered_value_ptr());
 float pressure_hold_initial_psi = 150;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
 float pressure_hold_increment_psi = 15;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 float pressure_panic_initial_psi = 250;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
