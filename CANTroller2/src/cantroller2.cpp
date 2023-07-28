@@ -1,6 +1,6 @@
 // Carpet CANTroller II  Source Code  - For ESP32-S3-DevKitC-1-N8
 
-#include <SPI.h>  // SPI serial bus needed to talk to the LCD and the SD card
+#include <SPI.h>  // SPI serial bus
 #include <Adafruit_SleepyDog.h>  // Watchdog
 #include <vector>
 #include <iomanip>  // Formatting cout
@@ -22,8 +22,8 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names
     index++;
 }
 
-HotrcManager hotrcHorzManager (22);
-HotrcManager hotrcVertManager (22);    
+HotrcManager hotrcHorzManager (6);
+HotrcManager hotrcVertManager (6);    
 Display screen;
 #ifdef CAP_TOUCH
 TouchScreen ts;
@@ -111,7 +111,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     printf("Encoder setup..\n");
     encoder.setup();
 
-    printf("Device setup..\n");
+    printf("Transducers setup..\n");
     pressure_sensor.setup();
 
     // Set up our interrupts
@@ -125,7 +125,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     // gas_servo.set_native_limits();  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     gas_servo.attach (gas_pwm_pin, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     steer_servo.attach (steer_pwm_pin, steer_pulse_right_us, steer_pulse_left_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
-    brake_servo.attach (brake_pwm_pin, brake_pulse_retract_us, brake_pulse_extend_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
+    // brake_servo.attach (brake_pwm_pin, brake_pulse_retract_us, brake_pulse_extend_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
     
     printf ("Init neopixel..");
     neo_heartbeat = (neopixel_pin >= 0);
@@ -137,30 +137,14 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     i2c_init (i2c_sda_pin, i2c_scl_pin);
     // printf ("done\n");
     for (int32_t i=0; i<i2c_devicecount; i++) if (i2c_addrs[i] == 0x28) airflow_detected = true;
-    printf ("Airflow sensor.. %sdetected. sensor is", (airflow_detected) ? "" : "not ");
+    printf ("Airflow sensor.. %sdetected", (airflow_detected) ? "" : "not ");
     if (airflow_detected) {
-        if (airflow_sensor.begin() == false) printf (" not");  // Begin communication with air flow sensor) over I2C 
+        if (airflow_sensor.begin() == false) printf ("  Sensor not responding");  // Begin communication with air flow sensor) over I2C 
         airflow_sensor.setRange(AIRFLOW_RANGE_15_MPS);
-        printf (" responding properly\n");
+        printf ("  Sensor responding properly\n");
     }
 
-    printf ("Temp sensors..");
-    tempsensebus.setWaitForConversion (false);  // Whether to block during conversion process
-    tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
-    tempsensebus.begin();
-    temp_detected_device_ct = tempsensebus.getDeviceCount();
-    printf (" detected %d devices, parasitic power is %s\n", temp_detected_device_ct, (tempsensebus.isParasitePowerMode()) ? "on" : "off");  // , DEC);
-    int32_t temp_unknown_index = 0;
-    for (int32_t index = 0; index < temp_detected_device_ct; index++) {  // for (int32_t x = 0; x < arraysize(temp_addrs); x++) {
-        if (tempsensebus.getAddress (temp_temp_addr, index)) {
-            for (int8_t addrbyte = 0; addrbyte < arraysize(temp_temp_addr); addrbyte++) {
-                temp_addrs[index][addrbyte] = temp_temp_addr[addrbyte];
-            }
-            tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
-            printf ("  found sensor #%d, addr 0x%x\n", index, temp_temp_addr);  // temp_addrs[x]
-        }
-        else printf ("  ghost device #%d, addr unknown\n", index);  // printAddress (temp_addrs[x]);
-    }  // Need algorithm to recognize addresses of detected devices in known vehicle locations
+    temp_init();  // Onewire bus and temp sensors
     
     // xTaskCreatePinnedToCore ( codeForTask1, "Task_1", 1000, NULL, 1, &Task1, 0);
     // if (ctrl == HOTRC) {  // Look for evidence of a normal (not failsafe) hotrc signal. If it's not yet powered on, we will ignore its spurious poweron ignition event
@@ -279,7 +263,15 @@ void loop() {
     }
 
     // Brake pressure - takes 72 us to read
+
+    if (pressure_sensor.source() != ControllerMode::POT) {
+        if (simulating && sim_pressure)
+            pressure_sensor.set_source(ControllerMode::TOUCH);
+        else
+            pressure_sensor.set_source(ControllerMode::PIN); 
+    }
     pressure_sensor.read();
+
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //
 
     // Read the car ignition signal, and while we're at it measure the vehicle battery voltage off ign signal
@@ -296,9 +288,11 @@ void loop() {
             hotrc_vert_pulse_us = (int32_t)hotrc_vert.readPulseWidth();
         }
         else {
-            hotrc_horz_pulse_us = hotrcHorzManager.spike_filter ((int32_t)hotrc_horz_pulse_64_us);
-            hotrc_vert_pulse_us = hotrcVertManager.spike_filter ((int32_t)hotrc_vert_pulse_64_us);
+            hotrc_horz_pulse_us = (int32_t)hotrc_horz_pulse_64_us;
+            hotrc_vert_pulse_us = (int32_t)hotrc_vert_pulse_64_us;
         }
+        hotrc_horz_pulse_us = hotrcHorzManager.spike_filter (hotrc_horz_pulse_us);
+        hotrc_vert_pulse_us = hotrcVertManager.spike_filter (hotrc_vert_pulse_us);
         ema_filt (hotrc_vert_pulse_us, &hotrc_vert_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Used to detect loss of radio
         // if (boot_button) printf ("hrc H:%4ld V:%4ld\n", hotrc_horz_pulse_us, hotrc_vert_pulse_us);
         // ema_filt (hotrc_horz_pulse_us, &hotrc_horz_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Just here for debugging. Do not need filtered horz value
@@ -751,28 +745,14 @@ void loop() {
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == PG_RUN) {
             if (selected_value == 4) adj_bool (&sim_joy, sim_edit_delta);
-            // else if (selected_value == 5) adj_bool (&sim_pressure, sim_edit_delta);
-            else if (selected_value == 5) {
-                 adj_bool(&sim_pressure, sim_edit_delta);
-                 if (pot_overload != pressure)
-                    if (simulating && sim_pressure)
-                        pressure_sensor.set_source(ControllerMode::TOUCH);
-                    else
-                        pressure_sensor.set_source(ControllerMode::PIN); 
-            }
+            else if (selected_value == 5) adj_bool (&sim_pressure, sim_edit_delta);
             else if (selected_value == 6) adj_bool (&sim_brkpos, sim_edit_delta);
             else if (selected_value == 7) adj_bool (&sim_tach, sim_edit_delta);
             else if (selected_value == 8) adj_bool (&sim_airflow, sim_edit_delta);
             else if (selected_value == 9) adj_bool (&sim_speedo, sim_edit_delta);
             else if (selected_value == 10) {
                 adj_val(&pot_overload, sim_edit_delta, 0, arraysize(sensorcard)-1);
-                if (pot_overload == pressure)
-                    pressure_sensor.set_source(ControllerMode::POT);
-                else
-                    if (simulating && sim_pressure)
-                        pressure_sensor.set_source(ControllerMode::TOUCH);
-                    else
-                        pressure_sensor.set_source(ControllerMode::PIN);
+                if (pot_overload == pressure) pressure_sensor.set_source(ControllerMode::POT);
             }
         }
         else if (dataset_page == PG_JOY) {

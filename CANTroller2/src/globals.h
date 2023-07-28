@@ -1,6 +1,6 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
-#include <SdFat.h>  // SD card & FAT filesystem library
+// #include <SdFat.h>  // SD card & FAT filesystem library
 #include <ESP32Servo.h>  // Makes PWM output to control motors (for rudimentary control of our gas and steering)
 #include <Adafruit_NeoPixel.h>  // Plan to allow control of neopixel LED onboard the esp32
 #include <OneWire.h>
@@ -343,8 +343,10 @@ int32_t ctrl_db_adc[2][2];  // [HORZ/VERT] [BOT/TOP] - to store the top and bott
 int32_t ctrl_pos_adc[2][2];  // [HORZ/VERT] [RAW/FILT] - holds most current controller values
 bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
 int32_t hotrc_source = ESP_RMT;
-
-int32_t hotrc_pulse_lims_us[4][3] = { { 970-1, 1470-3, 1970-3 }, { 1080-1, 1580-3, 2080-3 }, { 1200-1, 1500-2, 1800-3 }, { 1300-1, 1500-2, 1700-3 } };  // [HORZ/VERT/CH3/CH4] [MIN/CENT/MAX]  // These are the l
+int32_t hotrc_pulse_lims_us[4][3] = { { 970-1, 1470-5, 1970-8 },  // [HORZ] [MIN/CENT/MAX]
+                                      { 1080-1, 1580-5, 2080-8 },  // [VERT] [MIN/CENT/MAX]
+                                      { 1200-1, 1500-5, 1800-8 },  // [CH3] [MIN/CENT/MAX]
+                                      { 1300-1, 1500-5, 1700-8 } };  // [CH4] [MIN/CENT/MAX]
 int32_t hotrc_spike_buffer[2][3];
 bool hotrc_radio_detected = false;
 bool hotrc_radio_detected_last = hotrc_radio_detected;
@@ -546,12 +548,12 @@ QPID cruiseQPID (&speedo_filt_mph, &tach_target_rpm, &speedo_target_mph,  // inp
     cruise_pid_period_us, QPID::Control::timer, QPID::centMode::range);
     // QPID::centMode::centerStrict, (tach_govern_rpm + tach_idle_rpm)/2);  // period, more settings
 
-SdFat sd;  // SD card filesystem
-#define approot "cantroller2020"
-#define logfile "log.txt"
-#define error(msg) sd.errorHalt(F(msg))  // Error messages stored in flash.
-SdFile root;  // Directory file.
-SdFile file;  // Use for file creation in folders.
+// SdFat sd;  // SD card filesystem
+// #define approot "cantroller2020"
+// #define logfile "log.txt"
+// #define error(msg) sd.errorHalt(F(msg))  // Error messages stored in flash.
+// SdFile root;  // Directory file.
+// SdFile file;  // Use for file creation in folders.
 
 // Interrupt service routines
 //
@@ -664,34 +666,6 @@ void ema_filt (int32_t raw, int32_t* filt, float alpha) {
     *filt = (int32_t)(alpha * (float)raw + (1 - alpha) * (float)(*filt) + 0.5);  // (?) Adding 0.5 to compensate for the average loss due to int casting roundoff
 }
 
-void sd_init() {
-    if (!sd.begin (sdcard_cs_pin, SD_SCK_MHZ (50))) sd.initErrorHalt();  // Initialize at highest supported speed that is not over 50 mhz. Go lower if errors.
-    if (!root.open ("/")) error("open root failed");
-    if (!sd.exists (approot)) { 
-        if (sd.mkdir (approot)) Serial.println (F("Created approot directory\n"));  // cout << F("Created approot directory\n");
-        else error("Create approot failed");
-    }
-    // Change volume working directory to Folder1.
-    // if (sd.chdir(approot)) {
-    //    cout << F("\nList of files in appdir:\n");
-    //    char *apppath = (char*)malloc((arraysize(appdir)+2)*sizeof(char));
-    //        sd.ls(strcat("/",approot, LS_R);
-    // }
-    // else {
-    //     error("Chdir approot failed\n");
-    // }    
-    // if (!file.open(logfile, O_WRONLY | O_CREAT)) {
-    //     error("Open logfile failed\n");
-    // }
-    // file.close();
-    // Serial.println(F("Filesystem init finished\n"));  // cout << F("Filesystem init finished\n");
-    // for (byte a = 10; a >= 1; a--) {
-    //     char fileName[12];
-    //     sprintf(fileName, "%d.txt", a);
-    //     file = sd.open(fileName, FILE_WRITE); //create file
-    // }
-}
-
 // int* x is c++ style, int *x is c style
 bool adj_val (int32_t* variable, int32_t modify, int32_t low_limit, int32_t high_limit) {  // sets an int reference to new val constrained to given range
     int32_t oldval = *variable;
@@ -754,6 +728,25 @@ long temp_peef (void) {  // Peef's algorithm somewhat modified by Soren
     return 9930;  // Otherwise just return the sun's surface temperature
 }
 
+void temp_init (void) {
+    printf ("Temp sensors..");
+    tempsensebus.setWaitForConversion (false);  // Whether to block during conversion process
+    tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
+    tempsensebus.begin();
+    temp_detected_device_ct = tempsensebus.getDeviceCount();
+    printf (" detected %d devices, parasitic power is %s\n", temp_detected_device_ct, (tempsensebus.isParasitePowerMode()) ? "on" : "off");  // , DEC);
+    int32_t temp_unknown_index = 0;
+    for (int32_t index = 0; index < temp_detected_device_ct; index++) {  // for (int32_t x = 0; x < arraysize(temp_addrs); x++) {
+        if (tempsensebus.getAddress (temp_temp_addr, index)) {
+            for (int8_t addrbyte = 0; addrbyte < arraysize(temp_temp_addr); addrbyte++) {
+                temp_addrs[index][addrbyte] = temp_temp_addr[addrbyte];
+            }
+            tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
+            printf ("  found sensor #%d, addr 0x%x\n", index, temp_temp_addr);  // temp_addrs[x]
+        }
+        else printf ("  ghost device #%d, addr unknown\n", index);  // printAddress (temp_addrs[x]);
+    }  // Need algorithm to recognize addresses of detected devices in known vehicle locations
+}
 void temp_soren (void) {
     if (temp_detected_device_ct && tempTimer.expired()) {
         if (temp_state == CONVERT) {

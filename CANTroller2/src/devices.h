@@ -466,72 +466,6 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
         }
 };
 
-// class TempByPeef {
-//   public:
-//     #include <OneWire.h>
-//     static int secs = 0;
-//     static byte data[2];
-//     static long f;
-//     static long pf;
-//     static int16_t raw;
-
-
-//     TempByPeef (OneWire* onewire_bus) {
-//         ds.reset();
-//         ds.write(0xCC);        // All Devices present - Skip ROM ID
-//         ds.write(0x44);        // start conversion, with parasite power on at the end
-//     }
-
-// };
-
-// #include <OneWire.h>
-
-// static int secs = 0;
-// static byte data[2];
-// static long f;
-// static long pf;
-// static int16_t raw;
-
-
-// OneWire  ds(14);  // pin - a 4.7K resistor is necessary
-
-// void setup(void){
-//   Serial.begin(115200);
-//   Serial.println();
-//   Serial.println("Ready");
-
-//   ds.reset();
-//   ds.write(0xCC);        // All Devices present - Skip ROM ID
-//   ds.write(0x44);        // start conversion, with parasite power on at the end
-
-// }
-
-// void loop(void){
-//   if (millis() % 1000 == 0){
-//     ds.reset();
-//     ds.write(0xCC);        // All Devices present - Skip ROM ID
-//     ds.write(0xBE);         // Read Scratchpad
-//     data[0] = ds.read();
-//     data[1] = ds.read();
-//     raw = (data[1] << 8) | data[0];
-//     pf = f;
-//     f = ((long)raw * 180 / 16 + 3205) / 10;
-//     secs++;
-//     delay(10);
-//     if (abs(pf-f) >= 20 && pf != 0) {
-//       Serial.println("Bad-T-" + String(f));
-//       f = pf;
-//     }
-//     ds.reset();
-//     ds.write(0xCC);        // All Devices present - Skip ROM ID
-//     ds.write(0x44);        // start conversion, with parasite power on at the end
-
-//     Serial.println(String(f/10) + "." + String(f%10) + "°f");
-//   }
-
-//   yield();
-// }
-
 class HotrcManager {
   protected:
     bool spike_signbit;
@@ -550,15 +484,15 @@ class HotrcManager {
         this_delta = new_val - filt_history[previndex];  // Value change since last reading
         if (std::abs(this_delta) > spike_cliff) {  // If new value is a cliff edge (start or end of a spike)
             if (prespike_index == -1) {  // If this cliff edge is the start of a new spike
-                prespike_index = previndex;  // save index of last good value just before the cliffgit push
-                spike_signbit = signbit (this_delta);  // Save cliff steepness
+                prespike_index = previndex;  // save index of last good value just before the cliff
+                spike_signbit = signbit (this_delta);  // Save the direction of the cliff
             }
-            else if (spike_signbit == signbit (this_delta)) {  // If this cliff edge deepens an in-progress spike
+            else if (spike_signbit == signbit (this_delta)) {  // If this cliff edge deepens an in-progress spike (or more likely the change is valid)
                 inject_interpolations (previndex, filt_history[previndex]);  // Smoothly grade the values from before the last cliff to previous value
                 prespike_index = previndex;  // Consider this cliff edge the start of the spike instead
             }
-            else {  // If this cliff edge is a recovery of the existing spike
-                inject_interpolations (index, new_val);  // Fill in the spike with interpolated values
+            else {  // If this cliff edge is a recovery of an in-progress spike
+                inject_interpolations (index, new_val);  // Fill in the spiked values with interpolated values
                 prespike_index = -1;  // Cancel the current spike
             }
         }
@@ -574,17 +508,14 @@ class HotrcManager {
     }
     void inject_interpolations (int32_t endspike_index, int32_t endspike_val) {  // Replaces values between indexes with linear interpolated values
         spike_length = ((depth + endspike_index - prespike_index) % depth) - 1;  // Equal to the spiking values count plus one
-        // if (button_it) printf ("%1ld", spike_length);
         if (!spike_length) return;  // Two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
         interpolated_slope = (endspike_val - filt_history[prespike_index]) / spike_length;
         loopindex = 0;
-        while (++loopindex <= spike_length) {  // Total loop count is spike_length minus one (or not?)
+        while (++loopindex <= spike_length) {
             filt_history[(prespike_index + loopindex) % depth] = filt_history[prespike_index] + loopindex * interpolated_slope;
         }
     }
-    int32_t get_next_rawval () {  // helps to debug the filter from outside the class
-        return raw_history[index];
-    }
+    int32_t get_next_rawval () { return raw_history[index]; }  // helps to debug the filter from outside the class
 };
 
 // Sensor (int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max)  // std::string& eng_name, 
