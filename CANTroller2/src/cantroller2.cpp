@@ -29,6 +29,10 @@ HotrcManager hotrcVertManager (6);
 RunModeManager runModeManager;
 
 Display screen;
+
+// Declare RunModeManager to handle the different modes
+RunModeManager runModeManager;
+    
 #ifdef CAP_TOUCH
 TouchScreen ts;
 #else
