@@ -10,7 +10,7 @@ public:
 
     // Call this function in the main loop to manage run modes
     // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
-    void handle_runmode() {
+    runmodes handle_runmode() {
         updateMode(runmodes(runmode)); // Update the current mode if needed, this also sets we_just_switched_modes
         
         if (_currentMode == BASIC) {
@@ -32,35 +32,26 @@ public:
             if (serial_debugging) Serial.println (F("Error: Invalid runmode entered"));
             updateMode(SHUTDOWN);
         }
-
-        if (basicmodesw) updateMode(BASIC);  // if basicmode switch on --> Basic Mode
-        else if (runmode != CAL && (panic_stop || !ignition)) updateMode(SHUTDOWN);
-        else if (runmode != CAL && (starter || engine_stopped())) updateMode(STALL);  // otherwise if engine not running --> Stall Mode
-
-        if (we_just_switched_modes) {
-            disp_runmode_dirty = true;
-            syspower = HIGH;
-        }
+        return modeChanger();
     }
 
 private:
     runmodes _currentMode; // note these are more here in case we eventually don't use the globals
     runmodes _oldMode;
+    
+    void updateMode(runmodes newmode) { _currentMode = newmode; }
 
-    void updateMode(runmodes newMode) {
-        if (newMode != _currentMode) {
-            oldmode = runmode; // Save previous global runmode
-            runmode = newMode; // Set new global runmode
-            _oldMode = _currentMode;
-            _currentMode = newMode;
+    runmodes modeChanger() {
+        if (basicmodesw) _currentMode = BASIC;  // if basicmode switch on --> Basic Mode
+        else if (_currentMode != CAL && (panic_stop || !ignition)) _currentMode = SHUTDOWN;
+        else if (_currentMode != CAL && (starter || engine_stopped())) _currentMode = STALL;;  // otherwise if engine not running --> Stall Mode
+        we_just_switched_modes = (_currentMode != _oldMode);  // currentMode should not be changed after this point in loop
+        if (we_just_switched_modes) {
             disp_runmode_dirty = true;
-            we_just_switched_modes = true;
+            syspower = HIGH;
         }
-        else {
-            // Reset the global flag if no internal change
-            we_just_switched_modes = false;
-        }
-        Serial.printf("Mode set from %d to %d we just switched: %d\n", _oldMode, _currentMode, we_just_switched_modes);
+        _oldMode = _currentMode;
+        return _currentMode;
     }
 
     void handleBasicMode() { // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.

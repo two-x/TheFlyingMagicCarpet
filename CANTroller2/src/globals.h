@@ -153,7 +153,7 @@ Preferences config;
 // Declare Hotrc RMT Inputs in global scope
 RMTInput hotrc_horz(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_horz_pin)); 
 RMTInput hotrc_vert(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_vert_pin)); 
-RMTInput hotrc_ch3(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_ign_pin)); 
+RMTInput hotrc_ch3(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_ign_pin));
 RMTInput hotrc_ch4(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_cruise_pin)); 
 
 // Globals -------------------
@@ -169,8 +169,8 @@ RMTInput hotrc_ch4(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_cruise_pin));
 
 // run state machine related
 enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL };
-int32_t runmode = SHUTDOWN;
-int32_t oldmode = SHUTDOWN;  // So we can tell when the mode has just changed. start as different to trigger_mode start algo
+runmodes runmode = SHUTDOWN;
+runmodes disp_oldmode = SHUTDOWN;  // So we can tell when the mode has just changed. start as different to trigger_mode start algo
 int32_t gesture_progress = 0;  // How many steps of the Cruise Mode gesture have you completed successfully (from Fly Mode)
 bool shutdown_complete = false;  // Shutdown mode has completed its work and can stop activity
 bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
