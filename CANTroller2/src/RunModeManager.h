@@ -150,7 +150,7 @@ private:
             else if (!car_stopped()) car_initially_moved = true;  // Once car moves, we're allowed to stay in fly mode
         }
         else if (car_stopped()) updateMode(HOLD);  // Go to Hold Mode if we have come to a stop after moving  // && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT]
-        if (ctrl == HOTRC && !(simulating && sim_joy) && !hotrc_radio_detected) updateMode(HOLD);  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
+        if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && !hotrc_radio_detected) updateMode(HOLD);  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
         else {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])  {  // If we are trying to accelerate, scale joystick value to determine gas setpoint
                 tach_target_rpm = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], tach_idle_rpm, tach_govern_rpm);

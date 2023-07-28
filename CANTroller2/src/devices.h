@@ -3,7 +3,10 @@
 #include <stdio.h>
 #include <iostream>
 #include <cmath>
-#include <memory> // for shared_ptr
+#include <map>
+#include <tuple>
+// #include <ranges> // for std::view::keys
+#include <memory> // for std::shared_ptr
 #include "Arduino.h"
 #include "utils.h"
 // #include "xtensa/core-macros.h"  // access to ccount register for esp32 timing ticks
@@ -347,7 +350,8 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
     std::shared_ptr<HUMAN_T> get_filtered_value_ptr() { return _val_filt.get_ptr(); } // NOTE: should just be public?
 };
 
-// TODO: add Potentiometer
+// Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth. The output can either be read as a value, or passed as a pointer so that other components can
+// access it directly as needed.
 class Potentiometer : public Sensor<int32_t, float> {
     protected:
         // Multiplier and adder values to plug in for unit conversion math
@@ -407,154 +411,198 @@ class Potentiometer : public Sensor<int32_t, float> {
         }
 };
 
-    // if (pot_adc != pot_adc_last) printf ("pot adc:%ld pot%%:%lf filt:%lf\n", pot_adc, pot_percent, pot_filt_percent); 
-    // TODO: maybe even a SimulationManager class?
-    // class SimulationManager {
-    //     Map<string,pair<bool,Device>> _devices;
-    //     bool _simulating;
-    //     Potentiometer _pot;
-    //     string _pot_overload;
-    //     enable() {
-    //         // loop through _devices
-    //             // sim, d = pair
-    //             // if sim then d.set_source(TOUCH)
-    //         _simulating = true;
-    //     }
-    //     disable() {
-    //         // loop through _devices
-    //             // restore original mode
-    //         _simulating = false;
-    //     }
-    //     toggle() {
-    //         if _simulating disable() else enable();
-    //     }
-    //     register_device() {
-    //         // pair = sim, d, mode
-    //         // add pair to devices (or update)
-    //     }
-    //     set_pot_overload() {
-    //         // set prev overloaded device mode (either TOUCH or default)
-    //         // set new overloaded device mode to POT
-    //     }
-    //     get_device_list();
-    // }
-    
-// TODO: add description
-// class BrakePositionSensor : public AnalogSensor<int32_t, float> {
-//     protected:
-//         // Multiplier and adder values to plug in for unit conversion math
-//         float _m_factor;
-//         float _b_offset;  
-//         bool _invert;  // Flag to indicated if unit conversion math should multiply or divide
-// 
-//         // uh-oh, it looks like we've got a circular dependency here. maybe the one-val approach is a no-go?
-//         virtual float from_native(int32_t arg_val_native) {
-//             float arg_val_f = static_cast<float>(arg_val_native);
-//             float min_f = static_cast<float>(native.get_min());
-//             float max_f = static_cast<float>(native.get_max());
-//             float ret = -1;
-//             if (!_invert) {
-//                 if (dir == TransducerDirection::REV) {
-//                     ret = min_f + (max_f - (_b_offset + (_m_factor * arg_val_f)));
-//                 }
-//                 ret = _b_offset + (_m_factor * arg_val_f);
-//             } else if (arg_val_f) { // NOTE: isn't 0.0 a valid value tho?
-//                 if (dir == TransducerDirection::REV) {
-//                     ret = min_f + (max_f - (_b_offset + (_m_factor / arg_val_f)));
-//                 }
-//                 ret = _b_offset + (_m_factor / arg_val_f);
-//             } else {
-//                 printf ("Error: unit conversion refused to divide by zero\n");
-//                 // NOTE: hmmmm, couldn't -1 be a valid value in some caes?
-//             }
-//             return ret;
-//         }
-// 
-//         // okay if we don't allow setting limits using native values, then this can work, since we can use to_native to set
-//         // the native limits, and then use that to implement from native. but still, that means we'd either be caching the limits
-//         // (not much of a savings) or re-calculating every time. maybe if it happens rarely...? What about outgoing devices, where
-//         // the native val is downsream?
-//         virtual int32_t to_native(float arg_val_human) {
-//             float arg_val_f = static_cast<float>(arg_val_human);
-//             float min_f = static_cast<float>(human.get_min());
-//             float max_f = static_cast<float>(human.get_max());
-//             float ret = -1;
-//             if (dir == TransducerDirection::REV) {
-//                 arg_val_f = min_f + (max_f - arg_val_f);
-//             }
-//             if (_invert && (arg_val_f - _b_offset)) {
-//                 ret = _m_factor / (arg_val_f - _b_offset);
-//             } else if (!_invert && _m_factor) {
-//                 ret = (arg_val_f - _b_offset) / _m_factor;
-//             } else {
-//                 printf ("Error: unit conversion refused to divide by zero\n");
-//                 // NOTE: hmmmm, couldn't -1 be a valid value in some caes?
-//             }
-//             return ret;
-//         }
-// 
-//     public:
-// // native Param
-// float brake_pos_in;
-// 
-// // filt Param
-// float brake_pos_filt_in;
-// 
-// // initial in per adc
-// float brake_pos_convert_in_per_adc = 3.3 * 10000.0 / (5.0 * adcrange_adc * 557);  // 3.3 v * 10k ohm * 1/5 1/v * 1/4095 1/adc * 1/557 in/ohm = 0.0029 in/adc
-// 
-// // initial invert
-// bool brake_pos_convert_invert = false;
-// int32_t brake_pos_convert_polarity = 1;  // Forward
-// 
-// // initial alpha
-// float brake_pos_ema_alpha = 0.25;
-// float brake_pos_abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
-// float brake_pos_nom_lim_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-// float brake_pos_zeropoint_in = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
-// float brake_pos_park_in = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
-// float brake_pos_nom_lim_extend_in = 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-// float brake_pos_abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
-// float brake_pos_margin_in = .029;  //
-//         // NOTE: for now lets keep all the config stuff here in the class. could also read in values from a config file at some point.
-//         static constexpr int32_t min_adc_range = 0;
-//         static constexpr int32_t max_adc_range = 4095;
-//         static constexpr int32_t min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
-//         static constexpr int32_t max_adc = 2080; // Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
-// 
-//         // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
-//         static constexpr float initial_psi_per_adc = 1000.0 * (3.3 - 0.554) / ( (max_adc_range - min_adc) * (4.5 - 0.554) ); 
-//         static constexpr float initial_ema_alpha = 0.1;
-//         static constexpr float initial_offset = 0.0;
-//         static constexpr bool initial_invert = false;
-// 
-//         PressureSensor(uint8_t arg_pin, float* pot_arg=nullptr) : AnalogSensor<int32_t, float>(arg_pin) {
-//             _ema_alpha = initial_ema_alpha;
-//             _m_factor = initial_psi_per_adc;
-//             _b_offset = initial_offset;
-//             _invert = initial_invert;
-//             native.set_limits(min_adc, max_adc);
-//             human.set_limits(from_native(native.get_min()), from_native(native.get_max()));
-//             set_native(min_adc);
-//             set_can_source(ControllerMode::PIN, true);
-//             if (pot_arg)
-//                 enable_pot_input(pot_arg);
-//         }
-//         PressureSensor() = delete;
-// 
-//         void setup() {
-//             set_pin(_pin, INPUT);
-//             set_source(ControllerMode::PIN);
-//         }
-//     
-//         // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
-//         void set_convert(float arg_m_factor, float arg_b_offset, bool arg_invert) {
-//             _m_factor = arg_m_factor;
-//             _b_offset = arg_b_offset;
-//             _invert = arg_invert;
-//             set_native(native.get());
-//         }
-// };
+// These enum classes represent the components which can be simulated (SimOption) and the subset of those components which can be take simulated input from the pot (PotOption).
+// They are both uint8_t types under the covers, and PotOption has all of its members defined to match the values of its SimOption counterparts, so they can be compared and
+// used interchangeably, albeit with casts from one type to the other. Two converter functions are provided as helpers with casting if desired (sim2pot and pot2sim).
+typedef uint8_t opt_t;
+enum class SimOption : opt_t { pressure=0, brkpos, tach, airflow, speedo, battery, coolant, joy, basicsw, cruisesw, syspower, starter, ignition };
+enum class PotOption : opt_t { pressure=static_cast<opt_t>(SimOption::pressure),
+                               brkpos=static_cast<opt_t>(SimOption::brkpos),
+                               tach=static_cast<opt_t>(SimOption::tach), 
+                               airflow=static_cast<opt_t>(SimOption::airflow), 
+                               speedo=static_cast<opt_t>(SimOption::speedo), 
+                               battery=static_cast<opt_t>(SimOption::battery), 
+                               coolant=static_cast<opt_t>(SimOption::coolant),
+                               none=static_cast<opt_t>(-1) };
+PotOption sim2pot(SimOption option) { return static_cast<PotOption>(static_cast<opt_t>(option)); }
+SimOption pot2sim(PotOption option) { return static_cast<SimOption>(static_cast<opt_t>(option)); }
+
+// Simulator manages the ControllerMode handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
+// NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use ControllerModes,
+//       we can simplify the logic here a lot.
+class Simulator {
+    private:
+        // NOTE: if we only simulated devices, we could keep track of simulability in the Device class. We could keep the default ControllerMode in Device the same way.
+        // 3-tuple for a given component, keeping track of simulability status (whether this component is allowed to be simulated), an associated Device (a pointer to the actual component),
+        // and a default ControllerMode (the mode we would like the component to switch back to when it stops being simulated)
+        typedef std::tuple<bool, Device*, ControllerMode> simulable_t;
+        std::map<SimOption, simulable_t> _devices; // a collection of simulatable components
+        bool _enabled = false; // keep track of whether the simulator is running or not
+        SimOption _pot_overload; // keep track of which component is getting info from the pot
+
+        // NOTE: I think we should keep the pot internally here, but there are some logic questions to answer about how that should work.
+        //       For now, keep this class to just managing the logic.
+        // Potentiometer _pot;
+    public:
+        static constexpr PotOption initial_pot_overload = PotOption::speedo;
+        
+        // initial simulation settings
+        static constexpr bool initial_sim_joy = false;
+        static constexpr bool initial_sim_tach = true;
+        static constexpr bool initial_sim_speedo = true;
+        static constexpr bool initial_sim_brkpos = true;
+        static constexpr bool initial_sim_basicsw = true;
+        static constexpr bool initial_sim_cruisesw = false;
+        static constexpr bool initial_sim_pressure = true;
+        static constexpr bool initial_sim_syspower = true;
+        static constexpr bool initial_sim_starter = true;
+        static constexpr bool initial_sim_ignition = true;
+        static constexpr bool initial_sim_airflow = false;
+        static constexpr bool initial_sim_battery = true;
+        static constexpr bool initial_sim_coolant = true;
+
+        Simulator(PotOption overload_arg=initial_pot_overload) : _pot_overload(pot2sim(overload_arg)) {
+            // set initial simulatability status for all components
+            set_can_simulate(SimOption::joy, initial_sim_joy);
+            set_can_simulate(SimOption::tach, initial_sim_tach);
+            set_can_simulate(SimOption::speedo, initial_sim_speedo);
+            set_can_simulate(SimOption::brkpos, initial_sim_brkpos);
+            set_can_simulate(SimOption::basicsw, initial_sim_basicsw);
+            set_can_simulate(SimOption::cruisesw, initial_sim_cruisesw);
+            set_can_simulate(SimOption::pressure, initial_sim_pressure);
+            set_can_simulate(SimOption::syspower, initial_sim_syspower);
+            set_can_simulate(SimOption::starter, initial_sim_starter);
+            set_can_simulate(SimOption::ignition, initial_sim_ignition);
+            set_can_simulate(SimOption::airflow, initial_sim_airflow);
+            set_can_simulate(SimOption::battery, initial_sim_battery);
+            set_can_simulate(SimOption::coolant, initial_sim_coolant);
+        }
+
+        // turn on the simulator. all components which are set to be simulated will switch to simulated input
+        void enable() {
+            if (!_enabled) {
+                for ( auto &kv : _devices ) { // go through all our components
+                    bool can_sim = std::get<0>(kv.second); // check simulatability status
+                    if (can_sim && _pot_overload != kv.first) { // if component has simulation enabled and it's not being overloaded by the pot...
+                        Device *d = std::get<1>(kv.second);
+                        // NOTE: the nullptr checks here and below exist so that we can work with boolean components as well as Devices, for backwards compatability
+                        if (d != nullptr) {
+                           d->set_source(ControllerMode::TOUCH); // ...then set component to take input from the touchscreen
+                        }
+                    }
+                }
+                _enabled = true;
+            }
+        }
+
+        // turn off the simulator. all devices will be set to their default input (if they are not being overloaded by the pot)
+        void disable() {
+            if (_enabled) {
+                for ( auto &kv : _devices ) { // go through all our components
+                    bool can_sim = std::get<0>(kv.second);
+                    if (can_sim && _pot_overload != kv.first) { // if component has simulation enabled and it's not being overloaded by the pot...
+                        Device *d = std::get<1>(kv.second);
+                        if (d != nullptr) {
+                            ControllerMode default_mode = std::get<2>(kv.second);
+                            d->set_source(default_mode); // ...then it's in simulation mode and needs to be set back to it's default mode, since we are no longer simulating
+                        }
+                    }
+                }
+                _enabled = false;
+            }
+        }
+
+        // toggle the simulator on and off
+        void toggle() {
+            return _enabled ? disable() : enable();
+        }
+
+        // check if a componenet is currently being simulated (by either the touchscreen or the pot)
+        bool simulating(SimOption option) {
+            return can_simulate(option) && (_enabled || _pot_overload == option);
+        }
+
+        // associate a Device and a given fall-back ControllerMode with a SimOption
+        void register_device(SimOption option, Device *d, ControllerMode default_mode) {
+            // should we call d.set_can_source here?
+            bool can_sim = false; // by default, disable simulation for this component
+            auto kv = _devices.find(option); // look for the component
+            if (kv != _devices.end()) {
+                can_sim = std::get<0>(kv->second); // if an entry for the component already existed, preserve its simulatability status
+            }
+            _devices[option] = simulable_t(can_sim, d, default_mode); // store info for this component
+        }
+
+        // check if a component can be simulated (by either the touchscreen or the pot)
+        bool can_simulate(SimOption option) {
+            auto kv = _devices.find(option); // look for the component
+            if (kv != _devices.end()) {
+                return std::get<0>(kv->second); // if it exists, check the simulability status
+            }
+            return false; // couldn't find component, so there's no way we can simulate it
+        }
+
+        // set simulatability status for a component
+        void set_can_simulate(SimOption option, bool can_sim) {
+            auto kv = _devices.find(option); // look for component
+            if (kv != _devices.end()) { // if an entry for this component already exists, check if the new simulatability status is different from the old
+                bool old_can_sim = std::get<0>(kv->second);
+                if (can_sim != old_can_sim) { // if the simulation status has changed, we need to update the input source for the component
+                    ControllerMode default_mode = ControllerMode::UNDEF;
+                    Device *d = std::get<1>(kv->second);
+                    if (d != nullptr) { // if there is no associated Device with this component then input handling is done in the main code
+                        default_mode = std::get<2>(kv->second); // preserve the stored default controller mode
+                        if (can_sim) { // if we just enabled simulatability...
+                            if (option == _pot_overload) { // ...and the pot is supposed to overload this component...
+                                    d->set_source(ControllerMode::POT); // ...then set the input source for the associated Device to read from the pot
+                            } else if (_enabled) { // ...and the pot isn't overloading this component, but the simulator is running...
+                                    d->set_source(ControllerMode::TOUCH); // ...then set the input source for the associated Device to read from the touchscreen
+                            }
+                        } else {
+                            d->set_source(default_mode); // we disabled simulation for this component, set it back to its default input source
+                        }
+                    }
+                    kv->second = simulable_t(can_sim, d, default_mode); // update the entry with the new simulatability status
+                }
+            } else {
+                _devices[option] = simulable_t(can_sim, nullptr, ControllerMode::UNDEF); // add a new entry with the simulatability status for this component
+            }
+        }
+
+        // set the component to be overridden by the pot (the pot can only override one component at a time)
+        void set_pot_overload(PotOption pot_option) { // we take a PotOption here so only valid components can be overridden
+            SimOption option = pot2sim(pot_option); // convert arg to the right type
+            if (option != _pot_overload) { // if we're overloading a different component, we need to reset the input source for the old one
+                auto kv = _devices.find(_pot_overload);
+                if (kv != _devices.end()) {
+                    Device *d = std::get<1>(kv->second);
+                    if (d != nullptr) { // if we were overloading a component with an associated Device...
+                        bool can_sim = std::get<0>(kv->second);
+                        if (_enabled && can_sim) { // ...and the simulator is on, and we're able to be simulated...
+                            d->set_source(ControllerMode::TOUCH); // ...then set the input source to the touchscreen
+                        } else { // ...and either the simulator is off or we aren't allowing simualtion for this component...
+                            ControllerMode default_mode = std::get<2>(kv->second);
+                            d->set_source(default_mode); // then set the input source for the component to its default
+                        }
+                    } // ...else this component is a boolean, and input source handling is done elsewhere
+                }
+                kv = _devices.find(option); // we need to set the input source of the newly-overridden component
+                if (kv != _devices.end()) {
+                    Device *d = std::get<1>(kv->second);
+                    if (d != nullptr) { // if  we're overloading a component with an associated devicie, we need to change the input source to the pot
+                        bool can_sim = std::get<0>(kv->second);
+                        if (can_sim) { // if we allow simualation for this componenent...
+                            d->set_source(ControllerMode::POT); // ...then set its input source to the pot
+                        }
+                    }
+                }
+                _pot_overload = option;
+            }
+        }
+
+        bool get_enabled() { return _enabled; }
+        SimOption get_pot_overload() { return _pot_overload; }
+};
 
 // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
 template<typename NATIVE_T, typename HUMAN_T>
@@ -656,8 +704,9 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
             human.set_limits(from_native(native.get_min()), from_native(native.get_max()));
             set_native(min_adc);
             set_can_source(ControllerMode::PIN, true);
-            if (pot_arg)
+            if (pot_arg) {
                 enable_pot_input(pot_arg);
+            }
         }
         PressureSensor() = delete;
 

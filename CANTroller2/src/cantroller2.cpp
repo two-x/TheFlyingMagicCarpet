@@ -10,11 +10,10 @@
 #include "uictrl.h"
 #include "TouchScreen.h"
 #include "RunModeManager.h"
-using namespace std;
 
-std::vector<string> loop_names(20);
+std::vector<std::string> loop_names(20);
 
-void loop_savetime (uint32_t timesarray[], int32_t &index, vector<string> &names, bool dirty[], string loopname) {  // (int32_t timesarray[], int32_t index) {
+void loop_savetime (uint32_t timesarray[], int32_t &index, std::vector<std::string> &names, bool dirty[], std::string loopname) {  // (int32_t timesarray[], int32_t index) {
     if (dirty[index]) {
         names[index] = loopname;  // names[index], name);
         dirty[index] = false;
@@ -112,6 +111,9 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     printf("Transducers setup..\n");
     pressure_sensor.setup();
 
+    printf("Simulator setup..\n");
+    simulator.register_device(SimOption::pressure, &pressure_sensor, pressure_sensor.source());
+
     // Set up our interrupts
     printf ("Attach interrupts..\n");
     attachInterrupt (digitalPinToInterrupt(tach_pulse_pin), tach_isr, RISING);
@@ -204,13 +206,13 @@ void loop() {
     // printf ("it:%d ac:%ld lst:%d ta:%d sc:%d el:%ld\n", boot_button, boot_button_action, boot_button_last, boot_button_timer_active, boot_button_suppress_click, dispResetButtonTimer.elapsed());
     
     // External digital signals - takes 11 us to read
-    if (!(simulating && sim_basicsw)) basicmodesw = !digitalRead (basicmodesw_pin);   // 1-value because electrical signal is active low
-    // if (ctrl == JOY && (!simulating || !sim_cruisesw)) cruise_sw = digitalRead (joy_cruise_btn_pin);
+    if (!simulator.simulating(SimOption::basicsw)) basicmodesw = !digitalRead (basicmodesw_pin);   // 1-value because electrical signal is active low
+    // if (ctrl == JOY && (!simulator.get_enabled() || !sim_cruisesw)) cruise_sw = digitalRead (joy_cruise_btn_pin);
 
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
 
     if (take_temperatures) temp_soren();
-    if (sim_coolant && pot_overload == coolant) temps_f[ENGINE] = map (pot.get_filtered_value(), 0.0, 100.0, temp_sensor_min_f, temp_sensor_max_f);
+    if (simulator.can_simulate(SimOption::coolant) && simulator.get_pot_overload() == SimOption::coolant) temps_f[ENGINE] = map (pot.get_filtered_value(), 0.0, 100.0, temp_sensor_min_f, temp_sensor_max_f);
     
     encoder.update();  // Read encoder input signals
 
@@ -219,18 +221,18 @@ void loop() {
     // Brake position - takes 70 us to read, convert, and filter
     // (bs) replace with read()
     // brake_pos_sensor.read();
-    if (sim_brkpos && pot_overload == brkpos) brake_pos_filt_in = map (pot.get_filtered_value(), 0.0, 100.0, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
-    else if (!(simulating && sim_brkpos)) {
+    if (simulator.can_simulate(SimOption::brkpos) && simulator.get_pot_overload() == SimOption::brkpos) brake_pos_filt_in = map (pot.get_filtered_value(), 0.0, 100.0, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
+    else if (!simulator.simulating(SimOption::brkpos)) {
         brake_pos_in = convert_units ((float)analogRead (brake_pos_pin), brake_pos_convert_in_per_adc, brake_pos_convert_invert);
         ema_filt (brake_pos_in, &brake_pos_filt_in, brake_pos_ema_alpha);
     }
     else brake_pos_filt_in = (brake_pos_nom_lim_retract_in + brake_pos_zeropoint_in)/2;  // To keep brake position in legal range during simulation
     
-    if (!(simulating && sim_starter)) starter = read_pin (starter_pin);
+    if (!simulator.simulating(SimOption::starter)) starter = read_pin (starter_pin);
 
     // Tach - takes 22 us to read when no activity
-    if (sim_tach && pot_overload == tach) tach_filt_rpm = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, tach_govern_rpm);
-    else if (!(simulating && sim_tach)) {
+    if (simulator.can_simulate(SimOption::tach) && simulator.get_pot_overload() == SimOption::tach) tach_filt_rpm = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, tach_govern_rpm);
+    else if (!simulator.simulating(SimOption::tach)) {
         tach_buf_us = (int32_t)tach_us;  // Copy delta value (in case another interrupt happens during handling)
         tach_us = 0;  // Indicates to isr we processed this value
         if (tach_buf_us) {  // If a valid rotation has happened since last time, delta will have a value
@@ -243,14 +245,14 @@ void loop() {
         }        
     }
     // Airflow sensor
-    if (sim_airflow && pot_overload == airflow) airflow_filt_mph = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, airflow_max_mph);
-    else if (airflow_detected && !(simulating && sim_airflow)) {
+    if (simulator.can_simulate(SimOption::airflow) && simulator.get_pot_overload() == SimOption::airflow) airflow_filt_mph = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, airflow_max_mph);
+    else if (airflow_detected && !simulator.simulating(SimOption::airflow)) {
         airflow_mph = airflow_sensor.readMilesPerHour(); // note, this returns a float from 0-33.55 for the FS3000-1015 
         ema_filt (airflow_mph, &airflow_filt_mph, airflow_ema_alpha);  // Sensor EMA filter
     }
     // Speedo - takes 14 us to read when no activity
-    if (sim_speedo && pot_overload == speedo) speedo_filt_mph = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, speedo_govern_mph);
-    else if (!(simulating && sim_speedo)) { 
+    if (simulator.can_simulate(SimOption::speedo) && simulator.get_pot_overload() == SimOption::speedo) speedo_filt_mph = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, speedo_govern_mph);
+    else if (!simulator.simulating(SimOption::speedo)) { 
         speedo_buf_us = (int32_t)speedo_us;  // Copy delta value (in case another interrupt happens during handling)
         speedo_us = 0;  // Indicates to isr we processed this value
         if (speedo_buf_us) {  // If a valid rotation has happened since last time, delta will have a value
@@ -264,20 +266,13 @@ void loop() {
     }
 
     // Brake pressure - takes 72 us to read
-    if (sim_pressure && pot_overload == pressure) {
-        pressure_sensor.set_source(ControllerMode::POT);
-    } else if (sim_pressure && simulating) {
-        pressure_sensor.set_source(ControllerMode::TOUCH);
-    } else {
-        pressure_sensor.set_source(ControllerMode::PIN);
-    }
     pressure_sensor.read();
 
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //
 
     // Read the car ignition signal, and while we're at it measure the vehicle battery voltage off ign signal
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
-    if (sim_battery && pot_overload == coolant) battery_filt_v = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, battery_max_v);
+    if (simulator.simulating(SimOption::battery) && simulator.get_pot_overload() == SimOption::battery) battery_filt_v = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, battery_max_v);
 
     // Controller handling
     //
@@ -299,7 +294,7 @@ void loop() {
         // ema_filt (hotrc_horz_pulse_us, &hotrc_horz_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Just here for debugging. Do not need filtered horz value
         // if (boot_button) printf (" | ema H:%4ld V:%4ld", hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us);
     }
-    if (!(simulating && sim_joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
+    if (!simulator.simulating(SimOption::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
         if (ctrl == HOTRC) {
             if (hotrc_horz_pulse_us >= hotrc_pulse_lims_us[HORZ][CENT])  // Steering: Convert from pulse us to joystick adc equivalent, when pushing right, else pushing left
                  ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MAX]);
@@ -330,8 +325,9 @@ void loop() {
     // if (boot_button) printf ("hrz: %ld | saf: %ld | out %ld", ctrl_pos_adc[HORZ][FILT], steer_pulse_safe_us, steer_pulse_out_us);
 
     // Voltage of vehicle battery
+    // NOTE: we have these same lines of code above, are they both needed?
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
-    if (sim_battery && pot_overload == battery) battery_filt_v = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, battery_max_v);
+    if (simulator.can_simulate(SimOption::battery) && simulator.get_pot_overload() == SimOption::battery) battery_filt_v = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, battery_max_v);
 
     if (ctrl == JOY) ignition = ignition_sense;
     else if (ctrl == HOTRC) {
@@ -511,7 +507,7 @@ void loop() {
         if (encoder_sw_action == Encoder::SHORT)  {  // if short press
             if (tuning_ctrl == EDIT) tuning_ctrl = SELECT;  // If we were editing a value drop back to select mode
             else if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If we were selecting a variable start editing its value
-            else if (ctrl == JOY && (!simulating || !sim_cruisesw)) flycruise_toggle_request = true;  // Unless tuning, when using old joystick allow use of short encoder press to toggle fly/cruise modes
+            else if (ctrl == JOY && !simulator.simulating(SimOption::cruisesw)) flycruise_toggle_request = true;  // Unless tuning, when using old joystick allow use of short encoder press to toggle fly/cruise modes
             // I envision pushing encoder switch while not tuning could switch desktops from our current analysis interface to a different runtime display 
         }
         else tuning_ctrl = (tuning_ctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
@@ -522,7 +518,7 @@ void loop() {
 
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "enc");  //
 
-    // Tuning : implement effects of changes made by encoder or touchscreen to simulating, dataset_page, selected_value, or tuning_ctrl
+    // Tuning : implement effects of changes made by encoder or touchscreen to simulator, dataset_page, selected_value, or tuning_ctrl
     //
     sim_edit_delta += sim_edit_delta_encoder + sim_edit_delta_touch;  // Allow edits using the encoder or touchscreen
     sim_edit_delta_touch = 0;
@@ -543,13 +539,13 @@ void loop() {
     adj = false;
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == PG_RUN) {
-            if (selected_value == 4) adj_bool (&sim_joy, sim_edit_delta);
-            else if (selected_value == 5) adj_bool (&sim_pressure, sim_edit_delta);
-            else if (selected_value == 6) adj_bool (&sim_brkpos, sim_edit_delta);
-            else if (selected_value == 7) adj_bool (&sim_tach, sim_edit_delta);
-            else if (selected_value == 8) adj_bool (&sim_airflow, sim_edit_delta);
-            else if (selected_value == 9) adj_bool (&sim_speedo, sim_edit_delta);
-            else if (selected_value == 10) adj_val(&pot_overload, sim_edit_delta, 0, arraysize(sensorcard)-1);
+            if (selected_value == 4) simulator.set_can_simulate(SimOption::joy, adj_bool(simulator.can_simulate(SimOption::joy), sim_edit_delta));
+            else if (selected_value == 5) simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), sim_edit_delta));
+            else if (selected_value == 6) simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), sim_edit_delta));
+            else if (selected_value == 7) simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), sim_edit_delta));
+            else if (selected_value == 8) simulator.set_can_simulate(SimOption::airflow, adj_bool(simulator.can_simulate(SimOption::airflow), sim_edit_delta));
+            else if (selected_value == 9) simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), sim_edit_delta));
+            else if (selected_value == 10) simulator.set_pot_overload(static_cast<PotOption>(adj_val(static_cast<int>(simulator.get_pot_overload()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));
         }
         else if (dataset_page == PG_JOY) {
             if (selected_value == 4) adj_val (&hotrc_pulse_failsafe_max_us, sim_edit_delta, hotrc_pulse_failsafe_min_us + 1, hotrc_pulse_lims_us[VERT][MIN] - 1);
@@ -613,9 +609,9 @@ void loop() {
 
     // Ignition & Panic stop logic and Update output signals
     if (!car_stopped()) {
-        if (ctrl == HOTRC && !(simulating && sim_joy) && !hotrc_radio_detected) panic_stop = true;  // panic_stop could also have been initiated by the user button   && hotrc_radio_detected_last 
+        if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && !hotrc_radio_detected) panic_stop = true;  // panic_stop could also have been initiated by the user button   && hotrc_radio_detected_last 
         else if (ctrl == JOY && !ignition) panic_stop = true;
-        // else if (ctrl == JOY && !(simulating && sim_joy) && !ignition && ignition_last) panic_stop = true;
+        // else if (ctrl == JOY && !(simulator.get_enabled() && sim_joy) && !ignition && ignition_last) panic_stop = true;
     }
     else if (panic_stop) panic_stop = false;  // Cancel panic if car is stopped
     if (ctrl == HOTRC) {  // When using joystick, ignition is controlled with button and we read it. With Hotrc, we control ignition
@@ -691,7 +687,7 @@ void loop() {
     dataset_page_last = dataset_page;
     selected_value_last = selected_value;
     tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
-    simulating_last = simulating;
+    simulating_last = simulator.get_enabled();
 
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dis");
 
