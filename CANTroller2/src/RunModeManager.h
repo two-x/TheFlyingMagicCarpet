@@ -42,10 +42,10 @@ private:
     void updateMode(runmodes newmode) { _currentMode = newmode; }
 
     runmodes modeChanger() {
-        if (basicmodesw) currentMode = BASIC;  // if basicmode switch on --> Basic Mode
-        else if (currentMode != CAL && (panic_stop || !ignition)) currentMode = SHUTDOWN;
-        else if (currentMode != CAL && (starter || engine_stopped())) currentMode = STALL;;  // otherwise if engine not running --> Stall Mode
-        we_just_switched_modes = (currentMode != oldMode);  // currentMode should not be changed after this point in loop
+        if (basicmodesw) _currentMode = BASIC;  // if basicmode switch on --> Basic Mode
+        else if (_currentMode != CAL && (panic_stop || !ignition)) _currentMode = SHUTDOWN;
+        else if (_currentMode != CAL && (starter || engine_stopped())) _currentMode = STALL;;  // otherwise if engine not running --> Stall Mode
+        we_just_switched_modes = (_currentMode != _oldMode);  // currentMode should not be changed after this point in loop
         if (we_just_switched_modes) {
             disp_runmode_dirty = true;
             syspower = HIGH;

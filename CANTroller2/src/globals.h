@@ -169,8 +169,8 @@ RMTInput hotrc_ch4(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_cruise_pin));
 
 // run state machine related
 enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL };
-int32_t runmode = SHUTDOWN;
-int32_t oldmode = SHUTDOWN;  // So we can tell when the mode has just changed. start as different to trigger_mode start algo
+runmodes runmode = SHUTDOWN;
+runmodes disp_oldmode = SHUTDOWN;  // So we can tell when the mode has just changed. start as different to trigger_mode start algo
 int32_t gesture_progress = 0;  // How many steps of the Cruise Mode gesture have you completed successfully (from Fly Mode)
 bool shutdown_complete = false;  // Shutdown mode has completed its work and can stop activity
 bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode

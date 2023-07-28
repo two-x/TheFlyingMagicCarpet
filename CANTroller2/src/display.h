@@ -632,7 +632,8 @@ class Display {
                 disp_selected_val_dirty = false;
             }
             if (disp_runmode_dirty || _disp_redraw_all) {
-                draw_runmode(runmode, oldmode, (runmode == SHUTDOWN) ? shutdown_color : -1);
+                draw_runmode(runmode, disp_oldmode, (runmode == SHUTDOWN) ? shutdown_color : -1);
+                disp_oldmode = runmode;
                 disp_runmode_dirty = false;
             }
             if ((dispRefreshTimer.expired() && !_procrastinate) || _disp_redraw_all) {
