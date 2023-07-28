@@ -195,27 +195,12 @@ Timer cruiseAntiglitchTimer(cruise_antiglitch_timeout_us);
 Timer motorParkTimer(motor_park_timeout_us);
 
 // simulator related
+Simulator simulator(PotOption::speedo);
 bool simulating_last = false;
-Timer simTimer;
+Timer simTimer; // NOTE: unused
 int32_t sim_edit_delta = 0;
 int32_t sim_edit_delta_touch = 0;
 int32_t sim_edit_delta_encoder = 0;
-bool simulating = false;
-enum pot_overload { none, pressure, brkpos, tach, airflow, speedo, battery, coolant };  // , joy, brkpos, pressure, basicsw, cruisesw, syspower }
-int32_t pot_overload = speedo;  // Use the pot to simulate one of the sensors
-bool sim_joy = false;
-bool sim_tach = true;
-bool sim_speedo = true;
-bool sim_brkpos = true;
-bool sim_basicsw = true;
-bool sim_cruisesw = false;
-bool sim_pressure = true;
-bool sim_syspower = true;
-bool sim_starter = true;
-bool sim_ignition = true;
-bool sim_airflow = false;
-bool sim_battery = true;
-bool sim_coolant = true;
 
 // calibration related
 bool cal_joyvert_brkmotor = false;  // Allows direct control of brake motor using controller vert
@@ -653,21 +638,24 @@ void ema_filt (int32_t raw, int32_t* filt, float alpha) {
 }
 
 // int* x is c++ style, int *x is c style
-bool adj_val (int32_t* variable, int32_t modify, int32_t low_limit, int32_t high_limit) {  // sets an int reference to new val constrained to given range
+template<typename T>
+T adj_val(T variable, T modify, T low_limit, T high_limit) {
+    int32_t oldval = variable;
+    variable += modify;
+    return variable < low_limit ? low_limit : (variable > high_limit ? high_limit : variable);
+}
+bool adj_val(int32_t* variable, int32_t modify, int32_t low_limit, int32_t high_limit) {  // sets an int reference to new val constrained to given range
     int32_t oldval = *variable;
-    if (*variable + modify < low_limit) *variable = low_limit;
-    else if (*variable + modify > high_limit) *variable = high_limit;
-    else *variable += modify;
+    *variable = adj_val(*variable, modify, low_limit, high_limit);
     return (*variable != oldval);
 }
-bool adj_val (float* variable, float modify, float low_limit, float high_limit) {  // sets an int reference to new val constrained to given range
+bool adj_val(float* variable, float modify, float low_limit, float high_limit) {  // sets an int reference to new val constrained to given range
     float oldval = *variable;
-    if (*variable + modify < low_limit) *variable = low_limit;
-    else if (*variable + modify > high_limit) *variable = high_limit;
-    else *variable += modify; 
+    *variable = adj_val(*variable, modify, low_limit, high_limit);
     return (*variable != oldval);
 }
-void adj_bool (bool* val, int32_t delta) { if (delta != 0) *val = (delta > 0); }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
+bool adj_bool(bool val, int32_t delta) { return delta != 0 ? delta > 0 : val; }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
+void adj_bool(bool* val, int32_t delta) { *val = adj_bool(*val, delta); }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
 
 // battery_v = convert_units ((float)analogRead (battery_pin), battery_convert_v_per_adc, battery_convert_invert);
 // ema_filt (battery_v, &battery_filt_v, battery_ema_alpha);  // Apply EMA filter
