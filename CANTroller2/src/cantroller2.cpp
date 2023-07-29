@@ -268,12 +268,12 @@ void loop() {
     }
 
     // Brake pressure - takes 72 us to read
-
-    if (pressure_sensor.source() != ControllerMode::POT) {
-        if (simulating && sim_pressure)
-            pressure_sensor.set_source(ControllerMode::TOUCH);
-        else
-            pressure_sensor.set_source(ControllerMode::PIN); 
+    if (sim_pressure && pot_overload == pressure) {
+        pressure_sensor.set_source(ControllerMode::POT);
+    } else if (sim_pressure && simulating) {
+        pressure_sensor.set_source(ControllerMode::TOUCH);
+    } else {
+        pressure_sensor.set_source(ControllerMode::PIN);
     }
     pressure_sensor.read();
 
@@ -553,10 +553,7 @@ void loop() {
             else if (selected_value == 7) adj_bool (&sim_tach, sim_edit_delta);
             else if (selected_value == 8) adj_bool (&sim_airflow, sim_edit_delta);
             else if (selected_value == 9) adj_bool (&sim_speedo, sim_edit_delta);
-            else if (selected_value == 10) {
-                adj_val(&pot_overload, sim_edit_delta, 0, arraysize(sensorcard)-1);
-                if (pot_overload == pressure) pressure_sensor.set_source(ControllerMode::POT);
-            }
+            else if (selected_value == 10) adj_val(&pot_overload, sim_edit_delta, 0, arraysize(sensorcard)-1);
         }
         else if (dataset_page == PG_JOY) {
             if (selected_value == 4) adj_val (&hotrc_pulse_failsafe_max_us, sim_edit_delta, hotrc_pulse_failsafe_min_us + 1, hotrc_pulse_lims_us[VERT][MIN] - 1);
