@@ -104,15 +104,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     hotrc_ch3.init();
     hotrc_ch4.init();
     
-    printf ("Init display..\n");
-    if (display_enabled) {
-        config.begin("FlyByWire", false);
-        dataset_page = config.getUInt("dpage", PG_RUN);
-        dataset_page_last = config.getUInt("dpage", PG_TEMP);
-        screen.init();
-        ts.init();
-    }
-
     printf("Encoder setup..\n");
     encoder.setup();
 
@@ -163,6 +154,15 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     //     printf ("HotRC radio signal: %setected\n", (!hotrc_radio_detected) ? "Not d" : "D");
     // }
     
+    printf ("Init display..\n");
+    if (display_enabled) {
+        config.begin("FlyByWire", false);
+        dataset_page = config.getUInt("dpage", PG_RUN);
+        dataset_page_last = config.getUInt("dpage", PG_TEMP);
+        screen.init();
+        ts.init();
+    }
+
     int32_t watchdog_time_ms = Watchdog.enable(2500);  // Start 2.5 sec watchdog
     printf ("Enable watchdog.. timer set to %ld ms\n", watchdog_time_ms);
     hotrcPanicTimer.reset();
