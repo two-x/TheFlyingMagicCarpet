@@ -20,6 +20,7 @@
 #include "RMT_Input.h"
 
 #include "utils.h"
+#include "uictrl.h"
 #include "devices.h"
 
 // #define CAP_TOUCH
@@ -194,8 +195,11 @@ uint32_t cruise_antiglitch_timeout_us = 350000;  // Target speed won't change un
 Timer cruiseAntiglitchTimer(cruise_antiglitch_timeout_us);
 Timer motorParkTimer(motor_park_timeout_us);
 
+// potentiometer related
+Potentiometer pot(pot_wipe_pin);
+
 // simulator related
-Simulator simulator(PotOption::speedo);
+Simulator simulator(pot, SimOption::speedo);
 bool simulating_last = false;
 Timer simTimer; // NOTE: unused
 int32_t sim_edit_delta = 0;
@@ -297,8 +301,8 @@ bool battery_convert_invert = false;
 int32_t battery_convert_polarity = 1;  // Forward
 float battery_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 
-// potentiometer related
-Potentiometer pot(pot_wipe_pin);
+// encoder related
+Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 
 // controller related
 enum ctrls { HOTRC, JOY, SIM, HEADLESS };  // Possible sources of gas, brake, steering commands
@@ -357,7 +361,7 @@ float steer_pulse_left_us = 2330;  // Steering pulsewidth corresponding to full-
 float steer_pulse_left_max_us = 2500;  // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
 
 // brake pressure related
-PressureSensor pressure_sensor(pressure_pin, pot.get_filtered_value_ptr());
+PressureSensor pressure_sensor(pressure_pin);
 float pressure_hold_initial_psi = 150;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
 float pressure_hold_increment_psi = 15;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 float pressure_panic_initial_psi = 250;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
@@ -384,19 +388,7 @@ float brake_pulse_extend_us = 2330;  // Brake pulsewidth corresponding to full-s
 float brake_pulse_extend_max_us = 2330;  // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
 
 // brake actuator position related
-float brake_pos_in;
-float brake_pos_filt_in;
-float brake_pos_convert_in_per_adc = 3.3 * 10000.0 / (5.0 * adcrange_adc * 557);  // 3.3 v * 10k ohm * 1/5 1/v * 1/4095 1/adc * 1/557 in/ohm = 0.0029 in/adc
-bool brake_pos_convert_invert = false;
-int32_t brake_pos_convert_polarity = 1;  // Forward
-float brake_pos_ema_alpha = 0.25;
-float brake_pos_abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
-float brake_pos_nom_lim_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-float brake_pos_zeropoint_in = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
-float brake_pos_park_in = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
-float brake_pos_nom_lim_extend_in = 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-float brake_pos_abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
-float brake_pos_margin_in = .029;  //
+BrakePositionSensor brkpos_sensor(brake_pos_pin);
 
 // carspeed/speedo related
 float speedo_target_mph;
@@ -568,20 +560,6 @@ void hotrc_ch4_update (void) {  //
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
 
-// Utility functions
-#define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays
-#define floor(amt, lim) ((amt <= lim) ? lim : amt)
-#define ceiling(amt, lim) ((amt >= lim) ? lim : amt)
-#undef max
-inline float max (float a, float b) { return (a > b) ? a : b; }
-inline int32_t max (int32_t a, int32_t b) { return (a > b) ? a : b; }
-#undef min
-inline float min (float a, float b) { return (a < b) ? a : b; }
-inline int32_t min (int32_t a, int32_t b) { return (a < b) ? a : b; }
-#undef constrain
-inline float constrain (float amt, float low, float high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
-inline int32_t constrain (int32_t amt, int32_t low, int32_t high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
-inline uint32_t constrain (uint32_t amt, uint32_t low, uint32_t high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 bool rounding = true;
 float dround (float val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
 
@@ -622,19 +600,6 @@ void update_tach_idle (bool force = 0) {
         tach_idle_rpm = constrain (tach_idle_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm);
         cruiseQPID.SetOutputLimits (tach_idle_rpm, cruiseQPID.GetOutputMax());
     }
-}
-
-// Exponential Moving Average filter : Smooth out noise on inputs. 0 < alpha < 1 where lower = smoother and higher = more responsive
-// Pass in a fresh raw value, address of filtered value, and alpha factor, filtered value will get updated
-void ema_filt (float raw, float* filt, float alpha) {
-    // if (!raw) *filt = 0.0; else
-    *filt = alpha * raw + (1 - alpha) * (*filt);
-}
-void ema_filt (int32_t raw, float* filt, float alpha) {
-    ema_filt ((float)raw, filt, alpha);
-}
-void ema_filt (int32_t raw, int32_t* filt, float alpha) {
-    *filt = (int32_t)(alpha * (float)raw + (1 - alpha) * (float)(*filt) + 0.5);  // (?) Adding 0.5 to compensate for the average loss due to int casting roundoff
 }
 
 // int* x is c++ style, int *x is c style

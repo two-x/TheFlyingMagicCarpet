@@ -65,7 +65,7 @@ char pagecard[8][5] = { "Run ", "Joy ", "Car ", "PWMs", "Bpid", "Gpid", "Cpid", 
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, TEAL, MBLU };
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_BPID, PG_GPID, PG_CPID, PG_TEMP };
-char sensorcard[8][7] = { "bkpres", "brkpos", "tach", "airflw", "speedo", "batt", "engtmp", "none" };
+char sensorcard[8][7] = { "none", "bkpres", "brkpos", "tach", "airflw", "speedo", "batt", "engtmp" };
 
 char telemetry[disp_fixed_lines][9] = {  
     "CtrlVert",
@@ -649,9 +649,9 @@ class Display {
                 draw_dynamic(8, steer_out_percent, steer_left_percent, steer_right_percent);
                 if (dataset_page == PG_RUN) {
                     draw_dynamic(9, airflow_filt_mph, airflow_min_mph, airflow_max_mph);
-                    draw_dynamic(10, brake_pos_filt_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
+                    draw_dynamic(10, brkpos_sensor.get_filtered_value(), BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
                     draw_dynamic(11, battery_filt_v, 0.0, battery_max_v);
-                    draw_dynamic(12, pot.get_filtered_value(), pot.get_min_human(), pot.get_max_human());
+                    draw_dynamic(12, pot.get(), pot.min(), pot.max());
                     draw_truth(13, simulator.can_simulate(SimOption::joy), 0);
                     draw_truth(14, simulator.can_simulate(SimOption::pressure), 0);
                     draw_truth(15, simulator.can_simulate(SimOption::brkpos), 0);
@@ -684,7 +684,7 @@ class Display {
                     draw_dynamic(16, airflow_max_mph, 0.0, airflow_abs_max_mph);
                     draw_dynamic(17, speedo_idle_mph, 0.0, speedo_redline_mph);
                     draw_dynamic(18, speedo_redline_mph, 0.0, speedo_max_mph);
-                    draw_dynamic(19, brake_pos_zeropoint_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
+                    draw_dynamic(19, brkpos_sensor.get_zeropoint(), BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
                 }
                 else if (dataset_page == PG_PWMS) {
                     draw_dynamic(9, brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
