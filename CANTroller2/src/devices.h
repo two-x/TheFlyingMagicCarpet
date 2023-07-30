@@ -1,3 +1,4 @@
+#pragma once
 #ifndef CLASSES_H
 #define CLASSES_H
 #include <stdio.h>

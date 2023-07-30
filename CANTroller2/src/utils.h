@@ -1,5 +1,5 @@
 /* Contains utility functions, classes, and defines */
-
+#pragma once
 #ifndef UTILS_H
 #define UTILS_H
 
@@ -67,20 +67,25 @@ void ema_filt(RAW_T raw, FILT_T* filt, float alpha) {
 class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes, so we use 64 bits
   protected:
     // TODO: should check whether these actually use larger types (often compilers will just use their largest word)
+    //   Soren comment: The esp_timer_get reads from a 54-bit(?) micros register which can't be held in 32bit. If 32 bit
+    //   type is used for start_us then the timer fails after 32-bits overflows (~71 minutes). I assume there is some
+    //   multi-instruction handling of values typed as 64-bit going on, but it seems to work.
     volatile int64_t start_us = 0;
     volatile int64_t timeout_us = 0;
   public:
     Timer() { reset(); }
-    Timer(uint32_t arg_timeout_us) { set((int64_t)arg_timeout_us); }
-    void IRAM_ATTR set(int64_t arg_timeout_us) {
+    Timer (int64_t arg_timeout_us) { set (arg_timeout_us); }
+    void IRAM_ATTR set (int64_t arg_timeout_us) {
         timeout_us = arg_timeout_us;
         reset();
-     }
+    }
+    // void IRAM_ATTR set (uint32_t arg_timeout_us) { set ((int64_t)arg_timeout_us); }
     void IRAM_ATTR reset() { start_us = esp_timer_get_time(); }
     bool IRAM_ATTR expired() { return esp_timer_get_time() > start_us + timeout_us; }
     bool IRAM_ATTR expireset (void) {  // Like expired() but automatically resets if expired
-        if (esp_timer_get_time() <= start_us + timeout_us) return false;
-        reset();
+        int64_t now_us = esp_timer_get_time();
+        if (now_us <= start_us + timeout_us) return false;
+        start_us = now_us;
         return true;
     }    
     int64_t IRAM_ATTR elapsed() { return esp_timer_get_time() - start_us; }

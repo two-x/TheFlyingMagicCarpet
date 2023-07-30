@@ -1,3 +1,4 @@
+#pragma once
 #include <driver/rmt.h>
 #include <Arduino.h>
 class RMTInput
