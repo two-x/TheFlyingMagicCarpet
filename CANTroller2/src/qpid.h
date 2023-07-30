@@ -17,7 +17,6 @@ class TargetControl {  // Soren - To allow creative control of PID targets in ca
     Timer setTimer;
     targetMode targetmode;
   public:
-    enum class targetMode : uint32_t { softLanding, activeMin };  // After soft landing at minimum (which it will always do), Can be set to continuously further minimize target until irregular pulses detected. 
     TargetControl (float* argTarget, float* argMeasRaw, float* argMeasFilt, float initial, uint32_t settime, targetMode targmode = targetMode::softLanding) {
         target = argTarget;
         measRaw = argMeasRaw;
