@@ -637,6 +637,7 @@ void calc_ctrl_lims (void) {
 }
 void calc_governor (void) {
     tach_govern_rpm = map ((float)gas_governor_percent, 0.0, 100.0, 0.0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
+    cruiseQPID.SetOutputLimits(tach_idle_rpm, tach_govern_rpm);
     gas_pulse_govern_us = map (gas_governor_percent*(tach_redline_rpm-tach_idle_rpm)/tach_redline_rpm, 0.0, 100.0, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
     speedo_govern_mph = map ((float)gas_governor_percent, 0.0, 100.0, 0.0, speedo_redline_mph);  // Governor must scale the top vehicle speed proportionally
 }
