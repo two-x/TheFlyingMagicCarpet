@@ -75,12 +75,12 @@ class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes, so we u
   public:
     Timer() { reset(); }
     Timer (int64_t arg_timeout_us) { set (arg_timeout_us); }
-    Timer (uint32_t arg_timeout_us) { set ((int64_t)arg_timeout_us); }
+    Timer (int64 arg_timeout_us) { set (arg_timeout_us); }
     void IRAM_ATTR set (int64_t arg_timeout_us) {
         timeout_us = arg_timeout_us;
         reset();
     }
-    void IRAM_ATTR set (uint32_t arg_timeout_us) { set ((int64_t)arg_timeout_us); }
+    // void IRAM_ATTR set (uint32_t arg_timeout_us) { set ((int64_t)arg_timeout_us); }
     void IRAM_ATTR reset() { start_us = esp_timer_get_time(); }
     bool IRAM_ATTR expired() { return esp_timer_get_time() > start_us + timeout_us; }
     bool IRAM_ATTR expireset (void) {  // Like expired() but automatically resets if expired
