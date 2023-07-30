@@ -486,6 +486,9 @@ QPID brakeQPID (pressure_sensor.get_filtered_value_ptr().get(), &brake_out_perce
     brake_pid_period_us, QPID::Control::timer, QPID::centMode::centerStrict, brake_stop_percent);  // period, more settings
     
 // Gas : Controls the throttle to achieve the desired intake airflow and engine rpm
+
+TargetControl idleControl (&tach_target_rpm, &tach_rpm, &tach_filt_rpm, tach_idle_cold_max_rpm, 2000000, TargetControl::targetMode::activeMin);
+
 uint32_t gas_pid_period_us = 225000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer gasPidTimer (gas_pid_period_us);  // not actually tunable, just needs value above
 float gas_spid_initial_kp = 0.256;  // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)

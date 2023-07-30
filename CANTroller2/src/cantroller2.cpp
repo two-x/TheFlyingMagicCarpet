@@ -418,6 +418,7 @@ void loop() {
     }
     
     update_tach_idle();  // Adjust idle speed value based on engine temperature
+    idleControl.update();  // Adjust tach target when idling to minimize idle rpm while preventing stalling
 
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
     if (runmode == CRUISE && !cruise_adjusting && cruisePidTimer.expireset()) cruiseQPID.Compute();
