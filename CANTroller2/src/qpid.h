@@ -3,6 +3,7 @@
 #ifndef QPID_h
 #define QPID_h
 #include "Arduino.h"
+// #include "utils.h"
 
 class TargetControl {  // Soren - To allow creative control of PID targets in case your engine idle problems need that.
   public:
@@ -11,16 +12,16 @@ class TargetControl {  // Soren - To allow creative control of PID targets in ca
     enum targetState : uint32_t { onTarget, gotoHighIdle, Timer, minimize };
     float initialTarget, lastTarget;
     float* target;
-    float* outRaw;
-    float* outFilt;
+    float* measRaw;
+    float* measFilt;
     Timer setTimer;
     targetMode targetmode;
   public:
     enum class targetMode : uint32_t { softLanding, activeMin };  // After soft landing at minimum (which it will always do), Can be set to continuously further minimize target until irregular pulses detected. 
-    TargetControl (float* argTarget, float* argOutRaw, float* argOutFilt, float initial, uint32_t settime, targetMode targmode = targetMode::softLanding) {
+    TargetControl (float* argTarget, float* argMeasRaw, float* argMeasFilt, float initial, uint32_t settime, targetMode targmode = targetMode::softLanding) {
         target = argTarget;
-        outRaw = argOutRaw;
-        outFilt = argOutFilt;
+        measRaw = argMeasRaw;
+        measFilt = argMeasFilt;
         lastTarget = *target;
         setInitial (initial);
         setTimer.set ((int64_t)settime);
