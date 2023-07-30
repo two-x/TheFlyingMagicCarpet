@@ -4,6 +4,33 @@
 #define QPID_h
 #include "Arduino.h"
 
+class TargetControl {  // Soren - To allow creative control of PID targets in case your engine idle problems need that.
+  public:
+    enum class targetMode : uint32_t { softLanding, activeMin };  // After soft landing at minimum (which it will always do), Can be set to continuously further minimize target until irregular pulses detected. 
+  protected:
+    enum targetState : uint32_t { onTarget, gotoHighIdle, Timer, minimize };
+    float initialTarget, lastTarget;
+    float* target;
+    float* outRaw;
+    float* outFilt;
+    Timer setTimer;
+    targetMode targetmode;
+  public:
+    enum class targetMode : uint32_t { softLanding, activeMin };  // After soft landing at minimum (which it will always do), Can be set to continuously further minimize target until irregular pulses detected. 
+    TargetControl (float* argTarget, float* argOutRaw, float* argOutFilt, float initial, uint32_t settime, targetMode targmode = targetMode::softLanding) {
+        target = argTarget;
+        outRaw = argOutRaw;
+        outFilt = argOutFilt;
+        lastTarget = *target;
+        setInitial (initial);
+        setTimer.set ((int64_t)settime);
+
+    }
+    void setInitial (float initial) { initialTarget = initial; }
+    void update (float deviationRatio = 1.0) {  // deviationRatio tells us how unstable our output is being (0=stable to 1=unstable)
+
+    }
+};
 class QPID {
 
   public:
@@ -14,6 +41,7 @@ class QPID {
     enum class dMode : uint8_t {dOnError, dOnMeas};                   // derivative mode
     enum class iAwMode : uint8_t {iAwCondition, iAwClamp, iAwOff, iAwRound, iAwRoundCond};    // integral anti-windup mode  // Soren edit
     enum class centMode : uint8_t {range, center, centerStrict};    // Soren - Allows a defined output zero point
+    // enum class targSet : uint8_t {immediate, autoMin};    // Soren - Allows us to control target intelligently for throttle idle
 
     // commonly used functions ************************************************************************************
 
