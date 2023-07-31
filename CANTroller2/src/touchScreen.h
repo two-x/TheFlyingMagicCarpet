@@ -120,44 +120,35 @@ public:
             }
             else if (tcol == 0 && trow == 4) {  // Pressed the simulation mode toggle. Needs long-press
                 if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
-                    simulating = !simulating;
+                    simulator.toggle();
                     touch_longpress_valid = false;
-                
-                    // update device modes
-                    if (simulating && sim_pressure)
-                        if (pot_overload == pressure)
-                            pressure_sensor.set_source(ControllerMode::POT);
-                        else
-                            pressure_sensor.set_source(ControllerMode::TOUCH);
-                    else
-                        pressure_sensor.set_source(ControllerMode::PIN);
                 }
             }
-            else if (simulating) {
+            else if (simulator.get_enabled()) {
                 if (tcol == 2 && trow == 0 && (runmode == CAL || (runmode == SHUTDOWN && shutdown_complete))) {
                     if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
                         calmode_request = true;
                         touch_longpress_valid = false;
                     }
                 }  
-                else if (tcol == 3 && trow == 0 && sim_basicsw && !touch_now_touched) basicmodesw = !basicmodesw;
-                else if (tcol == 3 && trow == 1 && sim_pressure && pressure_sensor.source() == ControllerMode::TOUCH) pressure_sensor.add_human((float)touch_accel); // (+= 25) Pressed the increase brake pressure button
-                else if (tcol == 3 && trow == 2 && sim_pressure && pressure_sensor.source() == ControllerMode::TOUCH) pressure_sensor.add_human((float)(-touch_accel)); // (-= 25) Pressed the decrease brake pressure button
-                else if (tcol == 3 && trow == 4 && sim_joy) adj_val(&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
-                else if (tcol == 4 && trow == 0 && sim_ignition && !touch_now_touched) ignition = !ignition;
-                else if (tcol == 4 && trow == 1 && sim_tach) adj_val(&tach_filt_rpm, (float)touch_accel, 0.0, tach_redline_rpm);
-                else if (tcol == 4 && trow == 2 && sim_tach) adj_val(&tach_filt_rpm, (float)(-touch_accel), 0.0, tach_redline_rpm);
-                else if (tcol == 4 && trow == 3 && sim_joy) adj_val(&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-                else if (tcol == 4 && trow == 4 && sim_joy) adj_val(&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-                else if (tcol == 5 && trow == 0 && sim_syspower) {
+                else if (tcol == 3 && trow == 0 && simulator.can_simulate(SimOption::basicsw) && !touch_now_touched) basicmodesw = !basicmodesw;
+                else if (tcol == 3 && trow == 1 && simulator.can_simulate(SimOption::basicsw) && pressure_sensor.source() == ControllerMode::TOUCH) pressure_sensor.add_human((float)touch_accel); // (+= 25) Pressed the increase brake pressure button
+                else if (tcol == 3 && trow == 2 && simulator.can_simulate(SimOption::pressure) && pressure_sensor.source() == ControllerMode::TOUCH) pressure_sensor.add_human((float)(-touch_accel)); // (-= 25) Pressed the decrease brake pressure button
+                else if (tcol == 3 && trow == 4 && simulator.can_simulate(SimOption::joy)) adj_val(&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
+                else if (tcol == 4 && trow == 0 && simulator.can_simulate(SimOption::ignition) && !touch_now_touched) ignition = !ignition;
+                else if (tcol == 4 && trow == 1 && simulator.can_simulate(SimOption::tach)) adj_val(&tach_filt_rpm, (float)touch_accel, 0.0, tach_redline_rpm);
+                else if (tcol == 4 && trow == 2 && simulator.can_simulate(SimOption::tach)) adj_val(&tach_filt_rpm, (float)(-touch_accel), 0.0, tach_redline_rpm);
+                else if (tcol == 4 && trow == 3 && simulator.can_simulate(SimOption::joy)) adj_val(&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
+                else if (tcol == 4 && trow == 4 && simulator.can_simulate(SimOption::joy)) adj_val(&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
+                else if (tcol == 5 && trow == 0 && simulator.can_simulate(SimOption::syspower)) {
                     if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
                         syspower = !syspower;
                         touch_longpress_valid = false;
                     }
                 }
-                else if (tcol == 5 && trow == 1 && sim_speedo) adj_val(&speedo_filt_mph, 0.005 * (float)touch_accel, 0.0, speedo_redline_mph);
-                else if (tcol == 5 && trow == 2 && sim_speedo) adj_val(&speedo_filt_mph, -0.005 * (float)touch_accel, 0.0, speedo_redline_mph);
-                else if (tcol == 5 && trow == 4 && sim_joy) adj_val(&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
+                else if (tcol == 5 && trow == 1 && simulator.can_simulate(SimOption::speedo)) adj_val(&speedo_filt_mph, 0.005 * (float)touch_accel, 0.0, speedo_redline_mph);
+                else if (tcol == 5 && trow == 2 && simulator.can_simulate(SimOption::speedo)) adj_val(&speedo_filt_mph, -0.005 * (float)touch_accel, 0.0, speedo_redline_mph);
+                else if (tcol == 5 && trow == 4 && simulator.can_simulate(SimOption::joy)) adj_val(&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
             }
 
             // Update the touch_accel_exponent if needed
@@ -168,7 +159,7 @@ public:
             
             touch_now_touched = true;
         } else { // If not being touched, put momentarily-set simulated button values back to default values
-            if (simulating && sim_cruisesw) cruise_sw = false;  // Makes this button effectively momentary
+            if (simulator.simulating(SimOption::cruisesw)) cruise_sw = false;  // Makes this button effectively momentary
             sim_edit_delta_touch = 0;  // Stop changing the value
             touch_now_touched = false;  // Remember the last touch state
             touch_accel_exponent = 0;

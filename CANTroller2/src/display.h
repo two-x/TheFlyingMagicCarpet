@@ -65,7 +65,7 @@ char pagecard[8][5] = { "Run ", "Joy ", "Car ", "PWMs", "Bpid", "Gpid", "Cpid", 
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, TEAL, MBLU };
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_BPID, PG_GPID, PG_CPID, PG_TEMP };
-char sensorcard[8][7] = { "none", "bkpres", "brkpos", "tach", "airflw", "speedo", "batt", "engtmp" };
+char sensorcard[8][7] = { "bkpres", "brkpos", "tach", "airflw", "speedo", "batt", "engtmp", "none" };
 
 char telemetry[disp_fixed_lines][9] = {  
     "CtrlVert",
@@ -610,8 +610,8 @@ class Display {
         }
 
         void update() {
-            if (simulating != simulating_last || _disp_redraw_all) {
-                draw_simbuttons(simulating);  // if we just entered simulator draw the simulator buttons, or if we just left erase them
+            if (simulator.get_enabled() != simulating_last || _disp_redraw_all) {
+                draw_simbuttons(simulator.get_enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
                 _procrastinate = true;  // Waits till next loop to draw changed values
             }
             if ((disp_dataset_page_dirty || _disp_redraw_all)) {
@@ -651,14 +651,14 @@ class Display {
                     draw_dynamic(9, airflow_filt_mph, airflow_min_mph, airflow_max_mph);
                     draw_dynamic(10, brake_pos_filt_in, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
                     draw_dynamic(11, battery_filt_v, 0.0, battery_max_v);
-                    draw_dynamic(12, pot_filt_percent, pot_min_percent, pot_max_percent);
-                    draw_truth(13, sim_joy, 0);
-                    draw_truth(14, sim_pressure, 0);
-                    draw_truth(15, sim_brkpos, 0);
-                    draw_truth(16, sim_tach, 0);
-                    draw_truth(17, sim_airflow, 0);
-                    draw_truth(18, sim_speedo, 0);
-                    draw_sensorname(19, pot_overload);
+                    draw_dynamic(12, pot.get_filtered_value(), pot.get_min_human(), pot.get_max_human());
+                    draw_truth(13, simulator.can_simulate(SimOption::joy), 0);
+                    draw_truth(14, simulator.can_simulate(SimOption::pressure), 0);
+                    draw_truth(15, simulator.can_simulate(SimOption::brkpos), 0);
+                    draw_truth(16, simulator.can_simulate(SimOption::tach), 0);
+                    draw_truth(17, simulator.can_simulate(SimOption::airflow), 0);
+                    draw_truth(18, simulator.can_simulate(SimOption::speedo), 0);
+                    draw_sensorname(19, static_cast<int32_t>(simulator.get_pot_overload()));
                 }
                 else if (dataset_page == PG_JOY) {
                     draw_dynamic(9, ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);

@@ -134,10 +134,6 @@ bool flip_the_screen = false;
 #define touch_irq_pin 255  // Input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - Set to 255 if not used
 #define tft_rst_pin -1  // TFT Reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
 
-#define adcbits 12
-#define adcrange_adc 4095  // = 2^adcbits-1
-#define adcmidscale_adc 2047  // = 2^(adcbits-1)-1
-
 // Globals -------------------
 bool serial_debugging = true; 
 bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
@@ -199,27 +195,12 @@ Timer cruiseAntiglitchTimer(cruise_antiglitch_timeout_us);
 Timer motorParkTimer(motor_park_timeout_us);
 
 // simulator related
+Simulator simulator(PotOption::speedo);
 bool simulating_last = false;
-Timer simTimer;
+Timer simTimer; // NOTE: unused
 int32_t sim_edit_delta = 0;
 int32_t sim_edit_delta_touch = 0;
 int32_t sim_edit_delta_encoder = 0;
-bool simulating = false;
-enum pot_overload { none, pressure, brkpos, tach, airflow, speedo, battery, coolant };  // , joy, brkpos, pressure, basicsw, cruisesw, syspower }
-int32_t pot_overload = speedo;  // Use the pot to simulate one of the sensors
-bool sim_joy = false;
-bool sim_tach = true;
-bool sim_speedo = true;
-bool sim_brkpos = true;
-bool sim_basicsw = true;
-bool sim_cruisesw = false;
-bool sim_pressure = true;
-bool sim_syspower = true;
-bool sim_starter = true;
-bool sim_ignition = true;
-bool sim_airflow = false;
-bool sim_battery = true;
-bool sim_coolant = true;
 
 // calibration related
 bool cal_joyvert_brkmotor = false;  // Allows direct control of brake motor using controller vert
@@ -317,18 +298,7 @@ int32_t battery_convert_polarity = 1;  // Forward
 float battery_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 
 // potentiometer related
-float pot_percent = 50;
-float pot_filt_percent = pot_percent;
-float pot_min_percent = 0;  //
-float pot_max_percent = 100;  //
-int32_t pot_adc = adcmidscale_adc;
-float pot_min_adc = 300;  // TUNED 230603 - Used only in determining theconversion factor
-float pot_max_adc = 4095;  // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
-float pot_convert_percent_per_adc = (pot_max_percent - pot_min_percent)/(pot_max_adc - pot_min_adc);  // 100 % / (3996 adc - 0 adc) = 0.025 %/adc
-bool pot_convert_invert = false;
-float pot_convert_offset = -0.08;
-int32_t pot_convert_polarity = 1;  // Forward
-float pot_ema_alpha = 0.1;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+Potentiometer pot(pot_wipe_pin);
 
 // controller related
 enum ctrls { HOTRC, JOY, SIM, HEADLESS };  // Possible sources of gas, brake, steering commands
@@ -387,7 +357,7 @@ float steer_pulse_left_us = 2330;  // Steering pulsewidth corresponding to full-
 float steer_pulse_left_max_us = 2500;  // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
 
 // brake pressure related
-PressureSensor pressure_sensor(pressure_pin, &pot_filt_percent);
+PressureSensor pressure_sensor(pressure_pin, pot.get_filtered_value_ptr());
 float pressure_hold_initial_psi = 150;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
 float pressure_hold_increment_psi = 15;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 float pressure_panic_initial_psi = 250;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
@@ -668,21 +638,24 @@ void ema_filt (int32_t raw, int32_t* filt, float alpha) {
 }
 
 // int* x is c++ style, int *x is c style
-bool adj_val (int32_t* variable, int32_t modify, int32_t low_limit, int32_t high_limit) {  // sets an int reference to new val constrained to given range
+template<typename T>
+T adj_val(T variable, T modify, T low_limit, T high_limit) {
+    int32_t oldval = variable;
+    variable += modify;
+    return variable < low_limit ? low_limit : (variable > high_limit ? high_limit : variable);
+}
+bool adj_val(int32_t* variable, int32_t modify, int32_t low_limit, int32_t high_limit) {  // sets an int reference to new val constrained to given range
     int32_t oldval = *variable;
-    if (*variable + modify < low_limit) *variable = low_limit;
-    else if (*variable + modify > high_limit) *variable = high_limit;
-    else *variable += modify;
+    *variable = adj_val(*variable, modify, low_limit, high_limit);
     return (*variable != oldval);
 }
-bool adj_val (float* variable, float modify, float low_limit, float high_limit) {  // sets an int reference to new val constrained to given range
+bool adj_val(float* variable, float modify, float low_limit, float high_limit) {  // sets an int reference to new val constrained to given range
     float oldval = *variable;
-    if (*variable + modify < low_limit) *variable = low_limit;
-    else if (*variable + modify > high_limit) *variable = high_limit;
-    else *variable += modify; 
+    *variable = adj_val(*variable, modify, low_limit, high_limit);
     return (*variable != oldval);
 }
-void adj_bool (bool* val, int32_t delta) { if (delta != 0) *val = (delta > 0); }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
+bool adj_bool(bool val, int32_t delta) { return delta != 0 ? delta > 0 : val; }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
+void adj_bool(bool* val, int32_t delta) { *val = adj_bool(*val, delta); }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
 
 // battery_v = convert_units ((float)analogRead (battery_pin), battery_convert_v_per_adc, battery_convert_invert);
 // ema_filt (battery_v, &battery_filt_v, battery_ema_alpha);  // Apply EMA filter
