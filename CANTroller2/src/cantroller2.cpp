@@ -1,5 +1,4 @@
 // Carpet CANTroller II  Source Code  - For ESP32-S3-DevKitC-1-N8
-
 #include <SPI.h>  // SPI serial bus
 #include <Adafruit_SleepyDog.h>  // Watchdog
 #include <vector>
@@ -24,9 +23,7 @@ void loop_savetime (uint32_t timesarray[], int32_t &index, std::vector<std::stri
 
 HotrcManager hotrcHorzManager (6);
 HotrcManager hotrcVertManager (6);
-// Declare runModeManger as global
 RunModeManager runModeManager;
-
 Display screen;
 
 #ifdef CAP_TOUCH
@@ -285,9 +282,7 @@ void loop() {
         hotrc_horz_pulse_us = hotrcHorzManager.spike_filter (hotrc_horz_pulse_us);
         hotrc_vert_pulse_us = hotrcVertManager.spike_filter (hotrc_vert_pulse_us);
         ema_filt (hotrc_vert_pulse_us, &hotrc_vert_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Used to detect loss of radio
-        // if (boot_button) printf ("hrc H:%4ld V:%4ld\n", hotrc_horz_pulse_us, hotrc_vert_pulse_us);
         // ema_filt (hotrc_horz_pulse_us, &hotrc_horz_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Just here for debugging. Do not need filtered horz value
-        // if (boot_button) printf (" | ema H:%4ld V:%4ld", hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us);
     }
     if (!simulator.simulating(SimOption::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
         if (ctrl == HOTRC) {
@@ -302,22 +297,17 @@ void loop() {
             ctrl_pos_adc[VERT][RAW] = analogRead (joy_vert_pin);  // Read joy vertical
             ctrl_pos_adc[HORZ][RAW] = analogRead (joy_horz_pin);  // Read joy horizontal
         }
-        // if (boot_button) printf (" | Craw0 H:%4ld V:%4ld", ctrl_pos_adc[HORZ][RAW], ctrl_pos_adc[VERT][RAW]);
-        // if (boot_button) printf (" | Cflt0 H:%4ld V:%4ld", ctrl_pos_adc[HORZ][FILT], ctrl_pos_adc[VERT][FILT]);
         ema_filt (ctrl_pos_adc[VERT][RAW], &ctrl_pos_adc[VERT][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_vert_filt
         ema_filt (ctrl_pos_adc[HORZ][RAW], &ctrl_pos_adc[HORZ][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_horz_filt
         ctrl_pos_adc[VERT][FILT] = constrain (ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
         ctrl_pos_adc[HORZ][FILT] = constrain (ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
-        // if (boot_button) printf (" | Cflt1 H:%4ld V:%4ld", ctrl_pos_adc[HORZ][FILT], ctrl_pos_adc[VERT][FILT]);
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) {
             ctrl_pos_adc[VERT][FILT] = ctrl_lims_adc[ctrl][VERT][CENT];  // if joy vert is in the deadband, set joy_vert_filt to center value
         }
         if (ctrl_pos_adc[HORZ][FILT] > ctrl_db_adc[HORZ][BOT] && ctrl_pos_adc[HORZ][FILT] < ctrl_db_adc[HORZ][TOP]) {
             ctrl_pos_adc[HORZ][FILT] = ctrl_lims_adc[ctrl][HORZ][CENT];  // if joy horz is in the deadband, set joy_horz_filt to center value
         }
-        // if (boot_button) printf (" | Cflt2 H:%4ld V:%4ld\n", ctrl_pos_adc[HORZ][FILT], ctrl_pos_adc[VERT][FILT]);
     }    
-    // if (boot_button) printf ("hrz: %ld | saf: %ld | out %ld", ctrl_pos_adc[HORZ][FILT], steer_pulse_safe_us, steer_pulse_out_us);
 
     // Voltage of vehicle battery
     // NOTE: we have these same lines of code above, are they both needed?
@@ -352,10 +342,8 @@ void loop() {
     }
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "joy");  //
     
-    // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
-    runmode = runModeManager.handle_runmode();
+    runmode = runModeManager.handle_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
 
-    // cout << "rm:" << runmode << " om:" << oldmode << "vert:" << ctrl_pos_adc[VERT][FILT] << " up?" << (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) << " jc?" << joy_centered << "\n";
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "mod");  //
 
     // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
@@ -379,7 +367,6 @@ void loop() {
         #else
             // Send command over serial port
         #endif
-        // if (boot_button) printf ("JoyH:%4ld, safadj:%4.0lf out:%4.0lf puls:%4.0lf\n", ctrl_pos_adc[HORZ][FILT], steer_safe_adj_percent, steer_out_percent, steer_pulse_out_us);
     }
     // Brakes - Determine motor output and write it to motor
     if (brakePidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
@@ -412,8 +399,6 @@ void loop() {
             #else
                 // Send command over serial port
             #endif
-            // if (boot_button) printf ("JoyH:%4ld, safadj:%4.0lf out:%4.0lf puls:%4.0lf", ctrl_pos_adc[HORZ][FILT], steer_safe_adj_percent, steer_out_percent, steer_pulse_out_us);
-            // if (boot_button) printf (" Brk:%4ld", (int32_t)brake_pulse_out_us);
         }
     }
     
@@ -427,7 +412,6 @@ void loop() {
     if (gasPidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
         if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
-            // if (starter) gas_pulse_out_us = gas_pulse_govern_us;  // Fully open throttle during starting engine
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_idle_us;  // If in deadband or being pushed down, we want idle
             else gas_pulse_out_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_idle_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
         }
@@ -439,13 +423,10 @@ void loop() {
             else if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual)  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
                 gas_pulse_out_us = map (tach_target_rpm, tach_idle_rpm, tach_govern_rpm, gas_pulse_idle_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
             else gasQPID.Compute();  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
-            // printf ("Gas PID   rm= %+-4ld target=%-+9.4lf", runmode, (float)tach_target_rpm);
-            // printf (" output = %-+9.4lf,  %+-4ld\n", gasQPID.get_output(), gas_pulse_out_us);
         }
         if (runmode != BASIC || park_the_motors) {
             if (!(runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo))  // Constrain to operating limits. If calibrating constrain already happened above
                 gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_idle_us);
-            // printf (" output = %-+9.4lf,  %+-4ld\n", gasQPID.get_output(), gas_pulse_out_us);
             gas_servo.writeMicroseconds ((int32_t)gas_pulse_out_us);  // Write result to servo
             // if (boot_button) printf (" Gas:%4ld\n", (int32_t)gas_pulse_out_us);
         }
@@ -485,10 +466,6 @@ void loop() {
         }
     }
     else diag_ign_error_enabled = true;
-    // I don't think we really need to panic about this, but it does seem curious. Actually this will probably occur like when we're sliding
-    // into camp after a ride, and kill the engine before we stop the car. For a fraction of a second the engine would keep turning anyway.
-    // Or for that matter whenever the carb is out of tune and making the engine diesel after we kill the ign.
-
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");  //
         
     ts.handleTouch(); // Handle touch events and actions
@@ -497,7 +474,6 @@ void loop() {
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tch");  //
 
     // Encoder handling
-    //
     uint32_t encoder_sw_action = encoder.handleSwitchAction();
     if (encoder_sw_action != Encoder::NONE) {  // First deal with any unhandled switch press events
         if (encoder_sw_action == Encoder::SHORT)  {  // if short press
@@ -635,8 +611,6 @@ void loop() {
         starter = remote_starting;
         remote_start_toggle_request = false;
     }
-    // cout << "starter:" << starter << " starting:" << remote_starting << endl;;
-
     if (syspower != syspower_last) {
         syspower = syspower_set (syspower);
         syspower_last = syspower;
@@ -697,7 +671,6 @@ void loop() {
     // if (display_enabled) screen.watchdog();
  
     // Do the control loop bookkeeping at the end of each loop
-    //
     loop_period_us = (uint32_t)loopTimer.elapsed();  // us since beginning of this loop
     loopTimer.reset();
     loop_freq_hz = 1000000.0 / ((loop_period_us) ? loop_period_us : 1);  // Prevent potential divide by zero

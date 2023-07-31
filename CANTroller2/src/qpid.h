@@ -3,7 +3,6 @@
 #ifndef QPID_h
 #define QPID_h
 #include "Arduino.h"
-// #include "utils.h"
 
 class TargetControl {  // Soren - To allow creative control of PID targets in case your engine idle problems need that.
   public:
