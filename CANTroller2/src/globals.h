@@ -420,6 +420,7 @@ float speedo_max_mph = 25.0;  // What is max speed car can ever go
 float speedo_stop_thresh_mph = 0.1;  // Below which the car is considered stopped
 uint32_t speedo_stop_timeout_us = 600000;  // Time after last magnet pulse when we can assume the car is stopped (in us)
 int64_t speedo_delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
+Timer speedoStopTimer(speedo_stop_timeout_us);
 
 // throttle servo related
 float gas_pulse_out_us = 1501;  // pid loop output to send to the actuator (gas)
@@ -451,13 +452,14 @@ float tach_max_rpm = 7000.0;  // Max possible engine rotation speed
 float tach_redline_rpm = 5000.0;  // Max value for tach_rpm, pedal to the metal (in rpm). 20000 rotations/mile * 15 mi/hr * 1/60 hr/min = 5000 rpm
 float tach_margin_rpm = 15.0;  // Margin of error for checking engine rpm (in rpm)
 float tach_stop_thresh_rpm = 0.1;  // Below which the engine is considered stopped - this is redundant,
-uint32_t tach_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
+int64_t tach_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
 int64_t tach_delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
 float tach_idle_abs_min_rpm = 450.0;  // Low limit of idle speed adjustability
 float tach_idle_hot_min_rpm = 550.0;  // Idle speed at nom_max engine temp
 float tach_idle_cold_max_rpm = 775.0;  // Idle speed at nom_min engine temp
 float tach_idle_abs_max_rpm = 950.0;  // High limit of idle speed adjustability
 Timer tachIdleTimer (5000000);  // How often to update tach idle value based on engine temperature
+Timer tachStopTimer(tach_stop_timeout_us);
 
 
 // airflow related
