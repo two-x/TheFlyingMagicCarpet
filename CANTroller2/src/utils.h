@@ -1,5 +1,5 @@
 /* Contains utility functions, classes, and defines */
-
+#pragma once
 #ifndef UTILS_H
 #define UTILS_H
 
@@ -75,7 +75,6 @@ class Timer {  // 32 bit microsecond timer overflows after 71.5 minutes, so we u
   public:
     Timer() { reset(); }
     Timer (int64_t arg_timeout_us) { set (arg_timeout_us); }
-    Timer (int64 arg_timeout_us) { set (arg_timeout_us); }
     void IRAM_ATTR set (int64_t arg_timeout_us) {
         timeout_us = arg_timeout_us;
         reset();

@@ -1,3 +1,4 @@
+#pragma once
 // This is a setup file from the TFT_eSPI library, with edits for our setup.
 // Whenever the library is first installed or updated, to make it include this you need
 // to edit the following file (within the library package):

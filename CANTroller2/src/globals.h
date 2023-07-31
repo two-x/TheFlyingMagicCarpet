@@ -1,3 +1,4 @@
+#pragma once
 #ifndef GLOBALS_H
 #define GLOBALS_H
 // #include <SdFat.h>  // SD card & FAT filesystem library
@@ -8,17 +9,14 @@
 #include <Wire.h>
 #include <SparkFun_FS3000_Arduino_Library.h>  // For airflow sensor  http://librarymanager/All#SparkFun_FS3000
 #include <Preferences.h>
-#include <stdio.h>
 #include <iostream>
 // #include <DallasTemperature.h>
-// #include <stdio.h>  // MCPWM pulse measurement code
 // #include "freertos/FreeRTOS.h"  // MCPWM pulse measurement code
 // #include "freertos/task.h"  // MCPWM pulse measurement code
 // #include "driver/mcpwm.h"  // MCPWM pulse measurement code
 #include "qpid.h"
 #include "driver/rmt.h"
 #include "RMT_Input.h"
-
 #include "utils.h"
 #include "uictrl.h"
 #include "devices.h"
@@ -26,87 +24,19 @@
 // #define CAP_TOUCH
 bool flip_the_screen = false;
 
-// Here are the different runmodes documented
-//
-// ** Basic Mode **
-// - Required: BasicMode switch On
-// - Priority: 1 (Highest)
-// The gas and brake don't do anything in Basic Mode. Just the steering works, so use the pedals.
-// This mode is enabled with a toggle switch in the controller box.  When in Basic Mode, the only
-// other valid mode is Shutdown Mode. Shutdown Mode may override Basic Mode.
-// - Actions: Release and deactivate brake and gas actuators.  Steering PID keep active  
-//
-// ** Shutdown Mode **
-// - Required: BasicMode switch Off & Ignition Off
-// - Priority: 2
-// This mode is active whenever the ignition is off.  In other words, whenever the
-// little red pushbutton switch by the joystick is unclicked.  This happens before the
-// ignition is pressed before driving, but it also may happen if the driver needs to
-// panic and E-stop due to loss of control or any other reason.  The ignition will get cut
-// independent of the controller, but we can help stop the car faster by applying the
-// brakes. Once car is stopped, we release all actuators and then go idle.
-// - Actions: 1. Release throttle. If car is moving AND BasicMode Off, apply brakes to stop car
-// - Actions: 2: Release brakes and deactivate all actuators including steering
-//
-// ** Stall Mode **
-// - Required: Engine stopped & BasicMode switch Off & Ignition On
-// - Priority: 3
-// This mode is active when the engine is not running.  If car is moving, then it presumably may
-// coast to a stop.  The actuators are all enabled and work normally.  Starting the engine will 
-// bring you into Hold Mode.  Shutdown Mode and Basic Mode both override Stall Mode. Note: This
-// mode allows for driver to steer while being towed or pushed, or working on the car.
-// - Actions: Enable all actuators
-//
-// ** Hold Mode **
-// - Required: Engine running & JoyVert<=Center & BasicMode switch Off & Ignition On
-// - Priority: 4
-// This mode is entered from Stall Mode once engine is started, and also, whenever the car comes
-// to a stop while driving around in Fly Mode.  This mode releases the throttle and will 
-// continuously increase the brakes until the car is stopped, if it finds the car is moving. 
-// Pushing up on the joystick from Hold mode releases the brakes & begins Fly Mode.
-// Shutdown, Basic & Stall Modes override Hold Mode.
-// # Actions: Close throttle, and Apply brake to stop car, continue to ensure it stays stopped.
-//
-// ** Fly Mode **
-// - Required: (Car Moving OR JoyVert>Center) & In gear & Engine running & BasicMode Off & Ign On
-// - Priority: 5
-// This mode is for driving under manual control. In Fly Mode, vertical joystick positions
-// result in a proportional level of gas or brake (AKA "Manual" control).  Fly Mode is
-// only active when the car is moving - Once stopped or taken out of gear, we go back to Hold Mode.
-// If the driver performs a special secret "cruise gesture" on the joystick, then go to Cruise Mode.
-// Special cruise gesture might be: Pair of sudden full-throttle motions in rapid succession
-// - Actions: Enable all actuators, Watch for gesture
-//
-// ** Cruise Mode **
-// - Required: Car Moving & In gear & Engine running & BasicMode switch Off & Ignition On
-// - Priority: 6 (Lowest)
-// This mode is entered from Fly Mode by doing a special joystick gesture. In Cruise Mode,
-// the brake is disabled, and the joystick vertical is different: If joyv at center, the
-// throttle will actively maintain current car speed.  Up or down momentary joystick presses
-// serve to adjust that target speed. A sharp, full-downward gesture will drop us back to 
-// Fly Mode, promptly resulting in braking (if kept held down).
-// - Actions: Release brake, Maintain car speed, Handle joyvert differently, Watch for gesture
-
-// #ifdef CAP_TOUCH
-// #else
-//     #define touch_irq_pin 8  // (i2c0 sda / adc) - 
-//     #define touch_cs_pin 9  // (i2c0 scl / adc) - Use as chip select for resistive touchscreen
-// #endif
-
-// Defines for all the GPIO pins we're using
 #define button_pin 0  // (button0 / strap to 1) - This is the "Boot" button on the esp32 board
-#define joy_horz_pin 1  // (adc) - Either analog left-right input (joystick)
-#define joy_vert_pin 2  // (adc) - Either analog up-down input (joystick)
+#define joy_horz_pin 1  // (adc) - Analog left-right input (joystick)
+#define joy_vert_pin 2  // (adc) - Analog up-down input (joystick)
 #define tft_dc_pin 3  // (adc* / strap X) - Output, Assert when sending data to display chip to indicate commands vs. screen data
 #define ign_batt_pin 4  // (adc) - Analog input, ignition signal and battery voltage sense, full scale is 15.638V
-#define pot_wipe_pin 5  // (adc) - Analog in from 20k pot. Use 1% series R=22k to 5V on wipe=CW-0ohm side, and R=15k to gnd on wipe-CCW-0ohm side. Gives wipe range of 1.315V (CCW) to 3.070V (CW) with 80 uA draw.
+#define pot_wipe_pin 5  // (adc) - Analog in from 20k pot
 #define brake_pos_pin 6  // (adc) - Analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
 #define pressure_pin 7  // (adc) - Analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V.
 #define i2c_sda_pin 8  // (i2c0 sda / adc) - i2c bus for airspeed sensor, lighting board, cap touchscreen
 #define i2c_scl_pin 9  // (i2c0 scl / adc) - i2c bus for airspeed sensor, lighting board, cap touchscreen
 #define tft_cs_pin 10  // (spi0 cs / adc*) - Output, active low, Chip select allows ILI9341 display chip use of the SPI bus
-#define tft_mosi_pin 11  // (spi0 mosi / adc*) - Used as spi interface data to sd card and tft screen
-#define tft_sclk_pin 12  // (spi0 sclk / adc*) - Used as spi interface clock for sd card and tft screen
+#define tft_mosi_pin 11  // (spi0 mosi / adc*) - Used as spi interface data for touchscreen, sd card and tft screen
+#define tft_sclk_pin 12  // (spi0 sclk / adc*) - Used as spi interface clock for touchscreen, sd card and tft screen
 #define tft_miso_pin 13  // (spi0 miso / adc*) - Used as spi interface data from sd card and possibly (?) tft screen
 #define hotrc_ch2_vert_pin 14  // (pwm0 / adc*) - Hotrc Ch2 bidirectional trigger input
 #define hotrc_ch1_horz_pin 15  // (pwm1 / adc*) - Hotrc Ch1 thumb joystick input
@@ -117,19 +47,24 @@ bool flip_the_screen = false;
 #define hotrc_ch3_ign_pin 20  // (usb-otg / adc*) - Ignition control, Hotrc Ch3 PWM toggle signal
 #define hotrc_ch4_cruise_pin 21  // (pwm0) - Cruise control, Hotrc Ch4 PWM toggle signal
 #define tach_pulse_pin 35  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
-#define speedo_pulse_pin 36  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
+#define basicmodesw_pin 36  // (spi-ram / oct-spi) - Input, asserted to tell us to run in basic mode, active low (needs pullup)
 #define ign_out_pin 37  // (spi-ram / oct-spi) - Output for Hotrc to a relay to kill the car ignition. Note, Joystick ign button overrides this if connected and pressed
 #define syspower_pin 38  // (spi-ram / oct-spi) - Output, flips a relay to power all the tranducers. This is actually the neopixel pin on all v1.1 devkit boards.
-#define touch_cs_pin 39  // Use as chip select for resistive touchscreen
+#define sdcard_cs_pin 39  // Output, chip select for SD card controller on SPI bus, 
 #define encoder_b_pin 40  // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define encoder_a_pin 41  // Int input, The A (aka CLK) pin of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
 #define encoder_sw_pin 42  // Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
 #define uart_tx_pin 43  // "TX" (uart0 tx) - Needed for serial monitor
 #define uart_rx_pin 44  // "RX" (uart0 rx) - Needed for serial monitor. In theory we could dual-purpose this for certain things, as we haven't yet needed to accept input over the serial monitor
 #define starter_pin 45  // (strap to 0) - Input, active high when vehicle starter is engaged (needs pulldown)
-#define basicmodesw_pin 46  // (strap X) - Input, asserted to tell us to run in basic mode, active low (needs pullup)
-#define sdcard_cs_pin 47  // Output, chip select allows SD card controller chip use of the SPI bus, active low
+#define speedo_pulse_pin 46  // (strap X) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
+#define touch_cs_pin 47  // Output, chip select for resistive touchscreen, active low
 #define neopixel_pin 48  // (rgb led) - Data line to onboard Neopixel WS281x (on all v1 devkit boards)
+
+// ESP32 errata 3.11: Pin 36 and 39 will be pulled low for ~80ns when "certain RTC peripherals power up"
+// https://www.esp32.com/viewtopic.php?f=12&t=34831
+// Soren 230731 swapped crit signals off p36/p39:
+// Was: speedo_pulse_pin 36 , basicmodesw_pin 46 , , touch_cs_pin 39 , sdcard_cs_pin 47
 
 #define tft_ledk_pin -1  // Output, optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
 #define touch_irq_pin 255  // Input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - Set to 255 if not used
@@ -140,7 +75,7 @@ bool serial_debugging = true;
 bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
 bool take_temperatures = true;
 bool keep_system_powered = true;  // Use true during development
-bool require_car_stopped_before_driving = false;  // May be a smart prerequisite, may be us putting obstacles in our way
+bool allow_rolling_start = true;  // May be a smart prerequisite, may be us putting obstacles in our way
 
 #define pwm_jaguars true
 
@@ -452,7 +387,7 @@ QPID brakeQPID (pressure_sensor.get_filtered_value_ptr().get(), &brake_out_perce
     
 // Gas : Controls the throttle to achieve the desired intake airflow and engine rpm
 
-TargetControl idleControl (&tach_target_rpm, &tach_rpm, &tach_filt_rpm, tach_idle_cold_max_rpm, 2000000, TargetControl::targetMode::activeMin);
+TargetControl idleControl (&tach_target_rpm, tachometer.get_human_ptr().get(), tachometer.get_filtered_value_ptr().get(), tach_idle_cold_max_rpm, 2000000, TargetControl::targetMode::activeMin);
 
 uint32_t gas_pid_period_us = 225000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer gasPidTimer (gas_pid_period_us);  // not actually tunable, just needs value above
@@ -480,16 +415,8 @@ QPID cruiseQPID (speedometer.get_filtered_value_ptr().get(), &tach_target_rpm, &
     cruise_pid_period_us, QPID::Control::timer, QPID::centMode::range);
     // QPID::centMode::centerStrict, (tach_govern_rpm + tach_idle_rpm)/2);  // period, more settings
 
-// SdFat sd;  // SD card filesystem
-// #define approot "cantroller2020"
-// #define logfile "log.txt"
-// #define error(msg) sd.errorHalt(F(msg))  // Error messages stored in flash.
-// SdFile root;  // Directory file.
-// SdFile file;  // Use for file creation in folders.
-
 void handle_hotrc_vert(int32_t pulse_width) {
-    // reads return 0 if the buffer is empty eg bc our loop is running faster than the rmt is getting pulses
-    if (pulse_width > 0) {
+    if (pulse_width > 0) {  // reads return 0 if the buffer is empty eg bc our loop is running faster than the rmt is getting pulses
         hotrc_vert_pulse_64_us = pulse_width;
     }
 }
@@ -537,8 +464,6 @@ void calc_governor (void) {
 }
 float steer_safe (float endpoint) {
     return steer_stop_percent + (endpoint - steer_stop_percent) * (1 - steer_safe_ratio * speedometer.get_filtered_value() / speedometer.get_redline_mph());
-    // return steer_pulse_stop_us + (endpoint - steer_pulse_stop_us) * map (speedo_filt_mph, 0.0, speedo_redline_mph, 1.0, steer_safe_ratio);
-    // return steer_stop_percent + (endpoint - steer_stop_percent) * (1 - steer_safe_ratio * speedo_filt_mph / speedo_redline_mph);
 }
 void update_tach_idle (bool force = 0) {
     if (tachIdleTimer.expireset() || force) {
@@ -581,38 +506,6 @@ bool syspower_set (bool val) {
     write_pin (syspower_pin, really_power);  // delay (val * 500);
     return really_power;
 }
-long temp_peef (void) {  // Peef's algorithm somewhat modified by Soren
-    long temp_temp;
-    if (tempTimer.expired()) {  // if (millis() % 1000 == 0)
-        if (temp_state == READ) {
-            // delay(10);
-            if (abs(temp_last-temp_temp) >= 20 && temp_last != 0) {
-                // Serial.println("Bad-T-" + String(f));
-                temp_temp = temp_last;
-            }
-            onewire.reset();
-            onewire.write(0xCC);  // All Devices present - Skip ROM ID
-            onewire.write(0x44);  // start conversion, with parasite power on at the end
-            // printf ("\nTemp: %s.%s °F\n", String(temp/10), String(temp%10));
-            tempTimer.set (temp_times_us[temp_state]);
-            temp_state = CONVERT;
-            return temp_temp;
-        }  // else CONVERT
-        onewire.reset();
-        onewire.write(0xCC);  // All Devices present - Skip ROM ID
-        onewire.write(0xBE);  // Read Scratchpad
-        temp_data[0] = onewire.read();
-        temp_data[1] = onewire.read();
-        temp_raw = (temp_data[1] << 8) | temp_data[0];
-        temp_last = temp_temp;
-        temp_temp_addr_peef = ((long)temp_raw * 180 / 16 + 3205) / 10;
-        temp_secs++;
-        tempTimer.set (temp_times_us[temp_state]);
-        temp_state = READ;
-    }
-    return 9930;  // Otherwise just return the sun's surface temperature
-}
-
 void temp_init (void) {
     printf ("Temp sensors..");
     tempsensebus.setWaitForConversion (false);  // Whether to block during conversion process
@@ -670,20 +563,4 @@ void i2c_init (int32_t sda, int32_t scl) {
     if (i2c_devicecount == 0) printf (" no devices found\n");
     else printf (" done\n");
 }
-
-// TaskHandle_t Task1;
-// void codeForTask1 (void * parameter) {
-//     for(;;) {
-//         if (tempTimer.expired()) {
-//             int32_t start = mycros();
-//             tempsensebus.setWaitForConversion (false);  // makes it async
-//             tempsensebus.requestTemperatures();
-//             int32_t mid = mycros();
-//             temps[0] = tempsensebus.getTempCByIndex(0);
-//             int32_t done = mycros();
-//             printf ("Temp: %lf, took %ld + %ld = %ld us.\n", temps[0], mid-start, done-mid, done-start);
-//             tempTimer.reset();
-//         }
-//     }
-// }
 #endif  // GLOBALS_H

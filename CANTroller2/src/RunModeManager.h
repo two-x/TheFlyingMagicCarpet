@@ -1,3 +1,4 @@
+#pragma once
 #ifndef RUNMODEMANAGER_H
 #define RUNMODEMANAGER_H
 
@@ -78,8 +79,7 @@ private:
                 stopcarTimer.reset();
             }
         }
-        else if ((speedometer.car_stopped() || !require_car_stopped_before_driving) && ignition && !panic_stop && !tachometer.engine_stopped() && !starter)
-            updateMode(HOLD);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
+        else if ((speedometer.car_stopped() || allow_rolling_start) && ignition && !panic_stop && !tachometer.engine_stopped() && !starter) updateMode(HOLD);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
         if (!shutdown_complete) {  // If we haven't yet stopped the car and then released the brakes and gas all the way
             if (speedometer.car_stopped() || stopcarTimer.expired()) {  // If car has stopped, or timeout expires, then release the brake
                 if (shutdown_color == LPNK) {  // On first time through here
@@ -132,8 +132,7 @@ private:
             if (!speedometer.car_stopped() && !stopcarTimer.expired()) pressure_target_psi = min (pressure_target_psi + pressure_hold_increment_psi, pressure_sensor.get_max_human());  // If the car is still moving, push harder
         }
         if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
-        else if (joy_centered && (ctrl == JOY || hotrc_radio_detected)) updateMode(FLY); // Enter Fly Mode upon joystick movement from center to above center.
-        // Possibly add "&& car_stopped()" to above check?
+        else if (joy_centered && (ctrl == JOY || hotrc_radio_detected)) updateMode(FLY); // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
     }
 
      void handleFlyMode() {
@@ -251,4 +250,64 @@ private:
         }
     }
 };
-#endif
+// Here are the different runmodes documented
+//
+// ** Basic Mode **
+// - Required: BasicMode switch On
+// - Priority: 1 (Highest)
+// The gas and brake don't do anything in Basic Mode. Just the steering works, so use the pedals.
+// This mode is enabled with a toggle switch in the controller box.  When in Basic Mode, the only
+// other valid mode is Shutdown Mode. Shutdown Mode may override Basic Mode.
+// - Actions: Release and deactivate brake and gas actuators.  Steering PID keep active  
+//
+// ** Shutdown Mode **
+// - Required: BasicMode switch Off & Ignition Off
+// - Priority: 2
+// This mode is active whenever the ignition is off.  In other words, whenever the
+// little red pushbutton switch by the joystick is unclicked.  This happens before the
+// ignition is pressed before driving, but it also may happen if the driver needs to
+// panic and E-stop due to loss of control or any other reason.  The ignition will get cut
+// independent of the controller, but we can help stop the car faster by applying the
+// brakes. Once car is stopped, we release all actuators and then go idle.
+// - Actions: 1. Release throttle. If car is moving AND BasicMode Off, apply brakes to stop car
+// - Actions: 2: Release brakes and deactivate all actuators including steering
+//
+// ** Stall Mode **
+// - Required: Engine stopped & BasicMode switch Off & Ignition On
+// - Priority: 3
+// This mode is active when the engine is not running.  If car is moving, then it presumably may
+// coast to a stop.  The actuators are all enabled and work normally.  Starting the engine will 
+// bring you into Hold Mode.  Shutdown Mode and Basic Mode both override Stall Mode. Note: This
+// mode allows for driver to steer while being towed or pushed, or working on the car.
+// - Actions: Enable all actuators
+//
+// ** Hold Mode **
+// - Required: Engine running & JoyVert<=Center & BasicMode switch Off & Ignition On
+// - Priority: 4
+// This mode is entered from Stall Mode once engine is started, and also, whenever the car comes
+// to a stop while driving around in Fly Mode.  This mode releases the throttle and will 
+// continuously increase the brakes until the car is stopped, if it finds the car is moving. 
+// Pushing up on the joystick from Hold mode releases the brakes & begins Fly Mode.
+// Shutdown, Basic & Stall Modes override Hold Mode.
+// # Actions: Close throttle, and Apply brake to stop car, continue to ensure it stays stopped.
+//
+// ** Fly Mode **
+// - Required: (Car Moving OR JoyVert>Center) & In gear & Engine running & BasicMode Off & Ign On
+// - Priority: 5
+// This mode is for driving under manual control. In Fly Mode, vertical joystick positions
+// result in a proportional level of gas or brake (AKA "Manual" control).  Fly Mode is
+// only active when the car is moving - Once stopped or taken out of gear, we go back to Hold Mode.
+// If the driver performs a special secret "cruise gesture" on the joystick, then go to Cruise Mode.
+// Special cruise gesture might be: Pair of sudden full-throttle motions in rapid succession
+// - Actions: Enable all actuators, Watch for gesture
+//
+// ** Cruise Mode **
+// - Required: Car Moving & In gear & Engine running & BasicMode switch Off & Ignition On
+// - Priority: 6 (Lowest)
+// This mode is entered from Fly Mode by doing a special joystick gesture. In Cruise Mode,
+// the brake is disabled, and the joystick vertical is different: If joyv at center, the
+// throttle will actively maintain current car speed.  Up or down momentary joystick presses
+// serve to adjust that target speed. A sharp, full-downward gesture will drop us back to 
+// Fly Mode, promptly resulting in braking (if kept held down).
+// - Actions: Release brake, Maintain car speed, Handle joyvert differently, Watch for gesture
+#endif  // RUNMODEMANAGER.H
