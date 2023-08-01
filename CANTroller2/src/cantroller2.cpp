@@ -3,7 +3,6 @@
 #include <Adafruit_SleepyDog.h>  // Watchdog
 #include <vector>
 #include <iomanip>  // Formatting cout
-#include "qpid.h"  // This is quickpid library except i have to edit some of it
 #include "globals.h"
 #include "display.h"
 #include "uictrl.h"
@@ -140,18 +139,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
     temp_init();  // Onewire bus and temp sensors
     
-    // xTaskCreatePinnedToCore ( codeForTask1, "Task_1", 1000, NULL, 1, &Task1, 0);
-    // if (ctrl == HOTRC) {  // Look for evidence of a normal (not failsafe) hotrc signal. If it's not yet powered on, we will ignore its spurious poweron ignition event
-    //     int32_t temp = hotrc_vert_pulse_us;
-    //     hotrc_radio_detected = ((ctrl_lims_adc[HOTRC][VERT][MIN] <= temp && temp < hotrc_pos_failsafe_min_us) || (hotrc_pos_failsafe_max_us < temp && temp <= ctrl_lims_adc[HOTRC][VERT][MAX]));
-    //     for (int32_t x = 0; x < 4; x++) {
-    //         delay (20);
-    //         if (!((ctrl_lims_adc[HOTRC][VERT][MIN] < temp && temp < hotrc_pos_failsafe_min_us) || (hotrc_pos_failsafe_max_us < temp && temp < ctrl_lims_adc[HOTRC][VERT][MAX]))
-    //             || (hotrcPulseTimer.elapsed() > (int32_t)(hotrc_pulse_period_us*2.5))) hotrc_radio_detected = false;
-    //     }
-    //     printf ("HotRC radio signal: %setected\n", (!hotrc_radio_detected) ? "Not d" : "D");
-    // }
-    
     printf ("Init display..\n");
     if (display_enabled) {
         config.begin("FlyByWire", false);
@@ -197,7 +184,6 @@ void loop() {
         boot_button = false;  // Store press is not in effect
         boot_button_suppress_click = false;  // End click suppression
     }
-    // printf ("it:%d ac:%ld lst:%d ta:%d sc:%d el:%ld\n", boot_button, boot_button_action, boot_button_last, boot_button_timer_active, boot_button_suppress_click, dispResetButtonTimer.elapsed());
     
     // External digital signals - takes 11 us to read
     if (!simulator.simulating(SimOption::basicsw)) basicmodesw = !digitalRead (basicmodesw_pin);   // 1-value because electrical signal is active low
@@ -376,10 +362,13 @@ void loop() {
     }
     
     update_tach_idle();  // Adjust idle speed value based on engine temperature
-    idleControl.update();  // Adjust tach target when idling to minimize idle rpm while preventing stalling
+    idler.update();  // Adjust tach target when idling to minimize idle rpm while preventing stalling
 
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
-    if (runmode == CRUISE && !cruise_adjusting && cruisePidTimer.expireset()) cruiseQPID.Compute();
+    if (runmode == CRUISE && !cruise_adjusting && cruisePidTimer.expireset()) {
+        cruiseQPID.SetOutputLimits (idler.get_idlespeed(), tach_govern_rpm);
+        cruiseQPID.Compute();
+    }
 
     // Gas - Update servo output. Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
     if (gasPidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {

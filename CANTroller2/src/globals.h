@@ -14,9 +14,9 @@
 // #include "freertos/FreeRTOS.h"  // MCPWM pulse measurement code
 // #include "freertos/task.h"  // MCPWM pulse measurement code
 // #include "driver/mcpwm.h"  // MCPWM pulse measurement code
-#include "qpid.h"
 #include "driver/rmt.h"
 #include "RMT_Input.h"
+#include "qpid.h"  // This is quickpid library except i have to edit some of it
 #include "utils.h"
 #include "uictrl.h"
 #include "devices.h"
@@ -352,6 +352,7 @@ float tach_idle_abs_min_rpm = 450.0;  // Low limit of idle speed adjustability
 float tach_idle_hot_min_rpm = 550.0;  // Idle speed at nom_max engine temp
 float tach_idle_cold_max_rpm = 775.0;  // Idle speed at nom_min engine temp
 float tach_idle_abs_max_rpm = 950.0;  // High limit of idle speed adjustability
+float tach_idle_high_rpm = 1000.0;  // Elevated rpm above idle guaranteed never to stall
 Timer tachIdleTimer (5000000);  // How often to update tach idle value based on engine temperature
 
 // airflow related
@@ -387,8 +388,10 @@ QPID brakeQPID (pressure_sensor.get_filtered_value_ptr().get(), &brake_out_perce
     
 // Gas : Controls the throttle to achieve the desired intake airflow and engine rpm
 
-TargetControl idleControl (&tach_target_rpm, tachometer.get_human_ptr().get(), tachometer.get_filtered_value_ptr().get(), tach_idle_cold_max_rpm, 2000000, TargetControl::targetMode::activeMin);
-
+IdleControl idler (&tach_target_rpm, tachometer.get_human_ptr().get(), tachometer.get_filtered_value_ptr().get(), &temps_f[ENGINE],
+    tach_idle_high_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm,
+    temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][NOM_MAX],
+    2000000, IdleControl::idlemodes::activemin);
 uint32_t gas_pid_period_us = 225000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer gasPidTimer (gas_pid_period_us);  // not actually tunable, just needs value above
 float gas_spid_initial_kp = 0.256;  // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
@@ -467,8 +470,7 @@ float steer_safe (float endpoint) {
 }
 void update_tach_idle (bool force = 0) {
     if (tachIdleTimer.expireset() || force) {
-        tach_idle_rpm = map(temps_f[ENGINE], temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][NOM_MAX], tach_idle_cold_max_rpm, tach_idle_hot_min_rpm);
-        tach_idle_rpm = constrain (tach_idle_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm);
+        tach_idle_rpm = idler.get_idlespeed();
         cruiseQPID.SetOutputLimits (tach_idle_rpm, cruiseQPID.GetOutputMax());
     }
 }

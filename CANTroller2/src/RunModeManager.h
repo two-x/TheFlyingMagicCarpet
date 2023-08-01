@@ -66,7 +66,7 @@ private:
 
     void handleShutdownMode() { // In shutdown mode we stop the car if it's moving then park the motors.
         if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
-            tach_target_rpm = tach_idle_rpm;  //  Release the throttle 
+            idler.goto_idle();  //  Release the throttle 
             shutdown_complete = false;
             shutdown_color = LPNK;
             disp_runmode_dirty = true;

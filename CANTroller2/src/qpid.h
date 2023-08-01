@@ -1,36 +1,78 @@
 #pragma once
-#include <stdint.h>
 #ifndef QPID_h
 #define QPID_h
+#include <stdint.h>
 #include "Arduino.h"
 #include "utils.h"
 
-class TargetControl {  // Soren - To allow creative control of PID targets in case your engine idle problems need that.
+class IdleControl {  // Soren - To allow creative control of PID targets in case your engine idle problems need that.
   public:
-    enum class targetMode : uint32_t { softLanding, activeMin };  // After soft landing at minimum (which it will always do), Can be set to continuously further minimize target until irregular pulses detected. 
+    enum class idlemodes : uint32_t { softlanding, activemin };  // After soft landing at minimum (which it will always do), Can be set to continuously further minimize target until irregular pulses detected. 
   protected:
-    enum targetState : uint32_t { onTarget, gotoHighIdle, timer, minimize };
-    float initialTarget, lastTarget;
-    float* target;
-    float* measRaw;
-    float* measFilt;
+    enum targetstates : uint32_t { driving, dropfast, dropslow, minimize };
+    float targetlast_rpm, idle_rpm, idlehigh_rpm, idlehot_rpm, idlecold_rpm, temphot_f, tempcold_f; 
+    float* target_rpm;
+    float* measraw_rpm;
+    float* measfilt_rpm;
+    float* coolant_f;
+    uint32_t settletime_us;
     Timer setTimer;
-    targetMode targetmode;
+    idlemodes idlemode;
+    targetstates runstate, laststate;
   public:
-    TargetControl (float* argTarget, float* argMeasRaw, float* argMeasFilt, float initial, uint32_t settime, targetMode targmode = targetMode::softLanding) {
-        target = argTarget;
-        measRaw = argMeasRaw;
-        measFilt = argMeasFilt;
-        lastTarget = *target;
-        setInitial (initial);
-        setTimer.set ((int64_t)settime);
-
+    IdleControl (float* target_rpm_arg, float* measraw_rpm_arg, float* measfilt_rpm_arg, float* coolant_f_arg,  // Variable references: idle target, rpm raw, rpm filt, Engine temp
+                 float idlehigh_rpm_arg, float idlehot_rpm_arg, float idlecold_rpm_arg,  // Values for: high-idle rpm (will not stall), hot idle nominal rpm, cold idle nominal rpm 
+                 float tempcold_f_arg, float temphot_f_arg,  // Values for: operational temp cold (min) and temp hot (max) in degrees-f
+                 uint32_t settletime_us_arg = 2000000,  // Period over which the idle will be lowered from high-idle to final idle
+                 idlemodes idlemode_arg = idlemodes::softlanding) {  // Configure idle control to just soft land or also attempt to minimize idle
+        target_rpm = target_rpm_arg;
+        measraw_rpm = measraw_rpm_arg;
+        measfilt_rpm = measfilt_rpm_arg;
+        coolant_f = coolant_f_arg;
+        idlehigh_rpm  = idlehigh_rpm_arg;
+        idlehot_rpm = idlehot_rpm_arg;
+        idlecold_rpm = idlecold_rpm_arg;
+        tempcold_f = tempcold_f_arg;
+        settletime_us = settletime_us_arg;
+        idlemode = idlemode_arg;
+        calc_idlespeed();
+        targetlast_rpm = *target_rpm;
+        setTimer.set ((int64_t)settletime_us);  // Time period over which the idle will subsequently drop further to its final target value
+        runstate = targetstates::driving;
     }
-    void setInitial (float initial) { initialTarget = initial; }
+
     void update (float deviationRatio = 1.0) {  // deviationRatio tells us how unstable our output is being (0=stable to 1=unstable)
+        calc_idlespeed();
+        if (runstate == targetstates::driving) process_driving();
+        else if (runstate == targetstates::dropfast) process_dropfast();
+        else if (runstate == targetstates::dropslow) process_dropslow();
+        else if (runstate == targetstates::minimize) process_minimize();
+    }
+    void calc_idlespeed (void) {
+        idle_rpm = map (*coolant_f, tempcold_f, temphot_f, idlecold_rpm, idlehot_rpm);
+        idle_rpm = constrain (idle_rpm, idlehot_rpm, idlecold_rpm);
+    }
+    void goto_idle (void) {  // The gods request the engine should idle now
+        if (runstate == targetstates::driving) change_runstate (targetstates::dropfast);
+    }
+    void change_runstate (targetstates newstate) {
+        if (runstate != newstate) {
+            laststate = runstate;
+            runstate = newstate;
+        }
+    }
+    void process_driving (void) {
 
     }
+    void process_dropfast (void) {
+    }
+    void process_dropslow (void) {
+    }
+    void process_minimize (void) {
+    }
+    float get_idlespeed (void) { return idle_rpm; }
 };
+
 class QPID {
 
   public:
