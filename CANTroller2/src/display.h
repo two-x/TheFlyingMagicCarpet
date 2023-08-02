@@ -641,7 +641,7 @@ class Display {
                 float drange;
                 draw_dynamic(1, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
                 draw_dynamic(2, speedo_filt_mph, 0.0, speedo_redline_mph, speedo_target_mph);
-                draw_dynamic(3, tach_filt_rpm, 0.0, tach_redline_rpm, tach_target_rpm);
+                draw_dynamic(3, tachometer.get_filtered_value(), 0.0, tachometer.get_redline_rpm(), tach_target_rpm);
                 draw_dynamic(4, gas_pulse_out_us, gas_pulse_redline_us, gas_pulse_idle_us);
                 draw_dynamic(5, pressure_sensor.get_filtered_value(), pressure_sensor.get_min_human(), pressure_sensor.get_max_human(), pressure_target_psi);  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
                 draw_dynamic(6, brake_out_percent, brake_extend_percent, brake_retract_percent);
@@ -675,10 +675,10 @@ class Display {
                 }
                 else if (dataset_page == PG_CAR) {
                     draw_dynamic(9, pressure_sensor.get_native(), pressure_sensor.get_min_native(), pressure_sensor.get_max_native());                    
-                    draw_dynamic(10, tach_idle_rpm, 0.0, tach_redline_rpm);
-                    draw_dynamic(11, tach_idle_hot_min_rpm, 0.0, tach_redline_rpm); 
-                    draw_dynamic(12, tach_idle_cold_max_rpm, 0.0, tach_redline_rpm); 
-                    draw_dynamic(13, tach_redline_rpm, 0.0, tach_max_rpm);
+                    draw_dynamic(10, tach_idle_rpm, 0.0, tachometer.get_redline_rpm());
+                    draw_dynamic(11, tach_idle_hot_min_rpm, 0.0, tachometer.get_redline_rpm()); 
+                    draw_dynamic(12, tach_idle_cold_max_rpm, 0.0, tachometer.get_redline_rpm()); 
+                    draw_dynamic(13, tachometer.get_redline_rpm(), 0.0, tachometer.get_max_rpm());
                     draw_dynamic(14, gas_governor_percent, 0.0, 100.0);
                     draw_dynamic(15, steer_safe_percent, 0.0, 100.0);
                     draw_dynamic(16, airflow_max_mph, 0.0, airflow_abs_max_mph);
@@ -721,8 +721,8 @@ class Display {
                 }
                 else if (dataset_page == PG_GPID) {
                     drange = gas_pulse_idle_us-gas_pulse_govern_us;
-                    draw_dynamic(9, tach_target_rpm, 0.0, tach_redline_rpm);
-                    draw_dynamic(10, gasQPID.GetError(), tach_idle_rpm-tach_govern_rpm, tach_govern_rpm-tach_idle_rpm);
+                    draw_dynamic(9, tach_target_rpm, 0.0, tachometer.get_redline_rpm());
+                    draw_dynamic(10, gasQPID.GetError(), tach_idle_rpm - tach_govern_rpm, tach_govern_rpm - tach_idle_rpm);
                     draw_dynamic(11, gasQPID.GetPterm(), -drange, drange);
                     draw_dynamic(12, gasQPID.GetIterm(), -drange, drange);
                     draw_dynamic(13, gasQPID.GetDterm(), -drange, drange);
@@ -734,14 +734,14 @@ class Display {
                     draw_dynamic(19, gasQPID.GetKd(), 0.0, 2.0);
                 }
                 else if (dataset_page == PG_CPID) {
-                    drange = tach_govern_rpm-tach_idle_rpm;
+                    drange = tach_govern_rpm - tach_idle_rpm;
                     draw_dynamic(9, speedo_target_mph, 0.0, speedo_govern_mph);
                     draw_dynamic(10, cruiseQPID.GetError(), speedo_idle_mph-speedo_govern_mph, speedo_govern_mph-speedo_idle_mph);
                     draw_dynamic(11, cruiseQPID.GetPterm(), -drange, drange);
                     draw_dynamic(12, cruiseQPID.GetIterm(), -drange, drange);
                     draw_dynamic(13, cruiseQPID.GetDterm(), -drange, drange);
                     draw_dynamic(14, cruiseQPID.GetOutputSum(), -cruiseQPID.GetOutputRange(), cruiseQPID.GetOutputRange());  // cruise_spid_speedo_delta_adc, -drange, drange);
-                    draw_dynamic(15, tach_target_rpm, 0.0, tach_redline_rpm);
+                    draw_dynamic(15, tach_target_rpm, 0.0, tachometer.get_redline_rpm());
                     draw_eraseval(16);
                     draw_dynamic(17, cruiseQPID.GetKp(), 0.0, 2.0);
                     draw_dynamic(18, cruiseQPID.GetKi(), 0.0, 2.0);

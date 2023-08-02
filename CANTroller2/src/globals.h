@@ -426,33 +426,16 @@ float gas_pulse_ccw_max_us = 2500;  // Servo ccw limit pulsewidth. Hotrc control
 float gas_pulse_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_idle_us where to park the servo out of the way so we can drive manually (in us)
 
 // tachometer related
-volatile int64_t tach_us = 0;
-int32_t tach_buf_us = 0;
-volatile int64_t tach_timer_start_us = 0;
-volatile int64_t tach_time_us;
-volatile int64_t tach_timer_read_us = 0;
+Tachometer tachometer(tach_pulse_pin, pot.get_ptr());
 float tach_target_rpm, tach_adjustpoint_rpm;
-float tach_rpm = 50.0;  // Current engine speed, raw value converted to rpm (in rpm)
-float tach_filt_rpm = 50.0;  // Current engine speed, filtered (in rpm)
-float tach_govern_rpm;  // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
-float tach_convert_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
-bool tach_convert_invert = true;
-int32_t tach_convert_polarity = 1;  // Forward      
-float tach_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-float tach_idle_rpm = 700.0;  // Min value for engine hz, corresponding to low idle (in rpm) Note, this value is itself highly variable, dependent on engine temperature
-float tach_max_rpm = 7000.0;  // Max possible engine rotation speed
-float tach_redline_rpm = 5000.0;  // Max value for tach_rpm, pedal to the metal (in rpm). 20000 rotations/mile * 15 mi/hr * 1/60 hr/min = 5000 rpm
-float tach_margin_rpm = 15.0;  // Margin of error for checking engine rpm (in rpm)
-float tach_stop_thresh_rpm = 0.1;  // Below which the engine is considered stopped - this is redundant,
-int64_t tach_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
-int64_t tach_delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
+float tach_govern_rpm; // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
+float tach_margin_rpm = 15.0; // Margin of error for checking engine rpm (in rpm)
+float tach_idle_rpm = 700.0; // Min value for engine hz, corresponding to low idle (in rpm) Note, this value is itself highly variable, dependent on engine temperature
 float tach_idle_abs_min_rpm = 450.0;  // Low limit of idle speed adjustability
 float tach_idle_hot_min_rpm = 550.0;  // Idle speed at nom_max engine temp
 float tach_idle_cold_max_rpm = 775.0;  // Idle speed at nom_min engine temp
 float tach_idle_abs_max_rpm = 950.0;  // High limit of idle speed adjustability
 Timer tachIdleTimer (5000000);  // How often to update tach idle value based on engine temperature
-Timer tachStopTimer(tach_stop_timeout_us);
-
 
 // airflow related
 bool airflow_detected = false;
@@ -461,7 +444,7 @@ float airflow_filt_mph = airflow_mph;
 float airflow_target_mph = airflow_mph;
 float airflow_min_mph = 0.0;
 float airflow_max_mph = 33.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)
-float airflow_idle_mph = airflow_max_mph * tach_idle_rpm / tach_redline_rpm;
+float airflow_idle_mph = airflow_max_mph * tach_idle_rpm / tachometer.get_redline_rpm();
 // What diameter intake hose will reduce airspeed to abs max?  2.7 times the xsectional area. Current area is 6.38 cm2. New diameter = 4.68 cm (min). So, need to adapt to 2.5in + tube
 float airflow_abs_max_mph = 33.55;
 float airflow_ema_alpha = 0.2;
@@ -493,7 +476,7 @@ float gas_spid_initial_ki_hz = 0.022;  // PID integral frequency factor (gas). H
 float gas_spid_initial_kd_s = 0.091;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
 bool gas_open_loop = false;
 static Servo gas_servo;
-QPID gasQPID (&tach_filt_rpm, &gas_pulse_out_us, &tach_target_rpm,  // input, target, output variable references
+QPID gasQPID (tachometer.get_filtered_value_ptr().get(), &gas_pulse_out_us, &tach_target_rpm,  // input, target, output variable references
     gas_pulse_redline_us, gas_pulse_idle_us,  // output min, max
     gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s,  // Kp, Ki, and Kd tuning constants
     QPID::pMode::pOnErrorMeas, QPID::dMode::dOnMeas, QPID::iAwMode::iAwRound, QPID::Action::reverse,  // settings
@@ -524,14 +507,6 @@ QPID cruiseQPID (&speedo_filt_mph, &tach_target_rpm, &speedo_target_mph,  // inp
 // The tach and speed use a hall sensor being triggered by a passing magnet once per pulley turn. These ISRs call mycros()
 // on every pulse to know the time since the previous pulse. I tested this on the bench up to about 0.750 mph which is as 
 // fast as I can move the magnet with my hand, and it works. Update: Janky bench test appeared to work up to 11000 rpm.
-void IRAM_ATTR tach_isr (void) {  // The tach and speedo isrs get the period of the vehicle pulley rotations.
-    tach_timer_read_us = esp_timer_get_time();
-    tach_time_us = tach_timer_read_us - tach_timer_start_us;
-    if (tach_time_us > tach_delta_abs_min_us) {  // ignore spurious triggers or bounces
-        tach_timer_start_us = tach_timer_read_us;
-        tach_us = tach_time_us;
-    }
-}
 void IRAM_ATTR speedo_isr (void) {  //  Handler can get the most recent rotation time at speedo_us
     speedo_timer_read_us = esp_timer_get_time();
     speedo_time_us = speedo_timer_read_us - speedo_timer_start_us;
@@ -566,7 +541,6 @@ bool rounding = true;
 float dround (float val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
 
 bool inline car_stopped (void) { return (speedo_filt_mph < speedo_stop_thresh_mph); }  // Moved logic that was here to the main loop
-bool inline engine_stopped (void) { return (tach_filt_rpm < tach_stop_thresh_rpm); }  // Note due to weird float math stuff, can not just check if tach == 0.0
 
 uint32_t colorwheel (uint8_t WheelPos) {
     WheelPos = 255 - WheelPos;
@@ -586,9 +560,9 @@ void calc_ctrl_lims (void) {
     steer_safe_ratio = steer_safe_percent/100.0;
 }
 void calc_governor (void) {
-    tach_govern_rpm = map ((float)gas_governor_percent, 0.0, 100.0, 0.0, tach_redline_rpm);  // Create an artificially reduced maximum for the engine speed
+    tach_govern_rpm = map(gas_governor_percent, 0.0, 100.0, 0.0, tachometer.get_redline_rpm());  // Create an artificially reduced maximum for the engine speed
     cruiseQPID.SetOutputLimits(tach_idle_rpm, tach_govern_rpm);
-    gas_pulse_govern_us = map (gas_governor_percent*(tach_redline_rpm-tach_idle_rpm)/tach_redline_rpm, 0.0, 100.0, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
+    gas_pulse_govern_us = map (gas_governor_percent*(tach_govern_rpm-tach_idle_rpm)/tachometer.get_redline_rpm(), 0.0, 100.0, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
     speedo_govern_mph = map ((float)gas_governor_percent, 0.0, 100.0, 0.0, speedo_redline_mph);  // Governor must scale the top vehicle speed proportionally
 }
 float steer_safe (float endpoint) {
@@ -598,7 +572,7 @@ float steer_safe (float endpoint) {
 }
 void update_tach_idle (bool force = 0) {
     if (tachIdleTimer.expireset() || force) {
-        tach_idle_rpm = map (temps_f[ENGINE], temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][NOM_MAX], tach_idle_cold_max_rpm, tach_idle_hot_min_rpm);
+        tach_idle_rpm = map(temps_f[ENGINE], temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][NOM_MAX], tach_idle_cold_max_rpm, tach_idle_hot_min_rpm);
         tach_idle_rpm = constrain (tach_idle_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm);
         cruiseQPID.SetOutputLimits (tach_idle_rpm, cruiseQPID.GetOutputMax());
     }
@@ -607,7 +581,7 @@ void update_tach_idle (bool force = 0) {
 // int* x is c++ style, int *x is c style
 template<typename T>
 T adj_val(T variable, T modify, T low_limit, T high_limit) {
-    int32_t oldval = variable;
+    T oldval = variable;
     variable += modify;
     return variable < low_limit ? low_limit : (variable > high_limit ? high_limit : variable);
 }
