@@ -516,7 +516,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
                 _stop_timer.reset();
             }
             // NOTE: should be checking filt here maybe?
-            if (this->human.get() < _stop_thresh_rpm || _stop_timer.expired()) {  // If time between pulses is long enough an engine can't run that slow
+            if (_stop_timer.expired()) {  // If time between pulses is long enough an engine can't run that slow
                 this->human.set(0.0);
                 this->_val_filt.set(0.0);
             }        
@@ -541,7 +541,7 @@ class Tachometer : public PulseSensor<float> {
         static constexpr float _max_rpm = 7000.0;  // Max possible engine rotation speed
         // NOTE: should we start at 50rpm? shouldn't it be zero?
         static constexpr float _initial_rpm = 50.0; // Current engine speed, raw value converted to rpm (in rpm)
-        static constexpr float _initial_redline_rpm = 5000.0;  // Max value for tach_rpm, pedal to the metal (in rpm). 20000 rotations/mile * 15 mi/hr * 1/60 hr/min = 5000 rpm
+        static constexpr float _initial_redline_rpm = 5500.0;  // Max value for tach_rpm, pedal to the metal (in rpm). 20000 rotations/mile * 15 mi/hr * 1/60 hr/min = 5000 rpm
         static constexpr float _initial_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
         static constexpr bool _initial_invert = true;
         static constexpr float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
@@ -881,7 +881,7 @@ class OutToggle : public Toggle {
 
 // This enum class represent the components which can be simulated (SimOption). It's a uint8_t type under the covers, so it can be used as an index
 typedef uint8_t opt_t;
-enum class SimOption : opt_t { none=0, pressure, brkpos, tach, airflow, speedo, battery, coolant, joy, basicsw, cruisesw, syspower, starter, ignition };
+enum class SimOption : opt_t { none=0, pressure, brkpos, tach, airflow, mapsens, speedo, battery, coolant, joy, basicsw, cruisesw, syspower, starter, ignition };
 
 // Simulator manages the ControllerMode handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
 // NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use ControllerModes,
@@ -912,6 +912,7 @@ class Simulator {
         static constexpr bool initial_sim_starter = true;
         static constexpr bool initial_sim_ignition = true;
         static constexpr bool initial_sim_airflow = false;
+        static constexpr bool initial_sim_mapsens = false;
         static constexpr bool initial_sim_battery = true;
         static constexpr bool initial_sim_coolant = true;
 
@@ -928,6 +929,7 @@ class Simulator {
             set_can_simulate(SimOption::starter, initial_sim_starter);
             set_can_simulate(SimOption::ignition, initial_sim_ignition);
             set_can_simulate(SimOption::airflow, initial_sim_airflow);
+            set_can_simulate(SimOption::mapsens, initial_sim_mapsens);
             set_can_simulate(SimOption::battery, initial_sim_battery);
             set_can_simulate(SimOption::coolant, initial_sim_coolant);
             set_pot_overload(overload_arg); // set initial pot overload

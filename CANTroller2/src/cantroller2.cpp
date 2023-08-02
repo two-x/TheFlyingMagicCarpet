@@ -120,21 +120,31 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     gas_servo.attach (gas_pwm_pin, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     steer_servo.attach (steer_pwm_pin, steer_pulse_right_us, steer_pulse_left_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
     
-    printf ("Init neopixel..");
+    printf ("Init neopixel..\n");
     neo_heartbeat = (neopixel_pin >= 0);
     neostrip.begin();  // start datastream
     neostrip.show();  // Turn off the pixel
     neostrip.setBrightness (neo_brightness_max);  // It truly is incredibly bright
     
-    printf ("Init i2c..");
+    printf ("Init i2c.. ");
     i2c_init (i2c_sda_pin, i2c_scl_pin);
     // printf ("done\n");
-    for (int32_t i=0; i<i2c_devicecount; i++) if (i2c_addrs[i] == 0x28) airflow_detected = true;
-    printf ("Airflow sensor.. %sdetected", (airflow_detected) ? "" : "not ");
+    for (int32_t i=0; i<i2c_devicecount; i++) {
+        if (i2c_addrs[i] == 0x28) airflow_detected = true;
+        if (i2c_addrs[i] == 0x18) map_detected = true;
+    }
+    printf ("Airflow sensor.. %sdetected\n", (airflow_detected) ? "" : "not ");
     if (airflow_detected) {
         if (airflow_sensor.begin() == false) printf ("  Sensor not responding");  // Begin communication with air flow sensor) over I2C 
-        airflow_sensor.setRange(AIRFLOW_RANGE_15_MPS);
-        printf ("  Sensor responding properly\n");
+        else {
+            airflow_sensor.setRange(AIRFLOW_RANGE_15_MPS);
+            printf ("  Sensor responding properly\n");
+        }
+    }
+    printf ("MAP sensor.. %sdetected\n", (map_detected) ? "" : "not ");
+    if (map_detected) {
+        if (map_sensor.begin() == false) printf ("  Sensor not responding");  // Begin communication with air flow sensor) over I2C 
+        else printf ("  Reading %f atm manifold pressure\n", map_sensor.readPressure(ATM));
     }
 
     temp_init();  // Onewire bus and temp sensors
@@ -207,12 +217,17 @@ void loop() {
     tachometer.update();
 
     // Airflow sensor
-    if (simulator.can_simulate(SimOption::airflow) && simulator.get_pot_overload() == SimOption::airflow) airflow_filt_mph = pot.mapToRange(0.0f, airflow_max_mph);
+    if (simulator.can_simulate(SimOption::airflow) && simulator.get_pot_overload() == SimOption::airflow) airflow_filt_mph = pot.mapToRange(airflow_min_mph, airflow_max_mph);
     else if (airflow_detected && !simulator.simulating(SimOption::airflow)) {
         airflow_mph = airflow_sensor.readMilesPerHour(); // note, this returns a float from 0-33.55 for the FS3000-1015 
         ema_filt (airflow_mph, &airflow_filt_mph, airflow_ema_alpha);  // Sensor EMA filter
     }
-    
+    // MAP sensor
+    if (simulator.can_simulate(SimOption::mapsens) && simulator.get_pot_overload() == SimOption::mapsens) map_filt_psi = pot.mapToRange(map_min_psi, map_max_psi);
+    else if (map_detected && !simulator.simulating(SimOption::mapsens)) {
+        map_psi = map_sensor.readPressure(PSI);
+        ema_filt (map_psi, &map_filt_psi, map_ema_alpha);  // Sensor EMA filter
+    }
     // Speedo - takes 14 us to read when no activity
     speedometer.update();
 
@@ -271,7 +286,7 @@ void loop() {
     // Voltage of vehicle battery
     // NOTE: we have these same lines of code above, are they both needed?
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
-    if (simulator.can_simulate(SimOption::battery) && simulator.get_pot_overload() == SimOption::battery) battery_filt_v = pot.mapToRange(0.0f, battery_max_v);
+    // if (simulator.can_simulate(SimOption::battery) && simulator.get_pot_overload() == SimOption::batt) battery_filt_v = pot.mapToRange(0.0f, battery_max_v);
 
     if (ctrl == JOY) ignition = ignition_sense;
     else if (ctrl == HOTRC) {
@@ -360,22 +375,21 @@ void loop() {
             #endif
         }
     }
-    
-    update_tach_idle();  // Adjust idle speed value based on engine temperature
-    idler.update();  // Adjust tach target when idling to minimize idle rpm while preventing stalling
 
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
     if (runmode == CRUISE && !cruise_adjusting && cruisePidTimer.expireset()) {
-        cruiseQPID.SetOutputLimits (idler.get_idlespeed(), tach_govern_rpm);
+        idler.update();  // Adjust tach target when idling to minimize idle rpm while preventing stalling
+        cruiseQPID.SetOutputLimits (idler.get_idlespeed(), tach_govern_rpm);  // because cruise pid has internal variable for idlespeed which may need updating
         cruiseQPID.Compute();
     }
 
     // Gas - Update servo output. Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
     if (gasPidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
-        if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
+        idler.update();  // Adjust tach target when idling to minimize idle rpm while preventing stalling
+        if (park_the_motors) gas_pulse_out_us = gas_pulse_ccw_closed_us + gas_pulse_park_slack_us;
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
-            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_idle_us;  // If in deadband or being pushed down, we want idle
-            else gas_pulse_out_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_idle_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
+            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_ccw_closed_us;  // If in deadband or being pushed down, we want idle
+            else gas_pulse_out_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_ccw_closed_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
         }
         else if (runmode != BASIC) {
             if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) {
@@ -383,19 +397,19 @@ void loop() {
                 gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
             }            
             else if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual)  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
-                gas_pulse_out_us = map (tach_target_rpm, tach_idle_rpm, tach_govern_rpm, gas_pulse_idle_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
+                gas_pulse_out_us = map (tach_target_rpm, tach_idle_rpm, tach_govern_rpm, gas_pulse_ccw_closed_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
             else gasQPID.Compute();  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
         }
         if (runmode != BASIC || park_the_motors) {
             if (!(runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo))  // Constrain to operating limits. If calibrating constrain already happened above
-                gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_idle_us);
+                gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_ccw_closed_us);
             gas_servo.writeMicroseconds ((int32_t)gas_pulse_out_us);  // Write result to servo
             // if (boot_button) printf (" Gas:%4ld\n", (int32_t)gas_pulse_out_us);
         }
     }
     if (park_the_motors) {  //  When parking motors, IF the timeout expires OR the brake and gas motors are both close enough to the park position, OR runmode has changed THEN stop trying to park the motors
         bool brake_parked = brkpos_sensor.parked();
-        bool gas_parked = ((gas_pulse_out_us == gas_pulse_idle_us + gas_pulse_park_slack_us) && gasServoTimer.expired());
+        bool gas_parked = ((gas_pulse_out_us == gas_pulse_ccw_closed_us + gas_pulse_park_slack_us) && gasServoTimer.expired());
         if ((brake_parked && gas_parked) || motorParkTimer.expired() || (runmode != SHUTDOWN && runmode != BASIC))
             park_the_motors = false;
     }
@@ -473,14 +487,8 @@ void loop() {
     adj = false;
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == PG_RUN) {
-            // TODO: use an enum class for page indices to make it more clear whats happening here
-            if (selected_value == 4) simulator.set_can_simulate(SimOption::joy, adj_bool(simulator.can_simulate(SimOption::joy), sim_edit_delta));
-            else if (selected_value == 5) simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), sim_edit_delta));
-            else if (selected_value == 6) simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), sim_edit_delta));
-            else if (selected_value == 7) simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), sim_edit_delta));
-            else if (selected_value == 8) simulator.set_can_simulate(SimOption::airflow, adj_bool(simulator.can_simulate(SimOption::airflow), sim_edit_delta));
-            else if (selected_value == 9) simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), sim_edit_delta));
-            else if (selected_value == 10) simulator.set_pot_overload(static_cast<SimOption>(adj_val(static_cast<int>(simulator.get_pot_overload()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));
+            if (selected_value == 9) adj = adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);
+            else if (selected_value == 10) adj = adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
         }
         else if (dataset_page == PG_JOY) {
             if (selected_value == 4) adj_val (&hotrc_pulse_failsafe_max_us, sim_edit_delta, hotrc_pulse_failsafe_min_us + 1, hotrc_pulse_lims_us[VERT][MIN] - 1);
@@ -496,18 +504,13 @@ void loop() {
             if (selected_value == 2) adj = adj_val (&tach_idle_hot_min_rpm, 0.1*(float)sim_edit_delta, tach_idle_abs_min_rpm, tach_idle_cold_max_rpm - 1);
             else if (selected_value == 3) adj = adj_val (&tach_idle_cold_max_rpm, 0.1*(float)sim_edit_delta, tach_idle_hot_min_rpm + 1, tach_idle_abs_max_rpm);
             else if (selected_value == 4) adj = adj_val (tachometer.get_redline_rpm_ptr().get(), 0.1*(float)sim_edit_delta, tach_idle_rpm, tachometer.get_max_rpm());
-            else if (selected_value == 5) adj = adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);
-            else if (selected_value == 6) adj = adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
-            else if (selected_value == 7) adj_val (&airflow_max_mph, 0.01*(float)sim_edit_delta, 0, airflow_abs_max_mph);
+            else if (selected_value == 5) adj_val (&airflow_max_mph, 0.01*(float)sim_edit_delta, 0, airflow_abs_max_mph);
+            else if (selected_value == 6) adj_val (&map_min_psi, 0.1*(float)sim_edit_delta, map_abs_min_psi, map_abs_max_psi);
+            else if (selected_value == 7) adj_val (&map_max_psi, 0.1*(float)sim_edit_delta, map_abs_min_psi, map_abs_max_psi);
             else if (selected_value == 8) adj_val (&speedo_idle_mph, 0.01*(float)sim_edit_delta, 0, speedometer.get_redline_mph() - 1);
             else if (selected_value == 9) adj_val (speedometer.get_redline_mph_ptr().get(), 0.01*(float)sim_edit_delta, speedo_idle_mph, 30);
             else if (selected_value == 10) adj_val(brkpos_sensor.get_zeropoint_ptr().get(), 0.001*(float)sim_edit_delta, BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
-            if (adj) {
-                update_tach_idle(1);
-                calc_governor();
-                calc_ctrl_lims();
-            }
-      }
+        }
         else if (dataset_page == PG_PWMS) {
             if (selected_value == 3) adj_val (&steer_pulse_left_us, sim_edit_delta, steer_pulse_stop_us + 1, steer_pulse_left_max_us);
             else if (selected_value == 4) adj_val (&steer_pulse_stop_us, sim_edit_delta, steer_pulse_right_us + 1, steer_pulse_left_us - 1);
@@ -515,8 +518,17 @@ void loop() {
             else if (selected_value == 6) adj_val (&brake_pulse_extend_us, sim_edit_delta, brake_pulse_stop_us + 1, brake_pulse_extend_max_us);
             else if (selected_value == 7) adj_val (&brake_pulse_stop_us, sim_edit_delta, brake_pulse_retract_us + 1, brake_pulse_extend_us - 1);
             else if (selected_value == 8) adj_val (&brake_pulse_retract_us, sim_edit_delta, brake_pulse_retract_min_us, brake_pulse_stop_us -1);
-            else if (selected_value == 9) adj_val (&gas_pulse_idle_us, sim_edit_delta, gas_pulse_redline_us + 1, gas_pulse_ccw_max_us - gas_pulse_park_slack_us);
-            else if (selected_value == 10) adj_val (&gas_pulse_redline_us, sim_edit_delta, gas_pulse_cw_min_us, gas_pulse_idle_us - 1);
+            else if (selected_value == 9) adj_val (&gas_pulse_ccw_closed_us, sim_edit_delta, gas_pulse_cw_open_us + 1, gas_pulse_ccw_max_us - gas_pulse_park_slack_us);
+            else if (selected_value == 10) adj_val (&gas_pulse_cw_open_us, sim_edit_delta, gas_pulse_cw_min_us, gas_pulse_ccw_closed_us - 1);
+        }
+        else if (dataset_page == PG_IDLE) {
+            if (selected_value == 4) idler.set_idlehigh (idler.get_idlehigh(), (float)sim_edit_delta);
+            else if (selected_value == 5) idler.set_idlecold (idler.get_idlecold(), (float)sim_edit_delta);
+            else if (selected_value == 6) idler.set_idlehot (idler.get_idlehot(), (float)sim_edit_delta);
+            else if (selected_value == 7) idler.set_tempcold (idler.get_tempcold(), (float)sim_edit_delta);
+            else if (selected_value == 8) idler.set_temphot (idler.get_temphot(), (float)sim_edit_delta);
+            else if (selected_value == 9) idler.set_settletime (idler.get_settletime() + (float)sim_edit_delta);
+            else if (selected_value == 10) idler.cycle_idlemode (sim_edit_delta);
         }
         else if (dataset_page == PG_BPID) {
             if (selected_value == 8) brakeQPID.SetKp (brakeQPID.GetKp() + 0.001 * (float)sim_edit_delta);
@@ -534,8 +546,17 @@ void loop() {
             else if (selected_value == 9) cruiseQPID.SetKi (cruiseQPID.GetKi() + 0.001 * (float)sim_edit_delta);
             else if (selected_value == 10) cruiseQPID.SetKd (cruiseQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }
-        else if (dataset_page == PG_TEMP) {        
-            if (selected_value == 9 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor, sim_edit_delta);
+        else if (dataset_page == PG_TEMP);
+        else if (dataset_page == PG_SIM) {
+            if (selected_value == 1) simulator.set_can_simulate(SimOption::joy, adj_bool(simulator.can_simulate(SimOption::joy), sim_edit_delta));
+            else if (selected_value == 2) simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), sim_edit_delta));
+            else if (selected_value == 3) simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), sim_edit_delta));
+            else if (selected_value == 4) simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), sim_edit_delta));
+            else if (selected_value == 5) simulator.set_can_simulate(SimOption::airflow, adj_bool(simulator.can_simulate(SimOption::airflow), sim_edit_delta));
+            else if (selected_value == 6) simulator.set_can_simulate(SimOption::mapsens, adj_bool(simulator.can_simulate(SimOption::mapsens), sim_edit_delta));
+            else if (selected_value == 7) simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), sim_edit_delta));
+            else if (selected_value == 8) simulator.set_pot_overload(static_cast<SimOption>(adj_val(static_cast<int32_t>(simulator.get_pot_overload()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));
+            else if (selected_value == 9 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor, sim_edit_delta);
             else if (selected_value == 10 && runmode == CAL) adj_bool (&cal_pot_gasservo, (sim_edit_delta < 0 || cal_pot_gas_ready) ? sim_edit_delta : -1);
         }
         sim_edit_delta = 0;

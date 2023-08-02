@@ -8,6 +8,7 @@
 #include "temp.h"
 #include <Wire.h>
 #include <SparkFun_FS3000_Arduino_Library.h>  // For airflow sensor  http://librarymanager/All#SparkFun_FS3000
+#include <SparkFun_MicroPressure.h>
 #include <Preferences.h>
 #include <iostream>
 // #include <DallasTemperature.h>
@@ -42,22 +43,22 @@ bool flip_the_screen = false;
 #define hotrc_ch1_horz_pin 15  // (pwm1 / adc*) - Hotrc Ch1 thumb joystick input
 #define gas_pwm_pin 16  // (pwm1 / adc*) - Output, PWM signal duty cycle controls throttle target. On Due this is the pin labeled DAC1 (where A13 is on Mega)
 #define brake_pwm_pin 17  // (pwm0 / adc* / tx1) - Output, PWM signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% is stopped) 
-#define steer_pwm_pin 18  // (pwm0 / adc* / rx1) - Output, PWM signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
+#define steer_pwm_pin 18  // (pwm0 / adc* / rx1) - Oqutput, PWM signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
 #define onewire_pin 19  // (usb-otg / adc*) - Onewire bus for temperature sensor data
 #define hotrc_ch3_ign_pin 20  // (usb-otg / adc*) - Ignition control, Hotrc Ch3 PWM toggle signal
 #define hotrc_ch4_cruise_pin 21  // (pwm0) - Cruise control, Hotrc Ch4 PWM toggle signal
-#define tach_pulse_pin 35  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
-#define basicmodesw_pin 36  // (spi-ram / oct-spi) - Input, asserted to tell us to run in basic mode, active low (needs pullup)
+#define basicmodesw_pin 35  // (spi-ram / oct-spi) - Input, asserted to tell us to run in basic mode, active low (needs pullup)
+#define tach_pulse_pin 36  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup) - Note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define ign_out_pin 37  // (spi-ram / oct-spi) - Output for Hotrc to a relay to kill the car ignition. Note, Joystick ign button overrides this if connected and pressed
 #define syspower_pin 38  // (spi-ram / oct-spi) - Output, flips a relay to power all the tranducers. This is actually the neopixel pin on all v1.1 devkit boards.
-#define sdcard_cs_pin 39  // Output, chip select for SD card controller on SPI bus, 
+#define speedo_pulse_pin 39  // Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup) - Note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define encoder_b_pin 40  // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define encoder_a_pin 41  // Int input, The A (aka CLK) pin of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
 #define encoder_sw_pin 42  // Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
 #define uart_tx_pin 43  // "TX" (uart0 tx) - Needed for serial monitor
 #define uart_rx_pin 44  // "RX" (uart0 rx) - Needed for serial monitor. In theory we could dual-purpose this for certain things, as we haven't yet needed to accept input over the serial monitor
 #define starter_pin 45  // (strap to 0) - Input, active high when vehicle starter is engaged (needs pulldown)
-#define speedo_pulse_pin 46  // (strap X) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
+#define sdcard_cs_pin 46  // (strap X) - Output, chip select for SD card controller on SPI bus, 
 #define touch_cs_pin 47  // Output, chip select for resistive touchscreen, active low
 #define neopixel_pin 48  // (rgb led) - Data line to onboard Neopixel WS281x (on all v1 devkit boards)
 
@@ -72,7 +73,7 @@ bool flip_the_screen = false;
 
 // Globals -------------------
 bool serial_debugging = true; 
-bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
+bool timestamp_loop = true;  // Makes code write out timestamps throughout loop to serial port
 bool take_temperatures = true;
 bool keep_system_powered = true;  // Use true during development
 bool allow_rolling_start = true;  // May be a smart prerequisite, may be us putting obstacles in our way
@@ -206,9 +207,9 @@ static int16_t temp_raw;  // peef variables
 enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
 enum this_is_a_total_hack { WHEEL = 2 };
 enum temp_lims { DISP_MIN, NOM_MIN, NOM_MAX, WARNING, ALARM, DISP_MAX };  // Possible sources of gas, brake, steering commands
-float temp_lims_f[3][6] { { 0.0,  45.0, 115.0, 120.0, 130.0, 220.0 },  // [AMBIENT][NOM_MIN/NOM_MAX/WARNING/ALARM]
-                          { 0.0, 178.0, 198.0, 202.0, 205.0, 220.0 },  // [ENGINE][NOM_MIN/NOM_MAX/WARNING/ALARM]
-                          { 0.0,  50.0, 120.0, 130.0, 140.0, 220.0 }, };  // [WHEEL][NOM_MIN/NOM_MAX/WARNING/ALARM] (applies to all wheels)
+float temp_lims_f[3][6] { { 0.0,  45.0, 115.0, 120.0, 130.0, 220.0 },  // [AMBIENT][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
+                          { 0.0, 178.0, 198.0, 202.0, 205.0, 220.0 },  // [ENGINE][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
+                          { 0.0,  50.0, 120.0, 130.0, 140.0, 220.0 }, };  // [WHEEL][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM] (applies to all wheels)
 float temp_room = 77.0;  // "Room" temperature is 25 C = 77 F  Who cares?
 float temp_sensor_min_f = -67.0;  // Minimum reading of sensor is -25 C = -67 F
 float temp_sensor_max_f = 257.0;  // Maximum reading of sensor is 125 C = 257 F
@@ -337,10 +338,10 @@ float gas_pulse_govern_us = 1502;  // Governor must scale the pulse range propor
 Timer gasServoTimer (500000);  // We expect the servo to find any new position within this time
 float gas_governor_percent = 95;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
 float gas_pulse_cw_min_us = 500;  // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
-float gas_pulse_redline_us = 1400;  // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
-float gas_pulse_idle_us = 1800;  // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
+float gas_pulse_cw_open_us = 1400;  // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
+float gas_pulse_ccw_closed_us = 1800;  // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
 float gas_pulse_ccw_max_us = 2500;  // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
-float gas_pulse_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_idle_us where to park the servo out of the way so we can drive manually (in us)
+float gas_pulse_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_ccw_closed_us where to park the servo out of the way so we can drive manually (in us)
 
 // tachometer related
 Tachometer tachometer(tach_pulse_pin);
@@ -351,23 +352,35 @@ float tach_idle_rpm = 700.0; // Min value for engine hz, corresponding to low id
 float tach_idle_abs_min_rpm = 450.0;  // Low limit of idle speed adjustability
 float tach_idle_hot_min_rpm = 550.0;  // Idle speed at nom_max engine temp
 float tach_idle_cold_max_rpm = 775.0;  // Idle speed at nom_min engine temp
-float tach_idle_abs_max_rpm = 950.0;  // High limit of idle speed adjustability
-float tach_idle_high_rpm = 1000.0;  // Elevated rpm above idle guaranteed never to stall
+float tach_idle_high_rpm = 950.0;  // Elevated rpm above idle guaranteed never to stall
+float tach_idle_abs_max_rpm = 1000.0;  // High limit of idle speed adjustability
 Timer tachIdleTimer (5000000);  // How often to update tach idle value based on engine temperature
 
-// airflow related
+// airflow sensor related
 bool airflow_detected = false;
 float airflow_mph = 0.0;
 float airflow_filt_mph = airflow_mph;
-float airflow_target_mph = airflow_mph;
+// float airflow_target_mph = airflow_mph;
+float airflow_abs_min_mph = 0.0;  // Sensor min
 float airflow_min_mph = 0.0;
-float airflow_max_mph = 33.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)
-float airflow_idle_mph = airflow_max_mph * tach_idle_rpm / tachometer.get_redline_rpm();
+float airflow_max_mph = 33.55;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)
+float airflow_abs_max_mph = 33.55;  // Sensor max
+// float airflow_idle_mph = airflow_max_mph * tach_idle_rpm / tachometer.get_redline_rpm();
 // What diameter intake hose will reduce airspeed to abs max?  2.7 times the xsectional area. Current area is 6.38 cm2. New diameter = 4.68 cm (min). So, need to adapt to 2.5in + tube
-float airflow_abs_max_mph = 33.55;
 float airflow_ema_alpha = 0.2;
 FS3000 airflow_sensor;
-            
+
+// map sensor related
+bool map_detected = false;
+float map_abs_min_psi = 0.88;  // Sensor min
+float map_min_psi = 10.0;  // Typical low map for a car is 10.8 psi = 22 inHg
+float map_max_psi = 15.0;
+float map_abs_max_psi = 36.25;  // Sensor max
+float map_psi = 14.696;  // 1 atm = 14.6959 psi
+float map_filt_psi = map_psi;
+float map_ema_alpha = 0.2;
+SparkFun_MicroPressure map_sensor;
+
 // Motor control:
 // Steering : Controls the steering motor proportionally based on the joystick
 uint32_t steer_pid_period_us = 185000;  // (Not actually a pid) Needs to be long enough for motor to cause change in measurement, but higher means less responsive
@@ -390,8 +403,8 @@ QPID brakeQPID (pressure_sensor.get_filtered_value_ptr().get(), &brake_out_perce
 
 IdleControl idler (&tach_target_rpm, tachometer.get_human_ptr().get(), tachometer.get_filtered_value_ptr().get(), &temps_f[ENGINE],
     tach_idle_high_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm,
-    temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][NOM_MAX],
-    2000000, IdleControl::idlemodes::activemin);
+    temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][WARNING],
+    2300, IdleControl::idlemodes::control);
 uint32_t gas_pid_period_us = 225000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer gasPidTimer (gas_pid_period_us);  // not actually tunable, just needs value above
 float gas_spid_initial_kp = 0.256;  // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
@@ -400,7 +413,7 @@ float gas_spid_initial_kd_s = 0.091;  // PID derivative time factor (gas). How m
 bool gas_open_loop = false;
 static Servo gas_servo;
 QPID gasQPID (tachometer.get_filtered_value_ptr().get(), &gas_pulse_out_us, &tach_target_rpm,  // input, target, output variable references
-    gas_pulse_redline_us, gas_pulse_idle_us,  // output min, max
+    gas_pulse_cw_open_us, gas_pulse_ccw_closed_us,  // output min, max
     gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s,  // Kp, Ki, and Kd tuning constants
     QPID::pMode::pOnErrorMeas, QPID::dMode::dOnMeas, QPID::iAwMode::iAwRound, QPID::Action::reverse,  // settings
     gas_pid_period_us, QPID::Control::timer, QPID::centMode::range);  // period, more settings
@@ -434,7 +447,7 @@ void hotrc_ch3_update (void) {  //
     hotrc_ch3_sw_last = hotrc_ch3_sw;
 }
 void hotrc_ch4_update (void) {  // 
-    hotrc_ch4_sw = (hotrc_ch4.readPulseWidth(true) <= 1500);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
+    hotrc_ch4_sw = (hotrc_ch4.readPulseWidth(true) <= 1500);  // Ch4 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH4][CENT]
     if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
@@ -462,17 +475,11 @@ void calc_ctrl_lims (void) {
 void calc_governor (void) {
     tach_govern_rpm = map(gas_governor_percent, 0.0, 100.0, 0.0, tachometer.get_redline_rpm());  // Create an artificially reduced maximum for the engine speed
     cruiseQPID.SetOutputLimits(tach_idle_rpm, tach_govern_rpm);
-    gas_pulse_govern_us = map (gas_governor_percent*(tach_govern_rpm-tach_idle_rpm)/tachometer.get_redline_rpm(), 0.0, 100.0, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
+    gas_pulse_govern_us = map (gas_governor_percent*(tach_govern_rpm-tach_idle_rpm)/tachometer.get_redline_rpm(), 0.0, 100.0, gas_pulse_ccw_closed_us, gas_pulse_cw_open_us);  // Governor must scale the pulse range proportionally
     speedo_govern_mph = map ((float)gas_governor_percent, 0.0, 100.0, 0.0, speedometer.get_redline_mph());  // Governor must scale the top vehicle speed proportionally
 }
 float steer_safe (float endpoint) {
     return steer_stop_percent + (endpoint - steer_stop_percent) * (1 - steer_safe_ratio * speedometer.get_filtered_value() / speedometer.get_redline_mph());
-}
-void update_tach_idle (bool force = 0) {
-    if (tachIdleTimer.expireset() || force) {
-        tach_idle_rpm = idler.get_idlespeed();
-        cruiseQPID.SetOutputLimits (tach_idle_rpm, cruiseQPID.GetOutputMax());
-    }
 }
 
 // int* x is c++ style, int *x is c style
