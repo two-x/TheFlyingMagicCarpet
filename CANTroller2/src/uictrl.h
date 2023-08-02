@@ -45,7 +45,7 @@ class Encoder {
         static const uint32_t _spinrate_min_us = 2500;  // Will reject spins faster than this as an attempt to debounce behavior
         static const uint32_t _accel_thresh_us = 100000;  // Spins faster than this will be accelerated
         static const int32_t _accel_max = 50;  // Maximum acceleration factor
-        static const uint32_t _longPressTime = 800000;
+        static const uint32_t _longPressTime = 500000;
 
         // instance vars
         volatile uint32_t _spinrate_isr_us = 100000;  // Time elapsed between last two detents

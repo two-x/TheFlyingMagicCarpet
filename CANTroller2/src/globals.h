@@ -8,6 +8,7 @@
 #include "temp.h"
 #include <Wire.h>
 #include <SparkFun_FS3000_Arduino_Library.h>  // For airflow sensor  http://librarymanager/All#SparkFun_FS3000
+#include <SparkFun_MicroPressure.h>
 #include <Preferences.h>
 #include <iostream>
 // #include <DallasTemperature.h>
@@ -387,19 +388,31 @@ Timer tachIdleTimer (5000000);  // How often to update tach idle value based on 
 Timer tachStopTimer(tach_stop_timeout_us);
 float tach_stop_thresh_rpm = 0.1;  // Phase this out, we should use us of pulley period for stop criterium
 
-// airflow related
+// airflow sensor related
 bool airflow_detected = false;
 float airflow_mph = 0.0;
 float airflow_filt_mph = airflow_mph;
-float airflow_target_mph = airflow_mph;
+// float airflow_target_mph = airflow_mph;
+float airflow_abs_min_mph = 0.0;  // Sensor min
 float airflow_min_mph = 0.0;
-float airflow_max_mph = 33.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)
-float airflow_idle_mph = airflow_max_mph * tach_idle_rpm / tach_redline_rpm;
+float airflow_max_mph = 33.55;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)
+float airflow_abs_max_mph = 33.55;  // Sensor max
+// float airflow_idle_mph = airflow_max_mph * tach_idle_rpm / tach_redline_rpm;
 // What diameter intake hose will reduce airspeed to abs max?  2.7 times the xsectional area. Current area is 6.38 cm2. New diameter = 4.68 cm (min). So, need to adapt to 2.5in + tube
-float airflow_abs_max_mph = 33.55;
 float airflow_ema_alpha = 0.2;
 FS3000 airflow_sensor;
-            
+
+// map sensor related
+bool map_detected = false;
+float map_abs_min_psi = 0.88;  // Sensor min
+float map_min_psi = 10.0;  // Typical low map for a car is 10.8 psi = 22 inHg
+float map_max_psi = 15.0;
+float map_abs_max_psi = 36.25;  // Sensor max
+float map_psi = 14.696;  // 1 atm = 14.6959 psi
+float map_filt_psi = map_psi;
+float map_ema_alpha = 0.2;
+SparkFun_MicroPressure map_sensor;
+
 // Motor control:
 // Steering : Controls the steering motor proportionally based on the joystick
 uint32_t steer_pid_period_us = 185000;  // (Not actually a pid) Needs to be long enough for motor to cause change in measurement, but higher means less responsive
