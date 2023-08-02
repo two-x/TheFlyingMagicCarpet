@@ -132,12 +132,12 @@ public:
                     }
                 }  
                 else if (tcol == 3 && trow == 0 && simulator.can_simulate(SimOption::basicsw) && !touch_now_touched) basicmodesw = !basicmodesw;
-                else if (tcol == 3 && trow == 1 && simulator.can_simulate(SimOption::basicsw) && pressure_sensor.source() == ControllerMode::TOUCH) pressure_sensor.add_human((float)touch_accel); // (+= 25) Pressed the increase brake pressure button
+                else if (tcol == 3 && trow == 1 && simulator.can_simulate(SimOption::pressure) && pressure_sensor.source() == ControllerMode::TOUCH) pressure_sensor.add_human((float)touch_accel); // (+= 25) Pressed the increase brake pressure button
                 else if (tcol == 3 && trow == 2 && simulator.can_simulate(SimOption::pressure) && pressure_sensor.source() == ControllerMode::TOUCH) pressure_sensor.add_human((float)(-touch_accel)); // (-= 25) Pressed the decrease brake pressure button
                 else if (tcol == 3 && trow == 4 && simulator.can_simulate(SimOption::joy)) adj_val(&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
                 else if (tcol == 4 && trow == 0 && simulator.can_simulate(SimOption::ignition) && !touch_now_touched) ignition = !ignition;
-                else if (tcol == 4 && trow == 1 && simulator.can_simulate(SimOption::tach)) adj_val(&tach_filt_rpm, (float)touch_accel, 0.0, tach_redline_rpm);
-                else if (tcol == 4 && trow == 2 && simulator.can_simulate(SimOption::tach)) adj_val(&tach_filt_rpm, (float)(-touch_accel), 0.0, tach_redline_rpm);
+                else if (tcol == 4 && trow == 1 && simulator.can_simulate(SimOption::tach) && tachometer.source() == ControllerMode::TOUCH) tachometer.add_human((float)touch_accel);
+                else if (tcol == 4 && trow == 2 && simulator.can_simulate(SimOption::tach) && tachometer.source() == ControllerMode::TOUCH) tachometer.add_human((float)-touch_accel);
                 else if (tcol == 4 && trow == 3 && simulator.can_simulate(SimOption::joy)) adj_val(&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
                 else if (tcol == 4 && trow == 4 && simulator.can_simulate(SimOption::joy)) adj_val(&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
                 else if (tcol == 5 && trow == 0 && simulator.can_simulate(SimOption::syspower)) {

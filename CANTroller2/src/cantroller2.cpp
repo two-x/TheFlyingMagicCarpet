@@ -57,7 +57,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (tft_dc_pin, OUTPUT);
     set_pin (gas_pwm_pin, OUTPUT);
     set_pin (basicmodesw_pin, INPUT_PULLUP);
-    set_pin (tach_pulse_pin, INPUT_PULLUP);
     set_pin (speedo_pulse_pin, INPUT_PULLUP);
     set_pin (neopixel_pin, OUTPUT);
     set_pin (sdcard_cs_pin, OUTPUT);
@@ -109,14 +108,15 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     printf("Transducers setup..\n");
     pressure_sensor.setup();
     brkpos_sensor.setup();
+    tachometer.setup();
 
     printf("Simulator setup..\n");
     simulator.register_device(SimOption::pressure, pressure_sensor, pressure_sensor.source());
     simulator.register_device(SimOption::brkpos, brkpos_sensor, brkpos_sensor.source());
+    simulator.register_device(SimOption::tach, tachometer, tachometer.source());
 
     // Set up our interrupts
     printf ("Attach interrupts..\n");
-    attachInterrupt (digitalPinToInterrupt(tach_pulse_pin), tach_isr, RISING);
     attachInterrupt (digitalPinToInterrupt(speedo_pulse_pin), speedo_isr, RISING);
 
     printf ("Attach servos..\n");
@@ -224,20 +224,8 @@ void loop() {
     if (!simulator.simulating(SimOption::starter)) starter = read_pin (starter_pin);
 
     // Tach - takes 22 us to read when no activity
-    if (simulator.can_simulate(SimOption::tach) && simulator.get_pot_overload() == SimOption::tach) tach_filt_rpm = pot.mapToRange(0.0f, tach_govern_rpm);
-    else if (!simulator.simulating(SimOption::tach)) {
-        tach_buf_us = (int32_t)tach_us;  // Copy delta value (in case another interrupt happens during handling)
-        tach_us = 0;  // Indicates to isr we processed this value
-        if (tach_buf_us) {  // If a valid rotation has happened since last time, delta will have a value
-            tach_rpm = convert_units ((float)(tach_buf_us), tach_convert_rpm_per_rpus, tach_convert_invert);
-            ema_filt (tach_rpm, &tach_filt_rpm, tach_ema_alpha);  // Sensor EMA filter
-            tachStopTimer.reset();
-        }
-        if (tach_rpm < tach_stop_thresh_rpm || tachStopTimer.expired()) {  // If time between pulses is long enough an engine can't run that slow
-            tach_rpm = 0.0;  // If timeout since last magnet is exceeded
-            tach_filt_rpm = 0.0;
-        }        
-    }
+    tachometer.update();
+
     // Airflow sensor
     if (simulator.can_simulate(SimOption::airflow) && simulator.get_pot_overload() == SimOption::airflow) airflow_filt_mph = pot.mapToRange(0.0f, airflow_max_mph);
     else if (airflow_detected && !simulator.simulating(SimOption::airflow)) {
@@ -477,7 +465,7 @@ void loop() {
     //     D) Car is accelerating yet engine is at idle.
     //  11. The control system has nonsensical values in its variables.
     //
-    if (!ignition && !engine_stopped()) {
+    if (!ignition && !tachometer.engine_stopped()) {
         if (diag_ign_error_enabled) { // See if the engine is turning despite the ignition being off
             Serial.println (F("Detected engine rotation in the absense of ignition signal"));  // , tach_filt_rpm, ignition
             diag_ign_error_enabled = false;  // Prevents endless error reporting the same error
@@ -556,7 +544,7 @@ void loop() {
         else if (dataset_page == PG_CAR) {
             if (selected_value == 2) adj = adj_val (&tach_idle_hot_min_rpm, 0.1*(float)sim_edit_delta, tach_idle_abs_min_rpm, tach_idle_cold_max_rpm - 1);
             else if (selected_value == 3) adj = adj_val (&tach_idle_cold_max_rpm, 0.1*(float)sim_edit_delta, tach_idle_hot_min_rpm + 1, tach_idle_abs_max_rpm);
-            else if (selected_value == 4) adj = adj_val (&tach_redline_rpm, 0.1*(float)sim_edit_delta, tach_idle_rpm, tach_max_rpm);
+            else if (selected_value == 4) adj = adj_val (tachometer.get_redline_rpm_ptr().get(), 0.1*(float)sim_edit_delta, tach_idle_rpm, tachometer.get_max_rpm());
             else if (selected_value == 5) adj = adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);
             else if (selected_value == 6) adj = adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
             else if (selected_value == 7) adj_val (&airflow_max_mph, 0.01*(float)sim_edit_delta, 0, airflow_abs_max_mph);
