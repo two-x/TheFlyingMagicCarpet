@@ -209,14 +209,14 @@ void loop() {
     // Tach - takes 22 us to read when no activity
     if (simulator.can_simulate(SimOption::tach) && simulator.get_pot_overload() == SimOption::tach) tach_filt_rpm = pot.mapToRange(0.0f, tach_govern_rpm);
     else if (!simulator.simulating(SimOption::tach)) {
-        tach_buf_us = (int32_t)tach_us;  // Copy delta value (in case another interrupt happens during handling)
+        int32_t tach_buf_us = (int32_t)tach_us;  // Copy delta value (in case another interrupt happens during handling)
         tach_us = 0;  // Indicates to isr we processed this value
         if (tach_buf_us) {  // If a valid rotation has happened since last time, delta will have a value
             tach_rpm = convert_units ((float)(tach_buf_us), tach_convert_rpm_per_rpus, tach_convert_invert);
             ema_filt (tach_rpm, &tach_filt_rpm, tach_ema_alpha);  // Sensor EMA filter
             tachStopTimer.reset();
         }
-        if (tach_rpm < tach_stop_thresh_rpm || tachStopTimer.expired()) {  // If time between pulses is long enough an engine can't run that slow
+        if (tachStopTimer.expired()) {  // If time between pulses is long enough an engine can't run that slow
             tach_rpm = 0.0;  // If timeout since last magnet is exceeded
             tach_filt_rpm = 0.0;
         }        
@@ -230,14 +230,14 @@ void loop() {
     // Speedo - takes 14 us to read when no activity
     if (simulator.can_simulate(SimOption::speedo) && simulator.get_pot_overload() == SimOption::speedo) speedo_filt_mph = pot.mapToRange(0.0f, speedo_govern_mph);
     else if (!simulator.simulating(SimOption::speedo)) { 
-        speedo_buf_us = (int32_t)speedo_us;  // Copy delta value (in case another interrupt happens during handling)
+        int32_t speedo_buf_us = (int32_t)speedo_us;  // Copy delta value (in case another interrupt happens during handling)
         speedo_us = 0;  // Indicates to isr we processed this value
         if (speedo_buf_us) {  // If a valid rotation has happened since last time, delta will have a value
             speedo_mph = convert_units ((float)(speedo_buf_us), speedo_convert_mph_per_rpus, speedo_convert_invert);  // Update car speed value  
             ema_filt (speedo_mph, &speedo_filt_mph, speedo_ema_alpha);  // Sensor EMA filter
             speedoStopTimer.reset();
         }
-        if (speedo_mph < speedo_stop_thresh_mph || speedoStopTimer.expired()) {  // If time between pulses is long enough, consider the car is stopped
+        if (speedoStopTimer.expired()) {  // If time between pulses is long enough, consider the car is stopped
             speedo_mph = 0.0;
             speedo_filt_mph = 0.0;
         }
@@ -388,7 +388,6 @@ void loop() {
         }
     }
     
-    update_tach_idle();  // Adjust idle speed value based on engine temperature
     idler.update();  // Adjust tach target when idling to minimize idle rpm while preventing stalling
 
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
@@ -534,7 +533,6 @@ void loop() {
                 brkpos_sensor.set_zeropoint(zp);
             }
             if (adj) {
-                update_tach_idle(1);
                 calc_governor();
                 calc_ctrl_lims();
             }

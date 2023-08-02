@@ -331,7 +331,6 @@ float speedo_govern_mph;  // Governor must scale the top vehicle speed proportio
 float speedo_mph = 1.01;  // Current car speed, raw as sensed (in mph)
 float speedo_filt_mph = 1.02;  // Current car speed, filtered (in mph)
 volatile int64_t speedo_us = 0;
-int32_t speedo_buf_us = 0;
 volatile int64_t speedo_timer_start_us = 0;
 volatile int64_t speedo_time_us;
 volatile int64_t speedo_timer_read_us = 0;
@@ -341,12 +340,12 @@ float speedo_convert_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 *
 bool speedo_convert_invert = true;
 int32_t speedo_convert_polarity = 1;  // Forward
 float speedo_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-float speedo_idle_mph = 4.50;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
-float speedo_redline_mph = 15.0;  // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
-float speedo_max_mph = 25.0;  // What is max speed car can ever go
-float speedo_stop_thresh_mph = 0.1;  // Below which the car is considered stopped
+float speedo_idle_mph = 4.50;  // What is our steady state speed estimate at engine idle? (Pulley rotation frequency (in milli-)mph)
+float speedo_redline_mph = 15.0;  // What is our steady state speed estimate at redline? (mph)
+float speedo_max_mph = 25.0;  // What is highest limit redline speed might ever get set to
 uint32_t speedo_stop_timeout_us = 600000;  // Time after last magnet pulse when we can assume the car is stopped (in us)
 int64_t speedo_delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
+float speedo_stop_thresh_mph = 0.1;  // Phase this out, we should use us of pulley period for stop criterium
 Timer speedoStopTimer(speedo_stop_timeout_us);
 
 // throttle servo related
@@ -362,7 +361,6 @@ float gas_pulse_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_idle_us 
 
 // tachometer related
 volatile int64_t tach_us = 0;
-int32_t tach_buf_us = 0;
 volatile int64_t tach_timer_start_us = 0;
 volatile int64_t tach_time_us;
 volatile int64_t tach_timer_read_us = 0;
@@ -376,9 +374,8 @@ int32_t tach_convert_polarity = 1;  // Forward
 float tach_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 float tach_idle_rpm = 700.0;  // Min value for engine hz, corresponding to low idle (in rpm) Note, this value is itself highly variable, dependent on engine temperature
 float tach_max_rpm = 7000.0;  // Max possible engine rotation speed
-float tach_redline_rpm = 5000.0;  // Max value for tach_rpm, pedal to the metal (in rpm). 20000 rotations/mile * 15 mi/hr * 1/60 hr/min = 5000 rpm
+float tach_redline_rpm = 5500.0;  // Max value for tach_rpm, pedal to the metal (in rpm).  // ~20k rotations/mile * 15 mi/hr * 1/60 hr/min = 5000 rpm
 float tach_margin_rpm = 15.0;  // Margin of error for checking engine rpm (in rpm)
-float tach_stop_thresh_rpm = 0.1;  // Below which the engine is considered stopped - this is redundant,
 int64_t tach_stop_timeout_us = 400000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
 int64_t tach_delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
 float tach_idle_abs_min_rpm = 450.0;  // Low limit of idle speed adjustability
@@ -388,7 +385,7 @@ float tach_idle_abs_max_rpm = 950.0;  // High limit of idle speed adjustability
 float tach_idle_high_rpm = 1000.0;  // Elevated rpm above idle guaranteed never to stall
 Timer tachIdleTimer (5000000);  // How often to update tach idle value based on engine temperature
 Timer tachStopTimer(tach_stop_timeout_us);
-
+float tach_stop_thresh_rpm = 0.1;  // Phase this out, we should use us of pulley period for stop criterium
 
 // airflow related
 bool airflow_detected = false;
@@ -422,7 +419,6 @@ QPID brakeQPID (pressure_sensor.get_filtered_value_ptr().get(), &brake_out_perce
     brake_pid_period_us, QPID::Control::timer, QPID::centMode::centerStrict, brake_stop_percent);  // period, more settings
     
 // Gas : Controls the throttle to achieve the desired intake airflow and engine rpm
-
 IdleControl idler (&tach_target_rpm, &tach_rpm, &tach_filt_rpm, &temps_f[ENGINE],
     tach_idle_high_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm,
     temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][NOM_MAX],
@@ -490,7 +486,7 @@ void hotrc_ch3_update (void) {  //
     hotrc_ch3_sw_last = hotrc_ch3_sw;
 }
 void hotrc_ch4_update (void) {  // 
-    hotrc_ch4_sw = (hotrc_ch4.readPulseWidth(true) <= 1500);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
+    hotrc_ch4_sw = (hotrc_ch4.readPulseWidth(true) <= 1500);  // Ch4 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH4][CENT]
     if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
@@ -526,12 +522,6 @@ void calc_governor (void) {
 }
 float steer_safe (float endpoint) {
     return steer_stop_percent + (endpoint - steer_stop_percent) * (1 - steer_safe_ratio * speedo_filt_mph / speedo_redline_mph);
-}
-void update_tach_idle (bool force = 0) {
-    if (tachIdleTimer.expireset() || force) {
-        tach_idle_rpm = idler.update_tempidle ();
-        cruiseQPID.SetOutputLimits (tach_idle_rpm, cruiseQPID.GetOutputMax());
-    }
 }
 
 // int* x is c++ style, int *x is c style
