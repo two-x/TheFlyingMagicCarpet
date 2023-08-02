@@ -231,18 +231,11 @@ DeviceAddress temp_temp_addr;
 DeviceAddress temp_addrs[6];  // Hard code to the actual sensor addresses for the corresponding sense location on the car
 DallasSensor tempsensebus (&onewire);
 
-// mule battery related
-float battery_adc = adcmidscale_adc;
-float battery_v = 10.0;
-float battery_filt_v = 10.0;
-float battery_max_v = 16.0;  // The max vehicle voltage we can sense. Design resistor divider to match. Must exceed max V possible.
-float battery_convert_v_per_adc = battery_max_v/adcrange_adc;
-bool battery_convert_invert = false;
-int32_t battery_convert_polarity = 1;  // Forward
-float battery_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-
 // encoder related
 Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
+
+// mule battery related
+BatterySensor battery_sensor(ign_batt_pin);
 
 // controller related
 enum ctrls { HOTRC, JOY, SIM, HEADLESS };  // Possible sources of gas, brake, steering commands
@@ -503,14 +496,8 @@ bool adj_val(float* variable, float modify, float low_limit, float high_limit) {
 bool adj_bool(bool val, int32_t delta) { return delta != 0 ? delta > 0 : val; }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
 void adj_bool(bool* val, int32_t delta) { *val = adj_bool(*val, delta); }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
 
-// battery_v = convert_units ((float)analogRead (battery_pin), battery_convert_v_per_adc, battery_convert_invert);
-// ema_filt (battery_v, &battery_filt_v, battery_ema_alpha);  // Apply EMA filter
-bool read_battery_ignition (void) {  //Updates battery voltage and returns ignition on/off
-    battery_adc = analogRead (ign_batt_pin);
-    battery_v = convert_units (battery_adc, battery_convert_v_per_adc, battery_convert_invert);
-    ema_filt (battery_v, &battery_filt_v, battery_ema_alpha);  // Apply EMA filter
-    return (battery_filt_v > ignition_on_thresh_v);
-}
+bool read_battery_ignition() { return battery_sensor.get_filtered_value() > ignition_on_thresh_v; }
+
 bool syspower_set (bool val) {
     bool really_power = keep_system_powered | val;
     write_pin (syspower_pin, really_power);  // delay (val * 500);

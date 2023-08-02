@@ -206,7 +206,7 @@ class Transducer : public Device {
     // Multiplier and adder values to plug in for unit conversion math
     float _m_factor;
     float _b_offset;  
-    bool _invert;  // Flag to indicated if unit conversion math should multiply or divide
+    bool _invert = false;  // Flag to indicated if unit conversion math should multiply or divide
     TransducerDirection dir = TransducerDirection::FWD; // NOTE: what is this for, exactly?
     
     // conversion functions (can be overridden in child classes different conversion methods are needed)
@@ -407,6 +407,30 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
         this->set_source(ControllerMode::PIN);
     }
         
+};
+
+// BatterySensor reads the voltage level from the Mule battery
+class BatterySensor : public AnalogSensor<int32_t, float> {
+    protected:
+        // NOTE: for now lets keep all the config stuff here in the class. could also read in values from a config file at some point.
+        static constexpr float _initial_adc = adcmidscale_adc;
+        static constexpr float _initial_v = 10.0;
+        static constexpr float _min_v = 0.0; // NOTE: this would be if the battery is totally dead...? (not that we'd be able to run this code anyway...)
+        static constexpr float _max_v = 16.0;  // The max vehicle voltage we can sense. Design resistor divider to match. Must exceed max V possible.
+        static constexpr float _initial_v_per_adc = _max_v / adcrange_adc;
+        static constexpr float _initial_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+    public:
+        BatterySensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
+            _ema_alpha = _initial_ema_alpha;
+            _m_factor = _initial_v_per_adc;
+            human.set_limits(_min_v, _max_v);
+            native.set_limits(0.0, adcrange_adc);
+            set_native(_initial_adc);
+            set_can_source(ControllerMode::PIN, true);
+        }
+        BatterySensor() = delete;
+        float get_min_v() { return human.get_min(); }
+        float get_max_v() { return human.get_max(); }
 };
 
 // PressureSensor represents a brake fluid pressure sensor.
@@ -915,7 +939,7 @@ class Simulator {
         static constexpr bool initial_sim_ignition = true;
         static constexpr bool initial_sim_airflow = false;
         static constexpr bool initial_sim_mapsens = false;
-        static constexpr bool initial_sim_battery = true;
+        static constexpr bool initial_sim_battery = false;
         static constexpr bool initial_sim_coolant = true;
 
         Simulator(Potentiometer& pot_arg, SimOption overload_arg=SimOption::none) : _pot(pot_arg) {
