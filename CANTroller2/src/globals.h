@@ -434,7 +434,7 @@ void hotrc_ch3_update (void) {  //
     hotrc_ch3_sw_last = hotrc_ch3_sw;
 }
 void hotrc_ch4_update (void) {  // 
-    hotrc_ch4_sw = (hotrc_ch4.readPulseWidth(true) <= 1500);  // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
+    hotrc_ch4_sw = (hotrc_ch4.readPulseWidth(true) <= 1500);  // Ch4 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH4][CENT]
     if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true;  // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
@@ -467,12 +467,6 @@ void calc_governor (void) {
 }
 float steer_safe (float endpoint) {
     return steer_stop_percent + (endpoint - steer_stop_percent) * (1 - steer_safe_ratio * speedometer.get_filtered_value() / speedometer.get_redline_mph());
-}
-void update_tach_idle (bool force = 0) {
-    if (tachIdleTimer.expireset() || force) {
-        tach_idle_rpm = idler.get_idlespeed();
-        cruiseQPID.SetOutputLimits (tach_idle_rpm, cruiseQPID.GetOutputMax());
-    }
 }
 
 // int* x is c++ style, int *x is c style

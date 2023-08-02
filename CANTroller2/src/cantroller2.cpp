@@ -361,7 +361,6 @@ void loop() {
         }
     }
     
-    update_tach_idle();  // Adjust idle speed value based on engine temperature
     idler.update();  // Adjust tach target when idling to minimize idle rpm while preventing stalling
 
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
@@ -503,7 +502,6 @@ void loop() {
             else if (selected_value == 9) adj_val (speedometer.get_redline_mph_ptr().get(), 0.01*(float)sim_edit_delta, speedo_idle_mph, 30);
             else if (selected_value == 10) adj_val(brkpos_sensor.get_zeropoint_ptr().get(), 0.001*(float)sim_edit_delta, BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
             if (adj) {
-                update_tach_idle(1);
                 calc_governor();
                 calc_ctrl_lims();
             }
