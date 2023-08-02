@@ -612,7 +612,7 @@ class Display {
                     draw_dynamic(9, brkpos_sensor.get_filtered_value(), BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
                     draw_dynamic(10, airflow_filt_mph, airflow_min_mph, airflow_max_mph);
                     draw_dynamic(11, map_filt_psi, map_min_psi, map_max_psi);
-                    draw_dynamic(12, battery_filt_v, 0.0, battery_max_v);
+                    draw_dynamic(11, battery_sensor.get_filtered_value(), battery_sensor.get_min_v(), battery_sensor.get_max_v());
                     draw_dynamic(13, pot.get(), pot.min(), pot.max());
                     draw_truth(14, starter, 0);
                     draw_eraseval(15);

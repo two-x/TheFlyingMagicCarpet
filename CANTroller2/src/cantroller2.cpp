@@ -63,7 +63,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (joy_horz_pin, INPUT);
     set_pin (joy_vert_pin, INPUT);
     set_pin (touch_irq_pin, INPUT_PULLUP);
-    set_pin (ign_batt_pin, INPUT);
     set_pin (ign_out_pin, OUTPUT);
     set_pin (syspower_pin, OUTPUT);  // Then set the put as an output as normal.
     #ifdef pwm_jaguars
@@ -105,12 +104,14 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     printf("Transducers setup..\n");
     pressure_sensor.setup();
     brkpos_sensor.setup();
+    battery_sensor.setup();
     tachometer.setup();
     speedometer.setup();
 
     printf("Simulator setup..\n");
     simulator.register_device(SimOption::pressure, pressure_sensor, pressure_sensor.source());
     simulator.register_device(SimOption::brkpos, brkpos_sensor, brkpos_sensor.source());
+    simulator.register_device(SimOption::battery, battery_sensor, battery_sensor.source());
     simulator.register_device(SimOption::tach, tachometer, tachometer.source());
     simulator.register_device(SimOption::speedo, speedometer, speedometer.source());
 
@@ -249,8 +250,8 @@ void loop() {
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //
 
     // Read the car ignition signal, and while we're at it measure the vehicle battery voltage off ign signal
+    battery_sensor.update();
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
-    if (simulator.simulating(SimOption::battery) && simulator.get_pot_overload() == SimOption::battery) battery_filt_v = pot.mapToRange(0.0f, battery_max_v);
 
     // Controller handling
     //
@@ -294,11 +295,6 @@ void loop() {
             ctrl_pos_adc[HORZ][FILT] = ctrl_lims_adc[ctrl][HORZ][CENT];  // if joy horz is in the deadband, set joy_horz_filt to center value
         }
     }    
-
-    // Voltage of vehicle battery
-    // NOTE: we have these same lines of code above, are they both needed?
-    ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
-    // if (simulator.can_simulate(SimOption::battery) && simulator.get_pot_overload() == SimOption::batt) battery_filt_v = pot.mapToRange(0.0f, battery_max_v);
 
     if (ctrl == JOY) ignition = ignition_sense;
     else if (ctrl == HOTRC) {
