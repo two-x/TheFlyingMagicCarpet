@@ -129,12 +129,22 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     printf ("Init i2c..");
     i2c_init (i2c_sda_pin, i2c_scl_pin);
     // printf ("done\n");
-    for (int32_t i=0; i<i2c_devicecount; i++) if (i2c_addrs[i] == 0x28) airflow_detected = true;
+    for (int32_t i=0; i<i2c_devicecount; i++) {
+        if (i2c_addrs[i] == 0x28) airflow_detected = true;
+        if (i2c_addrs[i] == 0x18) map_detected = true;
+    }
     printf ("Airflow sensor.. %sdetected", (airflow_detected) ? "" : "not ");
     if (airflow_detected) {
         if (airflow_sensor.begin() == false) printf ("  Sensor not responding");  // Begin communication with air flow sensor) over I2C 
-        airflow_sensor.setRange(AIRFLOW_RANGE_15_MPS);
-        printf ("  Sensor responding properly\n");
+        else {
+            airflow_sensor.setRange(AIRFLOW_RANGE_15_MPS);
+            printf ("  Sensor responding properly\n");
+        }
+    }
+    printf ("MAP sensor.. %sdetected", (map_detected) ? "" : "not ");
+    if (map_detected) {
+        if (map_sensor.begin() == false) printf ("  Sensor not responding");  // Begin communication with air flow sensor) over I2C 
+        else printf ("  Reading %f atm pressure\n", map_sensor.readPressure(ATM));
     }
 
     temp_init();  // Onewire bus and temp sensors
@@ -212,7 +222,12 @@ void loop() {
         airflow_mph = airflow_sensor.readMilesPerHour(); // note, this returns a float from 0-33.55 for the FS3000-1015 
         ema_filt (airflow_mph, &airflow_filt_mph, airflow_ema_alpha);  // Sensor EMA filter
     }
-    
+    // MAP sensor
+    if (sim_mapsens && pot_overload == mapsens) map_filt_psi = map (pot_filt_percent, 0.0, 100.0, map_min_psi, map_max_psi);
+    else if (map_detected && !(simulating && sim_mapsens)) {
+        map_psi = map_sensor.readPressure(PSI); // note, this returns a float from 0-33.55 for the FS3000-1015 
+        ema_filt (map_psi, &map_filt_psi, map_ema_alpha);  // Sensor EMA filter
+    }
     // Speedo - takes 14 us to read when no activity
     speedometer.update();
 
