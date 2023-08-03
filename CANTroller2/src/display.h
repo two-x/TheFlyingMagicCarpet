@@ -61,11 +61,13 @@
 // string* pagecard = new string[8];  // How we might allocate on the heap instead of in the stack
 // string* modecard = new string[7];
 
-char pagecard[8][5] = { "Run ", "Joy ", "Car ", "PWMs", "Bpid", "Gpid", "Cpid", "Temp" };
+char pagecard[9][5] = { "Run ", "Joy ", "Car ", "PWMs", "Bpid", "Idle", "Gpid", "Cpid", "Temp" };
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, TEAL, MBLU };
-enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_BPID, PG_GPID, PG_CPID, PG_TEMP };
+enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_BPID, PG_IDLE, PG_GPID, PG_CPID, PG_TEMP };
 char sensorcard[8][7] = { "none", "bkpres", "brkpos", "tach", "airflw", "speedo", "batt", "engtmp" };
+char idlemodecard[3][7] = { "direct", "cntrol", "minimz" };
+char idlestatecard[4][7] = { "drivng", "tohigh", "tolow ", "tostal" };
 
 char telemetry[disp_fixed_lines][9] = {  
     "CtrlVert",
@@ -122,17 +124,17 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "BrakRetr",
         "TachIdle",
         "TachRedL", },
-    {   "Pres Tgt",  // PG_BPID
-        "Pres Err",
-        "  P Term",
-        "  I Term",
-        "  D Term",
-        "Integral",
+    {   "TgtState",  // PG_IDLE
+        "StallIdl",
+        "Low Idle",
         "      - ",
-        "      - ",
-        "  Kp (P)",
-        "  Ki (I)",
-        "  Kd (D)", },
+        "HighIdle",
+        "ColdIdle",
+        "Hot Idle",
+        "ColdTemp",
+        "Hot Temp",
+        "SettlTim",
+        "IdleMode", },
     {   "Tach Tgt",  // PG_GPID
         "Tach Err",
         "  P Term",
@@ -155,6 +157,17 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         "  Kp (P)",
         "  Ki (I)",
         "  Kd (D)", },
+    {   "Pres Tgt",  // PG_BPID
+        "Pres Err",
+        "  P Term",
+        "  I Term",
+        "  D Term",
+        "Integral",
+        "      - ",
+        "      - ",
+        "  Kp (P)",
+        "  Ki (I)",
+        "  Kd (D)", },
     {   " Ambient",  // PG_TEMP
         " Coolant",
         "AxleFrLt",
@@ -167,7 +180,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
         " Cal Brk",
         " Cal Gas", },
 };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 4, 4, 2, 3, 8, 7, 8, 9 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 4, 4, 2, 3, 4, 8, 7, 8, 9 };  // first value in each dataset page that's editable. All values after this must also be editable
 char units[disp_fixed_lines][5] = { "adc ", "mph ", "rpm ", "us  ", "psi ", "%   ", "adc ", "%   " };
 
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
@@ -175,9 +188,10 @@ char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "adc ", "adc ", "us  ", "us  ", "us  ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
     { "adc ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%   ", "mph ", "mph ", "mph ", "in  " },  // PG_CAR
     { "us  ", "us  ", "    ", "    ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PG_PWMS
-    { "psi ", "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "    ", "    ", "Hz  ", "s " },  // PG_BPID
-    { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "    ", "    ", "Hz  ", "s " },  // PG_GPID
-    { "mph ", "mph ", "mph ", "mph ", "mph ", "mph ", "rpm ", "    ", "    ", "Hz  ", "s " },  // PG_CPID
+    { "psi ", "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "    ", "    ", "Hz  ", "s   " },  // PG_BPID
+    { "    ", "rpm ", "rpm ", "    ", "rpm ", "rpm ", "rpm ", "rpm ", "\x09""F  ", "\x09""F  ", "    " },  // PG_IDLE
+    { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "    ", "    ", "Hz  ", "s   " },  // PG_GPID
+    { "mph ", "mph ", "mph ", "mph ", "mph ", "mph ", "rpm ", "    ", "    ", "Hz  ", "s   " },  // PG_CPID
     { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "    ", "    ", "    ", "    ", "    " },  // PG_TEMP
 };
 char simgrid[4][3][5] = {
@@ -530,8 +544,8 @@ class Display {
         void draw_eraseval (int32_t lineno) {
             draw_dynamic (lineno, "", 1234567, -1, -1, -1);
         }
-        void draw_sensorname (int32_t lineno, int32_t sensor_index) {
-            draw_dynamic (lineno, sensorcard[sensor_index], 1, -1, -1, -1, CYN);
+        void draw_asciiname (int32_t lineno, string name) {
+            draw_dynamic (lineno, name.c_str(), 1, -1, -1, -1, CYN);
         }
         void draw_truth (int32_t lineno, bool truthy, int32_t styl=2) {  // 0:on/off, 1:yes/no, 2:true/false
             draw_dynamic (lineno, (truthy) ? ((styl==0) ? " on" : ((styl==1) ? "yes" : "true")) : ((styl==0) ? "off" : ((styl==1) ? "no" : "false")), 1, -1, -1, -1, (truthy) ? GRN : DORG);
@@ -658,7 +672,7 @@ class Display {
                     draw_truth(16, simulator.can_simulate(SimOption::tach), 0);
                     draw_truth(17, simulator.can_simulate(SimOption::airflow), 0);
                     draw_truth(18, simulator.can_simulate(SimOption::speedo), 0);
-                    draw_sensorname(19, static_cast<int32_t>(simulator.get_pot_overload()));
+                    draw_asciiname(19, sensorcard[static_cast<int32_t>(simulator.get_pot_overload]()));
                 }
                 else if (dataset_page == PG_JOY) {
                     draw_dynamic(9, ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
@@ -718,6 +732,19 @@ class Display {
                     draw_dynamic(17, brakeQPID.GetKp(), 0.0, 2.0);
                     draw_dynamic(18, brakeQPID.GetKi(), 0.0, 2.0);
                     draw_dynamic(19, brakeQPID.GetKd(), 0.0, 2.0);
+                }
+                else if (dataset_page == PG_IDLE) {
+                    draw_asciiname(9, idlestatecard[idler.get_targetstate()]);
+                    draw_dynamic(10, idler.get_stallpoint(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
+                    draw_dynamic(11, idler.get_idlespeed(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
+                    draw_eraseval(12);
+                    draw_dynamic(13, idler.get_idlehigh(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
+                    draw_dynamic(14, idler.get_idlecold(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
+                    draw_dynamic(15, idler.get_idlehot(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
+                    draw_dynamic(16, idler.get_tempcold(), temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][NOM_MAX]);
+                    draw_dynamic(17, idler.get_temphot(), temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][NOM_MAX]);
+                    draw_dynamic(18, (int32_t)idler.get_settletime(), 0, 10);
+                    draw_asciiname(19, idlemodecard[(int32_t)idler.get_idlemode()]);
                 }
                 else if (dataset_page == PG_GPID) {
                     drange = gas_pulse_idle_us-gas_pulse_govern_us;

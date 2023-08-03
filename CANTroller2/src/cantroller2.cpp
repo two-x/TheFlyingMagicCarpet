@@ -217,7 +217,7 @@ void loop() {
     tachometer.update();
 
     // Airflow sensor
-    if (simulator.can_simulate(SimOption::airflow) && simulator.get_pot_overload() == SimOption::airflow) airflow_filt_mph = pot.mapToRange(0.0f, airflow_max_mph);
+    if (simulator.can_simulate(SimOption::airflow) && simulator.get_pot_overload() == SimOption::airflow) airflow_filt_mph = pot.mapToRange(airflow_min_mph, airflow_max_mph);
     else if (airflow_detected && !simulator.simulating(SimOption::airflow)) {
         airflow_mph = airflow_sensor.readMilesPerHour(); // note, this returns a float from 0-33.55 for the FS3000-1015 
         ema_filt (airflow_mph, &airflow_filt_mph, airflow_ema_alpha);  // Sensor EMA filter
@@ -225,7 +225,7 @@ void loop() {
     // MAP sensor
     if (sim_mapsens && pot_overload == mapsens) map_filt_psi = map (pot_filt_percent, 0.0, 100.0, map_min_psi, map_max_psi);
     else if (map_detected && !(simulating && sim_mapsens)) {
-        map_psi = map_sensor.readPressure(PSI); // note, this returns a float from 0-33.55 for the FS3000-1015 
+        map_psi = map_sensor.readPressure(PSI);
         ema_filt (map_psi, &map_filt_psi, map_ema_alpha);  // Sensor EMA filter
     }
     // Speedo - takes 14 us to read when no activity
@@ -375,17 +375,17 @@ void loop() {
             #endif
         }
     }
-    
-    idler.update();  // Adjust tach target when idling to minimize idle rpm while preventing stalling
 
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
     if (runmode == CRUISE && !cruise_adjusting && cruisePidTimer.expireset()) {
-        cruiseQPID.SetOutputLimits (idler.get_idlespeed(), tach_govern_rpm);
+        idler.update();  // Adjust tach target when idling to minimize idle rpm while preventing stalling
+        cruiseQPID.SetOutputLimits (idler.get_idlespeed(), tach_govern_rpm);  // because cruise pid has internal variable for idlespeed which may need updating
         cruiseQPID.Compute();
     }
 
     // Gas - Update servo output. Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
     if (gasPidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
+        idler.update();  // Adjust tach target when idling to minimize idle rpm while preventing stalling
         if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_idle_us;  // If in deadband or being pushed down, we want idle
@@ -535,6 +535,15 @@ void loop() {
             if (selected_value == 8) brakeQPID.SetKp (brakeQPID.GetKp() + 0.001 * (float)sim_edit_delta);
             else if (selected_value == 9) brakeQPID.SetKi (brakeQPID.GetKi() + 0.001 * (float)sim_edit_delta);
             else if (selected_value == 10) brakeQPID.SetKd (brakeQPID.GetKd() + 0.001 * (float)sim_edit_delta);
+        }
+        else if (dataset_page == PG_IDLE) {
+            if (selected_value == 13) idler.set_idlehigh (idler.get_idlehigh(), (float)sim_edit_delta);
+            else if (selected_value == 14) idler.set_idlecold (idler.get_idlecold(), (float)sim_edit_delta);
+            else if (selected_value == 15) idler.set_idlehot (idler.get_idlehot(), (float)sim_edit_delta);
+            else if (selected_value == 16) idler.set_tempcold (idler.get_tempcold(), (float)sim_edit_delta);
+            else if (selected_value == 17) idler.set_temphot (idler.get_temphot(), (float)sim_edit_delta);
+            else if (selected_value == 18) idler.set_settletime (idler.get_settletime() + (float)sim_edit_delta);
+            else if (selected_value == 19) idler.set_idlemode((int32_t)idler.get_idlemode() + sim_edit_delta);
         }
         else if (dataset_page == PG_GPID) {
             if (selected_value == 7) adj_bool (&gas_open_loop, sim_edit_delta);

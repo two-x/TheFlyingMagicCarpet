@@ -207,9 +207,9 @@ static int16_t temp_raw;  // peef variables
 enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
 enum this_is_a_total_hack { WHEEL = 2 };
 enum temp_lims { DISP_MIN, NOM_MIN, NOM_MAX, WARNING, ALARM, DISP_MAX };  // Possible sources of gas, brake, steering commands
-float temp_lims_f[3][6] { { 0.0,  45.0, 115.0, 120.0, 130.0, 220.0 },  // [AMBIENT][NOM_MIN/NOM_MAX/WARNING/ALARM]
-                          { 0.0, 178.0, 198.0, 202.0, 205.0, 220.0 },  // [ENGINE][NOM_MIN/NOM_MAX/WARNING/ALARM]
-                          { 0.0,  50.0, 120.0, 130.0, 140.0, 220.0 }, };  // [WHEEL][NOM_MIN/NOM_MAX/WARNING/ALARM] (applies to all wheels)
+float temp_lims_f[3][6] { { 0.0,  45.0, 115.0, 120.0, 130.0, 220.0 },  // [AMBIENT][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
+                          { 0.0, 178.0, 198.0, 202.0, 205.0, 220.0 },  // [ENGINE][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
+                          { 0.0,  50.0, 120.0, 130.0, 140.0, 220.0 }, };  // [WHEEL][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM] (applies to all wheels)
 float temp_room = 77.0;  // "Room" temperature is 25 C = 77 F  Who cares?
 float temp_sensor_min_f = -67.0;  // Minimum reading of sensor is -25 C = -67 F
 float temp_sensor_max_f = 257.0;  // Maximum reading of sensor is 125 C = 257 F
@@ -352,8 +352,8 @@ float tach_idle_rpm = 700.0; // Min value for engine hz, corresponding to low id
 float tach_idle_abs_min_rpm = 450.0;  // Low limit of idle speed adjustability
 float tach_idle_hot_min_rpm = 550.0;  // Idle speed at nom_max engine temp
 float tach_idle_cold_max_rpm = 775.0;  // Idle speed at nom_min engine temp
-float tach_idle_abs_max_rpm = 950.0;  // High limit of idle speed adjustability
-float tach_idle_high_rpm = 1000.0;  // Elevated rpm above idle guaranteed never to stall
+float tach_idle_high_rpm = 950.0;  // Elevated rpm above idle guaranteed never to stall
+float tach_idle_abs_max_rpm = 1000.0;  // High limit of idle speed adjustability
 Timer tachIdleTimer (5000000);  // How often to update tach idle value based on engine temperature
 
 // airflow sensor related
