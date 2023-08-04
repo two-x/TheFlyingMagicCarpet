@@ -414,10 +414,10 @@ void loop() {
     // Gas - Update servo output. Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
     if (gasPidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
         idler.update();  // Adjust tach target when idling to minimize idle rpm while preventing stalling
-        if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
+        if (park_the_motors) gas_pulse_out_us = gas_pulse_ccw_closed_us + gas_pulse_park_slack_us;
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
-            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_idle_us;  // If in deadband or being pushed down, we want idle
-            else gas_pulse_out_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_idle_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
+            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_ccw_closed_us;  // If in deadband or being pushed down, we want idle
+            else gas_pulse_out_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_ccw_closed_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
         }
         else if (runmode != BASIC) {
             if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) {
@@ -425,19 +425,19 @@ void loop() {
                 gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
             }            
             else if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual)  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
-                gas_pulse_out_us = map (tach_target_rpm, tach_idle_rpm, tach_govern_rpm, gas_pulse_idle_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
+                gas_pulse_out_us = map (tach_target_rpm, tach_idle_rpm, tach_govern_rpm, gas_pulse_ccw_closed_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
             else gasQPID.Compute();  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
         }
         if (runmode != BASIC || park_the_motors) {
             if (!(runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo))  // Constrain to operating limits. If calibrating constrain already happened above
-                gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_idle_us);
+                gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_ccw_closed_us);
             gas_servo.writeMicroseconds ((int32_t)gas_pulse_out_us);  // Write result to servo
             // if (boot_button) printf (" Gas:%4ld\n", (int32_t)gas_pulse_out_us);
         }
     }
     if (park_the_motors) {  //  When parking motors, IF the timeout expires OR the brake and gas motors are both close enough to the park position, OR runmode has changed THEN stop trying to park the motors
         bool brake_parked = brkpos_sensor.parked();
-        bool gas_parked = ((gas_pulse_out_us == gas_pulse_idle_us + gas_pulse_park_slack_us) && gasServoTimer.expired());
+        bool gas_parked = ((gas_pulse_out_us == gas_pulse_ccw_closed_us + gas_pulse_park_slack_us) && gasServoTimer.expired());
         if ((brake_parked && gas_parked) || motorParkTimer.expired() || (runmode != SHUTDOWN && runmode != BASIC))
             park_the_motors = false;
     }
@@ -560,8 +560,8 @@ void loop() {
             else if (selected_value == 6) adj_val (&brake_pulse_extend_us, sim_edit_delta, brake_pulse_stop_us + 1, brake_pulse_extend_max_us);
             else if (selected_value == 7) adj_val (&brake_pulse_stop_us, sim_edit_delta, brake_pulse_retract_us + 1, brake_pulse_extend_us - 1);
             else if (selected_value == 8) adj_val (&brake_pulse_retract_us, sim_edit_delta, brake_pulse_retract_min_us, brake_pulse_stop_us -1);
-            else if (selected_value == 9) adj_val (&gas_pulse_idle_us, sim_edit_delta, gas_pulse_redline_us + 1, gas_pulse_ccw_max_us - gas_pulse_park_slack_us);
-            else if (selected_value == 10) adj_val (&gas_pulse_redline_us, sim_edit_delta, gas_pulse_cw_min_us, gas_pulse_idle_us - 1);
+            else if (selected_value == 9) adj_val (&gas_pulse_ccw_closed_us, sim_edit_delta, gas_pulse_cw_open_us + 1, gas_pulse_ccw_max_us - gas_pulse_park_slack_us);
+            else if (selected_value == 10) adj_val (&gas_pulse_cw_open_us, sim_edit_delta, gas_pulse_cw_min_us, gas_pulse_ccw_closed_us - 1);
         }
         else if (dataset_page == PG_BPID) {
             if (selected_value == 8) brakeQPID.SetKp (brakeQPID.GetKp() + 0.001 * (float)sim_edit_delta);

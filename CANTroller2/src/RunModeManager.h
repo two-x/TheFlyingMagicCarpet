@@ -246,7 +246,7 @@ private:
         
         if (!cal_pot_gas_ready) {
             float temp = pot.mapToRange(gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
-            if (temp <= (float)gas_pulse_idle_us && temp >= (float)gas_pulse_redline_us) cal_pot_gas_ready = true;
+            if (temp <= (float)gas_pulse_ccw_closed_us && temp >= (float)gas_pulse_cw_open_us) cal_pot_gas_ready = true;
         }
     }
 };
