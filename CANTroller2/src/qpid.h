@@ -549,23 +549,23 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
         if (cycledir) idlemode = (idlemodes)(((int32_t)idlemode + (int32_t)idlemodes::num_idlemodes + constrain (cycledir, -1, 1)) % (int32_t)idlemodes::num_idlemodes);
     }
     void set_idlemode (idlemodes idlemode) {} 
-    void set_idlehigh (float idlehigh_rpm, float add = 0.0) { 
-        idlehigh_rpm = constrain (idlehigh_rpm + add, idlecold_rpm + 0.1, idle_absmax_rpm);
+    void set_idlehigh (float idlehigh, float add = 0.0) { 
+        idlehigh_rpm = constrain (idlehigh + add, idlecold_rpm + 0.1, idle_absmax_rpm);
     }
-    void set_idlehot (float idlehot_rpm, float add = 0.0) { 
-        idlehot_rpm = constrain (idlehot_rpm + add, stallpoint_rpm, idlecold_rpm - 0.1);
+    void set_idlehot (float idlehot, float add = 0.0) { 
+        idlehot_rpm = constrain (idlehot + add, stallpoint_rpm, idlecold_rpm - 0.1);
         calc_idlespeed();
     }
-    void set_idlecold (float idlecold_rpm, float add = 0.0) { 
-        idlecold_rpm = constrain (idlecold_rpm + add, idlehot_rpm + 0.1, idlehigh_rpm - 0.1);
+    void set_idlecold (float idlecold, float add = 0.0) { 
+        idlecold_rpm = constrain (idlecold + add, idlehot_rpm + 0.1, idlehigh_rpm - 0.1);
         calc_idlespeed();
     }
-    void set_temphot (float temphot_f, float add = 0.0) { 
-        if (temphot_f + add > tempcold_f) temphot_f += add;
+    void set_temphot (float temphot, float add = 0.0) { 
+        if (temphot + add > tempcold_f) temphot_f = temphot + add;
         calc_idlespeed();
     }
     void set_tempcold (float tempcold, float add = 0.0) { 
-        if (tempcold_f + add < temphot_f) tempcold_f += add;
+        if (tempcold + add < temphot_f) tempcold_f = tempcold + add;
         calc_idlespeed();
     }
     void set_margin (float margin_rpm) {}
