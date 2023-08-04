@@ -446,16 +446,16 @@ uint8_t QPID::GetCentMode() { return static_cast<uint8_t>(centmode); }  // Soren
 
 class IdleControl {  // Soren - To allow creative control of PID targets in case your engine idle problems need that.
   public:
-    enum class idlemodes : uint32_t { direct, control, minimize };  // direct: disable idle management.  control: soft landing to idle rpm.  minimize: attempt to minimize idle to edge of instability
+    enum class idlemodes : uint32_t { direct, control, minimize, num_idlemodes };  // direct: disable idle management.  control: soft landing to idle rpm.  minimize: attempt to minimize idle to edge of instability
   protected:
-    enum targetstates : uint32_t { driving, droptohigh, droptolow, stallpoint };
+    enum targetstates : uint32_t { driving, droptohigh, droptolow, idling, stallpoint };
     // String modenames[3] = { "direct", "cntrol", "minimz" };
     // String statenames[4] = { "drivng", "tohigh", "tolow", "tostal" };
     targetstates runstate, laststate;
     idlemodes idlemode;
     float targetlast_rpm, idle_rpm, idlehigh_rpm, idlehot_rpm, idlecold_rpm, stallpoint_rpm, dynamic_rpm, temphot_f, tempcold_f;
-    float margin_rpm = 10; float* target_rpm; float* measraw_rpm; float* measfilt_rpm; float* coolant_f;
-    float idle_absmax_rpm = 1000.0;  // High limit of idle speed adjustability
+    float margin_rpm = 10; float idle_absmax_rpm = 1000.0;  // High limit of idle speed adjustability
+    float* target_rpm; float* measraw_rpm; float* measfilt_rpm; float* coolant_f;
     bool we_just_changed_states = true;
     uint32_t settletime_us;
     Timer settleTimer;
@@ -481,6 +481,7 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
         if (runstate == driving) process_driving();  // while throttle is open when driving, we don't mess with the rpm target value
         else if (runstate == droptohigh) process_droptohigh();  // once the metaphorical foot is taken off the gas, first we let the carb close quickly to a high-idle rpm level (that won't stall)
         else if (runstate == droptolow) process_droptolow();  // after the rpm hits the high-idle level, we slowly close the throttle further until we reach the correct low-idle speed for the current engine temperature
+        else if (runstate == idling) process_idling();  // after the rpm hits the high-idle level, we slowly close the throttle further until we reach the correct low-idle speed for the current engine temperature
         else if (runstate == stallpoint) process_stallpoint();  // if idlemode == activemin, we then further allow the idle to drop, until we begin to sense irregularity in our rpm sensor pulses
         runstate_changer();  // if runstate was changed, prepare to run any initial actions upon processing our new runstate algorithm
     }
@@ -489,19 +490,23 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
         idle_rpm = constrain (idle_rpm, idlehot_rpm, idlecold_rpm);
     }
     void goto_idle (void) {  // The gods request the engine should idle now
-        if (runstate == driving && idlemode != idlemodes::) runstate = droptohigh;
+        if (runstate == driving && idlemode != idlemodes::direct) runstate = droptohigh;
     }
     void runstate_changer (void) {
         we_just_changed_states = (runstate != laststate);
         laststate = runstate;
     }
+    void set_target (float argtarget) {
+        targetlast_rpm = *target_rpm;
+        *target_rpm = argtarget;
+    }
     void process_driving (void) {
-        if (*target_rpm < idle_rpm) *target_rpm = idle_rpm;
+        if (*target_rpm < idle_rpm) set_target (idle_rpm);
     }
     void process_droptohigh (void) {
-        if (*target_rpm > idlehigh_rpm) runstate = driving;
-        else if (*measfilt_rpm > idlehigh_rpm + margin_rpm) *target_rpm = idlehigh_rpm;
-        else runstate = droptolow;
+        if (we_just_changed_states) set_target (idlehigh_rpm);
+        else if (*target_rpm > idlehigh_rpm) runstate = driving;
+        else if (*measfilt_rpm <= idlehigh_rpm + margin_rpm) runstate = droptolow;
     }
     void process_droptolow (void) {
         if (we_just_changed_states) {
@@ -509,12 +514,15 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
             settleTimer.reset();
         }
         if (*target_rpm > idlehigh_rpm) runstate = driving;
-        else if (*measfilt_rpm <= idle_rpm + margin_rpm && idlemode == idlemodes::minimize) runstate = stallpoint;
-        else if (settleTimer.expired()) *target_rpm = idle_rpm;
+        else if (settleTimer.expired()) runstate = (idlemode == idlemodes::minimize) ? stallpoint : idling;
         else {
             float addtarg_rpm = dynamic_rpm * (1 - (float)settleTimer.elapsed()/(float)settletime_us);
-            *target_rpm = idle_rpm + (addtarg_rpm > 0.0) ? addtarg_rpm : 0.0;  // because for some dumb reason max() doesn't do jack smack
+            set_target (idle_rpm + (addtarg_rpm > 0.0) ? addtarg_rpm : 0.0);  // because for some dumb reason max() doesn't do jack smack
         }
+    }
+    void process_idling (void) {  // If we aren't set to attempt to minimize idle speed, then we end up here
+        if (*target_rpm > idlecold_rpm) runstate = driving;  // If our idle is being monkeyed with, then quit doing low idle
+        set_target (idle_rpm);  // We're done dropping to the idle point, but keep tracking as idle speed may change
     }
     void process_stallpoint (void) {
         if (we_just_changed_states) {
@@ -534,7 +542,9 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
         if (new_settletime_us) settletime_us = new_settletime_us;
         settleTimer.set ((int64_t)settletime_us);
     }
-    void next_idlemode (void) { idlemode = (idlemode == direct) ? control : (idlemode == control) ? minimize : direct; }
+    void cycle_idlemode (int32_t cycledir) {  // Cycldir positive or negative
+        if (cycledir) idlemode = (idlemodes)(((int32_t)idlemode + (int32_t)idlemodes::num_idlemodes + constrain (cycledir, -1, 1)) % (int32_t)idlemodes::num_idlemodes);
+    }
     void set_idlemode (idlemodes idlemode) {} 
     void set_idlehigh (float idlehigh_rpm, float add = 0.0) { 
         idlehigh_rpm = constrain (idlehigh_rpm + add, idlecold_rpm + 0.1, idle_absmax_rpm);
