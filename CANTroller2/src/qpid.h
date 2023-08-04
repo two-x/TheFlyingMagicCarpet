@@ -522,6 +522,7 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
     }
     void process_idling (void) {  // If we aren't set to attempt to minimize idle speed, then we end up here
         if (*target_rpm > idlecold_rpm) runstate = driving;  // If our idle is being monkeyed with, then quit doing low idle
+        else if (idlemode == idlemodes::minimize) runstate = stallpoint;
         set_target (idle_rpm);  // We're done dropping to the idle point, but keep tracking as idle speed may change
     }
     void process_stallpoint (void) {
@@ -530,6 +531,8 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
             dynamic_rpm = stallpoint_rpm;
         }
         if (*target_rpm > idlehigh_rpm) runstate = driving;
+        else if (idlemode != idlemodes::minimize) runstate = idling;
+
         // else if (*measfilt_rpm > )
         // Soren finish writing this
     }
