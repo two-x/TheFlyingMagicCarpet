@@ -542,8 +542,8 @@ void loop() {
             else if (selected_value == 15) idler.set_idlehot (idler.get_idlehot(), (float)sim_edit_delta);
             else if (selected_value == 16) idler.set_tempcold (idler.get_tempcold(), (float)sim_edit_delta);
             else if (selected_value == 17) idler.set_temphot (idler.get_temphot(), (float)sim_edit_delta);
-            else if (selected_value == 18) idler.set_settletime (idler.get_settletime() + (float)sim_edit_delta);
-            else if (selected_value == 19) idler.set_idlemode((int32_t)idler.get_idlemode() + sim_edit_delta);
+            else if (selected_value == 18) idler.set_settletime (idler.get_settletime() + 1000*(float)sim_edit_delta);
+            else if (selected_value == 19) idler.cycle_idlemode (sim_edit_delta);
         }
         else if (dataset_page == PG_GPID) {
             if (selected_value == 7) adj_bool (&gas_open_loop, sim_edit_delta);

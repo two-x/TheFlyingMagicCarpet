@@ -34,7 +34,7 @@
 #define PNK  0xfcf3  // Pink is the best color
 #define DPNK 0xfa8a  // We need all shades of pink
 #define LPNK 0xfe18  // Especially light pink, the champagne of pinks
-#define TEAL 0x07f6
+#define TEAL 0x07f9
 #define PUR  0x881f
 
 // LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
@@ -67,7 +67,7 @@ int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, TEAL, MBLU }
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_BPID, PG_IDLE, PG_GPID, PG_CPID, PG_TEMP };
 char sensorcard[8][7] = { "none", "bkpres", "brkpos", "tach", "airflw", "speedo", "batt", "engtmp" };
 char idlemodecard[3][7] = { "direct", "cntrol", "minimz" };
-char idlestatecard[4][7] = { "drivng", "tohigh", "tolow ", "tostal" };
+char idlestatecard[5][7] = { "drving", "tohigh", "tolow", "idling", "tostal" };
 
 char telemetry[disp_fixed_lines][9] = {  
     "CtrlVert",
@@ -544,7 +544,7 @@ class Display {
         void draw_eraseval (int32_t lineno) {
             draw_dynamic (lineno, "", 1234567, -1, -1, -1);
         }
-        void draw_asciiname (int32_t lineno, string name) {
+        void draw_asciiname (int32_t lineno, String name) {
             draw_dynamic (lineno, name.c_str(), 1, -1, -1, -1, CYN);
         }
         void draw_truth (int32_t lineno, bool truthy, int32_t styl=2) {  // 0:on/off, 1:yes/no, 2:true/false
