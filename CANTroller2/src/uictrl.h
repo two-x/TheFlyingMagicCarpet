@@ -1,8 +1,39 @@
 #ifndef UICTRL_H
 #define UICTRL_H
 
-#include "globals.h"
+#include "utils.h"
 #include "FunctionalInterrupt.h"
+
+// Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth. The output can either be read as a value, or passed as a pointer so that other components can
+// access it directly as needed.
+class Potentiometer {
+    protected:
+        static constexpr float adc_min = 300; // TUNED 230603 - Used only in determining theconversion factor
+        static constexpr float adc_max = 4095; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
+        static constexpr float _ema_alpha = 0.1;
+        static constexpr float _percent_min = 0.0;
+        static constexpr float _percent_max = 100.0;
+        uint8_t _pin;
+        float _val;
+    public:
+        Potentiometer(uint8_t arg_pin) : _pin(arg_pin) {}
+        Potentiometer() = delete; // must have a pin defined
+        void setup() {
+            set_pin(_pin, INPUT);
+        }
+        void update() {
+            float new_val = map(static_cast<float>(analogRead(_pin)), adc_min, adc_max, _percent_min, _percent_max);
+            new_val = constrain(new_val, _percent_min, _percent_max); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
+            _val = ema_filt(new_val, _val, _ema_alpha);
+        }
+        template<typename VAL_T>
+        VAL_T mapToRange(VAL_T min, VAL_T max) {
+            return static_cast<VAL_T>(map(_val, _percent_min, _percent_max, static_cast<float>(min), static_cast<float>(max)));
+        }
+        float get() { return _val; }
+        float min() { return _percent_min; }
+        float max() { return _percent_max; }
+};
 
 class Encoder {
     private:
@@ -59,6 +90,7 @@ class Encoder {
         enum sw_presses { NONE, SHORT, LONG };
 
         Encoder(uint8_t a, uint8_t b, uint8_t sw) : _a_pin(a), _b_pin(b), _sw_pin(sw), _longPressTimer(_longPressTime){}
+        Encoder() = delete; // must be instantiated with pins
         
         void setLongPressTimer(uint32_t t){
             _longPressTimer.set(t);

@@ -34,7 +34,6 @@ TouchScreen ts;
 #else
 TouchScreen ts(touch_cs_pin, touch_irq_pin);
 #endif
-Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
     
 #define RUN_TESTS 0
 #if RUN_TESTS
@@ -60,7 +59,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (basicmodesw_pin, INPUT_PULLUP);
     set_pin (tach_pulse_pin, INPUT_PULLUP);
     set_pin (speedo_pulse_pin, INPUT_PULLUP);
-    set_pin (brake_pos_pin, INPUT);
     set_pin (neopixel_pin, OUTPUT);
     set_pin (sdcard_cs_pin, OUTPUT);
     set_pin (tft_cs_pin, OUTPUT);
@@ -110,9 +108,11 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
     printf("Transducers setup..\n");
     pressure_sensor.setup();
+    brkpos_sensor.setup();
 
     printf("Simulator setup..\n");
-    simulator.register_device(SimOption::pressure, &pressure_sensor, pressure_sensor.source());
+    simulator.register_device(SimOption::pressure, pressure_sensor, pressure_sensor.source());
+    simulator.register_device(SimOption::brkpos, brkpos_sensor, brkpos_sensor.source());
 
     // Set up our interrupts
     printf ("Attach interrupts..\n");
@@ -212,26 +212,19 @@ void loop() {
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
 
     if (take_temperatures) temp_soren();
-    if (simulator.can_simulate(SimOption::coolant) && simulator.get_pot_overload() == SimOption::coolant) temps_f[ENGINE] = map (pot.get_filtered_value(), 0.0, 100.0, temp_sensor_min_f, temp_sensor_max_f);
+    if (simulator.can_simulate(SimOption::coolant) && simulator.get_pot_overload() == SimOption::coolant) temps_f[ENGINE] = pot.mapToRange(temp_sensor_min_f, temp_sensor_max_f);
     
     encoder.update();  // Read encoder input signals
 
-    pot.read();
+    pot.update();
     
     // Brake position - takes 70 us to read, convert, and filter
-    // (bs) replace with read()
-    // brake_pos_sensor.read();
-    if (simulator.can_simulate(SimOption::brkpos) && simulator.get_pot_overload() == SimOption::brkpos) brake_pos_filt_in = map (pot.get_filtered_value(), 0.0, 100.0, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
-    else if (!simulator.simulating(SimOption::brkpos)) {
-        brake_pos_in = convert_units ((float)analogRead (brake_pos_pin), brake_pos_convert_in_per_adc, brake_pos_convert_invert);
-        ema_filt (brake_pos_in, &brake_pos_filt_in, brake_pos_ema_alpha);
-    }
-    else brake_pos_filt_in = (brake_pos_nom_lim_retract_in + brake_pos_zeropoint_in)/2;  // To keep brake position in legal range during simulation
+    brkpos_sensor.update();
     
     if (!simulator.simulating(SimOption::starter)) starter = read_pin (starter_pin);
 
     // Tach - takes 22 us to read when no activity
-    if (simulator.can_simulate(SimOption::tach) && simulator.get_pot_overload() == SimOption::tach) tach_filt_rpm = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, tach_govern_rpm);
+    if (simulator.can_simulate(SimOption::tach) && simulator.get_pot_overload() == SimOption::tach) tach_filt_rpm = pot.mapToRange(0.0f, tach_govern_rpm);
     else if (!simulator.simulating(SimOption::tach)) {
         tach_buf_us = (int32_t)tach_us;  // Copy delta value (in case another interrupt happens during handling)
         tach_us = 0;  // Indicates to isr we processed this value
@@ -245,13 +238,13 @@ void loop() {
         }        
     }
     // Airflow sensor
-    if (simulator.can_simulate(SimOption::airflow) && simulator.get_pot_overload() == SimOption::airflow) airflow_filt_mph = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, airflow_max_mph);
+    if (simulator.can_simulate(SimOption::airflow) && simulator.get_pot_overload() == SimOption::airflow) airflow_filt_mph = pot.mapToRange(0.0f, airflow_max_mph);
     else if (airflow_detected && !simulator.simulating(SimOption::airflow)) {
         airflow_mph = airflow_sensor.readMilesPerHour(); // note, this returns a float from 0-33.55 for the FS3000-1015 
         ema_filt (airflow_mph, &airflow_filt_mph, airflow_ema_alpha);  // Sensor EMA filter
     }
     // Speedo - takes 14 us to read when no activity
-    if (simulator.can_simulate(SimOption::speedo) && simulator.get_pot_overload() == SimOption::speedo) speedo_filt_mph = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, speedo_govern_mph);
+    if (simulator.can_simulate(SimOption::speedo) && simulator.get_pot_overload() == SimOption::speedo) speedo_filt_mph = pot.mapToRange(0.0f, speedo_govern_mph);
     else if (!simulator.simulating(SimOption::speedo)) { 
         speedo_buf_us = (int32_t)speedo_us;  // Copy delta value (in case another interrupt happens during handling)
         speedo_us = 0;  // Indicates to isr we processed this value
@@ -266,13 +259,13 @@ void loop() {
     }
 
     // Brake pressure - takes 72 us to read
-    pressure_sensor.read();
+    pressure_sensor.update();
 
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //
 
     // Read the car ignition signal, and while we're at it measure the vehicle battery voltage off ign signal
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
-    if (simulator.simulating(SimOption::battery) && simulator.get_pot_overload() == SimOption::battery) battery_filt_v = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, battery_max_v);
+    if (simulator.simulating(SimOption::battery) && simulator.get_pot_overload() == SimOption::battery) battery_filt_v = pot.mapToRange(0.0f, battery_max_v);
 
     // Controller handling
     //
@@ -327,7 +320,7 @@ void loop() {
     // Voltage of vehicle battery
     // NOTE: we have these same lines of code above, are they both needed?
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
-    if (simulator.can_simulate(SimOption::battery) && simulator.get_pot_overload() == SimOption::battery) battery_filt_v = map (pot.get_filtered_value(), 0.0, 100.0, 0.0, battery_max_v);
+    if (simulator.can_simulate(SimOption::battery) && simulator.get_pot_overload() == SimOption::battery) battery_filt_v = pot.mapToRange(0.0f, battery_max_v);
 
     if (ctrl == JOY) ignition = ignition_sense;
     else if (ctrl == HOTRC) {
@@ -394,15 +387,15 @@ void loop() {
             else brake_out_percent = (float)brake_stop_percent;
         }
         else if (park_the_motors) {
-            if (brake_pos_filt_in + brake_pos_margin_in <= brake_pos_park_in)  // If brake is retracted from park point, extend toward park point, slowing as we approach
-                brake_out_percent = map (brake_pos_filt_in, brake_pos_park_in, brake_pos_nom_lim_retract_in, brake_stop_percent, brake_extend_percent);
-            else if (brake_pos_filt_in - brake_pos_margin_in >= brake_pos_park_in)  // If brake is extended from park point, retract toward park point, slowing as we approach
-                brake_out_percent = map (brake_pos_filt_in, brake_pos_park_in, brake_pos_nom_lim_extend_in, brake_stop_percent, brake_retract_percent);
+            if (brkpos_sensor.get_filtered_value() + BrakePositionSensor::margin_in <= BrakePositionSensor::park_in)  // If brake is retracted from park point, extend toward park point, slowing as we approach
+                brake_out_percent = map (brkpos_sensor.get_filtered_value(), BrakePositionSensor::park_in, BrakePositionSensor::nom_lim_retract_in, brake_stop_percent, brake_extend_percent);
+            else if (brkpos_sensor.get_filtered_value() - BrakePositionSensor::margin_in >= BrakePositionSensor::park_in)  // If brake is extended from park point, retract toward park point, slowing as we approach
+                brake_out_percent = map (brkpos_sensor.get_filtered_value(), BrakePositionSensor::park_in, BrakePositionSensor::nom_lim_extend_in, brake_stop_percent, brake_retract_percent);
         }
         else if (runmode != BASIC) brakeQPID.Compute();  // Otherwise the pid control is active
         if (runmode != BASIC || park_the_motors) {
-            if (((brake_pos_filt_in + brake_pos_margin_in <= brake_pos_nom_lim_retract_in) && brake_out_percent > brake_stop_percent) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
-                ((brake_pos_filt_in - brake_pos_margin_in >= brake_pos_nom_lim_extend_in) && brake_out_percent < brake_stop_percent))  // ... or same thing in the extend direction ...
+            if (((brkpos_sensor.get_filtered_value() + BrakePositionSensor::margin_in <= BrakePositionSensor::nom_lim_retract_in) && brake_out_percent > brake_stop_percent) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
+                ((brkpos_sensor.get_filtered_value() - BrakePositionSensor::margin_in >= BrakePositionSensor::nom_lim_extend_in) && brake_out_percent < brake_stop_percent))  // ... or same thing in the extend direction ...
                     brake_out_percent = brake_stop_percent;  // ... then stop the motor
             else if (runmode == CAL && cal_joyvert_brkmotor)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
                  brake_out_percent = constrain (brake_out_percent, brake_extend_min_percent, brake_retract_max_percent);  // Constrain to full potential range when calibrating. Caution don't break anything!
@@ -437,7 +430,7 @@ void loop() {
         }
         else if (runmode != BASIC) {
             if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) {
-                gas_pulse_out_us = map (pot.get_filtered_value(), pot.get_min_human(), pot.get_max_human(), gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
+                gas_pulse_out_us = map (pot.get(), pot.min(), pot.max(), gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
                 gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
             }            
             else if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual)  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
@@ -455,7 +448,7 @@ void loop() {
         }
     }
     if (park_the_motors) {  //  When parking motors, IF the timeout expires OR the brake and gas motors are both close enough to the park position, OR runmode has changed THEN stop trying to park the motors
-        bool brake_parked = (abs(brake_pos_filt_in - brake_pos_park_in) <= brake_pos_margin_in);
+        bool brake_parked = brkpos_sensor.parked();
         bool gas_parked = ((gas_pulse_out_us == gas_pulse_idle_us + gas_pulse_park_slack_us) && gasServoTimer.expired());
         if ((brake_parked && gas_parked) || motorParkTimer.expired() || (runmode != SHUTDOWN && runmode != BASIC))
             park_the_motors = false;
@@ -539,13 +532,14 @@ void loop() {
     adj = false;
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == PG_RUN) {
+            // TODO: use an enum class for page indices to make it more clear whats happening here
             if (selected_value == 4) simulator.set_can_simulate(SimOption::joy, adj_bool(simulator.can_simulate(SimOption::joy), sim_edit_delta));
             else if (selected_value == 5) simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), sim_edit_delta));
             else if (selected_value == 6) simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), sim_edit_delta));
             else if (selected_value == 7) simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), sim_edit_delta));
             else if (selected_value == 8) simulator.set_can_simulate(SimOption::airflow, adj_bool(simulator.can_simulate(SimOption::airflow), sim_edit_delta));
             else if (selected_value == 9) simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), sim_edit_delta));
-            else if (selected_value == 10) simulator.set_pot_overload(static_cast<PotOption>(adj_val(static_cast<int>(simulator.get_pot_overload()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));
+            else if (selected_value == 10) simulator.set_pot_overload(static_cast<SimOption>(adj_val(static_cast<int>(simulator.get_pot_overload()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));
         }
         else if (dataset_page == PG_JOY) {
             if (selected_value == 4) adj_val (&hotrc_pulse_failsafe_max_us, sim_edit_delta, hotrc_pulse_failsafe_min_us + 1, hotrc_pulse_lims_us[VERT][MIN] - 1);
@@ -566,7 +560,11 @@ void loop() {
             else if (selected_value == 7) adj_val (&airflow_max_mph, 0.01*(float)sim_edit_delta, 0, airflow_abs_max_mph);
             else if (selected_value == 8) adj_val (&speedo_idle_mph, 0.01*(float)sim_edit_delta, 0, speedo_redline_mph - 1);
             else if (selected_value == 9) adj_val (&speedo_redline_mph, 0.01*(float)sim_edit_delta, speedo_idle_mph, 30);
-            else if (selected_value == 10) adj_val (&brake_pos_zeropoint_in, 0.001*(float)sim_edit_delta, brake_pos_nom_lim_retract_in, brake_pos_nom_lim_extend_in);
+            else if (selected_value == 10) {
+                float zp = brkpos_sensor.get_zeropoint();
+                adj_val(&zp, 0.001*(float)sim_edit_delta, BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
+                brkpos_sensor.set_zeropoint(zp);
+            }
             if (adj) {
                 update_tach_idle(1);
                 calc_governor();
