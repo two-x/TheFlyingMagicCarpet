@@ -146,8 +146,8 @@ public:
                         touch_longpress_valid = false;
                     }
                 }
-                else if (tcol == 5 && trow == 1 && simulator.can_simulate(SimOption::speedo)) adj_val(&speedo_filt_mph, 0.005 * (float)touch_accel, 0.0, speedo_redline_mph);
-                else if (tcol == 5 && trow == 2 && simulator.can_simulate(SimOption::speedo)) adj_val(&speedo_filt_mph, -0.005 * (float)touch_accel, 0.0, speedo_redline_mph);
+                else if (tcol == 5 && trow == 1 && simulator.can_simulate(SimOption::speedo) && speedometer.source() == ControllerMode::TOUCH) speedometer.add_human(0.005 * (float)touch_accel);
+                else if (tcol == 5 && trow == 2 && simulator.can_simulate(SimOption::speedo) && speedometer.source() == ControllerMode::TOUCH) speedometer.add_human(0.005 * (float)-touch_accel);
                 else if (tcol == 5 && trow == 4 && simulator.can_simulate(SimOption::joy)) adj_val(&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
             }
 
