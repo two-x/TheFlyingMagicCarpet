@@ -65,7 +65,7 @@ char pagecard[9][5] = { "Run ", "Joy ", "Car ", "PWMs", "Bpid", "Idle", "Gpid", 
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, TEAL, MBLU };
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_BPID, PG_IDLE, PG_GPID, PG_CPID, PG_TEMP };
-char sensorcard[9][7] = { "none", "bkpres", "brkpos", "tach", "airflw", "mapsens", "speedo", "batt", "engtmp" };
+char sensorcard[9][7] = { "none", "bkpres", "brkpos", "tach", "airflw", "mapsns", "speedo", "batt", "engtmp" };
 char idlemodecard[3][7] = { "direct", "cntrol", "minimz" };
 char idlestatecard[5][7] = { "drving", "tohigh", "tolow", "idling", "tostal" };
 
@@ -672,7 +672,7 @@ class Display {
                     draw_truth(16, simulator.can_simulate(SimOption::tach), 0);
                     draw_truth(17, simulator.can_simulate(SimOption::airflow), 0);
                     draw_truth(18, simulator.can_simulate(SimOption::speedo), 0);
-                    draw_asciiname(sensorcard[static_cast<uint8_t>(simulator.get_pot_overload())]);
+                    draw_asciiname(19, sensorcard[static_cast<uint8_t>(simulator.get_pot_overload())]);
                 }
                 else if (dataset_page == PG_JOY) {
                     draw_dynamic(9, ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
