@@ -644,7 +644,7 @@ class Display {
                 draw_dynamic(3, tachometer.get_filtered_value(), 0.0, tachometer.get_redline_rpm(), tach_target_rpm);
                 draw_dynamic(4, gas_pulse_out_us, gas_pulse_redline_us, gas_pulse_idle_us);
                 draw_dynamic(5, pressure_sensor.get_filtered_value(), pressure_sensor.get_min_human(), pressure_sensor.get_max_human(), pressure_target_psi);  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
-                draw_dynamic(6, brake_out_percent, brake_extend_percent, brake_retract_percent);
+                draw_dynamic(6, brake_servo.get_human(), brake_servo.get_min_human(), brake_servo.get_max_human());
                 draw_dynamic(7, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
                 draw_dynamic(8, steer_servo.get_human(), steer_servo.get_min_human(), steer_servo.get_max_human());
                 if (dataset_page == PG_RUN) {
@@ -687,7 +687,7 @@ class Display {
                     draw_dynamic(19, brkpos_sensor.get_zeropoint(), BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
                 }
                 else if (dataset_page == PG_PWMS) {
-                    draw_dynamic(9, brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
+                    draw_dynamic(9, brake_servo.get_native(), brake_servo.get_min_native(), brake_servo.get_max_native());
                     draw_dynamic(10, steer_servo.get_native(), steer_servo.get_min_native(), steer_servo.get_max_native());
                     draw_eraseval(11);
                     // draw_dynamic(12, steer_left_percent, steer_stop_percent, steer_right_max_percent);
@@ -699,14 +699,14 @@ class Display {
                     draw_dynamic(12, steer_servo.get_max_native(), steer_servo.get_center_native(), steer_servo.get_abs_max_native());
                     draw_dynamic(13, steer_servo.get_center_native(), steer_servo.get_min_native(), steer_servo.get_max_native());
                     draw_dynamic(14, steer_servo.get_min_native(), steer_servo.get_abs_min_native(), steer_servo.get_center_native());
-                    draw_dynamic(15, brake_pulse_extend_us, brake_pulse_stop_us, brake_pulse_extend_max_us);
-                    draw_dynamic(16, brake_pulse_stop_us, brake_pulse_retract_us, brake_pulse_extend_us);
-                    draw_dynamic(17, brake_pulse_retract_us, brake_pulse_retract_min_us, brake_pulse_stop_us);
+                    draw_dynamic(15, brake_servo.get_max_native(), brake_servo.get_center_native(), brake_servo.get_abs_max_native());
+                    draw_dynamic(16, brake_servo.get_center_native(), brake_servo.get_min_native(), brake_servo.get_max_native());
+                    draw_dynamic(17, brake_servo.get_min_native(), brake_servo.get_abs_min_native(), brake_servo.get_center_native());
                     draw_dynamic(18, gas_pulse_idle_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
                     draw_dynamic(19, gas_pulse_redline_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
                 }
                 else if (dataset_page == PG_BPID) {
-                    drange = brake_pulse_extend_us-brake_pulse_retract_us;
+                    drange = brake_servo.get_max_native() - brake_servo.get_min_native();
                     draw_dynamic(9, pressure_target_psi, pressure_sensor.get_min_human(), pressure_sensor.get_max_human());
                     draw_dynamic(10, brakeQPID.GetError(), pressure_sensor.get_min_human()-pressure_sensor.get_max_human(), pressure_sensor.get_max_human()-pressure_sensor.get_min_human());
                     draw_dynamic(11, brakeQPID.GetPterm(), -drange, drange);

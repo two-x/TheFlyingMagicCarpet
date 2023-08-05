@@ -81,7 +81,7 @@ class Param {
         }
     }
     void set_limits(std::shared_ptr<VALUE_T> arg_min, std::shared_ptr<VALUE_T> arg_max) { // Use if min/max are external
-        if (arg_min.get() > arg_max.get())
+        if (*arg_min > *arg_max)
             printf("Error: *min is > *max\n");
         else {
             _min = arg_min;
@@ -203,9 +203,9 @@ template<typename NATIVE_T, typename HUMAN_T>
 class Transducer : public Device {
   protected:
     // Multiplier and adder values to plug in for unit conversion math
-    float _m_factor;
-    float _b_offset;  
-    bool _invert;  // Flag to indicated if unit conversion math should multiply or divide
+    float _m_factor = 1.0;
+    float _b_offset = 0.0;  
+    bool _invert = false;  // Flag to indicated if unit conversion math should multiply or divide
     TransducerDirection dir = TransducerDirection::FWD; // NOTE: what is this for, exactly?
     
     // conversion functions (can be overridden in child classes different conversion methods are needed)
@@ -439,7 +439,7 @@ class PressureSensor : public AnalogSensor<float> {
 class BrakePositionSensor : public AnalogSensor<float> {
     protected:
         // TODO: add description
-        std::shared_ptr<float> _zeropoint;
+        std::shared_ptr<float> _zeropoint = std::make_shared<float>();
         void handle_touch_mode() { _val_filt.set((nom_lim_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
     public:
         // NOTE: for now lets keep all the config stuff here in the class. could also read in values from a config file at some point.
@@ -460,7 +460,7 @@ class BrakePositionSensor : public AnalogSensor<float> {
             _m_factor = initial_in_per_adc;
             _b_offset = initial_offset;
             _invert = initial_invert;
-            _zeropoint = std::make_shared<float>(initial_zeropoint_in);
+            *_zeropoint = initial_zeropoint_in;
             set_human_limits(nom_lim_retract_in, nom_lim_extend_in);
             set_native_limits(to_native(nom_lim_retract_in), to_native(nom_lim_extend_in));
             set_can_source(ControllerMode::POT, true);
@@ -591,7 +591,6 @@ class Speedometer : public PulseSensor<float> {
         std::shared_ptr<float> get_redline_mph_ptr() { return human.get_max_ptr(); }
 };
 
-// NOTE: I implemented the gas servo, but it looks like it's all in native units. should it still be a transducer?
 // ServoPWM is a base class for our type of actuators, where by varying a pulse width (in us), motors move.
 //    e.g. the gas, brake and steering motors. The gas motor is an actual servo, the others are controlled with servo signaling via jaguars.
 template<typename HUMAN_T>
@@ -622,7 +621,7 @@ template<typename HUMAN_T>
 class JagMotor : public ServoPWM<HUMAN_T> {
   protected:
     HUMAN_T _center;
-    std::shared_ptr<int32_t> _native_center;
+    std::shared_ptr<int32_t> _native_center = std::make_shared<int32_t>();
     virtual void handle_pin_mode() {
         int32_t min, max;
         if (this->human.get() >= _center) {
@@ -656,7 +655,7 @@ class JagMotor : public ServoPWM<HUMAN_T> {
     std::shared_ptr<int32_t> get_center_native_ptr() { return _native_center; }
 };
 
-class SteeringPWM : public JagMotor<float> {
+class SteeringServo : public JagMotor<float> {
     protected:
         // NOTE: why is left -100% but max pulse range?
         static constexpr float _left_min_percent = -100.0;
@@ -673,7 +672,7 @@ class SteeringPWM : public JagMotor<float> {
         Param<float> _percent_min, _percent_max;
         Param<int32_t> _pulse_min, _pulse_max;
     public:
-        SteeringPWM(uint8_t pin_arg) : JagMotor<float>(pin_arg),
+        SteeringServo(uint8_t pin_arg) : JagMotor<float>(pin_arg),
                                       _percent_min(_initial_left_percent, _left_min_percent, _stop_percent),
                                       _percent_max(_initial_right_percent, _stop_percent, _right_max_percent),
                                       _pulse_min(_initial_pulse_right_us, _pulse_right_min_us, _pulse_stop_us),
@@ -681,13 +680,59 @@ class SteeringPWM : public JagMotor<float> {
             human.set_limits(_percent_min.get_ptr(), _percent_max.get_ptr());
             native.set_limits(_pulse_min.get_ptr(), _pulse_max.get_ptr());
             _center = _stop_percent;
-            _native_center = std::make_shared<int32_t>(_pulse_stop_us);
+            *_native_center = _pulse_stop_us;
         }
-        SteeringPWM() = delete;
+        SteeringServo() = delete;
         float get_abs_min() { return _left_min_percent; }
         float get_abs_max() { return _right_max_percent; }
         int32_t get_abs_min_native() { return _pulse_right_min_us; }
         int32_t get_abs_max_native() { return _pulse_left_max_us; }
+        std::shared_ptr<int32_t> get_min_native_ptr() { return _pulse_min.get_ptr(); }
+        std::shared_ptr<int32_t> get_max_native_ptr() { return _pulse_min.get_ptr(); }
+};
+
+class BrakeServo : public JagMotor<float> {
+    protected:
+        static constexpr float _retract_max_percent = 100.0;  // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
+        static constexpr float _stop_percent = 0.0;  // Brake pulsewidth corresponding to center point where motor movement stops (in us)
+        static constexpr float _extend_min_percent = -100.0;  // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
+        static constexpr float _initial_retract_percent = 100.0;  // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
+        static constexpr float _initial_extend_percent = -100.0;  // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
+        static constexpr int32_t _pulse_retract_min_us = 670;  // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
+        static constexpr int32_t _pulse_stop_us = 1500;  // Brake pulsewidth corresponding to center point where motor movement stops (in us)
+        static constexpr int32_t _pulse_extend_max_us = 2330;  // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
+        static constexpr int32_t _initial_pulse_retract_us = 670;  // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
+        static constexpr int32_t _initial_pulse_extend_us = 2330;  // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
+
+        Param<float> _percent_min, _percent_max;
+        Param<int32_t> _pulse_min, _pulse_max;
+
+        virtual void handle_mode_change() {
+            if (_source == ControllerMode::CALC) {
+                // Constrain to full potential range when calibrating. Caution don't break anything!
+                std::shared_ptr<float> cal_min(new float(_extend_min_percent));
+                std::shared_ptr<float> cal_max(new float(_retract_max_percent));
+                human.set_limits(cal_min, cal_max);
+            } else {
+                human.set_limits(_percent_min.get_ptr(), _percent_max.get_ptr());
+            }
+        }
+    public:
+        BrakeServo(uint8_t pin_arg) : JagMotor<float>(pin_arg),
+                                      _percent_min(_initial_extend_percent, _extend_min_percent, _stop_percent),
+                                      _percent_max(_initial_retract_percent, _stop_percent, _retract_max_percent),
+                                      _pulse_min(_initial_pulse_retract_us, _pulse_retract_min_us, _pulse_stop_us),
+                                      _pulse_max(_initial_pulse_extend_us, _pulse_stop_us, _pulse_extend_max_us) {
+            human.set_limits(_percent_min.get_ptr(), _percent_max.get_ptr());
+            native.set_limits(_pulse_min.get_ptr(), _pulse_max.get_ptr());
+            _center = _stop_percent;
+            *_native_center = _pulse_stop_us;
+        }
+        BrakeServo() = delete;
+        float get_abs_min() { return _extend_min_percent; }
+        float get_abs_max() { return _retract_max_percent; }
+        int32_t get_abs_min_native() { return _pulse_retract_min_us; }
+        int32_t get_abs_max_native() { return _pulse_extend_max_us; }
         std::shared_ptr<int32_t> get_min_native_ptr() { return _pulse_min.get_ptr(); }
         std::shared_ptr<int32_t> get_max_native_ptr() { return _pulse_min.get_ptr(); }
 };
@@ -830,8 +875,6 @@ class HotrcManager {
     int32_t get_next_rawval () { return raw_history[index]; }  // helps to debug the filter from outside the class
 };
 
-// NOTE: if devices.h gets to be too long, we can (and maybe just should) move this to a separate file, it's not really a device...
-
 // This enum class represent the components which can be simulated (SimOption). It's a uint8_t type under the covers, so it can be used as an index
 typedef uint8_t opt_t;
 enum class SimOption : opt_t { none=0, pressure, brkpos, tach, airflow, speedo, battery, coolant, joy, basicsw, cruisesw, syspower, starter, ignition };
@@ -839,6 +882,7 @@ enum class SimOption : opt_t { none=0, pressure, brkpos, tach, airflow, speedo, 
 // Simulator manages the ControllerMode handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
 // NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use ControllerModes,
 //       we can simplify the logic here a lot.
+// NOTE: this should probably be made into a DeviceModeManager class instead that handles all Device mode changes
 class Simulator {
     private:
         // NOTE: if we only simulated devices, we could keep track of simulability in the Device class. We could keep the default ControllerMode in Device the same way.

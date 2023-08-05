@@ -8,6 +8,11 @@
 
 /* Config Defines */
 #define pwm_jaguars true
+#ifdef pwm_jaguars
+#else  // jaguars controlled over asynchronous serial port
+    #include <HardwareSerial.h>
+    HardwareSerial jagPort(1);  // Open serisl port to communicate with jaguar controllers for steering & brake motors
+#endif
 
 /* Value Defines */
 #define adcbits 12

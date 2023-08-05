@@ -154,13 +154,6 @@ RMTInput hotrc_ch4(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_cruise_pin));
 // Globals -------------------
 //
 
-#ifdef pwm_jaguars
-    static Servo brake_servo;
-#else  // jaguars controlled over asynchronous serial port
-    #include <HardwareSerial.h>
-    HardwareSerial jagPort(1);  // Open serisl port to communicate with jaguar controllers for steering & brake motors
-#endif
-
 // run state machine related
 enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL };
 runmodes runmode = SHUTDOWN;
@@ -338,7 +331,7 @@ volatile int64_t hotrc_vert_pulse_64_us = (int64_t)hotrc_pulse_lims_us[VERT][CEN
 // volatile int32_t intcount = 0;
 
 // steering related
-SteeringPWM steer_servo(steer_pwm_pin);
+SteeringServo steer_servo(steer_pwm_pin);
 float steer_safe_percent = 72.0;  // Steering is slower at high speed. How strong is this effect 
 float steer_safe_ratio = steer_safe_percent / 100;
 float speedo_safeline_mph;
@@ -354,23 +347,10 @@ float pressure_panic_increment_psi = 25;  // Incremental pressure added periodic
 float pressure_target_psi;
 
 // brake actuator motor related
+BrakeServo brake_servo(brake_pwm_pin);
 Timer brakeIntervalTimer (500000);  // How much time between increasing brake force during auto-stop if car still moving?
 int32_t brake_increment_interval_us = 500000;  // How often to apply increment during auto-stopping (in us)
-
-float brake_out_percent;
-float brake_retract_max_percent = 100.0;  // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
-float brake_retract_percent = 100.0;  // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
-float brake_stop_percent = 0.0;  // Brake pulsewidth corresponding to center point where motor movement stops (in us)
-float brake_extend_percent = -100.0;  // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
-float brake_extend_min_percent = -100.0;  // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
-float brake_margin_percent = 2.4; // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated 
-
-float brake_pulse_out_us;  // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
-float brake_pulse_retract_min_us = 670;  // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
-float brake_pulse_retract_us = 670;  // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
-float brake_pulse_stop_us = 1500;  // Brake pulsewidth corresponding to center point where motor movement stops (in us)
-float brake_pulse_extend_us = 2330;  // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
-float brake_pulse_extend_max_us = 2330;  // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
+// float brake_margin_percent = 2.4; // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated NOTE: unused
 
 // brake actuator position related
 BrakePositionSensor brkpos_sensor(brake_pos_pin);
@@ -429,11 +409,11 @@ Timer brakePidTimer (brake_pid_period_us);  // not actually tunable, just needs 
 float brake_spid_initial_kp = 0.253;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
 float brake_spid_initial_ki_hz = 0.057;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
 float brake_spid_initial_kd_s = 0.100;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-QPID brakeQPID (pressure_sensor.get_filtered_value_ptr().get(), &brake_out_percent, &pressure_target_psi,  // input, target, output variable references
-    brake_extend_percent, brake_retract_percent,  // output min, max
+QPID brakeQPID (pressure_sensor.get_filtered_value_ptr().get(), brake_servo.get_human_ptr().get(), &pressure_target_psi,  // input, target, output variable references
+    brake_servo.get_min_human(), brake_servo.get_max_human(),  // output min, max
     brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,  // Kp, Ki, and Kd tuning constants
     QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwRound, QPID::Action::direct,  // settings  // iAwRoundCond, iAwClamp
-    brake_pid_period_us, QPID::Control::timer, QPID::centMode::centerStrict, brake_stop_percent);  // period, more settings
+    brake_pid_period_us, QPID::Control::timer, QPID::centMode::centerStrict, brake_servo.get_center());  // period, more settings
     
 // Gas : Controls the throttle to achieve the desired intake airflow and engine rpm
 uint32_t gas_pid_period_us = 225000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive

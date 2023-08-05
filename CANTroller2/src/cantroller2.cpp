@@ -68,11 +68,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (ign_batt_pin, INPUT);
     set_pin (ign_out_pin, OUTPUT);
     set_pin (syspower_pin, OUTPUT);  // Then set the put as an output as normal.
-    #ifdef pwm_jaguars
-        set_pin (brake_pwm_pin, OUTPUT);
-    #else
-        // Init serial port uart 1
-    #endif
     analogReadResolution (adcbits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
 
     write_pin (tft_cs_pin, HIGH);   // Prevent bus contention
@@ -109,6 +104,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     tachometer.setup();
     speedometer.setup();
     steer_servo.setup();
+    brake_servo.setup();
 
     printf("Simulator setup..\n");
     simulator.register_device(SimOption::pressure, pressure_sensor, pressure_sensor.source());
@@ -120,7 +116,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     // Servo() argument 2 is channel (0-15) of the esp timer (?). set to Servo::CHANNEL_NOT_ATTACHED to auto grab a channel
     // gas_servo.setup();
     // gas_servo.set_native_limits();  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
-    brake_servo.attach (brake_pwm_pin, brake_pulse_retract_us, brake_pulse_extend_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
     gas_servo.attach (gas_pwm_pin, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     
     printf ("Init neopixel..");
@@ -347,34 +342,25 @@ void loop() {
     // Brakes - Determine motor output and write it to motor
     if (brakePidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
         if (runmode == CAL && cal_joyvert_brkmotor) {
-            if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], brake_stop_percent, brake_retract_percent);
-            else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], brake_extend_percent, brake_stop_percent);
-            else brake_out_percent = (float)brake_stop_percent;
+            if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) brake_servo.set_human(map((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], brake_servo.get_center(), brake_servo.get_max_human()));
+            else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) brake_servo.set_human(map((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], brake_servo.get_min_human(), brake_servo.get_center()));
+            else brake_servo.set_human(brake_servo.get_center());
         }
         else if (park_the_motors) {
             if (brkpos_sensor.get_filtered_value() + BrakePositionSensor::margin_in <= BrakePositionSensor::park_in)  // If brake is retracted from park point, extend toward park point, slowing as we approach
-                brake_out_percent = map (brkpos_sensor.get_filtered_value(), BrakePositionSensor::park_in, BrakePositionSensor::nom_lim_retract_in, brake_stop_percent, brake_extend_percent);
+                brake_servo.set_human(map(brkpos_sensor.get_filtered_value(), BrakePositionSensor::park_in, BrakePositionSensor::nom_lim_retract_in, brake_servo.get_min_human(), brake_servo.get_center()));
             else if (brkpos_sensor.get_filtered_value() - BrakePositionSensor::margin_in >= BrakePositionSensor::park_in)  // If brake is extended from park point, retract toward park point, slowing as we approach
-                brake_out_percent = map (brkpos_sensor.get_filtered_value(), BrakePositionSensor::park_in, BrakePositionSensor::nom_lim_extend_in, brake_stop_percent, brake_retract_percent);
+                brake_servo.set_human(map(brkpos_sensor.get_filtered_value(), BrakePositionSensor::park_in, BrakePositionSensor::nom_lim_extend_in, brake_servo.get_center(), brake_servo.get_max_human()));
         }
         else if (runmode != BASIC) brakeQPID.Compute();  // Otherwise the pid control is active
         if (runmode != BASIC || park_the_motors) {
-            if (((brkpos_sensor.get_filtered_value() + BrakePositionSensor::margin_in <= BrakePositionSensor::nom_lim_retract_in) && brake_out_percent > brake_stop_percent) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
-                ((brkpos_sensor.get_filtered_value() - BrakePositionSensor::margin_in >= BrakePositionSensor::nom_lim_extend_in) && brake_out_percent < brake_stop_percent))  // ... or same thing in the extend direction ...
-                    brake_out_percent = brake_stop_percent;  // ... then stop the motor
+            if (((brkpos_sensor.get_filtered_value() + BrakePositionSensor::margin_in <= BrakePositionSensor::nom_lim_retract_in) && brake_servo.get_human() > brake_servo.get_center()) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
+                ((brkpos_sensor.get_filtered_value() - BrakePositionSensor::margin_in >= BrakePositionSensor::nom_lim_extend_in) && brake_servo.get_human() < brake_servo.get_center()))  // ... or same thing in the extend direction ...
+                    brake_servo.set_human(brake_servo.get_center());  // ... then stop the motor
             else if (runmode == CAL && cal_joyvert_brkmotor)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
-                 brake_out_percent = constrain (brake_out_percent, brake_extend_min_percent, brake_retract_max_percent);  // Constrain to full potential range when calibrating. Caution don't break anything!
-            else brake_out_percent = constrain (brake_out_percent, brake_extend_percent, brake_retract_percent);  // Send to the actuator. Refuse to exceed range    
+                brake_servo.set_source(ControllerMode::CALC); // TODO: how do we get out of cal mode?
             
-            if (brake_out_percent >= brake_stop_percent)
-                brake_pulse_out_us = map (brake_out_percent, brake_stop_percent, brake_retract_percent, brake_pulse_stop_us, brake_pulse_retract_us);
-            else brake_pulse_out_us = map (brake_out_percent, brake_stop_percent, brake_extend_percent, brake_pulse_stop_us, brake_pulse_extend_us);
-                    
-            #ifdef pwm_jaguars
-                brake_servo.writeMicroseconds ((int32_t)brake_pulse_out_us);  // Write result to jaguar servo interface
-            #else
-                // Send command over serial port
-            #endif
+            brake_servo.update();
             // if (boot_button) printf ("JoyH:%4ld, safadj:%4.0lf out:%4.0lf puls:%4.0lf", ctrl_pos_adc[HORZ][FILT], steer_safe_adj_percent, steer_out_percent, steer_pulse_out_us);
             // if (boot_button) printf (" Brk:%4ld", (int32_t)brake_pulse_out_us);
         }
@@ -536,12 +522,13 @@ void loop() {
             }
       }
         else if (dataset_page == PG_PWMS) {
+            // TODO: Devices don't need to use adj_val, this should just be: adj = device.param.add(sim_edit_delta)
             if (selected_value == 3) adj_val (steer_servo.get_max_native_ptr().get(), sim_edit_delta, steer_servo.get_center() + 1, steer_servo.get_abs_max_native());
             else if (selected_value == 4) adj_val (steer_servo.get_center_native_ptr().get(), sim_edit_delta, steer_servo.get_min_native() + 1, steer_servo.get_max_native() - 1);
             else if (selected_value == 5) adj_val (steer_servo.get_min_native_ptr().get(), sim_edit_delta, steer_servo.get_abs_min_native(), steer_servo.get_center_native() - 1);
-            else if (selected_value == 6) adj_val (&brake_pulse_extend_us, sim_edit_delta, brake_pulse_stop_us + 1, brake_pulse_extend_max_us);
-            else if (selected_value == 7) adj_val (&brake_pulse_stop_us, sim_edit_delta, brake_pulse_retract_us + 1, brake_pulse_extend_us - 1);
-            else if (selected_value == 8) adj_val (&brake_pulse_retract_us, sim_edit_delta, brake_pulse_retract_min_us, brake_pulse_stop_us -1);
+            else if (selected_value == 6) adj_val (brake_servo.get_max_native_ptr().get(), sim_edit_delta, brake_servo.get_center_native() + 1, brake_servo.get_abs_max_native());
+            else if (selected_value == 7) adj_val (brake_servo.get_center_native_ptr().get(), sim_edit_delta, brake_servo.get_min_native() + 1, brake_servo.get_max_native() - 1);
+            else if (selected_value == 8) adj_val (brake_servo.get_min_native_ptr().get(), sim_edit_delta, brake_servo.get_abs_min_native(), brake_servo.get_center_native() -1);
             else if (selected_value == 9) adj_val (&gas_pulse_idle_us, sim_edit_delta, gas_pulse_redline_us + 1, gas_pulse_ccw_max_us - gas_pulse_park_slack_us);
             else if (selected_value == 10) adj_val (&gas_pulse_redline_us, sim_edit_delta, gas_pulse_cw_min_us, gas_pulse_idle_us - 1);
         }
