@@ -139,6 +139,7 @@ class Device {
     virtual void handle_touch_mode() {}
     virtual void handle_pot_mode() {}
     virtual void handle_calc_mode() {}
+    virtual void handle_mode_change() {}
   public:
     Timer timer;  // Can be used for external purposes
 
@@ -150,6 +151,7 @@ class Device {
     bool set_source(ControllerMode arg_source) {
         if (_can_source[static_cast<uint8_t>(arg_source)]) {
             _source = arg_source;
+            handle_mode_change();
             return true;
         } 
         return false;
@@ -357,12 +359,30 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
   protected:
     float _ema_alpha = 0.1;
     Param<HUMAN_T> _val_filt;
+    bool _should_filter = false;
+
     void calculate_ema() { // Exponential Moving Average
-        float cur_val = static_cast<float>(this->human.get());
-        float filt_val = static_cast<float>(_val_filt.get());
-        _val_filt.set(ema_filt(cur_val, filt_val, _ema_alpha));
+        if (_should_filter) {
+            float cur_val = static_cast<float>(this->human.get());
+            float filt_val = static_cast<float>(_val_filt.get());
+            _val_filt.set(ema_filt(cur_val, filt_val, _ema_alpha));
+        } else {
+            _val_filt.set(this->human.get());
+            _should_filter = true;
+        }
     }
-    virtual void handle_set_human_limits() { _val_filt.set_limits(this->human.get_min_ptr(), this->human.get_max_ptr()); }
+
+    virtual void handle_touch_mode() {
+        this->_val_filt.set(this->human.get());
+    }
+    virtual void handle_pot_mode() {
+        this->human.set(this->_pot->mapToRange(this->human.get_min(), this->human.get_max()));
+        this->_val_filt.set(this->human.get()); // don't filter the value we get from the pot, the pot output is already filtered
+    }
+
+    virtual void handle_set_human_limits() { _val_filt.set_limits(this->human.get_min_ptr(), this->human.get_max_ptr()); } // make sure our filtered value has the same limits as our regular value
+    virtual void handle_mode_change() { if (this->_source == ControllerMode::PIN) _should_filter = false; } // if we just switched to pin input, the old filtered value is not valid
+
   public:
     Sensor(uint8_t pin) : Transducer<NATIVE_T, HUMAN_T>(pin) {}  
     void set_ema_alpha(float arg_alpha) { _ema_alpha = arg_alpha; }
@@ -378,13 +398,6 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
     virtual void handle_pin_mode() {
         this->set_native(static_cast<NATIVE_T>(analogRead(this->_pin)));
         this->calculate_ema(); // filtered values are kept in human format
-    }
-    virtual void handle_touch_mode() {
-        this->_val_filt.set(this->human.get());
-    }
-    virtual void handle_pot_mode() {
-        this->human.set(this->_pot->mapToRange(this->human.get_min(), this->human.get_max()));
-        this->_val_filt.set(this->human.get()); // don't filter the value we get from the pot, the pot output is already filtered
     }
   public:
     AnalogSensor(uint8_t arg_pin) : Sensor<NATIVE_T, HUMAN_T>(arg_pin) {}
@@ -471,20 +484,14 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         void set_zeropoint(float zeropoint_arg) { _zeropoint = zeropoint_arg; }
 };
 
-// TODO: add description
-class Tachometer : public AnalogSensor<int32_t, float> {
+// class PulseSensor are sensors where the value is based on magnetic pulse timing of a rotational source (eg tachometer, speedometer)
+template<typename HUMAN_T>
+class PulseSensor : public Sensor<int32_t, HUMAN_T> {
     protected:
-        static constexpr float _min_rpm = 0.0;
-        static constexpr float _max_rpm = 7000.0;  // Max possible engine rotation speed
         static constexpr float _stop_thresh_rpm = 0.1;  // Below which the engine is considered stopped - this is redundant,
         static constexpr int64_t _delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
         static constexpr int64_t _stop_timeout_us = 2000000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
-        // NOTE: should we start at 50rpm? shouldn't it be zero?
-        static constexpr float _initial_rpm = 50.0; // Current engine speed, raw value converted to rpm (in rpm)
-        static constexpr float _initial_redline_rpm = 5000.0;  // Max value for tach_rpm, pedal to the metal (in rpm). 20000 rotations/mile * 15 mi/hr * 1/60 hr/min = 5000 rpm
         static constexpr float _initial_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
-        static constexpr bool _initial_invert = true;
-        static constexpr float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
 
         Timer _stop_timer;
         volatile int64_t _isr_us = 0;
@@ -492,11 +499,11 @@ class Tachometer : public AnalogSensor<int32_t, float> {
         volatile int64_t _isr_timer_read_us = 0;
         int32_t _isr_buf_us = 0;
 
-        // The tachometer uses a hall sensor being triggered by a passing magnet once per pulley turn. The ISR calls
+        // Shadows a hall sensor being triggered by a passing magnet once per pulley turn. The ISR calls
         // esp_timer_get_time() on every pulse to know the time since the previous pulse. I tested this on the bench up
         // to about 0.750 mph which is as fast as I can move the magnet with my hand, and it works.
         // Update: Janky bench test appeared to work up to 11000 rpm.
-        void IRAM_ATTR _isr() { // The tach isr gets the period of the vehicle pulley rotations.
+        void IRAM_ATTR _isr() { // The isr gets the period of the vehicle pulley rotations.
             _isr_timer_read_us = esp_timer_get_time();
             int64_t time_us = _isr_timer_read_us - _isr_timer_start_us;
             if (time_us > _delta_abs_min_us) {  // ignore spurious triggers or bounces
@@ -514,18 +521,36 @@ class Tachometer : public AnalogSensor<int32_t, float> {
                 _stop_timer.reset();
             }
             // NOTE: should be checking filt here maybe?
-            if (human.get() < _stop_thresh_rpm || _stop_timer.expired()) {  // If time between pulses is long enough an engine can't run that slow
+            if (this->human.get() < _stop_thresh_rpm || _stop_timer.expired()) {  // If time between pulses is long enough an engine can't run that slow
                 this->human.set(0.0);
                 this->_val_filt.set(0.0);
             }        
         }
 
     public:
-        Tachometer(uint8_t arg_pin, std::shared_ptr<float> pot_arg=nullptr) : AnalogSensor<int32_t, float>(arg_pin), _stopTimer(_stop_timeout_us) {
+        PulseSensor(uint8_t arg_pin) : Sensor<int32_t, HUMAN_T>(arg_pin), _stop_timer(_stop_timeout_us) {}
+        PulseSensor() = delete;
+        void setup() { attachInterrupt(digitalPinToInterrupt(this->_pin), [this]{ _isr(); }, RISING); }
+        bool stopped() { return this->_val_filt.get() < _stop_thresh_rpm; }  // Note due to weird float math stuff, can not just check if tach == 0.0
+};
+
+// Tachometer represents a magnetic pulse measurement of the enginge rotation.
+// It extends AnalogSensor to handle reading an analog pin and converting the ADC value to a pressure value in PSI.
+class Tachometer : public PulseSensor<float> {
+    protected:
+        static constexpr float _min_rpm = 0.0;
+        static constexpr float _max_rpm = 7000.0;  // Max possible engine rotation speed
+        // NOTE: should we start at 50rpm? shouldn't it be zero?
+        static constexpr float _initial_rpm = 50.0; // Current engine speed, raw value converted to rpm (in rpm)
+        static constexpr float _initial_redline_rpm = 5000.0;  // Max value for tach_rpm, pedal to the metal (in rpm). 20000 rotations/mile * 15 mi/hr * 1/60 hr/min = 5000 rpm
+        static constexpr float _initial_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
+        static constexpr bool _initial_invert = true;
+        static constexpr float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+    public:
+        Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin) {
             _ema_alpha = _initial_ema_alpha;
             _m_factor = _initial_rpm_per_rpus;
             _invert = _initial_invert;
-            // NOTE: what should the rpm limits really be here?
             set_human_limits(_min_rpm, _initial_redline_rpm);
             set_native_limits(0.0, _stop_timeout_us);
             set_human(_initial_rpm);
@@ -536,11 +561,11 @@ class Tachometer : public AnalogSensor<int32_t, float> {
 
         void setup() {
             set_pin(_pin, INPUT);
-            attachInterrupt(digitalPinToInterrupt(_pin), [this]{ _isr(); }, RISING);
             set_source(ControllerMode::PIN);
+            PulseSensor<float>::setup();
         }
 
-        bool engine_stopped() { return _val_filt.get() < _stop_thresh_rpm; }  // Note due to weird float math stuff, can not just check if tach == 0.0
+        bool engine_stopped() { return stopped(); }
         float get_redline_rpm() { return human.get_max(); }
         float get_max_rpm() { return _max_rpm; }
         std::shared_ptr<float> get_redline_rpm_ptr() { return human.get_max_ptr(); }
