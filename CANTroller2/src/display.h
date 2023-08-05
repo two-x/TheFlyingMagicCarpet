@@ -72,8 +72,8 @@ char idlestatecard[5][7] = { "drving", "tohigh", "tolow", "idling", "tostal" };
 char telemetry[disp_fixed_lines][9] = { "CtrlVert", "   Speed", "    Tach", "ThrotPWM", "BrakPres", "BrakeMot", "CtrlHorz", "SteerMot", };  // Fixed rows
 char units[disp_fixed_lines][5] = { "adc ", "mph ", "rpm ", "us  ", "psi ", "%   ", "adc ", "%   " };  // Fixed rows
 
-char pagecard[10][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim " };
-enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM };
+enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, num_datapages };
+char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim " };
 int32_t tuning_first_editable_line[disp_tuning_lines] = { 4, 4, 2, 3, 4, 8, 7, 8, 11, 1 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
@@ -88,16 +88,17 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
     { " Ambient", " Coolant", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", "      - ", "      - ", "      - ", "      - ", "      - ", },  // PG_TEMP
     { "      - ", "Sim Ctrl", "Sim Pres", "SimBkPos", "Sim Tach", "SimAirFl", " Sim MAP", "SimSpeed", "SimW/Pot", " Cal Brk", " Cal Gas", },  // PG_SIM
 };
+#define DEGR_F "\x09""F  "
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "in  ", "mph ", "psi ", "V   ", "%   ", "    ", "    ", "    ", "    ", "%   ", "%   " },  // PG_RUN
     { "adc ", "adc ", "us  ", "us  ", "us  ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
     { "adc ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%   ", "mph ", "mph ", "mph ", "in  " },  // PG_CAR
     { "us  ", "us  ", "    ", "    ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PG_PWMS
-    { "    ", "rpm ", "rpm ", "\x09""F  ", "rpm ", "rpm ", "rpm ", "\x09""F  ", "\x09""F  ", "ms  ", "    " },  // PG_IDLE
+    { "    ", "rpm ", "rpm ", DEGR_F, "rpm ", "rpm ", "rpm ", DEGR_F, DEGR_F, "ms  ", "    " },  // PG_IDLE
     { "psi ", "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "    ", "    ", "Hz  ", "s   " },  // PG_BPID
     { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "    ", "    ", "Hz  ", "s   " },  // PG_GPID
     { "mph ", "mph ", "mph ", "mph ", "mph ", "mph ", "rpm ", "    ", "    ", "Hz  ", "s   " },  // PG_CPID
-    { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "    ", "    ", "    ", "    ", "    " },  // PG_TEMP
+    { DEGR_F, DEGR_F, DEGR_F, DEGR_F, DEGR_F, DEGR_F, "    ", "    ", "    ", "    ", "    " },  // PG_TEMP
     { "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    " },  // PG_SIM
 };
 char simgrid[4][3][5] = {

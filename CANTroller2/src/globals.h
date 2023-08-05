@@ -43,7 +43,7 @@ bool flip_the_screen = false;
 #define hotrc_ch1_horz_pin 15  // (pwm1 / adc*) - Hotrc Ch1 thumb joystick input
 #define gas_pwm_pin 16  // (pwm1 / adc*) - Output, PWM signal duty cycle controls throttle target. On Due this is the pin labeled DAC1 (where A13 is on Mega)
 #define brake_pwm_pin 17  // (pwm0 / adc* / tx1) - Output, PWM signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% is stopped) 
-#define steer_pwm_pin 18  // (pwm0 / adc* / rx1) - Output, PWM signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
+#define steer_pwm_pin 18  // (pwm0 / adc* / rx1) - Oqutput, PWM signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
 #define onewire_pin 19  // (usb-otg / adc*) - Onewire bus for temperature sensor data
 #define hotrc_ch3_ign_pin 20  // (usb-otg / adc*) - Ignition control, Hotrc Ch3 PWM toggle signal
 #define hotrc_ch4_cruise_pin 21  // (pwm0) - Cruise control, Hotrc Ch4 PWM toggle signal
