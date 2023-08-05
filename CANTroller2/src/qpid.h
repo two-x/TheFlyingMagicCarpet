@@ -460,11 +460,15 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
     uint32_t settletime_us;
     Timer settleTimer;
   public:
-    IdleControl (float* target_rpm, float* measraw_rpm, float* measfilt_rpm, float* coolant_f,  // Variable references: idle target, rpm raw, rpm filt, Engine temp
+    IdleControl (float* target, float* measraw, float* measfilt, float* coolant,  // Variable references: idle target, rpm raw, rpm filt, Engine temp
       float idlehigh, float idlehot, float idlecold,  // Values for: high-idle rpm (will not stall), hot idle nominal rpm, cold idle nominal rpm 
       float tempcold, float temphot,  // Values for: engine operational temp cold (min) and temp hot (max) in degrees-f
       uint32_t settletime_us = 2000000,  // Period over which the idle will be lowered from high-idle to final idle
       idlemodes idlemode = idlemodes::control) {  // Configure idle control to just soft land or also attempt to minimize idle
+        target_rpm = target;
+        measraw_rpm = measraw;
+        measfilt_rpm = measfilt;
+        coolant_f = coolant;
         set_idlehigh (idlehigh);
         set_idlehot (idlehot);
         stallpoint_rpm = idlehot_rpm;
@@ -521,7 +525,7 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
         }
     }
     void process_idling (void) {  // If we aren't set to attempt to minimize idle speed, then we end up here
-        if (*target_rpm > idlecold_rpm) runstate = driving;  // If our idle is being monkeyed with, then quit doing low idle
+        if (*target_rpm > targetlast_rpm) runstate = (*target_rpm > idlehigh_rpm) ? driving : droptohigh;  // If our idle is being monkeyed with, then quit doing low idle
         else if (idlemode == idlemodes::minimize) runstate = stallpoint;
         set_target (idle_rpm);  // We're done dropping to the idle point, but keep tracking as idle speed may change
     }

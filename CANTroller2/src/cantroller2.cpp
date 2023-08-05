@@ -120,20 +120,20 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     gas_servo.attach (gas_pwm_pin, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     steer_servo.attach (steer_pwm_pin, steer_pulse_right_us, steer_pulse_left_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
     
-    printf ("Init neopixel..");
+    printf ("Init neopixel..\n");
     neo_heartbeat = (neopixel_pin >= 0);
     neostrip.begin();  // start datastream
     neostrip.show();  // Turn off the pixel
     neostrip.setBrightness (neo_brightness_max);  // It truly is incredibly bright
     
-    printf ("Init i2c..");
+    printf ("Init i2c.. ");
     i2c_init (i2c_sda_pin, i2c_scl_pin);
     // printf ("done\n");
     for (int32_t i=0; i<i2c_devicecount; i++) {
         if (i2c_addrs[i] == 0x28) airflow_detected = true;
         if (i2c_addrs[i] == 0x18) map_detected = true;
     }
-    printf ("Airflow sensor.. %sdetected", (airflow_detected) ? "" : "not ");
+    printf ("Airflow sensor.. %sdetected\n", (airflow_detected) ? "" : "not ");
     if (airflow_detected) {
         if (airflow_sensor.begin() == false) printf ("  Sensor not responding");  // Begin communication with air flow sensor) over I2C 
         else {
@@ -141,7 +141,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
             printf ("  Sensor responding properly\n");
         }
     }
-    printf ("MAP sensor.. %sdetected", (map_detected) ? "" : "not ");
+    printf ("MAP sensor.. %sdetected\n", (map_detected) ? "" : "not ");
     if (map_detected) {
         if (map_sensor.begin() == false) printf ("  Sensor not responding");  // Begin communication with air flow sensor) over I2C 
         else printf ("  Reading %f atm pressure\n", map_sensor.readPressure(ATM));
@@ -223,8 +223,8 @@ void loop() {
         ema_filt (airflow_mph, &airflow_filt_mph, airflow_ema_alpha);  // Sensor EMA filter
     }
     // MAP sensor
-    if (sim_mapsens && pot_overload == mapsens) map_filt_psi = map (pot_filt_percent, 0.0, 100.0, map_min_psi, map_max_psi);
-    else if (map_detected && !(simulating && sim_mapsens)) {
+    if (simulator.can_simulate(SimOption::mapsens) && simulator.get_pot_overload() == SimOption::mapsens) map_filt_psi = pot.mapToRange(map_min_psi, map_max_psi);
+    else if (map_detected && !simulator.simulating(SimOption::mapsens)) {
         map_psi = map_sensor.readPressure(PSI);
         ema_filt (map_psi, &map_filt_psi, map_ema_alpha);  // Sensor EMA filter
     }
@@ -531,11 +531,6 @@ void loop() {
             else if (selected_value == 9) adj_val (&gas_pulse_ccw_closed_us, sim_edit_delta, gas_pulse_cw_open_us + 1, gas_pulse_ccw_max_us - gas_pulse_park_slack_us);
             else if (selected_value == 10) adj_val (&gas_pulse_cw_open_us, sim_edit_delta, gas_pulse_cw_min_us, gas_pulse_ccw_closed_us - 1);
         }
-        else if (dataset_page == PG_BPID) {
-            if (selected_value == 8) brakeQPID.SetKp (brakeQPID.GetKp() + 0.001 * (float)sim_edit_delta);
-            else if (selected_value == 9) brakeQPID.SetKi (brakeQPID.GetKi() + 0.001 * (float)sim_edit_delta);
-            else if (selected_value == 10) brakeQPID.SetKd (brakeQPID.GetKd() + 0.001 * (float)sim_edit_delta);
-        }
         else if (dataset_page == PG_IDLE) {
             if (selected_value == 13) idler.set_idlehigh (idler.get_idlehigh(), (float)sim_edit_delta);
             else if (selected_value == 14) idler.set_idlecold (idler.get_idlecold(), (float)sim_edit_delta);
@@ -544,6 +539,11 @@ void loop() {
             else if (selected_value == 17) idler.set_temphot (idler.get_temphot(), (float)sim_edit_delta);
             else if (selected_value == 18) idler.set_settletime (idler.get_settletime() + 1000*(float)sim_edit_delta);
             else if (selected_value == 19) idler.cycle_idlemode (sim_edit_delta);
+        }
+        else if (dataset_page == PG_BPID) {
+            if (selected_value == 8) brakeQPID.SetKp (brakeQPID.GetKp() + 0.001 * (float)sim_edit_delta);
+            else if (selected_value == 9) brakeQPID.SetKi (brakeQPID.GetKi() + 0.001 * (float)sim_edit_delta);
+            else if (selected_value == 10) brakeQPID.SetKd (brakeQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }
         else if (dataset_page == PG_GPID) {
             if (selected_value == 7) adj_bool (&gas_open_loop, sim_edit_delta);

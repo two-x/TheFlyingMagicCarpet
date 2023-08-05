@@ -73,7 +73,7 @@ bool flip_the_screen = false;
 
 // Globals -------------------
 bool serial_debugging = true; 
-bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
+bool timestamp_loop = true;  // Makes code write out timestamps throughout loop to serial port
 bool take_temperatures = true;
 bool keep_system_powered = true;  // Use true during development
 bool allow_rolling_start = true;  // May be a smart prerequisite, may be us putting obstacles in our way
