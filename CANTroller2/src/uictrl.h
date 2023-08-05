@@ -4,8 +4,7 @@
 #include "utils.h"
 #include "FunctionalInterrupt.h"
 
-// Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth. The output can either be read as a value, or passed as a pointer so that other components can
-// access it directly as needed.
+// Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class Potentiometer {
     protected:
         static constexpr float adc_min = 300; // TUNED 230603 - Used only in determining theconversion factor

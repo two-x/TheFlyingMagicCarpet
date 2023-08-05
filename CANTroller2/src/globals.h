@@ -426,7 +426,7 @@ float gas_pulse_ccw_max_us = 2500;  // Servo ccw limit pulsewidth. Hotrc control
 float gas_pulse_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_idle_us where to park the servo out of the way so we can drive manually (in us)
 
 // tachometer related
-Tachometer tachometer(tach_pulse_pin, pot.get_ptr());
+Tachometer tachometer(tach_pulse_pin);
 float tach_target_rpm, tach_adjustpoint_rpm;
 float tach_govern_rpm; // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
 float tach_margin_rpm = 15.0; // Margin of error for checking engine rpm (in rpm)
