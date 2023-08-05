@@ -7,7 +7,6 @@
 #include <OneWire.h>
 #include "temp.h"
 #include <Wire.h>
-#include <SparkFun_FS3000_Arduino_Library.h>  // For airflow sensor  http://librarymanager/All#SparkFun_FS3000
 #include <SparkFun_MicroPressure.h>
 #include <Preferences.h>
 #include <iostream>
@@ -85,6 +84,9 @@ bool starter_signal_support = false;
 
 // Persistent config storage
 Preferences config;
+
+// I2C related
+I2C i2c(i2c_sda_pin, i2c_scl_pin);
 
 // Declare Hotrc RMT Inputs in global scope
 RMTInput hotrc_horz(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_horz_pin)); 
@@ -354,18 +356,7 @@ float tach_idle_abs_max_rpm = 1000.0;  // High limit of idle speed adjustability
 Timer tachIdleTimer (5000000);  // How often to update tach idle value based on engine temperature
 
 // airflow sensor related
-bool airflow_detected = false;
-float airflow_mph = 0.0;
-float airflow_filt_mph = airflow_mph;
-// float airflow_target_mph = airflow_mph;
-float airflow_abs_min_mph = 0.0;  // Sensor min
-float airflow_min_mph = 0.0;
-float airflow_max_mph = 33.55;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)
-float airflow_abs_max_mph = 33.55;  // Sensor max
-// float airflow_idle_mph = airflow_max_mph * tach_idle_rpm / tachometer.get_redline_rpm();
-// What diameter intake hose will reduce airspeed to abs max?  2.7 times the xsectional area. Current area is 6.38 cm2. New diameter = 4.68 cm (min). So, need to adapt to 2.5in + tube
-float airflow_ema_alpha = 0.2;
-FS3000 airflow_sensor;
+AirflowSensor airflow_sensor(i2c);
 
 // map sensor related
 bool map_detected = false;
@@ -537,26 +528,5 @@ void temp_soren (void) {
         }
     }
 }
-// I2C related
-int32_t i2c_devicecount = 0;
-uint8_t i2c_addrs[10];
 
-void i2c_init (int32_t sda, int32_t scl) {
-    printf ("I2C driver ");
-    Wire.begin (sda, scl);  // I2c bus needed for airflow sensor
-    byte error, address;
-    printf (" scanning ...");
-    i2c_devicecount = 0;
-    for (address = 1; address < 127; address++ ) {
-        Wire.beginTransmission (address);
-        error = Wire.endTransmission();
-        if (error == 0) {
-            printf (" found addr: 0x%s%x", (address < 16) ? "0" : "", address);
-            i2c_addrs[i2c_devicecount++] = address;
-        }
-        else if (error==4) printf (" error addr: 0x%s%x", (address < 16) ? "0" : "", address);
-    }
-    if (i2c_devicecount == 0) printf (" no devices found\n");
-    else printf (" done\n");
-}
 #endif  // GLOBALS_H

@@ -108,10 +108,21 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     tachometer.setup();
     speedometer.setup();
 
+    printf ("Init i2c and i2c-enabled devices..");
+    i2c.init();
+    airflow_sensor.setup(); // must be done after i2c is started
+    map_detected = i2c.device_detected(0x18);
+    printf ("MAP sensor.. %sdetected\n", (map_detected) ? "" : "not ");
+    if (map_detected) {
+        if (map_sensor.begin() == false) printf ("  Sensor not responding");  // Begin communication with air flow sensor) over I2C 
+        else printf ("  Reading %f atm manifold pressure\n", map_sensor.readPressure(ATM));
+    }
+
     printf("Simulator setup..\n");
     simulator.register_device(SimOption::pressure, pressure_sensor, pressure_sensor.source());
     simulator.register_device(SimOption::brkpos, brkpos_sensor, brkpos_sensor.source());
     simulator.register_device(SimOption::battery, battery_sensor, battery_sensor.source());
+    simulator.register_device(SimOption::airflow, airflow_sensor, airflow_sensor.source());
     simulator.register_device(SimOption::tach, tachometer, tachometer.source());
     simulator.register_device(SimOption::speedo, speedometer, speedometer.source());
 
@@ -137,26 +148,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     neostrip.show();  // Turn off the pixel
     neostrip.setBrightness (neo_brightness_max);  // It truly is incredibly bright
     
-    printf ("Init i2c.. ");
-    i2c_init (i2c_sda_pin, i2c_scl_pin);
-    // printf ("done\n");
-    for (int32_t i=0; i<i2c_devicecount; i++) {
-        if (i2c_addrs[i] == 0x28) airflow_detected = true;
-        if (i2c_addrs[i] == 0x18) map_detected = true;
-    }
-    printf ("Airflow sensor.. %sdetected\n", (airflow_detected) ? "" : "not ");
-    if (airflow_detected) {
-        if (airflow_sensor.begin() == false) printf ("  Sensor not responding");  // Begin communication with air flow sensor) over I2C 
-        else {
-            airflow_sensor.setRange(AIRFLOW_RANGE_15_MPS);
-            printf ("  Sensor responding properly\n");
-        }
-    }
-    printf ("MAP sensor.. %sdetected\n", (map_detected) ? "" : "not ");
-    if (map_detected) {
-        if (map_sensor.begin() == false) printf ("  Sensor not responding");  // Begin communication with air flow sensor) over I2C 
-        else printf ("  Reading %f atm manifold pressure\n", map_sensor.readPressure(ATM));
-    }
 
     temp_init();  // Onewire bus and temp sensors
     
@@ -230,11 +221,8 @@ void loop() {
     throttle.push_tach_reading(tachometer.get_human());
 
     // Airflow sensor
-    if (simulator.can_simulate(SimOption::airflow) && simulator.get_pot_overload() == SimOption::airflow) airflow_filt_mph = pot.mapToRange(airflow_min_mph, airflow_max_mph);
-    else if (airflow_detected && !simulator.simulating(SimOption::airflow)) {
-        airflow_mph = airflow_sensor.readMilesPerHour(); // note, this returns a float from 0-33.55 for the FS3000-1015 
-        ema_filt (airflow_mph, &airflow_filt_mph, airflow_ema_alpha);  // Sensor EMA filter
-    }
+    airflow_sensor.update();
+
     // MAP sensor
     if (simulator.can_simulate(SimOption::mapsens) && simulator.get_pot_overload() == SimOption::mapsens) map_filt_psi = pot.mapToRange(map_min_psi, map_max_psi);
     else if (map_detected && !simulator.simulating(SimOption::mapsens)) {
@@ -517,12 +505,12 @@ void loop() {
             if (selected_value == 2) adj = adj_val (&tach_idle_hot_min_rpm, 0.1*(float)sim_edit_delta, tach_idle_abs_min_rpm, tach_idle_cold_max_rpm - 1);
             else if (selected_value == 3) adj = adj_val (&tach_idle_cold_max_rpm, 0.1*(float)sim_edit_delta, tach_idle_hot_min_rpm + 1, tach_idle_abs_max_rpm);
             else if (selected_value == 4) adj = adj_val (tachometer.get_redline_rpm_ptr().get(), 0.1*(float)sim_edit_delta, throttle.get_idlehigh(), tachometer.get_max_rpm());
-            else if (selected_value == 5) adj_val (&airflow_max_mph, 0.01*(float)sim_edit_delta, 0, airflow_abs_max_mph);
+            else if (selected_value == 5) adj_val (airflow_sensor.get_max_mph_ptr().get(), 0.01*(float)sim_edit_delta, 0, airflow_sensor.get_abs_max_mph());
             else if (selected_value == 6) adj_val (&map_min_psi, 0.1*(float)sim_edit_delta, map_abs_min_psi, map_abs_max_psi);
-            else if (selected_value == 7) adj_val (&map_max_psi, 0.1*(float)sim_edit_delta, map_abs_min_psi, map_abs_max_psi);
+            else if (selected_value == 6) adj_val (&map_max_psi, 0.1*(float)sim_edit_delta, map_abs_min_psi, map_abs_max_psi);
             else if (selected_value == 8) adj_val (&speedo_idle_mph, 0.01*(float)sim_edit_delta, 0, speedometer.get_redline_mph() - 1);
             else if (selected_value == 9) adj_val (speedometer.get_redline_mph_ptr().get(), 0.01*(float)sim_edit_delta, speedo_idle_mph, 30);
-            else if (selected_value == 10) adj_val(brkpos_sensor.get_zeropoint_ptr().get(), 0.001*(float)sim_edit_delta, BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
+            else if (selected_value == 10) adj_val (brkpos_sensor.get_zeropoint_ptr().get(), 0.001*(float)sim_edit_delta, BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
         }
         else if (dataset_page == PG_PWMS) {
             if (selected_value == 3) adj_val (&steer_pulse_left_us, sim_edit_delta, steer_pulse_stop_us + 1, steer_pulse_left_max_us);
