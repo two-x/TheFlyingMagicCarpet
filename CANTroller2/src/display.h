@@ -640,7 +640,7 @@ class Display {
                 dispRefreshTimer.reset();
                 float drange;
                 draw_dynamic(1, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-                draw_dynamic(2, speedo_filt_mph, 0.0, speedo_redline_mph, speedo_target_mph);
+                draw_dynamic(2, speedometer.get_filtered_value(), 0.0, speedometer.get_redline_mph(), speedo_target_mph);
                 draw_dynamic(3, tachometer.get_filtered_value(), 0.0, tachometer.get_redline_rpm(), tach_target_rpm);
                 draw_dynamic(4, gas_pulse_out_us, gas_pulse_redline_us, gas_pulse_idle_us);
                 draw_dynamic(5, pressure_sensor.get_filtered_value(), pressure_sensor.get_min_human(), pressure_sensor.get_max_human(), pressure_target_psi);  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
@@ -682,8 +682,8 @@ class Display {
                     draw_dynamic(14, gas_governor_percent, 0.0, 100.0);
                     draw_dynamic(15, steer_safe_percent, 0.0, 100.0);
                     draw_dynamic(16, airflow_max_mph, 0.0, airflow_abs_max_mph);
-                    draw_dynamic(17, speedo_idle_mph, 0.0, speedo_redline_mph);
-                    draw_dynamic(18, speedo_redline_mph, 0.0, speedo_max_mph);
+                    draw_dynamic(17, speedo_idle_mph, 0.0, speedometer.get_redline_mph());
+                    draw_dynamic(18, speedometer.get_redline_mph(), 0.0, speedometer.get_max_mph());
                     draw_dynamic(19, brkpos_sensor.get_zeropoint(), BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
                 }
                 else if (dataset_page == PG_PWMS) {
