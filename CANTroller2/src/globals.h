@@ -47,18 +47,18 @@ bool flip_the_screen = false;
 #define onewire_pin 19  // (usb-otg / adc*) - Onewire bus for temperature sensor data
 #define hotrc_ch3_ign_pin 20  // (usb-otg / adc*) - Ignition control, Hotrc Ch3 PWM toggle signal
 #define hotrc_ch4_cruise_pin 21  // (pwm0) - Cruise control, Hotrc Ch4 PWM toggle signal
-#define tach_pulse_pin 35  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup)
-#define basicmodesw_pin 36  // (spi-ram / oct-spi) - Input, asserted to tell us to run in basic mode, active low (needs pullup)
+#define basicmodesw_pin 35  // (spi-ram / oct-spi) - Input, asserted to tell us to run in basic mode, active low (needs pullup)
+#define tach_pulse_pin 36  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup) - Note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define ign_out_pin 37  // (spi-ram / oct-spi) - Output for Hotrc to a relay to kill the car ignition. Note, Joystick ign button overrides this if connected and pressed
 #define syspower_pin 38  // (spi-ram / oct-spi) - Output, flips a relay to power all the tranducers. This is actually the neopixel pin on all v1.1 devkit boards.
-#define sdcard_cs_pin 39  // Output, chip select for SD card controller on SPI bus, 
+#define speedo_pulse_pin 39  // Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup) - Note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define encoder_b_pin 40  // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define encoder_a_pin 41  // Int input, The A (aka CLK) pin of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
 #define encoder_sw_pin 42  // Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
 #define uart_tx_pin 43  // "TX" (uart0 tx) - Needed for serial monitor
 #define uart_rx_pin 44  // "RX" (uart0 rx) - Needed for serial monitor. In theory we could dual-purpose this for certain things, as we haven't yet needed to accept input over the serial monitor
 #define starter_pin 45  // (strap to 0) - Input, active high when vehicle starter is engaged (needs pulldown)
-#define speedo_pulse_pin 46  // (strap X) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. Open collector sensors need pullup)
+#define sdcard_cs_pin 46  // (strap X) - Output, chip select for SD card controller on SPI bus, 
 #define touch_cs_pin 47  // Output, chip select for resistive touchscreen, active low
 #define neopixel_pin 48  // (rgb led) - Data line to onboard Neopixel WS281x (on all v1 devkit boards)
 
@@ -403,8 +403,8 @@ QPID brakeQPID (pressure_sensor.get_filtered_value_ptr().get(), &brake_out_perce
 
 IdleControl idler (&tach_target_rpm, tachometer.get_human_ptr().get(), tachometer.get_filtered_value_ptr().get(), &temps_f[ENGINE],
     tach_idle_high_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm,
-    temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][NOM_MAX],
-    2000000, IdleControl::idlemodes::control);
+    temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][WARNING],
+    2300, IdleControl::idlemodes::control);
 uint32_t gas_pid_period_us = 225000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer gasPidTimer (gas_pid_period_us);  // not actually tunable, just needs value above
 float gas_spid_initial_kp = 0.256;  // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)

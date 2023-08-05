@@ -54,6 +54,7 @@
 #define disp_bargraph_width 40
 #define disp_bargraph_squeeze 1
 #define disp_maxlength 6  // How many characters fit between the ":" and the units string
+#define disp_default_float_precision 3  // Significant digits displayed for float values. Higher causes more screen draws
 #define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
@@ -391,16 +392,19 @@ class Display {
             }
             return place;
         }
+        int32_t significant_place (int32_t value) {  // Returns the decimal place of the most significant digit of a given float value, without relying on logarithm math
+            int32_t place = 1;
+            while (value >= 10) {
+                value /= 10;
+                place++;
+            }
+            return place;
+        }
         std::string abs_itoa (int32_t value, int32_t maxlength) {  // returns an ascii string representation of a given integer value, using scientific notation if necessary to fit within given width constraint
             value = abs (value);  // This function disregards sign
-            if (significant_place(value) <= maxlength) return std::to_string (value);  // If value is short enough, return it
-            std::string result;
-            int32_t magnitude = std::log10 (value);  // check how slow is log() function? Compare performance vs. multiple divides ( see abs_ftoa() )
-            float scaledValue = value / std::pow (10, magnitude + 1 - maxlength);  // was (10, magnitude - 5);
-            if (scaledValue >= 1.0 && scaledValue < 10.0) result = std::to_string (static_cast<int>(scaledValue));
-            else result = std::to_string (scaledValue);
-            if (magnitude >= maxlength) result += "e" + std::to_string (magnitude);
-            return result;
+            int32_t magnitude = significant_place (value);  // check how slow is log() function? Compare performance vs. multiple divides ( see abs_ftoa() )
+            if (magnitude <= maxlength) return std::to_string (value);  // If value is short enough, return it
+            else return std::to_string ((float)value / (float)magnitude) + "e" + std::to_string (magnitude);
         }
         std::string abs_ftoa (float value, int32_t maxlength, int32_t sigdig) {  // returns an ascii string representation of a given float value, formatted to efficiently fit withinthe given width constraint
             value = abs (value);  // This function disregards sign
@@ -438,13 +442,13 @@ class Display {
             // std::cout << "Int: " << value << " -> " << val_string << ", " << ((value >= 0) ? 1 : -1) << std::endl;
             draw_dynamic (lineno, val_string.c_str(), value, lowlim, hilim, (int32_t)target);
         }
-        void draw_dynamic (int32_t lineno, float value, float lowlim, float hilim, int32_t target=-1) {
-            std::string val_string = abs_ftoa (value, (int32_t)disp_maxlength, 3);
+        void draw_dynamic (int32_t lineno, float value, float lowlim, float hilim, int32_t target=-1, int32_t precision = disp_default_float_precision) {
+            std::string val_string = abs_ftoa (value, (int32_t)disp_maxlength, precision);
             // std::cout << "Flt: " << value << " -> " << val_string << ", " << ((value >= 0) ? 1 : -1) << std::endl;
             draw_dynamic (lineno, val_string.c_str(), (int32_t)value, (int32_t)lowlim, (int32_t)hilim, target);
         }
-        void draw_dynamic (int32_t lineno, float value, float lowlim, float hilim, float target) {
-            draw_dynamic (lineno, value, lowlim, hilim, (int32_t)target);
+        void draw_dynamic (int32_t lineno, float value, float lowlim, float hilim, float target, int32_t precision = disp_default_float_precision) {
+            draw_dynamic (lineno, value, lowlim, hilim, (int32_t)target, precision);
         }
         void draw_eraseval (int32_t lineno) {
             draw_dynamic (lineno, "", 1234567, -1, -1, -1);
@@ -631,14 +635,14 @@ class Display {
                     // draw_dynamic(13, tach_redline_rpm, 0.0, tach_max_rpm);
                     draw_asciiname(9, idlestatecard[idler.get_targetstate()]);
                     draw_dynamic(10, idler.get_stallpoint(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
-                    draw_dynamic(11, idler.get_idlespeed(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
+                    draw_dynamic(11, idler.get_idlespeed(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);  // idler.get_idlehot(), idler.get_idlecold());
                     draw_dynamic(12, temps_f[ENGINE], temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
                     draw_dynamic(13, idler.get_idlehigh(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
-                    draw_dynamic(14, idler.get_idlecold(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
-                    draw_dynamic(15, idler.get_idlehot(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
-                    draw_dynamic(16, idler.get_tempcold(), temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][NOM_MAX]);
-                    draw_dynamic(17, idler.get_temphot(), temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][NOM_MAX]);
-                    draw_dynamic(18, (int32_t)idler.get_settletime(), 0, 10000000);
+                    draw_dynamic(14, idler.get_idlecold(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
+                    draw_dynamic(15, idler.get_idlehot(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
+                    draw_dynamic(16, idler.get_tempcold(), temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
+                    draw_dynamic(17, idler.get_temphot(), temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
+                    draw_dynamic(18, (int32_t)idler.get_settletime(), 0, 8000);
                     draw_asciiname(19, idlemodecard[(int32_t)idler.get_idlemode()]);
                 }
                 else if (dataset_page == PG_BPID) {

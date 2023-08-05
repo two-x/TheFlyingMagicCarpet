@@ -551,7 +551,7 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
         settleTimer.set (1000 * (int64_t)settletime_ms);
     }
     void cycle_idlemode (int32_t cycledir) {  // Cycldir positive or negative
-        if (cycledir) idlemode = (idlemodes)(((int32_t)idlemode + (int32_t)idlemodes::num_idlemodes + constrain (cycledir, -1, 1)) % (int32_t)idlemodes::num_idlemodes);
+        if (cycledir) idlemode = (idlemodes)(constrain ((int32_t)idlemode + constrain (cycledir, -1, 1), 0, (int32_t)idlemodes::num_idlemodes));
     }
     void set_idlemode (idlemodes idlemode) {} 
     void set_idlehigh (float idlehigh, float add = 0.0) { 
