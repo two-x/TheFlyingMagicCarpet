@@ -70,7 +70,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (syspower_pin, OUTPUT);  // Then set the put as an output as normal.
     #ifdef pwm_jaguars
         set_pin (brake_pwm_pin, OUTPUT);
-        set_pin (steer_pwm_pin, OUTPUT);
     #else
         // Init serial port uart 1
     #endif
@@ -109,6 +108,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     brkpos_sensor.setup();
     tachometer.setup();
     speedometer.setup();
+    steer_servo.setup();
 
     printf("Simulator setup..\n");
     simulator.register_device(SimOption::pressure, pressure_sensor, pressure_sensor.source());
@@ -122,7 +122,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     // gas_servo.set_native_limits();  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     brake_servo.attach (brake_pwm_pin, brake_pulse_retract_us, brake_pulse_extend_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
     gas_servo.attach (gas_pwm_pin, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
-    steer_servo.attach (steer_pwm_pin, steer_pulse_right_us, steer_pulse_left_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
     
     printf ("Init neopixel..");
     neo_heartbeat = (neopixel_pin >= 0);
@@ -337,23 +336,14 @@ void loop() {
     // Steering - Determine motor output and send to the motor
     if (steerPidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
         if (ctrl_pos_adc[HORZ][FILT] >= ctrl_db_adc[HORZ][TOP])  // If above the top edge of the deadband, turning right
-            steer_out_percent = map ((float)ctrl_pos_adc[HORZ][FILT], (float)ctrl_db_adc[HORZ][TOP], (float)ctrl_lims_adc[ctrl][HORZ][MAX], steer_stop_percent, steer_safe (steer_right_percent));  // Figure out the steering setpoint if joy to the right of deadband
+            steer_servo.set_human(map((float)ctrl_pos_adc[HORZ][FILT], (float)ctrl_db_adc[HORZ][TOP], (float)ctrl_lims_adc[ctrl][HORZ][MAX], steer_servo.get_center(), steer_safe(steer_servo.get_max_human())));  // Figure out the steering setpoint if joy to the right of deadband
         else if (ctrl_pos_adc[HORZ][FILT] <= ctrl_db_adc[HORZ][BOT])  // If below the bottom edge of the deadband, turning left
-            steer_out_percent = map ((float)ctrl_pos_adc[HORZ][FILT], (float)ctrl_db_adc[HORZ][BOT], (float)ctrl_lims_adc[ctrl][HORZ][MIN], steer_stop_percent, steer_safe (steer_left_percent));  // Figure out the steering setpoint if joy to the left of deadband
-        else steer_out_percent = steer_stop_percent;  // Stop the steering motor if inside the deadband
-        steer_out_percent = constrain (steer_out_percent, steer_left_percent, steer_right_percent);  // Don't be out of range
-        
-        if (steer_out_percent >= steer_stop_percent)
-             steer_pulse_out_us = map (steer_out_percent, steer_stop_percent, steer_right_percent, steer_pulse_stop_us, steer_pulse_right_us);
-        else steer_pulse_out_us = map (steer_out_percent, steer_stop_percent, steer_left_percent, steer_pulse_stop_us, steer_pulse_left_us);
-        
-        #ifdef pwm_jaguars
-            steer_servo.writeMicroseconds ((int32_t)steer_pulse_out_us);   // Write steering value to jaguar servo interface
-        #else
-            // Send command over serial port
-        #endif
+            steer_servo.set_human(map((float)ctrl_pos_adc[HORZ][FILT], (float)ctrl_db_adc[HORZ][BOT], (float)ctrl_lims_adc[ctrl][HORZ][MIN], steer_servo.get_center(), steer_safe(steer_servo.get_min_human())));  // Figure out the steering setpoint if joy to the left of deadband
+        else steer_servo.set_human(steer_servo.get_center());  // Stop the steering motor if inside the deadband
+        steer_servo.update();
         // if (boot_button) printf ("JoyH:%4ld, safadj:%4.0lf out:%4.0lf puls:%4.0lf\n", ctrl_pos_adc[HORZ][FILT], steer_safe_adj_percent, steer_out_percent, steer_pulse_out_us);
     }
+
     // Brakes - Determine motor output and write it to motor
     if (brakePidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
         if (runmode == CAL && cal_joyvert_brkmotor) {
@@ -396,6 +386,7 @@ void loop() {
     if (runmode == CRUISE && !cruise_adjusting && cruisePidTimer.expireset()) cruiseQPID.Compute();
 
     // Gas - Update servo output. Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
+    // if runmode == basic => set_source(FIXED)?
     if (gasPidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
         if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
@@ -405,6 +396,7 @@ void loop() {
         }
         else if (runmode != BASIC) {
             if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) {
+                // set_source(POT)
                 gas_pulse_out_us = map (pot.get(), pot.min(), pot.max(), gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
                 gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
             }            
@@ -418,6 +410,7 @@ void loop() {
             if (!(runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo))  // Constrain to operating limits. If calibrating constrain already happened above
                 gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_idle_us);
             // printf (" output = %-+9.4lf,  %+-4ld\n", gasQPID.get_output(), gas_pulse_out_us);
+            // gas_pulse_out_us
             gas_servo.writeMicroseconds ((int32_t)gas_pulse_out_us);  // Write result to servo
             // if (boot_button) printf (" Gas:%4ld\n", (int32_t)gas_pulse_out_us);
         }
@@ -543,9 +536,9 @@ void loop() {
             }
       }
         else if (dataset_page == PG_PWMS) {
-            if (selected_value == 3) adj_val (&steer_pulse_left_us, sim_edit_delta, steer_pulse_stop_us + 1, steer_pulse_left_max_us);
-            else if (selected_value == 4) adj_val (&steer_pulse_stop_us, sim_edit_delta, steer_pulse_right_us + 1, steer_pulse_left_us - 1);
-            else if (selected_value == 5) adj_val (&steer_pulse_right_us, sim_edit_delta, steer_pulse_right_min_us, steer_pulse_stop_us - 1);
+            if (selected_value == 3) adj_val (steer_servo.get_max_native_ptr().get(), sim_edit_delta, steer_servo.get_center() + 1, steer_servo.get_abs_max_native());
+            else if (selected_value == 4) adj_val (steer_servo.get_center_native_ptr().get(), sim_edit_delta, steer_servo.get_min_native() + 1, steer_servo.get_max_native() - 1);
+            else if (selected_value == 5) adj_val (steer_servo.get_min_native_ptr().get(), sim_edit_delta, steer_servo.get_abs_min_native(), steer_servo.get_center_native() - 1);
             else if (selected_value == 6) adj_val (&brake_pulse_extend_us, sim_edit_delta, brake_pulse_stop_us + 1, brake_pulse_extend_max_us);
             else if (selected_value == 7) adj_val (&brake_pulse_stop_us, sim_edit_delta, brake_pulse_retract_us + 1, brake_pulse_extend_us - 1);
             else if (selected_value == 8) adj_val (&brake_pulse_retract_us, sim_edit_delta, brake_pulse_retract_min_us, brake_pulse_stop_us -1);

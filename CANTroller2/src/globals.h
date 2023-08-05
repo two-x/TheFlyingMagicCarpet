@@ -142,8 +142,6 @@ bool take_temperatures = true;
 bool keep_system_powered = true;  // Use true during development
 bool require_car_stopped_before_driving = false;  // May be a smart prerequisite, may be us putting obstacles in our way
 
-#define pwm_jaguars true
-
 // Persistent config storage
 Preferences config;
 
@@ -158,7 +156,6 @@ RMTInput hotrc_ch4(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_cruise_pin));
 
 #ifdef pwm_jaguars
     static Servo brake_servo;
-    static Servo steer_servo;
 #else  // jaguars controlled over asynchronous serial port
     #include <HardwareSerial.h>
     HardwareSerial jagPort(1);  // Open serisl port to communicate with jaguar controllers for steering & brake motors
@@ -341,24 +338,12 @@ volatile int64_t hotrc_vert_pulse_64_us = (int64_t)hotrc_pulse_lims_us[VERT][CEN
 // volatile int32_t intcount = 0;
 
 // steering related
+SteeringPWM steer_servo(steer_pwm_pin);
 float steer_safe_percent = 72.0;  // Steering is slower at high speed. How strong is this effect 
 float steer_safe_ratio = steer_safe_percent / 100;
 float speedo_safeline_mph;
-//
-float steer_out_percent, steer_safe_adj_percent;
-float steer_right_max_percent = 100.0;
-float steer_right_percent = 100.0;
-float steer_stop_percent = 0.0;
-float steer_left_percent = -100.0;
-float steer_left_min_percent = -100.0;
-float steer_margin_percent = 2.4;
-// float steer_pulse_safe_us = 0;
-float steer_pulse_out_us;  // pid loop output to send to the actuator (steering)
-float steer_pulse_right_min_us = 500;  // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
-float steer_pulse_right_us = 670;  // Steering pulsewidth corresponding to full-speed right steering (in us). Default setting for jaguar is max 670us
-float steer_pulse_stop_us = 1500;  // Steering pulsewidth corresponding to zero steering motor movement (in us)
-float steer_pulse_left_us = 2330;  // Steering pulsewidth corresponding to full-speed left steering (in us). Default setting for jaguar is max 2330us
-float steer_pulse_left_max_us = 2500;  // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
+float steer_safe_adj_percent;
+float steer_margin_percent = 2.4; // NOTE: unused
 
 // brake pressure related
 PressureSensor pressure_sensor(pressure_pin);
@@ -533,7 +518,7 @@ void calc_governor (void) {
     speedo_govern_mph = map ((float)gas_governor_percent, 0.0, 100.0, 0.0, speedometer.get_redline_mph());  // Governor must scale the top vehicle speed proportionally
 }
 float steer_safe (float endpoint) {
-    return steer_stop_percent + (endpoint - steer_stop_percent) * (1 - steer_safe_ratio * speedometer.get_filtered_value() / speedometer.get_redline_mph());
+    return steer_servo.get_center() + (endpoint - steer_servo.get_center()) * (1 - steer_safe_ratio * speedometer.get_filtered_value() / speedometer.get_redline_mph());
     // return steer_pulse_stop_us + (endpoint - steer_pulse_stop_us) * map (speedo_filt_mph, 0.0, speedo_redline_mph, 1.0, steer_safe_ratio);
     // return steer_stop_percent + (endpoint - steer_stop_percent) * (1 - steer_safe_ratio * speedo_filt_mph / speedo_redline_mph);
 }

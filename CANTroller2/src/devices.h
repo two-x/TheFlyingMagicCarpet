@@ -384,7 +384,7 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
     virtual void handle_mode_change() { if (this->_source == ControllerMode::PIN) _should_filter = false; } // if we just switched to pin input, the old filtered value is not valid
 
   public:
-    Sensor(uint8_t pin) : Transducer<NATIVE_T, HUMAN_T>(pin) {}  
+    Sensor(uint8_t pin) : Transducer<NATIVE_T, HUMAN_T>(pin) { this->set_can_source(ControllerMode::PIN, true); }
     void set_ema_alpha(float arg_alpha) { _ema_alpha = arg_alpha; }
     float get_ema_alpha() { return _ema_alpha; }
     HUMAN_T get_filtered_value() { return _val_filt.get(); }
@@ -392,26 +392,25 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
 };
 
 // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
-template<typename NATIVE_T, typename HUMAN_T>
-class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
+template<typename HUMAN_T>
+class AnalogSensor : public Sensor<int32_t, HUMAN_T> {
   protected:
     virtual void handle_pin_mode() {
-        this->set_native(static_cast<NATIVE_T>(analogRead(this->_pin)));
+        this->set_native(analogRead(this->_pin));
         this->calculate_ema(); // filtered values are kept in human format
     }
   public:
-    AnalogSensor(uint8_t arg_pin) : Sensor<NATIVE_T, HUMAN_T>(arg_pin) {}
+    AnalogSensor(uint8_t arg_pin) : Sensor<int32_t, HUMAN_T>(arg_pin) {}
     void setup() {
         set_pin(this->_pin, INPUT);
         this->set_source(ControllerMode::PIN);
     }
-        
 };
 
 // PressureSensor represents a brake fluid pressure sensor.
 // It extends AnalogSensor to handle reading an analog pin
 // and converting the ADC value to a pressure value in PSI.
-class PressureSensor : public AnalogSensor<int32_t, float> {
+class PressureSensor : public AnalogSensor<float> {
     public:
         // NOTE: for now lets keep all the config stuff here in the class. could also read in values from a config file at some point.
         static constexpr int32_t min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
@@ -421,7 +420,7 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
         static constexpr float initial_offset = 0.0;
         static constexpr bool initial_invert = false;
 
-        PressureSensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
+        PressureSensor(uint8_t arg_pin) : AnalogSensor<float>(arg_pin) {
             _ema_alpha = initial_ema_alpha;
             _m_factor = initial_psi_per_adc;
             _b_offset = initial_offset;
@@ -429,7 +428,6 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
             set_native_limits(min_adc, max_adc);
             set_human_limits(from_native(min_adc), from_native(max_adc));
             set_native(min_adc);
-            set_can_source(ControllerMode::PIN, true);
             set_can_source(ControllerMode::POT, true);
         }
         PressureSensor() = delete;
@@ -438,7 +436,7 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
 // BrakePositionSensor represents a linear position sensor
 // for measuring brake position (TODO which position? pad? pedal?)
 // Extends AnalogSensor for handling analog pin reading and conversion.
-class BrakePositionSensor : public AnalogSensor<int32_t, float> {
+class BrakePositionSensor : public AnalogSensor<float> {
     protected:
         // TODO: add description
         std::shared_ptr<float> _zeropoint;
@@ -457,7 +455,7 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         static constexpr float initial_offset = 0.0;
         static constexpr bool initial_invert = false;
 
-        BrakePositionSensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
+        BrakePositionSensor(uint8_t arg_pin) : AnalogSensor<float>(arg_pin) {
             _ema_alpha = initial_ema_alpha;
             _m_factor = initial_in_per_adc;
             _b_offset = initial_offset;
@@ -465,7 +463,6 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
             _zeropoint = std::make_shared<float>(initial_zeropoint_in);
             set_human_limits(nom_lim_retract_in, nom_lim_extend_in);
             set_native_limits(to_native(nom_lim_retract_in), to_native(nom_lim_extend_in));
-            set_can_source(ControllerMode::PIN, true);
             set_can_source(ControllerMode::POT, true);
         }
         BrakePositionSensor() = delete;
@@ -553,7 +550,6 @@ class Tachometer : public PulseSensor<float> {
             set_human_limits(_min_rpm, _initial_redline_rpm);
             set_native_limits(0.0, _stop_timeout_us);
             set_human(_initial_rpm);
-            set_can_source(ControllerMode::PIN, true);
             set_can_source(ControllerMode::POT, true);
         }
         Tachometer() = delete;
@@ -585,7 +581,6 @@ class Speedometer : public PulseSensor<float> {
             set_human_limits(_min_mph, _initial_redline_mph);
             set_native_limits(0.0, _stop_timeout_us);
             set_human(_initial_mph);
-            set_can_source(ControllerMode::PIN, true);
             set_can_source(ControllerMode::POT, true);
         }
         Speedometer() = delete;
@@ -596,170 +591,120 @@ class Speedometer : public PulseSensor<float> {
         std::shared_ptr<float> get_redline_mph_ptr() { return human.get_max_ptr(); }
 };
 
-class HotrcManager {
-  protected:
-    bool spike_signbit;
-    int32_t spike_cliff, spike_length, this_delta, interpolated_slope, loopindex, previndex;
-    int32_t prespike_index = -1;
-    int32_t index = 1;  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
-    int32_t depth = 9;  // Longest spike the filter can detect
-    int32_t filt_history[9];  // Values after filtering.  It didn't accept filt_history[depth] - wtf
-    int32_t raw_history[9];  // Copies of the values read (don't need separate buffer, but useful to debug the filter)
-  public:
-    HotrcManager (int32_t spike_threshold) { spike_cliff = spike_threshold; }
-    // Spike filter pushes new hotrc readings into a LIFO ring buffer, replaces any well-defined spikes with values 
-    // interpolated from before and after the spike. Also smoothes out abrupt value changes that don't recover later
-    int32_t spike_filter (int32_t new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
-        previndex = (depth + index - 1) % depth;  // previndex is where the incoming new value will be stored
-        this_delta = new_val - filt_history[previndex];  // Value change since last reading
-        if (std::abs(this_delta) > spike_cliff) {  // If new value is a cliff edge (start or end of a spike)
-            if (prespike_index == -1) {  // If this cliff edge is the start of a new spike
-                prespike_index = previndex;  // save index of last good value just before the cliff
-                spike_signbit = signbit (this_delta);  // Save the direction of the cliff
-            }
-            else if (spike_signbit == signbit (this_delta)) {  // If this cliff edge deepens an in-progress spike (or more likely the change is valid)
-                inject_interpolations (previndex, filt_history[previndex]);  // Smoothly grade the values from before the last cliff to previous value
-                prespike_index = previndex;  // Consider this cliff edge the start of the spike instead
-            }
-            else {  // If this cliff edge is a recovery of an in-progress spike
-                inject_interpolations (index, new_val);  // Fill in the spiked values with interpolated values
-                prespike_index = -1;  // Cancel the current spike
-            }
-        }
-        else if (prespike_index == index) {  // If a current spike lasted thru our whole buffer
-            inject_interpolations (previndex, filt_history[previndex]);  // Smoothly grade the whole buffer
-            prespike_index = -1;  // Cancel the current spike
-        }
-        int32_t returnval = filt_history[index];  // Save the incumbent value at current index (oldest value) into buffer
-        filt_history[index] = new_val;
-        raw_history[index] = new_val;
-        index = (index + 1) % depth;  // Update index for next time
-        return returnval;  // Return the saved old value
-    }
-    void inject_interpolations (int32_t endspike_index, int32_t endspike_val) {  // Replaces values between indexes with linear interpolated values
-        spike_length = ((depth + endspike_index - prespike_index) % depth) - 1;  // Equal to the spiking values count plus one
-        if (!spike_length) return;  // Two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
-        interpolated_slope = (endspike_val - filt_history[prespike_index]) / spike_length;
-        loopindex = 0;
-        while (++loopindex <= spike_length) {
-            filt_history[(prespike_index + loopindex) % depth] = filt_history[prespike_index] + loopindex * interpolated_slope;
-        }
-    }
-    int32_t get_next_rawval () { return raw_history[index]; }  // helps to debug the filter from outside the class
-};
-
-// Sensor (int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max)  // std::string& eng_name, 
-// : Transducer (arg_pin, arg_dir) {
-//     set_limits(arg_val_min, arg_val_max);
-// }
-// Sensor (int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max, float arg_val_cent)  // std::string& eng_name, 
-// : Sensor (arg_pin, arg_dir, arg_val_min, arg_val_max) {
-//     set_center(arg_val_cent);
-// }
-// Sensor (int32_t arg_pin) 
-// : Device (arg_pin) {}
-// float getval (int32_t arg_hist) {  // returns the output value _RAW or _FILT. Use hist to retreive past values 0 (newest) - 9 (oldest)
-//     if (arg_hist < 0 || arg_hist >= sizeof(vals)) printf ("Transducer::val(): Max value history is past %d values\n", sizeof(vals)-1);            
-//     else return vals[d_val - &vals[0] + sizeof(vals) - arg_hist];
-// }
-
-// // Device::Transducer::Sensor::PulseSensor are sensors where the value is based on the measured period between successive pulses (eg tach, speedo)
-// class PulseSensor : public Sensor {
-//   protected:
-//     Timer PulseTimer;  // OK to not be volatile?
-//   public:
-//     volatile int32_t delta_us;
-//     int32_t delta_impossible_us, stop_timeout_us;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
-
-//     PulseSensor(int32_t arg_pin, int32_t arg_impossible_us, int32_t arg_stop_timeout_us) 
-//     : Device(arg_pin) {
-//         delta_us = 0;
-//         delta_impossible_us = arg_impossible_us;
-//         stop_timeout_us = arg_stop_timeout_us;
-//         val_source = _LIVE;
-//         // pinMode(pin, INPUT_PULLUP);
-//         // attachInterrupt(digitalPinToInterrupt(pin), isr, RISING);
-//     }
-//     void isr(void) {  //  A better approach would be to read, reset, and restart a hardware interval timer in the isr.  Better still would be to regularly read a hardware binary counter clocked by the pin - no isr.
-//         int32_t temp_us = PulseTimer.elapsed();
-//         if (temp_us > delta_impossible_us) {
-//             delta_us = temp_us;    
-//             PulseTimer.reset();
-//         }
-//     }
-//     void calc() {
-//         if (val_source != _TOUCH && val_source != _POT) {
-//             float val_temp;
-//             if (PulseTimer.elapsed() < stop_timeout_us) {
-//                 if (delta_us <= 0) printf ("Warning: PulseSensor::calc sees delta_us <= 0\n");
-//                 else val_temp = conversion_factor/delta_us;
-//             }
-//             else val_temp = 0;     
-//             if (filt_lp_spike(val_temp)) {
-//                 if (val_temp == 0) assign_val(0.0);
-//                 else assign_val ( filt_ema(val_temp, *d_val, ema_alpha) );
-//             }
-//         }
-//     }
-// };
-// // Device::Transducer::Sensor::InPWM are servo-pwm standard signals being read in, with variable pulsewidth
-// class InPWM : public Sensor {
-//   protected:
-//     Timer PulseTimer;  // OK to not be volatile?
-//   public:
-//     InPWM(int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max, float arg_val_cent)
-//     : Sensor(arg_pin, arg_dir, arg_val_min, arg_val_max, arg_val_cent)  {}
-
-// };
-// // Device::Transducer::Sensor::InPWM::InPWMToggle are servo-pwm standard signals being read in, but only valid values are pulse_min (0) and pulse_max (1) (eg hotrc ch3-4)
-// class InPWMToggle : public InPWM {
-//   protected:
-//     Timer PulseTimer;  // OK to not be volatile?
-//   public:
-//     InPWMToggle(int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max, float arg_val_cent)
-//     : Sensor(arg_pin, arg_dir, arg_val_min, arg_val_max, arg_val_cent)  {}
-
-// };
-
 // NOTE: I implemented the gas servo, but it looks like it's all in native units. should it still be a transducer?
 // ServoPWM is a base class for our type of actuators, where by varying a pulse width (in us), motors move.
 //    e.g. the gas, brake and steering motors. The gas motor is an actual servo, the others are controlled with servo signaling via jaguars.
-template<typename NATIVE_T, typename HUMAN_T>
-class ServoPWM : public Transducer<NATIVE_T, HUMAN_T> {
+template<typename HUMAN_T>
+class ServoPWM : public Transducer<int32_t, HUMAN_T> {
   protected:
     Servo _servo;
-
-    // NOTE: should be marked 'override' but compiler says it doesn't override anything...?
-    void set_native_limits(Param<NATIVE_T> &minParam, Param<NATIVE_T> &maxParam) {
-        this->set_native_limits(minParam, maxParam);
-        _servo.attach(this->_pin, this->min_native->get(), this->max_native->get());
+    virtual void handle_pin_mode() {
+        _servo.writeMicroseconds(this->native.get());  // Write result to servo interface
     }
-
-    void set_human_limits(Param<HUMAN_T> &minParam, Param<HUMAN_T> &maxParam) {
-        this->set_human_limits(minParam, maxParam);
-        _servo.attach(this->_pin, this->min_native->get(), this->max_native->get());
+    virtual void handle_pot_mode() {
+        this->human.set(this->_pot->mapToRange(this->human.get_min(), this->human.get_max())); // map pot to input
+        handle_pin_mode(); // write output
     }
-
   public:
-    ServoPWM(uint8_t pin) : Transducer<NATIVE_T, HUMAN_T>(pin) {
-        _servo.attach(this->_pin);
-    }
+    ServoPWM(uint8_t arg_pin) : Transducer<int32_t, HUMAN_T>(arg_pin) { this->set_can_source(ControllerMode::PIN, true); }
     ServoPWM() = delete;
     void setup() {
         set_pin(this->_pin, OUTPUT);
-    }
-    void write() {
-        _servo.writeMicroseconds((int32_t)this->native.get());  // Write result to servo interface
+        _servo.attach(this->_pin, this->native.get_min(), this->native.get_max());
+        this->set_source(ControllerMode::PIN);
     }
 };
 
 // JagMotor is a class specifically for the brake and steering motors. The jaguar stops the motor when receiving 1500 us pulse,
 //    and varies the speed in one direction if pulse is 1500 to (max~2500) us, the other direction if pulse is 1500 to (min~500) us.
 //    Effectively the difference is these have a center value.
-// class JagMotor : public ServoPWM {
-//   public:
-//     JagMotor (int32_t arg_pin) : ServoPWM(arg_pin) {}
-//     JagMotor() = delete;
+template<typename HUMAN_T>
+class JagMotor : public ServoPWM<HUMAN_T> {
+  protected:
+    HUMAN_T _center;
+    std::shared_ptr<int32_t> _native_center;
+    virtual void handle_pin_mode() {
+        int32_t min, max;
+        if (this->human.get() >= _center) {
+            min = static_cast<int32_t>(_center);
+            max = static_cast<int32_t>(this->human.get_max());
+        } else {
+            min = static_cast<int32_t>(this->human.get_min());
+            max = static_cast<int32_t>(_center);
+        }
+        this->native.set(map(static_cast<int32_t>(this->human.get()), min, max, this->native.get_min(), *_native_center));
+        // NOTE: what is this logic for? shouldn't there be something in the #else?
+        #ifdef pwm_jaguars
+            ServoPWM<HUMAN_T>::handle_pin_mode();
+        #else
+            // Send command over serial port
+        #endif
+    }
+  public:
+    JagMotor(int32_t arg_pin) : ServoPWM<HUMAN_T>(arg_pin) {}
+    JagMotor() = delete;
+    void setup() {
+        #ifdef pwm_jaguars
+            ServoPWM<HUMAN_T>::setup();
+        #else
+            // Send command over serial port
+            this->set_source(ControllerMode::PIN);
+        #endif
+    }
+    float get_center() { return _center; }
+    int32_t get_center_native() { return *_native_center; }
+    std::shared_ptr<int32_t> get_center_native_ptr() { return _native_center; }
+};
+
+class SteeringPWM : public JagMotor<float> {
+    protected:
+        // NOTE: why is left -100% but max pulse range?
+        static constexpr float _left_min_percent = -100.0;
+        static constexpr float _stop_percent = 0.0;
+        static constexpr float _right_max_percent = 100.0;
+        static constexpr float _initial_left_percent = _left_min_percent;
+        static constexpr float _initial_right_percent = _right_max_percent;
+        static constexpr int32_t _pulse_right_min_us = 500;  // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
+        static constexpr int32_t _pulse_stop_us = 1500;  // Steering pulsewidth corresponding to zero steering motor movement (in us)
+        static constexpr int32_t _pulse_left_max_us = 2500;  // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
+        static constexpr int32_t _initial_pulse_right_us = 670;  // Steering pulsewidth corresponding to full-speed right steering (in us). Default setting for jaguar is max 670us
+        static constexpr int32_t _initial_pulse_left_us = 2330;  // Steering pulsewidth corresponding to full-speed left steering (in us). Default setting for jaguar is max 2330us
+
+        Param<float> _percent_min, _percent_max;
+        Param<int32_t> _pulse_min, _pulse_max;
+    public:
+        SteeringPWM(uint8_t pin_arg) : JagMotor<float>(pin_arg),
+                                      _percent_min(_initial_left_percent, _left_min_percent, _stop_percent),
+                                      _percent_max(_initial_right_percent, _stop_percent, _right_max_percent),
+                                      _pulse_min(_initial_pulse_right_us, _pulse_right_min_us, _pulse_stop_us),
+                                      _pulse_max(_initial_pulse_left_us, _pulse_stop_us, _pulse_left_max_us) {
+            human.set_limits(_percent_min.get_ptr(), _percent_max.get_ptr());
+            native.set_limits(_pulse_min.get_ptr(), _pulse_max.get_ptr());
+            _center = _stop_percent;
+            _native_center = std::make_shared<int32_t>(_pulse_stop_us);
+        }
+        SteeringPWM() = delete;
+        float get_abs_min() { return _left_min_percent; }
+        float get_abs_max() { return _right_max_percent; }
+        int32_t get_abs_min_native() { return _pulse_right_min_us; }
+        int32_t get_abs_max_native() { return _pulse_left_max_us; }
+        std::shared_ptr<int32_t> get_min_native_ptr() { return _pulse_min.get_ptr(); }
+        std::shared_ptr<int32_t> get_max_native_ptr() { return _pulse_min.get_ptr(); }
+};
+
+// class GasPWM : public ServoPWM<float> {
+// // human
+// float gas_pulse_out_us = 1501;  // pid loop output to send to the actuator (gas)
+// 
+// float gas_pulse_govern_us = 1502;  // Governor must scale the pulse range proportionally. This is given a value in the loop
+// Timer gasServoTimer (500000);  // We expect the servo to find any new position within this time
+// float gas_governor_percent = 95;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
+// 
+// float gas_pulse_cw_min_us = 500;  // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
+// float gas_pulse_redline_us = 1400;  // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
+// float gas_pulse_idle_us = 1800;  // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
+// float gas_pulse_ccw_max_us = 2500;  // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
+// float gas_pulse_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_idle_us where to park the servo out of the way so we can drive manually (in us)
 // };
 
 // Device::Toggle is a base class for system signals or devices having a boolean value
@@ -827,54 +772,63 @@ class OutToggle : public Toggle {
 //     AnalogSensor Horz, Vert;  
 // };
 
-// // Device::Transducer is a base class for any system devices that convert real_world <--> signals in either direction
-// class Transducer : virtual public Device {
-//   protected:
-//     bool centermode, saturated;
-//     float vhist[5];  // vals[] is some past values, [0] beling most recent. 
-//     void hist_init (float arg_val) {
-//         for (int x = 0; x < sizeof(vals); x++) vhist[x] = arg_val;
-//     }
-//     void new_val (float new_val) {
-//         for (int x = sizeof(vhist)-1; x >= 1; x--) vhist[x] = vhist[x-1];
-//         vhist[0] = *val;
-//         *val = new_val;
-//     }
-//   public:
-//     enum relativity { ABSOLUTE, RELATIVE };
-//     float val_cent, val_margin;
-//     Transducer (int32_t arg_pin) 
-//     : Device (arg_pin) { // std::string& eng_name, 
-//         centermode = ABSOLUTE;
-//         val_margin = 0.0;
-//         val_cent = 
-//         // set_limits(arg_val_min, arg_val_max);
-//         hist_init(0);
-//     }
-//     void set_center (float arg_val_cent) {
-//         if (arg_val_cent <= min_val || arg_val_cent >= max_val) {
-//             printf ("Transducer::set_limits(): Centerpoint must fall within min/max limits\n");
-//             return;
-//         }
-//         else {
-//             val_cent = arg_val_cent;
-//             centermode = RELATIVE;
-//         }
-//     }
-//     void set (float val) {
-//     }
-// };
-// // Transducer (int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max) { // std::string& eng_name, 
-// void add_val (float arg_add_val) {  // 
-//     assign_val(*d_val + arg_add_val);
-// }
 
 // class TuneEditor {
 // };
-// class Simulator {
-// };
 // class Settings {
 // };
+
+class HotrcManager {
+  protected:
+    bool spike_signbit;
+    int32_t spike_cliff, spike_length, this_delta, interpolated_slope, loopindex, previndex;
+    int32_t prespike_index = -1;
+    int32_t index = 1;  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
+    int32_t depth = 9;  // Longest spike the filter can detect
+    int32_t filt_history[9];  // Values after filtering.  It didn't accept filt_history[depth] - wtf
+    int32_t raw_history[9];  // Copies of the values read (don't need separate buffer, but useful to debug the filter)
+  public:
+    HotrcManager (int32_t spike_threshold) { spike_cliff = spike_threshold; }
+    // Spike filter pushes new hotrc readings into a LIFO ring buffer, replaces any well-defined spikes with values 
+    // interpolated from before and after the spike. Also smoothes out abrupt value changes that don't recover later
+    int32_t spike_filter (int32_t new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
+        previndex = (depth + index - 1) % depth;  // previndex is where the incoming new value will be stored
+        this_delta = new_val - filt_history[previndex];  // Value change since last reading
+        if (std::abs(this_delta) > spike_cliff) {  // If new value is a cliff edge (start or end of a spike)
+            if (prespike_index == -1) {  // If this cliff edge is the start of a new spike
+                prespike_index = previndex;  // save index of last good value just before the cliff
+                spike_signbit = signbit (this_delta);  // Save the direction of the cliff
+            }
+            else if (spike_signbit == signbit (this_delta)) {  // If this cliff edge deepens an in-progress spike (or more likely the change is valid)
+                inject_interpolations (previndex, filt_history[previndex]);  // Smoothly grade the values from before the last cliff to previous value
+                prespike_index = previndex;  // Consider this cliff edge the start of the spike instead
+            }
+            else {  // If this cliff edge is a recovery of an in-progress spike
+                inject_interpolations (index, new_val);  // Fill in the spiked values with interpolated values
+                prespike_index = -1;  // Cancel the current spike
+            }
+        }
+        else if (prespike_index == index) {  // If a current spike lasted thru our whole buffer
+            inject_interpolations (previndex, filt_history[previndex]);  // Smoothly grade the whole buffer
+            prespike_index = -1;  // Cancel the current spike
+        }
+        int32_t returnval = filt_history[index];  // Save the incumbent value at current index (oldest value) into buffer
+        filt_history[index] = new_val;
+        raw_history[index] = new_val;
+        index = (index + 1) % depth;  // Update index for next time
+        return returnval;  // Return the saved old value
+    }
+    void inject_interpolations (int32_t endspike_index, int32_t endspike_val) {  // Replaces values between indexes with linear interpolated values
+        spike_length = ((depth + endspike_index - prespike_index) % depth) - 1;  // Equal to the spiking values count plus one
+        if (!spike_length) return;  // Two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
+        interpolated_slope = (endspike_val - filt_history[prespike_index]) / spike_length;
+        loopindex = 0;
+        while (++loopindex <= spike_length) {
+            filt_history[(prespike_index + loopindex) % depth] = filt_history[prespike_index] + loopindex * interpolated_slope;
+        }
+    }
+    int32_t get_next_rawval () { return raw_history[index]; }  // helps to debug the filter from outside the class
+};
 
 // NOTE: if devices.h gets to be too long, we can (and maybe just should) move this to a separate file, it's not really a device...
 

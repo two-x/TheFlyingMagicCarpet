@@ -6,6 +6,9 @@
 #include <cstdint> // for uint types
 #include <cstdio> // for printf
 
+/* Config Defines */
+#define pwm_jaguars true
+
 /* Value Defines */
 #define adcbits 12
 #define adcrange_adc 4095  // = 2^adcbits-1
