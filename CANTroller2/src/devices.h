@@ -5,9 +5,9 @@
 #include <cmath>
 #include <map>
 #include <tuple>
-// #include <ranges> // for std::view::keys
 #include <memory> // for std::shared_ptr
 #include "Arduino.h"
+#include "FunctionalInterrupt.h"
 #include "utils.h"
 #include "uictrl.h"
 // #include "xtensa/core-macros.h"  // access to ccount register for esp32 timing ticks
@@ -139,6 +139,7 @@ class Device {
     virtual void handle_touch_mode() {}
     virtual void handle_pot_mode() {}
     virtual void handle_calc_mode() {}
+    virtual void handle_mode_change() {}
   public:
     Timer timer;  // Can be used for external purposes
 
@@ -150,6 +151,7 @@ class Device {
     bool set_source(ControllerMode arg_source) {
         if (_can_source[static_cast<uint8_t>(arg_source)]) {
             _source = arg_source;
+            handle_mode_change();
             return true;
         } 
         return false;
@@ -252,6 +254,10 @@ class Transducer : public Device {
     // To hold val/min/max display values in display units (like V, mph, etc.)
     Param<HUMAN_T> human;
     Param<NATIVE_T> native;
+    
+    // override these in children that need to react to limits changing
+    virtual void handle_set_native_limits() {}
+    virtual void handle_set_human_limits() {}
   public:
     Transducer(uint8_t arg_pin) : Device(arg_pin) {}
     Transducer() = delete;
@@ -259,15 +265,38 @@ class Transducer : public Device {
     void set_native_limits(Param<NATIVE_T> &arg_min, Param<NATIVE_T> &arg_max) {
         if (arg_min.get() > arg_max.get()) {
             dir = TransducerDirection::REV;
+            native.set_limits(arg_max.get(), arg_min.get());
+        }
+        else {
+            dir = TransducerDirection::FWD;
+            native.set_limits(arg_min.get(), arg_max.get());
+        }
+        handle_set_native_limits();
+    }
+    void set_human_limits(Param<HUMAN_T> &arg_min, Param<HUMAN_T> &arg_max) {
+        if (arg_min.get() > arg_max.get()) {
+            dir = TransducerDirection::REV;
+            human.set_limits(arg_max.get(), arg_min.get());
+        }
+        else {
+            dir = TransducerDirection::FWD;
+            human.set_limits(arg_min.get(), arg_max.get());
+        }
+        handle_set_human_limits();
+    }
+    void set_native_limits(NATIVE_T arg_min, NATIVE_T arg_max) {
+        if (arg_min > arg_max) {
+            dir = TransducerDirection::REV;
             native.set_limits(arg_max, arg_min);
         }
         else {
             dir = TransducerDirection::FWD;
             native.set_limits(arg_min, arg_max);
         }
+        handle_set_native_limits();
     }
-    void set_human_limits(Param<HUMAN_T> &arg_min, Param<HUMAN_T> &arg_max) {
-        if (arg_min.get() > arg_max.get()) {
+    void set_human_limits(HUMAN_T arg_min, HUMAN_T arg_max) {
+        if (arg_min > arg_max) {
             dir = TransducerDirection::REV;
             human.set_limits(arg_max, arg_min);
         }
@@ -275,6 +304,7 @@ class Transducer : public Device {
             dir = TransducerDirection::FWD;
             human.set_limits(arg_min, arg_max);
         }
+        handle_set_human_limits();
     }
 
     bool set_native(NATIVE_T arg_val_native) {
@@ -329,16 +359,32 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
   protected:
     float _ema_alpha = 0.1;
     Param<HUMAN_T> _val_filt;
-    // NOTE: what does ema stand for...?
-    void ema(HUMAN_T arg_new_val_native) {
-        float new_val = _ema_alpha * static_cast<float>(arg_new_val_native);
-        float old_val = (1 - _ema_alpha) * static_cast<float>(_val_filt.get());
-        _val_filt.set(static_cast<HUMAN_T>(new_val + old_val));
+    bool _should_filter = false;
+
+    void calculate_ema() { // Exponential Moving Average
+        if (_should_filter) {
+            float cur_val = static_cast<float>(this->human.get());
+            float filt_val = static_cast<float>(_val_filt.get());
+            _val_filt.set(ema_filt(cur_val, filt_val, _ema_alpha));
+        } else {
+            _val_filt.set(this->human.get());
+            _should_filter = true;
+        }
     }
+
+    virtual void handle_touch_mode() {
+        this->_val_filt.set(this->human.get());
+    }
+    virtual void handle_pot_mode() {
+        this->human.set(this->_pot->mapToRange(this->human.get_min(), this->human.get_max()));
+        this->_val_filt.set(this->human.get()); // don't filter the value we get from the pot, the pot output is already filtered
+    }
+
+    virtual void handle_set_human_limits() { _val_filt.set_limits(this->human.get_min_ptr(), this->human.get_max_ptr()); } // make sure our filtered value has the same limits as our regular value
+    virtual void handle_mode_change() { if (this->_source == ControllerMode::PIN) _should_filter = false; } // if we just switched to pin input, the old filtered value is not valid
+
   public:
-    Sensor(uint8_t pin) : Transducer<NATIVE_T, HUMAN_T>(pin), _val_filt(this->human.get()), _ema_alpha() {
-        _val_filt.set_limits(this->human.get_min_ptr(), this->human.get_max_ptr());
-    }  
+    Sensor(uint8_t pin) : Transducer<NATIVE_T, HUMAN_T>(pin) {}  
     void set_ema_alpha(float arg_alpha) { _ema_alpha = arg_alpha; }
     float get_ema_alpha() { return _ema_alpha; }
     HUMAN_T get_filtered_value() { return _val_filt.get(); }
@@ -351,17 +397,15 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
   protected:
     virtual void handle_pin_mode() {
         this->set_native(static_cast<NATIVE_T>(analogRead(this->_pin)));
-        this->ema(this->human.get()); // filtered values are kept in human format
-    }
-    virtual void handle_touch_mode() {
-        this->_val_filt.set(this->human.get());
-    }
-    virtual void handle_pot_mode() {
-        this->human.set(this->_pot->mapToRange(this->human.get_min(), this->human.get_max()));
-        this->_val_filt.set(this->human.get()); // don't filter the value we get from the pot, the pot output is already filtered
+        this->calculate_ema(); // filtered values are kept in human format
     }
   public:
     AnalogSensor(uint8_t arg_pin) : Sensor<NATIVE_T, HUMAN_T>(arg_pin) {}
+    void setup() {
+        set_pin(this->_pin, INPUT);
+        this->set_source(ControllerMode::PIN);
+    }
+        
 };
 
 // PressureSensor represents a brake fluid pressure sensor.
@@ -382,18 +426,13 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
             _m_factor = initial_psi_per_adc;
             _b_offset = initial_offset;
             _invert = initial_invert;
-            native.set_limits(min_adc, max_adc);
-            human.set_limits(from_native(native.get_min()), from_native(native.get_max()));
+            set_native_limits(min_adc, max_adc);
+            set_human_limits(from_native(min_adc), from_native(max_adc));
             set_native(min_adc);
             set_can_source(ControllerMode::PIN, true);
             set_can_source(ControllerMode::POT, true);
         }
         PressureSensor() = delete;
-
-        void setup() {
-            set_pin(_pin, INPUT);
-            set_source(ControllerMode::PIN);
-        }
 };
 
 // BrakePositionSensor represents a linear position sensor
@@ -402,8 +441,8 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
 class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     protected:
         // TODO: add description
-        float _zeropoint;
-        void handle_touch_mode() { _val_filt.set((nom_lim_retract_in + _zeropoint) / 2); } // To keep brake position in legal range during simulation
+        std::shared_ptr<float> _zeropoint;
+        void handle_touch_mode() { _val_filt.set((nom_lim_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
     public:
         // NOTE: for now lets keep all the config stuff here in the class. could also read in values from a config file at some point.
         static constexpr float nom_lim_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
@@ -423,26 +462,138 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
             _m_factor = initial_in_per_adc;
             _b_offset = initial_offset;
             _invert = initial_invert;
-            _zeropoint = initial_zeropoint_in;
-            human.set_limits(nom_lim_retract_in, nom_lim_extend_in);
-            native.set_limits(to_native(human.get_min()), to_native(human.get_max()));
+            _zeropoint = std::make_shared<float>(initial_zeropoint_in);
+            set_human_limits(nom_lim_retract_in, nom_lim_extend_in);
+            set_native_limits(to_native(nom_lim_retract_in), to_native(nom_lim_extend_in));
             set_can_source(ControllerMode::PIN, true);
             set_can_source(ControllerMode::POT, true);
         }
         BrakePositionSensor() = delete;
 
-        void setup() {
-            set_pin(_pin, INPUT);
-            set_source(ControllerMode::PIN);
-        }
-        
         // is tha brake motor parked?
         bool parked() { return abs(_val_filt.get() - park_in) <= margin_in; }
 
         float get_park_position() { return park_in; }
         float get_margin() { return margin_in; }
-        float get_zeropoint() { return _zeropoint; }
-        void set_zeropoint(float zeropoint_arg) { _zeropoint = zeropoint_arg; }
+        float get_zeropoint() { return *_zeropoint; }
+        std::shared_ptr<float> get_zeropoint_ptr() { return _zeropoint; }
+};
+
+// class PulseSensor are hall-monitor sensors where the value is based on magnetic pulse timing of a rotational source (eg tachometer, speedometer)
+template<typename HUMAN_T>
+class PulseSensor : public Sensor<int32_t, HUMAN_T> {
+    protected:
+        static constexpr float _stop_thresh_rpm = 0.1;  // Below which the engine is considered stopped - this is redundant,
+        static constexpr int64_t _stop_timeout_us = 2000000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
+
+        Timer _stop_timer;
+        volatile int64_t _isr_us = 0;
+        volatile int64_t _isr_timer_start_us = 0;
+        volatile int64_t _isr_timer_read_us = 0;
+        int32_t _isr_buf_us = 0;
+        int64_t _delta_abs_min_us; // must be passed into constructor
+
+        // Shadows a hall sensor being triggered by a passing magnet once per pulley turn. The ISR calls
+        // esp_timer_get_time() on every pulse to know the time since the previous pulse. I tested this on the bench up
+        // to about 0.750 mph which is as fast as I can move the magnet with my hand, and it works.
+        // Update: Janky bench test appeared to work up to 11000 rpm.
+        void IRAM_ATTR _isr() { // The isr gets the period of the vehicle pulley rotations.
+            _isr_timer_read_us = esp_timer_get_time();
+            int64_t time_us = _isr_timer_read_us - _isr_timer_start_us;
+            if (time_us > _delta_abs_min_us) {  // ignore spurious triggers or bounces
+                _isr_timer_start_us = _isr_timer_read_us;
+                _isr_us = time_us;
+            }
+        }
+
+        virtual void handle_pin_mode() {
+            _isr_buf_us = static_cast<int32_t>(_isr_us);  // Copy delta value (in case another interrupt happens during handling)
+            _isr_us = 0;  // Indicates to isr we processed this value
+            if (_isr_buf_us) {  // If a valid rotation has happened since last time, delta will have a value
+                this->set_native(_isr_buf_us);
+                this->calculate_ema();
+                _stop_timer.reset();
+            }
+            // NOTE: should be checking filt here maybe?
+            if (this->human.get() < _stop_thresh_rpm || _stop_timer.expired()) {  // If time between pulses is long enough an engine can't run that slow
+                this->human.set(0.0);
+                this->_val_filt.set(0.0);
+            }        
+        }
+
+    public:
+        PulseSensor(uint8_t arg_pin, int64_t delta_abs_min_us_arg) : Sensor<int32_t, HUMAN_T>(arg_pin), _stop_timer(_stop_timeout_us), _delta_abs_min_us(delta_abs_min_us_arg) {}
+        PulseSensor() = delete;
+        void setup() {
+            set_pin(this->_pin, INPUT_PULLUP);
+            attachInterrupt(digitalPinToInterrupt(this->_pin), [this]{ _isr(); }, RISING);
+            this->set_source(ControllerMode::PIN);
+        }
+        bool stopped() { return this->_val_filt.get() < _stop_thresh_rpm; }  // Note due to weird float math stuff, can not just check if tach == 0.0
+};
+
+// Tachometer represents a magnetic pulse measurement of the enginge rotation.
+// It extends PulseSensor to handle reading a hall monitor sensor and converting RPU to RPM
+class Tachometer : public PulseSensor<float> {
+    protected:
+        static constexpr float _min_rpm = 0.0;
+        static constexpr float _max_rpm = 7000.0;  // Max possible engine rotation speed
+        // NOTE: should we start at 50rpm? shouldn't it be zero?
+        static constexpr float _initial_rpm = 50.0; // Current engine speed, raw value converted to rpm (in rpm)
+        static constexpr float _initial_redline_rpm = 5000.0;  // Max value for tach_rpm, pedal to the metal (in rpm). 20000 rotations/mile * 15 mi/hr * 1/60 hr/min = 5000 rpm
+        static constexpr float _initial_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
+        static constexpr bool _initial_invert = true;
+        static constexpr float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+        static constexpr int64_t tach_delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
+    public:
+        Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, tach_delta_abs_min_us) {
+            _ema_alpha = _initial_ema_alpha;
+            _m_factor = _initial_rpm_per_rpus;
+            _invert = _initial_invert;
+            set_human_limits(_min_rpm, _initial_redline_rpm);
+            set_native_limits(0.0, _stop_timeout_us);
+            set_human(_initial_rpm);
+            set_can_source(ControllerMode::PIN, true);
+            set_can_source(ControllerMode::POT, true);
+        }
+        Tachometer() = delete;
+
+        bool engine_stopped() { return stopped(); }
+        float get_redline_rpm() { return human.get_max(); }
+        float get_max_rpm() { return _max_rpm; }
+        std::shared_ptr<float> get_redline_rpm_ptr() { return human.get_max_ptr(); }
+};
+
+// Speedometer represents a magnetic pulse measurement of the enginge rotation.
+// It extends PulseSensor to handle reading a hall monitor sensor and converting RPU to MPH
+class Speedometer : public PulseSensor<float> {
+    protected:
+        static constexpr float _min_mph = 0.0;
+        static constexpr float _max_mph = 25.0; // What is max speed car can ever go
+        // NOTE: should we start at 1mph? shouldn't it be zero?
+        static constexpr float _initial_mph = 1.01; // Current speed, raw value converted to mph (in mph)
+        static constexpr float _initial_redline_mph = 15.0; // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
+        static constexpr float _initial_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 pulrot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 whlrot/pulrot * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
+        static constexpr bool _initial_invert = true;
+        static constexpr float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+        static constexpr int64_t speedo_delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
+    public:
+        Speedometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, speedo_delta_abs_min_us) {
+            _ema_alpha = _initial_ema_alpha;
+            _m_factor = _initial_mph_per_rpus;
+            _invert = _initial_invert;
+            set_human_limits(_min_mph, _initial_redline_mph);
+            set_native_limits(0.0, _stop_timeout_us);
+            set_human(_initial_mph);
+            set_can_source(ControllerMode::PIN, true);
+            set_can_source(ControllerMode::POT, true);
+        }
+        Speedometer() = delete;
+
+        bool car_stopped() { return stopped(); }
+        float get_redline_mph() { return human.get_max(); }
+        float get_max_mph() { return _max_mph; }
+        std::shared_ptr<float> get_redline_mph_ptr() { return human.get_max_ptr(); }
 };
 
 class HotrcManager {

@@ -57,8 +57,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (tft_dc_pin, OUTPUT);
     set_pin (gas_pwm_pin, OUTPUT);
     set_pin (basicmodesw_pin, INPUT_PULLUP);
-    set_pin (tach_pulse_pin, INPUT_PULLUP);
-    set_pin (speedo_pulse_pin, INPUT_PULLUP);
     set_pin (neopixel_pin, OUTPUT);
     set_pin (sdcard_cs_pin, OUTPUT);
     set_pin (tft_cs_pin, OUTPUT);
@@ -109,15 +107,14 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     printf("Transducers setup..\n");
     pressure_sensor.setup();
     brkpos_sensor.setup();
+    tachometer.setup();
+    speedometer.setup();
 
     printf("Simulator setup..\n");
     simulator.register_device(SimOption::pressure, pressure_sensor, pressure_sensor.source());
     simulator.register_device(SimOption::brkpos, brkpos_sensor, brkpos_sensor.source());
-
-    // Set up our interrupts
-    printf ("Attach interrupts..\n");
-    attachInterrupt (digitalPinToInterrupt(tach_pulse_pin), tach_isr, RISING);
-    attachInterrupt (digitalPinToInterrupt(speedo_pulse_pin), speedo_isr, RISING);
+    simulator.register_device(SimOption::tach, tachometer, tachometer.source());
+    simulator.register_device(SimOption::speedo, speedometer, speedometer.source());
 
     printf ("Attach servos..\n");
     // Servo() argument 2 is channel (0-15) of the esp timer (?). set to Servo::CHANNEL_NOT_ATTACHED to auto grab a channel
@@ -224,41 +221,17 @@ void loop() {
     if (!simulator.simulating(SimOption::starter)) starter = read_pin (starter_pin);
 
     // Tach - takes 22 us to read when no activity
-    if (simulator.can_simulate(SimOption::tach) && simulator.get_pot_overload() == SimOption::tach) tach_filt_rpm = pot.mapToRange(0.0f, tach_govern_rpm);
-    else if (!simulator.simulating(SimOption::tach)) {
-        tach_buf_us = (int32_t)tach_us;  // Copy delta value (in case another interrupt happens during handling)
-        tach_us = 0;  // Indicates to isr we processed this value
-        if (tach_buf_us) {  // If a valid rotation has happened since last time, delta will have a value
-            tach_rpm = convert_units ((float)(tach_buf_us), tach_convert_rpm_per_rpus, tach_convert_invert);
-            ema_filt (tach_rpm, &tach_filt_rpm, tach_ema_alpha);  // Sensor EMA filter
-            tachStopTimer.reset();
-        }
-        if (tach_rpm < tach_stop_thresh_rpm || tachStopTimer.expired()) {  // If time between pulses is long enough an engine can't run that slow
-            tach_rpm = 0.0;  // If timeout since last magnet is exceeded
-            tach_filt_rpm = 0.0;
-        }        
-    }
+    tachometer.update();
+
     // Airflow sensor
     if (simulator.can_simulate(SimOption::airflow) && simulator.get_pot_overload() == SimOption::airflow) airflow_filt_mph = pot.mapToRange(0.0f, airflow_max_mph);
     else if (airflow_detected && !simulator.simulating(SimOption::airflow)) {
         airflow_mph = airflow_sensor.readMilesPerHour(); // note, this returns a float from 0-33.55 for the FS3000-1015 
         ema_filt (airflow_mph, &airflow_filt_mph, airflow_ema_alpha);  // Sensor EMA filter
     }
+    
     // Speedo - takes 14 us to read when no activity
-    if (simulator.can_simulate(SimOption::speedo) && simulator.get_pot_overload() == SimOption::speedo) speedo_filt_mph = pot.mapToRange(0.0f, speedo_govern_mph);
-    else if (!simulator.simulating(SimOption::speedo)) { 
-        speedo_buf_us = (int32_t)speedo_us;  // Copy delta value (in case another interrupt happens during handling)
-        speedo_us = 0;  // Indicates to isr we processed this value
-        if (speedo_buf_us) {  // If a valid rotation has happened since last time, delta will have a value
-            speedo_mph = convert_units ((float)(speedo_buf_us), speedo_convert_mph_per_rpus, speedo_convert_invert);  // Update car speed value  
-            ema_filt (speedo_mph, &speedo_filt_mph, speedo_ema_alpha);  // Sensor EMA filter
-            speedoStopTimer.reset();
-        }
-        if (speedo_mph < speedo_stop_thresh_mph || speedoStopTimer.expired()) {  // If time between pulses is long enough, consider the car is stopped
-            speedo_mph = 0.0;
-            speedo_filt_mph = 0.0;
-        }
-    }
+    speedometer.update();
 
     // Brake pressure - takes 72 us to read
     pressure_sensor.update();
@@ -477,7 +450,7 @@ void loop() {
     //     D) Car is accelerating yet engine is at idle.
     //  11. The control system has nonsensical values in its variables.
     //
-    if (!ignition && !engine_stopped()) {
+    if (!ignition && !tachometer.engine_stopped()) {
         if (diag_ign_error_enabled) { // See if the engine is turning despite the ignition being off
             Serial.println (F("Detected engine rotation in the absense of ignition signal"));  // , tach_filt_rpm, ignition
             diag_ign_error_enabled = false;  // Prevents endless error reporting the same error
@@ -556,17 +529,13 @@ void loop() {
         else if (dataset_page == PG_CAR) {
             if (selected_value == 2) adj = adj_val (&tach_idle_hot_min_rpm, 0.1*(float)sim_edit_delta, tach_idle_abs_min_rpm, tach_idle_cold_max_rpm - 1);
             else if (selected_value == 3) adj = adj_val (&tach_idle_cold_max_rpm, 0.1*(float)sim_edit_delta, tach_idle_hot_min_rpm + 1, tach_idle_abs_max_rpm);
-            else if (selected_value == 4) adj = adj_val (&tach_redline_rpm, 0.1*(float)sim_edit_delta, tach_idle_rpm, tach_max_rpm);
+            else if (selected_value == 4) adj = adj_val (tachometer.get_redline_rpm_ptr().get(), 0.1*(float)sim_edit_delta, tach_idle_rpm, tachometer.get_max_rpm());
             else if (selected_value == 5) adj = adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);
             else if (selected_value == 6) adj = adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
             else if (selected_value == 7) adj_val (&airflow_max_mph, 0.01*(float)sim_edit_delta, 0, airflow_abs_max_mph);
-            else if (selected_value == 8) adj_val (&speedo_idle_mph, 0.01*(float)sim_edit_delta, 0, speedo_redline_mph - 1);
-            else if (selected_value == 9) adj_val (&speedo_redline_mph, 0.01*(float)sim_edit_delta, speedo_idle_mph, 30);
-            else if (selected_value == 10) {
-                float zp = brkpos_sensor.get_zeropoint();
-                adj_val(&zp, 0.001*(float)sim_edit_delta, BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
-                brkpos_sensor.set_zeropoint(zp);
-            }
+            else if (selected_value == 8) adj_val (&speedo_idle_mph, 0.01*(float)sim_edit_delta, 0, speedometer.get_redline_mph() - 1);
+            else if (selected_value == 9) adj_val (speedometer.get_redline_mph_ptr().get(), 0.01*(float)sim_edit_delta, speedo_idle_mph, 30);
+            else if (selected_value == 10) adj_val(brkpos_sensor.get_zeropoint_ptr().get(), 0.001*(float)sim_edit_delta, BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
             if (adj) {
                 update_tach_idle(1);
                 calc_governor();
@@ -608,7 +577,7 @@ void loop() {
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tun");  //
 
     // Ignition & Panic stop logic and Update output signals
-    if (!car_stopped()) {
+    if (!speedometer.car_stopped()) {
         if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && !hotrc_radio_detected) panic_stop = true;  // panic_stop could also have been initiated by the user button   && hotrc_radio_detected_last 
         else if (ctrl == JOY && !ignition) panic_stop = true;
         // else if (ctrl == JOY && !(simulator.get_enabled() && sim_joy) && !ignition && ignition_last) panic_stop = true;
