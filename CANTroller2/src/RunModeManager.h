@@ -56,7 +56,7 @@ private:
 
     void handleBasicMode() { // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         if (we_just_switched_modes) {  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
-            gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
+            gas_servo.timer.reset();  // Ensure we give the servo enough time to move to position
             motorParkTimer.reset();  // Set a timer to timebox this effort
             park_the_motors = true;  // Flags the motor parking to happen
         }
@@ -84,7 +84,7 @@ private:
             if (speedometer.car_stopped() || stopcarTimer.expired()) {  // If car has stopped, or timeout expires, then release the brake
                 if (shutdown_color == LPNK) {  // On first time through here
                     park_the_motors = true;  // Flags the motor parking to happen, only once
-                    gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
+                    gas_servo.timer.reset();  // Ensure we give the servo enough time to move to position
                     motorParkTimer.reset();  // Set a timer to timebox this effort
                     shutdown_color = DPNK;
                     disp_runmode_dirty = true;
@@ -246,8 +246,8 @@ private:
         else if (calmode_request) updateMode(SHUTDOWN);
         
         if (!cal_pot_gas_ready) {
-            float temp = pot.mapToRange(gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
-            if (temp <= (float)gas_pulse_idle_us && temp >= (float)gas_pulse_redline_us) cal_pot_gas_ready = true;
+            float temp = pot.mapToRange(gas_servo.get_abs_min_us(), gas_servo.get_abs_max_us());
+            if (temp <= (float)gas_servo.get_max_human() && temp >= (float)gas_servo.get_min_human()) cal_pot_gas_ready = true;
         }
     }
 };

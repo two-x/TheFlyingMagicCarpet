@@ -642,7 +642,7 @@ class Display {
                 draw_dynamic(1, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
                 draw_dynamic(2, speedometer.get_filtered_value(), 0.0, speedometer.get_redline_mph(), speedo_target_mph);
                 draw_dynamic(3, tachometer.get_filtered_value(), 0.0, tachometer.get_redline_rpm(), tach_target_rpm);
-                draw_dynamic(4, gas_pulse_out_us, gas_pulse_redline_us, gas_pulse_idle_us);
+                draw_dynamic(4, gas_servo.get_human(), gas_servo.get_min_human(), gas_servo.get_max_human());
                 draw_dynamic(5, pressure_sensor.get_filtered_value(), pressure_sensor.get_min_human(), pressure_sensor.get_max_human(), pressure_target_psi);  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
                 draw_dynamic(6, brake_servo.get_human(), brake_servo.get_min_human(), brake_servo.get_max_human());
                 draw_dynamic(7, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
@@ -702,8 +702,8 @@ class Display {
                     draw_dynamic(15, brake_servo.get_max_native(), brake_servo.get_center_native(), brake_servo.get_abs_max_native());
                     draw_dynamic(16, brake_servo.get_center_native(), brake_servo.get_min_native(), brake_servo.get_max_native());
                     draw_dynamic(17, brake_servo.get_min_native(), brake_servo.get_abs_min_native(), brake_servo.get_center_native());
-                    draw_dynamic(18, gas_pulse_idle_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
-                    draw_dynamic(19, gas_pulse_redline_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
+                    draw_dynamic(18, gas_servo.get_max_human(), gas_servo.get_abs_min_us(), gas_servo.get_abs_max_us());
+                    draw_dynamic(19, gas_servo.get_min_human(), gas_servo.get_abs_min_us(), gas_servo.get_abs_max_us());
                 }
                 else if (dataset_page == PG_BPID) {
                     drange = brake_servo.get_max_native() - brake_servo.get_min_native();
@@ -720,7 +720,7 @@ class Display {
                     draw_dynamic(19, brakeQPID.GetKd(), 0.0, 2.0);
                 }
                 else if (dataset_page == PG_GPID) {
-                    drange = gas_pulse_idle_us-gas_pulse_govern_us;
+                    drange = gas_servo.get_max_human() - gas_pulse_govern_us;
                     draw_dynamic(9, tach_target_rpm, 0.0, tachometer.get_redline_rpm());
                     draw_dynamic(10, gasQPID.GetError(), tach_idle_rpm - tach_govern_rpm, tach_govern_rpm - tach_idle_rpm);
                     draw_dynamic(11, gasQPID.GetPterm(), -drange, drange);

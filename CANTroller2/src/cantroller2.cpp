@@ -98,13 +98,16 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     printf("Encoder setup..\n");
     encoder.setup();
 
-    printf("Transducers setup..\n");
+    printf("Sensors setup..\n");
     pressure_sensor.setup();
     brkpos_sensor.setup();
     tachometer.setup();
     speedometer.setup();
+    
+    printf("Servos setup..\n");
     steer_servo.setup();
     brake_servo.setup();
+    gas_servo.setup();
 
     printf("Simulator setup..\n");
     simulator.register_device(SimOption::pressure, pressure_sensor, pressure_sensor.source());
@@ -112,12 +115,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     simulator.register_device(SimOption::tach, tachometer, tachometer.source());
     simulator.register_device(SimOption::speedo, speedometer, speedometer.source());
 
-    printf ("Attach servos..\n");
-    // Servo() argument 2 is channel (0-15) of the esp timer (?). set to Servo::CHANNEL_NOT_ATTACHED to auto grab a channel
-    // gas_servo.setup();
-    // gas_servo.set_native_limits();  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
-    gas_servo.attach (gas_pwm_pin, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
-    
     printf ("Init neopixel..");
     neo_heartbeat = (neopixel_pin >= 0);
     neostrip.begin();  // start datastream
@@ -374,36 +371,34 @@ void loop() {
     // Gas - Update servo output. Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
     // if runmode == basic => set_source(FIXED)?
     if (gasPidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
-        if (park_the_motors) gas_pulse_out_us = gas_pulse_idle_us + gas_pulse_park_slack_us;
+        if (park_the_motors) gas_servo.set_human(gas_servo.get_max_human() + gas_servo.get_park_slack_us());
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
             // if (starter) gas_pulse_out_us = gas_pulse_govern_us;  // Fully open throttle during starting engine
-            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_idle_us;  // If in deadband or being pushed down, we want idle
-            else gas_pulse_out_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_idle_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
+            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_servo.set_human(gas_servo.get_max_human());  // If in deadband or being pushed down, we want idle
+            else gas_servo.set_human(map((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], gas_servo.get_max_human(), gas_pulse_govern_us));  // Actuators still respond and everything, even tho engine is turned off
         }
         else if (runmode != BASIC) {
             if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) {
-                // set_source(POT)
-                gas_pulse_out_us = map (pot.get(), pot.min(), pot.max(), gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
-                gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
+                gas_servo.set_source(ControllerMode::POT);
             }            
             else if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual)  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
-                gas_pulse_out_us = map (tach_target_rpm, tach_idle_rpm, tach_govern_rpm, gas_pulse_idle_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
+                gas_servo.set_human(map(tach_target_rpm, tach_idle_rpm, tach_govern_rpm, gas_servo.get_max_human(), gas_pulse_govern_us)); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
             else gasQPID.Compute();  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
             // printf ("Gas PID   rm= %+-4ld target=%-+9.4lf", runmode, (float)tach_target_rpm);
             // printf (" output = %-+9.4lf,  %+-4ld\n", gasQPID.get_output(), gas_pulse_out_us);
         }
         if (runmode != BASIC || park_the_motors) {
             if (!(runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo))  // Constrain to operating limits. If calibrating constrain already happened above
-                gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_idle_us);
+                // TODO: should probably handle this internally based on controller mode
+                gas_servo.set_human(constrain(gas_servo.get_human(), gas_pulse_govern_us, gas_servo.get_max_human()));
             // printf (" output = %-+9.4lf,  %+-4ld\n", gasQPID.get_output(), gas_pulse_out_us);
-            // gas_pulse_out_us
-            gas_servo.writeMicroseconds ((int32_t)gas_pulse_out_us);  // Write result to servo
+            gas_servo.update();
             // if (boot_button) printf (" Gas:%4ld\n", (int32_t)gas_pulse_out_us);
         }
     }
     if (park_the_motors) {  //  When parking motors, IF the timeout expires OR the brake and gas motors are both close enough to the park position, OR runmode has changed THEN stop trying to park the motors
         bool brake_parked = brkpos_sensor.parked();
-        bool gas_parked = ((gas_pulse_out_us == gas_pulse_idle_us + gas_pulse_park_slack_us) && gasServoTimer.expired());
+        bool gas_parked = ((gas_servo.get_human() == gas_servo.get_max_human() + gas_servo.get_park_slack_us()) && gas_servo.timer.expired());
         if ((brake_parked && gas_parked) || motorParkTimer.expired() || (runmode != SHUTDOWN && runmode != BASIC))
             park_the_motors = false;
     }
@@ -529,8 +524,8 @@ void loop() {
             else if (selected_value == 6) adj_val (brake_servo.get_max_native_ptr().get(), sim_edit_delta, brake_servo.get_center_native() + 1, brake_servo.get_abs_max_native());
             else if (selected_value == 7) adj_val (brake_servo.get_center_native_ptr().get(), sim_edit_delta, brake_servo.get_min_native() + 1, brake_servo.get_max_native() - 1);
             else if (selected_value == 8) adj_val (brake_servo.get_min_native_ptr().get(), sim_edit_delta, brake_servo.get_abs_min_native(), brake_servo.get_center_native() -1);
-            else if (selected_value == 9) adj_val (&gas_pulse_idle_us, sim_edit_delta, gas_pulse_redline_us + 1, gas_pulse_ccw_max_us - gas_pulse_park_slack_us);
-            else if (selected_value == 10) adj_val (&gas_pulse_redline_us, sim_edit_delta, gas_pulse_cw_min_us, gas_pulse_idle_us - 1);
+            else if (selected_value == 9) adj_val (gas_servo.get_max_human_ptr().get(), sim_edit_delta, gas_servo.get_min_human() + 1, gas_servo.get_abs_max_us() - gas_servo.get_park_slack_us());
+            else if (selected_value == 10) adj_val (gas_servo.get_min_human_ptr().get(), sim_edit_delta, gas_servo.get_abs_min_us(), gas_servo.get_max_human() - 1);
         }
         else if (dataset_page == PG_BPID) {
             if (selected_value == 8) brakeQPID.SetKp (brakeQPID.GetKp() + 0.001 * (float)sim_edit_delta);

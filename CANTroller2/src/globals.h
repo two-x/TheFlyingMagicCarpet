@@ -362,15 +362,9 @@ float speedo_govern_mph;  // Governor must scale the top vehicle speed proportio
 float speedo_idle_mph = 4.50;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
 
 // throttle servo related
-float gas_pulse_out_us = 1501;  // pid loop output to send to the actuator (gas)
+GasServo gas_servo(gas_pwm_pin);
 float gas_pulse_govern_us = 1502;  // Governor must scale the pulse range proportionally. This is given a value in the loop
-Timer gasServoTimer (500000);  // We expect the servo to find any new position within this time
 float gas_governor_percent = 95;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
-float gas_pulse_cw_min_us = 500;  // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
-float gas_pulse_redline_us = 1400;  // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
-float gas_pulse_idle_us = 1800;  // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
-float gas_pulse_ccw_max_us = 2500;  // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
-float gas_pulse_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_idle_us where to park the servo out of the way so we can drive manually (in us)
 
 // tachometer related
 Tachometer tachometer(tach_pulse_pin);
@@ -422,9 +416,8 @@ float gas_spid_initial_kp = 0.256;  // PID proportional coefficient (gas) How mu
 float gas_spid_initial_ki_hz = 0.022;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
 float gas_spid_initial_kd_s = 0.091;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
 bool gas_open_loop = false;
-static Servo gas_servo;
-QPID gasQPID (tachometer.get_filtered_value_ptr().get(), &gas_pulse_out_us, &tach_target_rpm,  // input, target, output variable references
-    gas_pulse_redline_us, gas_pulse_idle_us,  // output min, max
+QPID gasQPID (tachometer.get_filtered_value_ptr().get(), gas_servo.get_human_ptr().get(), &tach_target_rpm,  // input, target, output variable references
+    gas_servo.get_min_human(), gas_servo.get_max_human(),  // output min, max
     gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s,  // Kp, Ki, and Kd tuning constants
     QPID::pMode::pOnErrorMeas, QPID::dMode::dOnMeas, QPID::iAwMode::iAwRound, QPID::Action::reverse,  // settings
     gas_pid_period_us, QPID::Control::timer, QPID::centMode::range);  // period, more settings
@@ -494,7 +487,7 @@ void calc_ctrl_lims (void) {
 void calc_governor (void) {
     tach_govern_rpm = map(gas_governor_percent, 0.0, 100.0, 0.0, tachometer.get_redline_rpm());  // Create an artificially reduced maximum for the engine speed
     cruiseQPID.SetOutputLimits(tach_idle_rpm, tach_govern_rpm);
-    gas_pulse_govern_us = map (gas_governor_percent*(tach_govern_rpm-tach_idle_rpm)/tachometer.get_redline_rpm(), 0.0, 100.0, gas_pulse_idle_us, gas_pulse_redline_us);  // Governor must scale the pulse range proportionally
+    gas_pulse_govern_us = map (gas_governor_percent*(tach_govern_rpm-tach_idle_rpm)/tachometer.get_redline_rpm(), 0.0, 100.0, gas_servo.get_min_human(), gas_servo.get_max_human());  // Governor must scale the pulse range proportionally
     speedo_govern_mph = map ((float)gas_governor_percent, 0.0, 100.0, 0.0, speedometer.get_redline_mph());  // Governor must scale the top vehicle speed proportionally
 }
 float steer_safe (float endpoint) {

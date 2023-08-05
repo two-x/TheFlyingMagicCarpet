@@ -737,20 +737,31 @@ class BrakeServo : public JagMotor<float> {
         std::shared_ptr<int32_t> get_max_native_ptr() { return _pulse_min.get_ptr(); }
 };
 
-// class GasPWM : public ServoPWM<float> {
-// // human
-// float gas_pulse_out_us = 1501;  // pid loop output to send to the actuator (gas)
-// 
-// float gas_pulse_govern_us = 1502;  // Governor must scale the pulse range proportionally. This is given a value in the loop
-// Timer gasServoTimer (500000);  // We expect the servo to find any new position within this time
-// float gas_governor_percent = 95;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
-// 
-// float gas_pulse_cw_min_us = 500;  // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
-// float gas_pulse_redline_us = 1400;  // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
-// float gas_pulse_idle_us = 1800;  // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
-// float gas_pulse_ccw_max_us = 2500;  // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
-// float gas_pulse_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_idle_us where to park the servo out of the way so we can drive manually (in us)
-// };
+class GasServo : public ServoPWM<float> {
+    protected:
+        float _cw_min_us = 500;  // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
+        float _ccw_max_us = 2500;  // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
+        float _redline_us = 1400;  // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
+        float _idle_us = 1800;  // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
+        float _park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_idle_us where to park the servo out of the way so we can drive manually (in us)
+        float _initial_out_us = 1501;  // pid loop output to send to the actuator (gas)
+        float _timeout = 500000; // We expect the servo to find any new position within this time
+        Param<float> _min_us, _max_us;
+    public:
+        GasServo(uint8_t pin_arg) : ServoPWM<float>(pin_arg),
+                                    _min_us(_redline_us, _cw_min_us, _ccw_max_us),
+                                    _max_us(_idle_us, _cw_min_us, _ccw_max_us) {
+            human.set_limits(_min_us.get_ptr(), _max_us.get_ptr());
+            native.set_limits(static_cast<int32_t>(_cw_min_us), static_cast<int32_t>(_ccw_max_us));
+            timer.set(_timeout);
+        }
+        GasServo() = delete;
+        float get_abs_min_us() { return _cw_min_us; }
+        float get_abs_max_us() { return _ccw_max_us; }
+        float get_park_slack_us() { return _park_slack_us; }
+        std::shared_ptr<float> get_max_human_ptr() { return _max_us.get_ptr(); }
+        std::shared_ptr<float> get_min_human_ptr() { return _min_us.get_ptr(); }
+};
 
 // Device::Toggle is a base class for system signals or devices having a boolean value
 class Toggle : public Device {
