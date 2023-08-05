@@ -61,145 +61,50 @@
 // string* pagecard = new string[8];  // How we might allocate on the heap instead of in the stack
 // string* modecard = new string[7];
 
-char pagecard[9][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp" };
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, TEAL, MBLU };
-enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP };
-char sensorcard[9][7] = { "none", "bkpres", "brkpos", "tach", "airflw", "mapsns", "speedo", "batt", "engtmp" };
+
+char sensorcard[8][7] = { "none", "bkpres", "brkpos", "tach", "airflw", "mapsns", "speedo", "engtmp" };
 char idlemodecard[3][7] = { "direct", "cntrol", "minimz" };
 char idlestatecard[5][7] = { "drving", "tohigh", "tolow", "idling", "tostal" };
 
-char telemetry[disp_fixed_lines][9] = {  
-    "CtrlVert",
-    "   Speed",
-    "    Tach",
-    " Gas PWM",
-    "BrakPres",   
-    "BrakeOut",
-    "CtrlHorz",
-    "SteerOut",
-}; 
-char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
-    {   " Airflow",  // PG_RUN
-        " Brk Pos",
-        " Battery",
-        "     Pot",
-        "Sim Ctrl",
-        "Sim Pres",
-        "SimBkPos",
-        "Sim Tach",
-        "SimAirFl",
-        "SimSpeed",
-        "SimW/Pot", },
-    {   "Horz Raw",  // PG_JOY
-        "Vert Raw",
-        "HRC Horz", 
-        "HRC Vert",
-        "HNoRadio",
-        "Horz Min",
-        "Horz Max",
-        " Horz DB",
-        "Vert Min",
-        "Vert Max",
-        " Vert DB", },
-    {   "Pres ADC",  // PG_CAR
-        "TachIdle",
-        "Tach Hot",
-        "TachCold",
-        "TachRedL",
-        "Governor",
-        "SteerSaf",
-        "AirFlMax",
-        "Spd Idle",
-        "Spd RedL",
-        "BkPos0Pt", },
-    {   "BrakePWM",  // PG_PWMS
-        "SteerPWM",
-        "      - ",
-        "Steer Lt",
-        "SteerStp",
-        "Steer Rt",
-        "BrakExtd",
-        "BrakStop",
-        "BrakRetr",
-        "ThrotCls",
-        "ThrotOpn", },
-    {   "TgtState",  // PG_IDLE
-        "StallIdl",
-        "Low Idle",
-        "CoolantT",
-        "HighIdle",
-        "ColdIdle",
-        "Hot Idle",
-        "ColdTemp",
-        "Hot Temp",
-        "SettlTim",
-        "IdleMode", },
-    {   "Pres Tgt",  // PG_BPID
-        "Pres Err",
-        "  P Term",
-        "  I Term",
-        "  D Term",
-        "Integral",
-        "      - ",
-        "      - ",
-        "  Kp (P)",
-        "  Ki (I)",
-        "  Kd (D)", },
-    {   "Tach Tgt",  // PG_GPID
-        "Tach Err",
-        "  P Term",
-        "  I Term",
-        "  D Term",
-        "Integral",
-        "      - ",
-        "OpenLoop",
-        "  Kp (P)",
-        "  Ki (I)",
-        "  Kd (D)" },
-    {   "SpeedTgt",  // PG_CPID
-        "SpeedErr",
-        "  P Term",
-        "  I Term",
-        "  D Term",
-        "Integral",
-        "Tach Tgt",
-        "      - ",
-        "  Kp (P)",
-        "  Ki (I)",
-        "  Kd (D)", },
-    {   " Ambient",  // PG_TEMP
-        " Coolant",
-        "AxleFrLt",
-        "AxleFrRt",
-        "AxleRrLt",
-        "AxleRrRt",
-        "      - ",
-        "      - ",
-        "      - ",
-        " Cal Brk",
-        " Cal Gas", },
-};
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 4, 4, 2, 3, 4, 8, 7, 8, 9 };  // first value in each dataset page that's editable. All values after this must also be editable
-char units[disp_fixed_lines][5] = { "adc ", "mph ", "rpm ", "us  ", "psi ", "%   ", "adc ", "%   " };
+char telemetry[disp_fixed_lines][9] = { "CtrlVert", "   Speed", "    Tach", "ThrotPWM", "BrakPres", "BrakeMot", "CtrlHorz", "SteerMot", };  // Fixed rows
+char units[disp_fixed_lines][5] = { "adc ", "mph ", "rpm ", "us  ", "psi ", "%   ", "adc ", "%   " };  // Fixed rows
 
+char pagecard[10][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim " };
+enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM };
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 4, 4, 2, 3, 4, 8, 7, 8, 11, 1 };  // first value in each dataset page that's editable. All values after this must also be editable
+
+char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
+    { "BrakePos", " Airflow", "     MAP", "MuleBatt", "     Pot", "      - ", "      - ", "      - ", "      - ", "Governor", "SteerSaf", },  // PG_RUN
+    { "JoyH Raw", "JoyV Raw", "HRC Horz", "HRC Vert", "HFailsaf", "Horz Min", "Horz Max", " Horz DB", "Vert Min", "Vert Max", " Vert DB", },  // PG_JOY
+    { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", "SpeedIdl", "SpeedRed", "BkPos0Pt", },  // PG_CAR
+    { "BrakePWM", "SteerPWM", "      - ", "Steer Lt", "SteerStp", "Steer Rt", "BrakExtd", "BrakStop", "BrakRetr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
+    { "TgtState", "StallIdl", "Low Idle", "CoolantT", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SettlTim", "IdleMode", },  // PG_IDLE
+    { "Pres Tgt", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", "      - ", "      - ", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
+    { "Tach Tgt", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", "      - ", "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
+    { "SpeedTgt", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "Tach Tgt", "      - ", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
+    { " Ambient", " Coolant", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", "      - ", "      - ", "      - ", "      - ", "      - ", },  // PG_TEMP
+    { "      - ", "Sim Ctrl", "Sim Pres", "SimBkPos", "Sim Tach", "SimAirFl", " Sim MAP", "SimSpeed", "SimW/Pot", " Cal Brk", " Cal Gas", },  // PG_SIM
+};
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
-    { "mph ", "in  ", "V   ", "%   ", "    ", "    ", "    ", "    ", "    ", "    ", "    " },  // PG_RUN
+    { "in  ", "mph ", "psi ", "V   ", "%   ", "    ", "    ", "    ", "    ", "%   ", "%   " },  // PG_RUN
     { "adc ", "adc ", "us  ", "us  ", "us  ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
     { "adc ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%   ", "mph ", "mph ", "mph ", "in  " },  // PG_CAR
     { "us  ", "us  ", "    ", "    ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PG_PWMS
-    { "    ", "rpm ", "rpm ", "\x09""F  ", "rpm ", "rpm ", "rpm ", "\x09""F  ", "\x09""F  ", "us  ", "    " },  // PG_IDLE
+    { "    ", "rpm ", "rpm ", "\x09""F  ", "rpm ", "rpm ", "rpm ", "\x09""F  ", "\x09""F  ", "ms  ", "    " },  // PG_IDLE
     { "psi ", "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "    ", "    ", "Hz  ", "s   " },  // PG_BPID
     { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "    ", "    ", "Hz  ", "s   " },  // PG_GPID
     { "mph ", "mph ", "mph ", "mph ", "mph ", "mph ", "rpm ", "    ", "    ", "Hz  ", "s   " },  // PG_CPID
     { "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "\x09""F  ", "    ", "    ", "    ", "    ", "    " },  // PG_TEMP
+    { "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    " },  // PG_SIM
 };
 char simgrid[4][3][5] = {
     { "prs\x18", "rpm\x18", "car\x18" },
     { "prs\x19", "rpm\x19", "car\x19" },
     { "    ", " \x1e  ", "    " },
-    { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682 // microseconds = "us  ""
-};
+    { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
+};  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
@@ -662,17 +567,17 @@ class Display {
                 draw_dynamic(7, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
                 draw_dynamic(8, steer_out_percent, steer_left_percent, steer_right_percent);
                 if (dataset_page == PG_RUN) {
-                    draw_dynamic(9, airflow_filt_mph, airflow_min_mph, airflow_max_mph);
-                    draw_dynamic(10, brkpos_sensor.get_filtered_value(), BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
-                    draw_dynamic(11, battery_filt_v, 0.0, battery_max_v);
-                    draw_dynamic(12, pot.get(), pot.min(), pot.max());
-                    draw_truth(13, simulator.can_simulate(SimOption::joy), 0);
-                    draw_truth(14, simulator.can_simulate(SimOption::pressure), 0);
-                    draw_truth(15, simulator.can_simulate(SimOption::brkpos), 0);
-                    draw_truth(16, simulator.can_simulate(SimOption::tach), 0);
-                    draw_truth(17, simulator.can_simulate(SimOption::airflow), 0);
-                    draw_truth(18, simulator.can_simulate(SimOption::speedo), 0);
-                    draw_asciiname(19, sensorcard[static_cast<int32_t>(simulator.get_pot_overload())]);
+                    draw_dynamic(9, brkpos_sensor.get_filtered_value(), BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
+                    draw_dynamic(10, airflow_filt_mph, airflow_min_mph, airflow_max_mph);
+                    draw_dynamic(11, map_filt_psi, map_min_psi, map_max_psi);
+                    draw_dynamic(12, battery_filt_v, 0.0, battery_max_v);
+                    draw_dynamic(13, pot.get(), pot.min(), pot.max());
+                    draw_eraseval(14);
+                    draw_eraseval(15);
+                    draw_eraseval(16);
+                    draw_eraseval(17);
+                    draw_dynamic(18, gas_governor_percent, 0.0, 100.0);
+                    draw_dynamic(19, steer_safe_percent, 0.0, 100.0);
                 }
                 else if (dataset_page == PG_JOY) {
                     draw_dynamic(9, ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
@@ -689,15 +594,15 @@ class Display {
                 }
                 else if (dataset_page == PG_CAR) {
                     draw_dynamic(9, pressure_sensor.get_native(), pressure_sensor.get_min_native(), pressure_sensor.get_max_native());                    
-                    draw_dynamic(10, tach_idle_rpm, 0.0, tachometer.get_redline_rpm());
-                    draw_dynamic(11, tach_idle_hot_min_rpm, 0.0, tachometer.get_redline_rpm()); 
-                    draw_dynamic(12, tach_idle_cold_max_rpm, 0.0, tachometer.get_redline_rpm()); 
-                    draw_dynamic(13, tachometer.get_redline_rpm(), 0.0, tachometer.get_max_rpm());
-                    draw_dynamic(14, gas_governor_percent, 0.0, 100.0);
-                    draw_dynamic(15, steer_safe_percent, 0.0, 100.0);
-                    draw_dynamic(16, airflow_max_mph, 0.0, airflow_abs_max_mph);
+                    draw_eraseval(10);
+                    draw_eraseval(11);
+                    draw_eraseval(12);
+                    draw_eraseval(13);
+                    draw_dynamic(14, airflow_max_mph, 0.0, airflow_abs_max_mph);
+                    draw_dynamic(15, map_min_psi, map_abs_min_psi, map_abs_max_psi);
+                    draw_dynamic(16, map_max_psi, map_abs_min_psi, map_abs_max_psi);
                     draw_dynamic(17, speedo_idle_mph, 0.0, speedometer.get_redline_mph());
-                    draw_dynamic(18, speedometer.get_redline_mph(), 0.0, speedometer.get_max_mph());
+                    draw_dynamic(18, speedometer.get_redline_mph(), 0.0, speedometer.get_max_human());
                     draw_dynamic(19, brkpos_sensor.get_zeropoint(), BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
                 }
                 else if (dataset_page == PG_PWMS) {
@@ -720,6 +625,10 @@ class Display {
                     draw_dynamic(19, gas_pulse_cw_open_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
                 }
                 else if (dataset_page == PG_IDLE) {
+                    // draw_dynamic(10, tach_idle_rpm, 0.0, tach_redline_rpm);
+                    // draw_dynamic(11, tach_idle_hot_min_rpm, 0.0, tach_redline_rpm); 
+                    // draw_dynamic(12, tach_idle_cold_max_rpm, 0.0, tach_redline_rpm); 
+                    // draw_dynamic(13, tach_redline_rpm, 0.0, tach_max_rpm);
                     draw_asciiname(9, idlestatecard[idler.get_targetstate()]);
                     draw_dynamic(10, idler.get_stallpoint(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
                     draw_dynamic(11, idler.get_idlespeed(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
@@ -784,6 +693,19 @@ class Display {
                     draw_eraseval(15);
                     draw_eraseval(16);
                     draw_eraseval(17);
+                    draw_eraseval(18);
+                    draw_eraseval(19);
+                }
+                else if (dataset_page == PG_SIM) {
+                    draw_eraseval(9);
+                    draw_truth(10, simulator.can_simulate(SimOption::joy), 0);
+                    draw_truth(11, simulator.can_simulate(SimOption::pressure), 0);
+                    draw_truth(12, simulator.can_simulate(SimOption::brkpos), 0);
+                    draw_truth(13, simulator.can_simulate(SimOption::tach), 0);
+                    draw_truth(14, simulator.can_simulate(SimOption::airflow), 0);
+                    draw_truth(15, simulator.can_simulate(SimOption::mapsens), 0);
+                    draw_truth(16, simulator.can_simulate(SimOption::speedo), 0);
+                    draw_asciiname(17, sensorcard[static_cast<uint8_t>(simulator.get_pot_overload())]);
                     draw_truth(18, cal_joyvert_brkmotor, 0);
                     draw_truth(19, cal_pot_gasservo, 0);
                 }

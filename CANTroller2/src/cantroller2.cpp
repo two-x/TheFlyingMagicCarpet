@@ -144,7 +144,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     printf ("MAP sensor.. %sdetected\n", (map_detected) ? "" : "not ");
     if (map_detected) {
         if (map_sensor.begin() == false) printf ("  Sensor not responding");  // Begin communication with air flow sensor) over I2C 
-        else printf ("  Reading %f atm pressure\n", map_sensor.readPressure(ATM));
+        else printf ("  Reading %f atm manifold pressure\n", map_sensor.readPressure(ATM));
     }
 
     temp_init();  // Onewire bus and temp sensors
@@ -286,7 +286,7 @@ void loop() {
     // Voltage of vehicle battery
     // NOTE: we have these same lines of code above, are they both needed?
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
-    if (simulator.can_simulate(SimOption::battery) && simulator.get_pot_overload() == SimOption::battery) battery_filt_v = pot.mapToRange(0.0f, battery_max_v);
+    // if (simulator.can_simulate(SimOption::battery) && simulator.get_pot_overload() == SimOption::batt) battery_filt_v = pot.mapToRange(0.0f, battery_max_v);
 
     if (ctrl == JOY) ignition = ignition_sense;
     else if (ctrl == HOTRC) {
@@ -487,14 +487,8 @@ void loop() {
     adj = false;
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == PG_RUN) {
-            // TODO: use an enum class for page indices to make it more clear whats happening here
-            if (selected_value == 4) simulator.set_can_simulate(SimOption::joy, adj_bool(simulator.can_simulate(SimOption::joy), sim_edit_delta));
-            else if (selected_value == 5) simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), sim_edit_delta));
-            else if (selected_value == 6) simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), sim_edit_delta));
-            else if (selected_value == 7) simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), sim_edit_delta));
-            else if (selected_value == 8) simulator.set_can_simulate(SimOption::airflow, adj_bool(simulator.can_simulate(SimOption::airflow), sim_edit_delta));
-            else if (selected_value == 9) simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), sim_edit_delta));
-            else if (selected_value == 10) simulator.set_pot_overload(static_cast<SimOption>(adj_val(static_cast<int>(simulator.get_pot_overload()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));
+            if (selected_value == 9) adj = adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);
+            else if (selected_value == 10) adj = adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
         }
         else if (dataset_page == PG_JOY) {
             if (selected_value == 4) adj_val (&hotrc_pulse_failsafe_max_us, sim_edit_delta, hotrc_pulse_failsafe_min_us + 1, hotrc_pulse_lims_us[VERT][MIN] - 1);
@@ -510,17 +504,13 @@ void loop() {
             if (selected_value == 2) adj = adj_val (&tach_idle_hot_min_rpm, 0.1*(float)sim_edit_delta, tach_idle_abs_min_rpm, tach_idle_cold_max_rpm - 1);
             else if (selected_value == 3) adj = adj_val (&tach_idle_cold_max_rpm, 0.1*(float)sim_edit_delta, tach_idle_hot_min_rpm + 1, tach_idle_abs_max_rpm);
             else if (selected_value == 4) adj = adj_val (tachometer.get_redline_rpm_ptr().get(), 0.1*(float)sim_edit_delta, tach_idle_rpm, tachometer.get_max_rpm());
-            else if (selected_value == 5) adj = adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);
-            else if (selected_value == 6) adj = adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
-            else if (selected_value == 7) adj_val (&airflow_max_mph, 0.01*(float)sim_edit_delta, 0, airflow_abs_max_mph);
+            else if (selected_value == 5) adj_val (&airflow_max_mph, 0.01*(float)sim_edit_delta, 0, airflow_abs_max_mph);
+            else if (selected_value == 6) adj_val (&map_min_psi, 0.1*(float)sim_edit_delta, map_abs_min_psi, map_abs_max_psi);
+            else if (selected_value == 7) adj_val (&map_max_psi, 0.1*(float)sim_edit_delta, map_abs_min_psi, map_abs_max_psi);
             else if (selected_value == 8) adj_val (&speedo_idle_mph, 0.01*(float)sim_edit_delta, 0, speedometer.get_redline_mph() - 1);
             else if (selected_value == 9) adj_val (speedometer.get_redline_mph_ptr().get(), 0.01*(float)sim_edit_delta, speedo_idle_mph, 30);
             else if (selected_value == 10) adj_val(brkpos_sensor.get_zeropoint_ptr().get(), 0.001*(float)sim_edit_delta, BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
-            if (adj) {
-                calc_governor();
-                calc_ctrl_lims();
-            }
-      }
+        }
         else if (dataset_page == PG_PWMS) {
             if (selected_value == 3) adj_val (&steer_pulse_left_us, sim_edit_delta, steer_pulse_stop_us + 1, steer_pulse_left_max_us);
             else if (selected_value == 4) adj_val (&steer_pulse_stop_us, sim_edit_delta, steer_pulse_right_us + 1, steer_pulse_left_us - 1);
@@ -532,13 +522,13 @@ void loop() {
             else if (selected_value == 10) adj_val (&gas_pulse_cw_open_us, sim_edit_delta, gas_pulse_cw_min_us, gas_pulse_ccw_closed_us - 1);
         }
         else if (dataset_page == PG_IDLE) {
-            if (selected_value == 13) idler.set_idlehigh (idler.get_idlehigh(), (float)sim_edit_delta);
-            else if (selected_value == 14) idler.set_idlecold (idler.get_idlecold(), (float)sim_edit_delta);
-            else if (selected_value == 15) idler.set_idlehot (idler.get_idlehot(), (float)sim_edit_delta);
-            else if (selected_value == 16) idler.set_tempcold (idler.get_tempcold(), (float)sim_edit_delta);
-            else if (selected_value == 17) idler.set_temphot (idler.get_temphot(), (float)sim_edit_delta);
-            else if (selected_value == 18) idler.set_settletime (idler.get_settletime() + 1000*(float)sim_edit_delta);
-            else if (selected_value == 19) idler.cycle_idlemode (sim_edit_delta);
+            if (selected_value == 4) idler.set_idlehigh (idler.get_idlehigh(), (float)sim_edit_delta);
+            else if (selected_value == 5) idler.set_idlecold (idler.get_idlecold(), (float)sim_edit_delta);
+            else if (selected_value == 6) idler.set_idlehot (idler.get_idlehot(), (float)sim_edit_delta);
+            else if (selected_value == 7) idler.set_tempcold (idler.get_tempcold(), (float)sim_edit_delta);
+            else if (selected_value == 8) idler.set_temphot (idler.get_temphot(), (float)sim_edit_delta);
+            else if (selected_value == 9) idler.set_settletime (idler.get_settletime() + (float)sim_edit_delta);
+            else if (selected_value == 10) idler.cycle_idlemode (sim_edit_delta);
         }
         else if (dataset_page == PG_BPID) {
             if (selected_value == 8) brakeQPID.SetKp (brakeQPID.GetKp() + 0.001 * (float)sim_edit_delta);
@@ -556,8 +546,17 @@ void loop() {
             else if (selected_value == 9) cruiseQPID.SetKi (cruiseQPID.GetKi() + 0.001 * (float)sim_edit_delta);
             else if (selected_value == 10) cruiseQPID.SetKd (cruiseQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }
-        else if (dataset_page == PG_TEMP) {        
-            if (selected_value == 9 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor, sim_edit_delta);
+        else if (dataset_page == PG_TEMP);
+        else if (dataset_page == PG_SIM) {
+            if (selected_value == 1) simulator.set_can_simulate(SimOption::joy, adj_bool(simulator.can_simulate(SimOption::joy), sim_edit_delta));
+            else if (selected_value == 2) simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), sim_edit_delta));
+            else if (selected_value == 3) simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), sim_edit_delta));
+            else if (selected_value == 4) simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), sim_edit_delta));
+            else if (selected_value == 5) simulator.set_can_simulate(SimOption::airflow, adj_bool(simulator.can_simulate(SimOption::airflow), sim_edit_delta));
+            else if (selected_value == 6) simulator.set_can_simulate(SimOption::mapsens, adj_bool(simulator.can_simulate(SimOption::mapsens), sim_edit_delta));
+            else if (selected_value == 7) simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), sim_edit_delta));
+            else if (selected_value == 8) simulator.set_pot_overload(static_cast<SimOption>(adj_val(static_cast<int32_t>(simulator.get_pot_overload()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));
+            else if (selected_value == 9 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor, sim_edit_delta);
             else if (selected_value == 10 && runmode == CAL) adj_bool (&cal_pot_gasservo, (sim_edit_delta < 0 || cal_pot_gas_ready) ? sim_edit_delta : -1);
         }
         sim_edit_delta = 0;
