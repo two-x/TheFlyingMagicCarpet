@@ -470,8 +470,8 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
         measfilt_rpm = measfilt;
         coolant_f = coolant;
         set_idlehigh (idlehigh);
-        set_idlehot (idlehot);
-        stallpoint_rpm = idlehot_rpm;
+        idlehot_rpm = constrain (idlehot, 0.0, idlehigh_rpm);
+        stallpoint_rpm = idlehot_rpm - 1;  // Just to give a sane initial value
         set_idlecold (idlecold);
         set_temphot (temphot);
         set_tempcold (tempcold);        
@@ -555,14 +555,14 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
     }
     void set_idlemode (idlemodes idlemode) {} 
     void set_idlehigh (float idlehigh, float add = 0.0) { 
-        idlehigh_rpm = constrain (idlehigh + add, idlecold_rpm + 0.1, idle_absmax_rpm);
+        idlehigh_rpm = constrain (idlehigh + add, idlecold_rpm + 1, idle_absmax_rpm);
     }
     void set_idlehot (float idlehot, float add = 0.0) { 
-        idlehot_rpm = constrain (idlehot + add, stallpoint_rpm, idlecold_rpm - 0.1);
+        idlehot_rpm = constrain (idlehot + add, stallpoint_rpm, idlecold_rpm - 1);
         calc_idlespeed();
     }
     void set_idlecold (float idlecold, float add = 0.0) { 
-        idlecold_rpm = constrain (idlecold + add, idlehot_rpm + 0.1, idlehigh_rpm - 0.1);
+        idlecold_rpm = constrain (idlecold + add, idlehot_rpm + 1, idlehigh_rpm - 1);
         calc_idlespeed();
     }
     void set_temphot (float temphot, float add = 0.0) { 
