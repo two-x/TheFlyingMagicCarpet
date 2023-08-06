@@ -24,6 +24,8 @@ HotrcManager hotrcHorzManager (6);
 HotrcManager hotrcVertManager (6);
 RunModeManager runModeManager;
 Display screen;
+ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
+
 
 #ifdef CAP_TOUCH
 TouchScreen ts;
@@ -56,7 +58,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (neopixel_pin, OUTPUT);
     set_pin (sdcard_cs_pin, OUTPUT);
     set_pin (tft_cs_pin, OUTPUT);
-    set_pin (button_pin, INPUT_PULLUP);
+    set_pin (multibutton_pin, INPUT_PULLUP);
     set_pin (starter_pin, INPUT_PULLDOWN);
     set_pin (joy_horz_pin, INPUT);
     set_pin (joy_vert_pin, INPUT);
@@ -112,14 +114,22 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     simulator.register_device(SimOption::tach, tachometer, tachometer.source());
     simulator.register_device(SimOption::speedo, speedometer, speedometer.source());
 
-    printf ("Attach servos..\n");
-    // Servo() argument 2 is channel (0-15) of the esp timer (?). set to Servo::CHANNEL_NOT_ATTACHED to auto grab a channel
-    // gas_servo.setup();
-    // gas_servo.set_native_limits();  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
+    printf ("Configure timers for PWM out..\n");
+    ESP32PWM::allocateTimer(0);
+	ESP32PWM::allocateTimer(1);
+	ESP32PWM::allocateTimer(2);
+	ESP32PWM::allocateTimer(3);
+	brake_servo.setPeriodHertz(50);
+    gas_servo.setPeriodHertz(50);
+	steer_servo.setPeriodHertz(50);
+
     brake_servo.attach (brake_pwm_pin, brake_pulse_retract_us, brake_pulse_extend_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
     gas_servo.attach (gas_pwm_pin, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     steer_servo.attach (steer_pwm_pin, steer_pulse_right_us, steer_pulse_left_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
-    
+    // Servo() argument 2 is channel (0-15) of the esp timer (?). set to Servo::CHANNEL_NOT_ATTACHED to auto grab a channel
+    // gas_servo.setup();
+    // gas_servo.set_native_limits();  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
+
     printf ("Init neopixel..\n");
     neo_heartbeat = (neopixel_pin >= 0);
     neostrip.begin();  // start datastream
@@ -175,7 +185,7 @@ void loop() {
     //
 
     // ESP32 "boot" button. generates boot_button_action flags of LONG or SHORT presses which can be handled wherever. Handler must reset boot_button_action = NONE
-    if (!read_pin (button_pin)) {
+    if (!read_pin (multibutton_pin)) {
         if (!boot_button) {  // If press just occurred
             dispResetButtonTimer.reset();  // Looks like someone just pushed the esp32 "boot" button
             boot_button_timer_active = true;  // flag to indicate timing for a possible long press
@@ -211,10 +221,12 @@ void loop() {
     // Brake position - takes 70 us to read, convert, and filter
     brkpos_sensor.update();
     
-    if (!simulator.simulating(SimOption::starter)) starter = read_pin (starter_pin);
+    if (!starter_signal_support) starter = LOW;
+    else if (!simulator.simulating(SimOption::starter)) starter = read_pin (starter_pin);
 
     // Tach - takes 22 us to read when no activity
     tachometer.update();
+    throttle.push_tach_reading(tachometer.get_human());
 
     // Airflow sensor
     if (simulator.can_simulate(SimOption::airflow) && simulator.get_pot_overload() == SimOption::airflow) airflow_filt_mph = pot.mapToRange(airflow_min_mph, airflow_max_mph);
@@ -375,17 +387,18 @@ void loop() {
             #endif
         }
     }
+    
+    throttle.update();  // Allow idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
 
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
     if (runmode == CRUISE && !cruise_adjusting && cruisePidTimer.expireset()) {
-        idler.update();  // Adjust tach target when idling to minimize idle rpm while preventing stalling
-        cruiseQPID.SetOutputLimits (idler.get_idlespeed(), tach_govern_rpm);  // because cruise pid has internal variable for idlespeed which may need updating
+        cruiseQPID.SetOutputLimits (throttle.get_idlespeed(), tach_govern_rpm);  // because cruise pid has internal variable for idlespeed which may need updating
+        tach_target_rpm = throttle.get_target();
         cruiseQPID.Compute();
     }
 
     // Gas - Update servo output. Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
     if (gasPidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
-        idler.update();  // Adjust tach target when idling to minimize idle rpm while preventing stalling
         if (park_the_motors) gas_pulse_out_us = gas_pulse_ccw_closed_us + gas_pulse_park_slack_us;
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_ccw_closed_us;  // If in deadband or being pushed down, we want idle
@@ -397,8 +410,12 @@ void loop() {
                 gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
             }            
             else if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual)  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
-                gas_pulse_out_us = map (tach_target_rpm, tach_idle_rpm, tach_govern_rpm, gas_pulse_ccw_closed_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
-            else gasQPID.Compute();  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
+                gas_pulse_out_us = map (throttle.get_target(), throttle.get_idlespeed(), tach_govern_rpm, gas_pulse_ccw_closed_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
+            else {
+                if (boot_button) printf("gpid: gpo:%lf tt:%lf tf:%lf\n", gas_pulse_out_us, throttle.get_target(), tachometer.get_filtered_value());
+                tach_target_rpm = throttle.get_target();
+                gasQPID.Compute();  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
+            }
         }
         if (runmode != BASIC || park_the_motors) {
             if (!(runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo))  // Constrain to operating limits. If calibrating constrain already happened above
@@ -503,7 +520,7 @@ void loop() {
         else if (dataset_page == PG_CAR) {
             if (selected_value == 2) adj = adj_val (&tach_idle_hot_min_rpm, 0.1*(float)sim_edit_delta, tach_idle_abs_min_rpm, tach_idle_cold_max_rpm - 1);
             else if (selected_value == 3) adj = adj_val (&tach_idle_cold_max_rpm, 0.1*(float)sim_edit_delta, tach_idle_hot_min_rpm + 1, tach_idle_abs_max_rpm);
-            else if (selected_value == 4) adj = adj_val (tachometer.get_redline_rpm_ptr().get(), 0.1*(float)sim_edit_delta, tach_idle_rpm, tachometer.get_max_rpm());
+            else if (selected_value == 4) adj = adj_val (tachometer.get_redline_rpm_ptr().get(), 0.1*(float)sim_edit_delta, throttle.get_idlehigh(), tachometer.get_max_rpm());
             else if (selected_value == 5) adj_val (&airflow_max_mph, 0.01*(float)sim_edit_delta, 0, airflow_abs_max_mph);
             else if (selected_value == 6) adj_val (&map_min_psi, 0.1*(float)sim_edit_delta, map_abs_min_psi, map_abs_max_psi);
             else if (selected_value == 7) adj_val (&map_max_psi, 0.1*(float)sim_edit_delta, map_abs_min_psi, map_abs_max_psi);
@@ -522,13 +539,13 @@ void loop() {
             else if (selected_value == 10) adj_val (&gas_pulse_cw_open_us, sim_edit_delta, gas_pulse_cw_min_us, gas_pulse_ccw_closed_us - 1);
         }
         else if (dataset_page == PG_IDLE) {
-            if (selected_value == 4) idler.set_idlehigh (idler.get_idlehigh(), (float)sim_edit_delta);
-            else if (selected_value == 5) idler.set_idlecold (idler.get_idlecold(), (float)sim_edit_delta);
-            else if (selected_value == 6) idler.set_idlehot (idler.get_idlehot(), (float)sim_edit_delta);
-            else if (selected_value == 7) idler.set_tempcold (idler.get_tempcold(), (float)sim_edit_delta);
-            else if (selected_value == 8) idler.set_temphot (idler.get_temphot(), (float)sim_edit_delta);
-            else if (selected_value == 9) idler.set_settletime (idler.get_settletime() + (float)sim_edit_delta);
-            else if (selected_value == 10) idler.cycle_idlemode (sim_edit_delta);
+            if (selected_value == 4) throttle.set_idlehigh (throttle.get_idlehigh(), (float)sim_edit_delta);
+            else if (selected_value == 5) throttle.set_idlecold (throttle.get_idlecold(), (float)sim_edit_delta);
+            else if (selected_value == 6) throttle.set_idlehot (throttle.get_idlehot(), (float)sim_edit_delta);
+            else if (selected_value == 7) throttle.set_tempcold (throttle.get_tempcold(), (float)sim_edit_delta);
+            else if (selected_value == 8) throttle.set_temphot (throttle.get_temphot(), (float)sim_edit_delta);
+            else if (selected_value == 9) throttle.set_settlerate (throttle.get_settlerate() + sim_edit_delta);
+            else if (selected_value == 10) throttle.cycle_idlemode (sim_edit_delta);
         }
         else if (dataset_page == PG_BPID) {
             if (selected_value == 8) brakeQPID.SetKp (brakeQPID.GetKp() + 0.001 * (float)sim_edit_delta);
@@ -536,7 +553,10 @@ void loop() {
             else if (selected_value == 10) brakeQPID.SetKd (brakeQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }
         else if (dataset_page == PG_GPID) {
-            if (selected_value == 7) adj_bool (&gas_open_loop, sim_edit_delta);
+            if (selected_value == 7) {
+                adj_bool (&gas_open_loop, sim_edit_delta);
+                gasQPID.SetMode (gas_open_loop ? QPID::Control::manual : QPID::Control::timer);
+            }
             else if (selected_value == 8) gasQPID.SetKp (gasQPID.GetKp() + 0.001 * (float)sim_edit_delta);
             else if (selected_value == 9) gasQPID.SetKi (gasQPID.GetKi() + 0.001 * (float)sim_edit_delta);
             else if (selected_value == 10) gasQPID.SetKd (gasQPID.GetKd() + 0.001 * (float)sim_edit_delta);
