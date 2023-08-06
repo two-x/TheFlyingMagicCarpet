@@ -24,6 +24,8 @@ HotrcManager hotrcHorzManager (6);
 HotrcManager hotrcVertManager (6);
 RunModeManager runModeManager;
 Display screen;
+ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
+
 
 #ifdef CAP_TOUCH
 TouchScreen ts;
@@ -56,7 +58,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (neopixel_pin, OUTPUT);
     set_pin (sdcard_cs_pin, OUTPUT);
     set_pin (tft_cs_pin, OUTPUT);
-    set_pin (button_pin, INPUT_PULLUP);
+    set_pin (multibutton_pin, INPUT_PULLUP);
     set_pin (starter_pin, INPUT_PULLDOWN);
     set_pin (joy_horz_pin, INPUT);
     set_pin (joy_vert_pin, INPUT);
@@ -112,14 +114,22 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     simulator.register_device(SimOption::tach, tachometer, tachometer.source());
     simulator.register_device(SimOption::speedo, speedometer, speedometer.source());
 
-    printf ("Attach servos..\n");
-    // Servo() argument 2 is channel (0-15) of the esp timer (?). set to Servo::CHANNEL_NOT_ATTACHED to auto grab a channel
-    // gas_servo.setup();
-    // gas_servo.set_native_limits();  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
+    printf ("Configure timers for PWM out..\n");
+    ESP32PWM::allocateTimer(0);
+	ESP32PWM::allocateTimer(1);
+	ESP32PWM::allocateTimer(2);
+	ESP32PWM::allocateTimer(3);
+	brake_servo.setPeriodHertz(50);
+    gas_servo.setPeriodHertz(50);
+	steer_servo.setPeriodHertz(50);
+
     brake_servo.attach (brake_pwm_pin, brake_pulse_retract_us, brake_pulse_extend_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
     gas_servo.attach (gas_pwm_pin, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     steer_servo.attach (steer_pwm_pin, steer_pulse_right_us, steer_pulse_left_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
-    
+    // Servo() argument 2 is channel (0-15) of the esp timer (?). set to Servo::CHANNEL_NOT_ATTACHED to auto grab a channel
+    // gas_servo.setup();
+    // gas_servo.set_native_limits();  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
+
     printf ("Init neopixel..\n");
     neo_heartbeat = (neopixel_pin >= 0);
     neostrip.begin();  // start datastream
@@ -175,7 +185,7 @@ void loop() {
     //
 
     // ESP32 "boot" button. generates boot_button_action flags of LONG or SHORT presses which can be handled wherever. Handler must reset boot_button_action = NONE
-    if (!read_pin (button_pin)) {
+    if (!read_pin (multibutton_pin)) {
         if (!boot_button) {  // If press just occurred
             dispResetButtonTimer.reset();  // Looks like someone just pushed the esp32 "boot" button
             boot_button_timer_active = true;  // flag to indicate timing for a possible long press
@@ -212,6 +222,7 @@ void loop() {
     brkpos_sensor.update();
     
     if (!simulator.simulating(SimOption::starter)) starter = read_pin (starter_pin);
+    else starter = LOW;  // Since we have no way to change value of simulated starter currently
 
     // Tach - takes 22 us to read when no activity
     tachometer.update();
@@ -397,7 +408,7 @@ void loop() {
                 gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
             }            
             else if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual)  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
-                gas_pulse_out_us = map (tach_target_rpm, tach_idle_rpm, tach_govern_rpm, gas_pulse_ccw_closed_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
+                gas_pulse_out_us = map (tach_target_rpm, idler.get_idlespeed(), tach_govern_rpm, gas_pulse_ccw_closed_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
             else gasQPID.Compute();  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
         }
         if (runmode != BASIC || park_the_motors) {
@@ -503,7 +514,7 @@ void loop() {
         else if (dataset_page == PG_CAR) {
             if (selected_value == 2) adj = adj_val (&tach_idle_hot_min_rpm, 0.1*(float)sim_edit_delta, tach_idle_abs_min_rpm, tach_idle_cold_max_rpm - 1);
             else if (selected_value == 3) adj = adj_val (&tach_idle_cold_max_rpm, 0.1*(float)sim_edit_delta, tach_idle_hot_min_rpm + 1, tach_idle_abs_max_rpm);
-            else if (selected_value == 4) adj = adj_val (tachometer.get_redline_rpm_ptr().get(), 0.1*(float)sim_edit_delta, tach_idle_rpm, tachometer.get_max_rpm());
+            else if (selected_value == 4) adj = adj_val (tachometer.get_redline_rpm_ptr().get(), 0.1*(float)sim_edit_delta, idler.get_idlehigh(), tachometer.get_max_rpm());
             else if (selected_value == 5) adj_val (&airflow_max_mph, 0.01*(float)sim_edit_delta, 0, airflow_abs_max_mph);
             else if (selected_value == 6) adj_val (&map_min_psi, 0.1*(float)sim_edit_delta, map_abs_min_psi, map_abs_max_psi);
             else if (selected_value == 7) adj_val (&map_max_psi, 0.1*(float)sim_edit_delta, map_abs_min_psi, map_abs_max_psi);

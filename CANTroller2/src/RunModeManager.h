@@ -98,7 +98,7 @@ private:
             }
             else if (brakeIntervalTimer.expireset()) {
                 pressure_target_psi = pressure_target_psi + (panic_stop) ? pressure_panic_increment_psi : pressure_hold_increment_psi;  // Slowly add more brakes until car stops
-                tach_target_rpm = tach_idle_rpm;  // Keep target updated to possibly changing idle value
+                idler.goto_idle();  // Keep target updated to possibly changing idle value
             }
         }
         else if (calmode_request) updateMode(CAL);  // if fully shut down and cal mode requested, go to cal mode
@@ -120,7 +120,7 @@ private:
 
     void handleHoldMode() {
         if (we_just_switched_modes) {  // Release throttle and push brake upon entering hold mode
-            tach_target_rpm = tach_idle_rpm;  // Let off gas (if gas using PID mode)
+            idler.goto_idle();  // Let off gas (if gas using PID mode)
             if (speedometer.car_stopped()) pressure_target_psi = pressure_sensor.get_filtered_value() + pressure_hold_increment_psi; // If the car is already stopped then just add a touch more pressure and then hold it.
             else if (pressure_target_psi < pressure_hold_initial_psi) pressure_target_psi = pressure_hold_initial_psi;  //  These hippies need us to stop the car for them
             brakeIntervalTimer.reset();
@@ -128,7 +128,7 @@ private:
             joy_centered = false;  // Fly mode will be locked until the joystick first is put at or below center
         }
         if (brakeIntervalTimer.expireset()) {  // On an interval ...
-            tach_target_rpm = tach_idle_rpm;  // Keep target updated to possibly changing idle value
+            idler.goto_idle();  // Keep target updated to possibly changing idle value
             if (!speedometer.car_stopped() && !stopcarTimer.expired()) pressure_target_psi = min (pressure_target_psi + pressure_hold_increment_psi, pressure_sensor.get_max_human());  // If the car is still moving, push harder
         }
         if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
@@ -141,8 +141,9 @@ private:
             gestureFlyTimer.set (gesture_flytimeout_us); // Initialize gesture timer to already-expired value
             cruise_sw_held = false;
             // cruiseSwTimer.reset();  // Needed if momentary cruise button is used to go to cruise mode
-            flycruise_toggle_request = false;
             car_initially_moved = !speedometer.car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
+            if (ctrl == HOTRC) flycruise_toggle_request = false;
+            else if (ctrl == JOY && share_boot_joycruise_buttons && boot_button_action == LONG) boot_button_action = NONE;
         }
         if (!car_initially_moved) {
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) updateMode(HOLD);  // Must keep pulling trigger until car moves, or it drops back to hold mode
@@ -152,9 +153,9 @@ private:
         if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && !hotrc_radio_detected) updateMode(HOLD);  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
         else {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])  {  // If we are trying to accelerate, scale joystick value to determine gas setpoint
-                tach_target_rpm = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], tach_idle_rpm, tach_govern_rpm);
+                tach_target_rpm = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], idler.get_idlespeed(), tach_govern_rpm);
             }
-            else tach_target_rpm = tach_idle_rpm;  // Else let off gas (if gas using PID mode)
+            else idler.goto_idle();  // Else let off gas (if gas using PID mode)
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT])  {  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
                 pressure_target_psi = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], pressure_sensor.get_min_human(), pressure_sensor.get_max_human());
             }
@@ -162,8 +163,6 @@ private:
         }
         // Cruise mode can be entered by pressing a controller button, or by holding the brake on full for a half second. Which epends on the cruise_gesturing flag.
         // The gesture involves pushing the joystick from the center to the top, then to the bottom, then back to center, quickly enough.
-        if (flycruise_toggle_request) updateMode(CRUISE);
-        flycruise_toggle_request = false;  // Reset the toggle request
         if (ctrl == JOY) {
             if (cruise_gesturing) {  // If we are configured to use joystick gestures to go to cruise mode, the gesture is 
                 if (!gesture_progress && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][TOP]) {  // Re-zero gesture timer for potential new gesture whenever joystick at center
@@ -184,16 +183,15 @@ private:
                     }        
                 }
             }
-            // This was when the thought was to add a momentary button to the joystick to toggle cruise <-> fly mode
-            // if (!cruise_sw) {  // If button not currently pressed
-            //     if (cruise_sw_held && cruiseSwTimer.expired()) runmode = CRUISE;  // After a long press of sufficient length, upon release enter Cruise mode
-            //     cruise_sw_held = false;  // Cancel button held state
-            // }
-            // else if (!cruise_sw_held) {  // If the button just now got pressed
-            //     cruiseSwTimer.reset(); // Start hold time timer
-            //     cruise_sw_held = true;  // Get into button held state
-            // }
+            if (share_boot_joycruise_buttons && boot_button_action == LONG) {  // Joy cruise button long press happened
+                updateMode(CRUISE);
+                boot_button_action = NONE;
+            }
         }
+        else if (ctrl == HOTRC && flycruise_toggle_request) {
+            updateMode(CRUISE);
+            flycruise_toggle_request = false;  // Reset the toggle request
+        }        
     }
 
     void handleCruiseMode() {
@@ -205,7 +203,8 @@ private:
             gestureFlyTimer.reset();  // reset gesture timer
             cruise_sw_held = false;
             cruise_adjusting = false;
-            flycruise_toggle_request = false;
+            if (ctrl == HOTRC) flycruise_toggle_request = false;
+            else if (ctrl == JOY && share_boot_joycruise_buttons && boot_button_action == LONG) boot_button_action = NONE;
         }
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) {  // When joystick vert above center, increase the throttle target proportional to how far off center
             if (!cruise_adjusting) tach_adjustpoint_rpm = tachometer.get_filtered_value();  // When beginning adjustment, save current tach value to use as adjustment low endpoint 
@@ -215,7 +214,7 @@ private:
         else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) {  // When joystick vert below center, decrease the throttle target proportional to how far off center
             if (!cruise_adjusting) tach_adjustpoint_rpm = tachometer.get_filtered_value();  // When beginning adjustment, save current tach value to use as adjustment high endpoint 
             cruise_adjusting = true;  // Suspend pid loop control of gas
-            tach_target_rpm = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], tach_idle_rpm, tach_adjustpoint_rpm);
+            tach_target_rpm = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], idler.get_idlespeed(), tach_adjustpoint_rpm);
         }
         else if (cruise_adjusting) {  // When joystick at center, the target speed stays locked to the value it was when joystick goes to center
             tach_target_rpm = tachometer.get_filtered_value();
@@ -225,14 +224,19 @@ private:
         if (!cruise_adjusting) cruiseAntiglitchTimer.reset();  // Anti-glitch timer attempts to keep very short joystick sensor glitches from going into adjust mode
         else if (cruiseAntiglitchTimer.expired()) speedo_target_mph = speedometer.get_filtered_value();  // May be unneccesary now that our readings are stable.  Remove?  Anyway, need to review the logic
 
-        if (flycruise_toggle_request) updateMode(FLY);  // Go to fly mode if hotrc ch4 button pushed
-        flycruise_toggle_request = false;  // Reset the toggle request
-
+        if (ctrl == HOTRC && flycruise_toggle_request) {
+            updateMode(FLY);  // Go to fly mode if hotrc ch4 button pushed
+            flycruise_toggle_request = false;  // Reset the toggle request
+        }
+        else if (ctrl == JOY && share_boot_joycruise_buttons && boot_button_action == LONG) {  // Joy cruise button long press happened
+            updateMode(FLY);
+            boot_button_action = NONE;
+        }
         // If joystick is held full-brake for more than X, driver could be confused & panicking, drop to fly mode so fly mode will push the brakes
         if (ctrl_pos_adc[VERT][FILT] > ctrl_lims_adc[ctrl][VERT][MIN] + flycruise_vert_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
         else if (gestureFlyTimer.expired()) updateMode(FLY);  // New gesture to drop to fly mode is hold the brake all the way down for more than X ms
         
-        if (speedometer.car_stopped()) updateMode(HOLD);  // In case we slam into a brick wall, get out of cruise mode
+        if (speedometer.car_stopped()) updateMode(HOLD);  // In case we slam into camp Q woofer stack, get out of cruise mode
     }
 
     void handleCalMode() {  // Calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration. Don't use it unless you know how.

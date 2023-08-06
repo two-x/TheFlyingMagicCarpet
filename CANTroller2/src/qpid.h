@@ -464,7 +464,7 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
       float idlehigh, float idlehot, float idlecold,  // Values for: high-idle rpm (will not stall), hot idle nominal rpm, cold idle nominal rpm 
       float tempcold, float temphot,  // Values for: engine operational temp cold (min) and temp hot (max) in degrees-f
       uint32_t settletime = 2300,  // Period over which the idle will be lowered from high-idle to final idle
-      idlemodes idlemode = idlemodes::control) {  // Configure idle control to just soft land or also attempt to minimize idle
+      idlemodes myidlemode = idlemodes::control) {  // Configure idle control to just soft land or also attempt to minimize idle
         target_rpm = target;
         measraw_rpm = measraw;
         measfilt_rpm = measfilt;
@@ -479,6 +479,7 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
         targetlast_rpm = *target_rpm;
         settletime_ms = settletime;
         settleTimer.set (1000 * (int64_t)settletime_ms);  // Time period over which the idle will subsequently drop further to its lower temperature-dependent target value
+        idlemode = myidlemode;
         runstate = driving;
     }
     void update (void) {  // this should be called to update idle and throttle target values before throttle-related control loop outputs are calculated

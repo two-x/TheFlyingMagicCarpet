@@ -25,7 +25,7 @@
 // #define CAP_TOUCH
 bool flip_the_screen = false;
 
-#define button_pin 0  // (button0 / strap to 1) - This is the "Boot" button on the esp32 board
+#define multibutton_pin 0  // (button0 / strap to 1) - This is the "Boot" button on the esp32 board, and also potentially a joystick cruise button. Both active low (existing onboard pullup)
 #define joy_horz_pin 1  // (adc) - Analog left-right input (joystick)
 #define joy_vert_pin 2  // (adc) - Analog up-down input (joystick)
 #define tft_dc_pin 3  // (adc* / strap X) - Output, Assert when sending data to display chip to indicate commands vs. screen data
@@ -43,25 +43,26 @@ bool flip_the_screen = false;
 #define hotrc_ch1_horz_pin 15  // (pwm1 / adc*) - Hotrc Ch1 thumb joystick input
 #define gas_pwm_pin 16  // (pwm1 / adc*) - Output, PWM signal duty cycle controls throttle target. On Due this is the pin labeled DAC1 (where A13 is on Mega)
 #define brake_pwm_pin 17  // (pwm0 / adc* / tx1) - Output, PWM signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% is stopped) 
-#define steer_pwm_pin 18  // (pwm0 / adc* / rx1) - Oqutput, PWM signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
+#define steer_pwm_pin 18  // (pwm0 / adc* / rx1) - Output, PWM signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
 #define onewire_pin 19  // (usb-otg / adc*) - Onewire bus for temperature sensor data
 #define hotrc_ch3_ign_pin 20  // (usb-otg / adc*) - Ignition control, Hotrc Ch3 PWM toggle signal
 #define hotrc_ch4_cruise_pin 21  // (pwm0) - Cruise control, Hotrc Ch4 PWM toggle signal
-#define basicmodesw_pin 35  // (spi-ram / oct-spi) - Input, asserted to tell us to run in basic mode, active low (needs pullup)
+#define speedo_pulse_pin 35  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
 #define tach_pulse_pin 36  // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup) - Note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define ign_out_pin 37  // (spi-ram / oct-spi) - Output for Hotrc to a relay to kill the car ignition. Note, Joystick ign button overrides this if connected and pressed
 #define syspower_pin 38  // (spi-ram / oct-spi) - Output, flips a relay to power all the tranducers. This is actually the neopixel pin on all v1.1 devkit boards.
-#define speedo_pulse_pin 39  // Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup) - Note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
+#define starter_pin 39  // Input, active high when vehicle starter is engaged (needs pulldown) - Note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define encoder_b_pin 40  // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define encoder_a_pin 41  // Int input, The A (aka CLK) pin of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
 #define encoder_sw_pin 42  // Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
 #define uart_tx_pin 43  // "TX" (uart0 tx) - Needed for serial monitor
 #define uart_rx_pin 44  // "RX" (uart0 rx) - Needed for serial monitor. In theory we could dual-purpose this for certain things, as we haven't yet needed to accept input over the serial monitor
-#define starter_pin 45  // (strap to 0) - Input, active high when vehicle starter is engaged (needs pulldown)
+#define basicmodesw_pin 45  // (strap to 0) - Input, asserted to tell us to run in basic mode, active high (has ext pulldown)
 #define sdcard_cs_pin 46  // (strap X) - Output, chip select for SD card controller on SPI bus, 
 #define touch_cs_pin 47  // Output, chip select for resistive touchscreen, active low
 #define neopixel_pin 48  // (rgb led) - Data line to onboard Neopixel WS281x (on all v1 devkit boards)
 
+// Servo library says S3 can run servos on pins 1-21,35-45,47-48, the multiple servo example uses pins 13,14,15,16, and (I think) 4.
 // ESP32 errata 3.11: Pin 36 and 39 will be pulled low for ~80ns when "certain RTC peripherals power up"
 // https://www.esp32.com/viewtopic.php?f=12&t=34831
 // Soren 230731 swapped crit signals off p36/p39:
@@ -77,6 +78,7 @@ bool timestamp_loop = false;  // Makes code write out timestamps throughout loop
 bool take_temperatures = true;
 bool keep_system_powered = true;  // Use true during development
 bool allow_rolling_start = true;  // May be a smart prerequisite, may be us putting obstacles in our way
+bool share_boot_joycruise_buttons = true;  // Set true if joystick cruise button is in parallel with esp native "boot" button
 
 #define pwm_jaguars true
 
@@ -348,7 +350,7 @@ Tachometer tachometer(tach_pulse_pin);
 float tach_target_rpm, tach_adjustpoint_rpm;
 float tach_govern_rpm; // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
 float tach_margin_rpm = 15.0; // Margin of error for checking engine rpm (in rpm)
-float tach_idle_rpm = 700.0; // Min value for engine hz, corresponding to low idle (in rpm) Note, this value is itself highly variable, dependent on engine temperature
+// float tach_idle_rpm = 700.0; // Min value for engine hz, corresponding to low idle (in rpm) Note, this value is itself highly variable, dependent on engine temperature
 float tach_idle_abs_min_rpm = 450.0;  // Low limit of idle speed adjustability
 float tach_idle_hot_min_rpm = 550.0;  // Idle speed at nom_max engine temp
 float tach_idle_cold_max_rpm = 775.0;  // Idle speed at nom_min engine temp
@@ -425,7 +427,7 @@ float cruise_spid_initial_kp = 5.57;  // PID proportional coefficient (cruise) H
 float cruise_spid_initial_ki_hz = 1.335;  // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
 float cruise_spid_initial_kd_s = 1.844;  // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
 QPID cruiseQPID (speedometer.get_filtered_value_ptr().get(), &tach_target_rpm, &speedo_target_mph,  // input, target, output variable references
-    tach_idle_rpm, tach_govern_rpm,  // output min, max
+    idler.get_idlespeed(), tach_govern_rpm,  // output min, max
     cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s,  // Kp, Ki, and Kd tuning constants
     QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwRound, QPID::Action::direct,  // settings
     cruise_pid_period_us, QPID::Control::timer, QPID::centMode::range);
@@ -474,8 +476,8 @@ void calc_ctrl_lims (void) {
 }
 void calc_governor (void) {
     tach_govern_rpm = map(gas_governor_percent, 0.0, 100.0, 0.0, tachometer.get_redline_rpm());  // Create an artificially reduced maximum for the engine speed
-    cruiseQPID.SetOutputLimits(tach_idle_rpm, tach_govern_rpm);
-    gas_pulse_govern_us = map (gas_governor_percent*(tach_govern_rpm-tach_idle_rpm)/tachometer.get_redline_rpm(), 0.0, 100.0, gas_pulse_ccw_closed_us, gas_pulse_cw_open_us);  // Governor must scale the pulse range proportionally
+    cruiseQPID.SetOutputLimits(idler.get_idlespeed(), tach_govern_rpm);
+    gas_pulse_govern_us = map (gas_governor_percent*(tach_govern_rpm-idler.get_idlespeed())/tachometer.get_redline_rpm(), 0.0, 100.0, gas_pulse_ccw_closed_us, gas_pulse_cw_open_us);  // Governor must scale the pulse range proportionally
     speedo_govern_mph = map ((float)gas_governor_percent, 0.0, 100.0, 0.0, speedometer.get_redline_mph());  // Governor must scale the top vehicle speed proportionally
 }
 float steer_safe (float endpoint) {

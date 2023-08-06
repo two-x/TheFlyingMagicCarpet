@@ -79,7 +79,7 @@ char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs
 int32_t tuning_first_editable_line[disp_tuning_lines] = { 9, 4, 5, 3, 4, 8, 7, 8, 11, 1 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
-    { "BrakePos", " Airflow", "     MAP", "MuleBatt", "     Pot", "      - ", "      - ", "      - ", "      - ", "Governor", "SteerSaf", },  // PG_RUN
+    { "BrakePos", " Airflow", "     MAP", "MuleBatt", "     Pot", " Starter", "      - ", "      - ", "      - ", "Governor", "SteerSaf", },  // PG_RUN
     { "JoyH Raw", "JoyV Raw", "HRC Horz", "HRC Vert", "HFailsaf", "Horz Min", "Horz Max", " Horz DB", "Vert Min", "Vert Max", " Vert DB", },  // PG_JOY
     { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", "SpeedIdl", "SpeedRed", "BkPos0Pt", },  // PG_CAR
     { "BrakePWM", "SteerPWM", "      - ", "Steer Lt", "SteerStp", "Steer Rt", "BrakExtd", "BrakStop", "BrakRetr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
@@ -579,7 +579,7 @@ class Display {
                     draw_dynamic(11, map_filt_psi, map_min_psi, map_max_psi);
                     draw_dynamic(12, battery_filt_v, 0.0, battery_max_v);
                     draw_dynamic(13, pot.get(), pot.min(), pot.max());
-                    draw_eraseval(14);
+                    draw_truth(14, starter, 0);
                     draw_eraseval(15);
                     draw_eraseval(16);
                     draw_eraseval(17);
@@ -637,7 +637,7 @@ class Display {
                     // draw_dynamic(12, tach_idle_cold_max_rpm, 0.0, tach_redline_rpm); 
                     // draw_dynamic(13, tach_redline_rpm, 0.0, tach_max_rpm);
                     draw_asciiname(9, idlestatecard[idler.get_targetstate()]);
-                    draw_dynamic(10, tach_target_rpm, 0.0, tach_redline_rpm);
+                    draw_dynamic(10, tach_target_rpm, 0.0, tachometer.get_redline_rpm());
                     draw_dynamic(11, idler.get_stallpoint(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
                     draw_dynamic(12, idler.get_idlespeed(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);  // idler.get_idlehot(), idler.get_idlecold());
                     // draw_dynamic(12, temps_f[ENGINE], temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
@@ -666,7 +666,7 @@ class Display {
                 else if (dataset_page == PG_GPID) {
                     drange = gas_pulse_ccw_closed_us-gas_pulse_govern_us;
                     draw_dynamic(9, tach_target_rpm, 0.0, tachometer.get_redline_rpm());
-                    draw_dynamic(10, gasQPID.GetError(), tach_idle_rpm - tach_govern_rpm, tach_govern_rpm - tach_idle_rpm);
+                    draw_dynamic(10, gasQPID.GetError(), idler.get_idlespeed() - tach_govern_rpm, tach_govern_rpm - idler.get_idlespeed());
                     draw_dynamic(11, gasQPID.GetPterm(), -drange, drange);
                     draw_dynamic(12, gasQPID.GetIterm(), -drange, drange);
                     draw_dynamic(13, gasQPID.GetDterm(), -drange, drange);
@@ -678,7 +678,7 @@ class Display {
                     draw_dynamic(19, gasQPID.GetKd(), 0.0, 2.0);
                 }
                 else if (dataset_page == PG_CPID) {
-                    drange = tach_govern_rpm - tach_idle_rpm;
+                    drange = tach_govern_rpm - idler.get_idlespeed();
                     draw_dynamic(9, speedo_target_mph, 0.0, speedo_govern_mph);
                     draw_dynamic(10, cruiseQPID.GetError(), speedo_idle_mph-speedo_govern_mph, speedo_govern_mph-speedo_idle_mph);
                     draw_dynamic(11, cruiseQPID.GetPterm(), -drange, drange);

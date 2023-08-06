@@ -484,10 +484,10 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
 template<typename HUMAN_T>
 class PulseSensor : public Sensor<int32_t, HUMAN_T> {
     protected:
-        static constexpr float _stop_thresh_rpm = 0.1;  // Below which the engine is considered stopped - this is redundant,
         static constexpr int64_t _stop_timeout_us = 2000000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
 
         Timer _stop_timer;
+        float _stop_thresh;
         volatile int64_t _isr_us = 0;
         volatile int64_t _isr_timer_start_us = 0;
         volatile int64_t _isr_timer_read_us = 0;
@@ -523,20 +523,22 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
         }
 
     public:
-        PulseSensor(uint8_t arg_pin, int64_t delta_abs_min_us_arg) : Sensor<int32_t, HUMAN_T>(arg_pin), _stop_timer(_stop_timeout_us), _delta_abs_min_us(delta_abs_min_us_arg) {}
+        PulseSensor(uint8_t arg_pin, int64_t delta_abs_min_us_arg, float stop_thresh_arg) : Sensor<int32_t, HUMAN_T>(arg_pin), _stop_timer(_stop_timeout_us), _delta_abs_min_us(delta_abs_min_us_arg), _stop_thresh(stop_thresh_arg) {}
         PulseSensor() = delete;
         void setup() {
             set_pin(this->_pin, INPUT_PULLUP);
             attachInterrupt(digitalPinToInterrupt(this->_pin), [this]{ _isr(); }, RISING);
             this->set_source(ControllerMode::PIN);
         }
-        bool stopped() { return this->_val_filt.get() < _stop_thresh_rpm; }  // Note due to weird float math stuff, can not just check if tach == 0.0
+        bool stopped() { return this->_val_filt.get() < _stop_thresh; }  // Note due to weird float math stuff, can not just check if tach == 0.0
 };
 
 // Tachometer represents a magnetic pulse measurement of the enginge rotation.
 // It extends PulseSensor to handle reading a hall monitor sensor and converting RPU to RPM
 class Tachometer : public PulseSensor<float> {
     protected:
+        static constexpr int64_t _delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
+        static constexpr float _stop_thresh_rpm = 0.2;  // Below which the engine is considered stopped
         static constexpr float _min_rpm = 0.0;
         static constexpr float _max_rpm = 7000.0;  // Max possible engine rotation speed
         // NOTE: should we start at 50rpm? shouldn't it be zero?
@@ -545,9 +547,8 @@ class Tachometer : public PulseSensor<float> {
         static constexpr float _initial_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
         static constexpr bool _initial_invert = true;
         static constexpr float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-        static constexpr int64_t tach_delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
     public:
-        Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, tach_delta_abs_min_us) {
+        Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_rpm) {
             _ema_alpha = _initial_ema_alpha;
             _m_factor = _initial_rpm_per_rpus;
             _invert = _initial_invert;
@@ -569,6 +570,8 @@ class Tachometer : public PulseSensor<float> {
 // It extends PulseSensor to handle reading a hall monitor sensor and converting RPU to MPH
 class Speedometer : public PulseSensor<float> {
     protected:
+        static constexpr int64_t _delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
+        static constexpr float _stop_thresh_mph = 0.2;  // Below which the car is considered stopped
         static constexpr float _min_mph = 0.0;
         static constexpr float _max_mph = 25.0; // What is max speed car can ever go
         // NOTE: should we start at 1mph? shouldn't it be zero?
@@ -577,9 +580,8 @@ class Speedometer : public PulseSensor<float> {
         static constexpr float _initial_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 pulrot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 whlrot/pulrot * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
         static constexpr bool _initial_invert = true;
         static constexpr float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-        static constexpr int64_t speedo_delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
     public:
-        Speedometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, speedo_delta_abs_min_us) {
+        Speedometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_mph) {
             _ema_alpha = _initial_ema_alpha;
             _m_factor = _initial_mph_per_rpus;
             _invert = _initial_invert;
