@@ -23,8 +23,9 @@ private:
     int32_t touch_fudge = 0;
     int32_t touch_accel_exponent_max = 8;
 
-    Timer touchHoldTimer{800000};
+    Timer touchHoldTimer{550000};  // Hold this long to count as a long press
     Timer touchAccelTimer{850000};
+    Timer touchDoublePressTimer{40000};  // Won't allow a new press within this long after an old press (prevent accidental double clicks)
 
     // debug printing
     bool touchPrintEnabled = true;
@@ -61,8 +62,10 @@ public:
 
     void handleTouch() {
         int32_t touch_x, touch_y, trow, tcol;
-        if (touched()) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
-            touch_accel = 1 << touch_accel_exponent;  // Determine value editing rate
+        // printf ("elaps:%8ld now:%d if:", touchDoublePressTimer.elapsed(), touch_now_touched);
+        if (touched() && touchDoublePressTimer.expired()) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints
+        //   printf ("touch\n");
+          touch_accel = 1 << touch_accel_exponent;  // Determine value editing rate
             TS_Point touchpoint = getPoint();  // Retrieve a point
             #ifdef CAP_TOUCH
                 // Rotate touch coordinates to match tft coordinates
@@ -161,6 +164,7 @@ public:
         } else { // If not being touched, put momentarily-set simulated button values back to default values
             if (simulator.simulating(SimOption::cruisesw)) cruise_sw = false;  // Makes this button effectively momentary
             sim_edit_delta_touch = 0;  // Stop changing the value
+            if (touch_now_touched) touchDoublePressTimer.reset();  // Upon end of a touch, begin timer to reject any accidental double touches
             touch_now_touched = false;  // Remember the last touch state
             touch_accel_exponent = 0;
             touch_accel = 1 << touch_accel_exponent; // Reset touch acceleration value to 1

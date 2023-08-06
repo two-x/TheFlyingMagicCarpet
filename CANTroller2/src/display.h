@@ -36,6 +36,8 @@
 #define LPNK 0xfe18  // Especially light pink, the champagne of pinks
 #define TEAL 0x07f9
 #define PUR  0x881f
+#define LPUR 0xc59f  // A light pastel purple
+#define GPUR 0x8c15  // A low saturation greyish pastel purple
 
 // LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
 // Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
@@ -74,7 +76,7 @@ char units[disp_fixed_lines][5] = { "adc ", "mph ", "rpm ", "us  ", "psi ", "%  
 
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, num_datapages };
 char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim " };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 4, 4, 2, 3, 4, 8, 7, 8, 11, 1 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 9, 4, 5, 3, 4, 8, 7, 8, 11, 1 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
     { "BrakePos", " Airflow", "     MAP", "MuleBatt", "     Pot", "      - ", "      - ", "      - ", "      - ", "Governor", "SteerSaf", },  // PG_RUN
@@ -458,7 +460,7 @@ class Display {
             draw_dynamic (lineno, name.c_str(), 1, -1, -1, -1, CYN);
         }
         void draw_truth (int32_t lineno, bool truthy, int32_t styl=2) {  // 0:on/off, 1:yes/no, 2:true/false
-            draw_dynamic (lineno, (truthy) ? ((styl==0) ? " on" : ((styl==1) ? "yes" : "true")) : ((styl==0) ? "off" : ((styl==1) ? "no" : "false")), 1, -1, -1, -1, (truthy) ? GRN : DORG);
+            draw_dynamic (lineno, (truthy) ? ((styl==0) ? "  on" : ((styl==1) ? " yes" : "true")) : ((styl==0) ? "off" : ((styl==1) ? "no" : "false")), 1, -1, -1, -1, (truthy) ? LPUR : GPUR);
         }
         void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override=-1) {  // color_override = -1 uses default color
             yield();
