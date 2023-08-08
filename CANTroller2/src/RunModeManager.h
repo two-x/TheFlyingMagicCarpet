@@ -153,7 +153,7 @@ private:
         if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && !hotrc_radio_detected) updateMode(HOLD);  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
         else {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])  {  // If we are trying to accelerate, scale joystick value to determine gas setpoint
-                tach_target_rpm = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], idler.get_idlespeed(), tach_govern_rpm);
+                idler.set_target (map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], idler.get_idlespeed(), tach_govern_rpm));
             }
             else idler.goto_idle();  // Else let off gas (if gas using PID mode)
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT])  {  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
@@ -198,7 +198,7 @@ private:
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
             speedo_target_mph = speedometer.get_filtered_value();
             pressure_target_psi = pressure_sensor.get_min_human();  // Let off the brake and keep it there till out of Cruise mode
-            tach_target_rpm = tachometer.get_filtered_value();  // Start off with target set to current tach value
+            idler.set_target (tachometer.get_filtered_value());  // Start off with target set to current tach value
             // cruiseQPID.SetCenter (tach_filt_rpm);
             gestureFlyTimer.reset();  // reset gesture timer
             cruise_sw_held = false;
@@ -209,20 +209,20 @@ private:
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) {  // When joystick vert above center, increase the throttle target proportional to how far off center
             if (!cruise_adjusting) tach_adjustpoint_rpm = tachometer.get_filtered_value();  // When beginning adjustment, save current tach value to use as adjustment low endpoint 
             cruise_adjusting = true;  // Suspend pid loop control of gas
-            tach_target_rpm = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], tach_adjustpoint_rpm, tach_govern_rpm);
+            idler.set_target (map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], tach_adjustpoint_rpm, tach_govern_rpm));
         }
         else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) {  // When joystick vert below center, decrease the throttle target proportional to how far off center
             if (!cruise_adjusting) tach_adjustpoint_rpm = tachometer.get_filtered_value();  // When beginning adjustment, save current tach value to use as adjustment high endpoint 
             cruise_adjusting = true;  // Suspend pid loop control of gas
-            tach_target_rpm = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], idler.get_idlespeed(), tach_adjustpoint_rpm);
+            idler.set_target (map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], idler.get_idlespeed(), tach_adjustpoint_rpm));
         }
         else if (cruise_adjusting) {  // When joystick at center, the target speed stays locked to the value it was when joystick goes to center
-            tach_target_rpm = tachometer.get_filtered_value();
+            idler.set_target (tachometer.get_filtered_value());
             // cruiseQPID.SetCenter (tach_filt_rpm);
             cruise_adjusting = false;
         }
         if (!cruise_adjusting) cruiseAntiglitchTimer.reset();  // Anti-glitch timer attempts to keep very short joystick sensor glitches from going into adjust mode
-        else if (cruiseAntiglitchTimer.expired()) speedo_target_mph = speedometer.get_filtered_value();  // May be unneccesary now that our readings are stable.  Remove?  Anyway, need to review the logic
+        else if (cruiseAntiglitchTimer.expired()) speedo_target_mph = speedometer.get_filtered_value();  // After adjusting long enough for glitch timer to expire, now our speed target tracks the current speed. May be unneccesary now that our readings are stable.  Remove?  Anyway, need to review the logic
 
         if (ctrl == HOTRC && flycruise_toggle_request) {
             updateMode(FLY);  // Go to fly mode if hotrc ch4 button pushed

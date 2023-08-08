@@ -393,6 +393,7 @@ void loop() {
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
     if (runmode == CRUISE && !cruise_adjusting && cruisePidTimer.expireset()) {
         cruiseQPID.SetOutputLimits (idler.get_idlespeed(), tach_govern_rpm);  // because cruise pid has internal variable for idlespeed which may need updating
+        tach_target_rpm = idler.get_target();
         cruiseQPID.Compute();
     }
 
@@ -409,8 +410,12 @@ void loop() {
                 gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
             }            
             else if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual)  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
-                gas_pulse_out_us = map (tach_target_rpm, idler.get_idlespeed(), tach_govern_rpm, gas_pulse_ccw_closed_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
-            else gasQPID.Compute();  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
+                gas_pulse_out_us = map (idler.get_target(), idler.get_idlespeed(), tach_govern_rpm, gas_pulse_ccw_closed_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
+            else {
+                if (boot_button) printf("gpid: gpo:%lf tt:%lf tf:%lf\n", gas_pulse_out_us, idler.get_target(), tachometer.get_filtered_value());
+                tach_target_rpm = idler.get_target();
+                gasQPID.Compute();  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
+            }
         }
         if (runmode != BASIC || park_the_motors) {
             if (!(runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo))  // Constrain to operating limits. If calibrating constrain already happened above
@@ -548,7 +553,10 @@ void loop() {
             else if (selected_value == 10) brakeQPID.SetKd (brakeQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }
         else if (dataset_page == PG_GPID) {
-            if (selected_value == 7) adj_bool (&gas_open_loop, sim_edit_delta);
+            if (selected_value == 7) {
+                adj_bool (&gas_open_loop, sim_edit_delta);
+                gasQPID.SetMode (gas_open_loop ? QPID::Control::manual : QPID::Control::timer);
+            }
             else if (selected_value == 8) gasQPID.SetKp (gasQPID.GetKp() + 0.001 * (float)sim_edit_delta);
             else if (selected_value == 9) gasQPID.SetKi (gasQPID.GetKi() + 0.001 * (float)sim_edit_delta);
             else if (selected_value == 10) gasQPID.SetKd (gasQPID.GetKd() + 0.001 * (float)sim_edit_delta);
