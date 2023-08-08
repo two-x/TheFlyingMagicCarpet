@@ -75,7 +75,9 @@ void test_Param() {
     // destructor
     printf("Testing destructor...\n");
     std::shared_ptr<int> r1;
-    Param<int> *p1;
+    Param<int> *
+    
+    ;
     {
         Param<int> p2;
         p1 = new Param<int>(p2);

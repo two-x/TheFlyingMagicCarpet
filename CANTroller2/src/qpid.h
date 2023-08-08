@@ -460,8 +460,8 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
     uint32_t settlerate_rpmps, index_now, index_last;
     uint32_t stallrate_rpmps = 400;  // Engine rpm drops exceeding this much per second are considered a stall in progress
     uint32_t history_depth = 20;
-    int32_t tach_history[20];  // Why can't I use [history_depth] here instead of [20] in this instantiation?  c++ is a pain in my ass
-    uint32_t timestamps[20];
+    int32_t tach_history_rpm[20];  // Why can't I use [history_depth] here instead of [20] in this instantiation?  c++ is a pain in my ass
+    uint32_t timestamps_us[20];
     Timer settleTimer, tachHistoryTimer;
   public:
     IdleControl (float* target, float* measraw, float* measfilt, float* coolant,  // Variable references: idle target, rpm raw, rpm filt, Engine temp
@@ -543,18 +543,18 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
         // Soren finish writing this
     }
     void calc_tach_stability (void) {
-        idle_slope_rpmps = (float)(tach_history[index_now] - tach_history[index_last]) / timestamps[index_now];
+        idle_slope_rpmps = (float)(tach_history_rpm[index_now] - tach_history_rpm[index_last]) * 1000000 / timestamps_us[index_now];
         // if (idle_slope_rpmps < stallrate_rpmps) 
         // Soren finish writing this.  So close!
     }
     // String get_modename (void) { return modenames[(int32_t)idlemode].c_str(); }
     // String get_statename (void) { return statenames[runstate].c_str(); }
-    void push_tach_reading (int32_t reading) {
-        if (reading == tach_history[index_now]) return;  // Ignore new tach values unless rpm has changed
+    void push_tach_reading (int32_t reading) {  // Add a new rpm reading to a small LIFO ring buffer. We will use this to detect arhythmic rpm
+        if (reading == tach_history_rpm[index_now]) return;  // Ignore new tach values unless rpm has changed
         index_last = index_now;
         index_now = (index_now + 1) % history_depth;
-        tach_history[index_now] = reading;
-        timestamps[index_now] = (uint32_t)tachHistoryTimer.elapsed();
+        tach_history_rpm[index_now] = reading;
+        timestamps_us[index_now] = (uint32_t)tachHistoryTimer.elapsed();
         tachHistoryTimer.reset();
     }
     void cycle_idlemode (int32_t cycledir) {  // Cycldir positive or negative
