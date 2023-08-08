@@ -83,7 +83,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
     { "JoyH Raw", "JoyV Raw", "HRC Horz", "HRC Vert", "HFailsaf", "Horz Min", "Horz Max", " Horz DB", "Vert Min", "Vert Max", " Vert DB", },  // PG_JOY
     { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", "SpeedIdl", "SpeedRed", "BkPos0Pt", },  // PG_CAR
     { "BrakePWM", "SteerPWM", "      - ", "Steer Lt", "SteerStp", "Steer Rt", "BrakExtd", "BrakStop", "BrakRetr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
-    { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SettlTim", "IdleMode", },  // PG_IDLE
+    { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
     { "Pres Tgt", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", "      - ", "      - ", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
     { "Tach Tgt", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", "      - ", "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
     { "SpeedTgt", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "Tach Tgt", "      - ", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
@@ -96,7 +96,7 @@ char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "adc ", "adc ", "us  ", "us  ", "us  ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
     { "adc ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%   ", "mph ", "mph ", "mph ", "in  " },  // PG_CAR
     { "us  ", "us  ", "    ", "    ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PG_PWMS
-    { "    ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", DEGR_F, DEGR_F, "ms  ", "    " },  // PG_IDLE
+    { "    ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", DEGR_F, DEGR_F, "rpms", "    " },  // PG_IDLE
     { "psi ", "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "    ", "    ", "Hz  ", "s   " },  // PG_BPID
     { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "    ", "    ", "Hz  ", "s   " },  // PG_GPID
     { "mph ", "mph ", "mph ", "mph ", "mph ", "mph ", "rpm ", "    ", "    ", "Hz  ", "s   " },  // PG_CPID
@@ -646,7 +646,7 @@ class Display {
                     draw_dynamic(15, idler.get_idlehot(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
                     draw_dynamic(16, idler.get_tempcold(), temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
                     draw_dynamic(17, idler.get_temphot(), temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
-                    draw_dynamic(18, (int32_t)idler.get_settletime(), 0, 8000);
+                    draw_dynamic(18, (int32_t)idler.get_settlerate(), 0, 500);
                     draw_asciiname(19, idlemodecard[(int32_t)idler.get_idlemode()]);
                 }
                 else if (dataset_page == PG_BPID) {

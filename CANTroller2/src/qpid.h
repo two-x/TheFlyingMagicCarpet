@@ -453,17 +453,21 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
     // String statenames[4] = { "drivng", "tohigh", "tolow", "tostal" };
     targetstates runstate, laststate;
     idlemodes idlemode;
-    float targetlast_rpm, idle_rpm, idlehigh_rpm, idlehot_rpm, idlecold_rpm, stallpoint_rpm, dynamic_rpm, temphot_f, tempcold_f;
+    float targetlast_rpm, idle_rpm, idlehigh_rpm, idlehot_rpm, idlecold_rpm, stallpoint_rpm, dynamic_rpm, temphot_f, tempcold_f, idle_slope_rpmps;
     float margin_rpm = 10; float idle_absmax_rpm = 1000.0;  // High limit of idle speed adjustability
     float* target_rpm; float* measraw_rpm; float* measfilt_rpm; float* coolant_f;
-    bool we_just_changed_states = true;
-    uint32_t settletime_ms;
-    Timer settleTimer;
+    bool we_just_changed_states = true; bool now_trying_to_idle = false;
+    uint32_t settlerate_rpmps, index_now, index_last;
+    uint32_t stallrate_rpmps = 400;  // Engine rpm drops exceeding this much per second are considered a stall in progress
+    uint32_t history_depth = 20;
+    int32_t tach_history[20];  // Why can't I use [history_depth] here instead of [20] in this instantiation?  c++ is a pain in my ass
+    uint32_t timestamps[20];
+    Timer settleTimer, tachHistoryTimer;
   public:
     IdleControl (float* target, float* measraw, float* measfilt, float* coolant,  // Variable references: idle target, rpm raw, rpm filt, Engine temp
       float idlehigh, float idlehot, float idlecold,  // Values for: high-idle rpm (will not stall), hot idle nominal rpm, cold idle nominal rpm 
       float tempcold, float temphot,  // Values for: engine operational temp cold (min) and temp hot (max) in degrees-f
-      uint32_t settletime = 2300,  // Period over which the idle will be lowered from high-idle to final idle
+      int32_t settlerate = 100,  // Rate to lower idle from high point to low point (in rpm per second)
       idlemodes myidlemode = idlemodes::control) {  // Configure idle control to just soft land or also attempt to minimize idle
         target_rpm = target;
         measraw_rpm = measraw;
@@ -477,12 +481,13 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
         set_tempcold (tempcold);        
         calc_idlespeed();
         targetlast_rpm = *target_rpm;
-        settletime_ms = settletime;
-        settleTimer.set (1000 * (int64_t)settletime_ms);  // Time period over which the idle will subsequently drop further to its lower temperature-dependent target value
+        settlerate_rpmps = settlerate;
+        settleTimer.reset();
         idlemode = myidlemode;
         runstate = driving;
     }
     void update (void) {  // this should be called to update idle and throttle target values before throttle-related control loop outputs are calculated
+        calc_tach_stability();
         calc_idlespeed();  // determine our appropriate idle speed, based on latest engine temperature reading
         if (runstate == driving) process_driving();  // while throttle is open when driving, we don't mess with the rpm target value
         else if (runstate == droptohigh) process_droptohigh();  // once the metaphorical foot is taken off the gas, first we let the carb close quickly to a high-idle rpm level (that won't stall)
@@ -496,9 +501,15 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
         idle_rpm = constrain (idle_rpm, idlehot_rpm, idlecold_rpm);
     }
     void goto_idle (void) {  // The gods request the engine should idle now
-        if (runstate == driving && idlemode != idlemodes::direct) runstate = droptohigh;
+        if (runstate == driving) runstate = (idlemode == idlemodes::direct) ? droptolow : droptohigh;
+        now_trying_to_idle = true;
     }
     void runstate_changer (void) {
+        if (*target_rpm != targetlast_rpm) {  // If the target has been changed externally, automatically determine our appropriate runstate
+            if (*target_rpm > idle_rpm + margin_rpm) runstate = driving;
+            else runstate = (idlemode == idlemodes::minimize) ? stallpoint : idling;
+            now_trying_to_idle = false;
+        }
         we_just_changed_states = (runstate != laststate);
         laststate = runstate;
     }
@@ -507,49 +518,44 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
         *target_rpm = argtarget;
     }
     void process_driving (void) {
-        if (*target_rpm < idle_rpm) set_target (idle_rpm);
+        if (we_just_changed_states) now_trying_to_idle = false;
     }
     void process_droptohigh (void) {
         if (we_just_changed_states) set_target (idlehigh_rpm);
-        else if (*target_rpm > idlehigh_rpm) runstate = driving;
-        else if (*measfilt_rpm <= idlehigh_rpm + margin_rpm) runstate = droptolow;
+        else if (*measfilt_rpm <= idlehigh_rpm + margin_rpm) runstate = droptolow;  // Done dropping to high idle, next continue dropping to low idle
     }
     void process_droptolow (void) {
-        if (we_just_changed_states) {
-            dynamic_rpm = *measfilt_rpm - idle_rpm;
+        if (we_just_changed_states) settleTimer.reset();
+        if (*measfilt_rpm <= idle_rpm + margin_rpm) runstate = (idlemode == idlemodes::minimize) ? stallpoint : idling;  // Done dropping to low idle, next proceed to a steady state
+        else {  // Drop from current rpm toward low idle speed at configured rate
+            set_target (*measfilt_rpm - settlerate_rpmps * (uint32_t)settleTimer.elapsed()/1000000);  // Need to review the dynamics of this considering update frequency and motor latency 
             settleTimer.reset();
-        }
-        if (*target_rpm > idlehigh_rpm) runstate = driving;
-        else if (settleTimer.expired()) runstate = (idlemode == idlemodes::minimize) ? stallpoint : idling;
-        else {
-            float addtarg_rpm = dynamic_rpm * (1 - (float)settleTimer.elapsed()/(1000 * (float)settletime_ms));
-            set_target (idle_rpm + (addtarg_rpm > 0.0) ? addtarg_rpm : 0.0);  // because for some dumb reason max() doesn't do jack smack
         }
     }
     void process_idling (void) {  // If we aren't set to attempt to minimize idle speed, then we end up here
-        if (*target_rpm > targetlast_rpm) runstate = (*target_rpm > idlehigh_rpm) ? driving : droptohigh;  // If our idle is being monkeyed with, then quit doing low idle
-        else if (idlemode == idlemodes::minimize) runstate = stallpoint;
-        set_target (idle_rpm);  // We're done dropping to the idle point, but keep tracking as idle speed may change
+        if (idlemode == idlemodes::minimize) runstate = stallpoint;  // In case idlemode is changed while in idling state
+        else set_target (idle_rpm);  // We're done dropping to the idle point, but keep tracking as idle speed may change
     }
     void process_stallpoint (void) {
-        if (we_just_changed_states) {
-            stallpoint_rpm = idle_rpm;
-            dynamic_rpm = stallpoint_rpm;
-        }
-        if (*target_rpm > idlehigh_rpm) runstate = driving;
-        else if (idlemode != idlemodes::minimize) runstate = idling;
-
+        if (we_just_changed_states) stallpoint_rpm = idle_rpm;
+        else if (idlemode != idlemodes::minimize) runstate = idling;  // In case idlemode is changed while in stallpoint state
         // else if (*measfilt_rpm > )
         // Soren finish writing this
     }
-    void calc_idle_stability (void) {
-        // This function does bullocks Soren
+    void calc_tach_stability (void) {
+        idle_slope_rpmps = (float)(tach_history[index_now] - tach_history[index_last]) / timestamps[index_now];
+        // if (idle_slope_rpmps < stallrate_rpmps) 
+        // Soren finish writing this.  So close!
     }
     // String get_modename (void) { return modenames[(int32_t)idlemode].c_str(); }
     // String get_statename (void) { return statenames[runstate].c_str(); }
-    void set_settletime (uint32_t new_settletime_ms) {
-        if (new_settletime_ms) settletime_ms = new_settletime_ms;
-        settleTimer.set (1000 * (int64_t)settletime_ms);
+    void push_tach_reading (int32_t reading) {
+        if (reading == tach_history[index_now]) return;  // Ignore new tach values unless rpm has changed
+        index_last = index_now;
+        index_now = (index_now + 1) % history_depth;
+        tach_history[index_now] = reading;
+        timestamps[index_now] = (uint32_t)tachHistoryTimer.elapsed();
+        tachHistoryTimer.reset();
     }
     void cycle_idlemode (int32_t cycledir) {  // Cycldir positive or negative
         if (cycledir) idlemode = (idlemodes)(constrain ((int32_t)idlemode + constrain (cycledir, -1, 1), 0, (int32_t)idlemodes::num_idlemodes - 1));
@@ -574,10 +580,11 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
         if (tempcold + add < temphot_f) tempcold_f = tempcold + add;
         calc_idlespeed();
     }
-    void set_margin (float margin_rpm) {}
+    void set_settlerate (uint32_t settlerate) { if (settlerate) settlerate_rpmps = settlerate; }
+    void set_margin (float margin) { margin_rpm = margin; }
     targetstates get_targetstate (void) { return runstate; } 
     idlemodes get_idlemode (void) { return idlemode; } 
-    uint32_t get_settletime (void) { return settletime_ms; }
+    uint32_t get_settlerate (void) { return settlerate_rpmps; }
     float get_idlehigh (void) { return idlehigh_rpm; }
     float get_idlehot (void) { return idlehot_rpm; }
     float get_idlecold (void) { return idlecold_rpm; }

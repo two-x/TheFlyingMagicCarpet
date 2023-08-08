@@ -226,6 +226,7 @@ void loop() {
 
     // Tach - takes 22 us to read when no activity
     tachometer.update();
+    idler.push_tach_reading(tachometer.get_human());
 
     // Airflow sensor
     if (simulator.can_simulate(SimOption::airflow) && simulator.get_pot_overload() == SimOption::airflow) airflow_filt_mph = pot.mapToRange(airflow_min_mph, airflow_max_mph);
@@ -386,10 +387,9 @@ void loop() {
             #endif
         }
     }
-
+    
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
     if (runmode == CRUISE && !cruise_adjusting && cruisePidTimer.expireset()) {
-        idler.update();  // Adjust tach target when idling to minimize idle rpm while preventing stalling
         cruiseQPID.SetOutputLimits (idler.get_idlespeed(), tach_govern_rpm);  // because cruise pid has internal variable for idlespeed which may need updating
         cruiseQPID.Compute();
     }
@@ -538,7 +538,7 @@ void loop() {
             else if (selected_value == 6) idler.set_idlehot (idler.get_idlehot(), (float)sim_edit_delta);
             else if (selected_value == 7) idler.set_tempcold (idler.get_tempcold(), (float)sim_edit_delta);
             else if (selected_value == 8) idler.set_temphot (idler.get_temphot(), (float)sim_edit_delta);
-            else if (selected_value == 9) idler.set_settletime (idler.get_settletime() + (float)sim_edit_delta);
+            else if (selected_value == 9) idler.set_settlerate (idler.get_settlerate() + sim_edit_delta);
             else if (selected_value == 10) idler.cycle_idlemode (sim_edit_delta);
         }
         else if (dataset_page == PG_BPID) {
