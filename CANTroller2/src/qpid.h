@@ -528,7 +528,7 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
         if (we_just_changed_states) settleTimer.reset();
         if (*measfilt_rpm <= idle_rpm + margin_rpm) runstate = (idlemode == idlemodes::minimize) ? stallpoint : idling;  // Done dropping to low idle, next proceed to a steady state
         else {  // Drop from current rpm toward low idle speed at configured rate
-            set_target (*measfilt_rpm - settlerate_rpmps * (uint32_t)settleTimer.elapsed()/1000000);  // Need to review the dynamics of this considering update frequency and motor latency 
+            set_target (*measfilt_rpm - settlerate_rpmps * (float)settleTimer.elapsed()/1000000);  // Need to review the dynamics of this considering update frequency and motor latency 
             settleTimer.reset();
         }
     }
