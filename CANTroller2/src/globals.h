@@ -79,6 +79,7 @@ bool take_temperatures = true;
 bool keep_system_powered = true;  // Use true during development
 bool allow_rolling_start = true;  // May be a smart prerequisite, may be us putting obstacles in our way
 bool share_boot_joycruise_buttons = true;  // Set true if joystick cruise button is in parallel with esp native "boot" button
+bool starter_signal_support = false;
 
 #define pwm_jaguars true
 
@@ -403,10 +404,10 @@ QPID brakeQPID (pressure_sensor.get_filtered_value_ptr().get(), &brake_out_perce
     
 // Gas : Controls the throttle to achieve the desired intake airflow and engine rpm
 
-IdleControl idler (tachometer.get_human_ptr().get(), tachometer.get_filtered_value_ptr().get(), &temps_f[ENGINE],
+ThrottleControl throttle(tachometer.get_human_ptr().get(), tachometer.get_filtered_value_ptr().get(), &temps_f[ENGINE],
     tach_idle_high_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm,
     temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][WARNING],
-    50, IdleControl::idlemodes::control);
+    50, ThrottleControl::idlemodes::control);
 uint32_t gas_pid_period_us = 225000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer gasPidTimer (gas_pid_period_us);  // not actually tunable, just needs value above
 float gas_spid_initial_kp = 0.106;  // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
@@ -426,8 +427,8 @@ Timer cruisePidTimer (cruise_pid_period_us);  // not actually tunable, just need
 float cruise_spid_initial_kp = 5.57;  // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
 float cruise_spid_initial_ki_hz = 0.000;  // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
 float cruise_spid_initial_kd_s = 0.000;  // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
-QPID cruiseQPID (speedometer.get_filtered_value_ptr().get(), &tach_target_rpm, &speedo_target_mph,  // input, target, output variable references
-    idler.get_idlespeed(), tach_govern_rpm,  // output min, max
+QPID cruiseQPID(speedometer.get_filtered_value_ptr().get(), &tach_target_rpm, &speedo_target_mph,  // input, target, output variable references
+    throttle.get_idlespeed(), tach_govern_rpm,  // output min, max
     cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s,  // Kp, Ki, and Kd tuning constants
     QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwRound, QPID::Action::direct,  // settings
     cruise_pid_period_us, QPID::Control::timer, QPID::centMode::range);
@@ -476,8 +477,8 @@ void calc_ctrl_lims (void) {
 }
 void calc_governor (void) {
     tach_govern_rpm = map(gas_governor_percent, 0.0, 100.0, 0.0, tachometer.get_redline_rpm());  // Create an artificially reduced maximum for the engine speed
-    cruiseQPID.SetOutputLimits(idler.get_idlespeed(), tach_govern_rpm);
-    gas_pulse_govern_us = map (gas_governor_percent*(tach_govern_rpm-idler.get_idlespeed())/tachometer.get_redline_rpm(), 0.0, 100.0, gas_pulse_ccw_closed_us, gas_pulse_cw_open_us);  // Governor must scale the pulse range proportionally
+    cruiseQPID.SetOutputLimits(throttle.get_idlespeed(), tach_govern_rpm);
+    gas_pulse_govern_us = map (gas_governor_percent*(tach_govern_rpm-throttle.get_idlespeed())/tachometer.get_redline_rpm(), 0.0, 100.0, gas_pulse_ccw_closed_us, gas_pulse_cw_open_us);  // Governor must scale the pulse range proportionally
     speedo_govern_mph = map ((float)gas_governor_percent, 0.0, 100.0, 0.0, speedometer.get_redline_mph());  // Governor must scale the top vehicle speed proportionally
 }
 float steer_safe (float endpoint) {

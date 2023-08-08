@@ -66,19 +66,20 @@ private:
 
     void handleShutdownMode() { // In shutdown mode we stop the car if it's moving then park the motors.
         if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
-            idler.goto_idle();  //  Release the throttle 
+            throttle.goto_idle();  //  Release the throttle 
             shutdown_complete = false;
             shutdown_color = LPNK;
             disp_runmode_dirty = true;
             calmode_request = false;
-            park_the_motors = false;
             if (!speedometer.car_stopped()) {
                 if (panic_stop && pressure_target_psi < pressure_panic_initial_psi) pressure_target_psi = pressure_panic_initial_psi;
                 else if (!panic_stop && pressure_target_psi < pressure_hold_initial_psi) pressure_target_psi = pressure_hold_initial_psi;
                 brakeIntervalTimer.reset();
                 stopcarTimer.reset();
+                park_the_motors = false;
             }
         }
+        // else if (ignition && engine_stopped()) updateMode(STALL);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
         else if ((speedometer.car_stopped() || allow_rolling_start) && ignition && !panic_stop && !tachometer.engine_stopped() && !starter) updateMode(HOLD);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
         if (!shutdown_complete) {  // If we haven't yet stopped the car and then released the brakes and gas all the way
             if (speedometer.car_stopped() || stopcarTimer.expired()) {  // If car has stopped, or timeout expires, then release the brake
@@ -98,7 +99,7 @@ private:
             }
             else if (brakeIntervalTimer.expireset()) {
                 pressure_target_psi = pressure_target_psi + (panic_stop) ? pressure_panic_increment_psi : pressure_hold_increment_psi;  // Slowly add more brakes until car stops
-                idler.goto_idle();  // Keep target updated to possibly changing idle value
+                throttle.goto_idle();  // Keep target updated to possibly changing idle value
             }
         }
         else if (calmode_request) updateMode(CAL);  // if fully shut down and cal mode requested, go to cal mode
@@ -120,7 +121,7 @@ private:
 
     void handleHoldMode() {
         if (we_just_switched_modes) {  // Release throttle and push brake upon entering hold mode
-            idler.goto_idle();  // Let off gas (if gas using PID mode)
+            throttle.goto_idle();  // Let off gas (if gas using PID mode)
             if (speedometer.car_stopped()) pressure_target_psi = pressure_sensor.get_filtered_value() + pressure_hold_increment_psi; // If the car is already stopped then just add a touch more pressure and then hold it.
             else if (pressure_target_psi < pressure_hold_initial_psi) pressure_target_psi = pressure_hold_initial_psi;  //  These hippies need us to stop the car for them
             brakeIntervalTimer.reset();
@@ -128,7 +129,7 @@ private:
             joy_centered = false;  // Fly mode will be locked until the joystick first is put at or below center
         }
         if (brakeIntervalTimer.expireset()) {  // On an interval ...
-            idler.goto_idle();  // Keep target updated to possibly changing idle value
+            throttle.goto_idle();  // Keep target updated to possibly changing idle value
             if (!speedometer.car_stopped() && !stopcarTimer.expired()) pressure_target_psi = min (pressure_target_psi + pressure_hold_increment_psi, pressure_sensor.get_max_human());  // If the car is still moving, push harder
         }
         if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
@@ -153,9 +154,9 @@ private:
         if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && !hotrc_radio_detected) updateMode(HOLD);  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
         else {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])  {  // If we are trying to accelerate, scale joystick value to determine gas setpoint
-                idler.set_target (map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], idler.get_idlespeed(), tach_govern_rpm));
+                throttle.set_target (map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], throttle.get_idlespeed(), tach_govern_rpm));
             }
-            else idler.goto_idle();  // Else let off gas (if gas using PID mode)
+            else throttle.goto_idle();  // Else let off gas (if gas using PID mode)
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT])  {  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
                 pressure_target_psi = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], pressure_sensor.get_min_human(), pressure_sensor.get_max_human());
             }
@@ -198,7 +199,7 @@ private:
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
             speedo_target_mph = speedometer.get_filtered_value();
             pressure_target_psi = pressure_sensor.get_min_human();  // Let off the brake and keep it there till out of Cruise mode
-            idler.set_target (tachometer.get_filtered_value());  // Start off with target set to current tach value
+            throttle.set_target(tachometer.get_filtered_value());  // Start off with target set to current tach value
             // cruiseQPID.SetCenter (tach_filt_rpm);
             gestureFlyTimer.reset();  // reset gesture timer
             cruise_sw_held = false;
@@ -209,15 +210,15 @@ private:
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) {  // When joystick vert above center, increase the throttle target proportional to how far off center
             if (!cruise_adjusting) tach_adjustpoint_rpm = tachometer.get_filtered_value();  // When beginning adjustment, save current tach value to use as adjustment low endpoint 
             cruise_adjusting = true;  // Suspend pid loop control of gas
-            idler.set_target (map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], tach_adjustpoint_rpm, tach_govern_rpm));
+            throttle.set_target (map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], tach_adjustpoint_rpm, tach_govern_rpm));
         }
         else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) {  // When joystick vert below center, decrease the throttle target proportional to how far off center
             if (!cruise_adjusting) tach_adjustpoint_rpm = tachometer.get_filtered_value();  // When beginning adjustment, save current tach value to use as adjustment high endpoint 
             cruise_adjusting = true;  // Suspend pid loop control of gas
-            idler.set_target (map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], idler.get_idlespeed(), tach_adjustpoint_rpm));
+            throttle.set_target (map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], throttle.get_idlespeed(), tach_adjustpoint_rpm));
         }
         else if (cruise_adjusting) {  // When joystick at center, the target speed stays locked to the value it was when joystick goes to center
-            idler.set_target (tachometer.get_filtered_value());
+            throttle.set_target(tachometer.get_filtered_value());
             // cruiseQPID.SetCenter (tach_filt_rpm);
             cruise_adjusting = false;
         }

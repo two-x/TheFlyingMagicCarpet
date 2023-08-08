@@ -221,12 +221,12 @@ void loop() {
     // Brake position - takes 70 us to read, convert, and filter
     brkpos_sensor.update();
     
-    if (!simulator.simulating(SimOption::starter)) starter = read_pin (starter_pin);
-    else starter = LOW;  // Since we have no way to change value of simulated starter currently
+    if (!starter_signal_support) starter = LOW;
+    else if (!simulator.simulating(SimOption::starter)) starter = read_pin (starter_pin);
 
     // Tach - takes 22 us to read when no activity
     tachometer.update();
-    idler.push_tach_reading(tachometer.get_human());
+    throttle.push_tach_reading(tachometer.get_human());
 
     // Airflow sensor
     if (simulator.can_simulate(SimOption::airflow) && simulator.get_pot_overload() == SimOption::airflow) airflow_filt_mph = pot.mapToRange(airflow_min_mph, airflow_max_mph);
@@ -388,12 +388,12 @@ void loop() {
         }
     }
     
-    idler.update();  // Allow idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
+    throttle.update();  // Allow idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
 
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
     if (runmode == CRUISE && !cruise_adjusting && cruisePidTimer.expireset()) {
-        cruiseQPID.SetOutputLimits (idler.get_idlespeed(), tach_govern_rpm);  // because cruise pid has internal variable for idlespeed which may need updating
-        tach_target_rpm = idler.get_target();
+        cruiseQPID.SetOutputLimits (throttle.get_idlespeed(), tach_govern_rpm);  // because cruise pid has internal variable for idlespeed which may need updating
+        tach_target_rpm = throttle.get_target();
         cruiseQPID.Compute();
     }
 
@@ -410,10 +410,10 @@ void loop() {
                 gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
             }            
             else if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual)  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
-                gas_pulse_out_us = map (idler.get_target(), idler.get_idlespeed(), tach_govern_rpm, gas_pulse_ccw_closed_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
+                gas_pulse_out_us = map (throttle.get_target(), throttle.get_idlespeed(), tach_govern_rpm, gas_pulse_ccw_closed_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
             else {
-                if (boot_button) printf("gpid: gpo:%lf tt:%lf tf:%lf\n", gas_pulse_out_us, idler.get_target(), tachometer.get_filtered_value());
-                tach_target_rpm = idler.get_target();
+                if (boot_button) printf("gpid: gpo:%lf tt:%lf tf:%lf\n", gas_pulse_out_us, throttle.get_target(), tachometer.get_filtered_value());
+                tach_target_rpm = throttle.get_target();
                 gasQPID.Compute();  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
             }
         }
@@ -520,7 +520,7 @@ void loop() {
         else if (dataset_page == PG_CAR) {
             if (selected_value == 2) adj = adj_val (&tach_idle_hot_min_rpm, 0.1*(float)sim_edit_delta, tach_idle_abs_min_rpm, tach_idle_cold_max_rpm - 1);
             else if (selected_value == 3) adj = adj_val (&tach_idle_cold_max_rpm, 0.1*(float)sim_edit_delta, tach_idle_hot_min_rpm + 1, tach_idle_abs_max_rpm);
-            else if (selected_value == 4) adj = adj_val (tachometer.get_redline_rpm_ptr().get(), 0.1*(float)sim_edit_delta, idler.get_idlehigh(), tachometer.get_max_rpm());
+            else if (selected_value == 4) adj = adj_val (tachometer.get_redline_rpm_ptr().get(), 0.1*(float)sim_edit_delta, throttle.get_idlehigh(), tachometer.get_max_rpm());
             else if (selected_value == 5) adj_val (&airflow_max_mph, 0.01*(float)sim_edit_delta, 0, airflow_abs_max_mph);
             else if (selected_value == 6) adj_val (&map_min_psi, 0.1*(float)sim_edit_delta, map_abs_min_psi, map_abs_max_psi);
             else if (selected_value == 7) adj_val (&map_max_psi, 0.1*(float)sim_edit_delta, map_abs_min_psi, map_abs_max_psi);
@@ -539,13 +539,13 @@ void loop() {
             else if (selected_value == 10) adj_val (&gas_pulse_cw_open_us, sim_edit_delta, gas_pulse_cw_min_us, gas_pulse_ccw_closed_us - 1);
         }
         else if (dataset_page == PG_IDLE) {
-            if (selected_value == 4) idler.set_idlehigh (idler.get_idlehigh(), (float)sim_edit_delta);
-            else if (selected_value == 5) idler.set_idlecold (idler.get_idlecold(), (float)sim_edit_delta);
-            else if (selected_value == 6) idler.set_idlehot (idler.get_idlehot(), (float)sim_edit_delta);
-            else if (selected_value == 7) idler.set_tempcold (idler.get_tempcold(), (float)sim_edit_delta);
-            else if (selected_value == 8) idler.set_temphot (idler.get_temphot(), (float)sim_edit_delta);
-            else if (selected_value == 9) idler.set_settlerate (idler.get_settlerate() + sim_edit_delta);
-            else if (selected_value == 10) idler.cycle_idlemode (sim_edit_delta);
+            if (selected_value == 4) throttle.set_idlehigh (throttle.get_idlehigh(), (float)sim_edit_delta);
+            else if (selected_value == 5) throttle.set_idlecold (throttle.get_idlecold(), (float)sim_edit_delta);
+            else if (selected_value == 6) throttle.set_idlehot (throttle.get_idlehot(), (float)sim_edit_delta);
+            else if (selected_value == 7) throttle.set_tempcold (throttle.get_tempcold(), (float)sim_edit_delta);
+            else if (selected_value == 8) throttle.set_temphot (throttle.get_temphot(), (float)sim_edit_delta);
+            else if (selected_value == 9) throttle.set_settlerate (throttle.get_settlerate() + sim_edit_delta);
+            else if (selected_value == 10) throttle.cycle_idlemode (sim_edit_delta);
         }
         else if (dataset_page == PG_BPID) {
             if (selected_value == 8) brakeQPID.SetKp (brakeQPID.GetKp() + 0.001 * (float)sim_edit_delta);

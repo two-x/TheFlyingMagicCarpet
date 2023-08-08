@@ -900,7 +900,7 @@ class Simulator {
 
         Potentiometer& _pot;
     public:
-        static constexpr SimOption initial_pot_overload = SimOption::speedo;
+        static constexpr SimOption initial_pot_overload = SimOption::tach;
         
         // initial simulation settings
         static constexpr bool initial_sim_joy = false;
