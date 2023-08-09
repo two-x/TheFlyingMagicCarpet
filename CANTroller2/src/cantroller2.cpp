@@ -79,7 +79,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     write_pin (tft_dc_pin, LOW);
     write_pin (ign_out_pin, LOW);
     write_pin (syspower_pin, syspower);
-
+    
     // Calculate some derived variables
     calc_ctrl_lims();
     calc_governor();

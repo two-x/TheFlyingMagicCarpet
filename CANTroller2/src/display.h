@@ -57,6 +57,17 @@
 #define disp_bargraph_squeeze 1
 #define disp_maxlength 6  // How many characters fit between the ":" and the units string
 #define disp_default_float_precision 3  // Significant digits displayed for float values. Higher causes more screen draws
+#define disp_datapage_names_x 12
+#define disp_datapage_values_x 59
+#define disp_datapage_units_x 104        
+#define disp_bargraphs_x 123
+#define disp_runmode_text_x 8
+#define disp_datapage_title_x 83
+#define disp_simbutton_radius_pix 19
+#define disp_idiot_corner_x 165
+#define disp_idiot_corner_y 13
+#define disp_idiots_per_row 11
+#define disp_idiot_row_height 10
 #define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
@@ -109,6 +120,12 @@ char simgrid[4][3][5] = {
     { "    ", " \x1e  ", "    " },
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
+
+bool* idiotlights[12] = { &starter, &remote_starting, &ignition_sense, &ignition, &syspower, &shutdown_complete, &we_just_switched_modes, simulator.get_enabled_ptr(), &hotrc_radio_detected, &panic_stop, &park_the_motors, &cruise_adjusting };
+uint16_t idiotcolors[arraysize(idiotlights)] = { GRN, TEAL, ORG, YEL, GRN, ORG, LYEL, PNK, GRN, RED, DPNK, CYN };
+char idiotchars[arraysize(idiotlights)][3] = { "St", "RS", "Is", "IG", "Pw", "Sh", "We", "Sm", "RC", "Pn", "Pk", "Aj" };
+bool idiotlasts[arraysize(idiotlights)];  //  = { !starter, !remote_starting, !ignition_sense, !ignition, !syspower, !shutdown_complete, !we_just_switched_modes, !simulator.get_enabled(), !hotrc_radio_detected, !panic_stop, !park_the_motors };
+
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
@@ -178,6 +195,7 @@ class Display {
             yield();
             draw_fixed (dataset_page, dataset_page_last, false);
             yield();
+            draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, true);
             _disp_redraw_all = true;
         }
         bool tft_reset() {  // call to begin a tft reset, and continue to call every loop until returns true (or get_reset_finished() returns true), then stop
@@ -304,22 +322,22 @@ class Display {
             // if (redraw_tuning_corner) _tft.fillRect(10, 145, 154, 95, BLK); // _tft.fillRect(0,145,167,95,BLK);  // Erase old dataset page area - This line alone uses 15 ms
             int32_t y_pos;
             if (!redraw_tuning_corner) {
-                for (int32_t lineno=0; lineno < disp_fixed_lines; lineno++)  {  // Step thru lines of fixed telemetry data
-                    y_pos = (lineno+1)*disp_line_height_pix+disp_vshift_pix;
-                    draw_string (12, 12, y_pos, telemetry[lineno], "", GRY2, BLK, forced);
-                    draw_string_units (104, y_pos, units[lineno], "", GRY2, BLK);
-                    draw_bargraph_base (124, y_pos+7, disp_bargraph_width);
+                for (int32_t lineno = 0; lineno < disp_fixed_lines; lineno++)  {  // Step thru lines of fixed telemetry data
+                    y_pos = (lineno + 1) * disp_line_height_pix + disp_vshift_pix;
+                    draw_string (disp_datapage_names_x, disp_datapage_names_x, y_pos, telemetry[lineno], "", GRY2, BLK, forced);
+                    draw_string_units (disp_datapage_units_x, y_pos, units[lineno], "", GRY2, BLK);
+                    draw_bargraph_base (disp_bargraphs_x, y_pos + 7, disp_bargraph_width);
                 }
                 // draw_colons(7+disp_font_width*arraysize(telemetry[0]), 1, disp_fixed_lines+disp_tuning_lines, GRY1);  // I can't decide if I like the colons or not
             }
             for (int32_t lineno=0; lineno < disp_tuning_lines; lineno++)  {  // Step thru lines of dataset page data
                 yield();  // experiment
-                draw_string(12, 12, (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[page][lineno], dataset_page_names[page_last][lineno], GRY2, BLK, forced);
-                draw_string_units(104, (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], GRY2, BLK);
+                draw_string (disp_datapage_names_x, disp_datapage_names_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, dataset_page_names[page][lineno], dataset_page_names[page_last][lineno], GRY2, BLK, forced);
+                draw_string_units (disp_datapage_units_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], GRY2, BLK);
                 if (redraw_tuning_corner) {
-                    int32_t corner_y = (lineno+disp_fixed_lines+1)*disp_line_height_pix+disp_vshift_pix+7;  // lineno*disp_line_height_pix+disp_vshift_pix-1;
-                    draw_bargraph_base (124, corner_y, disp_bargraph_width);
-                    if (disp_needles[lineno] >= 0) draw_bargraph_needle (-1, disp_needles[lineno], corner_y-6, BLK);  // Let's draw a needle
+                    int32_t corner_y = (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix + 7;  // lineno*disp_line_height_pix+disp_vshift_pix-1;
+                    draw_bargraph_base (disp_bargraphs_x, corner_y, disp_bargraph_width);
+                    if (disp_needles[lineno] >= 0) draw_bargraph_needle (-1, disp_needles[lineno], corner_y - 6, BLK);  // Let's draw a needle
                 }
             }
         }
@@ -329,7 +347,7 @@ class Display {
         void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target=-1, int32_t color=-1) {
             yield();  // experiment
             int32_t age_us = (color >= 0) ? 11 : (int32_t)((float)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
-            int32_t x_base = 59;
+            int32_t x_base = disp_datapage_values_x;
             bool polarity = (value >= 0);  // polarity 0=negative, 1=positive
             if (strcmp(disp_values[lineno], disp_string) || value == 1234567 || _disp_redraw_all) {  // If value differs, Erase old value and write new
                 if (color == -1) color = GRN;
@@ -351,7 +369,7 @@ class Display {
             }
             yield();  // experiment
             if (lowlim < hilim) {  // Any value having a given range deserves a bargraph gauge with a needle
-                int32_t corner_x = 124;    
+                int32_t corner_x = disp_bargraphs_x;    
                 int32_t corner_y = lineno*disp_line_height_pix+disp_vshift_pix-1;
                 int32_t n_pos = map (value, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
                 int32_t ncolor = (n_pos > disp_bargraph_width-disp_bargraph_squeeze || n_pos < disp_bargraph_squeeze) ? DORG : GRN;
@@ -465,18 +483,18 @@ class Display {
         void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override=-1) {  // color_override = -1 uses default color
             yield();
             int32_t color = (color_override == -1) ? colorcard[runmode] : color_override;
-            int32_t x_new = 8+6*(2+strlen (modecard[runmode]))-3;
-            int32_t x_old = 8+6*(2+strlen (modecard[oldmode]))-3;
-            draw_string (8+6, 8+6, disp_vshift_pix, modecard[oldmode], "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+            int32_t x_new = disp_runmode_text_x + disp_font_width * (2 + strlen (modecard[runmode])) - 3;
+            int32_t x_old = disp_runmode_text_x + disp_font_width * (2 + strlen (modecard[oldmode])) - 3;
+            draw_string (disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[oldmode], "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
             draw_string (x_old, x_old, disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-            draw_string (8+6, 8+6, disp_vshift_pix, modecard[runmode], "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+            draw_string (disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[runmode], "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
             draw_string (x_new, x_new, disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
         }
         void draw_dataset_page (int32_t page, int32_t page_last, bool forced=false) {
             draw_fixed (page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
             // for (int32_t lineno=0; lineno<disp_lines; lineno++) draw_hyphen (59, lineno*disp_line_height_pix+disp_vshift_pix, BLK);
             yield();
-            draw_string (83, 83, disp_vshift_pix, pagecard[page], pagecard[page_last], RBLU, BLK, forced); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+            draw_string (disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], RBLU, BLK, forced); // +6*(arraysize(modecard[runmode])+4-namelen)/2
         }
         void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
             yield();
@@ -498,7 +516,7 @@ class Display {
                     int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
                     int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
                     if (strcmp (simgrid[row][col], "    " )) {
-                        _tft.fillCircle (cntr_x, cntr_y, 19, create ? DGRY : BLK);
+                        _tft.fillCircle (cntr_x, cntr_y, disp_simbutton_radius_pix, create ? DGRY : BLK);
                         _tft.drawCircle (cntr_x, cntr_y, 19, create ? LYEL : BLK);
                         if (create) {
                             int32_t x_mod = cntr_x-(arraysize (simgrid[row][col])-1)*(disp_font_width>>1);
@@ -534,6 +552,22 @@ class Display {
                 }
             }
         }
+        uint16_t darken_color (uint16_t color, int32_t halvings = 1) {  // halves each of r, g, and b of a 5-6-5 formatted 16-bit color value either once or twice
+            if (halvings == 1) return ((color & 0xf000) | (color & 0x7c0) | (color & 0x1e)) >> 1;
+            else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
+        }
+        void draw_idiotlight (int32_t index, int32_t x, int32_t y) {
+            _tft.fillRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (*(idiotlights[index])) ? idiotcolors[index] : darken_color (idiotcolors[index], 2));  // GRY1);
+            _tft.setTextColor ((*(idiotlights[index])) ? BLK : GRY1);  // darken_color ((*(idiotlights[index])) ? BLK : DGRY)
+            _tft.setCursor (x+1, y+1);
+            _tft.print (idiotchars[index]);
+            idiotlasts[index] = *(idiotlights[index]);
+        }
+        void draw_idiotlights (int32_t x, int32_t y, bool force = false) {
+            for (int32_t ilite=0; ilite < arraysize(idiotlights); ilite++)
+                if (force || (*(idiotlights[ilite]) ^ idiotlasts[ilite]))
+                    draw_idiotlight (ilite, x + (2 * disp_font_width + 2) * (ilite % disp_idiots_per_row), y + disp_idiot_row_height * (int32_t)(ilite / disp_idiots_per_row));
+        }
 
         void update() {
             if (simulator.get_enabled() != simulating_last || _disp_redraw_all) {
@@ -563,6 +597,7 @@ class Display {
                 disp_runmode_dirty = false;
             }
             if ((dispRefreshTimer.expired() && !_procrastinate) || _disp_redraw_all) {
+                draw_idiotlights (disp_idiot_corner_x, disp_idiot_corner_y, false);
                 dispRefreshTimer.reset();
                 float drange;
                 draw_dynamic(1, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
