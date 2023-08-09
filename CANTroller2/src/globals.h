@@ -203,11 +203,12 @@ bool starter = LOW;
 bool starter_last = LOW;
 
 // Temperature sensor related
-long temp_temp, temp_last, temp_temp_addr_peef;  // peef variables
+long temp_temp, temp_last;  // peef variables
 static int temp_secs = 0;  // peef variables
 static byte temp_data[2];  // peef variables
 static int16_t temp_raw;  // peef variables
-enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };
+enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };  // , SOREN_DEV0, SOREN_DEV1, num_known_ };
+// DeviceAddress temp_known_addrs { 0, 0, 0, 0, 0, 0, 0x3fc983d4, 0 };  // Corresponding to temp_sensors enum, so code can identify sensors
 enum this_is_a_total_hack { WHEEL = 2 };
 enum temp_lims { DISP_MIN, NOM_MIN, NOM_MAX, WARNING, ALARM, DISP_MAX };  // Possible sources of gas, brake, steering commands
 float temp_lims_f[3][6] { { 0.0,  45.0, 115.0, 120.0, 130.0, 220.0 },  // [AMBIENT][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
@@ -227,7 +228,7 @@ uint32_t temp_times_us[2] = { 2000000, 10000 };  // Peef delay was 10000 (10ms)
 uint32_t temp_timeout_us = 2000000;
 Timer tempTimer (temp_timeout_us);
 DeviceAddress temp_temp_addr;
-DeviceAddress temp_addrs[6];  // Store the These are our finalHard code to the actual sensor addresses for the corresponding sense location on the car
+DeviceAddress temp_addrs[6];  // Hard code to the actual sensor addresses for the corresponding sense location on the car
 DallasSensor tempsensebus (&onewire);
 
 // mule battery related
@@ -549,7 +550,6 @@ void temp_soren (void) {
         }
     }
 }
-
 // I2C related
 int32_t i2c_devicecount = 0;
 uint8_t i2c_addrs[10];

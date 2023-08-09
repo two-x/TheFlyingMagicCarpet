@@ -63,8 +63,11 @@
 #define disp_bargraphs_x 123
 #define disp_runmode_text_x 8
 #define disp_datapage_title_x 83
+#define disp_simbutton_radius_pix 19
 #define disp_idiot_corner_x 165
 #define disp_idiot_corner_y 13
+#define disp_idiots_per_row 11
+#define disp_idiot_row_height 10
 #define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
@@ -118,10 +121,10 @@ char simgrid[4][3][5] = {
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
-bool* idiotlights[11] = { &starter, &remote_starting, &ignition_sense, &ignition, &syspower, &shutdown_complete, &we_just_switched_modes, simulator.get_enabled_ptr(), &hotrc_radio_detected, &panic_stop, &park_the_motors };
-uint16_t idiotcolors[arraysize(idiotlights)] = { GRN, TEAL, ORG, YEL, GRN, ORG, LYEL, PNK, GRN, RED, DPNK };
-char idiotchars[arraysize(idiotlights)][3] = { "St", "RS", "Is", "IG", "Pw", "Sh", "We", "Sm", "RC", "Pn", "Pk" };
-bool idiotlasts[arraysize(idiotlights)] = { !starter, !remote_starting, !ignition_sense, !ignition, !syspower, !shutdown_complete, !we_just_switched_modes, !simulator.get_enabled(), !hotrc_radio_detected, !panic_stop, !park_the_motors };
+bool* idiotlights[12] = { &starter, &remote_starting, &ignition_sense, &ignition, &syspower, &shutdown_complete, &we_just_switched_modes, simulator.get_enabled_ptr(), &hotrc_radio_detected, &panic_stop, &park_the_motors, &cruise_adjusting };
+uint16_t idiotcolors[arraysize(idiotlights)] = { GRN, TEAL, ORG, YEL, GRN, ORG, LYEL, PNK, GRN, RED, DPNK, CYN };
+char idiotchars[arraysize(idiotlights)][3] = { "St", "RS", "Is", "IG", "Pw", "Sh", "We", "Sm", "RC", "Pn", "Pk", "Aj" };
+bool idiotlasts[arraysize(idiotlights)];  //  = { !starter, !remote_starting, !ignition_sense, !ignition, !syspower, !shutdown_complete, !we_just_switched_modes, !simulator.get_enabled(), !hotrc_radio_detected, !panic_stop, !park_the_motors };
 
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
@@ -513,7 +516,7 @@ class Display {
                     int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
                     int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
                     if (strcmp (simgrid[row][col], "    " )) {
-                        _tft.fillCircle (cntr_x, cntr_y, 19, create ? DGRY : BLK);
+                        _tft.fillCircle (cntr_x, cntr_y, disp_simbutton_radius_pix, create ? DGRY : BLK);
                         _tft.drawCircle (cntr_x, cntr_y, 19, create ? LYEL : BLK);
                         if (create) {
                             int32_t x_mod = cntr_x-(arraysize (simgrid[row][col])-1)*(disp_font_width>>1);
@@ -562,7 +565,7 @@ class Display {
         void draw_idiotlights (int32_t x, int32_t y, bool force = false) {
             for (int32_t ilite=0; ilite < arraysize(idiotlights); ilite++)
                 if (force || (*(idiotlights[ilite]) != idiotlasts[ilite]))
-                    draw_idiotlight (ilite, x + (2 * disp_font_width + 2) * ilite, y);
+                    draw_idiotlight (ilite, x + (2 * disp_font_width + 2) * (ilite % disp_idiots_per_row), y + disp_idiot_row_height * (int32_t)(ilite / disp_idiots_per_row));
         }
 
         void update() {
