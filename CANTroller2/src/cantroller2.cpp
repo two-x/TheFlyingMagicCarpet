@@ -80,6 +80,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     write_pin (ign_out_pin, LOW);
     write_pin (syspower_pin, syspower);
 
+    idiotlights[0] = &panic_stop;
+
     // Calculate some derived variables
     calc_ctrl_lims();
     calc_governor();

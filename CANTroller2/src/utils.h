@@ -40,6 +40,9 @@ inline int32_t map(int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, i
     return out_max;  // Instead of dividing by zero, return the highest valid result
 }
 
+bool rounding = true;
+float dround (float val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
+
 /* Pin Operations */
 void set_pin(int32_t pin, int32_t mode) { if (pin >= 0 && pin != 255) pinMode (pin, mode); }
 void write_pin(int32_t pin, int32_t val) {  if (pin >= 0 && pin != 255) digitalWrite (pin, val); }

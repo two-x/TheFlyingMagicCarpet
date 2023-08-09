@@ -455,9 +455,6 @@ void hotrc_ch4_update (void) {  //
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
 
-bool rounding = true;
-float dround (float val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
-
 uint32_t colorwheel (uint8_t WheelPos) {
     WheelPos = 255 - WheelPos;
     if (WheelPos < 85) return neostrip.Color (255 - WheelPos * 3, 0, WheelPos * 3);

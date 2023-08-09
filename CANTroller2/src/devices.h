@@ -1063,6 +1063,7 @@ class Simulator {
         }
 
         bool get_enabled() { return _enabled; }
+        bool* get_enabled_ptr() { return &_enabled; }
         SimOption get_pot_overload() { return _pot_overload; }
 };
 

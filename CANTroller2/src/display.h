@@ -60,6 +60,8 @@
 #define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
+#define disp_idiot_corner_x 166
+#define disp_idiot_corner_y 13
 
 // string* pagecard = new string[8];  // How we might allocate on the heap instead of in the stack
 // string* modecard = new string[7];
@@ -109,6 +111,12 @@ char simgrid[4][3][5] = {
     { "    ", " \x1e  ", "    " },
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
+
+bool* idiotlights[11] = { &starter, &remote_starting, &ignition_sense, &ignition, &syspower, &shutdown_complete, &we_just_switched_modes, simulator.get_enabled_ptr(), &hotrc_radio_detected, &panic_stop, &park_the_motors };
+uint16_t idiotcolors[arraysize(idiotlights)] = { GRN, TEAL, ORG, YEL, GRN, ORG, LYEL, PNK, GRN, RED, DPNK };
+char idiotchars[arraysize(idiotlights)][3] = { "St", "RS", "Is", "IG", "Pw", "Sh", "We", "Sm", "RC", "Pn", "Pk" };
+bool idiotlasts[arraysize(idiotlights)] = { !starter, !remote_starting, !ignition_sense, !ignition, !syspower, !shutdown_complete, !we_just_switched_modes, !simulator.get_enabled(), !hotrc_radio_detected, !panic_stop, !park_the_motors };
+
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
@@ -534,6 +542,24 @@ class Display {
                 }
             }
         }
+        inline uint16_t max (uint16_t a, uint16_t b) { return (a > b) ? a : b; }  // Belongs in utils.h but I can't use includes for the life of me
+        uint16_t disp_darkencolor (uint16_t color) {
+            return max ((color >> 11) - 5, 0) << 11 | max (((color & 0x3f) >> 5) - 8, 0 << 5) | max ((color & 0x1f) - 5, 0.0);  
+        }
+        void draw_idiotlight (int32_t index, int32_t x, int32_t y) {
+            _tft.fillRoundRect (x, y, 13, 9, 2, (*(idiotlights[index])) ? idiotcolors[index] : GRY1);
+            // _tft.drawRoundRect (x, y, 13, 9, 2, (*(idiotlights[index])) ? idiotcolors[index] : GRY1);
+            _tft.setTextColor (BLK);  // disp_darkencolor ((*(idiotlights[index])) ? BLK : DGRY)
+            _tft.setCursor (x+1, y+1);
+            _tft.print (idiotchars[index]);
+            idiotlasts[index] = *(idiotlights[index]);
+        }
+        void draw_idiotlights (int32_t x, int32_t y, bool force = 0) {
+            for (int32_t ilite=0; ilite < arraysize(idiotlights); ilite++) {
+                if (force || (*(idiotlights[ilite]) != idiotlasts[ilite])) draw_idiotlight (ilite, x + (2*disp_font_width + 2) * ilite, y);
+                // printf ("%ld:%d(%ld), ", ilite, *(idiotlights[ilite]), x + disp_font_width * ilite);
+            }
+        }
 
         void update() {
             if (simulator.get_enabled() != simulating_last || _disp_redraw_all) {
@@ -563,6 +589,7 @@ class Display {
                 disp_runmode_dirty = false;
             }
             if ((dispRefreshTimer.expired() && !_procrastinate) || _disp_redraw_all) {
+                draw_idiotlights (disp_idiot_corner_x, disp_idiot_corner_y, false);
                 dispRefreshTimer.reset();
                 float drange;
                 draw_dynamic(1, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
