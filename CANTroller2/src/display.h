@@ -552,19 +552,20 @@ class Display {
                 }
             }
         }
-        uint16_t darken_color (uint16_t color) {  // halves each of r, g, and b of a 5-6-5 formatted 16-bit color value
-            return ((color >> 1) & 0xf800) | ((color & 0x7c0) >> 1) | ((color & 0x1f) >> 1);
+        uint16_t darken_color (uint16_t color, int32_t halvings = 1) {  // halves each of r, g, and b of a 5-6-5 formatted 16-bit color value either once or twice
+            if (halvings == 1) return ((color & 0xf000) | (color & 0x7c0) | (color & 0x1e)) >> 1;
+            else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
         }
         void draw_idiotlight (int32_t index, int32_t x, int32_t y) {
-            _tft.fillRoundRect (x, y, 13, 9, 2, (*(idiotlights[index])) ? idiotcolors[index] : GRY1);
-            _tft.setTextColor (BLK);  // darken_color ((*(idiotlights[index])) ? BLK : DGRY)
+            _tft.fillRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (*(idiotlights[index])) ? idiotcolors[index] : darken_color (idiotcolors[index], 2));  // GRY1);
+            _tft.setTextColor ((*(idiotlights[index])) ? BLK : GRY1);  // darken_color ((*(idiotlights[index])) ? BLK : DGRY)
             _tft.setCursor (x+1, y+1);
             _tft.print (idiotchars[index]);
             idiotlasts[index] = *(idiotlights[index]);
         }
         void draw_idiotlights (int32_t x, int32_t y, bool force = false) {
             for (int32_t ilite=0; ilite < arraysize(idiotlights); ilite++)
-                if (force || (*(idiotlights[ilite]) != idiotlasts[ilite]))
+                if (force || (*(idiotlights[ilite]) ^ idiotlasts[ilite]))
                     draw_idiotlight (ilite, x + (2 * disp_font_width + 2) * (ilite % disp_idiots_per_row), y + disp_idiot_row_height * (int32_t)(ilite / disp_idiots_per_row));
         }
 
