@@ -186,6 +186,7 @@ class Display {
             yield();
             draw_fixed (dataset_page, dataset_page_last, false);
             yield();
+            draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, true);
             _disp_redraw_all = true;
         }
         bool tft_reset() {  // call to begin a tft reset, and continue to call every loop until returns true (or get_reset_finished() returns true), then stop

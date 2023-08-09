@@ -79,7 +79,7 @@ bool take_temperatures = true;
 bool keep_system_powered = true;  // Use true during development
 bool allow_rolling_start = true;  // May be a smart prerequisite, may be us putting obstacles in our way
 bool share_boot_joycruise_buttons = true;  // Set true if joystick cruise button is in parallel with esp native "boot" button
-bool starter_signal_support = false;
+bool starter_signal_support = true;
 
 #define pwm_jaguars true
 
