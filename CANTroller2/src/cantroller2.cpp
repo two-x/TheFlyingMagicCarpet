@@ -134,8 +134,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 	steer_servo.setPeriodHertz(50);
 
     brake_servo.attach (brake_pwm_pin, brake_pulse_retract_us, brake_pulse_extend_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
-    gas_servo.attach (gas_pwm_pin, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     steer_servo.attach (steer_pwm_pin, steer_pulse_right_us, steer_pulse_left_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
+    gas_servo.attach (gas_pwm_pin, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     // Servo() argument 2 is channel (0-15) of the esp timer (?). set to Servo::CHANNEL_NOT_ATTACHED to auto grab a channel
     // gas_servo.setup();
     // gas_servo.set_native_limits();  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
@@ -162,6 +162,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         screen.init();
         ts.init();
     }
+
 
     int32_t watchdog_time_ms = Watchdog.enable(2500);  // Start 2.5 sec watchdog
     printf ("Enable watchdog.. timer set to %ld ms\n", watchdog_time_ms);
@@ -205,6 +206,7 @@ void loop() {
     // if (ctrl == JOY && (!simulator.get_enabled() || !sim_cruisesw)) cruise_sw = digitalRead (joy_cruise_btn_pin);
 
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
+
 
     encoder.update();  // Read encoder input signals
 
@@ -292,8 +294,8 @@ void loop() {
         }
         if (hotrc_ch4_sw_event) {
             if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
+            else if (runmode == STALL && remote_start_support) remote_start_toggle_request = true;
             else if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
-            else if (runmode == STALL) remote_start_toggle_request = true;
             else {}   // There's no reason pushing the ch4 button when in other modes can't do something different.  That would go here
             hotrc_ch4_sw_event = false;    
         }
@@ -416,23 +418,9 @@ void loop() {
     //
     // This section should become a real time self-diagnostic system, to look for anything that doesn't seem right and display an
     // informed trouble code. Much like the engine computer in cars nowadays, which keep track of any detectable failures for you to
-    // retreive with an OBD tool. Eventually this should include functions allowing us to detect things like:
-    //  1. A sensor or actuator is unplugged, movement blocked, missing magnetic pulses, etc.
-    //  2. Air in the brake lines.
-    //  3. Axle/brake drum may be going bad (increased engine RPM needed to achieve certain speedo)  (beware going up hill may look the same).
-    //  4. E-brake has been left on (much the same symptoms as above? (beware going up hill may look the same) 
-    //  5. Battery isn't charging, or just running low.
-    //  6. Carburetor not behaving (or air filter is clogged). (See above about engine deiseling - we can detect this!)
-    //  7. After increasing braking, the actuator position changes in the opposite direction, or vise versa.
-    //  8. Changing an actuator is not having the expected effect.
-    //  9. A tunable value suspected to be out of tune.
-    //  10. Check regularly for ridiculous shit. Compare our variable values against a predetermined list of conditions which shouldn't be possible or are at least very suspect. For example:
-    //     A) Sensor reading is out of range, or has changed faster than it ever should.
-    //     B) Stopping the car on entering hold/shutdown mode is taking longer than it ever should.
-    //     C) Mule seems to be accelerating like a Tesla.
-    //     D) Car is accelerating yet engine is at idle.
-    //  11. The control system has nonsensical values in its variables.
-    //
+    // retreive with an OBD tool. Some checks are below, along with other possible things to check for:
+
+    // Check: if engine is turning when ignition signal is off
     if (!ignition && !tachometer.engine_stopped()) {
         if (diag_ign_error_enabled) { // See if the engine is turning despite the ignition being off
             Serial.println (F("Detected engine rotation in the absense of ignition signal"));  // , tach_filt_rpm, ignition
@@ -440,6 +428,26 @@ void loop() {
         }
     }
     else diag_ign_error_enabled = true;
+    
+    //  Check: if any sensor is out of range    
+    //  Check: if sensor readings aren't consistent with actuator outputs given. Like, if the brake motor is moving down, then either brake position should be decreasing or pressure increasing (for example)
+    //  Check if the pressure response is characteristic of air being in the brake line.
+    //  * Axle/brake drum may be going bad (increased engine RPM needed to achieve certain speedo)  (beware going up hill may look the same).
+    //  * E-brake has been left on (much the same symptoms as above? (beware going up hill may look the same) 
+    //  * Battery isn't charging, or just running low.
+    //  * Carburetor not behaving (or air filter is clogged). (See above about engine deiseling - we can detect this!)
+    //  * After increasing braking, the actuator position changes in the opposite direction, or vise versa.
+    //  * Changing an actuator is not having the expected effect.
+    //  * A tunable value suspected to be out of tune.
+    //  * Check regularly for ridiculous shit. Compare our variable values against a predetermined list of conditions which shouldn't be possible or are at least very suspect. For example:
+    //     A) Sensor reading is out of range, or has changed faster than it ever should.
+    //     B) Stopping the car on entering hold/shutdown mode is taking longer than it ever should.
+    //     C) Mule seems to be accelerating like a Tesla.
+    //     D) Car is accelerating yet engine is at idle.
+    //  * The control system has nonsensical values in its variables.
+    //
+
+
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");  //
         
     ts.handleTouch(); // Handle touch events and actions
@@ -567,17 +575,19 @@ void loop() {
     // Ignition & Panic stop logic and Update output signals
     if (!speedometer.car_stopped()) {
         if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && !hotrc_radio_detected) panic_stop = true;  // panic_stop could also have been initiated by the user button   && hotrc_radio_detected_last 
-        else if (ctrl == JOY && !ignition) panic_stop = true;
+        else if (ctrl == JOY && !ignition_sense) panic_stop = true;
         // else if (ctrl == JOY && !(simulator.get_enabled() && sim_joy) && !ignition && ignition_last) panic_stop = true;
     }
     else if (panic_stop) panic_stop = false;  // Cancel panic if car is stopped
     if (ctrl == HOTRC) {  // When using joystick, ignition is controlled with button and we read it. With Hotrc, we control ignition
         hotrc_radio_detected_last = hotrc_radio_detected;
-        if (panic_stop) ignition = LOW;  // Kill car if panicking
-        if ((ignition != ignition_last) && ignition_output_enabled) {  // Whenever ignition state changes, assuming we're allowed to write to the pin
-            write_pin (ign_out_pin, !ignition);  // Turn car off or on (ign output is active low), ensuring to never turn on the ignition while panicking
-            ignition_last = ignition;  // Make sure this goes after the last comparison
-        }
+        if (!ignition && ignition_last && !car_stopped()) panic_stop = true;
+    }
+    else if (ctrl == JOY && !ignition_sense && ignition_last && !car_stopped) panic_stop = true;
+    if (panic_stop) ignition = LOW;  // Kill car if panicking
+    if ((ignition != ignition_last) && ignition_output_enabled) {  // Whenever ignition state changes, assuming we're allowed to write to the pin
+        write_pin (ign_out_pin, !ignition);  // Turn car off or on (ign output is active low), ensuring to never turn on the ignition while panicking
+        ignition_last = ignition;  // Make sure this goes after the last comparison
     }
     if (runmode == STALL && remote_start_toggle_request) {
         if (remote_starting) {
@@ -595,11 +605,11 @@ void loop() {
         syspower = syspower_set (syspower);
         syspower_last = syspower;
     }
-    if (boot_button_action == LONG) {
-        screen.tft_reset();
-        boot_button_action = NONE;
-    }
-    if (!screen.get_reset_finished()) screen.tft_reset();  // If resetting tft, keep calling tft_reset until complete
+    // if (boot_button_action == LONG) {
+    //     screen.tft_reset();
+    //     boot_button_action = NONE;
+    // }
+    // if (!screen.get_reset_finished()) screen.tft_reset();  // If resetting tft, keep calling tft_reset until complete
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
 
     if (neopixel_pin >= 0) {  // Heartbeat led algorithm

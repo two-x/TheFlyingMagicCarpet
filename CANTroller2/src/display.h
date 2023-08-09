@@ -27,6 +27,7 @@
 #define YEL  0xffe0
 #define LYEL 0xfff8
 #define WHT  0xffff
+#define HGRY 0x2104  // hella dark grey
 #define DGRY 0x39c7  // very dark grey
 #define GRY1 0x8410  // 10000 100 000 10000 = 84 10  dark grey
 #define GRY2 0xc618  // 11000 110 000 11000 = C6 18  light grey
@@ -121,10 +122,11 @@ char simgrid[4][3][5] = {
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
-bool* idiotlights[12] = { &starter, &remote_starting, &ignition_sense, &ignition, &syspower, &shutdown_complete, &we_just_switched_modes, simulator.get_enabled_ptr(), &hotrc_radio_detected, &panic_stop, &park_the_motors, &cruise_adjusting };
-uint16_t idiotcolors[arraysize(idiotlights)] = { GRN, TEAL, ORG, YEL, GRN, ORG, LYEL, PNK, GRN, RED, DPNK, CYN };
-char idiotchars[arraysize(idiotlights)][3] = { "St", "RS", "Is", "IG", "Pw", "Sh", "We", "Sm", "RC", "Pn", "Pk", "Aj" };
-bool idiotlasts[arraysize(idiotlights)];  //  = { !starter, !remote_starting, !ignition_sense, !ignition, !syspower, !shutdown_complete, !we_just_switched_modes, !simulator.get_enabled(), !hotrc_radio_detected, !panic_stop, !park_the_motors };
+bool* idiotlights[12] = { &starter, &remote_starting, &ignition_sense, &ignition, &syspower, &shutdown_complete, simulator.get_enabled_ptr(), &hotrc_radio_detected,
+    &panic_stop, &park_the_motors, &cruise_adjusting, &car_has_moved};  // , &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
+uint16_t idiotcolors[arraysize(idiotlights)] = { GRN, TEAL, ORG, YEL, GRN, ORG, PNK, GRN, RED, DPNK, CYN, LPUR };  // LYEL, YEL };
+char idiotchars[arraysize(idiotlights)][3] = { "St", "RS", "Is", "IG", "Pw", "Sh", "Sm", "RC", "Pn", "Pk", "Aj", "CM" };  // "c3", "c4" };
+bool idiotlasts[arraysize(idiotlights)];  //  = { !starter, !remote_starting, !ignition_sense, !ignition, !syspower, !shutdown_complete, !we_just_switched_modes, !simulator.get_enabled_ptr(), !hotrc_radio_detected, !panic_stop, !park_the_motors };
 
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
@@ -557,8 +559,8 @@ class Display {
             else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
         }
         void draw_idiotlight (int32_t index, int32_t x, int32_t y) {
-            _tft.fillRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (*(idiotlights[index])) ? idiotcolors[index] : darken_color (idiotcolors[index], 2));  // GRY1);
-            _tft.setTextColor ((*(idiotlights[index])) ? BLK : GRY1);  // darken_color ((*(idiotlights[index])) ? BLK : DGRY)
+            _tft.fillRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (*(idiotlights[index])) ? idiotcolors[index] : HGRY);  // GRY1);
+            _tft.setTextColor ((*(idiotlights[index])) ? BLK : darken_color (idiotcolors[index], 1));  // darken_color ((*(idiotlights[index])) ? BLK : DGRY)
             _tft.setCursor (x+1, y+1);
             _tft.print (idiotchars[index]);
             idiotlasts[index] = *(idiotlights[index]);
@@ -566,7 +568,7 @@ class Display {
         void draw_idiotlights (int32_t x, int32_t y, bool force = false) {
             for (int32_t ilite=0; ilite < arraysize(idiotlights); ilite++)
                 if (force || (*(idiotlights[ilite]) ^ idiotlasts[ilite]))
-                    draw_idiotlight (ilite, x + (2 * disp_font_width + 2) * (ilite % disp_idiots_per_row), y + disp_idiot_row_height * (int32_t)(ilite / disp_idiots_per_row));
+                    draw_idiotlight (ilite, x + (2 * disp_font_width + 2) * ((ilite % disp_idiots_per_row) % disp_idiots_per_row), y + disp_idiot_row_height * (int32_t)(ilite / disp_idiots_per_row) + disp_idiot_row_height * (int32_t)(ilite / disp_idiots_per_row));
         }
         void draw_temperature(sensor_location location, int draw_index) {
             TemperatureSensor* sensor = temperature_sensor_manager.get_sensor(location);

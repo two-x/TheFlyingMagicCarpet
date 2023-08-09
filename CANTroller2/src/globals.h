@@ -78,6 +78,7 @@ bool take_temperatures = true;
 bool keep_system_powered = true;  // Use true during development
 bool allow_rolling_start = true;  // May be a smart prerequisite, may be us putting obstacles in our way
 bool share_boot_joycruise_buttons = true;  // Set true if joystick cruise button is in parallel with esp native "boot" button
+bool remote_start_support = false;
 bool starter_signal_support = false;
 
 #define pwm_jaguars true
@@ -113,7 +114,7 @@ int32_t gesture_progress = 0;  // How many steps of the Cruise Mode gesture have
 bool shutdown_complete = false;  // Shutdown mode has completed its work and can stop activity
 bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
 bool park_the_motors = false;  // Indicates we should release the brake & gas so the pedals can be used manually without interference
-bool car_initially_moved = false;  // Whether car has moved at all since entering fly mode
+bool car_has_moved = false;  // Whether car has moved at all since entering fly mode
 bool calmode_request = false;
 bool joy_centered = false;
 bool panic_stop = false;
@@ -204,7 +205,6 @@ bool cruise_sw = LOW;
 bool starter = LOW;
 bool starter_last = LOW;
 
-// DeviceAddress temp_known_addrs { 0, 0, 0, 0, 0, 0, 0x3fc983d4, 0 };  // Corresponding to temp_sensors enum, so code can identify sensors
 enum this_is_a_total_hack { WHEEL = 2 };
 enum temp_lims { DISP_MIN, NOM_MIN, NOM_MAX, WARNING, ALARM, DISP_MAX };  // Possible sources of gas, brake, steering commands
 float temp_lims_f[3][6] { { 0.0,  45.0, 115.0, 120.0, 130.0, 220.0 },  // [AMBIENT][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]

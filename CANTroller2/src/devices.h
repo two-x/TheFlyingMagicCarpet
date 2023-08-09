@@ -727,8 +727,7 @@ class Speedometer : public PulseSensor<float> {
         static constexpr float _stop_thresh_mph = 0.2;  // Below which the car is considered stopped
         static constexpr float _min_mph = 0.0;
         static constexpr float _max_mph = 25.0; // What is max speed car can ever go
-        // NOTE: should we start at 1mph? shouldn't it be zero?
-        static constexpr float _initial_mph = 1.01; // Current speed, raw value converted to mph (in mph)
+        static constexpr float _initial_mph = 0.0; // Current speed, raw value converted to mph (in mph)
         static constexpr float _initial_redline_mph = 15.0; // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
         static constexpr float _initial_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 pulrot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 whlrot/pulrot * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
         static constexpr bool _initial_invert = true;
