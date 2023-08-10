@@ -145,7 +145,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     neostrip.setBrightness (neo_brightness_max);  // It truly is incredibly bright
     
 
-    temp_init();  // Onewire bus and temp sensors
+    init_temperature_sensors();  // Onewire bus and temp sensors
     
     printf ("Init display..\n");
     if (display_enabled) {

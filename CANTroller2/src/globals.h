@@ -486,25 +486,35 @@ bool syspower_set (bool val) {
     write_pin (syspower_pin, really_power);  // delay (val * 500);
     return really_power;
 }
-void temp_init (void) {
+
+void print_address(DeviceAddress device_address) {
+  for(uint8_t i = 0; i < sizeof(device_address); i++) {
+    if(device_address[i] < 0x10) Serial.print("0");
+    Serial.print(device_address[i], HEX);
+  }
+  Serial.println();
+}
+
+void init_temperature_sensors (void) {
     printf ("Temp sensors..");
+    // TODO investigate using tasks to handle blocking issues, go back to using the dallas import rather than our hacked timers version
     tempsensebus.setWaitForConversion (false);  // Whether to block during conversion process
     tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
     tempsensebus.begin();
     temp_detected_device_ct = tempsensebus.getDeviceCount();
+    DeviceAddress temp_addresses[temp_detected_device_ct];
     printf (" detected %d devices, parasitic power is %s\n", temp_detected_device_ct, (tempsensebus.isParasitePowerMode()) ? "on" : "off");  // , DEC);
     int32_t temp_unknown_index = 0;
-    for (int32_t index = 0; index < temp_detected_device_ct; index++) {  // for (int32_t x = 0; x < arraysize(temp_addrs); x++) {
-        if (tempsensebus.getAddress (temp_temp_addr, index)) {
-            for (int8_t addrbyte = 0; addrbyte < arraysize(temp_temp_addr); addrbyte++) {
-                temp_addrs[index][addrbyte] = temp_temp_addr[addrbyte];
-            }
-            tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
-            printf ("  found sensor #%d, addr 0x%x\n", index, temp_temp_addr);  // temp_addrs[x]
+    for (int i = 0; i < temp_detected_device_ct; i++) {
+        if (tempsensebus.getAddress (temp_addresses[i], i)) {
+            tempsensebus.setResolution (temp_addresses[i], temperature_precision);
+            printf ("  found sensor #%d, addr 0x", index);
+            print_address(temp_addresses[i]);
         }
-        else printf ("  ghost device #%d, addr unknown\n", index);  // printAddress (temp_addrs[x]);
+        else printf ("  ghost device #%d, addr unknown\n", index);
     }  // Need algorithm to recognize addresses of detected devices in known vehicle locations
 }
+
 void temp_soren (void) {
     if (temp_detected_device_ct && tempTimer.expired()) {
         if (temp_state == CONVERT) {
