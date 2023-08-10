@@ -142,13 +142,13 @@ private:
             gestureFlyTimer.set (gesture_flytimeout_us); // Initialize gesture timer to already-expired value
             cruise_sw_held = false;
             // cruiseSwTimer.reset();  // Needed if momentary cruise button is used to go to cruise mode
-            car_initially_moved = !speedometer.car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
+            car_has_moved = !speedometer.car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
             if (ctrl == HOTRC) flycruise_toggle_request = false;
             else if (ctrl == JOY && share_boot_joycruise_buttons && boot_button_action == LONG) boot_button_action = NONE;
         }
-        if (!car_initially_moved) {
+        if (car_has_moved) {
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) updateMode(HOLD);  // Must keep pulling trigger until car moves, or it drops back to hold mode
-            else if (!speedometer.car_stopped()) car_initially_moved = true;  // Once car moves, we're allowed to stay in fly mode
+            else if (!speedometer.car_stopped()) car_has_moved = true;  // Once car moves, we're allowed to stay in fly mode
         }
         else if (speedometer.car_stopped()) updateMode(HOLD);  // Go to Hold Mode if we have come to a stop after moving  // && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT]
         if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && !hotrc_radio_detected) updateMode(HOLD);  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt

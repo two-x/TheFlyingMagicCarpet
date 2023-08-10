@@ -27,6 +27,7 @@
 #define YEL  0xffe0
 #define LYEL 0xfff8
 #define WHT  0xffff
+#define HGRY 0x2104  // hella dark grey
 #define DGRY 0x39c7  // very dark grey
 #define GRY1 0x8410  // 10000 100 000 10000 = 84 10  dark grey
 #define GRY2 0xc618  // 11000 110 000 11000 = C6 18  light grey
@@ -558,7 +559,7 @@ class Display {
             else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
         }
         void draw_idiotlight (int32_t index, int32_t x, int32_t y) {
-            _tft.fillRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (*(idiotlights[index])) ? idiotcolors[index] : BLK);  // GRY1);
+            _tft.fillRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (*(idiotlights[index])) ? idiotcolors[index] : HGRY);  // GRY1);
             _tft.setTextColor ((*(idiotlights[index])) ? BLK : darken_color (idiotcolors[index], 1));  // darken_color ((*(idiotlights[index])) ? BLK : DGRY)
             _tft.setCursor (x+1, y+1);
             _tft.print (idiotchars[index]);
