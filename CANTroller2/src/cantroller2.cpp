@@ -163,6 +163,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         ts.init();
     }
 
+
     int32_t watchdog_time_ms = Watchdog.enable(2500);  // Start 2.5 sec watchdog
     printf ("Enable watchdog.. timer set to %ld ms\n", watchdog_time_ms);
     hotrcPanicTimer.reset();
@@ -205,6 +206,7 @@ void loop() {
     // if (ctrl == JOY && (!simulator.get_enabled() || !sim_cruisesw)) cruise_sw = digitalRead (joy_cruise_btn_pin);
 
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
+
 
     encoder.update();  // Read encoder input signals
 
@@ -416,23 +418,9 @@ void loop() {
     //
     // This section should become a real time self-diagnostic system, to look for anything that doesn't seem right and display an
     // informed trouble code. Much like the engine computer in cars nowadays, which keep track of any detectable failures for you to
-    // retreive with an OBD tool. Eventually this should include functions allowing us to detect things like:
-    //  1. A sensor or actuator is unplugged, movement blocked, missing magnetic pulses, etc.
-    //  2. Air in the brake lines.
-    //  3. Axle/brake drum may be going bad (increased engine RPM needed to achieve certain speedo)  (beware going up hill may look the same).
-    //  4. E-brake has been left on (much the same symptoms as above? (beware going up hill may look the same) 
-    //  5. Battery isn't charging, or just running low.
-    //  6. Carburetor not behaving (or air filter is clogged). (See above about engine deiseling - we can detect this!)
-    //  7. After increasing braking, the actuator position changes in the opposite direction, or vise versa.
-    //  8. Changing an actuator is not having the expected effect.
-    //  9. A tunable value suspected to be out of tune.
-    //  10. Check regularly for ridiculous shit. Compare our variable values against a predetermined list of conditions which shouldn't be possible or are at least very suspect. For example:
-    //     A) Sensor reading is out of range, or has changed faster than it ever should.
-    //     B) Stopping the car on entering hold/shutdown mode is taking longer than it ever should.
-    //     C) Mule seems to be accelerating like a Tesla.
-    //     D) Car is accelerating yet engine is at idle.
-    //  11. The control system has nonsensical values in its variables.
-    //
+    // retreive with an OBD tool. Some checks are below, along with other possible things to check for:
+
+    // Check: if engine is turning when ignition signal is off
     if (!ignition && !tachometer.engine_stopped()) {
         if (diag_ign_error_enabled) { // See if the engine is turning despite the ignition being off
             Serial.println (F("Detected engine rotation in the absense of ignition signal"));  // , tach_filt_rpm, ignition
@@ -440,6 +428,26 @@ void loop() {
         }
     }
     else diag_ign_error_enabled = true;
+    
+    //  Check: if any sensor is out of range    
+    //  Check: if sensor readings aren't consistent with actuator outputs given. Like, if the brake motor is moving down, then either brake position should be decreasing or pressure increasing (for example)
+    //  Check if the pressure response is characteristic of air being in the brake line.
+    //  * Axle/brake drum may be going bad (increased engine RPM needed to achieve certain speedo)  (beware going up hill may look the same).
+    //  * E-brake has been left on (much the same symptoms as above? (beware going up hill may look the same) 
+    //  * Battery isn't charging, or just running low.
+    //  * Carburetor not behaving (or air filter is clogged). (See above about engine deiseling - we can detect this!)
+    //  * After increasing braking, the actuator position changes in the opposite direction, or vise versa.
+    //  * Changing an actuator is not having the expected effect.
+    //  * A tunable value suspected to be out of tune.
+    //  * Check regularly for ridiculous shit. Compare our variable values against a predetermined list of conditions which shouldn't be possible or are at least very suspect. For example:
+    //     A) Sensor reading is out of range, or has changed faster than it ever should.
+    //     B) Stopping the car on entering hold/shutdown mode is taking longer than it ever should.
+    //     C) Mule seems to be accelerating like a Tesla.
+    //     D) Car is accelerating yet engine is at idle.
+    //  * The control system has nonsensical values in its variables.
+    //
+
+
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");  //
         
     ts.handleTouch(); // Handle touch events and actions

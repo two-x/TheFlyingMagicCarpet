@@ -121,9 +121,10 @@ char simgrid[4][3][5] = {
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
-bool* idiotlights[12] = { &starter, &remote_starting, &ignition_sense, &ignition, &syspower, &shutdown_complete, &we_just_switched_modes, simulator.get_enabled_ptr(), &hotrc_radio_detected, &panic_stop, &park_the_motors, &cruise_adjusting };
-uint16_t idiotcolors[arraysize(idiotlights)] = { GRN, TEAL, ORG, YEL, GRN, ORG, LYEL, PNK, GRN, RED, DPNK, CYN };
-char idiotchars[arraysize(idiotlights)][3] = { "St", "RS", "Is", "IG", "Pw", "Sh", "We", "Sm", "RC", "Pn", "Pk", "Aj" };
+bool* idiotlights[11] = { &starter, &remote_starting, &ignition_sense, &ignition, &syspower, &shutdown_complete, simulator.get_enabled_ptr(), &hotrc_radio_detected,
+    &panic_stop, &park_the_motors, &cruise_adjusting};  // , &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
+uint16_t idiotcolors[arraysize(idiotlights)] = { GRN, TEAL, ORG, YEL, GRN, ORG, PNK, GRN, RED, DPNK, CYN, };  // LYEL, YEL };
+char idiotchars[arraysize(idiotlights)][3] = { "St", "RS", "Is", "IG", "Pw", "Sh", "Sm", "RC", "Pn", "Pk", "Aj", };  // "c3", "c4" };
 bool idiotlasts[arraysize(idiotlights)];  //  = { !starter, !remote_starting, !ignition_sense, !ignition, !syspower, !shutdown_complete, !we_just_switched_modes, !simulator.get_enabled_ptr(), !hotrc_radio_detected, !panic_stop, !park_the_motors };
 
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
@@ -557,8 +558,8 @@ class Display {
             else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
         }
         void draw_idiotlight (int32_t index, int32_t x, int32_t y) {
-            _tft.fillRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (*(idiotlights[index])) ? idiotcolors[index] : darken_color (idiotcolors[index], 2));  // GRY1);
-            _tft.setTextColor ((*(idiotlights[index])) ? BLK : GRY1);  // darken_color ((*(idiotlights[index])) ? BLK : DGRY)
+            _tft.fillRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (*(idiotlights[index])) ? idiotcolors[index] : BLK);  // GRY1);
+            _tft.setTextColor ((*(idiotlights[index])) ? BLK : darken_color (idiotcolors[index], 1));  // darken_color ((*(idiotlights[index])) ? BLK : DGRY)
             _tft.setCursor (x+1, y+1);
             _tft.print (idiotchars[index]);
             idiotlasts[index] = *(idiotlights[index]);
