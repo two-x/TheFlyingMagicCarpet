@@ -294,8 +294,8 @@ void loop() {
         }
         if (hotrc_ch4_sw_event) {
             if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
+            else if (runmode == STALL && remote_start_support) remote_start_toggle_request = true;
             else if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
-            else if (runmode == STALL) remote_start_toggle_request = true;
             else {}   // There's no reason pushing the ch4 button when in other modes can't do something different.  That would go here
             hotrc_ch4_sw_event = false;    
         }
@@ -575,17 +575,19 @@ void loop() {
     // Ignition & Panic stop logic and Update output signals
     if (!speedometer.car_stopped()) {
         if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && !hotrc_radio_detected) panic_stop = true;  // panic_stop could also have been initiated by the user button   && hotrc_radio_detected_last 
-        else if (ctrl == JOY && !ignition) panic_stop = true;
+        else if (ctrl == JOY && !ignition_sense) panic_stop = true;
         // else if (ctrl == JOY && !(simulator.get_enabled() && sim_joy) && !ignition && ignition_last) panic_stop = true;
     }
     else if (panic_stop) panic_stop = false;  // Cancel panic if car is stopped
     if (ctrl == HOTRC) {  // When using joystick, ignition is controlled with button and we read it. With Hotrc, we control ignition
         hotrc_radio_detected_last = hotrc_radio_detected;
-        if (panic_stop) ignition = LOW;  // Kill car if panicking
-        if ((ignition != ignition_last) && ignition_output_enabled) {  // Whenever ignition state changes, assuming we're allowed to write to the pin
-            write_pin (ign_out_pin, !ignition);  // Turn car off or on (ign output is active low), ensuring to never turn on the ignition while panicking
-            ignition_last = ignition;  // Make sure this goes after the last comparison
-        }
+        if (!ignition && ignition_last && !car_stopped()) panic_stop = true;
+    }
+    else if (ctrl == JOY && !ignition_sense && ignition_last && !car_stopped) panic_stop = true;
+    if (panic_stop) ignition = LOW;  // Kill car if panicking
+    if ((ignition != ignition_last) && ignition_output_enabled) {  // Whenever ignition state changes, assuming we're allowed to write to the pin
+        write_pin (ign_out_pin, !ignition);  // Turn car off or on (ign output is active low), ensuring to never turn on the ignition while panicking
+        ignition_last = ignition;  // Make sure this goes after the last comparison
     }
     if (runmode == STALL && remote_start_toggle_request) {
         if (remote_starting) {
@@ -603,11 +605,11 @@ void loop() {
         syspower = syspower_set (syspower);
         syspower_last = syspower;
     }
-    if (boot_button_action == LONG) {
-        screen.tft_reset();
-        boot_button_action = NONE;
-    }
-    if (!screen.get_reset_finished()) screen.tft_reset();  // If resetting tft, keep calling tft_reset until complete
+    // if (boot_button_action == LONG) {
+    //     screen.tft_reset();
+    //     boot_button_action = NONE;
+    // }
+    // if (!screen.get_reset_finished()) screen.tft_reset();  // If resetting tft, keep calling tft_reset until complete
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
 
     if (neopixel_pin >= 0) {  // Heartbeat led algorithm

@@ -49,12 +49,27 @@ private:
         we_just_switched_modes = (_currentMode != _oldMode);  // currentMode should not be changed after this point in loop
         if (we_just_switched_modes) {
             disp_runmode_dirty = true;
+            cleanup_state_variables();
             syspower = HIGH;
         }
         _oldMode = _currentMode;
         return _currentMode;
     }
-
+    void cleanup_state_variables()  {
+        if (_oldMode == SHUTDOWN) {
+            shutdown_color = colorcard[SHUTDOWN];
+            shutdown_complete = false;
+        }
+        else if (_oldMode == STALL) remote_starting = false;
+        else if (_oldMode == HOLD) joy_centered = false;
+        else if (_oldMode == FLY) car_has_moved = false;
+        else if (_oldMode == CRUISE) cruise_adjusting = false;
+        else if (_oldMode == CAL) {
+            cal_pot_gas_ready = false;
+            cal_pot_gasservo = false;
+            cal_joyvert_brkmotor = false;
+        }
+    }
     void handleBasicMode() { // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         if (we_just_switched_modes) {  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
             gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
@@ -140,13 +155,11 @@ private:
         if (we_just_switched_modes) {
             gesture_progress = 0;
             gestureFlyTimer.set (gesture_flytimeout_us); // Initialize gesture timer to already-expired value
-            cruise_sw_held = false;
-            // cruiseSwTimer.reset();  // Needed if momentary cruise button is used to go to cruise mode
             car_has_moved = !speedometer.car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
             if (ctrl == HOTRC) flycruise_toggle_request = false;
             else if (ctrl == JOY && share_boot_joycruise_buttons && boot_button_action == LONG) boot_button_action = NONE;
         }
-        if (car_has_moved) {
+        if (!car_has_moved) {
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) updateMode(HOLD);  // Must keep pulling trigger until car moves, or it drops back to hold mode
             else if (!speedometer.car_stopped()) car_has_moved = true;  // Once car moves, we're allowed to stay in fly mode
         }
@@ -202,7 +215,6 @@ private:
             throttle.set_target(tachometer.get_filtered_value());  // Start off with target set to current tach value
             // cruiseQPID.SetCenter (tach_filt_rpm);
             gestureFlyTimer.reset();  // reset gesture timer
-            cruise_sw_held = false;
             cruise_adjusting = false;
             if (ctrl == HOTRC) flycruise_toggle_request = false;
             else if (ctrl == JOY && share_boot_joycruise_buttons && boot_button_action == LONG) boot_button_action = NONE;
