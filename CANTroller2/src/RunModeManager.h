@@ -151,7 +151,7 @@ private:
         else if (joy_centered && (ctrl == JOY || hotrc_radio_detected)) updateMode(FLY); // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
     }
 
-     void handleFlyMode() {
+    void handleFlyMode() {
         if (we_just_switched_modes) {
             gesture_progress = 0;
             gestureFlyTimer.set (gesture_flytimeout_us); // Initialize gesture timer to already-expired value
