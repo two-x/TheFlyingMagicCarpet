@@ -611,7 +611,7 @@ class Display {
                 if (dataset_page == PG_RUN) {
                     draw_dynamic(9, brkpos_sensor.get_filtered_value(), BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
                     draw_dynamic(10, airflow_sensor.get_filtered_value(), airflow_sensor.get_min_mph(), airflow_sensor.get_max_mph());
-                    draw_dynamic(11, map_filt_psi, map_min_psi, map_max_psi);
+                    draw_dynamic(11, map_sensor.get_filtered_value(), map_sensor.get_min_psi(), map_sensor.get_max_psi());
                     draw_dynamic(12, battery_sensor.get_filtered_value(), battery_sensor.get_min_v(), battery_sensor.get_max_v());
                     draw_dynamic(13, pot.get(), pot.min(), pot.max());
                     draw_truth(14, starter, 0);
@@ -641,8 +641,8 @@ class Display {
                     draw_eraseval(12);
                     draw_eraseval(13);
                     draw_dynamic(14, airflow_sensor.get_max_mph(), 0.0, airflow_sensor.get_abs_max_mph());
-                    draw_dynamic(15, map_min_psi, map_abs_min_psi, map_abs_max_psi);
-                    draw_dynamic(16, map_max_psi, map_abs_min_psi, map_abs_max_psi);
+                    draw_dynamic(15, map_sensor.get_min_psi(), map_sensor.get_abs_min_psi(), map_sensor.get_abs_max_psi());
+                    draw_dynamic(16, map_sensor.get_max_psi(), map_sensor.get_abs_min_psi(), map_sensor.get_abs_max_psi());
                     draw_dynamic(17, speedo_idle_mph, 0.0, speedometer.get_redline_mph());
                     draw_dynamic(18, speedometer.get_redline_mph(), 0.0, speedometer.get_max_human());
                     draw_dynamic(19, brkpos_sensor.get_zeropoint(), BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);

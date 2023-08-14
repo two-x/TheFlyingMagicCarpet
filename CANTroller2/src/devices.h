@@ -397,26 +397,21 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
     std::shared_ptr<HUMAN_T> get_filtered_value_ptr() { return _val_filt.get_ptr(); } // NOTE: should just be public?
 };
 
-// AirflowSensor measures the air intake into the engine (i think?). It communicates with the external sensor using i2c.
+// Base class for sensors which communicate using i2c.
 // NOTE: this is a strange type of Sensor, it's not really a Transducer but it does do filtering. maybe we should rethink the hierarchy a little?
 //       I think we can move Param to utils.h and add a class ExponentialMovingAverage there as well that just has the ema functionality, then make
-//       AirflowSensor a child of -> Device, ExponentialMovingAverage and not a Sensor at all. Would probably have a base class I2CSensor or something.
-class AirflowSensor : public Sensor<float,float> {
+//       I2CSensor a child of -> Device, ExponentialMovingAverage and not a Sensor at all.
+class I2CSensor : public Sensor<float,float> {
     protected:
-        // NOTE: would all AirflowSensors have the same address? how does this get determined?
-        static constexpr uint8_t _i2c_address = 0x28;
-        static constexpr float _min_mph = 0.0;
-        static constexpr float _abs_max_mph = 33.55; // What diameter intake hose will reduce airspeed to abs max?  2.7 times the xsectional area. Current area is 6.38 cm2. New diameter = 4.68 cm (min). So, need to adapt to 2.5in + tube
-        static constexpr float _initial_max_mph = 33.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)
-        static constexpr float _initial_airflow_mph = 0.0;
-        static constexpr float _ema_alpha = 0.2;
-
+        uint8_t _i2c_address;
         bool _detected = false;
-        FS3000 _sensor;
         I2C &_i2c;
 
+        // implement in child classes using the appropriate i2c sensor
+        virtual float read_sensor() = 0;
+
         virtual void handle_pin_mode() {
-            this->set_native(_sensor.readMilesPerHour()); // note, this returns a float from 0-33.55 for the FS3000-1015 
+            this->set_native(read_sensor());
             calculate_ema();  // Sensor EMA filter
         }
 
@@ -430,25 +425,47 @@ class AirflowSensor : public Sensor<float,float> {
             _val_filt.set_limits(human.get_min_ptr(), human.get_max_ptr());
         }
     public:
-        AirflowSensor(I2C &i2c_arg) : Sensor<float,float>(-1), _i2c(i2c_arg) { // uses i2c instead of a pin, but it's still a Device...
-            human.set_limits(_min_mph, _initial_max_mph);
-            handle_set_human_limits();
-            set_can_source(ControllerMode::PIN, true);
+        I2CSensor(I2C &i2c_arg, uint8_t i2c_address_arg) : Sensor<float,float>(-1), _i2c(i2c_arg), _i2c_address(i2c_address_arg) { set_can_source(ControllerMode::PIN, true); }
+        I2CSensor() = delete;
+        virtual void setup() {
+            _detected = _i2c.device_detected(_i2c_address);
+            set_source(ControllerMode::PIN); // we aren't actually reading from a pin but the point is the same...
+        }
+};
+
+// AirflowSensor measures the air intake into the engine in MPH. It communicates with the external sensor using i2c.
+class AirflowSensor : public I2CSensor {
+    protected:
+        // NOTE: would all AirflowSensors have the same address? how does this get determined?
+        static constexpr uint8_t _i2c_address = 0x28;
+        static constexpr float _min_mph = 0.0;
+        static constexpr float _abs_max_mph = 33.55; // What diameter intake hose will reduce airspeed to abs max?  2.7 times the xsectional area. Current area is 6.38 cm2. New diameter = 4.68 cm (min). So, need to adapt to 2.5in + tube
+        static constexpr float _initial_max_mph = 33.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)
+        static constexpr float _initial_airflow_mph = 0.0;
+        static constexpr float _initial_ema_alpha = 0.2;
+        FS3000 _sensor;
+        virtual float read_sensor() {
+            return _sensor.readMilesPerHour(); // note, this returns a float from 0-33.55 for the FS3000-1015 
+        }
+    public:
+        AirflowSensor(I2C &i2c_arg) : I2CSensor(i2c_arg, _i2c_address) {
+            _ema_alpha = _initial_ema_alpha;
+            set_human_limits(_min_mph, _initial_max_mph);
             set_can_source(ControllerMode::POT, true);
         }
         AirflowSensor() = delete;
 
         void setup() {
-            bool airflow_detected = _i2c.device_detected(_i2c_address);
-            printf("Airflow sensor.. %sdetected", airflow_detected ? "" : "not ");
-            if (airflow_detected) {
+            I2CSensor::setup();
+            printf("Airflow sensor.. %sdetected\n", _detected ? "" : "not ");
+            if (_detected) {
                 if (_sensor.begin() == false) {
-                    printf("  Sensor not responding");  // Begin communication with air flow sensor) over I2C 
+                    printf("  Sensor not responding\n");  // Begin communication with air flow sensor) over I2C 
                     set_source(ControllerMode::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
+                } else {
+                    _sensor.setRange(AIRFLOW_RANGE_15_MPS);
+                    printf ("  Sensor responding properly\n");
                 }
-                _sensor.setRange(AIRFLOW_RANGE_15_MPS);
-                printf ("  Sensor responding properly\n");
-                set_source(ControllerMode::PIN); // we aren't actually reading from a pin but the point is the same...
             } else {
                 set_source(ControllerMode::UNDEF); // don't even have a device at all...
             }
@@ -458,6 +475,53 @@ class AirflowSensor : public Sensor<float,float> {
         float get_max_mph() { return human.get_max(); }
         float get_abs_max_mph() { return _abs_max_mph; }
         std::shared_ptr<float> get_max_mph_ptr() { return human.get_max_ptr(); }
+};
+
+// MAPSensor measures the air pressure of the engine manifold in PSI. It communicates with the external sensor using i2c.
+class MAPSensor : public I2CSensor {
+    protected:
+        // NOTE: would all MAPSensors have the same address? how does this get determined?
+        static constexpr uint8_t _i2c_address = 0x18;
+        static constexpr float _abs_min_psi = 0.88;  // Sensor min
+        static constexpr float _abs_max_psi = 36.25;  // Sensor max
+        static constexpr float _initial_min_psi = 10.0;  // Typical low map for a car is 10.8 psi = 22 inHg
+        static constexpr float _initial_max_psi = 15.0;
+        static constexpr float _initial_psi = 14.696;  // 1 atm = 14.6959 psi
+        static constexpr float _initial_ema_alpha = 0.2;
+        SparkFun_MicroPressure _sensor;
+        virtual float read_sensor() {
+            return _sensor.readPressure(PSI);
+        }
+    public:
+        MAPSensor(I2C &i2c_arg) : I2CSensor(i2c_arg, _i2c_address) {
+            _ema_alpha = _initial_ema_alpha;
+            set_human_limits(_initial_min_psi, _initial_max_psi);
+            set_can_source(ControllerMode::POT, true);
+        }
+        MAPSensor() = delete;
+
+        void setup() {
+            I2CSensor::setup();
+            printf("MAP sensor.. %sdetected\n", _detected ? "" : "not ");
+            if (_detected) {
+                if (_sensor.begin() == false) {
+                    printf("  Sensor not responding\n");  // Begin communication with air flow sensor) over I2C 
+                    set_source(ControllerMode::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
+                } else {
+                    printf("  Reading %f atm manifold pressure\n", _sensor.readPressure(ATM));
+                    printf("  Sensor responding properly\n");
+                }
+            } else {
+                set_source(ControllerMode::UNDEF); // don't even have a device at all...
+            }
+        }
+
+        float get_min_psi() { return human.get_min(); }
+        float get_max_psi() { return human.get_max(); }
+        float get_abs_min_psi() { return _abs_min_psi; }
+        float get_abs_max_psi() { return _abs_max_psi; }
+        std::shared_ptr<float> get_min_psi_ptr() { return human.get_min_ptr(); }
+        std::shared_ptr<float> get_max_psi_ptr() { return human.get_max_ptr(); }
 };
 
 // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
