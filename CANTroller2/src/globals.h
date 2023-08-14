@@ -359,15 +359,7 @@ Timer tachIdleTimer (5000000);  // How often to update tach idle value based on 
 AirflowSensor airflow_sensor(i2c);
 
 // map sensor related
-bool map_detected = false;
-float map_abs_min_psi = 0.88;  // Sensor min
-float map_min_psi = 10.0;  // Typical low map for a car is 10.8 psi = 22 inHg
-float map_max_psi = 15.0;
-float map_abs_max_psi = 36.25;  // Sensor max
-float map_psi = 14.696;  // 1 atm = 14.6959 psi
-float map_filt_psi = map_psi;
-float map_ema_alpha = 0.2;
-SparkFun_MicroPressure map_sensor;
+MAPSensor map_sensor(i2c);
 
 // Motor control:
 // Steering : Controls the steering motor proportionally based on the joystick
