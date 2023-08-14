@@ -937,41 +937,46 @@ class Simulator {
             set_pot_overload(overload_arg); // set initial pot overload
         }
 
-        // turn on the simulator. all components which are set to be simulated will switch to simulated input
-        void enable() {
-            if (!_enabled) {
-                for ( auto &kv : _devices ) { // go through all our components
-                    bool can_sim = std::get<0>(kv.second); // check simulatability status
-                    if (can_sim && _pot_overload != kv.first) { // if component has simulation enabled and it's not being overloaded by the pot...
-                        Device *d = std::get<1>(kv.second);
-                        // NOTE: the nullptr checks here and below exist so that we can work with boolean components as well as Devices, for backwards compatability
-                        if (d != nullptr) {
-                           d->set_source(ControllerMode::TOUCH); // ...then set component to take input from the touchscreen
+        void updateSimulationStatus(bool enableSimulation) {
+            // If the simulation status hasn't changed, there's nothing to do
+            if (_enabled == enableSimulation) {
+                return;
+            }
+            // Iterate over all devices
+            for (auto &deviceEntry : _devices) {
+                bool can_sim = std::get<0>(deviceEntry.second);
+                // If the device can be simulated and isn't being overloaded by the potentiometer
+                if (can_sim && _pot_overload != deviceEntry.first) {
+                    Device *d = std::get<1>(deviceEntry.second);
+                    // If the device exists
+                    // NOTE: the nullptr checks here and below exist so that we can work with boolean components as well as Devices, for backwards compatability
+                    if (d != nullptr) {
+                        // If we're enabling the simulation, set the device's source to the touchscreen
+                        // Otherwise, set it to its default mode
+                        if (enableSimulation) {
+                            d->set_source(ControllerMode::TOUCH);
+                        } else {
+                            ControllerMode default_mode = std::get<2>(deviceEntry.second);
+                            d->set_source(default_mode);
                         }
                     }
                 }
-                _enabled = true;
             }
+
+            // Update the simulation status
+            _enabled = enableSimulation;
+        }
+
+        // turn on the simulator. all components which are set to be simulated will switch to simulated input
+        void enable() {
+            updateSimulationStatus(true);
         }
 
         // turn off the simulator. all devices will be set to their default input (if they are not being overloaded by the pot)
         void disable() {
-            if (_enabled) {
-                for ( auto &kv : _devices ) { // go through all our components
-                    bool can_sim = std::get<0>(kv.second);
-                    if (can_sim && _pot_overload != kv.first) { // if component has simulation enabled and it's not being overloaded by the pot...
-                        Device *d = std::get<1>(kv.second);
-                        if (d != nullptr) {
-                            ControllerMode default_mode = std::get<2>(kv.second);
-                            d->set_source(default_mode); // ...then it's in simulation mode and needs to be set back to it's default mode, since we are no longer simulating
-                        }
-                    }
-                }
-                _enabled = false;
-            }
+            updateSimulationStatus(false);
         }
 
-        // toggle the simulator on and off
         void toggle() {
             return _enabled ? disable() : enable();
         }
