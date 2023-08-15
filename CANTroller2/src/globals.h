@@ -20,6 +20,7 @@
 #include "utils.h"
 #include "uictrl.h"
 #include "devices.h"
+#include "TemperatureSensorManager.h"
 
 // #define CAP_TOUCH
 bool flip_the_screen = false;
@@ -229,9 +230,9 @@ temp_status temp_state = CONVERT;
 uint32_t temp_times_us[2] = { 2000000, 10000 };  // Peef delay was 10000 (10ms)
 uint32_t temp_timeout_us = 2000000;
 Timer tempTimer (temp_timeout_us);
-DeviceAddress temp_temp_addr;
-DeviceAddress temp_addrs[6];  // Hard code to the actual sensor addresses for the corresponding sense location on the car
-DallasSensor tempsensebus (&onewire);
+
+TemperatureSensorManager temperature_sensor_manager;
+
 
 // encoder related
 Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
@@ -485,50 +486,6 @@ bool syspower_set (bool val) {
     bool really_power = keep_system_powered | val;
     write_pin (syspower_pin, really_power);  // delay (val * 500);
     return really_power;
-}
-
-void print_address(DeviceAddress device_address) {
-  for(uint8_t i = 0; i < sizeof(device_address); i++) {
-    if(device_address[i] < 0x10) Serial.print("0");
-    Serial.print(device_address[i], HEX);
-  }
-  Serial.println();
-}
-
-void init_temperature_sensors (void) {
-    printf ("Temp sensors..");
-    // TODO investigate using tasks to handle blocking issues, go back to using the dallas import rather than our hacked timers version
-    tempsensebus.setWaitForConversion (false);  // Whether to block during conversion process
-    tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
-    tempsensebus.begin();
-    temp_detected_device_ct = tempsensebus.getDeviceCount();
-    DeviceAddress temp_addresses[temp_detected_device_ct];
-    printf (" detected %d devices, parasitic power is %s\n", temp_detected_device_ct, (tempsensebus.isParasitePowerMode()) ? "on" : "off");  // , DEC);
-    int32_t temp_unknown_index = 0;
-    for (int i = 0; i < temp_detected_device_ct; i++) {
-        if (tempsensebus.getAddress (temp_addresses[i], i)) {
-            tempsensebus.setResolution (temp_addresses[i], temperature_precision);
-            printf ("  found sensor #%d, addr 0x", index);
-            print_address(temp_addresses[i]);
-        }
-        else printf ("  ghost device #%d, addr unknown\n", index);
-    }  // Need algorithm to recognize addresses of detected devices in known vehicle locations
-}
-
-void temp_soren (void) {
-    if (temp_detected_device_ct && tempTimer.expired()) {
-        if (temp_state == CONVERT) {
-            tempsensebus.requestTemperatures();
-            tempTimer.set (tempsensebus.microsToWaitForConversion(temperature_precision));  // 50 us . / (1 << (12 - temperature_precision)));  // Give some time before reading temp
-            temp_state = READ;
-        }
-        else if (temp_state == READ) {
-            temps_f[temp_current_index] = tempsensebus.getTempF(temp_addrs[temp_current_index]);  // 12800 us
-            tempTimer.set (temp_timeout_us);
-            temp_state = CONVERT;
-            ++temp_current_index %= temp_detected_device_ct;
-        }
-    }
 }
 
 #endif  // GLOBALS_H

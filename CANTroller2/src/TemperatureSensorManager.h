@@ -1,20 +1,24 @@
-// temperaturesensors.h
-
 #ifndef TEMPERATURESENSORS_H
 #define TEMPERATURESENSORS_H
 
 #include <vector>
 #include <map>
+#include <array>
+#include <algorithm>
 
 #include <OneWire.h>
 #include "temp.h"
+#include "globals.h"
+#include "utils.h"
 
-
+// Class to manage OneWire temperature sensors
 class TemperatureSensorManager {
 private:
-    static constexpr uint8_t ONEWIRE_PIN = 19;
+    using DeviceAddress = std::array<uint8_t, 8>;
+
+    static constexpr uint8_t ONEWIRE_PIN = onewire_pin; // todo read from config in the future
     OneWire one_wire_bus;
-    DallasTemperature tempsensebus;
+    DallasSensor tempsensebus;
 
     int temp_detected_device_ct = 0;
     std::vector<DeviceAddress> detected_addresses;
@@ -23,89 +27,116 @@ private:
         {"AMBIENT", {0x28, 0x14, 0xb3, 0xbf, 0x00, 0x00, 0x00, 0x00}}
     };
     std::map<std::string, DeviceAddress> assigned_addresses;
-    int temp_current_index = 0;
 
-    void print_address(DeviceAddress device_address) {
-        for(uint8_t i = 0; i < sizeof(device_address); i++) {
-            if(device_address[i] < 0x10) Serial.print("0");
-            Serial.print(device_address[i], HEX);
-        }
-        Serial.println();
-    }
-
-public:
-    TemperatureSensorManager() : one_wire_bus(ONEWIRE_PIN), tempsensebus(&one_wire_bus) {}
-
-    void init() {
-        tempsensebus.setWaitForConversion(false);
-        tempsensebus.setCheckForConversion(true);
-        tempsensebus.begin();
-        temp_detected_device_ct = tempsensebus.getDeviceCount();
-        detected_addresses.resize(temp_detected_device_ct);
-        Serial.print("Temp sensors.. detected ");
-        Serial.print(temp_detected_device_ct);
-        Serial.println(" devices.");
-        for (int i = 0; i < temp_detected_device_ct; i++) {
-            if (tempsensebus.getAddress(detected_addresses[i], i)) {
-                tempsensebus.setResolution(detected_addresses[i], temperature_precision);
-                Serial.print("  found sensor #");
-                Serial.print(i);
-                Serial.print(", addr 0x");
-                print_address(detected_addresses[i]);
-            } else {
-                Serial.print("  ghost device #");
-                Serial.println(i);
-            }
-        }
-        match_known_addresses();
-        assign_unmatched_sensors();
-    }
-
-    float read_temperature(const std::string& location) {
-        if (assigned_addresses.find(location) != assigned_addresses.end()) {
-            return tempsensebus.getTempF(assigned_addresses[location]);
-        }
-        return -999; // Error value, adjust as needed
-    }
-
-    void update_temperature_readings() {
-        if (temp_detected_device_ct) {
-            tempsensebus.requestTemperaturesByAddress(detected_addresses[temp_current_index]);
-            ++temp_current_index %= temp_detected_device_ct;
-        }
-    }
-
-private:
-    void match_known_addresses() {
-        for (const auto& [location, addr] : known_addresses) {
-            for (const auto& detected_addr : detected_addresses) {
-                if (std::equal(std::begin(addr), std::end(addr), std::begin(detected_addr))) {
-                    assigned_addresses[location] = detected_addr;
+    // Assign known addresses to detected devices
+    void assign_known_addresses() {
+        for (auto& detected_address : detected_addresses) {
+            for (auto& known_address : known_addresses) {
+                if (std::equal(detected_address.begin(), detected_address.end(), known_address.second.begin())) {
+                    assigned_addresses[known_address.first] = detected_address;
+                    break; // Break the inner loop once a match is found
                 }
             }
         }
     }
 
-    void assign_unmatched_sensors() {
-        for (const auto& detected_addr : detected_addresses) {
-            bool is_assigned = false;
-            for (const auto& [_, assigned_addr] : assigned_addresses) {
-                if (std::equal(std::begin(assigned_addr), std::end(assigned_addr), std::begin(detected_addr))) {
-                    is_assigned = true;
-                    break;
-                }
-            }
-            if (!is_assigned) {
-                // Assign to the next available known location
-                for (const auto& [location, _] : known_addresses) {
-                    if (assigned_addresses.find(location) == assigned_addresses.end()) {
-                        assigned_addresses[location] = detected_addr;
+    // Assign remaining addresses to any unassigned locations
+    void assign_remaining_addresses() {
+        for (auto& detected_address : detected_addresses) {
+            if (std::find_if(assigned_addresses.begin(), assigned_addresses.end(), [&](const std::pair<const std::string, DeviceAddress>& pair) {
+                return std::equal(pair.second.begin(), pair.second.end(), detected_address.begin());
+            }) == assigned_addresses.end()) {
+                for (auto& known_address : known_addresses) {
+                    if (assigned_addresses.find(known_address.first) == assigned_addresses.end()) {
+                        assigned_addresses[known_address.first] = detected_address;
                         break;
                     }
                 }
             }
         }
     }
+
+public:
+    TemperatureSensorManager() : one_wire_bus(ONEWIRE_PIN), tempsensebus(&one_wire_bus) {}
+
+    void setup() {
+        Serial.println("Setting up Temperature Sensors...");
+        tempsensebus.setWaitForConversion(false);
+        tempsensebus.setCheckForConversion(true);
+        tempsensebus.begin();
+        temp_detected_device_ct = tempsensebus.getDeviceCount();
+        detected_addresses.resize(temp_detected_device_ct);
+        Serial.printf (" detected %d devices, parasitic power is %s\n", temp_detected_device_ct, (tempsensebus.isParasitePowerMode()) ? "on" : "off");  // , DEC);
+        for (int i = 0; i < temp_detected_device_ct; i++) {
+            if (tempsensebus.getAddress(detected_addresses[i].data(), i)) {
+                tempsensebus.setResolution(detected_addresses[i].data(), temperature_precision);
+            }
+        }
+
+        assign_known_addresses();
+        assign_remaining_addresses();
+        
+        // List the assigned devices
+        print_assigned_addresses();
+    }
+
+    // Method to read temperature from a specified location
+    float read_temperature(const std::string& location) {
+        if (assigned_addresses.find(location) != assigned_addresses.end()) {
+            return tempsensebus.getTempF(assigned_addresses[location].data());
+        }
+        return -999; // Error value, adjust as needed
+    }
+
+    float read_temperature_by_index(int device_index) {
+        if (device_index < temp_detected_device_ct) {
+            return tempsensebus.getTempF(detected_addresses[device_index].data());
+        }
+        return -999; // Error value, adjust as needed
+    }
+
+    // previously called temp_soren()
+    void update_temperatures() {
+        if (get_device_count() && tempTimer.expired()) {
+            if (temp_state == CONVERT) {
+                request_temperatures();
+                tempTimer.set(micros_to_wait_for_conversion(temperature_precision));
+                temp_state = READ;
+            }
+            else if (temp_state == READ) {
+                temps_f[temp_current_index] = read_temperature_by_index(temp_current_index);
+                tempTimer.set(temp_timeout_us);
+                temp_state = CONVERT;
+                ++temp_current_index %= get_device_count();
+            }
+        }
+    }
+
+    // Method to print assigned addresses
+    void print_assigned_addresses() {
+        for (const auto& pair : assigned_addresses) {
+            const auto& location = pair.first;
+            const auto& address = pair.second;
+            Serial.print("Location: ");
+            Serial.print(location.c_str());
+            Serial.print(", Assigned Address: ");
+            print_address(address.data()); // Use the print_address function from utils.h
+            Serial.println();
+        }
+    }
+
+    int get_device_count() {
+        return temp_detected_device_ct; // todo make sure we want to iterate through all addresses vs assigned
+    }
+
+    void request_temperatures() {
+        tempsensebus.requestTemperatures();
+    }
+
+    int micros_to_wait_for_conversion(int precision) {
+        return tempsensebus.microsToWaitForConversion(precision);
+    }
+
 };
 
 #endif // TEMPERATURESENSORS_H

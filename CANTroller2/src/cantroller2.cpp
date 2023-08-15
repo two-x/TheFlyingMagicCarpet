@@ -145,7 +145,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     neostrip.setBrightness (neo_brightness_max);  // It truly is incredibly bright
     
 
-    init_temperature_sensors();  // Onewire bus and temp sensors
+    temperature_sensor_manager.setup();  // Onewire bus and temp sensors
     
     printf ("Init display..\n");
     if (display_enabled) {
@@ -199,7 +199,7 @@ void loop() {
 
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
 
-    if (take_temperatures) temp_soren();
+    if (take_temperatures) temperature_sensor_manager.update_temperatures();
     if (simulator.can_simulate(SimOption::coolant) && simulator.get_pot_overload() == SimOption::coolant) temps_f[ENGINE] = pot.mapToRange(temp_sensor_min_f, temp_sensor_max_f);
     
     encoder.update();  // Read encoder input signals
