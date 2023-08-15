@@ -4,7 +4,6 @@
 // #include <SdFat.h>  // SD card & FAT filesystem library
 #include <ESP32Servo.h>  // Makes PWM output to control motors (for rudimentary control of our gas and steering)
 #include <Adafruit_NeoPixel.h>  // Plan to allow control of neopixel LED onboard the esp32
-#include <OneWire.h>
 #include "temp.h"
 #include <Wire.h>
 #include <SparkFun_MicroPressure.h>
@@ -206,10 +205,7 @@ bool starter = LOW;
 bool starter_last = LOW;
 
 // Temperature sensor related
-long temp_temp, temp_last;  // peef variables
-static int temp_secs = 0;  // peef variables
-static byte temp_data[2];  // peef variables
-static int16_t temp_raw;  // peef variables
+
 enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };  // , SOREN_DEV0, SOREN_DEV1, num_known_ };
 // DeviceAddress temp_known_addrs { 0, 0, 0, 0, 0, 0, 0x3fc983d4, 0 };  // Corresponding to temp_sensors enum, so code can identify sensors
 enum this_is_a_total_hack { WHEEL = 2 };
@@ -221,10 +217,7 @@ float temp_room = 77.0;  // "Room" temperature is 25 C = 77 F  Who cares?
 float temp_sensor_min_f = -67.0;  // Minimum reading of sensor is -25 C = -67 F
 float temp_sensor_max_f = 257.0;  // Maximum reading of sensor is 125 C = 257 F
 float temps_f[6];  // Array stores most recent readings for all sensors
-int32_t temp_detected_device_ct = 0;
-int32_t temperature_precision = 12;  // 9-12 bit resolution
-OneWire onewire (onewire_pin);
-int32_t temp_current_index = 0;
+
 enum temp_status : bool { CONVERT, READ };
 temp_status temp_state = CONVERT;
 uint32_t temp_times_us[2] = { 2000000, 10000 };  // Peef delay was 10000 (10ms)

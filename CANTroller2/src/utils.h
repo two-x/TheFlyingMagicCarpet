@@ -130,12 +130,4 @@ class I2C {
         }
 };
 
-void print_address(DeviceAddress device_address) {
-  for(uint8_t i = 0; i < sizeof(device_address); i++) {
-    if(device_address[i] < 0x10) Serial.print("0");
-    Serial.print(device_address[i], HEX);
-  }
-  Serial.println();
-}
-
 #endif // UTILS_H
