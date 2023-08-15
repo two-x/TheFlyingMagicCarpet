@@ -523,8 +523,6 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
     void set_target (float argtarget) {
         if ((int32_t)target_rpm != (int32_t)argtarget) {
             target_externally_set = true;
-            targetlast_rpm = target_rpm;
-            target_rpm = argtarget;
             set_target_internal (argtarget);
         }
     }
@@ -534,7 +532,6 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
   protected:
     void set_target_internal (float argtarget) {
         if ((int32_t)target_rpm != (int32_t)argtarget) {
-            target_externally_set = false;
             targetlast_rpm = target_rpm;
             target_rpm = argtarget;
         }
