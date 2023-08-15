@@ -7,7 +7,6 @@
 #include <OneWire.h>
 #include "temp.h"
 #include <Wire.h>
-#include <SparkFun_FS3000_Arduino_Library.h>  // For airflow sensor  http://librarymanager/All#SparkFun_FS3000
 #include <SparkFun_MicroPressure.h>
 #include <Preferences.h>
 #include <iostream>
@@ -85,6 +84,9 @@ bool starter_signal_support = false;
 
 // Persistent config storage
 Preferences config;
+
+// I2C related
+I2C i2c(i2c_sda_pin, i2c_scl_pin);
 
 // Declare Hotrc RMT Inputs in global scope
 RMTInput hotrc_horz(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_horz_pin)); 
@@ -231,18 +233,11 @@ DeviceAddress temp_temp_addr;
 DeviceAddress temp_addrs[6];  // Hard code to the actual sensor addresses for the corresponding sense location on the car
 DallasSensor tempsensebus (&onewire);
 
-// mule battery related
-float battery_adc = adcmidscale_adc;
-float battery_v = 10.0;
-float battery_filt_v = 10.0;
-float battery_max_v = 16.0;  // The max vehicle voltage we can sense. Design resistor divider to match. Must exceed max V possible.
-float battery_convert_v_per_adc = battery_max_v/adcrange_adc;
-bool battery_convert_invert = false;
-int32_t battery_convert_polarity = 1;  // Forward
-float battery_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-
 // encoder related
 Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
+
+// mule battery related
+BatterySensor battery_sensor(ign_batt_pin);
 
 // controller related
 enum ctrls { HOTRC, JOY, SIM, HEADLESS };  // Possible sources of gas, brake, steering commands
@@ -361,29 +356,10 @@ float tach_idle_abs_max_rpm = 1000.0;  // High limit of idle speed adjustability
 Timer tachIdleTimer (5000000);  // How often to update tach idle value based on engine temperature
 
 // airflow sensor related
-bool airflow_detected = false;
-float airflow_mph = 0.0;
-float airflow_filt_mph = airflow_mph;
-// float airflow_target_mph = airflow_mph;
-float airflow_abs_min_mph = 0.0;  // Sensor min
-float airflow_min_mph = 0.0;
-float airflow_max_mph = 33.55;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)
-float airflow_abs_max_mph = 33.55;  // Sensor max
-// float airflow_idle_mph = airflow_max_mph * tach_idle_rpm / tachometer.get_redline_rpm();
-// What diameter intake hose will reduce airspeed to abs max?  2.7 times the xsectional area. Current area is 6.38 cm2. New diameter = 4.68 cm (min). So, need to adapt to 2.5in + tube
-float airflow_ema_alpha = 0.2;
-FS3000 airflow_sensor;
+AirflowSensor airflow_sensor(i2c);
 
 // map sensor related
-bool map_detected = false;
-float map_abs_min_psi = 0.88;  // Sensor min
-float map_min_psi = 10.0;  // Typical low map for a car is 10.8 psi = 22 inHg
-float map_max_psi = 15.0;
-float map_abs_max_psi = 36.25;  // Sensor max
-float map_psi = 14.696;  // 1 atm = 14.6959 psi
-float map_filt_psi = map_psi;
-float map_ema_alpha = 0.2;
-SparkFun_MicroPressure map_sensor;
+MAPSensor map_sensor(i2c);
 
 // Motor control:
 // Steering : Controls the steering motor proportionally based on the joystick
@@ -503,14 +479,8 @@ bool adj_val(float* variable, float modify, float low_limit, float high_limit) {
 bool adj_bool(bool val, int32_t delta) { return delta != 0 ? delta > 0 : val; }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
 void adj_bool(bool* val, int32_t delta) { *val = adj_bool(*val, delta); }  // sets a bool reference to 1 on 1 delta or 0 on -1 delta 
 
-// battery_v = convert_units ((float)analogRead (battery_pin), battery_convert_v_per_adc, battery_convert_invert);
-// ema_filt (battery_v, &battery_filt_v, battery_ema_alpha);  // Apply EMA filter
-bool read_battery_ignition (void) {  //Updates battery voltage and returns ignition on/off
-    battery_adc = analogRead (ign_batt_pin);
-    battery_v = convert_units (battery_adc, battery_convert_v_per_adc, battery_convert_invert);
-    ema_filt (battery_v, &battery_filt_v, battery_ema_alpha);  // Apply EMA filter
-    return (battery_filt_v > ignition_on_thresh_v);
-}
+bool read_battery_ignition() { return battery_sensor.get_filtered_value() > ignition_on_thresh_v; }
+
 bool syspower_set (bool val) {
     bool really_power = keep_system_powered | val;
     write_pin (syspower_pin, really_power);  // delay (val * 500);
@@ -550,26 +520,5 @@ void temp_soren (void) {
         }
     }
 }
-// I2C related
-int32_t i2c_devicecount = 0;
-uint8_t i2c_addrs[10];
 
-void i2c_init (int32_t sda, int32_t scl) {
-    printf ("I2C driver ");
-    Wire.begin (sda, scl);  // I2c bus needed for airflow sensor
-    byte error, address;
-    printf (" scanning ...");
-    i2c_devicecount = 0;
-    for (address = 1; address < 127; address++ ) {
-        Wire.beginTransmission (address);
-        error = Wire.endTransmission();
-        if (error == 0) {
-            printf (" found addr: 0x%s%x", (address < 16) ? "0" : "", address);
-            i2c_addrs[i2c_devicecount++] = address;
-        }
-        else if (error==4) printf (" error addr: 0x%s%x", (address < 16) ? "0" : "", address);
-    }
-    if (i2c_devicecount == 0) printf (" no devices found\n");
-    else printf (" done\n");
-}
 #endif  // GLOBALS_H

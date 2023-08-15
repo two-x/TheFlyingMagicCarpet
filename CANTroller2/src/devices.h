@@ -7,11 +7,16 @@
 #include <map>
 #include <tuple>
 #include <memory> // for std::shared_ptr
+#include <SparkFun_FS3000_Arduino_Library.h>  // For airflow sensor  http://librarymanager/All#SparkFun_FS3000
 #include "Arduino.h"
 #include "FunctionalInterrupt.h"
 #include "utils.h"
 #include "uictrl.h"
 // #include "xtensa/core-macros.h"  // access to ccount register for esp32 timing ticks
+
+// NOTE: the following classes all contain their own initial config values (for simplicity). We could instead use Config objects and pass them in at construction time, which might be
+//       a little cleaner organization-wise, since all the configs would be consolidated. It would also allow us to read Configs from storage somewhere, so we could have persistent
+//       calibration.
 
 // Param is a value which is constrained between min/max limits, representing a "raw" (aka unfiltered) quantity. A value with tight limits
 // (wehere min=val=max) is constant and cannot be changed without changing the limits. An unconstrained value can be represented by setting
@@ -185,7 +190,7 @@ class Device {
         }
     }
 
-    void set_pot_input(Potentiometer &pot_arg) {
+    void attach_pot(Potentiometer &pot_arg) {
         _pot = &pot_arg;
     }
 
@@ -204,9 +209,9 @@ template<typename NATIVE_T, typename HUMAN_T>
 class Transducer : public Device {
   protected:
     // Multiplier and adder values to plug in for unit conversion math
-    float _m_factor;
-    float _b_offset;  
-    bool _invert;  // Flag to indicated if unit conversion math should multiply or divide
+    float _m_factor = 1.0;
+    float _b_offset = 0.0;  
+    bool _invert = false;  // Flag to indicated if unit conversion math should multiply or divide
     TransducerDirection dir = TransducerDirection::FWD; // NOTE: what is this for, exactly?
     
     // conversion functions (can be overridden in child classes different conversion methods are needed)
@@ -392,6 +397,133 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
     std::shared_ptr<HUMAN_T> get_filtered_value_ptr() { return _val_filt.get_ptr(); } // NOTE: should just be public?
 };
 
+// Base class for sensors which communicate using i2c.
+// NOTE: this is a strange type of Sensor, it's not really a Transducer but it does do filtering. maybe we should rethink the hierarchy a little?
+//       I think we can move Param to utils.h and add a class ExponentialMovingAverage there as well that just has the ema functionality, then make
+//       I2CSensor a child of -> Device, ExponentialMovingAverage and not a Sensor at all.
+class I2CSensor : public Sensor<float,float> {
+    protected:
+        uint8_t _i2c_address;
+        bool _detected = false;
+        I2C &_i2c;
+
+        // implement in child classes using the appropriate i2c sensor
+        virtual float read_sensor() = 0;
+
+        virtual void handle_pin_mode() {
+            this->set_native(read_sensor());
+            calculate_ema();  // Sensor EMA filter
+        }
+
+        virtual void handle_pot_mode() {
+            this->human.set(this->_pot->mapToRange(this->human.get_min(), this->human.get_max()));
+            this->_val_filt.set(this->human.get()); // don't filter the value we get from the pot, the pot output is already filtered
+        }
+    
+        virtual void handle_set_human_limits() {
+            native.set_limits(human.get_min_ptr(), human.get_max_ptr());
+            _val_filt.set_limits(human.get_min_ptr(), human.get_max_ptr());
+        }
+    public:
+        I2CSensor(I2C &i2c_arg, uint8_t i2c_address_arg) : Sensor<float,float>(-1), _i2c(i2c_arg), _i2c_address(i2c_address_arg) { set_can_source(ControllerMode::PIN, true); }
+        I2CSensor() = delete;
+        virtual void setup() {
+            _detected = _i2c.device_detected(_i2c_address);
+            set_source(ControllerMode::PIN); // we aren't actually reading from a pin but the point is the same...
+        }
+};
+
+// AirflowSensor measures the air intake into the engine in MPH. It communicates with the external sensor using i2c.
+class AirflowSensor : public I2CSensor {
+    protected:
+        // NOTE: would all AirflowSensors have the same address? how does this get determined?
+        static constexpr uint8_t _i2c_address = 0x28;
+        static constexpr float _min_mph = 0.0;
+        static constexpr float _abs_max_mph = 33.55; // What diameter intake hose will reduce airspeed to abs max?  2.7 times the xsectional area. Current area is 6.38 cm2. New diameter = 4.68 cm (min). So, need to adapt to 2.5in + tube
+        static constexpr float _initial_max_mph = 33.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)
+        static constexpr float _initial_airflow_mph = 0.0;
+        static constexpr float _initial_ema_alpha = 0.2;
+        FS3000 _sensor;
+        virtual float read_sensor() {
+            return _sensor.readMilesPerHour(); // note, this returns a float from 0-33.55 for the FS3000-1015 
+        }
+    public:
+        AirflowSensor(I2C &i2c_arg) : I2CSensor(i2c_arg, _i2c_address) {
+            _ema_alpha = _initial_ema_alpha;
+            set_human_limits(_min_mph, _initial_max_mph);
+            set_can_source(ControllerMode::POT, true);
+        }
+        AirflowSensor() = delete;
+
+        void setup() {
+            I2CSensor::setup();
+            printf("Airflow sensor.. %sdetected\n", _detected ? "" : "not ");
+            if (_detected) {
+                if (_sensor.begin() == false) {
+                    printf("  Sensor not responding\n");  // Begin communication with air flow sensor) over I2C 
+                    set_source(ControllerMode::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
+                } else {
+                    _sensor.setRange(AIRFLOW_RANGE_15_MPS);
+                    printf ("  Sensor responding properly\n");
+                }
+            } else {
+                set_source(ControllerMode::UNDEF); // don't even have a device at all...
+            }
+        }
+
+        float get_min_mph() { return human.get_min(); }
+        float get_max_mph() { return human.get_max(); }
+        float get_abs_max_mph() { return _abs_max_mph; }
+        std::shared_ptr<float> get_max_mph_ptr() { return human.get_max_ptr(); }
+};
+
+// MAPSensor measures the air pressure of the engine manifold in PSI. It communicates with the external sensor using i2c.
+class MAPSensor : public I2CSensor {
+    protected:
+        // NOTE: would all MAPSensors have the same address? how does this get determined?
+        static constexpr uint8_t _i2c_address = 0x18;
+        static constexpr float _abs_min_psi = 0.88;  // Sensor min
+        static constexpr float _abs_max_psi = 36.25;  // Sensor max
+        static constexpr float _initial_min_psi = 10.0;  // Typical low map for a car is 10.8 psi = 22 inHg
+        static constexpr float _initial_max_psi = 15.0;
+        static constexpr float _initial_psi = 14.696;  // 1 atm = 14.6959 psi
+        static constexpr float _initial_ema_alpha = 0.2;
+        SparkFun_MicroPressure _sensor;
+        virtual float read_sensor() {
+            return _sensor.readPressure(PSI);
+        }
+    public:
+        MAPSensor(I2C &i2c_arg) : I2CSensor(i2c_arg, _i2c_address) {
+            _ema_alpha = _initial_ema_alpha;
+            set_human_limits(_initial_min_psi, _initial_max_psi);
+            set_can_source(ControllerMode::POT, true);
+        }
+        MAPSensor() = delete;
+
+        void setup() {
+            I2CSensor::setup();
+            printf("MAP sensor.. %sdetected\n", _detected ? "" : "not ");
+            if (_detected) {
+                if (_sensor.begin() == false) {
+                    printf("  Sensor not responding\n");  // Begin communication with air flow sensor) over I2C 
+                    set_source(ControllerMode::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
+                } else {
+                    printf("  Reading %f atm manifold pressure\n", _sensor.readPressure(ATM));
+                    printf("  Sensor responding properly\n");
+                }
+            } else {
+                set_source(ControllerMode::UNDEF); // don't even have a device at all...
+            }
+        }
+
+        float get_min_psi() { return human.get_min(); }
+        float get_max_psi() { return human.get_max(); }
+        float get_abs_min_psi() { return _abs_min_psi; }
+        float get_abs_max_psi() { return _abs_max_psi; }
+        std::shared_ptr<float> get_min_psi_ptr() { return human.get_min_ptr(); }
+        std::shared_ptr<float> get_max_psi_ptr() { return human.get_max_ptr(); }
+};
+
 // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
 template<typename NATIVE_T, typename HUMAN_T>
 class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
@@ -409,12 +541,34 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
         
 };
 
+// BatterySensor reads the voltage level from the Mule battery
+class BatterySensor : public AnalogSensor<int32_t, float> {
+    protected:
+        static constexpr float _initial_adc = adcmidscale_adc;
+        static constexpr float _initial_v = 10.0;
+        static constexpr float _min_v = 0.0; // The min vehicle voltage we can sense.
+        static constexpr float _max_v = 16.0;  // The max vehicle voltage we can sense. Design resistor divider to match. Must exceed max V possible.
+        static constexpr float _initial_v_per_adc = _max_v / adcrange_adc;
+        static constexpr float _initial_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+    public:
+        BatterySensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
+            _ema_alpha = _initial_ema_alpha;
+            _m_factor = _initial_v_per_adc;
+            human.set_limits(_min_v, _max_v);
+            native.set_limits(0.0, adcrange_adc);
+            set_native(_initial_adc);
+            set_can_source(ControllerMode::PIN, true);
+        }
+        BatterySensor() = delete;
+        float get_min_v() { return human.get_min(); }
+        float get_max_v() { return human.get_max(); }
+};
+
 // PressureSensor represents a brake fluid pressure sensor.
 // It extends AnalogSensor to handle reading an analog pin
 // and converting the ADC value to a pressure value in PSI.
 class PressureSensor : public AnalogSensor<int32_t, float> {
     public:
-        // NOTE: for now lets keep all the config stuff here in the class. could also read in values from a config file at some point.
         static constexpr int32_t min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
         static constexpr int32_t max_adc = 2080; // Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
         static constexpr float initial_psi_per_adc = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - min_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
@@ -445,7 +599,6 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         std::shared_ptr<float> _zeropoint;
         void handle_touch_mode() { _val_filt.set((nom_lim_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
     public:
-        // NOTE: for now lets keep all the config stuff here in the class. could also read in values from a config file at some point.
         static constexpr float nom_lim_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
         static constexpr float nom_lim_extend_in = 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
         static constexpr float abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
@@ -915,7 +1068,7 @@ class Simulator {
         static constexpr bool initial_sim_ignition = true;
         static constexpr bool initial_sim_airflow = false;
         static constexpr bool initial_sim_mapsens = false;
-        static constexpr bool initial_sim_battery = true;
+        static constexpr bool initial_sim_battery = false;
         static constexpr bool initial_sim_coolant = true;
 
         Simulator(Potentiometer& pot_arg, SimOption overload_arg=SimOption::none) : _pot(pot_arg) {
@@ -992,8 +1145,17 @@ class Simulator {
             auto kv = _devices.find(option); // look for the component
             if (kv != _devices.end()) {
                 can_sim = std::get<0>(kv->second); // if an entry for the component already existed, preserve its simulatability status
+                if (can_sim) { // if simulability has already been enabled...
+                    if (option == _pot_overload) { // ...and the pot is supposed to overload this component...
+                        d.set_source(ControllerMode::POT); // ...then set the input source for the associated Device to read from the pot
+                    } else if (_enabled) { // ...and the pot isn't overloading this component, but the simulator is running...
+                        d.set_source(ControllerMode::TOUCH); // ...then set the input source for the associated Device to read from the touchscreen
+                    }
+                }
             }
-            d.set_pot_input(_pot);
+            if (d.can_source(ControllerMode::POT)) {
+                d.attach_pot(_pot); // if this device can be overloaded by the pot, connect it to pot input
+            }
             _devices[option] = simulable_t(can_sim, &d, default_mode); // store info for this component
         }
 
