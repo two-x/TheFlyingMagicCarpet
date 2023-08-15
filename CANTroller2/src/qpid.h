@@ -525,7 +525,6 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
             target_externally_set = true;
             targetlast_rpm = target_rpm;
             target_rpm = argtarget;
-            set_target_internal (argtarget);
         }
     }
     void set_engine_sensor (TemperatureSensor& sensor) {
