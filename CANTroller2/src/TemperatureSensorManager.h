@@ -10,7 +10,6 @@
 #include "temp.h"
 #include "utils.h"
 #include "TemperatureSensor.h"
-#include "globals.h"
 
 // Class to manage OneWire temperature sensors
 class TemperatureSensorManager {
@@ -18,62 +17,85 @@ private:
     // Replace DeviceAddress with std::array<uint8_t, 8>
     using DeviceAddress = std::array<uint8_t, 8>;
 
-    static constexpr uint8_t ONEWIRE_PIN = 19; // todo read from config in the future
     int32_t temperature_precision = 12;  // 9-12 bit resolution
-    int32_t current_index = 0;
     int detected_devices_ct = 0;
     
     OneWire one_wire_bus;
     DallasSensor tempsensebus;
 
-    std::vector<std::string> all_locations = {"ENGINE", "AMBIENT", "WHEEL_FL", "WHEEL_FR", "WHEEL_RL", "WHEEL_RR"};
     std::vector<DeviceAddress> detected_addresses;
-    std::map<std::string, DeviceAddress> known_addresses = {
-        {"ENGINE", {0x28, 0x3c, 0xf3, 0xa7, 0x00, 0x00, 0x00, 0x00}},
-        {"AMBIENT", {0x28, 0x14, 0xb3, 0xbf, 0x00, 0x00, 0x00, 0x00}}
+    std::vector<sensor_location> all_locations = {
+        sensor_location::ENGINE,
+        sensor_location::AMBIENT,
+        sensor_location::WHEEL_FL,
+        sensor_location::WHEEL_FR,
+        sensor_location::WHEEL_RL,
+        sensor_location::WHEEL_RR
+        };
+    std::map<sensor_location, DeviceAddress> known_addresses = {
+        {sensor_location::ENGINE, {0x28, 0x3c, 0xf3, 0xa7, 0x00, 0x00, 0x00, 0x00}},
+        {sensor_location::AMBIENT, {0x28, 0x14, 0xb3, 0xbf, 0x00, 0x00, 0x00, 0x00}}
     };
-    std::map<std::string, TemperatureSensor> sensors;
 
-    // Assigns known addresses to Sensors. The sensors will have names like ENGINE or AMBIENT
+    std::map<sensor_location, TemperatureSensor> sensors;
+
+    // Assigns known addresses to Sensors. The sensors will have locations like ENGINE or AMBIENT
     void assign_known_addresses() {
-        for (auto& detected_address : detected_addresses) {
-            for (auto& known_address : known_addresses) {
-                if (std::equal(detected_address.begin(), detected_address.end(), known_address.second.begin())) {
-                    sensors[known_address.first].set_address(detected_address);
-                    break; // Break the inner loop once a match is found
+        for (auto& known_address : known_addresses) {
+            // check to see if we have a known address that wasn't detected, print a warning if yes
+            auto detected_address_it = std::find_if(detected_addresses.begin(), detected_addresses.end(), [&](const DeviceAddress& detected_address) {
+                return std::equal(detected_address.begin(), detected_address.end(), known_address.second.begin());
+            });
+
+            if (detected_address_it != detected_addresses.end()) {
+                // The known address was detected, so assign it to the corresponding sensor
+                auto sensor_it = sensors.find(known_address.first);
+                if (sensor_it == sensors.end()) {
+                    // The sensor doesn't exist yet, so create it and add it to the map
+                    sensors.emplace(known_address.first, TemperatureSensor(known_address.first, *detected_address_it, &tempsensebus));
+                    // Print the sensor address for debugging purposes
+                    Serial.println("Assigned known sensor address:");
+                    sensors.at(known_address.first).print_address();
+                    
+                } else {
+                    // The sensor already exists, so just update its address
+                    sensor_it->second.set_address(*detected_address_it);
+                    // Print the updated sensor address for debugging purposes
+                    Serial.println("Updated sensor address:");
+                    sensor_it->second.print_address();
+                    
                 }
+            } else {
+                // The known address was not detected, so log a warning message
+                Serial.printf("Warning: Known sensor at location %s was not detected\n", TemperatureSensor::sensor_location_to_string(known_address.first).c_str());
             }
         }
     }
 
-    // Assign remaining addresses to any unassigned locations
+    // Assign remaining addresses to any unassigned locations, in order of the sensor_locations enum
     void assign_remaining_addresses() {
         auto it = all_locations.begin();
         for (auto& detected_address : detected_addresses) {
-            if (std::find_if(sensors.begin(), sensors.end(), [&](const std::pair<const std::string, TemperatureSensor>& pair) {
+            if (std::find_if(sensors.begin(), sensors.end(), [&](const std::pair<const sensor_location, TemperatureSensor>& pair) {
                 return std::equal(pair.second.get_address().begin(), pair.second.get_address().end(), detected_address.begin());
             }) == sensors.end()) {
-                while (it != all_locations.end() && sensors[*it].get_address() != DeviceAddress{}) {
+                while (it != all_locations.end() && sensors.find(*it) != sensors.end()) {
                     ++it;
                 }
                 if (it != all_locations.end()) {
-                    sensors[*it].set_address(detected_address);
+                    // The sensor doesn't exist yet, so create it and add it to the map
+                    sensors.emplace(*it, TemperatureSensor(*it, detected_address, &tempsensebus));
+                    // Print the sensor address for debugging purposes
+                    sensors.at(*it).print_address();
                 }
             }
         }
     }
-    
 
 public:
-    TemperatureSensorManager() : one_wire_bus(ONEWIRE_PIN), tempsensebus(&one_wire_bus) {}
-
+    TemperatureSensorManager(uint8_t _onewire_pin) : one_wire_bus(_onewire_pin), tempsensebus(&one_wire_bus) {}
     void setup() {
         Serial.println("Setting up Temperature Sensors...");
-        
-        // Instantiate TemperatureSensor objects with their names
-        for (const auto& location : all_locations) {
-            sensors[location] = TemperatureSensor(location, {});
-        }
         
         tempsensebus.setWaitForConversion(false);
         tempsensebus.setCheckForConversion(true);
@@ -85,10 +107,9 @@ public:
             Serial.println("No temperature sensor devices detected");
             return;
         }
+
+        // find all detected devices and set their temperature precision
         for (int i = 0; i < detected_devices_ct; i++) {
-            // getAddress returns true if it gets an address when it checks at index i
-            // if it does find an address, it stores it in detected_addresses[i] and sets precision
-            // the .data() returns a pointer that getAddress uses to populate detected-addresses
             if (tempsensebus.getAddress(detected_addresses[i].data(), i)) {
                 tempsensebus.setResolution(detected_addresses[i].data(), temperature_precision);
             }
@@ -100,72 +121,64 @@ public:
         // Assign remaining addresses to the sensors in order using all_locations
         assign_remaining_addresses();
 
-        // List the assigned devices
-        print_assigned_addresses();
-    }
-
-    // Method to read temperature from a specified location
-    float read_temperature(const std::string& location) {
-        if (sensors.find(location) != sensors.end()) {
-            return tempsensebus.getTempF(sensors[location].get_address().data());
-        }
-        return -999; // Error value, adjust as needed
-    }
-
-    float read_temperature_by_index(int device_index) {
-        if (device_index < detected_devices_ct) {
-            return tempsensebus.getTempF(detected_addresses[device_index].data());
-        }
-        return -999; // Error value, adjust as needed
-    }
-
-    float get_last_known_temperature(const std::string& location) {
-        if (sensors.find(location) != sensors.end()) {
-            return sensors[location].get_current_temperature();
-        }
-        return -999; // Error value, adjust as needed
+        // Request temperature for each sensor, this will make the is_ready() method work
+        request_temperatures();
     }
 
     // previously called temp_soren()
     void update_temperatures() {
-        if (get_device_count() && tempTimer.expired()) {
-            if (temp_state == CONVERT) {
-                request_temperatures();
-                tempTimer.set(micros_to_wait_for_conversion(temperature_precision));
-                temp_state = READ;
+        bool all_sensors_ready = true;
+
+        // Iterate through the sensors that have valid addresses, check if they're ready, and update
+        for (auto& sensor : sensors) {
+            if (sensor.second.has_valid_address() && sensor.second.get_state() != TemperatureSensor::State::WAITING_FOR_NEXT_CONVERSION) {
+                if (sensor.second.is_ready()) {
+                    // The sensor is ready, so set the state to READY_TO_READ
+                    sensor.second.set_state(TemperatureSensor::State::READY_TO_READ);
+                    // Then read the temperature
+                    sensor.second.read_temperature();
+                } else {
+                    // At least one sensor is not ready
+                    all_sensors_ready = false;
+                }
             }
-            else if (temp_state == READ) {
-                temps_f[current_index] = read_temperature_by_index(current_index);
-                tempTimer.set(temp_timeout_us);
-                temp_state = CONVERT;
-                ++current_index %= get_device_count();
-            }
+        }
+
+        // If all sensors are ready, start new temperature conversions
+        if (all_sensors_ready) {
+            request_temperatures();
         }
     }
 
-    // Method to print assigned addresses
-    void print_assigned_addresses() {
-        for (const auto& pair : sensors) {
-            const auto& location = pair.first;
-            const auto& sensor = pair.second;
-            Serial.print("Location: ");
-            Serial.print(location.c_str());
-            Serial.print(", Assigned Address: ");
-            sensor.print_address(); // Use the print_address function from utils.h
-            Serial.println();
-        }
+    int get_detected_device_count() {
+        return detected_devices_ct;
     }
 
-    int get_device_count() {
-        return detected_devices_ct; // todo make sure we want to iterate through all addresses vs assigned
+    // Method to get a sensor by its location
+    TemperatureSensor* get_sensor(sensor_location location) {
+        auto it = sensors.find(location);
+        if (it != sensors.end()) {
+            // The sensor exists in the map, so return it
+            return &it->second;
+        } else {
+            // The sensor doesn't exist in the map
+            // Serial.printf("Error: Sensor at location %s not found\n", TemperatureSensor::sensor_location_to_string(location).c_str());
+            return nullptr;
+            // throw std::runtime_error("Sensor not found"); // we could also just panic if this is not ok
+        }
     }
 
     void request_temperatures() {
+        // todo consider removing this, as it's non blocking and we risk it not finishing before is_ready runs
         tempsensebus.requestTemperatures();
+        // Set all sensors to the CONVERT state
+        for (auto& sensor : sensors) {
+            sensor.second.set_state(TemperatureSensor::State::CONVERTING);
+        }
     }
 
-    int micros_to_wait_for_conversion(int precision) {
-        return tempsensebus.microsToWaitForConversion(precision);
+    int get_micros_to_wait_for_conversion(int microseconds) {
+        return tempsensebus.microsToWaitForConversion(microseconds);
     }
 
 };

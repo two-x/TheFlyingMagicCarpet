@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "Arduino.h"
 #include "utils.h"
+#include "TemperatureSensor.h"
 
 class QPID {
 
@@ -454,7 +455,8 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
     idlemodes idlemode;
     float target_rpm, targetlast_rpm, idle_rpm, idlehigh_rpm, idlehot_rpm, idlecold_rpm, stallpoint_rpm, dynamic_rpm, temphot_f, tempcold_f, idle_slope_rpmps;
     float margin_rpm = 10; float idle_absmax_rpm = 1000.0;  // High limit of idle speed adjustability
-    float* measraw_rpm; float* measfilt_rpm; float* coolant_f;
+    float* measraw_rpm; float* measfilt_rpm; float engine_temp_f;
+    TemperatureSensor* engine_sensor = nullptr;
     bool we_just_changed_states = true; bool target_externally_set = false; // bool now_trying_to_idle = false;
     uint32_t settlerate_rpmps, index_now, index_last;
     uint32_t stallrate_rpmps = 400;  // Engine rpm drops exceeding this much per second are considered a stall in progress
@@ -463,7 +465,7 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
     uint32_t timestamps_us[20];
     Timer settleTimer, tachHistoryTimer;
   public:
-    ThrottleControl (float* measraw, float* measfilt, float* coolant,  // Variable references: idle target, rpm raw, rpm filt, Engine temp
+    ThrottleControl (float* measraw, float* measfilt, // Variable references: idle target, rpm raw, rpm filt
       float idlehigh, float idlehot, float idlecold,  // Values for: high-idle rpm (will not stall), hot idle nominal rpm, cold idle nominal rpm 
       float tempcold, float temphot,  // Values for: engine operational temp cold (min) and temp hot (max) in degrees-f
       int32_t settlerate = 100,  // Rate to lower idle from high point to low point (in rpm per second)
@@ -471,7 +473,6 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
         measraw_rpm = measraw;
         measfilt_rpm = measfilt;
         target_rpm = *measfilt_rpm;
-        coolant_f = coolant;
         set_idlehigh (idlehigh);
         idlehot_rpm = constrain (idlehot, 0.0, idlehigh_rpm);
         stallpoint_rpm = idlehot_rpm - 1;  // Just to give a sane initial value
@@ -485,7 +486,18 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
         idlemode = myidlemode;
         runstate = driving;
     }
+    void setup(TemperatureSensor* engine_sensor_ptr) {
+      if (engine_sensor_ptr == nullptr) {
+          Serial.println("engine_sensor_ptr is nullptr");
+          return;
+      }
+      engine_sensor = engine_sensor_ptr;
+    }
     void update (void) {  // this should be called to update idle and throttle target values before throttle-related control loop outputs are calculated
+        // update engine temp if it's ready
+        if (engine_sensor) {
+            engine_temp_f = engine_sensor->get_temperature();
+        }
         calc_tach_stability();
         calc_idlespeed();  // determine our appropriate idle speed, based on latest engine temperature reading
         runstate_changer();  // if runstate was changed, prepare to run any initial actions upon processing our new runstate algorithm
@@ -516,6 +528,9 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
             set_target_internal (argtarget);
         }
     }
+    void set_engine_sensor (TemperatureSensor& sensor) {
+      engine_sensor = &sensor;
+    }
   protected:
     void set_target_internal (float argtarget) {
         if ((int32_t)target_rpm != (int32_t)argtarget) {
@@ -525,7 +540,7 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
         }
     }
     void calc_idlespeed (void) {
-        idle_rpm = map (*coolant_f, tempcold_f, temphot_f, idlecold_rpm, idlehot_rpm);
+        idle_rpm = map (engine_temp_f, tempcold_f, temphot_f, idlecold_rpm, idlehot_rpm);
         idle_rpm = constrain (idle_rpm, idlehot_rpm, idlecold_rpm);
     }
     void runstate_changer (void) {  // If nextstate was changed during last update, or someone externally changed the target, change our runstate

@@ -147,6 +147,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
     temperature_sensor_manager.setup();  // Onewire bus and temp sensors
     
+    throttle.setup(temperature_sensor_manager.get_sensor(sensor_location::ENGINE));
+    
     printf ("Init display..\n");
     if (display_enabled) {
         config.begin("FlyByWire", false);
@@ -200,8 +202,12 @@ void loop() {
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
 
     if (take_temperatures) temperature_sensor_manager.update_temperatures();
-    if (simulator.can_simulate(SimOption::coolant) && simulator.get_pot_overload() == SimOption::coolant) temps_f[ENGINE] = pot.mapToRange(temp_sensor_min_f, temp_sensor_max_f);
-    
+    if (simulator.can_simulate(SimOption::coolant) && simulator.get_pot_overload() == SimOption::coolant) {
+        TemperatureSensor* engine_sensor = temperature_sensor_manager.get_sensor(sensor_location::ENGINE);
+        if(engine_sensor != nullptr) {
+            engine_sensor->set_temperature(pot.mapToRange(temp_sensor_min_f, temp_sensor_max_f));
+        }
+    }
     encoder.update();  // Read encoder input signals
 
     pot.update();

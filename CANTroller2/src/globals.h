@@ -204,9 +204,6 @@ bool cruise_sw = LOW;
 bool starter = LOW;
 bool starter_last = LOW;
 
-// Temperature sensor related
-
-enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };  // , SOREN_DEV0, SOREN_DEV1, num_known_ };
 // DeviceAddress temp_known_addrs { 0, 0, 0, 0, 0, 0, 0x3fc983d4, 0 };  // Corresponding to temp_sensors enum, so code can identify sensors
 enum this_is_a_total_hack { WHEEL = 2 };
 enum temp_lims { DISP_MIN, NOM_MIN, NOM_MAX, WARNING, ALARM, DISP_MAX };  // Possible sources of gas, brake, steering commands
@@ -216,15 +213,8 @@ float temp_lims_f[3][6] { { 0.0,  45.0, 115.0, 120.0, 130.0, 220.0 },  // [AMBIE
 float temp_room = 77.0;  // "Room" temperature is 25 C = 77 F  Who cares?
 float temp_sensor_min_f = -67.0;  // Minimum reading of sensor is -25 C = -67 F
 float temp_sensor_max_f = 257.0;  // Maximum reading of sensor is 125 C = 257 F
-float temps_f[6];  // Array stores most recent readings for all sensors
 
-enum temp_status : bool { CONVERT, READ };
-temp_status temp_state = CONVERT;
-uint32_t temp_times_us[2] = { 2000000, 10000 };  // Peef delay was 10000 (10ms)
-uint32_t temp_timeout_us = 2000000;
-Timer tempTimer (temp_timeout_us);
-
-TemperatureSensorManager temperature_sensor_manager;
+TemperatureSensorManager temperature_sensor_manager(onewire_pin);
 
 
 // encoder related
@@ -375,9 +365,9 @@ QPID brakeQPID (pressure_sensor.get_filtered_value_ptr().get(), &brake_out_perce
     
 // Gas : Controls the throttle to achieve the desired intake airflow and engine rpm
 
-ThrottleControl throttle(tachometer.get_human_ptr().get(), tachometer.get_filtered_value_ptr().get(), &temps_f[ENGINE],
+ThrottleControl throttle(tachometer.get_human_ptr().get(), tachometer.get_filtered_value_ptr().get(),
     tach_idle_high_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm,
-    temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][WARNING],
+    temp_lims_f[static_cast<int>(sensor_location::ENGINE)][NOM_MIN], temp_lims_f[static_cast<int>(sensor_location::ENGINE)][WARNING],
     50, ThrottleControl::idlemodes::control);
 uint32_t gas_pid_period_us = 225000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer gasPidTimer (gas_pid_period_us);  // not actually tunable, just needs value above
