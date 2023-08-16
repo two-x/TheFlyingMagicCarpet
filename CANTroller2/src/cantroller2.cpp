@@ -581,9 +581,9 @@ void loop() {
     else if (panic_stop) panic_stop = false;  // Cancel panic if car is stopped
     if (ctrl == HOTRC) {  // When using joystick, ignition is controlled with button and we read it. With Hotrc, we control ignition
         hotrc_radio_detected_last = hotrc_radio_detected;
-        if (!ignition && ignition_last && !car_stopped()) panic_stop = true;
+        if (!ignition && ignition_last && !speedometer.car_stopped()) panic_stop = true;
     }
-    else if (ctrl == JOY && !ignition_sense && ignition_last && !car_stopped) panic_stop = true;
+    else if (ctrl == JOY && !ignition_sense && ignition_last && !speedometer.car_stopped()) panic_stop = true;
     if (panic_stop) ignition = LOW;  // Kill car if panicking
     if ((ignition != ignition_last) && ignition_output_enabled) {  // Whenever ignition state changes, assuming we're allowed to write to the pin
         write_pin (ign_out_pin, !ignition);  // Turn car off or on (ign output is active low), ensuring to never turn on the ignition while panicking
