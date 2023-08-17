@@ -471,4 +471,21 @@ bool syspower_set (bool val) {
     return really_power;
 }
 
+
+// tasks for RTOS, this section is currently going to be where we keep sensor update loops.
+// TODO move these to more sensible places
+
+// This is the function that will be run in a separate task
+void update_temperature_sensors(void* parameter) {
+    while (true) {
+        if (take_temperatures) temperature_sensor_manager.update_temperatures();
+        if (simulator.can_simulate(SimOption::coolant) && simulator.get_pot_overload() == SimOption::coolant) {
+            TemperatureSensor* engine_sensor = temperature_sensor_manager.get_sensor(sensor_location::ENGINE);
+            if(engine_sensor != nullptr) {
+                engine_sensor->set_temperature(pot.mapToRange(temp_sensor_min_f, temp_sensor_max_f));
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently
+    }
+}
 #endif  // GLOBALS_H
