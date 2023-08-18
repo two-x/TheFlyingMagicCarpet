@@ -231,7 +231,11 @@ enum ctrl_edge { BOT, TOP };
 enum ctrl_vals { RAW, FILT };
 enum hotrc_sources { MICROS, ESP_RMT };
 float ctrl_ema_alpha[2] = { 0.05, 0.1 };  // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-int32_t ctrl_lims_adc[2][2][4] = { { { 0, adcmidscale_adc, adcrange_adc, 42 }, { 0, adcmidscale_adc, adcrange_adc, 42 } }, { { 9, adcmidscale_adc, 4085, 50 }, { 9, adcmidscale_adc, 4085, 50 } } }; // [HOTRC/JOY] [HORZ/VERT], [MIN/CENT/MAX/DB] values as microseconds (hotrc) or adc counts (joystick)
+int32_t ctrl_lims_adc[2][2][4] =  //   values as adc counts
+    { { { 0, adcmidscale_adc, adcrange_adc, 62 },    // [HOTRC][HORZ][MIN/CENT/MAX/DB]
+        { 0, adcmidscale_adc, adcrange_adc, 62 } },  // [HOTRC][VERT][MIN/CENT/MAX/DB]
+      { { 9, adcmidscale_adc, 4085, 50 },            // [JOY][HORZ][MIN/CENT/MAX/DB]
+        { 9, adcmidscale_adc, 4085, 50 } } };        // [JOY][VERT][MIN/CENT/MAX/DB]
 int32_t ctrl_db_adc[2][2];  // [HORZ/VERT] [BOT/TOP] - to store the top and bottom deadband values for each axis of selected controller
 int32_t ctrl_pos_adc[2][2];  // [HORZ/VERT] [RAW/FILT] - holds most current controller values
 bool ctrl = HOTRC;  // Use HotRC controller to drive instead of joystick?
@@ -321,8 +325,8 @@ float gas_pulse_govern_us = 1502;  // Governor must scale the pulse range propor
 Timer gasServoTimer (500000);  // We expect the servo to find any new position within this time
 float gas_governor_percent = 95;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
 float gas_pulse_cw_min_us = 500;  // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
-float gas_pulse_cw_open_us = 1400;  // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
-float gas_pulse_ccw_closed_us = 1800;  // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
+float gas_pulse_cw_open_us = 1000;  // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
+float gas_pulse_ccw_closed_us = 2000;  // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
 float gas_pulse_ccw_max_us = 2500;  // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
 float gas_pulse_park_slack_us = 30;  // Gas pulsewidth beyond gas_pulse_ccw_closed_us where to park the servo out of the way so we can drive manually (in us)
 
@@ -371,10 +375,10 @@ ThrottleControl throttle(tachometer.get_human_ptr().get(), tachometer.get_filter
     50, ThrottleControl::idlemodes::control);
 uint32_t gas_pid_period_us = 225000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer gasPidTimer (gas_pid_period_us);  // not actually tunable, just needs value above
-float gas_spid_initial_kp = 0.106;  // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
+float gas_spid_initial_kp = 0.206;  // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
 float gas_spid_initial_ki_hz = 0.000;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
 float gas_spid_initial_kd_s = 0.000;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
-bool gas_open_loop = false;
+bool gas_open_loop = true;
 static Servo gas_servo;
 QPID gasQPID (tachometer.get_filtered_value_ptr().get(), &gas_pulse_out_us, &tach_target_rpm,  // input, target, output variable references
     gas_pulse_cw_open_us, gas_pulse_ccw_closed_us,  // output min, max
