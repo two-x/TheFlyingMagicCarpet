@@ -542,9 +542,8 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
     }
     void runstate_changer (void) {  // If nextstate was changed during last update, or someone externally changed the target, change our runstate
         if (target_externally_set) {  // If the target has been changed externally, then determine our appropriate runstate based on target value
-            if (target_rpm > idlehigh_rpm) nextstate = (*measfilt_rpm > idlehigh_rpm) ? driving : todrive;
-            else if (target_rpm > idle_rpm + margin_rpm) nextstate = (idlemode == idlemodes::minimize) ? minimizing : idling;
-            // now_trying_to_idle = false;
+            if (target_rpm > idle_rpm + margin_rpm) nextstate = (*measfilt_rpm > idlehigh_rpm) ? driving : todrive;
+            // else nextstate = (idlemode == idlemodes::minimize) ? minimizing : idling;
         }
         target_externally_set = false;
         we_just_changed_states = (nextstate != runstate);
