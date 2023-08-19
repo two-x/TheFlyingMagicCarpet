@@ -56,7 +56,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
     set_pin (tft_dc_pin, OUTPUT);
     set_pin (gas_pwm_pin, OUTPUT);
-    set_pin (basicmodesw_pin, INPUT_PULLUP);
+    set_pin (basicmodesw_pin, INPUT_PULLDOWN);
     set_pin (neopixel_pin, OUTPUT);
     set_pin (sdcard_cs_pin, OUTPUT);
     set_pin (tft_cs_pin, OUTPUT);
@@ -220,7 +220,7 @@ void loop() {
 
     // Tach - takes 22 us to read when no activity
     tachometer.update();
-    throttle.push_tach_reading(tachometer.get_human());
+    throttle.push_tach_reading(tachometer.get_human(), tachometer.get_last_read_time());
 
     // Airflow sensor
     airflow_sensor.update();

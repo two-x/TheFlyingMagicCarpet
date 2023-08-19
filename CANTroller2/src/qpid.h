@@ -460,10 +460,13 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
     bool we_just_changed_states = true; bool target_externally_set = false; // bool now_trying_to_idle = false;
     uint32_t settlerate_rpmps, index_now, index_last;
     uint32_t stallrate_rpmps = 400;  // Engine rpm drops exceeding this much per second are considered a stall in progress
-    uint32_t history_depth = 20;
-    int32_t tach_history_rpm[20];  // Why can't I use [history_depth] here instead of [20] in this instantiation?  c++ is a pain in my ass
-    uint32_t timestamps_us[20];
+    float recovery_boost_rpm = 5;  // How much to increase rpm target in response to detection of stall slope
+    // The following are for detecting arhythmic period in tach pulses, which isn't implemented yet
+    uint32_t history_depth = 100;
+    int32_t tach_history_rpm[100];  // Why can't I use [history_depth] here instead of [20] in this instantiation?  c++ is a pain in my ass
+    uint32_t timestamps_us[100];
     Timer settleTimer, tachHistoryTimer;
+    int64_t readtime_last;
   public:
     ThrottleControl (float* measraw, float* measfilt, // Variable references: idle target, rpm raw, rpm filt
       float idlehigh, float idlehot, float idlecold,  // Values for: high-idle rpm (will not stall), hot idle nominal rpm, cold idle nominal rpm 
@@ -498,7 +501,7 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
         if (engine_sensor) {
             engine_temp_f = engine_sensor->get_temperature();
         }
-        calc_tach_stability();
+        antistall();
         calc_idlespeed();  // determine our appropriate idle speed, based on latest engine temperature reading
         runstate_changer();  // if runstate was changed, prepare to run any initial actions upon processing our new runstate algorithm
         if (runstate == todrive) process_todrive();  // Target is above idle, but currently engine is still idling 
@@ -512,13 +515,14 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
         if (runstate == driving) nextstate = (idlemode == idlemodes::direct) ? droptolow : droptohigh;
         // now_trying_to_idle = true;
     }
-    void push_tach_reading (int32_t reading) {  // Add a new rpm reading to a small LIFO ring buffer. We will use this to detect arhythmic rpm
-        if (reading == tach_history_rpm[index_now]) return;  // Ignore new tach values unless rpm has changed
+    void push_tach_reading (int32_t reading, int64_t readtime) {  // Add a new rpm reading to a small LIFO ring buffer. We will use this to detect arhythmic rpm
+        if (readtime == readtime_last) return;  // Ignore new tach values unless rpm has changed
         index_last = index_now;
         index_now = (index_now + 1) % history_depth;
         tach_history_rpm[index_now] = reading;
-        timestamps_us[index_now] = (uint32_t)tachHistoryTimer.elapsed();
-        tachHistoryTimer.reset();
+        timestamps_us[index_now] = (uint32_t)(readtime-readtime_last);  // (uint32_t)tachHistoryTimer.elapsed();
+        // tachHistoryTimer.reset();
+        readtime_last = readtime;
     }
     void set_target (float argtarget) {
         if ((int32_t)target_rpm != (int32_t)argtarget) {
@@ -580,10 +584,10 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
         // else if (*measfilt_rpm > )
         // Soren finish writing this
     }
-    void calc_tach_stability (void) {
+    void antistall (void) {
         idle_slope_rpmps = (float)(tach_history_rpm[index_now] - tach_history_rpm[index_last]) * 1000000 / timestamps_us[index_now];
-        // if (idle_slope_rpmps < stallrate_rpmps) 
-        // Soren finish writing this.  So close!
+        if (*measfilt_rpm <= idlehigh_rpm && idle_slope_rpmps < stallrate_rpmps) set_target_internal (idle_rpm + recovery_boost_rpm);
+        // Soren:  This is rather arbitrary and unlikely to work. Need to determine anti-stall strategy
     }
     // String get_modename (void) { return modenames[(int32_t)idlemode].c_str(); }
     // String get_statename (void) { return statenames[runstate].c_str(); }

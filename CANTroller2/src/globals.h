@@ -22,7 +22,7 @@
 #include "TemperatureSensorManager.h"
 
 // #define CAP_TOUCH
-bool flip_the_screen = false;
+bool flip_the_screen = true;
 
 #define multibutton_pin 0  // (button0 / strap to 1) - This is the "Boot" button on the esp32 board, and also potentially a joystick cruise button. Both active low (existing onboard pullup)
 #define joy_horz_pin 1  // (adc) - Analog left-right input (joystick)
