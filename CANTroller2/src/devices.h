@@ -642,6 +642,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
 
         Timer _stop_timer;
         float _stop_thresh;
+        float _last_read_time_us;
         volatile int64_t _isr_us = 0;
         volatile int64_t _isr_timer_start_us = 0;
         volatile int64_t _isr_timer_read_us = 0;
@@ -667,6 +668,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
             if (_isr_buf_us) {  // If a valid rotation has happened since last time, delta will have a value
                 this->set_native(_isr_buf_us);
                 this->calculate_ema();
+                _last_read_time_us = _stop_timer.elapsed();
                 _stop_timer.reset();
             }
             // NOTE: should be checking filt here maybe?
@@ -685,6 +687,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
             this->set_source(ControllerMode::PIN);
         }
         bool stopped() { return this->_val_filt.get() < _stop_thresh; }  // Note due to weird float math stuff, can not just check if tach == 0.0
+        float get_last_read_time() { return _last_read_time_us; }
 };
 
 // Tachometer represents a magnetic pulse measurement of the enginge rotation.
@@ -1053,23 +1056,21 @@ class Simulator {
 
         Potentiometer& _pot;
     public:
-        static constexpr SimOption initial_pot_overload = SimOption::tach;
-        
         // initial simulation settings
         static constexpr bool initial_sim_joy = false;
-        static constexpr bool initial_sim_tach = true;
-        static constexpr bool initial_sim_speedo = true;
-        static constexpr bool initial_sim_brkpos = true;
-        static constexpr bool initial_sim_basicsw = true;
+        static constexpr bool initial_sim_tach = false;
+        static constexpr bool initial_sim_speedo = false;
+        static constexpr bool initial_sim_brkpos = false;
+        static constexpr bool initial_sim_basicsw = false;
         static constexpr bool initial_sim_cruisesw = false;
-        static constexpr bool initial_sim_pressure = true;
-        static constexpr bool initial_sim_syspower = true;
-        static constexpr bool initial_sim_starter = true;
-        static constexpr bool initial_sim_ignition = true;
+        static constexpr bool initial_sim_pressure = false;
+        static constexpr bool initial_sim_syspower = false;
+        static constexpr bool initial_sim_starter = false;
+        static constexpr bool initial_sim_ignition = false;
         static constexpr bool initial_sim_airflow = false;
         static constexpr bool initial_sim_mapsens = false;
         static constexpr bool initial_sim_battery = false;
-        static constexpr bool initial_sim_coolant = true;
+        static constexpr bool initial_sim_coolant = false;
 
         Simulator(Potentiometer& pot_arg, SimOption overload_arg=SimOption::none) : _pot(pot_arg) {
             // set initial simulatability status for all components

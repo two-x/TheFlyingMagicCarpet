@@ -22,7 +22,7 @@
 #include "TemperatureSensorManager.h"
 
 // #define CAP_TOUCH
-bool flip_the_screen = false;
+bool flip_the_screen = true;
 
 #define multibutton_pin 0  // (button0 / strap to 1) - This is the "Boot" button on the esp32 board, and also potentially a joystick cruise button. Both active low (existing onboard pullup)
 #define joy_horz_pin 1  // (adc) - Analog left-right input (joystick)
@@ -75,11 +75,11 @@ bool flip_the_screen = false;
 bool serial_debugging = true; 
 bool timestamp_loop = false;  // Makes code write out timestamps throughout loop to serial port
 bool take_temperatures = true;
-bool keep_system_powered = true;  // Use true during development
-bool allow_rolling_start = true;  // May be a smart prerequisite, may be us putting obstacles in our way
+bool keep_system_powered = false;  // Use true during development
+bool allow_rolling_start = false;  // May be a smart prerequisite, may be us putting obstacles in our way
 bool share_boot_joycruise_buttons = true;  // Set true if joystick cruise button is in parallel with esp native "boot" button
 bool remote_start_support = false;
-bool starter_signal_support = false;
+bool starter_signal_support = true;
 
 #define pwm_jaguars true
 
@@ -141,7 +141,7 @@ Timer motorParkTimer(motor_park_timeout_us);
 Potentiometer pot(pot_wipe_pin);
 
 // simulator related
-Simulator simulator(pot, SimOption::speedo);
+Simulator simulator(pot);
 bool simulating_last = false;
 Timer simTimer; // NOTE: unused
 int32_t sim_edit_delta = 0;

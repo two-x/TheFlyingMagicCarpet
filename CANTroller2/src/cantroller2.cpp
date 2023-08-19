@@ -56,7 +56,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
     set_pin (tft_dc_pin, OUTPUT);
     set_pin (gas_pwm_pin, OUTPUT);
-    set_pin (basicmodesw_pin, INPUT_PULLUP);
+    set_pin (basicmodesw_pin, INPUT_PULLDOWN);
     set_pin (neopixel_pin, OUTPUT);
     set_pin (sdcard_cs_pin, OUTPUT);
     set_pin (tft_cs_pin, OUTPUT);
@@ -220,7 +220,7 @@ void loop() {
 
     // Tach - takes 22 us to read when no activity
     tachometer.update();
-    throttle.push_tach_reading(tachometer.get_human());
+    throttle.push_tach_reading(tachometer.get_human(), tachometer.get_last_read_time());
 
     // Airflow sensor
     airflow_sensor.update();
@@ -586,7 +586,7 @@ void loop() {
     else if (ctrl == JOY && !ignition_sense && ignition_last && !speedometer.car_stopped()) panic_stop = true;
     if (panic_stop) ignition = LOW;  // Kill car if panicking
     if ((ignition != ignition_last) && ignition_output_enabled) {  // Whenever ignition state changes, assuming we're allowed to write to the pin
-        write_pin (ign_out_pin, !ignition);  // Turn car off or on (ign output is active low), ensuring to never turn on the ignition while panicking
+        write_pin (ign_out_pin, ignition);  // Turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
         ignition_last = ignition;  // Make sure this goes after the last comparison
     }
     if (runmode == STALL && remote_start_toggle_request) {
