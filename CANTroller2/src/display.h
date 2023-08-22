@@ -10,34 +10,7 @@
 #include <TFT_eSPI.h>
 
 #include "globals.h"
-
-// display related globals
-#define BLK  0x0000
-#define BLU  0x001f
-#define MBLU 0x009f  // midnight blue. b/c true blue too dark to see over black
-#define RBLU 0x043f  // royal blue
-#define RED  0xf800
-#define DRED 0xb000
-#define GRN  0x07e0
-#define CYN  0x07ff  // 00000 111 111 11111 
-#define DCYN 0x0575  //
-#define MGT  0xf81f
-#define ORG  0xfca0
-#define DORG 0xfa40  // Dark orange aka brown
-#define YEL  0xffe0
-#define LYEL 0xfff8
-#define WHT  0xffff
-#define DGRY 0x39c7  // very dark grey
-#define GRY1 0x8410  // 10000 100 000 10000 = 84 10  dark grey
-#define GRY2 0xc618  // 11000 110 000 11000 = C6 18  light grey
-#define LGRY 0xd6ba  // very light grey
-#define PNK  0xfcf3  // Pink is the best color
-#define DPNK 0xfa8a  // We need all shades of pink
-#define LPNK 0xfe18  // Especially light pink, the champagne of pinks
-#define TEAL 0x07f9
-#define PUR  0x881f
-#define LPUR 0xc59f  // A light pastel purple
-#define GPUR 0x8c15  // A low saturation greyish pastel purple
+#include "IdiotLight.h"
 
 // LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
 // Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
@@ -120,11 +93,6 @@ char simgrid[4][3][5] = {
     { "    ", " \x1e  ", "    " },
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
-
-bool* idiotlights[12] = { &starter, &remote_starting, &ignition_sense, &ignition, &syspower, &shutdown_complete, &we_just_switched_modes, simulator.get_enabled_ptr(), &hotrc_radio_detected, &panic_stop, &park_the_motors, &cruise_adjusting };
-uint16_t idiotcolors[arraysize(idiotlights)] = { GRN, TEAL, ORG, YEL, GRN, ORG, LYEL, PNK, GRN, RED, DPNK, CYN };
-char idiotchars[arraysize(idiotlights)][3] = { "St", "RS", "Is", "IG", "Pw", "Sh", "We", "Sm", "RC", "Pn", "Pk", "Aj" };
-bool idiotlasts[arraysize(idiotlights)];  //  = { !starter, !remote_starting, !ignition_sense, !ignition, !syspower, !shutdown_complete, !we_just_switched_modes, !simulator.get_enabled(), !hotrc_radio_detected, !panic_stop, !park_the_motors };
 
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
@@ -556,17 +524,20 @@ class Display {
             if (halvings == 1) return ((color & 0xf000) | (color & 0x7c0) | (color & 0x1e)) >> 1;
             else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
         }
-        void draw_idiotlight (int32_t index, int32_t x, int32_t y) {
-            _tft.fillRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (*(idiotlights[index])) ? idiotcolors[index] : darken_color (idiotcolors[index], 2));  // GRY1);
-            _tft.setTextColor ((*(idiotlights[index])) ? BLK : GRY1);  // darken_color ((*(idiotlights[index])) ? BLK : DGRY)
-            _tft.setCursor (x+1, y+1);
-            _tft.print (idiotchars[index]);
-            idiotlasts[index] = *(idiotlights[index]);
+        void draw_idiotlight(IdiotLight& light, int32_t x, int32_t y) {
+            _tft.fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, light.get_state() ? light.get_color() : darken_color(light.get_color(), 2));
+            _tft.setTextColor(light.get_state() ? BLK : GRY1);
+            _tft.setCursor(x+1, y+1);
+            _tft.print(light.get_label());
+            light.update();
         }
-        void draw_idiotlights (int32_t x, int32_t y, bool force = false) {
-            for (int32_t ilite=0; ilite < arraysize(idiotlights); ilite++)
-                if (force || (*(idiotlights[ilite]) ^ idiotlasts[ilite]))
-                    draw_idiotlight (ilite, x + (2 * disp_font_width + 2) * (ilite % disp_idiots_per_row), y + disp_idiot_row_height * (int32_t)(ilite / disp_idiots_per_row));
+        void draw_idiotlights(int32_t x, int32_t y, bool force = false) {
+            for (int32_t ilite=0; ilite < arraysize(idiot_lights); ilite++) {
+                IdiotLight& light = idiot_lights[ilite];
+                if (force || light.has_changed()) {
+                    draw_idiotlight(light, x + (2 * disp_font_width + 2) * (ilite % disp_idiots_per_row), y + disp_idiot_row_height * (int32_t)(ilite / disp_idiots_per_row));
+                }
+            }
         }
         void draw_temperature(sensor_location location, int draw_index) {
             TemperatureSensor* sensor = temperature_sensor_manager.get_sensor(location);
