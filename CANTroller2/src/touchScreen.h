@@ -127,30 +127,35 @@ public:
                     touch_longpress_valid = false;
                 }
             }
+            if (tcol == 2 && trow == 0 && (runmode == CAL || (runmode == SHUTDOWN && shutdown_complete))) {
+                if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
+                    calmode_request = true;
+                    touch_longpress_valid = false;
+                }
+            }
+            else if (tcol == 4 && trow == 0 && simulator.simulating(SimOption::ignition)) {
+                if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
+                    ignition = !ignition;
+                    touch_longpress_valid = false;
+                }
+            }
+            else if (tcol == 5 && trow == 0 && simulator.simulating(SimOption::syspower)) {
+                if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
+                    syspower = !syspower;
+                    touch_longpress_valid = false;
+                }
+            }
             else if (simulator.get_enabled()) {
-                if (tcol == 2 && trow == 0 && (runmode == CAL || (runmode == SHUTDOWN && shutdown_complete))) {
-                    if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
-                        calmode_request = true;
-                        touch_longpress_valid = false;
-                    }
-                }  
-                else if (tcol == 3 && trow == 0 && simulator.can_simulate(SimOption::basicsw) && !touch_now_touched) basicmodesw = !basicmodesw;
+                if (tcol == 3 && trow == 0 && simulator.can_simulate(SimOption::basicsw) && !touch_now_touched) basicmodesw = !basicmodesw;
                 else if (tcol == 3 && trow == 1 && simulator.can_simulate(SimOption::pressure) && pressure_sensor.source() == ControllerMode::TOUCH) pressure_sensor.add_human((float)touch_accel); // (+= 25) Pressed the increase brake pressure button
                 else if (tcol == 3 && trow == 2 && simulator.can_simulate(SimOption::pressure) && pressure_sensor.source() == ControllerMode::TOUCH) pressure_sensor.add_human((float)(-touch_accel)); // (-= 25) Pressed the decrease brake pressure button
                 else if (tcol == 3 && trow == 4 && simulator.can_simulate(SimOption::joy)) adj_val(&ctrl_pos_adc[HORZ][FILT], -touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
-                else if (tcol == 4 && trow == 0 && simulator.can_simulate(SimOption::ignition) && !touch_now_touched) ignition = !ignition;
                 else if (tcol == 4 && trow == 1 && simulator.can_simulate(SimOption::tach) && tachometer.source() == ControllerMode::TOUCH) tachometer.add_human((float)touch_accel);
                 else if (tcol == 4 && trow == 2 && simulator.can_simulate(SimOption::tach) && tachometer.source() == ControllerMode::TOUCH) tachometer.add_human((float)-touch_accel);
                 else if (tcol == 4 && trow == 3 && simulator.can_simulate(SimOption::joy)) adj_val(&ctrl_pos_adc[VERT][FILT], touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
                 else if (tcol == 4 && trow == 4 && simulator.can_simulate(SimOption::joy)) adj_val(&ctrl_pos_adc[VERT][FILT], -touch_accel, ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-                else if (tcol == 5 && trow == 0 && simulator.can_simulate(SimOption::syspower)) {
-                    if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
-                        syspower = !syspower;
-                        touch_longpress_valid = false;
-                    }
-                }
-                else if (tcol == 5 && trow == 1 && simulator.can_simulate(SimOption::speedo) && speedometer.source() == ControllerMode::TOUCH) speedometer.add_human(0.005 * (float)touch_accel);
-                else if (tcol == 5 && trow == 2 && simulator.can_simulate(SimOption::speedo) && speedometer.source() == ControllerMode::TOUCH) speedometer.add_human(0.005 * (float)-touch_accel);
+                else if (tcol == 5 && trow == 1 && simulator.can_simulate(SimOption::speedo) && speedometer.source() == ControllerMode::TOUCH) speedometer.add_human((float)touch_accel);
+                else if (tcol == 5 && trow == 2 && simulator.can_simulate(SimOption::speedo) && speedometer.source() == ControllerMode::TOUCH) speedometer.add_human((float)-touch_accel);
                 else if (tcol == 5 && trow == 4 && simulator.can_simulate(SimOption::joy)) adj_val(&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
             }
 
