@@ -586,7 +586,7 @@ void loop() {
     else if (ctrl == JOY && !ignition_sense && ignition_last && !speedometer.car_stopped()) panic_stop = true;
     if (panic_stop) ignition = LOW;  // Kill car if panicking
     if ((ignition != ignition_last) && ignition_output_enabled) {  // Whenever ignition state changes, assuming we're allowed to write to the pin
-        write_pin (ign_out_pin, !ignition);  // Turn car off or on (ign output is active low), ensuring to never turn on the ignition while panicking
+        write_pin (ign_out_pin, ignition);  // Turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
         ignition_last = ignition;  // Make sure this goes after the last comparison
     }
     if (runmode == STALL && remote_start_toggle_request) {

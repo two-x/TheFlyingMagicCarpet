@@ -1056,23 +1056,21 @@ class Simulator {
 
         Potentiometer& _pot;
     public:
-        static constexpr SimOption initial_pot_overload = SimOption::tach;
-        
         // initial simulation settings
         static constexpr bool initial_sim_joy = false;
-        static constexpr bool initial_sim_tach = true;
-        static constexpr bool initial_sim_speedo = true;
-        static constexpr bool initial_sim_brkpos = true;
-        static constexpr bool initial_sim_basicsw = true;
+        static constexpr bool initial_sim_tach = false;
+        static constexpr bool initial_sim_speedo = false;
+        static constexpr bool initial_sim_brkpos = false;
+        static constexpr bool initial_sim_basicsw = false;
         static constexpr bool initial_sim_cruisesw = false;
-        static constexpr bool initial_sim_pressure = true;
-        static constexpr bool initial_sim_syspower = true;
-        static constexpr bool initial_sim_starter = true;
-        static constexpr bool initial_sim_ignition = true;
+        static constexpr bool initial_sim_pressure = false;
+        static constexpr bool initial_sim_syspower = false;
+        static constexpr bool initial_sim_starter = false;
+        static constexpr bool initial_sim_ignition = false;
         static constexpr bool initial_sim_airflow = false;
         static constexpr bool initial_sim_mapsens = false;
         static constexpr bool initial_sim_battery = false;
-        static constexpr bool initial_sim_coolant = true;
+        static constexpr bool initial_sim_coolant = false;
 
         Simulator(Potentiometer& pot_arg, SimOption overload_arg=SimOption::none) : _pot(pot_arg) {
             // set initial simulatability status for all components
