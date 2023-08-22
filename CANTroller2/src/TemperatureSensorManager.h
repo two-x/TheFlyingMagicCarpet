@@ -13,12 +13,21 @@
 
 // Class to manage OneWire temperature sensors
 class TemperatureSensorManager {
+public:
+    enum class State {
+        CONVERTING,
+        READY_TO_READ
+    };
+
 private:
     // Replace DeviceAddress with std::array<uint8_t, 8>
     using DeviceAddress = std::array<uint8_t, 8>;
 
-    int32_t temperature_precision = 12;  // 9-12 bit resolution
+    int32_t temperature_precision = 11;  // 9-12 bit resolution
     int detected_devices_ct = 0;
+    unsigned long last_read_request_time;
+    int sensor_index;
+    State _state;
     
     OneWire one_wire_bus;
     DallasSensor tempsensebus;
@@ -93,7 +102,7 @@ private:
     }
 
 public:
-    TemperatureSensorManager(uint8_t _onewire_pin) : one_wire_bus(_onewire_pin), tempsensebus(&one_wire_bus) {}
+    TemperatureSensorManager(uint8_t _onewire_pin) : one_wire_bus(_onewire_pin), tempsensebus(&one_wire_bus),  last_read_request_time(0), sensor_index(0), _state(State::CONVERTING) {}
     void setup() {
         Serial.println("Setting up Temperature Sensors...");
         
@@ -125,28 +134,44 @@ public:
         request_temperatures();
     }
 
+    // gets the state of the sensors (still converting values, or ready to read)
+    State get_state() const {
+        return _state;
+    }
+
+    void set_state(State state) {
+        _state = state;
+    }
+
+    // checks if all of the sensors on the device are ready to be read from, runs every 
+    void update_state() {
+        if (tempsensebus.isConversionComplete()) {
+            _state = State::READY_TO_READ;
+        } else {
+            _state = State::CONVERTING;
+        }
+    }
+
     // previously called temp_soren()
     void update_temperatures() {
-        bool all_sensors_ready = true;
+        // Check if conversions are complete
+        if (get_state() == State::READY_TO_READ) {
+            // Read temperature from one sensor
+            auto sensor_it = std::next(sensors.begin(), sensor_index);
+            sensor_it->second.read_temperature();
 
-        // Iterate through the sensors that have valid addresses, check if they're ready, and update
-        for (auto& sensor : sensors) {
-            if (sensor.second.has_valid_address() && sensor.second.get_state() != TemperatureSensor::State::WAITING_FOR_NEXT_CONVERSION) {
-                if (sensor.second.is_ready()) {
-                    // The sensor is ready, so set the state to READY_TO_READ
-                    sensor.second.set_state(TemperatureSensor::State::READY_TO_READ);
-                    // Then read the temperature
-                    sensor.second.read_temperature();
-                } else {
-                    // At least one sensor is not ready
-                    all_sensors_ready = false;
-                }
+            // Move to the next sensor
+            sensor_index = (sensor_index + 1) % sensors.size();
+
+            // If we've read from all sensors, start the next round of conversions
+            if (sensor_index == 0) {
+                request_temperatures();
+                set_state(State::CONVERTING);
+                last_read_request_time = millis();
             }
-        }
-
-        // If all sensors are ready, start new temperature conversions
-        if (all_sensors_ready) {
-            request_temperatures();
+        } else if (millis() - last_read_request_time >= tempsensebus.microsToWaitForConversion(tempsensebus.getResolution()) / 1000) {
+            // Enough time has passed since the last conversion request, so check if conversions are complete
+            update_state();
         }
     }
 
@@ -162,19 +187,17 @@ public:
             return &it->second;
         } else {
             // The sensor doesn't exist in the map
-            // Serial.printf("Error: Sensor at location %s not found\n", TemperatureSensor::sensor_location_to_string(location).c_str());
             return nullptr;
-            // throw std::runtime_error("Sensor not found"); // we could also just panic if this is not ok
         }
     }
 
     void request_temperatures() {
         // todo consider removing this, as it's non blocking and we risk it not finishing before is_ready runs
         tempsensebus.requestTemperatures();
-        // Set all sensors to the CONVERT state
-        for (auto& sensor : sensors) {
-            sensor.second.set_state(TemperatureSensor::State::CONVERTING);
-        }
+        // Set state to converting until the sensors are ready to be read from
+        set_state(State::CONVERTING);
+        // Record the time we made this request so we only check if the sensors are ready every so often
+        last_read_request_time = millis();
     }
 
     int get_micros_to_wait_for_conversion(int microseconds) {

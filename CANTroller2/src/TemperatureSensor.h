@@ -12,23 +12,15 @@ public:
     // Replace DeviceAddress with std::array<uint8_t, 8>
     using DeviceAddress = std::array<uint8_t, 8>;
 
-    enum class State {
-        CONVERTING,
-        READY_TO_READ,
-        WAITING_FOR_NEXT_CONVERSION
-    };
-
 private:
     sensor_location _location;
     DeviceAddress _address;
     float _temperature;
-    State _state;
     DallasSensor* _tempsensebus;
-    bool temperature_read = false;
 
 public:
     TemperatureSensor(sensor_location location, const DeviceAddress& address, DallasSensor* tempsensebus)
-   : _location(location), _address(address), _tempsensebus(tempsensebus), _state(State::CONVERTING), _temperature(-999) {}
+   : _location(location), _address(address), _tempsensebus(tempsensebus), _temperature(-999) {}
 
     TemperatureSensor() = delete; // always create with a pointer to the tempsensorbus
 
@@ -39,12 +31,6 @@ public:
             print_address();
             Serial.println();
         }
-        _state = State::CONVERTING;
-    }
-
-     bool is_ready() {
-        // Check if sensor is ready
-        return _tempsensebus->isConversionComplete();
     }
 
     bool has_valid_address() const {
@@ -54,26 +40,21 @@ public:
     }
 
     float read_temperature() {
-        if (is_ready() && _state == State::READY_TO_READ) {
-            int temp = _tempsensebus->getTempF(_address.data());
-            if (temp == DEVICE_DISCONNECTED_F) {
-                Serial.printf("Error: Device at location %s with address ", sensor_location_to_string(_location));
-                print_address();
-                Serial.println(" is disconnected");
-                return DEVICE_DISCONNECTED_F;
-            } 
-            _temperature = temp;
-            _state = State::WAITING_FOR_NEXT_CONVERSION;
-            return _temperature;
-        }
-        return -999; // error value, TODO we could make this a named thing or something more helpful
+        float temp = _tempsensebus->getTempF(_address.data());
+        if (temp == DEVICE_DISCONNECTED_F) {
+            Serial.printf("Error: Device at location %s with address ", sensor_location_to_string(_location));
+            print_address();
+            Serial.println(" is disconnected");
+            return DEVICE_DISCONNECTED_F;
+        } 
+        _temperature = temp;
+        return _temperature;
     }
 
     // getters
     sensor_location get_location() const { return _location; }
     float get_temperature() const { return _temperature; }
     const DeviceAddress& get_address() const { return _address; }
-    State get_state() const { return _state; }
     
     // setters
     void set_location(sensor_location location) { _location = location; }
@@ -81,10 +62,7 @@ public:
     void set_address(DeviceAddress address) {
         _address = address;
     }
-    void set_state(State state) {
-        _state = state;
-    }
-
+    
     void print_address() const {
         for(uint8_t i = 0; i < _address.size(); i++) {
             if(_address[i] < 0x10) Serial.print("0");
