@@ -555,9 +555,14 @@ void loop() {
             else if (selected_value == 9) cruiseQPID.SetKi (cruiseQPID.GetKi() + 0.001 * (float)sim_edit_delta);
             else if (selected_value == 10) cruiseQPID.SetKd (cruiseQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }
-        else if (dataset_page == PG_TEMP);
+        else if (dataset_page == PG_TEMP) {
+            if (selected_value == 8) simulator.set_can_simulate(SimOption::ignition, adj_bool(simulator.can_simulate(SimOption::ignition), sim_edit_delta));
+            else if (selected_value == 9) simulator.set_can_simulate(SimOption::basicsw, adj_bool(simulator.can_simulate(SimOption::basicsw), sim_edit_delta));
+            else if (selected_value == 10) simulator.set_can_simulate(SimOption::starter, adj_bool(simulator.can_simulate(SimOption::starter), sim_edit_delta));
+         }
         else if (dataset_page == PG_SIM) {
-            if (selected_value == 1) simulator.set_can_simulate(SimOption::joy, adj_bool(simulator.can_simulate(SimOption::joy), sim_edit_delta));
+            if (selected_value == 0) simulator.set_can_simulate(SimOption::syspower, adj_bool(simulator.can_simulate(SimOption::syspower), sim_edit_delta));
+            else if (selected_value == 1) simulator.set_can_simulate(SimOption::joy, adj_bool(simulator.can_simulate(SimOption::joy), sim_edit_delta));
             else if (selected_value == 2) simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), sim_edit_delta));
             else if (selected_value == 3) simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), sim_edit_delta));
             else if (selected_value == 4) simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), sim_edit_delta));
@@ -571,7 +576,6 @@ void loop() {
         sim_edit_delta = 0;
     }
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tun");  //
-
     // Ignition & Panic stop logic and Update output signals
     if (!speedometer.car_stopped()) {
         if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && !hotrc_radio_detected) panic_stop = true;  // panic_stop could also have been initiated by the user button   && hotrc_radio_detected_last 
