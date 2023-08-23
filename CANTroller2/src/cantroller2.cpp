@@ -433,10 +433,14 @@ void loop() {
     //
     bool check_wheels;
     check_wheels = false;
-    if (temperature_sensor_manager.get_sensor(sensor_location::WHEEL_FL)->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-    if (temperature_sensor_manager.get_sensor(sensor_location::WHEEL_FR)->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-    if (temperature_sensor_manager.get_sensor(sensor_location::WHEEL_RL)->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-    if (temperature_sensor_manager.get_sensor(sensor_location::WHEEL_RR)->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+    TemperatureSensor * temp_fl = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_FL);
+    TemperatureSensor * temp_fr = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_FR);
+    TemperatureSensor * temp_rl = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_RL);
+    TemperatureSensor * temp_rr = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_RR);
+    if (temp_fl != nullptr && temp_fl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+    if (temp_fr != nullptr && temp_fr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+    if (temp_rl != nullptr && temp_rl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+    if (temp_rr != nullptr && temp_rr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
     err_temp_wheel = check_wheels;
 
     err_temp_engine = (temperature_sensor_manager.get_sensor(sensor_location::ENGINE)->get_temperature() >= temp_lims_f[ENGINE][WARNING]);
