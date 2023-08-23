@@ -123,10 +123,10 @@ char simgrid[4][3][5] = {
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
-bool* idiotlights[12] = { &starter, &remote_starting, &ignition_sense, &ignition, &syspower, &shutdown_complete, simulator.get_enabled_ptr(), &hotrc_radio_detected,
-    &panic_stop, &park_the_motors, &cruise_adjusting, &car_has_moved};  // , &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
-uint16_t idiotcolors[arraysize(idiotlights)] = { GRN, TEAL, ORG, YEL, GRN, ORG, PNK, GRN, RED, DPNK, CYN, LPUR };  // LYEL, YEL };
-char idiotchars[arraysize(idiotlights)][3] = { "St", "RS", "Is", "IG", "Pw", "Sh", "Sm", "RC", "Pn", "Pk", "Aj", "CM" };  // "c3", "c4" };
+bool* idiotlights[14] = { &starter, &remote_starting, &ignition_sense, &ignition, &syspower, &shutdown_complete, simulator.get_enabled_ptr(), &hotrc_radio_detected,
+    &panic_stop, &park_the_motors, &cruise_adjusting, &car_has_moved, &err_temp_engine, &err_temp_wheel};  // , &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
+uint16_t idiotcolors[arraysize(idiotlights)] = { GRN, TEAL, ORG, YEL, GRN, ORG, PNK, GRN, RED, DPNK, CYN, LPUR, RED, RED };  // LYEL, YEL };
+char idiotchars[arraysize(idiotlights)][3] = { "St", "RS", "Is", "IG", "Pw", "Sh", "Sm", "RC", "Pn", "Pk", "Aj", "CM", "Eg", "Wh" };  // "c3", "c4" };
 bool idiotlasts[arraysize(idiotlights)];  //  = { !starter, !remote_starting, !ignition_sense, !ignition, !syspower, !shutdown_complete, !we_just_switched_modes, !simulator.get_enabled_ptr(), !hotrc_radio_detected, !panic_stop, !park_the_motors };
 
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
