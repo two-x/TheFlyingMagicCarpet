@@ -443,7 +443,8 @@ void loop() {
     if (temp_rr != nullptr && temp_rr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
     err_temp_wheel = check_wheels;
 
-    err_temp_engine = (temperature_sensor_manager.get_sensor(sensor_location::ENGINE)->get_temperature() >= temp_lims_f[ENGINE][WARNING]);
+    TemperatureSensor * temp_eng = temperature_sensor_manager.get_sensor(sensor_location::ENGINE);
+    err_temp_engine = temp_eng != nullptr ? temp_eng->get_temperature() >= temp_lims_f[ENGINE][WARNING] : -999;
     
     
     //  Check: if any sensor is out of range    
