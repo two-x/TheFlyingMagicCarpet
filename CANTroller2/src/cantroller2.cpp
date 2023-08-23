@@ -3,13 +3,14 @@
 #include <Adafruit_SleepyDog.h>  // Watchdog
 #include <vector>
 #include <iomanip>  // Formatting cout
-#include "globals.h"
+// #include "globals.h" imported indirectly via idiotlights
 #include "display.h"
 #include "uictrl.h"
 #include "TouchScreen.h"
 #include "RunModeManager.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "globals.h"
 
 std::vector<std::string> loop_names(20);
 
@@ -152,6 +153,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     throttle.setup(temperature_sensor_manager.get_sensor(TemperatureSensor::location::ENGINE));
     // Create a new task that runs the update_temperature_sensors function
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);
+    idiot_light_manager.setup();
+    // xTaskCreate(update_idiot_lights, "Update Idiot Lights", 2048, NULL, 5, NULL);
 
     printf ("Init display..\n");
     if (display_enabled) {
@@ -467,18 +470,18 @@ void loop() {
     //
     bool check_wheels;
     check_wheels = false;
-    TemperatureSensor * temp_fl = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_FL);
-    TemperatureSensor * temp_fr = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_FR);
-    TemperatureSensor * temp_rl = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_RL);
-    TemperatureSensor * temp_rr = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_RR);
-    if (temp_fl != nullptr && temp_fl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-    if (temp_fr != nullptr && temp_fr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-    if (temp_rl != nullptr && temp_rl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-    if (temp_rr != nullptr && temp_rr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+    TemperatureSensor * temp_fl = temperature_sensor_manager.get_sensor(TemperatureSensor::location::WHEEL_FL);
+    TemperatureSensor * temp_fr = temperature_sensor_manager.get_sensor(TemperatureSensor::location::WHEEL_FR);
+    TemperatureSensor * temp_rl = temperature_sensor_manager.get_sensor(TemperatureSensor::location::WHEEL_RL);
+    TemperatureSensor * temp_rr = temperature_sensor_manager.get_sensor(TemperatureSensor::location::WHEEL_RR);
+    if (temp_fl != nullptr && temp_fl->get_temperature() >= temp_fl->get_limits().get_warning()) check_wheels = true;
+    if (temp_fr != nullptr && temp_fr->get_temperature() >= temp_fr->get_limits().get_warning()) check_wheels = true;
+    if (temp_rl != nullptr && temp_rl->get_temperature() >= temp_rl->get_limits().get_warning()) check_wheels = true;
+    if (temp_rr != nullptr && temp_rr->get_temperature() >= temp_rr->get_limits().get_warning()) check_wheels = true;
     err_temp_wheel = check_wheels;
 
-    TemperatureSensor * temp_eng = temperature_sensor_manager.get_sensor(sensor_location::ENGINE);
-    err_temp_engine = temp_eng != nullptr ? temp_eng->get_temperature() >= temp_lims_f[ENGINE][WARNING] : -999;
+    TemperatureSensor * temp_eng = temperature_sensor_manager.get_sensor(TemperatureSensor::location::ENGINE);
+    err_temp_engine = temp_eng != nullptr ? temp_eng->get_temperature() >= temp_eng->get_limits().get_warning() : -999;
     
     
     //  Check: if any sensor is out of range    

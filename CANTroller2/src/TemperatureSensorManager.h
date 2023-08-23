@@ -10,6 +10,7 @@
 #include "temp.h"
 #include "utils.h"
 #include "TemperatureSensor.h"
+#include "ErrorManager.h"
 
 // Class to manage OneWire temperature sensors
 class TemperatureSensorManager {
@@ -31,6 +32,7 @@ private:
     
     OneWire one_wire_bus;
     DallasSensor tempsensebus;
+    ErrorManager* _errorManager;
 
     std::vector<DeviceAddress> detected_addresses;
     std::vector<TemperatureSensor::location> all_locations = {
@@ -77,7 +79,7 @@ private:
                 auto sensor_it = sensors.find(known_address.first);
                 if (sensor_it == sensors.end()) {
                     // The sensor doesn't exist yet, so create it and add it to the map
-                    sensors.emplace(known_address.first, TemperatureSensor(known_address.first, *detected_address_it, &tempsensebus, locationToType(known_address.first)));
+                    sensors.emplace(known_address.first, TemperatureSensor(known_address.first, *detected_address_it, &tempsensebus, locationToType(known_address.first), _errorManager));
                     // Print the sensor address for debugging purposes
                     Serial.println("Assigned known sensor address:");
                     sensors.at(known_address.first).print_address();
@@ -109,7 +111,7 @@ private:
                 }
                 if (it != all_locations.end()) {
                     // The sensor doesn't exist yet, so create it and add it to the map
-                    sensors.emplace(*it, TemperatureSensor(*it, detected_address, &tempsensebus, locationToType(*it)));
+                    sensors.emplace(*it, TemperatureSensor(*it, detected_address, &tempsensebus, locationToType(*it), _errorManager));
                     // Print the sensor address for debugging purposes
                     sensors.at(*it).print_address();
                 }
@@ -118,7 +120,7 @@ private:
     }
 
 public:
-    TemperatureSensorManager(uint8_t _onewire_pin) : one_wire_bus(_onewire_pin), tempsensebus(&one_wire_bus),  last_read_request_time(0), sensor_index(0), _state(State::CONVERTING) {}
+    TemperatureSensorManager(uint8_t _onewire_pin, ErrorManager* errorManager) : one_wire_bus(_onewire_pin), tempsensebus(&one_wire_bus),  last_read_request_time(0), sensor_index(0), _state(State::CONVERTING), _errorManager(errorManager) {}
     void setup() {
         Serial.println("Setting up Temperature Sensors...");
         
@@ -219,6 +221,27 @@ public:
 
     int get_micros_to_wait_for_conversion(int microseconds) {
         return tempsensebus.microsToWaitForConversion(microseconds);
+    }
+
+    // gets the highest temperature from the wheel sensors
+    float get_max_wheel_temperature() {
+        float max_temp = -std::numeric_limits<float>::infinity();
+        std::array<TemperatureSensor::location, 4> wheel_locations = {
+            TemperatureSensor::location::WHEEL_FL,
+            TemperatureSensor::location::WHEEL_FR,
+            TemperatureSensor::location::WHEEL_RL,
+            TemperatureSensor::location::WHEEL_RR
+        };
+        for (auto& location : wheel_locations) {
+            TemperatureSensor* sensor = get_sensor(location);
+            if (sensor != nullptr) {
+                float temp = sensor->get_temperature();
+                if (temp > max_temp) {
+                    max_temp = temp;
+                }
+            }
+        }
+        return max_temp;
     }
 
 };

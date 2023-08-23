@@ -8,8 +8,8 @@
 
 // #include <Adafruit_ILI9341.h>
 #include <TFT_eSPI.h>
-
 #include "globals.h"
+
 
 // display related globals
 #define BLK  0x0000
@@ -558,13 +558,12 @@ class Display {
             _tft.setTextColor(light.get_state() ? BLK : GRY1);
             _tft.setCursor(x+1, y+1);
             _tft.print(light.get_label());
-            light.update();
         }
         void draw_idiotlights(int32_t x, int32_t y, bool force = false) {
-            for (int32_t ilite=0; ilite < arraysize(idiot_lights); ilite++) {
-                IdiotLight& light = idiot_lights[ilite];
+            for (auto& ilite : idiot_light_manager.get_all_lights()) {
+                IdiotLight& light = ilite.second;
                 if (force || light.has_changed()) {
-                    draw_idiotlight(light, x + (2 * disp_font_width + 2) * (ilite % disp_idiots_per_row), y + disp_idiot_row_height * (int32_t)(ilite / disp_idiots_per_row));
+                    draw_idiotlight(light, x + (2 * disp_font_width + 2) * ((int)ilite.first % disp_idiots_per_row), y + disp_idiot_row_height * (int32_t)((int)ilite.first / disp_idiots_per_row));
                 }
             }
         }
@@ -686,8 +685,14 @@ class Display {
                     draw_dynamic(13, throttle.get_idlehigh(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
                     draw_dynamic(14, throttle.get_idlecold(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
                     draw_dynamic(15, throttle.get_idlehot(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
-                    draw_dynamic(16, throttle.get_tempcold(), temperature_sensor_manager.get_sensor(TemperatureSensor::location::ENGINE)->get_limits().get_disp_min(), temperature_sensor_manager.get_sensor(TemperatureSensor::location::ENGINE)->get_limits().get_disp_max());
-                    draw_dynamic(17, throttle.get_temphot(), temperature_sensor_manager.get_sensor(TemperatureSensor::location::ENGINE)->get_limits().get_disp_min(), temperature_sensor_manager.get_sensor(TemperatureSensor::location::ENGINE)->get_limits().get_disp_max());
+                    TemperatureSensor* engineSensor = temperature_sensor_manager.get_sensor(TemperatureSensor::location::ENGINE);
+                    if (engineSensor) {
+                        draw_dynamic(16, throttle.get_tempcold(), engineSensor->get_limits().get_disp_min(), engineSensor->get_limits().get_disp_max());
+                        draw_dynamic(17, throttle.get_temphot(), engineSensor->get_limits().get_disp_min(), engineSensor->get_limits().get_disp_max());
+                    } else {
+                        // Handle the case where there is no engine sensor.
+                        // We could skip the draw_dynamic calls or use some default values.
+                    }
                     draw_dynamic(18, (int32_t)throttle.get_settlerate(), 0, 500);
                     draw_asciiname(19, idlemodecard[(int32_t)throttle.get_idlemode()]);
                 }

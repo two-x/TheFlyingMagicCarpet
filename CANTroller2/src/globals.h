@@ -20,6 +20,10 @@
 #include "uictrl.h"
 #include "devices.h"
 #include "TemperatureSensorManager.h"
+#include "ErrorManager.h"
+#include "IdiotLightManager.h"
+#include "IdiotLightParams.h" // todo remove this hack
+#include "colors.h"
 
 // #define CAP_TOUCH
 bool flip_the_screen = true;
@@ -105,34 +109,6 @@ static Servo steer_servo;
 #include <HardwareSerial.h>
 HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
 #endif
-
-// display related globals
-#define BLK  0x0000
-#define BLU  0x001f
-#define MBLU 0x009f  // midnight blue. b/c true blue too dark to see over black
-#define RBLU 0x043f  // royal blue
-#define RED  0xf800
-#define DRED 0xb000
-#define GRN  0x07e0
-#define CYN  0x07ff  // 00000 111 111 11111 
-#define DCYN 0x0575  //
-#define MGT  0xf81f
-#define ORG  0xfca0
-#define DORG 0xfa40  // Dark orange aka brown
-#define YEL  0xffe0
-#define LYEL 0xfff8
-#define WHT  0xffff
-#define DGRY 0x39c7  // very dark grey
-#define GRY1 0x8410  // 10000 100 000 10000 = 84 10  dark grey
-#define GRY2 0xc618  // 11000 110 000 11000 = C6 18  light grey
-#define LGRY 0xd6ba  // very light grey
-#define PNK  0xfcf3  // Pink is the best color
-#define DPNK 0xfa8a  // We need all shades of pink
-#define LPNK 0xfe18  // Especially light pink, the champagne of pinks
-#define TEAL 0x07f9
-#define PUR  0x881f
-#define LPUR 0xc59f  // A light pastel purple
-#define GPUR 0x8c15  // A low saturation greyish pastel purple
 
 // run state machine related
 enum runmodes
@@ -253,8 +229,8 @@ bool starter = LOW;
 bool starter_last = LOW;
 
 // DeviceAddress temp_known_addrs { 0, 0, 0, 0, 0, 0, 0x3fc983d4, 0 };  // Corresponding to temp_sensors enum, so code can identify sensors
-
-TemperatureSensorManager temperature_sensor_manager(onewire_pin);
+ErrorManager error_manager;
+TemperatureSensorManager temperature_sensor_manager(onewire_pin, &error_manager);
 
 // encoder related
 Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
@@ -440,8 +416,7 @@ QPID brakeQPID(pressure_sensor.get_filtered_value_ptr().get(), &brake_out_percen
 
 ThrottleControl throttle(tachometer.get_human_ptr().get(), tachometer.get_filtered_value_ptr().get(),
     tach_idle_high_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm,
-    temperature_sensor_manager.get_sensor(TemperatureSensor::location::ENGINE)->get_limits().get_nom_min(), temperature_sensor_manager.get_sensor(TemperatureSensor::location::ENGINE)->get_limits().get_warning(),
-    50, ThrottleControl::idlemodes::control);
+    50, ThrottleControl::idlemodes::control); // todo name this 50 or somehting so it's clear what it does
 uint32_t gas_pid_period_us = 225000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer gasPidTimer(gas_pid_period_us); // not actually tunable, just needs value above
 float gas_spid_initial_kp = 0.206;    // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
@@ -472,6 +447,25 @@ QPID cruiseQPID(speedometer.get_filtered_value_ptr().get(), &tach_target_rpm, &s
 bool err_temp_engine;
 bool err_temp_wheel;
 bool err_range;
+
+// Idiot Lights
+// todo remove this hacky solution to avoid circular dependencies
+IdiotLightParams idiot_light_params = {
+    .starter = &starter,
+    .remote_starting = &remote_starting,
+    .ignition_sense = &ignition_sense,
+    .ignition = &ignition,
+    .syspower = &syspower,
+    .shutdown_complete = &shutdown_complete,
+    .simulator = &simulator,
+    .hotrc_radio_detected = &hotrc_radio_detected,
+    .panic_stop = &panic_stop,
+    .park_the_motors = &park_the_motors,
+    .cruise_adjusting = &cruise_adjusting,
+    .temperature_sensor_manager = &temperature_sensor_manager
+};
+IdiotLightManager idiot_light_manager(idiot_light_params);
+
 
 void handle_hotrc_vert(int32_t pulse_width) {
     if (pulse_width > 0) {  // reads return 0 if the buffer is empty eg bc our loop is running faster than the rmt is getting pulses
@@ -580,5 +574,12 @@ void update_temperature_sensors(void* parameter) {
         }
         vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently
     }
+}
+
+void update_idiot_lights(void* parameter) {
+        for (auto& pair : idiot_light_manager.get_all_lights()) {
+            pair.second.update();
+        }
+        vTaskDelay(pdMS_TO_TICKS(100)); // Delay for a 100ms to avoid updating the sensors too frequently
 }
 #endif // GLOBALS_H

@@ -470,7 +470,6 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
   public:
     ThrottleControl (float* measraw, float* measfilt, // Variable references: idle target, rpm raw, rpm filt
       float idlehigh, float idlehot, float idlecold,  // Values for: high-idle rpm (will not stall), hot idle nominal rpm, cold idle nominal rpm 
-      float tempcold, float temphot,  // Values for: engine operational temp cold (min) and temp hot (max) in degrees-f
       int32_t settlerate = 100,  // Rate to lower idle from high point to low point (in rpm per second)
       idlemodes myidlemode = idlemodes::control) {  // Configure idle control to just soft land or also attempt to minimize idle
         measraw_rpm = measraw;
@@ -480,8 +479,6 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
         idlehot_rpm = constrain (idlehot, 0.0, idlehigh_rpm);
         stallpoint_rpm = idlehot_rpm - 1;  // Just to give a sane initial value
         set_idlecold (idlecold);
-        set_temphot (temphot);
-        set_tempcold (tempcold);        
         calc_idlespeed();
         targetlast_rpm = target_rpm;
         settlerate_rpmps = settlerate;
@@ -490,11 +487,13 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
         runstate = driving;
     }
     void setup(TemperatureSensor* engine_sensor_ptr) {
-      if (engine_sensor_ptr == nullptr) {
-          Serial.println("engine_sensor_ptr is nullptr");
-          return;
-      }
-      engine_sensor = engine_sensor_ptr;
+        if (engine_sensor_ptr == nullptr) {
+            Serial.println("engine_sensor_ptr is nullptr");
+            return;
+        }
+        engine_sensor = engine_sensor_ptr;
+        set_temphot (engine_sensor->get_limits().get_nom_min());
+        set_tempcold (engine_sensor->get_limits().get_warning());
     }
     void update (void) {  // this should be called to update idle and throttle target values before throttle-related control loop outputs are calculated
         // update engine temp if it's ready
