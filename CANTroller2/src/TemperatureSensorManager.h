@@ -158,6 +158,7 @@ public:
 
     // previously called temp_soren()
     void update_temperatures() {
+        if (sensors.size() == 0) return; // if there are no sensors connected, bail
         // Check if conversions are complete
         if (get_state() == State::READY_TO_READ) {
             // Read temperature from one sensor

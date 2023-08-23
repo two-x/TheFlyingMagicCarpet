@@ -498,7 +498,7 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
     }
     void update (void) {  // this should be called to update idle and throttle target values before throttle-related control loop outputs are calculated
         // update engine temp if it's ready
-        if (engine_sensor) {
+        if (engine_sensor != nullptr) {
             engine_temp_f = engine_sensor->get_temperature();
         }
         antistall();
@@ -530,8 +530,8 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
             set_target_internal (argtarget);
         }
     }
-    void set_engine_sensor (TemperatureSensor& sensor) {
-      engine_sensor = &sensor;
+    void set_engine_sensor (TemperatureSensor* sensor) {
+      engine_sensor = sensor;
     }
   protected:
     void set_target_internal (float argtarget) {
