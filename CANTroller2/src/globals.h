@@ -471,7 +471,6 @@ bool syspower_set (bool val) {
     return really_power;
 }
 
-
 // tasks for RTOS, this section is currently going to be where we keep sensor update loops.
 // TODO move these to more sensible places
 

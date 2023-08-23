@@ -153,7 +153,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     // Create a new task that runs the update_temperature_sensors function
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);
 
-    
     printf ("Init display..\n");
     if (display_enabled) {
         config.begin("FlyByWire", false);
