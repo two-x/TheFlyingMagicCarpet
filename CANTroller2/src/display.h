@@ -568,7 +568,14 @@ class Display {
                 if (force || (*(idiotlights[ilite]) ^ idiotlasts[ilite]))
                     draw_idiotlight (ilite, x + (2 * disp_font_width + 2) * (ilite % disp_idiots_per_row), y + disp_idiot_row_height * (int32_t)(ilite / disp_idiots_per_row));
         }
-
+        void draw_temperature(sensor_location location, int draw_index) {
+            TemperatureSensor* sensor = temperature_sensor_manager.get_sensor(location);
+            if (sensor) {
+                draw_dynamic(draw_index, sensor->get_temperature(), static_cast<float>(temp_lims_f[static_cast<int>(location)][DISP_MIN]), static_cast<float>(temp_lims_f[static_cast<int>(location)][DISP_MAX]));
+            } else {
+                draw_eraseval(draw_index);
+            }
+        }
         void update() {
             if (simulator.get_enabled() != simulating_last || _disp_redraw_all) {
                 draw_simbuttons(simulator.get_enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
@@ -679,8 +686,8 @@ class Display {
                     draw_dynamic(13, throttle.get_idlehigh(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
                     draw_dynamic(14, throttle.get_idlecold(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
                     draw_dynamic(15, throttle.get_idlehot(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
-                    draw_dynamic(16, throttle.get_tempcold(), temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
-                    draw_dynamic(17, throttle.get_temphot(), temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
+                    draw_dynamic(16, throttle.get_tempcold(), temp_lims_f[static_cast<int>(sensor_location::ENGINE)][DISP_MIN], temp_lims_f[static_cast<int>(sensor_location::ENGINE)][DISP_MAX]);
+                    draw_dynamic(17, throttle.get_temphot(), temp_lims_f[static_cast<int>(sensor_location::ENGINE)][DISP_MIN], temp_lims_f[static_cast<int>(sensor_location::ENGINE)][DISP_MAX]);
                     draw_dynamic(18, (int32_t)throttle.get_settlerate(), 0, 500);
                     draw_asciiname(19, idlemodecard[(int32_t)throttle.get_idlemode()]);
                 }
@@ -727,12 +734,12 @@ class Display {
                     draw_dynamic(19, cruiseQPID.GetKd(), 0.0, 2.0);
                 }
                 else if (dataset_page == PG_TEMP) {
-                    draw_dynamic(9, temps_f[AMBIENT], temp_lims_f[AMBIENT][DISP_MIN], temp_lims_f[AMBIENT][DISP_MAX]);
-                    draw_dynamic(10, temps_f[ENGINE], temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
-                    draw_dynamic(11, temps_f[WHEEL_FL], temp_lims_f[WHEEL][DISP_MIN], temp_lims_f[WHEEL][DISP_MAX]);
-                    draw_dynamic(12, temps_f[WHEEL_FR], temp_lims_f[WHEEL][DISP_MIN], temp_lims_f[WHEEL][DISP_MAX]);
-                    draw_dynamic(13, temps_f[WHEEL_RL], temp_lims_f[WHEEL][DISP_MIN], temp_lims_f[WHEEL][DISP_MAX]);
-                    draw_dynamic(14, temps_f[WHEEL_RR], temp_lims_f[WHEEL][DISP_MIN], temp_lims_f[WHEEL][DISP_MAX]);
+                    draw_temperature(sensor_location::AMBIENT, 9);
+                    draw_temperature(sensor_location::ENGINE, 10);
+                    draw_temperature(sensor_location::WHEEL_FL, 11);
+                    draw_temperature(sensor_location::WHEEL_FR, 12);
+                    draw_temperature(sensor_location::WHEEL_RL, 13);
+                    draw_temperature(sensor_location::WHEEL_RR, 14);
                     draw_eraseval(15);
                     draw_eraseval(16);
                     draw_eraseval(17);

@@ -4,7 +4,6 @@
 // #include <SdFat.h>  // SD card & FAT filesystem library
 #include <ESP32Servo.h>  // Makes PWM output to control motors (for rudimentary control of our gas and steering)
 #include <Adafruit_NeoPixel.h>  // Plan to allow control of neopixel LED onboard the esp32
-#include <OneWire.h>
 #include "temp.h"
 #include <Wire.h>
 #include <SparkFun_MicroPressure.h>
@@ -20,6 +19,7 @@
 #include "utils.h"
 #include "uictrl.h"
 #include "devices.h"
+#include "TemperatureSensorManager.h"
 
 // #define CAP_TOUCH
 bool flip_the_screen = false;
@@ -204,12 +204,6 @@ bool cruise_sw = LOW;
 bool starter = LOW;
 bool starter_last = LOW;
 
-// Temperature sensor related
-long temp_temp, temp_last;  // peef variables
-static int temp_secs = 0;  // peef variables
-static byte temp_data[2];  // peef variables
-static int16_t temp_raw;  // peef variables
-enum temp_sensors { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };  // , SOREN_DEV0, SOREN_DEV1, num_known_ };
 // DeviceAddress temp_known_addrs { 0, 0, 0, 0, 0, 0, 0x3fc983d4, 0 };  // Corresponding to temp_sensors enum, so code can identify sensors
 enum this_is_a_total_hack { WHEEL = 2 };
 enum temp_lims { DISP_MIN, NOM_MIN, NOM_MAX, WARNING, ALARM, DISP_MAX };  // Possible sources of gas, brake, steering commands
@@ -219,19 +213,9 @@ float temp_lims_f[3][6] { { 0.0,  45.0, 115.0, 120.0, 130.0, 220.0 },  // [AMBIE
 float temp_room = 77.0;  // "Room" temperature is 25 C = 77 F  Who cares?
 float temp_sensor_min_f = -67.0;  // Minimum reading of sensor is -25 C = -67 F
 float temp_sensor_max_f = 257.0;  // Maximum reading of sensor is 125 C = 257 F
-float temps_f[6];  // Array stores most recent readings for all sensors
-int32_t temp_detected_device_ct = 0;
-int32_t temperature_precision = 12;  // 9-12 bit resolution
-OneWire onewire (onewire_pin);
-int32_t temp_current_index = 0;
-enum temp_status : bool { CONVERT, READ };
-temp_status temp_state = CONVERT;
-uint32_t temp_times_us[2] = { 2000000, 10000 };  // Peef delay was 10000 (10ms)
-uint32_t temp_timeout_us = 2000000;
-Timer tempTimer (temp_timeout_us);
-DeviceAddress temp_temp_addr;
-DeviceAddress temp_addrs[6];  // Hard code to the actual sensor addresses for the corresponding sense location on the car
-DallasSensor tempsensebus (&onewire);
+
+TemperatureSensorManager temperature_sensor_manager(onewire_pin);
+
 
 // encoder related
 Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
@@ -381,9 +365,9 @@ QPID brakeQPID (pressure_sensor.get_filtered_value_ptr().get(), &brake_out_perce
     
 // Gas : Controls the throttle to achieve the desired intake airflow and engine rpm
 
-ThrottleControl throttle(tachometer.get_human_ptr().get(), tachometer.get_filtered_value_ptr().get(), &temps_f[ENGINE],
+ThrottleControl throttle(tachometer.get_human_ptr().get(), tachometer.get_filtered_value_ptr().get(),
     tach_idle_high_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm,
-    temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][WARNING],
+    temp_lims_f[static_cast<int>(sensor_location::ENGINE)][NOM_MIN], temp_lims_f[static_cast<int>(sensor_location::ENGINE)][WARNING],
     50, ThrottleControl::idlemodes::control);
 uint32_t gas_pid_period_us = 225000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer gasPidTimer (gas_pid_period_us);  // not actually tunable, just needs value above
@@ -485,40 +469,6 @@ bool syspower_set (bool val) {
     bool really_power = keep_system_powered | val;
     write_pin (syspower_pin, really_power);  // delay (val * 500);
     return really_power;
-}
-void temp_init (void) {
-    printf ("Temp sensors..");
-    tempsensebus.setWaitForConversion (false);  // Whether to block during conversion process
-    tempsensebus.setCheckForConversion (true);  // Do not listen to device for conversion result, instead we will wait the worst-case period
-    tempsensebus.begin();
-    temp_detected_device_ct = tempsensebus.getDeviceCount();
-    printf (" detected %d devices, parasitic power is %s\n", temp_detected_device_ct, (tempsensebus.isParasitePowerMode()) ? "on" : "off");  // , DEC);
-    int32_t temp_unknown_index = 0;
-    for (int32_t index = 0; index < temp_detected_device_ct; index++) {  // for (int32_t x = 0; x < arraysize(temp_addrs); x++) {
-        if (tempsensebus.getAddress (temp_temp_addr, index)) {
-            for (int8_t addrbyte = 0; addrbyte < arraysize(temp_temp_addr); addrbyte++) {
-                temp_addrs[index][addrbyte] = temp_temp_addr[addrbyte];
-            }
-            tempsensebus.setResolution (temp_temp_addr, temperature_precision);  // temp_addrs[x]
-            printf ("  found sensor #%d, addr 0x%x\n", index, temp_temp_addr);  // temp_addrs[x]
-        }
-        else printf ("  ghost device #%d, addr unknown\n", index);  // printAddress (temp_addrs[x]);
-    }  // Need algorithm to recognize addresses of detected devices in known vehicle locations
-}
-void temp_soren (void) {
-    if (temp_detected_device_ct && tempTimer.expired()) {
-        if (temp_state == CONVERT) {
-            tempsensebus.requestTemperatures();
-            tempTimer.set (tempsensebus.microsToWaitForConversion(temperature_precision));  // 50 us . / (1 << (12 - temperature_precision)));  // Give some time before reading temp
-            temp_state = READ;
-        }
-        else if (temp_state == READ) {
-            temps_f[temp_current_index] = tempsensebus.getTempF(temp_addrs[temp_current_index]);  // 12800 us
-            tempTimer.set (temp_timeout_us);
-            temp_state = CONVERT;
-            ++temp_current_index %= temp_detected_device_ct;
-        }
-    }
 }
 
 #endif  // GLOBALS_H
