@@ -149,7 +149,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
     temperature_sensor_manager.setup();  // Onewire bus and temp sensors
     
-    throttle.setup(temperature_sensor_manager.get_sensor(sensor_location::ENGINE));
+    throttle.setup(temperature_sensor_manager.get_sensor(TemperatureSensor::location::ENGINE));
     // Create a new task that runs the update_temperature_sensors function
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);
 

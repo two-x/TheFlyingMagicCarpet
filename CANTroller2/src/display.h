@@ -568,10 +568,10 @@ class Display {
                 }
             }
         }
-        void draw_temperature(sensor_location location, int draw_index) {
+        void draw_temperature(TemperatureSensor::location location, int draw_index) {
             TemperatureSensor* sensor = temperature_sensor_manager.get_sensor(location);
             if (sensor) {
-                draw_dynamic(draw_index, sensor->get_temperature(), static_cast<float>(temp_lims_f[static_cast<int>(location)][DISP_MIN]), static_cast<float>(temp_lims_f[static_cast<int>(location)][DISP_MAX]));
+                draw_dynamic(draw_index, sensor->get_temperature(), sensor->get_limits().get_disp_min(), sensor->get_limits().get_disp_max());
             } else {
                 draw_eraseval(draw_index);
             }
@@ -686,8 +686,8 @@ class Display {
                     draw_dynamic(13, throttle.get_idlehigh(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
                     draw_dynamic(14, throttle.get_idlecold(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
                     draw_dynamic(15, throttle.get_idlehot(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
-                    draw_dynamic(16, throttle.get_tempcold(), temp_lims_f[static_cast<int>(sensor_location::ENGINE)][DISP_MIN], temp_lims_f[static_cast<int>(sensor_location::ENGINE)][DISP_MAX]);
-                    draw_dynamic(17, throttle.get_temphot(), temp_lims_f[static_cast<int>(sensor_location::ENGINE)][DISP_MIN], temp_lims_f[static_cast<int>(sensor_location::ENGINE)][DISP_MAX]);
+                    draw_dynamic(16, throttle.get_tempcold(), temperature_sensor_manager.get_sensor(TemperatureSensor::location::ENGINE)->get_limits().get_disp_min(), temperature_sensor_manager.get_sensor(TemperatureSensor::location::ENGINE)->get_limits().get_disp_max());
+                    draw_dynamic(17, throttle.get_temphot(), temperature_sensor_manager.get_sensor(TemperatureSensor::location::ENGINE)->get_limits().get_disp_min(), temperature_sensor_manager.get_sensor(TemperatureSensor::location::ENGINE)->get_limits().get_disp_max());
                     draw_dynamic(18, (int32_t)throttle.get_settlerate(), 0, 500);
                     draw_asciiname(19, idlemodecard[(int32_t)throttle.get_idlemode()]);
                 }
@@ -734,12 +734,12 @@ class Display {
                     draw_dynamic(19, cruiseQPID.GetKd(), 0.0, 2.0);
                 }
                 else if (dataset_page == PG_TEMP) {
-                    draw_temperature(sensor_location::AMBIENT, 9);
-                    draw_temperature(sensor_location::ENGINE, 10);
-                    draw_temperature(sensor_location::WHEEL_FL, 11);
-                    draw_temperature(sensor_location::WHEEL_FR, 12);
-                    draw_temperature(sensor_location::WHEEL_RL, 13);
-                    draw_temperature(sensor_location::WHEEL_RR, 14);
+                    draw_temperature(TemperatureSensor::location::AMBIENT, 9);
+                    draw_temperature(TemperatureSensor::location::ENGINE, 10);
+                    draw_temperature(TemperatureSensor::location::WHEEL_FL, 11);
+                    draw_temperature(TemperatureSensor::location::WHEEL_FR, 12);
+                    draw_temperature(TemperatureSensor::location::WHEEL_RL, 13);
+                    draw_temperature(TemperatureSensor::location::WHEEL_RR, 14);
                     draw_eraseval(15);
                     draw_eraseval(16);
                     draw_truth(17, simulator.can_simulate(SimOption::ignition), 0);
