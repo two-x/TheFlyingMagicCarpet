@@ -338,7 +338,7 @@ void loop() {
         #endif
     }
     // Brakes - Determine motor output and write it to motor
-    if (brakePidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
+    if (brakePidTimer.expireset()) {
         if (runmode == CAL && cal_joyvert_brkmotor) {
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], brake_stop_percent, brake_retract_percent);
             else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], brake_extend_percent, brake_stop_percent);
@@ -351,6 +351,7 @@ void loop() {
                 brake_out_percent = map (brkpos_sensor.get_filtered_value(), BrakePositionSensor::park_in, BrakePositionSensor::nom_lim_extend_in, brake_stop_percent, brake_retract_percent);
         }
         else if (runmode != BASIC) brakeQPID.Compute();  // Otherwise the pid control is active
+        else if (runmode == SHUTDOWN && shutdown_complete) brake_out_percent = brake_stop_percent; // if we're shutdown, stop the motor
         if (runmode != BASIC || park_the_motors) {
             if (((brkpos_sensor.get_filtered_value() + BrakePositionSensor::margin_in <= BrakePositionSensor::nom_lim_retract_in) && brake_out_percent > brake_stop_percent) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
                 ((brkpos_sensor.get_filtered_value() - BrakePositionSensor::margin_in >= BrakePositionSensor::nom_lim_extend_in) && brake_out_percent < brake_stop_percent))  // ... or same thing in the extend direction ...
