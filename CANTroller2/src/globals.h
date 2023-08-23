@@ -277,11 +277,11 @@ float steer_left_min_percent = -100.0;
 float steer_margin_percent = 2.4;
 // float steer_pulse_safe_us = 0;
 float steer_pulse_out_us;  // pid loop output to send to the actuator (steering)
-float steer_pulse_right_min_us = 500;  // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
-float steer_pulse_right_us = 670;  // Steering pulsewidth corresponding to full-speed right steering (in us). Default setting for jaguar is max 670us
+float steer_pulse_left_min_us = 500;  // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
+float steer_pulse_left_us = 670;  // Steering pulsewidth corresponding to full-speed right steering (in us). Default setting for jaguar is max 670us
 float steer_pulse_stop_us = 1500;  // Steering pulsewidth corresponding to zero steering motor movement (in us)
-float steer_pulse_left_us = 2330;  // Steering pulsewidth corresponding to full-speed left steering (in us). Default setting for jaguar is max 2330us
-float steer_pulse_left_max_us = 2500;  // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
+float steer_pulse_right_us = 2330;  // Steering pulsewidth corresponding to full-speed left steering (in us). Default setting for jaguar is max 2330us
+float steer_pulse_right_max_us = 2500;  // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
 
 // brake pressure related
 PressureSensor pressure_sensor(pressure_pin);
