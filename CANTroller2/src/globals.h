@@ -226,6 +226,8 @@ bool starter_last = LOW;
 
 enum this_is_a_total_hack
 {
+    AMBIENT = 0,
+    ENGINE = 1,
     WHEEL = 2
 };
 enum temp_lims
@@ -239,7 +241,7 @@ enum temp_lims
 }; // Possible sources of gas, brake, steering commands
 float temp_lims_f[3][6]{
     {0.0, 45.0, 115.0, 120.0, 130.0, 220.0},  // [AMBIENT][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
-    {0.0, 178.0, 198.0, 202.0, 205.0, 220.0}, // [ENGINE][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
+    {0.0, 178.0, 198.0, 135.0, 205.0, 220.0}, // [ENGINE][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
     {0.0, 50.0, 120.0, 130.0, 140.0, 220.0},
 };                               // [WHEEL][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM] (applies to all wheels)
 float temp_room = 77.0;          // "Room" temperature is 25 C = 77 F  Who cares?
@@ -432,7 +434,7 @@ QPID brakeQPID(pressure_sensor.get_filtered_value_ptr().get(), &brake_out_percen
 
 ThrottleControl throttle(tachometer.get_human_ptr().get(), tachometer.get_filtered_value_ptr().get(),
                          tach_idle_high_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm,
-                         temp_lims_f[static_cast<int>(sensor_location::ENGINE)][NOM_MIN], temp_lims_f[static_cast<int>(sensor_location::ENGINE)][WARNING],
+                         temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][WARNING],
                          50, ThrottleControl::idlemodes::control);
 uint32_t gas_pid_period_us = 225000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer gasPidTimer(gas_pid_period_us); // not actually tunable, just needs value above
@@ -460,10 +462,13 @@ QPID cruiseQPID(speedometer.get_filtered_value_ptr().get(), &tach_target_rpm, &s
                 cruise_pid_period_us, QPID::Control::timer, QPID::centMode::range);
 // QPID::centMode::centerStrict, (tach_govern_rpm + tach_idle_rpm)/2);  // period, more settings
 
-void handle_hotrc_vert(int32_t pulse_width)
-{
-    if (pulse_width > 0)
-    { // reads return 0 if the buffer is empty eg bc our loop is running faster than the rmt is getting pulses
+// Trouble codes
+bool err_temp_engine;
+bool err_temp_wheel;
+bool err_range;
+
+void handle_hotrc_vert(int32_t pulse_width) {
+    if (pulse_width > 0) {  // reads return 0 if the buffer is empty eg bc our loop is running faster than the rmt is getting pulses
         hotrc_vert_pulse_64_us = pulse_width;
     }
 }

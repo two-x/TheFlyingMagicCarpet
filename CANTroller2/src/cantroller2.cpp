@@ -428,6 +428,19 @@ void loop() {
         }
     }
     else diag_ign_error_enabled = true;
+
+    // Update warning idiot lights
+    //
+    bool check_wheels;
+    check_wheels = false;
+    if (temperature_sensor_manager.get_sensor(sensor_location::WHEEL_FL)->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+    if (temperature_sensor_manager.get_sensor(sensor_location::WHEEL_FR)->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+    if (temperature_sensor_manager.get_sensor(sensor_location::WHEEL_RL)->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+    if (temperature_sensor_manager.get_sensor(sensor_location::WHEEL_RR)->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+    err_temp_wheel = check_wheels;
+
+    err_temp_engine = (temperature_sensor_manager.get_sensor(sensor_location::ENGINE)->get_temperature() >= temp_lims_f[ENGINE][WARNING]);
+    
     
     //  Check: if any sensor is out of range    
     //  Check: if sensor readings aren't consistent with actuator outputs given. Like, if the brake motor is moving down, then either brake position should be decreasing or pressure increasing (for example)
