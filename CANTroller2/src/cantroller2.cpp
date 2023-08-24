@@ -242,7 +242,33 @@ void loop() {
 
     // Controller handling
     //
-
+    if (ctrl == JOY) ignition = ignition_sense;
+    else if (ctrl == HOTRC) {
+        hotrc_ch3_update();
+        hotrc_ch4_update();
+        if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
+            if (hotrc_suppress_next_ch3_event) hotrc_suppress_next_ch3_event = false;
+            else ignition = !ignition;
+            hotrc_ch3_sw_event = false;
+        }
+        if (hotrc_ch4_sw_event) {
+            if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
+            else if (runmode == STALL && remote_start_support) remote_start_toggle_request = true;
+            else if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
+            else {}   // There's no reason pushing the ch4 button when in other modes can't do something different.  That would go here
+            hotrc_ch4_sw_event = false;    
+        }
+        if (hotrc_vert_pulse_us > hotrc_pulse_failsafe_max_us) {
+            hotrcPanicTimer.reset();
+            hotrc_radio_detected = true;
+            if (!ignition_output_enabled) ignition_output_enabled = true; // Ignition stays low until the hotrc is detected here, then output is allowed
+            // set_pin (ignition_pin, OUTPUT);  // do NOT plug in the joystick when using the hotrc to avoid ign contention
+        }
+        else if (hotrc_radio_detected && hotrcPanicTimer.expired()) hotrc_radio_detected = false;
+        // hotrc_suppress_next_ch3_event = true;  // reject spurious ch3 switch event upon next hotrc poweron
+        // hotrc_suppress_next_ch4_event = true;  // reject spurious ch4 switch event upon next hotrc poweron
+    }
+    
     // Read horz and vert inputs, determine steering pwm output -  - takes 40 us to read. Then, takes 13 us to handle
     if (ctrl != JOY) {
         if (hotrc_source == ESP_RMT) {  // Read RMT pulse widths
@@ -293,7 +319,7 @@ void loop() {
             ctrl_pos_adc[VERT][FILT] = constrain (ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
             ctrl_pos_adc[HORZ][FILT] = constrain (ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
         }
-        
+
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) {
             ctrl_pos_adc[VERT][FILT] = ctrl_lims_adc[ctrl][VERT][CENT];  // if joy vert is in the deadband, set joy_vert_filt to center value
         }
@@ -302,32 +328,6 @@ void loop() {
         }
     }    
 
-    if (ctrl == JOY) ignition = ignition_sense;
-    else if (ctrl == HOTRC) {
-        hotrc_ch3_update();
-        hotrc_ch4_update();
-        if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
-            if (hotrc_suppress_next_ch3_event) hotrc_suppress_next_ch3_event = false;
-            else ignition = !ignition;
-            hotrc_ch3_sw_event = false;
-        }
-        if (hotrc_ch4_sw_event) {
-            if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
-            else if (runmode == STALL && remote_start_support) remote_start_toggle_request = true;
-            else if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
-            else {}   // There's no reason pushing the ch4 button when in other modes can't do something different.  That would go here
-            hotrc_ch4_sw_event = false;    
-        }
-        if (hotrc_vert_pulse_us > hotrc_pulse_failsafe_max_us) {
-            hotrcPanicTimer.reset();
-            hotrc_radio_detected = true;
-            if (!ignition_output_enabled) ignition_output_enabled = true; // Ignition stays low until the hotrc is detected here, then output is allowed
-            // set_pin (ignition_pin, OUTPUT);  // do NOT plug in the joystick when using the hotrc to avoid ign contention
-        }
-        else if (hotrc_radio_detected && hotrcPanicTimer.expired()) hotrc_radio_detected = false;
-        // hotrc_suppress_next_ch3_event = true;  // reject spurious ch3 switch event upon next hotrc poweron
-        // hotrc_suppress_next_ch4_event = true;  // reject spurious ch4 switch event upon next hotrc poweron
-    }
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "joy");  //
     
     runmode = runModeManager.handle_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
