@@ -339,12 +339,12 @@ float steer_left_percent = -100.0;
 float steer_left_min_percent = -100.0;
 float steer_margin_percent = 2.4;
 // float steer_pulse_safe_us = 0;
-float steer_pulse_out_us;              // pid loop output to send to the actuator (steering)
 float steer_pulse_left_min_us = 500;   // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
 float steer_pulse_left_us = 670;       // Steering pulsewidth corresponding to full-speed right steering (in us). Default setting for jaguar is max 670us
 float steer_pulse_stop_us = 1500;      // Steering pulsewidth corresponding to zero steering motor movement (in us)
 float steer_pulse_right_us = 2330;     // Steering pulsewidth corresponding to full-speed left steering (in us). Default setting for jaguar is max 2330us
 float steer_pulse_right_max_us = 2500; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
+float steer_pulse_out_us = steer_pulse_stop_us;              // pid loop output to send to the actuator (steering)
 
 // brake pressure related
 PressureSensor pressure_sensor(pressure_pin);
@@ -366,12 +366,12 @@ float brake_extend_percent = -100.0;     // Brake pulsewidth corresponding to fu
 float brake_extend_min_percent = -100.0; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
 float brake_margin_percent = 2.4;        // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated
 
-float brake_pulse_out_us;               // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
 float brake_pulse_retract_min_us = 670; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
 float brake_pulse_retract_us = 670;     // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
 float brake_pulse_stop_us = 1500;       // Brake pulsewidth corresponding to center point where motor movement stops (in us)
 float brake_pulse_extend_us = 2330;     // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
 float brake_pulse_extend_max_us = 2330; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
+float brake_pulse_out_us = brake_pulse_stop_us;               // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
 
 // brake actuator position related
 BrakePositionSensor brkpos_sensor(brake_pos_pin);
