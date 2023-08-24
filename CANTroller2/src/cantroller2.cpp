@@ -361,7 +361,9 @@ void loop() {
     if (brakePidTimer.expireset()) {
 
         // Step 1 : Determine motor percent value
-        if (runmode == CAL && cal_joyvert_brkmotor) {
+        if (runmode == SHUTDOWN && shutdown_complete)
+            brake_out_percent = brake_stop_percent; // if we're shutdown, stop the motor
+        else if (runmode == CAL && cal_joyvert_brkmotor) {
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], brake_stop_percent, brake_retract_percent);
             else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], brake_extend_percent, brake_stop_percent);
             else brake_out_percent = (float)brake_stop_percent;
@@ -373,7 +375,6 @@ void loop() {
                 brake_out_percent = map (brkpos_sensor.get_filtered_value(), BrakePositionSensor::park_in, BrakePositionSensor::nom_lim_extend_in, brake_stop_percent, brake_retract_percent);
         }
         else if (runmode != BASIC) brakeQPID.Compute();  // Otherwise the pid control is active
-        else if (runmode == SHUTDOWN && shutdown_complete) brake_out_percent = brake_stop_percent; // if we're shutdown, stop the motor
         
         // Step 2 : Fix motor percent value if it's out of range or exceeding positional limits
         if (runmode == CAL && cal_joyvert_brkmotor)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
