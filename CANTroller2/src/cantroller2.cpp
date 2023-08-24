@@ -417,12 +417,10 @@ void loop() {
         }
         else if (runmode == SHUTDOWN && shutdown_complete) 
             gas_pulse_out_us = gas_pulse_ccw_closed_us + gas_pulse_park_slack_us;
+        else if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo)
+            gas_pulse_out_us = map (pot.get(), pot.min(), pot.max(), gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
         else if (runmode != BASIC) {
-            if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) {
-                gas_pulse_out_us = map (pot.get(), pot.min(), pot.max(), gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
-                gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
-            }            
-            else if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual)  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
+            if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual)  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
                 gas_pulse_out_us = map (throttle.get_target(), throttle.get_idlespeed(), tach_govern_rpm, gas_pulse_ccw_closed_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
             else {
                 // if (boot_button) printf("gpid: gpo:%lf tt:%lf tf:%lf\n", gas_pulse_out_us, throttle.get_target(), tachometer.get_filtered_value());
@@ -433,8 +431,9 @@ void loop() {
         // Step 2 : Constrain if out of range
         if (runmode == BASIC || runmode == SHUTDOWN)
             gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_ccw_closed_us + gas_pulse_park_slack_us);
-        else if (!(runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo))  // Constrain to operating limits. If calibrating constrain already happened above
-            gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_ccw_closed_us);
+        else if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo)  // Constrain to operating limits. 
+            gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
+        else gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_ccw_closed_us);
 
         // Step 3 : Write to servo
         if (runmode != BASIC || park_the_motors) {
