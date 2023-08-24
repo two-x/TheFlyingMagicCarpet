@@ -268,7 +268,7 @@ void loop() {
         // hotrc_suppress_next_ch3_event = true;  // reject spurious ch3 switch event upon next hotrc poweron
         // hotrc_suppress_next_ch4_event = true;  // reject spurious ch4 switch event upon next hotrc poweron
     }
-    
+
     // Read horz and vert inputs, determine steering pwm output -  - takes 40 us to read. Then, takes 13 us to handle
     if (ctrl != JOY) {
         if (hotrc_source == ESP_RMT) {  // Read RMT pulse widths
@@ -359,6 +359,8 @@ void loop() {
     }
     // Brakes - Determine motor output and write it to motor
     if (brakePidTimer.expireset()) {
+
+        // Step 1 : Determine motor percent value
         if (runmode == CAL && cal_joyvert_brkmotor) {
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], brake_stop_percent, brake_retract_percent);
             else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], brake_extend_percent, brake_stop_percent);
@@ -372,18 +374,22 @@ void loop() {
         }
         else if (runmode != BASIC) brakeQPID.Compute();  // Otherwise the pid control is active
         else if (runmode == SHUTDOWN && shutdown_complete) brake_out_percent = brake_stop_percent; // if we're shutdown, stop the motor
-        if (runmode != BASIC || park_the_motors) {
-            if (((brkpos_sensor.get_filtered_value() + BrakePositionSensor::margin_in <= BrakePositionSensor::nom_lim_retract_in) && brake_out_percent > brake_stop_percent) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
-                ((brkpos_sensor.get_filtered_value() - BrakePositionSensor::margin_in >= BrakePositionSensor::nom_lim_extend_in) && brake_out_percent < brake_stop_percent))  // ... or same thing in the extend direction ...
+        
+        // Step 2 : Fix motor percent value if it's out of range or exceeding positional limits
+        if (runmode == CAL && cal_joyvert_brkmotor)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
+            brake_out_percent = constrain (brake_out_percent, brake_extend_min_percent, brake_retract_max_percent);  // Constrain to full potential range when calibrating. Caution don't break anything!
+        else if (((brkpos_sensor.get_filtered_value() + BrakePositionSensor::margin_in <= BrakePositionSensor::nom_lim_retract_in) && brake_out_percent > brake_stop_percent) ||  // If the motor is at or past its position limit in the retract direction, and we're intending to retract more ...
+                 ((brkpos_sensor.get_filtered_value() - BrakePositionSensor::margin_in >= BrakePositionSensor::nom_lim_extend_in) && brake_out_percent < brake_stop_percent))  // ... or same thing in the extend direction ...
                     brake_out_percent = brake_stop_percent;  // ... then stop the motor
-            else if (runmode == CAL && cal_joyvert_brkmotor)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
-                 brake_out_percent = constrain (brake_out_percent, brake_extend_min_percent, brake_retract_max_percent);  // Constrain to full potential range when calibrating. Caution don't break anything!
-            else brake_out_percent = constrain (brake_out_percent, brake_extend_percent, brake_retract_percent);  // Send to the actuator. Refuse to exceed range    
-            
-            if (brake_out_percent >= brake_stop_percent)
-                brake_pulse_out_us = map (brake_out_percent, brake_stop_percent, brake_retract_percent, brake_pulse_stop_us, brake_pulse_retract_us);
-            else brake_pulse_out_us = map (brake_out_percent, brake_stop_percent, brake_extend_percent, brake_pulse_stop_us, brake_pulse_extend_us);
-                    
+        else brake_out_percent = constrain (brake_out_percent, brake_extend_percent, brake_retract_percent);  // Send to the actuator. Refuse to exceed range    
+
+        // Step 3 : Convert motor percent value to pulse width
+        if (brake_out_percent >= brake_stop_percent)
+            brake_pulse_out_us = map (brake_out_percent, brake_stop_percent, brake_retract_percent, brake_pulse_stop_us, brake_pulse_retract_us);
+        else brake_pulse_out_us = map (brake_out_percent, brake_stop_percent, brake_extend_percent, brake_pulse_stop_us, brake_pulse_extend_us);
+
+        // Step 4 : Write to motor
+        if (runmode != BASIC || park_the_motors) {
             #ifdef pwm_jaguars
                 brake_servo.writeMicroseconds ((int32_t)brake_pulse_out_us);  // Write result to jaguar servo interface
             #else
@@ -402,12 +408,15 @@ void loop() {
     }
 
     // Gas - Update servo output. Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
-    if (gasPidTimer.expireset() && !(runmode == SHUTDOWN && shutdown_complete)) {
+    if (gasPidTimer.expireset()) {
+        // Step 1 : Determine servo pulse width value
         if (park_the_motors) gas_pulse_out_us = gas_pulse_ccw_closed_us + gas_pulse_park_slack_us;
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_ccw_closed_us;  // If in deadband or being pushed down, we want idle
             else gas_pulse_out_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_ccw_closed_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
         }
+        else if (runmode == SHUTDOWN && shutdown_complete) 
+            gas_pulse_out_us = gas_pulse_ccw_closed_us + gas_pulse_park_slack_us;
         else if (runmode != BASIC) {
             if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) {
                 gas_pulse_out_us = map (pot.get(), pot.min(), pot.max(), gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
@@ -416,18 +425,20 @@ void loop() {
             else if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual)  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
                 gas_pulse_out_us = map (throttle.get_target(), throttle.get_idlespeed(), tach_govern_rpm, gas_pulse_ccw_closed_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
             else {
-                if (boot_button) printf("gpid: gpo:%lf tt:%lf tf:%lf\n", gas_pulse_out_us, throttle.get_target(), tachometer.get_filtered_value());
+                // if (boot_button) printf("gpid: gpo:%lf tt:%lf tf:%lf\n", gas_pulse_out_us, throttle.get_target(), tachometer.get_filtered_value());
                 tach_target_rpm = throttle.get_target();
                 gasQPID.Compute();  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
             }
         }
+        // Step 2 : Constrain if out of range and write to servo
         if (runmode != BASIC || park_the_motors) {
-            if (!(runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo))  // Constrain to operating limits. If calibrating constrain already happened above
+            if (!(runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) && !(runmode == SHUTDOWN && shutdown_complete))  // Constrain to operating limits. If calibrating constrain already happened above
                 gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_ccw_closed_us);
             gas_servo.writeMicroseconds ((int32_t)gas_pulse_out_us);  // Write result to servo
             // if (boot_button) printf (" Gas:%4ld\n", (int32_t)gas_pulse_out_us);
         }
     }
+
     if (park_the_motors) {  //  When parking motors, IF the timeout expires OR the brake and gas motors are both close enough to the park position, OR runmode has changed THEN stop trying to park the motors
         bool brake_parked = brkpos_sensor.parked();
         bool gas_parked = ((gas_pulse_out_us == gas_pulse_ccw_closed_us + gas_pulse_park_slack_us) && gasServoTimer.expired());
