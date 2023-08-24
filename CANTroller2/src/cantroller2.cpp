@@ -410,13 +410,12 @@ void loop() {
     // Gas - Update servo output. Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
     if (gasPidTimer.expireset()) {
         // Step 1 : Determine servo pulse width value
-        if (park_the_motors) gas_pulse_out_us = gas_pulse_ccw_closed_us + gas_pulse_park_slack_us;
+        if (park_the_motors || (runmode == SHUTDOWN && shutdown_complete))
+            gas_pulse_out_us = gas_pulse_ccw_closed_us + gas_pulse_park_slack_us;
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_ccw_closed_us;  // If in deadband or being pushed down, we want idle
             else gas_pulse_out_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_ccw_closed_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
         }
-        else if (runmode == SHUTDOWN && shutdown_complete) 
-            gas_pulse_out_us = gas_pulse_ccw_closed_us + gas_pulse_park_slack_us;
         else if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo)
             gas_pulse_out_us = map (pot.get(), pot.min(), pot.max(), gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
         else if (runmode != BASIC) {
