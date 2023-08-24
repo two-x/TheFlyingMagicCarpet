@@ -670,9 +670,9 @@ class Display {
                     draw_dynamic(12, steer_pulse_left_us, steer_pulse_left_min_us, steer_pulse_stop_us);
                     draw_dynamic(13, steer_pulse_stop_us, steer_pulse_left_us, steer_pulse_right_us);
                     draw_dynamic(14, steer_pulse_right_us, steer_pulse_stop_us, steer_pulse_right_max_us);
-                    draw_dynamic(15, brake_pulse_extend_us, brake_pulse_stop_us, brake_pulse_extend_max_us);
-                    draw_dynamic(16, brake_pulse_stop_us, brake_pulse_retract_us, brake_pulse_extend_us);
-                    draw_dynamic(17, brake_pulse_retract_us, brake_pulse_retract_min_us, brake_pulse_stop_us);
+                    draw_dynamic(15, brake_pulse_extend_us, brake_pulse_extend_min_us, brake_pulse_stop_us);
+                    draw_dynamic(16, brake_pulse_stop_us, brake_pulse_extend_us, brake_pulse_retract_us);
+                    draw_dynamic(17, brake_pulse_retract_us, brake_pulse_stop_us, brake_pulse_retract_max_us);
                     draw_dynamic(18, gas_pulse_ccw_closed_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
                     draw_dynamic(19, gas_pulse_cw_open_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
                 }
