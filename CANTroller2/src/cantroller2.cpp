@@ -430,10 +430,14 @@ void loop() {
                 gasQPID.Compute();  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
             }
         }
-        // Step 2 : Constrain if out of range and write to servo
+        // Step 2 : Constrain if out of range
+        if (runmode == BASIC || runmode == SHUTDOWN)
+            gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_ccw_closed_us + gas_pulse_park_slack_us);
+        else if (!(runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo))  // Constrain to operating limits. If calibrating constrain already happened above
+            gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_ccw_closed_us);
+
+        // Step 3 : Write to servo
         if (runmode != BASIC || park_the_motors) {
-            if (!(runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo) && !(runmode == SHUTDOWN && shutdown_complete))  // Constrain to operating limits. If calibrating constrain already happened above
-                gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_ccw_closed_us);
             gas_servo.writeMicroseconds ((int32_t)gas_pulse_out_us);  // Write result to servo
             // if (boot_button) printf (" Gas:%4ld\n", (int32_t)gas_pulse_out_us);
         }
