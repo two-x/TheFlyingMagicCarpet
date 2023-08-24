@@ -154,7 +154,9 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     // Create a new task that runs the update_temperature_sensors function
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);
     idiot_light_manager.setup();
-    // xTaskCreate(update_idiot_lights, "Update Idiot Lights", 2048, NULL, 5, NULL);
+    // xTaskCreate(IdiotLightManager::update_idiot_lights_wrapper, "Update Idiot Lights", 2048, NULL, 5, NULL);
+
+    
 
     printf ("Init display..\n");
     if (display_enabled) {
