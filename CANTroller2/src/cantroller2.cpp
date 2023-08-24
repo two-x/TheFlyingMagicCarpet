@@ -261,25 +261,39 @@ void loop() {
     if (!simulator.simulating(SimOption::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
         if (ctrl == HOTRC) {
             if (hotrc_horz_pulse_us >= hotrc_pulse_lims_us[HORZ][CENT])  // Steering: Convert from pulse us to joystick adc equivalent, when pushing right, else pushing left
-                 ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MAX]);
+                ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MAX]);
             else ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MIN]);
             if (hotrc_vert_pulse_us >= hotrc_pulse_lims_us[VERT][CENT])  // Trigger: Convert from pulse us to joystick adc equivalent, for trigger pull, else trigger push
-                 ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MAX], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MAX]);
+                ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MAX], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MAX]);
             else ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MIN], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MIN]);  
         }
         else if (ctrl == JOY) {
             ctrl_pos_adc[VERT][RAW] = analogRead (joy_vert_pin);  // Read joy vertical
             ctrl_pos_adc[HORZ][RAW] = analogRead (joy_horz_pin);  // Read joy horizontal
         }
-        ema_filt (ctrl_pos_adc[VERT][RAW], &ctrl_pos_adc[VERT][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_vert_filt
-        ema_filt (ctrl_pos_adc[HORZ][RAW], &ctrl_pos_adc[HORZ][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_horz_filt
-        ctrl_pos_adc[VERT][FILT] = constrain (ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-        // ctrl_pos_adc[HORZ][FILT] = constrain (ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
 
-        if (ctrl_pos_adc[HORZ][FILT] < ctrl_lims_adc[ctrl][HORZ][MIN] || ctrl_pos_adc[HORZ][FILT] > ctrl_lims_adc[ctrl][HORZ][MAX]) {
+        // // If controller axis is wildly out of range, disregard reading
+        // if (ctrl_pos_adc[HORZ][RAW] < ctrl_lims_adc[ctrl][HORZ][MIN] - ctrl_lims_adc[ctrl][HORZ][MARGIN] || 
+        //     ctrl_pos_adc[HORZ][RAW] > ctrl_lims_adc[ctrl][HORZ][MAX] + ctrl_lims_adc[ctrl][HORZ][MARGIN]) {
+        //     // Wildly out of range value maybe should set an error flag?  If hotrc, then this happens to HORZ axis when you turn it off.
+        //     ctrl_pos_adc[HORZ][RAW] = ctrl_pos_adc[HORZ][FILT];  //  = ctrl_lims_adc[ctrl][HORZ][CENT];
+        // }
+        // if (ctrl_pos_adc[VERT][RAW] < ctrl_lims_adc[ctrl][VERT][MIN] - ctrl_lims_adc[ctrl][VERT][MARGIN] || 
+        //     ctrl_pos_adc[VERT][RAW] > ctrl_lims_adc[ctrl][VERT][MAX] + ctrl_lims_adc[ctrl][VERT][MARGIN]) {
+        //     ctrl_pos_adc[VERT][RAW] = ctrl_pos_adc[VERT][FILT];  //  = ctrl_lims_adc[ctrl][VERT][CENT];
+        // }
+
+        if (ctrl == HOTRC && !hotrc_radio_detected) {
             ctrl_pos_adc[HORZ][FILT] = ctrl_lims_adc[ctrl][HORZ][CENT];
+            ctrl_pos_adc[VERT][FILT] = ctrl_lims_adc[ctrl][VERT][CENT];
         }
-
+        else {
+            ema_filt (ctrl_pos_adc[VERT][RAW], &ctrl_pos_adc[VERT][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_vert_filt
+            ema_filt (ctrl_pos_adc[HORZ][RAW], &ctrl_pos_adc[HORZ][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_horz_filt
+            ctrl_pos_adc[VERT][FILT] = constrain (ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
+            ctrl_pos_adc[HORZ][FILT] = constrain (ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
+        }
+        
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) {
             ctrl_pos_adc[VERT][FILT] = ctrl_lims_adc[ctrl][VERT][CENT];  // if joy vert is in the deadband, set joy_vert_filt to center value
         }

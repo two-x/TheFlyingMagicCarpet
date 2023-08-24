@@ -294,11 +294,11 @@ enum hotrc_sources
     ESP_RMT
 };
 float ctrl_ema_alpha[2] = {0.05, 0.1};         // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
-int32_t ctrl_lims_adc[2][2][4] =               //   values as adc counts
-    {{{0, adcmidscale_adc, adcrange_adc, 62},  // [HOTRC][HORZ][MIN/CENT/MAX/DB]
-      {0, adcmidscale_adc, adcrange_adc, 62}}, // [HOTRC][VERT][MIN/CENT/MAX/DB]
-     {{9, adcmidscale_adc, 4085, 50},          // [JOY][HORZ][MIN/CENT/MAX/DB]
-      {9, adcmidscale_adc, 4085, 50}}};        // [JOY][VERT][MIN/CENT/MAX/DB]
+int32_t ctrl_lims_adc[2][2][5] =               //   values as adc counts
+    {{{0, adcmidscale_adc, adcrange_adc, 62, 100},  // [HOTRC][HORZ][MIN/CENT/MAX/DB/MARGIN]  // MARGIN is how much out of range the reading must be for axis to be completely ignored
+      {0, adcmidscale_adc, adcrange_adc, 62, 100}}, // [HOTRC][VERT][MIN/CENT/MAX/DB/MARGIN]
+     {{9, adcmidscale_adc, 4085, 50, 100},          // [JOY][HORZ][MIN/CENT/MAX/DB/MARGIN]
+      {9, adcmidscale_adc, 4085, 50, 100}}};        // [JOY][VERT][MIN/CENT/MAX/DB/MARGIN]
 int32_t ctrl_db_adc[2][2];                     // [HORZ/VERT] [BOT/TOP] - to store the top and bottom deadband values for each axis of selected controller
 int32_t ctrl_pos_adc[2][2];                    // [HORZ/VERT] [RAW/FILT] - holds most current controller values
 bool ctrl = HOTRC;                             // Use HotRC controller to drive instead of joystick?
