@@ -12,16 +12,22 @@ public:
     START, REMOTE_START, IGNITION_SENSE, IGNITION, SYSPOWER, SHUTDOWN_COMPLETE, MODE_SWITCH, SIMULATOR_ENABLED, RADIO_DETECTED, PANIC_STOP, MOTORS_PARKED, CRUISE_ADJUSTING, ENGINE_TEMP, WHEEL_TEMP };
 
     IdiotLight(StateFunction state_func, uint16_t color, const char* label)
-        : state_func(state_func), color(color), severity(Severity::NONE), label(label), last_state(false) {}
+        : state_func(state_func), color(color), severity(Severity::NONE), label(label), last_state(false), has_changed(false) {
+            printf("IdiotLight constructed\n");
+        }
+
+    ~IdiotLight() {
+        printf("IdiotLight destructed\n");
+    }
 
     IdiotLight() = delete; // should always create a light with settings
     
-    bool has_changed() const {
-        return state_func(*const_cast<IdiotLight*>(this)) != last_state;
+    bool get_has_changed() const {
+        return has_changed;
     }
 
     void update() {
-        last_state = state_func(*this);
+        set_state(state_func(*this));
         if (severity == Severity::WARN) {
             set_color(ORG); // Orange
         } else if (severity == Severity::ALARM) {
@@ -31,6 +37,13 @@ public:
 
     bool get_state() const {
         return last_state;
+    }
+
+    void set_state(bool new_state) {
+        // printf("Last State: %s, New State: %s\n", last_state ? "True" : "False", new_state ? "True" : "False");
+        
+        has_changed = (new_state != last_state);
+        last_state = new_state;
     }
 
     uint16_t get_color() const {
@@ -56,7 +69,8 @@ public:
     void print_details() const {
         printf("Label: %s ", label);
         printf("Color: %s ", color_name(color));
-        printf("Last State: %s\n", last_state ? "True" : "False");
+        printf("Last State: %s ", last_state ? "True" : "False");
+        printf("Has Changed: %s\n", get_has_changed() ? "True" : "False");
     }
 
     const char* color_name(uint16_t color) const {
@@ -88,6 +102,7 @@ public:
             case LPUR: return "Light Pastel Purple";
             case GPUR: return "Greyish Pastel Purple";
         }
+        return "";
     }
     
 
@@ -96,6 +111,7 @@ private:
     uint16_t color;
     const char* label;
     bool last_state;
+    bool has_changed;
     Severity severity;
 };
 

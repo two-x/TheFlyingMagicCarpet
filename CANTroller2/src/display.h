@@ -553,16 +553,16 @@ class Display {
             if (halvings == 1) return ((color & 0xf000) | (color & 0x7c0) | (color & 0x1e)) >> 1;
             else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
         }
-        void draw_idiotlight(IdiotLight& light, int32_t x, int32_t y) {
-            _tft.fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, light.get_state() ? light.get_color() : HGRY);
-            _tft.setTextColor(light.get_state() ? BLK : darken_color(light.get_color(), 1));
+        void draw_idiotlight(IdiotLight* light, int32_t x, int32_t y) {
+            _tft.fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, light->get_state() ? light->get_color() : HGRY);
+            _tft.setTextColor(light->get_state() ? BLK : darken_color(light->get_color(), 1));
             _tft.setCursor(x+1, y+1);
-            _tft.print(light.get_label());
+            _tft.print(light->get_label());
         }
         void draw_idiotlights(int32_t x, int32_t y, bool force = false) {
             for (auto& ilite : idiot_light_manager.get_all_lights()) {
-                IdiotLight& light = ilite.second;
-                if (force || light.has_changed()) {
+                IdiotLight* light = ilite.second;
+                if (force || light->get_has_changed()) {
                     draw_idiotlight(light, x + (2 * disp_font_width + 2) * ((int)ilite.first % disp_idiots_per_row), y + disp_idiot_row_height * (int32_t)((int)ilite.first / disp_idiots_per_row));
                 }
             }

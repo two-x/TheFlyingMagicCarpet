@@ -38,6 +38,10 @@ public:
 
     TemperatureSensor() = delete; // always create with a pointer to the tempsensorbus
 
+    ~TemperatureSensor() {
+        printf("TemperatureSensor destructed\n");
+    }
+
     void request_temperature() {
         // Request temperature from sensor
         if (!_tempsensebus->requestTemperaturesByAddress(_address.data())) {

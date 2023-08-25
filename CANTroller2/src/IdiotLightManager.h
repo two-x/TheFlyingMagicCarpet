@@ -10,7 +10,7 @@
 
 class IdiotLightManager {
 private:
-    std::map<IdiotLight::Name, IdiotLight> idiot_lights;
+    std::map<IdiotLight::Name, IdiotLight*> idiot_lights;
     bool* starter;
     bool* remote_starting;
     bool* ignition_sense;
@@ -40,32 +40,44 @@ public:
         temperature_sensor_manager(params.temperature_sensor_manager) {}
 
     void setup() {
-        idiot_lights.emplace(IdiotLight::Name::START, IdiotLight([this](IdiotLight& light){return *(this->starter);}, GRN, "St"));
-        idiot_lights.emplace(IdiotLight::Name::REMOTE_START, IdiotLight([this](IdiotLight& light){return *(this->remote_starting);}, TEAL, "RS"));
-        idiot_lights.emplace(IdiotLight::Name::IGNITION_SENSE, IdiotLight([this](IdiotLight& light){return *(this->ignition_sense);}, ORG, "Is"));
-        idiot_lights.emplace(IdiotLight::Name::IGNITION, IdiotLight([this](IdiotLight& light){return *(this->ignition);}, YEL, "IG"));
-        idiot_lights.emplace(IdiotLight::Name::SYSPOWER, IdiotLight([this](IdiotLight& light){return *(this->syspower);}, GRN, "Pw"));
-        idiot_lights.emplace(IdiotLight::Name::SHUTDOWN_COMPLETE, IdiotLight([this](IdiotLight& light){return *(this->shutdown_complete);}, ORG, "Sh"));
-        idiot_lights.emplace(IdiotLight::Name::SIMULATOR_ENABLED, IdiotLight([this](IdiotLight& light){return this->simulator->get_enabled();}, PNK, "Sm"));
-        idiot_lights.emplace(IdiotLight::Name::RADIO_DETECTED, IdiotLight([this](IdiotLight& light){return *(this->hotrc_radio_detected);}, GRN, "RC"));
-        idiot_lights.emplace(IdiotLight::Name::PANIC_STOP, IdiotLight([this](IdiotLight& light){return *(this->panic_stop);}, RED, "Pn"));
-        idiot_lights.emplace(IdiotLight::Name::MOTORS_PARKED, IdiotLight([this](IdiotLight& light){return *(this->park_the_motors);}, DPNK, "Pk"));
-        idiot_lights.emplace(IdiotLight::Name::CRUISE_ADJUSTING, IdiotLight([this](IdiotLight& light){return *(this->cruise_adjusting);}, CYN, "Aj"));
-        idiot_lights.emplace(IdiotLight::Name::ENGINE_TEMP, IdiotLight([this](IdiotLight& light){return this->check_engine_temp(light);}, ORG, "Eg"));
-        idiot_lights.emplace(IdiotLight::Name::WHEEL_TEMP, IdiotLight([this](IdiotLight& light){return this->check_wheel_temp(light);}, ORG, "Wh"));
+        idiot_lights.emplace(IdiotLight::Name::START, new IdiotLight([this](IdiotLight& light){return *(this->starter);}, GRN, "St"));
+        idiot_lights.emplace(IdiotLight::Name::REMOTE_START, new IdiotLight([this](IdiotLight& light){return *(this->remote_starting);}, TEAL, "RS"));
+        idiot_lights.emplace(IdiotLight::Name::IGNITION_SENSE, new IdiotLight([this](IdiotLight& light){return *(this->ignition_sense);}, ORG, "Is"));
+        idiot_lights.emplace(IdiotLight::Name::IGNITION, new IdiotLight([this](IdiotLight& light){return *(this->ignition);}, YEL, "IG"));
+        idiot_lights.emplace(IdiotLight::Name::SYSPOWER, new IdiotLight([this](IdiotLight& light){return *(this->syspower);}, GRN, "Pw"));
+        idiot_lights.emplace(IdiotLight::Name::SHUTDOWN_COMPLETE, new IdiotLight([this](IdiotLight& light){return *(this->shutdown_complete);}, ORG, "Sh"));
+        idiot_lights.emplace(IdiotLight::Name::SIMULATOR_ENABLED, new IdiotLight([this](IdiotLight& light){return this->simulator->get_enabled();}, PNK, "Sm"));
+        idiot_lights.emplace(IdiotLight::Name::RADIO_DETECTED, new IdiotLight([this](IdiotLight& light){return *(this->hotrc_radio_detected);}, GRN, "RC"));
+        idiot_lights.emplace(IdiotLight::Name::PANIC_STOP, new IdiotLight([this](IdiotLight& light){return *(this->panic_stop);}, RED, "Pn"));
+        idiot_lights.emplace(IdiotLight::Name::MOTORS_PARKED, new IdiotLight([this](IdiotLight& light){return *(this->park_the_motors);}, DPNK, "Pk"));
+        idiot_lights.emplace(IdiotLight::Name::CRUISE_ADJUSTING, new IdiotLight([this](IdiotLight& light){return *(this->cruise_adjusting);}, CYN, "Aj"));
+        idiot_lights.emplace(IdiotLight::Name::ENGINE_TEMP, new IdiotLight([this](IdiotLight& light){return this->check_engine_temp(light);}, ORG, "Eg"));
+        idiot_lights.emplace(IdiotLight::Name::WHEEL_TEMP, new IdiotLight([this](IdiotLight& light){return this->check_wheel_temp(light);}, ORG, "Wh"));
     }
 
-    IdiotLight get(IdiotLight::Name name) {
+    ~IdiotLightManager() {
+        // Don't forget to delete the IdiotLight objects in the destructor
+        for (auto& pair : idiot_lights) {
+            delete pair.second;
+        }
+    }
+
+    bool get_starter() {
+        return *starter;
+    }
+
+    IdiotLight* get(IdiotLight::Name name) {
         auto it = idiot_lights.find(name);
         if (it != idiot_lights.end()) {
             return it->second;
         } else {
             // Handle the case where `name` doesn't exist in the map.
             // You can throw an exception, return a dummy `IdiotLight` object, etc.
+            return nullptr;
         }
     }
 
-    std::map<IdiotLight::Name, IdiotLight> get_all_lights() {
+    std::map<IdiotLight::Name, IdiotLight*> get_all_lights() {
         return idiot_lights;
     }
 
