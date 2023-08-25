@@ -147,17 +147,10 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     neostrip.show();  // Turn off the pixel
     neostrip.setBrightness (neo_brightness_max);  // It truly is incredibly bright
     
-
     temperature_sensor_manager.setup();  // Onewire bus and temp sensors
-    
     throttle.setup(temperature_sensor_manager.get_sensor(TemperatureSensor::location::ENGINE));
-    // Create a new task that runs the update_temperature_sensors function
-    xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);
     idiot_light_manager.setup();
-    // xTaskCreate(IdiotLightManager::update_idiot_lights_wrapper, "Update Idiot Lights", 2048, NULL, 5, NULL);
-
     
-
     printf ("Init display..\n");
     if (display_enabled) {
         config.begin("FlyByWire", false);
@@ -173,6 +166,9 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     hotrcPanicTimer.reset();
     loopTimer.reset();  // start timer to measure the first loop
     booted = true;
+    // Create a new task that runs the update_temperature_sensors function
+    xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);
+    xTaskCreate(update_idiot_lights, "Update Idiot Lights", 2048, NULL, 5, NULL);
     printf ("Setup done\n");
 }
 

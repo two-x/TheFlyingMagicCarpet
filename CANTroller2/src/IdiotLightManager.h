@@ -69,19 +69,6 @@ public:
         return idiot_lights;
     }
 
-    static void update_idiot_lights_wrapper(void *parameter) {
-        // Cast the parameter back to an IdiotLightManager instance and call update_idiot_lights
-        static_cast<IdiotLightManager*>(parameter)->update_idiot_lights();
-    }
-
-    void update_idiot_lights() {
-        for (auto& pair : idiot_lights) {
-            Serial.printf("Updating idiot light\n");
-            pair.second.update();
-        }
-        vTaskDelay(pdMS_TO_TICKS(100)); // Delay for a 100ms to avoid updating the sensors too frequently
-    }
-
 private:
     // we can put all of the more complicated state functions here to determine if the light should be on or not. 
     bool check_engine_temp(IdiotLight& light) {

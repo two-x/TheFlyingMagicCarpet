@@ -77,7 +77,7 @@ bool flip_the_screen = true;
 
 // Globals -------------------
 bool serial_debugging = true;
-bool timestamp_loop = false; // Makes code write out timestamps throughout loop to serial port
+bool timestamp_loop = true; // Makes code write out timestamps throughout loop to serial port
 bool take_temperatures = true;
 bool keep_system_powered = false;         // Use true during development
 bool allow_rolling_start = false;         // May be a smart prerequisite, may be us putting obstacles in our way
@@ -577,9 +577,11 @@ void update_temperature_sensors(void* parameter) {
 }
 
 void update_idiot_lights(void* parameter) {
+    while (true) {
         for (auto& pair : idiot_light_manager.get_all_lights()) {
             pair.second.update();
         }
         vTaskDelay(pdMS_TO_TICKS(100)); // Delay for a 100ms to avoid updating the sensors too frequently
+    }
 }
 #endif // GLOBALS_H
