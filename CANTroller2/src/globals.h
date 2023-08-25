@@ -580,7 +580,6 @@ void update_idiot_lights(void* parameter) {
     while (true) {
         for (auto& pair : idiot_light_manager.get_all_lights()) {
             pair.second.update();
-            pair.second.print_details();
         }
         vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a 100ms to avoid updating the sensors too frequently
     }

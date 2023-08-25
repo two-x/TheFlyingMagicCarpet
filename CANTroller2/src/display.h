@@ -554,8 +554,8 @@ class Display {
             else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
         }
         void draw_idiotlight(IdiotLight& light, int32_t x, int32_t y) {
-            _tft.fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, light.get_state() ? light.get_color() : darken_color(light.get_color(), 2));
-            _tft.setTextColor(light.get_state() ? BLK : GRY1);
+            _tft.fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, light.get_state() ? light.get_color() : HGRY);
+            _tft.setTextColor(light.get_state() ? BLK : darken_color(light.get_color(), 1));
             _tft.setCursor(x+1, y+1);
             _tft.print(light.get_label());
         }
