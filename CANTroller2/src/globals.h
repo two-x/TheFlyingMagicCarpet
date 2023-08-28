@@ -241,7 +241,7 @@ enum temp_lims
 }; // Possible sources of gas, brake, steering commands
 float temp_lims_f[3][6]{
     {0.0, 45.0, 115.0, 120.0, 130.0, 220.0},  // [AMBIENT][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
-    {0.0, 178.0, 198.0, 135.0, 205.0, 220.0}, // [ENGINE][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
+    {0.0, 178.0, 198.0, 202.0, 205.0, 220.0}, // [ENGINE][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
     {0.0, 50.0, 120.0, 130.0, 140.0, 220.0},
 };                               // [WHEEL][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM] (applies to all wheels)
 float temp_room = 77.0;          // "Room" temperature is 25 C = 77 F  Who cares?

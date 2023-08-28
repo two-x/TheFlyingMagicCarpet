@@ -606,7 +606,7 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         static constexpr float abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
         static constexpr float park_in = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
         static constexpr float margin_in = .029;  // TODO: add description
-        static constexpr float initial_in_per_adc = 3.3 * 10000.0 / (5.0 * adcrange_adc * 557); // 3.3 v * 10k ohm * 1/5 1/v * 1/4095 1/adc * 1/557 in/ohm = 0.0029 in/adc
+        static constexpr float initial_in_per_adc = 3.3 * 10000.0 / (3.3 * adcrange_adc * 557); // 3.3 v * 10k ohm * 1/5 1/v * 1/4095 1/adc * 1/557 in/ohm = 0.0029 in/adc
         static constexpr float initial_zeropoint_in = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
         static constexpr float initial_ema_alpha = 0.25;
         static constexpr float initial_offset = 0.0;
@@ -618,8 +618,7 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
             _b_offset = initial_offset;
             _invert = initial_invert;
             _zeropoint = std::make_shared<float>(initial_zeropoint_in);
-            set_human_limits(nom_lim_retract_in, nom_lim_extend_in);
-            set_native_limits(to_native(nom_lim_retract_in), to_native(nom_lim_extend_in));
+            set_human_limits(abs_min_retract_in, abs_max_extend_in);
             set_can_source(ControllerMode::PIN, true);
             set_can_source(ControllerMode::POT, true);
         }
