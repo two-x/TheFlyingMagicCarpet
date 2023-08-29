@@ -600,6 +600,8 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         std::shared_ptr<float> _zeropoint;
         void handle_touch_mode() { _val_filt.set((nom_lim_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
     public:
+        static constexpr int32_t min_adc = 0.0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
+        static constexpr int32_t max_adc = adcrange_adc;
         static constexpr float nom_lim_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
         static constexpr float nom_lim_extend_in = 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
         static constexpr float abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
@@ -618,6 +620,7 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
             _b_offset = initial_offset;
             _invert = initial_invert;
             _zeropoint = std::make_shared<float>(initial_zeropoint_in);
+            set_native_limits(min_adc, max_adc);
             set_human_limits(abs_min_retract_in, abs_max_extend_in);
             set_can_source(ControllerMode::PIN, true);
             set_can_source(ControllerMode::POT, true);
