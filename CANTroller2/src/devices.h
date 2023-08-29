@@ -618,8 +618,7 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
             _b_offset = initial_offset;
             _invert = initial_invert;
             _zeropoint = std::make_shared<float>(initial_zeropoint_in);
-            set_human_limits(nom_lim_retract_in, nom_lim_extend_in);
-            set_native_limits(to_native(nom_lim_retract_in), to_native(nom_lim_extend_in));
+            set_human_limits(abs_min_retract_in, abs_max_extend_in);
             set_can_source(ControllerMode::PIN, true);
             set_can_source(ControllerMode::POT, true);
         }

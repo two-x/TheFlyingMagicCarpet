@@ -619,7 +619,7 @@ class Display {
                 draw_dynamic(7, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
                 draw_dynamic(8, steer_out_percent, steer_left_percent, steer_right_percent);
                 if (dataset_page == PG_RUN) {
-                    draw_dynamic(9, brkpos_sensor.get_filtered_value(), BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
+                    draw_dynamic(9, brkpos_sensor.get_filtered_value(), BrakePositionSensor::abs_min_retract_in, BrakePositionSensor::abs_max_extend_in);
                     draw_dynamic(10, airflow_sensor.get_filtered_value(), airflow_sensor.get_min_mph(), airflow_sensor.get_max_mph());
                     draw_dynamic(11, map_sensor.get_filtered_value(), map_sensor.get_min_psi(), map_sensor.get_max_psi());
                     draw_dynamic(12, battery_sensor.get_filtered_value(), battery_sensor.get_min_v(), battery_sensor.get_max_v());
@@ -655,7 +655,7 @@ class Display {
                     draw_dynamic(16, map_sensor.get_max_psi(), map_sensor.get_abs_min_psi(), map_sensor.get_abs_max_psi());
                     draw_dynamic(17, speedo_idle_mph, 0.0, speedometer.get_redline_mph());
                     draw_dynamic(18, speedometer.get_redline_mph(), 0.0, speedometer.get_max_human());
-                    draw_dynamic(19, brkpos_sensor.get_zeropoint(), BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
+                    draw_dynamic(19, brkpos_sensor.get_zeropoint(), BrakePositionSensor::abs_min_retract_in, BrakePositionSensor::abs_max_extend_in);
                 }
                 else if (dataset_page == PG_PWMS) {
                     draw_dynamic(9, brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
