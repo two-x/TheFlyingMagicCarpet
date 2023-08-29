@@ -45,7 +45,7 @@ private:
     runmodes modeChanger() {
         if (basicmodesw) _currentMode = BASIC;  // if basicmode switch on --> Basic Mode
         else if (_currentMode != CAL && (panic_stop || !ignition)) _currentMode = SHUTDOWN;
-        else if (_currentMode != CAL && (starter || tachometer.engine_stopped())) _currentMode = STALL;;  // otherwise if engine not running --> Stall Mode
+        else if (_currentMode != CAL && (tachometer.engine_stopped())) _currentMode = STALL;;  // otherwise if engine not running --> Stall Mode
         we_just_switched_modes = (_currentMode != _oldMode);  // currentMode should not be changed after this point in loop
         if (we_just_switched_modes) {
             disp_runmode_dirty = true;
@@ -95,7 +95,7 @@ private:
             }
         }
         // else if (ignition && engine_stopped()) updateMode(STALL);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
-        else if ((speedometer.car_stopped() || allow_rolling_start) && ignition && !panic_stop && !tachometer.engine_stopped() && !starter) updateMode(HOLD);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
+        else if ((speedometer.car_stopped() || allow_rolling_start) && ignition && !panic_stop && !tachometer.engine_stopped()) updateMode(HOLD);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
         if (!shutdown_complete) {  // If we haven't yet stopped the car and then released the brakes and gas all the way
             if (speedometer.car_stopped() || stopcarTimer.expired()) {  // If car has stopped, or timeout expires, then release the brake
                 if (shutdown_color == LPNK) {  // On first time through here
