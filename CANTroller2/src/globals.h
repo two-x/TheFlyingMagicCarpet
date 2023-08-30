@@ -436,7 +436,7 @@ ThrottleControl throttle(tachometer.get_human_ptr().get(), tachometer.get_filter
                          tach_idle_high_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm,
                          temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][WARNING],
                          50, ThrottleControl::idlemodes::control);
-uint32_t gas_pid_period_us = 225000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+uint32_t gas_pid_period_us = 22500;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer gasPidTimer(gas_pid_period_us); // not actually tunable, just needs value above
 float gas_spid_initial_kp = 0.206;    // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
 float gas_spid_initial_ki_hz = 0.000; // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
