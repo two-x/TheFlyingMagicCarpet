@@ -643,6 +643,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
         static constexpr int64_t _stop_timeout_us = 2000000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
 
         Timer _stop_timer;
+        bool _negative = false;
         float _stop_thresh;
         float _last_read_time_us;
         volatile int64_t _isr_us = 0;
@@ -685,7 +686,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
         PulseSensor() = delete;
         void setup() {
             set_pin(this->_pin, INPUT_PULLUP);
-            attachInterrupt(digitalPinToInterrupt(this->_pin), [this]{ _isr(); }, RISING);
+            attachInterrupt(digitalPinToInterrupt(this->_pin), [this]{ _isr(); }, _negative ? FALLING : RISING);
             this->set_source(ControllerMode::PIN);
         }
         bool stopped() { return this->_val_filt.get() < _stop_thresh; }  // Note due to weird float math stuff, can not just check if tach == 0.0
@@ -711,6 +712,7 @@ class Tachometer : public PulseSensor<float> {
             _ema_alpha = _initial_ema_alpha;
             _m_factor = _initial_rpm_per_rpus;
             _invert = _initial_invert;
+            _negative = true;
             set_human_limits(_min_rpm, _initial_redline_rpm);
             set_native_limits(0.0, _stop_timeout_us);
             set_human(_initial_rpm);
