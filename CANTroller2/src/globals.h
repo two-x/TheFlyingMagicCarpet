@@ -101,6 +101,11 @@ RMTInput hotrc_ch4(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_cruise_pin));
 #ifdef pwm_jaguars
 static Servo brake_servo;
 static Servo steer_servo;
+// Previous gas servo pulse width
+static int prev_gas_servo_pulse_width = 0;
+// Maximum rate of change of the gas servo pulse width (in microseconds per second)
+static const int MAX_DELTA_PULSE_WIDTH = 250;
+
 #else // jaguars controlled over asynchronous serial port
 #include <HardwareSerial.h>
 HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors

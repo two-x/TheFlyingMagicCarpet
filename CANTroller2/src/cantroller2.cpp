@@ -394,7 +394,24 @@ void loop() {
         // Step 4 : Write to motor
         if (runmode != BASIC || park_the_motors) {
             #ifdef pwm_jaguars
-                brake_servo.writeMicroseconds ((int32_t)brake_pulse_out_us);  // Write result to jaguar servo interface
+                // Calculate the current gas servo pulse width
+                int curr_gas_servo_pulse_width = map (brake_out_percent, brake_stop_percent, brake_extend_percent, brake_pulse_stop_us, brake_pulse_extend_us);
+
+                // Calculate the maximum allowed change in the pulse width
+                int max_delta_pulse_width = MAX_DELTA_PULSE_WIDTH;
+
+                // Limit the rate of change of the gas servo pulse width
+                if (curr_gas_servo_pulse_width - prev_gas_servo_pulse_width > max_delta_pulse_width) {
+                    curr_gas_servo_pulse_width = prev_gas_servo_pulse_width + max_delta_pulse_width;
+                } else if (prev_gas_servo_pulse_width - curr_gas_servo_pulse_width > max_delta_pulse_width) {
+                    curr_gas_servo_pulse_width = prev_gas_servo_pulse_width - max_delta_pulse_width;
+                }
+
+                // Update the gas servo with the limited pulse width
+                gas_servo.writeMicroseconds(curr_gas_servo_pulse_width); // Write result to jaguar servo interface
+
+                // Store the current pulse width for the next loop iteration
+                prev_gas_servo_pulse_width = curr_gas_servo_pulse_width;
             #else
                 // Send command over serial port
             #endif
