@@ -283,7 +283,10 @@ void loop() {
         ema_filt (hotrc_vert_pulse_us, &hotrc_vert_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Used to detect loss of radio
         // ema_filt (hotrc_horz_pulse_us, &hotrc_horz_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Just here for debugging. Do not need filtered horz value
     }
-    if (!simulator.simulating(SimOption::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
+
+    if (simulator.can_simulate(SimOption::joy) && simulator.get_pot_overload() == SimOption::joy) {
+        ctrl_pos_adc[HORZ][FILT] = pot.mapToRange(steer_pulse_left_us, steer_pulse_right_us);
+    } else if (!simulator.simulating(SimOption::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
         if (ctrl == HOTRC) {
             if (hotrc_horz_pulse_us >= hotrc_pulse_lims_us[HORZ][CENT])  // Steering: Convert from pulse us to joystick adc equivalent, when pushing right, else pushing left
                 ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MAX]);
@@ -325,7 +328,7 @@ void loop() {
         if (ctrl_pos_adc[HORZ][FILT] > ctrl_db_adc[HORZ][BOT] && ctrl_pos_adc[HORZ][FILT] < ctrl_db_adc[HORZ][TOP]) {
             ctrl_pos_adc[HORZ][FILT] = ctrl_lims_adc[ctrl][HORZ][CENT];  // if joy horz is in the deadband, set joy_horz_filt to center value
         }
-    }    
+    }
 
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "joy");  //
     
