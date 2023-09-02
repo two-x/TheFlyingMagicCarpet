@@ -580,7 +580,7 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
         PressureSensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
             _ema_alpha = initial_ema_alpha;
             _m_factor = initial_psi_per_adc;
-            _b_offset = initial_offset;
+            _b_offset = -from_native(min_adc);
             _invert = initial_invert;
             set_native_limits(min_adc, max_adc);
             set_human_limits(from_native(min_adc), from_native(max_adc));
@@ -602,23 +602,23 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     public:
         static constexpr int32_t min_adc = 0.0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
         static constexpr int32_t max_adc = adcrange_adc;
+        static constexpr float park_in = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
         static constexpr float nom_lim_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-        static constexpr float nom_lim_extend_in = 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
+        static constexpr float nom_lim_extend_in = park_in; // 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
         static constexpr float abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
         static constexpr float abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
-        static constexpr float park_in = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
         static constexpr float margin_in = .029;  // TODO: add description
         static constexpr float initial_in_per_adc = 3.3 * 10000.0 / (3.3 * adcrange_adc * 557); // 3.3 v * 10k ohm * 1/5 1/v * 1/4095 1/adc * 1/557 in/ohm = 0.0029 in/adc
         static constexpr float initial_zeropoint_in = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
         static constexpr float initial_ema_alpha = 0.25;
-        static constexpr float initial_offset = 0.0;
         static constexpr bool initial_invert = false;
+        static constexpr float initial_offset = 0.0;
 
         BrakePositionSensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
             _ema_alpha = initial_ema_alpha;
             _m_factor = initial_in_per_adc;
-            _b_offset = initial_offset;
             _invert = initial_invert;
+            _b_offset = initial_offset;
             _zeropoint = std::make_shared<float>(initial_zeropoint_in);
             set_native_limits(min_adc, max_adc);
             set_human_limits(abs_min_retract_in, abs_max_extend_in);
