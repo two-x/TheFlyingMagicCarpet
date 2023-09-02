@@ -79,7 +79,7 @@
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, TEAL, MBLU };
 
-char sensorcard[8][7] = { "none", "bkpres", "brkpos", "tach", "airflw", "mapsns", "speedo", "engtmp" };
+char sensorcard[9][7] = { "none", "bkpres", "brkpos", "tach", "airflw", "mapsns", "speedo", "engtmp", "ctrl" };
 char idlemodecard[3][7] = { "direct", "cntrol", "minimz" };
 char idlestatecard[ThrottleControl::targetstates::num_states][7] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
 
