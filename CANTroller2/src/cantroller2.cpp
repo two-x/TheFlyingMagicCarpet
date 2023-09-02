@@ -118,7 +118,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     printf("Simulator setup..\n");
     simulator.register_device(SimOption::pressure, pressure_sensor, pressure_sensor.source());
     simulator.register_device(SimOption::brkpos, brkpos_sensor, brkpos_sensor.source());
-    simulator.register_device(SimOption::battery, battery_sensor, battery_sensor.source());
     simulator.register_device(SimOption::airflow, airflow_sensor, airflow_sensor.source());
     simulator.register_device(SimOption::mapsens, map_sensor, map_sensor.source());
     simulator.register_device(SimOption::tach, tachometer, tachometer.source());

@@ -1043,7 +1043,7 @@ class OutToggle : public Toggle {
 
 // This enum class represent the components which can be simulated (SimOption). It's a uint8_t type under the covers, so it can be used as an index
 typedef uint8_t opt_t;
-enum class SimOption : opt_t { none=0, pressure, brkpos, tach, airflow, mapsens, speedo, battery, coolant, joy, basicsw, cruisesw, syspower, starter, ignition };
+enum class SimOption : opt_t { none=0, pressure, brkpos, tach, airflow, mapsens, speedo, coolant, joy, battery, basicsw, cruisesw, syspower, starter, ignition };
 
 // Simulator manages the ControllerMode handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
 // NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use ControllerModes,
