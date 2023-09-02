@@ -241,13 +241,13 @@ void loop() {
 
     // Controller handling
     //
-    if (ctrl == JOY) ignition = ignition_sense;
+    if (ctrl == JOY) ignition = simulator.simulating(SimOption::ignition) ? ignition : ignition_sense;
     else if (ctrl == HOTRC) {
         hotrc_ch3_update();
         hotrc_ch4_update();
         if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
             if (hotrc_suppress_next_ch3_event) hotrc_suppress_next_ch3_event = false;
-            else ignition = !ignition;
+            else ignition = simulator.simulating(SimOption::ignition) ? ignition : !ignition;
             hotrc_ch3_sw_event = false;
         }
         if (hotrc_ch4_sw_event) {
@@ -631,19 +631,20 @@ void loop() {
     }
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tun");  //
     // Ignition & Panic stop logic and Update output signals
-    if (!speedometer.car_stopped()) {
+    if (!speedometer.car_stopped()) { // if we lose connection to the hotrc while driving, or the joystick ignition button was turned off, panic
         if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && !hotrc_radio_detected) panic_stop = true;  // panic_stop could also have been initiated by the user button   && hotrc_radio_detected_last 
         else if (ctrl == JOY && !ignition_sense) panic_stop = true;
         // else if (ctrl == JOY && !(simulator.get_enabled() && sim_joy) && !ignition && ignition_last) panic_stop = true;
     }
     else if (panic_stop) panic_stop = false;  // Cancel panic if car is stopped
-    if (ctrl == HOTRC) {  // When using joystick, ignition is controlled with button and we read it. With Hotrc, we control ignition
+    if (ctrl == HOTRC) {  // if ignition was turned off on HotRC, panic
+        // When using joystick, ignition is controlled with button and we read it. With Hotrc, we control ignition
         hotrc_radio_detected_last = hotrc_radio_detected;
         if (!ignition && ignition_last && !speedometer.car_stopped()) panic_stop = true;
     }
-    else if (ctrl == JOY && !ignition_sense && ignition_last && !speedometer.car_stopped()) panic_stop = true;
+
     if (panic_stop) ignition = LOW;  // Kill car if panicking
-    if ((ignition != ignition_last) && ignition_output_enabled) {  // Whenever ignition state changes, assuming we're allowed to write to the pin
+    if ((ignition != ignition_last) /* && ignition_output_enabled */ ) {  // Whenever ignition state changes, assuming we're allowed to write to the pin
         write_pin (ign_out_pin, ignition);  // Turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
         ignition_last = ignition;  // Make sure this goes after the last comparison
     }
