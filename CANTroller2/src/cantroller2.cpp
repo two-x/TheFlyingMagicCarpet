@@ -437,12 +437,6 @@ void loop() {
         else if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo)  // Constrain to operating limits. 
             gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
         else gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_ccw_closed_us);
-        float gas_pulse_out_max_delta = 250;
-        if (gas_pulse_out_us > gas_pulse_out_max_delta) {
-            gas_pulse_out_us = gas_pulse_out_max_delta;
-        } else if (gas_pulse_out_us < -gas_pulse_out_max_delta) {
-            gas_pulse_out_us = -gas_pulse_out_max_delta;
-        }
 
         // Step 3 : Write to servo
         if (runmode != BASIC || park_the_motors) {
