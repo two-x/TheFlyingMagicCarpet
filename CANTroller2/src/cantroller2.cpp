@@ -56,7 +56,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
     set_pin (tft_dc_pin, OUTPUT);
     set_pin (gas_pwm_pin, OUTPUT);
-    set_pin (basicmodesw_pin, INPUT_PULLDOWN);
+    set_pin (basicmodesw_pin, INPUT_PULLUP);
     set_pin (neopixel_pin, OUTPUT);
     set_pin (sdcard_cs_pin, OUTPUT);
     set_pin (tft_cs_pin, OUTPUT);
@@ -201,7 +201,11 @@ void loop() {
     }
     
     // External digital signals - takes 11 us to read
-    if (!simulator.simulating(SimOption::basicsw)) basicmodesw = !digitalRead (basicmodesw_pin);   // 1-value because electrical signal is active low
+    if (!simulator.simulating(SimOption::basicsw)) {
+        do {
+            basicmodesw = !digitalRead(basicmodesw_pin);   // 1-value because electrical signal is active low
+        } while (basicmodesw != !digitalRead(basicmodesw_pin)); // basicmodesw pin has a tiny (39ns) window in which it can get invalid values, so read it twice to be sure
+    }
     // if (ctrl == JOY && (!simulator.get_enabled() || !sim_cruisesw)) cruise_sw = digitalRead (joy_cruise_btn_pin);
 
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
