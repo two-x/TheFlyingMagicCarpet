@@ -569,7 +569,7 @@ class Display {
         void draw_idiotlights (int32_t x, int32_t y, bool force = false) {
             for (int32_t ilite=0; ilite < arraysize(idiotlights); ilite++)
                 if (force || (*(idiotlights[ilite]) ^ idiotlasts[ilite]))
-                    draw_idiotlight (ilite, x + (2 * disp_font_width + 2) * ((ilite % disp_idiots_per_row) % disp_idiots_per_row), y + disp_idiot_row_height * (int32_t)(ilite / disp_idiots_per_row);
+                    draw_idiotlight (ilite, x + (2 * disp_font_width + 2) * ((ilite % disp_idiots_per_row) % disp_idiots_per_row), y + disp_idiot_row_height * (int32_t)(ilite / disp_idiots_per_row));
         }
         void draw_temperature(sensor_location location, int draw_index) {
             TemperatureSensor* sensor = temperature_sensor_manager.get_sensor(location);
