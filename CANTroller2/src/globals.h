@@ -80,6 +80,7 @@ bool allow_rolling_start = false;         // May be a smart prerequisite, may be
 bool share_boot_joycruise_buttons = true; // Set true if joystick cruise button is in parallel with esp native "boot" button
 bool remote_start_support = false;
 bool starter_signal_support = true;
+bool cruise_mode_adjustable = false;
 
 #define pwm_jaguars true
 
