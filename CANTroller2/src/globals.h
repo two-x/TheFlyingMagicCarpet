@@ -129,6 +129,8 @@ bool car_has_moved = false;         // Whether car has moved at all since enteri
 bool calmode_request = false;
 bool joy_centered = false;
 bool panic_stop = false;
+bool cruise_trigger_released = false;
+float cruise_ctrl_adjustpoint_adc;
 bool remote_starting = false;
 bool remote_starting_last = false;
 bool flycruise_toggle_request = false;
