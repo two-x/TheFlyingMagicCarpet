@@ -50,7 +50,7 @@ bool flip_the_screen = true;
 #define tach_pulse_pin 36       // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup) - Note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define ign_out_pin 37          // (spi-ram / oct-spi) - Output for Hotrc to a relay to kill the car ignition. Note, Joystick ign button overrides this if connected and pressed
 #define syspower_pin 38         // (spi-ram / oct-spi) - Output, flips a relay to power all the tranducers. This is actually the neopixel pin on all v1.1 devkit boards.
-#define basicmodesw_pin 39      // (strap to 0) - Input, asserted to tell us to run in basic mode, active high (has ext pulldown) - Note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
+#define basicmodesw_pin 39      // (strap to 0?) - Input, asserted to tell us to run in basic mode, active high (has ext pulldown) - Note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define encoder_b_pin 40        // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define encoder_a_pin 41        // Int input, The A (aka CLK) pin of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
 #define encoder_sw_pin 42       // Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
@@ -80,7 +80,7 @@ bool allow_rolling_start = false;         // May be a smart prerequisite, may be
 bool share_boot_joycruise_buttons = true; // Set true if joystick cruise button is in parallel with esp native "boot" button
 bool remote_start_support = false;
 bool starter_signal_support = true;
-bool cruise_speed_lowerable = false;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
+bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool cruise_fixed_throttle = true;  // Cruise mode fixes the throttle angle rather than controlling for a target speed
 
 #define pwm_jaguars true
@@ -129,6 +129,9 @@ bool car_has_moved = false;         // Whether car has moved at all since enteri
 bool calmode_request = false;
 bool joy_centered = false;
 bool panic_stop = false;
+bool cruise_trigger_released = false;
+float cruise_ctrl_adjustpoint_adc;  // During cruise adjustments, saves pre-djustment lock value to adjust against
+float cruise_ctrl_extent_adc;       // During cruise adjustments, saves farthest trigger position read
 bool remote_starting = false;
 bool remote_starting_last = false;
 bool flycruise_toggle_request = false;
