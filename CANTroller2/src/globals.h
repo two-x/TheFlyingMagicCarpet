@@ -80,7 +80,8 @@ bool allow_rolling_start = false;         // May be a smart prerequisite, may be
 bool share_boot_joycruise_buttons = true; // Set true if joystick cruise button is in parallel with esp native "boot" button
 bool remote_start_support = false;
 bool starter_signal_support = true;
-bool cruise_mode_adjustable = false;
+bool cruise_speed_lowerable = false;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
+bool cruise_fixed_throttle = true;  // Cruise mode fixes the throttle angle rather than controlling for a target speed
 
 #define pwm_jaguars true
 
@@ -393,6 +394,8 @@ float gas_pulse_cw_open_us = 1000;    // Gas pulsewidth corresponding to full op
 float gas_pulse_ccw_closed_us = 2000; // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
 float gas_pulse_ccw_max_us = 2500;    // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
 float gas_pulse_park_slack_us = 30;   // Gas pulsewidth beyond gas_pulse_ccw_closed_us where to park the servo out of the way so we can drive manually (in us)
+float gas_pulse_cruise_us;            // Gas pulsewidth value fixed by cruise mode when in fixed throttle mode 
+float gas_pulse_adjustpoint_us;             // Used for adjusting cruise fixed throttle level
 
 // tachometer related
 Tachometer tachometer(tach_pulse_pin);
