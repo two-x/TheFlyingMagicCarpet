@@ -385,12 +385,13 @@ float speedo_govern_mph;      // Governor must scale the top vehicle speed propo
 float speedo_idle_mph = 4.50; // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
 
 // throttle servo related
+bool reverse_gas_servo = true;
 float gas_pulse_out_us = 1501;        // pid loop output to send to the actuator (gas)
 float gas_pulse_govern_us = 1502;     // Governor must scale the pulse range proportionally. This is given a value in the loop
 Timer gasServoTimer(500000);          // We expect the servo to find any new position within this time
 float gas_governor_percent = 95;      // Software governor will only allow this percent of full-open throttle (percent 0-100)
 float gas_pulse_cw_min_us = 500;      // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
-float gas_pulse_cw_open_us = 1000;    // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
+float gas_pulse_cw_open_us = 718;    // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
 float gas_pulse_ccw_closed_us = 2000; // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
 float gas_pulse_ccw_max_us = 2500;    // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
 float gas_pulse_park_slack_us = 30;   // Gas pulsewidth beyond gas_pulse_ccw_closed_us where to park the servo out of the way so we can drive manually (in us)

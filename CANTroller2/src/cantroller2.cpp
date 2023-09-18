@@ -242,6 +242,7 @@ void loop() {
     // Read the car ignition signal, and while we're at it measure the vehicle battery voltage off ign signal
     battery_sensor.update();
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
+    // printf("batt_pin: %d, batt_raw: %f, batt_human: %f, batt_filt: %f\n", analogRead(ign_batt_pin), battery_sensor.get_native(), battery_sensor.get_human(), battery_sensor.get_filtered_value());
 
     // Controller handling
     //
@@ -430,11 +431,12 @@ void loop() {
         else if (runmode == CRUISE && cruise_fixed_throttle)
             gas_pulse_out_us = gas_pulse_cruise_us;
         else if (runmode != BASIC) {
-            if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual)  // This isn't really open loop, more like simple proportional control, with output set proportional to target 
+            tach_target_rpm = throttle.get_target();
+            if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual) { // This isn't really open loop, more like simple proportional control, with output set proportional to target
+                // printf("throttle.get_target: %f, idlespeed: %f, tach_target_rpm: %f, tach_govern_rpm: %f\n", throttle.get_target(), throttle.get_idlespeed(), tach_target_rpm, tach_govern_rpm);
                 gas_pulse_out_us = map (throttle.get_target(), throttle.get_idlespeed(), tach_govern_rpm, gas_pulse_ccw_closed_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
-            else {
+            } else {
                 // if (boot_button) printf("gpid: gpo:%lf tt:%lf tf:%lf\n", gas_pulse_out_us, throttle.get_target(), tachometer.get_filtered_value());
-                tach_target_rpm = throttle.get_target();
                 gasQPID.Compute();  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
             }
         }
@@ -447,7 +449,11 @@ void loop() {
 
         // Step 3 : Write to servo
         if (runmode != BASIC || park_the_motors) {
-            gas_servo.writeMicroseconds ((int32_t)gas_pulse_out_us);  // Write result to servo
+            if (reverse_gas_servo) {
+                gas_servo.writeMicroseconds((int32_t)(1500 - (gas_pulse_out_us - 1500)));
+            } else {
+                gas_servo.writeMicroseconds ((int32_t)gas_pulse_out_us);  // Write result to servo
+            }
             // if (boot_button) printf (" Gas:%4ld\n", (int32_t)gas_pulse_out_us);
         }
     }
