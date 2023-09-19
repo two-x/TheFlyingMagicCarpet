@@ -28,12 +28,12 @@ bool flip_the_screen = true;
 #define joy_horz_pin 1          // (adc) - Analog left-right input (joystick)
 #define joy_vert_pin 2          // (adc) - Analog up-down input (joystick)
 #define tft_dc_pin 3            // (adc* / strap X) - Output, Assert when sending data to display chip to indicate commands vs. screen data
-#define ign_batt_pin 4          // (adc) - Analog input, ignition signal and battery voltage sense, full scale is 15.638V
+#define ign_batt_pin 4          // (adc) - Analog input, battery voltage sense, full scale is 16V
 #define pot_wipe_pin 5          // (adc) - Analog in from 20k pot
 #define brake_pos_pin 6         // (adc) - Analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
 #define pressure_pin 7          // (adc) - Analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V.
-#define i2c_sda_pin 8           // (i2c0 sda / adc) - i2c bus for airspeed sensor, lighting board, cap touchscreen
-#define i2c_scl_pin 9           // (i2c0 scl / adc) - i2c bus for airspeed sensor, lighting board, cap touchscreen
+#define i2c_sda_pin 8           // (i2c0 sda / adc) - i2c bus for airspeed/map sensors, lighting board, cap touchscreen
+#define i2c_scl_pin 9           // (i2c0 scl / adc) - i2c bus for airspeed/map sensors, lighting board, cap touchscreen
 #define tft_cs_pin 10           // (spi0 cs / adc*) - Output, active low, Chip select allows ILI9341 display chip use of the SPI bus
 #define tft_mosi_pin 11         // (spi0 mosi / adc*) - Used as spi interface data for touchscreen, sd card and tft screen
 #define tft_sclk_pin 12         // (spi0 sclk / adc*) - Used as spi interface clock for touchscreen, sd card and tft screen
@@ -50,19 +50,20 @@ bool flip_the_screen = true;
 #define tach_pulse_pin 36       // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup) - Note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define ign_out_pin 37          // (spi-ram / oct-spi) - Output for Hotrc to a relay to kill the car ignition. Note, Joystick ign button overrides this if connected and pressed
 #define syspower_pin 38         // (spi-ram / oct-spi) - Output, flips a relay to power all the tranducers. This is actually the neopixel pin on all v1.1 devkit boards.
-#define basicmodesw_pin 39      // (strap to 0?) - Input, asserted to tell us to run in basic mode, active high (has ext pulldown) - Note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
+#define basicmodesw_pin 39      // Input, asserted to tell us to run in basic mode, active high (has ext pulldown) - Note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define encoder_b_pin 40        // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define encoder_a_pin 41        // Int input, The A (aka CLK) pin of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
 #define encoder_sw_pin 42       // Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
 #define uart_tx_pin 43          // "TX" (uart0 tx) - Needed for serial monitor
 #define uart_rx_pin 44          // "RX" (uart0 rx) - Needed for serial monitor. In theory we could dual-purpose this for certain things, as we haven't yet needed to accept input over the serial monitor
-#define starter_pin 45          // (strap to 0) Input, active high when vehicle starter is engaged (needs pulldown)
-#define sdcard_cs_pin 46        // (strap X) - Output, chip select for SD card controller on SPI bus,
+#define starter_pin 45          // (strap to 0) - Input, active high when vehicle starter is engaged (needs pulldown)
+#define sdcard_cs_pin 46        // (strap to 0) - Output, chip select for SD card controller on SPI bus,
 #define touch_cs_pin 47         // Output, chip select for resistive touchscreen, active low
 #define neopixel_pin 48         // (rgb led) - Data line to onboard Neopixel WS281x (on all v1 devkit boards)
 
 // Servo library says S3 can run servos on pins 1-21,35-45,47-48, the multiple servo example uses pins 13,14,15,16, and (I think) 4.
 // ESP32 errata 3.11: Pin 36 and 39 will be pulled low for ~80ns when "certain RTC peripherals power up"
+// ESP32 pullups/downs (eg on pin 0) tend to be weak 45k-ohm, on many pins. Use stronger values for our pullups/downs <= 10k-ohm
 // https://www.esp32.com/viewtopic.php?f=12&t=34831
 // Soren 230731 swapped crit signals off p36/p39:
 // Was: speedo_pulse_pin 36 , basicmodesw_pin 46 , , touch_cs_pin 39 , sdcard_cs_pin 47
@@ -82,6 +83,7 @@ bool remote_start_support = false;
 bool starter_signal_support = true;
 bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool cruise_fixed_throttle = true;  // Cruise mode fixes the throttle angle rather than controlling for a target speed
+bool nonpanic_autostop_disabled = true;
 
 #define pwm_jaguars true
 
@@ -422,11 +424,11 @@ MAPSensor map_sensor(i2c);
 
 // Motor control:
 // Steering : Controls the steering motor proportionally based on the joystick
-uint32_t steer_pid_period_us = 185000;    // (Not actually a pid) Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+uint32_t steer_pid_period_us = 70000;    // (Not actually a pid) Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer steerPidTimer(steer_pid_period_us); // not actually tunable, just needs value above
 
 // Brake : Controls the brake motor to achieve the desired brake fluid pressure
-uint32_t brake_pid_period_us = 185000;    // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+uint32_t brake_pid_period_us = 95000;    // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer brakePidTimer(brake_pid_period_us); // not actually tunable, just needs value above
 // float brake_perc_per_us = (100.0 - (-100.0)) / (brake_pulse_extend_us - brake_pulse_retract_us);  // (100 - 0) percent / (us-max - us-min) us = 1/8.3 = 0.12 percent/us
 float brake_spid_initial_kp = 0.323;                                                                         // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)

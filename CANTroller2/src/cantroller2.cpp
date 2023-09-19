@@ -203,8 +203,8 @@ void loop() {
     // External digital signals - takes 11 us to read
     if (!simulator.simulating(SimOption::basicsw)) {
         do {
-            basicmodesw = !digitalRead(basicmodesw_pin);   // 1-value because electrical signal is active low
-        } while (basicmodesw != !digitalRead(basicmodesw_pin)); // basicmodesw pin has a tiny (39ns) window in which it can get invalid values, so read it twice to be sure
+            basicmodesw = !digitalRead(basicmodesw_pin);   // !value because electrical signal is active low
+        } while (basicmodesw != !digitalRead(basicmodesw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
     }
     // if (ctrl == JOY && (!simulator.get_enabled() || !sim_cruisesw)) cruise_sw = digitalRead (joy_cruise_btn_pin);
 
