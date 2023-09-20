@@ -539,7 +539,6 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
         set_pin(this->_pin, INPUT);
         this->set_source(ControllerMode::PIN);
     }
-        
 };
 
 // BatterySensor reads the voltage level from the Mule battery
@@ -571,7 +570,9 @@ class BatterySensor : public AnalogSensor<int32_t, float> {
 class PressureSensor : public AnalogSensor<int32_t, float> {
     public:
         static constexpr int32_t min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
-        static constexpr int32_t max_adc = 2080; // Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
+        // Soren 230920: Reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
+        static constexpr int32_t max_adc = 1700; // ~208psi by this math - "Maximum" braking
+        // static constexpr int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
         static constexpr float initial_psi_per_adc = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - min_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
         static constexpr float initial_ema_alpha = 0.1;
         static constexpr float initial_offset = 0.0;

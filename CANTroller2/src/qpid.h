@@ -248,7 +248,7 @@ bool QPID::Compute() {
     }
     else if ((iawmode == iAwMode::iAwRound || iawmode == iAwMode::iAwRoundCond) && error < 0.001 && error > -0.001) {
         error = 0.0;
-        if (centmode == centMode::centerStrict) outputSum = center;     
+        if (centmode == centMode::center || centmode == centMode::centerStrict) outputSum = center;     
     }
     if (centmode == centMode::centerStrict && error * lastError < 0) outputSum = center;  // Soren - Recenters any old integral when error crosses zero
     

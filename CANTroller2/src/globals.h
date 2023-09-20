@@ -111,16 +111,7 @@ HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar contro
 #endif
 
 // run state machine related
-enum runmodes
-{
-    BASIC,
-    SHUTDOWN,
-    STALL,
-    HOLD,
-    FLY,
-    CRUISE,
-    CAL
-};
+enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL };
 runmodes runmode = SHUTDOWN;
 runmodes disp_oldmode = SHUTDOWN;   // So we can tell when the mode has just changed. start as different to trigger_mode start algo
 int32_t gesture_progress = 0;       // How many steps of the Cruise Mode gesture have you completed successfully (from Fly Mode)
@@ -191,12 +182,7 @@ uint32_t neo_timeout_us = 150000;
 Timer neoTimer(neo_timeout_us);
 bool neo_heartbeat = (neopixel_pin >= 0);
 uint8_t neo_brightness = neo_brightness_max; // brightness during fadeouts
-enum neo_colors
-{
-    N_RED,
-    N_GRN,
-    N_BLU
-};
+enum neo_colors { N_RED, N_GRN, N_BLU };
 uint8_t neo_heartcolor[3] = {0xff, 0xff, 0xff};
 Timer heartbeatTimer(1000000);
 int32_t heartbeat_state = 0;
@@ -206,12 +192,7 @@ int32_t heartbeat_pulse = 255;
 static Adafruit_NeoPixel neostrip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
 
 // pushbutton related
-enum sw_presses
-{
-    NONE,
-    SHORT,
-    LONG
-}; // used by encoder sw and button algorithms
+enum sw_presses { NONE, SHORT, LONG }; // used by encoder sw and button algorithms
 bool boot_button_last = 0;
 bool boot_button = 0;
 bool boot_button_timer_active = false;
@@ -231,21 +212,8 @@ bool cruise_sw = LOW;
 bool starter = LOW;
 bool starter_last = LOW;
 
-enum this_is_a_total_hack
-{
-    AMBIENT = 0,
-    ENGINE = 1,
-    WHEEL = 2
-};
-enum temp_lims
-{
-    DISP_MIN,
-    NOM_MIN,
-    NOM_MAX,
-    WARNING,
-    ALARM,
-    DISP_MAX
-}; // Possible sources of gas, brake, steering commands
+enum this_is_a_total_hack { AMBIENT = 0, ENGINE = 1, WHEEL = 2 };
+enum temp_lims { DISP_MIN, NOM_MIN, NOM_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
 float temp_lims_f[3][6]{
     {0.0, 45.0, 115.0, 120.0, 130.0, 220.0},  // [AMBIENT][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
     {0.0, 178.0, 198.0, 202.0, 205.0, 220.0}, // [ENGINE][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
@@ -264,43 +232,13 @@ Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 BatterySensor battery_sensor(ign_batt_pin);
 
 // controller related
-enum ctrls
-{
-    HOTRC,
-    JOY,
-    SIM,
-    HEADLESS
-}; // Possible sources of gas, brake, steering commands
-enum ctrl_axes
-{
-    HORZ,
-    VERT,
-    CH3,
-    CH4
-};
-enum ctrl_thresh
-{
-    MIN,
-    CENT,
-    MAX,
-    DB
-};
-enum ctrl_edge
-{
-    BOT,
-    TOP
-};
-enum ctrl_vals
-{
-    RAW,
-    FILT
-};
-enum hotrc_sources
-{
-    MICROS,
-    ESP_RMT
-};
-float ctrl_ema_alpha[2] = {0.05, 0.1};         // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
+enum ctrls { HOTRC, JOY, SIM, HEADLESS }; // Possible sources of gas, brake, steering commands
+enum ctrl_axes { HORZ, VERT, CH3, CH4 };
+enum ctrl_thresh { MIN, CENT, MAX, DB };
+enum ctrl_edge { BOT, TOP };
+enum ctrl_vals { RAW, FILT };
+enum hotrc_sources { MICROS, ESP_RMT };
+float ctrl_ema_alpha[2] = {0.2, 0.1};         // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
 int32_t ctrl_lims_adc[2][2][5] =               //   values as adc counts
     {{{0, adcmidscale_adc, adcrange_adc, 62, 100},  // [HOTRC][HORZ][MIN/CENT/MAX/DB/MARGIN]  // MARGIN is how much out of range the reading must be for axis to be completely ignored
       {0, adcmidscale_adc, adcrange_adc, 62, 100}}, // [HOTRC][VERT][MIN/CENT/MAX/DB/MARGIN]
@@ -355,10 +293,10 @@ float steer_pulse_out_us = steer_pulse_stop_us;              // pid loop output 
 
 // brake pressure related
 PressureSensor pressure_sensor(pressure_pin);
-float pressure_hold_initial_psi = 125;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
-float pressure_hold_increment_psi = 5;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
-float pressure_panic_initial_psi = 200; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
-float pressure_panic_increment_psi = 8; // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
+float pressure_hold_initial_psi = 45;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
+float pressure_hold_increment_psi = 3;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
+float pressure_panic_initial_psi = 80; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
+float pressure_panic_increment_psi = 5; // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 float pressure_target_psi;
 
 // brake actuator motor related
@@ -437,8 +375,10 @@ float brake_spid_initial_kd_s = 0.000;                                          
 QPID brakeQPID(pressure_sensor.get_filtered_value_ptr().get(), &brake_out_percent, &pressure_target_psi,     // input, target, output variable references
                brake_extend_percent, brake_retract_percent,                                                  // output min, max
                brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,                     // Kp, Ki, and Kd tuning constants
-               QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwRound, QPID::Action::direct,  // settings  // iAwRoundCond, iAwClamp
-               brake_pid_period_us, QPID::Control::timer, QPID::centMode::centerStrict, brake_stop_percent); // period, more settings
+               QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwCondition, QPID::Action::direct,  // settings  // iAwRoundCond, iAwClamp
+               brake_pid_period_us, QPID::Control::timer, QPID::centMode::center, brake_stop_percent); // period, more settings
+               // QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwRound, QPID::Action::direct,  // settings  // iAwRoundCond, iAwClamp
+               // brake_pid_period_us, QPID::Control::timer, QPID::centMode::centerStrict, brake_stop_percent); // period, more settings
 
 // Gas : Controls the throttle to achieve the desired intake airflow and engine rpm
 
@@ -477,82 +417,60 @@ bool err_temp_engine;
 bool err_temp_wheel;
 bool err_range;
 
-void handle_hotrc_vert(int32_t pulse_width) {
-    if (pulse_width > 0) {  // reads return 0 if the buffer is empty eg bc our loop is running faster than the rmt is getting pulses
-        hotrc_vert_pulse_64_us = pulse_width;
-    }
-}
-void handle_hotrc_horz(int32_t pulse_width)
-{
-    if (pulse_width > 0)
-    {
-        hotrc_vert_pulse_64_us = pulse_width;
-    }
-}
-void hotrc_ch3_update(void)
-{                                                            //
+// Soren: commenting out these pre-rmt horz/vert handler function relics (noticing also the horz function appears to operate on the vert value (?))
+// void handle_hotrc_vert(int32_t pulse_width) { if (pulse_width > 0) hotrc_vert_pulse_64_us = pulse_width; }  // reads return 0 if the buffer is empty eg bc our loop is running faster than the rmt is getting pulses;
+// void handle_hotrc_horz(int32_t pulse_width) { if (pulse_width > 0) hotrc_vert_pulse_64_us = pulse_width; }
+void hotrc_ch3_update(void) {                                                            //
     hotrc_ch3_sw = (hotrc_ch3.readPulseWidth(true) <= 1500); // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
-    if (hotrc_ch3_sw != hotrc_ch3_sw_last)
-        hotrc_ch3_sw_event = true; // So a handler routine can be signaled. Handler must reset this to false
+    if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true; // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch3_sw_last = hotrc_ch3_sw;
 }
-void hotrc_ch4_update(void)
-{                                                            //
+void hotrc_ch4_update(void) {                                                            //
     hotrc_ch4_sw = (hotrc_ch4.readPulseWidth(true) <= 1500); // Ch4 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH4][CENT]
-    if (hotrc_ch4_sw != hotrc_ch4_sw_last)
-        hotrc_ch4_sw_event = true; // So a handler routine can be signaled. Handler must reset this to false
+    if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true; // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
 
-uint32_t colorwheel(uint8_t WheelPos)
-{
+uint32_t colorwheel(uint8_t WheelPos) {
     WheelPos = 255 - WheelPos;
-    if (WheelPos < 85)
-        return neostrip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
-    if (WheelPos < 170)
-    {
+    if (WheelPos < 85) return neostrip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+    if (WheelPos < 170) {
         WheelPos -= 85;
         return neostrip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
     }
     WheelPos -= 170;
     return neostrip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
 }
-void calc_ctrl_lims(void)
-{
+void calc_ctrl_lims(void) {
     ctrl_db_adc[VERT][BOT] = ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][DB] / 2; // Lower threshold of vert joy deadband (ADC count 0-4095)
     ctrl_db_adc[VERT][TOP] = ctrl_lims_adc[ctrl][VERT][CENT] + ctrl_lims_adc[ctrl][VERT][DB] / 2; // Upper threshold of vert joy deadband (ADC count 0-4095)
     ctrl_db_adc[HORZ][BOT] = ctrl_lims_adc[ctrl][HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][DB] / 2; // Lower threshold of horz joy deadband (ADC count 0-4095)
     ctrl_db_adc[HORZ][TOP] = ctrl_lims_adc[ctrl][HORZ][CENT] + ctrl_lims_adc[ctrl][HORZ][DB] / 2; // Upper threshold of horz joy deadband (ADC count 0-4095)
     steer_safe_ratio = steer_safe_percent / 100.0;
 }
-void calc_governor(void)
-{
+void calc_governor(void) {
     tach_govern_rpm = map(gas_governor_percent, 0.0, 100.0, 0.0, tachometer.get_redline_rpm()); // Create an artificially reduced maximum for the engine speed
     cruiseQPID.SetOutputLimits(throttle.get_idlespeed(), tach_govern_rpm);
     gas_pulse_govern_us = map(gas_governor_percent * (tach_govern_rpm - throttle.get_idlespeed()) / tachometer.get_redline_rpm(), 0.0, 100.0, gas_pulse_ccw_closed_us, gas_pulse_cw_open_us); // Governor must scale the pulse range proportionally
     speedo_govern_mph = map((float)gas_governor_percent, 0.0, 100.0, 0.0, speedometer.get_redline_mph());                                                                                     // Governor must scale the top vehicle speed proportionally
 }
-float steer_safe(float endpoint)
-{
+float steer_safe(float endpoint) {
     return steer_stop_percent + (endpoint - steer_stop_percent) * (1 - steer_safe_ratio * speedometer.get_filtered_value() / speedometer.get_redline_mph());
 }
 
 // int* x is c++ style, int *x is c style
 template <typename T>
-T adj_val(T variable, T modify, T low_limit, T high_limit)
-{
+T adj_val(T variable, T modify, T low_limit, T high_limit) {
     T oldval = variable;
     variable += modify;
     return variable < low_limit ? low_limit : (variable > high_limit ? high_limit : variable);
 }
-bool adj_val(int32_t *variable, int32_t modify, int32_t low_limit, int32_t high_limit)
-{ // sets an int reference to new val constrained to given range
+bool adj_val(int32_t *variable, int32_t modify, int32_t low_limit, int32_t high_limit) { // sets an int reference to new val constrained to given range
     int32_t oldval = *variable;
     *variable = adj_val(*variable, modify, low_limit, high_limit);
     return (*variable != oldval);
 }
-bool adj_val(float *variable, float modify, float low_limit, float high_limit)
-{ // sets an int reference to new val constrained to given range
+bool adj_val(float *variable, float modify, float low_limit, float high_limit) { // sets an int reference to new val constrained to given range
     float oldval = *variable;
     *variable = adj_val(*variable, modify, low_limit, high_limit);
     return (*variable != oldval);
@@ -562,8 +480,7 @@ void adj_bool(bool *val, int32_t delta) { *val = adj_bool(*val, delta); }       
 
 bool read_battery_ignition() { return battery_sensor.get_filtered_value() > ignition_on_thresh_v; }
 
-bool syspower_set(bool val)
-{
+bool syspower_set(bool val) {
     bool really_power = keep_system_powered | val;
     write_pin(syspower_pin, really_power); // delay (val * 500);
     return really_power;
@@ -573,17 +490,13 @@ bool syspower_set(bool val)
 // TODO move these to more sensible places
 
 // This is the function that will be run in a separate task
-void update_temperature_sensors(void *parameter)
-{
-    while (true)
-    {
+void update_temperature_sensors(void *parameter) {
+    while (true) {
         if (take_temperatures)
             temperature_sensor_manager.update_temperatures();
-        if (simulator.can_simulate(SimOption::coolant) && simulator.get_pot_overload() == SimOption::coolant)
-        {
+        if (simulator.can_simulate(SimOption::coolant) && simulator.get_pot_overload() == SimOption::coolant) {
             TemperatureSensor *engine_sensor = temperature_sensor_manager.get_sensor(sensor_location::ENGINE);
-            if (engine_sensor != nullptr)
-            {
+            if (engine_sensor != nullptr) {
                 engine_sensor->set_temperature(pot.mapToRange(temp_sensor_min_f, temp_sensor_max_f));
             }
         }

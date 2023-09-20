@@ -96,7 +96,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
     { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", "SpeedIdl", "SpeedRed", "BkPos0Pt", },  // PG_CAR
     { "BrakePWM", "SteerPWM", "      - ", "Steer Lt", "SteerStp", "Steer Rt", "BrakExtd", "BrakStop", "BrakRetr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
-    { "Pres Tgt", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", "      - ", "      - ", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
+    { "Pres Tgt", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", "BrakeMot", "      - ", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
     { "Tach Tgt", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", "      - ", "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
     { "SpeedTgt", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "Tach Tgt", "FixThrot", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
     { " Ambient", " Coolant", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", "      - ", "      - ", " Sim Ign", "Sim Basc", "Sim Strt", },  // PG_TEMP
@@ -110,9 +110,9 @@ char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "adc ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%   ", "mph ", "mph ", "mph ", "in  " },  // PG_CAR
     { "us  ", "us  ", "    ", "    ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PG_PWMS
     { "    ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", DEGR_F, DEGR_F, "rpms", "    " },  // PG_IDLE
-    { "psi ", "psi ", "psi ", "psi ", "psi ", "psi ", "    ", "    ", "    ", "Hz  ", "s   " },  // PG_BPID
-    { "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "    ", "    ", "Hz  ", "s   " },  // PG_GPID
-    { "mph ", "mph ", "mph ", "mph ", "mph ", "mph ", "rpm ", "    ", "    ", "Hz  ", "s   " },  // PG_CPID
+    { "psi ", "psi ", "%   ", "%   ", "%   ", "%   ", "us  ", "    ", "    ", "Hz  ", "s   " },  // PG_BPID
+    { "rpm ", "rpm ", "us  ", "us  ", "us  ", "us  ", "    ", "    ", "    ", "Hz  ", "s   " },  // PG_GPID
+    { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "    ", "    ", "Hz  ", "s   " },  // PG_CPID
     { DEGR_F, DEGR_F, DEGR_F, DEGR_F, DEGR_F, DEGR_F, "    ", "    ", "    ", "    ", "    " },  // PG_TEMP
     { "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    " },  // PG_SIM
 };
@@ -702,7 +702,7 @@ class Display {
                     draw_dynamic(12, brakeQPID.GetIterm(), -drange, drange);
                     draw_dynamic(13, brakeQPID.GetDterm(), -drange, drange);
                     draw_dynamic(14, brakeQPID.GetOutputSum(), -brakeQPID.GetOutputRange(), brakeQPID.GetOutputRange());  // brake_spid_speedo_delta_adc, -range, range);
-                    draw_eraseval(15);
+                    draw_dynamic(15, brake_pulse_out_us, brake_pulse_extend_us, brake_pulse_retract_us);
                     draw_eraseval(16);
                     draw_dynamic(17, brakeQPID.GetKp(), 0.0, 2.0);
                     draw_dynamic(18, brakeQPID.GetKi(), 0.0, 2.0);
