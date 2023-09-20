@@ -371,7 +371,7 @@ void loop() {
         // Step 1 : Determine motor percent value
         if (runmode == SHUTDOWN && !shutdown_incomplete)
             brake_out_percent = brake_stop_percent; // if we're shutdown, stop the motor
-        else if (runmode == CAL && cal_joyvert_brkmotor) {
+        else if (runmode == CAL && cal_joyvert_brkmotor_mode) {
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], brake_stop_percent, brake_retract_percent);
             else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], brake_extend_percent, brake_stop_percent);
             else brake_out_percent = (float)brake_stop_percent;
@@ -385,7 +385,7 @@ void loop() {
         else if (runmode != BASIC) brakeQPID.Compute();  // Otherwise the pid control is active
         
         // Step 2 : Fix motor percent value if it's out of range or exceeding positional limits
-        if (runmode == CAL && cal_joyvert_brkmotor)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
+        if (runmode == CAL && cal_joyvert_brkmotor_mode)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
             brake_out_percent = constrain (brake_out_percent, brake_extend_min_percent, brake_retract_max_percent);  // Constrain to full potential range when calibrating. Caution don't break anything!
         else if ((brake_out_percent < brake_stop_percent && brkpos_sensor.get_filtered_value() > BrakePositionSensor::park_in - BrakePositionSensor::margin_in) || (brake_out_percent > brake_stop_percent && brkpos_sensor.get_filtered_value() < BrakePositionSensor::nom_lim_retract_in + BrakePositionSensor::margin_in))  // If brake is at position limits and we're tring to go further, stop the motor
             brake_out_percent = brake_stop_percent;
@@ -427,7 +427,7 @@ void loop() {
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_ccw_closed_us;  // If in deadband or being pushed down, we want idle
             else gas_pulse_out_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_ccw_closed_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
         }
-        else if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo)
+        else if (runmode == CAL && cal_pot_gasservo_mode)
             gas_pulse_out_us = map (pot.get(), pot.min(), pot.max(), gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
         else if (runmode == CRUISE && cruise_fixed_throttle)
             gas_pulse_out_us = gas_pulse_cruise_us;
@@ -444,7 +444,7 @@ void loop() {
         // Step 2 : Constrain if out of range
         if (runmode == BASIC || runmode == SHUTDOWN)
             gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_ccw_closed_us + gas_pulse_park_slack_us);
-        else if (runmode == CAL && cal_pot_gas_ready && cal_pot_gasservo)  // Constrain to operating limits. 
+        else if (runmode == CAL && cal_pot_gasservo_mode)  // Constrain to operating limits. 
             gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
         else gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_ccw_closed_us);
 
@@ -628,8 +628,8 @@ void loop() {
         }
         else if (dataset_page == PG_TEMP) {
             if (selected_value == 8) simulator.set_pot_overload(static_cast<SimOption>(adj_val(static_cast<int32_t>(simulator.get_pot_overload()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));
-            else if (selected_value == 9 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor, sim_edit_delta);
-            else if (selected_value == 10 && runmode == CAL) adj_bool (&cal_pot_gasservo, (sim_edit_delta < 0 || cal_pot_gas_ready) ? sim_edit_delta : -1);
+            else if (selected_value == 9 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor_mode, sim_edit_delta);
+            else if (selected_value == 10 && runmode == CAL) adj_bool (&cal_pot_gasservo_mode, (sim_edit_delta < 0 || cal_pot_gasservo_ready) ? sim_edit_delta : -1);
          }
         else if (dataset_page == PG_SIM) {
             if (selected_value == 0) simulator.set_can_simulate(SimOption::joy, adj_bool(simulator.can_simulate(SimOption::joy), sim_edit_delta));

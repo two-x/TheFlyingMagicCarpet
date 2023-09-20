@@ -65,9 +65,9 @@ private:
         else if (_oldMode == FLY) car_hasnt_moved = false;
         else if (_oldMode == CRUISE) cruise_adjusting = false;
         else if (_oldMode == CAL) {
-            cal_pot_gas_ready = false;
-            cal_pot_gasservo = false;
-            cal_joyvert_brkmotor = false;
+            cal_pot_gasservo_ready = false;
+            cal_pot_gasservo_mode = false;
+            cal_joyvert_brkmotor_mode = false;
         }
     }
     void handleBasicMode() { // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
@@ -76,7 +76,7 @@ private:
             motorParkTimer.reset();  // Set a timer to timebox this effort
             park_the_motors = true;  // Flags the motor parking to happen
         }
-        else if (!tachometer.engine_stopped() && !basicmodesw) updateMode(HOLD);  // If we turned off the basic mode switch with engine running, go to Hold mode. If engine is not running, we'll end up in Stall Mode automatically
+        else if (!basicmodesw && !tachometer.engine_stopped()) updateMode( speedometer.car_stopped() ? HOLD : FLY );  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
     }
 
     void handleShutdownMode() { // In shutdown mode we stop the car if it's moving then park the motors.
@@ -86,7 +86,7 @@ private:
             shutdown_color = LPNK;
             disp_runmode_dirty = true;
             calmode_request = false;
-            if (!speedometer.car_stopped() && !nonpanic_autostop_disabled) {
+            if (!speedometer.car_stopped() && !autostop_disabled) {
                 if (panic_stop && pressure_target_psi < pressure_panic_initial_psi) pressure_target_psi = pressure_panic_initial_psi;
                 else if (!panic_stop && pressure_target_psi < pressure_hold_initial_psi) pressure_target_psi = pressure_hold_initial_psi;
                 brakeIntervalTimer.reset();
@@ -95,9 +95,9 @@ private:
             }
         }
         // else if (ignition && engine_stopped()) updateMode(STALL);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
-        else if ((speedometer.car_stopped() || allow_rolling_start || nonpanic_autostop_disabled) && ignition && !panic_stop && !tachometer.engine_stopped()) updateMode(HOLD);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
+        else if ((speedometer.car_stopped() || allow_rolling_start || autostop_disabled) && ignition && !panic_stop && !tachometer.engine_stopped()) updateMode(HOLD);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
         if (shutdown_incomplete) {  // If we haven't yet stopped the car and then released the brakes and gas all the way
-            if (speedometer.car_stopped() || stopcarTimer.expired() || nonpanic_autostop_disabled) {  // If car has stopped, or timeout expires, then release the brake
+            if (speedometer.car_stopped() || stopcarTimer.expired() || autostop_disabled) {  // If car has stopped, or timeout expires, then release the brake
                 if (shutdown_color == LPNK) {  // On first time through here
                     park_the_motors = true;  // Flags the motor parking to happen, only once
                     gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
@@ -113,7 +113,7 @@ private:
                 }
             }
             else if (brakeIntervalTimer.expireset()) {
-                if (!nonpanic_autostop_disabled) pressure_target_psi = pressure_target_psi + (panic_stop) ? pressure_panic_increment_psi : pressure_hold_increment_psi;  // Slowly add more brakes until car stops
+                if (!autostop_disabled) pressure_target_psi = pressure_target_psi + (panic_stop) ? pressure_panic_increment_psi : pressure_hold_increment_psi;  // Slowly add more brakes until car stops
                 throttle.goto_idle();  // Keep target updated to possibly changing idle value
             }
         }
@@ -138,7 +138,7 @@ private:
     void handleHoldMode() {
         if (we_just_switched_modes) {  // Release throttle and push brake upon entering hold mode
             throttle.goto_idle();  // Let off gas (if gas using PID mode)
-            if (!nonpanic_autostop_disabled) {
+            if (!autostop_disabled) {
                 if (speedometer.car_stopped()) pressure_target_psi = pressure_sensor.get_filtered_value() + pressure_hold_increment_psi; // If the car is already stopped then just add a touch more pressure and then hold it.
                 else if (pressure_target_psi < pressure_hold_initial_psi) pressure_target_psi = pressure_hold_initial_psi;  //  These hippies need us to stop the car for them
             }
@@ -148,7 +148,7 @@ private:
         }
         if (brakeIntervalTimer.expireset()) {  // On an interval ...
             throttle.goto_idle();  // Keep target updated to possibly changing idle value
-            if (!speedometer.car_stopped() && !stopcarTimer.expired() && !nonpanic_autostop_disabled) pressure_target_psi = min (pressure_target_psi + pressure_hold_increment_psi, pressure_sensor.get_max_human());  // If the car is still moving, push harder
+            if (!speedometer.car_stopped() && !stopcarTimer.expired() && !autostop_disabled) pressure_target_psi = min (pressure_target_psi + pressure_hold_increment_psi, pressure_sensor.get_max_human());  // If the car is still moving, push harder
         }
         if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
         else if (joy_centered && (ctrl == JOY || !hotrc_radio_lost)) updateMode(FLY); // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
@@ -296,16 +296,14 @@ private:
     void handleCalMode() {  // Calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration. Don't use it unless you know how.
         if (we_just_switched_modes) {  // Entering Cal mode: From fully shut down state, open simulator and long-press the Cal button. Each feature starts disabled but can be enabled with the tuner.
             calmode_request = false;
-            cal_pot_gas_ready = false;
-            cal_pot_gasservo = false;
-            cal_joyvert_brkmotor = false;
+            cal_pot_gasservo_mode = false;
+            cal_pot_gasservo_ready = false;
+            cal_joyvert_brkmotor_mode = false;
         }
         else if (calmode_request) updateMode(SHUTDOWN);
         
-        if (!cal_pot_gas_ready) {
-            float temp = pot.mapToRange(gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
-            if (temp <= (float)gas_pulse_ccw_closed_us && temp >= (float)gas_pulse_cw_open_us) cal_pot_gas_ready = true;
-        }
+        float temp = pot.mapToRange(gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
+        cal_pot_gasservo_ready = (temp <= (float)gas_pulse_ccw_closed_us && temp >= (float)gas_pulse_cw_open_us);
     }
 };
 // Here are the different runmodes documented
