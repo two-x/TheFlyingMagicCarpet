@@ -680,7 +680,6 @@ void loop() {
     if (syspower != syspower_last) {
         syspower = syspower_set(syspower);
         syspower_last = syspower;
-        syspowerdown = !syspower;
     }
     // if (boot_button_action == LONG) {
     //     screen.tft_reset();

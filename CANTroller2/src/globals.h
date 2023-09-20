@@ -226,7 +226,6 @@ bool ignition_sense = ignition;
 float ignition_on_thresh_v = 2.0; // Below this voltage ignition is considered off
 bool syspower = HIGH;
 bool syspower_last = syspower;
-bool syspowerdown = !syspower;
 bool basicmodesw = LOW;
 bool cruise_sw = LOW;
 bool starter = LOW;
