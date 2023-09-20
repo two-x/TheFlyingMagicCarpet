@@ -39,6 +39,7 @@
 #define PUR  0x881f
 #define LPUR 0xc59f  // A light pastel purple
 #define GPUR 0x8c15  // A low saturation greyish pastel purple
+#define GGRN 0x5cac  // A low saturation greyish pastel green
 
 // LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
 // Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
@@ -480,7 +481,7 @@ class Display {
         void draw_asciiname (int32_t lineno, String name) {
             draw_dynamic (lineno, name.c_str(), 1, -1, -1, -1, CYN);
         }
-        void draw_truth (int32_t lineno, bool truthy, int32_t styl=2) {  // 0:on/off, 1:yes/no, 2:true/false
+        void draw_truth (int32_t lineno, bool truthy, int32_t styl=2) {  // 0:on/off, 1:yes/no, 2:true/false .
             draw_dynamic (lineno, (truthy) ? ((styl==0) ? " on" : ((styl==1) ? "yes" : "true")) : ((styl==0) ? "off" : ((styl==1) ? "no" : "false")), 1, -1, -1, -1, (truthy) ? LPUR : GPUR);
         }
         void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override=-1) {  // color_override = -1 uses default color
@@ -746,8 +747,8 @@ class Display {
                     draw_eraseval(15);
                     draw_eraseval(16);
                     draw_asciiname(17, sensorcard[static_cast<uint8_t>(simulator.get_pot_overload())]);
-                    draw_truth(18, cal_joyvert_brkmotor, 0);
-                    draw_truth(19, cal_pot_gasservo, 0);
+                    draw_truth(18, cal_joyvert_brkmotor_mode, 0);
+                    draw_truth(19, cal_pot_gasservo_mode, 0);
                 }
                 else if (dataset_page == PG_SIM) {
                     draw_truth(9, simulator.can_simulate(SimOption::joy), 0);

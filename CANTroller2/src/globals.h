@@ -83,7 +83,7 @@ bool remote_start_support = false;
 bool starter_signal_support = true;
 bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool cruise_fixed_throttle = true;  // Cruise mode fixes the throttle angle rather than controlling for a target speed
-bool nonpanic_autostop_disabled = true;
+bool autostop_disabled = true;
 
 #define pwm_jaguars true
 
@@ -156,9 +156,9 @@ int32_t sim_edit_delta_touch = 0;
 int32_t sim_edit_delta_encoder = 0;
 
 // calibration related
-bool cal_joyvert_brkmotor = false; // Allows direct control of brake motor using controller vert
-bool cal_pot_gasservo = false;     // Allows direct control of gas servo using pot
-bool cal_pot_gas_ready = false;    // To avoid immediately overturning gas pot, first pot must be turned to valid range
+bool cal_joyvert_brkmotor_mode = false; // Allows direct control of brake motor using controller vert
+bool cal_pot_gasservo_mode = false;     // Allows direct control of gas servo using pot. First requires pot to be in valid position before mode is entered
+bool cal_pot_gasservo_ready = false;    // Whether pot is in valid range
 bool cal_set_hotrc_failsafe_ready = false;
 
 // diag/monitoring variables
