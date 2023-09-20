@@ -257,7 +257,8 @@ bool hotrc_radio_lost_last = hotrc_radio_lost;
 bool hotrc_suppress_next_ch3_event = true; // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 bool hotrc_suppress_next_ch4_event = true; // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 float hotrc_pulse_period_us = 1000000.0 / 50;
-int32_t hotrc_horz_pulse_us, hotrc_vert_pulse_us, hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us;
+int32_t hotrc_pulse_us[2];  // [HORZ/VERT]  // horz_pulse_us, hotrc_vert_pulse_us, hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us;
+int32_t hotrc_pulse_vert_filt_us;  // Only needed for vert channel to detect radio
 int32_t hotrc_pulse_failsafe_min_us = 780; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
 int32_t hotrc_pulse_failsafe_max_us = 980; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
 int32_t hotrc_pulse_failsafe_pad_us = 10;
