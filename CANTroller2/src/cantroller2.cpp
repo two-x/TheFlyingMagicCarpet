@@ -254,7 +254,7 @@ void loop() {
             else {}   // There's no reason pushing the ch4 button when in other modes can't do something different.  That would go here
             hotrc_ch4_sw_event = false;    
         }
-        if (hotrc_vert_pulse_us > hotrc_pulse_failsafe_max_us) {
+        if (hotrc_pulse_vert_filt_us > hotrc_pulse_failsafe_max_us) {
             hotrcPanicTimer.reset();
             hotrc_radio_lost = false;
             if (!ignition_output_enabled) ignition_output_enabled = true; // Ignition stays low until the hotrc is detected here, then output is allowed
@@ -266,30 +266,27 @@ void loop() {
     // Read horz and vert inputs, determine steering pwm output -  - takes 40 us to read. Then, takes 13 us to handle
     if (ctrl != JOY) {
         if (hotrc_source == ESP_RMT) {  // Read RMT pulse widths
-            hotrc_horz_pulse_us = (int32_t)hotrc_horz.readPulseWidth();  
-            hotrc_vert_pulse_us = (int32_t)hotrc_vert.readPulseWidth();
+            hotrc_pulse_us[HORZ] = (int32_t)hotrc_horz.readPulseWidth();  
+            hotrc_pulse_us[VERT] = (int32_t)hotrc_vert.readPulseWidth();
         }
         else {
-            hotrc_horz_pulse_us = (int32_t)hotrc_horz_pulse_64_us;
-            hotrc_vert_pulse_us = (int32_t)hotrc_vert_pulse_64_us;
+            hotrc_pulse_us[HORZ] = (int32_t)hotrc_horz_pulse_64_us;
+            hotrc_pulse_us[VERT] = (int32_t)hotrc_vert_pulse_64_us;
         }
-        hotrc_horz_pulse_us = hotrcHorzManager.spike_filter (hotrc_horz_pulse_us);
-        hotrc_vert_pulse_us = hotrcVertManager.spike_filter (hotrc_vert_pulse_us);
-        ema_filt (hotrc_vert_pulse_us, &hotrc_vert_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Used to detect loss of radio
+        for (int32_t axis=HORZ; axis<=VERT; axis++)
+            hotrc_pulse_us[axis] = hotrcHorzManager.spike_filter (hotrc_pulse_us[axis]);
+        ema_filt (hotrc_pulse_us[VERT], &hotrc_pulse_vert_filt_us, ctrl_ema_alpha[HOTRC]);  // Used to detect loss of radio
     }
 
     if (simulator.can_simulate(SimOption::joy) && simulator.get_pot_overload() == SimOption::joy) {
         ctrl_pos_adc[HORZ][FILT] = pot.mapToRange(steer_pulse_left_us, steer_pulse_right_us);
     } else if (!simulator.simulating(SimOption::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
-        if (ctrl == HOTRC) {
-            if (hotrc_horz_pulse_us >= hotrc_pulse_lims_us[HORZ][CENT])  // Steering: Convert from pulse us to joystick adc equivalent, when pushing right, else pushing left
-                ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MAX]);
-            else ctrl_pos_adc[HORZ][RAW] = map (hotrc_horz_pulse_us, hotrc_pulse_lims_us[HORZ][CENT], hotrc_pulse_lims_us[HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][CENT], ctrl_lims_adc[ctrl][HORZ][MIN]);
-            if (hotrc_vert_pulse_us >= hotrc_pulse_lims_us[VERT][CENT])  // Trigger: Convert from pulse us to joystick adc equivalent, for trigger pull, else trigger push
-                ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MAX], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MAX]);
-            else ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MIN], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MIN]);  
-        }
         for (int32_t axis=HORZ; axis<=VERT; axis++) {
+            if (ctrl == HOTRC) {
+                if (hotrc_pulse_us[axis] >= hotrc_pulse_lims_us[axis][CENT])  // Steering: Convert from pulse us to joystick adc equivalent, when pushing right, else pushing left
+                    ctrl_pos_adc[axis][RAW] = map (hotrc_pulse_us[axis], hotrc_pulse_lims_us[axis][CENT], hotrc_pulse_lims_us[axis][MAX], ctrl_lims_adc[ctrl][axis][CENT], ctrl_lims_adc[ctrl][axis][MAX]);
+                else ctrl_pos_adc[axis][RAW] = map (hotrc_pulse_us[axis], hotrc_pulse_lims_us[axis][CENT], hotrc_pulse_lims_us[axis][MIN], ctrl_lims_adc[ctrl][axis][CENT], ctrl_lims_adc[ctrl][axis][MIN]);
+            }
             if ((ctrl == HOTRC && hotrc_radio_lost) || (ctrl_pos_adc[axis][FILT] > ctrl_db_adc[axis][BOT] && ctrl_pos_adc[axis][FILT] < ctrl_db_adc[axis][TOP]))
                 ctrl_pos_adc[axis][FILT] = ctrl_lims_adc[ctrl][axis][CENT];  // if radio lost or joy axis is in the deadband, set joy_axis_filt to center value
             else ema_filt (ctrl_pos_adc[axis][RAW], &ctrl_pos_adc[axis][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_vert_filt
