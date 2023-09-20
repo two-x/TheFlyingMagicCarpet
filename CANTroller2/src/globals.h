@@ -122,17 +122,16 @@ bool car_hasnt_moved = false;         // Whether car has moved at all since ente
 bool calmode_request = false;
 bool joy_centered = false;
 bool panic_stop = false;
-bool cruise_trigger_released = false;
-float cruise_ctrl_adjustpoint_adc;  // During cruise adjustments, saves pre-djustment lock value to adjust against
-float cruise_ctrl_extent_adc;       // During cruise adjustments, saves farthest trigger position read
 bool remote_starting = false;
 bool remote_starting_last = false;
-bool flycruise_toggle_request = false;
 bool remote_start_toggle_request = false;
-int32_t flycruise_vert_margin_adc = 25; // Margin of error for determining hard brake value for dropping out of cruise mode
+float cruise_ctrl_extent_adc;       // During cruise adjustments, saves farthest trigger position read
+bool cruise_trigger_released = false;
 bool cruise_gesturing = false;          // Is cruise mode enabled by gesturing?  Otherwise by press of cruise button
 bool cruise_sw_held = false;
 bool cruise_adjusting = false;
+bool flycruise_toggle_request = false;
+int32_t flycruise_vert_margin_adc = 25; // Margin of error for determining hard brake value for dropping out of cruise mode
 Timer gestureFlyTimer; // Used to keep track of time for gesturing for going in and out of fly/cruise modes
 // Timer cruiseSwTimer;  // Was used to require a medium-length hold time pushing cruise button to switch modes
 Timer sleepInactivityTimer(15000000);           // After shutdown how long to wait before powering down to sleep
@@ -334,12 +333,12 @@ float gas_pulse_govern_us = 1502;     // Governor must scale the pulse range pro
 Timer gasServoTimer(500000);          // We expect the servo to find any new position within this time
 float gas_governor_percent = 95;      // Software governor will only allow this percent of full-open throttle (percent 0-100)
 float gas_pulse_cw_min_us = 500;      // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
-float gas_pulse_cw_open_us = 718;    // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
+float gas_pulse_cw_open_us = 718;     // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
 float gas_pulse_ccw_closed_us = 2000; // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
 float gas_pulse_ccw_max_us = 2500;    // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
 float gas_pulse_park_slack_us = 30;   // Gas pulsewidth beyond gas_pulse_ccw_closed_us where to park the servo out of the way so we can drive manually (in us)
-float gas_pulse_cruise_us;            // Gas pulsewidth value fixed by cruise mode when in fixed throttle mode 
-float gas_pulse_adjustpoint_us;             // Used for adjusting cruise fixed throttle level
+float gas_pulse_cruise_us = gas_pulse_ccw_closed_us;  // Gas pulsewidth value fixed by cruise mode when in fixed throttle mode 
+float gas_pulse_adjustpoint_us;       // Used for adjusting cruise fixed throttle level
 
 // tachometer related
 Tachometer tachometer(tach_pulse_pin);

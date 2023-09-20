@@ -221,7 +221,6 @@ private:
             cruise_trigger_released = false;  // After cruise mode started, adjustments can not be made until trigger is initially released.
             gas_pulse_cruise_us = gas_pulse_out_us;
             gas_pulse_adjustpoint_us = gas_pulse_cruise_us;
-            cruise_ctrl_adjustpoint_adc = map (gas_pulse_adjustpoint_us, gas_pulse_ccw_closed_us, gas_pulse_govern_us, (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX]);
             cruise_ctrl_extent_adc = (float)ctrl_lims_adc[ctrl][VERT][CENT];
             cruise_adjusting = false;
             if (ctrl == HOTRC) flycruise_toggle_request = false;

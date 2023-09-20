@@ -28,7 +28,6 @@ RunModeManager runModeManager;
 Display screen;
 ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
 
-
 #ifdef CAP_TOUCH
 TouchScreen ts;
 #else
@@ -144,14 +143,12 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     neostrip.begin();  // start datastream
     neostrip.show();  // Turn off the pixel
     neostrip.setBrightness (neo_brightness_max);  // It truly is incredibly bright
-    
 
     temperature_sensor_manager.setup();  // Onewire bus and temp sensors
     
     throttle.setup(temperature_sensor_manager.get_sensor(sensor_location::ENGINE));
     // Create a new task that runs the update_temperature_sensors function
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);
-
     
     printf ("Init display..\n");
     if (display_enabled) {
@@ -161,7 +158,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         screen.init();
         ts.init();
     }
-
 
     int32_t watchdog_time_ms = Watchdog.enable(2500);  // Start 2.5 sec watchdog
     printf ("Enable watchdog.. timer set to %ld ms\n", watchdog_time_ms);
@@ -176,8 +172,7 @@ void loop() {
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "top");
     // cout << "(top)) spd:" << speedo_filt_mph << " tach:" << tach_filt_rpm;
 
-    // Update inputs.  Fresh sensor data, and filtering.
-    //
+    // Update inputs.  Fresh sensor data, and filtering
 
     // ESP32 "boot" button. generates boot_button_action flags of LONG or SHORT presses which can be handled wherever. Handler must reset boot_button_action = NONE
     if (!read_pin (multibutton_pin)) {
@@ -206,10 +201,8 @@ void loop() {
             basicmodesw = !digitalRead(basicmodesw_pin);   // !value because electrical signal is active low
         } while (basicmodesw != !digitalRead(basicmodesw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
     }
-    // if (ctrl == JOY && (!simulator.get_enabled() || !sim_cruisesw)) cruise_sw = digitalRead (joy_cruise_btn_pin);
 
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
-
 
     encoder.update();  // Read encoder input signals
 
@@ -245,7 +238,6 @@ void loop() {
     // printf("batt_pin: %d, batt_raw: %f, batt_human: %f, batt_filt: %f\n", analogRead(ign_batt_pin), battery_sensor.get_native(), battery_sensor.get_human(), battery_sensor.get_filtered_value());
 
     // Controller handling
-    //
     if (ctrl == JOY) ignition = simulator.simulating(SimOption::ignition) ? ignition : ignition_sense;
     else if (ctrl == HOTRC) {
         hotrc_ch3_update();
@@ -266,12 +258,9 @@ void loop() {
             hotrcPanicTimer.reset();
             hotrc_radio_lost = false;
             if (!ignition_output_enabled) ignition_output_enabled = true; // Ignition stays low until the hotrc is detected here, then output is allowed
-            // set_pin (ignition_pin, OUTPUT);  // do NOT plug in the joystick when using the hotrc to avoid ign contention
         }
         else if (!hotrc_radio_lost && hotrcPanicTimer.expired()) hotrc_radio_lost = true;
-
-        // hotrc_suppress_next_ch3_event = true;  // reject spurious ch3 switch event upon next hotrc poweron
-        // hotrc_suppress_next_ch4_event = true;  // reject spurious ch4 switch event upon next hotrc poweron
+        // hotrc_suppress_next_ch3_event = true;  // reject spurious ch3 switch event upon next hotrc poweron  // hotrc_suppress_next_ch4_event = true;  // reject spurious ch4 switch event upon next hotrc poweron
     }
 
     // Read horz and vert inputs, determine steering pwm output -  - takes 40 us to read. Then, takes 13 us to handle
@@ -287,7 +276,6 @@ void loop() {
         hotrc_horz_pulse_us = hotrcHorzManager.spike_filter (hotrc_horz_pulse_us);
         hotrc_vert_pulse_us = hotrcVertManager.spike_filter (hotrc_vert_pulse_us);
         ema_filt (hotrc_vert_pulse_us, &hotrc_vert_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Used to detect loss of radio
-        // ema_filt (hotrc_horz_pulse_us, &hotrc_horz_pulse_filt_us, ctrl_ema_alpha[HOTRC]);  // Just here for debugging. Do not need filtered horz value
     }
 
     if (simulator.can_simulate(SimOption::joy) && simulator.get_pot_overload() == SimOption::joy) {
@@ -301,49 +289,19 @@ void loop() {
                 ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MAX], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MAX]);
             else ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MIN], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MIN]);  
         }
-        // else if (ctrl == JOY) {
-        //     ctrl_pos_adc[VERT][RAW] = analogRead (joy_vert_pin);  // Read joy vertical
-        //     ctrl_pos_adc[HORZ][RAW] = analogRead (joy_horz_pin);  // Read joy horizontal
-        // }
-
-        // // If controller axis is wildly out of range, disregard reading
-        // if (ctrl_pos_adc[HORZ][RAW] < ctrl_lims_adc[ctrl][HORZ][MIN] - ctrl_lims_adc[ctrl][HORZ][MARGIN] || 
-        //     ctrl_pos_adc[HORZ][RAW] > ctrl_lims_adc[ctrl][HORZ][MAX] + ctrl_lims_adc[ctrl][HORZ][MARGIN]) {
-        //     // Wildly out of range value maybe should set an error flag?  If hotrc, then this happens to HORZ axis when you turn it off.
-        //     ctrl_pos_adc[HORZ][RAW] = ctrl_pos_adc[HORZ][FILT];  //  = ctrl_lims_adc[ctrl][HORZ][CENT];
-        // }
-        // if (ctrl_pos_adc[VERT][RAW] < ctrl_lims_adc[ctrl][VERT][MIN] - ctrl_lims_adc[ctrl][VERT][MARGIN] || 
-        //     ctrl_pos_adc[VERT][RAW] > ctrl_lims_adc[ctrl][VERT][MAX] + ctrl_lims_adc[ctrl][VERT][MARGIN]) {
-        //     ctrl_pos_adc[VERT][RAW] = ctrl_pos_adc[VERT][FILT];  //  = ctrl_lims_adc[ctrl][VERT][CENT];
-        // }
-
-        if (ctrl == HOTRC && hotrc_radio_lost) {
-            ctrl_pos_adc[HORZ][FILT] = ctrl_lims_adc[ctrl][HORZ][CENT];
-            ctrl_pos_adc[VERT][FILT] = ctrl_lims_adc[ctrl][VERT][CENT];
-        }
-        else {
-            ema_filt (ctrl_pos_adc[VERT][RAW], &ctrl_pos_adc[VERT][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_vert_filt
-            ema_filt (ctrl_pos_adc[HORZ][RAW], &ctrl_pos_adc[HORZ][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_horz_filt
-            ctrl_pos_adc[VERT][FILT] = constrain (ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-            ctrl_pos_adc[HORZ][FILT] = constrain (ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
-        }
-
-        if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) {
-            ctrl_pos_adc[VERT][FILT] = ctrl_lims_adc[ctrl][VERT][CENT];  // if joy vert is in the deadband, set joy_vert_filt to center value
-        }
-        if (ctrl_pos_adc[HORZ][FILT] > ctrl_db_adc[HORZ][BOT] && ctrl_pos_adc[HORZ][FILT] < ctrl_db_adc[HORZ][TOP]) {
-            ctrl_pos_adc[HORZ][FILT] = ctrl_lims_adc[ctrl][HORZ][CENT];  // if joy horz is in the deadband, set joy_horz_filt to center value
+        for (int32_t axis=HORZ; axis<=VERT; axis++) {
+            if ((ctrl == HOTRC && hotrc_radio_lost) || (ctrl_pos_adc[axis][FILT] > ctrl_db_adc[axis][BOT] && ctrl_pos_adc[axis][FILT] < ctrl_db_adc[axis][TOP]))
+                ctrl_pos_adc[axis][FILT] = ctrl_lims_adc[ctrl][axis][CENT];  // if radio lost or joy axis is in the deadband, set joy_axis_filt to center value
+            else ema_filt (ctrl_pos_adc[axis][RAW], &ctrl_pos_adc[axis][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_vert_filt
+            ctrl_pos_adc[axis][FILT] = constrain (ctrl_pos_adc[axis][FILT], ctrl_lims_adc[ctrl][axis][MIN], ctrl_lims_adc[ctrl][axis][MAX]);
         }
     }
-
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "joy");  //
     
     runmode = runModeManager.handle_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
-
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "mod");  //
 
     // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
-    //
 
     // Steering - Determine motor output and send to the motor
     if (steerPidTimer.expireset()) {
@@ -356,7 +314,7 @@ void loop() {
         steer_out_percent = constrain (steer_out_percent, steer_left_percent, steer_right_percent);  // Don't be out of range
         
         if (steer_out_percent >= steer_stop_percent)
-             steer_pulse_out_us = map (steer_out_percent, steer_stop_percent, steer_right_percent, steer_pulse_stop_us, steer_pulse_right_us);
+            steer_pulse_out_us = map (steer_out_percent, steer_stop_percent, steer_right_percent, steer_pulse_stop_us, steer_pulse_right_us);
         else steer_pulse_out_us = map (steer_out_percent, steer_stop_percent, steer_left_percent, steer_pulse_stop_us, steer_pulse_left_us);
         
         #ifdef pwm_jaguars
@@ -372,8 +330,10 @@ void loop() {
         if (runmode == SHUTDOWN && !shutdown_incomplete)
             brake_out_percent = brake_stop_percent; // if we're shutdown, stop the motor
         else if (runmode == CAL && cal_joyvert_brkmotor_mode) {
-            if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], brake_stop_percent, brake_retract_percent);
-            else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], brake_extend_percent, brake_stop_percent);
+            if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])
+                brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], brake_stop_percent, brake_retract_percent);
+            else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) 
+                brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], brake_extend_percent, brake_stop_percent);
             else brake_out_percent = (float)brake_stop_percent;
         }
         else if (park_the_motors) {
@@ -393,9 +353,7 @@ void loop() {
 
         // Step 3 : Convert motor percent value to pulse width
         if (brake_out_percent >= brake_stop_percent)
-            // brake_pulse_out_us = map (brake_out_percent, brake_stop_percent, brake_extend_percent, brake_pulse_stop_us, brake_pulse_extend_us);
             brake_pulse_out_us = map (brake_out_percent, brake_stop_percent, brake_retract_percent, brake_pulse_stop_us, brake_pulse_retract_us);
-         //else brake_pulse_out_us = map (brake_out_percent, brake_stop_percent, brake_retract_percent, brake_pulse_stop_us, brake_pulse_retract_us);
         else brake_pulse_out_us = map (brake_out_percent, brake_stop_percent, brake_extend_percent, brake_pulse_stop_us, brake_pulse_extend_us);
 
         // Step 4 : Write to motor
@@ -424,7 +382,8 @@ void loop() {
         if (park_the_motors || (runmode == SHUTDOWN && !shutdown_incomplete))
             gas_pulse_out_us = gas_pulse_ccw_closed_us + gas_pulse_park_slack_us;
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
-            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_ccw_closed_us;  // If in deadband or being pushed down, we want idle
+            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) 
+                gas_pulse_out_us = gas_pulse_ccw_closed_us;  // If in deadband or being pushed down, we want idle
             else gas_pulse_out_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_ccw_closed_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
         }
         else if (runmode == CAL && cal_pot_gasservo_mode)
@@ -433,13 +392,9 @@ void loop() {
             gas_pulse_out_us = gas_pulse_cruise_us;
         else if (runmode != BASIC) {
             tach_target_rpm = throttle.get_target();
-            if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual) { // This isn't really open loop, more like simple proportional control, with output set proportional to target
-                // printf("throttle.get_target: %f, idlespeed: %f, tach_target_rpm: %f, tach_govern_rpm: %f\n", throttle.get_target(), throttle.get_idlespeed(), tach_target_rpm, tach_govern_rpm);
+            if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual)  // This isn't really open loop, more like simple proportional control, with output set proportional to target
                 gas_pulse_out_us = map (throttle.get_target(), throttle.get_idlespeed(), tach_govern_rpm, gas_pulse_ccw_closed_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
-            } else {
-                // if (boot_button) printf("gpid: gpo:%lf tt:%lf tf:%lf\n", gas_pulse_out_us, throttle.get_target(), tachometer.get_filtered_value());
-                gasQPID.Compute();  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
-            }
+            else gasQPID.Compute();  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
         }
         // Step 2 : Constrain if out of range
         if (runmode == BASIC || runmode == SHUTDOWN)
@@ -450,11 +405,10 @@ void loop() {
 
         // Step 3 : Write to servo
         if (runmode != BASIC || park_the_motors) {
-            if (reverse_gas_servo) {
+            if (reverse_gas_servo)
                 gas_servo.writeMicroseconds((int32_t)(1500 - (gas_pulse_out_us - 1500)));
-            } else {
+            else
                 gas_servo.writeMicroseconds ((int32_t)gas_pulse_out_us);  // Write result to servo
-            }
             // if (boot_button) printf (" Gas:%4ld\n", (int32_t)gas_pulse_out_us);
         }
     }
@@ -472,8 +426,7 @@ void loop() {
     // informed trouble code. Much like the engine computer in cars nowadays, which keep track of any detectable failures for you to
     // retreive with an OBD tool. Some checks are below, along with other possible things to check for:
 
-    // Check: if engine is turning when ignition signal is off
-    if (!ignition && !tachometer.engine_stopped()) {
+    if (!ignition && !tachometer.engine_stopped()) {  // Check: if engine is turning when ignition signal is off
         if (diag_ign_error_enabled) { // See if the engine is turning despite the ignition being off
             Serial.println (F("Detected engine rotation in the absense of ignition signal"));  // , tach_filt_rpm, ignition
             diag_ign_error_enabled = false;  // Prevents endless error reporting the same error
@@ -482,7 +435,6 @@ void loop() {
     else diag_ign_error_enabled = true;
 
     // Update warning idiot lights
-    //
     bool check_wheels;
     check_wheels = false;
     TemperatureSensor * temp_fl = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_FL);
@@ -497,7 +449,6 @@ void loop() {
 
     TemperatureSensor * temp_eng = temperature_sensor_manager.get_sensor(sensor_location::ENGINE);
     err_temp_engine = temp_eng != nullptr ? temp_eng->get_temperature() >= temp_lims_f[ENGINE][WARNING] : -999;
-    
     
     //  Check: if any sensor is out of range    
     //  Check: if sensor readings aren't consistent with actuator outputs given. Like, if the brake motor is moving down, then either brake position should be decreasing or pressure increasing (for example)
@@ -515,8 +466,6 @@ void loop() {
     //     C) Mule seems to be accelerating like a Tesla.
     //     D) Car is accelerating yet engine is at idle.
     //  * The control system has nonsensical values in its variables.
-    //
-
 
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");  //
         
@@ -532,7 +481,7 @@ void loop() {
             if (tuning_ctrl == EDIT) tuning_ctrl = SELECT;  // If we were editing a value drop back to select mode
             else if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If we were selecting a variable start editing its value
             else if (ctrl == JOY && !simulator.simulating(SimOption::cruisesw)) flycruise_toggle_request = true;  // Unless tuning, when using old joystick allow use of short encoder press to toggle fly/cruise modes
-            // I envision pushing encoder switch while not tuning could switch desktops from our current analysis interface to a different runtime display 
+            // else ... I envision pushing encoder switch while not tuning could switch desktops from our current analysis interface to a different runtime display 
         }
         else tuning_ctrl = (tuning_ctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
     }
@@ -543,7 +492,6 @@ void loop() {
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "enc");  //
 
     // Tuning : implement effects of changes made by encoder or touchscreen to simulator, dataset_page, selected_value, or tuning_ctrl
-    //
     sim_edit_delta += sim_edit_delta_encoder + sim_edit_delta_touch;  // Allow edits using the encoder or touchscreen
     sim_edit_delta_touch = 0;
     sim_edit_delta_encoder = 0;
@@ -621,8 +569,7 @@ void loop() {
             else if (selected_value == 10) gasQPID.SetKd (gasQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }
         else if (dataset_page == PG_CPID) {
-            if (selected_value == 7) adj_bool (&cruise_fixed_throttle, sim_edit_delta);
-            else if (selected_value == 8) cruiseQPID.SetKp (cruiseQPID.GetKp() + 0.001 * (float)sim_edit_delta);
+            if (selected_value == 8) cruiseQPID.SetKp (cruiseQPID.GetKp() + 0.001 * (float)sim_edit_delta);
             else if (selected_value == 9) cruiseQPID.SetKi (cruiseQPID.GetKi() + 0.001 * (float)sim_edit_delta);
             else if (selected_value == 10) cruiseQPID.SetKd (cruiseQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }
@@ -659,7 +606,6 @@ void loop() {
         hotrc_radio_lost_last = hotrc_radio_lost;
         if (!ignition && ignition_last && !speedometer.car_stopped()) panic_stop = true;
     }
-
     if (panic_stop) ignition = LOW;  // Kill car if panicking
     if ((ignition != ignition_last) /* && ignition_output_enabled */ ) {  // Whenever ignition state changes, assuming we're allowed to write to the pin
         write_pin (ign_out_pin, ignition);  // Turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
@@ -681,43 +627,36 @@ void loop() {
         syspower = syspower_set(syspower);
         syspower_last = syspower;
     }
-    // if (boot_button_action == LONG) {
-    //     screen.tft_reset();
-    //     boot_button_action = NONE;
-    // }
-    // if (!screen.get_reset_finished()) screen.tft_reset();  // If resetting tft, keep calling tft_reset until complete
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
 
-    if (neopixel_pin >= 0) {  // Heartbeat led algorithm
-        if (neo_heartbeat) {
-            neo_heartcolor[N_RED] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0xf800) >> 8;
-            neo_heartcolor[N_GRN] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x7e0) >> 3;
-            neo_heartcolor[N_BLU] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x1f) << 3;
-            int32_t neocolor = neostrip.Color (neo_heartcolor[N_BLU], neo_heartcolor[N_RED], neo_heartcolor[N_GRN]);
-            if (heartbeatTimer.expired()) {
-                heartbeat_pulse = !heartbeat_pulse;
-                if (heartbeat_pulse) neo_brightness = neo_brightness_max;
-                else neoTimer.reset();
-                if (++heartbeat_state >= arraysize (heartbeat_ekg_us)) heartbeat_state -= arraysize (heartbeat_ekg_us);
-                heartbeatTimer.set (heartbeat_ekg_us[heartbeat_state]);
-            }
-            else if (!heartbeat_pulse && neo_brightness) {
-                neo_brightness = (int8_t)((float)neo_brightness_max * (1 - (float)neoTimer.elapsed() / (float)neo_timeout_us));
-                if (neoTimer.expired() || neo_brightness < 1) neo_brightness = 0;
-            }
-            int32_t neocolor_last, neobright_last;
-            if (neocolor != neocolor_last || neo_brightness != neobright_last) {
-                neostrip.setPixelColor (0, neocolor);
-                neostrip.setBrightness (neo_brightness);
-                neostrip.show();
-                neocolor_last = neocolor;
-                neobright_last = neo_brightness;
-            }
+    if (neo_heartbeat) {
+        neo_heartcolor[N_RED] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0xf800) >> 8;
+        neo_heartcolor[N_GRN] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x7e0) >> 3;
+        neo_heartcolor[N_BLU] = (((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]) & 0x1f) << 3;
+        int32_t neocolor = neostrip.Color (neo_heartcolor[N_BLU], neo_heartcolor[N_RED], neo_heartcolor[N_GRN]);
+        if (heartbeatTimer.expired()) {
+            heartbeat_pulse = !heartbeat_pulse;
+            if (heartbeat_pulse) neo_brightness = neo_brightness_max;
+            else neoTimer.reset();
+            if (++heartbeat_state >= arraysize (heartbeat_ekg_us)) heartbeat_state -= arraysize (heartbeat_ekg_us);
+            heartbeatTimer.set (heartbeat_ekg_us[heartbeat_state]);
         }
-        else if (neoTimer.expireset()) {  // Rainbow fade
-            neostrip.setPixelColor (0, colorwheel(++neo_wheelcounter));
+        else if (!heartbeat_pulse && neo_brightness) {
+            neo_brightness = (int8_t)((float)neo_brightness_max * (1 - (float)neoTimer.elapsed() / (float)neo_timeout_us));
+            if (neoTimer.expired() || neo_brightness < 1) neo_brightness = 0;
+        }
+        int32_t neocolor_last, neobright_last;
+        if (neocolor != neocolor_last || neo_brightness != neobright_last) {
+            neostrip.setPixelColor (0, neocolor);
+            neostrip.setBrightness (neo_brightness);
             neostrip.show();
+            neocolor_last = neocolor;
+            neobright_last = neo_brightness;
         }
+    }
+    else if (neoTimer.expireset()) {  // Rainbow fade
+        neostrip.setPixelColor (0, colorwheel(++neo_wheelcounter));
+        neostrip.show();
     }
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "hrt");
     
