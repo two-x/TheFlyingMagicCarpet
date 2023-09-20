@@ -62,8 +62,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (tft_cs_pin, OUTPUT);
     set_pin (multibutton_pin, INPUT_PULLUP);
     set_pin (starter_pin, INPUT_PULLDOWN);
-    set_pin (joy_horz_pin, INPUT);
-    set_pin (joy_vert_pin, INPUT);
+    set_pin (steer_enc_a_pin, INPUT);
+    set_pin (steer_enc_b_pin, INPUT);
     set_pin (touch_irq_pin, INPUT_PULLUP);
     set_pin (ign_out_pin, OUTPUT);
     set_pin (syspower_pin, OUTPUT);  // Then set the put as an output as normal.
@@ -264,11 +264,12 @@ void loop() {
         }
         if (hotrc_vert_pulse_us > hotrc_pulse_failsafe_max_us) {
             hotrcPanicTimer.reset();
-            hotrc_radio_detected = true;
+            hotrc_radio_lost = false;
             if (!ignition_output_enabled) ignition_output_enabled = true; // Ignition stays low until the hotrc is detected here, then output is allowed
             // set_pin (ignition_pin, OUTPUT);  // do NOT plug in the joystick when using the hotrc to avoid ign contention
         }
-        else if (hotrc_radio_detected && hotrcPanicTimer.expired()) hotrc_radio_detected = false;
+        else if (!hotrc_radio_lost && hotrcPanicTimer.expired()) hotrc_radio_lost = true;
+
         // hotrc_suppress_next_ch3_event = true;  // reject spurious ch3 switch event upon next hotrc poweron
         // hotrc_suppress_next_ch4_event = true;  // reject spurious ch4 switch event upon next hotrc poweron
     }
@@ -300,10 +301,10 @@ void loop() {
                 ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MAX], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MAX]);
             else ctrl_pos_adc[VERT][RAW] = map (hotrc_vert_pulse_us, hotrc_pulse_lims_us[VERT][CENT], hotrc_pulse_lims_us[VERT][MIN], ctrl_lims_adc[ctrl][VERT][CENT], ctrl_lims_adc[ctrl][VERT][MIN]);  
         }
-        else if (ctrl == JOY) {
-            ctrl_pos_adc[VERT][RAW] = analogRead (joy_vert_pin);  // Read joy vertical
-            ctrl_pos_adc[HORZ][RAW] = analogRead (joy_horz_pin);  // Read joy horizontal
-        }
+        // else if (ctrl == JOY) {
+        //     ctrl_pos_adc[VERT][RAW] = analogRead (joy_vert_pin);  // Read joy vertical
+        //     ctrl_pos_adc[HORZ][RAW] = analogRead (joy_horz_pin);  // Read joy horizontal
+        // }
 
         // // If controller axis is wildly out of range, disregard reading
         // if (ctrl_pos_adc[HORZ][RAW] < ctrl_lims_adc[ctrl][HORZ][MIN] - ctrl_lims_adc[ctrl][HORZ][MARGIN] || 
@@ -316,7 +317,7 @@ void loop() {
         //     ctrl_pos_adc[VERT][RAW] = ctrl_pos_adc[VERT][FILT];  //  = ctrl_lims_adc[ctrl][VERT][CENT];
         // }
 
-        if (ctrl == HOTRC && !hotrc_radio_detected) {
+        if (ctrl == HOTRC && hotrc_radio_lost) {
             ctrl_pos_adc[HORZ][FILT] = ctrl_lims_adc[ctrl][HORZ][CENT];
             ctrl_pos_adc[VERT][FILT] = ctrl_lims_adc[ctrl][VERT][CENT];
         }
@@ -346,7 +347,7 @@ void loop() {
 
     // Steering - Determine motor output and send to the motor
     if (steerPidTimer.expireset()) {
-        if (runmode == SHUTDOWN && shutdown_complete) steer_out_percent = steer_stop_percent;  // Stop the steering motor if in shutdown mode and shutdown is complete
+        if (runmode == SHUTDOWN && !shutdown_incomplete) steer_out_percent = steer_stop_percent;  // Stop the steering motor if in shutdown mode and shutdown is complete
         else if (ctrl_pos_adc[HORZ][FILT] >= ctrl_db_adc[HORZ][TOP])  // If above the top edge of the deadband, turning right
             steer_out_percent = map ((float)ctrl_pos_adc[HORZ][FILT], (float)ctrl_db_adc[HORZ][TOP], (float)ctrl_lims_adc[ctrl][HORZ][MAX], steer_stop_percent, steer_safe (steer_right_percent));  // Figure out the steering setpoint if joy to the right of deadband
         else if (ctrl_pos_adc[HORZ][FILT] <= ctrl_db_adc[HORZ][BOT])  // If below the bottom edge of the deadband, turning left
@@ -368,7 +369,7 @@ void loop() {
     if (brakePidTimer.expireset()) {
 
         // Step 1 : Determine motor percent value
-        if (runmode == SHUTDOWN && shutdown_complete)
+        if (runmode == SHUTDOWN && !shutdown_incomplete)
             brake_out_percent = brake_stop_percent; // if we're shutdown, stop the motor
         else if (runmode == CAL && cal_joyvert_brkmotor) {
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], brake_stop_percent, brake_retract_percent);
@@ -420,7 +421,7 @@ void loop() {
     // Gas - Update servo output. Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
     if (gasPidTimer.expireset()) {
         // Step 1 : Determine servo pulse width value
-        if (park_the_motors || (runmode == SHUTDOWN && shutdown_complete))
+        if (park_the_motors || (runmode == SHUTDOWN && !shutdown_incomplete))
             gas_pulse_out_us = gas_pulse_ccw_closed_us + gas_pulse_park_slack_us;
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) gas_pulse_out_us = gas_pulse_ccw_closed_us;  // If in deadband or being pushed down, we want idle
@@ -648,14 +649,14 @@ void loop() {
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tun");  //
     // Ignition & Panic stop logic and Update output signals
     if (!speedometer.car_stopped()) { // if we lose connection to the hotrc while driving, or the joystick ignition button was turned off, panic
-        if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && !hotrc_radio_detected) panic_stop = true;  // panic_stop could also have been initiated by the user button   && hotrc_radio_detected_last 
+        if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && hotrc_radio_lost) panic_stop = true;  // panic_stop could also have been initiated by the user button   && !hotrc_radio_lost_last 
         else if (ctrl == JOY && !ignition_sense) panic_stop = true;
         // else if (ctrl == JOY && !(simulator.get_enabled() && sim_joy) && !ignition && ignition_last) panic_stop = true;
     }
     else if (panic_stop) panic_stop = false;  // Cancel panic if car is stopped
     if (ctrl == HOTRC) {  // if ignition was turned off on HotRC, panic
         // When using joystick, ignition is controlled with button and we read it. With Hotrc, we control ignition
-        hotrc_radio_detected_last = hotrc_radio_detected;
+        hotrc_radio_lost_last = hotrc_radio_lost;
         if (!ignition && ignition_last && !speedometer.car_stopped()) panic_stop = true;
     }
 
@@ -677,7 +678,7 @@ void loop() {
         remote_start_toggle_request = false;
     }
     if (syspower != syspower_last) {
-        syspower = syspower_set (syspower);
+        syspower = syspower_set(syspower);
         syspower_last = syspower;
     }
     // if (boot_button_action == LONG) {

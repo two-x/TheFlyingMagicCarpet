@@ -58,11 +58,11 @@ private:
     void cleanup_state_variables()  {
         if (_oldMode == SHUTDOWN) {
             shutdown_color = colorcard[SHUTDOWN];
-            shutdown_complete = false;
+            shutdown_incomplete = false;
         }
         else if (_oldMode == STALL) remote_starting = false;
         else if (_oldMode == HOLD) joy_centered = false;
-        else if (_oldMode == FLY) car_has_moved = false;
+        else if (_oldMode == FLY) car_hasnt_moved = false;
         else if (_oldMode == CRUISE) cruise_adjusting = false;
         else if (_oldMode == CAL) {
             cal_pot_gas_ready = false;
@@ -82,7 +82,7 @@ private:
     void handleShutdownMode() { // In shutdown mode we stop the car if it's moving then park the motors.
         if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
             throttle.goto_idle();  //  Release the throttle 
-            shutdown_complete = false;
+            shutdown_incomplete = true;
             shutdown_color = LPNK;
             disp_runmode_dirty = true;
             calmode_request = false;
@@ -96,7 +96,7 @@ private:
         }
         // else if (ignition && engine_stopped()) updateMode(STALL);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
         else if ((speedometer.car_stopped() || allow_rolling_start || nonpanic_autostop_disabled) && ignition && !panic_stop && !tachometer.engine_stopped()) updateMode(HOLD);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
-        if (!shutdown_complete) {  // If we haven't yet stopped the car and then released the brakes and gas all the way
+        if (shutdown_incomplete) {  // If we haven't yet stopped the car and then released the brakes and gas all the way
             if (speedometer.car_stopped() || stopcarTimer.expired() || nonpanic_autostop_disabled) {  // If car has stopped, or timeout expires, then release the brake
                 if (shutdown_color == LPNK) {  // On first time through here
                     park_the_motors = true;  // Flags the motor parking to happen, only once
@@ -106,7 +106,7 @@ private:
                     disp_runmode_dirty = true;
                 }
                 else if (!park_the_motors) {  // When done parking the motors we can finish shutting down
-                    shutdown_complete = true;
+                    shutdown_incomplete = false;
                     shutdown_color = colorcard[SHUTDOWN];
                     disp_runmode_dirty = true;
                     sleepInactivityTimer.reset();
@@ -151,23 +151,23 @@ private:
             if (!speedometer.car_stopped() && !stopcarTimer.expired() && !nonpanic_autostop_disabled) pressure_target_psi = min (pressure_target_psi + pressure_hold_increment_psi, pressure_sensor.get_max_human());  // If the car is still moving, push harder
         }
         if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
-        else if (joy_centered && (ctrl == JOY || hotrc_radio_detected)) updateMode(FLY); // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
+        else if (joy_centered && (ctrl == JOY || !hotrc_radio_lost)) updateMode(FLY); // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
     }
 
     void handleFlyMode() {
         if (we_just_switched_modes) {
             gesture_progress = 0;
             gestureFlyTimer.set (gesture_flytimeout_us); // Initialize gesture timer to already-expired value
-            car_has_moved = !speedometer.car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
+            car_hasnt_moved = speedometer.car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
             if (ctrl == HOTRC) flycruise_toggle_request = false;
             else if (ctrl == JOY && share_boot_joycruise_buttons && boot_button_action == LONG) boot_button_action = NONE;
         }
-        if (!car_has_moved) {
+        if (car_hasnt_moved) {
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) updateMode(HOLD);  // Must keep pulling trigger until car moves, or it drops back to hold mode
-            else if (!speedometer.car_stopped()) car_has_moved = true;  // Once car moves, we're allowed to stay in fly mode
+            else if (!speedometer.car_stopped()) car_hasnt_moved = false;  // Once car moves, we're allowed to stay in fly mode
         }
         else if (speedometer.car_stopped()) updateMode(HOLD);  // Go to Hold Mode if we have come to a stop after moving  // && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT]
-        if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && !hotrc_radio_detected) updateMode(HOLD);  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
+        if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && hotrc_radio_lost) updateMode(HOLD);  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
         else {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])  {  // If we are trying to accelerate, scale joystick value to determine gas setpoint
                 throttle.set_target (map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], throttle.get_idlespeed(), tach_govern_rpm));

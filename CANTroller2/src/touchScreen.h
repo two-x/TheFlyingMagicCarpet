@@ -127,7 +127,7 @@ public:
                     touch_longpress_valid = false;
                 }
             }
-            if (tcol == 2 && trow == 0 && (runmode == CAL || (runmode == SHUTDOWN && shutdown_complete))) {
+            if (tcol == 2 && trow == 0 && (runmode == CAL || (runmode == SHUTDOWN && !shutdown_incomplete))) {
                 if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
                     calmode_request = true;
                     touch_longpress_valid = false;
