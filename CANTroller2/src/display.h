@@ -99,8 +99,8 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
     { "Pres Tgt", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", "BrakeMot", "      - ", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
     { "Tach Tgt", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", "      - ", "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
     { "SpeedTgt", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "Tach Tgt", "FixThrot", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
-    { " Ambient", " Coolant", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", "      - ", "      - ", " Sim Ign", "Sim Basc", "Sim Strt", },  // PG_TEMP
-    { "Sim SPwr", "Sim Ctrl", "Sim Pres", "SimBkPos", "Sim Tach", "SimAirFl", " Sim MAP", "SimSpeed", "SimW/Pot", " Cal Brk", " Cal Gas", },  // PG_SIM
+    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", "      - ", "      - ", "SimW/Pot", " Cal Brk", " Cal Gas", },  // PG_TEMP
+    { " Sim Joy", "SimSysPw", "Sim Pres", "SimBkPos", "Sim Tach", "SimAirFl", " Sim MAP", "SimSpeed", " Sim Ign", "SimBasic", "SimStart", },  // PG_SIM
 };
 
 #define DEGR_F "\x09""F  "
@@ -745,23 +745,22 @@ class Display {
                     draw_temperature(sensor_location::WHEEL_RR, 14);
                     draw_eraseval(15);
                     draw_eraseval(16);
-                    draw_truth(17, simulator.can_simulate(SimOption::ignition), 0);
-                    draw_truth(18, simulator.can_simulate(SimOption::basicsw), 0);
-                    draw_truth(19, simulator.can_simulate(SimOption::starter), 0);
+                    draw_asciiname(17, sensorcard[static_cast<uint8_t>(simulator.get_pot_overload())]);
+                    draw_truth(18, cal_joyvert_brkmotor, 0);
+                    draw_truth(19, cal_pot_gasservo, 0);
                 }
                 else if (dataset_page == PG_SIM) {
-                    draw_eraseval(9);
-                    draw_truth(9, simulator.can_simulate(SimOption::syspower), 0);
-                    draw_truth(10, simulator.can_simulate(SimOption::joy), 0);
+                    draw_truth(9, simulator.can_simulate(SimOption::joy), 0);
+                    draw_truth(10, simulator.can_simulate(SimOption::syspower), 0);
                     draw_truth(11, simulator.can_simulate(SimOption::pressure), 0);
                     draw_truth(12, simulator.can_simulate(SimOption::brkpos), 0);
                     draw_truth(13, simulator.can_simulate(SimOption::tach), 0);
                     draw_truth(14, simulator.can_simulate(SimOption::airflow), 0);
                     draw_truth(15, simulator.can_simulate(SimOption::mapsens), 0);
                     draw_truth(16, simulator.can_simulate(SimOption::speedo), 0);
-                    draw_asciiname(17, sensorcard[static_cast<uint8_t>(simulator.get_pot_overload())]);
-                    draw_truth(18, cal_joyvert_brkmotor, 0);
-                    draw_truth(19, cal_pot_gasservo, 0);
+                    draw_truth(17, simulator.can_simulate(SimOption::ignition), 0);
+                    draw_truth(18, simulator.can_simulate(SimOption::basicsw), 0);
+                    draw_truth(19, simulator.can_simulate(SimOption::starter), 0);
                 }
                 draw_bool((runmode == CAL), 2);
                 draw_bool((runmode == BASIC), 3);
