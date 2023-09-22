@@ -93,11 +93,11 @@ int32_t tuning_first_editable_line[disp_tuning_lines] = { 9, 4, 5, 3, 4, 8, 7, 8
 
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
     { "BrakePos", " Airflow", "     MAP", "MuleBatt", "     Pot", " Starter", "      - ", "      - ", "      - ", "Governor", "SteerSaf", },  // PG_RUN
-    { "JoyH Raw", "JoyV Raw", "HRC Horz", "HRC Vert", "HFailsaf", "Horz Min", "Horz Max", " Horz DB", "Vert Min", "Vert Max", " Vert DB", },  // PG_JOY
+    { "HRC Horz", "HRC Vert", "      - ", "      - ", "HFailsaf", "Horz Min", "Horz Max", " Horz DB", "Vert Min", "Vert Max", " Vert DB", },  // PG_JOY
     { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", "SpeedIdl", "SpeedRed", "BkPos0Pt", },  // PG_CAR
     { "BrakePWM", "SteerPWM", "      - ", "Steer Lt", "SteerStp", "Steer Rt", "BrakExtd", "BrakStop", "BrakRetr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
-    { "Pres Tgt", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", "BrakeMot", "      - ", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
+    { "Pres Tgt", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", "BrakeMot", "BrakPres", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
     { "Tach Tgt", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", "      - ", "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
     { "SpeedTgt", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "Tach Tgt", "ThrotSet", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", "      - ", "      - ", "SimW/Pot", " Cal Brk", " Cal Gas", },  // PG_TEMP
@@ -107,11 +107,11 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
 #define DEGR_F "\x09""F  "
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "in  ", "mph ", "psi ", "V   ", "%   ", "    ", "    ", "    ", "    ", "%   ", "%   " },  // PG_RUN
-    { "adc ", "adc ", "us  ", "us  ", "us  ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
+    { "us  ", "us  ", "    ", "    ", "us  ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
     { "adc ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%   ", "mph ", "mph ", "mph ", "in  " },  // PG_CAR
     { "us  ", "us  ", "    ", "    ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PG_PWMS
     { "    ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", DEGR_F, DEGR_F, "rpms", "    " },  // PG_IDLE
-    { "psi ", "psi ", "%   ", "%   ", "%   ", "%   ", "us  ", "    ", "    ", "Hz  ", "s   " },  // PG_BPID
+    { "psi ", "psi ", "%   ", "%   ", "%   ", "%   ", "us  ", "adc ", "    ", "Hz  ", "s   " },  // PG_BPID
     { "rpm ", "rpm ", "us  ", "us  ", "us  ", "us  ", "    ", "    ", "    ", "Hz  ", "s   " },  // PG_GPID
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "us  ", "    ", "Hz  ", "s   " },  // PG_CPID
     { DEGR_F, DEGR_F, DEGR_F, DEGR_F, DEGR_F, DEGR_F, "    ", "    ", "    ", "    ", "    " },  // PG_TEMP
@@ -126,7 +126,7 @@ char simgrid[4][3][5] = {
 
 bool* idiotlights[11] = { &starter, &shutdown_incomplete, simulator.get_enabled_ptr(), &hotrc_radio_lost,
     &panic_stop, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &err_temp_engine, &err_temp_wheel, &boot_button};  // , &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
-uint16_t idiotcolors[arraysize(idiotlights)] = { GRN, ORG, PNK, YEL, RED, TEAL, CYN, LPUR, RED, RED, LPNK };  // LYEL, YEL };
+uint16_t idiotcolors[arraysize(idiotlights)] = { GRN, ORG, PNK, YEL, RED, TEAL, CYN, LPUR, RED, RED, PNK };  // LYEL, YEL };
 char idiotchars[arraysize(idiotlights)][3] = { "St", "SI", "Sm", "RC", "Pn", "Pk", "Aj", "CM", "Eg", "Wh", "BB" };  // "c3", "c4" };
 bool idiotlasts[arraysize(idiotlights)];
 
@@ -633,10 +633,10 @@ class Display {
                     draw_dynamic(19, steer_safe_percent, 0.0, 100.0);
                 }
                 else if (dataset_page == PG_JOY) {
-                    draw_dynamic(9, ctrl_pos_adc[HORZ][RAW], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
-                    draw_dynamic(10, ctrl_pos_adc[VERT][RAW], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
-                    draw_dynamic(11, hotrc_pulse_us[HORZ], hotrc_pulse_lims_us[HORZ][MIN], hotrc_pulse_lims_us[HORZ][MAX]);  // Programmed centerpoint is 230 adc
-                    draw_dynamic(12, hotrc_pulse_us[VERT], hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);  // Programmed centerpoint is 230 adc
+                    draw_dynamic(9, hotrc_pulse_us[HORZ], hotrc_pulse_lims_us[HORZ][MIN], hotrc_pulse_lims_us[HORZ][MAX]);  // Programmed centerpoint is 230 adc
+                    draw_dynamic(10, hotrc_pulse_us[VERT], hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);  // Programmed centerpoint is 230 adc
+                    draw_eraseval(11);
+                    draw_eraseval(12);
                     draw_dynamic(13, hotrc_pulse_failsafe_max_us, hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);
                     draw_dynamic(14, ctrl_lims_adc[ctrl][HORZ][MIN], 0, ctrl_lims_adc[ctrl][HORZ][MAX]);
                     draw_dynamic(15, ctrl_lims_adc[ctrl][HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][MIN], adcrange_adc);
@@ -662,12 +662,6 @@ class Display {
                     draw_dynamic(9, brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
                     draw_dynamic(10, steer_pulse_out_us, steer_pulse_left_us, steer_pulse_right_us);
                     draw_eraseval(11);
-                    // draw_dynamic(12, steer_left_percent, steer_stop_percent, steer_right_max_percent);
-                    // draw_dynamic(13, steer_stop_percent, steer_left_percent, steer_right_percent);
-                    // draw_dynamic(14, steer_right_percent, steer_left_min_percent, steer_stop_percent);
-                    // draw_dynamic(15, brake_extend_percent, brake_stop_percent, brake_retract_max_percent);
-                    // draw_dynamic(16, brake_stop_percent, brake_retract_percent, brake_extend_percent);
-                    // draw_dynamic(17, brake_retract_percent, brake_extend_min_percent, brake_stop_percent);
                     draw_dynamic(12, steer_pulse_left_us, steer_pulse_left_min_us, steer_pulse_stop_us);
                     draw_dynamic(13, steer_pulse_stop_us, steer_pulse_left_us, steer_pulse_right_us);
                     draw_dynamic(14, steer_pulse_right_us, steer_pulse_stop_us, steer_pulse_right_max_us);
@@ -678,15 +672,10 @@ class Display {
                     draw_dynamic(19, gas_pulse_cw_open_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
                 }
                 else if (dataset_page == PG_IDLE) {
-                    // draw_dynamic(10, tach_idle_rpm, 0.0, tach_redline_rpm);
-                    // draw_dynamic(11, tach_idle_hot_min_rpm, 0.0, tach_redline_rpm); 
-                    // draw_dynamic(12, tach_idle_cold_max_rpm, 0.0, tach_redline_rpm); 
-                    // draw_dynamic(13, tach_redline_rpm, 0.0, tach_max_rpm);
                     draw_asciiname(9, idlestatecard[throttle.get_targetstate()]);
                     draw_dynamic(10, tach_target_rpm, 0.0, tachometer.get_redline_rpm());
                     draw_dynamic(11, throttle.get_stallpoint(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
                     draw_dynamic(12, throttle.get_idlespeed(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);  // throttle.get_idlehot(), throttle.get_idlecold());
-                    // draw_dynamic(12, temps_f[ENGINE], temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
                     draw_dynamic(13, throttle.get_idlehigh(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
                     draw_dynamic(14, throttle.get_idlecold(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
                     draw_dynamic(15, throttle.get_idlehot(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
@@ -704,7 +693,7 @@ class Display {
                     draw_dynamic(13, brakeQPID.GetDterm(), -drange, drange);
                     draw_dynamic(14, brakeQPID.GetOutputSum(), -brakeQPID.GetOutputRange(), brakeQPID.GetOutputRange());  // brake_spid_speedo_delta_adc, -range, range);
                     draw_dynamic(15, brake_pulse_out_us, brake_pulse_extend_us, brake_pulse_retract_us);
-                    draw_eraseval(16);
+                    draw_dynamic(16, pressure_sensor.get_native(), pressure_sensor.get_min_native(), pressure_sensor.get_max_native());
                     draw_dynamic(17, brakeQPID.GetKp(), 0.0, 2.0);
                     draw_dynamic(18, brakeQPID.GetKi(), 0.0, 2.0);
                     draw_dynamic(19, brakeQPID.GetKd(), 0.0, 2.0);

@@ -3,7 +3,6 @@
 #define GLOBALS_H
 // #include <SdFat.h>  // SD card & FAT filesystem library
 #include <ESP32Servo.h>        // Makes PWM output to control motors (for rudimentary control of our gas and steering)
-#include <Adafruit_NeoPixel.h> // Plan to allow control of neopixel LED onboard the esp32
 #include "temp.h"
 #include <Wire.h>
 #include <SparkFun_MicroPressure.h>
@@ -126,6 +125,7 @@ bool remote_starting = false;
 bool remote_starting_last = false;
 bool remote_start_toggle_request = false;
 float cruise_ctrl_extent_adc;       // During cruise adjustments, saves farthest trigger position read
+float cruise_adjust_scaling_percent = 40;  // What ratio of full throttle range is the max available with each adjustment event?
 bool cruise_trigger_released = false;
 bool cruise_gesturing = false;          // Is cruise mode enabled by gesturing?  Otherwise by press of cruise button
 bool cruise_sw_held = false;
@@ -174,22 +174,6 @@ int32_t loopindex = 0;
 bool booted = false;
 bool diag_ign_error_enabled = true;
 
-// neopixel and heartbeat related
-uint8_t neo_wheelcounter = 0;
-uint8_t neo_brightness_max = 15;
-uint32_t neo_timeout_us = 150000;
-Timer neoTimer(neo_timeout_us);
-bool neo_heartbeat = (neopixel_pin >= 0);
-uint8_t neo_brightness = neo_brightness_max; // brightness during fadeouts
-enum neo_colors { N_RED, N_GRN, N_BLU };
-uint8_t neo_heartcolor[3] = {0xff, 0xff, 0xff};
-Timer heartbeatTimer(1000000);
-int32_t heartbeat_state = 0;
-int32_t heartbeat_level = 0;
-uint32_t heartbeat_ekg_us[4] = {170000, 150000, 530000, 1100000};
-int32_t heartbeat_pulse = 255;
-static Adafruit_NeoPixel neostrip(1, neopixel_pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
-
 // pushbutton related
 enum sw_presses { NONE, SHORT, LONG }; // used by encoder sw and button algorithms
 bool boot_button_last = 0;
@@ -236,7 +220,6 @@ enum ctrl_axes { HORZ, VERT, CH3, CH4 };
 enum ctrl_thresh { MIN, CENT, MAX, DB };
 enum ctrl_edge { BOT, TOP };
 enum ctrl_vals { RAW, FILT };
-enum hotrc_sources { MICROS, ESP_RMT };
 float ctrl_ema_alpha[2] = {0.2, 0.1};         // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
 int32_t ctrl_lims_adc[2][2][5] =               //   values as adc counts
     {{{0, adcmidscale_adc, adcrange_adc, 62, 100},  // [HOTRC][HORZ][MIN/CENT/MAX/DB/MARGIN]  // MARGIN is how much out of range the reading must be for axis to be completely ignored
@@ -246,7 +229,6 @@ int32_t ctrl_lims_adc[2][2][5] =               //   values as adc counts
 int32_t ctrl_db_adc[2][2];                     // [HORZ/VERT] [BOT/TOP] - to store the top and bottom deadband values for each axis of selected controller
 int32_t ctrl_pos_adc[2][2];                    // [HORZ/VERT] [RAW/FILT] - holds most current controller values
 bool ctrl = HOTRC;                             // Use HotRC controller to drive instead of joystick?
-int32_t hotrc_source = ESP_RMT;
 int32_t hotrc_pulse_lims_us[4][3] = {{970 - 1, 1470 - 5, 1970 - 8},   // [HORZ] [MIN/CENT/MAX]
                                      {1080 - 1, 1580 - 5, 2080 - 8},  // [VERT] [MIN/CENT/MAX]
                                      {1200 - 1, 1500 - 5, 1800 - 8},  // [CH3] [MIN/CENT/MAX]
@@ -317,6 +299,7 @@ float brake_pulse_stop_us = 1500;       // Brake pulsewidth corresponding to cen
 float brake_pulse_retract_us = 2330;     // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
 float brake_pulse_retract_max_us = 2330; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
 float brake_pulse_out_us = brake_pulse_stop_us;               // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
+// float brake_motor_govern_percent = 80;   // Artificial limit on how fully the brake motor is powered. Ie what percent of 12V (the spec maximum) shall we consider full power?
 
 // brake actuator position related
 BrakePositionSensor brkpos_sensor(brake_pos_pin);
@@ -431,16 +414,6 @@ void hotrc_ch4_update(void) {                                                   
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
 
-uint32_t colorwheel(uint8_t WheelPos) {
-    WheelPos = 255 - WheelPos;
-    if (WheelPos < 85) return neostrip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
-    if (WheelPos < 170) {
-        WheelPos -= 85;
-        return neostrip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
-    }
-    WheelPos -= 170;
-    return neostrip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
-}
 void calc_ctrl_lims(void) {
     ctrl_db_adc[VERT][BOT] = ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][DB] / 2; // Lower threshold of vert joy deadband (ADC count 0-4095)
     ctrl_db_adc[VERT][TOP] = ctrl_lims_adc[ctrl][VERT][CENT] + ctrl_lims_adc[ctrl][VERT][DB] / 2; // Upper threshold of vert joy deadband (ADC count 0-4095)

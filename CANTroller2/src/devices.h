@@ -1044,7 +1044,7 @@ class OutToggle : public Toggle {
 
 // This enum class represent the components which can be simulated (SimOption). It's a uint8_t type under the covers, so it can be used as an index
 typedef uint8_t opt_t;
-enum class SimOption : opt_t { none=0, pressure, brkpos, tach, airflow, mapsens, speedo, coolant, joy, battery, basicsw, cruisesw, syspower, starter, ignition };
+enum class SimOption : opt_t { none=0, pressure, brkpos, tach, airflow, mapsens, speedo, engtemp, joy, battery, basicsw, cruisesw, syspower, starter, ignition };
 
 // Simulator manages the ControllerMode handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
 // NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use ControllerModes,
@@ -1075,7 +1075,7 @@ class Simulator {
         static constexpr bool initial_sim_airflow = false;
         static constexpr bool initial_sim_mapsens = false;
         static constexpr bool initial_sim_battery = false;
-        static constexpr bool initial_sim_coolant = false;
+        static constexpr bool initial_sim_engtemp = false;
 
         Simulator(Potentiometer& pot_arg, SimOption overload_arg=SimOption::none) : _pot(pot_arg) {
             // set initial simulatability status for all components
@@ -1092,7 +1092,7 @@ class Simulator {
             set_can_simulate(SimOption::airflow, initial_sim_airflow);
             set_can_simulate(SimOption::mapsens, initial_sim_mapsens);
             set_can_simulate(SimOption::battery, initial_sim_battery);
-            set_can_simulate(SimOption::coolant, initial_sim_coolant);
+            set_can_simulate(SimOption::engtemp, initial_sim_engtemp);
             set_pot_overload(overload_arg); // set initial pot overload
         }
 
@@ -1240,4 +1240,15 @@ class Simulator {
         SimOption get_pot_overload() { return _pot_overload; }
 };
 
+class Brake {  // This class wraps all brake activity to provide monitoring functions and coordination
+    // Todo: Write a duty cycle monitor which uses historical motor and pressure readings to estimate motor heat accumulation
+    //       Ultimately the motor should not be allowed to average over 25% of full power over any period of time less than what
+    //       it takes for it to cool.
+    // Todo: Detect system faults, such as:
+    //       1. The brake chain is not connected (evidenced by change in brake position without expected pressure changes)
+    //       2. Obstruction, motor failure, or inaccurate position. Evidenced by motor instructed to move but position not changing even when pressure is low.
+    //       3. Brake hydraulics failure or inaccurate pressure. Evidenced by normal positional change not causing expected increase in pressure.
+    // Todo: Startup brake press to detect faults and validity of parameters before starting normal operation
+    // Todo: Brake motor temperature sensor? 
+};
 #endif  // CLASSES_H
