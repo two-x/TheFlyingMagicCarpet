@@ -3,6 +3,7 @@
 
 #include "utils.h"
 #include "FunctionalInterrupt.h"
+#include <Adafruit_NeoPixel.h> // Plan to allow control of neopixel LED onboard the esp32
 
 // Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class Potentiometer {
@@ -164,6 +165,83 @@ class Encoder {
             }
             return d;
         }
+};
+
+class neopixelStrip {
+  protected:
+    uint8_t neo_wheelcounter = 0;
+    uint8_t neo_brightness_max = 15;
+    uint32_t neo_timeout_us = 150000;
+    uint32_t neo_heartbeat_timeout_us = 1000000;
+    Timer neoTimer, heartbeatTimer;
+    bool neo_heartbeat = false;
+    uint8_t neo_brightness = neo_brightness_max; // brightness during fadeouts
+    enum neo_colors { N_RED, N_GRN, N_BLU };
+    uint8_t neo_heartcolor[3] = {0xff, 0xff, 0xff};
+    int32_t heartbeat_state = 0;
+    int32_t heartbeat_level = 0;
+    uint32_t heartbeat_ekg_us[4] = {170000, 150000, 530000, 1100000};
+    int32_t heartbeat_pulse = 255;
+    Adafruit_NeoPixel* neostrip;
+  public:
+    neopixelStrip(int32_t pin=-1, int32_t length=1) {
+        neostrip = new Adafruit_NeoPixel(length, pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
+        neoTimer.set((int64_t)neo_timeout_us);
+        heartbeatTimer.set((int64_t)neo_heartbeat_timeout_us);
+    }
+    ~neopixelStrip() { delete neostrip; }
+
+    void init() {
+        neostrip->begin();  // start datastream
+        neostrip->show();  // Turn off the pixel
+        neostrip->setBrightness (neo_brightness_max);  // It truly is incredibly bright
+    }
+    void heartbeat(bool onoroff) {
+        neo_heartbeat = onoroff;  // Start heart beating
+    }
+    uint32_t colorwheel(uint8_t WheelPos) {
+        WheelPos = 255 - WheelPos;
+        if (WheelPos < 85) return neostrip->Color(255 - WheelPos * 3, 0, WheelPos * 3);
+        if (WheelPos < 170) {
+            WheelPos -= 85;
+            return neostrip->Color(0, WheelPos * 3, 255 - WheelPos * 3);
+        }
+        WheelPos -= 170;
+        return neostrip->Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+    }
+    void heartbeat_update(uint16_t runmode_color) {
+        if (neo_heartbeat) {
+            neo_heartcolor[N_RED] = (runmode_color & 0xf800) >> 8;
+            neo_heartcolor[N_GRN] = (runmode_color & 0x7e0) >> 3;
+            neo_heartcolor[N_BLU] = (runmode_color & 0x1f) << 3;
+            int32_t neocolor = neostrip->Color (neo_heartcolor[N_BLU], neo_heartcolor[N_RED], neo_heartcolor[N_GRN]);
+            if (heartbeatTimer.expired()) {
+                heartbeat_pulse = !heartbeat_pulse;
+                if (heartbeat_pulse) neo_brightness = neo_brightness_max;
+                else neoTimer.reset();
+                if (++heartbeat_state >= arraysize (heartbeat_ekg_us)) heartbeat_state -= arraysize (heartbeat_ekg_us);
+                heartbeatTimer.set (heartbeat_ekg_us[heartbeat_state]);
+            }
+            else if (!heartbeat_pulse && neo_brightness) {
+                neo_brightness = (int8_t)((float)neo_brightness_max * (1 - (float)neoTimer.elapsed() / (float)neo_timeout_us));
+                if (neoTimer.expired() || neo_brightness < 1) neo_brightness = 0;
+            }
+            int32_t neocolor_last, neobright_last;
+            if (neocolor != neocolor_last || neo_brightness != neobright_last) {
+                neostrip->setPixelColor (0, neocolor);
+                neostrip->setBrightness (neo_brightness);
+                neostrip->show();
+                neocolor_last = neocolor;
+                neobright_last = neo_brightness;
+            }
+        }
+    }
+    void colorfade_update() {
+        if (neoTimer.expireset()) {  // Rainbow fade
+            neostrip->setPixelColor (0, colorwheel(++neo_wheelcounter));
+            neostrip->show();
+        }
+    }
 };
 
 #endif

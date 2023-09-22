@@ -1240,4 +1240,15 @@ class Simulator {
         SimOption get_pot_overload() { return _pot_overload; }
 };
 
+class Brake {  // This class wraps all brake activity to provide monitoring functions and coordination
+    // Todo: Write a duty cycle monitor which uses historical motor and pressure readings to estimate motor heat accumulation
+    //       Ultimately the motor should not be allowed to average over 25% of full power over any period of time less than what
+    //       it takes for it to cool.
+    // Todo: Detect system faults, such as:
+    //       1. The brake chain is not connected (evidenced by change in brake position without expected pressure changes)
+    //       2. Obstruction, motor failure, or inaccurate position. Evidenced by motor instructed to move but position not changing even when pressure is low.
+    //       3. Brake hydraulics failure or inaccurate pressure. Evidenced by normal positional change not causing expected increase in pressure.
+    // Todo: Startup brake press to detect faults and validity of parameters before starting normal operation
+    // Todo: Brake motor temperature sensor? 
+};
 #endif  // CLASSES_H
