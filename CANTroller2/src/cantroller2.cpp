@@ -253,19 +253,12 @@ void loop() {
 
     // Read horz and vert inputs, determine steering pwm output -  - takes 40 us to read. Then, takes 13 us to handle
     if (ctrl != JOY) {
-        if (hotrc_source == ESP_RMT) {  // Read RMT pulse widths
-            hotrc_pulse_us[HORZ] = (int32_t)hotrc_horz.readPulseWidth();  
-            hotrc_pulse_us[VERT] = (int32_t)hotrc_vert.readPulseWidth();
-        }
-        else {
-            hotrc_pulse_us[HORZ] = (int32_t)hotrc_horz_pulse_64_us;
-            hotrc_pulse_us[VERT] = (int32_t)hotrc_vert_pulse_64_us;
-        }
+        hotrc_pulse_us[HORZ] = (int32_t)hotrc_horz.readPulseWidth();  
+        hotrc_pulse_us[VERT] = (int32_t)hotrc_vert.readPulseWidth();
         hotrc_pulse_us[HORZ] = hotrcHorzManager.spike_filter (hotrc_pulse_us[HORZ]);
         hotrc_pulse_us[VERT] = hotrcVertManager.spike_filter (hotrc_pulse_us[VERT]);
         ema_filt (hotrc_pulse_us[VERT], &hotrc_pulse_vert_filt_us, ctrl_ema_alpha[HOTRC]);  // Used to detect loss of radio
     }
-
     if (simulator.can_simulate(SimOption::joy) && simulator.get_pot_overload() == SimOption::joy)
         ctrl_pos_adc[HORZ][FILT] = pot.mapToRange(steer_pulse_left_us, steer_pulse_right_us);
     else if (!simulator.simulating(SimOption::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
