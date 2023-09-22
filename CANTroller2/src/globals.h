@@ -467,7 +467,7 @@ void update_temperature_sensors(void *parameter) {
     while (true) {
         if (take_temperatures)
             temperature_sensor_manager.update_temperatures();
-        if (simulator.can_simulate(SimOption::coolant) && simulator.get_pot_overload() == SimOption::coolant) {
+        if (simulator.can_simulate(SimOption::engtemp) && simulator.get_pot_overload() == SimOption::engtemp) {
             TemperatureSensor *engine_sensor = temperature_sensor_manager.get_sensor(sensor_location::ENGINE);
             if (engine_sensor != nullptr) {
                 engine_sensor->set_temperature(pot.mapToRange(temp_sensor_min_f, temp_sensor_max_f));
