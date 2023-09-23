@@ -1,6 +1,4 @@
 #pragma once
-#ifndef GLOBALS_H
-#define GLOBALS_H
 // #include <SdFat.h>  // SD card & FAT filesystem library
 #include <ESP32Servo.h>        // Makes PWM output to control motors (for rudimentary control of our gas and steering)
 #include "temp.h"
@@ -345,11 +343,11 @@ MAPSensor map_sensor(i2c);
 
 // Motor control:
 // Steering : Controls the steering motor proportionally based on the joystick
-uint32_t steer_pid_period_us = 70000;    // (Not actually a pid) Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+uint32_t steer_pid_period_us = 75000;    // (Not actually a pid) Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer steerPidTimer(steer_pid_period_us); // not actually tunable, just needs value above
 
 // Brake : Controls the brake motor to achieve the desired brake fluid pressure
-uint32_t brake_pid_period_us = 80000;    // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+uint32_t brake_pid_period_us = 85000;    // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer brakePidTimer(brake_pid_period_us); // not actually tunable, just needs value above
 // float brake_perc_per_us = (100.0 - (-100.0)) / (brake_pulse_extend_us - brake_pulse_retract_us);  // (100 - 0) percent / (us-max - us-min) us = 1/8.3 = 0.12 percent/us
 float brake_spid_initial_kp = 0.323;                                                                         // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
@@ -383,7 +381,7 @@ QPID gasQPID(tachometer.get_filtered_value_ptr().get(), &gas_pulse_out_us, &tach
              gas_pid_period_us, (gas_open_loop) ? QPID::Control::manual : QPID::Control::timer, QPID::centMode::range); // period, more settings
 
 // Cruise : is active on demand while driving. It controls the throttle target to achieve the desired vehicle speed
-uint32_t cruise_pid_period_us = 300000;                                                                      // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+uint32_t cruise_pid_period_us = 110000;                                                                      // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer cruisePidTimer(cruise_pid_period_us);                                                                  // not actually tunable, just needs value above
 float cruise_spid_initial_kp = 5.57;                                                                         // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
 float cruise_spid_initial_ki_hz = 0.000;                                                                     // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
@@ -476,4 +474,3 @@ void update_temperature_sensors(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently
     }
 }
-#endif // GLOBALS_H

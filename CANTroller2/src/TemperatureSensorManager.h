@@ -1,6 +1,4 @@
-#ifndef TEMPERATURESENSORMANAGER_H
-#define TEMPERATURESENSORMANAGER_H
-
+#pragma once
 #include <vector>
 #include <map>
 #include <array>
@@ -210,5 +208,3 @@ public:
     }
 
 };
-
-#endif // TEMPERATURESENSORMANAGER_H

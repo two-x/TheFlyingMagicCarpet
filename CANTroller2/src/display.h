@@ -1,7 +1,7 @@
 /* Contains code for the LCD touchscreen */
-
-#ifndef DISPLAY_H
-#define DISPLAY_H
+#pragma once
+// #ifndef DISPLAY_H
+// #define DISPLAY_H
 
 // #include <font_Arial.h> // from ILI9341_t3
 // #include <SPI.h>
@@ -40,10 +40,14 @@
 #define LPUR 0xc59f  // A light pastel purple
 #define GPUR 0x8c15  // A low saturation greyish pastel purple
 #define GGRN 0x5cac  // A low saturation greyish pastel green
+#define BORG 0xfa00  // Blood orange
+#define INDG 0x601f  // Indigo
+#define ORCD 0xb81f  // Orchid
 
 // LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
 // Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
 // Color picker websites: http://www.barth-dev.de/online/rgb565 , https://chrishewett.com/blog/true-rgb565-colour-picker/
+// Colors with names: https://wiki.tcl-lang.org/page/Colors+with+Names
 // LCD is 2.8in diagonal, 240x320 pixels
 
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
@@ -124,10 +128,9 @@ char simgrid[4][3][5] = {
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
-bool* idiotlights[11] = { &starter, &shutdown_incomplete, simulator.get_enabled_ptr(), &hotrc_radio_lost,
-    &panic_stop, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &err_temp_engine, &err_temp_wheel, &boot_button};  // , &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
-uint16_t idiotcolors[arraysize(idiotlights)] = { GRN, ORG, PNK, YEL, RED, TEAL, CYN, LPUR, RED, RED, PNK };  // LYEL, YEL };
-char idiotchars[arraysize(idiotlights)][3] = { "St", "SI", "Sm", "RC", "Pn", "Pk", "Aj", "CM", "Eg", "Wh", "BB" };  // "c3", "c4" };
+bool* idiotlights[11] = {&panic_stop, &err_temp_engine, &err_temp_wheel, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr()};  // , &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
+uint16_t idiotcolors[arraysize(idiotlights)] = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK };  // LYEL, YEL };
+char idiotchars[arraysize(idiotlights)][3] = {"Pn", "Eg", "Wh", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm" };  // "c3", "c4" };
 bool idiotlasts[arraysize(idiotlights)];
 
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
@@ -637,7 +640,7 @@ class Display {
                     draw_dynamic(10, hotrc_pulse_us[VERT], hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);  // Programmed centerpoint is 230 adc
                     draw_eraseval(11);
                     draw_eraseval(12);
-                    draw_dynamic(13, hotrc_pulse_failsafe_max_us, hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);
+                    draw_dynamic(13, hotrc_pulse_failsafe_max_us, 880.0, 2080.0);
                     draw_dynamic(14, ctrl_lims_adc[ctrl][HORZ][MIN], 0, ctrl_lims_adc[ctrl][HORZ][MAX]);
                     draw_dynamic(15, ctrl_lims_adc[ctrl][HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][MIN], adcrange_adc);
                     draw_dynamic(16, ctrl_lims_adc[ctrl][HORZ][DB], 0, 2*(min (ctrl_lims_adc[ctrl][HORZ][CENT]-ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]-ctrl_lims_adc[ctrl][HORZ][CENT]) -1));
@@ -694,9 +697,9 @@ class Display {
                     draw_dynamic(14, brakeQPID.GetOutputSum(), -brakeQPID.GetOutputRange(), brakeQPID.GetOutputRange());  // brake_spid_speedo_delta_adc, -range, range);
                     draw_dynamic(15, brake_pulse_out_us, brake_pulse_extend_us, brake_pulse_retract_us);
                     draw_dynamic(16, pressure_sensor.get_native(), pressure_sensor.get_min_native(), pressure_sensor.get_max_native());
-                    draw_dynamic(17, brakeQPID.GetKp(), 0.0, 2.0);
-                    draw_dynamic(18, brakeQPID.GetKi(), 0.0, 2.0);
-                    draw_dynamic(19, brakeQPID.GetKd(), 0.0, 2.0);
+                    draw_dynamic(17, brakeQPID.GetKp(), 0.0, 10.0);
+                    draw_dynamic(18, brakeQPID.GetKi(), 0.0, 10.0);
+                    draw_dynamic(19, brakeQPID.GetKd(), 0.0, 10.0);
                 }
                 else if (dataset_page == PG_GPID) {
                     drange = gas_pulse_ccw_closed_us-gas_pulse_govern_us;
@@ -708,9 +711,9 @@ class Display {
                     draw_dynamic(14, gasQPID.GetOutputSum(), -gasQPID.GetOutputRange(), gasQPID.GetOutputRange());
                     draw_eraseval(15);
                     draw_truth(16, gas_open_loop, 1);
-                    draw_dynamic(17, gasQPID.GetKp(), 0.0, 2.0);
-                    draw_dynamic(18, gasQPID.GetKi(), 0.0, 2.0);
-                    draw_dynamic(19, gasQPID.GetKd(), 0.0, 2.0);
+                    draw_dynamic(17, gasQPID.GetKp(), 0.0, 10.0);
+                    draw_dynamic(18, gasQPID.GetKi(), 0.0, 10.0);
+                    draw_dynamic(19, gasQPID.GetKd(), 0.0, 10.0);
                 }
                 else if (dataset_page == PG_CPID) {
                     drange = tach_govern_rpm - throttle.get_idlespeed();
@@ -722,9 +725,9 @@ class Display {
                     draw_dynamic(14, cruiseQPID.GetOutputSum(), -cruiseQPID.GetOutputRange(), cruiseQPID.GetOutputRange());  // cruise_spid_speedo_delta_adc, -drange, drange);
                     draw_dynamic(15, tach_target_rpm, 0.0, tachometer.get_redline_rpm());
                     draw_dynamic(16, gas_pulse_cruise_us, gas_pulse_cw_open_us, gas_pulse_ccw_closed_us);
-                    draw_dynamic(17, cruiseQPID.GetKp(), 0.0, 2.0);
-                    draw_dynamic(18, cruiseQPID.GetKi(), 0.0, 2.0);
-                    draw_dynamic(19, cruiseQPID.GetKd(), 0.0, 2.0);
+                    draw_dynamic(17, cruiseQPID.GetKp(), 0.0, 10.0);
+                    draw_dynamic(18, cruiseQPID.GetKi(), 0.0, 10.0);
+                    draw_dynamic(19, cruiseQPID.GetKd(), 0.0, 10.0);
                 }
                 else if (dataset_page == PG_TEMP) {
                     draw_temperature(sensor_location::AMBIENT, 9);
@@ -761,5 +764,4 @@ class Display {
             _disp_redraw_all = false;
         }
 };
-
-#endif  // DISPLAY_H
+// #endif  // DISPLAY_H

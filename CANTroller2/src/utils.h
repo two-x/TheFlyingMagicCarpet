@@ -1,8 +1,5 @@
 /* Contains utility functions, classes, and defines */
 #pragma once
-#ifndef UTILS_H
-#define UTILS_H
-
 #include <cstdint> // for uint types
 #include <cstdio> // for printf
 
@@ -20,10 +17,14 @@
 #undef max
 inline float max (float a, float b) { return (a > b) ? a : b; }
 inline int32_t max (int32_t a, int32_t b) { return (a > b) ? a : b; }
+inline uint32_t max (uint32_t a, uint32_t b) { return (a > b) ? a : b; }
+inline uint32_t max (uint32_t a, uint32_t b, uint32_t c) { return (a > b) ? ((c > a) ? c : a) : ((c > b) ? c : b); }
 
 #undef min
 inline float min (float a, float b) { return (a < b) ? a : b; }
 inline int32_t min (int32_t a, int32_t b) { return (a < b) ? a : b; }
+inline uint32_t min (uint32_t a, uint32_t b) { return (a < b) ? a : b; }
+inline uint32_t min (uint32_t a, uint32_t b, uint32_t c) { return (a < b) ? ((c < a) ? c : a) : ((c < b) ? c : b); }
 
 #undef constrain
 inline float constrain (float amt, float low, float high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
@@ -123,5 +124,3 @@ class I2C {
             return false;
         }
 };
-
-#endif // UTILS_H

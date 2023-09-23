@@ -4,8 +4,8 @@
 #include <vector>
 #include <iomanip>  // Formatting cout
 #include "globals.h"
+// #include "uictrl.h"
 #include "display.h"
-#include "uictrl.h"
 #include "TouchScreen.h"
 #include "RunModeManager.h"
 #include "freertos/FreeRTOS.h"
@@ -27,7 +27,7 @@ HotrcManager hotrcVertManager (6);
 RunModeManager runModeManager;
 Display screen;
 ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
-neopixelStrip neo(neopixel_pin, 8);
+neopixelStrip neo(neopixel_pin);
 
 #ifdef CAP_TOUCH
 TouchScreen ts;
@@ -139,10 +139,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     // gas_servo.setup();
     // gas_servo.set_native_limits();  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
 
-    printf ("Init neopixel..\n");
-    neo.init();
-    neo.heartbeat(neopixel_pin >= 0);
-
     temperature_sensor_manager.setup();  // Onewire bus and temp sensors
     
     throttle.setup(temperature_sensor_manager.get_sensor(sensor_location::ENGINE));
@@ -157,6 +153,14 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         screen.init();
         ts.init();
     }
+
+    printf ("Init neopixel.. ");
+    neo.init();
+    neo.heartbeat(neopixel_pin >= 0);
+    int32_t idiots = min((uint32_t)arraysize(idiotlights), neo.neopixelsAvailable());
+    for (int32_t idiot = 0; idiot < idiots; idiot++)
+        neo.newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
+    printf ("set up heartbeat led and %ld neopixel idiot lights\n", idiots);
 
     int32_t watchdog_time_ms = Watchdog.enable(2500);  // Start 2.5 sec watchdog
     printf ("Enable watchdog.. timer set to %ld ms\n", watchdog_time_ms);
@@ -613,6 +617,13 @@ void loop() {
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
 
     neo.heartbeat_update(((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]));  // Update our beating heart
+    for (int32_t ilite=0; ilite < arraysize(idiotlights); ilite++)
+        if (ilite <= neo.neopixelsAvailable() && (*(idiotlights[ilite]) ^ idiotlasts[ilite])) {
+            neo.setBoolState(ilite, *idiotlights[ilite]);
+            neo.updateIdiot(ilite);
+        }
+    neo.refresh();
+    
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "hrt");
     
     // Display updates

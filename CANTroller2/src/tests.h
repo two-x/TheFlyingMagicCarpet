@@ -1,9 +1,6 @@
 
 /* Contains unit tests */
 #pragma once
-#ifndef TESTS_H
-#define TESTS_H
-
 #include <cassert>  // for assert
 #include "utils.h"
 #include <memory>
@@ -266,5 +263,3 @@ void test_Param() {
     assert(t13.get_min_ptr().use_count() == 2);
     assert(t13.get_max_ptr().use_count() == 2);
 }
-
-#endif // UTILS_H
