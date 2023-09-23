@@ -618,8 +618,8 @@ void loop() {
     neo.heartbeat_update(((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]));  // Update our beating heart
     for (int32_t ilite=0; ilite < arraysize(idiotlights); ilite++)
         if (ilite <= neo.neopixelsAvailable() && (*(idiotlights[ilite]) ^ idiotlasts[ilite])) {
-                neo.setBoolState(ilite, *idiotlights[ilite]);
-                neo.updateIdiot(ilite);
+            neo.setBoolState(ilite, *idiotlights[ilite]);
+            neo.updateIdiot(ilite);
         }
     neo.refresh();
     

@@ -169,11 +169,11 @@ class Encoder {
 class neopixelStrip {
   private:
     uint8_t neo_wheelcounter = 0;
-    uint8_t neo_brightness_dim = 3;
-    uint8_t neo_brightness_medium = 15;
-    uint8_t neo_brightness_max = 40;
-    uint8_t neo_master_brightness = 100;
-    uint32_t neo_refresh_timeout_us = 80000;
+    uint8_t neo_brightness_dim = 1;
+    uint8_t neo_brightness_medium = 8;
+    uint8_t neo_brightness_max = 18;
+    uint8_t neo_master_brightness = 255;
+    uint32_t neo_refresh_timeout_us = 45000;
     uint32_t neo_fade_timeout_us = 150000;
     uint32_t neo_heartbeat_timeout_us = 1000000;
     Timer neoRefreshTimer, neoFadeTimer, neoHeartbeatTimer;
