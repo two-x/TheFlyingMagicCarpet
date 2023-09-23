@@ -27,7 +27,7 @@ HotrcManager hotrcVertManager (6);
 RunModeManager runModeManager;
 Display screen;
 ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
-neopixelStrip neo(neopixel_pin, 8);
+neopixelStrip neo(neopixel_pin);
 
 #ifdef CAP_TOUCH
 TouchScreen ts;

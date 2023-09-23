@@ -168,37 +168,50 @@ class Encoder {
 };
 
 class neopixelStrip {
-  protected:
+  private:
     uint8_t neo_wheelcounter = 0;
-    uint8_t neo_brightness_max = 15;
+    uint8_t neo_brightness_dim = 5;
+    uint8_t neo_brightness_medium = 15;
+    uint8_t neo_brightness_max = 30;
     uint32_t neo_timeout_us = 150000;
     uint32_t neo_heartbeat_timeout_us = 1000000;
     Timer neoTimer, heartbeatTimer;
     bool neo_heartbeat = false;
-    uint8_t neo_brightness = neo_brightness_max; // brightness during fadeouts
-    enum neo_colors { N_RED, N_GRN, N_BLU };
-    uint8_t neo_heartcolor[3] = {0xff, 0xff, 0xff};
+    uint8_t heartbeat_brightness = neo_brightness_medium; // brightness during fadeouts
+    uint32_t heartbeatColor;
     int32_t heartbeat_state = 0;
     int32_t heartbeat_level = 0;
     uint32_t heartbeat_ekg_us[4] = {170000, 150000, 530000, 1100000};
     int32_t heartbeat_pulse = 255;
+  protected:
+    static const uint32_t pixelCount = 8;
+    static const uint32_t idiotCount = pixelCount - 1;
+    bool idiotBoolstate[idiotCount];  // For simple boolean idiot light, LOW will set urgency=1, and HIGH sets urgency=3.
+    uint32_t idiotNormalColor[idiotCount];  // 
+    uint32_t idiotNowColor[idiotCount];  // 
+    uint32_t idiotUrgency[idiotCount];  // urgency is from 1 to 10 level of freakout (0=off, 1=dim, 2=medium, 3=bright, 4-6=flash/black, 7-9=flash/white, 10=strobe) 
     Adafruit_NeoPixel* neostrip;
   public:
-    neopixelStrip(int32_t pin=-1, int32_t length=1) {
-        neostrip = new Adafruit_NeoPixel(length, pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
+    neopixelStrip(int32_t pin=-1) {  // , int32_t count=1
+        // pixelCount = count;
+        neostrip = new Adafruit_NeoPixel(pixelCount, pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
         neoTimer.set((int64_t)neo_timeout_us);
         heartbeatTimer.set((int64_t)neo_heartbeat_timeout_us);
     }
     ~neopixelStrip() { delete neostrip; }
 
     void init() {
+        for (int32_t idiot=0; idiot<=idiotCount; idiot++) {
+
+        }
         neostrip->begin();  // start datastream
         neostrip->show();  // Turn off the pixel
-        neostrip->setBrightness (neo_brightness_max);  // It truly is incredibly bright
+        neostrip->setBrightness (neo_brightness_medium);  // It truly is incredibly bright
     }
     void heartbeat(bool onoroff) {
         neo_heartbeat = onoroff;  // Start heart beating
     }
+  private:
     uint32_t colorwheel(uint8_t WheelPos) {
         WheelPos = 255 - WheelPos;
         if (WheelPos < 85) return neostrip->Color(255 - WheelPos * 3, 0, WheelPos * 3);
@@ -209,30 +222,31 @@ class neopixelStrip {
         WheelPos -= 170;
         return neostrip->Color(WheelPos * 3, 255 - WheelPos * 3, 0);
     }
+    uint32_t color_16b_to_32b(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to 32 bit BRG value suitable for neopixels
+        return neostrip->Color((color565 & 0x1f) << 3, (color565 & 0xf800) >> 8, (color565 & 0x7e0) >> 3);
+    }
+  public:
     void heartbeat_update(uint16_t runmode_color) {
         if (neo_heartbeat) {
-            neo_heartcolor[N_RED] = (runmode_color & 0xf800) >> 8;
-            neo_heartcolor[N_GRN] = (runmode_color & 0x7e0) >> 3;
-            neo_heartcolor[N_BLU] = (runmode_color & 0x1f) << 3;
-            int32_t neocolor = neostrip->Color (neo_heartcolor[N_BLU], neo_heartcolor[N_RED], neo_heartcolor[N_GRN]);
+            heartbeatColor = color_16b_to_32b(runmode_color);
             if (heartbeatTimer.expired()) {
                 heartbeat_pulse = !heartbeat_pulse;
-                if (heartbeat_pulse) neo_brightness = neo_brightness_max;
+                if (heartbeat_pulse) heartbeat_brightness = neo_brightness_medium;
                 else neoTimer.reset();
                 if (++heartbeat_state >= arraysize (heartbeat_ekg_us)) heartbeat_state -= arraysize (heartbeat_ekg_us);
                 heartbeatTimer.set (heartbeat_ekg_us[heartbeat_state]);
             }
-            else if (!heartbeat_pulse && neo_brightness) {
-                neo_brightness = (int8_t)((float)neo_brightness_max * (1 - (float)neoTimer.elapsed() / (float)neo_timeout_us));
-                if (neoTimer.expired() || neo_brightness < 1) neo_brightness = 0;
+            else if (!heartbeat_pulse && heartbeat_brightness) {
+                heartbeat_brightness = (int8_t)((float)neo_brightness_medium * (1 - (float)neoTimer.elapsed() / (float)neo_timeout_us));
+                if (neoTimer.expired() || heartbeat_brightness < 1) heartbeat_brightness = 0;
             }
-            int32_t neocolor_last, neobright_last;
-            if (neocolor != neocolor_last || neo_brightness != neobright_last) {
-                neostrip->setPixelColor (0, neocolor);
-                neostrip->setBrightness (neo_brightness);
+            int32_t heartbeatColor_last, neobright_last;
+            if (heartbeatColor != heartbeatColor_last || heartbeat_brightness != neobright_last) {
+                neostrip->setPixelColor (0, heartbeatColor);
+                neostrip->setBrightness (heartbeat_brightness);
                 neostrip->show();
-                neocolor_last = neocolor;
-                neobright_last = neo_brightness;
+                heartbeatColor_last = heartbeatColor;
+                neobright_last = heartbeat_brightness;
             }
         }
     }
@@ -240,6 +254,22 @@ class neopixelStrip {
         if (neoTimer.expireset()) {  // Rainbow fade
             neostrip->setPixelColor (0, colorwheel(++neo_wheelcounter));
             neostrip->show();
+        }
+    }
+    bool newIdiotLight(uint32_t idiotIndex, uint16_t color565, bool startboolstate = 0) {
+        idiotBoolstate[idiotIndex] = startboolstate;
+        if (idiotIndex > idiotCount-1) return false;
+        idiotNormalColor[idiotIndex] = color_16b_to_32b(color565);
+        setBoolState(idiotIndex, idiotBoolstate[idiotIndex]);
+        updateIdiot(idiotIndex);
+        return true;
+    }
+    void setBoolState(uint32_t idiotIndex, bool state) {
+        idiotUrgency[idiotIndex] = (state) ? 3 : 1;
+    }
+    void updateIdiot(uint32_t idiotIndex) {
+        if (idiotUrgency[idiotIndex] == 1) {
+            idiotNowColor[idiotIndex] = idiotNormalColor[idiotIndex];
         }
     }
 };
