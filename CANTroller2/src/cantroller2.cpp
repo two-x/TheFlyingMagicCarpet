@@ -157,7 +157,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     printf ("Init neopixel..\n");
     neo.init();
     neo.heartbeat(neopixel_pin >= 0);
-    for (int32_t idiot = 0; idiot <= min((uint32_t)arraysize(idiotlights), neo.neopixelsAvailable()); idiot++)
+    for (int32_t idiot = 0; idiot < min((uint32_t)arraysize(idiotlights), neo.neopixelsAvailable()); idiot++)
         neo.newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
 
 

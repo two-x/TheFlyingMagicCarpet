@@ -171,7 +171,7 @@ class neopixelStrip {
     uint8_t neo_wheelcounter = 0;
     uint8_t neo_brightness_dim = 1;
     uint8_t neo_brightness_medium = 8;
-    uint8_t neo_brightness_max = 18;
+    uint8_t neo_brightness_max = 15;
     uint8_t neo_master_brightness = 255;
     uint32_t neo_refresh_timeout_us = 45000;
     uint32_t neo_fade_timeout_us = 150000;
@@ -208,7 +208,7 @@ class neopixelStrip {
     void init() {
         neostrip->begin();  // start datastream
         neostrip->setBrightness (neo_master_brightness);  // Truly these can get incredibly bright
-        for (int32_t idiot=0; idiot<=idiotCount; idiot++) {
+        for (int32_t idiot=0; idiot<idiotCount; idiot++) {
             setBoolState(idiot, 0);
             idiotNormalColor[idiot] = 0x808080;
             updateIdiot(idiot);
@@ -271,9 +271,11 @@ class neopixelStrip {
         updateIdiot(idiotIndex);
         return true;
     }
-    void setBoolState(uint32_t idiotIndex, bool state) {
-        idiotBoolState[idiotIndex] = state;
-        idiotUrgency[idiotIndex] = (state) ? 3 : 1;
+    void setBoolState(uint32_t idiot, bool state) {
+        if (idiot < idiotCount) {
+            idiotBoolState[idiot] = state;
+            idiotUrgency[idiot] = (state) ? 3 : 1;
+        }
     }
     uint32_t attenuateColor(uint32_t color, uint8_t brightness) {
         float fbright = (float)brightness / 100;  // I have no idea if this brightness value is actually out of 100. Check on this!
