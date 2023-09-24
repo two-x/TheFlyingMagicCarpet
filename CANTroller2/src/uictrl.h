@@ -171,14 +171,12 @@ class neopixelStrip {
     uint8_t neo_brightness_medium = 8;
     uint8_t neo_brightness_max = 20;
     uint8_t neo_master_brightness = 255;
-    uint32_t neo_refresh_timeout_us = 31250;
     uint32_t neo_fade_timeout_us = 125000;
     uint32_t neo_heartbeat_timeout_us = 1000000;
-    Timer neoRefreshTimer, neoFadeTimer, neoHeartbeatTimer;
+    Timer neoFadeTimer, neoHeartbeatTimer;
     bool neo_heartbeat = false;
     uint8_t heartbeat_brightness = neo_brightness_medium; // brightness during fadeouts
-    uint32_t heartbeatColor;
-    uint32_t heartbeatColor_last, neobright_last;
+    uint32_t heartbeatColor, heartbeatNow, heartbeatColor_last, neobright_last;
     int32_t heartbeat_state = 0;
     int32_t heartbeat_level = 0;
     uint32_t heartbeat_ekg_us[4] = {187500, 125000, 562500, 1250000};
@@ -196,7 +194,6 @@ class neopixelStrip {
     neopixelStrip(int32_t pin=-1) {  // , int32_t count=1
         // pixelCount = count;
         neostrip = new Adafruit_NeoPixel(pixelCount, pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
-        neoRefreshTimer.set((int64_t)neo_refresh_timeout_us);
         neoFadeTimer.set((int64_t)neo_fade_timeout_us);
         neoHeartbeatTimer.set((int64_t)neo_heartbeat_timeout_us);
     }
@@ -226,11 +223,12 @@ class neopixelStrip {
                 neoHeartbeatTimer.set ((int64_t)(heartbeat_ekg_us[heartbeat_state]));
             }
             else if (!heartbeat_pulse && heartbeat_brightness) {
-                heartbeat_brightness = max( (int8_t)((float)neo_brightness_medium * (1 - (float)neoFadeTimer.elapsed() / (float)neo_fade_timeout_us)), neo_brightness_dim );
-                if (neoFadeTimer.expired() || heartbeat_brightness < 1) heartbeat_brightness = 0;
+                heartbeat_brightness = (int8_t)(neo_brightness_dim + (float)(neo_brightness_medium-neo_brightness_dim) * (1 - (float)neoFadeTimer.elapsed() / (float)neo_fade_timeout_us));
+                if (neoFadeTimer.expired() || heartbeat_brightness < 1) heartbeat_brightness = neo_brightness_dim;
             }
             if (heartbeatColor != heartbeatColor_last || heartbeat_brightness != neobright_last) {
-                neostrip->setPixelColor (0, dimmer(heartbeatColor, heartbeat_brightness));
+                heartbeatNow = dimmer(heartbeatColor, heartbeat_brightness);
+                neostrip->setPixelColor (0, heartbeatNow);
                 heartbeatColor_last = heartbeatColor;
                 neobright_last = heartbeat_brightness;
             }
@@ -245,12 +243,12 @@ class neopixelStrip {
     uint32_t neopixelsAvailable() {
         return idiotCount;
     }
-    bool newIdiotLight(uint32_t idiotIndex, uint16_t color565, bool startboolstate = 0) {
-        idiotBoolState[idiotIndex] = startboolstate;
-        if (idiotIndex > idiotCount-1) return false;
-        idiotNormalColor[idiotIndex] = color_16b_to_32b(color565);
-        setBoolState(idiotIndex, idiotBoolState[idiotIndex]);
-        updateIdiot(idiotIndex);
+    bool newIdiotLight(uint32_t idiot, uint16_t color565, bool startboolstate = 0) {
+        idiotBoolState[idiot] = startboolstate;
+        if (idiot > idiotCount-1) return false;
+        idiotNormalColor[idiot] = color_16b_to_32b(color565);
+        setBoolState(idiot, idiotBoolState[idiot]);
+        updateIdiot(idiot);
         return true;
     }
     void setBoolState(uint32_t idiot, bool state) {
@@ -261,12 +259,9 @@ class neopixelStrip {
     }
     void updateIdiot(uint32_t idiot) {
         if (idiotUrgency[idiot] <= 0) idiotNowColor[idiot] = 0;  // Turn off the light
-        // else if (idiotUrgency[idiot] == 1) idiotNowColor[idiot] = dimmer(idiotNormalColor[idiot], neo_brightness_dim);
-        // else if (idiotUrgency[idiot] == 2) idiotNowColor[idiot] = dimmer(idiotNormalColor[idiot], neo_brightness_medium);
-        // else if (idiotUrgency[idiot] == 3) idiotNowColor[idiot] = dimmer(idiotNormalColor[idiot], neo_brightness_max);
         else if (idiotUrgency[idiot] == 1) idiotNowColor[idiot] = dimmer(idiotNormalColor[idiot], neo_brightness_dim);
-        else if (idiotUrgency[idiot] == 2) idiotNowColor[idiot] = saturate(idiotNormalColor[idiot], 25);
-        else if (idiotUrgency[idiot] == 3) idiotNowColor[idiot] = dimmer(saturate(idiotNormalColor[idiot], 15), neo_brightness_medium);
+        else if (idiotUrgency[idiot] == 2) idiotNowColor[idiot] = dimmer(idiotNormalColor[idiot], neo_brightness_medium);
+        else if (idiotUrgency[idiot] == 3) idiotNowColor[idiot] = dimmer(desaturate(idiotNormalColor[idiot], 15), neo_brightness_medium);
         else if (idiotUrgency[idiot] <= 6) {  // Flash alternating with black, at increasing frequency
             // todo : implement this effect
         }
@@ -279,8 +274,8 @@ class neopixelStrip {
         neostrip->setPixelColor (1+idiot, idiotNowColor[idiot]);
     }
     void refresh() {
-        bool something_changed = (heartbeatColor != color_last[0]);
-        color_last[0] = heartbeatColor;
+        bool something_changed = (heartbeatNow != color_last[0]);
+        color_last[0] = heartbeatNow;
         for (int32_t idiot=0; idiot<idiotCount; idiot++) {
             if (idiotNowColor[idiot] != color_last[idiot+1]) something_changed = true;
             color_last[idiot+1] = idiotNowColor[idiot];
@@ -303,19 +298,17 @@ class neopixelStrip {
     //         }
     // }
   private:
-    uint32_t dimmer(uint32_t color, int8_t brightness) {  // brightness 0 is off, 100 is max brightness while retaining same hue and saturation
+    uint32_t dimmer(uint32_t color, int8_t bright_percent) {  // brightness 0 is off, 100 is max brightness while retaining same hue and saturation
         uint32_t rgb[3] = { color >> 16, (color & 0xff00) >> 8, color & 0xff };
-        float fbright = (float)brightness * 2.55 / (float)max(rgb[0], rgb[1], rgb[2]);  // 2.55 = 0xff / 100
+        float fbright = (float)bright_percent * 2.55 / (float)max(rgb[0], rgb[1], rgb[2]);  // 2.55 = 0xff / 100
         return ((uint32_t)((float)rgb[0] * fbright) << 16) | ((uint32_t)((float)rgb[1] * fbright) << 8) | ((uint32_t)((float)rgb[2] * fbright));
     }
-    uint32_t saturate(uint32_t color, int8_t saturation) {  // saturation 0 has no effectis greyscale, 100 is max brightness while retaining same hue and saturation
+    uint32_t desaturate(uint32_t color, int8_t desat_percent) {  // desat_percent=0 has no effect, =100 desaturates all the way to greyscale, without change in brightness
         uint32_t rgb[3] = { color >> 16, (color & 0xff00) >> 8, color & 0xff };
-        // printf("sat: %3ld,%3ld,%3ld (0x%02x%02x%02x) -> ", rgb[0], rgb[1], rgb[2], rgb[0], rgb[1], rgb[2]);
         float dominant = (float)max(rgb[0], rgb[1], rgb[2]);
         for (int32_t element=0; element<3; element++) {
-            rgb[element] = (uint32_t)(rgb[element] + ((float)saturation * (dominant - rgb[element]) / 100.0));
+            rgb[element] = (uint32_t)(rgb[element] + ((float)desat_percent * (dominant - rgb[element]) / 100.0));
         }
-        // printf("%3ld,%3ld,%3ld (0x%02x%02x%02x)\n", rgb[0], rgb[1], rgb[2], rgb[0], rgb[1], rgb[2]);
         return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
     }
     uint32_t colorwheel(uint8_t WheelPos) {
