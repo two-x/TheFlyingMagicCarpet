@@ -1,7 +1,7 @@
 /* Contains code for the LCD touchscreen */
-
-#ifndef DISPLAY_H
-#define DISPLAY_H
+#pragma once
+// #ifndef DISPLAY_H
+// #define DISPLAY_H
 
 // #include <font_Arial.h> // from ILI9341_t3
 // #include <SPI.h>
@@ -40,10 +40,14 @@
 #define LPUR 0xc59f  // A light pastel purple
 #define GPUR 0x8c15  // A low saturation greyish pastel purple
 #define GGRN 0x5cac  // A low saturation greyish pastel green
+#define BORG 0xfa00  // Blood orange
+#define INDG 0x601f  // Indigo
+#define ORCD 0xb81f  // Orchid
 
 // LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
 // Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
 // Color picker websites: http://www.barth-dev.de/online/rgb565 , https://chrishewett.com/blog/true-rgb565-colour-picker/
+// Colors with names: https://wiki.tcl-lang.org/page/Colors+with+Names
 // LCD is 2.8in diagonal, 240x320 pixels
 
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
@@ -124,10 +128,9 @@ char simgrid[4][3][5] = {
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
-bool* idiotlights[11] = { &starter, &shutdown_incomplete, simulator.get_enabled_ptr(), &hotrc_radio_lost,
-    &panic_stop, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &err_temp_engine, &err_temp_wheel, &boot_button};  // , &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
-uint16_t idiotcolors[arraysize(idiotlights)] = { GRN, ORG, PNK, YEL, RED, TEAL, CYN, LPUR, RED, RED, PNK };  // LYEL, YEL };
-char idiotchars[arraysize(idiotlights)][3] = { "St", "SI", "Sm", "RC", "Pn", "Pk", "Aj", "CM", "Eg", "Wh", "BB" };  // "c3", "c4" };
+bool* idiotlights[11] = {&panic_stop, &err_temp_engine, &err_temp_wheel, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr()};  // , &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
+uint16_t idiotcolors[arraysize(idiotlights)] = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK };  // LYEL, YEL };
+char idiotchars[arraysize(idiotlights)][3] = {"Pn", "Eg", "Wh", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm" };  // "c3", "c4" };
 bool idiotlasts[arraysize(idiotlights)];
 
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
@@ -761,5 +764,4 @@ class Display {
             _disp_redraw_all = false;
         }
 };
-
-#endif  // DISPLAY_H
+// #endif  // DISPLAY_H

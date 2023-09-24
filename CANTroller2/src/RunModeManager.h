@@ -1,7 +1,4 @@
 #pragma once
-#ifndef RUNMODEMANAGER_H
-#define RUNMODEMANAGER_H
-
 #include "display.h"
 
 class RunModeManager {
@@ -365,4 +362,3 @@ private:
 // serve to adjust that target speed. A sharp, full-downward gesture will drop us back to 
 // Fly Mode, promptly resulting in braking (if kept held down).
 // - Actions: Release brake, Maintain car speed, Handle joyvert differently, Watch for gesture
-#endif  // RUNMODEMANAGER.H

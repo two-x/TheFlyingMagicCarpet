@@ -1,6 +1,4 @@
-#ifndef UICTRL_H
-#define UICTRL_H
-
+#pragma once
 #include "utils.h"
 #include "FunctionalInterrupt.h"
 #include <Adafruit_NeoPixel.h> // Plan to allow control of neopixel LED onboard the esp32
@@ -171,24 +169,23 @@ class neopixelStrip {
     uint8_t neo_wheelcounter = 0;
     uint8_t neo_brightness_dim = 1;
     uint8_t neo_brightness_medium = 8;
-    uint8_t neo_brightness_max = 15;
+    uint8_t neo_brightness_max = 20;
     uint8_t neo_master_brightness = 255;
-    uint32_t neo_refresh_timeout_us = 45000;
-    uint32_t neo_fade_timeout_us = 150000;
+    uint32_t neo_refresh_timeout_us = 31250;
+    uint32_t neo_fade_timeout_us = 125000;
     uint32_t neo_heartbeat_timeout_us = 1000000;
     Timer neoRefreshTimer, neoFadeTimer, neoHeartbeatTimer;
     bool neo_heartbeat = false;
     uint8_t heartbeat_brightness = neo_brightness_medium; // brightness during fadeouts
     uint32_t heartbeatColor;
     uint32_t heartbeatColor_last, neobright_last;
-
     int32_t heartbeat_state = 0;
     int32_t heartbeat_level = 0;
-    uint32_t heartbeat_ekg_us[4] = {170000, 150000, 530000, 1100000};
+    uint32_t heartbeat_ekg_us[4] = {187500, 125000, 562500, 1250000};
     int32_t heartbeat_pulse = 255;
-  protected:
     static const uint32_t pixelCount = 8;
     static const uint32_t idiotCount = pixelCount - 1;
+    uint32_t color_last[pixelCount];
     bool idiotBoolState[idiotCount];  // For simple boolean idiot light, LOW will set urgency=1, and HIGH sets urgency=3.
     uint32_t idiotNormalColor[idiotCount];  // 
     uint32_t idiotNowColor[idiotCount];  // 
@@ -218,21 +215,6 @@ class neopixelStrip {
     void heartbeat(bool onoroff) {
         neo_heartbeat = onoroff;  // Start heart beating
     }
-  private:
-    uint32_t colorwheel(uint8_t WheelPos) {
-        WheelPos = 255 - WheelPos;
-        if (WheelPos < 85) return neostrip->Color(255 - WheelPos * 3, 0, WheelPos * 3);
-        if (WheelPos < 170) {
-            WheelPos -= 85;
-            return neostrip->Color(0, WheelPos * 3, 255 - WheelPos * 3);
-        }
-        WheelPos -= 170;
-        return neostrip->Color(WheelPos * 3, 255 - WheelPos * 3, 0);
-    }
-    uint32_t color_16b_to_32b(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to 32 bit BRG value suitable for neopixels
-        return neostrip->Color((color565 & 0x1f) << 3, (color565 & 0xf800) >> 8, (color565 & 0x7e0) >> 3);
-    }
-  public:
     void heartbeat_update(uint16_t runmode_color) {
         if (neo_heartbeat) {
             heartbeatColor = color_16b_to_32b(runmode_color);
@@ -244,11 +226,11 @@ class neopixelStrip {
                 neoHeartbeatTimer.set ((int64_t)(heartbeat_ekg_us[heartbeat_state]));
             }
             else if (!heartbeat_pulse && heartbeat_brightness) {
-                heartbeat_brightness = (int8_t)((float)neo_brightness_medium * (1 - (float)neoFadeTimer.elapsed() / (float)neo_fade_timeout_us));
+                heartbeat_brightness = max( (int8_t)((float)neo_brightness_medium * (1 - (float)neoFadeTimer.elapsed() / (float)neo_fade_timeout_us)), neo_brightness_dim );
                 if (neoFadeTimer.expired() || heartbeat_brightness < 1) heartbeat_brightness = 0;
             }
             if (heartbeatColor != heartbeatColor_last || heartbeat_brightness != neobright_last) {
-                neostrip->setPixelColor (0, attenuateColor(heartbeatColor, heartbeat_brightness));
+                neostrip->setPixelColor (0, dimmer(heartbeatColor, heartbeat_brightness));
                 heartbeatColor_last = heartbeatColor;
                 neobright_last = heartbeat_brightness;
             }
@@ -277,23 +259,14 @@ class neopixelStrip {
             idiotUrgency[idiot] = (state) ? 3 : 1;
         }
     }
-    uint32_t attenuateColor(uint32_t color, uint8_t brightness) {
-        float fbright = (float)brightness / 100;  // I have no idea if this brightness value is actually out of 100. Check on this!
-        return ((uint32_t)((float)(color >> 16) * fbright) << 16) | ((uint32_t)((float)((color & 0xff00) >> 8) * fbright) << 8) | ((uint32_t)((float)(color & 0xff) * fbright));
-    }
     void updateIdiot(uint32_t idiot) {
-        if (idiotUrgency[idiot] <= 0) {
-            idiotNowColor[idiot] = 0;  // Turn off the light
-        }
-        else if (idiotUrgency[idiot] == 1) {
-            idiotNowColor[idiot] = attenuateColor(idiotNormalColor[idiot], neo_brightness_dim);
-        }
-        else if (idiotUrgency[idiot] == 2) {
-            idiotNowColor[idiot] = attenuateColor(idiotNormalColor[idiot], neo_brightness_medium);
-        }
-        else if (idiotUrgency[idiot] == 3) {
-            idiotNowColor[idiot] = attenuateColor(idiotNormalColor[idiot], neo_brightness_max);
-        }
+        if (idiotUrgency[idiot] <= 0) idiotNowColor[idiot] = 0;  // Turn off the light
+        // else if (idiotUrgency[idiot] == 1) idiotNowColor[idiot] = dimmer(idiotNormalColor[idiot], neo_brightness_dim);
+        // else if (idiotUrgency[idiot] == 2) idiotNowColor[idiot] = dimmer(idiotNormalColor[idiot], neo_brightness_medium);
+        // else if (idiotUrgency[idiot] == 3) idiotNowColor[idiot] = dimmer(idiotNormalColor[idiot], neo_brightness_max);
+        else if (idiotUrgency[idiot] == 1) idiotNowColor[idiot] = dimmer(idiotNormalColor[idiot], neo_brightness_medium);
+        else if (idiotUrgency[idiot] == 2) idiotNowColor[idiot] = saturate(idiotNormalColor[idiot], 25);
+        else if (idiotUrgency[idiot] == 3) idiotNowColor[idiot] = dimmer(saturate(idiotNormalColor[idiot], 55), neo_brightness_medium);
         else if (idiotUrgency[idiot] <= 6) {  // Flash alternating with black, at increasing frequency
             // todo : implement this effect
         }
@@ -306,7 +279,13 @@ class neopixelStrip {
         neostrip->setPixelColor (1+idiot, idiotNowColor[idiot]);
     }
     void refresh() {
-        if (neoRefreshTimer.expireset()) neostrip->show();
+        bool something_changed = (heartbeatColor != color_last[0]);
+        color_last[0] = heartbeatColor;
+        for (int32_t idiot=0; idiot<idiotCount; idiot++) {
+            if (idiotNowColor[idiot] != color_last[idiot+1]) something_changed = true;
+            color_last[idiot+1] = idiotNowColor[idiot];
+        }
+        if (something_changed) neostrip->show();
     }
     // void assign_idiotlight(uint32_t index, bool idiotvalue, uint16_t idiotcolor) {
     //     for (int32_t idiot = 0; idiot <= min((uint32_t)arraysize(idiotlights), neopixelsAvailable()); idiot++) {
@@ -323,7 +302,33 @@ class neopixelStrip {
     //             }
     //         }
     // }
-
+  private:
+    uint32_t dimmer(uint32_t color, int8_t brightness) {  // brightness 0 is off, 100 is max brightness while retaining same hue and saturation
+        uint32_t rgb[3] = { color >> 16, (color & 0xff00) >> 8, color & 0xff };
+        float fbright = (float)brightness * 2.55 / (float)max(rgb[0], rgb[1], rgb[2]);  // 2.55 = 0xff / 100
+        return ((uint32_t)((float)rgb[0] * fbright) << 16) | ((uint32_t)((float)rgb[1] * fbright) << 8) | ((uint32_t)((float)rgb[2] * fbright));
+    }
+    uint32_t saturate(uint32_t color, int8_t saturation) {  // saturation 0 has no effectis greyscale, 100 is max brightness while retaining same hue and saturation
+        uint32_t rgb[3] = { color >> 16, (color & 0xff00) >> 8, color & 0xff };
+        //printf("sat: %3ld,%3ld,%3ld (0x%02x%02x%02x) -> ", rgb[0], rgb[1], rgb[2], rgb[0], rgb[1], rgb[2]);
+        float dominant = (float)max(rgb[0], rgb[1], rgb[2]);
+        for (int32_t element=0; element<3; element++) {
+            rgb[element] = (uint32_t)(rgb[element] + ((float)saturation * (dominant - rgb[element]) / 100.0));
+        }
+        printf("%3ld,%3ld,%3ld (0x%02x%02x%02x)\n", rgb[0], rgb[1], rgb[2], rgb[0], rgb[1], rgb[2]);
+        return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
+    }
+    uint32_t colorwheel(uint8_t WheelPos) {
+        WheelPos = 255 - WheelPos;
+        if (WheelPos < 85) return neostrip->Color(255 - WheelPos * 3, 0, WheelPos * 3);
+        if (WheelPos < 170) {
+            WheelPos -= 85;
+            return neostrip->Color(0, WheelPos * 3, 255 - WheelPos * 3);
+        }
+        WheelPos -= 170;
+        return neostrip->Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+    }
+    uint32_t color_16b_to_32b(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to 32 bit BRG value suitable for neopixels
+        return neostrip->Color((color565 & 0x1f) << 3, (color565 & 0xf800) >> 8, (color565 & 0x7e0) >> 3);
+    }
 };
-
-#endif

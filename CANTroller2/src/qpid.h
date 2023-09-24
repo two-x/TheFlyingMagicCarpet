@@ -1,6 +1,4 @@
 #pragma once
-#ifndef QPID_h
-#define QPID_h
 #include <stdint.h>
 #include "Arduino.h"
 #include "utils.h"
@@ -628,4 +626,3 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
     float get_stallpoint (void) { return stallpoint_rpm; }
     float get_target (void) { return target_rpm; }
 };
-#endif // QPID.h

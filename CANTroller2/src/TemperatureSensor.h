@@ -1,6 +1,4 @@
-#ifndef TEMPERATURESENSOR_H
-#define TEMPERATURESENSOR_H
-
+#pragma once
 #include <array>
 #include <string>
 #include "temp.h"
@@ -89,5 +87,3 @@ public:
         }
     }
 };
-
-#endif // TEMPERATURESENSOR_H

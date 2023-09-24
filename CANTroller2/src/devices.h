@@ -1,6 +1,4 @@
 #pragma once
-#ifndef CLASSES_H
-#define CLASSES_H
 #include <stdio.h>
 #include <iostream>
 #include <cmath>
@@ -1251,4 +1249,3 @@ class Brake {  // This class wraps all brake activity to provide monitoring func
     // Todo: Startup brake press to detect faults and validity of parameters before starting normal operation
     // Todo: Brake motor temperature sensor? 
 };
-#endif  // CLASSES_H

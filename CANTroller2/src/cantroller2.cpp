@@ -154,12 +154,13 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         ts.init();
     }
 
-    printf ("Init neopixel..\n");
+    printf ("Init neopixel.. ");
     neo.init();
     neo.heartbeat(neopixel_pin >= 0);
-    for (int32_t idiot = 0; idiot < min((uint32_t)arraysize(idiotlights), neo.neopixelsAvailable()); idiot++)
+    int32_t idiots = min((uint32_t)arraysize(idiotlights), neo.neopixelsAvailable());
+    for (int32_t idiot = 0; idiot < idiots; idiot++)
         neo.newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
-
+    printf ("set up heartbeat led and %ld neopixel idiot lights\n", idiots);
 
     int32_t watchdog_time_ms = Watchdog.enable(2500);  // Start 2.5 sec watchdog
     printf ("Enable watchdog.. timer set to %ld ms\n", watchdog_time_ms);

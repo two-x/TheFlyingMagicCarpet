@@ -1,8 +1,5 @@
 // Stolen DallasTemperature library, modified to allow use of timers rather than blocking delays
-
-#ifndef TEMP_H
-#define TEMP_H
-
+#pragma once
 #include <stdio.h>
 
 #define DALLASTEMPLIBVERSION "3.8.1" // To be deprecated -> TODO remove in 4.0.0
@@ -1465,7 +1462,4 @@ void DallasSensor::operator delete(void* p) {
 
 	free(p);// Free the memory
 }
-
-#endif
-
 #endif
