@@ -264,9 +264,9 @@ class neopixelStrip {
         // else if (idiotUrgency[idiot] == 1) idiotNowColor[idiot] = dimmer(idiotNormalColor[idiot], neo_brightness_dim);
         // else if (idiotUrgency[idiot] == 2) idiotNowColor[idiot] = dimmer(idiotNormalColor[idiot], neo_brightness_medium);
         // else if (idiotUrgency[idiot] == 3) idiotNowColor[idiot] = dimmer(idiotNormalColor[idiot], neo_brightness_max);
-        else if (idiotUrgency[idiot] == 1) idiotNowColor[idiot] = dimmer(idiotNormalColor[idiot], neo_brightness_medium);
+        else if (idiotUrgency[idiot] == 1) idiotNowColor[idiot] = dimmer(idiotNormalColor[idiot], neo_brightness_dim);
         else if (idiotUrgency[idiot] == 2) idiotNowColor[idiot] = saturate(idiotNormalColor[idiot], 25);
-        else if (idiotUrgency[idiot] == 3) idiotNowColor[idiot] = dimmer(saturate(idiotNormalColor[idiot], 55), neo_brightness_medium);
+        else if (idiotUrgency[idiot] == 3) idiotNowColor[idiot] = dimmer(saturate(idiotNormalColor[idiot], 15), neo_brightness_medium);
         else if (idiotUrgency[idiot] <= 6) {  // Flash alternating with black, at increasing frequency
             // todo : implement this effect
         }
@@ -310,12 +310,12 @@ class neopixelStrip {
     }
     uint32_t saturate(uint32_t color, int8_t saturation) {  // saturation 0 has no effectis greyscale, 100 is max brightness while retaining same hue and saturation
         uint32_t rgb[3] = { color >> 16, (color & 0xff00) >> 8, color & 0xff };
-        //printf("sat: %3ld,%3ld,%3ld (0x%02x%02x%02x) -> ", rgb[0], rgb[1], rgb[2], rgb[0], rgb[1], rgb[2]);
+        // printf("sat: %3ld,%3ld,%3ld (0x%02x%02x%02x) -> ", rgb[0], rgb[1], rgb[2], rgb[0], rgb[1], rgb[2]);
         float dominant = (float)max(rgb[0], rgb[1], rgb[2]);
         for (int32_t element=0; element<3; element++) {
             rgb[element] = (uint32_t)(rgb[element] + ((float)saturation * (dominant - rgb[element]) / 100.0));
         }
-        printf("%3ld,%3ld,%3ld (0x%02x%02x%02x)\n", rgb[0], rgb[1], rgb[2], rgb[0], rgb[1], rgb[2]);
+        // printf("%3ld,%3ld,%3ld (0x%02x%02x%02x)\n", rgb[0], rgb[1], rgb[2], rgb[0], rgb[1], rgb[2]);
         return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
     }
     uint32_t colorwheel(uint8_t WheelPos) {
