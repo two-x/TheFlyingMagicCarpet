@@ -545,15 +545,15 @@ class BatterySensor : public AnalogSensor<int32_t, float> {
         static constexpr float _initial_adc = adcmidscale_adc;
         static constexpr float _initial_v = 10.0;
         static constexpr float _min_v = 0.0; // The min vehicle voltage we can sense.
-        static constexpr float _max_v = 16.0;  // The max vehicle voltage we can sense. Design resistor divider to match. Must exceed max V possible.
-        static constexpr float _initial_v_per_adc = _max_v / adcrange_adc;
+        static constexpr float _max_v = 16.0;  // The max vehicle voltage we can sense. Resistor divider is designed so max 16.0 V = (adcrange_adc - 5) plus a weak pullup, so values > (adcrange - 5) indicates broken connection.
+        static constexpr float _initial_v_per_adc = _max_v / (adcrange_adc - 5);
         static constexpr float _initial_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
     public:
         BatterySensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
             _ema_alpha = _initial_ema_alpha;
             _m_factor = _initial_v_per_adc;
             human.set_limits(_min_v, _max_v);
-            native.set_limits(0.0, adcrange_adc);
+            native.set_limits(0.0, adcrange_adc - 5);
             set_native(_initial_adc);
             set_can_source(ControllerMode::PIN, true);
         }

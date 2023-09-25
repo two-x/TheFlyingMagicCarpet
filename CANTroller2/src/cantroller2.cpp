@@ -53,14 +53,13 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     if (RUN_TESTS) {
         run_tests();
     }    
-
     set_pin (tft_dc_pin, OUTPUT);
     set_pin (gas_pwm_pin, OUTPUT);
     set_pin (basicmodesw_pin, INPUT_PULLUP);
     set_pin (neopixel_pin, OUTPUT);
     set_pin (sdcard_cs_pin, OUTPUT);
     set_pin (tft_cs_pin, OUTPUT);
-    set_pin (multibutton_pin, INPUT_PULLUP);
+    set_pin (bootbutton_pin, INPUT_PULLUP);
     set_pin (starter_pin, INPUT_PULLDOWN);
     set_pin (steer_enc_a_pin, INPUT);
     set_pin (steer_enc_b_pin, INPUT);
@@ -86,6 +85,12 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     calc_governor();
     for (int32_t x=0; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
 
+    // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
+    set_pin (uart_tx_pin, INPUT);  // 
+    running_on_devboard = (read_pin(uart_tx_pin));
+    if (running_on_devboard) set_devboard_defaults();
+    printf ("Using %s defaults..\n", (running_on_devboard) ? "vehicle-pcb" : "dev-board");
+    set_pin (uart_tx_pin, OUTPUT);  // 
     Serial.begin (115200);  // Open console serial port
     delay (800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     printf ("Console started..\n");
@@ -178,7 +183,7 @@ void loop() {
     // Update inputs.  Fresh sensor data, and filtering
 
     // ESP32 "boot" button. generates boot_button_action flags of LONG or SHORT presses which can be handled wherever. Handler must reset boot_button_action = NONE
-    if (!read_pin (multibutton_pin)) {
+    if (!read_pin (bootbutton_pin)) {
         if (!boot_button) {  // If press just occurred
             dispResetButtonTimer.reset();  // Looks like someone just pushed the esp32 "boot" button
             boot_button_timer_active = true;  // flag to indicate timing for a possible long press
@@ -227,7 +232,7 @@ void loop() {
     // Read the car ignition signal, and while we're at it measure the vehicle battery voltage off ign signal
     battery_sensor.update();
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
-    // printf("batt_pin: %d, batt_raw: %f, batt_human: %f, batt_filt: %f\n", analogRead(ign_batt_pin), battery_sensor.get_native(), battery_sensor.get_human(), battery_sensor.get_filtered_value());
+    // printf("batt_pin: %d, batt_raw: %f, batt_human: %f, batt_filt: %f\n", analogRead(mulebatt_pin), battery_sensor.get_native(), battery_sensor.get_human(), battery_sensor.get_filtered_value());
 
     // Controller handling
     if (ctrl == JOY) ignition = simulator.simulating(SimOption::ignition) ? ignition : ignition_sense;
@@ -246,7 +251,7 @@ void loop() {
             else {}   // There's no reason pushing the ch4 button when in other modes can't do something different.  That would go here
             hotrc_ch4_sw_event = false;    
         }
-        if (hotrc_pulse_vert_filt_us > hotrc_pulse_failsafe_max_us) {
+        if (hotrc_pulse_vert_filt_us > hotrc_pulse_failsafe_us + hotrc_pulse_failsafe_margin_us) {
             hotrcPanicTimer.reset();
             hotrc_radio_lost = false;
             if (!ignition_output_enabled) ignition_output_enabled = true; // Ignition stays low until the hotrc is detected here, then output is allowed
@@ -437,6 +442,30 @@ void loop() {
     TemperatureSensor * temp_eng = temperature_sensor_manager.get_sensor(sensor_location::ENGINE);
     err_temp_engine = temp_eng != nullptr ? temp_eng->get_temperature() >= temp_lims_f[ENGINE][WARNING] : -999;
     
+    // Detect sensors disconnected or giving out-of-range readings.
+    // TODO : The logic of this for each sensor should be moved to devices.h objects
+    err_sensor_range = false;
+    err_sensor_lost = false;
+    uint32_t val;
+    val = analogRead(brake_pos_pin);
+    if (val < brkpos_sensor.get_min_native() || val > brkpos_sensor.get_max_native()) err_sensor_range = true;
+    if (!val) err_sensor_lost = true;
+    val = analogRead(pressure_pin);
+    if ((val && val < pressure_sensor.get_min_native()) || val > pressure_sensor.get_max_native()) err_sensor_range = true;
+    if (!val) err_sensor_lost = true;
+    if (analogRead(mulebatt_pin) > battery_sensor.get_max_native()) err_sensor_lost = true;
+    if (hotrc_pulse_us[VERT] < hotrc_pulse_lims_us[VERT][MIN] - hotrc_pulse_margin_us) err_sensor_range = true; 
+    if (!hotrc_pulse_us[VERT]) err_sensor_lost = true;
+    int32_t halfmargin = hotrc_pulse_margin_us / 2;
+    for (int32_t ch = HORZ; ch <= CH4; ch++) {
+        if (ch != VERT && (hotrc_pulse_us[ch] < hotrc_pulse_lims_us[ch][MIN] - halfmargin)) err_sensor_range = true; 
+        if (hotrc_pulse_us[ch] > hotrc_pulse_lims_us[ch][MAX] + halfmargin) err_sensor_range = true; 
+        if (hotrc_pulse_us[ch] < (hotrc_pulse_abs_min_us - hotrc_pulse_margin_us)) err_sensor_lost = true;
+        if (hotrc_pulse_us[ch] > (hotrc_pulse_abs_max_us + hotrc_pulse_margin_us)) err_sensor_lost = true;
+    }
+    if (((hotrc_pulse_us[VERT] < hotrc_pulse_lims_us[VERT][MIN] - halfmargin) && (hotrc_pulse_us[VERT] > hotrc_pulse_failsafe_us + hotrc_pulse_margin_us))
+          || (hotrc_pulse_us[VERT] < hotrc_pulse_failsafe_us - hotrc_pulse_margin_us)) err_sensor_range = true; 
+    
     //  Check: if any sensor is out of range    
     //  Check: if sensor readings aren't consistent with actuator outputs given. Like, if the brake motor is moving down, then either brake position should be decreasing or pressure increasing (for example)
     //  Check if the pressure response is characteristic of air being in the brake line.
@@ -502,7 +531,7 @@ void loop() {
             else if (selected_value == 10) adj = adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
         }
         else if (dataset_page == PG_JOY) {
-            if (selected_value == 4) adj_val (&hotrc_pulse_failsafe_max_us, sim_edit_delta, hotrc_pulse_failsafe_min_us + 1, hotrc_pulse_lims_us[VERT][MIN] - 1);
+            if (selected_value == 4) adj_val (&hotrc_pulse_failsafe_us, sim_edit_delta, hotrc_pulse_abs_min_us, hotrc_pulse_lims_us[VERT][MIN] - hotrc_pulse_margin_us);
             else if (selected_value == 5) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][MIN], sim_edit_delta, 0, ctrl_lims_adc[ctrl][HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][DB] / 2 - 1);
             else if (selected_value == 6) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][MAX], sim_edit_delta, ctrl_lims_adc[ctrl][HORZ][CENT] + ctrl_lims_adc[ctrl][HORZ][DB] / 2 + 1, ctrl_lims_adc[ctrl][HORZ][CENT]);
             else if (selected_value == 7) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][DB], sim_edit_delta, 0, (ctrl_lims_adc[ctrl][HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][MIN] > ctrl_lims_adc[ctrl][HORZ][MAX] - ctrl_lims_adc[ctrl][HORZ][CENT]) ? 2*(ctrl_lims_adc[ctrl][HORZ][MAX] - ctrl_lims_adc[ctrl][HORZ][CENT]) : 2*(ctrl_lims_adc[ctrl][HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][MIN]));

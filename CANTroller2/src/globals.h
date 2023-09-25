@@ -21,11 +21,11 @@
 // #define CAP_TOUCH
 bool flip_the_screen = true;
 
-#define multibutton_pin 0       // (button0 / bootstrap high) - This is the "Boot" button on the esp32 board, and also potentially a joystick cruise button. Both active low (existing onboard pullup)
+#define bootbutton_pin 0       // (button0 / bootstrap high) - This is the "Boot" button on the esp32 board, and also potentially a joystick cruise button. Both active low (existing onboard pullup)
 #define steer_enc_a_pin 1       // (adc) - Reserved for a steering quadrature encoder. Encoder "A" signal
 #define steer_enc_b_pin 2       // (adc) - Reserved for a steering quadrature encoder. Encoder "B" signal
 #define tft_dc_pin 3            // (adc* / strap X) - Output, Assert when sending data to display chip to indicate commands vs. screen data
-#define ign_batt_pin 4          // (adc) - Analog input, battery voltage sense, full scale is 16V
+#define mulebatt_pin 4          // (adc) - Analog input, battery voltage sense, full scale is 16V
 #define pot_wipe_pin 5          // (adc) - Analog in from 20k pot
 #define brake_pos_pin 6         // (adc) - Analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
 #define pressure_pin 7          // (adc) - Analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V.
@@ -58,12 +58,16 @@ bool flip_the_screen = true;
 #define touch_cs_pin 47         // Output, chip select for resistive touchscreen, active low
 #define neopixel_pin 48         // (rgb led) - Data line to onboard Neopixel WS281x (on all v1 devkit boards)
 
-// Servo library says S3 can run servos on pins 1-21,35-45,47-48, the multiple servo example uses pins 13,14,15,16, and (I think) 4.
+// External pullup/pulldown resistors:   (Note: "BB" = On dev breadboards only, "PCB" = On vehicle PCB only)
+// 1. mulebatt_pin: Add 1M-ohm to 3.3V. Allows detecting broken connection.
+// 2. brake_pos_pin, pressure_pin: Add 1M-ohm to GND. Allows detecting unconnected sensors or broken connections.
+// 3. onewire_pin: Add 4.7k-ohm to 3.3V. Needed for open collector sensor output, to define logic-high voltage level.
+// 4. tach_pulse_pin, speedo_pulse_pin: (PCB) Add 4.7k-ohm to 3.3V. For open collector sensor outputs. (BB) If no sensor is present: connect 4.7k-ohm to GND instead. Allows sensor detection.
+// 5. neopixel_pin: (PCB) Add 300 ohm in series (between pin and the DataIn pin of the 1st pixel). (BB) Same, but this one is likely optional, e.g. mine works w/o it.  For signal integrity over long wires. 
+// 6. uart_tx_pin: (PCB) Add 1M to GND. (BB) Connect 1M-ohm to 3.3V instead. For boot detection of vehicle PCB, so defaults are set appropriately.
+
 // ESP32 errata 3.11: Pin 36 and 39 will be pulled low for ~80ns when "certain RTC peripherals power up"
-// ESP32 pullups/downs (eg on pin 0) tend to be weak 45k-ohm, on many pins. Use stronger values for our pullups/downs <= 10k-ohm
-// https://www.esp32.com/viewtopic.php?f=12&t=34831
-// Soren 230731 swapped crit signals off p36/p39:
-// Was: speedo_pulse_pin 36 , basicmodesw_pin 46 , , touch_cs_pin 39 , sdcard_cs_pin 47
+// ESP32 pullups/downs (~45k-ohm) details: https://www.esp32.com/viewtopic.php?f=12&t=34831
 
 #define tft_ledk_pin -1   // Output, optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
 #define touch_irq_pin 255 // Input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - Set to 255 if not used
@@ -140,6 +144,7 @@ uint32_t cruise_sw_timeout_us = 500000;         // how long do you have to hold 
 uint32_t cruise_antiglitch_timeout_us = 350000; // Target speed won't change until manual adjustment is outside deadboand for longer than this
 Timer cruiseAntiglitchTimer(cruise_antiglitch_timeout_us);
 Timer motorParkTimer(motor_park_timeout_us);
+bool running_on_devboard;  // true = running on dev board, false = running on the car.  Requires pullup/pulldown resistors configured as above
 
 // potentiometer related
 Potentiometer pot(pot_wipe_pin);
@@ -210,7 +215,7 @@ TemperatureSensorManager temperature_sensor_manager(onewire_pin);
 Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 
 // mule battery related
-BatterySensor battery_sensor(ign_batt_pin);
+BatterySensor battery_sensor(mulebatt_pin);
 
 // controller related
 enum ctrls { HOTRC, JOY, SIM, HEADLESS }; // Possible sources of gas, brake, steering commands
@@ -231,16 +236,19 @@ int32_t hotrc_pulse_lims_us[4][3] = {{970 - 1, 1470 - 5, 1970 - 8},   // [HORZ] 
                                      {1080 - 1, 1580 - 5, 2080 - 8},  // [VERT] [MIN/CENT/MAX]
                                      {1200 - 1, 1500 - 5, 1800 - 8},  // [CH3] [MIN/CENT/MAX]
                                      {1300 - 1, 1500 - 5, 1700 - 8}}; // [CH4] [MIN/CENT/MAX]
+int32_t hotrc_pulse_abs_min_us = 880;
+int32_t hotrc_pulse_abs_max_us = 2080;
+int32_t hotrc_pulse_margin_us = 20;
 int32_t hotrc_spike_buffer[2][3];
 bool hotrc_radio_lost = true;
 bool hotrc_radio_lost_last = hotrc_radio_lost;
 bool hotrc_suppress_next_ch3_event = true; // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 bool hotrc_suppress_next_ch4_event = true; // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 float hotrc_pulse_period_us = 1000000.0 / 50;
-int32_t hotrc_pulse_us[2];  // [HORZ/VERT]  // horz_pulse_us, hotrc_vert_pulse_us, hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us;
+volatile int32_t hotrc_pulse_us[4];  // [HORZ/VERT/CH3/CH4]  // horz_pulse_us, hotrc_vert_pulse_us, hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us;
 int32_t hotrc_pulse_vert_filt_us;  // Only needed for vert channel to detect radio
-int32_t hotrc_pulse_failsafe_min_us = 780; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
-int32_t hotrc_pulse_failsafe_max_us = 980; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
+int32_t hotrc_pulse_failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
+int32_t hotrc_pulse_failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
 int32_t hotrc_pulse_failsafe_pad_us = 10;
 uint32_t hotrc_panic_timeout_us = 500000; // how long to receive flameout-range signal from hotrc vertical before panic stopping
 Timer hotrcPanicTimer(hotrc_panic_timeout_us);
@@ -394,24 +402,23 @@ QPID cruiseQPID(speedometer.get_filtered_value_ptr().get(), &tach_target_rpm, &s
 // QPID::centMode::centerStrict, (tach_govern_rpm + tach_idle_rpm)/2);  // period, more settings
 
 // Trouble codes
-bool err_temp_engine;
-bool err_temp_wheel;
-bool err_range;
+bool err_temp_engine, err_temp_wheel, err_sensor_range, err_sensor_lost;
 
 // Soren: commenting out these pre-rmt horz/vert handler function relics (noticing also the horz function appears to operate on the vert value (?))
 // void handle_hotrc_vert(int32_t pulse_width) { if (pulse_width > 0) hotrc_vert_pulse_64_us = pulse_width; }  // reads return 0 if the buffer is empty eg bc our loop is running faster than the rmt is getting pulses;
 // void handle_hotrc_horz(int32_t pulse_width) { if (pulse_width > 0) hotrc_vert_pulse_64_us = pulse_width; }
 void hotrc_ch3_update(void) {                                                            //
-    hotrc_ch3_sw = (hotrc_ch3.readPulseWidth(true) <= 1500); // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
+    hotrc_pulse_us[CH3] = hotrc_ch3.readPulseWidth(true);
+    hotrc_ch3_sw = (hotrc_pulse_us[CH3] <= 1500); // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
     if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true; // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch3_sw_last = hotrc_ch3_sw;
 }
 void hotrc_ch4_update(void) {                                                            //
-    hotrc_ch4_sw = (hotrc_ch4.readPulseWidth(true) <= 1500); // Ch4 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH4][CENT]
+    hotrc_pulse_us[CH4] = hotrc_ch4.readPulseWidth(true);
+    hotrc_ch4_sw = (hotrc_pulse_us[CH4] <= 1500); // Ch4 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH4][CENT]
     if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true; // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
-
 void calc_ctrl_lims(void) {
     ctrl_db_adc[VERT][BOT] = ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][DB] / 2; // Lower threshold of vert joy deadband (ADC count 0-4095)
     ctrl_db_adc[VERT][TOP] = ctrl_lims_adc[ctrl][VERT][CENT] + ctrl_lims_adc[ctrl][VERT][DB] / 2; // Upper threshold of vert joy deadband (ADC count 0-4095)
@@ -473,4 +480,12 @@ void update_temperature_sensors(void *parameter) {
         }
         vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently
     }
+}
+void set_devboard_defaults() {
+    simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), 1));
+    simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), 1));
+    simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), 1));
+    simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), 1));
+    // simulator.set_can_simulate(SimOption::airflow, adj_bool(simulator.can_simulate(SimOption::airflow), 1));
+    // simulator.set_can_simulate(SimOption::mapsens, adj_bool(simulator.can_simulate(SimOption::mapsens), 1));
 }
