@@ -128,9 +128,9 @@ char simgrid[4][3][5] = {
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
-bool* idiotlights[11] = {&panic_stop, &err_temp_engine, &err_temp_wheel, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr()};  // , &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
-uint16_t idiotcolors[arraysize(idiotlights)] = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK };  // LYEL, YEL };
-char idiotchars[arraysize(idiotlights)][3] = {"Pn", "Eg", "Wh", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm" };  // "c3", "c4" };
+bool* idiotlights[15] = {&err_sensor_lost, &err_sensor_range, &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard, &boot_button };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
+uint16_t idiotcolors[arraysize(idiotlights)] = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG, YEL };  // LYEL, YEL };
+char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "Eg", "Wh", "Pn", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB", "BB" };  // "c3", "c4" };
 bool idiotlasts[arraysize(idiotlights)];
 
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
@@ -640,7 +640,7 @@ class Display {
                     draw_dynamic(10, hotrc_pulse_us[VERT], hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);  // Programmed centerpoint is 230 adc
                     draw_eraseval(11);
                     draw_eraseval(12);
-                    draw_dynamic(13, hotrc_pulse_failsafe_max_us, 880.0, 2080.0);
+                    draw_dynamic(13, hotrc_pulse_failsafe_us, hotrc_pulse_abs_min_us, hotrc_pulse_lims_us[VERT][MIN] - hotrc_pulse_margin_us);
                     draw_dynamic(14, ctrl_lims_adc[ctrl][HORZ][MIN], 0, ctrl_lims_adc[ctrl][HORZ][MAX]);
                     draw_dynamic(15, ctrl_lims_adc[ctrl][HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][MIN], adcrange_adc);
                     draw_dynamic(16, ctrl_lims_adc[ctrl][HORZ][DB], 0, 2*(min (ctrl_lims_adc[ctrl][HORZ][CENT]-ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]-ctrl_lims_adc[ctrl][HORZ][CENT]) -1));
