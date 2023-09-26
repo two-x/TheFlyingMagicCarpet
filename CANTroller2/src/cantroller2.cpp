@@ -4,7 +4,6 @@
 #include <vector>
 #include <iomanip>  // Formatting cout
 #include "globals.h"
-// #include "uictrl.h"
 #include "display.h"
 #include "TouchScreen.h"
 #include "RunModeManager.h"
@@ -89,11 +88,10 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (uart_tx_pin, INPUT);  // 
     running_on_devboard = (read_pin(uart_tx_pin));
     if (running_on_devboard) set_devboard_defaults();
-    printf ("Using %s defaults..\n", (running_on_devboard) ? "vehicle-pcb" : "dev-board");
     set_pin (uart_tx_pin, OUTPUT);  // 
     Serial.begin (115200);  // Open console serial port
     delay (800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
-    printf ("Console started..\n");
+    printf ("Console started..\nUsing %s defaults..\n", (running_on_devboard) ? "vehicle-pcb" : "dev-board");
     
     // Set up 4 RMT receivers, one per channel
     printf ("Init rmt for hotrc..\n");
