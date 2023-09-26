@@ -4,7 +4,6 @@
 #include <vector>
 #include <iomanip>  // Formatting cout
 #include "globals.h"
-// #include "uictrl.h"
 #include "display.h"
 #include "TouchScreen.h"
 #include "RunModeManager.h"
@@ -89,11 +88,10 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (uart_tx_pin, INPUT);  // 
     running_on_devboard = (read_pin(uart_tx_pin));
     if (running_on_devboard) set_devboard_defaults();
-    printf ("Using %s defaults..\n", (running_on_devboard) ? "vehicle-pcb" : "dev-board");
     set_pin (uart_tx_pin, OUTPUT);  // 
     Serial.begin (115200);  // Open console serial port
     delay (800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
-    printf ("Console started..\n");
+    printf ("Console started..\nUsing %s defaults..\n", (running_on_devboard) ? "vehicle-pcb" : "dev-board");
     
     // Set up 4 RMT receivers, one per channel
     printf ("Init rmt for hotrc..\n");
@@ -213,7 +211,7 @@ void loop() {
         } while (basicmodesw != !digitalRead(basicmodesw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
     }
 
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
+    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
 
     encoder.update();  // Read encoder input signals
     pot.update();
@@ -230,12 +228,12 @@ void loop() {
     speedometer.update();  // Speedo
     pressure_sensor.update();  // Brake pressure
 
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //
-
     // Read the car ignition signal, and while we're at it measure the vehicle battery voltage off ign signal
     battery_sensor.update();
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
     // printf("batt_pin: %d, batt_raw: %f, batt_human: %f, batt_filt: %f\n", analogRead(mulebatt_pin), battery_sensor.get_native(), battery_sensor.get_human(), battery_sensor.get_filtered_value());
+
+    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "sns");  //
 
     // Controller handling
     if (ctrl == JOY) ignition = simulator.simulating(SimOption::ignition) ? ignition : ignition_sense;
@@ -290,10 +288,10 @@ void loop() {
                 ctrl_pos_adc[axis][FILT] = ctrl_lims_adc[ctrl][axis][CENT];  // if joy axis is in the deadband, set joy_axis_filt to center value
         }
     }
-    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "joy");  //
+    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //
     
     runmode = runModeManager.handle_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
-    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "mod");  //
+    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "run");  //
 
     // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
 
@@ -414,6 +412,7 @@ void loop() {
         if ((brake_parked && gas_parked) || motorParkTimer.expired() || (runmode != SHUTDOWN && runmode != BASIC))
             park_the_motors = false;
     }
+    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "out");  //
 
     // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
     //
@@ -428,54 +427,59 @@ void loop() {
         }
     }
     else diag_ign_error_enabled = true;
+    
+    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tch");  //
 
     // Update warning idiot lights
-    bool check_wheels;
-    check_wheels = false;
-    TemperatureSensor * temp_fl = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_FL);
-    TemperatureSensor * temp_fr = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_FR);
-    TemperatureSensor * temp_rl = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_RL);
-    TemperatureSensor * temp_rr = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_RR);
-    if (temp_fl != nullptr && temp_fl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-    if (temp_fr != nullptr && temp_fr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-    if (temp_rl != nullptr && temp_rl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-    if (temp_rr != nullptr && temp_rr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-    err_temp_wheel = check_wheels;
+    if (errTimer.expireset()) {
+        bool check_wheels;
+        check_wheels = false;
+        TemperatureSensor * temp_fl = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_FL);
+        TemperatureSensor * temp_fr = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_FR);
+        TemperatureSensor * temp_rl = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_RL);
+        TemperatureSensor * temp_rr = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_RR);
+        if (temp_fl != nullptr && temp_fl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+        if (temp_fr != nullptr && temp_fr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+        if (temp_rl != nullptr && temp_rl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+        if (temp_rr != nullptr && temp_rr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+        err_temp_wheel = check_wheels;
 
-    TemperatureSensor * temp_eng = temperature_sensor_manager.get_sensor(sensor_location::ENGINE);
-    err_temp_engine = temp_eng != nullptr ? temp_eng->get_temperature() >= temp_lims_f[ENGINE][WARNING] : -999;
-    
-    // Detect sensors disconnected or giving out-of-range readings.
-    // TODO : The logic of this for each sensor should be moved to devices.h objects
-    uint32_t val;
-    val = analogRead(brake_pos_pin);
-    err_sensor[RANGE][e_brkpos] = (val < brkpos_sensor.get_min_native() || val > brkpos_sensor.get_max_native());
-    err_sensor[LOST][e_brkpos] = (val < err_margin_adc);
-    val = analogRead(pressure_pin);
-    err_sensor[RANGE][e_pressure] = ((val && val < pressure_sensor.get_min_native()) || val > pressure_sensor.get_max_native());
-    err_sensor[LOST][e_pressure] = (val < err_margin_adc);
-    err_sensor[LOST][e_battery] = (analogRead(mulebatt_pin) > battery_sensor.get_max_native());
-    int32_t halfmargin = hotrc_pulse_margin_us / 2;
-    for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
-        err_sensor[RANGE][ch] = !hotrc_radio_lost && ((hotrc_pulse_us[ch] < hotrc_pulse_lims_us[ch][MIN] - halfmargin) 
-                                 || (hotrc_pulse_us[ch] > hotrc_pulse_lims_us[ch][MAX] + halfmargin));
-        err_sensor[LOST][ch] = !hotrc_radio_lost && ((hotrc_pulse_us[ch] < (hotrc_pulse_abs_min_us - hotrc_pulse_margin_us))
-                                || (hotrc_pulse_us[ch] > (hotrc_pulse_abs_max_us + hotrc_pulse_margin_us)));
+        TemperatureSensor * temp_eng = temperature_sensor_manager.get_sensor(sensor_location::ENGINE);
+        err_temp_engine = temp_eng != nullptr ? temp_eng->get_temperature() >= temp_lims_f[ENGINE][WARNING] : -999;
+        
+        // Detect sensors disconnected or giving out-of-range readings.
+        // TODO : The logic of this for each sensor should be moved to devices.h objects
+        uint32_t val;
+        val = analogRead(brake_pos_pin);
+        err_sensor[RANGE][e_brkpos] = (val < brkpos_sensor.get_min_native() || val > brkpos_sensor.get_max_native());
+        err_sensor[LOST][e_brkpos] = (val < err_margin_adc);
+        val = analogRead(pressure_pin);
+        err_sensor[RANGE][e_pressure] = ((val && val < pressure_sensor.get_min_native()) || val > pressure_sensor.get_max_native());
+        err_sensor[LOST][e_pressure] = (val < err_margin_adc);
+        err_sensor[LOST][e_battery] = (analogRead(mulebatt_pin) > battery_sensor.get_max_native());
+        int32_t halfmargin = hotrc_pulse_margin_us / 2;
+        for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
+            err_sensor[RANGE][ch] = !hotrc_radio_lost && ((hotrc_pulse_us[ch] < hotrc_pulse_lims_us[ch][MIN] - halfmargin) 
+                                    || (hotrc_pulse_us[ch] > hotrc_pulse_lims_us[ch][MAX] + halfmargin));  // && ch != VERT
+            err_sensor[LOST][ch] = !hotrc_radio_lost && ((hotrc_pulse_us[ch] < (hotrc_pulse_abs_min_us - hotrc_pulse_margin_us))
+                                    || (hotrc_pulse_us[ch] > (hotrc_pulse_abs_max_us + hotrc_pulse_margin_us)));
+        }
+        // err_sensor[RANGE][e_hrcvert] = (hotrc_pulse_us[VERT] < hotrc_pulse_failsafe_us - hotrc_pulse_margin_us)
+        //     || ((hotrc_pulse_us[VERT] < hotrc_pulse_lims_us[VERT][MIN] - halfmargin) && (hotrc_pulse_us[VERT] > hotrc_pulse_failsafe_us + hotrc_pulse_margin_us));
+        
+        // Set sensor error idiot light flags
+        // printf ("Sensors errors: ");
+        for (int32_t t=0; t<num_err_types; t++) {
+            err_sensor_alarm[t] = false;
+            for (int32_t s=0; s<e_num_sensors; s++)
+                if (err_sensor[t][s]) {
+                    err_sensor_alarm[t] = true;
+                    // printf ("%ld(%d), ", s, t);
+                }
+        }
+        // printf ("\n");
     }
-    // err_sensor[RANGE][e_hrcvert] = (hotrc_pulse_us[VERT] < hotrc_pulse_failsafe_us - hotrc_pulse_margin_us)
-    //     || ((hotrc_pulse_us[VERT] < hotrc_pulse_lims_us[VERT][MIN] - halfmargin) && (hotrc_pulse_us[VERT] > hotrc_pulse_failsafe_us + hotrc_pulse_margin_us));
-    
-    // Set error flags
-    // printf ("Sensors errors: ");
-    for (int32_t t=0; t<num_err_types; t++) {
-        err_sensor_alarm[t] = false;
-        for (int32_t s=0; s<e_num_sensors; s++)
-            if (err_sensor[t][s]) {
-                err_sensor_alarm[t] = true;
-                // printf ("%ld(%d), ", s, t);
-            }
-    }
-    // printf ("\n");
+    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "err");  //
 
 
     //  Check: if any sensor is out of range    
@@ -494,8 +498,6 @@ void loop() {
     //     C) Mule seems to be accelerating like a Tesla.
     //     D) Car is accelerating yet engine is at idle.
     //  * The control system has nonsensical values in its variables.
-
-    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pid");  //
         
     ts.handleTouch(); // Handle touch events and actions
     // ts.printTouchInfo(); 
@@ -540,7 +542,8 @@ void loop() {
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == PG_RUN) {
             if (selected_value == 9) adj = adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);
-            else if (selected_value == 10) adj = adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
+            else if (selected_value == 10) adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
+            if (adj) calc_governor();
         }
         else if (dataset_page == PG_JOY) {
             if (selected_value == 4) adj_val (&hotrc_pulse_failsafe_us, sim_edit_delta, hotrc_pulse_abs_min_us, hotrc_pulse_lims_us[VERT][MIN] - hotrc_pulse_margin_us);
@@ -553,8 +556,10 @@ void loop() {
             if (adj) calc_ctrl_lims();  // update derived variables relevant to changes made
         }
         else if (dataset_page == PG_CAR) {
-            if (selected_value == 2) adj = adj_val (&tach_idle_hot_min_rpm, 0.1*(float)sim_edit_delta, tach_idle_abs_min_rpm, tach_idle_cold_max_rpm - 1);
-            else if (selected_value == 3) adj = adj_val (&tach_idle_cold_max_rpm, 0.1*(float)sim_edit_delta, tach_idle_hot_min_rpm + 1, tach_idle_abs_max_rpm);
+            if (selected_value == 2) throttle.set_idlehot(throttle.get_idlehot(), 0.1*(float)sim_edit_delta);
+            else if (selected_value == 3) throttle.set_idlecold(throttle.get_idlecold(), 0.1*(float)sim_edit_delta);
+            // if (selected_value == 2) adj = adj_val (&tach_idle_hot_min_rpm, 0.1*(float)sim_edit_delta, tach_idle_abs_min_rpm, tach_idle_cold_max_rpm - 1);
+            // else if (selected_value == 3) adj = adj_val (&tach_idle_cold_max_rpm, 0.1*(float)sim_edit_delta, tach_idle_hot_min_rpm + 1, tach_idle_abs_max_rpm);
             else if (selected_value == 4) adj = adj_val (tachometer.get_redline_rpm_ptr().get(), 0.1*(float)sim_edit_delta, throttle.get_idlehigh(), tachometer.get_max_rpm());
             else if (selected_value == 5) adj_val (airflow_sensor.get_max_mph_ptr().get(), 0.01*(float)sim_edit_delta, 0, airflow_sensor.get_abs_max_mph());
             else if (selected_value == 6) adj_val (map_sensor.get_min_psi_ptr().get(), 0.1*(float)sim_edit_delta, map_sensor.get_abs_min_psi(), map_sensor.get_abs_max_psi());
@@ -621,7 +626,7 @@ void loop() {
         }
         sim_edit_delta = 0;
     }
-    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tun");  //
+    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tun");  //
     // Ignition & Panic stop logic and Update output signals
     if (!speedometer.car_stopped()) { // if we lose connection to the hotrc while driving, or the joystick ignition button was turned off, panic
         if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && hotrc_radio_lost) panic_stop = true;  // panic_stop could also have been initiated by the user button   && !hotrc_radio_lost_last 
@@ -655,7 +660,7 @@ void loop() {
         syspower = syspower_set(syspower);
         syspower_last = syspower;
     }
-    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
+    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
 
     neo.heartbeat_update(((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]));  // Update our beating heart
     for (int32_t ilite=0; ilite < arraysize(idiotlights); ilite++)
@@ -665,7 +670,7 @@ void loop() {
         }
     neo.refresh();
     
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "hrt");
+    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "neo");
     
     // Display updates
     if (display_enabled) screen.update();
@@ -689,11 +694,12 @@ void loop() {
     loopno++;  // I like to count how many loops
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");    
     if (timestamp_loop) {
-        // looptime_sum_us += loop_period_us;
-        // if (loopno) looptime_avg_us = looptime_sum_us / loopno;
-        std::cout <<"\rLp#" << loopno << " us:" << loop_period_us; // << " avg:" << looptime_avg_us;  //  " us:" << esp_timer_get_time() << 
+        looptime_sum_s += (float)loop_period_us / 1000000;
+        if (loopno) looptime_avg_ms = 1000 * looptime_sum_s / (float)loopno;
+        std::cout << std::fixed << std::setprecision(0);
+        std::cout << "\r" << std::setw(5) << looptime_sum_s << " av:" << std::setw(3) << looptime_avg_ms << " lp#" << std::setw(5) << loopno << " us:" << std::setw(5) << loop_period_us; // << " avg:" << looptime_avg_us;  //  " us:" << esp_timer_get_time() << 
         for (int32_t x=1; x<loopindex; x++) std::cout << " " << std::setw(3) << loop_names[x] << x << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1];
-        if (loop_period_us > 20000) std::cout << std::endl;
+        if (loop_period_us > 10000) std::cout << std::endl;
     }
     loop_int_count = 0;
 }
