@@ -105,7 +105,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
     { "Tach Tgt", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", "      - ", "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
     { "SpeedTgt", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "Tach Tgt", "ThrotSet", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", "      - ", "      - ", "SimW/Pot", " Cal Brk", " Cal Gas", },  // PG_TEMP
-    { " Sim Joy", "SimSysPw", "Sim Pres", "SimBkPos", "Sim Tach", "SimAirFl", " Sim MAP", "SimSpeed", " Sim Ign", "SimBasic", "SimStart", },  // PG_SIM
+    { "Joy Axes", "SysPower", "Brk Pres", " Brk Pos", "    Tach", " Airflow", "     MAP", "  Speedo", "Ignition", "Basic Sw", " Starter", },  // PG_SIM
 };
 
 #define DEGR_F "\x09""F  "
@@ -128,7 +128,7 @@ char simgrid[4][3][5] = {
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
-bool* idiotlights[15] = {&err_sensor_lost, &err_sensor_range, &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard, &boot_button };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
+bool* idiotlights[15] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard, &boot_button };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
 uint16_t idiotcolors[arraysize(idiotlights)] = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG, YEL };  // LYEL, YEL };
 char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "Eg", "Wh", "Pn", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB", "BB" };  // "c3", "c4" };
 bool idiotlasts[arraysize(idiotlights)];
