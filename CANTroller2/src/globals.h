@@ -402,7 +402,13 @@ QPID cruiseQPID(speedometer.get_filtered_value_ptr().get(), &tach_target_rpm, &s
 // QPID::centMode::centerStrict, (tach_govern_rpm + tach_idle_rpm)/2);  // period, more settings
 
 // Trouble codes
-bool err_temp_engine, err_temp_wheel, err_sensor_range, err_sensor_lost;
+uint32_t err_margin_adc = 5;
+bool err_temp_engine, err_temp_wheel;
+// Sensor related trouble - this all should be moved to devices.h
+enum err_types_sensor { LOST, RANGE, num_err_types };
+enum err_sensors { e_hrchorz, e_hrcvert, e_hrcch3, e_hrcch4, e_pressure, e_brkpos, e_tach, e_speedo, e_airflow, e_mapsens, e_temps, e_battery, e_basicsw, e_starter, e_num_sensors };
+bool err_sensor_alarm[num_err_types] = { false, false };  // [LOST/RANGE]
+bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_battery/e_basicsw/e_starter]   // SimOption::opt_t::num_sensors]
 
 // Soren: commenting out these pre-rmt horz/vert handler function relics (noticing also the horz function appears to operate on the vert value (?))
 // void handle_hotrc_vert(int32_t pulse_width) { if (pulse_width > 0) hotrc_vert_pulse_64_us = pulse_width; }  // reads return 0 if the buffer is empty eg bc our loop is running faster than the rmt is getting pulses;

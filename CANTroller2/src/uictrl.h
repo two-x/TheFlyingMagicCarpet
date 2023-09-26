@@ -166,20 +166,22 @@ class Encoder {
 
 class neopixelStrip {
   private:
+    enum brightness_presets { B_OFF, B_MIN, B_LO, B_MED, B_HI, B_EXT, B_MAX };
+    enum brightness_contexts { NITE, DAY };  // Indoors = NITE
     uint8_t neo_wheelcounter = 0;
-    uint8_t neo_brightness_dim = 1;
-    uint8_t neo_brightness_medium = 8;
-    uint8_t neo_brightness_max = 20;
+    uint8_t brightlev[2][7] = { { 0, 1,  6, 10, 18, 30,  50 },     // [NITE] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
+                                { 0, 2, 14, 25, 40, 60, 100 }, };  // [DAY] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
     uint8_t neo_master_brightness = 255;
-    uint32_t neo_fade_timeout_us = 125000;
-    uint32_t neo_heartbeat_timeout_us = 1000000;
+    uint32_t neo_fade_timeout_us = 300000;
     Timer neoFadeTimer, neoHeartbeatTimer;
     bool neo_heartbeat = false;
-    uint8_t heartbeat_brightness = neo_brightness_medium; // brightness during fadeouts
+    int32_t pin = -1;
+    uint8_t heartbeat_brightness; // brightness during fadeouts
     uint32_t heartbeatColor, heartbeatNow, heartbeatColor_last, neobright_last;
+    bool context = NITE;
     int32_t heartbeat_state = 0;
     int32_t heartbeat_level = 0;
-    uint32_t heartbeat_ekg_us[4] = {187500, 125000, 562500, 1250000};
+    int64_t heartbeat_ekg_us[4] = {250000, 175000, 550000, 1750000};  // {187500, 125000, 562500, 1250000};
     int32_t heartbeat_pulse = 255;
     static const uint32_t pixelCount = 8;
     static const uint32_t idiotCount = pixelCount - 1;
@@ -191,17 +193,17 @@ class neopixelStrip {
     uint8_t idiotBrightness[idiotCount];  //
     Adafruit_NeoPixel* neostrip;
   public:
-    neopixelStrip(int32_t pin=-1) {  // , int32_t count=1
-        // pixelCount = count;
-        neostrip = new Adafruit_NeoPixel(pixelCount, pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
-        neoFadeTimer.set((int64_t)neo_fade_timeout_us);
-        neoHeartbeatTimer.set((int64_t)neo_heartbeat_timeout_us);
-    }
-    ~neopixelStrip() { delete neostrip; }
+    neopixelStrip() {}
 
-    void init() {
+    void init(int32_t argpin, bool viewcontext=NITE) {
+        pin = argpin;
+        context = viewcontext;
+        neostrip = new Adafruit_NeoPixel(pixelCount, pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
         neostrip->begin();  // start datastream
         neostrip->setBrightness (neo_master_brightness);  // Truly these can get incredibly bright
+        heartbeat_brightness = brightlev[context][B_MED];
+        neoHeartbeatTimer.set(heartbeat_ekg_us[3]);
+        neoFadeTimer.set((int64_t)neo_fade_timeout_us);
         for (int32_t idiot=0; idiot<idiotCount; idiot++) {
             setBoolState(idiot, 0);
             idiotNormalColor[idiot] = 0x808080;
@@ -217,18 +219,19 @@ class neopixelStrip {
             heartbeatColor = color_16b_to_32b(runmode_color);
             if (neoHeartbeatTimer.expired()) {
                 heartbeat_pulse = !heartbeat_pulse;
-                if (heartbeat_pulse) heartbeat_brightness = neo_brightness_medium;
+                if (++heartbeat_state >= arraysize(heartbeat_ekg_us)) heartbeat_state -= arraysize(heartbeat_ekg_us);
+                neoHeartbeatTimer.set(heartbeat_ekg_us[heartbeat_state]);
+                if (heartbeat_pulse) heartbeat_brightness = brightlev[context][B_MED];
                 else neoFadeTimer.reset();
-                if (++heartbeat_state >= arraysize (heartbeat_ekg_us)) heartbeat_state -= arraysize (heartbeat_ekg_us);
-                neoHeartbeatTimer.set ((int64_t)(heartbeat_ekg_us[heartbeat_state]));
             }
-            else if (!heartbeat_pulse && heartbeat_brightness) {
-                heartbeat_brightness = (int8_t)(neo_brightness_dim + (float)(neo_brightness_medium-neo_brightness_dim) * (1 - (float)neoFadeTimer.elapsed() / (float)neo_fade_timeout_us));
-                if (neoFadeTimer.expired() || heartbeat_brightness < 1) heartbeat_brightness = neo_brightness_dim;
+            else if (!heartbeat_pulse && heartbeat_brightness > brightlev[context][B_MIN]) {
+                if (neoFadeTimer.expired()) heartbeat_brightness = brightlev[context][B_MIN];
+                else heartbeat_brightness = (int8_t)(brightlev[context][B_MIN] + (float)(brightlev[context][B_LO] - brightlev[context][B_MIN]) * (1 - (float)neoFadeTimer.elapsed() / (float)neo_fade_timeout_us));
+                
             }
             if (heartbeatColor != heartbeatColor_last || heartbeat_brightness != neobright_last) {
                 heartbeatNow = dimmer(heartbeatColor, heartbeat_brightness);
-                neostrip->setPixelColor (0, heartbeatNow);
+                neostrip->setPixelColor(0, heartbeatNow);
                 heartbeatColor_last = heartbeatColor;
                 neobright_last = heartbeat_brightness;
             }
@@ -258,10 +261,10 @@ class neopixelStrip {
         }
     }
     void updateIdiot(uint32_t idiot) {
-        if (idiotUrgency[idiot] <= 0) idiotNowColor[idiot] = 0;  // Turn off the light
-        else if (idiotUrgency[idiot] == 1) idiotNowColor[idiot] = dimmer(idiotNormalColor[idiot], neo_brightness_dim);
-        else if (idiotUrgency[idiot] == 2) idiotNowColor[idiot] = dimmer(idiotNormalColor[idiot], neo_brightness_medium);
-        else if (idiotUrgency[idiot] == 3) idiotNowColor[idiot] = dimmer(desaturate(idiotNormalColor[idiot], 15), neo_brightness_medium);
+        if (idiotUrgency[idiot] <= 0) idiotNowColor[idiot] = brightlev[context][B_OFF];  // Turn off the light
+        else if (idiotUrgency[idiot] == 1) idiotNowColor[idiot] = dimmer(desaturate(idiotNormalColor[idiot], 5), brightlev[context][B_MIN]);
+        else if (idiotUrgency[idiot] == 2) idiotNowColor[idiot] = dimmer(desaturate(idiotNormalColor[idiot], 5), brightlev[context][B_LO]);
+        else if (idiotUrgency[idiot] == 3) idiotNowColor[idiot] = dimmer(desaturate(idiotNormalColor[idiot], 5), brightlev[context][B_MED]);
         else if (idiotUrgency[idiot] <= 6) {  // Flash alternating with black, at increasing frequency
             // todo : implement this effect
         }

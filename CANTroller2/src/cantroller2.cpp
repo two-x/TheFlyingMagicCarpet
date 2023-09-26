@@ -27,7 +27,7 @@ HotrcManager hotrcVertManager (6);
 RunModeManager runModeManager;
 Display screen;
 ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
-neopixelStrip neo(neopixel_pin);
+neopixelStrip neo;
 
 #ifdef CAP_TOUCH
 TouchScreen ts;
@@ -160,12 +160,15 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     }
 
     printf ("Init neopixel.. ");
-    neo.init();
+    neo.init(neopixel_pin, !running_on_devboard);
     neo.heartbeat(neopixel_pin >= 0);
     int32_t idiots = min((uint32_t)arraysize(idiotlights), neo.neopixelsAvailable());
     for (int32_t idiot = 0; idiot < idiots; idiot++)
         neo.newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
     printf ("set up heartbeat led and %ld neopixel idiot lights\n", idiots);
+
+    // Initialize sensor error flags to false
+    for (int32_t i=0; i<num_err_types; i++) for (int32_t j=0; j<e_num_sensors; j++) err_sensor[i][j] = false;
 
     int32_t watchdog_time_ms = Watchdog.enable(2500);  // Start 2.5 sec watchdog
     printf ("Enable watchdog.. timer set to %ld ms\n", watchdog_time_ms);
@@ -444,28 +447,37 @@ void loop() {
     
     // Detect sensors disconnected or giving out-of-range readings.
     // TODO : The logic of this for each sensor should be moved to devices.h objects
-    err_sensor_range = false;
-    err_sensor_lost = false;
     uint32_t val;
     val = analogRead(brake_pos_pin);
-    if (val < brkpos_sensor.get_min_native() || val > brkpos_sensor.get_max_native()) err_sensor_range = true;
-    if (!val) err_sensor_lost = true;
+    err_sensor[RANGE][e_brkpos] = (val < brkpos_sensor.get_min_native() || val > brkpos_sensor.get_max_native());
+    err_sensor[LOST][e_brkpos] = (val < err_margin_adc);
     val = analogRead(pressure_pin);
-    if ((val && val < pressure_sensor.get_min_native()) || val > pressure_sensor.get_max_native()) err_sensor_range = true;
-    if (!val) err_sensor_lost = true;
-    if (analogRead(mulebatt_pin) > battery_sensor.get_max_native()) err_sensor_lost = true;
-    if (hotrc_pulse_us[VERT] < hotrc_pulse_lims_us[VERT][MIN] - hotrc_pulse_margin_us) err_sensor_range = true; 
-    if (!hotrc_pulse_us[VERT]) err_sensor_lost = true;
+    err_sensor[RANGE][e_pressure] = ((val && val < pressure_sensor.get_min_native()) || val > pressure_sensor.get_max_native());
+    err_sensor[LOST][e_pressure] = (val < err_margin_adc);
+    err_sensor[LOST][e_battery] = (analogRead(mulebatt_pin) > battery_sensor.get_max_native());
     int32_t halfmargin = hotrc_pulse_margin_us / 2;
-    for (int32_t ch = HORZ; ch <= CH4; ch++) {
-        if (ch != VERT && (hotrc_pulse_us[ch] < hotrc_pulse_lims_us[ch][MIN] - halfmargin)) err_sensor_range = true; 
-        if (hotrc_pulse_us[ch] > hotrc_pulse_lims_us[ch][MAX] + halfmargin) err_sensor_range = true; 
-        if (hotrc_pulse_us[ch] < (hotrc_pulse_abs_min_us - hotrc_pulse_margin_us)) err_sensor_lost = true;
-        if (hotrc_pulse_us[ch] > (hotrc_pulse_abs_max_us + hotrc_pulse_margin_us)) err_sensor_lost = true;
+    for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
+        err_sensor[RANGE][ch] = !hotrc_radio_lost && ((hotrc_pulse_us[ch] < hotrc_pulse_lims_us[ch][MIN] - halfmargin) 
+                                 || (hotrc_pulse_us[ch] > hotrc_pulse_lims_us[ch][MAX] + halfmargin));
+        err_sensor[LOST][ch] = !hotrc_radio_lost && ((hotrc_pulse_us[ch] < (hotrc_pulse_abs_min_us - hotrc_pulse_margin_us))
+                                || (hotrc_pulse_us[ch] > (hotrc_pulse_abs_max_us + hotrc_pulse_margin_us)));
     }
-    if (((hotrc_pulse_us[VERT] < hotrc_pulse_lims_us[VERT][MIN] - halfmargin) && (hotrc_pulse_us[VERT] > hotrc_pulse_failsafe_us + hotrc_pulse_margin_us))
-          || (hotrc_pulse_us[VERT] < hotrc_pulse_failsafe_us - hotrc_pulse_margin_us)) err_sensor_range = true; 
+    // err_sensor[RANGE][e_hrcvert] = (hotrc_pulse_us[VERT] < hotrc_pulse_failsafe_us - hotrc_pulse_margin_us)
+    //     || ((hotrc_pulse_us[VERT] < hotrc_pulse_lims_us[VERT][MIN] - halfmargin) && (hotrc_pulse_us[VERT] > hotrc_pulse_failsafe_us + hotrc_pulse_margin_us));
     
+    // Set error flags
+    // printf ("Sensors errors: ");
+    for (int32_t t=0; t<num_err_types; t++) {
+        err_sensor_alarm[t] = false;
+        for (int32_t s=0; s<e_num_sensors; s++)
+            if (err_sensor[t][s]) {
+                err_sensor_alarm[t] = true;
+                // printf ("%ld(%d), ", s, t);
+            }
+    }
+    // printf ("\n");
+
+
     //  Check: if any sensor is out of range    
     //  Check: if sensor readings aren't consistent with actuator outputs given. Like, if the brake motor is moving down, then either brake position should be decreasing or pressure increasing (for example)
     //  Check if the pressure response is characteristic of air being in the brake line.
