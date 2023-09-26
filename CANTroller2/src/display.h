@@ -697,9 +697,9 @@ class Display {
                     draw_dynamic(14, brakeQPID.GetOutputSum(), -brakeQPID.GetOutputRange(), brakeQPID.GetOutputRange());  // brake_spid_speedo_delta_adc, -range, range);
                     draw_dynamic(15, brake_pulse_out_us, brake_pulse_extend_us, brake_pulse_retract_us);
                     draw_dynamic(16, pressure_sensor.get_native(), pressure_sensor.get_min_native(), pressure_sensor.get_max_native());
-                    draw_dynamic(17, brakeQPID.GetKp(), 0.0, 10.0);
-                    draw_dynamic(18, brakeQPID.GetKi(), 0.0, 10.0);
-                    draw_dynamic(19, brakeQPID.GetKd(), 0.0, 10.0);
+                    draw_dynamic(17, brakeQPID.GetKp(), 0.0, 2.0);
+                    draw_dynamic(18, brakeQPID.GetKi(), 0.0, 2.0);
+                    draw_dynamic(19, brakeQPID.GetKd(), 0.0, 2.0);
                 }
                 else if (dataset_page == PG_GPID) {
                     drange = gas_pulse_ccw_closed_us-gas_pulse_govern_us;
@@ -711,9 +711,9 @@ class Display {
                     draw_dynamic(14, gasQPID.GetOutputSum(), -gasQPID.GetOutputRange(), gasQPID.GetOutputRange());
                     draw_eraseval(15);
                     draw_truth(16, gas_open_loop, 1);
-                    draw_dynamic(17, gasQPID.GetKp(), 0.0, 10.0);
-                    draw_dynamic(18, gasQPID.GetKi(), 0.0, 10.0);
-                    draw_dynamic(19, gasQPID.GetKd(), 0.0, 10.0);
+                    draw_dynamic(17, gasQPID.GetKp(), 0.0, 2.0);
+                    draw_dynamic(18, gasQPID.GetKi(), 0.0, 2.0);
+                    draw_dynamic(19, gasQPID.GetKd(), 0.0, 2.0);
                 }
                 else if (dataset_page == PG_CPID) {
                     drange = tach_govern_rpm - throttle.get_idlespeed();

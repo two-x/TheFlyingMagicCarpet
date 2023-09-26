@@ -166,8 +166,8 @@ bool cal_set_hotrc_failsafe_ready = false;
 // diag/monitoring variables
 Timer loopTimer(1000000); // how long the previous main loop took to run (in us)
 uint32_t loop_period_us;
-uint64_t looptime_sum_us;
-uint32_t looptime_avg_us;
+float looptime_sum_s;
+float looptime_avg_ms;
 float loop_freq_hz = 1;              // run loop real time frequency (in Hz)
 volatile int32_t loop_int_count = 0; // counts interrupts per loop
 int32_t loopno = 1;
@@ -402,6 +402,8 @@ QPID cruiseQPID(speedometer.get_filtered_value_ptr().get(), &tach_target_rpm, &s
 // QPID::centMode::centerStrict, (tach_govern_rpm + tach_idle_rpm)/2);  // period, more settings
 
 // Trouble codes
+uint32_t err_timeout_us = 175000;
+Timer errTimer((int64_t)err_timeout_us);
 uint32_t err_margin_adc = 5;
 bool err_temp_engine, err_temp_wheel;
 // Sensor related trouble - this all should be moved to devices.h
@@ -435,8 +437,9 @@ void calc_ctrl_lims(void) {
 void calc_governor(void) {
     tach_govern_rpm = map(gas_governor_percent, 0.0, 100.0, 0.0, tachometer.get_redline_rpm()); // Create an artificially reduced maximum for the engine speed
     cruiseQPID.SetOutputLimits(throttle.get_idlespeed(), tach_govern_rpm);
-    gas_pulse_govern_us = map(gas_governor_percent * (tach_govern_rpm - throttle.get_idlespeed()) / tachometer.get_redline_rpm(), 0.0, 100.0, gas_pulse_ccw_closed_us, gas_pulse_cw_open_us); // Governor must scale the pulse range proportionally
-    speedo_govern_mph = map((float)gas_governor_percent, 0.0, 100.0, 0.0, speedometer.get_redline_mph());                                                                                     // Governor must scale the top vehicle speed proportionally
+    gas_pulse_govern_us = map(tach_govern_rpm, throttle.get_idlespeed(), tachometer.get_redline_rpm(), gas_pulse_ccw_closed_us, gas_pulse_cw_open_us); // Governor must scale the pulse range proportionally
+    // gas_pulse_govern_us = map(gas_governor_percent * (tach_govern_rpm - throttle.get_idlespeed()) / tachometer.get_redline_rpm(), 0.0, 100.0, gas_pulse_ccw_closed_us, gas_pulse_cw_open_us); // Governor must scale the pulse range proportionally
+    speedo_govern_mph = map(gas_governor_percent, 0.0, 100.0, 0.0, speedometer.get_redline_mph());                                                                                     // Governor must scale the top vehicle speed proportionally
 }
 float steer_safe(float endpoint) {
     return steer_stop_percent + (endpoint - steer_stop_percent) * (1 - steer_safe_ratio * speedometer.get_filtered_value() / speedometer.get_redline_mph());

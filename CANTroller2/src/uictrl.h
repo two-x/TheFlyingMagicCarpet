@@ -172,7 +172,7 @@ class neopixelStrip {
     uint8_t brightlev[2][7] = { { 0, 1,  6, 10, 18, 30,  50 },     // [NITE] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
                                 { 0, 2, 14, 25, 40, 60, 100 }, };  // [DAY] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
     uint8_t neo_master_brightness = 255;
-    uint32_t neo_fade_timeout_us = 300000;
+    uint32_t neo_fade_timeout_us = 150000;
     Timer neoFadeTimer, neoHeartbeatTimer;
     bool neo_heartbeat = false;
     int32_t pin = -1;
@@ -181,7 +181,7 @@ class neopixelStrip {
     bool context = NITE;
     int32_t heartbeat_state = 0;
     int32_t heartbeat_level = 0;
-    int64_t heartbeat_ekg_us[4] = {250000, 175000, 550000, 1750000};  // {187500, 125000, 562500, 1250000};
+    int64_t heartbeat_ekg_us[4] = {250000, 175000, 620000, 1750000};  // {187500, 125000, 562500, 1250000};
     int32_t heartbeat_pulse = 255;
     static const uint32_t pixelCount = 8;
     static const uint32_t idiotCount = pixelCount - 1;
@@ -224,9 +224,9 @@ class neopixelStrip {
                 if (heartbeat_pulse) heartbeat_brightness = brightlev[context][B_MED];
                 else neoFadeTimer.reset();
             }
-            else if (!heartbeat_pulse && heartbeat_brightness > brightlev[context][B_MIN]) {
+            else if (!heartbeat_pulse) {
                 if (neoFadeTimer.expired()) heartbeat_brightness = brightlev[context][B_MIN];
-                else heartbeat_brightness = (int8_t)(brightlev[context][B_MIN] + (float)(brightlev[context][B_LO] - brightlev[context][B_MIN]) * (1 - (float)neoFadeTimer.elapsed() / (float)neo_fade_timeout_us));
+                else heartbeat_brightness = (int8_t)(brightlev[context][B_MIN] + (float)(brightlev[context][B_LO] - brightlev[context][B_MIN]) * (1.0 - (float)neoFadeTimer.elapsed() / (float)neo_fade_timeout_us));
                 
             }
             if (heartbeatColor != heartbeatColor_last || heartbeat_brightness != neobright_last) {
