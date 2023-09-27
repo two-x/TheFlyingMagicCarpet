@@ -1,7 +1,8 @@
 #pragma once
 #include "utils.h"
 #include "FunctionalInterrupt.h"
-#include <Adafruit_NeoPixel.h> // Plan to allow control of neopixel LED onboard the esp32
+// #include <Adafruit_NeoPixel.h> // Plan to allow control of neopixel LED onboard the esp32
+#include <FastLED.h>
 
 // Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class Potentiometer {
@@ -183,9 +184,12 @@ class neopixelStrip {
     int32_t heartbeat_level = 0;
     int64_t heartbeat_ekg_us[4] = {250000, 175000, 620000, 1750000};  // {187500, 125000, 562500, 1250000};
     int32_t heartbeat_pulse = 255;
-    static const uint32_t pixelCount = 8;
-    static const uint32_t idiotCount = pixelCount - 1;
-    uint32_t color_last[pixelCount];
+    // static const uint32_t numpixels = 8;
+    uint32_t numpixels = 8;
+    static const uint32_t idiotCount = numpixels - 1;
+    CRGB neostrip[numpixels];
+    CRGB color_last[numpixels];
+    // uint32_t color_last[numpixels];
     bool idiotBoolState[idiotCount];  // For simple boolean idiot light, LOW will set urgency=1, and HIGH sets urgency=3.
     uint32_t idiotNormalColor[idiotCount];  // 
     uint32_t idiotNowColor[idiotCount];  // 
@@ -198,9 +202,11 @@ class neopixelStrip {
     void init(int32_t argpin, bool viewcontext=NITE) {
         pin = argpin;
         context = viewcontext;
-        neostrip = new Adafruit_NeoPixel(pixelCount, pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
-        neostrip->begin();  // start datastream
-        neostrip->setBrightness (neo_master_brightness);  // Truly these can get incredibly bright
+        FastLED.addLeds<NEOPIXEL, pin>(neostrip, numpixels);
+        FastLED.setBrightness(0xff); // Adjust the brightness as needed
+        // neostrip = new Adafruit_NeoPixel(pixelCount, pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
+        // neostrip->begin();  // start datastream
+        // neostrip->setBrightness (neo_master_brightness);  // Truly these can get incredibly bright
         heartbeat_brightness = brightlev[context][B_MED];
         neoHeartbeatTimer.set(heartbeat_ekg_us[3]);
         neoFadeTimer.set((int64_t)neo_fade_timeout_us);
@@ -232,11 +238,18 @@ class neopixelStrip {
             if (heartbeatColor != heartbeatColor_last || heartbeat_brightness != neobright_last) {
                 heartbeatNow = dimmer(heartbeatColor, heartbeat_brightness);
                 neostrip->setPixelColor(0, heartbeatNow);
+                // neostrip->setPixelColor(0, heartbeatNow);
                 heartbeatColor_last = heartbeatColor;
                 neobright_last = heartbeat_brightness;
             }
         }
     }
+        CRGB color( (color565 & 0x1f) << 3, (color565 & 0xf800) >> 8, (color565 & 0x7e0) >> 3 );
+        neostrip[1 + idiot] = idiotNowColor[idiot]; // Set the color of the pixel
+        FastLED.show();
+
+
+
     void colorfade_update() {
         if (neoFadeTimer.expireset()) {  // Rainbow fade
             neostrip->setPixelColor (0, colorwheel(++neo_wheelcounter));
@@ -276,14 +289,14 @@ class neopixelStrip {
         }
         neostrip->setPixelColor (1+idiot, idiotNowColor[idiot]);
     }
-    void refresh() {
-        bool something_changed = (heartbeatNow != color_last[0]);
+    void refresh() {  // uint32_t last_led_written = numpixels
+        int32_t lastledtowrite = (heartbeatNow == color_last[0]) ? -1 : 0;
         color_last[0] = heartbeatNow;
         for (int32_t idiot=0; idiot<idiotCount; idiot++) {
-            if (idiotNowColor[idiot] != color_last[idiot+1]) something_changed = true;
+            if (idiotNowColor[idiot] != color_last[idiot+1]) lastledtowrite = idiot;
             color_last[idiot+1] = idiotNowColor[idiot];
         }
-        if (something_changed) neostrip->show();
+        if (something_changed) neostrip->show(lastledtowrite);
     }
     // void assign_idiotlight(uint32_t index, bool idiotvalue, uint16_t idiotcolor) {
     //     for (int32_t idiot = 0; idiot <= min((uint32_t)arraysize(idiotlights), neopixelsAvailable()); idiot++) {
