@@ -64,7 +64,7 @@ bool flip_the_screen = true;
 // 3. onewire_pin: Add 4.7k-ohm to 3.3V. Needed for open collector sensor output, to define logic-high voltage level.
 // 4. tach_pulse_pin, speedo_pulse_pin: (PCB) Add 4.7k-ohm to 3.3V. For open collector sensor outputs. (BB) If no sensor is present: connect 4.7k-ohm to GND instead. Allows sensor detection.
 // 5. neopixel_pin: (PCB) Add 300 ohm in series (between pin and the DataIn pin of the 1st pixel). (BB) Same, but this one is likely optional, e.g. mine works w/o it.  For signal integrity over long wires. 
-// 6. uart_tx_pin: (PCB) Add 1M to GND. (BB) Connect 1M-ohm to 3.3V instead. For boot detection of vehicle PCB, so defaults are set appropriately.
+// 6. uart_tx_pin: (PCB) Add 22k-ohm to GND. (BB) Connect 1M-ohm to 3.3V instead. For boot detection of vehicle PCB, so defaults are set appropriately.
 
 // ESP32 errata 3.11: Pin 36 and 39 will be pulled low for ~80ns when "certain RTC peripherals power up"
 // ESP32 pullups/downs (~45k-ohm) details: https://www.esp32.com/viewtopic.php?f=12&t=34831

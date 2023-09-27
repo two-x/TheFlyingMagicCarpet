@@ -148,22 +148,24 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     // Create a new task that runs the update_temperature_sensors function
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);
     
-    printf ("Init display..\n");
+    printf ("Init screen.. ");
     if (display_enabled) {
         config.begin("FlyByWire", false);
         dataset_page = config.getUInt("dpage", PG_RUN);
         dataset_page_last = config.getUInt("dpage", PG_TEMP);
         screen.init();
+        printf ("TFT initialized.. ");
         ts.init();
+        printf ("touchscreen initialized..\n");
     }
 
-    printf ("Init neopixel.. ");
-    neo.init(neopixel_pin, !running_on_devboard);
+    std::cout << "Init neopixel.. ";
+    neo.init((uint8_t)neopixel_pin, !running_on_devboard);
     neo.heartbeat(neopixel_pin >= 0);
     int32_t idiots = min((uint32_t)arraysize(idiotlights), neo.neopixelsAvailable());
     for (int32_t idiot = 0; idiot < idiots; idiot++)
         neo.newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
-    printf ("set up heartbeat led and %ld neopixel idiot lights\n", idiots);
+    std::cout << "set up heartbeat led and " << idiots << " neopixel idiot lights" << std::endl;
 
     // Initialize sensor error flags to false
     for (int32_t i=0; i<num_err_types; i++) for (int32_t j=0; j<e_num_sensors; j++) err_sensor[i][j] = false;
