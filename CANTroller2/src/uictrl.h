@@ -189,7 +189,7 @@ class neopixelStrip {
     bool context = NITE;
     int32_t heartbeat_state = 0;
     int32_t heartbeat_level = 0;
-    int64_t heartbeat_ekg_us[4] = {250000, 200000, 620000, 1750000};  // {187500, 125000, 562500, 1250000};
+    int64_t heartbeat_ekg_us[4] = {250000, 200000, 620000, 2000000};  // {187500, 125000, 562500, 1250000};
     int32_t heartbeat_pulse = 255;
     static const uint8_t numpixels = 8;
     static const uint8_t idiotCount = numpixels - 1;
@@ -246,7 +246,7 @@ class neopixelStrip {
             }
             else if (!heartbeat_pulse) {
                 if (neoFadeTimer.expired()) heartbeat_brightness = brightlev[context][B_MIN];
-                else heartbeat_brightness = (int8_t)(brightlev[context][B_MIN] + (float)(brightlev[context][B_LO] - brightlev[context][B_MIN]) * (1.0 - (float)neoFadeTimer.elapsed() / (float)neo_fade_timeout_us));
+                else heartbeat_brightness = (int8_t)(brightlev[context][B_MIN] + (float)(brightlev[context][B_LO] - brightlev[context][B_MIN]) * (1.0 - ((heartbeat_state == 1) ? 1.5 : 1.0) * (float)neoFadeTimer.elapsed() / (float)neo_fade_timeout_us));
                 
             }
             if (heartbeatColor != heartbeatColor_last || heartbeat_brightness != neobright_last) {
