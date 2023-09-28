@@ -480,26 +480,44 @@ void loop() {
                 }
         }
         // printf ("\n");
+
+        // Detectable transducer-related failures :: How we can detect them
+        // Brakes:
+        // * Pressure sensor, chain linkage, or vehicle brakes problem :: Motor retracted with position below zeropoint, but pressure did not increase.
+        // * Position sensor problem :: When pressure is not near max, motor is driven more than X volt-seconds without position change (of the expected polarity).
+        // * Brake motor problem :: When motor is driven more than X volt-seconds without any change (of the expected polarity) to either position or pressure.
+        // * Brake calibration, idle high, or speedo sensor problem :: Motor retracted to near limit, with position decreased and pressure increased as expected, but speed doesn't settle toward 0.
+        // * Pressure sensor problem :: If pressure reading is out of range, or ever changes in the unexpected direction during motor movement.
+        // * Position sensor or limit switch problem :: If position reading is outside the range of the motor limit switches.
+        // Steering:
+        // * Chain derailment or motor or limit switch problem :: Motor told to drive for beyond X volt-seconds in one direction for > Y seconds.
+        // Throttle/Engine:
+        // * Airflow/MAP/tach sensor failure :: If any of these three sensor readings are out of range to the other two.
+        // Temperature:
+        // * Engine temperature sensor problem :: Over X min elapsed with Ignition on and tach >= low_idle, but engine temp is below nominal warmup temp.
+        // * Cooling system, coolant, fan, thermostat, or coolant sensor problem :: Engine temp stays over ~204 for >= X min without coolant temp dropping due to fan.
+        // * Axle, brake, etc. wheel issue or wheel sensor problem :: The hottest wheel temp is >= X degF hotter than the 2nd hottest wheel.
+        // * Axle, brake, etc. wheel issue or wheel/ambient sensor problem :: A wheel temp >= X degF higher than ambient temp.
+        // * Ignition problem, fire alarm, or temp sensor problem :: Ignition is off but a non-ambient temp reading increases to above ambient temp.
+        // 
+        // More ideas to define better and implement:
+        // * Check if the pressure response is characteristic of air being in the brake line.
+        // * Axle/brake drum may be going bad (increased engine RPM needed to achieve certain speedo)  (beware going up hill may look the same).
+        // * E-brake has been left on (much the same symptoms as above? (beware going up hill may look the same) 
+        // * Battery isn't charging, or just running low.
+        // * Carburetor not behaving (or air filter is clogged). (See above about engine deiseling - we can detect this!)
+        // * After increasing braking, the actuator position changes in the opposite direction, or vise versa.
+        // * Changing an actuator is not having the expected effect.
+        // * A tunable value suspected to be out of tune.
+        // * Check regularly for ridiculous shit. Compare our variable values against a predetermined list of conditions which shouldn't be possible or are at least very suspect. For example:
+        //   A) Sensor reading is out of range, or has changed faster than it ever should.
+        //   B) Stopping the car on entering hold/shutdown mode is taking longer than it ever should.
+        //   C) Mule seems to be accelerating like a Tesla.
+        //   D) Car is accelerating yet engine is at idle.
+        // * The control system has nonsensical values in its variables.
+
     }
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "err");  //
-
-
-    //  Check: if any sensor is out of range    
-    //  Check: if sensor readings aren't consistent with actuator outputs given. Like, if the brake motor is moving down, then either brake position should be decreasing or pressure increasing (for example)
-    //  Check if the pressure response is characteristic of air being in the brake line.
-    //  * Axle/brake drum may be going bad (increased engine RPM needed to achieve certain speedo)  (beware going up hill may look the same).
-    //  * E-brake has been left on (much the same symptoms as above? (beware going up hill may look the same) 
-    //  * Battery isn't charging, or just running low.
-    //  * Carburetor not behaving (or air filter is clogged). (See above about engine deiseling - we can detect this!)
-    //  * After increasing braking, the actuator position changes in the opposite direction, or vise versa.
-    //  * Changing an actuator is not having the expected effect.
-    //  * A tunable value suspected to be out of tune.
-    //  * Check regularly for ridiculous shit. Compare our variable values against a predetermined list of conditions which shouldn't be possible or are at least very suspect. For example:
-    //     A) Sensor reading is out of range, or has changed faster than it ever should.
-    //     B) Stopping the car on entering hold/shutdown mode is taking longer than it ever should.
-    //     C) Mule seems to be accelerating like a Tesla.
-    //     D) Car is accelerating yet engine is at idle.
-    //  * The control system has nonsensical values in its variables.
         
     ts.handleTouch(); // Handle touch events and actions
     // ts.printTouchInfo(); 
