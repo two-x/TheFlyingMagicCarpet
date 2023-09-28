@@ -88,12 +88,12 @@ char units[disp_fixed_lines][5] = { "adc ", "mph ", "rpm ", "us  ", "psi ", "%  
 
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, num_datapages };
 char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim " };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 9, 4, 5, 3, 4, 8, 7, 8, 8, 0 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 7, 4, 5, 3, 4, 8, 7, 8, 8, 0 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
-    { "BrakePos", " Airflow", "     MAP", "MuleBatt", "     Pot", " Starter", "      - ", "      - ", "      - ", "Governor", "SteerSaf", },  // PG_RUN
-    { "HRC Horz", "HRC Vert", "      - ", "      - ", "HFailsaf", "Horz Min", "Horz Max", " Horz DB", "Vert Min", "Vert Max", " Vert DB", },  // PG_JOY
-    { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", "SpeedIdl", "SpeedRed", "BkPos0Pt", },  // PG_CAR
+    { "BrkPosit", " Airflow", "     MAP", "MuleBatt", "     Pot", "      - ", "      - ", "Br\xa1tness", "DSaturat", "Governor", "SteerSaf", },  // PG_RUN
+    { "HRC Horz", "HRC Vert", "      - ", "      - ", "HFailsaf", "Horz Min", "Horz Max", "HorzDBnd", "Vert Min", "Vert Max", "VertDBnd", },  // PG_JOY
+    { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", "Spd Idle", "SpdRedLn", "BkPos0Pt", },  // PG_CAR
     { "BrakePWM", "SteerPWM", "      - ", "Steer Lt", "SteerStp", "Steer Rt", "BrakExtd", "BrakStop", "BrakRetr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
     { "Pres Tgt", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", "BrakeMot", "BrakPres", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
@@ -103,18 +103,20 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
     { "Joy Axes", "SysPower", "Brk Pres", " Brk Pos", "    Tach", " Airflow", "     MAP", "  Speedo", "Ignition", "Basic Sw", " Starter", },  // PG_SIM
 };
 
-#define DEGR_F "\x09""F  "
+#define DEGR_F "\xf7""F  "  // "\x09""F  "
+#define BINARY "\xa7   "
+#define CHOICE "\x12   "
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
-    { "in  ", "mph ", "psi ", "V   ", "%   ", "    ", "    ", "    ", "    ", "%   ", "%   " },  // PG_RUN
+    { "in  ", "mph ", "psi ", "V   ", "%   ", "    ", "    ", "%   ", "/10 ", "%   ", "%   " },  // PG_RUN
     { "us  ", "us  ", "    ", "    ", "us  ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
     { "adc ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%   ", "mph ", "mph ", "mph ", "in  " },  // PG_CAR
     { "us  ", "us  ", "    ", "    ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PG_PWMS
-    { "    ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", DEGR_F, DEGR_F, "rpms", "    " },  // PG_IDLE
+    { CHOICE, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", DEGR_F, DEGR_F, "rpms", CHOICE },  // PG_IDLE
     { "psi ", "psi ", "%   ", "%   ", "%   ", "%   ", "us  ", "adc ", "    ", "Hz  ", "s   " },  // PG_BPID
-    { "rpm ", "rpm ", "us  ", "us  ", "us  ", "us  ", "    ", "    ", "    ", "Hz  ", "s   " },  // PG_GPID
+    { "rpm ", "rpm ", "us  ", "us  ", "us  ", "us  ", "    ", BINARY, "    ", "Hz  ", "s   " },  // PG_GPID
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "us  ", "    ", "Hz  ", "s   " },  // PG_CPID
-    { DEGR_F, DEGR_F, DEGR_F, DEGR_F, DEGR_F, DEGR_F, "    ", "    ", "    ", "    ", "    " },  // PG_TEMP
-    { "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    ", "    " },  // PG_SIM
+    { DEGR_F, DEGR_F, DEGR_F, DEGR_F, DEGR_F, DEGR_F, "    ", "    ", CHOICE, BINARY, BINARY },  // PG_TEMP
+    { BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY },  // PG_SIM
 };
 char simgrid[4][3][5] = {
     { "prs\x18", "rpm\x18", "car\x18" },
@@ -125,7 +127,7 @@ char simgrid[4][3][5] = {
 
 bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
 uint16_t idiotcolors[arraysize(idiotlights)] = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
-char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "Eg", "Wh", "Pn", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
+char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\x09""E", "\x09""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
 bool idiotlasts[arraysize(idiotlights)];
 
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
@@ -436,7 +438,7 @@ class Display {
                 std::string result (std::to_string ((int32_t)value));
                 return result;
             }
-            if (place >= 0 && place < maxlength) {  // Then we want float formatted with enough nonzero digits after the decimal point for 4 significant digits (eg 123.4, 12.34, 1.234, 0)
+            if (place >= 0 && place < maxlength) {  // Then we want float formatted with enough nonzero digits after the decimal point for 4 significant digits (eg 123.4, 12.34, 1.234, 0.000)
                 int32_t length = min (sigdig+1, maxlength);
                 char buffer[length+1];
                 std::snprintf (buffer, length + 1, "%.*g", length - 1, value);
@@ -578,6 +580,9 @@ class Display {
                 draw_eraseval(draw_index);
             }
         }
+        void update_idiots() {
+            draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, false);
+        }
         void update() {
             if (simulator.get_enabled() != simulating_last || _disp_redraw_all) {
                 draw_simbuttons(simulator.get_enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
@@ -606,7 +611,6 @@ class Display {
                 disp_runmode_dirty = false;
             }
             if ((dispRefreshTimer.expired() && !_procrastinate) || _disp_redraw_all) {
-                draw_idiotlights (disp_idiot_corner_x, disp_idiot_corner_y, false);
                 dispRefreshTimer.reset();
                 float drange;
                 draw_dynamic(1, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
@@ -623,10 +627,11 @@ class Display {
                     draw_dynamic(11, map_sensor.get_filtered_value(), map_sensor.get_min_psi(), map_sensor.get_max_psi());
                     draw_dynamic(12, battery_sensor.get_filtered_value(), battery_sensor.get_min_v(), battery_sensor.get_max_v());
                     draw_dynamic(13, pot.get(), pot.min(), pot.max());
-                    draw_truth(14, starter, 0);
+                    draw_eraseval(14);
                     draw_eraseval(15);
                     draw_eraseval(16);
-                    draw_eraseval(17);
+                    draw_dynamic(16, neobright, 1.0, 100.0, -1, 3);
+                    draw_dynamic(17, neodesat, 0.0, 10.0, -1, 2);
                     draw_dynamic(18, gas_governor_percent, 0.0, 100.0);
                     draw_dynamic(19, steer_safe_percent, 0.0, 100.0);
                 }

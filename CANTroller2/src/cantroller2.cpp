@@ -161,6 +161,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
     std::cout << "Init neopixel.. ";
     neo.init((uint8_t)neopixel_pin, !running_on_devboard);
+    neo.setbright(neobright);
+    neo.setdesaturation(neodesat);
     neo.heartbeat(neopixel_pin >= 0);
     int32_t idiots = min((uint32_t)arraysize(idiotlights), neo.neopixelsAvailable());
     for (int32_t idiot = 0; idiot < idiots; idiot++)
@@ -407,12 +409,14 @@ void loop() {
             // if (boot_button) printf (" Gas:%4ld\n", (int32_t)gas_pulse_out_us);
         }
     }
-
+    uint32_t loophack;
     if (park_the_motors) {  //  When parking motors, IF the timeout expires OR the brake and gas motors are both close enough to the park position, OR runmode has changed THEN stop trying to park the motors
         bool brake_parked = brkpos_sensor.parked();
         bool gas_parked = ((gas_pulse_out_us == gas_pulse_ccw_closed_us + gas_pulse_park_slack_us) && gasServoTimer.expired());
-        if ((brake_parked && gas_parked) || motorParkTimer.expired() || (runmode != SHUTDOWN && runmode != BASIC))
+        if ((brake_parked && gas_parked) || motorParkTimer.expired() || (runmode != SHUTDOWN && runmode != BASIC)) {
             park_the_motors = false;
+            loophack = loopno;  // Hack!  Just to hack around bug in neopixel for first idiot light. Ugh!
+        }
     }
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "out");  //
 
@@ -471,6 +475,7 @@ void loop() {
         
         // Set sensor error idiot light flags
         // printf ("Sensors errors: ");
+        
         for (int32_t t=0; t<num_err_types; t++) {
             err_sensor_alarm[t] = false;
             for (int32_t s=0; s<e_num_sensors; s++)
@@ -561,9 +566,19 @@ void loop() {
     adj = false;
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == PG_RUN) {
-            if (selected_value == 9) adj = adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);
+            if (selected_value == 7) {
+                adj_val (&neobright, sim_edit_delta, 1.0, 100.0);
+                neo.setbright(neobright);
+            }
+            if (selected_value == 8) {
+                adj_val (&neodesat, sim_edit_delta, 0.0, 10.0);
+                neo.setdesaturation(neodesat);
+            }
+            else if (selected_value == 9) {
+                adj = adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);
+                calc_governor();
+            }
             else if (selected_value == 10) adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
-            if (adj) calc_governor();
         }
         else if (dataset_page == PG_JOY) {
             if (selected_value == 4) adj_val (&hotrc_pulse_failsafe_us, sim_edit_delta, hotrc_pulse_abs_min_us, hotrc_pulse_lims_us[VERT][MIN] - hotrc_pulse_margin_us);
@@ -681,27 +696,33 @@ void loop() {
         syspower_last = syspower;
     }
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
-
+    
     neo.heartbeat_update(((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]));  // Update our beating heart
-    for (int32_t ilite=0; ilite < arraysize(idiotlights); ilite++)
-        if (ilite <= neo.neopixelsAvailable() && (*(idiotlights[ilite]) ^ idiotlasts[ilite])) {
-            neo.setBoolState(ilite, *idiotlights[ilite]);
-            neo.updateIdiot(ilite);
+    for (int32_t idiot = 0; idiot < arraysize(idiotlights); idiot++)
+        if (idiot <= neo.neopixelsAvailable() && (*(idiotlights[idiot]) != idiotlasts[idiot])) {
+            printf ("Idiot#%d = %d\n", idiot, *(idiotlights[idiot]));
+
+            neo.setBoolState(idiot, *idiotlights[idiot]);
+            neo.updateIdiot(idiot);
         }
+    if ((loopno == loophack) || park_the_motors) neo.updateIdiot(0);  // For some reason the first neopixel idiot light starts up bright at boot. Weird.
     neo.refresh();
     
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "neo");
-    
+
     // Display updates
-    if (display_enabled) screen.update();
+    if (display_enabled) {
+        screen.update_idiots();
+        screen.update();
+    }
     else if (dataset_page_last != dataset_page) config.putUInt ("dpage", dataset_page);
     
+    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dis");
+
     dataset_page_last = dataset_page;
     selected_value_last = selected_value;
     tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
     simulating_last = simulator.get_enabled();
-
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dis");
 
     // Kick watchdogs
     Watchdog.reset();  // Kick the watchdog to keep us alive
