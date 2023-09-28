@@ -1,8 +1,15 @@
 #pragma once
 #include "utils.h"
 #include "FunctionalInterrupt.h"
-// #include <Adafruit_NeoPixel.h> // Plan to allow control of neopixel LED onboard the esp32
-#include <FastLED.h>
+
+// #define use_fastled
+#ifdef use_fastled
+    #include <FastLED.h>
+    #define colortype CRGB
+#else
+    #include <Adafruit_NeoPixel.h> // Plan to allow control of neopixel LED onboard the esp32
+    #define colortype uint32_t
+#endif
 
 // Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class Potentiometer {
@@ -166,7 +173,7 @@ class Encoder {
 };
 
 class neopixelStrip {
-  private:  // Adafruit_NeoPixel* neostrip;
+  private:
     enum brightness_presets { B_OFF, B_MIN, B_LO, B_MED, B_HI, B_EXT, B_MAX };
     enum brightness_contexts { NITE, DAY };  // Indoors = NITE
     uint8_t neo_wheelcounter = 0;
@@ -178,7 +185,6 @@ class neopixelStrip {
     bool neo_heartbeat = false;
     uint8_t pin = -1;
     uint8_t heartbeat_brightness; // brightness during fadeouts
-    CRGB heartbeatColor, heartbeatNow, heartbeatColor_last;
     uint32_t neobright_last;
     bool context = NITE;
     int32_t heartbeat_state = 0;
@@ -187,13 +193,17 @@ class neopixelStrip {
     int32_t heartbeat_pulse = 255;
     static const uint8_t numpixels = 8;
     static const uint8_t idiotCount = numpixels - 1;
-    CRGB neostrip[numpixels];
-    CRGB neolast[numpixels];
     bool idiotBoolState[idiotCount];  // For simple boolean idiot light, LOW will set urgency=1, and HIGH sets urgency=3.
-    CRGB idiotNormalColor[idiotCount];  // 
-    CRGB idiotNowColor[idiotCount];  // 
     uint32_t idiotUrgency[idiotCount];  // urgency is from 1 to 10 level of freakout (0=off, 1=dim, 2=medium, 3=bright, 4-6=flash/black, 7-9=flash/white, 10=strobe) 
     uint8_t idiotBrightness[idiotCount];  //
+    #ifndef use_fastled
+        Adafruit_NeoPixel* neoobj;
+    #endif
+    colortype neostrip[numpixels];
+    colortype heartbeatColor, heartbeatNow, heartbeatColor_last;
+    colortype neolast[numpixels];
+    colortype idiotNormalColor[idiotCount];  // 
+    colortype idiotNowColor[idiotCount];  // 
   public:
     neopixelStrip() {}
 
@@ -201,10 +211,15 @@ class neopixelStrip {
         pin = argpin;
         context = viewcontext;
         std::cout << "Neo init: add LEDs.. ";
-        FastLED.addLeds<NEOPIXEL, 48>(neostrip, 8);  // FastLED.addLeds<NEOPIXEL, pin>(neostrip, numpixels);  // neostrip = new Adafruit_NeoPixel(pixelCount, pin, NEO_GRB + NEO_GRB + NEO_KHZ800);  // neostrip->begin();  // start datastream
-        std::cout << "set brightness.. ";
-        FastLED.setBrightness(neo_master_brightness); // neostrip->setBrightness (neo_master_brightness);  // Truly these can get incredibly bright
-        heartbeat_brightness = brightlev[context][B_MED];
+        #ifdef use_fastled
+            FastLED.addLeds<NEOPIXEL, 48>(neostrip, 8);  // FastLED.addLeds<NEOPIXEL, pin>(neostrip, numpixels);  // neostrip = new Adafruit_NeoPixel(pixelCount, pin, NEO_GRB + NEO_GRB + NEO_KHZ800);  // neostrip->begin();  // start datastream
+            FastLED.setBrightness(neo_master_brightness); // neostrip->setBrightness (neo_master_brightness);  // Truly these can get incredibly bright
+        #else
+            neoobj = new Adafruit_NeoPixel(numpixels, pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
+            neoobj->begin();  // start datastream
+            neoobj->setBrightness (neo_master_brightness);  // Truly these can get incredibly bright
+        #endif
+        heartbeat_brightness = brightlev[context][B_LO];
         neoHeartbeatTimer.set(heartbeat_ekg_us[3]);
         neoFadeTimer.set((int64_t)neo_fade_timeout_us);
         for (int32_t idiot=0; idiot<idiotCount; idiot++) {
@@ -226,7 +241,7 @@ class neopixelStrip {
                 heartbeat_pulse = !heartbeat_pulse;
                 if (++heartbeat_state >= arraysize(heartbeat_ekg_us)) heartbeat_state -= arraysize(heartbeat_ekg_us);
                 neoHeartbeatTimer.set(heartbeat_ekg_us[heartbeat_state]);
-                if (heartbeat_pulse) heartbeat_brightness = brightlev[context][B_MED];
+                if (heartbeat_pulse) heartbeat_brightness = brightlev[context][B_LO];
                 else neoFadeTimer.reset();
             }
             else if (!heartbeat_pulse) {
@@ -237,13 +252,21 @@ class neopixelStrip {
             if (heartbeatColor != heartbeatColor_last || heartbeat_brightness != neobright_last) {
                 heartbeatNow = dimmer(heartbeatColor, heartbeat_brightness);
                 neostrip[0] = heartbeatNow;  // neostrip->setPixelColor(0, heartbeatNow);
+                #ifndef use_fastled
+                    neoobj->setPixelColor(0, heartbeatNow);
+                #endif
                 heartbeatColor_last = heartbeatColor;
                 neobright_last = heartbeat_brightness;
             }
         }
     }
     void colorfade_update() {
-        if (neoFadeTimer.expireset()) neostrip[0] = colorwheel(++neo_wheelcounter);
+        if (neoFadeTimer.expireset()) {
+            neostrip[0] = colorwheel(++neo_wheelcounter);
+            #ifndef use_fastled
+                neoobj->setPixelColor (0, colorwheel(++neo_wheelcounter));
+            #endif
+        }
     }
     uint32_t neopixelsAvailable() {
         return idiotCount;
@@ -263,7 +286,13 @@ class neopixelStrip {
         }
     }
     void updateIdiot(uint8_t idiot) {
-        if (idiotUrgency[idiot] <= 0) idiotNowColor[idiot] = CRGB(0, 0, 0);  // Turn off the light
+        if (idiotUrgency[idiot] <= 0) {
+            #ifdef use_fastled
+                idiotNowColor[idiot] = CRGB(0, 0, 0);  // Turn off the light
+            #else
+                idiotNowColor[idiot] = brightlev[context][B_OFF];
+            #endif
+        }
         else if (idiotUrgency[idiot] == 1) idiotNowColor[idiot] = dimmer(desaturate(idiotNormalColor[idiot], 5), brightlev[context][B_MIN]);
         else if (idiotUrgency[idiot] == 2) idiotNowColor[idiot] = dimmer(desaturate(idiotNormalColor[idiot], 5), brightlev[context][B_LO]);
         else if (idiotUrgency[idiot] == 3) idiotNowColor[idiot] = dimmer(desaturate(idiotNormalColor[idiot], 5), brightlev[context][B_MED]);
@@ -277,61 +306,89 @@ class neopixelStrip {
             // todo : implement this effect
         }
         neostrip[1+idiot] = idiotNowColor[idiot];
+        #ifndef use_fastled
+            neoobj->setPixelColor (1+idiot, idiotNowColor[idiot]);
+        #endif
     }
     void refresh() {
         int32_t numledstowrite = (heartbeatNow != neolast[0]);
         neolast[0] = heartbeatNow;
+        #ifndef use_fastled
+            neoobj->setPixelColor (0, heartbeatNow);
+        #endif
         for (int32_t idiot=0; idiot<idiotCount; idiot++) {
             if (idiotNowColor[idiot] != neolast[idiot+1]) {
                 numledstowrite = idiot + 2;
                 neolast[idiot+1] = idiotNowColor[idiot];
+                #ifndef use_fastled
+                    neoobj->setPixelColor (1+idiot, idiotNowColor[idiot]);
+                #endif
             }
         }
-        if (numledstowrite) FastLED.show(numledstowrite);
+        #ifdef use_fastled
+            if (numledstowrite) FastLED.show(numledstowrite);
+        #else
+            if (numledstowrite) neoobj->show();
+        #endif
     }
   private:
-    CRGB colorwheel(uint8_t WheelPos) {
+    colortype colorwheel(uint8_t WheelPos) {
         WheelPos = 255 - WheelPos;
-        if (WheelPos < 85) return CRGB(255 - WheelPos * 3, 0, WheelPos * 3);
-        if (WheelPos < 170) {
-            WheelPos -= 85;
-            return CRGB(0, WheelPos * 3, 255 - WheelPos * 3);
+        int rgb[3];
+        if (WheelPos < 85) {
+            rgb[0] = 255 - WheelPos * 3; rgb[1] = 0; rgb[2] = WheelPos * 3;
         }
-        WheelPos -= 170;
-        return CRGB(WheelPos * 3, 255 - WheelPos * 3, 0);
+        else if (WheelPos < 170) {
+            WheelPos -= 85;
+            rgb[0] = 0; rgb[1] = WheelPos * 3; rgb[2] = 255 - WheelPos * 3;
+        }
+        else {
+            WheelPos -= 170;
+            rgb[0] = WheelPos * 3; rgb[1] = 255 - WheelPos * 3; rgb[2] = 0;
+        }
+        #ifdef use_fastled
+            return CRGB(rgb[0], rgb[1], rgb[2]);
+        #else
+            return neoobj->Color(rgb[0], rgb[1], rgb[2]);
+        #endif
     }
-    CRGB color_16b_to_32b(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to FastLED CRGB struct suitable for library
-        return CRGB((color565 & 0x1f) << 3, (color565 & 0xf800) >> 8, (color565 & 0x7e0) >> 3);
+    colortype color_16b_to_32b(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to FastLED CRGB struct suitable for library
+        #ifdef use_fastled
+            return CRGB((color565 & 0x1f) << 3, (color565 & 0xf800) >> 8, (color565 & 0x7e0) >> 3);
+        #else
+            return neoobj->Color((color565 & 0x1f) << 3, (color565 & 0xf800) >> 8, (color565 & 0x7e0) >> 3);
+        #endif
     }
     float maxelement(float r, float g, float b) {
         return (r > g) ? ((r > b) ? r : b) : ((g > b) ? g : b);  // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
     }
-    CRGB dimmer(CRGB color, int8_t bright_percent) {  // brightness 0 is off, 100 is max brightness while retaining same hue and saturation
-        float rgb[3] = { static_cast<float>(color.r), static_cast<float>(color.g), static_cast<float>(color.b) };
-        float fbright = (float)bright_percent * 2.55 / maxelement(rgb[0], rgb[1], rgb[2]);  // max(color.r, color.g, color.b);  // 2.55 = 0xff / 100
-        return CRGB((uint32_t)(rgb[0] * fbright), (uint32_t)(rgb[1] * fbright), (uint32_t)(rgb[2] * fbright));  // return CRGB((float)(color.r * fbright), (float)(color.g * fbright), (float)(color.b * fbright));
+    colortype dimmer(colortype color, int8_t bright_percent) {  // brightness 0 is off, 100 is max brightness while retaining same hue and saturation
+        #ifdef use_fastled
+            float rgb[3] = { static_cast<float>(color.r), static_cast<float>(color.g), static_cast<float>(color.b) };
+            float fbright = (float)bright_percent * 2.55 / maxelement(rgb[0], rgb[1], rgb[2]);  // max(color.r, color.g, color.b);  // 2.55 = 0xff / 100
+            return CRGB((uint32_t)(rgb[0] * fbright), (uint32_t)(rgb[1] * fbright), (uint32_t)(rgb[2] * fbright));  // return CRGB((float)(color.r * fbright), (float)(color.g * fbright), (float)(color.b * fbright));
+        #else
+            colortype rgb[3] = { color >> 16, (color & 0xff00) >> 8, color & 0xff };
+            float fbright = (float)bright_percent * 2.55 / maxelement(rgb[0], rgb[1], rgb[2]);  // max(color.r, color.g, color.b);  // 2.55 = 0xff / 100
+            return ((uint32_t)(rgb[0] * fbright) << 16) | ((uint32_t)(rgb[1] * fbright) << 8) | ((uint32_t)(rgb[2] * fbright));
+        #endif
     }
-    CRGB desaturate(CRGB color, int8_t desat_percent) {  // desat_percent=0 has no effect, =100 desaturates all the way to greyscale, without change in brightness
-        float rgb[3] = { static_cast<float>(color.r), static_cast<float>(color.g), static_cast<float>(color.b) };
+    colortype desaturate(colortype color, int8_t desat_percent) {  // desat_percent=0 has no effect, =100 desaturates all the way to greyscale, without change in brightness
+        #ifdef use_fastled
+            float rgb[3] = { static_cast<float>(color.r), static_cast<float>(color.g), static_cast<float>(color.b) };
+        #else
+            colortype rgb[3] = { color >> 16, (color & 0xff00) >> 8, color & 0xff };
+        #endif
         float dominant = maxelement(rgb[0], rgb[1], rgb[2]);  // max(color.r, color.g, color.b);
         for (int32_t element=0; element<3; element++) {
             rgb[element] = (uint32_t)(rgb[element] + ((float)desat_percent * (dominant - rgb[element]) / 100.0));
         }
-        return CRGB(rgb[0], rgb[1], rgb[2]);
+        #ifdef use_fastled
+            return CRGB(rgb[0], rgb[1], rgb[2]);
+        #else
+            return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
+        #endif
     }
-    //     uint32_t dimmer(uint32_t color, int8_t bright_percent) {  // brightness 0 is off, 100 is max brightness while retaining same hue and saturation
-    //         uint32_t rgb[3] = { color >> 16, (color & 0xff00) >> 8, color & 0xff };
-    //         float fbright = (float)bright_percent * 2.55 / (float)max(rgb[0], rgb[1], rgb[2]);  // 2.55 = 0xff / 100
-    //         return ((uint32_t)((float)rgb[0] * fbright) << 16) | ((uint32_t)((float)rgb[1] * fbright) << 8) | ((uint32_t)((float)rgb[2] * fbright));
-    //     }
-    //     uint32_t desaturate(uint32_t color, int8_t desat_percent) {  // desat_percent=0 has no effect, =100 desaturates all the way to greyscale, without change in brightness
-    //         uint32_t rgb[3] = { color >> 16, (color & 0xff00) >> 8, color & 0xff };
-    //         float dominant = (float)max(rgb[0], rgb[1], rgb[2]);
-    //         for (int32_t element=0; element<3; element++) {
-    //             rgb[element] = (uint32_t)(rgb[element] + ((float)desat_percent * (dominant - rgb[element]) / 100.0));
-    //         }
-    //         return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
-    //     }
     //   public:
     //     void assign_idiotlight(uint32_t index, bool idiotvalue, uint16_t idiotcolor) {
     //         for (int32_t idiot = 0; idiot <= min((uint32_t)arraysize(idiotlights), neopixelsAvailable()); idiot++) {
