@@ -88,10 +88,10 @@ char units[disp_fixed_lines][5] = { "adc ", "mph ", "rpm ", "us  ", "psi ", "%  
 
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, num_datapages };
 char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim " };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 9, 4, 5, 3, 4, 8, 7, 8, 8, 0 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 8, 4, 5, 3, 4, 8, 7, 8, 8, 0 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
-    { "BrakePos", " Airflow", "     MAP", "MuleBatt", "     Pot", " Starter", "      - ", "      - ", "      - ", "Governor", "SteerSaf", },  // PG_RUN
+    { "BrakePos", " Airflow", "     MAP", "MuleBatt", "     Pot", "      - ", "      - ", "      - ", " Daytime", "Governor", "SteerSaf", },  // PG_RUN
     { "HRC Horz", "HRC Vert", "      - ", "      - ", "HFailsaf", "Horz Min", "Horz Max", " Horz DB", "Vert Min", "Vert Max", " Vert DB", },  // PG_JOY
     { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", "SpeedIdl", "SpeedRed", "BkPos0Pt", },  // PG_CAR
     { "BrakePWM", "SteerPWM", "      - ", "Steer Lt", "SteerStp", "Steer Rt", "BrakExtd", "BrakStop", "BrakRetr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
@@ -623,10 +623,10 @@ class Display {
                     draw_dynamic(11, map_sensor.get_filtered_value(), map_sensor.get_min_psi(), map_sensor.get_max_psi());
                     draw_dynamic(12, battery_sensor.get_filtered_value(), battery_sensor.get_min_v(), battery_sensor.get_max_v());
                     draw_dynamic(13, pot.get(), pot.min(), pot.max());
-                    draw_truth(14, starter, 0);
+                    draw_eraseval(14);
                     draw_eraseval(15);
                     draw_eraseval(16);
-                    draw_eraseval(17);
+                    draw_truth(17, neodaytime, 1);
                     draw_dynamic(18, gas_governor_percent, 0.0, 100.0);
                     draw_dynamic(19, steer_safe_percent, 0.0, 100.0);
                 }

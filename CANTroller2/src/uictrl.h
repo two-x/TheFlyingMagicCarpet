@@ -177,8 +177,8 @@ class neopixelStrip {
     enum brightness_presets { B_OFF, B_MIN, B_LO, B_MED, B_HI, B_EXT, B_MAX };
     enum brightness_contexts { NITE, DAY };  // Indoors = NITE
     uint8_t neo_wheelcounter = 0;
-    uint8_t brightlev[2][7] = { { 0, 1,  6, 10, 18, 30,  50 },     // [NITE] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
-                                { 0, 2, 14, 25, 40, 60, 100 }, };  // [DAY] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
+    uint8_t brightlev[2][7] = { { 0, 1,  6, 10, 17, 30,  50 },     // [NITE] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
+                                { 0, 2, 16, 30, 45, 65, 100 }, };  // [DAY] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
     uint8_t neo_master_brightness = 0xff;
     uint32_t neo_fade_timeout_us = 350000;
     Timer neoFadeTimer, neoHeartbeatTimer;
@@ -230,6 +230,10 @@ class neopixelStrip {
         std::cout << "refresh strip.. ";
         refresh();
         std::cout << std::endl;
+    }
+    void daytime(bool day) {  // a way to specify nite or daytime brightness levels
+        context = day;
+        for (int32_t idiot=0; idiot<idiotCount; idiot++) updateIdiot(idiot);
     }
     void heartbeat(bool onoroff) {
         neo_heartbeat = onoroff;  // Start heart beating
