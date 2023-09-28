@@ -1,54 +1,49 @@
-/* Contains code for the LCD touchscreen */
 #pragma once
 // #ifndef DISPLAY_H
 // #define DISPLAY_H
-
 // #include <font_Arial.h> // from ILI9341_t3
 // #include <SPI.h>
-
 // #include <Adafruit_ILI9341.h>
 #include <TFT_eSPI.h>
-
 #include "globals.h"
 
 // display related globals
-#define BLK  0x0000
-#define BLU  0x001f
-#define MBLU 0x009f  // midnight blue. b/c true blue too dark to see over black
-#define RBLU 0x043f  // royal blue
-#define RED  0xf800
-#define DRED 0xb000
-#define GRN  0x07e0
-#define CYN  0x07ff  // 00000 111 111 11111 
-#define DCYN 0x0575  //
-#define MGT  0xf81f
-#define ORG  0xfca0
-#define DORG 0xfa40  // Dark orange aka brown
-#define YEL  0xffe0
-#define LYEL 0xfff8
-#define WHT  0xffff
-#define HGRY 0x2104  // hella dark grey
-#define DGRY 0x39c7  // very dark grey
-#define GRY1 0x8410  // 10000 100 000 10000 = 84 10  dark grey
-#define GRY2 0xc618  // 11000 110 000 11000 = C6 18  light grey
-#define LGRY 0xd6ba  // very light grey
-#define PNK  0xfcf3  // Pink is the best color
-#define DPNK 0xfa8a  // We need all shades of pink
-#define LPNK 0xfe18  // Especially light pink, the champagne of pinks
-#define TEAL 0x07f9
-#define PUR  0x881f
-#define LPUR 0xc59f  // A light pastel purple
-#define GPUR 0x8c15  // A low saturation greyish pastel purple
-#define GGRN 0x5cac  // A low saturation greyish pastel green
-#define BORG 0xfa00  // Blood orange
-#define INDG 0x601f  // Indigo
-#define ORCD 0xb81f  // Orchid
 
+// LCD is 2.8in diagonal, 240x320 pixels
 // LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
 // Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
-// Color picker websites: http://www.barth-dev.de/online/rgb565 , https://chrishewett.com/blog/true-rgb565-colour-picker/
-// Colors with names: https://wiki.tcl-lang.org/page/Colors+with+Names
-// LCD is 2.8in diagonal, 240x320 pixels
+#define BLK  0x0000  // greyscale: full black (RGB elements off)
+#define HGRY 0x2104  // greyscale: hella dark grey
+#define DGRY 0x39c7  // greyscale: very dark grey
+#define GRY1 0x8410  // greyscale: dark grey  (10000)(100 000)(10000) = 84 10
+#define GRY2 0xc618  // greyscale: light grey  (11000)(110 000)(11000) = C6 18
+#define LGRY 0xd6ba  // greyscale: very light grey
+#define WHT  0xffff  // greyscale: full white (RGB elements full on)
+#define RED  0xf800  // primary red (R element full on)
+#define YEL  0xffe0  // Secondary yellow (RG elements full on)
+#define GRN  0x07e0  // primary green (G element full on)
+#define CYN  0x07ff  // secondary cyan (GB elements full on)  (00000)(111 111)(11111) = 07 ff
+#define BLU  0x001f  // primary red (B element full on)
+#define MGT  0xf81f  // secondary magenta (RB elements full on)
+#define DRED 0xb000  // dark red
+#define BORG 0xfa00  // blood orange (very reddish orange)
+#define DORG 0xfa40  // dark orange aka brown
+#define ORG  0xfca0  // 
+#define LYEL 0xfff8  // 
+#define GGRN 0x5cac  // a low saturation greyish pastel green
+#define TEAL 0x07f9  // this teal is indistinguishable from cyan
+#define DCYN 0x0575  // dark cyan
+#define RBLU 0x043f  // royal blue
+#define MBLU 0x009f  // midnight blue
+#define INDG 0x601f  // indigo (deep blue with a hint of purple)
+#define ORCD 0xb81f  // orchid (lighter and less saturated purple)
+#define PUR  0x881f  // 
+#define GPUR 0x8c15  // a low saturation greyish pastel purple
+#define LPUR 0xc59f  // a light pastel purple
+#define PNK  0xfcf3  // pink is the best color
+#define DPNK 0xfa8a  // we need all shades of pink
+#define LPNK 0xfe18  // especially light pink, the champagne of pinks
+// 5-6-5 color pickers: http://www.barth-dev.de/online/rgb565 , https://chrishewett.com/blog/true-rgb565-colour-picker  // named colors: https://wiki.tcl-lang.org/page/Colors+with+Names
 
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
 #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
