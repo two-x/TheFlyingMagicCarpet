@@ -180,7 +180,7 @@ class neopixelStrip {
     uint8_t brightlev[2][7] = { { 0, 1,  6, 10, 18, 30,  50 },     // [NITE] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
                                 { 0, 2, 14, 25, 40, 60, 100 }, };  // [DAY] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
     uint8_t neo_master_brightness = 0xff;
-    uint32_t neo_fade_timeout_us = 150000;
+    uint32_t neo_fade_timeout_us = 350000;
     Timer neoFadeTimer, neoHeartbeatTimer;
     bool neo_heartbeat = false;
     uint8_t pin = -1;
@@ -189,7 +189,7 @@ class neopixelStrip {
     bool context = NITE;
     int32_t heartbeat_state = 0;
     int32_t heartbeat_level = 0;
-    int64_t heartbeat_ekg_us[4] = {250000, 175000, 620000, 1750000};  // {187500, 125000, 562500, 1250000};
+    int64_t heartbeat_ekg_us[4] = {250000, 200000, 620000, 1750000};  // {187500, 125000, 562500, 1250000};
     int32_t heartbeat_pulse = 255;
     static const uint8_t numpixels = 8;
     static const uint8_t idiotCount = numpixels - 1;
