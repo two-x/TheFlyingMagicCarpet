@@ -204,7 +204,7 @@ class neopixelStrip {
         FastLED.addLeds<NEOPIXEL, 48>(neostrip, 8);  // FastLED.addLeds<NEOPIXEL, pin>(neostrip, numpixels);  // neostrip = new Adafruit_NeoPixel(pixelCount, pin, NEO_GRB + NEO_GRB + NEO_KHZ800);  // neostrip->begin();  // start datastream
         std::cout << "set brightness.. ";
         FastLED.setBrightness(neo_master_brightness); // neostrip->setBrightness (neo_master_brightness);  // Truly these can get incredibly bright
-        heartbeat_brightness = brightlev[context][B_MED];
+        heartbeat_brightness = brightlev[context][B_LO];
         neoHeartbeatTimer.set(heartbeat_ekg_us[3]);
         neoFadeTimer.set((int64_t)neo_fade_timeout_us);
         for (int32_t idiot=0; idiot<idiotCount; idiot++) {
@@ -226,7 +226,7 @@ class neopixelStrip {
                 heartbeat_pulse = !heartbeat_pulse;
                 if (++heartbeat_state >= arraysize(heartbeat_ekg_us)) heartbeat_state -= arraysize(heartbeat_ekg_us);
                 neoHeartbeatTimer.set(heartbeat_ekg_us[heartbeat_state]);
-                if (heartbeat_pulse) heartbeat_brightness = brightlev[context][B_MED];
+                if (heartbeat_pulse) heartbeat_brightness = brightlev[context][B_LO];
                 else neoFadeTimer.reset();
             }
             else if (!heartbeat_pulse) {

@@ -27,11 +27,11 @@
 #define MGT  0xf81f  // secondary magenta (RB elements full on)
 #define DRED 0xb000  // dark red
 #define BORG 0xfa00  // blood orange (very reddish orange)
-#define DORG 0xfa40  // dark orange aka brown
+#define BRN  0xfa40  // dark orange aka brown
 #define ORG  0xfca0  // 
 #define LYEL 0xfff8  // 
 #define GGRN 0x5cac  // a low saturation greyish pastel green
-#define TEAL 0x07f9  // this teal is indistinguishable from cyan
+#define TEAL 0x07f9  // this teal is barely distinguishable from cyan
 #define DCYN 0x0575  // dark cyan
 #define RBLU 0x043f  // royal blue
 #define MBLU 0x009f  // midnight blue
