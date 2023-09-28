@@ -327,6 +327,7 @@ class neopixelStrip {
         }
         #ifdef use_fastled
             if (numledstowrite) FastLED.show(numledstowrite);
+            // This ability to exclude pixels at the end of the strip that haven't changed from the data write is my whole point of using fastled
         #else
             if (numledstowrite) neoobj->show();
         #endif
@@ -381,7 +382,7 @@ class neopixelStrip {
         #endif
         float dominant = maxelement(rgb[0], rgb[1], rgb[2]);  // max(color.r, color.g, color.b);
         for (int32_t element=0; element<3; element++) {
-            rgb[element] = (uint32_t)(rgb[element] + ((float)desat_percent * (dominant - rgb[element]) / 100.0));
+            rgb[element] = (uint32_t)(rgb[element] + ((float)desat_percent * (dominant - (float)(rgb[element])) / 100.0));
         }
         #ifdef use_fastled
             return CRGB(rgb[0], rgb[1], rgb[2]);
