@@ -161,7 +161,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
     std::cout << "Init neopixel.. ";
     neo.init((uint8_t)neopixel_pin, !running_on_devboard);
-    neo.daytime(neodaytime);
+    neo.setbright(neobright);
+    neo.setsaturation(neosat);
     neo.heartbeat(neopixel_pin >= 0);
     int32_t idiots = min((uint32_t)arraysize(idiotlights), neo.neopixelsAvailable());
     for (int32_t idiot = 0; idiot < idiots; idiot++)
@@ -562,9 +563,13 @@ void loop() {
     adj = false;
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == PG_RUN) {
+            if (selected_value == 7) {
+                adj_val (&neobright, sim_edit_delta, 0, 100);
+                neo.setbright(neobright);
+            }
             if (selected_value == 8) {
-                adj_bool (&neodaytime, sim_edit_delta);
-                neo.daytime(neodaytime);
+                adj_val (&neosat, sim_edit_delta, -99, 100);
+                neo.setsaturation(neosat);
             }
             else if (selected_value == 9) {
                 adj = adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);

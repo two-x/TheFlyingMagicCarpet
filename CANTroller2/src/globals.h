@@ -145,7 +145,9 @@ uint32_t cruise_antiglitch_timeout_us = 350000; // Target speed won't change unt
 Timer cruiseAntiglitchTimer(cruise_antiglitch_timeout_us);
 Timer motorParkTimer(motor_park_timeout_us);
 bool running_on_devboard;  // true = running on dev board, false = running on the car.  Requires pullup/pulldown resistors configured as above
-bool neodaytime = false;  // lets us brighten the neopixels in the daytime
+int32_t neobright = 6;  // lets us dim/brighten the neopixels
+int32_t neosat = 0;  // lets us de/saturate the neopixels
+
 
 // potentiometer related
 Potentiometer pot(pot_wipe_pin);
