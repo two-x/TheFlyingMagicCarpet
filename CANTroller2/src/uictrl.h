@@ -242,15 +242,15 @@ class neopixelStrip {
         hibright = newlev;
         heartbright = hibright;  // (uint8_t)((float)hibright * 0.75);
         lobright = (hibright > 50) ? 3 : (hibright > 25) ? 2 : 1;
-        for (int32_t idiot=0; idiot<idiotCount; idiot++) updateIdiot(idiot);
+        updateAll();
     }
     void setdesaturation(float newlev) {  // a way to specify nite or daytime brightness levels
         desatlevel = newlev;
-        for (int32_t idiot=0; idiot<idiotCount; idiot++) updateIdiot(idiot);
+        updateAll();
     }
     void daytime(bool day) {  // a way to specify nite or daytime brightness levels
         context = day;
-        for (int32_t idiot=0; idiot<idiotCount; idiot++) updateIdiot(idiot);
+        updateAll();
     }
     void heartbeat(bool onoroff) {
         neo_heartbeat = onoroff;  // Start heart beating
