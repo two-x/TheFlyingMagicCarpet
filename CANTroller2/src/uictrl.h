@@ -184,7 +184,7 @@ class neopixelStrip {
     uint8_t hibright = 6;
     float desatlevel = 0.0;  // out of 10.0
     uint8_t neo_master_brightness = 0xff;
-    float correction[3] = { 1.0, 0.85, 1.0 };  // Applied to brightness of rgb elements
+    float correction[3] = { 1.0, 0.9, 1.0 };  // Applied to brightness of rgb elements
     uint32_t neo_fade_timeout_us = 350000;
     Timer neoFadeTimer, neoHeartbeatTimer;
     bool neo_heartbeat = false;
