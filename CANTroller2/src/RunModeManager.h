@@ -148,16 +148,12 @@ private:
             if (!speedometer.car_stopped() && !stopcarTimer.expired() && !autostop_disabled) pressure_target_psi = min (pressure_target_psi + pressure_hold_increment_psi, pressure_sensor.get_max_human());  // If the car is still moving, push harder
         }
         if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
-        else if (joy_centered && (ctrl == JOY || !hotrc_radio_lost)) updateMode(FLY); // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
     }
 
     void handleFlyMode() {
         if (we_just_switched_modes) {
-            gesture_progress = 0;
-            gestureFlyTimer.set (gesture_flytimeout_us); // Initialize gesture timer to already-expired value
             car_hasnt_moved = speedometer.car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
             if (ctrl == HOTRC) flycruise_toggle_request = false;
-            else if (ctrl == JOY && share_boot_joycruise_buttons && boot_button_action == LONG) boot_button_action = NONE;
         }
         if (car_hasnt_moved) {
             if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) updateMode(HOLD);  // Must keep pulling trigger until car moves, or it drops back to hold mode
@@ -177,32 +173,7 @@ private:
         }
         // Cruise mode can be entered by pressing a controller button, or by holding the brake on full for a half second. Which epends on the cruise_gesturing flag.
         // The gesture involves pushing the joystick from the center to the top, then to the bottom, then back to center, quickly enough.
-        if (ctrl == JOY) {
-            if (cruise_gesturing) {  // If we are configured to use joystick gestures to go to cruise mode, the gesture is 
-                if (!gesture_progress && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][TOP]) {  // Re-zero gesture timer for potential new gesture whenever joystick at center
-                    gestureFlyTimer.reset();
-                }
-                if (gestureFlyTimer.expired()) gesture_progress = 0; // If gesture timeout has expired, cancel any in-progress gesture
-                else {  // Otherwise check for successful gesture motions
-                    if (!gesture_progress && ctrl_pos_adc[VERT][FILT] >= ctrl_lims_adc[ctrl][VERT][MAX] - flycruise_vert_margin_adc) {  // If joystick quickly pushed to top, step 1 of gesture is successful
-                        gesture_progress++;
-                        gestureFlyTimer.reset();
-                    }
-                    else if (gesture_progress == 1 && ctrl_pos_adc[VERT][FILT] <= ctrl_lims_adc[ctrl][VERT][MIN] + flycruise_vert_margin_adc) {  // If joystick then quickly pushed to bottom, step 2 succeeds
-                        gesture_progress++;
-                        gestureFlyTimer.reset();
-                    }
-                    else if (gesture_progress == 2 && ctrl_pos_adc[VERT][FILT] >= ctrl_db_adc[VERT][BOT] && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][TOP]) {  // If joystick then quickly returned to center, go to Cruise mode
-                        updateMode(CRUISE);
-                    }        
-                }
-            }
-            if (share_boot_joycruise_buttons && boot_button_action == LONG) {  // Joy cruise button long press happened
-                updateMode(CRUISE);
-                boot_button_action = NONE;
-            }
-        }
-        else if (ctrl == HOTRC && flycruise_toggle_request) {
+        if (ctrl == HOTRC && flycruise_toggle_request) {
             updateMode(CRUISE);
             flycruise_toggle_request = false;  // Reset the toggle request
         }        
@@ -221,7 +192,6 @@ private:
             cruise_ctrl_extent_adc = (float)ctrl_lims_adc[ctrl][VERT][CENT];
             cruise_adjusting = false;
             if (ctrl == HOTRC) flycruise_toggle_request = false;
-            else if (ctrl == JOY && share_boot_joycruise_buttons && boot_button_action == LONG) boot_button_action = NONE;
         }
         if (cruise_fixed_throttle) {
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) {  // When joystick vert above center, increase the throttle target proportional to how far off center
@@ -277,10 +247,6 @@ private:
         if (ctrl == HOTRC && flycruise_toggle_request) {
             updateMode(FLY);  // Go to fly mode if hotrc ch4 button pushed
             flycruise_toggle_request = false;  // Reset the toggle request
-        }
-        else if (ctrl == JOY && share_boot_joycruise_buttons && boot_button_action == LONG) {  // Joy cruise button long press happened
-            updateMode(FLY);
-            boot_button_action = NONE;
         }
         // If joystick is held full-brake for more than X, driver could be confused & panicking, drop to fly mode so fly mode will push the brakes
         if (ctrl_pos_adc[VERT][FILT] > ctrl_lims_adc[ctrl][VERT][MIN] + flycruise_vert_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom

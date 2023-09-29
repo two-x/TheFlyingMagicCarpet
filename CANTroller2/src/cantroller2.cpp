@@ -240,8 +240,7 @@ void loop() {
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "sns");  //
 
     // Controller handling
-    if (ctrl == JOY) ignition = simulator.simulating(SimOption::ignition) ? ignition : ignition_sense;
-    else if (ctrl == HOTRC) {
+    if (ctrl == HOTRC) {
         hotrc_ch3_update();
         hotrc_ch4_update();
         if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
@@ -266,13 +265,11 @@ void loop() {
     }
 
     // Read horz and vert inputs, determine steering pwm output -  - takes 40 us to read. Then, takes 13 us to handle
-    if (ctrl != JOY) {
-        hotrc_pulse_us[HORZ] = (int32_t)hotrc_horz.readPulseWidth();  
-        hotrc_pulse_us[VERT] = (int32_t)hotrc_vert.readPulseWidth();
-        hotrc_pulse_us[HORZ] = hotrcHorzManager.spike_filter (hotrc_pulse_us[HORZ]);
-        hotrc_pulse_us[VERT] = hotrcVertManager.spike_filter (hotrc_pulse_us[VERT]);
-        ema_filt (hotrc_pulse_us[VERT], &hotrc_pulse_vert_filt_us, ctrl_ema_alpha[HOTRC]);  // Used to detect loss of radio
-    }
+    hotrc_pulse_us[HORZ] = (int32_t)hotrc_horz.readPulseWidth();  
+    hotrc_pulse_us[VERT] = (int32_t)hotrc_vert.readPulseWidth();
+    hotrc_pulse_us[HORZ] = hotrcHorzManager.spike_filter (hotrc_pulse_us[HORZ]);
+    hotrc_pulse_us[VERT] = hotrcVertManager.spike_filter (hotrc_pulse_us[VERT]);
+    ema_filt (hotrc_pulse_us[VERT], &hotrc_pulse_vert_filt_us, ctrl_ema_alpha[HOTRC]);  // Used to detect loss of radio
     if (simulator.can_simulate(SimOption::joy) && simulator.get_pot_overload() == SimOption::joy)
         ctrl_pos_adc[HORZ][FILT] = pot.mapToRange(steer_pulse_left_us, steer_pulse_right_us);
     else if (!simulator.simulating(SimOption::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
@@ -535,7 +532,6 @@ void loop() {
         if (encoder_sw_action == Encoder::SHORT)  {  // if short press
             if (tuning_ctrl == EDIT) tuning_ctrl = SELECT;  // If we were editing a value drop back to select mode
             else if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If we were selecting a variable start editing its value
-            else if (ctrl == JOY && !simulator.simulating(SimOption::cruisesw)) flycruise_toggle_request = true;  // Unless tuning, when using old joystick allow use of short encoder press to toggle fly/cruise modes
             // else ... I envision pushing encoder switch while not tuning could switch desktops from our current analysis interface to a different runtime display 
         }
         else tuning_ctrl = (tuning_ctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
@@ -665,12 +661,9 @@ void loop() {
     // Ignition & Panic stop logic and Update output signals
     if (!speedometer.car_stopped()) { // if we lose connection to the hotrc while driving, or the joystick ignition button was turned off, panic
         if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && hotrc_radio_lost) panic_stop = true;  // panic_stop could also have been initiated by the user button   && !hotrc_radio_lost_last 
-        else if (ctrl == JOY && !ignition_sense) panic_stop = true;
-        // else if (ctrl == JOY && !(simulator.get_enabled() && sim_joy) && !ignition && ignition_last) panic_stop = true;
     }
     else if (panic_stop) panic_stop = false;  // Cancel panic if car is stopped
-    if (ctrl == HOTRC) {  // if ignition was turned off on HotRC, panic
-        // When using joystick, ignition is controlled with button and we read it. With Hotrc, we control ignition
+    if (ctrl == HOTRC) {  // if ignition was turned off on HotRC, panic .  With Hotrc, we control ignition
         hotrc_radio_lost_last = hotrc_radio_lost;
         if (!ignition && ignition_last && !speedometer.car_stopped()) panic_stop = true;
     }

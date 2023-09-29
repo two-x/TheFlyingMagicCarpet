@@ -75,15 +75,15 @@ bool flip_the_screen = true;
 
 // Globals -------------------
 bool serial_debugging = true;
-bool timestamp_loop = false; // Makes code write out timestamps throughout loop to serial port
+bool timestamp_loop = false;         // Makes code write out timestamps throughout loop to serial port
 bool take_temperatures = true;
-bool keep_system_powered = false;         // Use true during development
-bool allow_rolling_start = false;         // May be a smart prerequisite, may be us putting obstacles in our way
-bool share_boot_joycruise_buttons = false; // Set true if joystick cruise button is in parallel with esp native "boot" button
+bool keep_system_powered = false;    // Use true during development
+bool allow_rolling_start = false;    // May be a smart prerequisite, may be us putting obstacles in our way
+bool share_boot_button = false;      // Set true if joystick cruise button is in parallel with esp native "boot" button
 bool remote_start_support = false;
 bool starter_signal_support = true;
 bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
-bool cruise_fixed_throttle = true;  // Cruise mode fixes the throttle angle rather than controlling for a target speed
+bool cruise_fixed_throttle = true;   // Cruise mode fixes the throttle angle rather than controlling for a target speed
 bool autostop_disabled = true;
 
 #define pwm_jaguars true
@@ -221,17 +221,17 @@ Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 BatterySensor battery_sensor(mulebatt_pin);
 
 // controller related
-enum ctrls { HOTRC, JOY, SIM, HEADLESS }; // Possible sources of gas, brake, steering commands
+enum ctrls { HOTRC, OTHER, SIM, HEADLESS }; // Possible sources of gas, brake, steering commands
 enum ctrl_axes { HORZ, VERT, CH3, CH4 };
 enum ctrl_thresh { MIN, CENT, MAX, DB };
 enum ctrl_edge { BOT, TOP };
 enum ctrl_vals { RAW, FILT };
-float ctrl_ema_alpha[2] = {0.2, 0.1};         // [HOTRC/JOY] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
+float ctrl_ema_alpha[2] = {0.2, 0.1};         // [HOTRC/OTHER] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
 int32_t ctrl_lims_adc[2][2][5] =               //   values as adc counts
     {{{0, adcmidscale_adc, adcrange_adc, 62, 100},  // [HOTRC][HORZ][MIN/CENT/MAX/DB/MARGIN]  // MARGIN is how much out of range the reading must be for axis to be completely ignored
       {0, adcmidscale_adc, adcrange_adc, 62, 100}}, // [HOTRC][VERT][MIN/CENT/MAX/DB/MARGIN]
-     {{9, adcmidscale_adc, 4085, 50, 100},          // [JOY][HORZ][MIN/CENT/MAX/DB/MARGIN]
-      {9, adcmidscale_adc, 4085, 50, 100}}};        // [JOY][VERT][MIN/CENT/MAX/DB/MARGIN]
+     {{9, adcmidscale_adc, 4085, 50, 100},          // [OTHER][HORZ][MIN/CENT/MAX/DB/MARGIN]
+      {9, adcmidscale_adc, 4085, 50, 100}}};        // [OTHER][VERT][MIN/CENT/MAX/DB/MARGIN]
 int32_t ctrl_db_adc[2][2];                     // [HORZ/VERT] [BOT/TOP] - to store the top and bottom deadband values for each axis of selected controller
 int32_t ctrl_pos_adc[2][2];                    // [HORZ/VERT] [RAW/FILT] - holds most current controller values
 bool ctrl = HOTRC;                             // Use HotRC controller to drive instead of joystick?
