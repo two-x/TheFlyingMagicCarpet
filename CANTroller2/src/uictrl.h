@@ -395,14 +395,19 @@ class neopixelStrip {
     colortype dimmer(colortype color, int8_t bright_percent) {  // brightness 0 is off, 100 is max brightness while retaining same hue and saturation
         #ifdef use_fastled
             float rgb[3] = { static_cast<float>(color.r), static_cast<float>(color.g), static_cast<float>(color.b) };
-            float fbright = (float)bright_percent * 2.55 / maxelement(rgb[0], rgb[1], rgb[2]);  // max(color.r, color.g, color.b);  // 2.55 = 0xff / 100
-            return CRGB((uint32_t)(rgb[0] * fbright), (uint32_t)(rgb[1] * fbright), (uint32_t)(rgb[2] * fbright));  // return CRGB((float)(color.r * fbright), (float)(color.g * fbright), (float)(color.b * fbright));
         #else
             colortype rgb[3] = { color >> 16, (color & 0xff00) >> 8, color & 0xff };
-            float fbright = (float)bright_percent * 2.55 / maxelement(rgb[0], rgb[1], rgb[2]);  // max(color.r, color.g, color.b);  // 2.55 = 0xff / 100
-            float sat = 1;  // 1 - desatlevel * desatlevel / 100.0;
-            float c[3] = { correction[0] * sat, correction[1] * sat, correction[2] * sat };
-            return ((uint32_t)(rgb[0] * fbright * c[0]) << 16) | ((uint32_t)(rgb[1] * fbright * c[1]) << 8) | ((uint32_t)(rgb[2] * fbright * c[2]));
+        #endif
+        float fbright = (float)bright_percent * 2.55 / maxelement(rgb[0], rgb[1], rgb[2]);  // max(color.r, color.g, color.b);  // 2.55 = 0xff / 100
+        float sat = 1;  // 1 - desatlevel * desatlevel / 100.0;
+        float c[3] = { correction[0] * sat, correction[1] * sat, correction[2] * sat };
+        for (int32_t element=0; element<3; element++)
+            rgb[element] *= fbright * c[element];
+        #ifdef use_fastled
+            return CRGB(rgb[0], rgb[1], rgb[2]);  // return CRGB((float)(color.r * fbright), (float)(color.g * fbright), (float)(color.b * fbright));
+        #else
+            return neoobj->Color(rgb[0], rgb[1], rgb[2]);
+            // return ((uint32_t)(rgb[0] * fbright * c[0]) << 16) | ((uint32_t)(rgb[1] * fbright * c[1]) << 8) | ((uint32_t)(rgb[2] * fbright * c[2]));
         #endif
     }
     colortype desaturate(colortype color, float desat_of_ten) {  // desat_percent=0 has no effect, =10 desaturates all the way to greyscale, =-99 saturates to max. without change in brightness
@@ -419,9 +424,8 @@ class neopixelStrip {
             dominant = minelement(rgb[0], rgb[1], rgb[2]);  // max(color.r, color.g, color.b);
         }
         else dominant = maxelement(rgb[0], rgb[1], rgb[2]);  // max(color.r, color.g, color.b);
-        for (int32_t element=0; element<3; element++) {
+        for (int32_t element=0; element<3; element++)
             rgb[element] = (uint32_t)(rgb[element] + ((float)desat_percent * (dominant - (float)(rgb[element])) / 100.0));
-        }
         printf (" after: 0x%02x%02x%02x\n", rgb[0], rgb[1], rgb[2]);
         #ifdef use_fastled
             return CRGB(rgb[0], rgb[1], rgb[2]);

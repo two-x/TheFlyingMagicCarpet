@@ -705,7 +705,7 @@ void loop() {
             neo.setBoolState(idiot, *idiotlights[idiot]);
             neo.updateIdiot(idiot);
         }
-    if ((loopno == loophack + 10) || park_the_motors) neo.updateIdiot(0);  // For some reason the first neopixel idiot light starts up bright at boot. Weird.
+    if ((loopno == loophack) || park_the_motors) neo.updateIdiot(0);  // For some reason the first neopixel idiot light starts up bright at boot. Weird.
     neo.refresh();
     
     if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "neo");
