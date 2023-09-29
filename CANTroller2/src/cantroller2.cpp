@@ -132,7 +132,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 	ESP32PWM::allocateTimer(2);
 	ESP32PWM::allocateTimer(3);
 	brake_servo.setPeriodHertz(50);
-    gas_servo.setPeriodHertz(49);
+    gas_servo.setPeriodHertz(60);
 	steer_servo.setPeriodHertz(50);
 
     brake_servo.attach (brake_pwm_pin, brake_pulse_extend_us, brake_pulse_retract_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us

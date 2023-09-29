@@ -79,7 +79,7 @@ bool timestamp_loop = false; // Makes code write out timestamps throughout loop 
 bool take_temperatures = true;
 bool keep_system_powered = false;         // Use true during development
 bool allow_rolling_start = false;         // May be a smart prerequisite, may be us putting obstacles in our way
-bool share_boot_joycruise_buttons = true; // Set true if joystick cruise button is in parallel with esp native "boot" button
+bool share_boot_joycruise_buttons = false; // Set true if joystick cruise button is in parallel with esp native "boot" button
 bool remote_start_support = false;
 bool starter_signal_support = true;
 bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
@@ -201,7 +201,7 @@ bool cruise_sw = LOW;
 bool starter = LOW;
 bool starter_last = LOW;
 
-enum this_is_a_total_hack { AMBIENT = 0, ENGINE = 1, WHEEL = 2 };
+enum temp_categories { AMBIENT = 0, ENGINE = 1, WHEEL = 2 };
 enum temp_lims { DISP_MIN, NOM_MIN, NOM_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
 float temp_lims_f[3][6]{
     {0.0, 45.0, 115.0, 120.0, 130.0, 220.0},  // [AMBIENT][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]

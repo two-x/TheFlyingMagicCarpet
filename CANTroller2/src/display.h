@@ -320,7 +320,6 @@ class Display {
         }
         // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
         void draw_fixed (int32_t page, int32_t page_last, bool redraw_tuning_corner, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
-            yield();  // experiment
             _tft.setTextColor (GRY2);
             _tft.setTextSize (1);
             // if (redraw_tuning_corner) _tft.fillRect(10, 145, 154, 95, BLK); // _tft.fillRect(0,145,167,95,BLK);  // Erase old dataset page area - This line alone uses 15 ms
@@ -335,7 +334,6 @@ class Display {
                 // draw_colons(7+disp_font_width*arraysize(telemetry[0]), 1, disp_fixed_lines+disp_tuning_lines, GRY1);  // I can't decide if I like the colons or not
             }
             for (int32_t lineno=0; lineno < disp_tuning_lines; lineno++)  {  // Step thru lines of dataset page data
-                yield();  // experiment
                 draw_string (disp_datapage_names_x, disp_datapage_names_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, dataset_page_names[page][lineno], dataset_page_names[page_last][lineno], GRY2, BLK, forced);
                 draw_string_units (disp_datapage_units_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], GRY2, BLK);
                 if (redraw_tuning_corner) {
@@ -349,7 +347,6 @@ class Display {
             _tft.drawFastHLine (x_pos+2, y_pos+3, 3, color);
         }
         void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target=-1, int32_t color=-1) {
-            yield();  // experiment
             int32_t age_us = (color >= 0) ? 11 : (int32_t)((float)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
             int32_t x_base = disp_datapage_values_x;
             bool polarity = (value >= 0);  // polarity 0=negative, 1=positive
@@ -371,7 +368,6 @@ class Display {
                 draw_string (x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_values[lineno], "", color, BLK);
                 disp_age_quanta[lineno] = age_us;
             }
-            yield();  // experiment
             if (lowlim < hilim) {  // Any value having a given range deserves a bargraph gauge with a needle
                 int32_t corner_x = disp_bargraphs_x;    
                 int32_t corner_y = lineno*disp_line_height_pix+disp_vshift_pix-1;
@@ -441,7 +437,7 @@ class Display {
             if (place >= 0 && place < maxlength) {  // Then we want float formatted with enough nonzero digits after the decimal point for 4 significant digits (eg 123.4, 12.34, 1.234, 0.000)
                 int32_t length = min (sigdig+1, maxlength);
                 char buffer[length+1];
-                std::snprintf (buffer, length + 1, "%.*g", length - 1, value);
+                std::snprintf (buffer, length + 1, "%.*g", length - 1, value);  // (buf, chars incl. end, %.*g = floats formatted in shortest form, length-1 digits after decimal, val)
                 std::string result (buffer);  // copy buffer to result
                 return result;
             }
@@ -485,7 +481,6 @@ class Display {
             draw_dynamic (lineno, (truthy) ? ((styl==0) ? " on" : ((styl==1) ? "yes" : "true")) : ((styl==0) ? "off" : ((styl==1) ? "no" : "false")), 1, -1, -1, -1, (truthy) ? LPUR : GPUR);
         }
         void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override=-1) {  // color_override = -1 uses default color
-            yield();
             int32_t color = (color_override == -1) ? colorcard[runmode] : color_override;
             int32_t x_new = disp_runmode_text_x + disp_font_width * (2 + strlen (modecard[runmode])) - 3;
             int32_t x_old = disp_runmode_text_x + disp_font_width * (2 + strlen (modecard[oldmode])) - 3;
@@ -497,11 +492,9 @@ class Display {
         void draw_dataset_page (int32_t page, int32_t page_last, bool forced=false) {
             draw_fixed (page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
             // for (int32_t lineno=0; lineno<disp_lines; lineno++) draw_hyphen (59, lineno*disp_line_height_pix+disp_vshift_pix, BLK);
-            yield();
             draw_string (disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], RBLU, BLK, forced); // +6*(arraysize(modecard[runmode])+4-namelen)/2
         }
         void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
-            yield();
             if (selected_val != selected_last) draw_string (12, 12, 12+(selected_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_last], "", GRY2, BLK);
             draw_string (12, 12, 12+(selected_val+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_val], "", (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : GRY2), BLK);
         }
@@ -516,7 +509,6 @@ class Display {
             _tft.setTextColor (LYEL);
             for (int32_t row = 0; row < arraysize(simgrid); row++) {
                 for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
-                    yield();
                     int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
                     int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
                     if (strcmp (simgrid[row][col], "    " )) {
@@ -534,7 +526,6 @@ class Display {
             int32_t namelen = 0;
             _tft.setTextColor (WHT);
             for (int32_t row = 0; row < arraysize (side_menu_buttons); row++) {  // Step thru all rows to draw buttons along the left edge
-                yield();
                 _tft.fillRoundRect (-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, DGRY);
                 _tft.drawRoundRect (-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, LYEL);
                 namelen = 0;
@@ -542,14 +533,12 @@ class Display {
                     if (side_menu_buttons[row][x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
                 }
                 for (int32_t letter = 0; letter < namelen; letter++) {  // Going letter by letter thru each button name so we can write vertically 
-                    yield();
                     _tft.setCursor (1, ( touch_cell_v_pix*row) + (touch_cell_v_pix/2) - (int32_t)(4.5*((float)namelen-1)) + (disp_font_height+1)*letter); // adjusts vertical offset depending how many letters in the button name and which letter we're on
                     _tft.println (side_menu_buttons[row][letter]);  // Writes each letter such that the whole name is centered vertically on the button
                 }
             }
             if (!side_only) {
                 for (int32_t col = 2; col <= 5; col++) {  // Step thru all cols to draw buttons across the top edge
-                    yield();
                     _tft.fillRoundRect (touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
                     _tft.drawRoundRect (touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // _tft.width()-9, 3, 18, (_tft.height()/5)-6, 8, LYEL);
                     // draw_bool (top_menu_buttons[btn], btn+3);
