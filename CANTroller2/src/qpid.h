@@ -552,18 +552,18 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
         runstate = nextstate;
     }
     void process_todrive (void) {
-        if (we_just_changed_states) { printf("todriv "); }
+        if (we_just_changed_states);  // { printf("todriv "); }
         else if (*measfilt_rpm > idlehigh_rpm) nextstate = driving;
     }
     void process_driving (void) {
-        if (we_just_changed_states) { printf("driving "); }
+        // if (we_just_changed_states) { printf("driving "); }
     }
     void process_droptohigh (void) {
-        if (we_just_changed_states) { set_target_internal (idlehigh_rpm); printf("droptohigh "); }
+        if (we_just_changed_states) { set_target_internal (idlehigh_rpm); }  // printf("droptohigh "); }
         else if (*measfilt_rpm <= idlehigh_rpm + margin_rpm) nextstate = droptolow;  // Done dropping to high idle, next continue dropping to low idle
     }
     void process_droptolow (void) {
-        if (we_just_changed_states) { settleTimer.reset(); printf("droptolow "); }
+        if (we_just_changed_states) { settleTimer.reset(); }  // printf("droptolow "); }
         if (*measfilt_rpm <= idle_rpm + margin_rpm) nextstate = (idlemode == idlemodes::minimize) ? minimizing : idling;  // Done dropping to low idle, next proceed to a steady state
         else {  // Drop from current rpm toward low idle speed at configured rate
             set_target_internal (*measfilt_rpm - settlerate_rpmps * (float)settleTimer.elapsed()/1000000);  // Need to review the dynamics of this considering update frequency and motor latency 
@@ -571,13 +571,12 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
         }
     }
     void process_idling (void) {  // If we aren't set to attempt to minimize idle speed, then we end up here
-            if (we_just_changed_states) {       printf("idling "); }
-
+        // if (we_just_changed_states) {       printf("idling "); }
         if (idlemode == idlemodes::minimize) nextstate = minimizing;  // In case idlemode is changed while in idling state
         set_target_internal (idle_rpm);  // We're done dropping to the idle point, but keep tracking as idle speed may change
     }
     void process_minimizing (void) {
-        if (we_just_changed_states) { stallpoint_rpm = idle_rpm; printf("minimizing "); }
+        if (we_just_changed_states) { stallpoint_rpm = idle_rpm; }  // printf("minimizing "); }
         else if (idlemode != idlemodes::minimize) nextstate = idling;  // In case idlemode is changed while in stallpoint state
         // else if (*measfilt_rpm > )
         // Soren finish writing this

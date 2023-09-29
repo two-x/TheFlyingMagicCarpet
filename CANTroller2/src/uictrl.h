@@ -182,8 +182,9 @@ class neopixelStrip {
     uint8_t lobright = 1;
     uint8_t heartbright = 6;
     uint8_t hibright = 6;
-    int8_t saturation = 100;
+    float desatlevel = 0.0;  // out of 10.0
     uint8_t neo_master_brightness = 0xff;
+    float correction[3] = { 1.0, 0.85, 1.0 };  // Applied to brightness of rgb elements
     uint32_t neo_fade_timeout_us = 350000;
     Timer neoFadeTimer, neoHeartbeatTimer;
     bool neo_heartbeat = false;
@@ -230,7 +231,7 @@ class neopixelStrip {
         for (int32_t idiot=0; idiot<idiotCount; idiot++) {
             setBoolState(idiot, 0);
             idiotNormalColor[idiot] = 0x808080;
-            idiotEffectColor[idiot] = saturator(idiotNormalColor[idiot], saturation);
+            idiotEffectColor[idiot] = idiotNormalColor[idiot];  // desaturate(idiotNormalColor[idiot], desatlevel);
             updateIdiot(idiot);
         }
         std::cout << "refresh strip.. ";
@@ -239,12 +240,12 @@ class neopixelStrip {
     }
     void setbright(int8_t newlev) {  // a way to specify nite or daytime brightness levels
         hibright = newlev;
-        heartbright = (uint8_t)((float)hibright * 0.65);
-        lobright = (hibright > 25) ? 2 : 1;
+        heartbright = hibright;  // (uint8_t)((float)hibright * 0.75);
+        lobright = (hibright > 50) ? 3 : (hibright > 25) ? 2 : 1;
         for (int32_t idiot=0; idiot<idiotCount; idiot++) updateIdiot(idiot);
     }
-    void setsaturation(int8_t newlev) {  // a way to specify nite or daytime brightness levels
-        saturation = newlev;
+    void setdesaturation(float newlev) {  // a way to specify nite or daytime brightness levels
+        desatlevel = newlev;
         for (int32_t idiot=0; idiot<idiotCount; idiot++) updateIdiot(idiot);
     }
     void daytime(bool day) {  // a way to specify nite or daytime brightness levels
@@ -270,7 +271,7 @@ class neopixelStrip {
                 
             }
             if (heartbeatColor != heartbeatColor_last || heartbeat_brightness != neobright_last) {
-                heartbeatNow = dimmer(saturator(heartbeatColor, saturation), heartbeat_brightness);
+                heartbeatNow = dimmer(heartbeatColor, heartbeat_brightness);  // heartbeatNow = dimmer(desaturate(heartbeatColor, desatlevel), heartbeat_brightness);
                 neostrip[0] = heartbeatNow;  // neostrip->setPixelColor(0, heartbeatNow);
                 #ifndef use_fastled
                     neoobj->setPixelColor(0, heartbeatNow);
@@ -295,7 +296,7 @@ class neopixelStrip {
         idiotBoolState[idiot] = startboolstate;
         if (idiot > idiotCount-1) return false;
         idiotNormalColor[idiot] = color_16b_to_32b(color565);
-        idiotEffectColor[idiot] = saturator(idiotNormalColor[idiot], saturation);
+        idiotEffectColor[idiot] = idiotNormalColor[idiot]; // desaturate(idiotNormalColor[idiot], desatlevel);
         setBoolState(idiot, idiotBoolState[idiot]);
         updateIdiot(idiot);
         return true;
@@ -306,8 +307,11 @@ class neopixelStrip {
             idiotUrgency[idiot] = (state) ? 3 : 1;
         }
     }
+    void updateAll() {
+        for (int32_t idiot=0; idiot<idiotCount; idiot++) updateIdiot(idiot);
+    }
     void updateIdiot(uint8_t idiot) {
-        idiotEffectColor[idiot] = saturator(idiotNormalColor[idiot], saturation);
+        idiotEffectColor[idiot] = idiotNormalColor[idiot];  // idiotEffectColor[idiot] = desaturate(idiotNormalColor[idiot], desatlevel);
         if (idiotUrgency[idiot] <= 0) {
             #ifdef use_fastled
                 idiotNowColor[idiot] = CRGB(0, 0, 0);  // Turn off the light
@@ -396,27 +400,33 @@ class neopixelStrip {
         #else
             colortype rgb[3] = { color >> 16, (color & 0xff00) >> 8, color & 0xff };
             float fbright = (float)bright_percent * 2.55 / maxelement(rgb[0], rgb[1], rgb[2]);  // max(color.r, color.g, color.b);  // 2.55 = 0xff / 100
-            return ((uint32_t)(rgb[0] * fbright) << 16) | ((uint32_t)(rgb[1] * fbright) << 8) | ((uint32_t)(rgb[2] * fbright));
+            float sat = 1;  // 1 - desatlevel * desatlevel / 100.0;
+            float c[3] = { correction[0] * sat, correction[1] * sat, correction[2] * sat };
+            return ((uint32_t)(rgb[0] * fbright * c[0]) << 16) | ((uint32_t)(rgb[1] * fbright * c[1]) << 8) | ((uint32_t)(rgb[2] * fbright * c[2]));
         #endif
     }
-    colortype saturator(colortype color, int8_t sat_percent) {  // desat_percent=0 has no effect, =-99 desaturates all the way to greyscale, =100 saturates to max. without change in brightness
+    colortype desaturate(colortype color, float desat_of_ten) {  // desat_percent=0 has no effect, =10 desaturates all the way to greyscale, =-99 saturates to max. without change in brightness
+        int8_t desat_percent = desat_of_ten;  // * desat_of_ten / 2.0; // Makes this control exponential
         #ifdef use_fastled
             float rgb[3] = { static_cast<float>(color.r), static_cast<float>(color.g), static_cast<float>(color.b) };
         #else
             colortype rgb[3] = { color >> 16, (color & 0xff00) >> 8, color & 0xff };
         #endif
+        printf (" Desat: (%f) before: 0x%02x%02x%02x", desat_of_ten, rgb[0], rgb[1], rgb[2]);
         float dominant;
-        if (sat_percent >= 0) {
-            sat_percent = -sat_percent;
+        if (desat_percent < 0) {
+            desat_percent = -desat_percent;
             dominant = minelement(rgb[0], rgb[1], rgb[2]);  // max(color.r, color.g, color.b);
         }
         else dominant = maxelement(rgb[0], rgb[1], rgb[2]);  // max(color.r, color.g, color.b);
-        for (int32_t element=0; element<3; element++)
-            rgb[element] = (uint32_t)(rgb[element] + ((float)sat_percent * (dominant - (float)(rgb[element])) / 100.0));
+        for (int32_t element=0; element<3; element++) {
+            rgb[element] = (uint32_t)(rgb[element] + ((float)desat_percent * (dominant - (float)(rgb[element])) / 100.0));
+        }
+        printf (" after: 0x%02x%02x%02x\n", rgb[0], rgb[1], rgb[2]);
         #ifdef use_fastled
             return CRGB(rgb[0], rgb[1], rgb[2]);
         #else
-            return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
+            return neoobj->Color(rgb[0], rgb[1], rgb[2]);
         #endif
     }
     //   public:
