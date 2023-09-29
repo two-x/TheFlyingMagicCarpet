@@ -648,16 +648,16 @@ void loop() {
          }
         else if (dataset_page == PG_SIM) {
             if (selected_value == 0) simulator.set_can_simulate(SimOption::joy, adj_bool(simulator.can_simulate(SimOption::joy), sim_edit_delta));
-            else if (selected_value == 1) simulator.set_can_simulate(SimOption::syspower, adj_bool(simulator.can_simulate(SimOption::syspower), sim_edit_delta));
-            else if (selected_value == 2) simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), sim_edit_delta));
-            else if (selected_value == 3) simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), sim_edit_delta));
+            else if (selected_value == 1) simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), sim_edit_delta));
+            else if (selected_value == 2) simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), sim_edit_delta));
+            else if (selected_value == 3) simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), sim_edit_delta));
             else if (selected_value == 4) simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), sim_edit_delta));
             else if (selected_value == 5) simulator.set_can_simulate(SimOption::airflow, adj_bool(simulator.can_simulate(SimOption::airflow), sim_edit_delta));
             else if (selected_value == 6) simulator.set_can_simulate(SimOption::mapsens, adj_bool(simulator.can_simulate(SimOption::mapsens), sim_edit_delta));
-            else if (selected_value == 7) simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), sim_edit_delta));
-            else if (selected_value == 8) simulator.set_can_simulate(SimOption::ignition, adj_bool(simulator.can_simulate(SimOption::ignition), sim_edit_delta));
+            else if (selected_value == 7) simulator.set_can_simulate(SimOption::ignition, adj_bool(simulator.can_simulate(SimOption::ignition), sim_edit_delta));
+            else if (selected_value == 8) simulator.set_can_simulate(SimOption::starter, adj_bool(simulator.can_simulate(SimOption::starter), sim_edit_delta));
             else if (selected_value == 9) simulator.set_can_simulate(SimOption::basicsw, adj_bool(simulator.can_simulate(SimOption::basicsw), sim_edit_delta));
-            else if (selected_value == 10) simulator.set_can_simulate(SimOption::starter, adj_bool(simulator.can_simulate(SimOption::starter), sim_edit_delta));
+            else if (selected_value == 10) simulator.set_can_simulate(SimOption::syspower, adj_bool(simulator.can_simulate(SimOption::syspower), sim_edit_delta));
         }
         sim_edit_delta = 0;
     }

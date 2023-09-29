@@ -43,7 +43,7 @@
 #define PNK  0xfcf3  // pink is the best color
 #define DPNK 0xfa8a  // we need all shades of pink
 #define LPNK 0xfe18  // especially light pink, the champagne of pinks
-// 5-6-5 color pickers: http://www.barth-dev.de/online/rgb565 , https://chrishewett.com/blog/true-rgb565-colour-picker  // named colors: https://wiki.tcl-lang.org/page/Colors+with+Names
+// 5-6-5 color picker site: http://www.barth-dev.de/online/rgb565  // named colors: https://wiki.tcl-lang.org/page/Colors+with+Names
 
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
 #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
@@ -79,7 +79,7 @@
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, TEAL, MBLU };
 
-char sensorcard[9][7] = { "none", "bkpres", "brkpos", "tach", "airflw", "mapsns", "speedo", "engtmp", "ctrl" };
+char sensorcard[15][7] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "ign", "basic", "cruise", "startr", "syspwr" };
 char idlemodecard[3][7] = { "direct", "cntrol", "minimz" };
 char idlestatecard[ThrottleControl::targetstates::num_states][7] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
 
@@ -90,8 +90,14 @@ enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID,
 char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim " };
 int32_t tuning_first_editable_line[disp_tuning_lines] = { 7, 4, 5, 3, 4, 8, 7, 8, 8, 0 };  // first value in each dataset page that's editable. All values after this must also be editable
 
+#define BINARY "  \xa7 "
+#define CHOICE "\x12   "
+#define DEGR_F "\xf7""F  "  // "\x09""F  "
+#define BRIGHTNESS "NeoBr\x8dte"
+#define STEER_SAFE "St\x88rSafe"
+
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
-    { "BrkPosit", " Airflow", "     MAP", "MuleBatt", "     Pot", "      - ", "      - ", "Br\xa1tness", "DSaturat", "Governor", "SteerSaf", },  // PG_RUN
+    { "BrkPosit", " Airflow", "     MAP", "MuleBatt", "     Pot", "      - ", "      - ", BRIGHTNESS, "NeoDesat", "Governor", STEER_SAFE, },  // PG_RUN
     { "HRC Horz", "HRC Vert", "      - ", "      - ", "HFailsaf", "Horz Min", "Horz Max", "HorzDBnd", "Vert Min", "Vert Max", "VertDBnd", },  // PG_JOY
     { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", "Spd Idle", "SpdRedLn", "BkPos0Pt", },  // PG_CAR
     { "BrakePWM", "SteerPWM", "      - ", "Steer Lt", "SteerStp", "Steer Rt", "BrakExtd", "BrakStop", "BrakRetr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
@@ -100,12 +106,8 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
     { "Tach Tgt", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", "      - ", "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
     { "SpeedTgt", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "Tach Tgt", "ThrotSet", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", "      - ", "      - ", "SimW/Pot", " Cal Brk", " Cal Gas", },  // PG_TEMP
-    { "Joy Axes", "SysPower", "Brk Pres", " Brk Pos", "    Tach", " Airflow", "     MAP", "  Speedo", "Ignition", "Basic Sw", " Starter", },  // PG_SIM
+    { "Joy Axes", "Brk Pres", " Brk Pos", "  Speedo", "    Tach", " Airflow", "     MAP", "Ignition", " Starter", "Basic Sw", "SysPower", },  // PG_SIM
 };
-
-#define DEGR_F "\xf7""F  "  // "\x09""F  "
-#define BINARY "\xa7   "
-#define CHOICE "\x12   "
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "in  ", "mph ", "psi ", "V   ", "%   ", "    ", "    ", "%   ", "/10 ", "%   ", "%   " },  // PG_RUN
     { "us  ", "us  ", "    ", "    ", "us  ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
@@ -127,7 +129,7 @@ char simgrid[4][3][5] = {
 
 bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
 uint16_t idiotcolors[arraysize(idiotlights)] = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
-char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\x09""E", "\x09""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
+char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
 bool idiotlasts[arraysize(idiotlights)];
 
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
@@ -618,7 +620,6 @@ class Display {
                     draw_dynamic(13, pot.get(), pot.min(), pot.max());
                     draw_eraseval(14);
                     draw_eraseval(15);
-                    draw_eraseval(16);
                     draw_dynamic(16, neobright, 1.0, 100.0, -1, 3);
                     draw_dynamic(17, neodesat, 0.0, 10.0, -1, 2);
                     draw_dynamic(18, gas_governor_percent, 0.0, 100.0);
@@ -733,16 +734,16 @@ class Display {
                 }
                 else if (dataset_page == PG_SIM) {
                     draw_truth(9, simulator.can_simulate(SimOption::joy), 0);
-                    draw_truth(10, simulator.can_simulate(SimOption::syspower), 0);
-                    draw_truth(11, simulator.can_simulate(SimOption::pressure), 0);
-                    draw_truth(12, simulator.can_simulate(SimOption::brkpos), 0);
+                    draw_truth(10, simulator.can_simulate(SimOption::pressure), 0);
+                    draw_truth(11, simulator.can_simulate(SimOption::brkpos), 0);
+                    draw_truth(12, simulator.can_simulate(SimOption::speedo), 0);
                     draw_truth(13, simulator.can_simulate(SimOption::tach), 0);
                     draw_truth(14, simulator.can_simulate(SimOption::airflow), 0);
                     draw_truth(15, simulator.can_simulate(SimOption::mapsens), 0);
-                    draw_truth(16, simulator.can_simulate(SimOption::speedo), 0);
-                    draw_truth(17, simulator.can_simulate(SimOption::ignition), 0);
+                    draw_truth(16, simulator.can_simulate(SimOption::ignition), 0);
+                    draw_truth(17, simulator.can_simulate(SimOption::starter), 0);
                     draw_truth(18, simulator.can_simulate(SimOption::basicsw), 0);
-                    draw_truth(19, simulator.can_simulate(SimOption::starter), 0);
+                    draw_truth(19, simulator.can_simulate(SimOption::syspower), 0);
                 }
                 draw_bool((runmode == CAL), 2);
                 draw_bool((runmode == BASIC), 3);
