@@ -106,12 +106,17 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     printf("Encoder setup..\n");
     encoder.setup();
 
-    printf("Transducers setup..\n");
+    printf("Brake pressure sensor.. ");
     pressure_sensor.setup();
+    printf("done\nBrake position sensor.. ");
     brkpos_sensor.setup();
+    printf("done\nVehicle battery sense.. ");
     battery_sensor.setup();
+    printf("done\nTachometer.. ");
     tachometer.setup();
+    printf("done\nSpeedometer.. ");
     speedometer.setup();
+    printf("done..\n");
 
     printf ("Init i2c and i2c-enabled devices..");
     i2c.init();
