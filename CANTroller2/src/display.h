@@ -131,7 +131,22 @@ bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), 
 uint16_t idiotcolors[arraysize(idiotlights)] = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
 char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
 bool idiotlasts[arraysize(idiotlights)];
-
+uint8_t idiotmaps[arraysize(idiotlights)][11] = {
+    { 0x7e, 0x7e, 0x7e, 0x20, 0x30, 0x10, 0x54, 0x38, 0x10, 0x28, 0x44, },     // 0 = Box with broken wire
+    { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },     // 1 = NA
+    { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },     // 2 = NA
+    { 0x1c, 0x3e, 0x63, 0x6b, 0x63, 0x3e, 0x1c, 0x01, 0x15, 0x0b, 0x07, },     // 3 = Hot wheel
+    { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },     // 4 = NA
+    { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },     // 5 = NA
+    { 0x63, 0x71, 0x59, 0x4d, 0x67, 0x63, 0x00, 0x09, 0x0d, 0x0b, 0x0d, },     // 6 = Zzz
+    { 0x7f, 0x01, 0x45, 0x7d, 0x7d, 0x45, 0x01, 0x7f, 0x01, 0x45, 0x7d, },     // 7 = Parked cars
+    { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },     // 8 = NA
+    { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },     // 9 = NA
+    { 0x3c, 0x63, 0x7f, 0x22, 0x63, 0x63, 0xc1, 0xe7, 0x08, 0x3e, 0x1c, },     // 10 = DC motor
+    { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },     // 11 = NA
+    { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },     // 12 = NA
+    { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, }, };  // 13 = NA
+    
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
@@ -551,12 +566,26 @@ class Display {
             if (halvings == 1) return ((color & 0xf000) | (color & 0x7c0) | (color & 0x1e)) >> 1;
             else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
         }
-        void draw_idiotlight (int32_t index, int32_t x, int32_t y) {
-            _tft.fillRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (*(idiotlights[index])) ? idiotcolors[index] : BLK);  // GRY1);
-            _tft.setTextColor ((*(idiotlights[index])) ? BLK : darken_color (idiotcolors[index], 1));  // darken_color ((*(idiotlights[index])) ? BLK : DGRY)
-            _tft.setCursor (x+1, y+1);
-            _tft.print (idiotchars[index]);
-            idiotlasts[index] = *(idiotlights[index]);
+        void draw_idiotbitmap (int32_t idiot, int32_t x, int32_t y) {
+            uint16_t color = (*idiotlights[idiot]) ? BLK : darken_color(idiotcolors[idiot]);
+            uint16_t bg = (*idiotlights[idiot]) ? idiotcolors[idiot] : BLK;
+            uint16_t seed = 1;
+            for (int32_t xo = 0; xo < (2 * disp_font_width - 1); xo++)  for (int32_t yo = 6; yo >= 0; yo--)
+                _tft.drawPixel (x + xo + 1, y + yo + 1, ((idiotmaps[idiot][xo] & (seed << yo)) >> yo) ? color : bg);
+            _tft.drawFastHLine (x + 1, y, 2 * disp_font_width - 1, bg);
+            _tft.drawFastHLine (x + 1, y + disp_font_height, 2 * disp_font_width - 1, bg);
+            _tft.drawFastVLine (x, y + 1, disp_font_height - 1, bg);
+            _tft.drawFastVLine (x+disp_font_width * 2, y + 1, disp_font_height - 1, bg);
+        }
+        void draw_idiotlight (int32_t idiot, int32_t x, int32_t y) {
+            if (idiotmaps[idiot][0] >= 0x80) {
+                _tft.fillRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (*(idiotlights[idiot])) ? idiotcolors[idiot] : BLK);  // GRY1);
+                _tft.setTextColor ((*(idiotlights[idiot])) ? BLK : darken_color(idiotcolors[idiot]));  // darken_color ((*(idiotlights[index])) ? BLK : DGRY)
+                _tft.setCursor (x+1, y+1);
+                _tft.print (idiotchars[idiot]);
+            }
+            else draw_idiotbitmap(idiot, x, y);
+            idiotlasts[idiot] = *(idiotlights[idiot]);
         }
         void draw_idiotlights (int32_t x, int32_t y, bool force = false) {
             for (int32_t ilite=0; ilite < arraysize(idiotlights); ilite++)
