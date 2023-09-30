@@ -131,7 +131,25 @@ bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), 
 uint16_t idiotcolors[arraysize(idiotlights)] = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
 char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
 bool idiotlasts[arraysize(idiotlights)];
-
+uint8_t idiotmaps[arraysize(idiotlights)][11] = {
+    { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e, },     // 0 = "S" + crossout symbol
+    { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x78, 0x70, 0x58, 0x0d, 0x07, 0x0f, },     // 1 = "S" + double arrows
+    { 0x7f, 0x7f, 0x6b, 0x6b, 0x00, 0x70, 0x72, 0x17, 0x15, 0x77, 0x62, },     // 2 = "En" + degree symbol
+    { 0x3f, 0x60, 0x7c, 0x60, 0x3f, 0x00, 0x7a, 0x77, 0x25, 0x67, 0x62, },     // 3 = "Wh" + degree symbol
+    { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },     // 4 = NA
+    { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },     // 5 = NA
+    { 0x63, 0x71, 0x59, 0x4d, 0x67, 0x63, 0x00, 0x09, 0x0d, 0x0b, 0x0d, },     // 6 = Zzz
+    { 0x7f, 0x7f, 0x1b, 0x1f, 0x0e, 0x00, 0x7f, 0x7f, 0x3c, 0x76, 0x66, },     // 7 = "Pk" bold
+    { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },     // 8 = NA
+    { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },     // 9 = NA
+    { 0x3c, 0x66, 0x7e, 0x66, 0x66, 0x66, 0x3c, 0x18, 0x3c, 0x5a, 0x3c, },     // 10 = DC motor
+    { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },     // 11 = NA
+    { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },     // 12 = NA
+    { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, }, };  // 13 = NA
+//  { 0x7e, 0x7e, 0x7e, 0x20, 0x30, 0x10, 0x54, 0x38, 0x10, 0x28, 0x44, },     // box with broken wire
+//  { 0x1c, 0x3e, 0x63, 0x6b, 0x63, 0x3e, 0x1c, 0x01, 0x15, 0x0b, 0x07, },     // smoking wheel
+//  { 0x7f, 0x01, 0x45, 0x7d, 0x7d, 0x45, 0x01, 0x7f, 0x01, 0x45, 0x7d, },     // parked cars
+    
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
@@ -551,12 +569,25 @@ class Display {
             if (halvings == 1) return ((color & 0xf000) | (color & 0x7c0) | (color & 0x1e)) >> 1;
             else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
         }
-        void draw_idiotlight (int32_t index, int32_t x, int32_t y) {
-            _tft.fillRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (*(idiotlights[index])) ? idiotcolors[index] : BLK);  // GRY1);
-            _tft.setTextColor ((*(idiotlights[index])) ? BLK : darken_color (idiotcolors[index], 1));  // darken_color ((*(idiotlights[index])) ? BLK : DGRY)
-            _tft.setCursor (x+1, y+1);
-            _tft.print (idiotchars[index]);
-            idiotlasts[index] = *(idiotlights[index]);
+        void draw_idiotbitmap (int32_t idiot, int32_t x, int32_t y) {
+            uint16_t color = (*idiotlights[idiot]) ? BLK : darken_color(idiotcolors[idiot]);
+            uint16_t bg = (*idiotlights[idiot]) ? idiotcolors[idiot] : BLK;
+            for (int32_t xo = 0; xo < (2 * disp_font_width - 1); xo++)  for (int32_t yo = disp_font_width; yo >= 0; yo--)
+                _tft.drawPixel (x + xo + 1, y + yo + 1, ((idiotmaps[idiot][xo] >> yo) & 1) ? color : bg);
+            _tft.drawFastHLine (x + 1, y, 2 * disp_font_width - 1, bg);
+            _tft.drawFastHLine (x + 1, y + disp_font_height, 2 * disp_font_width - 1, bg);
+            _tft.drawFastVLine (x, y + 1, disp_font_height - 1, bg);
+            _tft.drawFastVLine (x+disp_font_width * 2, y + 1, disp_font_height - 1, bg);
+        }
+        void draw_idiotlight (int32_t idiot, int32_t x, int32_t y) {
+            if (idiotmaps[idiot][0] >= 0x80) {
+                _tft.fillRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (*(idiotlights[idiot])) ? idiotcolors[idiot] : BLK);  // GRY1);
+                _tft.setTextColor ((*(idiotlights[idiot])) ? BLK : darken_color(idiotcolors[idiot]));  // darken_color ((*(idiotlights[index])) ? BLK : DGRY)
+                _tft.setCursor (x+1, y+1);
+                _tft.print (idiotchars[idiot]);
+            }
+            else draw_idiotbitmap(idiot, x, y);
+            idiotlasts[idiot] = *(idiotlights[idiot]);
         }
         void draw_idiotlights (int32_t x, int32_t y, bool force = false) {
             for (int32_t ilite=0; ilite < arraysize(idiotlights); ilite++)
