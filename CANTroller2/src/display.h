@@ -570,7 +570,7 @@ class Display {
             uint16_t color = (*idiotlights[idiot]) ? BLK : darken_color(idiotcolors[idiot]);
             uint16_t bg = (*idiotlights[idiot]) ? idiotcolors[idiot] : BLK;
             uint16_t seed = 1;
-            for (int32_t xo = 0; xo < (2 * disp_font_width - 1); xo++)  for (int32_t yo = 6; yo >= 0; yo--)
+            for (int32_t xo = 0; xo < (2 * disp_font_width - 1); xo++)  for (int32_t yo = disp_font_width; yo >= 0; yo--)
                 _tft.drawPixel (x + xo + 1, y + yo + 1, ((idiotmaps[idiot][xo] & (seed << yo)) >> yo) ? color : bg);
             _tft.drawFastHLine (x + 1, y, 2 * disp_font_width - 1, bg);
             _tft.drawFastHLine (x + 1, y + disp_font_height, 2 * disp_font_width - 1, bg);
