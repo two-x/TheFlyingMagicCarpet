@@ -118,7 +118,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     speedometer.setup();
     printf("done..\n");
 
-    printf ("Init i2c and i2c-enabled devices..");
+    printf ("Init i2c and i2c-enabled devices.."); delay(1);  // Attempt to force print to happen before init
     i2c.init();
     airflow_sensor.setup(); // must be done after i2c is started
     map_sensor.setup();

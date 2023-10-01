@@ -95,11 +95,13 @@ class I2C {
         int32_t _devicecount = 0;
         uint8_t _addrs[10];
         uint8_t _sda_pin, _scl_pin;
+        Timer scanTimer;
     public:
         I2C(uint8_t sda_pin_arg, uint8_t scl_pin_arg) : _sda_pin(sda_pin_arg), _scl_pin(scl_pin_arg) {}
 
         void init() {
             printf("I2C driver ");
+            scanTimer.reset();
             Wire.begin(_sda_pin, _scl_pin);  // I2c bus needed for airflow sensor
             byte error, address;
             printf(" scanning ...");
@@ -113,8 +115,9 @@ class I2C {
                 }
                 else if (error==4) printf (" error addr: 0x%s%x", (address < 16) ? "0" : "", address);
             }
-            if (_devicecount == 0) printf(" no devices found\n");
-            else printf(" done\n");
+            if (scanTimer.elapsed() > 5000000) printf(" timeout & fail bus scan.");
+            if (_devicecount == 0) printf(" no devices found.");
+            printf(" done\n");
         }
 
         bool device_detected(uint8_t addr) {
