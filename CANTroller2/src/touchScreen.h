@@ -166,7 +166,6 @@ public:
             
             touch_now_touched = true;
         } else { // If not being touched, put momentarily-set simulated button values back to default values
-            if (simulator.simulating(SimOption::cruisesw)) cruise_sw = false;  // Makes this button effectively momentary
             sim_edit_delta_touch = 0;  // Stop changing the value
             if (touch_now_touched) touchDoublePressTimer.reset();  // Upon end of a touch, begin timer to reject any accidental double touches
             touch_now_touched = false;  // Remember the last touch state

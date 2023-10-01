@@ -478,13 +478,15 @@ void loop() {
         // Set sensor error idiot light flags
         // printf ("Sensors errors: ");
         
+        // printf ("Sensor check: ");
         for (int32_t t=0; t<num_err_types; t++) {
             err_sensor_alarm[t] = false;
             for (int32_t s=0; s<e_num_sensors; s++)
                 if (err_sensor[t][s]) {
                     err_sensor_alarm[t] = true;
-                    // printf ("%ld(%d), ", s, t);
-                }
+                    // if (s <= 3) printf ("hotrc-ch%d is %s, ", s, t ? "Rang" : "Lost");
+                    // else printf ("%d is %s, ", s, t ? "Rang" : "Lost");
+\                }
         }
         // printf ("\n");
 
