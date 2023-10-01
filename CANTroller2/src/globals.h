@@ -412,6 +412,8 @@ bool err_temp_engine, err_temp_wheel;
 // Sensor related trouble - this all should be moved to devices.h
 enum err_types_sensor { LOST, RANGE, num_err_types };
 enum err_sensors { e_hrchorz, e_hrcvert, e_hrcch3, e_hrcch4, e_pressure, e_brkpos, e_speedo, e_tach, e_airflow, e_mapsens, e_temps, e_battery, e_starter, e_basicsw, e_num_sensors };
+// enum class SimOption : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, battery, ignition, basicsw, cruisesw, starter, syspower };  // , num_sensors, err_flag };
+
 bool err_sensor_alarm[num_err_types] = { false, false };  // [LOST/RANGE]
 bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_battery/e_basicsw/e_starter]   // SimOption::opt_t::num_sensors]
 

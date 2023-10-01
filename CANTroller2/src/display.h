@@ -79,7 +79,9 @@
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, TEAL, MBLU };
 
-char sensorcard[15][7] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "ign", "basic", "cruise", "startr", "syspwr" };
+char sensorcard[14][7] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
+// char sensorerrcard { e_hrchorz, e_hrcvert, e_hrcch3, e_hrcch4, e_pressure, e_brkpos, e_speedo, e_tach, e_airflow, e_mapsens, e_temps, e_battery, e_starter, e_basicsw, e_num_sensors };
+
 char idlemodecard[3][7] = { "direct", "cntrol", "minimz" };
 char idlestatecard[ThrottleControl::targetstates::num_states][7] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
 
@@ -127,9 +129,9 @@ char simgrid[4][3][5] = {
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
-bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
-uint16_t idiotcolors[arraysize(idiotlights)] = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
-char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
+bool* idiotlights[15] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard, &joy_centered };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
+uint16_t idiotcolors[arraysize(idiotlights)] = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG, YEL };  // LYEL, YEL };
+char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB", "JC" };  // "c3", "c4" };
 bool idiotlasts[arraysize(idiotlights)];
 uint8_t idiotmaps[arraysize(idiotlights)][11] = {
     { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e, },     // 0 = "S" w/ crossout symbol
@@ -145,7 +147,8 @@ uint8_t idiotmaps[arraysize(idiotlights)][11] = {
     { 0x3e, 0x63, 0x7f, 0x41, 0x41, 0x63, 0x3e, 0x08, 0x3e, 0x55, 0x3e, },     // 10 = motor w/ spur gear
     { 0x03, 0x7e, 0x7e, 0x7e, 0x3e, 0x38, 0x74, 0x70, 0x70, 0x70, 0x60, },     // 11 = boot
     { 0x6e, 0x6b, 0x3b, 0x00, 0x7f, 0x00, 0x7f, 0x06, 0x1c, 0x06, 0x7f, },     // 12 = "SIM"
-    { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, }, };  // 13 = "DEV"
+    { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, },     // 13 = "DEV"
+    { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, }, };  // 14 = N/A
 //  { 0x, 0x, 0x, 0x, 0x, 0x, 0x, 0x, 0x, 0x, 0x, },     // Template
 //  Icon bitmap fail gallery:
 //  { 0x7e, 0x7e, 0x7e, 0x20, 0x30, 0x10, 0x54, 0x38, 0x10, 0x28, 0x44, },     // 0 - box w/ broken cord
