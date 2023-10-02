@@ -207,6 +207,7 @@ template<typename NATIVE_T, typename HUMAN_T>
 class Transducer : public Device {
   protected:
     // Multiplier and adder values to plug in for unit conversion math
+    NATIVE_T _val_raw;  // Keep track of the most recent unfiltered and unconstrained native value, for monitoring and diag purposes
     float _m_factor = 1.0;
     float _b_offset = 0.0;  
     bool _invert = false;  // Flag to indicated if unit conversion math should multiply or divide
@@ -312,6 +313,7 @@ class Transducer : public Device {
     }
 
     bool set_native(NATIVE_T arg_val_native) {
+        _val_raw = arg_val_native;
         if (native.set(arg_val_native)) {
             human.set(from_native(native.get()));
             return true;
@@ -319,6 +321,7 @@ class Transducer : public Device {
         return false;
     }
     bool add_native(NATIVE_T arg_add_native) {
+        _val_raw += arg_add_native;
         if (native.add(arg_add_native)) {
             human.set(from_native(native.get()));
             return true;
@@ -326,6 +329,7 @@ class Transducer : public Device {
         return false;
     }
     bool set_human(HUMAN_T arg_val_human) {
+        _val_raw = to_native(arg_val_human);
         if (human.set(arg_val_human)) {
             native.set(to_native(human.get()));
             return true;
@@ -333,6 +337,7 @@ class Transducer : public Device {
         return false;
     }
     bool add_human(HUMAN_T arg_add_human) {
+        _val_raw += to_native(arg_add_human);
         if (human.add(arg_add_human)) {
             native.set(to_native(human.get()));
             return true;
@@ -349,6 +354,7 @@ class Transducer : public Device {
 
     NATIVE_T get_native() { return native.get(); }
     HUMAN_T get_human() { return human.get(); }
+    NATIVE_T get_raw() { return _val_raw; }
     NATIVE_T get_min_native() { return native.get_min(); }
     NATIVE_T get_max_native() { return native.get_max(); }
     HUMAN_T get_min_human() { return human.get_min(); }
@@ -381,6 +387,7 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
     }
     virtual void handle_pot_mode() {
         this->human.set(this->_pot->mapToRange(this->human.get_min(), this->human.get_max()));
+        this->_val_raw = this->native.get();  // Arguably pot should set the raw value and let the filter work normally, instead of this
         this->_val_filt.set(this->human.get()); // don't filter the value we get from the pot, the pot output is already filtered
     }
 
@@ -415,6 +422,7 @@ class I2CSensor : public Sensor<float,float> {
 
         virtual void handle_pot_mode() {
             this->human.set(this->_pot->mapToRange(this->human.get_min(), this->human.get_max()));
+            this->_val_raw = this->native.get();
             this->_val_filt.set(this->human.get()); // don't filter the value we get from the pot, the pot output is already filtered
         }
     
@@ -444,7 +452,10 @@ class AirflowSensor : public I2CSensor {
         static constexpr float _initial_ema_alpha = 0.2;
         FS3000 _sensor;
         virtual float read_sensor() {
-            return _sensor.readMilesPerHour(); // note, this returns a float from 0-33.55 for the FS3000-1015 
+            return _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
+            // float temp = _sensor.readMilesPerHour();
+            // this->_val_raw = (NATIVE_T)temp;  // note, this returns a float from 0-33.55 for the FS3000-1015 
+            // return temp;
         }
     public:
         AirflowSensor(I2C &i2c_arg) : I2CSensor(i2c_arg, _i2c_address) {
@@ -490,6 +501,9 @@ class MAPSensor : public I2CSensor {
         SparkFun_MicroPressure _sensor;
         virtual float read_sensor() {
             return _sensor.readPressure(PSI);
+            // float temp = _sensor.readPressure(PSI);
+            // this->_val_raw = (NATIVE_T)temp;  // note, this returns a float from 0-33.55 for the FS3000-1015 
+            // return temp;
         }
     public:
         MAPSensor(I2C &i2c_arg) : I2CSensor(i2c_arg, _i2c_address) {
@@ -528,7 +542,7 @@ template<typename NATIVE_T, typename HUMAN_T>
 class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
   protected:
     virtual void handle_pin_mode() {
-        this->set_native(static_cast<NATIVE_T>(analogRead(this->_pin)));
+        this->set_native(static_cast<NATIVE_T>(analogRead(this->_pin)));  // Soren: can this be done without two casts?
         this->calculate_ema(); // filtered values are kept in human format
     }
   public:
@@ -911,7 +925,8 @@ class ServoPWM : public Transducer<NATIVE_T, HUMAN_T> {
         set_pin(this->_pin, OUTPUT);
     }
     void write() {
-        _servo.writeMicroseconds((int32_t)this->native.get());  // Write result to servo interface
+        this->_val_raw = this->native.get();
+        _servo.writeMicroseconds((int32_t)this->_val_raw);  // Write result to servo interface
     }
 };
 
