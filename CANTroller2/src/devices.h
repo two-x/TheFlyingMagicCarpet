@@ -1244,6 +1244,7 @@ class Brake {  // This class wraps all brake activity to provide monitoring func
     //       1. The brake chain is not connected (evidenced by change in brake position without expected pressure changes)
     //       2. Obstruction, motor failure, or inaccurate position. Evidenced by motor instructed to move but position not changing even when pressure is low.
     //       3. Brake hydraulics failure or inaccurate pressure. Evidenced by normal positional change not causing expected increase in pressure.
+    //       4. 
     // Todo: Startup brake press to detect faults and validity of parameters before starting normal operation
     // Todo: Brake motor temperature sensor? 
 };

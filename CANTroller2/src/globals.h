@@ -75,7 +75,6 @@ bool flip_the_screen = true;
 
 // Globals -------------------
 bool serial_debugging = true;
-bool timestamp_loop = false;         // Makes code write out timestamps throughout loop to serial port
 bool take_temperatures = true;
 bool keep_system_powered = false;    // Use true during development
 bool allow_rolling_start = false;    // May be a smart prerequisite, may be us putting obstacles in our way
@@ -84,8 +83,9 @@ bool remote_start_support = false;
 bool starter_signal_support = true;
 bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool cruise_fixed_throttle = true;   // Cruise mode fixes the throttle angle rather than controlling for a target speed
-bool autostop_disabled = true;
-
+bool autostop_disabled = true;       // Temporary measure to keep brake behaving until we get it debugged. Eventually should be false
+bool timestamp_loop = true;         // Makes code write out timestamps throughout loop to serial port
+uint32_t timestamp_loop_linefeed_threshold = 15000;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
 #define pwm_jaguars true
 
 // Persistent config storage
@@ -177,6 +177,8 @@ int32_t loopno = 1;
 uint32_t looptimes_us[20];
 bool loop_dirty[20];
 int32_t loopindex = 0;
+int64_t looptime_cout_mark_us;
+uint32_t looptime_cout_us;
 bool booted = false;
 bool diag_ign_error_enabled = true;
 

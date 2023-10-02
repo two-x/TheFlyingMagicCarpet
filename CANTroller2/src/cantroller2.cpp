@@ -479,7 +479,7 @@ void loop() {
         // printf ("Sensors errors: ");
         
         // printf ("Sensor check: ");
-        for (int32_t t=0; t<num_err_types; t++) {
+        for (int32_t t=LOST; t<=RANGE; t++) {
             err_sensor_alarm[t] = false;
             for (int32_t s=0; s<e_num_sensors; s++)
                 if (err_sensor[t][s]) {
@@ -735,12 +735,15 @@ void loop() {
     loopno++;  // I like to count how many loops
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");    
     if (timestamp_loop) {
+        looptime_cout_mark_us = esp_timer_get_time();
         looptime_sum_s += (float)loop_period_us / 1000000;
         if (loopno) looptime_avg_ms = 1000 * looptime_sum_s / (float)loopno;
         std::cout << std::fixed << std::setprecision(0);
-        std::cout << "\r" << std::setw(5) << looptime_sum_s << " av:" << std::setw(3) << looptime_avg_ms << " lp#" << std::setw(5) << loopno << " us:" << std::setw(5) << loop_period_us; // << " avg:" << looptime_avg_us;  //  " us:" << esp_timer_get_time() << 
-        for (int32_t x=1; x<loopindex; x++) std::cout << " " << std::setw(3) << loop_names[x] << x << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1];
-        if (loop_period_us > 10000) std::cout << std::endl;
+        std::cout << "\r" << std::setw(5) << looptime_sum_s << " av:" << std::setw(3) << looptime_avg_ms << " lp#" << std::setw(5) << loopno;
+        std::cout << " us:" << std::setw(5) << loop_period_us << " (" << std::setw(5) << loop_period_us-looptime_cout_us << ") ";  // << " avg:" << looptime_avg_us;  //  " us:" << esp_timer_get_time() << 
+        for (int32_t x=1; x<loopindex; x++) std::cout << std::setw(3) << loop_names[x] << x << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1] << " ";
+        if (loop_period_us-looptime_cout_us > timestamp_loop_linefeed_threshold || !timestamp_loop_linefeed_threshold) std::cout << std::endl;
+        looptime_cout_us = (uint32_t)(esp_timer_get_time() - looptime_cout_mark_us);
     }
     loop_int_count = 0;
 }
