@@ -436,7 +436,7 @@ void loop() {
     }
     else diag_ign_error_enabled = true;
     
-    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tch");  //
+    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tch");  //
 
     // Update warning idiot lights
     if (errTimer.expireset()) {

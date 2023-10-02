@@ -1,7 +1,7 @@
 #pragma once
 #include <array>
 #include <string>
-#include "temp.h"
+#include <DallasTemperature.h>
 
 enum class sensor_location { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };  // , SOREN_DEV0, SOREN_DEV1, num_known_ };
 
@@ -14,10 +14,10 @@ private:
     sensor_location _location;
     DeviceAddress _address;
     float _temperature;
-    DallasSensor* _tempsensebus;
+    DallasTemperature* _tempsensebus;
 
 public:
-    TemperatureSensor(sensor_location location, const DeviceAddress& address, DallasSensor* tempsensebus)
+    TemperatureSensor(sensor_location location, const DeviceAddress& address, DallasTemperature* tempsensebus)
    : _location(location), _address(address), _tempsensebus(tempsensebus), _temperature(-999) {}
 
     TemperatureSensor() = delete; // always create with a pointer to the tempsensorbus

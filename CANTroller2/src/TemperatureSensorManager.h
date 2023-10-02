@@ -5,7 +5,7 @@
 #include <algorithm>
 
 #include <OneWire.h>
-#include "temp.h"
+#include <DallasTemperature.h>
 #include "utils.h"
 #include "TemperatureSensor.h"
 
@@ -28,7 +28,7 @@ private:
     State _state;
     
     OneWire one_wire_bus;
-    DallasSensor tempsensebus;
+    DallasTemperature tempsensebus;
 
     std::vector<DeviceAddress> detected_addresses;
     std::vector<sensor_location> all_locations = {
@@ -172,7 +172,7 @@ public:
                 set_state(State::CONVERTING);
                 last_read_request_time = millis();
             }
-        } else if (millis() - last_read_request_time >= tempsensebus.microsToWaitForConversion(tempsensebus.getResolution()) / 1000) {
+        } else if (millis() - last_read_request_time >= tempsensebus.millisToWaitForConversion(tempsensebus.getResolution())) {
             // Enough time has passed since the last conversion request, so check if conversions are complete
             update_state();
         }
@@ -203,8 +203,12 @@ public:
         last_read_request_time = millis();
     }
 
-    int get_micros_to_wait_for_conversion(int microseconds) {
-        return tempsensebus.microsToWaitForConversion(microseconds);
+    int get_micros_to_wait_for_conversion() {
+        return 1000 * tempsensebus.millisToWaitForConversion(tempsensebus.getResolution());
     }
+    // This looks wrong so I modified above. Here is the original. I don't think it's used anywhere
+    // int get_micros_to_wait_for_conversion(int microseconds) {
+    //     return 1000 * tempsensebus.millisToWaitForConversion(microseconds);
+    // }
 
 };
