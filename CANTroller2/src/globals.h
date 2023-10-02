@@ -15,7 +15,7 @@
 #include "utils.h"
 #include "uictrl.h"
 #include "devices.h"
-#include "TemperatureSensorManager.h"
+#include "temperature.h"
 
 // #define CAP_TOUCH
 bool flip_the_screen = true;

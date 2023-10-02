@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include "Arduino.h"
 #include "utils.h"
-#include "TemperatureSensor.h"
+#include "temperature.h"
 
 class QPID {
 
