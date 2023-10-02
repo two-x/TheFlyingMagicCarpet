@@ -1,12 +1,11 @@
 #pragma once
 // #include <SdFat.h>  // SD card & FAT filesystem library
 #include <ESP32Servo.h>        // Makes PWM output to control motors (for rudimentary control of our gas and steering)
-#include "temp.h"
+#include <DallasTemperature.h>
 #include <Wire.h>
 #include <SparkFun_MicroPressure.h>
 #include <Preferences.h>
 #include <iostream>
-// #include <DallasTemperature.h>
 // #include "freertos/FreeRTOS.h"  // MCPWM pulse measurement code
 // #include "freertos/task.h"  // MCPWM pulse measurement code
 // #include "driver/mcpwm.h"  // MCPWM pulse measurement code
@@ -85,7 +84,7 @@ bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise s
 bool cruise_fixed_throttle = true;   // Cruise mode fixes the throttle angle rather than controlling for a target speed
 bool autostop_disabled = true;       // Temporary measure to keep brake behaving until we get it debugged. Eventually should be false
 bool timestamp_loop = true;         // Makes code write out timestamps throughout loop to serial port
-uint32_t timestamp_loop_linefeed_threshold = 15000;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
+uint32_t timestamp_loop_linefeed_threshold = 0;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
 #define pwm_jaguars true
 
 // Persistent config storage
