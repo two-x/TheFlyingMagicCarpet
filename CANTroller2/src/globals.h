@@ -20,7 +20,7 @@
 // #define CAP_TOUCH
 bool flip_the_screen = true;
 
-#define bootbutton_pin 0       // (button0 / bootstrap high) - This is the "Boot" button on the esp32 board, and also potentially a joystick cruise button. Both active low (existing onboard pullup)
+#define bootbutton_pin 0        // (button0 / bootstrap high) - This is the "Boot" button on the esp32 board. Active low (existing onboard pullup)#define steer_enc_a_pin 1       // (adc) - Reserved for a steering quadrature encoder. Encoder "A" signal
 #define steer_enc_a_pin 1       // (adc) - Reserved for a steering quadrature encoder. Encoder "A" signal
 #define steer_enc_b_pin 2       // (adc) - Reserved for a steering quadrature encoder. Encoder "B" signal
 #define tft_dc_pin 3            // (adc* / strap X) - Output, Assert when sending data to display chip to indicate commands vs. screen data
@@ -65,6 +65,7 @@ bool flip_the_screen = true;
 // 5. neopixel_pin: (PCB) Add 300 ohm in series (between pin and the DataIn pin of the 1st pixel). (BB) Same, but this one is likely optional, e.g. mine works w/o it.  For signal integrity over long wires. 
 // 6. uart_tx_pin: (PCB) Add 22k-ohm to GND. (BB) Connect 1M-ohm to 3.3V instead. For boot detection of vehicle PCB, so defaults are set appropriately.
 
+// ESP32 pins 34, 35, 36, 39 are input-only (applies to S3?).  ADC ch2 will not work if wifi is enabled
 // ESP32 errata 3.11: Pin 36 and 39 will be pulled low for ~80ns when "certain RTC peripherals power up"
 // ESP32 pullups/downs (~45k-ohm) details: https://www.esp32.com/viewtopic.php?f=12&t=34831
 
