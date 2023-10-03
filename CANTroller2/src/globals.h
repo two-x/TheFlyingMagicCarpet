@@ -83,8 +83,8 @@ bool starter_signal_support = true;
 bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool cruise_fixed_throttle = true;   // Cruise mode fixes the throttle angle rather than controlling for a target speed
 bool autostop_disabled = true;       // Temporary measure to keep brake behaving until we get it debugged. Eventually should be false
-bool timestamp_loop = true;         // Makes code write out timestamps throughout loop to serial port
-uint32_t timestamp_loop_linefeed_threshold = 0;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
+bool timestamp_loop = false;         // Makes code write out timestamps throughout loop to serial port
+uint32_t timestamp_loop_linefeed_threshold = 15000;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
 #define pwm_jaguars true
 
 // Persistent config storage
