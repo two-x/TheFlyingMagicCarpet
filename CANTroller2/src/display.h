@@ -80,6 +80,10 @@
 #define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
+#define disp_simbuttons_x 165
+#define disp_simbuttons_y 48
+#define disp_sprite_width 155
+#define disp_sprite_height 192
 
 // string* pagecard = new string[8];  // How we might allocate on the heap instead of in the stack
 // string* modecard = new string[7];
@@ -215,11 +219,15 @@ class Display {
         // Adafruit_ILI9341 _tft (tft_cs_pin, tft_dc_pin, tft_rst_pin); // LCD screen
         // Adafruit_ILI9341 _tft; // LCD screen
         TFT_eSPI _tft; // LCD screen
+        TFT_eSprite spr = TFT_eSprite(&_tft);  // Declare Sprite object "spr" with pointer to "tft" object
 
         // ILI9341_t3 _tft;
         Timer _tftResetTimer;
         Timer _tftDelayTimer;
         int32_t _timing_tft_reset;
+        int16_t sprite_x, sprite_y;
+        uint16_t sprite_n;
+        uint32_t spriteUpdateTime = 0;       // time for next update
         bool _procrastinate = false, reset_finished = false;
         bool _disp_redraw_all = true;
     public:
@@ -248,6 +256,7 @@ class Display {
             yield();
             draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, true);
             _disp_redraw_all = true;
+            sprite_setup();
         }
         bool tft_reset() {  // call to begin a tft reset, and continue to call every loop until returns true (or get_reset_finished() returns true), then stop
             if (reset_finished) {
@@ -633,10 +642,13 @@ class Display {
             draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, false);
         }
         void update() {
-            if (simulator.get_enabled() != simulating_last || _disp_redraw_all) {
-                draw_simbuttons(simulator.get_enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
-                _procrastinate = true;  // Waits till next loop to draw changed values
+            if (simulator.get_enabled()) {
+                if (!simulating_last || _disp_redraw_all) {
+                    draw_simbuttons(simulator.get_enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
+                    _procrastinate = true;  // Waits till next loop to draw changed values
+                }
             }
+            else sprite_update();
             if ((disp_dataset_page_dirty || _disp_redraw_all)) {
                 static bool first = true;
                 draw_dataset_page(dataset_page, dataset_page_last, first);
@@ -810,6 +822,105 @@ class Display {
             }
             _procrastinate = false;
             _disp_redraw_all = false;
+        }
+        void sprite_setup() {
+            // spr.setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
+            spr.createSprite(disp_sprite_width, disp_sprite_height);  // Create a sprite of defined size
+            // _tft.fillScreen(TFT_BLUE);  // Clear the TFT screen to blue
+
+            // Formerly below this line was in loop, not setup (in example)
+            // Fill the whole sprite with black (Sprite is in memory so not visible yet)
+            spr.fillSprite(TFT_BLACK);
+
+            // // Number of pixels to draw
+            // uint16_t n = 100;
+
+            // // Draw 100 random colour pixels at random positions in sprite
+            // while (n--) {
+            //     uint16_t colour = random(0x10000); // Returns colour 0 - 0xFFFF
+            //     uint16_t star_x = random(disp_sprite_width);        // Random x coordinate
+            //     uint16_t star_y = random(disp_sprite_height);       // Random y coordinate
+            //     spr.drawPixel( star_x, star_y, colour);      // Draw pixel in sprite
+            // }
+
+            // Draw some lines
+            spr.drawLine(1, 0, disp_sprite_width, disp_sprite_height-1, TFT_GREEN);
+            spr.drawLine(0, 0, disp_sprite_width, disp_sprite_height, TFT_GREEN);
+            spr.drawLine(0, 1, disp_sprite_width-1, disp_sprite_height, TFT_GREEN);
+            spr.drawLine(0, disp_sprite_height-1, disp_sprite_width-1, 0, TFT_RED);
+            spr.drawLine(0, disp_sprite_height, disp_sprite_width, 0, TFT_RED);
+            spr.drawLine(1, disp_sprite_height, disp_sprite_width, 1, TFT_RED);
+
+            // Draw some text with Middle Centre datum
+            // spr.setTextDatum(MC_DATUM);
+            // spr.drawString("Sprite", disp_sprite_width / 2, disp_sprite_height / 2, 4);
+
+            // Now push the sprite to the TFT at position 0,0 on screen
+            spr.pushSprite(disp_simbuttons_x, disp_simbuttons_y);
+            // spr.pushSprite(-40, -40);
+            // spr.pushSprite(_tft.width() / 2 - disp_sprite_width / 2, _tft.height() / 2 - disp_sprite_height / 2);
+            // spr.pushSprite(_tft.width() - disp_sprite_width + 40, _tft.height() - disp_sprite_height + 40);
+
+            delay(1000);
+
+            // Fill TFT screen with blue
+            // _tft.fillScreen(TFT_BLUE);
+
+            // Draw a blue rectangle in sprite so when we move it 1 pixel it does not leave a trail
+            // on the blue screen background
+            spr.drawRect(0, 0, disp_sprite_width, disp_sprite_height, TFT_BLUE);
+
+            // sprite_x = _tft.width() / 2  -  disp_sprite_width / 2;
+            // sprite_y = _tft.height() / 2 - disp_sprite_height / 2;
+            sprite_x = random(disp_sprite_width);        // Random x coordinate
+            sprite_y = random(disp_sprite_height);       // Random y coordinate
+        }
+        void sprite_update() {
+            uint16_t n = 1;
+            uint16_t color, star_x, star_y;
+            while (n--) {
+                color = random(0x10000); // Returns colour 0 - 0xFFFF
+                star_x = random(disp_sprite_width);        // Random x coordinate
+                star_y = random(disp_sprite_height);       // Random y coordinate
+                spr.drawLine(sprite_x, sprite_y, star_x, star_y, color);      // Draw pixel in sprite
+                // spr.drawPixel( star_x, star_y, color);      // Draw pixel in sprite
+            }
+            sprite_x = star_x;
+            sprite_y = star_y;
+            spr.setTextDatum(MC_DATUM);
+            spr.setTextColor(BLK);
+            spr.drawString("do drugs", disp_sprite_width / 2, disp_sprite_height / 2, 4);
+            spr.pushSprite(disp_simbuttons_x, disp_simbuttons_y);
+        }
+        void sprite_wander(void) {
+            // Random movement direction
+            int dx = 1; if (random(2)) dx = -1;
+            int dy = 1; if (random(2)) dy = -1;
+
+            // Pull it back onto screen if it wanders off
+            if (sprite_x < -disp_sprite_width/2) dx = 1;
+            if (sprite_x >= _tft.width()-disp_sprite_width/2) dx = -1;
+            if (sprite_y < -disp_sprite_height/2) dy = 1;
+            if (sprite_y >= _tft.height()-disp_sprite_height/2) dy = -1;
+
+            // Draw it 50 time, moving in random direct or staying still
+            sprite_n = 50;
+            int wait = random (50);
+            while (sprite_n) {
+                if (spriteUpdateTime <= millis()) {
+                    // Use time delay so sprite does not move fast when not all on screen
+                    spriteUpdateTime = millis() + wait;
+
+                    // Push the sprite to the TFT screen
+                    spr.pushSprite(sprite_x, sprite_y);
+
+                    // Change coord for next loop
+                    sprite_x += dx;
+                    sprite_y += dy;
+                    sprite_n--;
+                    yield(); // Stop watchdog reset
+                }
+            }
         }
 };
 // #endif  // DISPLAY_H
