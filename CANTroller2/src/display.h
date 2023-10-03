@@ -141,9 +141,9 @@ char simgrid[4][3][5] = {
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
-bool* idiotlights[15] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard, &joy_centered };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
-uint16_t idiotcolors[arraysize(idiotlights)] = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG, YEL };  // LYEL, YEL };
-char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB", "JC" };  // "c3", "c4" };
+bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
+uint16_t idiotcolors[arraysize(idiotlights)] = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
+char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
 bool idiotlasts[arraysize(idiotlights)];
 // Idiot light bitmaps
 // Format: Each byte is one of 11 pixel columns (left->right) with LSB->MSB within each byte being the top->bottom pixels in that column
@@ -162,9 +162,8 @@ uint8_t idiotmaps[arraysize(idiotlights)][11] = {
     { 0x3e, 0x41, 0x7f, 0x41, 0x41, 0x63, 0x3e, 0x08, 0x7f, 0x55, 0x7f, },     // 10 = motor w/ spur gear
     { 0x01, 0x7f, 0x7f, 0x7f, 0x3f, 0x38, 0x74, 0x70, 0x70, 0x70, 0x60, },     // 11 = boot
     { 0x6e, 0x6b, 0x3b, 0x00, 0x7f, 0x00, 0x7f, 0x06, 0x1c, 0x06, 0x7f, },     // 12 = "SIM"
-    { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, },     // 13 = "DEV"
-    { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, }, };  // 14 = N/A
-//  { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },     // Use for lights w/o bitmap (really just needs first byte high nibble >= 8)
+    { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, }, };  // 13 = "DEV"
+//  { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, }, };  // 14 = N/A (no idiot light bitmap)
 //  { 0x, 0x, 0x, 0x, 0x, 0x, 0x, 0x, 0x, 0x, 0x, },     // Template
 //  Icon bitmap fail gallery:
 //  { 0x7e, 0x7e, 0x7e, 0x20, 0x30, 0x10, 0x54, 0x38, 0x10, 0x28, 0x44, },     // 0 - box w/ broken cord
@@ -225,11 +224,22 @@ class Display {
         Timer _tftResetTimer;
         Timer _tftDelayTimer;
         int32_t _timing_tft_reset;
-        int16_t sprite_x, sprite_y;
-        uint16_t sprite_n;
-        uint32_t spriteUpdateTime = 0;       // time for next update
         bool _procrastinate = false, reset_finished = false;
         bool _disp_redraw_all = true;
+        
+        // For sprites
+        long star_x0, star_y0;
+        long eraser_rad = 14;
+        long eraser_velo_min = 2;
+        long eraser_velo_max = 8;
+        long eraser_pos[2] = { 0, 0 };
+        long eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) };
+        long eraser_pos_max[2] = { disp_sprite_width / 2 - eraser_rad, disp_sprite_height / 2 - eraser_rad }; 
+        long eraser_velo_sign[2] = { 1, 1 };
+        int spritecycle = 1;
+        uint32_t sprite_cycletime_us = 60000000;
+        Timer spriteRefreshTimer, spriteCycleTimer;
+        int16_t sprite_lines_mode = 0;  // 0 = eraser, 1 = do drugs
     public:
 
         Display (int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0){}
@@ -562,6 +572,7 @@ class Display {
             }
         }
         void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
+            _tft.fillRect(disp_simbuttons_x, disp_simbuttons_y, disp_sprite_width, disp_sprite_height, BLK);
             _tft.setTextColor (LYEL);
             for (int32_t row = 0; row < arraysize(simgrid); row++) {
                 for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
@@ -826,100 +837,55 @@ class Display {
         void sprite_setup() {
             // spr.setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
             spr.createSprite(disp_sprite_width, disp_sprite_height);  // Create a sprite of defined size
-            // _tft.fillScreen(TFT_BLUE);  // Clear the TFT screen to blue
-
-            // Formerly below this line was in loop, not setup (in example)
-            // Fill the whole sprite with black (Sprite is in memory so not visible yet)
             spr.fillSprite(TFT_BLACK);
-
-            // // Number of pixels to draw
-            // uint16_t n = 100;
-
-            // // Draw 100 random colour pixels at random positions in sprite
-            // while (n--) {
-            //     uint16_t colour = random(0x10000); // Returns colour 0 - 0xFFFF
-            //     uint16_t star_x = random(disp_sprite_width);        // Random x coordinate
-            //     uint16_t star_y = random(disp_sprite_height);       // Random y coordinate
-            //     spr.drawPixel( star_x, star_y, colour);      // Draw pixel in sprite
-            // }
-
-            // Draw some lines
-            spr.drawLine(1, 0, disp_sprite_width, disp_sprite_height-1, TFT_GREEN);
-            spr.drawLine(0, 0, disp_sprite_width, disp_sprite_height, TFT_GREEN);
-            spr.drawLine(0, 1, disp_sprite_width-1, disp_sprite_height, TFT_GREEN);
-            spr.drawLine(0, disp_sprite_height-1, disp_sprite_width-1, 0, TFT_RED);
-            spr.drawLine(0, disp_sprite_height, disp_sprite_width, 0, TFT_RED);
-            spr.drawLine(1, disp_sprite_height, disp_sprite_width, 1, TFT_RED);
-
-            // Draw some text with Middle Centre datum
-            // spr.setTextDatum(MC_DATUM);
-            // spr.drawString("Sprite", disp_sprite_width / 2, disp_sprite_height / 2, 4);
-
-            // Now push the sprite to the TFT at position 0,0 on screen
             spr.pushSprite(disp_simbuttons_x, disp_simbuttons_y);
-            // spr.pushSprite(-40, -40);
-            // spr.pushSprite(_tft.width() / 2 - disp_sprite_width / 2, _tft.height() / 2 - disp_sprite_height / 2);
-            // spr.pushSprite(_tft.width() - disp_sprite_width + 40, _tft.height() - disp_sprite_height + 40);
-
-            delay(1000);
-
-            // Fill TFT screen with blue
-            // _tft.fillScreen(TFT_BLUE);
-
-            // Draw a blue rectangle in sprite so when we move it 1 pixel it does not leave a trail
-            // on the blue screen background
-            spr.drawRect(0, 0, disp_sprite_width, disp_sprite_height, TFT_BLUE);
-
-            // sprite_x = _tft.width() / 2  -  disp_sprite_width / 2;
-            // sprite_y = _tft.height() / 2 - disp_sprite_height / 2;
-            sprite_x = random(disp_sprite_width);        // Random x coordinate
-            sprite_y = random(disp_sprite_height);       // Random y coordinate
-        }
-        void sprite_update() {
-            uint16_t n = 1;
-            uint16_t color, star_x, star_y;
-            while (n--) {
-                color = random(0x10000); // Returns colour 0 - 0xFFFF
-                star_x = random(disp_sprite_width);        // Random x coordinate
-                star_y = random(disp_sprite_height);       // Random y coordinate
-                spr.drawLine(sprite_x, sprite_y, star_x, star_y, color);      // Draw pixel in sprite
-                // spr.drawPixel( star_x, star_y, color);      // Draw pixel in sprite
-            }
-            sprite_x = star_x;
-            sprite_y = star_y;
+            // spr.drawRect(0, 0, disp_sprite_width, disp_sprite_height, TFT_BLUE);
+            // delay(1000);
+            star_x0 = random(disp_sprite_width);        // Random x coordinate
+            star_y0 = random(disp_sprite_height);       // Random y coordinate
+            for (int16_t axis=0; axis<=1; axis++) { eraser_velo_sign[axis] = (random(1)) ? 1 : -1; }
             spr.setTextDatum(MC_DATUM);
             spr.setTextColor(BLK);
-            spr.drawString("do drugs", disp_sprite_width / 2, disp_sprite_height / 2, 4);
-            spr.pushSprite(disp_simbuttons_x, disp_simbuttons_y);
+            spriteRefreshTimer.set(50000);
+            spriteCycleTimer.set((int64_t)sprite_cycletime_us);
         }
-        void sprite_wander(void) {
-            // Random movement direction
-            int dx = 1; if (random(2)) dx = -1;
-            int dy = 1; if (random(2)) dy = -1;
-
-            // Pull it back onto screen if it wanders off
-            if (sprite_x < -disp_sprite_width/2) dx = 1;
-            if (sprite_x >= _tft.width()-disp_sprite_width/2) dx = -1;
-            if (sprite_y < -disp_sprite_height/2) dy = 1;
-            if (sprite_y >= _tft.height()-disp_sprite_height/2) dy = -1;
-
-            // Draw it 50 time, moving in random direct or staying still
-            sprite_n = 50;
-            int wait = random (50);
-            while (sprite_n) {
-                if (spriteUpdateTime <= millis()) {
-                    // Use time delay so sprite does not move fast when not all on screen
-                    spriteUpdateTime = millis() + wait;
-
-                    // Push the sprite to the TFT screen
-                    spr.pushSprite(sprite_x, sprite_y);
-
-                    // Change coord for next loop
-                    sprite_x += dx;
-                    sprite_y += dy;
-                    sprite_n--;
-                    yield(); // Stop watchdog reset
+        void sprite_update() {
+            if (spriteRefreshTimer.expireset()) {
+                if (spriteCycleTimer.expireset()) {
+                    if (sprite_lines_mode == 1) {
+                        if (!spritecycle) spr.fillSprite(BLK);
+                        spritecycle = !spritecycle;
+                    }
+                    else if (sprite_lines_mode == 0) {
+                        if (--spritecycle < 0b01) spritecycle = 0b11;
+                        // if (spritecycle == 0b01) spr.fillSprite(BLK);
+                    }
                 }
+                uint16_t color;
+                long star_x1, star_y1;
+                color = spritecycle ? random(0x10000) : BLK; // Returns colour 0 - 0xFFFF
+                star_x1 = random(disp_sprite_width);        // Random x coordinate
+                star_y1 = random(disp_sprite_height);       // Random y coordinate
+                if (!(sprite_lines_mode == 0 && (spritecycle == 0b10))) spr.drawLine(star_x0, star_y0, star_x1, star_y1, color);      // Draw pixel in sprite
+                if (sprite_lines_mode == 1 && !spritecycle) spr.drawLine(star_x0+1, star_y0+1, star_x1+1, star_y1+1, color);
+                // spr.drawPixel( star_x1, star_y1, color);      // Draw pixel in sprite
+                star_x0 = star_x1;
+                star_y0 = star_y1;
+                if (sprite_lines_mode == 0 && spritecycle != 0b01) {
+                    for (int axis=0; axis<=1; axis++) {
+                        eraser_pos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
+                        if (eraser_pos[axis] * eraser_velo_sign[axis] >= eraser_pos_max[axis]) {
+                            eraser_pos[axis] = eraser_pos_max[axis] * eraser_velo_sign[axis];
+                            eraser_velo[axis] = eraser_velo_min + random(eraser_velo_max - eraser_velo_min);
+                            eraser_velo[!axis] = eraser_velo_min + random(eraser_velo_max - eraser_velo_min);
+                            eraser_velo_sign[axis] *= -1;
+                        }
+                    }
+                    spr.fillCircle((disp_sprite_width / 2) + eraser_pos[0], (disp_sprite_height / 2) + eraser_pos[1], eraser_rad, BLK);
+                } 
+                else if (sprite_lines_mode == 1) spr.drawString("do drugs", disp_sprite_width / 2, disp_sprite_height / 2, 4);
+                // spr.drawString("do drugs", disp_sprite_width / 2, (int32_t)(float)disp_sprite_height * (float)(spriteCycleTimer.elapsed() / (float)sprite_cycletime_us), 4);
+                spr.pushSprite(disp_simbuttons_x, disp_simbuttons_y);
             }
         }
 };
