@@ -175,10 +175,11 @@ class Encoder {
 class neopixelStrip {
   private:
     enum brightness_presets { B_OFF, B_MIN, B_LO, B_MED, B_HI, B_EXT, B_MAX };
-    enum brightness_contexts { NITE, DAY };  // Indoors = NITE
     uint8_t neo_wheelcounter = 0;
+    enum brightness_contexts { NITE, DAY };  // Indoors = NITE
     uint8_t brightlev[2][7] = { { 0, 1,  6, 10, 17, 30,  50 },     // [NITE] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
                                 { 0, 2, 16, 30, 45, 65, 100 }, };  // [DAY] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
+    bool context = NITE;
     uint8_t lobright = 1;
     uint8_t heartbright = 6;
     uint8_t hibright = 6;
@@ -191,13 +192,12 @@ class neopixelStrip {
     uint8_t pin = -1;
     uint8_t heartbeat_brightness; // brightness during fadeouts
     uint32_t neobright_last;
-    bool context = NITE;
     int32_t heartbeat_state = 0;
     int32_t heartbeat_level = 0;
     int64_t heartbeat_ekg_us[4] = {250000, 200000, 620000, 2000000};  // {187500, 125000, 562500, 1250000};
     int32_t heartbeat_pulse = 255;
-    static const uint8_t numpixels = 8;
-    static const uint8_t idiotCount = numpixels - 1;
+    static const uint8_t idiotCount = 7;
+    static const uint8_t numpixels = 2 * idiotCount + 1;  // 15 pixels = heartbeat RGB + 7 onboard RGB + 7 external RGBW
     bool idiotBoolState[idiotCount];  // For simple boolean idiot light, LOW will set urgency=1, and HIGH sets urgency=3.
     uint32_t idiotUrgency[idiotCount];  // urgency is from 1 to 10 level of freakout (0=off, 1=dim, 2=medium, 3=bright, 4-6=flash/black, 7-9=flash/white, 10=strobe) 
     uint8_t idiotBrightness[idiotCount];  //
@@ -230,7 +230,8 @@ class neopixelStrip {
         neoFadeTimer.set((int64_t)neo_fade_timeout_us);
         for (int32_t idiot=0; idiot<idiotCount; idiot++) {
             setBoolState(idiot, 0);
-            idiotNormalColor[idiot] = 0x808080;
+            idiotNormalColor[idiot] = neoobj->ColorHSV(5957 * idiot, 0xff, 0xff );  // 5957 = 2^16/11
+            printf ("#define RBOW11_%02d 0x%04x\n", idiot, color_32b_to_16b(idiotNormalColor[idiot]));
             idiotEffectColor[idiot] = idiotNormalColor[idiot];  // desaturate(idiotNormalColor[idiot], desatlevel);
             updateIdiot(idiot);
         }
@@ -238,7 +239,7 @@ class neopixelStrip {
         refresh();
         std::cout << std::endl;
     }
-    void setbright(int8_t newlev) {  // a way to specify nite or daytime brightness levels
+    void setbright(int8_t newlev) {  // a way to specify brightness levels
         hibright = newlev;
         heartbright = hibright;  // (uint8_t)((float)hibright * 0.75);
         lobright = (hibright > 50) ? 3 : (hibright > 25) ? 2 : 1;
@@ -246,10 +247,6 @@ class neopixelStrip {
     }
     void setdesaturation(float newlev) {  // a way to specify nite or daytime brightness levels
         desatlevel = newlev;
-        updateAll();
-    }
-    void daytime(bool day) {  // a way to specify nite or daytime brightness levels
-        context = day;
         updateAll();
     }
     void heartbeat(bool onoroff) {
@@ -347,7 +344,8 @@ class neopixelStrip {
                 numledstowrite = idiot + 2;
                 neolast[idiot+1] = idiotNowColor[idiot];
                 #ifndef use_fastled
-                    neoobj->setPixelColor (1+idiot, idiotNowColor[idiot]);
+                    neoobj->setPixelColor (1+idiot, idiotNowColor[idiot]);  // onboard pixels
+                    neoobj->setPixelColor (1+idiotCount+idiot, idiotNowColor[idiot]);  // external pixels
                 #endif
             }
         }
@@ -384,6 +382,13 @@ class neopixelStrip {
             return CRGB((color565 & 0x1f) << 3, (color565 & 0xf800) >> 8, (color565 & 0x7e0) >> 3);
         #else
             return neoobj->Color((color565 & 0x1f) << 3, (color565 & 0xf800) >> 8, (color565 & 0x7e0) >> 3);
+        #endif
+    }
+    uint16_t color_32b_to_16b(colortype color) {  // Convert 5-6-5 encoded 16-bit color value to FastLED CRGB struct suitable for library
+        #ifdef use_fastled
+            return ((static_cast<uint16_t>(color.r) & 0xf8) << 8) | ((static_cast<uint16_t>(color.g) & 0xfc) << 3) | (((static_cast<uint16_t>(color.b) & 0xf8) >> 3));
+        #else
+            return (uint16_t)(((color & 0xf80000) >> 8) | ((color & 0xfc00) >> 5) | ((color & 0xf8) >> 3));
         #endif
     }
     float maxelement(float r, float g, float b) {

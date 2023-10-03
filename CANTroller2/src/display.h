@@ -43,6 +43,14 @@
 #define PNK  0xfcf3  // pink is the best color
 #define DPNK 0xfa8a  // we need all shades of pink
 #define LPNK 0xfe18  // especially light pink, the champagne of pinks
+#define RBOW11_00 0xf800
+#define RBOW11_01 0xfc40
+#define RBOW11_02 0xefe0
+#define RBOW11_03 0x5fe0
+#define RBOW11_04 0x07e5
+#define RBOW11_05 0x07f7
+#define RBOW11_06 0x05df
+
 // 5-6-5 color picker site: http://www.barth-dev.de/online/rgb565  // named colors: https://wiki.tcl-lang.org/page/Colors+with+Names
 
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
