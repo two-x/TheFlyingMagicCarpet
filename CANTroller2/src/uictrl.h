@@ -2,13 +2,14 @@
 #include "utils.h"
 #include "FunctionalInterrupt.h"
 
-// #define use_fastled
-#ifdef use_fastled
-    #include <FastLED.h>
+// #define use_neopixelbus
+#ifdef use_neopixelbus
+    #include <NeoPixelBus.h>
     #define colortype CRGB
 #else
     #include <Adafruit_NeoPixel.h> // Plan to allow control of neopixel LED onboard the esp32
     #define colortype uint32_t
+    Adafruit_NeoPixel* neoobj;
 #endif
 
 // Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
@@ -201,9 +202,6 @@ class neopixelStrip {
     bool idiotBoolState[idiotCount];  // For simple boolean idiot light, LOW will set urgency=1, and HIGH sets urgency=3.
     uint32_t idiotUrgency[idiotCount];  // urgency is from 1 to 10 level of freakout (0=off, 1=dim, 2=medium, 3=bright, 4-6=flash/black, 7-9=flash/white, 10=strobe) 
     uint8_t idiotBrightness[idiotCount];  //
-    #ifndef use_fastled
-        Adafruit_NeoPixel* neoobj;
-    #endif
     colortype neostrip[numpixels];
     colortype heartbeatColor, heartbeatNow, heartbeatColor_last;
     colortype neolast[numpixels];
@@ -217,8 +215,8 @@ class neopixelStrip {
         pin = argpin;
         context = viewcontext;
         std::cout << "Neo init: add LEDs.. ";
-        #ifdef use_fastled
-            FastLED.addLeds<NEOPIXEL, 48>(neostrip, 8);  // FastLED.addLeds<NEOPIXEL, pin>(neostrip, numpixels);  // neostrip = new Adafruit_NeoPixel(pixelCount, pin, NEO_GRB + NEO_GRB + NEO_KHZ800);  // neostrip->begin();  // start datastream
+        #ifdef use_neopixelbus
+            FastLED.addLeds<NEOPIXEL, 48>(neostrip, numpixels);  // FastLED.addLeds<NEOPIXEL, pin>(neostrip, numpixels);  // neostrip = new Adafruit_NeoPixel(pixelCount, pin, NEO_GRB + NEO_GRB + NEO_KHZ800);  // neostrip->begin();  // start datastream
             FastLED.setBrightness(neo_master_brightness); // neostrip->setBrightness (neo_master_brightness);  // Truly these can get incredibly bright
         #else
             neoobj = new Adafruit_NeoPixel(numpixels, pin, NEO_GRB + NEO_GRB + NEO_KHZ800);
@@ -228,13 +226,12 @@ class neopixelStrip {
         heartbeat_brightness = brightlev[context][B_LO];
         neoHeartbeatTimer.set(heartbeat_ekg_us[3]);
         neoFadeTimer.set((int64_t)neo_fade_timeout_us);
-        for (int32_t idiot=0; idiot<idiotCount; idiot++) {
-            setBoolState(idiot, 0);
-            idiotNormalColor[idiot] = neoobj->ColorHSV(5957 * idiot, 0xff, 0xff );  // 5957 = 2^16/11
-            printf ("#define RBOW11_%02d 0x%04x\n", idiot, color_32b_to_16b(idiotNormalColor[idiot]));
-            idiotEffectColor[idiot] = idiotNormalColor[idiot];  // desaturate(idiotNormalColor[idiot], desatlevel);
-            updateIdiot(idiot);
-        }
+        // for (int32_t idiot=0; idiot<idiotCount; idiot++) {
+        //     setBoolState(idiot, 0);
+        //     idiotNormalColor[idiot] = color_16b_to_32b(idiotcolors[idiot]);
+        //     idiotEffectColor[idiot] = idiotNormalColor[idiot];  // desaturate(idiotNormalColor[idiot], desatlevel);
+        //     updateIdiot(idiot);
+        // }
         std::cout << "refresh strip.. ";
         refresh();
         std::cout << std::endl;
@@ -270,7 +267,7 @@ class neopixelStrip {
             if (heartbeatColor != heartbeatColor_last || heartbeat_brightness != neobright_last) {
                 heartbeatNow = dimmer(heartbeatColor, heartbeat_brightness);  // heartbeatNow = dimmer(desaturate(heartbeatColor, desatlevel), heartbeat_brightness);
                 neostrip[0] = heartbeatNow;  // neostrip->setPixelColor(0, heartbeatNow);
-                #ifndef use_fastled
+                #ifndef use_neopixelbus
                     neoobj->setPixelColor(0, heartbeatNow);
                 #endif
                 heartbeatColor_last = heartbeatColor;
@@ -281,7 +278,7 @@ class neopixelStrip {
     void colorfade_update() {
         if (neoFadeTimer.expireset()) {
             neostrip[0] = colorwheel(++neo_wheelcounter);
-            #ifndef use_fastled
+            #ifndef use_neopixelbus
                 neoobj->setPixelColor (0, colorwheel(++neo_wheelcounter));
             #endif
         }
@@ -310,7 +307,7 @@ class neopixelStrip {
     void updateIdiot(uint8_t idiot) {
         idiotEffectColor[idiot] = idiotNormalColor[idiot];  // idiotEffectColor[idiot] = desaturate(idiotNormalColor[idiot], desatlevel);
         if (idiotUrgency[idiot] <= 0) {
-            #ifdef use_fastled
+            #ifdef use_neopixelbus
                 idiotNowColor[idiot] = CRGB(0, 0, 0);  // Turn off the light
             #else
                 idiotNowColor[idiot] = 0;
@@ -329,29 +326,34 @@ class neopixelStrip {
             // todo : implement this effect
         }
         neostrip[1+idiot] = idiotNowColor[idiot];
-        #ifndef use_fastled
+        #ifndef use_neopixelbus
             neoobj->setPixelColor (1+idiot, idiotNowColor[idiot]);
         #endif
     }
     void refresh() {
         int32_t numledstowrite = (heartbeatNow != neolast[0]);
         neolast[0] = heartbeatNow;
-        #ifndef use_fastled
-            neoobj->setPixelColor (0, heartbeatNow);
+        #ifdef use_neopixelbus
+            neostrip[0] = CRGB(heartbeatNow);
+        #else
+            neoobj->setPixelColor (0, ((heartbeatNow & 0xff0000) << 8) | heartbeatNow);
         #endif
         for (int32_t idiot=0; idiot<idiotCount; idiot++) {
             if (idiotNowColor[idiot] != neolast[idiot+1]) {
-                numledstowrite = idiot + 2;
-                neolast[idiot+1] = idiotNowColor[idiot];
-                #ifndef use_fastled
+                numledstowrite = idiot + idiotCount + 2;
+                neolast[idiot + 1] = idiotNowColor[idiot];                
+                #ifdef use_neopixelbus
+                    neostrip[idiot + 1] = CRGB(idiotNowColor[idiot]);
+                    neostrip[idiot + idiotCount + 1] = CRGB(idiotNowColor[idiot]);
+                #else
                     neoobj->setPixelColor (1+idiot, idiotNowColor[idiot]);  // onboard pixels
-                    neoobj->setPixelColor (1+idiotCount+idiot, idiotNowColor[idiot]);  // external pixels
+                    neoobj->setPixelColor (1+idiotCount+idiot, ((idiotNowColor[idiot] & 0xff0000) << 8) | idiotNowColor[idiot]);  // external pixels
                 #endif
             }
         }
-        #ifdef use_fastled
+        #ifdef use_neopixelbus
             if (numledstowrite) FastLED.show(numledstowrite);
-            // This ability to exclude pixels at the end of the strip that haven't changed from the data write is my whole point of using fastled
+            // This ability to exclude pixels at the end of the strip that haven't changed from the data write is my whole point of using neopixelbus
         #else
             if (numledstowrite) neoobj->show();
         #endif
@@ -371,21 +373,21 @@ class neopixelStrip {
             WheelPos -= 170;
             rgb[0] = WheelPos * 3; rgb[1] = 255 - WheelPos * 3; rgb[2] = 0;
         }
-        #ifdef use_fastled
+        #ifdef use_neopixelbus
             return CRGB(rgb[0], rgb[1], rgb[2]);
         #else
             return neoobj->Color(rgb[0], rgb[1], rgb[2]);
         #endif
     }
     colortype color_16b_to_32b(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to FastLED CRGB struct suitable for library
-        #ifdef use_fastled
+        #ifdef use_neopixelbus
             return CRGB((color565 & 0x1f) << 3, (color565 & 0xf800) >> 8, (color565 & 0x7e0) >> 3);
         #else
             return neoobj->Color((color565 & 0x1f) << 3, (color565 & 0xf800) >> 8, (color565 & 0x7e0) >> 3);
         #endif
     }
     uint16_t color_32b_to_16b(colortype color) {  // Convert 5-6-5 encoded 16-bit color value to FastLED CRGB struct suitable for library
-        #ifdef use_fastled
+        #ifdef use_neopixelbus
             return ((static_cast<uint16_t>(color.r) & 0xf8) << 8) | ((static_cast<uint16_t>(color.g) & 0xfc) << 3) | (((static_cast<uint16_t>(color.b) & 0xf8) >> 3));
         #else
             return (uint16_t)(((color & 0xf80000) >> 8) | ((color & 0xfc00) >> 5) | ((color & 0xf8) >> 3));
@@ -398,7 +400,7 @@ class neopixelStrip {
         return (r < g) ? ((r < b) ? r : b) : ((g < b) ? g : b);  // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
     }
     colortype dimmer(colortype color, int8_t bright_percent) {  // brightness 0 is off, 100 is max brightness while retaining same hue and saturation
-        #ifdef use_fastled
+        #ifdef use_neopixelbus
             float rgb[3] = { static_cast<float>(color.r), static_cast<float>(color.g), static_cast<float>(color.b) };
         #else
             colortype rgb[3] = { color >> 16, (color & 0xff00) >> 8, color & 0xff };
@@ -408,7 +410,7 @@ class neopixelStrip {
         float c[3] = { correction[0] * sat, correction[1] * sat, correction[2] * sat };
         for (int32_t element=0; element<3; element++)
             rgb[element] *= fbright * c[element];
-        #ifdef use_fastled
+        #ifdef use_neopixelbus
             return CRGB(rgb[0], rgb[1], rgb[2]);  // return CRGB((float)(color.r * fbright), (float)(color.g * fbright), (float)(color.b * fbright));
         #else
             return neoobj->Color(rgb[0], rgb[1], rgb[2]);
@@ -417,7 +419,7 @@ class neopixelStrip {
     }
     colortype desaturate(colortype color, float desat_of_ten) {  // desat_percent=0 has no effect, =10 desaturates all the way to greyscale, =-99 saturates to max. without change in brightness
         int8_t desat_percent = desat_of_ten;  // * desat_of_ten / 2.0; // Makes this control exponential
-        #ifdef use_fastled
+        #ifdef use_neopixelbus
             float rgb[3] = { static_cast<float>(color.r), static_cast<float>(color.g), static_cast<float>(color.b) };
         #else
             colortype rgb[3] = { color >> 16, (color & 0xff00) >> 8, color & 0xff };
@@ -432,7 +434,7 @@ class neopixelStrip {
         for (int32_t element=0; element<3; element++)
             rgb[element] = (uint32_t)(rgb[element] + ((float)desat_percent * (dominant - (float)(rgb[element])) / 100.0));
         printf (" after: 0x%02x%02x%02x\n", rgb[0], rgb[1], rgb[2]);
-        #ifdef use_fastled
+        #ifdef use_neopixelbus
             return CRGB(rgb[0], rgb[1], rgb[2]);
         #else
             return neoobj->Color(rgb[0], rgb[1], rgb[2]);

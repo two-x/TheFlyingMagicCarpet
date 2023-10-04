@@ -165,7 +165,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     }
 
     std::cout << "Init neopixel.. ";
-    neo.init((uint8_t)neopixel_pin, !running_on_devboard);
+    neo.init((uint8_t)neopixel_pin, 1);
+    // neo.init((uint8_t)neopixel_pin, !running_on_devboard);
     neo.setbright(neobright);
     neo.setdesaturation(neodesat);
     neo.heartbeat(neopixel_pin >= 0);

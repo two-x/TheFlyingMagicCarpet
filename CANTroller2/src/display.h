@@ -43,13 +43,43 @@
 #define PNK  0xfcf3  // pink is the best color
 #define DPNK 0xfa8a  // we need all shades of pink
 #define LPNK 0xfe18  // especially light pink, the champagne of pinks
-#define RBOW11_00 0xf800
-#define RBOW11_01 0xfc40
-#define RBOW11_02 0xefe0
-#define RBOW11_03 0x5fe0
-#define RBOW11_04 0x07e5
-#define RBOW11_05 0x07f7
-#define RBOW11_06 0x05df
+// #define RBOW11_00 0xf800
+// #define RBOW11_01 0xfc40
+// #define RBOW11_02 0xefe0
+// #define RBOW11_03 0x5fe0
+// #define RBOW11_04 0x07e5
+// #define RBOW11_05 0x07f7
+// #define RBOW11_06 0x05df
+// conv:  32b: 0x00ff0000 -> 0xf800 = 11111 000000 00000
+// conv:  32b: 0x00ba4500 -> 0xba20 = 10111 010001 00000
+// conv:  32b: 0x00758a00 -> 0x7440 = 01110 100010 00000
+// conv:  32b: 0x0030cf00 -> 0x3660
+// conv:  32b: 0x0000ea15 -> 0x0742
+// conv:  32b: 0x0000a55a -> 0x052b
+// conv:  32b: 0x00005da2 -> 0x02f4
+// conv:  32b: 0x000018e7 -> 0x00dc
+// conv:  32b: 0x002d00d2 -> 0x281a
+// conv:  32b: 0x0072008d -> 0x7011
+// conv:  32b: 0x00b70048 -> 0xb009
+
+// conv:  32b: 0x00ff0000 -> 0xf800
+// conv:  32b: 0x00ba4500 -> 0xba20
+// conv:  32b: 0x00758a00 -> 0x7440
+// ---
+// conv:  32b: 0x00ff0000 -> 0xf800 = 11111 000000 00000
+// conv:  32b: 0x00ff5e00 -> 0xfae0 = 11111 010111 00000
+// conv:  32b: 0x00d8ff00 -> 0xdfe0 = 11011 111111 00000
+// conv:  32b: 0x003bfe00 -> 0x3fe0 = 00111 111111 00000
+// conv:  32b: 0x0000ff16 -> 0x07e2 = 00000 111111 00010
+// conv:  32b: 0x0000ff8b -> 0x07f1 = 00000 111111 10001
+// conv:  32b: 0x000092ff -> 0x049f = 00000 100100 11111
+// conv:  32b: 0x00001aff -> 0x00df = 00000 000110 11111
+// conv:  32b: 0x003600ff -> 0x301f = 00110 000000 11111
+// conv:  32b: 0x00ce00ff -> 0xc81f = 11001 000000 11111
+// conv:  32b: 0x00ff0064 -> 0xf80c = 11111 000000 01100
+// conv:  32b: 0x00ff0000 -> 0xf800
+// conv:  32b: 0x00ff5e00 -> 0xfae0
+// conv:  32b: 0x00d8ff00 -> 0xdfe0
 
 // 5-6-5 color picker site: http://www.barth-dev.de/online/rgb565  // named colors: https://wiki.tcl-lang.org/page/Colors+with+Names
 
@@ -87,6 +117,33 @@
 
 // string* pagecard = new string[8];  // How we might allocate on the heap instead of in the stack
 // string* modecard = new string[7];
+uint32_t color_16b_to_uint32(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to FastLED CRGB struct suitable for library
+    return (((uint32_t)color565 & 0x1f) << 3) | (((uint32_t)color565 & 0xf800) >> 8) | (((uint32_t)color565 & 0x7e0) >> 3);
+}
+uint16_t color_uint32_to_16b(uint32_t color32b) {  // Convert 5-6-5 encoded 16-bit color value to FastLED CRGB struct suitable for library
+    uint16_t blah = (uint16_t)(((color32b & 0xf80000) >> 8) | ((color32b & 0xfc00) >> 5) | ((color32b & 0xf8) >> 3));
+    // return (uint16_t)(((color32b & 0xf80000) >> 8) | ((color32b & 0xfc00) >> 5) | ((color32b & 0xf8) >> 3));
+    printf ("conv:  32b: 0x%06x -> 0x%04x\n", color32b, blah);
+    return blah;
+}
+uint32_t hue_to_rgb(uint8_t hue) {
+    hue = 255 - hue;
+    uint32_t rgb[3];
+    if (hue < 85) {
+        rgb[0] = 255 - hue * 3; rgb[1] = 0; rgb[2] = hue * 3;
+    }
+    else if (hue < 170) {
+        hue -= 85;
+        rgb[0] = 0; rgb[1] = hue * 3; rgb[2] = 255 - hue * 3;
+    }
+    else {
+        hue -= 170;
+        rgb[0] = hue * 3; rgb[1] = 255 - hue * 3; rgb[2] = 0;
+    }
+    float brighten = 255.0 / (float)max(rgb[0], rgb[1], rgb[2]);
+    for (int32_t led=0; led<=2; led++) rgb[led] = (uint32_t)((float)rgb[led] * brighten); 
+    return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
+}
 
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, TEAL, MBLU };
@@ -142,7 +199,19 @@ char simgrid[4][3][5] = {
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
 bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
-uint16_t idiotcolors[arraysize(idiotlights)] = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
+uint16_t idiotcolors[arraysize(idiotlights)];
+uint8_t idiot_saturation = 0;
+// = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
+void set_idiotcolors() {
+    for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
+        // CHSV hsvColor((uint8_t)(255.0 * ((float)(idiot % disp_idiots_per_row) / (float)disp_idiots_per_row)), idiot_saturation, 255); // Hue, Saturation, Value
+        // CRGB rgbColor = hsvColor;  // Convert the HSV color to RGB
+        // idiotcolors[idiot] = color_uint32_to_16b(((uint32_t)rgbColor.r << 16) | ((uint32_t)rgbColor.g << 8) | rgbColor.b);
+        idiotcolors[idiot] = color_uint32_to_16b(hue_to_rgb(255 * (idiot % disp_idiots_per_row) / disp_idiots_per_row));  // 5957 = 2^16/11
+        // printf ("hsv:  blah: 0x%02x -> 0x%08x\n", blah, rgbColor.r, rgbColor.g, rgbColor.b);
+    }
+}
+
 char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
 bool idiotlasts[arraysize(idiotlights)];
 // Idiot light bitmaps
@@ -264,6 +333,7 @@ class Display {
             yield();
             draw_fixed (dataset_page, dataset_page_last, false);
             yield();
+            set_idiotcolors();
             draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, true);
             _disp_redraw_all = true;
             sprite_setup();
