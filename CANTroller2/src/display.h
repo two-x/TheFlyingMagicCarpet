@@ -43,43 +43,17 @@
 #define PNK  0xfcf3  // pink is the best color
 #define DPNK 0xfa8a  // we need all shades of pink
 #define LPNK 0xfe18  // especially light pink, the champagne of pinks
-// #define RBOW11_00 0xf800
-// #define RBOW11_01 0xfc40
-// #define RBOW11_02 0xefe0
-// #define RBOW11_03 0x5fe0
-// #define RBOW11_04 0x07e5
-// #define RBOW11_05 0x07f7
-// #define RBOW11_06 0x05df
-// conv:  32b: 0x00ff0000 -> 0xf800 = 11111 000000 00000
-// conv:  32b: 0x00ba4500 -> 0xba20 = 10111 010001 00000
-// conv:  32b: 0x00758a00 -> 0x7440 = 01110 100010 00000
-// conv:  32b: 0x0030cf00 -> 0x3660
-// conv:  32b: 0x0000ea15 -> 0x0742
-// conv:  32b: 0x0000a55a -> 0x052b
-// conv:  32b: 0x00005da2 -> 0x02f4
-// conv:  32b: 0x000018e7 -> 0x00dc
-// conv:  32b: 0x002d00d2 -> 0x281a
-// conv:  32b: 0x0072008d -> 0x7011
-// conv:  32b: 0x00b70048 -> 0xb009
-
-// conv:  32b: 0x00ff0000 -> 0xf800
-// conv:  32b: 0x00ba4500 -> 0xba20
-// conv:  32b: 0x00758a00 -> 0x7440
-// ---
-// conv:  32b: 0x00ff0000 -> 0xf800 = 11111 000000 00000
-// conv:  32b: 0x00ff5e00 -> 0xfae0 = 11111 010111 00000
-// conv:  32b: 0x00d8ff00 -> 0xdfe0 = 11011 111111 00000
-// conv:  32b: 0x003bfe00 -> 0x3fe0 = 00111 111111 00000
-// conv:  32b: 0x0000ff16 -> 0x07e2 = 00000 111111 00010
-// conv:  32b: 0x0000ff8b -> 0x07f1 = 00000 111111 10001
-// conv:  32b: 0x000092ff -> 0x049f = 00000 100100 11111
-// conv:  32b: 0x00001aff -> 0x00df = 00000 000110 11111
-// conv:  32b: 0x003600ff -> 0x301f = 00110 000000 11111
-// conv:  32b: 0x00ce00ff -> 0xc81f = 11001 000000 11111
-// conv:  32b: 0x00ff0064 -> 0xf80c = 11111 000000 01100
-// conv:  32b: 0x00ff0000 -> 0xf800
-// conv:  32b: 0x00ff5e00 -> 0xfae0
-// conv:  32b: 0x00d8ff00 -> 0xdfe0
+// idiot#1: 0xff5e00 -> 0xfae0
+// idiot#2: 0xd8ff00 -> 0xdfe0
+// idiot#3: 0x3bfe00 -> 0x3fe0
+// idiot#4: 0x00ff16 -> 0x07e2 = 00000 111111 00010  skip
+// idiot#5: 0x00ff8b -> 0x07f1 = 00000 111111 10001
+// idiot#6: 0x0092ff -> 0x049f
+// idiot#7: 0x001aff -> 0x00df
+// idiot#8: 0x3600ff -> 0x301f = 00110 000000 11111  skip
+// idiot#9: 0xce00ff -> 0xc81f = 11001 000000 11111  add red
+// idiot#10: 0xff0064 -> 0xf80c = 11111 000000 01100
+// idiot#11: 0xff0000 -> 0xf800
 
 // 5-6-5 color picker site: http://www.barth-dev.de/online/rgb565  // named colors: https://wiki.tcl-lang.org/page/Colors+with+Names
 
@@ -121,12 +95,9 @@ uint32_t color_16b_to_uint32(uint16_t color565) {  // Convert 5-6-5 encoded 16-b
     return (((uint32_t)color565 & 0x1f) << 3) | (((uint32_t)color565 & 0xf800) >> 8) | (((uint32_t)color565 & 0x7e0) >> 3);
 }
 uint16_t color_uint32_to_16b(uint32_t color32b) {  // Convert 5-6-5 encoded 16-bit color value to FastLED CRGB struct suitable for library
-    uint16_t blah = (uint16_t)(((color32b & 0xf80000) >> 8) | ((color32b & 0xfc00) >> 5) | ((color32b & 0xf8) >> 3));
-    // return (uint16_t)(((color32b & 0xf80000) >> 8) | ((color32b & 0xfc00) >> 5) | ((color32b & 0xf8) >> 3));
-    printf ("conv:  32b: 0x%06x -> 0x%04x\n", color32b, blah);
-    return blah;
+    return (uint16_t)(((color32b & 0xf80000) >> 8) | ((color32b & 0xfc00) >> 5) | ((color32b & 0xf8) >> 3));
 }
-uint32_t hue_to_rgb(uint8_t hue) {
+uint32_t hue_to_rgb(uint8_t hue, uint8_t brighten = 0) {
     hue = 255 - hue;
     uint32_t rgb[3];
     if (hue < 85) {
@@ -140,8 +111,9 @@ uint32_t hue_to_rgb(uint8_t hue) {
         hue -= 170;
         rgb[0] = hue * 3; rgb[1] = 255 - hue * 3; rgb[2] = 0;
     }
-    float brighten = 255.0 / (float)max(rgb[0], rgb[1], rgb[2]);
-    for (int32_t led=0; led<=2; led++) rgb[led] = (uint32_t)((float)rgb[led] * brighten); 
+    float brightener = (float)max(rgb[0], rgb[1], rgb[2]);
+    brightener = 1.0 + (brighten * (255.0 - brightener) / (255.0 * brightener));
+    for (int32_t led=0; led<=2; led++) rgb[led] = (uint32_t)((float)rgb[led] * brightener); 
     return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
 }
 
@@ -204,11 +176,10 @@ uint8_t idiot_saturation = 0;
 // = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
 void set_idiotcolors() {
     for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
-        // CHSV hsvColor((uint8_t)(255.0 * ((float)(idiot % disp_idiots_per_row) / (float)disp_idiots_per_row)), idiot_saturation, 255); // Hue, Saturation, Value
-        // CRGB rgbColor = hsvColor;  // Convert the HSV color to RGB
-        // idiotcolors[idiot] = color_uint32_to_16b(((uint32_t)rgbColor.r << 16) | ((uint32_t)rgbColor.g << 8) | rgbColor.b);
-        idiotcolors[idiot] = color_uint32_to_16b(hue_to_rgb(255 * (idiot % disp_idiots_per_row) / disp_idiots_per_row));  // 5957 = 2^16/11
-        // printf ("hsv:  blah: 0x%02x -> 0x%08x\n", blah, rgbColor.r, rgbColor.g, rgbColor.b);
+        int division = disp_idiots_per_row;
+        uint32_t color32 = hue_to_rgb(255 * (idiot % division) / division, 255);
+        idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
+        // printf ("idiot#%d: 0x%06x -> 0x%04x\n", idiot, color32, idiotcolors[idiot]);
     }
 }
 

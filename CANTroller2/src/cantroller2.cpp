@@ -60,9 +60,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (tft_cs_pin, OUTPUT);
     set_pin (bootbutton_pin, INPUT_PULLUP);
     set_pin (starter_pin, INPUT_PULLDOWN);
-    set_pin (steer_enc_a_pin, INPUT);
-    set_pin (steer_enc_b_pin, INPUT);
-    set_pin (touch_irq_pin, INPUT_PULLUP);
+    set_pin (steer_enc_a_pin, INPUT_PULLUP);
+    set_pin (steer_enc_b_pin, INPUT_PULLUP);
     set_pin (ign_out_pin, OUTPUT);
     set_pin (syspower_pin, OUTPUT);  // Then set the put as an output as normal.
     #ifdef pwm_jaguars
@@ -227,9 +226,16 @@ void loop() {
     pot.update();
     brkpos_sensor.update();  // Brake position
     
-    if (!starter_signal_support) starter = LOW;
-    else if (!simulator.simulating(SimOption::starter)) starter = read_pin (starter_pin);
+    // if (!starter_signal_support) starter = LOW;
+    // else if (!simulator.simulating(SimOption::starter)) starter = read_pin (starter_pin);
 
+    if (!starter_signal_support) starter = LOW;
+    else if (!simulator.simulating(SimOption::starter)) {
+        do {
+            starter = digitalRead(starter_pin);
+        } while (starter != digitalRead(starter_pin)); // starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+    }
+    
     tachometer.update();  // Tach
     throttle.push_tach_reading(tachometer.get_human(), tachometer.get_last_read_time());
 
