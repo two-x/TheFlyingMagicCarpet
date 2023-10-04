@@ -269,6 +269,7 @@ class Display {
         
         // For sprites
         long star_x0, star_y0;
+        long touchpoint_x = -1; long touchpoint_y = -1;
         long eraser_rad = 14;
         long eraser_velo_min = 2;
         long eraser_velo_max = 8;
@@ -276,7 +277,7 @@ class Display {
         long eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) };
         long eraser_pos_max[2] = { disp_sprite_width / 2 - eraser_rad, disp_sprite_height / 2 - eraser_rad }; 
         long eraser_velo_sign[2] = { 1, 1 };
-        int spritecycle = 1;
+        int spritenumcycles; int spritecycle = 1; int spriteshapes = 3; int spriteshape = random(spriteshapes); int spriteshape_last; 
         uint32_t sprite_cycletime_us = 60000000;
         Timer spriteRefreshTimer, spriteCycleTimer;
         int16_t sprite_lines_mode = 0;  // 0 = eraser, 1 = do drugs
@@ -875,6 +876,17 @@ class Display {
             _procrastinate = false;
             _disp_redraw_all = false;
         }
+        void sprite_touch(int16_t x, int16_t y) {
+            touchpoint_x = x;
+            touchpoint_y = y;
+            printf("Got X=%d, Y=%d\n", touchpoint_x, touchpoint_y);
+            if (touchpoint_x >= disp_simbuttons_x && touchpoint_y >= disp_simbuttons_y) {
+                spr.fillCircle(touchpoint_x-disp_simbuttons_x, touchpoint_y-disp_simbuttons_y, 4, random(0x10000));
+                touchpoint_x = -1;
+                touchpoint_y = -1;
+            }
+            printf("Got X=%d, Y=%d\n", touchpoint_x, touchpoint_y);
+        }
         void sprite_setup() {
             // spr.setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
             spr.createSprite(disp_sprite_width, disp_sprite_height);  // Create a sprite of defined size
@@ -884,6 +896,7 @@ class Display {
             // delay(1000);
             star_x0 = random(disp_sprite_width);        // Random x coordinate
             star_y0 = random(disp_sprite_height);       // Random y coordinate
+            if (sprite_lines_mode == 1) spriteshape = 1;
             for (int16_t axis=0; axis<=1; axis++) { eraser_velo_sign[axis] = (random(1)) ? 1 : -1; }
             spr.setTextDatum(MC_DATUM);
             spr.setTextColor(BLK);
@@ -893,23 +906,31 @@ class Display {
         void sprite_update() {
             if (spriteRefreshTimer.expireset()) {
                 if (spriteCycleTimer.expireset()) {
+                    spritenumcycles++;
                     if (sprite_lines_mode == 1) {
                         if (!spritecycle) spr.fillSprite(BLK);
                         spritecycle = !spritecycle;
                     }
                     else if (sprite_lines_mode == 0) {
                         if (--spritecycle < 0b01) spritecycle = 0b11;
-                        // if (spritecycle == 0b01) spr.fillSprite(BLK);
+                        if (!(spritenumcycles % spriteshapes)) {
+                            spriteshape_last = spriteshape;
+                            while (spriteshape == spriteshape_last) spriteshape = random(spriteshapes);
+                        }
                     }
                 }
-                uint16_t color;
-                long star_x1, star_y1;
-                color = spritecycle ? random(0x10000) : BLK; // Returns colour 0 - 0xFFFF
-                star_x1 = random(disp_sprite_width);        // Random x coordinate
-                star_y1 = random(disp_sprite_height);       // Random y coordinate
-                if (!(sprite_lines_mode == 0 && (spritecycle == 0b10))) spr.drawLine(star_x0, star_y0, star_x1, star_y1, color);      // Draw pixel in sprite
+                uint16_t color = spritecycle ? random(0x10000) : BLK; // Returns colour 0 - 0xFFFF
+                long star_x1 = random(disp_sprite_width);        // Random x coordinate
+                long star_y1 = random(disp_sprite_height);       // Random y coordinate
+                if (!(sprite_lines_mode == 0 && (spritecycle == 0b10))) {
+                    if (spriteshape == 2)      // Draw pixels in sprite
+                        for (int star=0; star<35; star++) 
+                            spr.drawPixel(random(disp_sprite_width), random(disp_sprite_height), random(0x10000));      // Draw pixel in sprite
+                    else if (spriteshape == 1) spr.drawCircle(random(disp_sprite_width), random(disp_sprite_height), random(20), random(0x10000));
+                    else spr.drawLine(star_x0, star_y0, star_x1, star_y1, color); 
+                }
                 if (sprite_lines_mode == 1 && !spritecycle) spr.drawLine(star_x0+1, star_y0+1, star_x1+1, star_y1+1, color);
-                // spr.drawPixel( star_x1, star_y1, color);      // Draw pixel in sprite
+                // 
                 star_x0 = star_x1;
                 star_y0 = star_y1;
                 if (sprite_lines_mode == 0 && spritecycle != 0b01) {

@@ -2,7 +2,6 @@
 #include "utils.h"
 #include "FunctionalInterrupt.h"
 #include <NeoPixelBus.h>
-
 #define colortype RgbColor  // CRGB
 NeoPixelBus<NeoBgrFeature, NeoEsp32Rmt0Ws2812xMethod> neoobj(15, 48);  // NeoEsp32Rmt0Ws2812xMethod works! NeoWs2812xMethod NeoEsp32I2s1X8Sk6812Method  NeoEsp32I2s1X8Ws2812xMethod
 // Run neos in a task example: https://github.com/Makuna/NeoPixelBus/wiki/ESP32-and-RTOS-Tasks

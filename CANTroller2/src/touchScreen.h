@@ -50,7 +50,6 @@ public:
     TS_Point getPoint() {
         return _ts.getPoint();
     }
-
     int16_t getX() {
         return getPoint().x;
     }
@@ -157,7 +156,6 @@ public:
                 else if (tcol == 5 && trow == 2 && simulator.can_simulate(SimOption::speedo) && speedometer.source() == ControllerMode::TOUCH) speedometer.add_human((float)-touch_accel * 0.05);
                 else if (tcol == 5 && trow == 4 && simulator.can_simulate(SimOption::joy)) adj_val(&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
             }
-
             // Update the touch_accel_exponent if needed
             if (touch_accel_exponent < touch_accel_exponent_max && (touchHoldTimer.elapsed() > (touch_accel_exponent + 1) * touchAccelTimer.get_timeout())) {
                 touch_accel_exponent++;

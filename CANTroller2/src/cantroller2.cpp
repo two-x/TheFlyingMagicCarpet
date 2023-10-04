@@ -537,7 +537,9 @@ void loop() {
         
     ts.handleTouch(); // Handle touch events and actions
     // ts.printTouchInfo(); 
-
+    // This doesn't work for some reason, and causes Wire.cpp i2c errors:
+    // if (ts.touched() && !simulator.get_enabled()) screen.sprite_touch(ts.getX(), ts.getY());
+    
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tch");  //
 
     // Encoder handling
@@ -707,8 +709,7 @@ void loop() {
     neo.heartbeat_update(((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]));  // Update our beating heart
     for (int32_t idiot = 0; idiot < arraysize(idiotlights); idiot++)
         if (idiot <= neo.neopixelsAvailable() && (*(idiotlights[idiot]) != idiotlasts[idiot])) {
-            printf ("Idiot#%d = %d\n", idiot, *(idiotlights[idiot]));
-
+            // printf ("Idiot#%d = %d\n", idiot, *(idiotlights[idiot]));
             neo.setBoolState(idiot, *idiotlights[idiot]);
             neo.updateIdiot(idiot);
         }
