@@ -43,14 +43,6 @@
 #define PNK  0xfcf3  // pink is the best color
 #define DPNK 0xfa8a  // we need all shades of pink
 #define LPNK 0xfe18  // especially light pink, the champagne of pinks
-#define RBOW11_00 0xf800
-#define RBOW11_01 0xfc40
-#define RBOW11_02 0xefe0
-#define RBOW11_03 0x5fe0
-#define RBOW11_04 0x07e5
-#define RBOW11_05 0x07f7
-#define RBOW11_06 0x05df
-
 // 5-6-5 color picker site: http://www.barth-dev.de/online/rgb565  // named colors: https://wiki.tcl-lang.org/page/Colors+with+Names
 
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
@@ -87,6 +79,35 @@
 
 // string* pagecard = new string[8];  // How we might allocate on the heap instead of in the stack
 // string* modecard = new string[7];
+uint32_t color_16b_to_uint32(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to FastLED CRGB struct suitable for library
+    return (((uint32_t)color565 & 0x1f) << 3) | (((uint32_t)color565 & 0xf800) >> 8) | (((uint32_t)color565 & 0x7e0) >> 3);
+}
+uint16_t color_uint32_to_16b(uint32_t color32b) {  // Convert 5-6-5 encoded 16-bit color value to FastLED CRGB struct suitable for library
+    return (uint16_t)(((color32b & 0xf80000) >> 8) | ((color32b & 0xfc00) >> 5) | ((color32b & 0xf8) >> 3));
+}
+uint32_t hsv_to_rgb565(uint8_t hue, uint8_t desat = 0, uint8_t brighten = 0) {
+    float brightener;
+    hue = 255 - hue;
+    uint32_t rgb[3];
+    if (hue < 85) {
+        rgb[0] = 255 - hue * 3; rgb[1] = 0; rgb[2] = hue * 3;
+    }
+    else if (hue < 170) {
+        hue -= 85;
+        rgb[0] = 0; rgb[1] = hue * 3; rgb[2] = 255 - hue * 3;
+    }
+    else {
+        hue -= 170;
+        rgb[0] = hue * 3; rgb[1] = 255 - hue * 3; rgb[2] = 0;
+    }
+    float maxc = (float)max(rgb[0], rgb[1], rgb[2]);
+    
+    brightener = 1.0 + (brighten * (255.0 - maxc) / (255.0 * maxc));
+    for (int32_t led=0; led<=2; led++) {
+        rgb[led] = brightener * (rgb[led] + desat * (float)(maxc - rgb[led]) / 255.0);
+    }
+    return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
+}
 
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, TEAL, MBLU };
@@ -97,30 +118,32 @@ char sensorcard[14][7] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", 
 char idlemodecard[3][7] = { "direct", "cntrol", "minimz" };
 char idlestatecard[ThrottleControl::targetstates::num_states][7] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
 
-char telemetry[disp_fixed_lines][9] = { "CtrlVert", "   Speed", "    Tach", "ThrotPWM", "BrakPres", "BrakeMot", "CtrlHorz", "SteerMot", };  // Fixed rows
+#define BINARY "  \xa7 "
+#define CHOICE "\x12   "
+#define DEGR_F "\xf7""F  "  // "\x09""F  "
+#define BRIGHTNESS "NeoBr\x8dte"
+#define STER "St\x88r"
+#define BRAK "Br\x83k"
+#define SPED "Sp\x88""d"
+
+char telemetry[disp_fixed_lines][9] = { "CtrlVert", "   Speed", "    Tach", "ThrotPWM", BRAK"Pres", BRAK"Motr", "CtrlHorz", STER"Motr", };  // Fixed rows
 char units[disp_fixed_lines][5] = { "adc ", "mph ", "rpm ", "us  ", "psi ", "%   ", "adc ", "%   " };  // Fixed rows
 
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, num_datapages };
 char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim " };
 int32_t tuning_first_editable_line[disp_tuning_lines] = { 7, 4, 5, 3, 4, 8, 7, 8, 8, 0 };  // first value in each dataset page that's editable. All values after this must also be editable
 
-#define BINARY "  \xa7 "
-#define CHOICE "\x12   "
-#define DEGR_F "\xf7""F  "  // "\x09""F  "
-#define BRIGHTNESS "NeoBr\x8dte"
-#define STEER_SAFE "St\x88rSafe"
-
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
-    { "BrkPosit", " Airflow", "     MAP", "MuleBatt", "     Pot", "      - ", "      - ", BRIGHTNESS, "NeoDesat", "Governor", STEER_SAFE, },  // PG_RUN
+    { BRAK"Posn", " Airflow", "     MAP", "MuleBatt", "     Pot", "      - ", "      - ", BRIGHTNESS, "NeoDesat", "Governor", STER"Safe", },  // PG_RUN
     { "HRC Horz", "HRC Vert", "      - ", "      - ", "HFailsaf", "Horz Min", "Horz Max", "HorzDBnd", "Vert Min", "Vert Max", "VertDBnd", },  // PG_JOY
-    { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", "Spd Idle", "SpdRedLn", "BkPos0Pt", },  // PG_CAR
-    { "BrakePWM", "SteerPWM", "      - ", "Steer Lt", "SteerStp", "Steer Rt", "BrakExtd", "BrakStop", "BrakRetr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
+    { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", SPED"Idle", SPED"RedL", "BkPos0Pt", },  // PG_CAR
+    { "BrakePWM", "SteerPWM", "      - ", STER"Left", STER"Stop", STER"Rght", BRAK"Extd", BRAK"Stop", BRAK"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
-    { "Pres Tgt", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", "BrakeMot", "BrakPres", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
-    { "Tach Tgt", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", "      - ", "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
-    { "SpeedTgt", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "Tach Tgt", "ThrotSet", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
-    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", "      - ", "      - ", "SimW/Pot", " Cal Brk", " Cal Gas", },  // PG_TEMP
-    { "Joy Axes", "Brk Pres", " Brk Pos", "  Speedo", "    Tach", " Airflow", "     MAP", "Ignition", " Starter", "Basic Sw", "SysPower", },  // PG_SIM
+    { "PresTarg", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", BRAK"Motr", BRAK"Pres", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
+    { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", "      - ", "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
+    { "SpeedTgt", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "TachTarg", "ThrotSet", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
+    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", "      - ", "      - ", "SimW/Pot", "CalBrake", " Cal Gas", },  // PG_TEMP
+    { "Joy Axes", BRAK"Pres", "BrakePos", "  Speedo", "    Tach", " Airflow", "     MAP", "Ignition", " Starter", "Basic Sw", "SysPower", },  // PG_SIM
 };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "in  ", "mph ", "psi ", "V   ", "%   ", "    ", "    ", "%   ", "/10 ", "%   ", "%   " },  // PG_RUN
@@ -142,7 +165,19 @@ char simgrid[4][3][5] = {
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
 bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
-uint16_t idiotcolors[arraysize(idiotlights)] = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
+uint16_t idiotcolors[arraysize(idiotlights)];
+uint8_t idiot_desaturation = 70;
+uint8_t idiot_hue_offset = 240;
+// = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
+void set_idiotcolors() {
+    for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
+        int division = disp_idiots_per_row;
+        uint32_t color32 = hsv_to_rgb565((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_desaturation, 255);
+        idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
+        // printf ("idiot#%d: 0x%06x -> 0x%04x\n", idiot, color32, idiotcolors[idiot]);
+    }
+}
+
 char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
 bool idiotlasts[arraysize(idiotlights)];
 // Idiot light bitmaps
@@ -229,6 +264,7 @@ class Display {
         
         // For sprites
         long star_x0, star_y0;
+        long touchpoint_x = -1; long touchpoint_y = -1;
         long eraser_rad = 14;
         long eraser_velo_min = 2;
         long eraser_velo_max = 8;
@@ -236,7 +272,7 @@ class Display {
         long eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) };
         long eraser_pos_max[2] = { disp_sprite_width / 2 - eraser_rad, disp_sprite_height / 2 - eraser_rad }; 
         long eraser_velo_sign[2] = { 1, 1 };
-        int spritecycle = 1;
+        int spritenumcycles; int spritecycle = 1; int spriteshapes = 3; int spriteshape = random(spriteshapes); int spriteshape_last; 
         uint32_t sprite_cycletime_us = 60000000;
         Timer spriteRefreshTimer, spriteCycleTimer;
         int16_t sprite_lines_mode = 0;  // 0 = eraser, 1 = do drugs
@@ -264,6 +300,7 @@ class Display {
             yield();
             draw_fixed (dataset_page, dataset_page_last, false);
             yield();
+            set_idiotcolors();
             draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, true);
             _disp_redraw_all = true;
             sprite_setup();
@@ -834,6 +871,17 @@ class Display {
             _procrastinate = false;
             _disp_redraw_all = false;
         }
+        void sprite_touch(int16_t x, int16_t y) {
+            touchpoint_x = x;
+            touchpoint_y = y;
+            printf("Got X=%d, Y=%d\n", touchpoint_x, touchpoint_y);
+            if (touchpoint_x >= disp_simbuttons_x && touchpoint_y >= disp_simbuttons_y) {
+                spr.fillCircle(touchpoint_x-disp_simbuttons_x, touchpoint_y-disp_simbuttons_y, 4, random(0x10000));
+                touchpoint_x = -1;
+                touchpoint_y = -1;
+            }
+            printf("Got X=%d, Y=%d\n", touchpoint_x, touchpoint_y);
+        }
         void sprite_setup() {
             // spr.setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
             spr.createSprite(disp_sprite_width, disp_sprite_height);  // Create a sprite of defined size
@@ -843,6 +891,7 @@ class Display {
             // delay(1000);
             star_x0 = random(disp_sprite_width);        // Random x coordinate
             star_y0 = random(disp_sprite_height);       // Random y coordinate
+            if (sprite_lines_mode == 1) spriteshape = 1;
             for (int16_t axis=0; axis<=1; axis++) { eraser_velo_sign[axis] = (random(1)) ? 1 : -1; }
             spr.setTextDatum(MC_DATUM);
             spr.setTextColor(BLK);
@@ -852,23 +901,31 @@ class Display {
         void sprite_update() {
             if (spriteRefreshTimer.expireset()) {
                 if (spriteCycleTimer.expireset()) {
+                    spritenumcycles++;
                     if (sprite_lines_mode == 1) {
                         if (!spritecycle) spr.fillSprite(BLK);
                         spritecycle = !spritecycle;
                     }
                     else if (sprite_lines_mode == 0) {
                         if (--spritecycle < 0b01) spritecycle = 0b11;
-                        // if (spritecycle == 0b01) spr.fillSprite(BLK);
+                        if (!(spritenumcycles % spriteshapes)) {
+                            spriteshape_last = spriteshape;
+                            while (spriteshape == spriteshape_last) spriteshape = random(spriteshapes);
+                        }
                     }
                 }
-                uint16_t color;
-                long star_x1, star_y1;
-                color = spritecycle ? random(0x10000) : BLK; // Returns colour 0 - 0xFFFF
-                star_x1 = random(disp_sprite_width);        // Random x coordinate
-                star_y1 = random(disp_sprite_height);       // Random y coordinate
-                if (!(sprite_lines_mode == 0 && (spritecycle == 0b10))) spr.drawLine(star_x0, star_y0, star_x1, star_y1, color);      // Draw pixel in sprite
+                uint16_t color = spritecycle ? random(0x10000) : BLK; // Returns colour 0 - 0xFFFF
+                long star_x1 = random(disp_sprite_width);        // Random x coordinate
+                long star_y1 = random(disp_sprite_height);       // Random y coordinate
+                if (!(sprite_lines_mode == 0 && (spritecycle == 0b10))) {
+                    if (spriteshape == 2)      // Draw pixels in sprite
+                        for (int star=0; star<35; star++) 
+                            spr.drawPixel(random(disp_sprite_width), random(disp_sprite_height), random(0x10000));      // Draw pixel in sprite
+                    else if (spriteshape == 1) spr.drawCircle(random(disp_sprite_width), random(disp_sprite_height), random(20), random(0x10000));
+                    else spr.drawLine(star_x0, star_y0, star_x1, star_y1, color); 
+                }
                 if (sprite_lines_mode == 1 && !spritecycle) spr.drawLine(star_x0+1, star_y0+1, star_x1+1, star_y1+1, color);
-                // spr.drawPixel( star_x1, star_y1, color);      // Draw pixel in sprite
+                // 
                 star_x0 = star_x1;
                 star_y0 = star_y1;
                 if (sprite_lines_mode == 0 && spritecycle != 0b01) {

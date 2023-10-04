@@ -50,7 +50,6 @@ public:
     TS_Point getPoint() {
         return _ts.getPoint();
     }
-
     int16_t getX() {
         return getPoint().x;
     }
@@ -115,10 +114,14 @@ public:
             else if (tcol == 0 && trow == 2) {  // Pressed the increase value button, for real-time tuning of variables
                 if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change the value yet
                 else if (tuning_ctrl == EDIT) sim_edit_delta_touch = touch_accel;  // If in edit mode, increase the value
+                // else adj_val(&idiot_hue_offset, sim_edit_delta_touch, 0, 255);
+                // set_idiotcolors();
             }
             else if (tcol == 0 && trow == 3) {  // Pressed the decrease value button, for real-time tuning of variables
                 if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change the value yet
                 else if (tuning_ctrl == EDIT) sim_edit_delta_touch = -touch_accel;  // If in edit mode, decrease the value
+                // else adj_val(&idiot_hue_offset -sim_edit_delta_touch, 0, 255);
+                // set_idiotcolors();
             }
             else if (tcol == 0 && trow == 4) {  // Pressed the simulation mode toggle. Needs long-press
                 if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
@@ -157,7 +160,6 @@ public:
                 else if (tcol == 5 && trow == 2 && simulator.can_simulate(SimOption::speedo) && speedometer.source() == ControllerMode::TOUCH) speedometer.add_human((float)-touch_accel * 0.05);
                 else if (tcol == 5 && trow == 4 && simulator.can_simulate(SimOption::joy)) adj_val(&ctrl_pos_adc[HORZ][FILT], touch_accel, ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
             }
-
             // Update the touch_accel_exponent if needed
             if (touch_accel_exponent < touch_accel_exponent_max && (touchHoldTimer.elapsed() > (touch_accel_exponent + 1) * touchAccelTimer.get_timeout())) {
                 touch_accel_exponent++;

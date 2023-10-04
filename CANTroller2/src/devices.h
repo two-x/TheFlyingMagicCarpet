@@ -231,6 +231,7 @@ class Transducer : public Device {
             ret = _b_offset + (_m_factor / arg_val_f);
         } else {
             printf ("Error: unit conversion refused to divide by zero\n");
+            ret = min_f;  // Best return given _m_factor/0 would be infinite
             // NOTE: hmmmm, couldn't -1 be a valid value in some caes?
         }
         return static_cast<HUMAN_T>(ret);
@@ -250,6 +251,7 @@ class Transducer : public Device {
             ret = (arg_val_f - _b_offset) / _m_factor;
         } else {
             printf ("Error: unit conversion refused to divide by zero\n");
+            ret = max_f;  // Best return given /_m_factor would be infinite
             // NOTE: hmmmm, couldn't -1 be a valid value in some caes?
         }
         return static_cast<NATIVE_T>(ret);
