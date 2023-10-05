@@ -484,6 +484,11 @@ bool adj_val(float *variable, float modify, float low_limit, float high_limit) {
     *variable = adj_val(*variable, modify, low_limit, high_limit);
     return (*variable != oldval);
 }
+// bool adj_val(uint8_t *variable, int8_t modify, uint8_t low_limit, uint8_t high_limit) { // sets an int reference to new val constrained to given range
+//     float oldval = *variable;
+//     *variable = adj_val(*variable, modify, low_limit, high_limit);
+//     return (*variable != oldval);
+// }
 bool adj_bool(bool val, int32_t delta) { return delta != 0 ? delta > 0 : val; } // sets a bool reference to 1 on 1 delta or 0 on -1 delta
 void adj_bool(bool *val, int32_t delta) { *val = adj_bool(*val, delta); }       // sets a bool reference to 1 on 1 delta or 0 on -1 delta
 

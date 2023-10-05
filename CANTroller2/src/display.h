@@ -49,7 +49,7 @@
 // idiot#4: 0x00ff16 -> 0x07e2 = 00000 111111 00010  skip
 // idiot#5: 0x00ff8b -> 0x07f1 = 00000 111111 10001
 // idiot#6: 0x0092ff -> 0x049f
-// idiot#7: 0x001aff -> 0x00df
+// idiot#7: 0x001aff -> 0x00df = 00000 000110 11111
 // idiot#8: 0x3600ff -> 0x301f = 00110 000000 11111  skip
 // idiot#9: 0xce00ff -> 0xc81f = 11001 000000 11111  add red
 // idiot#10: 0xff0064 -> 0xf80c = 11111 000000 01100
@@ -97,7 +97,8 @@ uint32_t color_16b_to_uint32(uint16_t color565) {  // Convert 5-6-5 encoded 16-b
 uint16_t color_uint32_to_16b(uint32_t color32b) {  // Convert 5-6-5 encoded 16-bit color value to FastLED CRGB struct suitable for library
     return (uint16_t)(((color32b & 0xf80000) >> 8) | ((color32b & 0xfc00) >> 5) | ((color32b & 0xf8) >> 3));
 }
-uint32_t hue_to_rgb(uint8_t hue, uint8_t brighten = 0) {
+uint32_t hsv_to_rgb565(uint8_t hue, uint8_t desat = 0, uint8_t brighten = 0) {
+    float brightener;
     hue = 255 - hue;
     uint32_t rgb[3];
     if (hue < 85) {
@@ -111,9 +112,12 @@ uint32_t hue_to_rgb(uint8_t hue, uint8_t brighten = 0) {
         hue -= 170;
         rgb[0] = hue * 3; rgb[1] = 255 - hue * 3; rgb[2] = 0;
     }
-    float brightener = (float)max(rgb[0], rgb[1], rgb[2]);
-    brightener = 1.0 + (brighten * (255.0 - brightener) / (255.0 * brightener));
-    for (int32_t led=0; led<=2; led++) rgb[led] = (uint32_t)((float)rgb[led] * brightener); 
+    float maxc = (float)max(rgb[0], rgb[1], rgb[2]);
+    
+    brightener = 1.0 + (brighten * (255.0 - maxc) / (255.0 * maxc));
+    for (int32_t led=0; led<=2; led++) {
+        rgb[led] = brightener * (rgb[led] + desat * (float)(maxc - rgb[led]) / 255.0);
+    }
     return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
 }
 
@@ -172,12 +176,13 @@ char simgrid[4][3][5] = {
 
 bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
 uint16_t idiotcolors[arraysize(idiotlights)];
-uint8_t idiot_saturation = 0;
+uint8_t idiot_desaturation = 63;
+uint8_t idiot_hue_offset = 57;
 // = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
 void set_idiotcolors() {
     for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
         int division = disp_idiots_per_row;
-        uint32_t color32 = hue_to_rgb(255 * (idiot % division) / division, 255);
+        uint32_t color32 = hsv_to_rgb565((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_desaturation, 255);
         idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
         // printf ("idiot#%d: 0x%06x -> 0x%04x\n", idiot, color32, idiotcolors[idiot]);
     }

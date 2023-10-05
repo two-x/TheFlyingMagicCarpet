@@ -114,10 +114,14 @@ public:
             else if (tcol == 0 && trow == 2) {  // Pressed the increase value button, for real-time tuning of variables
                 if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change the value yet
                 else if (tuning_ctrl == EDIT) sim_edit_delta_touch = touch_accel;  // If in edit mode, increase the value
+                // else adj_val(&idiot_hue_offset, sim_edit_delta_touch, 0, 255);
+                // set_idiotcolors();
             }
             else if (tcol == 0 && trow == 3) {  // Pressed the decrease value button, for real-time tuning of variables
                 if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change the value yet
                 else if (tuning_ctrl == EDIT) sim_edit_delta_touch = -touch_accel;  // If in edit mode, decrease the value
+                // else adj_val(&idiot_hue_offset -sim_edit_delta_touch, 0, 255);
+                // set_idiotcolors();
             }
             else if (tcol == 0 && trow == 4) {  // Pressed the simulation mode toggle. Needs long-press
                 if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {

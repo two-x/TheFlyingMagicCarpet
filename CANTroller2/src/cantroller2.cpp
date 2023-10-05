@@ -213,11 +213,17 @@ void loop() {
         boot_button_suppress_click = false;  // End click suppression
     }
     
-    // External digital signals
+    // External digital inputs
     if (!simulator.simulating(SimOption::basicsw)) {  // Basic Mode switch
         do {
             basicmodesw = !digitalRead(basicmodesw_pin);   // !value because electrical signal is active low
         } while (basicmodesw != !digitalRead(basicmodesw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+    }
+    if (!starter_signal_support) starter = LOW;
+    else if (!simulator.simulating(SimOption::starter)) {
+        do {
+            starter = digitalRead(starter_pin);
+        } while (starter != digitalRead(starter_pin)); // starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
     }
 
     // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
@@ -225,17 +231,7 @@ void loop() {
     encoder.update();  // Read encoder input signals
     pot.update();
     brkpos_sensor.update();  // Brake position
-    
-    // if (!starter_signal_support) starter = LOW;
-    // else if (!simulator.simulating(SimOption::starter)) starter = read_pin (starter_pin);
-
-    if (!starter_signal_support) starter = LOW;
-    else if (!simulator.simulating(SimOption::starter)) {
-        do {
-            starter = digitalRead(starter_pin);
-        } while (starter != digitalRead(starter_pin)); // starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
-    }
-    
+        
     tachometer.update();  // Tach
     throttle.push_tach_reading(tachometer.get_human(), tachometer.get_last_read_time());
 
@@ -654,6 +650,10 @@ void loop() {
             else if (selected_value == 10) cruiseQPID.SetKd (cruiseQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }
         else if (dataset_page == PG_TEMP) {
+            // if (selected_value == 7) {
+            //     adj_val(&idiot_hue_offset, (int8_t)sim_edit_delta, 0x00, 0xff);
+            //     set_idiotcolors();
+            // }
             if (selected_value == 8) simulator.set_pot_overload(static_cast<SimOption>(adj_val(static_cast<int32_t>(simulator.get_pot_overload()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));
             else if (selected_value == 9 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor_mode, sim_edit_delta);
             else if (selected_value == 10 && runmode == CAL) adj_bool (&cal_pot_gasservo_mode, (sim_edit_delta < 0 || cal_pot_gasservo_ready) ? sim_edit_delta : -1);
