@@ -3,7 +3,7 @@
 #include "FunctionalInterrupt.h"
 #include <NeoPixelBus.h>
 #define colortype RgbColor  // CRGB
-NeoPixelBus<NeoBgrFeature, NeoEsp32Rmt0Ws2812xMethod> neoobj(15, 48);  // NeoEsp32Rmt0Ws2812xMethod works! NeoWs2812xMethod NeoEsp32I2s1X8Sk6812Method  NeoEsp32I2s1X8Ws2812xMethod
+NeoPixelBus<NeoGrbFeature, NeoEsp32Rmt0Ws2812xMethod> neoobj(15, 48);  // NeoEsp32Rmt0Ws2812xMethod works! NeoWs2812xMethod NeoEsp32I2s1X8Sk6812Method  NeoEsp32I2s1X8Ws2812xMethod
 // Run neos in a task example: https://github.com/Makuna/NeoPixelBus/wiki/ESP32-and-RTOS-Tasks
 
 // Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
@@ -274,6 +274,8 @@ class neopixelStrip {
         idiotEffectColor[idiot] = idiotNormalColor[idiot]; // desaturate(idiotNormalColor[idiot], desatlevel);
         setBoolState(idiot, idiotBoolState[idiot]);
         updateIdiot(idiot);
+        uint16_t reconv = color_32b_to_16b(idiotNormalColor[idiot]);
+        // printf ("idiot#%d: 565: %04x (%02x, %02x, %02x) 32b: %06x Rgb.R: %02x Rgb.G: %02x Rgb.B: %02x reconv16b: %04x (%02x, %02x, %02x)\n", idiot, color565, (color565 & 0xf800) >> 8, (color565 & 0x7e0) >> 3, (color565 & 0x1f) << 3, idiotNormalColor[idiot], idiotNormalColor[idiot].R, idiotNormalColor[idiot].G, idiotNormalColor[idiot].B, reconv, (reconv & 0xf800) >> 8, (reconv & 0x7e0) >> 3, (reconv & 0x1f) << 3);
         return true;
     }
     void setBoolState(uint8_t idiot, bool state) {
@@ -336,6 +338,7 @@ class neopixelStrip {
             WheelPos -= 170;
             rgb[0] = WheelPos * 3; rgb[1] = 255 - WheelPos * 3; rgb[2] = 0;
         }
+        // return RgbColor(rgb[2], rgb[0], rgb[1]);  // Order: BRG (?)
         return RgbColor(rgb[0], rgb[1], rgb[2]);
     }
     colortype color_16b_to_32b(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to FastLED CRGB struct suitable for library
