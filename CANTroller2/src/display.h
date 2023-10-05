@@ -85,15 +85,17 @@ uint32_t color_16b_to_uint32(uint16_t color565) {  // Convert 5-6-5 encoded 16-b
 uint16_t color_uint32_to_16b(uint32_t color32b) {  // Convert uint32 color in format 0x00RRGGBB to uint16 5-6-5 encoded color value suitable for screen
     return (uint16_t)(((color32b & 0xf80000) >> 8) | ((color32b & 0xfc00) >> 5) | ((color32b & 0xf8) >> 3));
 }
-// hue: 0,255 = red, 85 = grn, 170 = blu | desat: 0 = nop, 255 = saturated up to greyscale | brighten: r,g,b each raised by brighten/255 times the ratio needed to raise max(r,g,b) to 255
-uint32_t hsv_to_rgb(uint8_t hue, uint8_t desat = 0, uint8_t brighten = 0) {  // returns uint32 color in format 0x00RRGGBB
+// hue: 0,255 = red, 85 = grn, 170 = blu | sat: 0 = saturated up to greyscale, 255 = pure color | bright: 0 = blk, 255 = "full"* | *bright_flat: if =1, "full" brightness varies w/ hue for consistent luminance, otherwise "full" always ranges to 255 (mixed-element colors are brighter) | blu_boost: adds blu_boost/255 desaturation as a ratio of blu dominance
+uint32_t hsv_to_rgb(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool bright_flat = 1, uint8_t blu_boost = 0) {  // returns uint32 color in format 0x00RRGGBB
     uint32_t rgb[3] = { 255 - 3 * (uint32_t)((255 - hue) % 85), 0, 3 * (uint32_t)((255 - hue) % 85) };
     float maxc = (float)((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]);
     if (hue <= 85) { rgb[1] = rgb[0]; rgb[0] = rgb[2]; rgb[2] = 0; }
     else if (hue <= 170) { rgb[1] = rgb[2]; rgb[2] = rgb[0]; rgb[0] = 0; }
-    float brightener = 1.0 + (brighten * (255.0 - maxc) / (255.0 * maxc));
+    float brightener = (float)bright / (bright_flat ? 255.0 : maxc);
+    float blu_booster = 1 + (float)(blu_boost * rgb[2]) / (float)(255.0 * (rgb[0] + rgb[1] + rgb[2]));
+    // float brightener = 1.0 + (bright * (255.0 - maxc) / (255.0 * maxc));  // if bright_flat == 0
     for (int led=0; led<=2; led++) 
-        rgb[led] = brightener * (rgb[led] + desat * (float)(maxc - rgb[led]) / 255.0);
+        rgb[led] = brightener * ((float)rgb[led] + blu_booster * (255.0 - sat) * (float)(maxc - rgb[led]) / 255.0);
     return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
 }
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
@@ -153,13 +155,13 @@ char simgrid[4][3][5] = {
 
 bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
 uint16_t idiotcolors[arraysize(idiotlights)];
-uint8_t idiot_desaturation = 65;  // 60-80 makes nice bright distinguishable colors
+uint8_t idiot_saturation = 190;  // 170-195 makes nice bright yet distinguishable colors
 uint8_t idiot_hue_offset = 240;
 // = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
 void set_idiotcolors() {
     for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
         int division = disp_idiots_per_row;
-        uint32_t color32 = hsv_to_rgb((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_desaturation, 255);
+        uint32_t color32 = hsv_to_rgb((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 195);
         idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
         // printf ("idiot#%d: 0x%06x -> 0x%04x\n", idiot, color32, idiotcolors[idiot]);
     }
