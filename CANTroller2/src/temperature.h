@@ -8,7 +8,7 @@
 #include <DallasTemperature.h>
 #include "utils.h"
 
-enum class sensor_location { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR };  // , SOREN_DEV0, SOREN_DEV1, num_known_ };
+enum class sensor_location { ambient, engine, wheel_fl, wheel_fr, wheel_rl, wheel_rr };  // , SOREN_DEV0, SOREN_DEV1, num_known_ };
 
 class TemperatureSensor {
 public:
@@ -30,9 +30,9 @@ public:
      void request_temperature() {
         // Request temperature from sensor
         if (!_tempsensebus->requestTemperaturesByAddress(_address.data())) {
-            Serial.printf("Error: Failed to request temperature from sensor at address ");
+            printf("  failed temperature request from sensor addr: ");
             print_address();
-            Serial.println();
+            printf("\n");
         }
     }
 
@@ -45,9 +45,9 @@ public:
     float read_temperature() {
         float temp = _tempsensebus->getTempF(_address.data());
         if (temp == DEVICE_DISCONNECTED_F) {
-            Serial.printf("Error: Device at location %s with address ", sensor_location_to_string(_location));
+            printf("  disconnected device %s w/ addr: ", sensor_location_to_string(_location));
             print_address();
-            Serial.println(" is disconnected");
+            printf("\n");
             return DEVICE_DISCONNECTED_F;
         } 
         _temperature = temp;
@@ -67,28 +67,29 @@ public:
     }
     
     void print_address() const {
+        printf("0x");
         for(uint8_t i = 0; i < _address.size(); i++) {
-            if(_address[i] < 0x10) Serial.print("0");
-            Serial.print(_address[i], HEX);
+            // if(_address[i] < 0x10) Serial.print("0");
+            // Serial.print(_address[i], HEX);
+            printf("%02x", _address[i]);
         }
-        Serial.println();
     }
 
     void print_sensor_info() const {
-        Serial.printf("Location: %s, Assigned Address: ", sensor_location_to_string(_location).c_str());
+        printf("  location: %s, assigned addr: ", sensor_location_to_string(_location).c_str());
         print_address();
-        Serial.println();
+        printf("\n");
     }
 
     static std::string sensor_location_to_string(sensor_location location) {
         switch(location) {
-            case sensor_location::AMBIENT: return "AMBIENT";
-            case sensor_location::ENGINE: return "ENGINE";
-            case sensor_location::WHEEL_FL: return "WHEEL_FL";
-            case sensor_location::WHEEL_FR: return "WHEEL_FR";
-            case sensor_location::WHEEL_RL: return "WHEEL_RL";
-            case sensor_location::WHEEL_RR: return "WHEEL_RR";
-            default: return "UNKNOWN";
+            case sensor_location::ambient: return "ambient";
+            case sensor_location::engine: return "engine";
+            case sensor_location::wheel_fl: return "wheel_fl";
+            case sensor_location::wheel_fr: return "wheel_fr";
+            case sensor_location::wheel_rl: return "wheel_rl";
+            case sensor_location::wheel_rr: return "wheel_rr";
+            default: return "unknown";
         }
     }
 };
@@ -116,25 +117,25 @@ private:
 
     std::vector<DeviceAddress> detected_addresses;
     std::vector<sensor_location> all_locations = {
-        sensor_location::ENGINE,
-        sensor_location::AMBIENT,
-        sensor_location::WHEEL_FL,
-        sensor_location::WHEEL_FR,
-        sensor_location::WHEEL_RL,
-        sensor_location::WHEEL_RR
+        sensor_location::engine,
+        sensor_location::ambient,
+        sensor_location::wheel_fl,
+        sensor_location::wheel_fr,
+        sensor_location::wheel_rl,
+        sensor_location::wheel_rr
         };
     std::map<sensor_location, DeviceAddress> known_addresses = {
-        {sensor_location::ENGINE, {0x28, 0x1a, 0x27, 0x90, 0x5c, 0x21, 0x01, 0x59}},
-        {sensor_location::AMBIENT, {0x28, 0x3c, 0xf3, 0xa7, 0xc1, 0x21, 0x06, 0x69}},
-        {sensor_location::WHEEL_FL, {0x28, 0x55, 0x42, 0x8f, 0x5c, 0x21, 0x01, 0x69}},
-        {sensor_location::WHEEL_FR, {0x28, 0x70, 0x73, 0xb3, 0x5c, 0x21, 0x01, 0x27}},
-        {sensor_location::WHEEL_RL, {0x28, 0x54, 0xfb, 0x88, 0x5c, 0x21, 0x01, 0x64}},
-        {sensor_location::WHEEL_RR, {0x28, 0x6f, 0xcd, 0xba, 0x5c, 0x21, 0x01, 0x26}}
+        {sensor_location::engine, {0x28, 0x1a, 0x27, 0x90, 0x5c, 0x21, 0x01, 0x59}},
+        {sensor_location::ambient, {0x28, 0x3c, 0xf3, 0xa7, 0xc1, 0x21, 0x06, 0x69}},
+        {sensor_location::wheel_fl, {0x28, 0x55, 0x42, 0x8f, 0x5c, 0x21, 0x01, 0x69}},
+        {sensor_location::wheel_fr, {0x28, 0x70, 0x73, 0xb3, 0x5c, 0x21, 0x01, 0x27}},
+        {sensor_location::wheel_rl, {0x28, 0x54, 0xfb, 0x88, 0x5c, 0x21, 0x01, 0x64}},
+        {sensor_location::wheel_rr, {0x28, 0x6f, 0xcd, 0xba, 0x5c, 0x21, 0x01, 0x26}}
     };
 
     std::map<sensor_location, TemperatureSensor> sensors;
 
-    // Assigns known addresses to Sensors. The sensors will have locations like ENGINE or AMBIENT
+    // Assigns known addresses to Sensors. The sensors will have locations like engine or ambient
     void assign_known_addresses() {
         for (auto& known_address : known_addresses) {
             // check to see if we have a known address that wasn't detected, print a warning if yes
@@ -149,20 +150,20 @@ private:
                     // The sensor doesn't exist yet, so create it and add it to the map
                     sensors.emplace(known_address.first, TemperatureSensor(known_address.first, *detected_address_it, &tempsensebus));
                     // Print the sensor address for debugging purposes
-                    Serial.println("Assigned known sensor address:");
+                    Serial.printf("  assigned known sensor %s at addr: ", TemperatureSensor::sensor_location_to_string(known_address.first).c_str());
                     sensors.at(known_address.first).print_address();
                     
                 } else {
                     // The sensor already exists, so just update its address
                     sensor_it->second.set_address(*detected_address_it);
                     // Print the updated sensor address for debugging purposes
-                    Serial.println("Updated sensor address:");
+                    printf("  updated sensor addr: ");
                     sensor_it->second.print_address();
                     
                 }
             } else {
                 // The known address was not detected, so log a warning message
-                Serial.printf("Warning: Known sensor at location %s was not detected\n", TemperatureSensor::sensor_location_to_string(known_address.first).c_str());
+                Serial.printf("  known sensor %s not detected\n", TemperatureSensor::sensor_location_to_string(known_address.first).c_str());
             }
         }
     }
@@ -178,10 +179,11 @@ private:
                     ++it;
                 }
                 if (it != all_locations.end()) {
-                    // The sensor doesn't exist yet, so create it and add it to the map
+                    // The sensor doesn't exist yet, so create it and add it to the map and print the sensor address
+                    printf("  detected unknown sensor addr: ");
                     sensors.emplace(*it, TemperatureSensor(*it, detected_address, &tempsensebus));
-                    // Print the sensor address for debugging purposes
                     sensors.at(*it).print_address();
+                    printf("\n");
                 }
             }
         }
@@ -190,16 +192,16 @@ private:
 public:
     TemperatureSensorManager(uint8_t _onewire_pin) : one_wire_bus(_onewire_pin), tempsensebus(&one_wire_bus),  last_read_request_time(0), sensor_index(0), _state(State::CONVERTING) {}
     void setup() {
-        Serial.println("Setting up Temperature Sensors...");
+        printf("Setting up Temperature Sensors.. ");
         
         tempsensebus.setWaitForConversion(false);
         tempsensebus.setCheckForConversion(true);
         tempsensebus.begin();
         detected_devices_ct = tempsensebus.getDeviceCount();
         detected_addresses.resize(detected_devices_ct);
-        Serial.printf (" detected %d devices, parasitic power is %s\n", detected_devices_ct, (tempsensebus.isParasitePowerMode()) ? "on" : "off");  // , DEC);
+        printf(" parasitic power %s. found %d devices:\n", (tempsensebus.isParasitePowerMode()) ? "on" : "off", detected_devices_ct);  // , DEC);
         if (detected_devices_ct == 0) {
-            Serial.println("No temperature sensor devices detected");
+            // printf("  no devices detected\n");
             return;
         }
 
