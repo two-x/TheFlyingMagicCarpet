@@ -43,18 +43,6 @@
 #define PNK  0xfcf3  // pink is the best color
 #define DPNK 0xfa8a  // we need all shades of pink
 #define LPNK 0xfe18  // especially light pink, the champagne of pinks
-// idiot#1: 0xff5e00 -> 0xfae0
-// idiot#2: 0xd8ff00 -> 0xdfe0
-// idiot#3: 0x3bfe00 -> 0x3fe0
-// idiot#4: 0x00ff16 -> 0x07e2 = 00000 111111 00010  skip
-// idiot#5: 0x00ff8b -> 0x07f1 = 00000 111111 10001
-// idiot#6: 0x0092ff -> 0x049f
-// idiot#7: 0x001aff -> 0x00df = 00000 000110 11111
-// idiot#8: 0x3600ff -> 0x301f = 00110 000000 11111  skip
-// idiot#9: 0xce00ff -> 0xc81f = 11001 000000 11111  add red
-// idiot#10: 0xff0064 -> 0xf80c = 11111 000000 01100
-// idiot#11: 0xff0000 -> 0xf800
-
 // 5-6-5 color picker site: http://www.barth-dev.de/online/rgb565  // named colors: https://wiki.tcl-lang.org/page/Colors+with+Names
 
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
@@ -130,30 +118,32 @@ char sensorcard[14][7] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", 
 char idlemodecard[3][7] = { "direct", "cntrol", "minimz" };
 char idlestatecard[ThrottleControl::targetstates::num_states][7] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
 
-char telemetry[disp_fixed_lines][9] = { "CtrlVert", "   Speed", "    Tach", "ThrotPWM", "BrakPres", "BrakeMot", "CtrlHorz", "SteerMot", };  // Fixed rows
+#define BINARY "  \xa7 "
+#define CHOICE "\x12   "
+#define DEGR_F "\xf7""F  "  // "\x09""F  "
+#define BRIGHTNESS "NeoBr\x8dte"
+#define STER "St\x88r"
+#define BRAK "Br\x83k"
+#define SPED "Sp\x88""d"
+
+char telemetry[disp_fixed_lines][9] = { "CtrlVert", "   Speed", "    Tach", "ThrotPWM", BRAK"Pres", BRAK"Motr", "CtrlHorz", STER"Motr", };  // Fixed rows
 char units[disp_fixed_lines][5] = { "adc ", "mph ", "rpm ", "us  ", "psi ", "%   ", "adc ", "%   " };  // Fixed rows
 
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, num_datapages };
 char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim " };
 int32_t tuning_first_editable_line[disp_tuning_lines] = { 7, 4, 5, 3, 4, 8, 7, 8, 8, 0 };  // first value in each dataset page that's editable. All values after this must also be editable
 
-#define BINARY "  \xa7 "
-#define CHOICE "\x12   "
-#define DEGR_F "\xf7""F  "  // "\x09""F  "
-#define BRIGHTNESS "NeoBr\x8dte"
-#define STEER_SAFE "St\x88rSafe"
-
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
-    { "BrkPosit", " Airflow", "     MAP", "MuleBatt", "     Pot", "      - ", "      - ", BRIGHTNESS, "NeoDesat", "Governor", STEER_SAFE, },  // PG_RUN
+    { BRAK"Posn", " Airflow", "     MAP", "MuleBatt", "     Pot", "      - ", "      - ", BRIGHTNESS, "NeoDesat", "Governor", STER"Safe", },  // PG_RUN
     { "HRC Horz", "HRC Vert", "      - ", "      - ", "HFailsaf", "Horz Min", "Horz Max", "HorzDBnd", "Vert Min", "Vert Max", "VertDBnd", },  // PG_JOY
-    { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", "Spd Idle", "SpdRedLn", "BkPos0Pt", },  // PG_CAR
-    { "BrakePWM", "SteerPWM", "      - ", "Steer Lt", "SteerStp", "Steer Rt", "BrakExtd", "BrakStop", "BrakRetr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
+    { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", SPED"Idle", SPED"RedL", "BkPos0Pt", },  // PG_CAR
+    { "BrakePWM", "SteerPWM", "      - ", STER"Left", STER"Stop", STER"Rght", BRAK"Extd", BRAK"Stop", BRAK"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
-    { "Pres Tgt", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", "BrakeMot", "BrakPres", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
-    { "Tach Tgt", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", "      - ", "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
-    { "SpeedTgt", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "Tach Tgt", "ThrotSet", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
-    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", "      - ", "      - ", "SimW/Pot", " Cal Brk", " Cal Gas", },  // PG_TEMP
-    { "Joy Axes", "Brk Pres", " Brk Pos", "  Speedo", "    Tach", " Airflow", "     MAP", "Ignition", " Starter", "Basic Sw", "SysPower", },  // PG_SIM
+    { "PresTarg", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", BRAK"Motr", BRAK"Pres", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
+    { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", "      - ", "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
+    { "SpeedTgt", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "TachTarg", "ThrotSet", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
+    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", "      - ", "      - ", "SimW/Pot", "CalBrake", " Cal Gas", },  // PG_TEMP
+    { "Joy Axes", BRAK"Pres", "BrakePos", "  Speedo", "    Tach", " Airflow", "     MAP", "Ignition", " Starter", "Basic Sw", "SysPower", },  // PG_SIM
 };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "in  ", "mph ", "psi ", "V   ", "%   ", "    ", "    ", "%   ", "/10 ", "%   ", "%   " },  // PG_RUN
@@ -176,8 +166,8 @@ char simgrid[4][3][5] = {
 
 bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
 uint16_t idiotcolors[arraysize(idiotlights)];
-uint8_t idiot_desaturation = 63;
-uint8_t idiot_hue_offset = 57;
+uint8_t idiot_desaturation = 70;
+uint8_t idiot_hue_offset = 240;
 // = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
 void set_idiotcolors() {
     for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
