@@ -10,17 +10,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-std::vector<std::string> loop_names(20);
-
-void loop_savetime (uint32_t timesarray[], int32_t &index, std::vector<std::string> &names, bool dirty[], std::string loopname) {  // (int32_t timesarray[], int32_t index) {
-    if (dirty[index]) {
-        names[index] = loopname;  // names[index], name);
-        dirty[index] = false;
-    }
-    timesarray[index] = esp_timer_get_time();
-    index++;
-}
-
 HotrcManager hotrcHorzManager (6);
 HotrcManager hotrcVertManager (6);
 RunModeManager runModeManager;
@@ -81,7 +70,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     // Calculate some derived variables
     calc_ctrl_lims();
     calc_governor();
-    for (int32_t x=0; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
 
     // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
     set_pin (uart_tx_pin, INPUT);  // 
@@ -148,7 +136,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
     temperature_sensor_manager.setup();  // Onewire bus and temp sensors
     
-    throttle.setup(temperature_sensor_manager.get_sensor(sensor_location::ENGINE));
+    throttle.setup(temperature_sensor_manager.get_sensor(sensor_location::engine));
     // Create a new task that runs the update_temperature_sensors function
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);
     
@@ -180,14 +168,12 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     int32_t watchdog_time_ms = Watchdog.enable(2500);  // Start 2.5 sec watchdog
     printf ("Enable watchdog.. timer set to %ld ms\n", watchdog_time_ms);
     hotrcPanicTimer.reset();
-    loopTimer.reset();  // start timer to measure the first loop
     booted = true;
     printf ("Setup done\n");
+    looptiming_init();
 }
 
 void loop() {
-    loopindex = 0;  // reset at top of loop
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "top");
     // cout << "(top)) spd:" << speedo_filt_mph << " tach:" << tach_filt_rpm;
 
     // Update inputs.  Fresh sensor data, and filtering
@@ -225,8 +211,7 @@ void loop() {
             starter = digitalRead(starter_pin);
         } while (starter != digitalRead(starter_pin)); // starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
     }
-
-    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "pre");
+    // loop_marktime ("pre");
 
     encoder.update();  // Read encoder input signals
     pot.update();
@@ -245,7 +230,7 @@ void loop() {
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
     // printf("batt_pin: %d, batt_raw: %f, batt_human: %f, batt_filt: %f\n", analogRead(mulebatt_pin), battery_sensor.get_native(), battery_sensor.get_human(), battery_sensor.get_filtered_value());
 
-    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "sns");  //
+    // loop_marktime ("sns");  //
 
     // Controller handling
     if (ctrl == HOTRC) {
@@ -297,10 +282,10 @@ void loop() {
                 ctrl_pos_adc[axis][FILT] = ctrl_lims_adc[ctrl][axis][CENT];  // if joy axis is in the deadband, set joy_axis_filt to center value
         }
     }
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "inp");  //
+    loop_marktime ("inp");  //
     
     runmode = runModeManager.handle_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "run");  //
+    loop_marktime ("run");  //
 
     // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
 
@@ -423,7 +408,7 @@ void loop() {
             loophack = loopno;  // Hack!  Just to hack around bug in neopixel for first idiot light. Ugh!
         }
     }
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "out");  //
+    loop_marktime ("out");  //
 
     // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
     //
@@ -439,23 +424,23 @@ void loop() {
     }
     else diag_ign_error_enabled = true;
     
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tch");  //
+    loop_marktime ("tch");  //
 
     // Update warning idiot lights
     if (errTimer.expireset()) {
         bool check_wheels;
         check_wheels = false;
-        TemperatureSensor * temp_fl = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_FL);
-        TemperatureSensor * temp_fr = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_FR);
-        TemperatureSensor * temp_rl = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_RL);
-        TemperatureSensor * temp_rr = temperature_sensor_manager.get_sensor(sensor_location::WHEEL_RR);
+        TemperatureSensor * temp_fl = temperature_sensor_manager.get_sensor(sensor_location::wheel_fl);
+        TemperatureSensor * temp_fr = temperature_sensor_manager.get_sensor(sensor_location::wheel_fr);
+        TemperatureSensor * temp_rl = temperature_sensor_manager.get_sensor(sensor_location::wheel_rl);
+        TemperatureSensor * temp_rr = temperature_sensor_manager.get_sensor(sensor_location::wheel_rr);
         if (temp_fl != nullptr && temp_fl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
         if (temp_fr != nullptr && temp_fr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
         if (temp_rl != nullptr && temp_rl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
         if (temp_rr != nullptr && temp_rr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
         err_temp_wheel = check_wheels;
 
-        TemperatureSensor * temp_eng = temperature_sensor_manager.get_sensor(sensor_location::ENGINE);
+        TemperatureSensor * temp_eng = temperature_sensor_manager.get_sensor(sensor_location::engine);
         err_temp_engine = temp_eng != nullptr ? temp_eng->get_temperature() >= temp_lims_f[ENGINE][WARNING] : -999;
         
         // Detect sensors disconnected or giving out-of-range readings.
@@ -529,14 +514,14 @@ void loop() {
         // * The control system has nonsensical values in its variables.
 
     }
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "err");  //
+    loop_marktime ("err");  //
         
     ts.handleTouch(); // Handle touch events and actions
     // ts.printTouchInfo(); 
     // This doesn't work for some reason, and causes Wire.cpp i2c errors:
     // if (ts.touched() && !simulator.get_enabled()) screen.sprite_touch(ts.getX(), ts.getY());
     
-    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tch");  //
+    // loop_marktime ("tch");  //
 
     // Encoder handling
     uint32_t encoder_sw_action = encoder.handleSwitchAction();
@@ -552,7 +537,7 @@ void loop() {
     else if (tuning_ctrl == SELECT) selected_value += encoder.handleSelection();  // If overflow constrain will fix in general handler below
     else if (tuning_ctrl == OFF) dataset_page += encoder.handleSelection();  // If overflow tconstrain will fix in general below
 
-    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "enc");  //
+    // loop_marktime ("enc");  //
 
     // Tuning : implement effects of changes made by encoder or touchscreen to simulator, dataset_page, selected_value, or tuning_ctrl
     sim_edit_delta += sim_edit_delta_encoder + sim_edit_delta_touch;  // Allow edits using the encoder or touchscreen
@@ -673,7 +658,7 @@ void loop() {
         }
         sim_edit_delta = 0;
     }
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "tun");  //
+    loop_marktime ("tun");  //
     // Ignition & Panic stop logic and Update output signals
     if (!speedometer.car_stopped()) { // if we lose connection to the hotrc while driving, or the joystick ignition button was turned off, panic
         if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && hotrc_radio_lost) panic_stop = true;  // panic_stop could also have been initiated by the user button   && !hotrc_radio_lost_last 
@@ -704,7 +689,7 @@ void loop() {
         syspower = syspower_set(syspower);
         syspower_last = syspower;
     }
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "ext");  //
+    loop_marktime ("ext");  //
     
     neo.heartbeat_update(((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]));  // Update our beating heart
     for (int32_t idiot = 0; idiot < arraysize(idiotlights); idiot++)
@@ -716,7 +701,7 @@ void loop() {
     if ((loopno == loophack) || park_the_motors) neo.updateIdiot(0);  // For some reason the first neopixel idiot light starts up bright at boot. Weird.
     neo.refresh();
     
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "neo");
+    loop_marktime ("neo");
 
     // Display updates
     if (display_enabled) {
@@ -725,7 +710,7 @@ void loop() {
     }
     else if (dataset_page_last != dataset_page) config.putUInt ("dpage", dataset_page);
     
-    if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "dis");
+    loop_marktime ("dis");
 
     dataset_page_last = dataset_page;
     selected_value_last = selected_value;
@@ -737,21 +722,6 @@ void loop() {
     // if (display_enabled) screen.watchdog();
  
     // Do the control loop bookkeeping at the end of each loop
-    loop_period_us = (uint32_t)loopTimer.elapsed();  // us since beginning of this loop
-    loopTimer.reset();
-    loop_freq_hz = 1000000.0 / ((loop_period_us) ? loop_period_us : 1);  // Prevent potential divide by zero
-    loopno++;  // I like to count how many loops
-    // if (timestamp_loop) loop_savetime (looptimes_us, loopindex, loop_names, loop_dirty, "end");    
-    if (timestamp_loop) {
-        looptime_cout_mark_us = esp_timer_get_time();
-        looptime_sum_s += (float)loop_period_us / 1000000;
-        if (loopno) looptime_avg_ms = 1000 * looptime_sum_s / (float)loopno;
-        std::cout << std::fixed << std::setprecision(0);
-        std::cout << "\r" << std::setw(5) << looptime_sum_s << " av:" << std::setw(3) << looptime_avg_ms << " lp#" << std::setw(5) << loopno;
-        std::cout << " us:" << std::setw(5) << loop_period_us << " (" << std::setw(5) << loop_period_us-looptime_cout_us << ") ";  // << " avg:" << looptime_avg_us;  //  " us:" << esp_timer_get_time() << 
-        for (int32_t x=1; x<loopindex; x++) std::cout << std::setw(3) << loop_names[x] << x << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1] << " ";
-        if (loop_period_us-looptime_cout_us > timestamp_loop_linefeed_threshold || !timestamp_loop_linefeed_threshold) std::cout << std::endl;
-        looptime_cout_us = (uint32_t)(esp_timer_get_time() - looptime_cout_mark_us);
-    }
+    loop_print_timing();
     loop_int_count = 0;
 }

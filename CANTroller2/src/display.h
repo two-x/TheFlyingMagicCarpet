@@ -79,36 +79,23 @@
 
 // string* pagecard = new string[8];  // How we might allocate on the heap instead of in the stack
 // string* modecard = new string[7];
-uint32_t color_16b_to_uint32(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to FastLED CRGB struct suitable for library
+uint32_t color_16b_to_uint32(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to uint32 in format 0x00RRGGBB
     return (((uint32_t)color565 & 0x1f) << 3) | (((uint32_t)color565 & 0xf800) >> 8) | (((uint32_t)color565 & 0x7e0) >> 3);
 }
-uint16_t color_uint32_to_16b(uint32_t color32b) {  // Convert 5-6-5 encoded 16-bit color value to FastLED CRGB struct suitable for library
+uint16_t color_uint32_to_16b(uint32_t color32b) {  // Convert uint32 color in format 0x00RRGGBB to uint16 5-6-5 encoded color value suitable for screen
     return (uint16_t)(((color32b & 0xf80000) >> 8) | ((color32b & 0xfc00) >> 5) | ((color32b & 0xf8) >> 3));
 }
-uint32_t hsv_to_rgb565(uint8_t hue, uint8_t desat = 0, uint8_t brighten = 0) {
-    float brightener;
-    hue = 255 - hue;
-    uint32_t rgb[3];
-    if (hue < 85) {
-        rgb[0] = 255 - hue * 3; rgb[1] = 0; rgb[2] = hue * 3;
-    }
-    else if (hue < 170) {
-        hue -= 85;
-        rgb[0] = 0; rgb[1] = hue * 3; rgb[2] = 255 - hue * 3;
-    }
-    else {
-        hue -= 170;
-        rgb[0] = hue * 3; rgb[1] = 255 - hue * 3; rgb[2] = 0;
-    }
-    float maxc = (float)max(rgb[0], rgb[1], rgb[2]);
-    
-    brightener = 1.0 + (brighten * (255.0 - maxc) / (255.0 * maxc));
-    for (int32_t led=0; led<=2; led++) {
+// hue: 0,255 = red, 85 = grn, 170 = blu | desat: 0 = nop, 255 = saturated up to greyscale | brighten: r,g,b each raised by brighten/255 times the ratio needed to raise max(r,g,b) to 255
+uint32_t hsv_to_rgb(uint8_t hue, uint8_t desat = 0, uint8_t brighten = 0) {  // returns uint32 color in format 0x00RRGGBB
+    uint32_t rgb[3] = { 255 - 3 * (uint32_t)((255 - hue) % 85), 0, 3 * (uint32_t)((255 - hue) % 85) };
+    float maxc = (float)((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]);
+    if (hue <= 85) { rgb[1] = rgb[0]; rgb[0] = rgb[2]; rgb[2] = 0; }
+    else if (hue <= 170) { rgb[1] = rgb[2]; rgb[2] = rgb[0]; rgb[0] = 0; }
+    float brightener = 1.0 + (brighten * (255.0 - maxc) / (255.0 * maxc));
+    for (int led=0; led<=2; led++) 
         rgb[led] = brightener * (rgb[led] + desat * (float)(maxc - rgb[led]) / 255.0);
-    }
     return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
 }
-
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, TEAL, MBLU };
 
@@ -141,9 +128,9 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
     { "PresTarg", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", BRAK"Motr", BRAK"Pres", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
     { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", "      - ", "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
-    { "SpeedTgt", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "TachTarg", "ThrotSet", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
+    { SPED"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "TachTarg", "ThrotSet", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", "      - ", "      - ", "SimW/Pot", "CalBrake", " Cal Gas", },  // PG_TEMP
-    { "Joy Axes", BRAK"Pres", "BrakePos", "  Speedo", "    Tach", " Airflow", "     MAP", "Ignition", " Starter", "Basic Sw", "SysPower", },  // PG_SIM
+    { "Joy Axes", BRAK"Pres", BRAK"Posn", "  Speedo", "    Tach", " Airflow", "     MAP", "Ignition", " Starter", "Basic Sw", "SysPower", },  // PG_SIM
 };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "in  ", "mph ", "psi ", "V   ", "%   ", "    ", "    ", "%   ", "/10 ", "%   ", "%   " },  // PG_RUN
@@ -166,13 +153,13 @@ char simgrid[4][3][5] = {
 
 bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
 uint16_t idiotcolors[arraysize(idiotlights)];
-uint8_t idiot_desaturation = 70;
+uint8_t idiot_desaturation = 65;  // 60-80 makes nice bright distinguishable colors
 uint8_t idiot_hue_offset = 240;
 // = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
 void set_idiotcolors() {
     for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
         int division = disp_idiots_per_row;
-        uint32_t color32 = hsv_to_rgb565((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_desaturation, 255);
+        uint32_t color32 = hsv_to_rgb((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_desaturation, 255);
         idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
         // printf ("idiot#%d: 0x%06x -> 0x%04x\n", idiot, color32, idiotcolors[idiot]);
     }
@@ -303,7 +290,7 @@ class Display {
             set_idiotcolors();
             draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, true);
             _disp_redraw_all = true;
-            sprite_setup();
+            if (screensaver) sprite_setup();
         }
         bool tft_reset() {  // call to begin a tft reset, and continue to call every loop until returns true (or get_reset_finished() returns true), then stop
             if (reset_finished) {
@@ -696,7 +683,7 @@ class Display {
                     _procrastinate = true;  // Waits till next loop to draw changed values
                 }
             }
-            else sprite_update();
+            else if (screensaver) sprite_update();
             if ((disp_dataset_page_dirty || _disp_redraw_all)) {
                 static bool first = true;
                 draw_dataset_page(dataset_page, dataset_page_last, first);
@@ -790,8 +777,8 @@ class Display {
                     draw_dynamic(13, throttle.get_idlehigh(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
                     draw_dynamic(14, throttle.get_idlecold(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
                     draw_dynamic(15, throttle.get_idlehot(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
-                    draw_dynamic(16, throttle.get_tempcold(), temp_lims_f[static_cast<int>(sensor_location::ENGINE)][DISP_MIN], temp_lims_f[static_cast<int>(sensor_location::ENGINE)][DISP_MAX]);
-                    draw_dynamic(17, throttle.get_temphot(), temp_lims_f[static_cast<int>(sensor_location::ENGINE)][DISP_MIN], temp_lims_f[static_cast<int>(sensor_location::ENGINE)][DISP_MAX]);
+                    draw_dynamic(16, throttle.get_tempcold(), temp_lims_f[static_cast<int>(sensor_location::engine)][DISP_MIN], temp_lims_f[static_cast<int>(sensor_location::engine)][DISP_MAX]);
+                    draw_dynamic(17, throttle.get_temphot(), temp_lims_f[static_cast<int>(sensor_location::engine)][DISP_MIN], temp_lims_f[static_cast<int>(sensor_location::engine)][DISP_MAX]);
                     draw_dynamic(18, (int32_t)throttle.get_settlerate(), 0, 500);
                     draw_asciiname(19, idlemodecard[(int32_t)throttle.get_idlemode()]);
                 }
@@ -838,12 +825,12 @@ class Display {
                     draw_dynamic(19, cruiseQPID.GetKd(), 0.0, 10.0);
                 }
                 else if (dataset_page == PG_TEMP) {
-                    draw_temperature(sensor_location::AMBIENT, 9);
-                    draw_temperature(sensor_location::ENGINE, 10);
-                    draw_temperature(sensor_location::WHEEL_FL, 11);
-                    draw_temperature(sensor_location::WHEEL_FR, 12);
-                    draw_temperature(sensor_location::WHEEL_RL, 13);
-                    draw_temperature(sensor_location::WHEEL_RR, 14);
+                    draw_temperature(sensor_location::ambient, 9);
+                    draw_temperature(sensor_location::engine, 10);
+                    draw_temperature(sensor_location::wheel_fl, 11);
+                    draw_temperature(sensor_location::wheel_fr, 12);
+                    draw_temperature(sensor_location::wheel_rl, 13);
+                    draw_temperature(sensor_location::wheel_rr, 14);
                     draw_eraseval(15);
                     draw_eraseval(16);
                     draw_asciiname(17, sensorcard[static_cast<uint8_t>(simulator.get_pot_overload())]);

@@ -88,7 +88,6 @@ bool flip_the_screen = true;
 #define tft_ledk_pin -1   // Output, optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
 #define touch_irq_pin 255 // Input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - Set to 255 if not used
 #define tft_rst_pin -1    // TFT Reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
-
 // Globals -------------------
 bool serial_debugging = true;
 bool take_temperatures = true;
@@ -101,7 +100,8 @@ bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise s
 bool cruise_fixed_throttle = true;   // Cruise mode fixes the throttle angle rather than controlling for a target speed
 bool autostop_disabled = true;       // Temporary measure to keep brake behaving until we get it debugged. Eventually should be false
 bool timestamp_loop = false;         // Makes code write out timestamps throughout loop to serial port
-uint32_t timestamp_loop_linefeed_threshold = 15000;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
+uint32_t timestamp_loop_linefeed_threshold = 0;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
+bool screensaver = false;  // Can enable experiment with animated screen draws
 #define pwm_jaguars true
 
 // Persistent config storage
@@ -182,18 +182,6 @@ bool cal_pot_gasservo_ready = false;    // Whether pot is in valid range
 bool cal_set_hotrc_failsafe_ready = false;
 
 // diag/monitoring variables
-Timer loopTimer(1000000); // how long the previous main loop took to run (in us)
-uint32_t loop_period_us;
-float looptime_sum_s;
-float looptime_avg_ms;
-float loop_freq_hz = 1;              // run loop real time frequency (in Hz)
-volatile int32_t loop_int_count = 0; // counts interrupts per loop
-int32_t loopno = 1;
-uint32_t looptimes_us[20];
-bool loop_dirty[20];
-int32_t loopindex = 0;
-int64_t looptime_cout_mark_us;
-uint32_t looptime_cout_us;
 bool booted = false;
 bool diag_ign_error_enabled = true;
 
@@ -509,7 +497,7 @@ void update_temperature_sensors(void *parameter) {
         if (take_temperatures)
             temperature_sensor_manager.update_temperatures();
         if (simulator.can_simulate(SimOption::engtemp) && simulator.get_pot_overload() == SimOption::engtemp) {
-            TemperatureSensor *engine_sensor = temperature_sensor_manager.get_sensor(sensor_location::ENGINE);
+            TemperatureSensor *engine_sensor = temperature_sensor_manager.get_sensor(sensor_location::engine);
             if (engine_sensor != nullptr) {
                 engine_sensor->set_temperature(pot.mapToRange(temp_sensor_min_f, temp_sensor_max_f));
             }
@@ -524,4 +512,58 @@ void set_devboard_defaults() {
     simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), 1));
     // simulator.set_can_simulate(SimOption::airflow, adj_bool(simulator.can_simulate(SimOption::airflow), 1));
     // simulator.set_can_simulate(SimOption::mapsens, adj_bool(simulator.can_simulate(SimOption::mapsens), 1));
+}
+
+Timer loopTimer(1000000); // how long the previous main loop took to run (in us)
+uint32_t loop_period_us;
+float looptime_sum_s;
+float looptime_avg_ms;
+float loop_freq_hz = 1;              // run loop real time frequency (in Hz)
+volatile int32_t loop_int_count = 0; // counts interrupts per loop
+int32_t loopno = 1;
+uint32_t looptimes_us[20];
+bool loop_dirty[20];
+int32_t loopindex = 1;
+int64_t looptime_cout_mark_us;
+uint32_t looptime_cout_us;
+std::vector<std::string> loop_names(20);
+
+void looptiming_init() {  // Run once at end of setup()
+    if (timestamp_loop) {
+        for (int32_t x=1; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
+        loop_names[0] = "top";
+        loop_dirty[0] = false;
+        looptimes_us[0] = esp_timer_get_time();
+        loopTimer.reset();  // start timer to measure the first loop
+    }
+}
+void loop_marktime(std::string loopname) {  // Add these throughout loop with short names
+    if (timestamp_loop) {
+        if (loop_dirty[loopindex]) {
+            loop_names[loopindex] = loopname;  // names[index], name);
+            loop_dirty[loopindex] = false;
+        }
+        loopindex++;
+        looptimes_us[loopindex] = esp_timer_get_time();
+    }
+}
+void loop_print_timing() {  // Call once at very end of loop
+    if (timestamp_loop) {
+        loop_period_us = (uint32_t)loopTimer.elapsed();  // us since beginning of this loop
+        loopTimer.reset();
+        looptime_cout_mark_us = esp_timer_get_time();
+        // loop_freq_hz = 1000000.0 / ((loop_period_us) ? loop_period_us : 1);  // Prevent potential divide by zero
+        loopno++;  // I like to count how many loops
+        looptime_sum_s += (float)loop_period_us / 1000000;
+        if (loopno) looptime_avg_ms = 1000 * looptime_sum_s / (float)loopno;
+        std::cout << std::fixed << std::setprecision(0);
+        std::cout << "\r" << std::setw(5) << looptime_sum_s << " av:" << std::setw(3) << looptime_avg_ms << " lp#" << loopno;
+        std::cout << " us:" << std::setw(5) << loop_period_us << " (" << std::setw(5) << loop_period_us-looptime_cout_us << ") ";  // << " avg:" << looptime_avg_us;  //  " us:" << esp_timer_get_time() << 
+        for (int32_t x=1; x<loopindex; x++) std::cout << std::setw(3) << loop_names[x] << x << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1] << " ";
+        std::cout << " cout:" << std::setw(5) << looptime_cout_us;
+        if (loop_period_us-looptime_cout_us > timestamp_loop_linefeed_threshold || !timestamp_loop_linefeed_threshold) std::cout << std::endl;
+        looptime_cout_us = (uint32_t)(esp_timer_get_time() - looptime_cout_mark_us);
+        loopindex = 0;
+        loop_marktime ("top");
+    }
 }
