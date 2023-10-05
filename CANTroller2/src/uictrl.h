@@ -339,7 +339,7 @@ class neopixelStrip {
         return RgbColor(rgb[0], rgb[1], rgb[2]);
     }
     colortype color_16b_to_32b(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to FastLED CRGB struct suitable for library
-        return RgbColor((color565 & 0x1f) << 3, (color565 & 0xf800) >> 8, (color565 & 0x7e0) >> 3);
+        return RgbColor((color565 & 0xf800) >> 8, (color565 & 0x7e0) >> 3, (color565 & 0x1f) << 3);
     }
     uint16_t color_32b_to_16b(colortype color) {  // Convert 5-6-5 encoded 16-bit color value to FastLED CRGB struct suitable for library
         return ((static_cast<uint16_t>(color.R) & 0xf8) << 8) | ((static_cast<uint16_t>(color.G) & 0xfc) << 3) | (((static_cast<uint16_t>(color.B) & 0xf8) >> 3));
