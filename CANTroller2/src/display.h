@@ -80,22 +80,24 @@
 // string* pagecard = new string[8];  // How we might allocate on the heap instead of in the stack
 // string* modecard = new string[7];
 uint32_t color_16b_to_uint32(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to uint32 in format 0x00RRGGBB
-    return (((uint32_t)color565 & 0x1f) << 3) | (((uint32_t)color565 & 0xf800) >> 8) | (((uint32_t)color565 & 0x7e0) >> 3);
+    return (((uint32_t)color565 & 0xf800) << 8) | (((uint32_t)color565 & 0x7e0) << 5) | (((uint32_t)color565 & 0x1f) << 3);
 }
 uint16_t color_uint32_to_16b(uint32_t color32b) {  // Convert uint32 color in format 0x00RRGGBB to uint16 5-6-5 encoded color value suitable for screen
     return (uint16_t)(((color32b & 0xf80000) >> 8) | ((color32b & 0xfc00) >> 5) | ((color32b & 0xf8) >> 3));
 }
-// hue: 0,255 = red, 85 = grn, 170 = blu | desat: 0 = nop, 255 = saturated up to greyscale | brighten: r,g,b each raised by brighten/255 times the ratio needed to raise max(r,g,b) to 255
-uint32_t hsv_to_rgb(uint8_t hue, uint8_t desat = 0, uint8_t brighten = 0) {  // returns uint32 color in format 0x00RRGGBB
+// hue: 0,255 = red, 85 = grn, 170 = blu | sat: 0 = saturated up to greyscale, 255 = pure color | bright: 0 = blk, 255 = "full"* | *bright_flat: if =1, "full" brightness varies w/ hue for consistent luminance, otherwise "full" always ranges to 255 (mixed-element colors are brighter) | blu_boost: adds blu_boost/255 desaturation as a ratio of blu dominance
+uint32_t hsv_to_rgb(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool bright_flat = 1, uint8_t blu_boost = 0) {  // returns uint32 color in format 0x00RRGGBB
     uint32_t rgb[3] = { 255 - 3 * (uint32_t)((255 - hue) % 85), 0, 3 * (uint32_t)((255 - hue) % 85) };
     float maxc = (float)((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]);
     if (hue <= 85) { rgb[1] = rgb[0]; rgb[0] = rgb[2]; rgb[2] = 0; }
     else if (hue <= 170) { rgb[1] = rgb[2]; rgb[2] = rgb[0]; rgb[0] = 0; }
-    float brightener = 1.0 + (brighten * (255.0 - maxc) / (255.0 * maxc));
+    float brightener = (float)bright / (bright_flat ? 255.0 : maxc);
+    float blu_booster = 1 + (float)(blu_boost * rgb[2]) / (float)(255.0 * (rgb[0] + rgb[1] + rgb[2]));
     for (int led=0; led<=2; led++) 
-        rgb[led] = brightener * (rgb[led] + desat * (float)(maxc - rgb[led]) / 255.0);
+        rgb[led] = brightener * ((float)rgb[led] + blu_booster * (255.0 - sat) * (float)(maxc - rgb[led]) / 255.0);
     return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
 }
+
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, TEAL, MBLU };
 
@@ -118,10 +120,10 @@ char units[disp_fixed_lines][5] = { "adc ", "mph ", "rpm ", "us  ", "psi ", "%  
 
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, num_datapages };
 char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim " };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 7, 4, 5, 3, 4, 8, 7, 8, 8, 0 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 6, 4, 5, 3, 4, 8, 7, 8, 8, 0 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
-    { BRAK"Posn", " Airflow", "     MAP", "MuleBatt", "     Pot", "      - ", "      - ", BRIGHTNESS, "NeoDesat", "Governor", STER"Safe", },  // PG_RUN
+    { BRAK"Posn", " Airflow", "     MAP", "MuleBatt", "     Pot", "      - ", BRIGHTNESS, "NeoDesat", "Governor", STER"Safe", "ScrnSavr", },  // PG_RUN
     { "HRC Horz", "HRC Vert", "      - ", "      - ", "HFailsaf", "Horz Min", "Horz Max", "HorzDBnd", "Vert Min", "Vert Max", "VertDBnd", },  // PG_JOY
     { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", SPED"Idle", SPED"RedL", "BkPos0Pt", },  // PG_CAR
     { "BrakePWM", "SteerPWM", "      - ", STER"Left", STER"Stop", STER"Rght", BRAK"Extd", BRAK"Stop", BRAK"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
@@ -133,7 +135,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
     { "Joy Axes", BRAK"Pres", BRAK"Posn", "  Speedo", "    Tach", " Airflow", "     MAP", "Ignition", " Starter", "Basic Sw", "SysPower", },  // PG_SIM
 };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
-    { "in  ", "mph ", "psi ", "V   ", "%   ", "    ", "    ", "%   ", "/10 ", "%   ", "%   " },  // PG_RUN
+    { "in  ", "mph ", "psi ", "V   ", "%   ", "    ", "%   ", "/10 ", "%   ", "%   ", BINARY },  // PG_RUN
     { "us  ", "us  ", "    ", "    ", "us  ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
     { "adc ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%   ", "mph ", "mph ", "mph ", "in  " },  // PG_CAR
     { "us  ", "us  ", "    ", "    ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PG_PWMS
@@ -152,20 +154,11 @@ char simgrid[4][3][5] = {
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
 bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
+char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
 uint16_t idiotcolors[arraysize(idiotlights)];
-uint8_t idiot_desaturation = 65;  // 60-80 makes nice bright distinguishable colors
+uint8_t idiot_saturation = 200;  // 170-195 makes nice bright yet distinguishable colors
 uint8_t idiot_hue_offset = 240;
 // = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
-void set_idiotcolors() {
-    for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
-        int division = disp_idiots_per_row;
-        uint32_t color32 = hsv_to_rgb((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_desaturation, 255);
-        idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
-        // printf ("idiot#%d: 0x%06x -> 0x%04x\n", idiot, color32, idiotcolors[idiot]);
-    }
-}
-
-char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
 bool idiotlasts[arraysize(idiotlights)];
 // Idiot light bitmaps
 // Format: Each byte is one of 11 pixel columns (left->right) with LSB->MSB within each byte being the top->bottom pixels in that column
@@ -201,6 +194,14 @@ uint8_t idiotmaps[arraysize(idiotlights)][11] = {
 //  { 0x47, 0x65, 0x77, 0x44, 0x40, 0x07, 0x45, 0x42, 0x72, 0x64, 0x47, },     // 8 - "adj" w/ arrows
 //  { 0x7c, 0x50, 0x70, 0x0e, 0x1b, 0x0e, 0x1b, 0x0e, 0x10, 0x78, 0x50, },     // 11 - "boot"
 //  { 0x6e, 0x6b, 0x3b, 0x00, 0x7b, 0x00, 0x7c, 0x0c, 0x7c, 0x0c, 0x78, },     // 12 - "Sim"
+void set_idiotcolors() {
+    for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
+        int division = disp_idiots_per_row;
+        uint32_t color32 = hsv_to_rgb((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 220);
+        idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
+        // printf ("idiot#%d: 0x%06x -> 0x%04x\n", idiot, color32, idiotcolors[idiot]);
+    }
+}
 
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
@@ -282,15 +283,13 @@ class Display {
             for (int32_t row=0; row<arraysize (disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
             yield();
             _tft.fillScreen (BLK);  // Black out the whole screen
-            yield();
             draw_touchgrid (false);
-            yield();
             draw_fixed (dataset_page, dataset_page_last, false);
             yield();
             set_idiotcolors();
             draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, true);
             _disp_redraw_all = true;
-            if (screensaver) sprite_setup();
+            sprite_setup();
         }
         bool tft_reset() {  // call to begin a tft reset, and continue to call every loop until returns true (or get_reset_finished() returns true), then stop
             if (reset_finished) {
@@ -683,6 +682,7 @@ class Display {
                     _procrastinate = true;  // Waits till next loop to draw changed values
                 }
             }
+            else if (simulating_last) draw_simbuttons(simulator.get_enabled());
             else if (screensaver) sprite_update();
             if ((disp_dataset_page_dirty || _disp_redraw_all)) {
                 static bool first = true;
@@ -724,11 +724,11 @@ class Display {
                     draw_dynamic(12, battery_sensor.get_filtered_value(), battery_sensor.get_min_v(), battery_sensor.get_max_v());
                     draw_dynamic(13, pot.get(), pot.min(), pot.max());
                     draw_eraseval(14);
-                    draw_eraseval(15);
-                    draw_dynamic(16, neobright, 1.0, 100.0, -1, 3);
-                    draw_dynamic(17, neodesat, 0.0, 10.0, -1, 2);
-                    draw_dynamic(18, gas_governor_percent, 0.0, 100.0);
-                    draw_dynamic(19, steer_safe_percent, 0.0, 100.0);
+                    draw_dynamic(15, neobright, 1.0, 100.0, -1, 3);
+                    draw_dynamic(16, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
+                    draw_dynamic(17, gas_governor_percent, 0.0, 100.0);
+                    draw_dynamic(18, steer_safe_percent, 0.0, 100.0);
+                    draw_truth(19, screensaver, 0);
                 }
                 else if (dataset_page == PG_JOY) {
                     draw_dynamic(9, hotrc_pulse_us[HORZ], hotrc_pulse_lims_us[HORZ][MIN], hotrc_pulse_lims_us[HORZ][MAX]);  // Programmed centerpoint is 230 adc
@@ -873,7 +873,7 @@ class Display {
             // spr.setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
             spr.createSprite(disp_sprite_width, disp_sprite_height);  // Create a sprite of defined size
             spr.fillSprite(TFT_BLACK);
-            spr.pushSprite(disp_simbuttons_x, disp_simbuttons_y);
+            // spr.pushSprite(disp_simbuttons_x, disp_simbuttons_y);
             // spr.drawRect(0, 0, disp_sprite_width, disp_sprite_height, TFT_BLUE);
             // delay(1000);
             star_x0 = random(disp_sprite_width);        // Random x coordinate

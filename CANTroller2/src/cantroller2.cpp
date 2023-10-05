@@ -198,7 +198,6 @@ void loop() {
         boot_button = false;  // Store press is not in effect
         boot_button_suppress_click = false;  // End click suppression
     }
-    
     // External digital inputs
     if (!simulator.simulating(SimOption::basicsw)) {  // Basic Mode switch
         do {
@@ -352,7 +351,6 @@ void loop() {
             #endif
         }
     }
-    
     throttle.update();  // Allow idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
 
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
@@ -410,110 +408,8 @@ void loop() {
     }
     loop_marktime ("out");  //
 
-    // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
-    //
-    // This section should become a real time self-diagnostic system, to look for anything that doesn't seem right and display an
-    // informed trouble code. Much like the engine computer in cars nowadays, which keep track of any detectable failures for you to
-    // retreive with an OBD tool. Some checks are below, along with other possible things to check for:
+    detect_errors();  // Look for screwy conditions and update warning idiot lights
 
-    if (!ignition && !tachometer.engine_stopped()) {  // Check: if engine is turning when ignition signal is off
-        if (diag_ign_error_enabled) { // See if the engine is turning despite the ignition being off
-            Serial.println (F("Detected engine rotation in the absense of ignition signal"));  // , tach_filt_rpm, ignition
-            diag_ign_error_enabled = false;  // Prevents endless error reporting the same error
-        }
-    }
-    else diag_ign_error_enabled = true;
-    
-    loop_marktime ("tch");  //
-
-    // Update warning idiot lights
-    if (errTimer.expireset()) {
-        bool check_wheels;
-        check_wheels = false;
-        TemperatureSensor * temp_fl = temperature_sensor_manager.get_sensor(sensor_location::wheel_fl);
-        TemperatureSensor * temp_fr = temperature_sensor_manager.get_sensor(sensor_location::wheel_fr);
-        TemperatureSensor * temp_rl = temperature_sensor_manager.get_sensor(sensor_location::wheel_rl);
-        TemperatureSensor * temp_rr = temperature_sensor_manager.get_sensor(sensor_location::wheel_rr);
-        if (temp_fl != nullptr && temp_fl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-        if (temp_fr != nullptr && temp_fr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-        if (temp_rl != nullptr && temp_rl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-        if (temp_rr != nullptr && temp_rr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-        err_temp_wheel = check_wheels;
-
-        TemperatureSensor * temp_eng = temperature_sensor_manager.get_sensor(sensor_location::engine);
-        err_temp_engine = temp_eng != nullptr ? temp_eng->get_temperature() >= temp_lims_f[ENGINE][WARNING] : -999;
-        
-        // Detect sensors disconnected or giving out-of-range readings.
-        // TODO : The logic of this for each sensor should be moved to devices.h objects
-        uint32_t val;
-        val = analogRead(brake_pos_pin);
-        err_sensor[RANGE][e_brkpos] = (val < brkpos_sensor.get_min_native() || val > brkpos_sensor.get_max_native());
-        err_sensor[LOST][e_brkpos] = (val < err_margin_adc);
-        val = analogRead(pressure_pin);
-        err_sensor[RANGE][e_pressure] = ((val && val < pressure_sensor.get_min_native()) || val > pressure_sensor.get_max_native());
-        err_sensor[LOST][e_pressure] = (val < err_margin_adc);
-        err_sensor[LOST][e_battery] = (analogRead(mulebatt_pin) > battery_sensor.get_max_native());
-        int32_t halfmargin = hotrc_pulse_margin_us / 2;
-        for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
-            err_sensor[RANGE][ch] = !hotrc_radio_lost && ((hotrc_pulse_us[ch] < hotrc_pulse_lims_us[ch][MIN] - halfmargin) 
-                                    || (hotrc_pulse_us[ch] > hotrc_pulse_lims_us[ch][MAX] + halfmargin));  // && ch != VERT
-            err_sensor[LOST][ch] = !hotrc_radio_lost && ((hotrc_pulse_us[ch] < (hotrc_pulse_abs_min_us - hotrc_pulse_margin_us))
-                                    || (hotrc_pulse_us[ch] > (hotrc_pulse_abs_max_us + hotrc_pulse_margin_us)));
-        }
-        // err_sensor[RANGE][e_hrcvert] = (hotrc_pulse_us[VERT] < hotrc_pulse_failsafe_us - hotrc_pulse_margin_us)
-        //     || ((hotrc_pulse_us[VERT] < hotrc_pulse_lims_us[VERT][MIN] - halfmargin) && (hotrc_pulse_us[VERT] > hotrc_pulse_failsafe_us + hotrc_pulse_margin_us));
-        
-        // Set sensor error idiot light flags
-        // printf ("Sensors errors: ");
-        
-        // printf ("Sensor check: ");
-        for (int32_t t=LOST; t<=RANGE; t++) {
-            err_sensor_alarm[t] = false;
-            for (int32_t s=0; s<e_num_sensors; s++)
-                if (err_sensor[t][s]) {
-                    err_sensor_alarm[t] = true;
-                    // if (s <= 3) printf ("hotrc-ch%d is %s, ", s, t ? "Rang" : "Lost");
-                    // else printf ("%d is %s, ", s, t ? "Rang" : "Lost");
-\                }
-        }
-        // printf ("\n");
-
-        // Detectable transducer-related failures :: How we can detect them
-        // Brakes:
-        // * Pressure sensor, chain linkage, or vehicle brakes problem :: Motor retracted with position below zeropoint, but pressure did not increase.
-        // * Position sensor problem :: When pressure is not near max, motor is driven more than X volt-seconds without position change (of the expected polarity).
-        // * Brake motor problem :: When motor is driven more than X volt-seconds without any change (of the expected polarity) to either position or pressure.
-        // * Brake calibration, idle high, or speedo sensor problem :: Motor retracted to near limit, with position decreased and pressure increased as expected, but speed doesn't settle toward 0.
-        // * Pressure sensor problem :: If pressure reading is out of range, or ever changes in the unexpected direction during motor movement.
-        // * Position sensor or limit switch problem :: If position reading is outside the range of the motor limit switches.
-        // Steering:
-        // * Chain derailment or motor or limit switch problem :: Motor told to drive for beyond X volt-seconds in one direction for > Y seconds.
-        // Throttle/Engine:
-        // * Airflow/MAP/tach sensor failure :: If any of these three sensor readings are out of range to the other two.
-        // Temperature:
-        // * Engine temperature sensor problem :: Over X min elapsed with Ignition on and tach >= low_idle, but engine temp is below nominal warmup temp.
-        // * Cooling system, coolant, fan, thermostat, or coolant sensor problem :: Engine temp stays over ~204 for >= X min without coolant temp dropping due to fan.
-        // * Axle, brake, etc. wheel issue or wheel sensor problem :: The hottest wheel temp is >= X degF hotter than the 2nd hottest wheel.
-        // * Axle, brake, etc. wheel issue or wheel/ambient sensor problem :: A wheel temp >= X degF higher than ambient temp.
-        // * Ignition problem, fire alarm, or temp sensor problem :: Ignition is off but a non-ambient temp reading increases to above ambient temp.
-        // 
-        // More ideas to define better and implement:
-        // * Check if the pressure response is characteristic of air being in the brake line.
-        // * Axle/brake drum may be going bad (increased engine RPM needed to achieve certain speedo)  (beware going up hill may look the same).
-        // * E-brake has been left on (much the same symptoms as above? (beware going up hill may look the same) 
-        // * Battery isn't charging, or just running low.
-        // * Carburetor not behaving (or air filter is clogged). (See above about engine deiseling - we can detect this!)
-        // * After increasing braking, the actuator position changes in the opposite direction, or vise versa.
-        // * Changing an actuator is not having the expected effect.
-        // * A tunable value suspected to be out of tune.
-        // * Check regularly for ridiculous shit. Compare our variable values against a predetermined list of conditions which shouldn't be possible or are at least very suspect. For example:
-        //   A) Sensor reading is out of range, or has changed faster than it ever should.
-        //   B) Stopping the car on entering hold/shutdown mode is taking longer than it ever should.
-        //   C) Mule seems to be accelerating like a Tesla.
-        //   D) Car is accelerating yet engine is at idle.
-        // * The control system has nonsensical values in its variables.
-
-    }
     loop_marktime ("err");  //
         
     ts.handleTouch(); // Handle touch events and actions
@@ -537,8 +433,6 @@ void loop() {
     else if (tuning_ctrl == SELECT) selected_value += encoder.handleSelection();  // If overflow constrain will fix in general handler below
     else if (tuning_ctrl == OFF) dataset_page += encoder.handleSelection();  // If overflow tconstrain will fix in general below
 
-    // loop_marktime ("enc");  //
-
     // Tuning : implement effects of changes made by encoder or touchscreen to simulator, dataset_page, selected_value, or tuning_ctrl
     sim_edit_delta += sim_edit_delta_encoder + sim_edit_delta_touch;  // Allow edits using the encoder or touchscreen
     sim_edit_delta_touch = 0;
@@ -559,19 +453,20 @@ void loop() {
     adj = false;
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == PG_RUN) {
-            if (selected_value == 7) {
-                adj_val (&neobright, sim_edit_delta, 1.0, 100.0);
+            if (selected_value == 6) {
+                adj_val (&neobright, sim_edit_delta, 1, 100);
                 neo.setbright(neobright);
             }
-            if (selected_value == 8) {
-                adj_val (&neodesat, sim_edit_delta, 0.0, 10.0);
+            if (selected_value == 7) {
+                adj_val (&neodesat, sim_edit_delta, 0, 10);  // -10, 10);
                 neo.setdesaturation(neodesat);
             }
-            else if (selected_value == 9) {
+            else if (selected_value == 8) {
                 adj = adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);
                 calc_governor();
             }
-            else if (selected_value == 10) adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
+            else if (selected_value == 9) adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
+            else if (selected_value == 10) adj_bool (&screensaver, sim_edit_delta);
         }
         else if (dataset_page == PG_JOY) {
             if (selected_value == 4) adj_val (&hotrc_pulse_failsafe_us, sim_edit_delta, hotrc_pulse_abs_min_us, hotrc_pulse_lims_us[VERT][MIN] - hotrc_pulse_margin_us);
@@ -586,8 +481,6 @@ void loop() {
         else if (dataset_page == PG_CAR) {
             if (selected_value == 2) throttle.set_idlehot(throttle.get_idlehot(), 0.1*(float)sim_edit_delta);
             else if (selected_value == 3) throttle.set_idlecold(throttle.get_idlecold(), 0.1*(float)sim_edit_delta);
-            // if (selected_value == 2) adj = adj_val (&tach_idle_hot_min_rpm, 0.1*(float)sim_edit_delta, tach_idle_abs_min_rpm, tach_idle_cold_max_rpm - 1);
-            // else if (selected_value == 3) adj = adj_val (&tach_idle_cold_max_rpm, 0.1*(float)sim_edit_delta, tach_idle_hot_min_rpm + 1, tach_idle_abs_max_rpm);
             else if (selected_value == 4) adj = adj_val (tachometer.get_redline_rpm_ptr().get(), 0.1*(float)sim_edit_delta, throttle.get_idlehigh(), tachometer.get_max_rpm());
             else if (selected_value == 5) adj_val (airflow_sensor.get_max_mph_ptr().get(), 0.01*(float)sim_edit_delta, 0, airflow_sensor.get_abs_max_mph());
             else if (selected_value == 6) adj_val (map_sensor.get_min_psi_ptr().get(), 0.1*(float)sim_edit_delta, map_sensor.get_abs_min_psi(), map_sensor.get_abs_max_psi());
@@ -635,10 +528,6 @@ void loop() {
             else if (selected_value == 10) cruiseQPID.SetKd (cruiseQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }
         else if (dataset_page == PG_TEMP) {
-            // if (selected_value == 7) {
-            //     adj_val(&idiot_hue_offset, (int8_t)sim_edit_delta, 0x00, 0xff);
-            //     set_idiotcolors();
-            // }
             if (selected_value == 8) simulator.set_pot_overload(static_cast<SimOption>(adj_val(static_cast<int32_t>(simulator.get_pot_overload()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));
             else if (selected_value == 9 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor_mode, sim_edit_delta);
             else if (selected_value == 10 && runmode == CAL) adj_bool (&cal_pot_gasservo_mode, (sim_edit_delta < 0 || cal_pot_gasservo_ready) ? sim_edit_delta : -1);
@@ -700,7 +589,6 @@ void loop() {
         }
     if ((loopno == loophack) || park_the_motors) neo.updateIdiot(0);  // For some reason the first neopixel idiot light starts up bright at boot. Weird.
     neo.refresh();
-    
     loop_marktime ("neo");
 
     // Display updates
@@ -709,7 +597,6 @@ void loop() {
         screen.update();
     }
     else if (dataset_page_last != dataset_page) config.putUInt ("dpage", dataset_page);
-    
     loop_marktime ("dis");
 
     dataset_page_last = dataset_page;
@@ -720,8 +607,6 @@ void loop() {
     // Kick watchdogs
     Watchdog.reset();  // Kick the watchdog to keep us alive
     // if (display_enabled) screen.watchdog();
- 
-    // Do the control loop bookkeeping at the end of each loop
-    loop_print_timing();
+     loop_print_timing();
     loop_int_count = 0;
 }
