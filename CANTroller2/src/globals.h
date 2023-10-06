@@ -567,3 +567,106 @@ void loop_print_timing() {  // Call once at very end of loop
         loop_marktime ("top");
     }
 }
+void detect_errors() {
+    if (errTimer.expireset()) {
+
+        // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
+        // this is one approach
+        // This section should become a real time self-diagnostic system, to look for anything that doesn't seem right and display an
+        // informed trouble code. Much like the engine computer in cars nowadays, which keep track of any detectable failures for you to
+        // retreive with an OBD tool. Some checks are below, along with other possible things to check for:
+        if (!ignition && !tachometer.engine_stopped()) {  // Check: if engine is turning when ignition signal is off
+            if (diag_ign_error_enabled) { // See if the engine is turning despite the ignition being off
+                Serial.println (F("Detected engine rotation in the absense of ignition signal"));  // , tach_filt_rpm, ignition
+                diag_ign_error_enabled = false;  // Prevents endless error reporting the same error
+            }
+        }
+        else diag_ign_error_enabled = true;
+
+        // different approach
+        bool check_wheels;
+        check_wheels = false;
+        TemperatureSensor * temp_fl = temperature_sensor_manager.get_sensor(sensor_location::wheel_fl);
+        TemperatureSensor * temp_fr = temperature_sensor_manager.get_sensor(sensor_location::wheel_fr);
+        TemperatureSensor * temp_rl = temperature_sensor_manager.get_sensor(sensor_location::wheel_rl);
+        TemperatureSensor * temp_rr = temperature_sensor_manager.get_sensor(sensor_location::wheel_rr);
+        if (temp_fl != nullptr && temp_fl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+        if (temp_fr != nullptr && temp_fr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+        if (temp_rl != nullptr && temp_rl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+        if (temp_rr != nullptr && temp_rr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+        err_temp_wheel = check_wheels;
+
+        TemperatureSensor * temp_eng = temperature_sensor_manager.get_sensor(sensor_location::engine);
+        err_temp_engine = temp_eng != nullptr ? temp_eng->get_temperature() >= temp_lims_f[ENGINE][WARNING] : -999;
+        
+        // Detect sensors disconnected or giving out-of-range readings.
+        // TODO : The logic of this for each sensor should be moved to devices.h objects
+        uint32_t val;
+        val = analogRead(brake_pos_pin);
+        err_sensor[RANGE][e_brkpos] = (val < brkpos_sensor.get_min_native() || val > brkpos_sensor.get_max_native());
+        err_sensor[LOST][e_brkpos] = (val < err_margin_adc);
+        val = analogRead(pressure_pin);
+        err_sensor[RANGE][e_pressure] = ((val && val < pressure_sensor.get_min_native()) || val > pressure_sensor.get_max_native());
+        err_sensor[LOST][e_pressure] = (val < err_margin_adc);
+        err_sensor[LOST][e_battery] = (analogRead(mulebatt_pin) > battery_sensor.get_max_native());
+        int32_t halfmargin = hotrc_pulse_margin_us / 2;
+        for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
+            err_sensor[RANGE][ch] = !hotrc_radio_lost && ((hotrc_pulse_us[ch] < hotrc_pulse_lims_us[ch][MIN] - halfmargin) 
+                                    || (hotrc_pulse_us[ch] > hotrc_pulse_lims_us[ch][MAX] + halfmargin));  // && ch != VERT
+            err_sensor[LOST][ch] = !hotrc_radio_lost && ((hotrc_pulse_us[ch] < (hotrc_pulse_abs_min_us - hotrc_pulse_margin_us))
+                                    || (hotrc_pulse_us[ch] > (hotrc_pulse_abs_max_us + hotrc_pulse_margin_us)));
+        }
+        // err_sensor[RANGE][e_hrcvert] = (hotrc_pulse_us[VERT] < hotrc_pulse_failsafe_us - hotrc_pulse_margin_us)
+        //     || ((hotrc_pulse_us[VERT] < hotrc_pulse_lims_us[VERT][MIN] - halfmargin) && (hotrc_pulse_us[VERT] > hotrc_pulse_failsafe_us + hotrc_pulse_margin_us));
+        
+        // Set sensor error idiot light flags
+        // printf ("Sensors errors: ");
+        
+        // printf ("Sensor check: ");
+        for (int32_t t=LOST; t<=RANGE; t++) {
+            err_sensor_alarm[t] = false;
+            for (int32_t s=0; s<e_num_sensors; s++)
+                if (err_sensor[t][s]) {
+                    err_sensor_alarm[t] = true;
+                    // if (s <= 3) printf ("hotrc-ch%d is %s, ", s, t ? "Rang" : "Lost");
+                    // else printf ("%d is %s, ", s, t ? "Rang" : "Lost");
+                }
+        }
+        // printf ("\n");
+
+        // Detectable transducer-related failures :: How we can detect them
+        // Brakes:
+        // * Pressure sensor, chain linkage, or vehicle brakes problem :: Motor retracted with position below zeropoint, but pressure did not increase.
+        // * Position sensor problem :: When pressure is not near max, motor is driven more than X volt-seconds without position change (of the expected polarity).
+        // * Brake motor problem :: When motor is driven more than X volt-seconds without any change (of the expected polarity) to either position or pressure.
+        // * Brake calibration, idle high, or speedo sensor problem :: Motor retracted to near limit, with position decreased and pressure increased as expected, but speed doesn't settle toward 0.
+        // * Pressure sensor problem :: If pressure reading is out of range, or ever changes in the unexpected direction during motor movement.
+        // * Position sensor or limit switch problem :: If position reading is outside the range of the motor limit switches.
+        // Steering:
+        // * Chain derailment or motor or limit switch problem :: Motor told to drive for beyond X volt-seconds in one direction for > Y seconds.
+        // Throttle/Engine:
+        // * Airflow/MAP/tach sensor failure :: If any of these three sensor readings are out of range to the other two.
+        // Temperature:
+        // * Engine temperature sensor problem :: Over X min elapsed with Ignition on and tach >= low_idle, but engine temp is below nominal warmup temp.
+        // * Cooling system, coolant, fan, thermostat, or coolant sensor problem :: Engine temp stays over ~204 for >= X min without coolant temp dropping due to fan.
+        // * Axle, brake, etc. wheel issue or wheel sensor problem :: The hottest wheel temp is >= X degF hotter than the 2nd hottest wheel.
+        // * Axle, brake, etc. wheel issue or wheel/ambient sensor problem :: A wheel temp >= X degF higher than ambient temp.
+        // * Ignition problem, fire alarm, or temp sensor problem :: Ignition is off but a non-ambient temp reading increases to above ambient temp.
+        // 
+        // More ideas to define better and implement:
+        // * Check if the pressure response is characteristic of air being in the brake line.
+        // * Axle/brake drum may be going bad (increased engine RPM needed to achieve certain speedo)  (beware going up hill may look the same).
+        // * E-brake has been left on (much the same symptoms as above? (beware going up hill may look the same) 
+        // * Battery isn't charging, or just running low.
+        // * Carburetor not behaving (or air filter is clogged). (See above about engine deiseling - we can detect this!)
+        // * After increasing braking, the actuator position changes in the opposite direction, or vise versa.
+        // * Changing an actuator is not having the expected effect.
+        // * A tunable value suspected to be out of tune.
+        // * Check regularly for ridiculous shit. Compare our variable values against a predetermined list of conditions which shouldn't be possible or are at least very suspect. For example:
+        //   A) Sensor reading is out of range, or has changed faster than it ever should.
+        //   B) Stopping the car on entering hold/shutdown mode is taking longer than it ever should.
+        //   C) Mule seems to be accelerating like a Tesla.
+        //   D) Car is accelerating yet engine is at idle.
+        // * The control system has nonsensical values in its variables.
+    }
+}

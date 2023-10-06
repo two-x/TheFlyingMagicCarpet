@@ -97,6 +97,15 @@ uint32_t hsv_to_rgb(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool b
         rgb[led] = brightener * ((float)rgb[led] + blu_booster * (255.0 - sat) * (float)(maxc - rgb[led]) / 255.0);
     return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
 }
+void set_idiotcolors() {
+    for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
+        int division = disp_idiots_per_row;
+        uint32_t color32 = hsv_to_rgb((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 220);
+        idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
+        // printf ("idiot#%d: 0x%06x -> 0x%04x\n", idiot, color32, idiotcolors[idiot]);
+    }
+}
+
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, TEAL, MBLU };
 
@@ -153,20 +162,11 @@ char simgrid[4][3][5] = {
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
 bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
+char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
 uint16_t idiotcolors[arraysize(idiotlights)];
-uint8_t idiot_saturation = 220;  // 170-195 makes nice bright yet distinguishable colors
+uint8_t idiot_saturation = 200;  // 170-195 makes nice bright yet distinguishable colors
 uint8_t idiot_hue_offset = 240;
 // = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
-void set_idiotcolors() {
-    for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
-        int division = disp_idiots_per_row;
-        uint32_t color32 = hsv_to_rgb((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 220);
-        idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
-        // printf ("idiot#%d: 0x%06x -> 0x%04x\n", idiot, color32, idiotcolors[idiot]);
-    }
-}
-
-char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
 bool idiotlasts[arraysize(idiotlights)];
 // Idiot light bitmaps
 // Format: Each byte is one of 11 pixel columns (left->right) with LSB->MSB within each byte being the top->bottom pixels in that column
@@ -283,9 +283,7 @@ class Display {
             for (int32_t row=0; row<arraysize (disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
             yield();
             _tft.fillScreen (BLK);  // Black out the whole screen
-            yield();
             draw_touchgrid (false);
-            yield();
             draw_fixed (dataset_page, dataset_page_last, false);
             yield();
             set_idiotcolors();
