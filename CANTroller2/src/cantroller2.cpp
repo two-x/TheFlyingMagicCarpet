@@ -560,11 +560,11 @@ void loop() {
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == PG_RUN) {
             if (selected_value == 7) {
-                adj_val (&neobright, sim_edit_delta, 1.0, 100.0);
+                adj_val (&neobright, sim_edit_delta, 1, 100);
                 neo.setbright(neobright);
             }
             if (selected_value == 8) {
-                adj_val (&neodesat, sim_edit_delta, 0.0, 10.0);
+                adj_val (&neodesat, sim_edit_delta, 0, 10);  // -10, 10);
                 neo.setdesaturation(neodesat);
             }
             else if (selected_value == 9) {

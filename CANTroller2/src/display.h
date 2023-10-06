@@ -154,13 +154,13 @@ char simgrid[4][3][5] = {
 
 bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
 uint16_t idiotcolors[arraysize(idiotlights)];
-uint8_t idiot_saturation = 190;  // 170-195 makes nice bright yet distinguishable colors
+uint8_t idiot_saturation = 220;  // 170-195 makes nice bright yet distinguishable colors
 uint8_t idiot_hue_offset = 240;
 // = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
 void set_idiotcolors() {
     for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
         int division = disp_idiots_per_row;
-        uint32_t color32 = hsv_to_rgb((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 195);
+        uint32_t color32 = hsv_to_rgb((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 220);
         idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
         // printf ("idiot#%d: 0x%06x -> 0x%04x\n", idiot, color32, idiotcolors[idiot]);
     }
@@ -727,7 +727,7 @@ class Display {
                     draw_eraseval(14);
                     draw_eraseval(15);
                     draw_dynamic(16, neobright, 1.0, 100.0, -1, 3);
-                    draw_dynamic(17, neodesat, 0.0, 10.0, -1, 2);
+                    draw_dynamic(17, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
                     draw_dynamic(18, gas_governor_percent, 0.0, 100.0);
                     draw_dynamic(19, steer_safe_percent, 0.0, 100.0);
                 }
