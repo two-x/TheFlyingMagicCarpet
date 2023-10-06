@@ -97,14 +97,6 @@ uint32_t hsv_to_rgb(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool b
         rgb[led] = brightener * ((float)rgb[led] + blu_booster * (255.0 - sat) * (float)(maxc - rgb[led]) / 255.0);
     return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
 }
-void set_idiotcolors() {
-    for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
-        int division = disp_idiots_per_row;
-        uint32_t color32 = hsv_to_rgb((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 220);
-        idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
-        // printf ("idiot#%d: 0x%06x -> 0x%04x\n", idiot, color32, idiotcolors[idiot]);
-    }
-}
 
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, TEAL, MBLU };
@@ -202,6 +194,14 @@ uint8_t idiotmaps[arraysize(idiotlights)][11] = {
 //  { 0x47, 0x65, 0x77, 0x44, 0x40, 0x07, 0x45, 0x42, 0x72, 0x64, 0x47, },     // 8 - "adj" w/ arrows
 //  { 0x7c, 0x50, 0x70, 0x0e, 0x1b, 0x0e, 0x1b, 0x0e, 0x10, 0x78, 0x50, },     // 11 - "boot"
 //  { 0x6e, 0x6b, 0x3b, 0x00, 0x7b, 0x00, 0x7c, 0x0c, 0x7c, 0x0c, 0x78, },     // 12 - "Sim"
+void set_idiotcolors() {
+    for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
+        int division = disp_idiots_per_row;
+        uint32_t color32 = hsv_to_rgb((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 220);
+        idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
+        // printf ("idiot#%d: 0x%06x -> 0x%04x\n", idiot, color32, idiotcolors[idiot]);
+    }
+}
 
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
