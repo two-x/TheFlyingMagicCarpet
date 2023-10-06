@@ -119,10 +119,10 @@ char units[disp_fixed_lines][5] = { "adc ", "mph ", "rpm ", "us  ", "psi ", "%  
 
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, num_datapages };
 char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim " };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 7, 4, 5, 3, 4, 8, 7, 8, 8, 0 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 6, 4, 5, 3, 4, 8, 7, 8, 8, 0 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
-    { BRAK"Posn", " Airflow", "     MAP", "MuleBatt", "     Pot", "      - ", "      - ", BRIGHTNESS, "NeoDesat", "Governor", STER"Safe", },  // PG_RUN
+    { BRAK"Posn", " Airflow", "     MAP", "MuleBatt", "     Pot", "      - ", BRIGHTNESS, "NeoDesat", "Governor", STER"Safe", "ScrnSavr", },  // PG_RUN
     { "HRC Horz", "HRC Vert", "      - ", "      - ", "HFailsaf", "Horz Min", "Horz Max", "HorzDBnd", "Vert Min", "Vert Max", "VertDBnd", },  // PG_JOY
     { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", SPED"Idle", SPED"RedL", "BkPos0Pt", },  // PG_CAR
     { "BrakePWM", "SteerPWM", "      - ", STER"Left", STER"Stop", STER"Rght", BRAK"Extd", BRAK"Stop", BRAK"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
@@ -134,7 +134,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
     { "Joy Axes", BRAK"Pres", BRAK"Posn", "  Speedo", "    Tach", " Airflow", "     MAP", "Ignition", " Starter", "Basic Sw", "SysPower", },  // PG_SIM
 };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
-    { "in  ", "mph ", "psi ", "V   ", "%   ", "    ", "    ", "%   ", "/10 ", "%   ", "%   " },  // PG_RUN
+    { "in  ", "mph ", "psi ", "V   ", "%   ", "    ", "%   ", "/10 ", "%   ", "%   ", BINARY },  // PG_RUN
     { "us  ", "us  ", "    ", "    ", "us  ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
     { "adc ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%   ", "mph ", "mph ", "mph ", "in  " },  // PG_CAR
     { "us  ", "us  ", "    ", "    ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PG_PWMS
@@ -291,7 +291,7 @@ class Display {
             set_idiotcolors();
             draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, true);
             _disp_redraw_all = true;
-            if (screensaver) sprite_setup();
+            sprite_setup();
         }
         bool tft_reset() {  // call to begin a tft reset, and continue to call every loop until returns true (or get_reset_finished() returns true), then stop
             if (reset_finished) {
@@ -684,6 +684,7 @@ class Display {
                     _procrastinate = true;  // Waits till next loop to draw changed values
                 }
             }
+            else if (simulating_last) draw_simbuttons(simulator.get_enabled());
             else if (screensaver) sprite_update();
             if ((disp_dataset_page_dirty || _disp_redraw_all)) {
                 static bool first = true;
@@ -725,11 +726,11 @@ class Display {
                     draw_dynamic(12, battery_sensor.get_filtered_value(), battery_sensor.get_min_v(), battery_sensor.get_max_v());
                     draw_dynamic(13, pot.get(), pot.min(), pot.max());
                     draw_eraseval(14);
-                    draw_eraseval(15);
-                    draw_dynamic(16, neobright, 1.0, 100.0, -1, 3);
-                    draw_dynamic(17, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
-                    draw_dynamic(18, gas_governor_percent, 0.0, 100.0);
-                    draw_dynamic(19, steer_safe_percent, 0.0, 100.0);
+                    draw_dynamic(15, neobright, 1.0, 100.0, -1, 3);
+                    draw_dynamic(16, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
+                    draw_dynamic(17, gas_governor_percent, 0.0, 100.0);
+                    draw_dynamic(18, steer_safe_percent, 0.0, 100.0);
+                    draw_truth(19, screensaver, 0);
                 }
                 else if (dataset_page == PG_JOY) {
                     draw_dynamic(9, hotrc_pulse_us[HORZ], hotrc_pulse_lims_us[HORZ][MIN], hotrc_pulse_lims_us[HORZ][MAX]);  // Programmed centerpoint is 230 adc
@@ -874,7 +875,7 @@ class Display {
             // spr.setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
             spr.createSprite(disp_sprite_width, disp_sprite_height);  // Create a sprite of defined size
             spr.fillSprite(TFT_BLACK);
-            spr.pushSprite(disp_simbuttons_x, disp_simbuttons_y);
+            // spr.pushSprite(disp_simbuttons_x, disp_simbuttons_y);
             // spr.drawRect(0, 0, disp_sprite_width, disp_sprite_height, TFT_BLUE);
             // delay(1000);
             star_x0 = random(disp_sprite_width);        // Random x coordinate

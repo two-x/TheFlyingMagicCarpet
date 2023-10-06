@@ -559,19 +559,20 @@ void loop() {
     adj = false;
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == PG_RUN) {
-            if (selected_value == 7) {
+            if (selected_value == 6) {
                 adj_val (&neobright, sim_edit_delta, 1, 100);
                 neo.setbright(neobright);
             }
-            if (selected_value == 8) {
+            if (selected_value == 7) {
                 adj_val (&neodesat, sim_edit_delta, 0, 10);  // -10, 10);
                 neo.setdesaturation(neodesat);
             }
-            else if (selected_value == 9) {
+            else if (selected_value == 8) {
                 adj = adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);
                 calc_governor();
             }
-            else if (selected_value == 10) adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
+            else if (selected_value == 9) adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
+            else if (selected_value == 10) adj_bool (&screensaver, sim_edit_delta);
         }
         else if (dataset_page == PG_JOY) {
             if (selected_value == 4) adj_val (&hotrc_pulse_failsafe_us, sim_edit_delta, hotrc_pulse_abs_min_us, hotrc_pulse_lims_us[VERT][MIN] - hotrc_pulse_margin_us);
