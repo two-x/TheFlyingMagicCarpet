@@ -68,12 +68,11 @@ bool flip_the_screen = true;
 #endif
 
 // External pullup/pulldown resistors:   (Note: "BB" = On dev breadboards only, "PCB" = On vehicle PCB only)
-// 1. mulebatt_pin: Add 1M-ohm to 3.3V. Allows detecting broken connection.
-// 2. brake_pos_pin, pressure_pin: Add 1M-ohm to GND. Allows detecting unconnected sensors or broken connections.
-// 3. onewire_pin: Add 4.7k-ohm to 3.3V. Needed for open collector sensor output, to define logic-high voltage level.
-// 4. tach_pulse_pin, speedo_pulse_pin: (PCB) Add 4.7k-ohm to 3.3V. For open collector sensor outputs. (BB) If no sensor is present: connect 4.7k-ohm to GND instead. Allows sensor detection.
-// 5. neopixel_pin: (PCB) Add 300 ohm in series (between pin and the DataIn pin of the 1st pixel). (BB) Same, but this one is likely optional, e.g. mine works w/o it.  For signal integrity over long wires. 
-// 6. uart_tx_pin: (PCB) Add 22k-ohm to GND. (BB) Connect 1M-ohm to 3.3V instead. For boot detection of vehicle PCB, so defaults are set appropriately.
+// 1. brake_pos_pin, pressure_pin: Add 1M-ohm to GND. Allows detecting unconnected sensors or broken connections.
+// 2. onewire_pin: Add 4.7k-ohm to 3.3V. Needed for open collector sensor output, to define logic-high voltage level.
+// 3. tach_pulse_pin, speedo_pulse_pin: (PCB) Add 4.7k-ohm to 3.3V. For open collector sensor outputs. (BB) If no sensor is present: connect 4.7k-ohm to GND instead. Allows sensor detection.
+// 4. neopixel_pin: (PCB) Add 330 ohm in series (between pin and the DataIn pin of the 1st pixel). (BB) Same, but this one is likely optional, e.g. mine works w/o it.  For signal integrity over long wires. 
+// 5. uart_tx_pin: (PCB) Add 22k-ohm to GND. (BB) Connect the 22k-ohm to 3.3V instead. For boot detection of vehicle PCB, so defaults are set appropriately.
 
 // ESP32-S3 TRM: https://www.espressif.com/sites/default/files/documentation/esp32-s3_technical_reference_manual_en.pdf#dma
 // ESP32-S3 Datasheet: https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf
@@ -505,7 +504,7 @@ void update_temperature_sensors(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently
     }
 }
-void set_devboard_defaults() {
+void set_devboard_defaults() {src/globals.h
     simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), 1));
     simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), 1));
     simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), 1));
