@@ -156,7 +156,7 @@ char simgrid[4][3][5] = {
 bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
 char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
 uint16_t idiotcolors[arraysize(idiotlights)];
-uint8_t idiot_saturation = 200;  // 170-195 makes nice bright yet distinguishable colors
+uint8_t idiot_saturation = 225;  // 170-195 makes nice bright yet distinguishable colors
 uint8_t idiot_hue_offset = 240;
 // = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
 bool idiotlasts[arraysize(idiotlights)];
@@ -241,7 +241,7 @@ class Display {
         // Adafruit_ILI9341 _tft (tft_cs_pin, tft_dc_pin, tft_rst_pin); // LCD screen
         // Adafruit_ILI9341 _tft; // LCD screen
         TFT_eSPI _tft; // LCD screen
-        TFT_eSprite spr = TFT_eSprite(&_tft);  // Declare Sprite object "spr" with pointer to "tft" object
+        TFT_eSprite _spr = TFT_eSprite(&_tft);  // Declare Sprite object "spr" with pointer to "tft" object
 
         // ILI9341_t3 _tft;
         Timer _tftResetTimer;
@@ -250,7 +250,7 @@ class Display {
         bool _procrastinate = false, reset_finished = false;
         bool _disp_redraw_all = true;
         
-        // For sprites
+        // For screensaver sprite
         long star_x0, star_y0;
         long touchpoint_x = -1; long touchpoint_y = -1;
         long eraser_rad = 14;
@@ -260,7 +260,9 @@ class Display {
         long eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) };
         long eraser_pos_max[2] = { disp_sprite_width / 2 - eraser_rad, disp_sprite_height / 2 - eraser_rad }; 
         long eraser_velo_sign[2] = { 1, 1 };
-        int spritenumcycles; int spritecycle = 1; int spriteshapes = 3; int spriteshape = random(spriteshapes); int spriteshape_last; 
+        int spritenumcycles; int spritecycle = 1; int spriteshape_last;
+        int spriteshapes = 3;  // 4
+        int spriteshape = random(spriteshapes);  // 3
         uint32_t sprite_cycletime_us = 60000000;
         Timer spriteRefreshTimer, spriteCycleTimer;
         int16_t sprite_lines_mode = 0;  // 0 = eraser, 1 = do drugs
@@ -271,6 +273,7 @@ class Display {
 
         void init() {
             yield();
+            _tft.initDMA(); // Initialise the DMA engine (tested with STM32F446 and STM32F767)
             _tft.begin();
             _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
             for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
@@ -683,7 +686,6 @@ class Display {
                 }
             }
             else if (simulating_last) draw_simbuttons(simulator.get_enabled());
-            else if (screensaver) sprite_update();
             if ((disp_dataset_page_dirty || _disp_redraw_all)) {
                 static bool first = true;
                 draw_dataset_page(dataset_page, dataset_page_last, first);
@@ -854,7 +856,9 @@ class Display {
                 draw_bool((runmode == BASIC), 3);
                 draw_bool(ignition, 4);
                 draw_bool(syspower, 5);
+                _procrastinate = true;
             }
+            if (screensaver && !simulator.get_enabled() && !_procrastinate) sprite_update();
             _procrastinate = false;
             _disp_redraw_all = false;
         }
@@ -863,25 +867,25 @@ class Display {
             touchpoint_y = y;
             printf("Got X=%d, Y=%d\n", touchpoint_x, touchpoint_y);
             if (touchpoint_x >= disp_simbuttons_x && touchpoint_y >= disp_simbuttons_y) {
-                spr.fillCircle(touchpoint_x-disp_simbuttons_x, touchpoint_y-disp_simbuttons_y, 4, random(0x10000));
+                _spr.fillCircle(touchpoint_x-disp_simbuttons_x, touchpoint_y-disp_simbuttons_y, 4, random(0x10000));
                 touchpoint_x = -1;
                 touchpoint_y = -1;
             }
             printf("Got X=%d, Y=%d\n", touchpoint_x, touchpoint_y);
         }
         void sprite_setup() {
-            // spr.setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
-            spr.createSprite(disp_sprite_width, disp_sprite_height);  // Create a sprite of defined size
-            spr.fillSprite(TFT_BLACK);
-            // spr.pushSprite(disp_simbuttons_x, disp_simbuttons_y);
-            // spr.drawRect(0, 0, disp_sprite_width, disp_sprite_height, TFT_BLUE);
+            // _spr.setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
+            _spr.createSprite(disp_sprite_width, disp_sprite_height);  // Create a sprite of defined size
+            _spr.fillSprite(TFT_BLACK);
+            // _spr.pushSprite(disp_simbuttons_x, disp_simbuttons_y);
+            // _spr.drawRect(0, 0, disp_sprite_width, disp_sprite_height, TFT_BLUE);
             // delay(1000);
             star_x0 = random(disp_sprite_width);        // Random x coordinate
             star_y0 = random(disp_sprite_height);       // Random y coordinate
             if (sprite_lines_mode == 1) spriteshape = 1;
             for (int16_t axis=0; axis<=1; axis++) { eraser_velo_sign[axis] = (random(1)) ? 1 : -1; }
-            spr.setTextDatum(MC_DATUM);
-            spr.setTextColor(BLK);
+            _spr.setTextDatum(MC_DATUM);
+            _spr.setTextColor(BLK);
             spriteRefreshTimer.set(50000);
             spriteCycleTimer.set((int64_t)sprite_cycletime_us);
         }
@@ -890,7 +894,7 @@ class Display {
                 if (spriteCycleTimer.expireset()) {
                     spritenumcycles++;
                     if (sprite_lines_mode == 1) {
-                        if (!spritecycle) spr.fillSprite(BLK);
+                        if (!spritecycle) _spr.fillSprite(BLK);
                         spritecycle = !spritecycle;
                     }
                     else if (sprite_lines_mode == 0) {
@@ -905,13 +909,20 @@ class Display {
                 long star_x1 = random(disp_sprite_width);        // Random x coordinate
                 long star_y1 = random(disp_sprite_height);       // Random y coordinate
                 if (!(sprite_lines_mode == 0 && (spritecycle == 0b10))) {
-                    if (spriteshape == 2)      // Draw pixels in sprite
+                    if (spriteshape == 0) _spr.drawLine(star_x0, star_y0, star_x1, star_y1, color); 
+                    else if (spriteshape == 1) _spr.drawCircle(random(disp_sprite_width), random(disp_sprite_height), random(20), random(0x10000));
+                    else if (spriteshape == 2)      // Draw pixels in sprite
                         for (int star=0; star<35; star++) 
-                            spr.drawPixel(random(disp_sprite_width), random(disp_sprite_height), random(0x10000));      // Draw pixel in sprite
-                    else if (spriteshape == 1) spr.drawCircle(random(disp_sprite_width), random(disp_sprite_height), random(20), random(0x10000));
-                    else spr.drawLine(star_x0, star_y0, star_x1, star_y1, color); 
+                            _spr.drawPixel(random(disp_sprite_width), random(disp_sprite_height), random(0x10000));      // Draw pixel in sprite
+                    // Whoa, this routine causes a reset after a few seconds!
+                    // else if (spriteshape = 3) {
+                    //     _spr.setTextColor(random(0x10000));
+                    //     _spr.setTextSize (1);
+                    //     _spr.setCursor(star_x1, star_y1);
+                    //     _spr.print((char)random(255));  // static_cast<char>((random(16) << 8) | random(16)));
+                    // }    
                 }
-                if (sprite_lines_mode == 1 && !spritecycle) spr.drawLine(star_x0+1, star_y0+1, star_x1+1, star_y1+1, color);
+                if (sprite_lines_mode == 1 && !spritecycle) _spr.drawLine(star_x0+1, star_y0+1, star_x1+1, star_y1+1, color);
                 // 
                 star_x0 = star_x1;
                 star_y0 = star_y1;
@@ -925,11 +936,11 @@ class Display {
                             eraser_velo_sign[axis] *= -1;
                         }
                     }
-                    spr.fillCircle((disp_sprite_width / 2) + eraser_pos[0], (disp_sprite_height / 2) + eraser_pos[1], eraser_rad, BLK);
+                    _spr.fillCircle((disp_sprite_width / 2) + eraser_pos[0], (disp_sprite_height / 2) + eraser_pos[1], eraser_rad, BLK);
                 } 
-                else if (sprite_lines_mode == 1) spr.drawString("do drugs", disp_sprite_width / 2, disp_sprite_height / 2, 4);
-                // spr.drawString("do drugs", disp_sprite_width / 2, (int32_t)(float)disp_sprite_height * (float)(spriteCycleTimer.elapsed() / (float)sprite_cycletime_us), 4);
-                spr.pushSprite(disp_simbuttons_x, disp_simbuttons_y);
+                else if (sprite_lines_mode == 1) _spr.drawString("do drugs", disp_sprite_width / 2, disp_sprite_height / 2, 4);
+                // _spr.drawString("do drugs", disp_sprite_width / 2, (int32_t)(float)disp_sprite_height * (float)(spriteCycleTimer.elapsed() / (float)sprite_cycletime_us), 4);
+                _spr.pushSprite(disp_simbuttons_x, disp_simbuttons_y);
             }
         }
 };

@@ -175,6 +175,7 @@ class neopixelStrip {
     uint8_t brightlev[2][7] = { { 0, 1,  6, 10, 17, 30,  50 },     // [NITE] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
                                 { 0, 2, 16, 30, 45, 65, 100 }, };  // [DAY] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
     bool context = NITE;
+    bool neo_heartbeat_variable_brightness = false;  // If false then brightness control only affect idiotlights
     uint8_t lobright = 1;
     uint8_t heartbright = 6;
     uint8_t hibright = 6;
@@ -220,7 +221,7 @@ class neopixelStrip {
     }
     void setbright(int8_t newlev) {  // a way to specify brightness levels
         hibright = newlev;
-        heartbright = hibright;  // (uint8_t)((float)hibright * 0.75);
+        if (neo_heartbeat_variable_brightness) heartbright = hibright;  // (uint8_t)((float)hibright * 0.75);
         lobright = (hibright > 50) ? 3 : (hibright > 25) ? 2 : 1;
         updateAll();
     }
@@ -247,7 +248,6 @@ class neopixelStrip {
             }
             if (heartbeatColor != heartbeatColor_last || heartbeat_brightness != neobright_last) {
                 heartbeatNow = dimmer(heartbeatColor, heartbeat_brightness);  // heartbeatNow = dimmer(desaturate(heartbeatColor, desatlevel), heartbeat_brightness);
-                // printf ("brite: %d dt: %7d HBnow: 0x%06x\n", heartbeat_brightness, debugtimer.elapsed(), color_Rgb_to_32b(heartbeatNow));  // HT: %7ld  neoFadeTimer.elapsed(), 
                 debugtimer.set(4000000);
                 heartbeatColor_last = heartbeatColor;
                 neobright_last = heartbeat_brightness;
@@ -372,7 +372,7 @@ class neopixelStrip {
         float dominant = maxelement(rgb[0], rgb[1], rgb[2]);
         if (desat_of_ten > 0) {
             for (int element=0; element<3; element++)
-                rgb[element] = (uint8_t)(rgb[element] + ((float)desat_of_ten * (dominant - (float)(rgb[element])) / 10.0));
+                rgb[element] = (uint8_t)(rgb[element] + ((float)desat_of_ten * (dominant - (float)(rgb[element])) / 20.0));
         }
         // else {
         //     // float mide = midelement(rgb[0], rgb[1], rgb[2]);
