@@ -607,6 +607,6 @@ void loop() {
     // Kick watchdogs
     Watchdog.reset();  // Kick the watchdog to keep us alive
     // if (display_enabled) screen.watchdog();
-     loop_print_timing();
+    loop_print_timing();
     loop_int_count = 0;
 }

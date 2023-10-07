@@ -45,21 +45,21 @@ bool flip_the_screen = true;
 #define hotrc_ch3_ign_pin 20    // (usb-otg / adc2ch9) - Ignition control, Hotrc Ch3 PWM toggle signal
 #define hotrc_ch4_cruise_pin 21 // (pwm0) - Cruise control, Hotrc Ch4 PWM toggle signal
 #define speedo_pulse_pin 35     // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
-#define starter_pin 36          // (spi-ram / oct-spi) - Input, active high when vehicle starter is engaged (needs pulldown)
+#define starter_pin 36          // (spi-ram / oct-spi) - Input/Output (both active high), output when starter is being driven, otherwise input senses external starter activation
 #define tach_pulse_pin 37       // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup) - Note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define sdcard_cs_pin 38        // (spi-ram / oct-spi) - Output, chip select for SD card controller on SPI bus
 #define basicmodesw_pin 39      // Input, asserted to tell us to run in basic mode, active low (has ext pullup) - Note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define encoder_b_pin 40        // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define encoder_a_pin 41        // Int input, The A (aka CLK) pin of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
 #define encoder_sw_pin 42       // Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
-#define uart_tx_pin 43          // "TX" (uart0 tx) - Needed for serial monitor
-#define uart_rx_pin 44          // "RX" (uart0 rx) - Needed for serial monitor. In theory we could dual-purpose this for certain things, as we haven't yet needed to accept input over the serial monitor
+#define uart_tx_pin 43          // "TX" (uart0 tx) - Serial monitor data out. Also used to detect devboard vs. pcb at boot time (using pullup/pulldown, see below)
+#define uart_rx_pin 44          // "RX" (uart0 rx) - Serial monitor data in.
 #define ign_out_pin 45          // (bootstrap low) - Output for Hotrc to a relay to kill the car ignition. Note, Joystick ign button overrides this if connected and pressed
 #define syspower_pin 46         // (bootstrap low) - Output, flips a relay to power all the tranducers. This is actually the neopixel pin on all v1.1 devkit boards.
 #define touch_cs_pin 47         // Output, chip select for resistive touchscreen, active low
-#define neopixel_pin 48         // (rgb led) - Data line to onboard Neopixel WS281x (on all v1 devkit boards)
+#define neopixel_pin 48         // (rgb led) - Data line to onboard Neopixel WS281x (on all v1 devkit boards - pin 38 is used on v1.1 boards). Also used for onboard and external neopoxels
 
-#ifdef pinout_bm2023            // 231003: Swapped these 5 signals from pins below (bm2023) to above (bm2024)
+#ifdef pinout_bm2023            // Swapped these signals from pins below (bm2023) to above (bm2024)
     #define tach_pulse_pin 36   // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup) - Note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
     #define ign_out_pin 37      // (spi-ram / oct-spi) - Output for Hotrc to a relay to kill the car ignition. Note, Joystick ign button overrides this if connected and pressed
     #define syspower_pin 38     // (spi-ram / oct-spi) - Output, flips a relay to power all the tranducers. This is actually the neopixel pin on all v1.1 devkit boards.
@@ -67,12 +67,17 @@ bool flip_the_screen = true;
     #define sdcard_cs_pin 46    // (bootstrap low) - Output, chip select for SD card controller on SPI bus,
 #endif
 
-// External pullup/pulldown resistors:   (Note: "BB" = On dev breadboards only, "PCB" = On vehicle PCB only)
-// 1. brake_pos_pin, pressure_pin: Add 1M-ohm to GND. Allows detecting unconnected sensors or broken connections.
+// External components needed (pullup/pulldown resistors, and capacitors): (Note: "BB" = On dev breadboards only, "PCB" = On vehicle PCB only)
+// 1. brake_pos_pin: Add 1M-ohm to GND. Allows detecting unconnected sensor or broken connection.
 // 2. onewire_pin: Add 4.7k-ohm to 3.3V. Needed for open collector sensor output, to define logic-high voltage level.
 // 3. tach_pulse_pin, speedo_pulse_pin: (PCB) Add 4.7k-ohm to 3.3V. For open collector sensor outputs. (BB) If no sensor is present: connect 4.7k-ohm to GND instead. Allows sensor detection.
 // 4. neopixel_pin: (PCB) Add 330 ohm in series (between pin and the DataIn pin of the 1st pixel). (BB) Same, but this one is likely optional, e.g. mine works w/o it.  For signal integrity over long wires. 
 // 5. uart_tx_pin: (PCB) Add 22k-ohm to GND. (BB) Connect the 22k-ohm to 3.3V instead. For boot detection of vehicle PCB, so defaults are set appropriately.
+// 6. ADC inputs (mulebatt_pin, pressure_pin, brake_pos_pin, pot_wipe_pin) should have 100nF cap to gnd, tho it works w/o it.
+// 7. Rotary encoder inputs (encoder_a_pin, encoder_b_pin, encoder_sw_pin) should have 10nF to gnd, tho it works w/o it. Pullups to 3.3V (4.7uF is good) are also necessary, but the encoder we're using includes these.
+// 8. Resistor dividers are needed for these inputs: starter_pin (16V->3.3V), mulebatt_pin (16V->3.3V), and pressure_pin (5V->3.3V).
+// 9. ign_out_pin, syspower_pin, and starter_pin require pulldown to gnd, this is provided by nfet gate pulldown.
+// 10. gas_pwm_pin should have a series ~680-ohm R going to the servo.
 
 // ESP32-S3 TRM: https://www.espressif.com/sites/default/files/documentation/esp32-s3_technical_reference_manual_en.pdf#dma
 // ESP32-S3 Datasheet: https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf
@@ -82,7 +87,8 @@ bool flip_the_screen = true;
 // ESP32 pins 34, 35, 36, 39 are input-only (applies to S3?).  ADC ch2 will not work if wifi is enabled
 // Bootstrap pins: Pin 0 must be pulled high, and pins 45 and 46 pulled low during bootup
 // ESP32 errata 3.11: Pin 36 and 39 will be pulled low for ~80ns when "certain RTC peripherals power up"
-// ESP32 pullups/downs (~45k-ohm) details: https://www.esp32.com/viewtopic.php?f=12&t=34831
+// ESP32 internal pullups/downs are ~45k-ohm, details: https://www.esp32.com/viewtopic.php?f=12&t=34831
+// SPI bus page including DMA information: https://docs.espressif.com/projects/esp-idf/en/v4.4/esp32s3/api-reference/peripherals/spi_master.html
 
 #define tft_ledk_pin -1   // Output, optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
 #define touch_irq_pin 255 // Input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - Set to 255 if not used
@@ -504,7 +510,7 @@ void update_temperature_sensors(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently
     }
 }
-void set_devboard_defaults() {src/globals.h
+void set_devboard_defaults() {
     simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), 1));
     simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), 1));
     simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), 1));
@@ -636,6 +642,8 @@ void detect_errors() {
         // Detectable transducer-related failures :: How we can detect them
         // Brakes:
         // * Pressure sensor, chain linkage, or vehicle brakes problem :: Motor retracted with position below zeropoint, but pressure did not increase.
+        // * Pressure sensor zero point miscalibration (no force on pedal) :: Minimum pressure reading since startup has never reached 0 PSI or less (cal is too high), or, is more than a given margin below 0. * Note this can also be an auto-calibration approach
+        // * Pressure sensor max point miscalibration (full force on pedal) :: When target set to max pressure, after motor moves to the point position isn't changing, the pressure reading deviates from max setting by more than a given margin. * Note this can also be an auto-calibration approach
         // * Position sensor problem :: When pressure is not near max, motor is driven more than X volt-seconds without position change (of the expected polarity).
         // * Brake motor problem :: When motor is driven more than X volt-seconds without any change (of the expected polarity) to either position or pressure.
         // * Brake calibration, idle high, or speedo sensor problem :: Motor retracted to near limit, with position decreased and pressure increased as expected, but speed doesn't settle toward 0.
@@ -645,18 +653,26 @@ void detect_errors() {
         // * Chain derailment or motor or limit switch problem :: Motor told to drive for beyond X volt-seconds in one direction for > Y seconds.
         // Throttle/Engine:
         // * Airflow/MAP/tach sensor failure :: If any of these three sensor readings are out of range to the other two.
+        // Tach/Speedo:
+        // * Sensor read problem :: Derivative of consecutive readings (rate of change) spikes higher than it's possible for the physical rotation to change - (indicates missing pulses)
+        // * Disconnected/problematic speed sensor :: ignition is on, tach is nonzero, and runmode = hold/fly/cruise, yet speed is zero. Or, throttle is at idle and brake pressure high for enough time, yet speed readings are nonzero
+        // * Disconnected/problematic tach sensor :: runmode is hold/fly/cruise, ignition is on and speed increases, but tach is below idle speed 
         // Temperature:
         // * Engine temperature sensor problem :: Over X min elapsed with Ignition on and tach >= low_idle, but engine temp is below nominal warmup temp.
         // * Cooling system, coolant, fan, thermostat, or coolant sensor problem :: Engine temp stays over ~204 for >= X min without coolant temp dropping due to fan.
         // * Axle, brake, etc. wheel issue or wheel sensor problem :: The hottest wheel temp is >= X degF hotter than the 2nd hottest wheel.
         // * Axle, brake, etc. wheel issue or wheel/ambient sensor problem :: A wheel temp >= X degF higher than ambient temp.
         // * Ignition problem, fire alarm, or temp sensor problem :: Ignition is off but a non-ambient temp reading increases to above ambient temp.
+        // Airflow:
+        // * Air filter clogged, or carburetor problem :: Track ratio of airflow/throttle angle whenever throttle is constant. Then, if that ratio lowers over time by X below that level, indicates restricted air. 
+        // Battery:
+        // * Battery low :: Mulebatt readings average is below a given threshold
+        // * Inadequate charging :: Mulebatt readings average has decreased over long time period
         // 
         // More ideas to define better and implement:
         // * Check if the pressure response is characteristic of air being in the brake line.
         // * Axle/brake drum may be going bad (increased engine RPM needed to achieve certain speedo)  (beware going up hill may look the same).
         // * E-brake has been left on (much the same symptoms as above? (beware going up hill may look the same) 
-        // * Battery isn't charging, or just running low.
         // * Carburetor not behaving (or air filter is clogged). (See above about engine deiseling - we can detect this!)
         // * After increasing braking, the actuator position changes in the opposite direction, or vise versa.
         // * Changing an actuator is not having the expected effect.

@@ -208,7 +208,7 @@ private:
                 else if (cruise_trigger_released && ctrl_pos_adc[VERT][FILT] <= cruise_ctrl_extent_adc) {
                     if (!cruise_adjusting) gas_pulse_adjustpoint_us = gas_pulse_cruise_us;  // When beginning adjustment, save current throttle pulse value to use as adjustment low endpoint
                     cruise_ctrl_extent_adc = (float)ctrl_pos_adc[VERT][FILT];
-                    gas_pulse_cruise_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], gas_pulse_ccw_closed_us, gas_pulse_adjustpoint_us);
+                    gas_pulse_cruise_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], gas_pulse_adjustpoint_us, gas_pulse_ccw_closed_us);
                     cruise_adjusting = true;  // Suspend pid loop control of gas
                 }
             }
@@ -227,23 +227,19 @@ private:
                 }
             }
             else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) {  // When joystick vert below center, decrease the throttle target proportional to how far off center
-                if (cruise_speed_lowerable) {
-                    if (!cruise_adjusting) gas_pulse_adjustpoint_us = gas_pulse_cruise_us;  // When beginning adjustment, save current throttle pulse value to use as adjustment low endpoint
-                    gas_pulse_cruise_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], gas_pulse_ccw_closed_us, gas_pulse_adjustpoint_us);
+                if (!cruise_speed_lowerable) updateMode(FLY);  // Then any trigger braking activity cancels cruise mode
+                else if (cruise_trigger_released) {
+                    if (!cruise_adjusting) tach_adjustpoint_rpm = tachometer.get_filtered_value();  // When beginning adjustment, save current tach value to use as adjustment low endpoint 
+                    throttle.set_target (map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], tach_adjustpoint_rpm, throttle.get_idlespeed()));
                     cruise_adjusting = true;  // Suspend pid loop control of gas
                 }
-                else updateMode(FLY);  // Otherwise any trigger braking activity cancels cruise mode
             }
             else {  // If ctrl vert at center
                 cruise_trigger_released = true;
-                if (cruise_adjusting) {  // When joystick returned to center, the target speed stays locked to the value it was when joystick goes to center
-                    throttle.set_target(tachometer.get_filtered_value());
-                    // cruiseQPID.SetCenter (tach_filt_rpm);
-                    cruise_adjusting = false;
-                }
+                cruise_adjusting = false;
             } 
-            if (!cruise_adjusting) cruiseAntiglitchTimer.reset();  // Anti-glitch timer attempts to keep very short joystick sensor glitches from going into adjust mode
-            else if (cruiseAntiglitchTimer.expired()) speedo_target_mph = speedometer.get_filtered_value();  // After adjusting long enough for glitch timer to expire, now our speed target tracks the current speed. May be unneccesary now that our readings are stable.  Remove?  Anyway, need to review the logic
+            // if (!cruise_adjusting) cruiseAntiglitchTimer.reset();  // Anti-glitch timer attempts to keep very short joystick sensor glitches from going into adjust mode
+            // else if (cruiseAntiglitchTimer.expired()) speedo_target_mph = speedometer.get_filtered_value();  // After adjusting long enough for glitch timer to expire, now our speed target tracks the current speed. May be unneccesary now that our readings are stable.  Remove?  Anyway, need to review the logic
         }
         if (ctrl == HOTRC && flycruise_toggle_request) {
             updateMode(FLY);  // Go to fly mode if hotrc ch4 button pushed
