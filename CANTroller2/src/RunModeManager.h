@@ -209,9 +209,9 @@ private:
             }
         }
         else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) {  // When joystick vert below center, decrease the speed target proportional to how far off center
-            if (cruise_trigger_released && ctrl_pos_adc[VERT][FILT] <= cruise_ctrl_extent_adc) {
-                if (!cruise_speed_lowerable) updateMode(FLY);  // Then any trigger braking activity cancels cruise mode
-                else if (cruise_fixed_throttle) {
+            if (!cruise_speed_lowerable) updateMode(FLY);  // Then any trigger braking activity cancels cruise mode
+            else if (cruise_trigger_released && ctrl_pos_adc[VERT][FILT] <= cruise_ctrl_extent_adc) {
+                if (cruise_fixed_throttle) {
                     if (!cruise_adjusting) gas_pulse_adjustpoint_us = gas_pulse_cruise_us;  // When beginning adjustment, save current throttle pulse value to use as adjustment low endpoint
                     gas_pulse_cruise_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], gas_pulse_adjustpoint_us, gas_pulse_ccw_closed_us);
                 }
