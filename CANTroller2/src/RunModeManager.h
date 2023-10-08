@@ -187,17 +187,17 @@ private:
             throttle.set_target(tachometer.get_filtered_value());  // Start off with target set to current tach value
             // cruiseQPID.SetCenter (tach_filt_rpm);
             gestureFlyTimer.reset();  // reset gesture timer
-            cruise_trigger_released = false;  // After cruise mode started, adjustments can not be made until trigger is initially released.
-            gas_pulse_cruise_us = gas_pulse_out_us;
-            gas_pulse_adjustpoint_us = gas_pulse_cruise_us;
-            cruise_ctrl_extent_adc = (float)ctrl_lims_adc[ctrl][VERT][CENT];
+            cruise_trigger_released = false;  // in case trigger is being pulled as cruise mode is entered, the ability to adjust is only unlocked after the trigger is subsequently released to the center
+            gas_pulse_cruise_us = gas_pulse_out_us;  // This variable stores the setpoint, either of throttle angle (if cruise_fixed throttle=true) or rpm target (if false)
+            gas_pulse_adjustpoint_us = gas_pulse_cruise_us;  // Pull of trigger away from center in either direction starts a setpoint adjustment, scaled from *your current setpoint* (not from the center value) to the relevant min or max extreme 
+            cruise_ctrl_extent_adc = (float)ctrl_lims_adc[ctrl][VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
             cruise_adjusting = false;
             if (ctrl == HOTRC) flycruise_toggle_request = false;
         }
-        if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) {  // When joystick vert above center, increase the throttle target proportional to how far off center
+        if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) {  // When joystick vert above center, increase the throttle setpoint proportional to how far off center
             if (cruise_trigger_released && ctrl_pos_adc[VERT][FILT] >= cruise_ctrl_extent_adc) {
                 if (cruise_fixed_throttle) {
-                    if (!cruise_adjusting) gas_pulse_adjustpoint_us = gas_pulse_cruise_us;  // When beginning adjustment, save current throttle pulse value to use as adjustment low endpoint
+                    if (!cruise_adjusting) gas_pulse_adjustpoint_us = gas_pulse_cruise_us;  // When beginning adjustment, save current throttle pulse value to use as adjustment endpoint
                     gas_pulse_cruise_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_adjustpoint_us, gas_pulse_govern_us);
                 }
                 else {
@@ -208,7 +208,7 @@ private:
                 cruise_adjusting = true;  // Suspend pid loop control of gas
             }
         }
-        else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) {  // When joystick vert below center, decrease the throttle target proportional to how far off center
+        else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) {  // When joystick vert below center, decrease the speed target proportional to how far off center
             if (!cruise_speed_lowerable) updateMode(FLY);  // Then any trigger braking activity cancels cruise mode
             else if (cruise_trigger_released && ctrl_pos_adc[VERT][FILT] <= cruise_ctrl_extent_adc) {
                 if (cruise_fixed_throttle) {

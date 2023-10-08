@@ -104,7 +104,7 @@ bool starter_signal_support = true;
 bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool cruise_fixed_throttle = true;   // Cruise mode fixes the throttle angle rather than controlling for a target speed
 bool autostop_disabled = true;       // Temporary measure to keep brake behaving until we get it debugged. Eventually should be false
-bool timestamp_loop = false;         // Makes code write out timestamps throughout loop to serial port
+bool timestamp_loop = true;         // Makes code write out timestamps throughout loop to serial port
 uint32_t timestamp_loop_linefeed_threshold = 0;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
 bool screensaver = false;  // Can enable experiment with animated screen draws
 #define pwm_jaguars true
@@ -318,7 +318,8 @@ float brake_pulse_stop_us = 1500;       // Brake pulsewidth corresponding to cen
 float brake_pulse_retract_us = 2330;     // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
 float brake_pulse_retract_max_us = 2330; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
 float brake_pulse_out_us = brake_pulse_stop_us;               // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
-// float brake_motor_govern_percent = 80;   // Artificial limit on how fully the brake motor is powered. Ie what percent of 12V (the spec maximum) shall we consider full power?
+float brake_motor_govern_duty_percent = 25;  // From motor datasheet
+float brake_pulse_retract_effective_max_us;   // 
 
 // brake actuator position related
 BrakePositionSensor brkpos_sensor(brake_pos_pin);
@@ -522,13 +523,13 @@ void set_devboard_defaults() {
 Timer loopTimer(1000000); // how long the previous main loop took to run (in us)
 uint32_t loop_period_us;
 float looptime_sum_s;
-float looptime_avg_ms;
+uint32_t looptime_avg_ms;
 float loop_freq_hz = 1;              // run loop real time frequency (in Hz)
 volatile int32_t loop_int_count = 0; // counts interrupts per loop
 int32_t loopno = 1;
 uint32_t looptimes_us[20];
 bool loop_dirty[20];
-int32_t loopindex = 1;
+int32_t loopindex = 0;
 int64_t looptime_cout_mark_us;
 uint32_t looptime_cout_us;
 std::vector<std::string> loop_names(20);
@@ -536,20 +537,21 @@ std::vector<std::string> loop_names(20);
 void looptiming_init() {  // Run once at end of setup()
     if (timestamp_loop) {
         for (int32_t x=1; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
-        loop_names[0] = "top";
+        loop_names[0] = std::string("top");
         loop_dirty[0] = false;
+        loopindex = 1;
         looptimes_us[0] = esp_timer_get_time();
         loopTimer.reset();  // start timer to measure the first loop
     }
 }
-void loop_marktime(std::string loopname) {  // Add these throughout loop with short names
+void loop_marktime(std::string loopname = std::string("")) {  // Add these throughout loop with short names
     if (timestamp_loop) {
         if (loop_dirty[loopindex]) {
             loop_names[loopindex] = loopname;  // names[index], name);
             loop_dirty[loopindex] = false;
         }
-        loopindex++;
         looptimes_us[loopindex] = esp_timer_get_time();
+        loopindex++;
     }
 }
 void loop_print_timing() {  // Call once at very end of loop
@@ -560,11 +562,13 @@ void loop_print_timing() {  // Call once at very end of loop
         // loop_freq_hz = 1000000.0 / ((loop_period_us) ? loop_period_us : 1);  // Prevent potential divide by zero
         loopno++;  // I like to count how many loops
         looptime_sum_s += (float)loop_period_us / 1000000;
-        if (loopno) looptime_avg_ms = 1000 * looptime_sum_s / (float)loopno;
+        if (!loopno) looptime_avg_ms = loop_period_us / 1000;
+        else looptime_avg_ms += (loop_period_us - looptime_avg_ms * 1000) >> 16;  // Approx avg over previous 65 loops, without using memory or divides
         std::cout << std::fixed << std::setprecision(0);
-        std::cout << "\r" << std::setw(5) << looptime_sum_s << " av:" << std::setw(3) << looptime_avg_ms << " lp#" << loopno;
-        std::cout << " us:" << std::setw(5) << loop_period_us << " (" << std::setw(5) << loop_period_us-looptime_cout_us << ") ";  // << " avg:" << looptime_avg_us;  //  " us:" << esp_timer_get_time() << 
-        for (int32_t x=1; x<loopindex; x++) std::cout << std::setw(3) << loop_names[x] << x << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1] << " ";
+        std::cout << "\r" << (uint32_t)looptime_sum_s << " av:" << std::setw(3) << looptime_avg_ms << " lp# " << loopno;
+        std::cout << " us:" << std::setw(5) << loop_period_us << " ";  // << " avg:" << looptime_avg_us;  //  " us:" << esp_timer_get_time() << 
+        for (int32_t x=1; x<loopindex; x++)
+            std::cout << std::setw(3) << loop_names[x] << x << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1] << " ";
         std::cout << " cout:" << std::setw(5) << looptime_cout_us;
         if (loop_period_us-looptime_cout_us > timestamp_loop_linefeed_threshold || !timestamp_loop_linefeed_threshold) std::cout << std::endl;
         looptime_cout_us = (uint32_t)(esp_timer_get_time() - looptime_cout_mark_us);

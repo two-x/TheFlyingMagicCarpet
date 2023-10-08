@@ -174,8 +174,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 }
 
 void loop() {
-    // cout << "(top)) spd:" << speedo_filt_mph << " tach:" << tach_filt_rpm;
-
     // Update inputs.  Fresh sensor data, and filtering
 
     // ESP32 "boot" button. generates boot_button_action flags of LONG or SHORT presses which can be handled wherever. Handler must reset boot_button_action = NONE
@@ -198,6 +196,8 @@ void loop() {
         boot_button = false;  // Store press is not in effect
         boot_button_suppress_click = false;  // End click suppression
     }
+        loop_marktime("B");  //
+
     // External digital inputs
     if (!simulator.simulating(SimOption::basicsw)) {  // Basic Mode switch
         do {
@@ -210,26 +210,32 @@ void loop() {
             starter = digitalRead(starter_pin);
         } while (starter != digitalRead(starter_pin)); // starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
     }
-    // loop_marktime ("pre");
+    loop_marktime ("-");
 
     encoder.update();  // Read encoder input signals
+      loop_marktime("a");  //
     pot.update();
+      loop_marktime("b");  //  takes 400 us (??)
     brkpos_sensor.update();  // Brake position
-        
+      loop_marktime("c");  //  takes 100 us (?)
     tachometer.update();  // Tach
     throttle.push_tach_reading(tachometer.get_human(), tachometer.get_last_read_time());
 
-    airflow_sensor.update();  // Airflow sensor
-    map_sensor.update();  // MAP sensor
+    loop_marktime("-");  //
+    airflow_sensor.update();  // Airflow sensor  // takes 900 us (!)
+         loop_marktime("D");  //
+    map_sensor.update();  // MAP sensor  // takes 6800 us (!!)
+    loop_marktime("E");  //
     speedometer.update();  // Speedo
+    loop_marktime("F");  //
     pressure_sensor.update();  // Brake pressure
+    loop_marktime("G");  //
 
     // Read the car ignition signal, and while we're at it measure the vehicle battery voltage off ign signal
     battery_sensor.update();
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
     // printf("batt_pin: %d, batt_raw: %f, batt_human: %f, batt_filt: %f\n", analogRead(mulebatt_pin), battery_sensor.get_native(), battery_sensor.get_human(), battery_sensor.get_filtered_value());
 
-    // loop_marktime ("sns");  //
 
     // Controller handling
     if (ctrl == HOTRC) {
@@ -281,10 +287,10 @@ void loop() {
                 ctrl_pos_adc[axis][FILT] = ctrl_lims_adc[ctrl][axis][CENT];  // if joy axis is in the deadband, set joy_axis_filt to center value
         }
     }
-    loop_marktime ("inp");  //
+    loop_marktime ("hrc");  //
     
     runmode = runModeManager.handle_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
-    loop_marktime ("run");  //
+    //loop_marktime ("run");  //
 
     // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
 
@@ -317,7 +323,7 @@ void loop() {
         else if (runmode == CAL && cal_joyvert_brkmotor_mode) {
             if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])
                 brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], brake_stop_percent, brake_retract_percent);
-            else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) 
+            else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT])
                 brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], brake_extend_percent, brake_stop_percent);
             else brake_out_percent = (float)brake_stop_percent;
         }
@@ -328,21 +334,28 @@ void loop() {
                 brake_out_percent = map (brkpos_sensor.get_filtered_value(), BrakePositionSensor::park_in, BrakePositionSensor::nom_lim_extend_in, brake_stop_percent, brake_retract_percent);
         }
         else if (runmode == CAL || runmode == BASIC || runmode == SHUTDOWN) brake_out_percent = (float)brake_stop_percent;
-        else brakeQPID.Compute();  // Otherwise the pid control is active
-        
-        // Step 2 : Fix motor percent value if it's out of range or exceeding positional limits
+        else {  // First attenuate max power to avoid blowing out the motor like in bm2023, if retracting, as a proportion of position from zeropoint to fully retracted
+
+            // To-Do Finish this brake governing calculation
+            // brake_pulse_retract_effective_us = map(brkpos_sensor.get_filtered_value(), brkpos_sensor.get_zeropoint(), BrakePositionSensor::abs_min_retract_in, )) {    
+            // brake_motor_govern_duty_ratio = 0.25;  // 25% = Max motor duty cycle under load given by datasheet. Results in: 1500 + 0.25 * (2330 - 1500) = 1707.5 us max pulsewidth at position = minimum
+            brake_pulse_retract_effective_max_us = brake_pulse_stop_us + brake_motor_govern_duty_percent * (brake_pulse_retract_us - brake_pulse_stop_us);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
+
+            brakeQPID.Compute();  // Otherwise the pid control is active
+        }
+        // Step 3 : Fix motor percent value if it's out of range or exceeding positional limits
         if (runmode == CAL && cal_joyvert_brkmotor_mode)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
             brake_out_percent = constrain (brake_out_percent, brake_extend_min_percent, brake_retract_max_percent);  // Constrain to full potential range when calibrating. Caution don't break anything!
         else if ((brake_out_percent < brake_stop_percent && brkpos_sensor.get_filtered_value() > BrakePositionSensor::park_in - BrakePositionSensor::margin_in) || (brake_out_percent > brake_stop_percent && brkpos_sensor.get_filtered_value() < BrakePositionSensor::nom_lim_retract_in + BrakePositionSensor::margin_in))  // If brake is at position limits and we're tring to go further, stop the motor
             brake_out_percent = brake_stop_percent;
         else brake_out_percent = constrain (brake_out_percent, brake_extend_percent, brake_retract_percent);  // Send to the actuator. Refuse to exceed range
 
-        // Step 3 : Convert motor percent value to pulse width
+        // Step 4 : Convert motor percent value to pulse width
         if (brake_out_percent >= brake_stop_percent)
             brake_pulse_out_us = map (brake_out_percent, brake_stop_percent, brake_retract_percent, brake_pulse_stop_us, brake_pulse_retract_us);
         else brake_pulse_out_us = map (brake_out_percent, brake_stop_percent, brake_extend_percent, brake_pulse_stop_us, brake_pulse_extend_us);
 
-        // Step 4 : Write to motor
+        // Step 5 : Write to motor
         if (!(runmode == BASIC && !park_the_motors) && !(runmode == CAL && !cal_joyvert_brkmotor_mode) && !(runmode == SHUTDOWN && !shutdown_incomplete)) {
             #ifdef pwm_jaguars
                 brake_servo.writeMicroseconds ((int32_t)brake_pulse_out_us);  // Write result to jaguar servo interface
@@ -406,11 +419,11 @@ void loop() {
             loophack = loopno;  // Hack!  Just to hack around bug in neopixel for first idiot light. Ugh!
         }
     }
-    loop_marktime ("out");  //
+    //loop_marktime ("out");  //
 
     detect_errors();  // Look for screwy conditions and update warning idiot lights
 
-    loop_marktime ("err");  //
+    //loop_marktime ("err");  //
         
     ts.handleTouch(); // Handle touch events and actions
     // ts.printTouchInfo(); 
@@ -547,7 +560,7 @@ void loop() {
         }
         sim_edit_delta = 0;
     }
-    loop_marktime ("tun");  //
+    //loop_marktime ("tun");  //
     // Ignition & Panic stop logic and Update output signals
     if (!speedometer.car_stopped()) { // if we lose connection to the hotrc while driving, or the joystick ignition button was turned off, panic
         if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && hotrc_radio_lost) panic_stop = true;  // panic_stop could also have been initiated by the user button   && !hotrc_radio_lost_last 
@@ -578,7 +591,7 @@ void loop() {
         syspower = syspower_set(syspower);
         syspower_last = syspower;
     }
-    loop_marktime ("ext");  //
+    //loop_marktime ("ext");  //
     
     neo.heartbeat_update(((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]));  // Update our beating heart
     for (int32_t idiot = 0; idiot < arraysize(idiotlights); idiot++)
@@ -589,7 +602,7 @@ void loop() {
         }
     if ((loopno == loophack) || park_the_motors) neo.updateIdiot(0);  // For some reason the first neopixel idiot light starts up bright at boot. Weird.
     neo.refresh();
-    loop_marktime ("neo");
+    //loop_marktime ("neo");
 
     // Display updates
     if (display_enabled) {
