@@ -223,8 +223,11 @@ void loop() {
 
     loop_marktime("-");  //
     airflow_sensor.update();  // Airflow sensor  // takes 900 us (!)
-         loop_marktime("D");  //
+    loop_marktime("D");  //
     map_sensor.update();  // MAP sensor  // takes 6800 us (!!)
+    
+    maf_gps = get_massairflow();  // Recalculate intake mass airflow
+    
     loop_marktime("E");  //
     speedometer.update();  // Speedo
     loop_marktime("F");  //
@@ -367,7 +370,7 @@ void loop() {
     throttle.update();  // Allow idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
 
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
-    if (runmode == CRUISE && !cruise_adjusting && !cruise_fixed_throttle && cruisePidTimer.expireset()) {
+    if (runmode == CRUISE && !cruise_adjusting && (cruise_setpoint_mode == rpm_target) && cruisePidTimer.expireset()) {
         cruiseQPID.SetOutputLimits (throttle.get_idlespeed(), tach_govern_rpm);  // because cruise pid has internal variable for idlespeed which may need updating
         tach_target_rpm = throttle.get_target();
         cruiseQPID.Compute();
@@ -386,7 +389,7 @@ void loop() {
         }
         else if (runmode == CAL && cal_pot_gasservo_mode)
             gas_pulse_out_us = map (pot.get(), pot.min(), pot.max(), gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
-        else if (runmode == CRUISE && cruise_fixed_throttle)
+        else if (runmode == CRUISE && (cruise_setpoint_mode != rpm_target))
             gas_pulse_out_us = gas_pulse_cruise_us;
         else if (runmode != BASIC) {
             tach_target_rpm = throttle.get_target();
@@ -404,7 +407,7 @@ void loop() {
         // Step 3 : Write to servo
         if (!(runmode == BASIC && !park_the_motors) && !(runmode == CAL && !cal_pot_gasservo_mode) && !(runmode == SHUTDOWN && !shutdown_incomplete)) {
             if (reverse_gas_servo)
-                gas_servo.writeMicroseconds((int32_t)(1500 - (gas_pulse_out_us - 1500)));
+                gas_servo.writeMicroseconds((int32_t)(3000 - gas_pulse_out_us));
             else
                 gas_servo.writeMicroseconds ((int32_t)gas_pulse_out_us);  // Write result to servo
             // if (boot_button) printf (" Gas:%4ld\n", (int32_t)gas_pulse_out_us);
@@ -467,18 +470,18 @@ void loop() {
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == PG_RUN) {
             if (selected_value == 6) {
-                adj_val (&neobright, sim_edit_delta, 1, 100);
-                neo.setbright(neobright);
-            }
-            if (selected_value == 7) {
-                adj_val (&neodesat, sim_edit_delta, 0, 10);  // -10, 10);
-                neo.setdesaturation(neodesat);
-            }
-            else if (selected_value == 8) {
                 adj = adj_val (&gas_governor_percent, sim_edit_delta, 0, 100);
                 calc_governor();
             }
-            else if (selected_value == 9) adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
+            else if (selected_value == 7) adj_val (&steer_safe_percent, sim_edit_delta, 0, 100);
+            else if (selected_value == 8) {
+                adj_val (&neobright, sim_edit_delta, 1, 100);
+                neo.setbright(neobright);
+            }
+            else if (selected_value == 9) {
+                adj_val (&neodesat, sim_edit_delta, 0, 10);  // -10, 10);
+                neo.setdesaturation(neodesat);
+            }
             else if (selected_value == 10) adj_bool (&screensaver, sim_edit_delta);
         }
         else if (dataset_page == PG_JOY) {
@@ -536,7 +539,8 @@ void loop() {
             else if (selected_value == 10) gasQPID.SetKd (gasQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }
         else if (dataset_page == PG_CPID) {
-            if (selected_value == 8) cruiseQPID.SetKp (cruiseQPID.GetKp() + 0.001 * (float)sim_edit_delta);
+            if (selected_value == 7) adj_val(&cruise_adjust_delta_max_us_per_s, sim_edit_delta, 1, 1000);
+            else if (selected_value == 8) cruiseQPID.SetKp (cruiseQPID.GetKp() + 0.001 * (float)sim_edit_delta);
             else if (selected_value == 9) cruiseQPID.SetKi (cruiseQPID.GetKi() + 0.001 * (float)sim_edit_delta);
             else if (selected_value == 10) cruiseQPID.SetKd (cruiseQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }

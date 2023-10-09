@@ -1,9 +1,9 @@
 #pragma once
-#ifdef CAP_TOUCH
-    #include <Adafruit_FT6206.h>  // For interfacing with the capacitive touchscreen controller chip
-#else
-    #include <XPT2046_Touchscreen.h>
-#endif
+// #ifdef CAP_TOUCH
+//     #include <Adafruit_FT6206.h>  // For interfacing with the capacitive touchscreen controller chip
+// #else
+#include <XPT2046_Touchscreen.h>
+// #endif
 
 class TouchScreen {
 private:

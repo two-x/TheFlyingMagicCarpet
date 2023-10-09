@@ -89,6 +89,7 @@ uint16_t color_uint32_to_16b(uint32_t color32b) {  // Convert uint32 color in fo
 uint32_t hsv_to_rgb(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool bright_flat = 1, uint8_t blu_boost = 0) {  // returns uint32 color in format 0x00RRGGBB
     uint32_t rgb[3] = { 255 - 3 * (uint32_t)((255 - hue) % 85), 0, 3 * (uint32_t)((255 - hue) % 85) };
     float maxc = (float)((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]);
+    if (!(int32_t)maxc) return 0;  // prevent divides by zero coming up
     if (hue <= 85) { rgb[1] = rgb[0]; rgb[0] = rgb[2]; rgb[2] = 0; }
     else if (hue <= 170) { rgb[1] = rgb[2]; rgb[2] = rgb[0]; rgb[0] = 0; }
     float brightener = (float)bright / (bright_flat ? 255.0 : maxc);
@@ -113,6 +114,7 @@ char idlestatecard[ThrottleControl::targetstates::num_states][7] = { "todriv", "
 #define BRIGHTNESS "NeoBr\x8dte"
 #define STER "St\x88r"
 #define BRAK "Br\x83k"
+#define MAXADJRATE "MaxAjR\x83t"
 #define SPED "Sp\x88""d"
 
 char telemetry[disp_fixed_lines][9] = { "CtrlVert", "   Speed", "    Tach", "ThrotPWM", BRAK"Pres", BRAK"Motr", "CtrlHorz", STER"Motr", };  // Fixed rows
@@ -120,29 +122,29 @@ char units[disp_fixed_lines][5] = { "adc ", "mph ", "rpm ", "us  ", "psi ", "%  
 
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, num_datapages };
 char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim " };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 6, 4, 5, 3, 4, 8, 7, 8, 8, 0 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 6, 4, 5, 3, 4, 8, 7, 7, 8, 0 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
-    { BRAK"Posn", " Airflow", "     MAP", "MuleBatt", "     Pot", "      - ", BRIGHTNESS, "NeoDesat", "Governor", STER"Safe", "ScrnSavr", },  // PG_RUN
+    { BRAK"Posn", "MuleBatt", "     Pot", " Airflow", "     MAP", "MasAirFl", "Governor", STER"Safe", BRIGHTNESS, "NeoDesat", "ScrnSavr", },  // PG_RUN
     { "HRC Horz", "HRC Vert", "      - ", "      - ", "HFailsaf", "Horz Min", "Horz Max", "HorzDBnd", "Vert Min", "Vert Max", "VertDBnd", },  // PG_JOY
     { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", SPED"Idle", SPED"RedL", "BkPos0Pt", },  // PG_CAR
     { "BrakePWM", "SteerPWM", "      - ", STER"Left", STER"Stop", STER"Rght", BRAK"Extd", BRAK"Stop", BRAK"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
     { "PresTarg", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", BRAK"Motr", BRAK"Pres", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
     { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", "      - ", "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
-    { SPED"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "TachTarg", "ThrotSet", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
+    { SPED"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", MAXADJRATE, "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", "      - ", "      - ", "SimW/Pot", "CalBrake", " Cal Gas", },  // PG_TEMP
     { "Joy Axes", BRAK"Pres", BRAK"Posn", "  Speedo", "    Tach", " Airflow", "     MAP", "Ignition", " Starter", "Basic Sw", "SysPower", },  // PG_SIM
 };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
-    { "in  ", "mph ", "psi ", "V   ", "%   ", "    ", "%   ", "/10 ", "%   ", "%   ", BINARY },  // PG_RUN
+    { "in  ", "V   ", "%   ", "mph ", "psi ", "g/s ", "%   ", "%   ", "%   ", "/10 ", BINARY },  // PG_RUN
     { "us  ", "us  ", "    ", "    ", "us  ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
     { "adc ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%   ", "mph ", "mph ", "mph ", "in  " },  // PG_CAR
     { "us  ", "us  ", "    ", "    ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PG_PWMS
     { CHOICE, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", DEGR_F, DEGR_F, "rpms", CHOICE },  // PG_IDLE
     { "psi ", "psi ", "%   ", "%   ", "%   ", "%   ", "us  ", "adc ", "    ", "Hz  ", "s   " },  // PG_BPID
     { "rpm ", "rpm ", "us  ", "us  ", "us  ", "us  ", "    ", BINARY, "    ", "Hz  ", "s   " },  // PG_GPID
-    { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "us  ", "    ", "Hz  ", "s   " },  // PG_CPID
+    { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "us  ", "u/s ", "    ", "Hz  ", "s   " },  // PG_CPID
     { DEGR_F, DEGR_F, DEGR_F, DEGR_F, DEGR_F, DEGR_F, "    ", "    ", CHOICE, BINARY, BINARY },  // PG_TEMP
     { BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY },  // PG_SIM
 };
@@ -721,15 +723,15 @@ class Display {
                 draw_dynamic(8, steer_out_percent, steer_left_percent, steer_right_percent);
                 if (dataset_page == PG_RUN) {
                     draw_dynamic(9, brkpos_sensor.get_filtered_value(), BrakePositionSensor::abs_min_retract_in, BrakePositionSensor::abs_max_extend_in);
-                    draw_dynamic(10, airflow_sensor.get_filtered_value(), airflow_sensor.get_min_mph(), airflow_sensor.get_max_mph());
-                    draw_dynamic(11, map_sensor.get_filtered_value(), map_sensor.get_min_psi(), map_sensor.get_max_psi());
-                    draw_dynamic(12, battery_sensor.get_filtered_value(), battery_sensor.get_min_v(), battery_sensor.get_max_v());
-                    draw_dynamic(13, pot.get(), pot.min(), pot.max());
-                    draw_eraseval(14);
-                    draw_dynamic(15, neobright, 1.0, 100.0, -1, 3);
-                    draw_dynamic(16, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
-                    draw_dynamic(17, gas_governor_percent, 0.0, 100.0);
-                    draw_dynamic(18, steer_safe_percent, 0.0, 100.0);
+                    draw_dynamic(10, battery_sensor.get_filtered_value(), battery_sensor.get_min_v(), battery_sensor.get_max_v());
+                    draw_dynamic(11, pot.get(), pot.min(), pot.max());
+                    draw_dynamic(12, airflow_sensor.get_filtered_value(), airflow_sensor.get_min_mph(), airflow_sensor.get_max_mph());
+                    draw_dynamic(13, map_sensor.get_filtered_value(), map_sensor.get_min_psi(), map_sensor.get_max_psi());
+                    draw_dynamic(14, maf_gps, maf_min_gps, maf_max_gps);
+                    draw_dynamic(15, gas_governor_percent, 0.0, 100.0);
+                    draw_dynamic(16, steer_safe_percent, 0.0, 100.0);
+                    draw_dynamic(17, neobright, 1.0, 100.0, -1, 3);
+                    draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
                     draw_truth(19, screensaver, 0);
                 }
                 else if (dataset_page == PG_JOY) {
@@ -820,8 +822,9 @@ class Display {
                     draw_dynamic(12, cruiseQPID.GetIterm(), -drange, drange);
                     draw_dynamic(13, cruiseQPID.GetDterm(), -drange, drange);
                     draw_dynamic(14, cruiseQPID.GetOutputSum(), -cruiseQPID.GetOutputRange(), cruiseQPID.GetOutputRange());  // cruise_spid_speedo_delta_adc, -drange, drange);
-                    draw_dynamic(15, tach_target_rpm, 0.0, tachometer.get_redline_rpm());
-                    draw_dynamic(16, gas_pulse_cruise_us, gas_pulse_cw_open_us, gas_pulse_ccw_closed_us);
+                    // draw_dynamic(15, tach_target_rpm, 0.0, tachometer.get_redline_rpm());
+                    draw_dynamic(15, gas_pulse_cruise_us, gas_pulse_cw_open_us, gas_pulse_ccw_closed_us);
+                    draw_dynamic(16, cruise_adjust_delta_max_us_per_s, 1, 1000);
                     draw_dynamic(17, cruiseQPID.GetKp(), 0.0, 10.0);
                     draw_dynamic(18, cruiseQPID.GetKi(), 0.0, 10.0);
                     draw_dynamic(19, cruiseQPID.GetKd(), 0.0, 10.0);

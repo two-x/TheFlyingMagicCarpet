@@ -447,9 +447,8 @@ class AirflowSensor : public I2CSensor {
         // NOTE: would all AirflowSensors have the same address? how does this get determined?
         static constexpr uint8_t _i2c_address = 0x28;
         static constexpr float _min_mph = 0.0;
-        static constexpr float _abs_max_mph = 33.55; // What diameter intake hose will reduce airspeed to abs max?  2.7 times the xsectional area. Current area is 6.38 cm2. New diameter = 4.68 cm (min). So, need to adapt to 2.5in + tube
-        static constexpr float _initial_max_mph = 18.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)
-            // = 44.6 * r^2  //  @ r = 2in = 5.08 cm :  7.12 mph  // @ r = 1.25in = 3.175 cm : 18.25 mph
+        static constexpr float _abs_max_mph = 33.55; // Sensor maximum mph reading.  Our sensor mounted in 2-in ID intake tube
+        static constexpr float _initial_max_mph = 28.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
         static constexpr float _initial_airflow_mph = 0.0;
         static constexpr float _initial_ema_alpha = 0.2;
         FS3000 _sensor;

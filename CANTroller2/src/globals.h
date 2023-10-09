@@ -94,6 +94,7 @@ bool flip_the_screen = true;
 #define touch_irq_pin 255 // Input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - Set to 255 if not used
 #define tft_rst_pin -1    // TFT Reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
 // Globals -------------------
+enum cruise_modes { rpm_target, throttle_setpoint, throttle_delta };
 bool serial_debugging = true;
 bool take_temperatures = true;
 bool keep_system_powered = false;    // Use true during development
@@ -102,7 +103,7 @@ bool share_boot_button = false;      // Set true if joystick cruise button is in
 bool remote_start_support = false;
 bool starter_signal_support = true;
 bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
-bool cruise_fixed_throttle = true;   // Cruise mode fixes the throttle angle rather than controlling for a target speed
+int8_t cruise_setpoint_mode = throttle_delta;   // Cruise mode fixes the throttle angle rather than controlling for a target speed
 bool autostop_disabled = true;       // Temporary measure to keep brake behaving until we get it debugged. Eventually should be false
 bool timestamp_loop = true;         // Makes code write out timestamps throughout loop to serial port
 uint32_t timestamp_loop_linefeed_threshold = 0;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
@@ -148,11 +149,13 @@ bool remote_starting = false;
 bool remote_starting_last = false;
 bool remote_start_toggle_request = false;
 float cruise_ctrl_extent_adc;       // During cruise adjustments, saves farthest trigger position read
-float cruise_adjust_scaling_percent = 40;  // What ratio of full throttle range is the max available with each adjustment event?
+// float cruise_adjust_scaling_percent = 40;  // What ratio of full throttle range is the max available with each adjustment event?
 bool cruise_trigger_released = false;
 bool cruise_gesturing = false;          // Is cruise mode enabled by gesturing?  Otherwise by press of cruise button
 bool cruise_sw_held = false;
 bool cruise_adjusting = false;
+int32_t cruise_adjust_delta_max_us_per_s = 200;  // What's the fastest rate cruise adjustment can change pulse width (in us per second)
+Timer cruiseDeltaTimer;
 bool flycruise_toggle_request = false;
 int32_t flycruise_vert_margin_adc = 25; // Margin of error for determining hard brake value for dropping out of cruise mode
 Timer gestureFlyTimer; // Used to keep track of time for gesturing for going in and out of fly/cruise modes
@@ -689,3 +692,19 @@ void detect_errors() {
         // * The control system has nonsensical values in its variables.
     }
 }
+float degF_to_K(float degF) {
+    return 0.556 * (degF - 32) + 273.15;
+}
+// Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
+float get_massairflow(float map = NAN, float airflow = NAN, float ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
+    TemperatureSensor* sensor = temperature_sensor_manager.get_sensor(sensor_location::ambient);
+    float T = degF_to_K((ambient == NAN) ? sensor->get_temperature() : ambient);  // in K
+    float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
+    float v = 0.447 * (airflow == NAN) ? airflow_sensor.get_filtered_value() : airflow; // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
+    float A = 0.0020268;  // in m2    1.0 in2 * pi * 0.00064516 m2/in2
+    float P = 6894.76 * (map == NAN) ? map_sensor.get_filtered_value() : map;  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
+    return 1000.0 * v * A * P / (R * T);  // in g/s   (g/kg * m/s * m2 * J/m3) / (J/(kg*K) * K) = g/s
+}
+float maf_gps;  // Mass airflow in grams per second
+float maf_min_gps = 0.0;
+float maf_max_gps = get_massairflow(map_sensor.get_max_psi(), airflow_sensor.get_max_mph(), temp_lims_f[AMBIENT][MIN]);

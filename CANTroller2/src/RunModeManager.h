@@ -195,33 +195,47 @@ private:
             if (ctrl == HOTRC) flycruise_toggle_request = false;
         }
         if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) {  // When joystick vert above center, increase the throttle setpoint proportional to how far off center
-            if (cruise_trigger_released && ctrl_pos_adc[VERT][FILT] >= cruise_ctrl_extent_adc) {
-                if (cruise_fixed_throttle) {
+            if (cruise_trigger_released && cruise_setpoint_mode == throttle_delta) {
+                if (cruise_adjusting) {
+                    float ctrlratio = (float)(ctrl_pos_adc[VERT][FILT] - ctrl_db_adc[VERT][TOP]) / (float)(ctrl_lims_adc[ctrl][VERT][MAX] - ctrl_db_adc[VERT][TOP]);
+                    gas_pulse_cruise_us = constrain(gas_pulse_cruise_us + ctrlratio * cruise_adjust_delta_max_us_per_s * cruiseDeltaTimer.elapsed() / 1000000.0, gas_pulse_cw_open_us, gas_pulse_ccw_closed_us);
+                }
+                cruiseDeltaTimer.reset(); 
+            }
+            else if (cruise_trigger_released && ctrl_pos_adc[VERT][FILT] >= cruise_ctrl_extent_adc) {
+                if (cruise_setpoint_mode == throttle_setpoint) {
                     if (!cruise_adjusting) gas_pulse_adjustpoint_us = gas_pulse_cruise_us;  // When beginning adjustment, save current throttle pulse value to use as adjustment endpoint
                     gas_pulse_cruise_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_adjustpoint_us, gas_pulse_govern_us);
                 }
-                else {
+                else if (cruise_setpoint_mode == rpm_target) {
                     if (!cruise_adjusting) tach_adjustpoint_rpm = tachometer.get_filtered_value();
                     throttle.set_target (map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], tach_adjustpoint_rpm, tach_govern_rpm));
                 }
                 cruise_ctrl_extent_adc = (float)ctrl_pos_adc[VERT][FILT];
-                cruise_adjusting = true;  // Suspend pid loop control of gas
             }
+            if (cruise_trigger_released) cruise_adjusting = true;
         }
         else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) {  // When joystick vert below center, decrease the speed target proportional to how far off center
             if (!cruise_speed_lowerable) updateMode(FLY);  // Then any trigger braking activity cancels cruise mode
+            else if (cruise_trigger_released && cruise_setpoint_mode == throttle_delta) {
+                if (cruise_adjusting) {
+                    float ctrlratio = (float)(ctrl_db_adc[VERT][BOT] - ctrl_pos_adc[VERT][FILT]) / (float)(ctrl_db_adc[VERT][BOT] - ctrl_lims_adc[ctrl][VERT][MIN]);
+                    gas_pulse_cruise_us = constrain(gas_pulse_cruise_us - ctrlratio * cruise_adjust_delta_max_us_per_s * cruiseDeltaTimer.elapsed() / 1000000.0, gas_pulse_cw_open_us, gas_pulse_ccw_closed_us);
+                }
+                cruiseDeltaTimer.reset(); 
+            }
             else if (cruise_trigger_released && ctrl_pos_adc[VERT][FILT] <= cruise_ctrl_extent_adc) {
-                if (cruise_fixed_throttle) {
+                if (cruise_setpoint_mode == throttle_setpoint) {
                     if (!cruise_adjusting) gas_pulse_adjustpoint_us = gas_pulse_cruise_us;  // When beginning adjustment, save current throttle pulse value to use as adjustment low endpoint
                     gas_pulse_cruise_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], gas_pulse_adjustpoint_us, gas_pulse_ccw_closed_us);
                 }
-                else {
+                else if (cruise_setpoint_mode == rpm_target) {
                     if (!cruise_adjusting) tach_adjustpoint_rpm = tachometer.get_filtered_value();
                     throttle.set_target (map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], tach_adjustpoint_rpm, throttle.get_idlespeed()));
                 }
                 cruise_ctrl_extent_adc = (float)ctrl_pos_adc[VERT][FILT];
-                cruise_adjusting = true;  // Suspend pid loop control of gas
             }
+            if (cruise_trigger_released) cruise_adjusting = true;
         }
         else {  // If ctrl vert at center
             cruise_trigger_released = true;
