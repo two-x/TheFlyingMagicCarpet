@@ -261,8 +261,8 @@ void loop() {
         for (int32_t axis=HORZ; axis<=VERT; axis++) {
             if (ctrl == HOTRC) {
                 if (hotrc_pulse_us[axis] >= hotrc_pulse_lims_us[axis][CENT])  // Steering: Convert from pulse us to joystick adc equivalent, when pushing right, else pushing left
-                    hotrc[axis][RAW] = map ((float)hotrc_pulse_us[axis], (float)hotrc_pulse_lims_us[axis][CENT], (float)hotrc_pulse_lims_us[axis][MAX], hotrc[axis][CENT], hotrc[axis][MAX]);
-                else hotrc[axis][RAW] = map ((float)hotrc_pulse_us[axis], (float)hotrc_pulse_lims_us[axis][CENT], (float)hotrc_pulse_lims_us[axis][MIN], hotrc[axis][CENT], hotrc[axis][MIN]);
+                    hotrc[axis][RAW] = map ((float)hotrc_pulse_us[axis], (float)hotrc_pulse_lims_us[axis][CENT], (float)hotrc_pulse_lims_us[axis][MAX], hotrc[axis][CENT], hotrc[axis][MIN]);
+                else hotrc[axis][RAW] = map ((float)hotrc_pulse_us[axis], (float)hotrc_pulse_lims_us[axis][CENT], (float)hotrc_pulse_lims_us[axis][MIN], hotrc[axis][CENT], hotrc[axis][MAX]);
             }
             if (ctrl == HOTRC && hotrc_radio_lost)
                 hotrc[axis][FILT] = hotrc[axis][CENT];  // if radio lost set joy_axis_filt to center value

@@ -239,10 +239,10 @@ enum ctrl_axes { HORZ, VERT, CH3, CH4 };
 enum ctrl_vals { RAW, FILT, MIN, DBBOT, CENT, DBTOP, MAX, MARGIN };
 float hotrc_ema_alpha = 0.1;         // [HOTRC/OTHER] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
 float hotrc[4][8] =               //   values in percent
-    { { 0.0, 0.0, -100.0, -3.0, 0.0, 3.0, 100.0, 2.5 },    // [HORZ][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]  // MARGIN is how much out of range the reading must be for axis to be completely ignored
-      { 0.0, 0.0, -100.0, -3.0, 0.0, 3.0, 100.0, 2.5 },    // [VERT][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]
-      { 0.0, 0.0, -100.0, -3.0, 0.0, 3.0, 100.0, 2.5 },    // [CH3][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]
-      { 0.0, 0.0, -100.0, -3.0, 0.0, 3.0, 100.0, 2.5 }, }; // [CH4][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]
+    { { 0.0, 0.0, -100.0, -4.0, 0.0, 4.0, 100.0, 2.5 },    // [HORZ][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]  // MARGIN is how much out of range the reading must be for axis to be completely ignored
+      { 0.0, 0.0, -100.0, -4.0, 0.0, 4.0, 100.0, 2.5 },    // [VERT][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]
+      { 0.0, 0.0, -100.0, -9.0, 0.0, 9.0, 100.0, 2.5 },    // [CH3][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]
+      { 0.0, 0.0, -100.0, -9.0, 0.0, 9.0, 100.0, 2.5 }, }; // [CH4][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]
 bool ctrl = HOTRC;                             // Use HotRC controller to drive instead of joystick?
 int32_t hotrc_pulse_lims_us[4][3] = {{970 - 1, 1470 - 5, 1970 - 8},   // [HORZ] [MIN/CENT/MAX]
                                      {1080 - 1, 1580 - 5, 2080 - 8},  // [VERT] [MIN/CENT/MAX]
