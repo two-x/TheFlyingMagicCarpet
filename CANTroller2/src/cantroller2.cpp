@@ -196,8 +196,6 @@ void loop() {
         boot_button = false;  // Store press is not in effect
         boot_button_suppress_click = false;  // End click suppression
     }
-        loop_marktime("B");  //
-
     // External digital inputs
     if (!simulator.simulating(SimOption::basicsw)) {  // Basic Mode switch
         do {
@@ -210,35 +208,21 @@ void loop() {
             starter = digitalRead(starter_pin);
         } while (starter != digitalRead(starter_pin)); // starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
     }
-    loop_marktime ("-");
-
     encoder.update();  // Read encoder input signals
-      loop_marktime("a");  //
     pot.update();
-      loop_marktime("b");  //  takes 400 us (??)
     brkpos_sensor.update();  // Brake position
-      loop_marktime("c");  //  takes 100 us (?)
     tachometer.update();  // Tach
     throttle.push_tach_reading(tachometer.get_human(), tachometer.get_last_read_time());
-
-    loop_marktime("-");  //
     airflow_sensor.update();  // Airflow sensor  // takes 900 us (!)
-    loop_marktime("D");  //
     map_sensor.update();  // MAP sensor  // takes 6800 us (!!)
-    
     maf_gps = get_massairflow();  // Recalculate intake mass airflow
-    
-    loop_marktime("E");  //
     speedometer.update();  // Speedo
-    loop_marktime("F");  //
     pressure_sensor.update();  // Brake pressure
-    loop_marktime("G");  //
 
     // Read the car ignition signal, and while we're at it measure the vehicle battery voltage off ign signal
     battery_sensor.update();
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
     // printf("batt_pin: %d, batt_raw: %f, batt_human: %f, batt_filt: %f\n", analogRead(mulebatt_pin), battery_sensor.get_native(), battery_sensor.get_human(), battery_sensor.get_filtered_value());
-
 
     // Controller handling
     if (ctrl == HOTRC) {
@@ -290,10 +274,8 @@ void loop() {
                 ctrl_pos_adc[axis][FILT] = ctrl_lims_adc[ctrl][axis][CENT];  // if joy axis is in the deadband, set joy_axis_filt to center value
         }
     }
-    loop_marktime ("hrc");  //
     
     runmode = runModeManager.handle_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
-    //loop_marktime ("run");  //
 
     // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
 
@@ -422,19 +404,14 @@ void loop() {
             loophack = loopno;  // Hack!  Just to hack around bug in neopixel for first idiot light. Ugh!
         }
     }
-    //loop_marktime ("out");  //
 
     detect_errors();  // Look for screwy conditions and update warning idiot lights
-
-    //loop_marktime ("err");  //
         
     ts.handleTouch(); // Handle touch events and actions
     // ts.printTouchInfo(); 
     // This doesn't work for some reason, and causes Wire.cpp i2c errors:
     // if (ts.touched() && !simulator.get_enabled()) screen.sprite_touch(ts.getX(), ts.getY());
     
-    // loop_marktime ("tch");  //
-
     // Encoder handling
     uint32_t encoder_sw_action = encoder.handleSwitchAction();
     if (encoder_sw_action != Encoder::NONE) {  // First deal with any unhandled switch press events
@@ -564,7 +541,6 @@ void loop() {
         }
         sim_edit_delta = 0;
     }
-    //loop_marktime ("tun");  //
     // Ignition & Panic stop logic and Update output signals
     if (!speedometer.car_stopped()) { // if we lose connection to the hotrc while driving, or the joystick ignition button was turned off, panic
         if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && hotrc_radio_lost) panic_stop = true;  // panic_stop could also have been initiated by the user button   && !hotrc_radio_lost_last 
@@ -595,7 +571,6 @@ void loop() {
         syspower = syspower_set(syspower);
         syspower_last = syspower;
     }
-    //loop_marktime ("ext");  //
     
     neo.heartbeat_update(((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]));  // Update our beating heart
     for (int32_t idiot = 0; idiot < arraysize(idiotlights); idiot++)
@@ -606,7 +581,7 @@ void loop() {
         }
     if ((loopno == loophack) || park_the_motors) neo.updateIdiot(0);  // For some reason the first neopixel idiot light starts up bright at boot. Weird.
     neo.refresh();
-    //loop_marktime ("neo");
+    loop_marktime ("-");
 
     // Display updates
     if (display_enabled) {

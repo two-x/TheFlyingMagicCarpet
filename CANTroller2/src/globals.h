@@ -105,7 +105,7 @@ bool starter_signal_support = true;
 bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 int8_t cruise_setpoint_mode = throttle_delta;   // Cruise mode fixes the throttle angle rather than controlling for a target speed
 bool autostop_disabled = true;       // Temporary measure to keep brake behaving until we get it debugged. Eventually should be false
-bool timestamp_loop = true;         // Makes code write out timestamps throughout loop to serial port
+bool timestamp_loop = false;         // Makes code write out timestamps throughout loop to serial port
 uint32_t timestamp_loop_linefeed_threshold = 0;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
 bool screensaver = false;  // Can enable experiment with animated screen draws
 #define pwm_jaguars true
@@ -568,10 +568,10 @@ void loop_print_timing() {  // Call once at very end of loop
         if (!loopno) looptime_avg_ms = loop_period_us / 1000;
         else looptime_avg_ms += (loop_period_us - looptime_avg_ms * 1000) >> 16;  // Approx avg over previous 65 loops, without using memory or divides
         std::cout << std::fixed << std::setprecision(0);
-        std::cout << "\r" << (uint32_t)looptime_sum_s << " av:" << std::setw(3) << looptime_avg_ms << " lp# " << loopno;
-        std::cout << " us:" << std::setw(5) << loop_period_us << " ";  // << " avg:" << looptime_avg_us;  //  " us:" << esp_timer_get_time() << 
+        std::cout << "\r" << (uint32_t)looptime_sum_s << "s #" << loopno;  //  << " av:" << std::setw(3) << looptime_avg_ms 
+        std::cout << " : " << std::setw(5) << loop_period_us << " (" << loop_period_us-looptime_cout_us << ")us ";  // << " avg:" << looptime_avg_us;  //  " us:" << esp_timer_get_time() << 
         for (int32_t x=1; x<loopindex; x++)
-            std::cout << std::setw(3) << loop_names[x] << x << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1] << " ";
+            std::cout << std::setw(3) << loop_names[x] << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1] << " ";
         std::cout << " cout:" << std::setw(5) << looptime_cout_us;
         if (loop_period_us-looptime_cout_us > timestamp_loop_linefeed_threshold || !timestamp_loop_linefeed_threshold) std::cout << std::endl;
         looptime_cout_us = (uint32_t)(esp_timer_get_time() - looptime_cout_mark_us);
@@ -696,6 +696,7 @@ float degF_to_K(float degF) {
     return 0.556 * (degF - 32) + 273.15;
 }
 // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
+
 float get_massairflow(float map = NAN, float airflow = NAN, float ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
     TemperatureSensor* sensor = temperature_sensor_manager.get_sensor(sensor_location::ambient);
     float T = degF_to_K((ambient == NAN) ? sensor->get_temperature() : ambient);  // in K
@@ -708,3 +709,21 @@ float get_massairflow(float map = NAN, float airflow = NAN, float ambient = NAN)
 float maf_gps;  // Mass airflow in grams per second
 float maf_min_gps = 0.0;
 float maf_max_gps = get_massairflow(map_sensor.get_max_psi(), airflow_sensor.get_max_mph(), temp_lims_f[AMBIENT][MIN]);
+
+// // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
+// float calc_maf(float map_psi, float airflow_mph, float ambient_f) {
+//     float T = degF_to_K(ambient_f);  // in K
+//     float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
+//     float v = 0.447 * airflow_mph;  // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
+//     float A = 0.0020268;  // in m2    1.0 in2 * pi * 0.00064516 m2/in2
+//     float P = 6894.76 * map_psi;  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
+//     return 1000.0 * v * A * P / (R * T);  // in g/s   (g/kg * m/s * m2 * J/m3) / (J/(kg*K) * K) = g/s
+
+// }
+// float get_massairflow() {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
+//     TemperatureSensor* sensor = temperature_sensor_manager.get_sensor(sensor_location::ambient);
+//     return calc_maf(map_sensor.get_filtered_value(), airflow_sensor.get_filtered_value(), sensor->get_temperature());
+// }
+// float maf_gps;  // Mass airflow in grams per second
+// float maf_min_gps = 0.0;
+// float maf_max_gps = calc_maf(map_sensor.get_max_psi(), airflow_sensor.get_max_mph(), temp_lims_f[AMBIENT][MIN]);
