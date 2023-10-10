@@ -1,9 +1,8 @@
-// Soren: Modified to prevent blocking. Below are library .h file and .c file with additional timer and logic
+// Soren: Stole and modified this library to prevent it from blocking for 6 ms
+// SparkFun_MicroPressure library by Alex Wende July 2020 (Beerware license)
 // This is a library for the Qwiic MicroPressure Sensor, which can read from 0 to 25 PSI.
-// By: Alex Wende July 2020 (Beerware license).
 #pragma once
 #include <Wire.h>   // for i2c bus support
-#include "utils.h"  // for Timer class
 #define DEFAULT_ADDRESS 0x18
 #define MAXIMUM_PSI     25
 #define MINIMUM_PSI     0
@@ -13,7 +12,6 @@
 #define OUTPUT_MAX      0xE66666
 #define OUTPUT_MIN      0x19999A
 enum Pressure_Units {PSI, Pa, kPa, torr, inHg, atm, bar};
-enum read_phases {idle, requesting, reading};
 
 class SparkFun_MicroPressure {
   public:
@@ -22,10 +20,10 @@ class SparkFun_MicroPressure {
     uint8_t readStatus(void);
     float readPressure(Pressure_Units units=PSI);
   private:
-    bool value_ready = false;
+    bool idle;
     float pressure = NAN;
     int8_t _address, _eoc, _rst;
-    uint8_t _minPsi, _maxPsi, readphase, status;
+    uint8_t _minPsi, _maxPsi, status;
     TwoWire *_i2cPort;
 };
 // Constructor and sets default values.
@@ -54,7 +52,7 @@ bool SparkFun_MicroPressure::begin(uint8_t deviceAddress, TwoWire &wirePort) {
         digitalWrite(_rst,HIGH);
         delay(5);
     }
-    readphase = idle;
+    idle = true;
     _i2cPort->beginTransmission(_address);
     return !(_i2cPort->endTransmission());
 }
@@ -65,43 +63,37 @@ uint8_t SparkFun_MicroPressure::readStatus(void) {
 }
 // Read the Pressure Sensor Reading - (optional) Pressure_Units, can return various pressure units. Default: PSI
 float SparkFun_MicroPressure::readPressure(Pressure_Units units) {
-    if (readphase == idle) {
+    if (idle) {
         _i2cPort->beginTransmission(_address);
         _i2cPort->write((uint8_t)0xAA);
         _i2cPort->write((uint8_t)0x00);
         _i2cPort->write((uint8_t)0x00);
         _i2cPort->endTransmission();
-        // if(_eoc != -1) while(!digitalRead(_eoc)) delay(1);  // Wait for new pressure reading available // Use GPIO pin if defined
-        // else { // Check status byte if GPIO is not defined
-        readphase = requesting;
     }
-    if (readphase == requesting) {
+    idle = false;
+    if(_eoc == -1) {  // Check status byte if GPIO is not defined
         status = readStatus();
-        if (status&BUSY_FLAG && (status!=0xFF)) {
-            readphase = requesting;
-            return pressure;
-        }
-        readphase = reading;
+        if (status&BUSY_FLAG && (status!=0xFF)) return pressure;  
     }
+    else if (!digitalRead(_eoc)) return pressure;  // Wait for new pressure reading available (eoc = high) // Use GPIO pin if defined
+    idle = true;
     _i2cPort->requestFrom(_address,4);
-    uint8_t status = _i2cPort->read();
-    if((status & INTEGRITY_FLAG) || (status & MATH_SAT_FLAG)) {
-        readphase = idle;
-        return NAN;
-    } //  check memory integrity and math saturation bit
-    uint32_t reading = 0;
-    for(uint8_t i=0;i<3;i++) {  //  read 24-bit pressure
-        reading |= _i2cPort->read();
-        if(i != 2) reading = reading<<8;
+    status = _i2cPort->read();
+    if((status & INTEGRITY_FLAG) || (status & MATH_SAT_FLAG)) pressure = NAN; //  check memory integrity and math saturation bit
+    else {
+        uint32_t reading = 0;
+        for(uint8_t i=0;i<3;i++) {  //  read 24-bit pressure
+            reading |= _i2cPort->read();
+            if(i != 2) reading = reading<<8;
+        }
+        pressure = (reading - OUTPUT_MIN) * (_maxPsi - _minPsi);
+        pressure = (pressure / (OUTPUT_MAX - OUTPUT_MIN)) + _minPsi;
+        if(units == Pa)        pressure *= 6894.7573; //Pa (Pascal)
+        else if(units == kPa)  pressure *= 6.89476;   //kPa (kilopascal)
+        else if(units == torr) pressure *= 51.7149;   //torr (mmHg)
+        else if(units == inHg) pressure *= 2.03602;   //inHg (inch of mercury)
+        else if(units == atm)  pressure *= 0.06805;   //atm (atmosphere)
+        else if(units == bar)  pressure *= 0.06895;   //bar
     }
-    pressure = (reading - OUTPUT_MIN) * (_maxPsi - _minPsi);
-    pressure = (pressure / (OUTPUT_MAX - OUTPUT_MIN)) + _minPsi;
-    if(units == Pa)        pressure *= 6894.7573; //Pa (Pascal)
-    else if(units == kPa)  pressure *= 6.89476;   //kPa (kilopascal)
-    else if(units == torr) pressure *= 51.7149;   //torr (mmHg)
-    else if(units == inHg) pressure *= 2.03602;   //inHg (inch of mercury)
-    else if(units == atm)  pressure *= 0.06805;   //atm (atmosphere)
-    else if(units == bar)  pressure *= 0.06895;   //bar
-    readphase = idle;
     return pressure;
 }
