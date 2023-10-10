@@ -68,7 +68,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     write_pin (syspower_pin, syspower);
     
     // Calculate some derived variables
-    calc_ctrl_lims();
+    // calc_ctrl_lims();
     calc_governor();
 
     // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
@@ -254,24 +254,24 @@ void loop() {
     hotrc_pulse_us[VERT] = (int32_t)hotrc_vert.readPulseWidth();
     hotrc_pulse_us[HORZ] = hotrcHorzManager.spike_filter (hotrc_pulse_us[HORZ]);
     hotrc_pulse_us[VERT] = hotrcVertManager.spike_filter (hotrc_pulse_us[VERT]);
-    ema_filt (hotrc_pulse_us[VERT], &hotrc_pulse_vert_filt_us, ctrl_ema_alpha[HOTRC]);  // Used to detect loss of radio
+    ema_filt (hotrc_pulse_us[VERT], &hotrc_pulse_vert_filt_us, hotrc_ema_alpha);  // Used to detect loss of radio
     if (simulator.can_simulate(SimOption::joy) && simulator.get_pot_overload() == SimOption::joy)
-        ctrl_pos_adc[HORZ][FILT] = pot.mapToRange(steer_pulse_left_us, steer_pulse_right_us);
+        hotrc[HORZ][FILT] = pot.mapToRange(steer_pulse_left_us, steer_pulse_right_us);
     else if (!simulator.simulating(SimOption::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
         for (int32_t axis=HORZ; axis<=VERT; axis++) {
             if (ctrl == HOTRC) {
                 if (hotrc_pulse_us[axis] >= hotrc_pulse_lims_us[axis][CENT])  // Steering: Convert from pulse us to joystick adc equivalent, when pushing right, else pushing left
-                    ctrl_pos_adc[axis][RAW] = map (hotrc_pulse_us[axis], hotrc_pulse_lims_us[axis][CENT], hotrc_pulse_lims_us[axis][MAX], ctrl_lims_adc[ctrl][axis][CENT], ctrl_lims_adc[ctrl][axis][MAX]);
-                else ctrl_pos_adc[axis][RAW] = map (hotrc_pulse_us[axis], hotrc_pulse_lims_us[axis][CENT], hotrc_pulse_lims_us[axis][MIN], ctrl_lims_adc[ctrl][axis][CENT], ctrl_lims_adc[ctrl][axis][MIN]);
+                    hotrc[axis][RAW] = map ((float)hotrc_pulse_us[axis], (float)hotrc_pulse_lims_us[axis][CENT], (float)hotrc_pulse_lims_us[axis][MAX], hotrc[axis][CENT], hotrc[axis][MAX]);
+                else hotrc[axis][RAW] = map ((float)hotrc_pulse_us[axis], (float)hotrc_pulse_lims_us[axis][CENT], (float)hotrc_pulse_lims_us[axis][MIN], hotrc[axis][CENT], hotrc[axis][MIN]);
             }
             if (ctrl == HOTRC && hotrc_radio_lost)
-                ctrl_pos_adc[axis][FILT] = ctrl_lims_adc[ctrl][axis][CENT];  // if radio lost set joy_axis_filt to center value
+                hotrc[axis][FILT] = hotrc[axis][CENT];  // if radio lost set joy_axis_filt to center value
             else {
-                ema_filt (ctrl_pos_adc[axis][RAW], &ctrl_pos_adc[axis][FILT], ctrl_ema_alpha[ctrl]);  // do ema filter to determine joy_vert_filt
-                ctrl_pos_adc[axis][FILT] = constrain (ctrl_pos_adc[axis][FILT], ctrl_lims_adc[ctrl][axis][MIN], ctrl_lims_adc[ctrl][axis][MAX]);
+                ema_filt (hotrc[axis][RAW], &hotrc[axis][FILT], hotrc_ema_alpha);  // do ema filter to determine joy_vert_filt
+                hotrc[axis][FILT] = constrain (hotrc[axis][FILT], hotrc[axis][MIN], hotrc[axis][MAX]);
             }
-            if (ctrl_pos_adc[axis][FILT] > ctrl_db_adc[axis][BOT] && ctrl_pos_adc[axis][FILT] < ctrl_db_adc[axis][TOP])
-                ctrl_pos_adc[axis][FILT] = ctrl_lims_adc[ctrl][axis][CENT];  // if joy axis is in the deadband, set joy_axis_filt to center value
+            if (hotrc[axis][FILT] > hotrc[axis][DBBOT] && hotrc[axis][FILT] < hotrc[axis][DBTOP])
+                hotrc[axis][FILT] = hotrc[axis][CENT];  // if joy axis is in the deadband, set joy_axis_filt to center value
         }
     }
     
@@ -282,10 +282,10 @@ void loop() {
     // Steering - Determine motor output and send to the motor
     if (steerPidTimer.expireset()) {
         if (runmode == SHUTDOWN && !shutdown_incomplete) steer_out_percent = steer_stop_percent;  // Stop the steering motor if in shutdown mode and shutdown is complete
-        else if (ctrl_pos_adc[HORZ][FILT] >= ctrl_db_adc[HORZ][TOP])  // If above the top edge of the deadband, turning right
-            steer_out_percent = map ((float)ctrl_pos_adc[HORZ][FILT], (float)ctrl_db_adc[HORZ][TOP], (float)ctrl_lims_adc[ctrl][HORZ][MAX], steer_stop_percent, steer_safe (steer_right_percent));  // Figure out the steering setpoint if joy to the right of deadband
-        else if (ctrl_pos_adc[HORZ][FILT] <= ctrl_db_adc[HORZ][BOT])  // If below the bottom edge of the deadband, turning left
-            steer_out_percent = map ((float)ctrl_pos_adc[HORZ][FILT], (float)ctrl_db_adc[HORZ][BOT], (float)ctrl_lims_adc[ctrl][HORZ][MIN], steer_stop_percent, steer_safe (steer_left_percent));  // Figure out the steering setpoint if joy to the left of deadband
+        else if (hotrc[HORZ][FILT] >= hotrc[HORZ][DBTOP])  // If above the top edge of the deadband, turning right
+            steer_out_percent = map (hotrc[HORZ][FILT], hotrc[HORZ][DBTOP], hotrc[HORZ][MAX], steer_stop_percent, steer_safe (steer_right_percent));  // Figure out the steering setpoint if joy to the right of deadband
+        else if (hotrc[HORZ][FILT] <= hotrc[HORZ][DBBOT])  // If below the bottom edge of the deadband, turning left
+            steer_out_percent = map (hotrc[HORZ][FILT], hotrc[HORZ][DBBOT], hotrc[HORZ][MIN], steer_stop_percent, steer_safe (steer_left_percent));  // Figure out the steering setpoint if joy to the left of deadband
         else steer_out_percent = steer_stop_percent;  // Stop the steering motor if inside the deadband
         steer_out_percent = constrain (steer_out_percent, steer_left_percent, steer_right_percent);  // Don't be out of range
         
@@ -306,10 +306,10 @@ void loop() {
         if (runmode == SHUTDOWN && !shutdown_incomplete)
             brake_out_percent = brake_stop_percent; // if we're shutdown, stop the motor
         else if (runmode == CAL && cal_joyvert_brkmotor_mode) {
-            if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])
-                brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], brake_stop_percent, brake_retract_percent);
-            else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT])
-                brake_out_percent = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_lims_adc[ctrl][VERT][MIN], (float)ctrl_db_adc[VERT][BOT], brake_extend_percent, brake_stop_percent);
+            if (hotrc[VERT][FILT] > hotrc[VERT][DBTOP])
+                brake_out_percent = map (hotrc[VERT][FILT], hotrc[VERT][DBTOP], hotrc[VERT][MAX], brake_stop_percent, brake_retract_percent);
+            else if (hotrc[VERT][FILT] < hotrc[VERT][DBBOT])
+                brake_out_percent = map (hotrc[VERT][FILT], hotrc[VERT][MIN], hotrc[VERT][DBBOT], brake_extend_percent, brake_stop_percent);
             else brake_out_percent = (float)brake_stop_percent;
         }
         else if (park_the_motors) {
@@ -365,9 +365,9 @@ void loop() {
         if (park_the_motors || (runmode == SHUTDOWN && !shutdown_incomplete))
             gas_pulse_out_us = gas_pulse_ccw_closed_us + gas_pulse_park_slack_us;
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
-            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) 
+            if (hotrc[VERT][FILT] < hotrc[VERT][DBTOP]) 
                 gas_pulse_out_us = gas_pulse_ccw_closed_us;  // If in deadband or being pushed down, we want idle
-            else gas_pulse_out_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_ccw_closed_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
+            else gas_pulse_out_us = map (hotrc[VERT][FILT], hotrc[VERT][DBTOP], hotrc[VERT][MAX], gas_pulse_ccw_closed_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
         }
         else if (runmode == CAL && cal_pot_gasservo_mode)
             gas_pulse_out_us = map (pot.get(), pot.min(), pot.max(), gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
@@ -395,14 +395,11 @@ void loop() {
             // if (boot_button) printf (" Gas:%4ld\n", (int32_t)gas_pulse_out_us);
         }
     }
-    uint32_t loophack;
     if (park_the_motors) {  //  When parking motors, IF the timeout expires OR the brake and gas motors are both close enough to the park position, OR runmode has changed THEN stop trying to park the motors
         bool brake_parked = brkpos_sensor.parked();
         bool gas_parked = ((gas_pulse_out_us == gas_pulse_ccw_closed_us + gas_pulse_park_slack_us) && gasServoTimer.expired());
-        if ((brake_parked && gas_parked) || motorParkTimer.expired() || (runmode != SHUTDOWN && runmode != BASIC)) {
+        if ((brake_parked && gas_parked) || motorParkTimer.expired() || (runmode != SHUTDOWN && runmode != BASIC))
             park_the_motors = false;
-            loophack = loopno;  // Hack!  Just to hack around bug in neopixel for first idiot light. Ugh!
-        }
     }
 
     detect_errors();  // Look for screwy conditions and update warning idiot lights
@@ -462,14 +459,12 @@ void loop() {
             else if (selected_value == 10) adj_bool (&screensaver, sim_edit_delta);
         }
         else if (dataset_page == PG_JOY) {
-            if (selected_value == 4) adj_val (&hotrc_pulse_failsafe_us, sim_edit_delta, hotrc_pulse_abs_min_us, hotrc_pulse_lims_us[VERT][MIN] - hotrc_pulse_margin_us);
-            else if (selected_value == 5) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][MIN], sim_edit_delta, 0, ctrl_lims_adc[ctrl][HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][DB] / 2 - 1);
-            else if (selected_value == 6) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][MAX], sim_edit_delta, ctrl_lims_adc[ctrl][HORZ][CENT] + ctrl_lims_adc[ctrl][HORZ][DB] / 2 + 1, ctrl_lims_adc[ctrl][HORZ][CENT]);
-            else if (selected_value == 7) adj = adj_val (&ctrl_lims_adc[ctrl][HORZ][DB], sim_edit_delta, 0, (ctrl_lims_adc[ctrl][HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][MIN] > ctrl_lims_adc[ctrl][HORZ][MAX] - ctrl_lims_adc[ctrl][HORZ][CENT]) ? 2*(ctrl_lims_adc[ctrl][HORZ][MAX] - ctrl_lims_adc[ctrl][HORZ][CENT]) : 2*(ctrl_lims_adc[ctrl][HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][MIN]));
-            else if (selected_value == 8) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][MIN], sim_edit_delta, 0, ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][DB] / 2 - 1);
-            else if (selected_value == 9) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][MAX], sim_edit_delta, ctrl_lims_adc[ctrl][VERT][CENT] + ctrl_lims_adc[ctrl][VERT][DB] / 2 + 1, ctrl_lims_adc[ctrl][VERT][CENT]);
-            else if (selected_value == 10) adj = adj_val (&ctrl_lims_adc[ctrl][VERT][DB], sim_edit_delta, 0, (ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][MIN] > ctrl_lims_adc[ctrl][VERT][MAX] - ctrl_lims_adc[ctrl][VERT][CENT]) ? 2*(ctrl_lims_adc[ctrl][VERT][MAX] - ctrl_lims_adc[ctrl][VERT][CENT]) : 2*(ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][MIN]));
-            if (adj) calc_ctrl_lims();  // update derived variables relevant to changes made
+            if (selected_value == 6) adj_val (&hotrc_pulse_failsafe_us, sim_edit_delta, hotrc_pulse_abs_min_us, hotrc_pulse_lims_us[VERT][MIN] - hotrc_pulse_margin_us);
+            else if (selected_value == 7) adj = adj_val (&hotrc[HORZ][MIN], sim_edit_delta, 0, hotrc[HORZ][DBBOT] - 1);
+            else if (selected_value == 8) adj = adj_val (&hotrc[HORZ][MAX], sim_edit_delta, hotrc[HORZ][DBTOP] + 1, hotrc[HORZ][CENT]);
+            else if (selected_value == 9) adj = adj_val (&hotrc[VERT][MIN], sim_edit_delta, 0, hotrc[VERT][DBBOT] - 1);
+            else if (selected_value == 10) adj = adj_val (&hotrc[VERT][MAX], sim_edit_delta, hotrc[VERT][DBTOP] + 1, hotrc[VERT][CENT]);
+            // if (adj) calc_ctrl_lims();  // update derived variables relevant to changes made
         }
         else if (dataset_page == PG_CAR) {
             if (selected_value == 2) throttle.set_idlehot(throttle.get_idlehot(), 0.1*(float)sim_edit_delta);
@@ -579,7 +574,7 @@ void loop() {
             neo.setBoolState(idiot, *idiotlights[idiot]);
             neo.updateIdiot(idiot);
         }
-    if ((loopno == loophack) || park_the_motors) neo.updateIdiot(0);  // For some reason the first neopixel idiot light starts up bright at boot. Weird.
+    // if ((loopno == loophack) || park_the_motors) neo.updateIdiot(0);  // For some reason the first neopixel idiot light starts up bright at boot. Weird.
     neo.refresh();
     loop_marktime ("-");
 

@@ -116,16 +116,16 @@ char idlestatecard[ThrottleControl::targetstates::num_states][7] = { "todriv", "
 #define MAXADJRATE "MaxAjR\x83t"
 #define SPED "Sp\x88""d"
 
-char telemetry[disp_fixed_lines][9] = { "CtrlVert", "   Speed", "    Tach", "ThrotPWM", BRAK"Pres", BRAK"Motr", "CtrlHorz", STER"Motr", };  // Fixed rows
+char telemetry[disp_fixed_lines][9] = { "Joy Vert", "   Speed", "    Tach", "ThrotPWM", BRAK"Pres", BRAK"Motr", "Joy Horz", STER"Motr", };  // Fixed rows
 char units[disp_fixed_lines][5] = { "adc ", "mph ", "rpm ", "us  ", "psi ", "%   ", "adc ", "%   " };  // Fixed rows
 
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, num_datapages };
 char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim " };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 6, 4, 5, 3, 4, 8, 7, 7, 8, 0 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 6, 6, 5, 3, 4, 8, 7, 7, 8, 0 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
     { BRAK"Posn", "MuleBatt", "     Pot", " Airflow", "     MAP", "MasAirFl", "Governor", STER"Safe", BRIGHTNESS, "NeoDesat", "ScrnSavr", },  // PG_RUN
-    { "HRC Horz", "HRC Vert", "      - ", "      - ", "HFailsaf", "Horz Min", "Horz Max", "HorzDBnd", "Vert Min", "Vert Max", "VertDBnd", },  // PG_JOY
+    { "HRC Horz", "HRC Vert", "      - ", "      - ", "      - ", "      - ", "HFailsaf", "Horz Min", "Horz Max", "Vert Min", "Vert Max" },  // PG_JOY
     { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", SPED"Idle", SPED"RedL", "BkPos0Pt", },  // PG_CAR
     { "BrakePWM", "SteerPWM", "      - ", STER"Left", STER"Stop", STER"Rght", BRAK"Extd", BRAK"Stop", BRAK"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
@@ -137,7 +137,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
 };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "in  ", "V   ", "%   ", "mph ", "psi ", "g/s ", "%   ", "%   ", "%   ", "/10 ", BINARY },  // PG_RUN
-    { "us  ", "us  ", "    ", "    ", "us  ", "adc ", "adc ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
+    { "us  ", "us  ", "    ", "    ", "    ", "    ", "us  ", "adc ", "adc ", "adc ", "adc " },  // PG_JOY
     { "adc ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%   ", "mph ", "mph ", "mph ", "in  " },  // PG_CAR
     { "us  ", "us  ", "    ", "    ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PG_PWMS
     { CHOICE, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", DEGR_F, DEGR_F, "rpms", CHOICE },  // PG_IDLE
@@ -712,13 +712,13 @@ class Display {
             if ((dispRefreshTimer.expired() && !_procrastinate) || _disp_redraw_all) {
                 dispRefreshTimer.reset();
                 float drange;
-                draw_dynamic(1, ctrl_pos_adc[VERT][FILT], ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]);
+                draw_dynamic(1, hotrc[VERT][FILT], hotrc[VERT][MIN], hotrc[VERT][MAX]);
                 draw_dynamic(2, speedometer.get_filtered_value(), 0.0, speedometer.get_redline_mph(), speedo_target_mph);
                 draw_dynamic(3, tachometer.get_filtered_value(), 0.0, tachometer.get_redline_rpm(), tach_target_rpm);
                 draw_dynamic(4, gas_pulse_out_us, gas_pulse_cw_open_us, gas_pulse_ccw_closed_us);
                 draw_dynamic(5, pressure_sensor.get_filtered_value(), pressure_sensor.get_min_human(), pressure_sensor.get_max_human(), pressure_target_psi);  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
                 draw_dynamic(6, brake_out_percent, brake_extend_percent, brake_retract_percent);
-                draw_dynamic(7, ctrl_pos_adc[HORZ][FILT], ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]);
+                draw_dynamic(7, hotrc[HORZ][FILT], hotrc[HORZ][MIN], hotrc[HORZ][MAX]);
                 draw_dynamic(8, steer_out_percent, steer_left_percent, steer_right_percent);
                 if (dataset_page == PG_RUN) {
                     draw_dynamic(9, brkpos_sensor.get_filtered_value(), BrakePositionSensor::abs_min_retract_in, BrakePositionSensor::abs_max_extend_in);
@@ -738,13 +738,13 @@ class Display {
                     draw_dynamic(10, hotrc_pulse_us[VERT], hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);  // Programmed centerpoint is 230 adc
                     draw_eraseval(11);
                     draw_eraseval(12);
-                    draw_dynamic(13, hotrc_pulse_failsafe_us, hotrc_pulse_abs_min_us, hotrc_pulse_lims_us[VERT][MIN] - hotrc_pulse_margin_us);
-                    draw_dynamic(14, ctrl_lims_adc[ctrl][HORZ][MIN], 0, ctrl_lims_adc[ctrl][HORZ][MAX]);
-                    draw_dynamic(15, ctrl_lims_adc[ctrl][HORZ][MAX], ctrl_lims_adc[ctrl][HORZ][MIN], adcrange_adc);
-                    draw_dynamic(16, ctrl_lims_adc[ctrl][HORZ][DB], 0, 2*(min (ctrl_lims_adc[ctrl][HORZ][CENT]-ctrl_lims_adc[ctrl][HORZ][MIN], ctrl_lims_adc[ctrl][HORZ][MAX]-ctrl_lims_adc[ctrl][HORZ][CENT]) -1));
-                    draw_dynamic(17, ctrl_lims_adc[ctrl][VERT][MIN], 0, ctrl_lims_adc[ctrl][VERT][MAX]);
-                    draw_dynamic(18, ctrl_lims_adc[ctrl][VERT][MAX], ctrl_lims_adc[ctrl][VERT][MIN], adcrange_adc);
-                    draw_dynamic(19, ctrl_lims_adc[ctrl][VERT][DB], 0, 2*(min (ctrl_lims_adc[ctrl][VERT][CENT]-ctrl_lims_adc[ctrl][VERT][MIN], ctrl_lims_adc[ctrl][VERT][MAX]-ctrl_lims_adc[ctrl][VERT][CENT]) -1));
+                    draw_eraseval(13);
+                    draw_eraseval(14);
+                    draw_dynamic(15, hotrc_pulse_failsafe_us, hotrc_pulse_abs_min_us, hotrc_pulse_lims_us[VERT][MIN] - hotrc_pulse_margin_us);
+                    draw_dynamic(16, (int)hotrc[HORZ][MIN], 0, (int)hotrc[HORZ][MAX]);
+                    draw_dynamic(17, (int)hotrc[HORZ][MAX], (int)hotrc[HORZ][MIN], (int)adcrange_adc);
+                    draw_dynamic(18, (int)hotrc[VERT][MIN], 0, (int)hotrc[VERT][MAX]);
+                    draw_dynamic(19, (int)hotrc[VERT][MAX], (int)hotrc[VERT][MIN], (int)adcrange_adc);
                 }
                 else if (dataset_page == PG_CAR) {
                     draw_dynamic(9, pressure_sensor.get_native(), pressure_sensor.get_min_native(), pressure_sensor.get_max_native());                    

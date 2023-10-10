@@ -234,19 +234,15 @@ Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 BatterySensor battery_sensor(mulebatt_pin);
 
 // controller related
-enum ctrls { HOTRC, OTHER, SIM, HEADLESS }; // Possible sources of gas, brake, steering commands
+enum ctrls { HOTRC, SIM, HEADLESS }; // Possible sources of gas, brake, steering commands
 enum ctrl_axes { HORZ, VERT, CH3, CH4 };
-enum ctrl_thresh { MIN, CENT, MAX, DB };
-enum ctrl_edge { BOT, TOP };
-enum ctrl_vals { RAW, FILT };
-float ctrl_ema_alpha[2] = {0.2, 0.1};         // [HOTRC/OTHER] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
-int32_t ctrl_lims_adc[2][2][5] =               //   values as adc counts
-    {{{0, adcmidscale_adc, adcrange_adc, 62, 100},  // [HOTRC][HORZ][MIN/CENT/MAX/DB/MARGIN]  // MARGIN is how much out of range the reading must be for axis to be completely ignored
-      {0, adcmidscale_adc, adcrange_adc, 62, 100}}, // [HOTRC][VERT][MIN/CENT/MAX/DB/MARGIN]
-     {{9, adcmidscale_adc, 4085, 50, 100},          // [OTHER][HORZ][MIN/CENT/MAX/DB/MARGIN]
-      {9, adcmidscale_adc, 4085, 50, 100}}};        // [OTHER][VERT][MIN/CENT/MAX/DB/MARGIN]
-int32_t ctrl_db_adc[2][2];                     // [HORZ/VERT] [BOT/TOP] - to store the top and bottom deadband values for each axis of selected controller
-int32_t ctrl_pos_adc[2][2];                    // [HORZ/VERT] [RAW/FILT] - holds most current controller values
+enum ctrl_vals { RAW, FILT, MIN, DBBOT, CENT, DBTOP, MAX, MARGIN };
+float hotrc_ema_alpha = 0.1;         // [HOTRC/OTHER] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
+float hotrc[4][8] =               //   values in percent
+    { { 0.0, 0.0, -100.0, -3.0, 0.0, 3.0, 100.0, 2.5 },    // [HORZ][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]  // MARGIN is how much out of range the reading must be for axis to be completely ignored
+      { 0.0, 0.0, -100.0, -3.0, 0.0, 3.0, 100.0, 2.5 },    // [VERT][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]
+      { 0.0, 0.0, -100.0, -3.0, 0.0, 3.0, 100.0, 2.5 },    // [CH3][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]
+      { 0.0, 0.0, -100.0, -3.0, 0.0, 3.0, 100.0, 2.5 }, }; // [CH4][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]
 bool ctrl = HOTRC;                             // Use HotRC controller to drive instead of joystick?
 int32_t hotrc_pulse_lims_us[4][3] = {{970 - 1, 1470 - 5, 1970 - 8},   // [HORZ] [MIN/CENT/MAX]
                                      {1080 - 1, 1580 - 5, 2080 - 8},  // [VERT] [MIN/CENT/MAX]
@@ -446,13 +442,13 @@ void hotrc_ch4_update(void) {                                                   
     if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true; // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
-void calc_ctrl_lims(void) {
-    ctrl_db_adc[VERT][BOT] = ctrl_lims_adc[ctrl][VERT][CENT] - ctrl_lims_adc[ctrl][VERT][DB] / 2; // Lower threshold of vert joy deadband (ADC count 0-4095)
-    ctrl_db_adc[VERT][TOP] = ctrl_lims_adc[ctrl][VERT][CENT] + ctrl_lims_adc[ctrl][VERT][DB] / 2; // Upper threshold of vert joy deadband (ADC count 0-4095)
-    ctrl_db_adc[HORZ][BOT] = ctrl_lims_adc[ctrl][HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][DB] / 2; // Lower threshold of horz joy deadband (ADC count 0-4095)
-    ctrl_db_adc[HORZ][TOP] = ctrl_lims_adc[ctrl][HORZ][CENT] + ctrl_lims_adc[ctrl][HORZ][DB] / 2; // Upper threshold of horz joy deadband (ADC count 0-4095)
-    steer_safe_ratio = steer_safe_percent / 100.0;
-}
+// void calc_ctrl_lims(void) {
+//     hotrc[VERT][DBBOT] = hotrc[VERT][CENT] - ctrl_lims_adc[ctrl][VERT][DB] / 2; // Lower threshold of vert joy deadband (ADC count 0-4095)
+//     hotrc[VERT][DBTOP] = hotrc[VERT][CENT] + ctrl_lims_adc[ctrl][VERT][DB] / 2; // Upper threshold of vert joy deadband (ADC count 0-4095)
+//     hotrc[HORZ][DBBOT] = hotrc[HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][DB] / 2; // Lower threshold of horz joy deadband (ADC count 0-4095)
+//     hotrc[HORZ][DBTOP] = hotrc[HORZ][CENT] + ctrl_lims_adc[ctrl][HORZ][DB] / 2; // Upper threshold of horz joy deadband (ADC count 0-4095)
+//     steer_safe_ratio = steer_safe_percent / 100.0;
+// }
 void calc_governor(void) {
     tach_govern_rpm = map(gas_governor_percent, 0.0, 100.0, 0.0, tachometer.get_redline_rpm()); // Create an artificially reduced maximum for the engine speed
     cruiseQPID.SetOutputLimits(throttle.get_idlespeed(), tach_govern_rpm);
