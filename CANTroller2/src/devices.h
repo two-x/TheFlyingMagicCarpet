@@ -447,9 +447,8 @@ class AirflowSensor : public I2CSensor {
         // NOTE: would all AirflowSensors have the same address? how does this get determined?
         static constexpr uint8_t _i2c_address = 0x28;
         static constexpr float _min_mph = 0.0;
-        static constexpr float _abs_max_mph = 33.55; // What diameter intake hose will reduce airspeed to abs max?  2.7 times the xsectional area. Current area is 6.38 cm2. New diameter = 4.68 cm (min). So, need to adapt to 2.5in + tube
-        static constexpr float _initial_max_mph = 18.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)
-            // = 44.6 * r^2  //  @ r = 2in = 5.08 cm :  7.12 mph  // @ r = 1.25in = 3.175 cm : 18.25 mph
+        static constexpr float _abs_max_mph = 33.55; // Sensor maximum mph reading.  Our sensor mounted in 2-in ID intake tube
+        static constexpr float _initial_max_mph = 28.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
         static constexpr float _initial_airflow_mph = 0.0;
         static constexpr float _initial_ema_alpha = 0.2;
         FS3000 _sensor;
@@ -500,9 +499,12 @@ class MAPSensor : public I2CSensor {
         static constexpr float _initial_max_psi = 15.0;
         static constexpr float _initial_psi = 14.696;  // 1 atm = 14.6959 psi
         static constexpr float _initial_ema_alpha = 0.2;
+        float last_reading = -1;
         SparkFun_MicroPressure _sensor;
         virtual float read_sensor() {
-            return _sensor.readPressure(PSI);
+            float temp = _sensor.readPressure(PSI);
+            if (!std::isnan(temp)) last_reading = temp;
+            return last_reading;
             // float temp = _sensor.readPressure(PSI);
             // this->_val_raw = (NATIVE_T)temp;  // note, this returns a float from 0-33.55 for the FS3000-1015 
             // return temp;
@@ -523,7 +525,7 @@ class MAPSensor : public I2CSensor {
                     printf("  Sensor not responding\n");  // Begin communication with air flow sensor) over I2C 
                     set_source(ControllerMode::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
                 } else {
-                    printf("  Reading %f atm manifold pressure\n", _sensor.readPressure(ATM));
+                    printf("  Reading %f atm manifold pressure\n", _sensor.readPressure(atm));
                     printf("  Sensor responding properly\n");
                 }
             } else {

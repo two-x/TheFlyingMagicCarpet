@@ -126,8 +126,8 @@ private:
             remote_starting = false;
             remote_start_toggle_request = false;
         }
-        if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][BOT]) pressure_target_psi = pressure_sensor.get_min_human();  // If in deadband or being pushed up, no pressure target
-        else pressure_target_psi = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], pressure_sensor.get_min_human(), pressure_sensor.get_max_human());  // Scale joystick value to pressure adc setpoint
+        if (hotrc_pc[VERT][FILT] > hotrc_pc[VERT][DBBOT]) pressure_target_psi = pressure_sensor.get_min_human();  // If in deadband or being pushed up, no pressure target
+        else pressure_target_psi = map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBBOT], hotrc_pc[VERT][MIN], pressure_sensor.get_min_human(), pressure_sensor.get_max_human());  // Scale joystick value to pressure adc setpoint
         if (!tachometer.engine_stopped()) updateMode(HOLD);  // If we started the car, enter hold mode once starter is released
         /// if (!starter && !tachometer.engine_stopped()) updateMode(HOLD);  // If we started the car, enter hold mode once starter is released
     }
@@ -147,7 +147,7 @@ private:
             throttle.goto_idle();  // Keep target updated to possibly changing idle value
             if (!speedometer.car_stopped() && !stopcarTimer.expired() && !autostop_disabled) pressure_target_psi = min (pressure_target_psi + pressure_hold_increment_psi, pressure_sensor.get_max_human());  // If the car is still moving, push harder
         }
-        if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
+        if (hotrc_pc[VERT][FILT] < hotrc_pc[VERT][DBTOP]) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
         else if (joy_centered && !hotrc_radio_lost) updateMode(FLY); // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
     }
 
@@ -157,18 +157,18 @@ private:
             if (ctrl == HOTRC) flycruise_toggle_request = false;
         }
         if (car_hasnt_moved) {
-            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][TOP]) updateMode(HOLD);  // Must keep pulling trigger until car moves, or it drops back to hold mode
+            if (hotrc_pc[VERT][FILT] < hotrc_pc[VERT][DBTOP]) updateMode(HOLD);  // Must keep pulling trigger until car moves, or it drops back to hold mode
             else if (!speedometer.car_stopped()) car_hasnt_moved = false;  // Once car moves, we're allowed to stay in fly mode
         }
-        else if (speedometer.car_stopped()) updateMode(HOLD);  // Go to Hold Mode if we have come to a stop after moving  // && ctrl_pos_adc[VERT][FILT] <= ctrl_db_adc[VERT][BOT]
+        else if (speedometer.car_stopped()) updateMode(HOLD);  // Go to Hold Mode if we have come to a stop after moving  // && hotrc_pc[VERT][FILT] <= hotrc_pc[VERT][DBBOT]
         if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && hotrc_radio_lost) updateMode(HOLD);  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
         else {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
-            if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP])  {  // If we are trying to accelerate, scale joystick value to determine gas setpoint
-                throttle.set_target (map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], throttle.get_idlespeed(), tach_govern_rpm));
+            if (hotrc_pc[VERT][FILT] > hotrc_pc[VERT][DBTOP])  {  // If we are trying to accelerate, scale joystick value to determine gas setpoint
+                throttle.set_target (map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBTOP], hotrc_pc[VERT][MAX], throttle.get_idlespeed(), tach_govern_rpm));
             }
             else throttle.goto_idle();  // Else let off gas (if gas using PID mode)
-            if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT])  {  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
-                pressure_target_psi = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], pressure_sensor.get_min_human(), pressure_sensor.get_max_human());
+            if (hotrc_pc[VERT][FILT] < hotrc_pc[VERT][DBBOT])  {  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
+                pressure_target_psi = map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBBOT], hotrc_pc[VERT][MIN], pressure_sensor.get_min_human(), pressure_sensor.get_max_human());
             }
             else pressure_target_psi = pressure_sensor.get_min_human();  // Else let off the brake   
         }
@@ -190,42 +190,56 @@ private:
             cruise_trigger_released = false;  // in case trigger is being pulled as cruise mode is entered, the ability to adjust is only unlocked after the trigger is subsequently released to the center
             gas_pulse_cruise_us = gas_pulse_out_us;  //  if cruise_fixed throttle is true, this variable stores the setpoint of throttle angle
             gas_pulse_adjustpoint_us = gas_pulse_cruise_us;  // Pull of trigger away from center in either direction starts a setpoint adjustment, scaled from *your current setpoint* (not from the center value) to the relevant min or max extreme 
-            cruise_ctrl_extent_adc = (float)ctrl_lims_adc[ctrl][VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
+            cruise_ctrl_extent_adc = hotrc_pc[VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
             cruise_adjusting = false;
             if (ctrl == HOTRC) flycruise_toggle_request = false;
         }
-        if (ctrl_pos_adc[VERT][FILT] > ctrl_db_adc[VERT][TOP]) {  // When joystick vert above center, increase the throttle setpoint proportional to how far off center
-            if (cruise_trigger_released && ctrl_pos_adc[VERT][FILT] >= cruise_ctrl_extent_adc) {
-                if (cruise_fixed_throttle) {
+        if (hotrc_pc[VERT][FILT] > hotrc_pc[VERT][DBTOP]) {  // When joystick vert above center, increase the throttle setpoint proportional to how far off center
+            if (cruise_trigger_released && cruise_setpoint_mode == throttle_delta) {
+                if (cruise_adjusting) {
+                    float ctrlratio = (float)(hotrc_pc[VERT][FILT] - hotrc_pc[VERT][DBTOP]) / (float)(hotrc_pc[VERT][MAX] - hotrc_pc[VERT][DBTOP]);
+                    gas_pulse_cruise_us = constrain(gas_pulse_cruise_us - ctrlratio * cruise_adjust_delta_max_us_per_s * cruiseDeltaTimer.elapsed() / 1000000.0, gas_pulse_cw_open_us, gas_pulse_ccw_closed_us);
+                }
+                cruiseDeltaTimer.reset(); 
+            }
+            else if (cruise_trigger_released && hotrc_pc[VERT][FILT] >= cruise_ctrl_extent_adc) {
+                if (cruise_setpoint_mode == throttle_setpoint) {
                     if (!cruise_adjusting) gas_pulse_adjustpoint_us = gas_pulse_cruise_us;  // When beginning adjustment, save current throttle pulse value to use as adjustment endpoint
-                    gas_pulse_cruise_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], gas_pulse_adjustpoint_us, gas_pulse_govern_us);
+                    gas_pulse_cruise_us = map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBTOP], hotrc_pc[VERT][MAX], gas_pulse_adjustpoint_us, gas_pulse_govern_us);
                 }
-                else {
+                else if (cruise_setpoint_mode == rpm_target) {
                     if (!cruise_adjusting) tach_adjustpoint_rpm = tachometer.get_filtered_value();
-                    throttle.set_target (map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][TOP], (float)ctrl_lims_adc[ctrl][VERT][MAX], tach_adjustpoint_rpm, tach_govern_rpm));
+                    throttle.set_target (map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBTOP], hotrc_pc[VERT][MAX], tach_adjustpoint_rpm, tach_govern_rpm));
                 }
-                cruise_ctrl_extent_adc = (float)ctrl_pos_adc[VERT][FILT];
-                cruise_adjusting = true;  // Suspend pid loop control of gas
+                cruise_ctrl_extent_adc = hotrc_pc[VERT][FILT];
             }
+            if (cruise_trigger_released) cruise_adjusting = true;
         }
-        else if (ctrl_pos_adc[VERT][FILT] < ctrl_db_adc[VERT][BOT]) {  // When joystick vert below center, decrease the speed target proportional to how far off center
+        else if (hotrc_pc[VERT][FILT] < hotrc_pc[VERT][DBBOT]) {  // When joystick vert below center, decrease the speed target proportional to how far off center
             if (!cruise_speed_lowerable) updateMode(FLY);  // Then any trigger braking activity cancels cruise mode
-            else if (cruise_trigger_released && ctrl_pos_adc[VERT][FILT] <= cruise_ctrl_extent_adc) {
-                if (cruise_fixed_throttle) {
-                    if (!cruise_adjusting) gas_pulse_adjustpoint_us = gas_pulse_cruise_us;  // When beginning adjustment, save current throttle pulse value to use as adjustment low endpoint
-                    gas_pulse_cruise_us = map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], gas_pulse_adjustpoint_us, gas_pulse_ccw_closed_us);
+            else if (cruise_trigger_released && cruise_setpoint_mode == throttle_delta) {
+                if (cruise_adjusting) {
+                    float ctrlratio = (float)(hotrc_pc[VERT][DBBOT] - hotrc_pc[VERT][FILT]) / (float)(hotrc_pc[VERT][DBBOT] - hotrc_pc[VERT][MIN]);
+                    gas_pulse_cruise_us = constrain(gas_pulse_cruise_us + ctrlratio * cruise_adjust_delta_max_us_per_s * cruiseDeltaTimer.elapsed() / 1000000.0, gas_pulse_cw_open_us, gas_pulse_ccw_closed_us);
                 }
-                else {
-                    if (!cruise_adjusting) tach_adjustpoint_rpm = tachometer.get_filtered_value();
-                    throttle.set_target (map ((float)ctrl_pos_adc[VERT][FILT], (float)ctrl_db_adc[VERT][BOT], (float)ctrl_lims_adc[ctrl][VERT][MIN], tach_adjustpoint_rpm, throttle.get_idlespeed()));
-                }
-                cruise_ctrl_extent_adc = (float)ctrl_pos_adc[VERT][FILT];
-                cruise_adjusting = true;  // Suspend pid loop control of gas
+                cruiseDeltaTimer.reset(); 
             }
+            else if (cruise_trigger_released && hotrc_pc[VERT][FILT] <= cruise_ctrl_extent_adc) {
+                if (cruise_setpoint_mode == throttle_setpoint) {
+                    if (!cruise_adjusting) gas_pulse_adjustpoint_us = gas_pulse_cruise_us;  // When beginning adjustment, save current throttle pulse value to use as adjustment low endpoint
+                    gas_pulse_cruise_us = map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBBOT], hotrc_pc[VERT][MIN], gas_pulse_adjustpoint_us, gas_pulse_ccw_closed_us);
+                }
+                else if (cruise_setpoint_mode == rpm_target) {
+                    if (!cruise_adjusting) tach_adjustpoint_rpm = tachometer.get_filtered_value();
+                    throttle.set_target (map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBBOT], hotrc_pc[VERT][MIN], tach_adjustpoint_rpm, throttle.get_idlespeed()));
+                }
+                cruise_ctrl_extent_adc = hotrc_pc[VERT][FILT];
+            }
+            if (cruise_trigger_released) cruise_adjusting = true;
         }
         else {  // If ctrl vert at center
             cruise_trigger_released = true;
-            cruise_ctrl_extent_adc = (float)ctrl_lims_adc[ctrl][VERT][CENT];
+            cruise_ctrl_extent_adc = hotrc_pc[VERT][CENT];
             cruise_adjusting = false;
         }
         // if (!cruise_adjusting) cruiseAntiglitchTimer.reset();  // Anti-glitch timer attempts to keep very short joystick sensor glitches from going into adjust mode
@@ -235,9 +249,11 @@ private:
             flycruise_toggle_request = false;  // Reset the toggle request
         }
         // If joystick is held full-brake for more than X, driver could be confused & panicking, drop to fly mode so fly mode will push the brakes
-        if (ctrl_pos_adc[VERT][FILT] > ctrl_lims_adc[ctrl][VERT][MIN] + flycruise_vert_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
-        else if (gestureFlyTimer.expired()) updateMode(FLY);  // New gesture to drop to fly mode is hold the brake all the way down for more than X ms
-        
+        if (hotrc_pc[VERT][FILT] > hotrc_pc[VERT][MIN] + flycruise_vert_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
+        else {
+            if (gestureFlyTimer.expired()) updateMode(FLY);  // New gesture to drop to fly mode is hold the brake all the way down for more than X ms
+        }
+
         if (speedometer.car_stopped()) updateMode(HOLD);  // In case we slam into camp Q woofer stack, get out of cruise mode
     }
 
