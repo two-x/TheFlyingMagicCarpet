@@ -73,27 +73,25 @@ float SparkFun_MicroPressure::readPressure(Pressure_Units units) {
     idle = false;
     if(_eoc == -1) {  // Check status byte if GPIO is not defined
         status = readStatus();
-        if (status&BUSY_FLAG && (status!=0xFF)) return pressure;  
+        if (status&BUSY_FLAG && (status!=0xFF)) return NAN;  
     }
-    else if (!digitalRead(_eoc)) return pressure;  // Wait for new pressure reading available (eoc = high) // Use GPIO pin if defined
+    else if (!digitalRead(_eoc)) return NAN;  // Wait for new pressure reading available (eoc = high) // Use GPIO pin if defined
     idle = true;
     _i2cPort->requestFrom(_address,4);
     status = _i2cPort->read();
-    if((status & INTEGRITY_FLAG) || (status & MATH_SAT_FLAG)) pressure = NAN; //  check memory integrity and math saturation bit
-    else {
-        uint32_t reading = 0;
-        for(uint8_t i=0;i<3;i++) {  //  read 24-bit pressure
-            reading |= _i2cPort->read();
-            if(i != 2) reading = reading<<8;
-        }
-        pressure = (reading - OUTPUT_MIN) * (_maxPsi - _minPsi);
-        pressure = (pressure / (OUTPUT_MAX - OUTPUT_MIN)) + _minPsi;
-        if(units == Pa)        pressure *= 6894.7573; //Pa (Pascal)
-        else if(units == kPa)  pressure *= 6.89476;   //kPa (kilopascal)
-        else if(units == torr) pressure *= 51.7149;   //torr (mmHg)
-        else if(units == inHg) pressure *= 2.03602;   //inHg (inch of mercury)
-        else if(units == atm)  pressure *= 0.06805;   //atm (atmosphere)
-        else if(units == bar)  pressure *= 0.06895;   //bar
+    if((status & INTEGRITY_FLAG) || (status & MATH_SAT_FLAG)) return NAN; //  check memory integrity and math saturation bit
+    uint32_t reading = 0;
+    for(uint8_t i=0;i<3;i++) {  //  read 24-bit pressure
+        reading |= _i2cPort->read();
+        if(i != 2) reading = reading<<8;
     }
+    pressure = (reading - OUTPUT_MIN) * (_maxPsi - _minPsi);
+    pressure = (pressure / (OUTPUT_MAX - OUTPUT_MIN)) + _minPsi;
+    if(units == Pa)        pressure *= 6894.7573; //Pa (Pascal)
+    else if(units == kPa)  pressure *= 6.89476;   //kPa (kilopascal)
+    else if(units == torr) pressure *= 51.7149;   //torr (mmHg)
+    else if(units == inHg) pressure *= 2.03602;   //inHg (inch of mercury)
+    else if(units == atm)  pressure *= 0.06805;   //atm (atmosphere)
+    else if(units == bar)  pressure *= 0.06895;   //bar
     return pressure;
 }

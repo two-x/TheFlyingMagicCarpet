@@ -85,11 +85,10 @@ uint32_t color_16b_to_uint32(uint16_t color565) {  // Convert 5-6-5 encoded 16-b
 uint16_t color_uint32_to_16b(uint32_t color32b) {  // Convert uint32 color in format 0x00RRGGBB to uint16 5-6-5 encoded color value suitable for screen
     return (uint16_t)(((color32b & 0xf80000) >> 8) | ((color32b & 0xfc00) >> 5) | ((color32b & 0xf8) >> 3));
 }
-// hue: 0,255 = red, 85 = grn, 170 = blu | sat: 0 = saturated up to greyscale, 255 = pure color | bright: 0 = blk, 255 = "full"* | *bright_flat: if =1, "full" brightness varies w/ hue for consistent luminance, otherwise "full" always ranges to 255 (mixed-element colors are brighter) | blu_boost: adds blu_boost/255 desaturation as a ratio of blu dominance
+// hue: 0,255 = red, 85 = grn, 170 = blu | sat: 0 = saturated up to greyscale, 255 = pure color | bright: 0 = blk, 255 = "full" | bright_flat: if =1, "full" brightness varies w/ hue for consistent luminance, otherwise "full" always ranges to 255 (mixed-element colors are brighter) | blu_boost: adds blu_boost/255 desaturation as a ratio of blu dominance
 uint32_t hsv_to_rgb(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool bright_flat = 1, uint8_t blu_boost = 0) {  // returns uint32 color in format 0x00RRGGBB
     uint32_t rgb[3] = { 255 - 3 * (uint32_t)((255 - hue) % 85), 0, 3 * (uint32_t)((255 - hue) % 85) };
     float maxc = (float)((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]);
-    if (!(int32_t)maxc) return 0;  // prevent divides by zero coming up
     if (hue <= 85) { rgb[1] = rgb[0]; rgb[0] = rgb[2]; rgb[2] = 0; }
     else if (hue <= 170) { rgb[1] = rgb[2]; rgb[2] = rgb[0]; rgb[0] = 0; }
     float brightener = (float)bright / (bright_flat ? 255.0 : maxc);
@@ -922,7 +921,7 @@ class Display {
                     //     _spr.setTextColor(random(0x10000));
                     //     _spr.setTextSize (1);
                     //     _spr.setCursor(star_x1, star_y1);
-                    //     _spr.print((char)random(255));  // static_cast<char>((random(16) << 8) | random(16)));
+                    //     _spr.drawString((char)random(255), star_x1, star_y1, 1);  // static_cast<char>((random(16) << 8) | random(16)));
                     // }    
                 }
                 if (sprite_lines_mode == 1 && !spritecycle) _spr.drawLine(star_x0+1, star_y0+1, star_x1+1, star_y1+1, color);

@@ -499,9 +499,12 @@ class MAPSensor : public I2CSensor {
         static constexpr float _initial_max_psi = 15.0;
         static constexpr float _initial_psi = 14.696;  // 1 atm = 14.6959 psi
         static constexpr float _initial_ema_alpha = 0.2;
+        float last_reading = -1;
         SparkFun_MicroPressure _sensor;
         virtual float read_sensor() {
-            return _sensor.readPressure(PSI);
+            float temp = _sensor.readPressure(PSI);
+            if (!std::isnan(temp)) last_reading = temp;
+            return last_reading;
             // float temp = _sensor.readPressure(PSI);
             // this->_val_raw = (NATIVE_T)temp;  // note, this returns a float from 0-33.55 for the FS3000-1015 
             // return temp;
