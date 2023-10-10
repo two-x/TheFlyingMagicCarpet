@@ -53,12 +53,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (steer_enc_b_pin, INPUT_PULLUP);
     set_pin (ign_out_pin, OUTPUT);
     set_pin (syspower_pin, OUTPUT);  // Then set the put as an output as normal.
-    #ifdef pwm_jaguars
-        set_pin (brake_pwm_pin, OUTPUT);
-        set_pin (steer_pwm_pin, OUTPUT);
-    #else
-        // Init serial port uart 1
-    #endif
+    set_pin (brake_pwm_pin, OUTPUT);
+    set_pin (steer_pwm_pin, OUTPUT);
     analogReadResolution (adcbits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
 
     write_pin (tft_cs_pin, HIGH);   // Prevent bus contention
@@ -218,38 +214,35 @@ void loop() {
     maf_gps = get_massairflow();  // Recalculate intake mass airflow
     speedometer.update();  // Speedo
     pressure_sensor.update();  // Brake pressure
-
     // Read the car ignition signal, and while we're at it measure the vehicle battery voltage off ign signal
     battery_sensor.update();
     ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
     // printf("batt_pin: %d, batt_raw: %f, batt_human: %f, batt_filt: %f\n", analogRead(mulebatt_pin), battery_sensor.get_native(), battery_sensor.get_human(), battery_sensor.get_filtered_value());
 
     // Controller handling
-    if (ctrl == HOTRC) {
-        hotrc_ch3_update();
-        hotrc_ch4_update();
-        if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
-            if (hotrc_suppress_next_ch3_event) hotrc_suppress_next_ch3_event = false;
-            else ignition = simulator.simulating(SimOption::ignition) ? ignition : !ignition;
-            hotrc_ch3_sw_event = false;
-        }
-        if (hotrc_ch4_sw_event) {
-            if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
-            else if (runmode == STALL && remote_start_support) remote_start_toggle_request = true;
-            else if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
-            else {}   // There's no reason pushing the ch4 button when in other modes can't do something different.  That would go here
-            hotrc_ch4_sw_event = false;    
-        }
-        if (hotrc_pulse_vert_filt_us > hotrc_pulse_failsafe_us + hotrc_pulse_failsafe_margin_us) {
-            hotrcPanicTimer.reset();
-            hotrc_radio_lost = false;
-            if (!ignition_output_enabled) ignition_output_enabled = true; // Ignition stays low until the hotrc is detected here, then output is allowed
-        }
-        else if (!hotrc_radio_lost && hotrcPanicTimer.expired()) hotrc_radio_lost = true;
-        // hotrc_suppress_next_ch3_event = true;  // reject spurious ch3 switch event upon next hotrc poweron  // hotrc_suppress_next_ch4_event = true;  // reject spurious ch4 switch event upon next hotrc poweron
+    hotrc_ch3_update();
+    hotrc_ch4_update();
+    if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
+        if (hotrc_suppress_next_ch3_event) hotrc_suppress_next_ch3_event = false;
+        else ignition = simulator.simulating(SimOption::ignition) ? ignition : !ignition;
+        hotrc_ch3_sw_event = false;
     }
+    if (hotrc_ch4_sw_event) {
+        if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
+        else if (runmode == STALL && remote_start_support) remote_start_toggle_request = true;
+        else if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
+        else {}   // There's no reason pushing the ch4 button when in other modes can't do something different.  That would go here
+        hotrc_ch4_sw_event = false;    
+    }
+    if (hotrc_pulse_vert_filt_us > hotrc_pulse_failsafe_us + hotrc_pulse_failsafe_margin_us) {
+        hotrcPanicTimer.reset();
+        hotrc_radio_lost = false;
+        if (!ignition_output_enabled) ignition_output_enabled = true; // Ignition stays low until the hotrc is detected here, then output is allowed
+    }
+    else if (!hotrc_radio_lost && hotrcPanicTimer.expired()) hotrc_radio_lost = true;
+    // hotrc_suppress_next_ch3_event = true;  // reject spurious ch3 switch event upon next hotrc poweron  // hotrc_suppress_next_ch4_event = true;  // reject spurious ch4 switch event upon next hotrc poweron
 
-    // Read horz and vert inputs, determine steering pwm output -  - takes 40 us to read. Then, takes 13 us to handle
+    // Read horz and vert pulse inputs, convert to percent units, and determine steering pwm output
     hotrc_pulse_us[HORZ] = (int32_t)hotrc_horz.readPulseWidth();  
     hotrc_pulse_us[VERT] = (int32_t)hotrc_vert.readPulseWidth();
     hotrc_pulse_us[HORZ] = hotrcHorzManager.spike_filter (hotrc_pulse_us[HORZ]);
@@ -259,22 +252,18 @@ void loop() {
         hotrc[HORZ][FILT] = pot.mapToRange(steer_pulse_left_us, steer_pulse_right_us);
     else if (!simulator.simulating(SimOption::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
         for (int32_t axis=HORZ; axis<=VERT; axis++) {
-            if (ctrl == HOTRC) {
-                if (hotrc_pulse_us[axis] >= hotrc_pulse_lims_us[axis][CENT])  // Steering: Convert from pulse us to joystick adc equivalent, when pushing right, else pushing left
-                    hotrc[axis][RAW] = map ((float)hotrc_pulse_us[axis], (float)hotrc_pulse_lims_us[axis][CENT], (float)hotrc_pulse_lims_us[axis][MAX], hotrc[axis][CENT], hotrc[axis][MIN]);
-                else hotrc[axis][RAW] = map ((float)hotrc_pulse_us[axis], (float)hotrc_pulse_lims_us[axis][CENT], (float)hotrc_pulse_lims_us[axis][MIN], hotrc[axis][CENT], hotrc[axis][MAX]);
-            }
-            if (ctrl == HOTRC && hotrc_radio_lost)
+            if (hotrc_pulse_us[axis] >= hotrc_pulse_lims_us[axis][CENT])  // Convert from pulse us to percent, when pushing left/down, else when pushing right/up
+                hotrc[axis][RAW] = map ((float)hotrc_pulse_us[axis], (float)hotrc_pulse_lims_us[axis][CENT], (float)hotrc_pulse_lims_us[axis][MAX], hotrc[axis][CENT], hotrc[axis][MIN]);  // When pushing left, or down
+            else hotrc[axis][RAW] = map ((float)hotrc_pulse_us[axis], (float)hotrc_pulse_lims_us[axis][CENT], (float)hotrc_pulse_lims_us[axis][MIN], hotrc[axis][CENT], hotrc[axis][MAX]);  // When pushing right, or up
+            if (hotrc_radio_lost || (hotrc[axis][FILT] > hotrc[axis][DBBOT] && hotrc[axis][FILT] < hotrc[axis][DBTOP]))
                 hotrc[axis][FILT] = hotrc[axis][CENT];  // if radio lost set joy_axis_filt to center value
             else {
                 ema_filt (hotrc[axis][RAW], &hotrc[axis][FILT], hotrc_ema_alpha);  // do ema filter to determine joy_vert_filt
                 hotrc[axis][FILT] = constrain (hotrc[axis][FILT], hotrc[axis][MIN], hotrc[axis][MAX]);
             }
-            if (hotrc[axis][FILT] > hotrc[axis][DBBOT] && hotrc[axis][FILT] < hotrc[axis][DBTOP])
-                hotrc[axis][FILT] = hotrc[axis][CENT];  // if joy axis is in the deadband, set joy_axis_filt to center value
         }
     }
-    
+
     runmode = runModeManager.handle_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
 
     // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
@@ -292,12 +281,7 @@ void loop() {
         if (steer_out_percent >= steer_stop_percent)
             steer_pulse_out_us = map (steer_out_percent, steer_stop_percent, steer_right_percent, steer_pulse_stop_us, steer_pulse_right_us);
         else steer_pulse_out_us = map (steer_out_percent, steer_stop_percent, steer_left_percent, steer_pulse_stop_us, steer_pulse_left_us);
-        
-        #ifdef pwm_jaguars
-            steer_servo.writeMicroseconds ((int32_t)steer_pulse_out_us);   // Write steering value to jaguar servo interface
-        #else
-            // Send command over serial port
-        #endif
+        steer_servo.writeMicroseconds ((int32_t)steer_pulse_out_us);   // Write steering value to jaguar servo interface
     }
     // Brakes - Determine motor output and write it to motor
     if (brakePidTimer.expireset()) {
@@ -342,11 +326,7 @@ void loop() {
 
         // Step 5 : Write to motor
         if (!(runmode == BASIC && !park_the_motors) && !(runmode == CAL && !cal_joyvert_brkmotor_mode) && !(runmode == SHUTDOWN && !shutdown_incomplete)) {
-            #ifdef pwm_jaguars
-                brake_servo.writeMicroseconds ((int32_t)brake_pulse_out_us);  // Write result to jaguar servo interface
-            #else
-                // Send command over serial port
-            #endif
+            brake_servo.writeMicroseconds ((int32_t)brake_pulse_out_us);  // Write result to jaguar servo interface
         }
     }
     throttle.update();  // Allow idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling

@@ -913,13 +913,6 @@ class Display {
                     else if (savershape == 2)      // Draw pixels in sprite
                         for (int star=0; star<35; star++) 
                             _spr.drawPixel(random(disp_saver_width), random(disp_saver_height), random(0x10000));      // Draw pixel in sprite
-                    // Whoa, this routine causes a reset after a few seconds!
-                    // else if (savershape = 3) {
-                    //     _spr.setTextColor(random(0x10000));
-                    //     _spr.setTextSize (1);
-                    //     _spr.setCursor(star_x1, star_y1);
-                    //     _spr.drawString((char)random(255), star_x1, star_y1, 1);  // static_cast<char>((random(16) << 8) | random(16)));
-                    // }    
                 }
                 if (saver_lines_mode == 1 && !savercycle) _spr.drawLine(star_x0+1, star_y0+1, star_x1+1, star_y1+1, color);
                 // 
@@ -938,7 +931,6 @@ class Display {
                     _spr.fillCircle((disp_saver_width / 2) + eraser_pos[0], (disp_saver_height / 2) + eraser_pos[1], eraser_rad, BLK);
                 } 
                 else if (saver_lines_mode == 1) _spr.drawString("do drugs", disp_saver_width / 2, disp_saver_height / 2, 4);
-                // _spr.drawString("do drugs", disp_saver_width / 2, (int32_t)(float)disp_saver_height * (float)(saverCycleTimer.elapsed() / (float)saver_cycletime_us), 4);
                 _spr.pushSprite(disp_simbuttons_x, disp_simbuttons_y);
             }
         }

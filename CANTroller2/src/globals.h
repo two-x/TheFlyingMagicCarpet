@@ -238,16 +238,14 @@ enum ctrls { HOTRC, SIM, HEADLESS }; // Possible sources of gas, brake, steering
 enum ctrl_axes { HORZ, VERT, CH3, CH4 };
 enum ctrl_vals { RAW, FILT, MIN, DBBOT, CENT, DBTOP, MAX, MARGIN };
 float hotrc_ema_alpha = 0.1;         // [HOTRC/OTHER] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
-float hotrc[4][8] =               //   values in percent
-    { { 0.0, 0.0, -100.0, -4.0, 0.0, 4.0, 100.0, 2.5 },    // [HORZ][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]  // MARGIN is how much out of range the reading must be for axis to be completely ignored
-      { 0.0, 0.0, -100.0, -4.0, 0.0, 4.0, 100.0, 2.5 },    // [VERT][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]
-      { 0.0, 0.0, -100.0, -9.0, 0.0, 9.0, 100.0, 2.5 },    // [CH3][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]
-      { 0.0, 0.0, -100.0, -9.0, 0.0, 9.0, 100.0, 2.5 }, }; // [CH4][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]
+float hotrc[2][8] =               //  human values in percent
+    { { 0.0, 0.0, -100.0, -4.0, 0.0, 4.0, 100.0, 2.5 },     // [HORZ][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]  // MARGIN is how much out of range the reading must be for axis to be completely ignored
+      { 0.0, 0.0, -100.0, -4.0, 0.0, 4.0, 100.0, 2.5 }, };  // [VERT][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]
 bool ctrl = HOTRC;                             // Use HotRC controller to drive instead of joystick?
-int32_t hotrc_pulse_lims_us[4][3] = {{970 - 1, 1470 - 5, 1970 - 8},   // [HORZ] [MIN/CENT/MAX]
-                                     {1080 - 1, 1580 - 5, 2080 - 8},  // [VERT] [MIN/CENT/MAX]
-                                     {1200 - 1, 1500 - 5, 1800 - 8},  // [CH3] [MIN/CENT/MAX]
-                                     {1300 - 1, 1500 - 5, 1700 - 8}}; // [CH4] [MIN/CENT/MAX]
+int32_t hotrc_pulse_lims_us[4][3] = { {  970 - 1, 1470 - 5, 1970 - 8 },    // [HORZ] [MIN/CENT/MAX]
+                                      { 1080 - 1, 1580 - 5, 2080 - 8 },    // [VERT] [MIN/CENT/MAX]
+                                      { 1200 - 1, 1500 - 5, 1800 - 8 },    // [CH3] [MIN/CENT/MAX]
+                                      { 1300 - 1, 1500 - 5, 1700 - 8 } };  // [CH4] [MIN/CENT/MAX]
 int32_t hotrc_pulse_abs_min_us = 880;
 int32_t hotrc_pulse_abs_max_us = 2080;
 int32_t hotrc_pulse_margin_us = 20;
@@ -262,7 +260,7 @@ int32_t hotrc_pulse_vert_filt_us;  // Only needed for vert channel to detect rad
 int32_t hotrc_pulse_failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
 int32_t hotrc_pulse_failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
 int32_t hotrc_pulse_failsafe_pad_us = 10;
-uint32_t hotrc_panic_timeout_us = 500000; // how long to receive flameout-range signal from hotrc vertical before panic stopping
+uint32_t hotrc_panic_timeout_us = 200000; // how long to receive flameout-range signal from hotrc vertical before panic stopping
 Timer hotrcPanicTimer(hotrc_panic_timeout_us);
 volatile int64_t hotrc_timer_start;
 volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
