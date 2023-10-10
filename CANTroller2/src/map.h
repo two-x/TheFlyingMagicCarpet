@@ -1,4 +1,5 @@
-// Soren: Stole and modified this library to prevent it from blocking for 6 ms
+// Soren: Stole and modified this library to prevent it from blocking for 6 ms. Now, instead of waiting (blocking)
+// until the reading is ready, you have to keep calling it, when it's ready you'll get a reading, and otherwise NAN.
 // SparkFun_MicroPressure library by Alex Wende July 2020 (Beerware license)
 // This is a library for the Qwiic MicroPressure Sensor, which can read from 0 to 25 PSI.
 #pragma once
@@ -73,7 +74,7 @@ float SparkFun_MicroPressure::readPressure(Pressure_Units units) {
     idle = false;
     if(_eoc == -1) {  // Check status byte if GPIO is not defined
         status = readStatus();
-        if (status&BUSY_FLAG && (status!=0xFF)) return NAN;  
+        if (status&BUSY_FLAG && (status!=0xFF)) return NAN;  // The bus is busy still, calling function should try again in a ms or so
     }
     else if (!digitalRead(_eoc)) return NAN;  // Wait for new pressure reading available (eoc = high) // Use GPIO pin if defined
     idle = true;

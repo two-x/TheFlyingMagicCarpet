@@ -74,8 +74,8 @@
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
 #define disp_simbuttons_x 165
 #define disp_simbuttons_y 48
-#define disp_sprite_width 155
-#define disp_sprite_height 192
+#define disp_saver_width 155
+#define disp_saver_height 192
 
 // string* pagecard = new string[8];  // How we might allocate on the heap instead of in the stack
 // string* modecard = new string[7];
@@ -259,14 +259,14 @@ class Display {
         long eraser_velo_max = 8;
         long eraser_pos[2] = { 0, 0 };
         long eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) };
-        long eraser_pos_max[2] = { disp_sprite_width / 2 - eraser_rad, disp_sprite_height / 2 - eraser_rad }; 
+        long eraser_pos_max[2] = { disp_saver_width / 2 - eraser_rad, disp_saver_height / 2 - eraser_rad }; 
         long eraser_velo_sign[2] = { 1, 1 };
-        int spritenumcycles; int spritecycle = 1; int spriteshape_last;
-        int spriteshapes = 3;  // 4
-        int spriteshape = random(spriteshapes);  // 3
-        uint32_t sprite_cycletime_us = 60000000;
-        Timer spriteRefreshTimer, spriteCycleTimer;
-        int16_t sprite_lines_mode = 0;  // 0 = eraser, 1 = do drugs
+        int savernumcycles; int savercycle = 1; int savershape_last;
+        int savershapes = 3;  // 4
+        int savershape = random(savershapes);  // 3
+        uint32_t saver_cycletime_us = 60000000;
+        Timer saverRefreshTimer, saverCycleTimer;
+        int16_t saver_lines_mode = 0;  // 0 = eraser, 1 = do drugs
     public:
 
         Display (int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0){}
@@ -293,7 +293,7 @@ class Display {
             set_idiotcolors();
             draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, true);
             _disp_redraw_all = true;
-            sprite_setup();
+            saver_setup();
         }
         bool tft_reset() {  // call to begin a tft reset, and continue to call every loop until returns true (or get_reset_finished() returns true), then stop
             if (reset_finished) {
@@ -599,7 +599,7 @@ class Display {
             }
         }
         void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
-            _tft.fillRect(disp_simbuttons_x, disp_simbuttons_y, disp_sprite_width, disp_sprite_height, BLK);
+            _tft.fillRect(disp_simbuttons_x, disp_simbuttons_y, disp_saver_width, disp_saver_height, BLK);
             _tft.setTextColor (LYEL);
             for (int32_t row = 0; row < arraysize(simgrid); row++) {
                 for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
@@ -860,11 +860,11 @@ class Display {
                 draw_bool(syspower, 5);
                 _procrastinate = true;
             }
-            if (screensaver && !simulator.get_enabled() && !_procrastinate) sprite_update();
+            if (screensaver && !simulator.get_enabled() && !_procrastinate) saver_update();
             _procrastinate = false;
             _disp_redraw_all = false;
         }
-        void sprite_touch(int16_t x, int16_t y) {
+        void saver_touch(int16_t x, int16_t y) {
             touchpoint_x = x;
             touchpoint_y = y;
             printf("Got X=%d, Y=%d\n", touchpoint_x, touchpoint_y);
@@ -875,60 +875,57 @@ class Display {
             }
             printf("Got X=%d, Y=%d\n", touchpoint_x, touchpoint_y);
         }
-        void sprite_setup() {
+        void saver_setup() {
             // _spr.setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
-            _spr.createSprite(disp_sprite_width, disp_sprite_height);  // Create a sprite of defined size
+            _spr.createSprite(disp_saver_width, disp_saver_height);  // Create a sprite of defined size
             _spr.fillSprite(TFT_BLACK);
-            // _spr.pushSprite(disp_simbuttons_x, disp_simbuttons_y);
-            // _spr.drawRect(0, 0, disp_sprite_width, disp_sprite_height, TFT_BLUE);
-            // delay(1000);
-            star_x0 = random(disp_sprite_width);        // Random x coordinate
-            star_y0 = random(disp_sprite_height);       // Random y coordinate
-            if (sprite_lines_mode == 1) spriteshape = 1;
+            star_x0 = random(disp_saver_width);        // Random x coordinate
+            star_y0 = random(disp_saver_height);       // Random y coordinate
+            if (saver_lines_mode == 1) savershape = 1;
             for (int16_t axis=0; axis<=1; axis++) { eraser_velo_sign[axis] = (random(1)) ? 1 : -1; }
             _spr.setTextDatum(MC_DATUM);
             _spr.setTextColor(BLK);
-            spriteRefreshTimer.set(50000);
-            spriteCycleTimer.set((int64_t)sprite_cycletime_us);
+            saverRefreshTimer.set(50000);
+            saverCycleTimer.set((int64_t)saver_cycletime_us);
         }
-        void sprite_update() {
-            if (spriteRefreshTimer.expireset()) {
-                if (spriteCycleTimer.expireset()) {
-                    spritenumcycles++;
-                    if (sprite_lines_mode == 1) {
-                        if (!spritecycle) _spr.fillSprite(BLK);
-                        spritecycle = !spritecycle;
+        void saver_update() {
+            if (saverRefreshTimer.expireset()) {
+                if (saverCycleTimer.expireset()) {
+                    savernumcycles++;
+                    if (saver_lines_mode == 1) {
+                        if (!savercycle) _spr.fillSprite(BLK);
+                        savercycle = !savercycle;
                     }
-                    else if (sprite_lines_mode == 0) {
-                        if (--spritecycle < 0b01) spritecycle = 0b11;
-                        if (!(spritenumcycles % spriteshapes)) {
-                            spriteshape_last = spriteshape;
-                            while (spriteshape == spriteshape_last) spriteshape = random(spriteshapes);
+                    else if (saver_lines_mode == 0) {
+                        if (--savercycle < 0b01) savercycle = 0b11;
+                        if (!(savernumcycles % savershapes)) {
+                            savershape_last = savershape;
+                            while (savershape == savershape_last) savershape = random(savershapes);
                         }
                     }
                 }
-                uint16_t color = spritecycle ? random(0x10000) : BLK; // Returns colour 0 - 0xFFFF
-                long star_x1 = random(disp_sprite_width);        // Random x coordinate
-                long star_y1 = random(disp_sprite_height);       // Random y coordinate
-                if (!(sprite_lines_mode == 0 && (spritecycle == 0b10))) {
-                    if (spriteshape == 0) _spr.drawLine(star_x0, star_y0, star_x1, star_y1, color); 
-                    else if (spriteshape == 1) _spr.drawCircle(random(disp_sprite_width), random(disp_sprite_height), random(20), random(0x10000));
-                    else if (spriteshape == 2)      // Draw pixels in sprite
+                uint16_t color = savercycle ? random(0x10000) : BLK; // Returns colour 0 - 0xFFFF
+                long star_x1 = random(disp_saver_width);        // Random x coordinate
+                long star_y1 = random(disp_saver_height);       // Random y coordinate
+                if (!(saver_lines_mode == 0 && (savercycle == 0b10))) {
+                    if (savershape == 0) _spr.drawLine(star_x0, star_y0, star_x1, star_y1, color); 
+                    else if (savershape == 1) _spr.drawCircle(random(disp_saver_width), random(disp_saver_height), random(20), random(0x10000));
+                    else if (savershape == 2)      // Draw pixels in sprite
                         for (int star=0; star<35; star++) 
-                            _spr.drawPixel(random(disp_sprite_width), random(disp_sprite_height), random(0x10000));      // Draw pixel in sprite
+                            _spr.drawPixel(random(disp_saver_width), random(disp_saver_height), random(0x10000));      // Draw pixel in sprite
                     // Whoa, this routine causes a reset after a few seconds!
-                    // else if (spriteshape = 3) {
+                    // else if (savershape = 3) {
                     //     _spr.setTextColor(random(0x10000));
                     //     _spr.setTextSize (1);
                     //     _spr.setCursor(star_x1, star_y1);
                     //     _spr.drawString((char)random(255), star_x1, star_y1, 1);  // static_cast<char>((random(16) << 8) | random(16)));
                     // }    
                 }
-                if (sprite_lines_mode == 1 && !spritecycle) _spr.drawLine(star_x0+1, star_y0+1, star_x1+1, star_y1+1, color);
+                if (saver_lines_mode == 1 && !savercycle) _spr.drawLine(star_x0+1, star_y0+1, star_x1+1, star_y1+1, color);
                 // 
                 star_x0 = star_x1;
                 star_y0 = star_y1;
-                if (sprite_lines_mode == 0 && spritecycle != 0b01) {
+                if (saver_lines_mode == 0 && savercycle != 0b01) {
                     for (int axis=0; axis<=1; axis++) {
                         eraser_pos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
                         if (eraser_pos[axis] * eraser_velo_sign[axis] >= eraser_pos_max[axis]) {
@@ -938,10 +935,10 @@ class Display {
                             eraser_velo_sign[axis] *= -1;
                         }
                     }
-                    _spr.fillCircle((disp_sprite_width / 2) + eraser_pos[0], (disp_sprite_height / 2) + eraser_pos[1], eraser_rad, BLK);
+                    _spr.fillCircle((disp_saver_width / 2) + eraser_pos[0], (disp_saver_height / 2) + eraser_pos[1], eraser_rad, BLK);
                 } 
-                else if (sprite_lines_mode == 1) _spr.drawString("do drugs", disp_sprite_width / 2, disp_sprite_height / 2, 4);
-                // _spr.drawString("do drugs", disp_sprite_width / 2, (int32_t)(float)disp_sprite_height * (float)(spriteCycleTimer.elapsed() / (float)sprite_cycletime_us), 4);
+                else if (saver_lines_mode == 1) _spr.drawString("do drugs", disp_saver_width / 2, disp_saver_height / 2, 4);
+                // _spr.drawString("do drugs", disp_saver_width / 2, (int32_t)(float)disp_saver_height * (float)(saverCycleTimer.elapsed() / (float)saver_cycletime_us), 4);
                 _spr.pushSprite(disp_simbuttons_x, disp_simbuttons_y);
             }
         }
