@@ -523,7 +523,7 @@ class MAPSensor : public I2CSensor {
                     printf("  Sensor not responding\n");  // Begin communication with air flow sensor) over I2C 
                     set_source(ControllerMode::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
                 } else {
-                    printf("  Reading %f atm manifold pressure\n", _sensor.readPressure(ATM));
+                    printf("  Reading %f atm manifold pressure\n", _sensor.readPressure(atm));
                     printf("  Sensor responding properly\n");
                 }
             } else {

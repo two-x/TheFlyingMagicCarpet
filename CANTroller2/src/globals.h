@@ -3,7 +3,7 @@
 #include <ESP32Servo.h>        // Makes PWM output to control motors (for rudimentary control of our gas and steering)
 #include <DallasTemperature.h>
 #include <Wire.h>
-#include <SparkFun_MicroPressure.h>
+#include "map.h"
 #include <Preferences.h>
 #include <iostream>
 // #include "freertos/FreeRTOS.h"  // MCPWM pulse measurement code
