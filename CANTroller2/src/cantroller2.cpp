@@ -17,6 +17,13 @@ Display screen;
 ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
 neopixelStrip neo;
 
+// void update_saver(void* parameter) {
+//     while (true) {
+//         screen.saver_update();
+//         delay(10);
+//     }
+// }
+
 #ifdef CAP_TOUCH
 TouchScreen ts;
 #else
@@ -146,6 +153,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         ts.init();
         printf ("touchscreen initialized..\n");
     }
+
+    // xTaskCreate(update_saver, "Update Screensaver", 2048, NULL, 4, NULL);
 
     std::cout << "Init neopixel.. ";
     neo.init((uint8_t)neopixel_pin, 1);

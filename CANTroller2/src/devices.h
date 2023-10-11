@@ -502,7 +502,7 @@ class MAPSensor : public I2CSensor {
         float last_reading = -1;
         SparkFun_MicroPressure _sensor;
         virtual float read_sensor() {
-            float temp = _sensor.readPressure(PSI);
+            float temp = _sensor.readPressure(PSI, true);
             if (!std::isnan(temp)) last_reading = temp;
             return last_reading;
             // float temp = _sensor.readPressure(PSI);
