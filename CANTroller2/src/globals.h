@@ -149,7 +149,7 @@ bool remote_starting = false;
 bool remote_starting_last = false;
 bool remote_start_toggle_request = false;
 float cruise_ctrl_extent_adc;       // During cruise adjustments, saves farthest trigger position read
-// float cruise_adjust_scaling_percent = 40;  // What ratio of full throttle range is the max available with each adjustment event?
+// float cruise_adjust_scaling_pc = 40;  // What ratio of full throttle range is the max available with each adjustment event?
 bool cruise_trigger_released = false;
 bool cruise_gesturing = false;          // Is cruise mode enabled by gesturing?  Otherwise by press of cruise button
 bool cruise_sw_held = false;
@@ -236,51 +236,50 @@ BatterySensor battery_sensor(mulebatt_pin);
 // controller related
 enum ctrls { HOTRC, SIM, HEADLESS }; // Possible sources of gas, brake, steering commands
 enum ctrl_axes { HORZ, VERT, CH3, CH4 };
-enum ctrl_vals { RAW, FILT, MIN, DBBOT, CENT, DBTOP, MAX, MARGIN };
-float hotrc_ema_alpha = 0.1;         // [HOTRC/OTHER] alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
-float hotrc[2][8] =               //  human values in percent
-    { { 0.0, 0.0, -100.0, -4.0, 0.0, 4.0, 100.0, 2.5 },     // [HORZ][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]  // MARGIN is how much out of range the reading must be for axis to be completely ignored
-      { 0.0, 0.0, -100.0, -4.0, 0.0, 4.0, 100.0, 2.5 }, };  // [VERT][RAW/FILT/MIN/DBBOT/CENT/DBTOP/MAX/MARGIN]
+enum hotrc_units { US, PC };  // microseconds pulsewidth, or percent of full range
+enum hotrc_vals { RAW, FILT, MIN, CENT, MAX, MARGIN, DBBOT, DBTOP };
 bool ctrl = HOTRC;                             // Use HotRC controller to drive instead of joystick?
-int32_t hotrc_pulse_lims_us[4][3] = { {  970 - 1, 1470 - 5, 1970 - 8 },    // [HORZ] [MIN/CENT/MAX]
-                                      { 1080 - 1, 1580 - 5, 2080 - 8 },    // [VERT] [MIN/CENT/MAX]
-                                      { 1200 - 1, 1500 - 5, 1800 - 8 },    // [CH3] [MIN/CENT/MAX]
-                                      { 1300 - 1, 1500 - 5, 1700 - 8 } };  // [CH4] [MIN/CENT/MAX]
-int32_t hotrc_pulse_abs_min_us = 880;
-int32_t hotrc_pulse_abs_max_us = 2080;
-int32_t hotrc_pulse_margin_us = 20;
+float hotrc_ema_alpha = 0.1;         // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
+float hotrc_pc[2][8] =               //  human values in percent
+    { { 0.0, 0.0, -100.0, 0.0, 100.0, 2.5, -4.0, 4.0 },     // [HORZ] [RAW/FILT/MIN/CENT/MAX/MARGIN/DBBOT/DBTOP]  // MARGIN is how much out of range the reading must be for axis to be completely ignored
+      { 0.0, 0.0, -100.0, 0.0, 100.0, 2.5, -4.0, 4.0 }, };  // [VERT] [RAW/FILT/MIN/CENT/MAX/MARGIN/DBBOT/DBTOP]
+int32_t hotrc_us[4][6] =
+    { { 1500, 1500,  969, 1465, 1962, 20 },     // [HORZ] [RAW/FILT/MIN/CENT/MAX/MARGIN]
+      { 1500, 1500, 1079, 1575, 2072, 20 },     // [VERT] [RAW/FILT/MIN/CENT/MAX/MARGIN]
+      { 1500, 1500, 1199, 1495, 1792, 20 },     // [CH3] [RAW/FILT/MIN/CENT/MAX/MARGIN]
+      { 1500, 1500, 1299, 1495, 1692, 20 }, };  // [CH4] [RAW/FILT/MIN/CENT/MAX/MARGIN]
+int32_t hotrc_absmin_us = 880;
+int32_t hotrc_absmax_us = 2080;
+int32_t hotrc_failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
+int32_t hotrc_failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
+int32_t hotrc_failsafe_pad_us = 10;
+
 int32_t hotrc_spike_buffer[2][3];
 bool hotrc_radio_lost = true;
 bool hotrc_radio_lost_last = hotrc_radio_lost;
 bool hotrc_suppress_next_ch3_event = true; // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 bool hotrc_suppress_next_ch4_event = true; // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 float hotrc_pulse_period_us = 1000000.0 / 50;
-volatile int32_t hotrc_pulse_us[4];  // [HORZ/VERT/CH3/CH4]  // horz_pulse_us, hotrc_vert_pulse_us, hotrc_horz_pulse_filt_us, hotrc_vert_pulse_filt_us;
-int32_t hotrc_pulse_vert_filt_us;  // Only needed for vert channel to detect radio
-int32_t hotrc_pulse_failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
-int32_t hotrc_pulse_failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
-int32_t hotrc_pulse_failsafe_pad_us = 10;
+
 uint32_t hotrc_panic_timeout_us = 200000; // how long to receive flameout-range signal from hotrc vertical before panic stopping
 Timer hotrcPanicTimer(hotrc_panic_timeout_us);
 volatile int64_t hotrc_timer_start;
 volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
 volatile bool hotrc_isr_pin_preread = true;
-volatile int64_t hotrc_horz_pulse_64_us = (int64_t)hotrc_pulse_lims_us[HORZ][CENT];
-volatile int64_t hotrc_vert_pulse_64_us = (int64_t)hotrc_pulse_lims_us[VERT][CENT];
 // volatile int32_t intcount = 0;
 
 // steering related
-float steer_safe_percent = 72.0; // Steering is slower at high speed. How strong is this effect
-float steer_safe_ratio = steer_safe_percent / 100;
+float steer_safe_pc = 72.0; // Steering is slower at high speed. How strong is this effect
+float steer_safe_ratio = steer_safe_pc / 100;
 float speedo_safeline_mph;
 //
-float steer_out_percent, steer_safe_adj_percent;
-float steer_right_max_percent = 100.0;
-float steer_right_percent = 100.0;
-float steer_stop_percent = 0.0;
-float steer_left_percent = -100.0;
-float steer_left_min_percent = -100.0;
-float steer_margin_percent = 2.4;
+float steer_out_pc, steer_safe_adj_pc;
+float steer_right_max_pc = 100.0;
+float steer_right_pc = 100.0;
+float steer_stop_pc = 0.0;
+float steer_left_pc = -100.0;
+float steer_left_min_pc = -100.0;
+float steer_margin_pc = 2.4;
 // float steer_pulse_safe_us = 0;
 float steer_pulse_left_min_us = 500;   // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
 float steer_pulse_left_us = 670;       // Steering pulsewidth corresponding to full-speed right steering (in us). Default setting for jaguar is max 670us
@@ -301,13 +300,13 @@ float pressure_target_psi;
 Timer brakeIntervalTimer(100000);             // How much time between increasing brake force during auto-stop if car still moving?
 int32_t brake_increment_interval_us = 100000; // How often to apply increment during auto-stopping (in us)
 
-float brake_out_percent;
-float brake_retract_max_percent = 100.0; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
-float brake_retract_percent = 100.0;     // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
-float brake_stop_percent = 0.0;          // Brake pulsewidth corresponding to center point where motor movement stops (in us)
-float brake_extend_percent = -100.0;     // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
-float brake_extend_min_percent = -100.0; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
-float brake_margin_percent = 2.4;        // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated
+float brake_out_pc;
+float brake_retract_max_pc = 100.0; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
+float brake_retract_pc = 100.0;     // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
+float brake_stop_pc = 0.0;          // Brake pulsewidth corresponding to center point where motor movement stops (in us)
+float brake_extend_pc = -100.0;     // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
+float brake_extend_min_pc = -100.0; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
+float brake_margin_pc = 2.4;        // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated
 
 float brake_pulse_extend_min_us = 670; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
 float brake_pulse_extend_us = 670;     // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
@@ -315,7 +314,7 @@ float brake_pulse_stop_us = 1500;       // Brake pulsewidth corresponding to cen
 float brake_pulse_retract_us = 2330;     // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
 float brake_pulse_retract_max_us = 2330; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
 float brake_pulse_out_us = brake_pulse_stop_us;               // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
-float brake_motor_govern_duty_percent = 25;  // From motor datasheet
+float brake_motor_govern_duty_pc = 25;  // From motor datasheet
 float brake_pulse_retract_effective_max_us;   // 
 
 // brake actuator position related
@@ -332,7 +331,7 @@ bool reverse_gas_servo = true;
 float gas_pulse_out_us = 1501;        // pid loop output to send to the actuator (gas)
 float gas_pulse_govern_us = 1502;     // Governor must scale the pulse range proportionally. This is given a value in the loop
 Timer gasServoTimer(500000);          // We expect the servo to find any new position within this time
-float gas_governor_percent = 95;      // Software governor will only allow this percent of full-open throttle (percent 0-100)
+float gas_governor_pc = 95;      // Software governor will only allow this percent of full-open throttle (percent 0-100)
 float gas_pulse_cw_min_us = 500;      // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
 float gas_pulse_cw_open_us = 718;     // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
 float gas_pulse_ccw_closed_us = 2000; // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
@@ -372,13 +371,13 @@ Timer brakePidTimer(brake_pid_period_us); // not actually tunable, just needs va
 float brake_spid_initial_kp = 0.323;                                                                         // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
 float brake_spid_initial_ki_hz = 0.000;                                                                      // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
 float brake_spid_initial_kd_s = 0.000;                                                                       // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-QPID brakeQPID(pressure_sensor.get_filtered_value_ptr().get(), &brake_out_percent, &pressure_target_psi,     // input, target, output variable references
-               brake_extend_percent, brake_retract_percent,                                                  // output min, max
+QPID brakeQPID(pressure_sensor.get_filtered_value_ptr().get(), &brake_out_pc, &pressure_target_psi,     // input, target, output variable references
+               brake_extend_pc, brake_retract_pc,                                                  // output min, max
                brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,                     // Kp, Ki, and Kd tuning constants
                QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwCondition, QPID::Action::direct,  // settings  // iAwRoundCond, iAwClamp
-               brake_pid_period_us, QPID::Control::timer, QPID::centMode::center, brake_stop_percent); // period, more settings
+               brake_pid_period_us, QPID::Control::timer, QPID::centMode::center, brake_stop_pc); // period, more settings
                // QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwRound, QPID::Action::direct,  // settings  // iAwRoundCond, iAwClamp
-               // brake_pid_period_us, QPID::Control::timer, QPID::centMode::centerStrict, brake_stop_percent); // period, more settings
+               // brake_pid_period_us, QPID::Control::timer, QPID::centMode::centerStrict, brake_stop_pc); // period, more settings
 
 // Gas : Controls the throttle to achieve the desired intake airflow and engine rpm
 
@@ -429,33 +428,33 @@ bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrc
 // void handle_hotrc_vert(int32_t pulse_width) { if (pulse_width > 0) hotrc_vert_pulse_64_us = pulse_width; }  // reads return 0 if the buffer is empty eg bc our loop is running faster than the rmt is getting pulses;
 // void handle_hotrc_horz(int32_t pulse_width) { if (pulse_width > 0) hotrc_vert_pulse_64_us = pulse_width; }
 void hotrc_ch3_update(void) {                                                            //
-    hotrc_pulse_us[CH3] = hotrc_ch3.readPulseWidth(true);
-    hotrc_ch3_sw = (hotrc_pulse_us[CH3] <= 1500); // Ch3 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH3][CENT]
+    hotrc_us[CH3][RAW] = hotrc_ch3.readPulseWidth(true);
+    hotrc_ch3_sw = (hotrc_us[CH3][RAW] <= hotrc_us[CH3][CENT]); // Ch3 switch true if short pulse, otherwise false  hotrc_us[CH3][CENT]
     if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true; // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch3_sw_last = hotrc_ch3_sw;
 }
 void hotrc_ch4_update(void) {                                                            //
-    hotrc_pulse_us[CH4] = hotrc_ch4.readPulseWidth(true);
-    hotrc_ch4_sw = (hotrc_pulse_us[CH4] <= 1500); // Ch4 switch true if short pulse, otherwise false  hotrc_pulse_lims_us[CH4][CENT]
+    hotrc_us[CH4][RAW] = hotrc_ch4.readPulseWidth(true);
+    hotrc_ch4_sw = (hotrc_us[CH4][RAW] <= hotrc_us[CH4][CENT]); // Ch4 switch true if short pulse, otherwise false  hotrc_us[CH4][CENT]
     if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true; // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
 // void calc_ctrl_lims(void) {
-//     hotrc[VERT][DBBOT] = hotrc[VERT][CENT] - ctrl_lims_adc[ctrl][VERT][DB] / 2; // Lower threshold of vert joy deadband (ADC count 0-4095)
-//     hotrc[VERT][DBTOP] = hotrc[VERT][CENT] + ctrl_lims_adc[ctrl][VERT][DB] / 2; // Upper threshold of vert joy deadband (ADC count 0-4095)
-//     hotrc[HORZ][DBBOT] = hotrc[HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][DB] / 2; // Lower threshold of horz joy deadband (ADC count 0-4095)
-//     hotrc[HORZ][DBTOP] = hotrc[HORZ][CENT] + ctrl_lims_adc[ctrl][HORZ][DB] / 2; // Upper threshold of horz joy deadband (ADC count 0-4095)
-//     steer_safe_ratio = steer_safe_percent / 100.0;
+//     hotrc_pc[VERT][DBBOT] = hotrc_pc[VERT][CENT] - ctrl_lims_adc[ctrl][VERT][DB] / 2; // Lower threshold of vert joy deadband (ADC count 0-4095)
+//     hotrc_pc[VERT][DBTOP] = hotrc_pc[VERT][CENT] + ctrl_lims_adc[ctrl][VERT][DB] / 2; // Upper threshold of vert joy deadband (ADC count 0-4095)
+//     hotrc_pc[HORZ][DBBOT] = hotrc_pc[HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][DB] / 2; // Lower threshold of horz joy deadband (ADC count 0-4095)
+//     hotrc_pc[HORZ][DBTOP] = hotrc_pc[HORZ][CENT] + ctrl_lims_adc[ctrl][HORZ][DB] / 2; // Upper threshold of horz joy deadband (ADC count 0-4095)
+//     steer_safe_ratio = steer_safe_pc / 100.0;
 // }
 void calc_governor(void) {
-    tach_govern_rpm = map(gas_governor_percent, 0.0, 100.0, 0.0, tachometer.get_redline_rpm()); // Create an artificially reduced maximum for the engine speed
+    tach_govern_rpm = map(gas_governor_pc, 0.0, 100.0, 0.0, tachometer.get_redline_rpm()); // Create an artificially reduced maximum for the engine speed
     cruiseQPID.SetOutputLimits(throttle.get_idlespeed(), tach_govern_rpm);
     gas_pulse_govern_us = map(tach_govern_rpm, throttle.get_idlespeed(), tachometer.get_redline_rpm(), gas_pulse_ccw_closed_us, gas_pulse_cw_open_us); // Governor must scale the pulse range proportionally
-    // gas_pulse_govern_us = map(gas_governor_percent * (tach_govern_rpm - throttle.get_idlespeed()) / tachometer.get_redline_rpm(), 0.0, 100.0, gas_pulse_ccw_closed_us, gas_pulse_cw_open_us); // Governor must scale the pulse range proportionally
-    speedo_govern_mph = map(gas_governor_percent, 0.0, 100.0, 0.0, speedometer.get_redline_mph());                                                                                     // Governor must scale the top vehicle speed proportionally
+    // gas_pulse_govern_us = map(gas_governor_pc * (tach_govern_rpm - throttle.get_idlespeed()) / tachometer.get_redline_rpm(), 0.0, 100.0, gas_pulse_ccw_closed_us, gas_pulse_cw_open_us); // Governor must scale the pulse range proportionally
+    speedo_govern_mph = map(gas_governor_pc, 0.0, 100.0, 0.0, speedometer.get_redline_mph());                                                                                     // Governor must scale the top vehicle speed proportionally
 }
 float steer_safe(float endpoint) {
-    return steer_stop_percent + (endpoint - steer_stop_percent) * (1 - steer_safe_ratio * speedometer.get_filtered_value() / speedometer.get_redline_mph());
+    return steer_stop_pc + (endpoint - steer_stop_pc) * (1 - steer_safe_ratio * speedometer.get_filtered_value() / speedometer.get_redline_mph());
 }
 
 // int* x is c++ style, int *x is c style
@@ -615,15 +614,14 @@ void detect_errors() {
         err_sensor[RANGE][e_pressure] = ((val && val < pressure_sensor.get_min_native()) || val > pressure_sensor.get_max_native());
         err_sensor[LOST][e_pressure] = (val < err_margin_adc);
         err_sensor[LOST][e_battery] = (analogRead(mulebatt_pin) > battery_sensor.get_max_native());
-        int32_t halfmargin = hotrc_pulse_margin_us / 2;
         for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
-            err_sensor[RANGE][ch] = !hotrc_radio_lost && ((hotrc_pulse_us[ch] < hotrc_pulse_lims_us[ch][MIN] - halfmargin) 
-                                    || (hotrc_pulse_us[ch] > hotrc_pulse_lims_us[ch][MAX] + halfmargin));  // && ch != VERT
-            err_sensor[LOST][ch] = !hotrc_radio_lost && ((hotrc_pulse_us[ch] < (hotrc_pulse_abs_min_us - hotrc_pulse_margin_us))
-                                    || (hotrc_pulse_us[ch] > (hotrc_pulse_abs_max_us + hotrc_pulse_margin_us)));
+            err_sensor[RANGE][ch] = !hotrc_radio_lost && ((hotrc_us[ch][RAW] < hotrc_us[ch][MIN] - (hotrc_us[ch][MARGIN] >> 1)) 
+                                    || (hotrc_us[ch][RAW] > hotrc_us[ch][MAX] + (hotrc_us[ch][MARGIN] >> 1)));  // && ch != VERT
+            err_sensor[LOST][ch] = !hotrc_radio_lost && ((hotrc_us[ch][RAW] < (hotrc_absmin_us - hotrc_us[ch][MARGIN]))
+                                    || (hotrc_us[ch][RAW] > (hotrc_absmax_us + hotrc_us[ch][MARGIN])));
         }
-        // err_sensor[RANGE][e_hrcvert] = (hotrc_pulse_us[VERT] < hotrc_pulse_failsafe_us - hotrc_pulse_margin_us)
-        //     || ((hotrc_pulse_us[VERT] < hotrc_pulse_lims_us[VERT][MIN] - halfmargin) && (hotrc_pulse_us[VERT] > hotrc_pulse_failsafe_us + hotrc_pulse_margin_us));
+        // err_sensor[RANGE][e_hrcvert] = (hotrc_us[VERT][RAW] < hotrc_failsafe_us - hotrc_us[ch][MARGIN])
+        //     || ((hotrc_us[VERT][RAW] < hotrc_us[VERT][MIN] - halfmargin) && (hotrc_us[VERT][RAW] > hotrc_failsafe_us + hotrc_us[ch][MARGIN]));
         
         // Set sensor error idiot light flags
         // printf ("Sensors errors: ");

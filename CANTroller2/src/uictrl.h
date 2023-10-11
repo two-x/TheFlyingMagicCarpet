@@ -12,8 +12,8 @@ class Potentiometer {
         static constexpr float adc_min = 300; // TUNED 230603 - Used only in determining theconversion factor
         static constexpr float adc_max = 4095; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
         static constexpr float _ema_alpha = 0.1;
-        static constexpr float _percent_min = 0.0;
-        static constexpr float _percent_max = 100.0;
+        static constexpr float _pc_min = 0.0;
+        static constexpr float _pc_max = 100.0;
         uint8_t _pin;
         float _val;
     public:
@@ -23,17 +23,17 @@ class Potentiometer {
             set_pin(_pin, INPUT);
         }
         void update() {
-            float new_val = map(static_cast<float>(analogRead(_pin)), adc_min, adc_max, _percent_min, _percent_max);
-            new_val = constrain(new_val, _percent_min, _percent_max); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
+            float new_val = map(static_cast<float>(analogRead(_pin)), adc_min, adc_max, _pc_min, _pc_max);
+            new_val = constrain(new_val, _pc_min, _pc_max); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
             _val = ema_filt(new_val, _val, _ema_alpha);
         }
         template<typename VAL_T>
         VAL_T mapToRange(VAL_T min, VAL_T max) {
-            return static_cast<VAL_T>(map(_val, _percent_min, _percent_max, static_cast<float>(min), static_cast<float>(max)));
+            return static_cast<VAL_T>(map(_val, _pc_min, _pc_max, static_cast<float>(min), static_cast<float>(max)));
         }
         float get() { return _val; }
-        float min() { return _percent_min; }
-        float max() { return _percent_max; }
+        float min() { return _pc_min; }
+        float max() { return _pc_max; }
 };
 
 class Encoder {
@@ -357,16 +357,16 @@ class neopixelStrip {
     float minelement(float r, float g, float b) {
         return (r < g) ? ((r < b) ? r : b) : ((g < b) ? g : b);  // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
     }
-    colortype dimmer(colortype color, int8_t bright_percent) {  // brightness 0 is off, 100 is max brightness while retaining same hue and saturation
+    colortype dimmer(colortype color, int8_t bright_pc) {  // brightness 0 is off, 100 is max brightness while retaining same hue and saturation
         float rgb[3] = { static_cast<float>(color.R), static_cast<float>(color.G), static_cast<float>(color.B) };
-        float fbright = (float)bright_percent * 2.55 / maxelement(rgb[0], rgb[1], rgb[2]);  // max(color.r, color.g, color.b);  // 2.55 = 0xff / 100
+        float fbright = (float)bright_pc * 2.55 / maxelement(rgb[0], rgb[1], rgb[2]);  // max(color.r, color.g, color.b);  // 2.55 = 0xff / 100
         float sat = 1;  // 1 - desatlevel * desatlevel / 100.0;
         float c[3] = { correction[0] * sat, correction[1] * sat, correction[2] * sat };
         for (int32_t element=0; element<3; element++)
             rgb[element] *= fbright * c[element];
         return colortype(rgb[0], rgb[1], rgb[2]);  // return CRGB((float)(color.r * fbright), (float)(color.g * fbright), (float)(color.b * fbright));
     }
-    colortype desaturate(colortype color, int32_t desat_of_ten) {  // desat_percent=0 has no effect, =10 desaturates all the way to greyscale, =-99 saturates to max. without change in brightness
+    colortype desaturate(colortype color, int32_t desat_of_ten) {  // desat_pc=0 has no effect, =10 desaturates all the way to greyscale, =-99 saturates to max. without change in brightness
         uint8_t rgb[3] = { static_cast<uint8_t>(color.R), static_cast<uint8_t>(color.G), static_cast<uint8_t>(color.B) };
         // printf (" Desat: (%d) before: 0x%02x %02x %02x", desat_of_ten, rgb[0], rgb[1], rgb[2]);
         float dominant = maxelement(rgb[0], rgb[1], rgb[2]);

@@ -151,14 +151,14 @@ public:
                 if (tcol == 3 && trow == 0 && simulator.can_simulate(SimOption::basicsw) && !touch_now_touched) basicmodesw = !basicmodesw;
                 else if (tcol == 3 && trow == 1 && simulator.can_simulate(SimOption::pressure) && pressure_sensor.source() == ControllerMode::TOUCH) pressure_sensor.add_human((float)touch_accel); // (+= 25) Pressed the increase brake pressure button
                 else if (tcol == 3 && trow == 2 && simulator.can_simulate(SimOption::pressure) && pressure_sensor.source() == ControllerMode::TOUCH) pressure_sensor.add_human((float)(-touch_accel)); // (-= 25) Pressed the decrease brake pressure button
-                else if (tcol == 3 && trow == 4 && simulator.can_simulate(SimOption::joy)) adj_val(&hotrc[HORZ][FILT], -touch_accel, hotrc[HORZ][MIN], hotrc[HORZ][MAX]);
+                else if (tcol == 3 && trow == 4 && simulator.can_simulate(SimOption::joy)) adj_val(&hotrc_pc[HORZ][FILT], -touch_accel, hotrc_pc[HORZ][MIN], hotrc_pc[HORZ][MAX]);
                 else if (tcol == 4 && trow == 1 && simulator.can_simulate(SimOption::tach) && tachometer.source() == ControllerMode::TOUCH) tachometer.add_human((float)touch_accel * 0.1);
                 else if (tcol == 4 && trow == 2 && simulator.can_simulate(SimOption::tach) && tachometer.source() == ControllerMode::TOUCH) tachometer.add_human((float)-touch_accel * 0.1);
-                else if (tcol == 4 && trow == 3 && simulator.can_simulate(SimOption::joy)) adj_val(&hotrc[VERT][FILT], touch_accel, hotrc[VERT][MIN], hotrc[VERT][MAX]);
-                else if (tcol == 4 && trow == 4 && simulator.can_simulate(SimOption::joy)) adj_val(&hotrc[VERT][FILT], -touch_accel, hotrc[VERT][MIN], hotrc[VERT][MAX]);
+                else if (tcol == 4 && trow == 3 && simulator.can_simulate(SimOption::joy)) adj_val(&hotrc_pc[VERT][FILT], touch_accel, hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
+                else if (tcol == 4 && trow == 4 && simulator.can_simulate(SimOption::joy)) adj_val(&hotrc_pc[VERT][FILT], -touch_accel, hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
                 else if (tcol == 5 && trow == 1 && simulator.can_simulate(SimOption::speedo) && speedometer.source() == ControllerMode::TOUCH) speedometer.add_human((float)touch_accel * 0.05);
                 else if (tcol == 5 && trow == 2 && simulator.can_simulate(SimOption::speedo) && speedometer.source() == ControllerMode::TOUCH) speedometer.add_human((float)-touch_accel * 0.05);
-                else if (tcol == 5 && trow == 4 && simulator.can_simulate(SimOption::joy)) adj_val(&hotrc[HORZ][FILT], touch_accel, hotrc[HORZ][MIN], hotrc[HORZ][MAX]);
+                else if (tcol == 5 && trow == 4 && simulator.can_simulate(SimOption::joy)) adj_val(&hotrc_pc[HORZ][FILT], touch_accel, hotrc_pc[HORZ][MIN], hotrc_pc[HORZ][MAX]);
             }
             // Update the touch_accel_exponent if needed
             if (touch_accel_exponent < touch_accel_exponent_max && (touchHoldTimer.elapsed() > (touch_accel_exponent + 1) * touchAccelTimer.get_timeout())) {

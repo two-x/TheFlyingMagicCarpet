@@ -712,14 +712,14 @@ class Display {
             if ((dispRefreshTimer.expired() && !_procrastinate) || _disp_redraw_all) {
                 dispRefreshTimer.reset();
                 float drange;
-                draw_dynamic(1, hotrc[VERT][FILT], hotrc[VERT][MIN], hotrc[VERT][MAX]);
+                draw_dynamic(1, hotrc_pc[VERT][FILT], hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
                 draw_dynamic(2, speedometer.get_filtered_value(), 0.0, speedometer.get_redline_mph(), speedo_target_mph);
                 draw_dynamic(3, tachometer.get_filtered_value(), 0.0, tachometer.get_redline_rpm(), tach_target_rpm);
                 draw_dynamic(4, gas_pulse_out_us, gas_pulse_cw_open_us, gas_pulse_ccw_closed_us);
                 draw_dynamic(5, pressure_sensor.get_filtered_value(), pressure_sensor.get_min_human(), pressure_sensor.get_max_human(), pressure_target_psi);  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.get_target() : pressure_target_adc);
-                draw_dynamic(6, brake_out_percent, brake_extend_percent, brake_retract_percent);
-                draw_dynamic(7, hotrc[HORZ][FILT], hotrc[HORZ][MIN], hotrc[HORZ][MAX]);
-                draw_dynamic(8, steer_out_percent, steer_left_percent, steer_right_percent);
+                draw_dynamic(6, brake_out_pc, brake_extend_pc, brake_retract_pc);
+                draw_dynamic(7, hotrc_pc[HORZ][FILT], hotrc_pc[HORZ][MIN], hotrc_pc[HORZ][MAX]);
+                draw_dynamic(8, steer_out_pc, steer_left_pc, steer_right_pc);
                 if (dataset_page == PG_RUN) {
                     draw_dynamic(9, brkpos_sensor.get_filtered_value(), BrakePositionSensor::abs_min_retract_in, BrakePositionSensor::abs_max_extend_in);
                     draw_dynamic(10, battery_sensor.get_filtered_value(), battery_sensor.get_min_v(), battery_sensor.get_max_v());
@@ -727,24 +727,24 @@ class Display {
                     draw_dynamic(12, airflow_sensor.get_filtered_value(), airflow_sensor.get_min_mph(), airflow_sensor.get_max_mph());
                     draw_dynamic(13, map_sensor.get_filtered_value(), map_sensor.get_min_psi(), map_sensor.get_max_psi());
                     draw_dynamic(14, maf_gps, maf_min_gps, maf_max_gps);
-                    draw_dynamic(15, gas_governor_percent, 0.0, 100.0);
-                    draw_dynamic(16, steer_safe_percent, 0.0, 100.0);
+                    draw_dynamic(15, gas_governor_pc, 0.0, 100.0);
+                    draw_dynamic(16, steer_safe_pc, 0.0, 100.0);
                     draw_dynamic(17, neobright, 1.0, 100.0, -1, 3);
                     draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
                     draw_truth(19, screensaver, 0);
                 }
                 else if (dataset_page == PG_JOY) {
-                    draw_dynamic(9, hotrc_pulse_us[HORZ], hotrc_pulse_lims_us[HORZ][MIN], hotrc_pulse_lims_us[HORZ][MAX]);  // Programmed centerpoint is 230 adc
-                    draw_dynamic(10, hotrc_pulse_us[VERT], hotrc_pulse_lims_us[VERT][MIN], hotrc_pulse_lims_us[VERT][MAX]);  // Programmed centerpoint is 230 adc
+                    draw_dynamic(9, hotrc_us[HORZ][RAW], hotrc_us[HORZ][MIN], hotrc_us[HORZ][MAX]);  // Programmed centerpoint is 230 adc
+                    draw_dynamic(10, hotrc_us[VERT][RAW], hotrc_us[VERT][MIN], hotrc_us[VERT][MAX]);  // Programmed centerpoint is 230 adc
                     draw_eraseval(11);
                     draw_eraseval(12);
                     draw_eraseval(13);
                     draw_eraseval(14);
-                    draw_dynamic(15, hotrc_pulse_failsafe_us, hotrc_pulse_abs_min_us, hotrc_pulse_lims_us[VERT][MIN] - hotrc_pulse_margin_us);
-                    draw_dynamic(16, (int)hotrc[HORZ][MIN], 0, (int)hotrc[HORZ][MAX]);
-                    draw_dynamic(17, (int)hotrc[HORZ][MAX], (int)hotrc[HORZ][MIN], (int)adcrange_adc);
-                    draw_dynamic(18, (int)hotrc[VERT][MIN], 0, (int)hotrc[VERT][MAX]);
-                    draw_dynamic(19, (int)hotrc[VERT][MAX], (int)hotrc[VERT][MIN], (int)adcrange_adc);
+                    draw_dynamic(15, hotrc_failsafe_us, hotrc_absmin_us, hotrc_us[VERT][MIN] - hotrc_us[VERT][MARGIN]);
+                    draw_dynamic(16, (int)hotrc_pc[HORZ][MIN], 0, (int)hotrc_pc[HORZ][MAX]);
+                    draw_dynamic(17, (int)hotrc_pc[HORZ][MAX], (int)hotrc_pc[HORZ][MIN], (int)adcrange_adc);
+                    draw_dynamic(18, (int)hotrc_pc[VERT][MIN], 0, (int)hotrc_pc[VERT][MAX]);
+                    draw_dynamic(19, (int)hotrc_pc[VERT][MAX], (int)hotrc_pc[VERT][MIN], (int)adcrange_adc);
                 }
                 else if (dataset_page == PG_CAR) {
                     draw_dynamic(9, pressure_sensor.get_native(), pressure_sensor.get_min_native(), pressure_sensor.get_max_native());                    
