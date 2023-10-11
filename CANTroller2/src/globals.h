@@ -157,13 +157,13 @@ bool cruise_adjusting = false;
 int32_t cruise_adjust_delta_max_us_per_s = 200;  // What's the fastest rate cruise adjustment can change pulse width (in us per second)
 Timer cruiseDeltaTimer;
 bool flycruise_toggle_request = false;
-int32_t flycruise_vert_margin_adc = 25; // Margin of error for determining hard brake value for dropping out of cruise mode
+float flycruise_vert_margin_adc = 0.3; // Margin of error for determining hard brake value for dropping out of cruise mode
 Timer gestureFlyTimer; // Used to keep track of time for gesturing for going in and out of fly/cruise modes
 // Timer cruiseSwTimer;  // Was used to require a medium-length hold time pushing cruise button to switch modes
 Timer sleepInactivityTimer(15000000);           // After shutdown how long to wait before powering down to sleep
 Timer stopcarTimer(8000000);                    // Allows code to fail in a sensible way after a delay if nothing is happening
 uint32_t motor_park_timeout_us = 4000000;       // If we can't park the motors faster than this, then give up.
-uint32_t gesture_flytimeout_us = 400000;        // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
+uint32_t gesture_flytimeout_us = 750000;        // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
 uint32_t cruise_sw_timeout_us = 500000;         // how long do you have to hold down the cruise button to start cruise mode (in us)
 uint32_t cruise_antiglitch_timeout_us = 350000; // Target speed won't change until manual adjustment is outside deadboand for longer than this
 Timer cruiseAntiglitchTimer(cruise_antiglitch_timeout_us);
@@ -241,13 +241,13 @@ enum hotrc_vals { RAW, FILT, MIN, CENT, MAX, MARGIN, DBBOT, DBTOP };
 bool ctrl = HOTRC;                             // Use HotRC controller to drive instead of joystick?
 float hotrc_ema_alpha = 0.1;         // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
 float hotrc_pc[2][8] =               //  human values in percent
-    { { 0.0, 0.0, -100.0, 0.0, 100.0, 2.5, -4.0, 4.0 },     // [HORZ] [RAW/FILT/MIN/CENT/MAX/MARGIN/DBBOT/DBTOP]  // MARGIN is how much out of range the reading must be for axis to be completely ignored
-      { 0.0, 0.0, -100.0, 0.0, 100.0, 2.5, -4.0, 4.0 }, };  // [VERT] [RAW/FILT/MIN/CENT/MAX/MARGIN/DBBOT/DBTOP]
+    { { 0.0, 0.0, -100.0, 0.0, 100.0, 2.5, -2.5, 2.5 },     // [HORZ] [RAW/FILT/MIN/CENT/MAX/MARGIN/DBBOT/DBTOP]  // MARGIN is how much out of range the reading must be for axis to be completely ignored
+      { 0.0, 0.0, -100.0, 0.0, 100.0, 2.5, -2.5, 2.5 }, };  // [VERT] [RAW/FILT/MIN/CENT/MAX/MARGIN/DBBOT/DBTOP]
 int32_t hotrc_us[4][6] =
-    { { 1500, 1500,  969, 1465, 1962, 20 },     // [HORZ] [RAW/FILT/MIN/CENT/MAX/MARGIN]
-      { 1500, 1500, 1079, 1575, 2072, 20 },     // [VERT] [RAW/FILT/MIN/CENT/MAX/MARGIN]
-      { 1500, 1500, 1199, 1495, 1792, 20 },     // [CH3] [RAW/FILT/MIN/CENT/MAX/MARGIN]
-      { 1500, 1500, 1299, 1495, 1692, 20 }, };  // [CH4] [RAW/FILT/MIN/CENT/MAX/MARGIN]
+    { { 1500, 1500,  971, 1470, 1968, 20 },     // [HORZ] [RAW/FILT/MIN/CENT/MAX/MARGIN]
+      { 1500, 1500, 1081, 1580, 2078, 20 },     // [VERT] [RAW/FILT/MIN/CENT/MAX/MARGIN]
+      { 1500, 1500, 1151, 1500, 1849, 20 },     // [CH3] [RAW/FILT/MIN/CENT/MAX/MARGIN]
+      { 1500, 1500, 1251, 1500, 1749, 20 }, };  // [CH4] [RAW/FILT/MIN/CENT/MAX/MARGIN]
 int32_t hotrc_absmin_us = 880;
 int32_t hotrc_absmax_us = 2080;
 int32_t hotrc_failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
@@ -264,7 +264,9 @@ float hotrc_pulse_period_us = 1000000.0 / 50;
 uint32_t hotrc_panic_timeout_us = 200000; // how long to receive flameout-range signal from hotrc vertical before panic stopping
 Timer hotrcPanicTimer(hotrc_panic_timeout_us);
 volatile int64_t hotrc_timer_start;
-volatile bool hotrc_ch3_sw, hotrc_ch4_sw, hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw_last, hotrc_ch4_sw_last;
+volatile bool hotrc_ch3_sw_last = true;
+volatile bool hotrc_ch4_sw_last = true;
+volatile bool hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw, hotrc_ch4_sw;
 volatile bool hotrc_isr_pin_preread = true;
 // volatile int32_t intcount = 0;
 

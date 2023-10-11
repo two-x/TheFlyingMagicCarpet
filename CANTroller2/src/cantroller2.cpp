@@ -253,14 +253,16 @@ void loop() {
     else if (!simulator.simulating(SimOption::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
         for (int32_t axis=HORZ; axis<=VERT; axis++) {
             if (hotrc_us[axis][RAW] >= hotrc_us[axis][CENT])  // Convert from pulse us to percent, when pushing left/down, else when pushing right/up
-                hotrc_pc[axis][RAW] = map ((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MAX], hotrc_pc[axis][CENT], hotrc_pc[axis][MIN]);  // When pushing left, or down
-            else hotrc_pc[axis][RAW] = map ((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MIN], hotrc_pc[axis][CENT], hotrc_pc[axis][MAX]);  // When pushing right, or up
-            if (hotrc_radio_lost || (hotrc_pc[axis][FILT] > hotrc_pc[axis][DBBOT] && hotrc_pc[axis][FILT] < hotrc_pc[axis][DBTOP]))
+                hotrc_pc[axis][RAW] = map ((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MAX], hotrc_pc[axis][CENT], hotrc_pc[axis][MAX]);  // When pushing right, or trigger pull
+            else hotrc_pc[axis][RAW] = map ((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MIN], hotrc_pc[axis][CENT], hotrc_pc[axis][MIN]);  // When pushing left, or trigger push
+            if (hotrc_radio_lost)
                 hotrc_pc[axis][FILT] = hotrc_pc[axis][CENT];  // if radio lost set joy_axis_filt to center value
             else {
                 ema_filt (hotrc_pc[axis][RAW], &hotrc_pc[axis][FILT], hotrc_ema_alpha);  // do ema filter to determine joy_vert_filt
                 hotrc_pc[axis][FILT] = constrain (hotrc_pc[axis][FILT], hotrc_pc[axis][MIN], hotrc_pc[axis][MAX]);
             }
+            if (hotrc_pc[axis][FILT] > hotrc_pc[axis][DBBOT] && hotrc_pc[axis][FILT] < hotrc_pc[axis][DBTOP])
+                hotrc_pc[axis][FILT] = hotrc_pc[axis][CENT];  // if within the deadband set joy_axis_filt to center value
         }
     }
 

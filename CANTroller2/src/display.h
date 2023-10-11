@@ -116,7 +116,7 @@ char idlestatecard[ThrottleControl::targetstates::num_states][7] = { "todriv", "
 #define MAXADJRATE "MaxAjR\x83t"
 #define SPED "Sp\x88""d"
 
-char telemetry[disp_fixed_lines][9] = { "Joy Vert", "   Speed", "    Tach", "ThrotPWM", BRAK"Pres", BRAK"Motr", "Joy Horz", STER"Motr", };  // Fixed rows
+char telemetry[disp_fixed_lines][9] = { "TrigVert", "   Speed", "    Tach", "ThrotPWM", BRAK"Pres", BRAK"Motr", "Joy Horz", STER"Motr", };  // Fixed rows
 char units[disp_fixed_lines][5] = { "%   ", "mph ", "rpm ", "us  ", "psi ", "%   ", "%   ", "%   " };  // Fixed rows
 
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, num_datapages };
@@ -125,7 +125,7 @@ int32_t tuning_first_editable_line[disp_tuning_lines] = { 6, 6, 5, 3, 4, 8, 7, 7
 
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
     { BRAK"Posn", "MuleBatt", "     Pot", " Airflow", "     MAP", "MasAirFl", "Governor", STER"Safe", BRIGHTNESS, "NeoDesat", "ScrnSavr", },  // PG_RUN
-    { "HRC Horz", "HRC Vert", "      - ", "      - ", "      - ", "      - ", "HFailsaf", "Horz Min", "Horz Max", "Vert Min", "Vert Max" },  // PG_JOY
+    { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "      - ", "      - ", "HFailsaf", "Horz Min", "Horz Max", "Vert Min", "Vert Max" },  // PG_JOY
     { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", SPED"Idle", SPED"RedL", "BkPos0Pt", },  // PG_CAR
     { "BrakePWM", "SteerPWM", "      - ", STER"Left", STER"Stop", STER"Rght", BRAK"Extd", BRAK"Stop", BRAK"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
@@ -137,7 +137,7 @@ char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
 };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "in  ", "V   ", "%   ", "mph ", "psi ", "g/s ", "%   ", "%   ", "%   ", "/10 ", BINARY },  // PG_RUN
-    { "us  ", "us  ", "    ", "    ", "    ", "    ", "us  ", "%   ", "%   ", "%   ", "%   " },  // PG_JOY
+    { "us  ", "us  ", "us  ", "us  ", "    ", "    ", "us  ", "%   ", "%   ", "%   ", "%   " },  // PG_JOY
     { "adc ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%   ", "mph ", "mph ", "mph ", "in  " },  // PG_CAR
     { "us  ", "us  ", "    ", "    ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PG_PWMS
     { CHOICE, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", DEGR_F, DEGR_F, "rpms", CHOICE },  // PG_IDLE
@@ -734,10 +734,10 @@ class Display {
                     draw_truth(19, screensaver, 0);
                 }
                 else if (dataset_page == PG_JOY) {
-                    draw_dynamic(9, hotrc_us[HORZ][RAW], hotrc_us[HORZ][MIN], hotrc_us[HORZ][MAX]);  // Programmed centerpoint is 230 adc
-                    draw_dynamic(10, hotrc_us[VERT][RAW], hotrc_us[VERT][MIN], hotrc_us[VERT][MAX]);  // Programmed centerpoint is 230 adc
-                    draw_eraseval(11);
-                    draw_eraseval(12);
+                    draw_dynamic(9, hotrc_us[HORZ][RAW], hotrc_us[HORZ][MIN], hotrc_us[HORZ][MAX]);
+                    draw_dynamic(10, hotrc_us[VERT][RAW], hotrc_us[VERT][MIN], hotrc_us[VERT][MAX]);
+                    draw_dynamic(11, hotrc_us[CH3][RAW], hotrc_us[CH3][MIN], hotrc_us[CH3][MAX]);
+                    draw_dynamic(12, hotrc_us[CH4][RAW], hotrc_us[CH4][MIN], hotrc_us[CH4][MAX]);
                     draw_eraseval(13);
                     draw_eraseval(14);
                     draw_dynamic(15, hotrc_failsafe_us, hotrc_absmin_us, hotrc_us[VERT][MIN] - hotrc_us[VERT][MARGIN]);

@@ -198,7 +198,7 @@ private:
             if (cruise_trigger_released && cruise_setpoint_mode == throttle_delta) {
                 if (cruise_adjusting) {
                     float ctrlratio = (float)(hotrc_pc[VERT][FILT] - hotrc_pc[VERT][DBTOP]) / (float)(hotrc_pc[VERT][MAX] - hotrc_pc[VERT][DBTOP]);
-                    gas_pulse_cruise_us = constrain(gas_pulse_cruise_us + ctrlratio * cruise_adjust_delta_max_us_per_s * cruiseDeltaTimer.elapsed() / 1000000.0, gas_pulse_cw_open_us, gas_pulse_ccw_closed_us);
+                    gas_pulse_cruise_us = constrain(gas_pulse_cruise_us - ctrlratio * cruise_adjust_delta_max_us_per_s * cruiseDeltaTimer.elapsed() / 1000000.0, gas_pulse_cw_open_us, gas_pulse_ccw_closed_us);
                 }
                 cruiseDeltaTimer.reset(); 
             }
@@ -220,7 +220,7 @@ private:
             else if (cruise_trigger_released && cruise_setpoint_mode == throttle_delta) {
                 if (cruise_adjusting) {
                     float ctrlratio = (float)(hotrc_pc[VERT][DBBOT] - hotrc_pc[VERT][FILT]) / (float)(hotrc_pc[VERT][DBBOT] - hotrc_pc[VERT][MIN]);
-                    gas_pulse_cruise_us = constrain(gas_pulse_cruise_us - ctrlratio * cruise_adjust_delta_max_us_per_s * cruiseDeltaTimer.elapsed() / 1000000.0, gas_pulse_cw_open_us, gas_pulse_ccw_closed_us);
+                    gas_pulse_cruise_us = constrain(gas_pulse_cruise_us + ctrlratio * cruise_adjust_delta_max_us_per_s * cruiseDeltaTimer.elapsed() / 1000000.0, gas_pulse_cw_open_us, gas_pulse_ccw_closed_us);
                 }
                 cruiseDeltaTimer.reset(); 
             }
@@ -250,8 +250,10 @@ private:
         }
         // If joystick is held full-brake for more than X, driver could be confused & panicking, drop to fly mode so fly mode will push the brakes
         if (hotrc_pc[VERT][FILT] > hotrc_pc[VERT][MIN] + flycruise_vert_margin_adc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
-        else if (gestureFlyTimer.expired()) updateMode(FLY);  // New gesture to drop to fly mode is hold the brake all the way down for more than X ms
-        
+        else {
+            if (gestureFlyTimer.expired()) updateMode(FLY);  // New gesture to drop to fly mode is hold the brake all the way down for more than X ms
+        }
+
         if (speedometer.car_stopped()) updateMode(HOLD);  // In case we slam into camp Q woofer stack, get out of cruise mode
     }
 
