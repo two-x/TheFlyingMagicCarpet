@@ -509,6 +509,7 @@ void update_temperature_sensors(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently
     }
 }
+
 void set_devboard_defaults() {
     simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), 1));
     simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), 1));

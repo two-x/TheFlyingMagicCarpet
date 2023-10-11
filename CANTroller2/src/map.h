@@ -19,9 +19,9 @@ class SparkFun_MicroPressure {
     SparkFun_MicroPressure(int8_t eoc_pin=-1, int8_t rst_pin=-1, uint8_t minimumPSI=MINIMUM_PSI, uint8_t maximumPSI=MAXIMUM_PSI);
     bool begin(uint8_t deviceAddress = DEFAULT_ADDRESS, TwoWire &wirePort = Wire);
     uint8_t readStatus(void);
-    float readPressure(Pressure_Units units=PSI);
+    float readPressure(Pressure_Units units=PSI, bool noblock=false);
   private:
-    bool idle;
+    bool ready;
     float pressure = NAN;
     int8_t _address, _eoc, _rst;
     uint8_t _minPsi, _maxPsi, status;
@@ -53,7 +53,7 @@ bool SparkFun_MicroPressure::begin(uint8_t deviceAddress, TwoWire &wirePort) {
         digitalWrite(_rst,HIGH);
         delay(5);
     }
-    idle = true;
+    ready = true;
     _i2cPort->beginTransmission(_address);
     return !(_i2cPort->endTransmission());
 }
@@ -63,21 +63,25 @@ uint8_t SparkFun_MicroPressure::readStatus(void) {
     return _i2cPort->read();
 }
 // Read the Pressure Sensor Reading - (optional) Pressure_Units, can return various pressure units. Default: PSI
-float SparkFun_MicroPressure::readPressure(Pressure_Units units) {
-    if (idle) {
+float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
+    if (ready) {
         _i2cPort->beginTransmission(_address);
         _i2cPort->write((uint8_t)0xAA);
         _i2cPort->write((uint8_t)0x00);
         _i2cPort->write((uint8_t)0x00);
         _i2cPort->endTransmission();
     }
-    idle = false;
+    ready = false;
     if(_eoc == -1) {  // Check status byte if GPIO is not defined
         status = readStatus();
-        if (status&BUSY_FLAG && (status!=0xFF)) return NAN;  // The bus is busy still, calling function should try again in a ms or so
+        while (status&BUSY_FLAG && (status!=0xFF)) {
+            if (noblock) return NAN;
+            delay(1);  // The bus is busy still, calling function should try again in a ms or so
+            status = readStatus();
+        }
     }
-    else if (!digitalRead(_eoc)) return NAN;  // Wait for new pressure reading available (eoc = high) // Use GPIO pin if defined
-    idle = true;
+    else while (!digitalRead(_eoc)) delay(1);  // return NAN;  // Wait for new pressure reading available (eoc = high) // Use GPIO pin if defined
+    ready = true;
     _i2cPort->requestFrom(_address,4);
     status = _i2cPort->read();
     if((status & INTEGRITY_FLAG) || (status & MATH_SAT_FLAG)) return NAN; //  check memory integrity and math saturation bit
