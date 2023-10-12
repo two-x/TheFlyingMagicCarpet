@@ -78,13 +78,16 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (uart_tx_pin, INPUT);  // 
     running_on_devboard = (read_pin(uart_tx_pin));
     if (running_on_devboard) set_devboard_defaults();
-    set_pin (uart_tx_pin, OUTPUT);  // 
-    Serial.begin (115200);  // Open console serial port
-    delay (800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
-    printf ("Console started..\nUsing %s defaults..\n", (running_on_devboard) ? "vehicle-pcb" : "dev-board");
-    
+    if (console_enabled) {
+        set_pin (uart_tx_pin, OUTPUT);  // 
+        Serial.begin (115200);  // Open console serial port
+        delay (800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
+        printf ("Console started..\nUsing %s defaults..\n", (running_on_devboard) ? "vehicle-pcb" : "dev-board");
+    }
+
     // Set up 4 RMT receivers, one per channel
     printf ("Init rmt for hotrc..\n");
+    hotrc_calc_params();  // Need to establish derived parameter values
     hotrc_vert.init();
     hotrc_horz.init();
     hotrc_ch3.init();
@@ -108,10 +111,10 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     speedometer.setup();
     printf("done..\n");
 
-    printf ("Init i2c and i2c-enabled devices.."); delay(1);  // Attempt to force print to happen before init
-    i2c.init();
-    airflow_sensor.setup(); // must be done after i2c is started
-    map_sensor.setup();
+    // printf ("Init i2c and i2c-enabled devices.."); delay(1);  // Attempt to force print to happen before init
+    // i2c.init();
+    // airflow_sensor.setup(); // must be done after i2c is started
+    // map_sensor.setup();
 
     printf("Simulator setup..\n");
     simulator.register_device(SimOption::pressure, pressure_sensor, pressure_sensor.source());
@@ -171,10 +174,10 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     for (int32_t i=0; i<num_err_types; i++) for (int32_t j=0; j<e_num_sensors; j++) err_sensor[i][j] = false;
 
     int32_t watchdog_time_ms = Watchdog.enable(2500);  // Start 2.5 sec watchdog
-    printf ("Enable watchdog.. timer set to %ld ms\n", watchdog_time_ms);
-    hotrcPanicTimer.reset();
+    printf ("Watchdog.. timer set to %ld ms\n", watchdog_time_ms);
     booted = true;
     printf ("Setup done\n");
+    panicTimer.reset();
     looptiming_init();
 }
 
@@ -207,12 +210,28 @@ void loop() {
             basicmodesw = !digitalRead(basicmodesw_pin);   // !value because electrical signal is active low
         } while (basicmodesw != !digitalRead(basicmodesw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
     }
-    if (!starter_signal_support) starter = LOW;
-    else if (!simulator.simulating(SimOption::starter)) {
-        do {
-            starter = digitalRead(starter_pin);
-        } while (starter != digitalRead(starter_pin)); // starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+
+    // Starter bidirectional handler logic. Don't assign starter bool outside here. Instead use starter_toggle_request. 
+    if (starter_signal_support) {
+        if (starter_drive && (starter_toggle_request || starterTimer.expired())) {
+            starter_drive = false;
+            set_pin (starter_pin, INPUT_PULLDOWN);
+        }
+        if (!starter_drive && !starter_toggle_request && !simulator.simulating(SimOption::starter)) {
+            do {
+                starter = digitalRead(starter_pin);
+            } while (starter != digitalRead(starter_pin)); // starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+        }
+        else if (!starter && starter_toggle_request) {  // If starter is being driven externally, request to turn on is ignored
+            starter_drive = true;
+            starter = true;
+            set_pin (starter_pin, OUTPUT);
+            write_pin (starter_pin, starter);
+            starterTimer.reset();  // If left on the starter will turn off automatically after X seconds
+        }
+        starter_toggle_request = false;
     }
+
     encoder.update();  // Read encoder input signals
     pot.update();
     brkpos_sensor.update();  // Brake position
@@ -223,58 +242,94 @@ void loop() {
     maf_gps = get_massairflow();  // Recalculate intake mass airflow
     speedometer.update();  // Speedo
     pressure_sensor.update();  // Brake pressure
-    // Read the car ignition signal, and while we're at it measure the vehicle battery voltage off ign signal
     battery_sensor.update();
-    ignition_sense = read_battery_ignition();  // Updates battery voltage reading and returns ignition status
-    // printf("batt_pin: %d, batt_raw: %f, batt_human: %f, batt_filt: %f\n", analogRead(mulebatt_pin), battery_sensor.get_native(), battery_sensor.get_human(), battery_sensor.get_filtered_value());
 
     // Controller handling
     hotrc_ch3_update();
     hotrc_ch4_update();
     if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
-        if (hotrc_suppress_next_ch3_event) hotrc_suppress_next_ch3_event = false;
-        else ignition = simulator.simulating(SimOption::ignition) ? ignition : !ignition;
+        ignition_toggle_request = true;
         hotrc_ch3_sw_event = false;
     }
     if (hotrc_ch4_sw_event) {
-        if (hotrc_suppress_next_ch4_event) hotrc_suppress_next_ch4_event = false;
-        else if (runmode == STALL && remote_start_support) remote_start_toggle_request = true;
-        else if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
-        else {}   // There's no reason pushing the ch4 button when in other modes can't do something different.  That would go here
-        hotrc_ch4_sw_event = false;    
+        if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
+        else if (runmode == STALL && remote_start_support) starter_toggle_request = true;
+        hotrc_ch4_sw_event = false;
     }
-    if (hotrc_us[VERT][FILT] > hotrc_failsafe_us + hotrc_failsafe_margin_us) {
-        hotrcPanicTimer.reset();
-        hotrc_radio_lost = false;
-        if (!ignition_output_enabled) ignition_output_enabled = true; // Ignition stays low until the hotrc is detected here, then output is allowed
-    }
-    else if (!hotrc_radio_lost && hotrcPanicTimer.expired()) hotrc_radio_lost = true;
-    // hotrc_suppress_next_ch3_event = true;  // reject spurious ch3 switch event upon next hotrc poweron  // hotrc_suppress_next_ch4_event = true;  // reject spurious ch4 switch event upon next hotrc poweron
-
     // Read horz and vert pulse inputs, convert to percent units, and determine steering pwm output
     hotrc_us[HORZ][RAW] = (int32_t)hotrc_horz.readPulseWidth();  
     hotrc_us[VERT][RAW] = (int32_t)hotrc_vert.readPulseWidth();
-    hotrc_us[HORZ][RAW] = hotrcHorzManager.spike_filter (hotrc_us[HORZ][RAW]);
-    hotrc_us[VERT][RAW] = hotrcVertManager.spike_filter (hotrc_us[VERT][RAW]);
-    ema_filt (hotrc_us[VERT][RAW], &(hotrc_us[VERT][FILT]), hotrc_ema_alpha);  // Used to detect loss of radio
-    if (simulator.can_simulate(SimOption::joy) && simulator.get_pot_overload() == SimOption::joy)
-        hotrc_pc[HORZ][FILT] = pot.mapToRange(steer_pulse_left_us, steer_pulse_right_us);
-    else if (!simulator.simulating(SimOption::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
-        for (int32_t axis=HORZ; axis<=VERT; axis++) {
-            if (hotrc_us[axis][RAW] >= hotrc_us[axis][CENT])  // Convert from pulse us to percent, when pushing left/down, else when pushing right/up
-                hotrc_pc[axis][RAW] = map ((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MAX], hotrc_pc[axis][CENT], hotrc_pc[axis][MAX]);  // When pushing right, or trigger pull
-            else hotrc_pc[axis][RAW] = map ((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MIN], hotrc_pc[axis][CENT], hotrc_pc[axis][MIN]);  // When pushing left, or trigger push
+    // hotrc_us[HORZ][RAW] = hotrcHorzManager.spike_filter (hotrc_us[HORZ][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
+    // hotrc_us[VERT][RAW] = hotrcVertManager.spike_filter (hotrc_us[VERT][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
+    ema_filt (hotrcHorzManager.spike_filter (hotrc_us[VERT][RAW]), &hotrc_vert_ema_unconstr_us, hotrc_ema_alpha);  // Need unconstrained ema-filtered vertical for radio lost detection 
+    if (hotrc_vert_ema_unconstr_us > hotrc_failsafe_us + hotrc_failsafe_margin_us) {
+        panicTimer.reset();
+        hotrc_radio_lost = false;
+    }
+    else if (!hotrc_radio_lost && panicTimer.expired()) hotrc_radio_lost = true;
+    if (!simulator.simulating(SimOption::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
+        for (int axis = HORZ; axis <= VERT; axis++) {
+            // hotrc_pc[axis][RAW] = hotrc_us_to_pc(hotrc_us[axis][RAW] - hotrc_us[axis][CENT]);
+            
+            hotrc_pc[axis][RAW] = (float)(map ((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][MIN], (float)hotrc_us[axis][MAX], hotrc_pc[axis][MIN], hotrc_pc[axis][MAX]));
+            
+            // if (hotrc_us[axis][RAW] >= hotrc_us[axis][CENT])  // Convert from pulse us to percent, when pushing left/down, else when pushing right/up
+            //     hotrc_pc[axis][RAW] = map ((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MAX], hotrc_pc[axis][CENT], hotrc_pc[axis][MAX]);  // When pushing right, or trigger pull
+            // else hotrc_pc[axis][RAW] = map ((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MIN], hotrc_pc[axis][CENT], hotrc_pc[axis][MIN]);  // When pushing left, or trigger push
+
+            // if (boot_button) printf(" lpc_x %4.0lf ", hotrc_pc[axis][RAW]); 
             if (hotrc_radio_lost)
                 hotrc_pc[axis][FILT] = hotrc_pc[axis][CENT];  // if radio lost set joy_axis_filt to center value
             else {
-                ema_filt (hotrc_pc[axis][RAW], &hotrc_pc[axis][FILT], hotrc_ema_alpha);  // do ema filter to determine joy_vert_filt
+                // if (boot_button) printf("(%d) us_h %lf  ", axis, hotrc_us[axis][RAW]);
+                // if (boot_button) std::cout << "(" << axis << ") us=" << hotrc_pc[axis][FILT] << ", ";
+                ema_filt (hotrc_pc[axis][RAW], &(hotrc_pc[axis][FILT]), hotrc_ema_alpha);  // do ema filter to determine joy_vert_filt
                 hotrc_pc[axis][FILT] = constrain (hotrc_pc[axis][FILT], hotrc_pc[axis][MIN], hotrc_pc[axis][MAX]);
+                // if (boot_button) std::cout << "pc=" << hotrc_pc[axis][FILT] << ", ";
             }
-            if (hotrc_pc[axis][FILT] > hotrc_pc[axis][DBBOT] && hotrc_pc[axis][FILT] < hotrc_pc[axis][DBTOP])
-                hotrc_pc[axis][FILT] = hotrc_pc[axis][CENT];  // if within the deadband set joy_axis_filt to center value
-        }
-    }
+            // if (std::abs(hotrc_pc[axis][FILT]) < 1e-9) hotrc_pc[axis][FILT] = 0.0;
+            
+            
+            if (std::abs(hotrc_pc[axis][FILT]) < hotrc_pc[axis][DBTOP]) hotrc_pc[axis][FILT] = hotrc_pc[axis][CENT];  // if within the deadband set joy_axis_filt to center value
+            // if (boot_button) std::cout << "pc2=" << hotrc_pc[axis][FILT] << " | ";
 
+
+            // if (hotrc_pc[axis][FILT] > hotrc_pc[axis][DBBOT] && hotrc_pc[axis][FILT] < hotrc_pc[axis][DBTOP])
+            //     hotrc_pc[axis][FILT] = hotrc_pc[axis][CENT];  // if within the deadband set joy_axis_filt to center value
+        }
+        // if (boot_button) std::cout << std::endl;
+
+        if (simulator.can_simulate(SimOption::joy) && simulator.get_pot_overload() == SimOption::joy)
+            hotrc_pc[HORZ][FILT] = pot.mapToRange(steer_pulse_left_us, steer_pulse_right_us);
+
+
+        // hotrc_pc[VERT][RAW] = (float)(map ((float)hotrc_us[VERT][RAW], (float)hotrc_us[VERT][MIN], (float)hotrc_us[VERT][MAX], hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]));
+        // hotrc_pc[HORZ][RAW] = (float)(map ((float)hotrc_us[HORZ][RAW], (float)hotrc_us[HORZ][MIN], (float)hotrc_us[HORZ][MAX], hotrc_pc[HORZ][MIN], hotrc_pc[HORZ][MAX]));
+        // if (hotrc_radio_lost) {
+        //     hotrc_pc[VERT][FILT] = hotrc_pc[VERT][CENT];  // if radio lost set joy_axis_filt to center value
+        //     hotrc_pc[HORZ][FILT] = hotrc_pc[HORZ][CENT];  // if radio lost set joy_axis_filt to center value
+        // }
+        // else {
+        //     ema_filt (hotrc_pc[VERT][RAW], &(hotrc_pc[VERT][FILT]), hotrc_ema_alpha);  // do ema filter to determine joy_vert_filt
+        //     ema_filt (hotrc_pc[HORZ][RAW], &(hotrc_pc[HORZ][FILT]), hotrc_ema_alpha);  // do ema filter to determine joy_vert_filt
+        //     hotrc_pc[VERT][FILT] = constrain (hotrc_pc[VERT][FILT], hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
+        //     hotrc_pc[HORZ][FILT] = constrain (hotrc_pc[HORZ][FILT], hotrc_pc[HORZ][MIN], hotrc_pc[HORZ][MAX]);
+        // }
+        // if (hotrc_pc[VERT][FILT] > hotrc_pc[VERT][DBBOT] && hotrc_pc[VERT][FILT] < hotrc_pc[VERT][DBTOP])
+        //     hotrc_pc[VERT][FILT] = hotrc_pc[VERT][CENT];  // if within the deadband set joy_axis_filt to center value
+        // if (hotrc_pc[HORZ][FILT] > hotrc_pc[HORZ][DBBOT] && hotrc_pc[HORZ][FILT] < hotrc_pc[HORZ][DBTOP])
+        //     hotrc_pc[HORZ][FILT] = hotrc_pc[HORZ][CENT];  // if within the deadband set joy_axis_filt to center value
+        // if (boot_button) printf("HR  %f  VR  %f  HF  %f  VF  %f\n", hotrc_us[HORZ][RAW], hotrc_us[VERT][RAW], hotrc_us[HORZ][FILT], hotrc_us[VERT][FILT]);
+        
+        
+        // if (boot_button) printf("  pc_h %4.0lf  pc_v %4.0lf \n", hotrc_pc[HORZ][FILT], hotrc_pc[VERT][FILT]);
+    }
+    // bool header;
+    // if (boot_button) {
+    //     pr(header);
+    //     header = false;
+    // } else header = true;
+    
     runmode = runModeManager.handle_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
 
     // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
@@ -450,12 +505,11 @@ void loop() {
             else if (selected_value == 10) adj_bool (&screensaver, sim_edit_delta);
         }
         else if (dataset_page == PG_JOY) {
-            if (selected_value == 6) adj_val (&hotrc_failsafe_us, sim_edit_delta, hotrc_absmin_us, hotrc_us[VERT][MIN] - hotrc_us[VERT][MARGIN]);
-            else if (selected_value == 7) adj = adj_val (&hotrc_pc[HORZ][MIN], sim_edit_delta, 0, hotrc_pc[HORZ][DBBOT] - 1);
-            else if (selected_value == 8) adj = adj_val (&hotrc_pc[HORZ][MAX], sim_edit_delta, hotrc_pc[HORZ][DBTOP] + 1, hotrc_pc[HORZ][CENT]);
-            else if (selected_value == 9) adj = adj_val (&hotrc_pc[VERT][MIN], sim_edit_delta, 0, hotrc_pc[VERT][DBBOT] - 1);
-            else if (selected_value == 10) adj = adj_val (&hotrc_pc[VERT][MAX], sim_edit_delta, hotrc_pc[VERT][DBTOP] + 1, hotrc_pc[VERT][CENT]);
-            // if (adj) calc_ctrl_lims();  // update derived variables relevant to changes made
+            if (selected_value == 9) adj_val (&hotrc_failsafe_us, sim_edit_delta, hotrc_absmin_us, hotrc_us[VERT][MIN] - hotrc_us[VERT][MARGIN]);
+            else if (selected_value == 10) {
+                adj_val (&hotrc_deadband_us, sim_edit_delta, 0, 50);
+                hotrc_calc_params();
+            }
         }
         else if (dataset_page == PG_CAR) {
             if (selected_value == 2) throttle.set_idlehot(throttle.get_idlehot(), 0.1*(float)sim_edit_delta);
@@ -508,69 +562,50 @@ void loop() {
             else if (selected_value == 10) cruiseQPID.SetKd (cruiseQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }
         else if (dataset_page == PG_TEMP) {
-            if (selected_value == 8) simulator.set_pot_overload(static_cast<SimOption>(adj_val(static_cast<int32_t>(simulator.get_pot_overload()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));
-            else if (selected_value == 9 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor_mode, sim_edit_delta);
+            if (selected_value == 9 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor_mode, sim_edit_delta);
             else if (selected_value == 10 && runmode == CAL) adj_bool (&cal_pot_gasservo_mode, (sim_edit_delta < 0 || cal_pot_gasservo_ready) ? sim_edit_delta : -1);
          }
         else if (dataset_page == PG_SIM) {
-            if (selected_value == 0) simulator.set_can_simulate(SimOption::joy, adj_bool(simulator.can_simulate(SimOption::joy), sim_edit_delta));
-            else if (selected_value == 1) simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), sim_edit_delta));
-            else if (selected_value == 2) simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), sim_edit_delta));
-            else if (selected_value == 3) simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), sim_edit_delta));
-            else if (selected_value == 4) simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), sim_edit_delta));
-            else if (selected_value == 5) simulator.set_can_simulate(SimOption::airflow, adj_bool(simulator.can_simulate(SimOption::airflow), sim_edit_delta));
-            else if (selected_value == 6) simulator.set_can_simulate(SimOption::mapsens, adj_bool(simulator.can_simulate(SimOption::mapsens), sim_edit_delta));
-            else if (selected_value == 7) simulator.set_can_simulate(SimOption::ignition, adj_bool(simulator.can_simulate(SimOption::ignition), sim_edit_delta));
+            if (selected_value == 1) simulator.set_can_simulate(SimOption::joy, adj_bool(simulator.can_simulate(SimOption::joy), sim_edit_delta));
+            else if (selected_value == 2) simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), sim_edit_delta));
+            else if (selected_value == 3) simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), sim_edit_delta));
+            else if (selected_value == 4) simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), sim_edit_delta));
+            else if (selected_value == 5) simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), sim_edit_delta));
+            else if (selected_value == 6) simulator.set_can_simulate(SimOption::airflow, adj_bool(simulator.can_simulate(SimOption::airflow), sim_edit_delta));
+            else if (selected_value == 7) simulator.set_can_simulate(SimOption::mapsens, adj_bool(simulator.can_simulate(SimOption::mapsens), sim_edit_delta));
             else if (selected_value == 8) simulator.set_can_simulate(SimOption::starter, adj_bool(simulator.can_simulate(SimOption::starter), sim_edit_delta));
             else if (selected_value == 9) simulator.set_can_simulate(SimOption::basicsw, adj_bool(simulator.can_simulate(SimOption::basicsw), sim_edit_delta));
-            else if (selected_value == 10) simulator.set_can_simulate(SimOption::syspower, adj_bool(simulator.can_simulate(SimOption::syspower), sim_edit_delta));
+            else if (selected_value == 10) simulator.set_pot_overload(static_cast<SimOption>(adj_val(static_cast<int32_t>(simulator.get_pot_overload()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));
         }
         sim_edit_delta = 0;
     }
-    // Ignition & Panic stop logic and Update output signals
-    if (!speedometer.car_stopped()) { // if we lose connection to the hotrc while driving, or the joystick ignition button was turned off, panic
-        if (ctrl == HOTRC && !simulator.simulating(SimOption::joy) && hotrc_radio_lost) panic_stop = true;  // panic_stop could also have been initiated by the user button   && !hotrc_radio_lost_last 
+    // Handlers for Panic Stop, Ignition, and Syspower
+    if (syspower_toggle_request && !keep_system_powered) {
+        syspower = !syspower;
+        write_pin(syspower_pin, syspower); // delay (val * 500);
+        syspower_toggle_request = false;
     }
-    else if (panic_stop) panic_stop = false;  // Cancel panic if car is stopped
-    if (ctrl == HOTRC) {  // if ignition was turned off on HotRC, panic .  With Hotrc, we control ignition
-        hotrc_radio_lost_last = hotrc_radio_lost;
-        if (!ignition && ignition_last && !speedometer.car_stopped()) panic_stop = true;
-    }
-    if (panic_stop) ignition = LOW;  // Kill car if panicking
-    if ((ignition != ignition_last) /* && ignition_output_enabled */ ) {  // Whenever ignition state changes, assuming we're allowed to write to the pin
+    if (ignition_toggle_request) {
+        if (ignition && !speedometer.car_stopped()) panic_stop = true;  // if ignition was turned off on HotRC, panic .
+        ignition = !ignition;
         write_pin (ign_out_pin, ignition);  // Turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
-        ignition_last = ignition;  // Make sure this goes after the last comparison
+        ignition_toggle_request = false;  // Make sure this goes after the last comparison
     }
-    if (runmode == STALL && remote_start_toggle_request) {
-        if (remote_starting) {
-            set_pin (starter_pin, OUTPUT);
-            write_pin (starter_pin, HIGH);
-        }
-        else {
-            write_pin (starter_pin, LOW);
-            set_pin (starter_pin, INPUT_PULLDOWN);
-        }
-        starter = remote_starting;
-        remote_start_toggle_request = false;
-    }
-    if (syspower != syspower_last) {
-        syspower = syspower_set(syspower);
-        syspower_last = syspower;
-    }
-    
+    if (!speedometer.car_stopped() && !simulator.simulating(SimOption::joy) && hotrc_radio_lost) panic_stop = true;
+    if (panic_stop && !panic_stop_last) panicTimer.reset();
+    else if (speedometer.car_stopped() || panicTimer.expired()) panic_stop = false;  // Cancel panic stop if car is stopped
+    panic_stop_last = panic_stop;
+
     neo.heartbeat_update(((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]));  // Update our beating heart
     for (int32_t idiot = 0; idiot < arraysize(idiotlights); idiot++)
         if (idiot <= neo.neopixelsAvailable() && (*(idiotlights[idiot]) != idiotlasts[idiot])) {
-            // printf ("Idiot#%d = %d\n", idiot, *(idiotlights[idiot]));
             neo.setBoolState(idiot, *idiotlights[idiot]);
             neo.updateIdiot(idiot);
         }
-    // if ((loopno == loophack) || park_the_motors) neo.updateIdiot(0);  // For some reason the first neopixel idiot light starts up bright at boot. Weird.
     neo.refresh();
     loop_marktime ("-");
-
-    // Display updates
-    if (display_enabled) {
+    
+    if (display_enabled) {  // Display updates
         screen.update_idiots();
         screen.update();
     }
@@ -582,9 +617,7 @@ void loop() {
     tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
     simulating_last = simulator.get_enabled();
 
-    // Kick watchdogs
     Watchdog.reset();  // Kick the watchdog to keep us alive
     // if (display_enabled) screen.watchdog();
     loop_print_timing();
-    loop_int_count = 0;
 }

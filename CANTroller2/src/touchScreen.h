@@ -135,15 +135,15 @@ public:
                     touch_longpress_valid = false;
                 }
             }
-            else if (tcol == 4 && trow == 0 && simulator.simulating(SimOption::ignition)) {
+            else if (tcol == 4 && trow == 0) {
                 if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
-                    ignition = !ignition;
+                    ignition_toggle_request = true;
                     touch_longpress_valid = false;
                 }
             }
-            else if (tcol == 5 && trow == 0 && simulator.simulating(SimOption::syspower)) {
+            else if (tcol == 5 && trow == 0) {
                 if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
-                    syspower = !syspower;
+                    syspower_toggle_request = true;
                     touch_longpress_valid = false;
                 }
             }
