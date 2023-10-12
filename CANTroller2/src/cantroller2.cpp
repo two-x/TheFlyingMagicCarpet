@@ -238,37 +238,37 @@ void loop() {
     battery_sensor.update();
 
     // Controller handling
-    hotrc_ch3_update();
-    hotrc_ch4_update();
-    if (hotrc_ch3_sw_event) {  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
-        ignition_toggle_request = true;
-        hotrc_ch3_sw_event = false;
-    }
-    if (hotrc_ch4_sw_event) {
+    // 1. Handle any toggle button events (ch3 and ch4)
+    for (int ch = CH3; ch <= CH4; ch++) hotrc_toggle_update(ch);
+    if (hotrc_sw_event[CH3]) ignition_toggle_request = true;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
+    if (hotrc_sw_event[CH4]) {
         if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
         else if (runmode == STALL && remote_start_support) starter_toggle_request = true;
-        hotrc_ch4_sw_event = false;
     }
-    // Read horz and vert pulse inputs, convert to percent units, and determine steering pwm output
+    for (int ch = CH3; ch <= CH4; ch++) hotrc_sw_event[ch] = false;
+    // 3. Read horz and vert pulse inputs, spike filter, convert to percent, ema filter, constrain, and center within deadband
     for (int axis = HORZ; axis <= VERT; axis++) {
         hotrc_us[axis][RAW] = (int32_t)hotrc_rmt[axis].readPulseWidth();
-        hotrc_us[axis][RAW] = hotrcManager[axis].spike_filter (hotrc_us[axis][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
-        ema_filt (hotrc_us[axis][RAW], &hotrc_ema_us[axis], hotrc_ema_alpha);  // Need unconstrained ema-filtered vertical for radio lost detection 
+        hotrc_us[axis][RAW] = hotrcManager[axis].spike_filter(hotrc_us[axis][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
+        ema_filt(hotrc_us[axis][RAW], &hotrc_ema_us[axis], hotrc_ema_alpha);  // Need unconstrained ema-filtered vertical for radio lost detection 
         if (!simulator.simulating(SimOption::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
-            hotrc_pc[axis][RAW] = (float)(map ((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][MIN], (float)hotrc_us[axis][MAX], hotrc_pc[axis][MIN], hotrc_pc[axis][MAX]));
-            ema_filt (hotrc_pc[axis][RAW], &(hotrc_pc[axis][FILT]), hotrc_ema_alpha);  // do ema filter to determine joy_vert_filt
-            hotrc_pc[axis][FILT] = constrain (hotrc_pc[axis][FILT], hotrc_pc[axis][MIN], hotrc_pc[axis][MAX]);
+            hotrc_pc[axis][RAW] = map((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][MIN], (float)hotrc_us[axis][MAX], hotrc_pc[axis][MIN], hotrc_pc[axis][MAX]);
+            ema_filt(hotrc_pc[axis][RAW], &(hotrc_pc[axis][FILT]), hotrc_ema_alpha);  // do ema filter to determine joy_vert_filt
+            hotrc_pc[axis][FILT] = constrain(hotrc_pc[axis][FILT], hotrc_pc[axis][MIN], hotrc_pc[axis][MAX]);
             if (hotrc_radio_lost || (hotrc_ema_us[axis] > hotrc_us[axis][DBBOT] && hotrc_ema_us[axis] < hotrc_us[axis][DBTOP]))
                 hotrc_pc[axis][FILT] = hotrc_pc[axis][CENT];  // if within the deadband set joy_axis_filt to center value
         }
     }
+    // 4. Pot overload can rudely overwrite the horz value
     if (simulator.can_simulate(SimOption::joy) && simulator.get_pot_overload() == SimOption::joy)
         hotrc_pc[HORZ][FILT] = pot.mapToRange(steer_pulse_left_us, steer_pulse_right_us);
+        // 2. Determine if the radio is lost
     if (hotrc_ema_us[VERT] > hotrc_failsafe_us + hotrc_failsafe_margin_us) {
-        panicTimer.reset();
+        hotrcFailsafeTimer.reset();
         hotrc_radio_lost = false;
     }
-    else if (!hotrc_radio_lost && panicTimer.expired()) hotrc_radio_lost = true;
+    else if (!hotrc_radio_lost && hotrcFailsafeTimer.expired()) hotrc_radio_lost = true;
+
 
     runmode = runModeManager.handle_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
 

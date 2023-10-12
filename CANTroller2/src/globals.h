@@ -111,7 +111,7 @@ uint32_t timestamp_loop_linefeed_threshold = 0;  // Leaves prints of loops takin
 bool screensaver = false;  // Can enable experiment with animated screen draws
 #define pwm_jaguars true
 
-enum ctrl_axes { HORZ, VERT, CH3, CH4 };
+enum hotrc_axes { HORZ, VERT, CH3, CH4 };
 enum hotrc_vals { MIN, CENT, MAX, RAW, FILT, DBBOT, DBTOP, MARGIN };
 
 // Persistent config storage
@@ -127,10 +127,6 @@ RMTInput hotrc_rmt[4] = {
     RMTInput(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_ign_pin)),  // hotrc[CH3]
     RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_cruise_pin))  // hotrc[CH4]
 };
-// RMTInput hotrc_horz(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_horz_pin));
-// RMTInput hotrc_vert(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_vert_pin));
-// RMTInput hotrc_ch3(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_ign_pin));
-// RMTInput hotrc_ch4(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_cruise_pin));
 
 // Globals -------------------
 //
@@ -255,13 +251,14 @@ int32_t hotrc_margin_us = 20;  // All [MARGIN] values above are derived from thi
 int32_t hotrc_failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
 int32_t hotrc_failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
 int32_t hotrc_failsafe_pad_us = 10;
+Timer hotrcFailsafeTimer(75000);  // How long to receive failsafe pulse value continuously before recognizing radio is lost. To prevent false positives
 int32_t hotrc_spike_buffer[2][3];
 bool hotrc_radio_lost = true;
 float hotrc_pulse_period_us = 1000000.0 / 50;
 volatile int64_t hotrc_timer_start;
-volatile bool hotrc_ch3_sw_last = true;
-volatile bool hotrc_ch4_sw_last = true;
-volatile bool hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw, hotrc_ch4_sw;
+volatile bool hotrc_sw[4];  // Only using indices 2,3 for [CH3] and [CH4]. Do not use 0 or 1
+volatile bool hotrc_sw_last[4] = { 1, 1, true, true };  // [X/X/CH3/CH4]  initialized true i think otherwise the first ign or cruise press doesn't work
+volatile bool hotrc_sw_event[4];
 
 // steering related
 float steer_safe_pc = 72.0; // Steering is slower at high speed. How strong is this effect
@@ -418,18 +415,18 @@ enum err_sensors { e_hrchorz, e_hrcvert, e_hrcch3, e_hrcch4, e_pressure, e_brkpo
 bool err_sensor_alarm[num_err_types] = { false, false };  // [LOST/RANGE]
 bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_battery/e_basicsw/e_starter]   // SimOption::opt_t::num_sensors]
 
-void hotrc_ch3_update(void) {                                                            //
-    hotrc_us[CH3][RAW] = hotrc_rmt[CH3].readPulseWidth(true);
-    hotrc_ch3_sw = (hotrc_us[CH3][RAW] <= hotrc_us[CH3][CENT]); // Ch3 switch true if short pulse, otherwise false  hotrc_us[CH3][CENT]
-    if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true; // So a handler routine can be signaled. Handler must reset this to false
-    hotrc_ch3_sw_last = hotrc_ch3_sw;
+void hotrc_toggle_update(int chan) {                                                            //
+    hotrc_us[chan][RAW] = hotrc_rmt[chan].readPulseWidth(true);
+    hotrc_sw[chan] = (hotrc_us[chan][RAW] <= hotrc_us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  hotrc_us[CH3][CENT]
+    if (hotrc_sw[chan] != hotrc_sw_last[chan]) hotrc_sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false
+    hotrc_sw_last[chan] = hotrc_sw[chan];
 }
-void hotrc_ch4_update(void) {                                                            //
-    hotrc_us[CH4][RAW] = hotrc_rmt[CH4].readPulseWidth(true);
-    hotrc_ch4_sw = (hotrc_us[CH4][RAW] <= hotrc_us[CH4][CENT]); // Ch4 switch true if short pulse, otherwise false  hotrc_us[CH4][CENT]
-    if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true; // So a handler routine can be signaled. Handler must reset this to false
-    hotrc_ch4_sw_last = hotrc_ch4_sw;
-}
+// void hotrc_ch4_update(void) {                                                            //
+//     hotrc_us[CH4][RAW] = hotrc_rmt[CH4].readPulseWidth(true);
+//     hotrc_ch4_sw = (hotrc_us[CH4][RAW] <= hotrc_us[CH4][CENT]); // Ch4 switch true if short pulse, otherwise false  hotrc_us[CH4][CENT]
+//     if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true; // So a handler routine can be signaled. Handler must reset this to false
+//     hotrc_ch4_sw_last = hotrc_ch4_sw;
+// }
 float hotrc_us_to_pc(int32_t us) {
     return (float)us * (hotrc_pc[VERT][MAX] - hotrc_pc[VERT][MIN]) / (float)(hotrc_us[VERT][MAX] - hotrc_us[VERT][MIN]);
 }
