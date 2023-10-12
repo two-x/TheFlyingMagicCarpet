@@ -107,54 +107,56 @@ char sensorcard[14][7] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", 
 char idlemodecard[3][7] = { "direct", "cntrol", "minimz" };
 char idlestatecard[ThrottleControl::targetstates::num_states][7] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
 
+#define STER "St\x88r"
+#define BRAK "Br\x83k"
+#define SPED "Sp\x88""d"
 #define BINARY "  \xa7 "
 #define CHOICE "\x12   "
 #define DEGR_F "\xf7""F  "  // "\x09""F  "
+#define BLAANK "    "
+#define BLAAAAAANK "      - "
 #define BRIGHTNESS "NeoBr\x8dte"
-#define STER "St\x88r"
-#define BRAK "Br\x83k"
 #define MAXADJRATE "MaxAjR\x83t"
-#define SPED "Sp\x88""d"
 
-char telemetry[disp_fixed_lines][9] = { "TrigVert", "   Speed", "    Tach", "ThrotPWM", BRAK"Pres", BRAK"Motr", "Joy Horz", STER"Motr", };  // Fixed rows
+char telemetry[disp_fixed_lines][9] = { "TriggerV", "   Speed", "    Tach", "ThrotPWM", BRAK"Pres", BRAK"Motr", "Joy Horz", STER"Motr", };  // Fixed rows
 char units[disp_fixed_lines][5] = { "%   ", "mph ", "rpm ", "us  ", "psi ", "%   ", "%   ", "%   " };  // Fixed rows
 
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, num_datapages };
 char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim " };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 6, 6, 5, 3, 4, 8, 7, 7, 8, 0 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[disp_tuning_lines] = { 6, 9, 5, 3, 4, 8, 7, 7, 9, 1 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
-    { BRAK"Posn", "MuleBatt", "     Pot", " Airflow", "     MAP", "MasAirFl", "Governor", STER"Safe", BRIGHTNESS, "NeoDesat", "ScrnSavr", },  // PG_RUN
-    { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "      - ", "      - ", "HFailsaf", "Horz Min", "Horz Max", "Vert Min", "Vert Max" },  // PG_JOY
-    { "Pres ADC", "      - ", "      - ", "      - ", "      - ", "AirFlMax", " MAP Min", " MAP Max", SPED"Idle", SPED"RedL", "BkPos0Pt", },  // PG_CAR
-    { "BrakePWM", "SteerPWM", "      - ", STER"Left", STER"Stop", STER"Rght", BRAK"Extd", BRAK"Stop", BRAK"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
+    { BRAK"Posn", "MuleBatt", "     Pot", "AirSpeed", "     MAP", "MasAirFl", "Governor", STER"Safe", BRIGHTNESS, "NeoDesat", "ScrnSavr", },  // PG_RUN
+    { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", BLAAAAAANK, BLAAAAAANK, BLAAAAAANK, "HFailsaf", "Deadband", },  // PG_JOY
+    { "Pres ADC", BLAAAAAANK, BLAAAAAANK, BLAAAAAANK, BLAAAAAANK, "AirSpMax", " MAP Min", " MAP Max", SPED"Idle", SPED"RedL", "BkPos0Pt", },  // PG_CAR
+    { "BrakePWM", "SteerPWM", BLAAAAAANK, STER"Left", STER"Stop", STER"Rght", BRAK"Extd", BRAK"Stop", BRAK"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
     { "PresTarg", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", BRAK"Motr", BRAK"Pres", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
-    { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", "      - ", "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
+    { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", BLAAAAAANK, "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
     { SPED"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", MAXADJRATE, "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
-    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", "      - ", "      - ", "SimW/Pot", "CalBrake", " Cal Gas", },  // PG_TEMP
-    { "Joy Axes", BRAK"Pres", BRAK"Posn", "  Speedo", "    Tach", " Airflow", "     MAP", "Ignition", " Starter", "Basic Sw", "SysPower", },  // PG_SIM
+    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", BLAAAAAANK, BLAAAAAANK, BLAAAAAANK, "CalBrake", " Cal Gas", },  // PG_TEMP
+    { BLAAAAAANK, "Joystick", BRAK"Pres", BRAK"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", " Starter", "Basic Sw", "SimW/Pot", },  // PG_SIM
 };
 char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
     { "in  ", "V   ", "%   ", "mph ", "psi ", "g/s ", "%   ", "%   ", "%   ", "/10 ", BINARY },  // PG_RUN
-    { "us  ", "us  ", "us  ", "us  ", "    ", "    ", "us  ", "%   ", "%   ", "%   ", "%   " },  // PG_JOY
-    { "adc ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%   ", "mph ", "mph ", "mph ", "in  " },  // PG_CAR
-    { "us  ", "us  ", "    ", "    ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PG_PWMS
+    { "us  ", "us  ", "us  ", "us  ", "%   ", "%   ", BLAANK, BLAANK, BLAANK, "us  ", "us  " },  // PG_JOY
+    { "adc ", BLAANK, BLAANK, BLAANK, BLAANK, "mph ", "psi ", "psi ", "mph ", "mph ", "in  " },  // PG_CAR
+    { "us  ", "us  ", BLAANK, "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PG_PWMS
     { CHOICE, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", DEGR_F, DEGR_F, "rpms", CHOICE },  // PG_IDLE
-    { "psi ", "psi ", "%   ", "%   ", "%   ", "%   ", "us  ", "adc ", "    ", "Hz  ", "s   " },  // PG_BPID
-    { "rpm ", "rpm ", "us  ", "us  ", "us  ", "us  ", "    ", BINARY, "    ", "Hz  ", "s   " },  // PG_GPID
-    { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "us  ", "u/s ", "    ", "Hz  ", "s   " },  // PG_CPID
-    { DEGR_F, DEGR_F, DEGR_F, DEGR_F, DEGR_F, DEGR_F, "    ", "    ", CHOICE, BINARY, BINARY },  // PG_TEMP
-    { BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY },  // PG_SIM
+    { "psi ", "psi ", "%   ", "%   ", "%   ", "%   ", "us  ", "adc ", BLAANK, "Hz  ", "s   " },  // PG_BPID
+    { "rpm ", "rpm ", "us  ", "us  ", "us  ", "us  ", BLAANK, BINARY, BLAANK, "Hz  ", "s   " },  // PG_GPID
+    { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "us  ", "u/s ", BLAANK, "Hz  ", "s   " },  // PG_CPID
+    { DEGR_F, DEGR_F, DEGR_F, DEGR_F, DEGR_F, DEGR_F, BLAANK, BLAANK, BLAANK, BINARY, BINARY },  // PG_TEMP
+    { BLAANK, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, CHOICE },  // PG_SIM
 };
 char simgrid[4][3][5] = {
-    { "prs\x18", "rpm\x18", "car\x18" },
-    { "prs\x19", "rpm\x19", "car\x19" },
-    { "    ", " \x1e  ", "    " },
+    { "psi\x18", "rpm\x18", "mph\x18" },
+    { "psi\x19", "rpm\x19", "mph\x19" },
+    { BLAANK, " \x1e  ", BLAANK },
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
-bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard };  // &hotrc_ch3_sw_event, &hotrc_ch4_sw_event };
+bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard };
 char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
 uint16_t idiotcolors[arraysize(idiotlights)];
 uint8_t idiot_saturation = 225;  // 170-195 makes nice bright yet distinguishable colors
@@ -605,7 +607,7 @@ class Display {
                 for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
                     int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
                     int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
-                    if (strcmp (simgrid[row][col], "    " )) {
+                    if (strcmp (simgrid[row][col], BLAANK )) {
                         _tft.fillCircle (cntr_x, cntr_y, disp_simbutton_radius_pix, create ? DGRY : BLK);
                         _tft.drawCircle (cntr_x, cntr_y, 19, create ? LYEL : BLK);
                         if (create) {
@@ -644,14 +646,12 @@ class Display {
             else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
         }
         void draw_idiotbitmap (int32_t idiot, int32_t x, int32_t y) {
-            uint16_t color = (*idiotlights[idiot]) ? BLK : darken_color(idiotcolors[idiot]);
             uint16_t bg = (*idiotlights[idiot]) ? idiotcolors[idiot] : BLK;
-            for (int32_t xo = 0; xo < (2 * disp_font_width - 1); xo++)  for (int32_t yo = disp_font_width; yo >= 0; yo--)
-                _tft.drawPixel (x + xo + 1, y + yo + 1, ((idiotmaps[idiot][xo] >> yo) & 1) ? color : bg);
-            _tft.drawFastHLine (x + 1, y, 2 * disp_font_width - 1, bg);
-            _tft.drawFastHLine (x + 1, y + disp_font_height, 2 * disp_font_width - 1, bg);
-            _tft.drawFastVLine (x, y + 1, disp_font_height - 1, bg);
-            _tft.drawFastVLine (x+disp_font_width * 2, y + 1, disp_font_height - 1, bg);
+            uint16_t color = (*idiotlights[idiot]) ? BLK : darken_color(idiotcolors[idiot]);
+            _tft.drawRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, bg);
+            for (int32_t xo = 0; xo < (2 * disp_font_width - 1); xo++)
+                for (int32_t yo = disp_font_width; yo >= 0; yo--)
+                    _tft.drawPixel (x + xo + 1, y + yo + 1, ((idiotmaps[idiot][xo] >> yo) & 1) ? color : bg);
         }
         void draw_idiotlight (int32_t idiot, int32_t x, int32_t y) {
             if (idiotmaps[idiot][0] >= 0x80) {
@@ -738,13 +738,13 @@ class Display {
                     draw_dynamic(10, hotrc_us[VERT][RAW], hotrc_us[VERT][MIN], hotrc_us[VERT][MAX]);
                     draw_dynamic(11, hotrc_us[CH3][RAW], hotrc_us[CH3][MIN], hotrc_us[CH3][MAX]);
                     draw_dynamic(12, hotrc_us[CH4][RAW], hotrc_us[CH4][MIN], hotrc_us[CH4][MAX]);
-                    draw_eraseval(13);
-                    draw_eraseval(14);
-                    draw_dynamic(15, hotrc_failsafe_us, hotrc_absmin_us, hotrc_us[VERT][MIN] - hotrc_us[VERT][MARGIN]);
-                    draw_dynamic(16, (int)hotrc_pc[HORZ][MIN], 0, (int)hotrc_pc[HORZ][MAX]);
-                    draw_dynamic(17, (int)hotrc_pc[HORZ][MAX], (int)hotrc_pc[HORZ][MIN], (int)adcrange_adc);
-                    draw_dynamic(18, (int)hotrc_pc[VERT][MIN], 0, (int)hotrc_pc[VERT][MAX]);
-                    draw_dynamic(19, (int)hotrc_pc[VERT][MAX], (int)hotrc_pc[VERT][MIN], (int)adcrange_adc);
+                    draw_dynamic(13, hotrc_pc[HORZ][RAW], hotrc_pc[HORZ][MIN], hotrc_pc[HORZ][MAX]);
+                    draw_dynamic(14, hotrc_pc[VERT][RAW], hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
+                    draw_eraseval(15);
+                    draw_eraseval(16);
+                    draw_eraseval(17);
+                    draw_dynamic(18, hotrc_failsafe_us, hotrc_absmin_us, hotrc_us[VERT][MIN] - hotrc_us[VERT][MARGIN]);
+                    draw_dynamic(19, hotrc_deadband_us, 0, 100);
                 }
                 else if (dataset_page == PG_CAR) {
                     draw_dynamic(9, pressure_sensor.get_native(), pressure_sensor.get_min_native(), pressure_sensor.get_max_native());                    
@@ -837,22 +837,23 @@ class Display {
                     draw_temperature(sensor_location::wheel_rr, 14);
                     draw_eraseval(15);
                     draw_eraseval(16);
-                    draw_asciiname(17, sensorcard[static_cast<uint8_t>(simulator.get_pot_overload())]);
+                    draw_eraseval(17);
                     draw_truth(18, cal_joyvert_brkmotor_mode, 0);
                     draw_truth(19, cal_pot_gasservo_mode, 0);
                 }
                 else if (dataset_page == PG_SIM) {
-                    draw_truth(9, simulator.can_simulate(SimOption::joy), 0);
-                    draw_truth(10, simulator.can_simulate(SimOption::pressure), 0);
-                    draw_truth(11, simulator.can_simulate(SimOption::brkpos), 0);
-                    draw_truth(12, simulator.can_simulate(SimOption::speedo), 0);
-                    draw_truth(13, simulator.can_simulate(SimOption::tach), 0);
-                    draw_truth(14, simulator.can_simulate(SimOption::airflow), 0);
-                    draw_truth(15, simulator.can_simulate(SimOption::mapsens), 0);
-                    draw_truth(16, simulator.can_simulate(SimOption::ignition), 0);
+                    draw_truth(10, simulator.can_simulate(SimOption::joy), 0);
+                    draw_truth(11, simulator.can_simulate(SimOption::pressure), 0);
+                    draw_truth(12, simulator.can_simulate(SimOption::brkpos), 0);
+                    draw_truth(13, simulator.can_simulate(SimOption::speedo), 0);
+                    draw_truth(14, simulator.can_simulate(SimOption::tach), 0);
+                    draw_truth(15, simulator.can_simulate(SimOption::airflow), 0);
+                    draw_truth(16, simulator.can_simulate(SimOption::mapsens), 0);
                     draw_truth(17, simulator.can_simulate(SimOption::starter), 0);
                     draw_truth(18, simulator.can_simulate(SimOption::basicsw), 0);
-                    draw_truth(19, simulator.can_simulate(SimOption::syspower), 0);
+                    draw_asciiname(19, sensorcard[static_cast<uint8_t>(simulator.get_pot_overload())]);
+                    // draw_truth(18, simulator.can_simulate(SimOption::ignition), 0);
+                    // draw_truth(19, simulator.can_simulate(SimOption::syspower), 0);
                 }
                 draw_bool((runmode == CAL), 2);
                 draw_bool((runmode == BASIC), 3);

@@ -1061,7 +1061,7 @@ class OutToggle : public Toggle {
 
 // This enum class represent the components which can be simulated (SimOption). It's a uint8_t type under the covers, so it can be used as an index
 typedef uint8_t opt_t;
-enum class SimOption : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, battery, starter, basicsw, ignition, syspower };  // , num_sensors, err_flag };
+enum class SimOption : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, battery, starter, basicsw };  //, ignition, syspower };  // , num_sensors, err_flag };
 
 // Simulator manages the ControllerMode handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
 // NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use ControllerModes,
@@ -1085,9 +1085,9 @@ class Simulator {
         static constexpr bool initial_sim_brkpos = false;
         static constexpr bool initial_sim_basicsw = false;
         static constexpr bool initial_sim_pressure = false;
-        static constexpr bool initial_sim_syspower = false;
+        // static constexpr bool initial_sim_syspower = false;  // Syspower cannot be simulated as its source is not external
         static constexpr bool initial_sim_starter = false;
-        static constexpr bool initial_sim_ignition = false;
+        // static constexpr bool initial_sim_ignition = false;  // Ignition cannot be simulated as its source is not external
         static constexpr bool initial_sim_airflow = false;
         static constexpr bool initial_sim_mapsens = false;
         static constexpr bool initial_sim_battery = false;
@@ -1101,9 +1101,9 @@ class Simulator {
             set_can_simulate(SimOption::brkpos, initial_sim_brkpos);
             set_can_simulate(SimOption::basicsw, initial_sim_basicsw);
             set_can_simulate(SimOption::pressure, initial_sim_pressure);
-            set_can_simulate(SimOption::syspower, initial_sim_syspower);
+            // set_can_simulate(SimOption::syspower, initial_sim_syspower);  // Syspower cannot be simulated as its source is not external
             set_can_simulate(SimOption::starter, initial_sim_starter);
-            set_can_simulate(SimOption::ignition, initial_sim_ignition);
+            // set_can_simulate(SimOption::ignition, initial_sim_ignition);  // Ignition cannot be simulated as its source is not external
             set_can_simulate(SimOption::airflow, initial_sim_airflow);
             set_can_simulate(SimOption::mapsens, initial_sim_mapsens);
             set_can_simulate(SimOption::battery, initial_sim_battery);

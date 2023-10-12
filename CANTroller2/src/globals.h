@@ -6,6 +6,7 @@
 #include "map.h"
 #include <Preferences.h>
 #include <iostream>
+#include <iomanip>  // For formatting console cout strings
 // #include "freertos/FreeRTOS.h"  // MCPWM pulse measurement code
 // #include "freertos/task.h"  // MCPWM pulse measurement code
 // #include "driver/mcpwm.h"  // MCPWM pulse measurement code
@@ -95,7 +96,7 @@ bool flip_the_screen = true;
 #define tft_rst_pin -1    // TFT Reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
 // Globals -------------------
 enum cruise_modes { rpm_target, throttle_setpoint, throttle_delta };
-bool serial_debugging = true;
+bool console_enabled = true;         // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
 bool take_temperatures = true;
 bool keep_system_powered = false;    // Use true during development
 bool allow_rolling_start = false;    // May be a smart prerequisite, may be us putting obstacles in our way
@@ -110,6 +111,9 @@ uint32_t timestamp_loop_linefeed_threshold = 0;  // Leaves prints of loops takin
 bool screensaver = false;  // Can enable experiment with animated screen draws
 #define pwm_jaguars true
 
+enum hotrc_axes { HORZ, VERT, CH3, CH4 };
+enum hotrc_vals { MIN, CENT, MAX, RAW, FILT, DBBOT, DBTOP, MARGIN };
+
 // Persistent config storage
 Preferences config;
 
@@ -117,10 +121,12 @@ Preferences config;
 I2C i2c(i2c_sda_pin, i2c_scl_pin);
 
 // Declare Hotrc RMT Inputs in global scope
-RMTInput hotrc_horz(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_horz_pin));
-RMTInput hotrc_vert(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_vert_pin));
-RMTInput hotrc_ch3(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_ign_pin));
-RMTInput hotrc_ch4(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_cruise_pin));
+RMTInput hotrc_rmt[4] = {
+    RMTInput(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_horz_pin)),  // hotrc[HORZ]
+    RMTInput(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_vert_pin)),  // hotrc[VERT]
+    RMTInput(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_ign_pin)),  // hotrc[CH3]
+    RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_cruise_pin))  // hotrc[CH4]
+};
 
 // Globals -------------------
 //
@@ -145,9 +151,8 @@ bool car_hasnt_moved = false;         // Whether car has moved at all since ente
 bool calmode_request = false;
 bool joy_centered = false;
 bool panic_stop = false;
-bool remote_starting = false;
-bool remote_starting_last = false;
-bool remote_start_toggle_request = false;
+bool panic_stop_last = false;
+Timer panicTimer(20000000);  // How long should a panic stop last?  We can't stay mad forever
 float cruise_ctrl_extent_adc;       // During cruise adjustments, saves farthest trigger position read
 // float cruise_adjust_scaling_pc = 40;  // What ratio of full throttle range is the max available with each adjustment event?
 bool cruise_trigger_released = false;
@@ -158,19 +163,18 @@ int32_t cruise_adjust_delta_max_us_per_s = 200;  // What's the fastest rate crui
 Timer cruiseDeltaTimer;
 bool flycruise_toggle_request = false;
 float flycruise_vert_margin_adc = 0.3; // Margin of error for determining hard brake value for dropping out of cruise mode
-Timer gestureFlyTimer; // Used to keep track of time for gesturing for going in and out of fly/cruise modes
 // Timer cruiseSwTimer;  // Was used to require a medium-length hold time pushing cruise button to switch modes
 Timer sleepInactivityTimer(15000000);           // After shutdown how long to wait before powering down to sleep
 Timer stopcarTimer(8000000);                    // Allows code to fail in a sensible way after a delay if nothing is happening
 uint32_t motor_park_timeout_us = 4000000;       // If we can't park the motors faster than this, then give up.
-uint32_t gesture_flytimeout_us = 750000;        // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
+uint32_t gesture_flytimeout_us = 2000000;        // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
+Timer gestureFlyTimer(gesture_flytimeout_us); // Used to keep track of time for gesturing for going in and out of fly/cruise modes
 uint32_t cruise_sw_timeout_us = 500000;         // how long do you have to hold down the cruise button to start cruise mode (in us)
-uint32_t cruise_antiglitch_timeout_us = 350000; // Target speed won't change until manual adjustment is outside deadboand for longer than this
-Timer cruiseAntiglitchTimer(cruise_antiglitch_timeout_us);
 Timer motorParkTimer(motor_park_timeout_us);
 bool running_on_devboard;  // true = running on dev board, false = running on the car.  Requires pullup/pulldown resistors configured as above
 int32_t neobright = 10;  // lets us dim/brighten the neopixels
 int32_t neodesat = 0;  // lets us de/saturate the neopixels
+bool devboard;  // If detected we are running on devboard, this will get set true.
 
 // potentiometer related
 Potentiometer pot(pot_wipe_pin);
@@ -202,25 +206,23 @@ bool boot_button_suppress_click = false;
 bool boot_button_action = NONE;
 
 // external digital input and output signal related
-bool ignition = LOW;
-bool ignition_last = ignition;
-bool ignition_output_enabled = false; // disallows configuration of ignition pin as an output until hotrc detected
-bool ignition_sense = ignition;
-float ignition_on_thresh_v = 2.0; // Below this voltage ignition is considered off
-bool syspower = HIGH;
-bool syspower_last = syspower;
+bool ignition = LOW;  // Set by handler only. Reflects current state of the signal
+bool ignition_toggle_request = false;  // Setting to true tells handler to toggle the signal. Handler will set to false.
+bool syspower = HIGH;  // Set by handler only. Reflects current state of the signal
+bool syspower_toggle_request = false;  // Setting to true tells handler to toggle the signal. Handler will set to false.
+bool starter = LOW;  // Set by handler only. Reflects current state of starter signal (does not indicate source)
+bool starter_drive = false;  // Set by handler only. High when we're driving starter, otherwise starter is an input
+bool starter_toggle_request = false;  // Set to true for handler to start/stop starter motor
+Timer starterTimer(5000000);  // If remotely-started starting event is left on for this long, end it automatically  
 bool basicmodesw = LOW;
-bool cruise_sw = LOW;
-bool starter = LOW;
-bool starter_last = LOW;
 
 enum temp_categories { AMBIENT = 0, ENGINE = 1, WHEEL = 2 };
 enum temp_lims { DISP_MIN, NOM_MIN, NOM_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
 float temp_lims_f[3][6]{
-    {0.0, 45.0, 115.0, 120.0, 130.0, 220.0},  // [AMBIENT][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
-    {0.0, 178.0, 198.0, 202.0, 205.0, 220.0}, // [ENGINE][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
+    {0.0, 45.0, 115.0, 120.0, 130.0, 220.0},  // [AMBIENT][DISP_MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
+    {0.0, 178.0, 198.0, 202.0, 205.0, 220.0}, // [ENGINE][DISP_MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
     {0.0, 50.0, 120.0, 130.0, 140.0, 220.0},
-};                               // [WHEEL][MIN/NOM_MIN/NOM_MAX/WARNING/ALARM] (applies to all wheels)
+};                               // [WHEEL][DISP_MIN/NOM_MIN/NOM_MAX/WARNING/ALARM] (applies to all wheels)
 float temp_room = 77.0;          // "Room" temperature is 25 C = 77 F  Who cares?
 float temp_sensor_min_f = -67.0; // Minimum reading of sensor is -25 C = -67 F
 float temp_sensor_max_f = 257.0; // Maximum reading of sensor is 125 C = 257 F
@@ -234,45 +236,32 @@ Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 BatterySensor battery_sensor(mulebatt_pin);
 
 // controller related
-enum ctrls { HOTRC, SIM, HEADLESS }; // Possible sources of gas, brake, steering commands
-enum ctrl_axes { HORZ, VERT, CH3, CH4 };
-enum hotrc_units { US, PC };  // microseconds pulsewidth, or percent of full range
-enum hotrc_vals { RAW, FILT, MIN, CENT, MAX, MARGIN, DBBOT, DBTOP };
-bool ctrl = HOTRC;                             // Use HotRC controller to drive instead of joystick?
-float hotrc_ema_alpha = 0.1;         // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
-float hotrc_pc[2][8] =               //  human values in percent
-    { { 0.0, 0.0, -100.0, 0.0, 100.0, 2.5, -2.5, 2.5 },     // [HORZ] [RAW/FILT/MIN/CENT/MAX/MARGIN/DBBOT/DBTOP]  // MARGIN is how much out of range the reading must be for axis to be completely ignored
-      { 0.0, 0.0, -100.0, 0.0, 100.0, 2.5, -2.5, 2.5 }, };  // [VERT] [RAW/FILT/MIN/CENT/MAX/MARGIN/DBBOT/DBTOP]
-int32_t hotrc_us[4][6] =
-    { { 1500, 1500,  971, 1470, 1968, 20 },     // [HORZ] [RAW/FILT/MIN/CENT/MAX/MARGIN]
-      { 1500, 1500, 1081, 1580, 2078, 20 },     // [VERT] [RAW/FILT/MIN/CENT/MAX/MARGIN]
-      { 1500, 1500, 1151, 1500, 1849, 20 },     // [CH3] [RAW/FILT/MIN/CENT/MAX/MARGIN]
-      { 1500, 1500, 1251, 1500, 1749, 20 }, };  // [CH4] [RAW/FILT/MIN/CENT/MAX/MARGIN]
+float hotrc_ema_alpha = 0.075;         // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
+float hotrc_pc[2][8] = { { -100.0, 0.0, 100.0, 0.0, 0.0, 0.0, 0.0, 0.0 }, { -100.0, 0.0, 100.0, 0.0, 0.0, 0.0, 0.0, 0.0 }, };  // human values in percent are all derived
+int32_t hotrc_us[4][8] =
+    { {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [HORZ] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+      { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+      { 1151, 1500, 1848, 0, 1500, 0, 0, 0 },     // 1000+150+1,   1500, 2000-150-2,  // [CH3] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+      { 1251, 1500, 1748, 0, 1500, 0, 0, 0 }, };  // 1000+250+1,   1500, 2000-250-2,  // [CH4] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+float hotrc_ema_us[2] = { 1500.0, 1500.0 };  // [HORZ/VERT]
 int32_t hotrc_absmin_us = 880;
 int32_t hotrc_absmax_us = 2080;
+int32_t hotrc_deadband_us = 13;  // All [DBBOT] and [DBTOP] values above are derived from this by calling hotrc_calc_params()
+int32_t hotrc_margin_us = 20;  // All [MARGIN] values above are derived from this by calling hotrc_calc_params()
 int32_t hotrc_failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
 int32_t hotrc_failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
 int32_t hotrc_failsafe_pad_us = 10;
-
+Timer hotrcFailsafeTimer(75000);  // How long to receive failsafe pulse value continuously before recognizing radio is lost. To prevent false positives
 int32_t hotrc_spike_buffer[2][3];
 bool hotrc_radio_lost = true;
-bool hotrc_radio_lost_last = hotrc_radio_lost;
-bool hotrc_suppress_next_ch3_event = true; // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
-bool hotrc_suppress_next_ch4_event = true; // When powered up, the hotrc will trigger a Ch3 and Ch4 event we should ignore
 float hotrc_pulse_period_us = 1000000.0 / 50;
-
-uint32_t hotrc_panic_timeout_us = 200000; // how long to receive flameout-range signal from hotrc vertical before panic stopping
-Timer hotrcPanicTimer(hotrc_panic_timeout_us);
 volatile int64_t hotrc_timer_start;
-volatile bool hotrc_ch3_sw_last = true;
-volatile bool hotrc_ch4_sw_last = true;
-volatile bool hotrc_ch3_sw_event, hotrc_ch4_sw_event, hotrc_ch3_sw, hotrc_ch4_sw;
-volatile bool hotrc_isr_pin_preread = true;
-// volatile int32_t intcount = 0;
+volatile bool hotrc_sw[4];  // Only using indices 2,3 for [CH3] and [CH4]. Do not use 0 or 1
+volatile bool hotrc_sw_last[4] = { 1, 1, true, true };  // [X/X/CH3/CH4]  initialized true i think otherwise the first ign or cruise press doesn't work
+volatile bool hotrc_sw_event[4];
 
 // steering related
 float steer_safe_pc = 72.0; // Steering is slower at high speed. How strong is this effect
-float steer_safe_ratio = steer_safe_pc / 100;
 float speedo_safeline_mph;
 //
 float steer_out_pc, steer_safe_adj_pc;
@@ -426,37 +415,39 @@ enum err_sensors { e_hrchorz, e_hrcvert, e_hrcch3, e_hrcch4, e_pressure, e_brkpo
 bool err_sensor_alarm[num_err_types] = { false, false };  // [LOST/RANGE]
 bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_battery/e_basicsw/e_starter]   // SimOption::opt_t::num_sensors]
 
-// Soren: commenting out these pre-rmt horz/vert handler function relics (noticing also the horz function appears to operate on the vert value (?))
-// void handle_hotrc_vert(int32_t pulse_width) { if (pulse_width > 0) hotrc_vert_pulse_64_us = pulse_width; }  // reads return 0 if the buffer is empty eg bc our loop is running faster than the rmt is getting pulses;
-// void handle_hotrc_horz(int32_t pulse_width) { if (pulse_width > 0) hotrc_vert_pulse_64_us = pulse_width; }
-void hotrc_ch3_update(void) {                                                            //
-    hotrc_us[CH3][RAW] = hotrc_ch3.readPulseWidth(true);
-    hotrc_ch3_sw = (hotrc_us[CH3][RAW] <= hotrc_us[CH3][CENT]); // Ch3 switch true if short pulse, otherwise false  hotrc_us[CH3][CENT]
-    if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true; // So a handler routine can be signaled. Handler must reset this to false
-    hotrc_ch3_sw_last = hotrc_ch3_sw;
+void hotrc_toggle_update(int chan) {                                                            //
+    hotrc_us[chan][RAW] = hotrc_rmt[chan].readPulseWidth(true);
+    hotrc_sw[chan] = (hotrc_us[chan][RAW] <= hotrc_us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  hotrc_us[CH3][CENT]
+    if (hotrc_sw[chan] != hotrc_sw_last[chan]) hotrc_sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false
+    hotrc_sw_last[chan] = hotrc_sw[chan];
 }
-void hotrc_ch4_update(void) {                                                            //
-    hotrc_us[CH4][RAW] = hotrc_ch4.readPulseWidth(true);
-    hotrc_ch4_sw = (hotrc_us[CH4][RAW] <= hotrc_us[CH4][CENT]); // Ch4 switch true if short pulse, otherwise false  hotrc_us[CH4][CENT]
-    if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true; // So a handler routine can be signaled. Handler must reset this to false
-    hotrc_ch4_sw_last = hotrc_ch4_sw;
-}
-// void calc_ctrl_lims(void) {
-//     hotrc_pc[VERT][DBBOT] = hotrc_pc[VERT][CENT] - ctrl_lims_adc[ctrl][VERT][DB] / 2; // Lower threshold of vert joy deadband (ADC count 0-4095)
-//     hotrc_pc[VERT][DBTOP] = hotrc_pc[VERT][CENT] + ctrl_lims_adc[ctrl][VERT][DB] / 2; // Upper threshold of vert joy deadband (ADC count 0-4095)
-//     hotrc_pc[HORZ][DBBOT] = hotrc_pc[HORZ][CENT] - ctrl_lims_adc[ctrl][HORZ][DB] / 2; // Lower threshold of horz joy deadband (ADC count 0-4095)
-//     hotrc_pc[HORZ][DBTOP] = hotrc_pc[HORZ][CENT] + ctrl_lims_adc[ctrl][HORZ][DB] / 2; // Upper threshold of horz joy deadband (ADC count 0-4095)
-//     steer_safe_ratio = steer_safe_pc / 100.0;
+// void hotrc_ch4_update(void) {                                                            //
+//     hotrc_us[CH4][RAW] = hotrc_rmt[CH4].readPulseWidth(true);
+//     hotrc_ch4_sw = (hotrc_us[CH4][RAW] <= hotrc_us[CH4][CENT]); // Ch4 switch true if short pulse, otherwise false  hotrc_us[CH4][CENT]
+//     if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true; // So a handler routine can be signaled. Handler must reset this to false
+//     hotrc_ch4_sw_last = hotrc_ch4_sw;
 // }
+float hotrc_us_to_pc(int32_t us) {
+    return (float)us * (hotrc_pc[VERT][MAX] - hotrc_pc[VERT][MIN]) / (float)(hotrc_us[VERT][MAX] - hotrc_us[VERT][MIN]);
+}
+void hotrc_calc_params() {
+    for (int axis=HORZ; axis<=VERT; axis++) {
+        hotrc_us[axis][DBBOT] = hotrc_us[axis][CENT] - hotrc_deadband_us;
+        hotrc_us[axis][DBTOP] = hotrc_us[axis][CENT] + hotrc_deadband_us;
+        hotrc_pc[axis][DBBOT] = hotrc_pc[axis][CENT] - hotrc_us_to_pc(hotrc_deadband_us);
+        hotrc_pc[axis][DBTOP] = hotrc_pc[axis][CENT] + hotrc_us_to_pc(hotrc_deadband_us);
+        hotrc_us[axis][MARGIN] = hotrc_margin_us;
+        hotrc_pc[axis][MARGIN] = hotrc_us_to_pc(hotrc_margin_us);
+    }
+}
 void calc_governor(void) {
     tach_govern_rpm = map(gas_governor_pc, 0.0, 100.0, 0.0, tachometer.get_redline_rpm()); // Create an artificially reduced maximum for the engine speed
     cruiseQPID.SetOutputLimits(throttle.get_idlespeed(), tach_govern_rpm);
     gas_pulse_govern_us = map(tach_govern_rpm, throttle.get_idlespeed(), tachometer.get_redline_rpm(), gas_pulse_ccw_closed_us, gas_pulse_cw_open_us); // Governor must scale the pulse range proportionally
-    // gas_pulse_govern_us = map(gas_governor_pc * (tach_govern_rpm - throttle.get_idlespeed()) / tachometer.get_redline_rpm(), 0.0, 100.0, gas_pulse_ccw_closed_us, gas_pulse_cw_open_us); // Governor must scale the pulse range proportionally
     speedo_govern_mph = map(gas_governor_pc, 0.0, 100.0, 0.0, speedometer.get_redline_mph());                                                                                     // Governor must scale the top vehicle speed proportionally
 }
 float steer_safe(float endpoint) {
-    return steer_stop_pc + (endpoint - steer_stop_pc) * (1 - steer_safe_ratio * speedometer.get_filtered_value() / speedometer.get_redline_mph());
+    return steer_stop_pc + (endpoint - steer_stop_pc) * (1 - steer_safe_pc * speedometer.get_filtered_value() / (100.0 * speedometer.get_redline_mph()));
 }
 
 // int* x is c++ style, int *x is c style
@@ -476,21 +467,8 @@ bool adj_val(float *variable, float modify, float low_limit, float high_limit) {
     *variable = adj_val(*variable, modify, low_limit, high_limit);
     return (*variable != oldval);
 }
-// bool adj_val(uint8_t *variable, int8_t modify, uint8_t low_limit, uint8_t high_limit) { // sets an int reference to new val constrained to given range
-//     float oldval = *variable;
-//     *variable = adj_val(*variable, modify, low_limit, high_limit);
-//     return (*variable != oldval);
-// }
 bool adj_bool(bool val, int32_t delta) { return delta != 0 ? delta > 0 : val; } // sets a bool reference to 1 on 1 delta or 0 on -1 delta
 void adj_bool(bool *val, int32_t delta) { *val = adj_bool(*val, delta); }       // sets a bool reference to 1 on 1 delta or 0 on -1 delta
-
-bool read_battery_ignition() { return battery_sensor.get_filtered_value() > ignition_on_thresh_v; }
-
-bool syspower_set(bool val) {
-    bool really_power = keep_system_powered | val;
-    write_pin(syspower_pin, really_power); // delay (val * 500);
-    return really_power;
-}
 
 // tasks for RTOS, this section is currently going to be where we keep sensor update loops.
 // TODO move these to more sensible places
@@ -511,6 +489,7 @@ void update_temperature_sensors(void *parameter) {
 }
 
 void set_devboard_defaults() {
+    devboard = true;
     simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), 1));
     simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), 1));
     simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), 1));
@@ -523,8 +502,6 @@ Timer loopTimer(1000000); // how long the previous main loop took to run (in us)
 uint32_t loop_period_us;
 float looptime_sum_s;
 uint32_t looptime_avg_ms;
-float loop_freq_hz = 1;              // run loop real time frequency (in Hz)
-volatile int32_t loop_int_count = 0; // counts interrupts per loop
 int32_t loopno = 1;
 uint32_t looptimes_us[20];
 bool loop_dirty[20];
@@ -558,7 +535,6 @@ void loop_print_timing() {  // Call once at very end of loop
         loop_period_us = (uint32_t)loopTimer.elapsed();  // us since beginning of this loop
         loopTimer.reset();
         looptime_cout_mark_us = esp_timer_get_time();
-        // loop_freq_hz = 1000000.0 / ((loop_period_us) ? loop_period_us : 1);  // Prevent potential divide by zero
         loopno++;  // I like to count how many loops
         looptime_sum_s += (float)loop_period_us / 1000000;
         if (!loopno) looptime_avg_ms = loop_period_us / 1000;
@@ -703,7 +679,7 @@ float get_massairflow(float map = NAN, float airflow = NAN, float ambient = NAN)
 }
 float maf_gps;  // Mass airflow in grams per second
 float maf_min_gps = 0.0;
-float maf_max_gps = get_massairflow(map_sensor.get_max_psi(), airflow_sensor.get_max_mph(), temp_lims_f[AMBIENT][MIN]);
+float maf_max_gps = get_massairflow(map_sensor.get_max_psi(), airflow_sensor.get_max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
 
 // // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
 // float calc_maf(float map_psi, float airflow_mph, float ambient_f) {
@@ -721,4 +697,4 @@ float maf_max_gps = get_massairflow(map_sensor.get_max_psi(), airflow_sensor.get
 // }
 // float maf_gps;  // Mass airflow in grams per second
 // float maf_min_gps = 0.0;
-// float maf_max_gps = calc_maf(map_sensor.get_max_psi(), airflow_sensor.get_max_mph(), temp_lims_f[AMBIENT][MIN]);
+// float maf_max_gps = calc_maf(map_sensor.get_max_psi(), airflow_sensor.get_max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);

@@ -26,6 +26,7 @@ class SparkFun_MicroPressure {
     int8_t _address, _eoc, _rst;
     uint8_t _minPsi, _maxPsi, status;
     TwoWire *_i2cPort;
+    bool statusreadable();
 };
 // Constructor and sets default values.
 // - (Optional) eoc_pin, End of Conversion indicator. Default: -1 (skip)
@@ -62,6 +63,11 @@ uint8_t SparkFun_MicroPressure::readStatus(void) {
     _i2cPort->requestFrom(_address,1);
     return _i2cPort->read();
 }
+bool SparkFun_MicroPressure::statusreadable(void) {
+    if (_eoc >= 0) return digitalRead(_eoc);
+    bool bit = readStatus();
+    return !(bit & BUSY_FLAG) || (bit == 0xff);
+}
 // Read the Pressure Sensor Reading - (optional) Pressure_Units, can return various pressure units. Default: PSI
 float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
     if (ready) {
@@ -72,15 +78,10 @@ float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
         _i2cPort->endTransmission();
     }
     ready = false;
-    if(_eoc == -1) {  // Check status byte if GPIO is not defined
-        status = readStatus();
-        while (status&BUSY_FLAG && (status!=0xFF)) {
-            if (noblock) return NAN;
-            delay(1);  // The bus is busy still, calling function should try again in a ms or so
-            status = readStatus();
-        }
+    while (!statusreadable()) {
+        if (noblock) return NAN;  // If asked not to block but it's not ready, it sends you packing w/o a result & you have to retry.
+        delay(1);
     }
-    else while (!digitalRead(_eoc)) delay(1);  // return NAN;  // Wait for new pressure reading available (eoc = high) // Use GPIO pin if defined
     ready = true;
     _i2cPort->requestFrom(_address,4);
     status = _i2cPort->read();
