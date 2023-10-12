@@ -10,19 +10,13 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-HotrcManager hotrcHorzManager (6);
-HotrcManager hotrcVertManager (6);
+HotrcManager hotrcManager[2] = { 6, 6 };  // [HORZ/VERT]
 RunModeManager runModeManager;
 Display screen;
 ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
 neopixelStrip neo;
 
-// void update_saver(void* parameter) {
-//     while (true) {
-//         screen.saver_update();
-//         delay(10);
-//     }
-// }
+// void update_saver(void* parameter) { while (1) { screen.saver_update(); delay(10); } }  // Struggles, choppy, crashes, etc. as task
 
 #ifdef CAP_TOUCH
 TouchScreen ts;
@@ -88,10 +82,9 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     // Set up 4 RMT receivers, one per channel
     printf ("Init rmt for hotrc..\n");
     hotrc_calc_params();  // Need to establish derived parameter values
-    hotrc_vert.init();
-    hotrc_horz.init();
-    hotrc_ch3.init();
-    hotrc_ch4.init();
+    
+    for (int axis=HORZ; axis<=CH4; axis++)
+        hotrc_rmt[axis].init();
     
     printf("Pot setup..\n");
     pot.setup();
@@ -257,19 +250,20 @@ void loop() {
         hotrc_ch4_sw_event = false;
     }
     // Read horz and vert pulse inputs, convert to percent units, and determine steering pwm output
-    hotrc_us[HORZ][RAW] = (int32_t)hotrc_horz.readPulseWidth();  
-    hotrc_us[VERT][RAW] = (int32_t)hotrc_vert.readPulseWidth();
-    // hotrc_us[HORZ][RAW] = hotrcHorzManager.spike_filter (hotrc_us[HORZ][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
-    // hotrc_us[VERT][RAW] = hotrcVertManager.spike_filter (hotrc_us[VERT][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
-    ema_filt (hotrcHorzManager.spike_filter (hotrc_us[VERT][RAW]), &hotrc_vert_ema_unconstr_us, hotrc_ema_alpha);  // Need unconstrained ema-filtered vertical for radio lost detection 
-    if (hotrc_vert_ema_unconstr_us > hotrc_failsafe_us + hotrc_failsafe_margin_us) {
+    // hotrc_us[HORZ][RAW] = (int32_t)hotrc_horz.readPulseWidth();  
+    // hotrc_us[VERT][RAW] = (int32_t)hotrc_vert.readPulseWidth();
+    for (int axis = HORZ; axis <= VERT; axis++) {
+        hotrc_us[axis][RAW] = (int32_t)hotrc_rmt[axis].readPulseWidth();
+        hotrc_us[axis][RAW] = hotrcManager[axis].spike_filter (hotrc_us[axis][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
+        ema_filt (hotrc_us[axis][RAW], &hotrc_ema_us[axis], hotrc_ema_alpha);  // Need unconstrained ema-filtered vertical for radio lost detection 
+    }
+    if (hotrc_ema_us[VERT] > hotrc_failsafe_us + hotrc_failsafe_margin_us) {
         panicTimer.reset();
         hotrc_radio_lost = false;
     }
     else if (!hotrc_radio_lost && panicTimer.expired()) hotrc_radio_lost = true;
     if (!simulator.simulating(SimOption::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
         for (int axis = HORZ; axis <= VERT; axis++) {
-            // hotrc_pc[axis][RAW] = hotrc_us_to_pc(hotrc_us[axis][RAW] - hotrc_us[axis][CENT]);
             hotrc_pc[axis][RAW] = (float)(map ((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][MIN], (float)hotrc_us[axis][MAX], hotrc_pc[axis][MIN], hotrc_pc[axis][MAX]));
             if (hotrc_radio_lost)
                 hotrc_pc[axis][FILT] = hotrc_pc[axis][CENT];  // if radio lost set joy_axis_filt to center value
@@ -277,10 +271,8 @@ void loop() {
                 ema_filt (hotrc_pc[axis][RAW], &(hotrc_pc[axis][FILT]), hotrc_ema_alpha);  // do ema filter to determine joy_vert_filt
                 hotrc_pc[axis][FILT] = constrain (hotrc_pc[axis][FILT], hotrc_pc[axis][MIN], hotrc_pc[axis][MAX]);
             }
-            // if (std::abs(hotrc_pc[axis][FILT]) < hotrc_pc[axis][DBTOP]) hotrc_pc[axis][FILT] = hotrc_pc[axis][CENT];  // if within the deadband set joy_axis_filt to center value
-            //
-            // if (hotrc_pc[axis][FILT] > hotrc_pc[axis][DBBOT] && hotrc_pc[axis][FILT] < hotrc_pc[axis][DBTOP])
-            //     hotrc_pc[axis][FILT] = hotrc_pc[axis][CENT];  // if within the deadband set joy_axis_filt to center value
+            if (hotrc_ema_us[axis] > hotrc_us[axis][DBBOT] && hotrc_ema_us[axis] < hotrc_us[axis][DBTOP])
+                hotrc_pc[axis][FILT] = hotrc_pc[axis][CENT];  // if within the deadband set joy_axis_filt to center value
         }
         if (simulator.can_simulate(SimOption::joy) && simulator.get_pot_overload() == SimOption::joy)
             hotrc_pc[HORZ][FILT] = pot.mapToRange(steer_pulse_left_us, steer_pulse_right_us);

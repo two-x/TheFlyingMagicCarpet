@@ -111,6 +111,9 @@ uint32_t timestamp_loop_linefeed_threshold = 0;  // Leaves prints of loops takin
 bool screensaver = false;  // Can enable experiment with animated screen draws
 #define pwm_jaguars true
 
+enum ctrl_axes { HORZ, VERT, CH3, CH4 };
+enum hotrc_vals { MIN, CENT, MAX, RAW, FILT, DBBOT, DBTOP, MARGIN };
+
 // Persistent config storage
 Preferences config;
 
@@ -118,10 +121,16 @@ Preferences config;
 I2C i2c(i2c_sda_pin, i2c_scl_pin);
 
 // Declare Hotrc RMT Inputs in global scope
-RMTInput hotrc_horz(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_horz_pin));
-RMTInput hotrc_vert(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_vert_pin));
-RMTInput hotrc_ch3(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_ign_pin));
-RMTInput hotrc_ch4(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_cruise_pin));
+RMTInput hotrc_rmt[4] = {
+    RMTInput(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_horz_pin)),  // hotrc[HORZ]
+    RMTInput(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_vert_pin)),  // hotrc[VERT]
+    RMTInput(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_ign_pin)),  // hotrc[CH3]
+    RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_cruise_pin))  // hotrc[CH4]
+};
+// RMTInput hotrc_horz(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_horz_pin));
+// RMTInput hotrc_vert(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_vert_pin));
+// RMTInput hotrc_ch3(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_ign_pin));
+// RMTInput hotrc_ch4(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_cruise_pin));
 
 // Globals -------------------
 //
@@ -231,8 +240,6 @@ Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 BatterySensor battery_sensor(mulebatt_pin);
 
 // controller related
-enum ctrl_axes { HORZ, VERT, CH3, CH4 };
-enum hotrc_vals { MIN, CENT, MAX, RAW, FILT, DBBOT, DBTOP, MARGIN };
 float hotrc_ema_alpha = 0.075;         // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
 float hotrc_pc[2][8] = { { -100.0, 0.0, 100.0, 0.0, 0.0, 0.0, 0.0, 0.0 }, { -100.0, 0.0, 100.0, 0.0, 0.0, 0.0, 0.0, 0.0 }, };  // human values in percent are all derived
 int32_t hotrc_us[4][8] =
@@ -240,6 +247,7 @@ int32_t hotrc_us[4][8] =
       { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
       { 1151, 1500, 1848, 0, 1500, 0, 0, 0 },     // 1000+150+1,   1500, 2000-150-2,  // [CH3] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
       { 1251, 1500, 1748, 0, 1500, 0, 0, 0 }, };  // 1000+250+1,   1500, 2000-250-2,  // [CH4] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+float hotrc_ema_us[2] = { 1500.0, 1500.0 };  // [HORZ/VERT]
 int32_t hotrc_absmin_us = 880;
 int32_t hotrc_absmax_us = 2080;
 int32_t hotrc_deadband_us = 13;  // All [DBBOT] and [DBTOP] values above are derived from this by calling hotrc_calc_params()
@@ -247,7 +255,6 @@ int32_t hotrc_margin_us = 20;  // All [MARGIN] values above are derived from thi
 int32_t hotrc_failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
 int32_t hotrc_failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
 int32_t hotrc_failsafe_pad_us = 10;
-float hotrc_vert_ema_unconstr_us = 1500.0;
 int32_t hotrc_spike_buffer[2][3];
 bool hotrc_radio_lost = true;
 float hotrc_pulse_period_us = 1000000.0 / 50;
@@ -412,13 +419,13 @@ bool err_sensor_alarm[num_err_types] = { false, false };  // [LOST/RANGE]
 bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_battery/e_basicsw/e_starter]   // SimOption::opt_t::num_sensors]
 
 void hotrc_ch3_update(void) {                                                            //
-    hotrc_us[CH3][RAW] = hotrc_ch3.readPulseWidth(true);
+    hotrc_us[CH3][RAW] = hotrc_rmt[CH3].readPulseWidth(true);
     hotrc_ch3_sw = (hotrc_us[CH3][RAW] <= hotrc_us[CH3][CENT]); // Ch3 switch true if short pulse, otherwise false  hotrc_us[CH3][CENT]
     if (hotrc_ch3_sw != hotrc_ch3_sw_last) hotrc_ch3_sw_event = true; // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch3_sw_last = hotrc_ch3_sw;
 }
 void hotrc_ch4_update(void) {                                                            //
-    hotrc_us[CH4][RAW] = hotrc_ch4.readPulseWidth(true);
+    hotrc_us[CH4][RAW] = hotrc_rmt[CH4].readPulseWidth(true);
     hotrc_ch4_sw = (hotrc_us[CH4][RAW] <= hotrc_us[CH4][CENT]); // Ch4 switch true if short pulse, otherwise false  hotrc_us[CH4][CENT]
     if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true; // So a handler routine can be signaled. Handler must reset this to false
     hotrc_ch4_sw_last = hotrc_ch4_sw;
