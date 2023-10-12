@@ -270,66 +270,21 @@ void loop() {
     if (!simulator.simulating(SimOption::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
         for (int axis = HORZ; axis <= VERT; axis++) {
             // hotrc_pc[axis][RAW] = hotrc_us_to_pc(hotrc_us[axis][RAW] - hotrc_us[axis][CENT]);
-            
             hotrc_pc[axis][RAW] = (float)(map ((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][MIN], (float)hotrc_us[axis][MAX], hotrc_pc[axis][MIN], hotrc_pc[axis][MAX]));
-            
-            // if (hotrc_us[axis][RAW] >= hotrc_us[axis][CENT])  // Convert from pulse us to percent, when pushing left/down, else when pushing right/up
-            //     hotrc_pc[axis][RAW] = map ((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MAX], hotrc_pc[axis][CENT], hotrc_pc[axis][MAX]);  // When pushing right, or trigger pull
-            // else hotrc_pc[axis][RAW] = map ((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MIN], hotrc_pc[axis][CENT], hotrc_pc[axis][MIN]);  // When pushing left, or trigger push
-
-            // if (boot_button) printf(" lpc_x %4.0lf ", hotrc_pc[axis][RAW]); 
             if (hotrc_radio_lost)
                 hotrc_pc[axis][FILT] = hotrc_pc[axis][CENT];  // if radio lost set joy_axis_filt to center value
             else {
-                // if (boot_button) printf("(%d) us_h %lf  ", axis, hotrc_us[axis][RAW]);
-                // if (boot_button) std::cout << "(" << axis << ") us=" << hotrc_pc[axis][FILT] << ", ";
                 ema_filt (hotrc_pc[axis][RAW], &(hotrc_pc[axis][FILT]), hotrc_ema_alpha);  // do ema filter to determine joy_vert_filt
                 hotrc_pc[axis][FILT] = constrain (hotrc_pc[axis][FILT], hotrc_pc[axis][MIN], hotrc_pc[axis][MAX]);
-                // if (boot_button) std::cout << "pc=" << hotrc_pc[axis][FILT] << ", ";
             }
-            // if (std::abs(hotrc_pc[axis][FILT]) < 1e-9) hotrc_pc[axis][FILT] = 0.0;
-            
-            
-            if (std::abs(hotrc_pc[axis][FILT]) < hotrc_pc[axis][DBTOP]) hotrc_pc[axis][FILT] = hotrc_pc[axis][CENT];  // if within the deadband set joy_axis_filt to center value
-            // if (boot_button) std::cout << "pc2=" << hotrc_pc[axis][FILT] << " | ";
-
-
+            // if (std::abs(hotrc_pc[axis][FILT]) < hotrc_pc[axis][DBTOP]) hotrc_pc[axis][FILT] = hotrc_pc[axis][CENT];  // if within the deadband set joy_axis_filt to center value
+            //
             // if (hotrc_pc[axis][FILT] > hotrc_pc[axis][DBBOT] && hotrc_pc[axis][FILT] < hotrc_pc[axis][DBTOP])
             //     hotrc_pc[axis][FILT] = hotrc_pc[axis][CENT];  // if within the deadband set joy_axis_filt to center value
         }
-        // if (boot_button) std::cout << std::endl;
-
         if (simulator.can_simulate(SimOption::joy) && simulator.get_pot_overload() == SimOption::joy)
             hotrc_pc[HORZ][FILT] = pot.mapToRange(steer_pulse_left_us, steer_pulse_right_us);
-
-
-        // hotrc_pc[VERT][RAW] = (float)(map ((float)hotrc_us[VERT][RAW], (float)hotrc_us[VERT][MIN], (float)hotrc_us[VERT][MAX], hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]));
-        // hotrc_pc[HORZ][RAW] = (float)(map ((float)hotrc_us[HORZ][RAW], (float)hotrc_us[HORZ][MIN], (float)hotrc_us[HORZ][MAX], hotrc_pc[HORZ][MIN], hotrc_pc[HORZ][MAX]));
-        // if (hotrc_radio_lost) {
-        //     hotrc_pc[VERT][FILT] = hotrc_pc[VERT][CENT];  // if radio lost set joy_axis_filt to center value
-        //     hotrc_pc[HORZ][FILT] = hotrc_pc[HORZ][CENT];  // if radio lost set joy_axis_filt to center value
-        // }
-        // else {
-        //     ema_filt (hotrc_pc[VERT][RAW], &(hotrc_pc[VERT][FILT]), hotrc_ema_alpha);  // do ema filter to determine joy_vert_filt
-        //     ema_filt (hotrc_pc[HORZ][RAW], &(hotrc_pc[HORZ][FILT]), hotrc_ema_alpha);  // do ema filter to determine joy_vert_filt
-        //     hotrc_pc[VERT][FILT] = constrain (hotrc_pc[VERT][FILT], hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
-        //     hotrc_pc[HORZ][FILT] = constrain (hotrc_pc[HORZ][FILT], hotrc_pc[HORZ][MIN], hotrc_pc[HORZ][MAX]);
-        // }
-        // if (hotrc_pc[VERT][FILT] > hotrc_pc[VERT][DBBOT] && hotrc_pc[VERT][FILT] < hotrc_pc[VERT][DBTOP])
-        //     hotrc_pc[VERT][FILT] = hotrc_pc[VERT][CENT];  // if within the deadband set joy_axis_filt to center value
-        // if (hotrc_pc[HORZ][FILT] > hotrc_pc[HORZ][DBBOT] && hotrc_pc[HORZ][FILT] < hotrc_pc[HORZ][DBTOP])
-        //     hotrc_pc[HORZ][FILT] = hotrc_pc[HORZ][CENT];  // if within the deadband set joy_axis_filt to center value
-        // if (boot_button) printf("HR  %f  VR  %f  HF  %f  VF  %f\n", hotrc_us[HORZ][RAW], hotrc_us[VERT][RAW], hotrc_us[HORZ][FILT], hotrc_us[VERT][FILT]);
-        
-        
-        // if (boot_button) printf("  pc_h %4.0lf  pc_v %4.0lf \n", hotrc_pc[HORZ][FILT], hotrc_pc[VERT][FILT]);
     }
-    // bool header;
-    // if (boot_button) {
-    //     pr(header);
-    //     header = false;
-    // } else header = true;
-    
     runmode = runModeManager.handle_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
 
     // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us

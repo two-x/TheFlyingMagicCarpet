@@ -6,6 +6,7 @@
 #include "map.h"
 #include <Preferences.h>
 #include <iostream>
+#include <iomanip>  // For formatting console cout strings
 // #include "freertos/FreeRTOS.h"  // MCPWM pulse measurement code
 // #include "freertos/task.h"  // MCPWM pulse measurement code
 // #include "driver/mcpwm.h"  // MCPWM pulse measurement code
@@ -232,7 +233,7 @@ BatterySensor battery_sensor(mulebatt_pin);
 // controller related
 enum ctrl_axes { HORZ, VERT, CH3, CH4 };
 enum hotrc_vals { MIN, CENT, MAX, RAW, FILT, DBBOT, DBTOP, MARGIN };
-float hotrc_ema_alpha = 0.025;         // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
+float hotrc_ema_alpha = 0.075;         // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
 float hotrc_pc[2][8] = { { -100.0, 0.0, 100.0, 0.0, 0.0, 0.0, 0.0, 0.0 }, { -100.0, 0.0, 100.0, 0.0, 0.0, 0.0, 0.0, 0.0 }, };  // human values in percent are all derived
 int32_t hotrc_us[4][8] =
     { {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [HORZ] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
@@ -243,7 +244,6 @@ int32_t hotrc_absmin_us = 880;
 int32_t hotrc_absmax_us = 2080;
 int32_t hotrc_deadband_us = 13;  // All [DBBOT] and [DBTOP] values above are derived from this by calling hotrc_calc_params()
 int32_t hotrc_margin_us = 20;  // All [MARGIN] values above are derived from this by calling hotrc_calc_params()
-
 int32_t hotrc_failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
 int32_t hotrc_failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
 int32_t hotrc_failsafe_pad_us = 10;
@@ -251,7 +251,6 @@ float hotrc_vert_ema_unconstr_us = 1500.0;
 int32_t hotrc_spike_buffer[2][3];
 bool hotrc_radio_lost = true;
 float hotrc_pulse_period_us = 1000000.0 / 50;
-
 volatile int64_t hotrc_timer_start;
 volatile bool hotrc_ch3_sw_last = true;
 volatile bool hotrc_ch4_sw_last = true;
@@ -412,9 +411,6 @@ enum err_sensors { e_hrchorz, e_hrcvert, e_hrcch3, e_hrcch4, e_pressure, e_brkpo
 bool err_sensor_alarm[num_err_types] = { false, false };  // [LOST/RANGE]
 bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_battery/e_basicsw/e_starter]   // SimOption::opt_t::num_sensors]
 
-// Soren: commenting out these pre-rmt horz/vert handler function relics (noticing also the horz function appears to operate on the vert value (?))
-// void handle_hotrc_vert(int32_t pulse_width) { if (pulse_width > 0) hotrc_vert_pulse_64_us = pulse_width; }  // reads return 0 if the buffer is empty eg bc our loop is running faster than the rmt is getting pulses;
-// void handle_hotrc_horz(int32_t pulse_width) { if (pulse_width > 0) hotrc_vert_pulse_64_us = pulse_width; }
 void hotrc_ch3_update(void) {                                                            //
     hotrc_us[CH3][RAW] = hotrc_ch3.readPulseWidth(true);
     hotrc_ch3_sw = (hotrc_us[CH3][RAW] <= hotrc_us[CH3][CENT]); // Ch3 switch true if short pulse, otherwise false  hotrc_us[CH3][CENT]
@@ -428,8 +424,7 @@ void hotrc_ch4_update(void) {                                                   
     hotrc_ch4_sw_last = hotrc_ch4_sw;
 }
 float hotrc_us_to_pc(int32_t us) {
-    float m = hotrc_us_to_pc (hotrc_pc[VERT][MAX] - hotrc_pc[VERT][MIN]) / (float)(hotrc_us[VERT][MAX] - hotrc_us[VERT][MIN]);
-    return m * (float)us;
+    return (float)us * (hotrc_pc[VERT][MAX] - hotrc_pc[VERT][MIN]) / (float)(hotrc_us[VERT][MAX] - hotrc_us[VERT][MIN]);
 }
 void hotrc_calc_params() {
     for (int axis=HORZ; axis<=VERT; axis++) {
@@ -440,13 +435,11 @@ void hotrc_calc_params() {
         hotrc_us[axis][MARGIN] = hotrc_margin_us;
         hotrc_pc[axis][MARGIN] = hotrc_us_to_pc(hotrc_margin_us);
     }
-    // printf ("vmax = %lf, vmin = %lf\n", hotrc_pc[VERT][MAX], hotrc_pc[VERT][MIN]);        
 }
 void calc_governor(void) {
     tach_govern_rpm = map(gas_governor_pc, 0.0, 100.0, 0.0, tachometer.get_redline_rpm()); // Create an artificially reduced maximum for the engine speed
     cruiseQPID.SetOutputLimits(throttle.get_idlespeed(), tach_govern_rpm);
     gas_pulse_govern_us = map(tach_govern_rpm, throttle.get_idlespeed(), tachometer.get_redline_rpm(), gas_pulse_ccw_closed_us, gas_pulse_cw_open_us); // Governor must scale the pulse range proportionally
-    // gas_pulse_govern_us = map(gas_governor_pc * (tach_govern_rpm - throttle.get_idlespeed()) / tachometer.get_redline_rpm(), 0.0, 100.0, gas_pulse_ccw_closed_us, gas_pulse_cw_open_us); // Governor must scale the pulse range proportionally
     speedo_govern_mph = map(gas_governor_pc, 0.0, 100.0, 0.0, speedometer.get_redline_mph());                                                                                     // Governor must scale the top vehicle speed proportionally
 }
 float steer_safe(float endpoint) {

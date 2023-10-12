@@ -127,8 +127,8 @@ int32_t tuning_first_editable_line[disp_tuning_lines] = { 6, 9, 5, 3, 4, 8, 7, 7
 
 char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
     { BRAK"Posn", "MuleBatt", "     Pot", "AirSpeed", "     MAP", "MasAirFl", "Governor", STER"Safe", BRIGHTNESS, "NeoDesat", "ScrnSavr", },  // PG_RUN
-    { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", "Min     ", "Cent    ", "Max     ", "HFailsaf", "Deadband", },  // PG_JOY
-    { "Pres ADC", "dbbot   ", "dbtop   ", BLAAAAAANK, BLAAAAAANK, "AirSpMax", " MAP Min", " MAP Max", SPED"Idle", SPED"RedL", "BkPos0Pt", },  // PG_CAR
+    { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", BLAAAAAANK, BLAAAAAANK, BLAAAAAANK, "HFailsaf", "Deadband", },  // PG_JOY
+    { "Pres ADC", BLAAAAAANK, BLAAAAAANK, BLAAAAAANK, BLAAAAAANK, "AirSpMax", " MAP Min", " MAP Max", SPED"Idle", SPED"RedL", "BkPos0Pt", },  // PG_CAR
     { "BrakePWM", "SteerPWM", BLAAAAAANK, STER"Left", STER"Stop", STER"Rght", BRAK"Extd", BRAK"Stop", BRAK"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
     { "PresTarg", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", BRAK"Motr", BRAK"Pres", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
@@ -740,18 +740,16 @@ class Display {
                     draw_dynamic(12, hotrc_us[CH4][RAW], hotrc_us[CH4][MIN], hotrc_us[CH4][MAX]);
                     draw_dynamic(13, hotrc_pc[HORZ][RAW], hotrc_pc[HORZ][MIN], hotrc_pc[HORZ][MAX]);
                     draw_dynamic(14, hotrc_pc[VERT][RAW], hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
-                    draw_dynamic(15, hotrc_pc[VERT][MIN], hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
-                    draw_dynamic(16, hotrc_pc[VERT][CENT], hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
-                    draw_dynamic(17, hotrc_pc[VERT][MAX], hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
-                    // draw_eraseval(16);
-                    // draw_eraseval(17);
+                    draw_eraseval(15);
+                    draw_eraseval(16);
+                    draw_eraseval(17);
                     draw_dynamic(18, hotrc_failsafe_us, hotrc_absmin_us, hotrc_us[VERT][MIN] - hotrc_us[VERT][MARGIN]);
                     draw_dynamic(19, hotrc_deadband_us, 0, 100);
                 }
                 else if (dataset_page == PG_CAR) {
                     draw_dynamic(9, pressure_sensor.get_native(), pressure_sensor.get_min_native(), pressure_sensor.get_max_native());                    
-                    draw_dynamic(10, hotrc_pc[VERT][DBBOT], hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
-                    draw_dynamic(11, hotrc_pc[VERT][DBTOP], hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
+                    draw_eraseval(10);
+                    draw_eraseval(11);
                     draw_eraseval(12);
                     draw_eraseval(13);
                     draw_dynamic(14, airflow_sensor.get_max_mph(), 0.0, airflow_sensor.get_abs_max_mph());
