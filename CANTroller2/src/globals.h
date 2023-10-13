@@ -203,15 +203,18 @@ bool boot_button_suppress_click = false;
 bool boot_button_action = NONE;
 
 // external digital input and output signal related
+bool basicmodesw = LOW;
+
 bool ignition = LOW;  // Set by handler only. Reflects current state of the signal
 bool ignition_toggle_request = false;  // Setting to true tells handler to toggle the signal. Handler will set to false.
 bool syspower = HIGH;  // Set by handler only. Reflects current state of the signal
 bool syspower_toggle_request = false;  // Setting to true tells handler to toggle the signal. Handler will set to false.
+
+enum starter_requests { st_nop, st_off, st_on, st_tog };  // code can set starter_request to these things, handler will make starter do it
 bool starter = LOW;  // Set by handler only. Reflects current state of starter signal (does not indicate source)
 bool starter_drive = false;  // Set by handler only. High when we're driving starter, otherwise starter is an input
-bool starter_toggle_request = false;  // Set to true for handler to start/stop starter motor
+int8_t starter_request = st_nop;  // Code can set for handler to drive the pin. -1 = nop, LOW = turn off starter, HIGH = turn on starter
 Timer starterTimer(5000000);  // If remotely-started starting event is left on for this long, end it automatically  
-bool basicmodesw = LOW;
 
 enum temp_categories { AMBIENT = 0, ENGINE = 1, WHEEL = 2 };
 enum temp_lims { DISP_MIN, NOM_MIN, NOM_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands

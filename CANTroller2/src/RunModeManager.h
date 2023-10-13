@@ -57,7 +57,7 @@ private:
             shutdown_color = colorcard[SHUTDOWN];
             shutdown_incomplete = false;
         }
-        else if (_oldMode == STALL && starter) starter_toggle_request = true;
+        else if (_oldMode == STALL) starter_request = st_off;  // Stop any in-progress startings
         else if (_oldMode == HOLD) joy_centered = false;
         else if (_oldMode == FLY) car_hasnt_moved = false;
         else if (_oldMode == CRUISE) cruise_adjusting = false;

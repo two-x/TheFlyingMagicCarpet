@@ -205,23 +205,24 @@ void loop() {
 
     // Starter bidirectional handler logic.  Outside code interacts with handler by setting starter_request = HIGH/LOW . 
     if (starter_signal_support) {
-        if (starter_drive && ((starter_request == LOW) || starterTimer.expired())) {  // If we're driving the motor but need to stop
+        if (starter_request == st_tog) starter_request = !starter_drive;  // translate toggle request to a drive request opposite to the current drive state
+        if (starter_drive && ((starter_request == st_off) || starterTimer.expired())) {  // If we're driving the motor but need to stop
             starter_drive = false;
             set_pin (starter_pin, INPUT_PULLDOWN);  // we never assert low on the pin, just set pin as input and let the pulldown bring it low
         }
-        if (!starter_drive && (starter_request != HIGH) && !simulator.simulating(SimOption::starter)) {  // If we haven't been and shouldn't be driving, and not simulating
+        if (!starter_drive && (starter_request != st_on) && !simulator.simulating(SimOption::starter)) {  // If we haven't been and shouldn't be driving, and not simulating
             do {
                 starter = digitalRead(starter_pin);  // then read the pin, starter variable will store if starter is turned on externally
             } while (starter != digitalRead(starter_pin)); // starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
         }
-        else if (!starter && (starter_request == HIGH)) {  // If we got a request to start the motor, and it's not already being driven externally
+        else if (!starter && (starter_request == st_on)) {  // If we got a request to start the motor, and it's not already being driven externally
             starter_drive = true;
             starter = HIGH;
             set_pin (starter_pin, OUTPUT);  // then set pin to an output
             write_pin (starter_pin, starter);  // and start the motor
             starterTimer.reset();  // if left on the starter will turn off automatically after X seconds
         }
-        starter_request = -1;  // we have serviced whatever requests
+        starter_request = st_nop;  // we have serviced whatever requests
     }
 
     encoder.update();  // Read encoder input signals
@@ -242,7 +243,7 @@ void loop() {
     if (hotrc_sw_event[CH3]) ignition_toggle_request = true;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
     if (hotrc_sw_event[CH4]) {
         if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
-        else if (runmode == STALL && remote_start_support) starter_toggle_request = true;
+        else if (runmode == STALL) starter_request = st_tog;
     }
     for (int ch = CH3; ch <= CH4; ch++) hotrc_sw_event[ch] = false;
     // 2. Read horz and vert pulse inputs, spike filter, convert to percent, ema filter, constrain, and center within deadband
