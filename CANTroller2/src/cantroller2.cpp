@@ -71,13 +71,11 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
     set_pin (uart_tx_pin, INPUT);  // 
     running_on_devboard = (read_pin(uart_tx_pin));
-    if (running_on_devboard) set_devboard_defaults();
-    if (console_enabled) {
-        set_pin (uart_tx_pin, OUTPUT);  // 
-        Serial.begin (115200);  // Open console serial port
-        delay (800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
-        printf ("Console started..\nUsing %s defaults..\n", (running_on_devboard) ? "vehicle-pcb" : "dev-board");
-    }
+    set_board_defaults(running_on_devboard);
+    set_pin (uart_tx_pin, OUTPUT);  // 
+    Serial.begin (115200);  // Open console serial port
+    delay (800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
+    printf ("Console started..\nUsing %s defaults..\n", (running_on_devboard) ? "vehicle-pcb" : "dev-board");
 
     // Set up 4 RMT receivers, one per channel
     printf ("Init rmt for hotrc..\n");
@@ -169,7 +167,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     int32_t watchdog_time_ms = Watchdog.enable(2500);  // Start 2.5 sec watchdog
     printf ("Watchdog.. timer set to %ld ms\n", watchdog_time_ms);
     booted = true;
-    printf ("Setup done\n");
+    printf ("Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
+    if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     panicTimer.reset();
     looptiming_init();
 }
@@ -246,7 +245,7 @@ void loop() {
         else if (runmode == STALL && remote_start_support) starter_toggle_request = true;
     }
     for (int ch = CH3; ch <= CH4; ch++) hotrc_sw_event[ch] = false;
-    // 3. Read horz and vert pulse inputs, spike filter, convert to percent, ema filter, constrain, and center within deadband
+    // 2. Read horz and vert pulse inputs, spike filter, convert to percent, ema filter, constrain, and center within deadband
     for (int axis = HORZ; axis <= VERT; axis++) {
         hotrc_us[axis][RAW] = (int32_t)hotrc_rmt[axis].readPulseWidth();
         hotrc_us[axis][RAW] = hotrcManager[axis].spike_filter(hotrc_us[axis][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
@@ -259,16 +258,15 @@ void loop() {
                 hotrc_pc[axis][FILT] = hotrc_pc[axis][CENT];  // if within the deadband set joy_axis_filt to center value
         }
     }
-    // 4. Pot overload can rudely overwrite the horz value
+    // 3. Pot overload can rudely overwrite the horz value
     if (simulator.can_simulate(SimOption::joy) && simulator.get_pot_overload() == SimOption::joy)
         hotrc_pc[HORZ][FILT] = pot.mapToRange(steer_pulse_left_us, steer_pulse_right_us);
-        // 2. Determine if the radio is lost
+    // 4. Determine if the radio is lost
     if (hotrc_ema_us[VERT] > hotrc_failsafe_us + hotrc_failsafe_margin_us) {
         hotrcFailsafeTimer.reset();
         hotrc_radio_lost = false;
     }
     else if (!hotrc_radio_lost && hotrcFailsafeTimer.expired()) hotrc_radio_lost = true;
-
 
     runmode = runModeManager.handle_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
 
@@ -429,20 +427,11 @@ void loop() {
     adj = false;
     if (tuning_ctrl == EDIT && sim_edit_delta != 0) {  // Change tunable values when editing
         if (dataset_page == PG_RUN) {
-            if (selected_value == 6) {
+            if (selected_value == 9) {
                 adj = adj_val (&gas_governor_pc, sim_edit_delta, 0, 100);
                 calc_governor();
             }
-            else if (selected_value == 7) adj_val (&steer_safe_pc, sim_edit_delta, 0, 100);
-            else if (selected_value == 8) {
-                adj_val (&neobright, sim_edit_delta, 1, 100);
-                neo.setbright(neobright);
-            }
-            else if (selected_value == 9) {
-                adj_val (&neodesat, sim_edit_delta, 0, 10);  // -10, 10);
-                neo.setdesaturation(neodesat);
-            }
-            else if (selected_value == 10) adj_bool (&screensaver, sim_edit_delta);
+            else if (selected_value == 10) adj_val (&steer_safe_pc, sim_edit_delta, 0, 100);
         }
         else if (dataset_page == PG_JOY) {
             if (selected_value == 9) adj_val (&hotrc_failsafe_us, sim_edit_delta, hotrc_absmin_us, hotrc_us[VERT][MIN] - hotrc_us[VERT][MARGIN]);
@@ -502,20 +491,32 @@ void loop() {
             else if (selected_value == 10) cruiseQPID.SetKd (cruiseQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }
         else if (dataset_page == PG_TEMP) {
-            if (selected_value == 9 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor_mode, sim_edit_delta);
-            else if (selected_value == 10 && runmode == CAL) adj_bool (&cal_pot_gasservo_mode, (sim_edit_delta < 0 || cal_pot_gasservo_ready) ? sim_edit_delta : -1);
+            if (selected_value == 10) adj_bool (&dont_take_temperatures, sim_edit_delta);
          }
         else if (dataset_page == PG_SIM) {
-            if (selected_value == 1) simulator.set_can_simulate(SimOption::joy, adj_bool(simulator.can_simulate(SimOption::joy), sim_edit_delta));
-            else if (selected_value == 2) simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), sim_edit_delta));
-            else if (selected_value == 3) simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), sim_edit_delta));
-            else if (selected_value == 4) simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), sim_edit_delta));
-            else if (selected_value == 5) simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), sim_edit_delta));
-            else if (selected_value == 6) simulator.set_can_simulate(SimOption::airflow, adj_bool(simulator.can_simulate(SimOption::airflow), sim_edit_delta));
-            else if (selected_value == 7) simulator.set_can_simulate(SimOption::mapsens, adj_bool(simulator.can_simulate(SimOption::mapsens), sim_edit_delta));
-            else if (selected_value == 8) simulator.set_can_simulate(SimOption::starter, adj_bool(simulator.can_simulate(SimOption::starter), sim_edit_delta));
-            else if (selected_value == 9) simulator.set_can_simulate(SimOption::basicsw, adj_bool(simulator.can_simulate(SimOption::basicsw), sim_edit_delta));
-            else if (selected_value == 10) simulator.set_pot_overload(static_cast<SimOption>(adj_val(static_cast<int32_t>(simulator.get_pot_overload()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));
+            if (selected_value == 0) simulator.set_can_simulate(SimOption::joy, adj_bool(simulator.can_simulate(SimOption::joy), sim_edit_delta));
+            else if (selected_value == 1) simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), sim_edit_delta));
+            else if (selected_value == 2) simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), sim_edit_delta));
+            else if (selected_value == 3) simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), sim_edit_delta));
+            else if (selected_value == 4) simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), sim_edit_delta));
+            else if (selected_value == 5) simulator.set_can_simulate(SimOption::airflow, adj_bool(simulator.can_simulate(SimOption::airflow), sim_edit_delta));
+            else if (selected_value == 6) simulator.set_can_simulate(SimOption::mapsens, adj_bool(simulator.can_simulate(SimOption::mapsens), sim_edit_delta));
+            else if (selected_value == 7) simulator.set_can_simulate(SimOption::starter, adj_bool(simulator.can_simulate(SimOption::starter), sim_edit_delta));
+            else if (selected_value == 8) simulator.set_can_simulate(SimOption::basicsw, adj_bool(simulator.can_simulate(SimOption::basicsw), sim_edit_delta));
+            else if (selected_value == 9 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor_mode, sim_edit_delta);
+            else if (selected_value == 10 && runmode == CAL) adj_bool (&cal_pot_gasservo_mode, (sim_edit_delta < 0 || cal_pot_gasservo_ready) ? sim_edit_delta : -1);
+        }
+        else if (dataset_page == PG_UI) {
+            if (selected_value == 7) simulator.set_pot_overload(static_cast<SimOption>(adj_val(static_cast<int32_t>(simulator.get_pot_overload()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));
+            else if (selected_value == 8) {
+                adj_val (&neobright, sim_edit_delta, 1, 100);
+                neo.setbright(neobright);
+            }
+            else if (selected_value == 9) {
+                adj_val (&neodesat, sim_edit_delta, 0, 10);  // -10, 10);
+                neo.setdesaturation(neodesat);
+            }
+            else if (selected_value == 10) adj_bool (&screensaver, sim_edit_delta);
         }
         sim_edit_delta = 0;
     }

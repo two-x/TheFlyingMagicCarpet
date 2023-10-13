@@ -32,6 +32,7 @@
 #define LYEL 0xfff8  // 
 #define GGRN 0x5cac  // a low saturation greyish pastel green
 #define TEAL 0x07f9  // this teal is barely distinguishable from cyan
+#define STBL 0x9e1f  // steel blue is desaturated light blue
 #define DCYN 0x0575  // dark cyan
 #define RBLU 0x043f  // royal blue
 #define MBLU 0x009f  // midnight blue
@@ -107,53 +108,57 @@ char sensorcard[14][7] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", 
 char idlemodecard[3][7] = { "direct", "cntrol", "minimz" };
 char idlestatecard[ThrottleControl::targetstates::num_states][7] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
 
-#define STER "St\x88r"
-#define BRAK "Br\x83k"
-#define SPED "Sp\x88""d"
-#define BINARY "  \xa7 "
-#define CHOICE "\x12   "
-#define DEGR_F "\xf7""F  "  // "\x09""F  "
-#define BLAANK "    "
-#define BLAAAAAANK "      - "
-#define BRIGHTNESS "NeoBr\x8dte"
-#define MAXADJRATE "MaxAjR\x83t"
+#define stEr "St\x88r"
+#define brAk "Br\x83k"
+#define spEd "Sp\x88""d"
+#define RperMS "rp\xf0 "
+#define b1nary "  \xa7 "
+#define scroll "\x12   "
+#define degreF "\xf7""F  "  // "\x09""F  "
+#define ______ "    "
+#define __________ "      - "
+#define neo_bright "NeoBr\x8dte"
+#define maxadjrate "MaxAjR\x83t"
+#define horfailsaf "HFails\x83""f"
 
-char telemetry[disp_fixed_lines][9] = { "TriggerV", "   Speed", "    Tach", "ThrotPWM", BRAK"Pres", BRAK"Motr", "Joy Horz", STER"Motr", };  // Fixed rows
+char telemetry[disp_fixed_lines][9] = { "TriggerV", "   Speed", "    Tach", "ThrotPWM", brAk"Pres", brAk"Motr", "Joy Horz", stEr"Motr", };  // Fixed rows
 char units[disp_fixed_lines][5] = { "%   ", "mph ", "rpm ", "us  ", "psi ", "%   ", "%   ", "%   " };  // Fixed rows
 
-enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, num_datapages };
-char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim " };
-int32_t tuning_first_editable_line[disp_tuning_lines] = { 6, 9, 5, 3, 4, 8, 7, 7, 9, 1 };  // first value in each dataset page that's editable. All values after this must also be editable
+enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, num_datapages };
+char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
+int32_t tuning_first_editable_line[dataset_pages::num_datapages] = { 9, 9, 5, 3, 4, 8, 7, 7, 10, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
 
-char dataset_page_names[arraysize(pagecard)][disp_tuning_lines][9] = {
-    { BRAK"Posn", "MuleBatt", "     Pot", "AirSpeed", "     MAP", "MasAirFl", "Governor", STER"Safe", BRIGHTNESS, "NeoDesat", "ScrnSavr", },  // PG_RUN
-    { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", BLAAAAAANK, BLAAAAAANK, BLAAAAAANK, "HFailsaf", "Deadband", },  // PG_JOY
-    { "Pres ADC", BLAAAAAANK, BLAAAAAANK, BLAAAAAANK, BLAAAAAANK, "AirSpMax", " MAP Min", " MAP Max", SPED"Idle", SPED"RedL", "BkPos0Pt", },  // PG_CAR
-    { "BrakePWM", "SteerPWM", BLAAAAAANK, STER"Left", STER"Stop", STER"Rght", BRAK"Extd", BRAK"Stop", BRAK"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
+char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
+    { brAk"Posn", "MuleBatt", "     Pot", "AirSpeed", "     MAP", "MasAirFl", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
+    { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
+    { "Pres ADC", __________, __________, __________, __________, "AirSpMax", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_CAR
+    { "BrakePWM", "SteerPWM", __________, stEr"Left", stEr"Stop", stEr"Rght", brAk"Extd", brAk"Stop", brAk"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
-    { "PresTarg", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", BRAK"Motr", BRAK"Pres", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
-    { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", BLAAAAAANK, "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
-    { SPED"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", MAXADJRATE, "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
-    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", BLAAAAAANK, BLAAAAAANK, BLAAAAAANK, "CalBrake", " Cal Gas", },  // PG_TEMP
-    { BLAAAAAANK, "Joystick", BRAK"Pres", BRAK"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", " Starter", "Basic Sw", "SimW/Pot", },  // PG_SIM
+    { "PresTarg", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", brAk"Motr", brAk"Pres", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
+    { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
+    { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
+    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
+    { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", " Starter", "Basic Sw", "CalBrake", " Cal Gas", },  // PG_SIM
+    { __________, __________, __________, __________, __________, __________, __________, "SimW/Pot", neo_bright, "NeoDesat", "ScrnSavr", },  // PG_UI
 };
-char tuneunits[arraysize(pagecard)][disp_tuning_lines][5] = {
-    { "in  ", "V   ", "%   ", "mph ", "psi ", "g/s ", "%   ", "%   ", "%   ", "/10 ", BINARY },  // PG_RUN
-    { "us  ", "us  ", "us  ", "us  ", "%   ", "%   ", BLAANK, BLAANK, BLAANK, "us  ", "us  " },  // PG_JOY
-    { "adc ", BLAANK, BLAANK, BLAANK, BLAANK, "mph ", "psi ", "psi ", "mph ", "mph ", "in  " },  // PG_CAR
-    { "us  ", "us  ", BLAANK, "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  " },  // PG_PWMS
-    { CHOICE, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", DEGR_F, DEGR_F, "rpms", CHOICE },  // PG_IDLE
-    { "psi ", "psi ", "%   ", "%   ", "%   ", "%   ", "us  ", "adc ", BLAANK, "Hz  ", "s   " },  // PG_BPID
-    { "rpm ", "rpm ", "us  ", "us  ", "us  ", "us  ", BLAANK, BINARY, BLAANK, "Hz  ", "s   " },  // PG_GPID
-    { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "us  ", "u/s ", BLAANK, "Hz  ", "s   " },  // PG_CPID
-    { DEGR_F, DEGR_F, DEGR_F, DEGR_F, DEGR_F, DEGR_F, BLAANK, BLAANK, BLAANK, BINARY, BINARY },  // PG_TEMP
-    { BLAANK, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, BINARY, CHOICE },  // PG_SIM
+char tuneunits[dataset_pages::num_datapages][disp_tuning_lines][5] = {
+    { "in  ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
+    { "us  ", "us  ", "us  ", "us  ", "%   ", "%   ", ______, ______, ______, "us  ", "us  ", },  // PG_JOY
+    { "adc ", ______, ______, ______, ______, "mph ", "psi ", "psi ", "mph ", "mph ", "in  ", },  // PG_CAR
+    { "us  ", "us  ", ______, "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", },  // PG_PWMS
+    { scroll, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", degreF, degreF, RperMS, scroll, },  // PG_IDLE
+    { "psi ", "psi ", "%   ", "%   ", "%   ", "%   ", "us  ", "adc ", ______, "Hz  ", "s   ", },  // PG_BPID
+    { "rpm ", "rpm ", "us  ", "us  ", "us  ", "us  ", ______, b1nary, ______, "Hz  ", "s   ", },  // PG_GPID
+    { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "us  ", "u/s ", ______, "Hz  ", "s   ", },  // PG_CPID
+    { degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, b1nary, },  // PG_TEMP
+    { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, },  // PG_SIM
+    { ______, ______, ______, ______, ______, ______, ______, scroll, "%   ", "/10 ", b1nary, },  // PG_UI
 };
 char simgrid[4][3][5] = {
     { "psi\x18", "rpm\x18", "mph\x18" },
     { "psi\x19", "rpm\x19", "mph\x19" },
-    { BLAANK, " \x1e  ", BLAANK },
-    { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
+    { ______, " \x1e  ", ______ },
+    { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters is the left-side map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
 bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard };
@@ -587,7 +592,7 @@ class Display {
         void draw_dataset_page (int32_t page, int32_t page_last, bool forced=false) {
             draw_fixed (page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
             // for (int32_t lineno=0; lineno<disp_lines; lineno++) draw_hyphen (59, lineno*disp_line_height_pix+disp_vshift_pix, BLK);
-            draw_string (disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], RBLU, BLK, forced); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+            draw_string (disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], STBL, BLK, forced); // +6*(arraysize(modecard[runmode])+4-namelen)/2
         }
         void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
             if (selected_val != selected_last) draw_string (12, 12, 12+(selected_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_last], "", GRY2, BLK);
@@ -607,7 +612,7 @@ class Display {
                 for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
                     int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
                     int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
-                    if (strcmp (simgrid[row][col], BLAANK )) {
+                    if (strcmp (simgrid[row][col], ______ )) {
                         _tft.fillCircle (cntr_x, cntr_y, disp_simbutton_radius_pix, create ? DGRY : BLK);
                         _tft.drawCircle (cntr_x, cntr_y, 19, create ? LYEL : BLK);
                         if (create) {
@@ -727,11 +732,11 @@ class Display {
                     draw_dynamic(12, airflow_sensor.get_filtered_value(), airflow_sensor.get_min_mph(), airflow_sensor.get_max_mph());
                     draw_dynamic(13, map_sensor.get_filtered_value(), map_sensor.get_min_psi(), map_sensor.get_max_psi());
                     draw_dynamic(14, maf_gps, maf_min_gps, maf_max_gps);
-                    draw_dynamic(15, gas_governor_pc, 0.0, 100.0);
-                    draw_dynamic(16, steer_safe_pc, 0.0, 100.0);
-                    draw_dynamic(17, neobright, 1.0, 100.0, -1, 3);
-                    draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
-                    draw_truth(19, screensaver, 0);
+                    draw_eraseval(15);
+                    draw_eraseval(16);
+                    draw_eraseval(17);
+                    draw_dynamic(18, gas_governor_pc, 0.0, 100.0);
+                    draw_dynamic(19, steer_safe_pc, 0.0, 100.0);
                 }
                 else if (dataset_page == PG_JOY) {
                     draw_dynamic(9, hotrc_us[HORZ][RAW], hotrc_us[HORZ][MIN], hotrc_us[HORZ][MAX]);
@@ -838,20 +843,34 @@ class Display {
                     draw_eraseval(15);
                     draw_eraseval(16);
                     draw_eraseval(17);
+                    draw_eraseval(18);
+                    draw_truth(19, dont_take_temperatures, 2);
+                }
+                else if (dataset_page == PG_SIM) {
+                    draw_truth(9, simulator.can_simulate(SimOption::joy), 0);
+                    draw_truth(10, simulator.can_simulate(SimOption::pressure), 0);
+                    draw_truth(11, simulator.can_simulate(SimOption::brkpos), 0);
+                    draw_truth(12, simulator.can_simulate(SimOption::speedo), 0);
+                    draw_truth(13, simulator.can_simulate(SimOption::tach), 0);
+                    draw_truth(14, simulator.can_simulate(SimOption::airflow), 0);
+                    draw_truth(15, simulator.can_simulate(SimOption::mapsens), 0);
+                    draw_truth(16, simulator.can_simulate(SimOption::starter), 0);
+                    draw_truth(17, simulator.can_simulate(SimOption::basicsw), 0);
                     draw_truth(18, cal_joyvert_brkmotor_mode, 0);
                     draw_truth(19, cal_pot_gasservo_mode, 0);
                 }
-                else if (dataset_page == PG_SIM) {
-                    draw_truth(10, simulator.can_simulate(SimOption::joy), 0);
-                    draw_truth(11, simulator.can_simulate(SimOption::pressure), 0);
-                    draw_truth(12, simulator.can_simulate(SimOption::brkpos), 0);
-                    draw_truth(13, simulator.can_simulate(SimOption::speedo), 0);
-                    draw_truth(14, simulator.can_simulate(SimOption::tach), 0);
-                    draw_truth(15, simulator.can_simulate(SimOption::airflow), 0);
-                    draw_truth(16, simulator.can_simulate(SimOption::mapsens), 0);
-                    draw_truth(17, simulator.can_simulate(SimOption::starter), 0);
-                    draw_truth(18, simulator.can_simulate(SimOption::basicsw), 0);
-                    draw_asciiname(19, sensorcard[static_cast<uint8_t>(simulator.get_pot_overload())]);
+                else if (dataset_page == PG_UI) {
+                    draw_eraseval(9);
+                    draw_eraseval(10);
+                    draw_eraseval(11);
+                    draw_eraseval(12);
+                    draw_eraseval(13);
+                    draw_eraseval(14);
+                    draw_eraseval(15);
+                    draw_asciiname(16, sensorcard[static_cast<uint8_t>(simulator.get_pot_overload())]);
+                    draw_dynamic(17, neobright, 1.0, 100.0, -1, 3);
+                    draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
+                    draw_truth(19, screensaver, 0);
                     // draw_truth(18, simulator.can_simulate(SimOption::ignition), 0);
                     // draw_truth(19, simulator.can_simulate(SimOption::syspower), 0);
                 }
