@@ -166,7 +166,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
     int32_t watchdog_time_ms = Watchdog.enable(2500);  // Start 2.5 sec watchdog
     printf ("Watchdog.. timer set to %ld ms\n", watchdog_time_ms);
-    booted = true;
     printf ("Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     panicTimer.reset();
@@ -240,10 +239,12 @@ void loop() {
     // Controller handling
     // 1. Handle any toggle button events (ch3 and ch4)
     for (int ch = CH3; ch <= CH4; ch++) hotrc_toggle_update(ch);
-    if (hotrc_sw_event[CH3]) ignition_toggle_request = true;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
-    if (hotrc_sw_event[CH4]) {
-        if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
-        else if (runmode == STALL) starter_request = st_tog;
+    if (!hotrc_radio_lost) {  // Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
+        if (hotrc_sw_event[CH3]) ignition_toggle_request = true;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
+        if (hotrc_sw_event[CH4]) {
+            if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
+            else if (runmode == STALL) starter_request = st_tog;
+        }
     }
     for (int ch = CH3; ch <= CH4; ch++) hotrc_sw_event[ch] = false;
     // 2. Read horz and vert pulse inputs, spike filter, convert to percent, ema filter, constrain, and center within deadband
@@ -339,13 +340,15 @@ void loop() {
     throttle.update();  // Allow idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
 
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
-    if (runmode == CRUISE && !cruise_adjusting && (cruise_setpoint_mode == rpm_target) && cruisePidTimer.expireset()) {
-        cruiseQPID.SetOutputLimits (throttle.get_idlespeed(), tach_govern_rpm);  // because cruise pid has internal variable for idlespeed which may need updating
-        tach_target_rpm = throttle.get_target();
-        cruiseQPID.Compute();
-        throttle.set_target(tach_target_rpm);  // Need for pid math to be be read by gas control handler below
+    if (runmode == CRUISE && (cruise_setpoint_mode == pid_suspend_fly) && cruisePidTimer.expireset()) {
+        if (cruise_adjusting) speedo_target_mph = speedometer.get_filtered_value();
+        else {
+            cruiseQPID.SetOutputLimits (throttle.get_idlespeed(), tach_govern_rpm);  // because cruise pid has internal variable for idlespeed which may need updating
+            tach_target_rpm = throttle.get_target();  // tach_target_rpm is pointed to as the output of the cruise pid loop, need to update it before doing pid math
+            cruiseQPID.Compute();  // cruise pid calculates new output (tach_target_rpm) based on input (speedmeter::human) and target (speedo_target_mph)
+            throttle.set_target(tach_target_rpm);  // conversely to above, update throttle manager with new value from the pid calculation
+        }
     }
-
     // Gas - Update servo output. Determine gas actuator output from rpm target.  PID loop is effective in Fly or Cruise mode.
     if (gasPidTimer.expireset()) {
         // Step 1 : Determine servo pulse width value
@@ -358,7 +361,7 @@ void loop() {
         }
         else if (runmode == CAL && cal_pot_gasservo_mode)
             gas_pulse_out_us = map (pot.get(), pot.min(), pot.max(), gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
-        else if (runmode == CRUISE && (cruise_setpoint_mode != rpm_target))
+        else if (runmode == CRUISE && (cruise_setpoint_mode != pid_suspend_fly))
             gas_pulse_out_us = gas_pulse_cruise_us;
         else if (runmode != BASIC) {
             tach_target_rpm = throttle.get_target();
@@ -488,7 +491,7 @@ void loop() {
             else if (selected_value == 10) gasQPID.SetKd (gasQPID.GetKd() + 0.001 * (float)sim_edit_delta);
         }
         else if (dataset_page == PG_CPID) {
-            if (selected_value == 7) adj_val(&cruise_adjust_delta_max_us_per_s, sim_edit_delta, 1, 1000);
+            if (selected_value == 7) adj_val(&cruise_delta_max_us_per_s, sim_edit_delta, 1, 1000);
             else if (selected_value == 8) cruiseQPID.SetKp (cruiseQPID.GetKp() + 0.001 * (float)sim_edit_delta);
             else if (selected_value == 9) cruiseQPID.SetKi (cruiseQPID.GetKi() + 0.001 * (float)sim_edit_delta);
             else if (selected_value == 10) cruiseQPID.SetKd (cruiseQPID.GetKd() + 0.001 * (float)sim_edit_delta);

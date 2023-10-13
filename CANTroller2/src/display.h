@@ -828,7 +828,7 @@ class Display {
                     draw_dynamic(14, cruiseQPID.GetOutputSum(), -cruiseQPID.GetOutputRange(), cruiseQPID.GetOutputRange());  // cruise_spid_speedo_delta_adc, -drange, drange);
                     // draw_dynamic(15, tach_target_rpm, 0.0, tachometer.get_redline_rpm());
                     draw_dynamic(15, gas_pulse_cruise_us, gas_pulse_cw_open_us, gas_pulse_ccw_closed_us);
-                    draw_dynamic(16, cruise_adjust_delta_max_us_per_s, 1, 1000);
+                    draw_dynamic(16, cruise_delta_max_us_per_s, 1, 1000);
                     draw_dynamic(17, cruiseQPID.GetKp(), 0.0, 10.0);
                     draw_dynamic(18, cruiseQPID.GetKi(), 0.0, 10.0);
                     draw_dynamic(19, cruiseQPID.GetKd(), 0.0, 10.0);
