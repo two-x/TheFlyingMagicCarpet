@@ -539,7 +539,10 @@ void loop() {
         ignition_toggle_request = false;  // Make sure this goes after the last comparison
     }
     if (!speedometer.car_stopped() && !simulator.simulating(SimOption::joy) && hotrc_radio_lost) panic_stop = true;
-    if (panic_stop && !panic_stop_last) panicTimer.reset();
+    if (panic_stop && !panic_stop_last) {
+        panicTimer.reset();
+        if (ignition) ignition_toggle_request = true;  // If panic stop didn't already result from ignition cut, we will cut it. Will lead to shutdown mode and braking
+    }
     else if (speedometer.car_stopped() || panicTimer.expired()) panic_stop = false;  // Cancel panic stop if car is stopped
     panic_stop_last = panic_stop;
 
