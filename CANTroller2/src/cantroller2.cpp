@@ -203,7 +203,7 @@ void loop() {
         } while (basicmodesw != !digitalRead(basicmodesw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
     }
 
-    // Starter bidirectional handler logic.  Outside code interacts with handler by setting starter_request = HIGH/LOW . 
+    // Starter bidirectional handler logic.  Outside code interacts with handler by setting starter_request = st_off, st_on, or st_tog . 
     if (starter_signal_support) {
         if (starter_request == st_tog) starter_request = !starter_drive;  // translate toggle request to a drive request opposite to the current drive state
         if (starter_drive && ((starter_request == st_off) || starterTimer.expired())) {  // If we're driving the motor but need to stop

@@ -210,7 +210,7 @@ bool ignition_toggle_request = false;  // Setting to true tells handler to toggl
 bool syspower = HIGH;  // Set by handler only. Reflects current state of the signal
 bool syspower_toggle_request = false;  // Setting to true tells handler to toggle the signal. Handler will set to false.
 
-enum starter_requests { st_nop, st_off, st_on, st_tog };  // code can set starter_request to these things, handler will make starter do it
+enum starter_requests { st_nop = -1, st_off = 0, st_on = 1, st_tog = 2 };  // code can set starter_request to these things, handler will make starter do it
 bool starter = LOW;  // Set by handler only. Reflects current state of starter signal (does not indicate source)
 bool starter_drive = false;  // Set by handler only. High when we're driving starter, otherwise starter is an input
 int8_t starter_request = st_nop;  // Code can set for handler to drive the pin. -1 = nop, LOW = turn off starter, HIGH = turn on starter
