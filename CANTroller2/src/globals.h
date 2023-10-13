@@ -95,11 +95,8 @@ bool flip_the_screen = true;
 #define touch_irq_pin 255 // Input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - Set to 255 if not used
 #define tft_rst_pin -1    // TFT Reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
 // Globals -------------------
-enum cruise_modes { rpm_target, throttle_setpoint, throttle_delta };
 bool starter_signal_support = true;
 bool remote_start_support = true;
-bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
-int8_t cruise_setpoint_mode = throttle_delta;   // Cruise mode fixes the throttle angle rather than controlling for a target speed
 bool autostop_disabled = false;       // Temporary measure to keep brake behaving until we get it debugged. Eventually should be false
 bool allow_rolling_start = false;    // May be a smart prerequisite, may be us putting obstacles in our way
 
@@ -153,23 +150,12 @@ bool joy_centered = false;
 bool panic_stop = false;
 bool panic_stop_last = false;
 Timer panicTimer(20000000);  // How long should a panic stop last?  We can't stay mad forever
-float cruise_ctrl_extent_adc;       // During cruise adjustments, saves farthest trigger position read
-// float cruise_adjust_scaling_pc = 40;  // What ratio of full throttle range is the max available with each adjustment event?
-bool cruise_trigger_released = false;
-bool cruise_gesturing = false;          // Is cruise mode enabled by gesturing?  Otherwise by press of cruise button
-bool cruise_sw_held = false;
-bool cruise_adjusting = false;
-int32_t cruise_adjust_delta_max_us_per_s = 200;  // What's the fastest rate cruise adjustment can change pulse width (in us per second)
-Timer cruiseDeltaTimer;
-bool flycruise_toggle_request = false;
-float flycruise_vert_margin_adc = 0.3; // Margin of error for determining hard brake value for dropping out of cruise mode
 // Timer cruiseSwTimer;  // Was used to require a medium-length hold time pushing cruise button to switch modes
 Timer sleepInactivityTimer(15000000);           // After shutdown how long to wait before powering down to sleep
 Timer stopcarTimer(8000000);                    // Allows code to fail in a sensible way after a delay if nothing is happening
 uint32_t motor_park_timeout_us = 4000000;       // If we can't park the motors faster than this, then give up.
-uint32_t gesture_flytimeout_us = 2000000;        // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
+uint32_t gesture_flytimeout_us = 1250000;        // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
 Timer gestureFlyTimer(gesture_flytimeout_us); // Used to keep track of time for gesturing for going in and out of fly/cruise modes
-uint32_t cruise_sw_timeout_us = 500000;         // how long do you have to hold down the cruise button to start cruise mode (in us)
 Timer motorParkTimer(motor_park_timeout_us);
 int32_t neobright = 10;  // lets us dim/brighten the neopixels
 int32_t neodesat = 0;  // lets us de/saturate the neopixels
@@ -191,7 +177,6 @@ bool cal_pot_gasservo_mode = false;     // Allows direct control of gas servo us
 bool cal_pot_gasservo_ready = false;    // Whether pot is in valid range
 
 // diag/monitoring variables
-bool booted = false;
 bool diag_ign_error_enabled = true;
 
 // pushbutton related
@@ -203,15 +188,18 @@ bool boot_button_suppress_click = false;
 bool boot_button_action = NONE;
 
 // external digital input and output signal related
+bool basicmodesw = LOW;
+
 bool ignition = LOW;  // Set by handler only. Reflects current state of the signal
 bool ignition_toggle_request = false;  // Setting to true tells handler to toggle the signal. Handler will set to false.
 bool syspower = HIGH;  // Set by handler only. Reflects current state of the signal
 bool syspower_toggle_request = false;  // Setting to true tells handler to toggle the signal. Handler will set to false.
+
+enum starter_requests { st_nop = -1, st_off = 0, st_on = 1, st_tog = 2 };  // code can set starter_request to these things, handler will make starter do it
 bool starter = LOW;  // Set by handler only. Reflects current state of starter signal (does not indicate source)
 bool starter_drive = false;  // Set by handler only. High when we're driving starter, otherwise starter is an input
-bool starter_toggle_request = false;  // Set to true for handler to start/stop starter motor
+int8_t starter_request = st_nop;  // Code can set for handler to drive the pin. -1 = nop, LOW = turn off starter, HIGH = turn on starter
 Timer starterTimer(5000000);  // If remotely-started starting event is left on for this long, end it automatically  
-bool basicmodesw = LOW;
 
 enum temp_categories { AMBIENT = 0, ENGINE = 1, WHEEL = 2 };
 enum temp_lims { DISP_MIN, NOM_MIN, NOM_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
@@ -324,7 +312,6 @@ float gas_pulse_cw_open_us = 718;     // Gas pulsewidth corresponding to full op
 float gas_pulse_ccw_closed_us = 2000; // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
 float gas_pulse_ccw_max_us = 2500;    // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
 float gas_pulse_park_slack_us = 30;   // Gas pulsewidth beyond gas_pulse_ccw_closed_us where to park the servo out of the way so we can drive manually (in us)
-float gas_pulse_cruise_us = gas_pulse_ccw_closed_us;  // Gas pulsewidth value fixed by cruise mode when in fixed throttle mode 
 float gas_pulse_adjustpoint_us;       // Used for adjusting cruise fixed throttle level
 
 // tachometer related
@@ -385,8 +372,22 @@ QPID gasQPID(tachometer.get_filtered_value_ptr().get(), &gas_pulse_out_us, &tach
              QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwClamp, QPID::Action::reverse,              // settings
              gas_pid_period_us, (gas_open_loop) ? QPID::Control::manual : QPID::Control::timer, QPID::centMode::range); // period, more settings
 
-// Cruise : is active on demand while driving. It controls the throttle target to achieve the desired vehicle speed
-uint32_t cruise_pid_period_us = 110000;                                                                      // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+// Cruise : is active on demand while driving.
+// Pick from 3 different styles of adjusting cruise setpoint. I prefer throttle_delta.
+// pid_suspend_fly : (PID) Moving trigger from center disables pid and lets you adjust the rpm target directly like Fly mode does. Whatever speed you're at when trigger releases is new pid target  
+// throttle_angle : Cruise locks throttle angle, instead of pid. Moving trigger from center adjusts setpoint proportional to how far you push it before releasing (and reduced by an attenuation factor)
+// throttle_delta : Cruise locks throttle angle, instead of pid. Any non-center trigger position continuously adjusts setpoint proportional to how far it's pulled over time (up to a specified maximum rate)
+enum cruise_modes { pid_suspend_fly, throttle_angle, throttle_delta };
+cruise_modes cruise_setpoint_mode = throttle_delta;
+bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
+bool cruise_adjusting = false;
+int32_t cruise_delta_max_us_per_s = 200;  // (in throttle_delta mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
+float cruise_angle_attenuator = 0.25;  // (in throttle_angle mode) Limits the change of each adjust trigger pull to this fraction of what's possible
+bool flycruise_toggle_request = false;
+float flycruise_vert_margin_pc = 0.3; // Margin of error for determining hard brake value for dropping out of cruise mode
+float gas_pulse_cruise_us;  // Gas pulsewidth value fixed by cruise mode when in fixed throttle mode 
+
+uint32_t cruise_pid_period_us = 85000;                                                                      // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer cruisePidTimer(cruise_pid_period_us);                                                                  // not actually tunable, just needs value above
 float cruise_spid_initial_kp = 5.57;                                                                         // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
 float cruise_spid_initial_ki_hz = 0.000;                                                                     // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
