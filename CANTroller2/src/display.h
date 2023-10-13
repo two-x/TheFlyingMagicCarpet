@@ -32,6 +32,7 @@
 #define LYEL 0xfff8  // 
 #define GGRN 0x5cac  // a low saturation greyish pastel green
 #define TEAL 0x07f9  // this teal is barely distinguishable from cyan
+#define STBL 0x9e1f  // steel blue is desaturated light blue
 #define DCYN 0x0575  // dark cyan
 #define RBLU 0x043f  // royal blue
 #define MBLU 0x009f  // midnight blue
@@ -110,14 +111,15 @@ char idlestatecard[ThrottleControl::targetstates::num_states][7] = { "todriv", "
 #define stEr "St\x88r"
 #define brAk "Br\x83k"
 #define spEd "Sp\x88""d"
-#define RperMS "rp\xf1 "
+#define RperMS "rp\xf0 "
 #define b1nary "  \xa7 "
 #define scroll "\x12   "
 #define degreF "\xf7""F  "  // "\x09""F  "
-#define __no__ "    "
-#define ____no____ "      - "
-#define brightness "NeoBr\x8dte"
+#define ______ "    "
+#define __________ "      - "
+#define neo_bright "NeoBr\x8dte"
 #define maxadjrate "MaxAjR\x83t"
+#define horfailsaf "HFails\x83""f"
 
 char telemetry[disp_fixed_lines][9] = { "TriggerV", "   Speed", "    Tach", "ThrotPWM", brAk"Pres", brAk"Motr", "Joy Horz", stEr"Motr", };  // Fixed rows
 char units[disp_fixed_lines][5] = { "%   ", "mph ", "rpm ", "us  ", "psi ", "%   ", "%   ", "%   " };  // Fixed rows
@@ -127,36 +129,36 @@ char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs
 int32_t tuning_first_editable_line[dataset_pages::num_datapages] = { 9, 9, 5, 3, 4, 8, 7, 7, 10, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
-    { brAk"Posn", "MuleBatt", "     Pot", "AirSpeed", "     MAP", "MasAirFl", ____no____, ____no____, ____no____, "Governor", stEr"Safe", },  // PG_RUN
-    { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", ____no____, ____no____, ____no____, "HFailsaf", "Deadband", },  // PG_JOY
-    { "Pres ADC", ____no____, ____no____, ____no____, ____no____, "AirSpMax", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_CAR
-    { "BrakePWM", "SteerPWM", ____no____, stEr"Left", stEr"Stop", stEr"Rght", brAk"Extd", brAk"Stop", brAk"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
+    { brAk"Posn", "MuleBatt", "     Pot", "AirSpeed", "     MAP", "MasAirFl", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
+    { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
+    { "Pres ADC", __________, __________, __________, __________, "AirSpMax", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_CAR
+    { "BrakePWM", "SteerPWM", __________, stEr"Left", stEr"Stop", stEr"Rght", brAk"Extd", brAk"Stop", brAk"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
     { "PresTarg", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", brAk"Motr", brAk"Pres", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
-    { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", ____no____, "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
+    { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
-    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", ____no____, ____no____, ____no____, ____no____, "No Temps", },  // PG_TEMP
+    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", " Starter", "Basic Sw", "CalBrake", " Cal Gas", },  // PG_SIM
-    { ____no____, ____no____, ____no____, ____no____, ____no____, ____no____, ____no____, "SimW/Pot", brightness, "NeoDesat", "ScrnSavr", },  // PG_UI
+    { __________, __________, __________, __________, __________, __________, __________, "SimW/Pot", neo_bright, "NeoDesat", "ScrnSavr", },  // PG_UI
 };
 char tuneunits[dataset_pages::num_datapages][disp_tuning_lines][5] = {
-    { "in  ", "V   ", "%   ", "mph ", "psi ", "g/s ", __no__, __no__, __no__, "%   ", "%   ", },  // PG_RUN
-    { "us  ", "us  ", "us  ", "us  ", "%   ", "%   ", __no__, __no__, __no__, "us  ", "us  ", },  // PG_JOY
-    { "adc ", __no__, __no__, __no__, __no__, "mph ", "psi ", "psi ", "mph ", "mph ", "in  ", },  // PG_CAR
-    { "us  ", "us  ", __no__, "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", },  // PG_PWMS
+    { "in  ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
+    { "us  ", "us  ", "us  ", "us  ", "%   ", "%   ", ______, ______, ______, "us  ", "us  ", },  // PG_JOY
+    { "adc ", ______, ______, ______, ______, "mph ", "psi ", "psi ", "mph ", "mph ", "in  ", },  // PG_CAR
+    { "us  ", "us  ", ______, "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", },  // PG_PWMS
     { scroll, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", degreF, degreF, RperMS, scroll, },  // PG_IDLE
-    { "psi ", "psi ", "%   ", "%   ", "%   ", "%   ", "us  ", "adc ", __no__, "Hz  ", "s   ", },  // PG_BPID
-    { "rpm ", "rpm ", "us  ", "us  ", "us  ", "us  ", __no__, b1nary, __no__, "Hz  ", "s   ", },  // PG_GPID
-    { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "us  ", "u/s ", __no__, "Hz  ", "s   ", },  // PG_CPID
-    { degreF, degreF, degreF, degreF, degreF, degreF, __no__, __no__, __no__, __no__, b1nary, },  // PG_TEMP
+    { "psi ", "psi ", "%   ", "%   ", "%   ", "%   ", "us  ", "adc ", ______, "Hz  ", "s   ", },  // PG_BPID
+    { "rpm ", "rpm ", "us  ", "us  ", "us  ", "us  ", ______, b1nary, ______, "Hz  ", "s   ", },  // PG_GPID
+    { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "us  ", "u/s ", ______, "Hz  ", "s   ", },  // PG_CPID
+    { degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, b1nary, },  // PG_TEMP
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, },  // PG_SIM
-    { __no__, __no__, __no__, __no__, __no__, __no__, __no__, scroll, "%   ", "/10 ", b1nary, },  // PG_UI
+    { ______, ______, ______, ______, ______, ______, ______, scroll, "%   ", "/10 ", b1nary, },  // PG_UI
 };
 char simgrid[4][3][5] = {
     { "psi\x18", "rpm\x18", "mph\x18" },
     { "psi\x19", "rpm\x19", "mph\x19" },
-    { __no__, " \x1e  ", __no__ },
-    { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters map:  https://learn.adafruit.com/assets/103682
+    { ______, " \x1e  ", ______ },
+    { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters is the left-side map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
 bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, simulator.get_enabled_ptr(), &running_on_devboard };
@@ -590,7 +592,7 @@ class Display {
         void draw_dataset_page (int32_t page, int32_t page_last, bool forced=false) {
             draw_fixed (page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
             // for (int32_t lineno=0; lineno<disp_lines; lineno++) draw_hyphen (59, lineno*disp_line_height_pix+disp_vshift_pix, BLK);
-            draw_string (disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], RBLU, BLK, forced); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+            draw_string (disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], STBL, BLK, forced); // +6*(arraysize(modecard[runmode])+4-namelen)/2
         }
         void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
             if (selected_val != selected_last) draw_string (12, 12, 12+(selected_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_last], "", GRY2, BLK);
@@ -610,7 +612,7 @@ class Display {
                 for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
                     int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
                     int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
-                    if (strcmp (simgrid[row][col], __no__ )) {
+                    if (strcmp (simgrid[row][col], ______ )) {
                         _tft.fillCircle (cntr_x, cntr_y, disp_simbutton_radius_pix, create ? DGRY : BLK);
                         _tft.drawCircle (cntr_x, cntr_y, 19, create ? LYEL : BLK);
                         if (create) {
