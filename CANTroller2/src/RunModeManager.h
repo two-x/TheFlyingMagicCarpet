@@ -125,7 +125,7 @@ private:
         if (hotrc_pc[VERT][FILT] > hotrc_pc[VERT][DBBOT]) pressure_target_psi = pressure_sensor.get_min_human();  // If in deadband or being pushed up, no pressure target
         else pressure_target_psi = map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBBOT], hotrc_pc[VERT][MIN], pressure_sensor.get_min_human(), pressure_sensor.get_max_human());  // Scale joystick value to pressure adc setpoint
         if (!tachometer.engine_stopped()) updateMode(HOLD);  // If we started the car, enter hold mode once starter is released
-        if ((!starter || devboard) && !tachometer.engine_stopped()) updateMode(HOLD);  // If we started the car, enter hold mode once starter is released
+        if ((!starter || running_on_devboard) && !tachometer.engine_stopped()) updateMode(HOLD);  // If we started the car, enter hold mode once starter is released
     }
 
     void handleHoldMode() {

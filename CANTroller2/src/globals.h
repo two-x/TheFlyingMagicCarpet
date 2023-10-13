@@ -96,20 +96,21 @@ bool flip_the_screen = true;
 #define tft_rst_pin -1    // TFT Reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
 // Globals -------------------
 enum cruise_modes { rpm_target, throttle_setpoint, throttle_delta };
-bool console_enabled = true;         // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
-bool take_temperatures = true;
-bool keep_system_powered = false;    // Use true during development
-bool allow_rolling_start = false;    // May be a smart prerequisite, may be us putting obstacles in our way
-bool share_boot_button = false;      // Set true if joystick cruise button is in parallel with esp native "boot" button
-bool remote_start_support = false;
 bool starter_signal_support = true;
+bool remote_start_support = true;
 bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 int8_t cruise_setpoint_mode = throttle_delta;   // Cruise mode fixes the throttle angle rather than controlling for a target speed
-bool autostop_disabled = true;       // Temporary measure to keep brake behaving until we get it debugged. Eventually should be false
+bool autostop_disabled = false;       // Temporary measure to keep brake behaving until we get it debugged. Eventually should be false
+bool allow_rolling_start = false;    // May be a smart prerequisite, may be us putting obstacles in our way
+
+// Dev-board-only options:
+// Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
+bool dont_take_temperatures = false;  // In case debugging dallas sensors or causing problems
+bool console_enabled = true;         // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
+bool keep_system_powered = false;    // Use true during development
+bool screensaver = false;  // Can enable experiment with animated screen draws
 bool timestamp_loop = false;         // Makes code write out timestamps throughout loop to serial port
 uint32_t timestamp_loop_linefeed_threshold = 0;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
-bool screensaver = false;  // Can enable experiment with animated screen draws
-#define pwm_jaguars true
 
 enum hotrc_axes { HORZ, VERT, CH3, CH4 };
 enum hotrc_vals { MIN, CENT, MAX, RAW, FILT, DBBOT, DBTOP, MARGIN };
@@ -131,16 +132,15 @@ RMTInput hotrc_rmt[4] = {
 // Globals -------------------
 //
 
-#ifdef pwm_jaguars
 static Servo brake_servo;
 static Servo steer_servo;
-#else // jaguars controlled over asynchronous serial port
-#include <HardwareSerial.h>
-HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
-#endif
+// In case we ever talk to jaguars over asynchronous serial port, replace with this:
+// #include <HardwareSerial.h>
+// HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
 
 // run state machine related
 enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL };
+bool running_on_devboard = false;  // will overwrite with value read thru pull resistor on tx pin at boot
 runmodes runmode = SHUTDOWN;
 runmodes disp_oldmode = SHUTDOWN;   // So we can tell when the mode has just changed. start as different to trigger_mode start algo
 int32_t gesture_progress = 0;       // How many steps of the Cruise Mode gesture have you completed successfully (from Fly Mode)
@@ -171,10 +171,8 @@ uint32_t gesture_flytimeout_us = 2000000;        // Time allowed for joy mode-ch
 Timer gestureFlyTimer(gesture_flytimeout_us); // Used to keep track of time for gesturing for going in and out of fly/cruise modes
 uint32_t cruise_sw_timeout_us = 500000;         // how long do you have to hold down the cruise button to start cruise mode (in us)
 Timer motorParkTimer(motor_park_timeout_us);
-bool running_on_devboard;  // true = running on dev board, false = running on the car.  Requires pullup/pulldown resistors configured as above
 int32_t neobright = 10;  // lets us dim/brighten the neopixels
 int32_t neodesat = 0;  // lets us de/saturate the neopixels
-bool devboard;  // If detected we are running on devboard, this will get set true.
 
 // potentiometer related
 Potentiometer pot(pot_wipe_pin);
@@ -191,7 +189,6 @@ int32_t sim_edit_delta_encoder = 0;
 bool cal_joyvert_brkmotor_mode = false; // Allows direct control of brake motor using controller vert
 bool cal_pot_gasservo_mode = false;     // Allows direct control of gas servo using pot. First requires pot to be in valid position before mode is entered
 bool cal_pot_gasservo_ready = false;    // Whether pot is in valid range
-bool cal_set_hotrc_failsafe_ready = false;
 
 // diag/monitoring variables
 bool booted = false;
@@ -236,8 +233,8 @@ Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 BatterySensor battery_sensor(mulebatt_pin);
 
 // controller related
-float hotrc_ema_alpha = 0.075;         // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
-float hotrc_pc[2][8] = { { -100.0, 0.0, 100.0, 0.0, 0.0, 0.0, 0.0, 0.0 }, { -100.0, 0.0, 100.0, 0.0, 0.0, 0.0, 0.0, 0.0 }, };  // human values in percent are all derived
+float hotrc_ema_alpha = 0.075;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
+float hotrc_pc[2][8];           // values range from -100% to 100% are all derived or auto-assigned
 int32_t hotrc_us[4][8] =
     { {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [HORZ] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
       { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
@@ -256,9 +253,8 @@ int32_t hotrc_spike_buffer[2][3];
 bool hotrc_radio_lost = true;
 float hotrc_pulse_period_us = 1000000.0 / 50;
 volatile int64_t hotrc_timer_start;
-volatile bool hotrc_sw[4];  // Only using indices 2,3 for [CH3] and [CH4]. Do not use 0 or 1
-volatile bool hotrc_sw_last[4] = { 1, 1, true, true };  // [X/X/CH3/CH4]  initialized true i think otherwise the first ign or cruise press doesn't work
-volatile bool hotrc_sw_event[4];
+volatile bool hotrc_sw[4] = { 1, 1, 0, 0 };  // index[2]=CH3, index[3]=CH4 and using [0] and [1] indices for LAST values of ch3 and ch4 respectively
+volatile bool hotrc_sw_event[4];  // First 2 indices are unused.  What a tragic waste
 
 // steering related
 float steer_safe_pc = 72.0; // Steering is slower at high speed. How strong is this effect
@@ -418,15 +414,9 @@ bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrc
 void hotrc_toggle_update(int chan) {                                                            //
     hotrc_us[chan][RAW] = hotrc_rmt[chan].readPulseWidth(true);
     hotrc_sw[chan] = (hotrc_us[chan][RAW] <= hotrc_us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  hotrc_us[CH3][CENT]
-    if (hotrc_sw[chan] != hotrc_sw_last[chan]) hotrc_sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false
-    hotrc_sw_last[chan] = hotrc_sw[chan];
+    if (hotrc_sw[chan] != hotrc_sw[chan-2]) hotrc_sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false
+    hotrc_sw[chan-2] = hotrc_sw[chan];  // chan-2 index being used to store previous values of index chan
 }
-// void hotrc_ch4_update(void) {                                                            //
-//     hotrc_us[CH4][RAW] = hotrc_rmt[CH4].readPulseWidth(true);
-//     hotrc_ch4_sw = (hotrc_us[CH4][RAW] <= hotrc_us[CH4][CENT]); // Ch4 switch true if short pulse, otherwise false  hotrc_us[CH4][CENT]
-//     if (hotrc_ch4_sw != hotrc_ch4_sw_last) hotrc_ch4_sw_event = true; // So a handler routine can be signaled. Handler must reset this to false
-//     hotrc_ch4_sw_last = hotrc_ch4_sw;
-// }
 float hotrc_us_to_pc(int32_t us) {
     return (float)us * (hotrc_pc[VERT][MAX] - hotrc_pc[VERT][MIN]) / (float)(hotrc_us[VERT][MAX] - hotrc_us[VERT][MIN]);
 }
@@ -434,6 +424,9 @@ void hotrc_calc_params() {
     for (int axis=HORZ; axis<=VERT; axis++) {
         hotrc_us[axis][DBBOT] = hotrc_us[axis][CENT] - hotrc_deadband_us;
         hotrc_us[axis][DBTOP] = hotrc_us[axis][CENT] + hotrc_deadband_us;
+        hotrc_pc[axis][MIN] = -100.0;
+        hotrc_pc[axis][CENT] = 0.0;
+        hotrc_pc[axis][MAX] = 100.0;
         hotrc_pc[axis][DBBOT] = hotrc_pc[axis][CENT] - hotrc_us_to_pc(hotrc_deadband_us);
         hotrc_pc[axis][DBTOP] = hotrc_pc[axis][CENT] + hotrc_us_to_pc(hotrc_deadband_us);
         hotrc_us[axis][MARGIN] = hotrc_margin_us;
@@ -476,7 +469,7 @@ void adj_bool(bool *val, int32_t delta) { *val = adj_bool(*val, delta); }       
 // This is the function that will be run in a separate task
 void update_temperature_sensors(void *parameter) {
     while (true) {
-        if (take_temperatures)
+        if (!dont_take_temperatures)
             temperature_sensor_manager.update_temperatures();
         if (simulator.can_simulate(SimOption::engtemp) && simulator.get_pot_overload() == SimOption::engtemp) {
             TemperatureSensor *engine_sensor = temperature_sensor_manager.get_sensor(sensor_location::engine);
@@ -488,14 +481,22 @@ void update_temperature_sensors(void *parameter) {
     }
 }
 
-void set_devboard_defaults() {
-    devboard = true;
-    simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), 1));
-    simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), 1));
-    simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), 1));
-    simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), 1));
-    // simulator.set_can_simulate(SimOption::airflow, adj_bool(simulator.can_simulate(SimOption::airflow), 1));
-    // simulator.set_can_simulate(SimOption::mapsens, adj_bool(simulator.can_simulate(SimOption::mapsens), 1));
+void set_board_defaults(bool devboard) {  // true for dev boards, false for printed board (on the car)
+    if (devboard) {
+        simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), 1));
+        simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), 1));
+        simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), 1));
+        simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), 1));
+        // simulator.set_can_simulate(SimOption::airflow, adj_bool(simulator.can_simulate(SimOption::airflow), 1));
+        // simulator.set_can_simulate(SimOption::mapsens, adj_bool(simulator.can_simulate(SimOption::mapsens), 1));
+    }
+    else {
+        console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
+        keep_system_powered = false; // Use true during development
+        screensaver = false;         // Can enable experiment with animated screen draws
+        timestamp_loop = false;      // Makes code write out timestamps throughout loop to serial port
+        dont_take_temperatures = false;
+    }
 }
 
 Timer loopTimer(1000000); // how long the previous main loop took to run (in us)
