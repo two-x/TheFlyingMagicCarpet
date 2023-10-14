@@ -109,8 +109,8 @@ bool screensaver = false;  // Can enable experiment with animated screen draws
 bool timestamp_loop = false;         // Makes code write out timestamps throughout loop to serial port
 uint32_t timestamp_loop_linefeed_threshold = 0;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
 
-enum hotrc_axes { HORZ, VERT, CH3, CH4 };
-enum hotrc_vals { MIN, CENT, MAX, RAW, FILT, DBBOT, DBTOP, MARGIN };
+enum hotrc_axis { HORZ, VERT, CH3, CH4 };
+enum hotrc_val { MIN, CENT, MAX, RAW, FILT, DBBOT, DBTOP, MARGIN };
 
 // Persistent config storage
 Preferences config;
@@ -129,8 +129,6 @@ RMTInput hotrc_rmt[4] = {
 // Globals -------------------
 //
 
-static Servo brake_servo;
-static Servo steer_servo;
 // In case we ever talk to jaguars over asynchronous serial port, replace with this:
 // #include <HardwareSerial.h>
 // HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
@@ -220,6 +218,10 @@ Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 // mule battery related
 BatterySensor battery_sensor(mulebatt_pin);
 
+static Servo brake_servo;
+static Servo steer_servo;
+static Servo gas_servo;
+
 // controller related
 float hotrc_ema_alpha = 0.075;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
 float hotrc_pc[2][8];           // values range from -100% to 100% are all derived or auto-assigned
@@ -302,17 +304,25 @@ float speedo_govern_mph;      // Governor must scale the top vehicle speed propo
 float speedo_idle_mph = 4.50; // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
 
 // throttle servo related
+float gas_governor_pc = 95;      // Software governor will only allow this percent of full-open throttle (percent 0-100)
+Timer gasServoTimer(500000);          // We expect the servo to find any new position within this time
+float gas_pulse_adjustpoint_us;       // Used for adjusting cruise fixed throttle level
+
 bool reverse_gas_servo = true;
 float gas_pulse_out_us = 1501;        // pid loop output to send to the actuator (gas)
 float gas_pulse_govern_us = 1502;     // Governor must scale the pulse range proportionally. This is given a value in the loop
-Timer gasServoTimer(500000);          // We expect the servo to find any new position within this time
-float gas_governor_pc = 95;      // Software governor will only allow this percent of full-open throttle (percent 0-100)
 float gas_pulse_cw_min_us = 500;      // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
 float gas_pulse_cw_open_us = 718;     // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
 float gas_pulse_ccw_closed_us = 2000; // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
 float gas_pulse_ccw_max_us = 2500;    // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
 float gas_pulse_park_slack_us = 30;   // Gas pulsewidth beyond gas_pulse_ccw_closed_us where to park the servo out of the way so we can drive manually (in us)
-float gas_pulse_adjustpoint_us;       // Used for adjusting cruise fixed throttle level
+
+// Misguided beginnings of attempt to restructure pwm variables above
+// enum pwm_val { OUT=3, GOV=4, ABSMIN=5, ABSMAX=6, PARK=7, num_pwmvals=8 };  // { MIN=0, CENT=1, MAX=2 }
+// enum pwm_opts { REVERSED, CENTERED, GOVERNED, num_pwmopts };  // Forward is considered ccw < cw motion
+// float gas_angle_pc[num_pwmvals];
+// float gas_angle_us[num_pwmvals] = { 718, 1500, 2000, 2000, 718, 500, 2500, 2030 };
+// bool gas_angle_opt[num_pwmopts] = { true, false, true };
 
 // tachometer related
 Tachometer tachometer(tach_pulse_pin);
@@ -345,6 +355,7 @@ Timer brakePidTimer(brake_pid_period_us); // not actually tunable, just needs va
 float brake_spid_initial_kp = 0.323;                                                                         // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
 float brake_spid_initial_ki_hz = 0.000;                                                                      // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
 float brake_spid_initial_kd_s = 0.000;                                                                       // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+
 QPID brakeQPID(pressure_sensor.get_filtered_value_ptr().get(), &brake_out_pc, &pressure_target_psi,     // input, target, output variable references
                brake_extend_pc, brake_retract_pc,                                                  // output min, max
                brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,                     // Kp, Ki, and Kd tuning constants
@@ -365,7 +376,6 @@ float gas_spid_initial_kp = 0.206;    // PID proportional coefficient (gas) How 
 float gas_spid_initial_ki_hz = 0.000; // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
 float gas_spid_initial_kd_s = 0.000;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
 bool gas_open_loop = true;
-static Servo gas_servo;
 QPID gasQPID(tachometer.get_filtered_value_ptr().get(), &gas_pulse_out_us, &tach_target_rpm,                            // input, target, output variable references
              gas_pulse_cw_open_us, gas_pulse_ccw_closed_us,                                                             // output min, max
              gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s,                                        // Kp, Ki, and Kd tuning constants
@@ -412,26 +422,28 @@ enum err_sensors { e_hrchorz, e_hrcvert, e_hrcch3, e_hrcch4, e_pressure, e_brkpo
 bool err_sensor_alarm[num_err_types] = { false, false };  // [LOST/RANGE]
 bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_battery/e_basicsw/e_starter]   // SimOption::opt_t::num_sensors]
 
-void hotrc_toggle_update(int chan) {                                                            //
+void hotrc_toggle_update(int8_t chan) {                                                            //
     hotrc_us[chan][RAW] = hotrc_rmt[chan].readPulseWidth(true);
     hotrc_sw[chan] = (hotrc_us[chan][RAW] <= hotrc_us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  hotrc_us[CH3][CENT]
     if (hotrc_sw[chan] != hotrc_sw[chan-2]) hotrc_sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false
     hotrc_sw[chan-2] = hotrc_sw[chan];  // chan-2 index being used to store previous values of index chan
 }
-float hotrc_us_to_pc(int32_t us) {
-    return (float)us * (hotrc_pc[VERT][MAX] - hotrc_pc[VERT][MIN]) / (float)(hotrc_us[VERT][MAX] - hotrc_us[VERT][MIN]);
+float hotrc_us_to_pc(int8_t axis, int32_t us) {
+    if (us >= hotrc_us[axis][CENT])
+        return map((float)us, (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MAX], hotrc_pc[axis][CENT], hotrc_pc[axis][MAX]);
+    else return map((float)us, (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MIN], hotrc_pc[axis][CENT], hotrc_pc[axis][MIN]);
 }
 void hotrc_calc_params() {
-    for (int axis=HORZ; axis<=VERT; axis++) {
+    for (int8_t axis=HORZ; axis<=VERT; axis++) {
         hotrc_us[axis][DBBOT] = hotrc_us[axis][CENT] - hotrc_deadband_us;
         hotrc_us[axis][DBTOP] = hotrc_us[axis][CENT] + hotrc_deadband_us;
+        hotrc_us[axis][MARGIN] = hotrc_margin_us;
         hotrc_pc[axis][MIN] = -100.0;
         hotrc_pc[axis][CENT] = 0.0;
         hotrc_pc[axis][MAX] = 100.0;
-        hotrc_pc[axis][DBBOT] = hotrc_pc[axis][CENT] - hotrc_us_to_pc(hotrc_deadband_us);
-        hotrc_pc[axis][DBTOP] = hotrc_pc[axis][CENT] + hotrc_us_to_pc(hotrc_deadband_us);
-        hotrc_us[axis][MARGIN] = hotrc_margin_us;
-        hotrc_pc[axis][MARGIN] = hotrc_us_to_pc(hotrc_margin_us);
+        hotrc_pc[axis][DBBOT] = hotrc_pc[axis][CENT] - hotrc_us_to_pc(axis, hotrc_deadband_us);
+        hotrc_pc[axis][DBTOP] = hotrc_pc[axis][CENT] + hotrc_us_to_pc(axis, hotrc_deadband_us);
+        hotrc_pc[axis][MARGIN] = hotrc_us_to_pc(axis, hotrc_margin_us);
     }
 }
 void calc_governor(void) {
@@ -441,7 +453,7 @@ void calc_governor(void) {
     speedo_govern_mph = map(gas_governor_pc, 0.0, 100.0, 0.0, speedometer.get_redline_mph());                                                                                     // Governor must scale the top vehicle speed proportionally
 }
 float steer_safe(float endpoint) {
-    return steer_stop_pc + (endpoint - steer_stop_pc) * (1 - steer_safe_pc * speedometer.get_filtered_value() / (100.0 * speedometer.get_redline_mph()));
+    return steer_stop_pc + (endpoint - steer_stop_pc) * (1.0 - steer_safe_pc * speedometer.get_filtered_value() / (100.0 * speedometer.get_redline_mph()));
 }
 
 // int* x is c++ style, int *x is c style
@@ -488,8 +500,6 @@ void set_board_defaults(bool devboard) {  // true for dev boards, false for prin
         simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), 1));
         simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), 1));
         simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), 1));
-        // simulator.set_can_simulate(SimOption::airflow, adj_bool(simulator.can_simulate(SimOption::airflow), 1));
-        // simulator.set_can_simulate(SimOption::mapsens, adj_bool(simulator.can_simulate(SimOption::mapsens), 1));
     }
     else {
         console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
@@ -498,6 +508,30 @@ void set_board_defaults(bool devboard) {  // true for dev boards, false for prin
         timestamp_loop = false;      // Makes code write out timestamps throughout loop to serial port
         dont_take_temperatures = false;
     }
+}
+// Starter bidirectional handler logic.  Outside code interacts with handler by setting starter_request = st_off, st_on, or st_tog    
+void starter_update () {
+    if (starter_signal_support) {
+        if (starter_request == st_tog) starter_request = !starter_drive;  // translate toggle request to a drive request opposite to the current drive state
+        if (starter_drive && ((starter_request == st_off) || starterTimer.expired())) {  // If we're driving the motor but need to stop
+            starter_drive = false;
+            set_pin (starter_pin, INPUT_PULLDOWN);  // we never assert low on the pin, just set pin as input and let the pulldown bring it low
+        }
+        if (!starter_drive && (starter_request != st_on) && !simulator.simulating(SimOption::starter)) {  // If we haven't been and shouldn't be driving, and not simulating
+            do {
+                starter = digitalRead(starter_pin);  // then read the pin, starter variable will store if starter is turned on externally
+            } while (starter != digitalRead(starter_pin)); // starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+        }
+        else if (!starter && (starter_request == st_on) && remote_start_support) {  // If we got a request to start the motor, and it's not already being driven externally
+            starter_drive = true;
+            starter = HIGH;
+            set_pin (starter_pin, OUTPUT);  // then set pin to an output
+            write_pin (starter_pin, starter);  // and start the motor
+            starterTimer.reset();  // if left on the starter will turn off automatically after X seconds
+        }
+        starter_request = st_nop;  // we have serviced whatever requests
+    }
+    else starter = LOW;
 }
 
 Timer loopTimer(1000000); // how long the previous main loop took to run (in us)
@@ -532,7 +566,7 @@ void loop_marktime(std::string loopname = std::string("")) {  // Add these throu
         loopindex++;
     }
 }
-void loop_print_timing() {  // Call once at very end of loop
+void loop_print_timing() {  // Call once each loop at the very end
     if (timestamp_loop) {
         loop_period_us = (uint32_t)loopTimer.elapsed();  // us since beginning of this loop
         loopTimer.reset();

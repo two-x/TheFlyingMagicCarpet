@@ -116,7 +116,7 @@ char idlestatecard[ThrottleControl::targetstates::num_states][7] = { "todriv", "
 #define scroll "\x12   "
 #define degreF "\xf7""F  "  // "\x09""F  "
 #define ______ "    "
-#define __________ "      - "
+#define __________ "      \xf9 "
 #define neo_bright "NeoBr\x8dte"
 #define maxadjrate "MaxAjR\x83t"
 #define horfailsaf "HFails\x83""f"
@@ -126,7 +126,7 @@ char units[disp_fixed_lines][5] = { "%   ", "mph ", "rpm ", "us  ", "psi ", "%  
 
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, num_datapages };
 char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-int32_t tuning_first_editable_line[dataset_pages::num_datapages] = { 9, 9, 5, 3, 4, 8, 7, 7, 10, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[dataset_pages::num_datapages] = { 9, 9, 5, 3, 4, 8, 7, 7, 10, 0, 8 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
     { brAk"Posn", "MuleBatt", "     Pot", "AirSpeed", "     MAP", "MasAirFl", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
@@ -138,8 +138,8 @@ char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
     { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
-    { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", " Starter", "Basic Sw", "CalBrake", " Cal Gas", },  // PG_SIM
-    { __________, __________, __________, __________, __________, __________, __________, "SimW/Pot", neo_bright, "NeoDesat", "ScrnSavr", },  // PG_UI
+    { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", "SimW/Pot", "CalBrake", " Cal Gas", },  // PG_SIM
+    { __________, __________, __________, __________, __________, __________, __________, __________, neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
 };
 char tuneunits[dataset_pages::num_datapages][disp_tuning_lines][5] = {
     { "in  ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
@@ -151,8 +151,8 @@ char tuneunits[dataset_pages::num_datapages][disp_tuning_lines][5] = {
     { "rpm ", "rpm ", "us  ", "us  ", "us  ", "us  ", ______, b1nary, ______, "Hz  ", "s   ", },  // PG_GPID
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "us  ", "u/s ", ______, "Hz  ", "s   ", },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, b1nary, },  // PG_TEMP
-    { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, },  // PG_SIM
-    { ______, ______, ______, ______, ______, ______, ______, scroll, "%   ", "/10 ", b1nary, },  // PG_UI
+    { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
+    { ______, ______, ______, ______, ______, ______, ______, ______, "%   ", "/10 ", b1nary, },  // PG_UI
 };
 char simgrid[4][3][5] = {
     { "psi\x18", "rpm\x18", "mph\x18" },
@@ -655,7 +655,7 @@ class Display {
             uint16_t color = (*idiotlights[idiot]) ? BLK : darken_color(idiotcolors[idiot]);
             _tft.drawRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, bg);
             for (int32_t xo = 0; xo < (2 * disp_font_width - 1); xo++)
-                for (int32_t yo = disp_font_width; yo >= 0; yo--)
+                for (int32_t yo = 0; yo < disp_font_height - 1; yo++)
                     _tft.drawPixel (x + xo + 1, y + yo + 1, ((idiotmaps[idiot][xo] >> yo) & 1) ? color : bg);
         }
         void draw_idiotlight (int32_t idiot, int32_t x, int32_t y) {
@@ -753,10 +753,7 @@ class Display {
                 }
                 else if (dataset_page == PG_CAR) {
                     draw_dynamic(9, pressure_sensor.get_native(), pressure_sensor.get_min_native(), pressure_sensor.get_max_native());                    
-                    draw_eraseval(10);
-                    draw_eraseval(11);
-                    draw_eraseval(12);
-                    draw_eraseval(13);
+                    for (int line=10; line<=13; line++) draw_eraseval(line);
                     draw_dynamic(14, airflow_sensor.get_max_mph(), 0.0, airflow_sensor.get_abs_max_mph());
                     draw_dynamic(15, map_sensor.get_min_psi(), map_sensor.get_abs_min_psi(), map_sensor.get_abs_max_psi());
                     draw_dynamic(16, map_sensor.get_max_psi(), map_sensor.get_abs_min_psi(), map_sensor.get_abs_max_psi());
@@ -840,10 +837,7 @@ class Display {
                     draw_temperature(sensor_location::wheel_fr, 12);
                     draw_temperature(sensor_location::wheel_rl, 13);
                     draw_temperature(sensor_location::wheel_rr, 14);
-                    draw_eraseval(15);
-                    draw_eraseval(16);
-                    draw_eraseval(17);
-                    draw_eraseval(18);
+                    for (int line=15; line<=18; line++) draw_eraseval(line);
                     draw_truth(19, dont_take_temperatures, 2);
                 }
                 else if (dataset_page == PG_SIM) {
@@ -854,20 +848,14 @@ class Display {
                     draw_truth(13, simulator.can_simulate(SimOption::tach), 0);
                     draw_truth(14, simulator.can_simulate(SimOption::airflow), 0);
                     draw_truth(15, simulator.can_simulate(SimOption::mapsens), 0);
-                    draw_truth(16, simulator.can_simulate(SimOption::starter), 0);
-                    draw_truth(17, simulator.can_simulate(SimOption::basicsw), 0);
+                    // draw_truth(16, simulator.can_simulate(SimOption::starter), 0);
+                    draw_truth(16, simulator.can_simulate(SimOption::basicsw), 0);                    
+                    draw_asciiname(17, sensorcard[static_cast<uint8_t>(simulator.get_pot_overload())]);
                     draw_truth(18, cal_joyvert_brkmotor_mode, 0);
                     draw_truth(19, cal_pot_gasservo_mode, 0);
                 }
                 else if (dataset_page == PG_UI) {
-                    draw_eraseval(9);
-                    draw_eraseval(10);
-                    draw_eraseval(11);
-                    draw_eraseval(12);
-                    draw_eraseval(13);
-                    draw_eraseval(14);
-                    draw_eraseval(15);
-                    draw_asciiname(16, sensorcard[static_cast<uint8_t>(simulator.get_pot_overload())]);
+                    for (int line=9; line<=16; line++) draw_eraseval(line);
                     draw_dynamic(17, neobright, 1.0, 100.0, -1, 3);
                     draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
                     draw_truth(19, screensaver, 0);
