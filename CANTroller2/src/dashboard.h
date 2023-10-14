@@ -1,8 +1,9 @@
 #pragma once
-#include <TFT_eSPI.h>
+#include "display.h"
 
+// This code draws a nice looking gauge cluster, very apropos to our needs.
+// See this video: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
 // Rinkydink home page: http://www.rinkydinkelectronics.com
-// dashboard: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
 // moving transparent arrow sprite over background: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
 // bar graphs: https://www.youtube.com/watch?v=g4jlj_T-nRw&ab_channel=VolosProjects
 // Image site: 
@@ -90,7 +91,7 @@ float speedAngle=0; //...speed variable 0-240
 float rpmAngle=5;  //.....RPM variable 0-9
 
 float* pspeed; float* ptach; 
-void setup_dash(uint32_t size_x, uint_t size_y) {
+void setup_dash(uint32_t size_x, uint32_t size_y) {
   pinMode(THROTTLE,INPUT_PULLUP);
   pinMode(BRAKE,INPUT_PULLUP);
   pinMode(LEFT,INPUT_PULLUP);
