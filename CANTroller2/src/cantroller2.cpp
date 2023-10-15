@@ -211,12 +211,14 @@ void loop() {
     throttle.push_tach_reading(tachometer.get_human(), tachometer.get_last_read_time());
     
     if (i2cReadTimer.expireset()) {
-        ++i2creadsensor %= num_i2csensors;
-        if (i2creadsensor == AIRFLOW) airflow_sensor.update();  // Airflow sensor  // takes 900 us (!)
-        else if (i2creadsensor == MAP) map_sensor.update();  // MAP sensor  // takes 6800 us (!!)
+        // ++i2creadsensor %= num_i2csensors;
+        // if (i2creadsensor == AIRFLOW) 
+        airflow_sensor.update();  // Airflow sensor  // takes 900 us (!)
+        // else if (i2creadsensor == MAP) map_sensor.update();  // MAP sensor  // takes 6800 us (!!)
         maf_gps = get_massairflow();  // Recalculate intake mass airflow
     }
-
+    map_sensor.update();  // MAP sensor  // takes 6800 us (!!)
+    
     speedometer.update();  // Speedo
     pressure_sensor.update();  // Brake pressure
     battery_sensor.update();

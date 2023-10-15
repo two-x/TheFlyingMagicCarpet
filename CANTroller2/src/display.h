@@ -1,9 +1,4 @@
 #pragma once
-// #ifndef DISPLAY_H
-// #define DISPLAY_H
-// #include <font_Arial.h> // from ILI9341_t3
-// #include <SPI.h>
-// #include <Adafruit_ILI9341.h>
 #include <TFT_eSPI.h>
 #include "globals.h"
 
@@ -14,9 +9,6 @@
     #define disp _tft
 #endif
 
-// display related globals
-
-// LCD is 2.8in diagonal, 240x320 pixels
 // LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
 // Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
 #define BLK  0x0000  // greyscale: full black (RGB elements off)
@@ -85,8 +77,6 @@
 #define disp_saver_width 155
 #define disp_saver_height 192
 
-// string* pagecard = new string[8];  // How we might allocate on the heap instead of in the stack
-// string* modecard = new string[7];
 uint32_t color_16b_to_uint32(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to uint32 in format 0x00RRGGBB
     return (((uint32_t)color565 & 0xf800) << 8) | (((uint32_t)color565 & 0x7e0) << 5) | (((uint32_t)color565 & 0x1f) << 3);
 }
@@ -110,11 +100,11 @@ char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Ca
 int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, TEAL, MBLU };
 
 char sensorcard[14][7] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
-// char sensorerrcard { e_hrchorz, e_hrcvert, e_hrcch3, e_hrcch4, e_pressure, e_brkpos, e_speedo, e_tach, e_airflow, e_mapsens, e_temps, e_battery, e_starter, e_basicsw, e_num_sensors };
 
 char idlemodecard[3][7] = { "direct", "cntrol", "minimz" };
 char idlestatecard[ThrottleControl::targetstates::num_states][7] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
 
+// These defines are just a convenience to keep the below datapage strings array initializations aligned in neat rows & cols for legibility
 #define stEr "St\x88r"
 #define brAk "Br\x83k"
 #define spEd "Sp\x88""d"
@@ -173,11 +163,9 @@ char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", 
 uint16_t idiotcolors[arraysize(idiotlights)];
 uint8_t idiot_saturation = 225;  // 170-195 makes nice bright yet distinguishable colors
 uint8_t idiot_hue_offset = 240;
-// = { RED, BORG, ORG, YEL, GRN, TEAL, RBLU, INDG, ORCD, MGT, PNK, RED, BORG, ORG };  // LYEL, YEL };
 bool idiotlasts[arraysize(idiotlights)];
-// Idiot light bitmaps
-// Format: Each byte is one of 11 pixel columns (left->right) with LSB->MSB within each byte being the top->bottom pixels in that column
-// The high bit (bottom pixel) of every byte is 0 because we only have 7 pixel height. Set high bit of first byte to 1 to skip bitmap and use letters instead
+// 11x7 pixel idiot light bitmaps.  Format: Each byte is one pixel column (left->right) with LSB->MSB within each byte being the top->bottom pixels in that column
+// The high bit (bottom pixel) of every byte is 0 due to 7-pixel height. Set high bit of first byte to 1 to skip bitmap and use letters instead
 uint8_t idiotmaps[arraysize(idiotlights)][11] = {
     { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e, },     // 0 = "S" w/ crossout symbol
     { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x78, 0x70, 0x58, 0x0d, 0x07, 0x0f, },     // 1 = "S" w/ double arrow
@@ -194,30 +182,13 @@ uint8_t idiotmaps[arraysize(idiotlights)][11] = {
     { 0x6e, 0x6b, 0x3b, 0x00, 0x7f, 0x00, 0x7f, 0x06, 0x1c, 0x06, 0x7f, },     // 12 = "SIM"
     { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, }, };  // 13 = "DEV"
 //  { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, }, };  // 14 = N/A (no idiot light bitmap)
-//  { 0x, 0x, 0x, 0x, 0x, 0x, 0x, 0x, 0x, 0x, 0x, },     // Template
-//  Icon bitmap fail gallery:
-//  { 0x7e, 0x7e, 0x7e, 0x20, 0x30, 0x10, 0x54, 0x38, 0x10, 0x28, 0x44, },     // 0 - box w/ broken cord
-//  { 0x1c, 0x3e, 0x63, 0x6b, 0x63, 0x3e, 0x1c, 0x01, 0x15, 0x0b, 0x07, },     // 3 - smoking wheel
-//  { 0x26, 0x49, 0x49, 0x3e, 0x00, 0x42, 0x7f, 0x40, 0x42, 0x7f, 0x40, },     // 4 - "911"
-//  { 0x63, 0x36, 0x1c, 0x36, 0x63, 0x00, 0x02, 0x07, 0x7d, 0x57, 0x52, },     // 4 - key with X
-//  { 0x02, 0x02, 0x09, 0x55, 0x75, 0x25, 0x75, 0x55, 0x09, 0x02, 0x02, },     // 5 - lost reception vert
-//  { 0x63, 0x71, 0x59, 0x4d, 0x67, 0x63, 0x00, 0x09, 0x0d, 0x0b, 0x0d, },     // 6 = "Zz" (going to sleep)
-//  { 0x7f, 0x01, 0x45, 0x7d, 0x7d, 0x45, 0x01, 0x7f, 0x01, 0x45, 0x7d, },     // 7 - parking lot
-//  { 0x7f, 0x7f, 0x1b, 0x1f, 0x0e, 0x00, 0x7f, 0x7f, 0x3c, 0x76, 0x66, },     // 7 - "Pk"
-//  { 0x18, 0x7c, 0x7f, 0x1f, 0x7f, 0x7c, 0x18, 0x00, 0x0e, 0xfe, 0x0e, },     // 9 - car at stop sign
-//  { 0x7f, 0x41, 0x63, 0x00, 0x78, 0x08, 0x04, 0x44, 0x4f, 0x44, 0x44, },     // 8 - "Cr" w/ +/-
-//  { 0x47, 0x65, 0x77, 0x44, 0x40, 0x07, 0x45, 0x42, 0x72, 0x64, 0x47, },     // 8 - "adj" w/ arrows
-//  { 0x7c, 0x50, 0x70, 0x0e, 0x1b, 0x0e, 0x1b, 0x0e, 0x10, 0x78, 0x50, },     // 11 - "boot"
-//  { 0x6e, 0x6b, 0x3b, 0x00, 0x7b, 0x00, 0x7c, 0x0c, 0x7c, 0x0c, 0x78, },     // 12 - "Sim"
 void set_idiotcolors() {
     for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
         int division = disp_idiots_per_row;
         uint32_t color32 = hsv_to_rgb((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 220);
         idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
-        // printf ("idiot#%d: 0x%06x -> 0x%04x\n", idiot, color32, idiotcolors[idiot]);
     }
 }
-
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
@@ -245,7 +216,6 @@ int32_t dataset_page = PG_RUN;  // Which of the six 8-value dataset pages is cur
 int32_t dataset_page_last = PG_TEMP;
 int32_t selected_value = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
 int32_t selected_value_last = 0;
-//  ---- tunable ----
 Timer tuningCtrlTimer (25000000);  // This times out edit mode after a a long period of inactivity
 
 // run state globals
@@ -253,8 +223,6 @@ int32_t shutdown_color = colorcard[SHUTDOWN];
 
 class Display {
     private:
-        // Adafruit_ILI9341 _tft (tft_cs_pin, tft_dc_pin, tft_rst_pin); // LCD screen
-        // Adafruit_ILI9341 _tft; // LCD screen
         #ifdef USE_DMA_TO_TFT
             TFT_eSPI _panel = TFT_eSPI();
             TFT_eSprite _tft[2] = {TFT_eSprite(&_panel), TFT_eSprite(&_panel) };
@@ -265,7 +233,6 @@ class Display {
             TFT_eSPI _tft = TFT_eSPI();
             TFT_eSprite _saver = TFT_eSprite(&_tft);  // Declare screensaver sprite object "spr" with pointer to "tft" object
         #endif
-        // ILI9341_t3 _tft;
         Timer _tftResetTimer;
         Timer _tftDelayTimer;
         int32_t _timing_tft_reset;
@@ -354,8 +321,6 @@ class Display {
         }
         bool get_reset_finished() { return reset_finished; }
 
-        // Functions to write to the screen efficiently
-        //
         void draw_bargraph_base (int32_t corner_x, int32_t corner_y, int32_t width) {  // draws a horizontal bargraph scale.  124, y, 40
             disp.drawFastHLine (corner_x+disp_bargraph_squeeze, corner_y, width-disp_bargraph_squeeze*2, GRY1);
             for (int32_t offset=0; offset<=2; offset++) disp.drawFastVLine ((corner_x+disp_bargraph_squeeze)+offset*(width/2 - disp_bargraph_squeeze), corner_y-1, 3, WHT);
@@ -400,36 +365,6 @@ class Display {
                 }
             }
         }
-        void draw_mmph (int32_t x, int32_t y, int32_t color) {  // This is my cheesy pixel-drawn "mmph" compressed horizontally to 3-char width
-            disp.setTextColor (color);
-            disp.setCursor (x, y);
-            disp.print ("m");
-            disp.setCursor (x+4, y);
-            disp.print ("m");  // Overlapping 'mm' complete (x = 0-8)
-            disp.drawFastVLine (x+10, y+2, 6, color);
-            disp.drawPixel (x+11, y+2, color);
-            disp.drawPixel (x+11, y+6, color);
-            disp.drawFastVLine (x+12, y+3, 3, color);  // 'p' complete (x = 10-12)
-            disp.drawFastVLine (x+14, y, 7, color);
-            disp.drawPixel (x+15, y+2, color);
-            disp.drawFastVLine (x+16, y+3, 4, color);  // 'h' complete (x = 14-16)
-        }
-        void draw_thou (int32_t x, int32_t y, int32_t color) {  // This is my cheesy pixel-drawn "thou" compressed horizontally to 3-char width
-            disp.drawFastVLine (x+1, y+1, 5, color);
-            disp.drawFastHLine (x, y+2, 3, color);
-            disp.drawPixel (x+2, y+6, color);  // 't' complete (x = 0-2)
-            disp.drawFastVLine (x+4, y, 7, color);
-            disp.drawPixel (x+5, y+3, color);
-            disp.drawPixel (x+6, y+2, color);
-            disp.drawFastVLine (x+7, y+3, 4, color);  // 'h' complete (x = 4-7)
-            disp.drawFastVLine (x+9, y+3, 3, color);
-            disp.drawFastHLine (x+10, y+2, 2, color);
-            disp.drawFastHLine (x+10, y+6, 2, color);
-            disp.drawFastVLine (x+12, y+3, 3, color);  // 'o' complete (x = 9-12)
-            disp.drawFastVLine (x+14, y+2, 4, color);
-            disp.drawPixel (x+15, y+6, color);
-            disp.drawFastVLine (x+16, y+2, 5, color);  // 'u' complete (x = 14-16)
-        }
         void draw_string_units (int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
             disp.setCursor (x, y);
             disp.setTextColor (bgcolor);
@@ -438,19 +373,10 @@ class Display {
             disp.setTextColor (color);
             disp.print (text);  // Erase the old content
         }
-        void draw_colons (int32_t x_pos, int32_t first, int32_t last, int32_t color) {
-            for (int32_t lineno=first; lineno <= last; lineno++) {
-                disp.drawPixel (x_pos, lineno*disp_line_height_pix+3, color);  // Tiny microscopic colon dots
-                disp.drawPixel (x_pos, lineno*disp_line_height_pix+7, color);  // Tiny microscopic colon dots
-                // disp.fillRect (x_pos, (lineno+1)*disp_line_height_pix+3, 2, 2, color);  // Big goofy looking colon dots
-                // disp.fillRect (x_pos, (lineno+1)*disp_line_height_pix+7, 2, 2, color);  // Big goofy looking colon dots
-            }
-        }
         // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
         void draw_fixed (int32_t page, int32_t page_last, bool redraw_tuning_corner, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
             disp.setTextColor (GRY2);
             disp.setTextSize (1);
-            // if (redraw_tuning_corner) disp.fillRect(10, 145, 154, 95, BLK); // disp.fillRect(0,145,167,95,BLK);  // Erase old dataset page area - This line alone uses 15 ms
             int32_t y_pos;
             if (!redraw_tuning_corner) {
                 for (int32_t lineno = 0; lineno < disp_fixed_lines; lineno++)  {  // Step thru lines of fixed telemetry data
@@ -459,7 +385,6 @@ class Display {
                     draw_string_units (disp_datapage_units_x, y_pos, units[lineno], "", GRY2, BLK);
                     draw_bargraph_base (disp_bargraphs_x, y_pos + 7, disp_bargraph_width);
                 }
-                // draw_colons(7+disp_font_width*arraysize(telemetry[0]), 1, disp_fixed_lines+disp_tuning_lines, GRY1);  // I can't decide if I like the colons or not
             }
             for (int32_t lineno=0; lineno < disp_tuning_lines; lineno++)  {  // Step thru lines of dataset page data
                 draw_string (disp_datapage_names_x, disp_datapage_names_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, dataset_page_names[page][lineno], dataset_page_names[page_last][lineno], GRY2, BLK, forced);
@@ -588,12 +513,10 @@ class Display {
         }
         void draw_dynamic (int32_t lineno, int32_t value, int32_t lowlim=-1, int32_t hilim=-1, int32_t target=-1) {
             std::string val_string = abs_itoa (value, (int32_t)disp_maxlength);
-            // std::cout << "Int: " << value << " -> " << val_string << ", " << ((value >= 0) ? 1 : -1) << std::endl;
             draw_dynamic (lineno, val_string.c_str(), value, lowlim, hilim, (int32_t)target);
         }
         void draw_dynamic (int32_t lineno, float value, float lowlim=-1, float hilim=-1, int32_t target=-1, int32_t precision = disp_default_float_precision) {
             std::string val_string = abs_ftoa (value, (int32_t)disp_maxlength, precision);
-            // std::cout << "Flt: " << value << " -> " << val_string << ", " << ((value >= 0) ? 1 : -1) << std::endl;
             draw_dynamic (lineno, val_string.c_str(), (int32_t)value, (int32_t)lowlim, (int32_t)hilim, target);
         }
         void draw_dynamic (int32_t lineno, float value, float lowlim, float hilim, float target, int32_t precision = disp_default_float_precision) {
@@ -619,7 +542,6 @@ class Display {
         }
         void draw_dataset_page (int32_t page, int32_t page_last, bool forced=false) {
             draw_fixed (page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
-            // for (int32_t lineno=0; lineno<disp_lines; lineno++) draw_hyphen (59, lineno*disp_line_height_pix+disp_vshift_pix, BLK);
             draw_string (disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], STBL, BLK, forced); // +6*(arraysize(modecard[runmode])+4-namelen)/2
         }
         void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
@@ -670,7 +592,6 @@ class Display {
                 for (int32_t col = 2; col <= 5; col++) {  // Step thru all cols to draw buttons across the top edge
                     disp.fillRoundRect (touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
                     disp.drawRoundRect (touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // disp.width()-9, 3, 18, (disp.height()/5)-6, 8, LYEL);
-                    // draw_bool (top_menu_buttons[btn], btn+3);
                 }
             }
         }
@@ -851,7 +772,6 @@ class Display {
                     draw_dynamic(12, cruiseQPID.GetIterm(), -drange, drange);
                     draw_dynamic(13, cruiseQPID.GetDterm(), -drange, drange);
                     draw_dynamic(14, cruiseQPID.GetOutputSum(), -cruiseQPID.GetOutputRange(), cruiseQPID.GetOutputRange());  // cruise_spid_speedo_delta_adc, -drange, drange);
-                    // draw_dynamic(15, tach_target_rpm, 0.0, tachometer.get_redline_rpm());
                     draw_dynamic(15, gas_pulse_cruise_us, gas_pulse_cw_open_us, gas_pulse_ccw_closed_us);
                     draw_dynamic(16, cruise_delta_max_us_per_s, 1, 1000);
                     draw_dynamic(17, cruiseQPID.GetKp(), 0.0, 10.0);
@@ -876,7 +796,6 @@ class Display {
                     draw_truth(13, simulator.can_simulate(SimOption::tach), 0);
                     draw_truth(14, simulator.can_simulate(SimOption::airflow), 0);
                     draw_truth(15, simulator.can_simulate(SimOption::mapsens), 0);
-                    // draw_truth(16, simulator.can_simulate(SimOption::starter), 0);
                     draw_truth(16, simulator.can_simulate(SimOption::basicsw), 0);                    
                     draw_asciiname(17, sensorcard[static_cast<uint8_t>(simulator.get_pot_overload())]);
                     draw_truth(18, cal_joyvert_brkmotor_mode, 0);
@@ -890,8 +809,6 @@ class Display {
                     draw_dynamic(17, neobright, 1.0, 100.0, -1, 3);
                     draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
                     draw_truth(19, screensaver, 0);
-                    // draw_truth(18, simulator.can_simulate(SimOption::ignition), 0);
-                    // draw_truth(19, simulator.can_simulate(SimOption::syspower), 0);
                 }
                 draw_bool((runmode == CAL), 2);
                 draw_bool((runmode == BASIC), 3);
@@ -986,4 +903,3 @@ class Display {
             }
         }
 };
-// #endif  // DISPLAY_H

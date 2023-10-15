@@ -68,11 +68,7 @@ public:
     
     void print_address() const {
         printf("0x");
-        for(uint8_t i = 0; i < _address.size(); i++) {
-            // if(_address[i] < 0x10) Serial.print("0");
-            // Serial.print(_address[i], HEX);
-            printf("%02x", _address[i]);
-        }
+        for(uint8_t i = 0; i < _address.size(); i++) printf("%02x", _address[i]);
     }
 
     void print_sensor_info() const {
@@ -296,5 +292,4 @@ public:
     // int get_micros_to_wait_for_conversion(int microseconds) {
     //     return 1000 * tempsensebus.millisToWaitForConversion(microseconds);
     // }
-
 };

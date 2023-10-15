@@ -5,7 +5,7 @@
 #define colortype RgbColor  // RgbwColor
 
 // Default for esp32 is dma via I2S bus 1 at 800kHz using RMT. Don't know difference between "Ws2812", "Ws2812x", and "Sk6812"
-NeoPixelBus<NeoGrbFeature, NeoWs2812xMethod> neoobj(8, 48);  // NeoWs2812Method, NeoWs2812xMethod, NeoSk6812Method, NeoEsp32Rmt0Ws2812xMethod, NeoEsp32I2s1800KbpsMethod, NeoEsp32I2s1Sk6812Method, 
+NeoPixelBus<NeoGrbFeature, NeoSk6812Method> neoobj(8, 48);  // NeoWs2812Method, NeoWs2812xMethod, NeoSk6812Method, NeoEsp32Rmt0Ws2812xMethod, NeoEsp32I2s1800KbpsMethod, NeoEsp32I2s1Sk6812Method, 
 
 // Run neos in a task example: https://github.com/Makuna/NeoPixelBus/wiki/ESP32-and-RTOS-Tasks
 
@@ -108,7 +108,6 @@ class Encoder {
             attachInterrupt(digitalPinToInterrupt(_b_pin), [this]{ _b_isr(); }, CHANGE);
         }
         void update() {
-            // Encoder - takes 10 us to read when no encoder activity
             // Read and interpret encoder switch activity. Encoder rotation is handled in interrupt routine
             // Encoder handler routines should act whenever encoder_sw_action is SHORT or LONG, setting it back to
             // NONE once handled. When handling press, if encoder_long_clicked is nonzero then press is a long press
@@ -376,7 +375,6 @@ class neopixelStrip {
     }
     colortype desaturate(colortype color, int32_t desat_of_ten) {  // desat_pc=0 has no effect, =10 desaturates all the way to greyscale, =-99 saturates to max. without change in brightness
         uint8_t rgb[3] = { static_cast<uint8_t>(color.R), static_cast<uint8_t>(color.G), static_cast<uint8_t>(color.B) };
-        // printf (" Desat: (%d) before: 0x%02x %02x %02x", desat_of_ten, rgb[0], rgb[1], rgb[2]);
         float dominant = maxelement(rgb[0], rgb[1], rgb[2]);
         if (desat_of_ten > 0) {
             for (int element=0; element<3; element++)
@@ -388,7 +386,6 @@ class neopixelStrip {
         //     for (int element=0; element<3; element++)
         //         rgb[element] = (uint8_t)(rgb[element] - ((float)desat_of_ten * dominant / 10.0));
         // }
-        // printf (" after: 0x%02x %02x %02x\n", rgb[0], rgb[1], rgb[2]);
         return colortype(rgb[0], rgb[1], rgb[2]);
     }
 };
