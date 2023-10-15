@@ -102,10 +102,10 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     speedometer.setup();
     printf("done..\n");
 
-    // printf ("Init i2c and i2c-enabled devices.."); delay(1);  // Attempt to force print to happen before init
-    // i2c.init();
-    // airflow_sensor.setup(); // must be done after i2c is started
-    // map_sensor.setup();
+    printf ("Init i2c and i2c-enabled devices.."); delay(1);  // Attempt to force print to happen before init
+    i2c.init();
+    airflow_sensor.setup(); // must be done after i2c is started
+    map_sensor.setup();
 
     printf("Simulator setup..\n");
     simulator.register_device(SimOption::pressure, pressure_sensor, pressure_sensor.source());
@@ -206,11 +206,17 @@ void loop() {
     encoder.update();  // Read encoder input signals
     pot.update();
     brkpos_sensor.update();  // Brake position
+    
     tachometer.update();  // Tach
     throttle.push_tach_reading(tachometer.get_human(), tachometer.get_last_read_time());
-    airflow_sensor.update();  // Airflow sensor  // takes 900 us (!)
-    map_sensor.update();  // MAP sensor  // takes 6800 us (!!)
-    maf_gps = get_massairflow();  // Recalculate intake mass airflow
+    
+    if (i2cReadTimer.expireset()) {
+        ++i2creadsensor %= num_i2csensors;
+        if (i2creadsensor == AIRFLOW) airflow_sensor.update();  // Airflow sensor  // takes 900 us (!)
+        else if (i2creadsensor == MAP) map_sensor.update();  // MAP sensor  // takes 6800 us (!!)
+        maf_gps = get_massairflow();  // Recalculate intake mass airflow
+    }
+
     speedometer.update();  // Speedo
     pressure_sensor.update();  // Brake pressure
     battery_sensor.update();

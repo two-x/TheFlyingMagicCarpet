@@ -499,12 +499,14 @@ class MAPSensor : public I2CSensor {
         static constexpr float _initial_max_psi = 15.0;
         static constexpr float _initial_psi = 14.696;  // 1 atm = 14.6959 psi
         static constexpr float _initial_ema_alpha = 0.2;
-        float last_reading = -1;
+        float good_reading = -1;
         SparkFun_MicroPressure _sensor;
         virtual float read_sensor() {
+            // float temp = _sensor.readPressure(PSI, true);
             float temp = _sensor.readPressure(PSI, true);
-            if (!std::isnan(temp)) last_reading = temp;
-            return last_reading;
+            
+            if (!std::isnan(temp)) good_reading = temp;
+            return good_reading;
             // float temp = _sensor.readPressure(PSI);
             // this->_val_raw = (NATIVE_T)temp;  // note, this returns a float from 0-33.55 for the FS3000-1015 
             // return temp;
@@ -525,7 +527,7 @@ class MAPSensor : public I2CSensor {
                     printf("  Sensor not responding\n");  // Begin communication with air flow sensor) over I2C 
                     set_source(ControllerMode::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
                 } else {
-                    printf("  Reading %f atm manifold pressure\n", _sensor.readPressure(atm));
+                    printf("  Reading %f atm manifold pressure\n", _sensor.readPressure(ATM));
                     printf("  Sensor responding properly\n");
                 }
             } else {

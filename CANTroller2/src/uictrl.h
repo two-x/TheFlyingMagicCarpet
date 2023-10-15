@@ -3,7 +3,10 @@
 #include "FunctionalInterrupt.h"
 #include <NeoPixelBus.h>
 #define colortype RgbColor  // RgbwColor
-NeoPixelBus<NeoGrbFeature, NeoEsp32Rmt0Ws2812xMethod> neoobj(15, 48);  // <NeoGrbFeature, NeoEsp32Rmt0Ws2812xMethod> works! NeoGrbwFeature NeoWs2812xMethod NeoEsp32I2s1X8Sk6812Method  NeoEsp32I2s1X8Ws2812xMethod
+
+// Default for esp32 is dma via I2S bus 1 at 800kHz using RMT. Don't know difference between "Ws2812", "Ws2812x", and "Sk6812"
+NeoPixelBus<NeoGrbFeature, NeoWs2812xMethod> neoobj(8, 48);  // NeoWs2812Method, NeoWs2812xMethod, NeoSk6812Method, NeoEsp32Rmt0Ws2812xMethod, NeoEsp32I2s1800KbpsMethod, NeoEsp32I2s1Sk6812Method, 
+
 // Run neos in a task example: https://github.com/Makuna/NeoPixelBus/wiki/ESP32-and-RTOS-Tasks
 
 // Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
@@ -210,6 +213,7 @@ class neopixelStrip {
 
     void init(uint8_t argpin, bool viewcontext=NITE) {
         pin = argpin;
+        // neoobj.NeoPixelBus<NeoGrbFeature, NeoEsp32Rmt0Ws2812xMethod>(numpixels, pin);  // <NeoGrbFeature, NeoEsp32Rmt0Ws2812xMethod> works! NeoGrbwFeature NeoWs2812xMethod NeoEsp32I2s1X8Sk6812Method  NeoEsp32I2s1X8Ws2812xMethod
         context = viewcontext;
         std::cout << "Neo init: add LEDs.. ";
         neoobj.Begin();
