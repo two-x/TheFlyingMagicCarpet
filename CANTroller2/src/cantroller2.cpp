@@ -202,28 +202,7 @@ void loop() {
         } while (basicmodesw != !digitalRead(basicmodesw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
     }
 
-    // Starter bidirectional handler logic.  Outside code interacts with handler by setting starter_request = st_off, st_on, or st_tog . 
-    if (starter_signal_support) {
-        if (starter_request == st_tog) starter_request = !starter_drive;  // translate toggle request to a drive request opposite to the current drive state
-        if (starter_drive && ((starter_request == st_off) || starterTimer.expired())) {  // If we're driving the motor but need to stop
-            starter_drive = false;
-            set_pin (starter_pin, INPUT_PULLDOWN);  // we never assert low on the pin, just set pin as input and let the pulldown bring it low
-        }
-        if (!starter_drive && (starter_request != st_on) && !simulator.simulating(SimOption::starter)) {  // If we haven't been and shouldn't be driving, and not simulating
-            do {
-                starter = digitalRead(starter_pin);  // then read the pin, starter variable will store if starter is turned on externally
-            } while (starter != digitalRead(starter_pin)); // starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
-        }
-        else if (!starter && (starter_request == st_on)) {  // If we got a request to start the motor, and it's not already being driven externally
-            starter_drive = true;
-            starter = HIGH;
-            set_pin (starter_pin, OUTPUT);  // then set pin to an output
-            write_pin (starter_pin, starter);  // and start the motor
-            starterTimer.reset();  // if left on the starter will turn off automatically after X seconds
-        }
-        starter_request = st_nop;  // we have serviced whatever requests
-    }
-
+    starter_update();  // Runs starter bidirectional handler
     encoder.update();  // Read encoder input signals
     pot.update();
     brkpos_sensor.update();  // Brake position
@@ -238,7 +217,7 @@ void loop() {
 
     // Controller handling
     // 1. Handle any toggle button events (ch3 and ch4)
-    for (int ch = CH3; ch <= CH4; ch++) hotrc_toggle_update(ch);
+    for (int8_t ch = CH3; ch <= CH4; ch++) hotrc_toggle_update(ch);
     if (!hotrc_radio_lost) {  // Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
         if (hotrc_sw_event[CH3]) ignition_toggle_request = true;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
         if (hotrc_sw_event[CH4]) {
@@ -246,16 +225,14 @@ void loop() {
             else if (runmode == STALL) starter_request = st_tog;
         }
     }
-    for (int ch = CH3; ch <= CH4; ch++) hotrc_sw_event[ch] = false;
+    for (int8_t ch = CH3; ch <= CH4; ch++) hotrc_sw_event[ch] = false;
     // 2. Read horz and vert pulse inputs, spike filter, convert to percent, ema filter, constrain, and center within deadband
-    for (int axis = HORZ; axis <= VERT; axis++) {
+    for (int8_t axis = HORZ; axis <= VERT; axis++) {
         hotrc_us[axis][RAW] = (int32_t)hotrc_rmt[axis].readPulseWidth();
         hotrc_us[axis][RAW] = hotrcManager[axis].spike_filter(hotrc_us[axis][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
         ema_filt(hotrc_us[axis][RAW], &hotrc_ema_us[axis], hotrc_ema_alpha);  // Need unconstrained ema-filtered vertical for radio lost detection 
         if (!simulator.simulating(SimOption::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
-            if (hotrc_pc[axis][RAW] >= hotrc_pc[axis][CENT])
-                hotrc_pc[axis][RAW] = map((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MAX], hotrc_pc[axis][CENT], hotrc_pc[axis][MAX]);
-            else hotrc_pc[axis][RAW] = map((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MIN], hotrc_pc[axis][CENT], hotrc_pc[axis][MIN]);
+            hotrc_pc[axis][RAW] = hotrc_us_to_pc(axis, hotrc_us[axis][RAW]);
             ema_filt(hotrc_pc[axis][RAW], &(hotrc_pc[axis][FILT]), hotrc_ema_alpha);  // do ema filter to determine joy_vert_filt
             hotrc_pc[axis][FILT] = constrain(hotrc_pc[axis][FILT], hotrc_pc[axis][MIN], hotrc_pc[axis][MAX]);
             if (hotrc_radio_lost || (hotrc_ema_us[axis] > hotrc_us[axis][DBBOT] && hotrc_ema_us[axis] < hotrc_us[axis][DBTOP]))
@@ -507,14 +484,14 @@ void loop() {
             else if (selected_value == 4) simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), sim_edit_delta));
             else if (selected_value == 5) simulator.set_can_simulate(SimOption::airflow, adj_bool(simulator.can_simulate(SimOption::airflow), sim_edit_delta));
             else if (selected_value == 6) simulator.set_can_simulate(SimOption::mapsens, adj_bool(simulator.can_simulate(SimOption::mapsens), sim_edit_delta));
-            else if (selected_value == 7) simulator.set_can_simulate(SimOption::starter, adj_bool(simulator.can_simulate(SimOption::starter), sim_edit_delta));
-            else if (selected_value == 8) simulator.set_can_simulate(SimOption::basicsw, adj_bool(simulator.can_simulate(SimOption::basicsw), sim_edit_delta));
+            // else if (selected_value == 7) simulator.set_can_simulate(SimOption::starter, adj_bool(simulator.can_simulate(SimOption::starter), sim_edit_delta));
+            else if (selected_value == 7) simulator.set_can_simulate(SimOption::basicsw, adj_bool(simulator.can_simulate(SimOption::basicsw), sim_edit_delta));
+            else if (selected_value == 8) simulator.set_pot_overload(static_cast<SimOption>(adj_val(static_cast<int32_t>(simulator.get_pot_overload()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));            
             else if (selected_value == 9 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor_mode, sim_edit_delta);
             else if (selected_value == 10 && runmode == CAL) adj_bool (&cal_pot_gasservo_mode, (sim_edit_delta < 0 || cal_pot_gasservo_ready) ? sim_edit_delta : -1);
         }
         else if (dataset_page == PG_UI) {
-            if (selected_value == 7) simulator.set_pot_overload(static_cast<SimOption>(adj_val(static_cast<int32_t>(simulator.get_pot_overload()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));
-            else if (selected_value == 8) {
+            if (selected_value == 8) {
                 adj_val (&neobright, sim_edit_delta, 1, 100);
                 neo.setbright(neobright);
             }

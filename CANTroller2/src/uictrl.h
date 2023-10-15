@@ -179,6 +179,7 @@ class neopixelStrip {
     uint8_t lobright = 1;
     uint8_t heartbright = 6;
     uint8_t hibright = 6;
+    uint8_t heartlobright = 1;
     float desatlevel = 0.0;  // out of 10.0
     uint8_t neo_master_brightness = 0xff;
     float correction[3] = { 1.0, 0.9, 1.0 };  // Applied to brightness of rgb elements
@@ -221,8 +222,11 @@ class neopixelStrip {
     }
     void setbright(int8_t newlev) {  // a way to specify brightness levels
         hibright = newlev;
-        if (neo_heartbeat_variable_brightness) heartbright = hibright;  // (uint8_t)((float)hibright * 0.75);
         lobright = (hibright > 50) ? 3 : (hibright > 25) ? 2 : 1;
+        if (neo_heartbeat_variable_brightness) {
+            heartbright = hibright;  // (uint8_t)((float)hibright * 0.75);
+            heartlobright = lobright;
+        }
         updateAll();
     }
     void setdesaturation(float newlev) {  // a way to specify nite or daytime brightness levels
@@ -244,7 +248,7 @@ class neopixelStrip {
             }
             else if (!heartbeat_pulse) {
                 if (neoFadeTimer.expired()) heartbeat_brightness = brightlev[context][B_MIN];
-                else heartbeat_brightness = (int8_t)(lobright + max(1, (float)(heartbright - lobright) * (1.0 - ((heartbeat_state == 1) ? 1.5 : 1.0) * (float)neoFadeTimer.elapsed() / (float)neo_fade_timeout_us)));
+                else heartbeat_brightness = (int8_t)(heartlobright + max(1, (float)(heartbright - heartlobright) * (1.0 - ((heartbeat_state == 1) ? 1.5 : 1.0) * (float)neoFadeTimer.elapsed() / (float)neo_fade_timeout_us)));
             }
             if (heartbeatColor != heartbeatColor_last || heartbeat_brightness != neobright_last) {
                 heartbeatNow = dimmer(heartbeatColor, heartbeat_brightness);  // heartbeatNow = dimmer(desaturate(heartbeatColor, desatlevel), heartbeat_brightness);
