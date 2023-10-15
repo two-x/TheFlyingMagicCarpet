@@ -4,6 +4,7 @@
 #include <DallasTemperature.h>
 #include <Wire.h>
 #include "map.h"
+// #include <SparkFun_MicroPressure.h>
 #include <Preferences.h>
 #include <iostream>
 #include <iomanip>  // For formatting console cout strings
@@ -337,11 +338,12 @@ float tach_idle_high_rpm = 950.0;     // Elevated rpm above idle guaranteed neve
 float tach_idle_abs_max_rpm = 1000.0; // High limit of idle speed adjustability
 Timer tachIdleTimer(5000000);         // How often to update tach idle value based on engine temperature
 
-// airflow sensor related
+// i2c sensor related
+enum i2csensor { AIRFLOW, MAP, num_i2csensors };
 AirflowSensor airflow_sensor(i2c);
-
-// map sensor related
-MAPSensor map_sensor(i2c);
+MAPSensor map_sensor(i2c);  // map sensor related
+Timer i2cReadTimer(25000);  // How often to read an i2c sensor
+int32_t i2creadsensor = AIRFLOW;
 
 // Motor control:
 // Steering : Controls the steering motor proportionally based on the joystick
@@ -535,15 +537,18 @@ void starter_update () {
 }
 
 Timer loopTimer(1000000); // how long the previous main loop took to run (in us)
-uint32_t loop_period_us;
 float looptime_sum_s;
-uint32_t looptime_avg_ms;
 int32_t loopno = 1;
 uint32_t looptimes_us[20];
 bool loop_dirty[20];
 int32_t loopindex = 0;
 int64_t looptime_cout_mark_us;
-uint32_t looptime_cout_us;
+uint32_t looptime_cout_us, looptime_peak_us;
+uint32_t loop_maxloop_us = 100;
+const uint32_t loop_history = 15;
+uint32_t loop_periods_us[loop_history];
+uint32_t loop_now = 0;
+float looptime_avg_us, loopfreq_hz;
 std::vector<std::string> loop_names(20);
 
 void looptiming_init() {  // Run once at end of setup()
@@ -553,8 +558,8 @@ void looptiming_init() {  // Run once at end of setup()
         loop_dirty[0] = false;
         loopindex = 1;
         looptimes_us[0] = esp_timer_get_time();
-        loopTimer.reset();  // start timer to measure the first loop
     }
+    loopTimer.reset();  // start timer to measure the first loop
 }
 void loop_marktime(std::string loopname = std::string("")) {  // Add these throughout loop with short names
     if (timestamp_loop) {
@@ -567,25 +572,29 @@ void loop_marktime(std::string loopname = std::string("")) {  // Add these throu
     }
 }
 void loop_print_timing() {  // Call once each loop at the very end
+    loop_periods_us[loop_now] = (uint32_t)loopTimer.elapsed();  // us since beginning of this loop
+    loopTimer.reset();
+    looptime_sum_s += (float)loop_periods_us[loop_now] / 1000000;
+    ema_filt(loop_periods_us[loop_now], &looptime_avg_us, 0.05);
+    if (looptime_avg_us > 1) loopfreq_hz = 1000000/looptime_avg_us;
+    if (loopno > 10 && loop_periods_us[loop_now] > loop_maxloop_us) loop_maxloop_us = (float)loop_periods_us[loop_now];
+    looptime_peak_us = 0;
+    for (int8_t i=0; i<loop_history; i++) if (looptime_peak_us < loop_periods_us[i]) looptime_peak_us = loop_periods_us[i]; 
     if (timestamp_loop) {
-        loop_period_us = (uint32_t)loopTimer.elapsed();  // us since beginning of this loop
-        loopTimer.reset();
         looptime_cout_mark_us = esp_timer_get_time();
-        loopno++;  // I like to count how many loops
-        looptime_sum_s += (float)loop_period_us / 1000000;
-        if (!loopno) looptime_avg_ms = loop_period_us / 1000;
-        else looptime_avg_ms += (loop_period_us - looptime_avg_ms * 1000) >> 16;  // Approx avg over previous 65 loops, without using memory or divides
         std::cout << std::fixed << std::setprecision(0);
-        std::cout << "\r" << (uint32_t)looptime_sum_s << "s #" << loopno;  //  << " av:" << std::setw(3) << looptime_avg_ms 
-        std::cout << " : " << std::setw(5) << loop_period_us << " (" << loop_period_us-looptime_cout_us << ")us ";  // << " avg:" << looptime_avg_us;  //  " us:" << esp_timer_get_time() << 
+        std::cout << "\r" << (uint32_t)looptime_sum_s << "s #" << loopno;  //  << " av:" << std::setw(5) << (int32_t)(looptime_avg_us);  //  << " av:" << std::setw(3) << looptime_avg_ms 
+        std::cout << " : " << std::setw(5) << loop_periods_us[loop_now] << " (" << loop_periods_us[loop_now]-looptime_cout_us << ")us ";  // << " avg:" << looptime_avg_us;  //  " us:" << esp_timer_get_time() << 
         for (int32_t x=1; x<loopindex; x++)
             std::cout << std::setw(3) << loop_names[x] << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1] << " ";
         std::cout << " cout:" << std::setw(5) << looptime_cout_us;
-        if (loop_period_us-looptime_cout_us > timestamp_loop_linefeed_threshold || !timestamp_loop_linefeed_threshold) std::cout << std::endl;
+        if (loop_periods_us[loop_now]-looptime_cout_us > timestamp_loop_linefeed_threshold || !timestamp_loop_linefeed_threshold) std::cout << std::endl;
         looptime_cout_us = (uint32_t)(esp_timer_get_time() - looptime_cout_mark_us);
         loopindex = 0;
         loop_marktime ("top");
     }
+    ++loop_now %= loop_history;
+    loopno++;  // I like to count how many loops
 }
 void detect_errors() {
     if (errTimer.expireset()) {

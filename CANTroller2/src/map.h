@@ -12,7 +12,7 @@
 #define MATH_SAT_FLAG   0x01
 #define OUTPUT_MAX      0xE66666
 #define OUTPUT_MIN      0x19999A
-enum Pressure_Units {PSI, Pa, kPa, torr, inHg, atm, bar};
+enum Pressure_Units {PSI, PA, KPA, TORR, INHG, ATM, BAR};  // {PSI, Pa, kPa, torr, inHg, atm, bar};
 
 class SparkFun_MicroPressure {
   public:
@@ -26,7 +26,7 @@ class SparkFun_MicroPressure {
     int8_t _address, _eoc, _rst;
     uint8_t _minPsi, _maxPsi, status;
     TwoWire *_i2cPort;
-    bool statusreadable();
+    // bool statusreadable();
 };
 // Constructor and sets default values.
 // - (Optional) eoc_pin, End of Conversion indicator. Default: -1 (skip)
@@ -56,18 +56,22 @@ bool SparkFun_MicroPressure::begin(uint8_t deviceAddress, TwoWire &wirePort) {
     }
     ready = true;
     _i2cPort->beginTransmission(_address);
-    return !(_i2cPort->endTransmission());
+
+    //return !(_i2cPort->endTransmission());
+    uint8_t error = _i2cPort->endTransmission();
+    if(error == 0) return true;
+    else           return false;
 }
 // Read the status byte of the sensor - Returns status byte
 uint8_t SparkFun_MicroPressure::readStatus(void) {
     _i2cPort->requestFrom(_address,1);
     return _i2cPort->read();
 }
-bool SparkFun_MicroPressure::statusreadable(void) {
-    if (_eoc >= 0) return digitalRead(_eoc);
-    bool bit = readStatus();
-    return !(bit & BUSY_FLAG) || (bit == 0xff);
-}
+// bool SparkFun_MicroPressure::statusreadable(void) {
+//     if (_eoc >= 0) return digitalRead(_eoc);
+//     bool bit = readStatus();
+//     return !(bit & BUSY_FLAG) || (bit == 0xff);
+// }
 // Read the Pressure Sensor Reading - (optional) Pressure_Units, can return various pressure units. Default: PSI
 float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
     if (ready) {
@@ -78,9 +82,24 @@ float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
         _i2cPort->endTransmission();
     }
     ready = false;
-    while (!statusreadable()) {
-        if (noblock) return NAN;  // If asked not to block but it's not ready, it sends you packing w/o a result & you have to retry.
-        delay(1);
+    // while (!statusreadable()) {
+    //     if (noblock) return NAN;  // If asked not to block but it's not ready, it sends you packing w/o a result & you have to retry.
+    //     delay(1);
+    // }
+    // ready = true;
+    if (_eoc != -1) { // Use GPIO pin if defined
+        while (!digitalRead(_eoc)) {
+            if (noblock) return NAN;
+            delay(1);
+        }
+    }
+    else { // Check status byte if GPIO is not defined
+        uint8_t status = readStatus();
+        while((status&BUSY_FLAG) && (status!=0xFF)) {
+            if (noblock) return NAN;
+            delay(1);
+            status = readStatus();
+        }
     }
     ready = true;
     _i2cPort->requestFrom(_address,4);
@@ -93,11 +112,11 @@ float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
     }
     pressure = (reading - OUTPUT_MIN) * (_maxPsi - _minPsi);
     pressure = (pressure / (OUTPUT_MAX - OUTPUT_MIN)) + _minPsi;
-    if(units == Pa)        pressure *= 6894.7573; //Pa (Pascal)
-    else if(units == kPa)  pressure *= 6.89476;   //kPa (kilopascal)
-    else if(units == torr) pressure *= 51.7149;   //torr (mmHg)
-    else if(units == inHg) pressure *= 2.03602;   //inHg (inch of mercury)
-    else if(units == atm)  pressure *= 0.06805;   //atm (atmosphere)
-    else if(units == bar)  pressure *= 0.06895;   //bar
+    if(units == PA)        pressure *= 6894.7573; //Pa (Pascal)
+    else if(units == KPA)  pressure *= 6.89476;   //kPa (kilopascal)
+    else if(units == TORR) pressure *= 51.7149;   //torr (mmHg)
+    else if(units == INHG) pressure *= 2.03602;   //inHg (inch of mercury)
+    else if(units == ATM)  pressure *= 0.06805;   //atm (atmosphere)
+    else if(units == BAR)  pressure *= 0.06895;   //bar
     return pressure;
 }
