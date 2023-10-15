@@ -221,18 +221,17 @@ class Transducer : public Device {
         float ret = -1;
         if (!_invert) {
             if (dir == TransducerDirection::REV) {
-                ret = min_f + (max_f - (_b_offset + (_m_factor * arg_val_f)));
+                ret = min_f + max_f - _b_offset - _m_factor * arg_val_f;
             }
-            ret = _b_offset + (_m_factor * arg_val_f);
+            ret = _b_offset + _m_factor * arg_val_f;
         } else if (arg_val_f) { // NOTE: isn't 0.0 a valid value tho?
             if (dir == TransducerDirection::REV) {
-                ret = min_f + (max_f - (_b_offset + (_m_factor / arg_val_f)));
+                ret = min_f + max_f - _b_offset - _m_factor / arg_val_f;
             }
-            ret = _b_offset + (_m_factor / arg_val_f);
+            ret = _b_offset + _m_factor / arg_val_f;
         } else {
             printf ("Error: unit conversion refused to divide by zero\n");
             ret = min_f;  // Best return given _m_factor/0 would be infinite
-            // NOTE: hmmmm, couldn't -1 be a valid value in some caes?
         }
         return static_cast<HUMAN_T>(ret);
     }
@@ -243,7 +242,7 @@ class Transducer : public Device {
         float max_f = static_cast<float>(human.get_max());
         float ret = -1;
         if (dir == TransducerDirection::REV) {
-            arg_val_f = min_f + (max_f - arg_val_f);
+            arg_val_f = min_f + max_f - arg_val_f;
         }
         if (_invert && (arg_val_f - _b_offset)) {
             ret = _m_factor / (arg_val_f - _b_offset);

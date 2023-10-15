@@ -4,7 +4,6 @@
 #include <DallasTemperature.h>
 #include <Wire.h>
 #include "map.h"
-// #include <SparkFun_MicroPressure.h>
 #include <Preferences.h>
 #include <iostream>
 #include <iomanip>  // For formatting console cout strings
@@ -69,27 +68,26 @@ bool flip_the_screen = true;
     #define sdcard_cs_pin 46    // (bootstrap low) - Output, chip select for SD card controller on SPI bus,
 #endif
 
-// External components needed (pullup/pulldown resistors, and capacitors): (Note: "BB" = On dev breadboards only, "PCB" = On vehicle PCB only)
+// External components needed (pullup/pulldown resistors, capacitors, etc.): (Note: "BB" = On dev breadboards only, "PCB" = On vehicle PCB only)
 // 1. brake_pos_pin: Add 1M-ohm to GND. Allows detecting unconnected sensor or broken connection.
 // 2. onewire_pin: Add 4.7k-ohm to 3.3V. Needed for open collector sensor output, to define logic-high voltage level.
 // 3. tach_pulse_pin, speedo_pulse_pin: (PCB) Add 4.7k-ohm to 3.3V. For open collector sensor outputs. (BB) If no sensor is present: connect 4.7k-ohm to GND instead. Allows sensor detection.
 // 4. neopixel_pin: (PCB) Add 330 ohm in series (between pin and the DataIn pin of the 1st pixel). (BB) Same, but this one is likely optional, e.g. mine works w/o it.  For signal integrity over long wires. 
 // 5. uart_tx_pin: (PCB) Add 22k-ohm to GND. (BB) Connect the 22k-ohm to 3.3V instead. For boot detection of vehicle PCB, so defaults are set appropriately.
 // 6. ADC inputs (mulebatt_pin, pressure_pin, brake_pos_pin, pot_wipe_pin) should have 100nF cap to gnd, tho it works w/o it.
-// 7. Rotary encoder inputs (encoder_a_pin, encoder_b_pin, encoder_sw_pin) should have 10nF to gnd, tho it works w/o it. Pullups to 3.3V (4.7uF is good) are also necessary, but the encoder we're using includes these.
+// 7. encoder_a_pin, encoder_b_pin, encoder_sw_pin: should have 10nF to gnd, tho it should work w/o it. Pullups to 3.3V (4.7k-ohm is good) are also necessary, but the encoder we're using includes these.
 // 8. Resistor dividers are needed for these inputs: starter_pin (16V->3.3V), mulebatt_pin (16V->3.3V), and pressure_pin (5V->3.3V).
-// 9. ign_out_pin, syspower_pin, and starter_pin require pulldown to gnd, this is provided by nfet gate pulldown.
-// 10. gas_pwm_pin should have a series ~680-ohm R going to the servo.
+// 9. ign_out_pin, syspower_pin, starter_pin: require pulldowns to gnd, this is provided by nfet gate pulldown.
+// 10. gas_pwm_pin: should have a series ~680-ohm R going to the servo.
 
 // ESP32-S3 TRM: https://www.espressif.com/sites/default/files/documentation/esp32-s3_technical_reference_manual_en.pdf#dma
 // ESP32-S3 Datasheet: https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf
 // ESP32-S3 has 5 DMA channels in each direction. We would use them for SPI data out to TFT, Neopixel data out, and possibly out to the 3 motor outputs and in from the 4 hotrc channels.
 // DMA works with: RMT, I2S0, I2S1, SPI2, SPI3, ADC, internal RAM, external PSRAM, and a few others (see the TRM)
 // Official pin capabilities: https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/hw-reference/esp32s3/user-guide-devkitc-1.html?highlight=devkitc#user-guide-s3-devkitc-1-v1-1-header-blocks
-// ESP32 pins 34, 35, 36, 39 are input-only (applies to S3?).  ADC ch2 will not work if wifi is enabled
+// ADC ch2 will not work if wifi is enabled
 // Bootstrap pins: Pin 0 must be pulled high, and pins 45 and 46 pulled low during bootup
 // ESP32 errata 3.11: Pin 36 and 39 will be pulled low for ~80ns when "certain RTC peripherals power up"
-// ESP32 internal pullups/downs are ~45k-ohm, details: https://www.esp32.com/viewtopic.php?f=12&t=34831
 // SPI bus page including DMA information: https://docs.espressif.com/projects/esp-idf/en/v4.4/esp32s3/api-reference/peripherals/spi_master.html
 
 #define tft_ledk_pin -1   // Output, optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
@@ -239,18 +237,13 @@ int32_t hotrc_margin_us = 20;  // All [MARGIN] values above are derived from thi
 int32_t hotrc_failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
 int32_t hotrc_failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
 int32_t hotrc_failsafe_pad_us = 10;
-Timer hotrcFailsafeTimer(75000);  // How long to receive failsafe pulse value continuously before recognizing radio is lost. To prevent false positives
-int32_t hotrc_spike_buffer[2][3];
+Timer hotrcFailsafeTimer(15000);  // How long to receive failsafe pulse value continuously before recognizing radio is lost. To prevent false positives
 bool hotrc_radio_lost = true;
-float hotrc_pulse_period_us = 1000000.0 / 50;
-volatile int64_t hotrc_timer_start;
-volatile bool hotrc_sw[4] = { 1, 1, 0, 0 };  // index[2]=CH3, index[3]=CH4 and using [0] and [1] indices for LAST values of ch3 and ch4 respectively
-volatile bool hotrc_sw_event[4];  // First 2 indices are unused.  What a tragic waste
+bool hotrc_sw[4] = { 1, 1, 0, 0 };  // index[2]=CH3, index[3]=CH4 and using [0] and [1] indices for LAST values of ch3 and ch4 respectively
+bool hotrc_sw_event[4];  // First 2 indices are unused.  What a tragic waste
 
 // steering related
 float steer_safe_pc = 72.0; // Steering is slower at high speed. How strong is this effect
-float speedo_safeline_mph;
-//
 float steer_out_pc, steer_safe_adj_pc;
 float steer_right_max_pc = 100.0;
 float steer_right_pc = 100.0;
@@ -258,7 +251,6 @@ float steer_stop_pc = 0.0;
 float steer_left_pc = -100.0;
 float steer_left_min_pc = -100.0;
 float steer_margin_pc = 2.4;
-// float steer_pulse_safe_us = 0;
 float steer_pulse_left_min_us = 500;   // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
 float steer_pulse_left_us = 670;       // Steering pulsewidth corresponding to full-speed right steering (in us). Default setting for jaguar is max 670us
 float steer_pulse_stop_us = 1500;      // Steering pulsewidth corresponding to zero steering motor movement (in us)
@@ -277,7 +269,6 @@ float pressure_target_psi;
 // brake actuator motor related
 Timer brakeIntervalTimer(100000);             // How much time between increasing brake force during auto-stop if car still moving?
 int32_t brake_increment_interval_us = 100000; // How often to apply increment during auto-stopping (in us)
-
 float brake_out_pc;
 float brake_retract_max_pc = 100.0; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
 float brake_retract_pc = 100.0;     // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
@@ -285,7 +276,6 @@ float brake_stop_pc = 0.0;          // Brake pulsewidth corresponding to center 
 float brake_extend_pc = -100.0;     // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
 float brake_extend_min_pc = -100.0; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
 float brake_margin_pc = 2.4;        // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated
-
 float brake_pulse_extend_min_us = 670; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
 float brake_pulse_extend_us = 670;     // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
 float brake_pulse_stop_us = 1500;       // Brake pulsewidth corresponding to center point where motor movement stops (in us)
@@ -330,7 +320,6 @@ Tachometer tachometer(tach_pulse_pin);
 float tach_target_rpm, tach_adjustpoint_rpm;
 float tach_govern_rpm;        // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
 float tach_margin_rpm = 15.0; // Margin of error for checking engine rpm (in rpm)
-// float tach_idle_rpm = 700.0; // Min value for engine hz, corresponding to low idle (in rpm) Note, this value is itself highly variable, dependent on engine temperature
 float tach_idle_abs_min_rpm = 450.0;  // Low limit of idle speed adjustability
 float tach_idle_hot_min_rpm = 550.0;  // Idle speed at nom_max engine temp
 float tach_idle_cold_max_rpm = 775.0; // Idle speed at nom_min engine temp
@@ -711,8 +700,8 @@ void detect_errors() {
 float degF_to_K(float degF) {
     return 0.556 * (degF - 32) + 273.15;
 }
-// Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
 
+// Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
 float get_massairflow(float map = NAN, float airflow = NAN, float ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
     TemperatureSensor* sensor = temperature_sensor_manager.get_sensor(sensor_location::ambient);
     float T = degF_to_K((ambient == NAN) ? sensor->get_temperature() : ambient);  // in K
@@ -726,20 +715,12 @@ float maf_gps;  // Mass airflow in grams per second
 float maf_min_gps = 0.0;
 float maf_max_gps = get_massairflow(map_sensor.get_max_psi(), airflow_sensor.get_max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
 
-// // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
-// float calc_maf(float map_psi, float airflow_mph, float ambient_f) {
-//     float T = degF_to_K(ambient_f);  // in K
-//     float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
-//     float v = 0.447 * airflow_mph;  // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
-//     float A = 0.0020268;  // in m2    1.0 in2 * pi * 0.00064516 m2/in2
-//     float P = 6894.76 * map_psi;  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
-//     return 1000.0 * v * A * P / (R * T);  // in g/s   (g/kg * m/s * m2 * J/m3) / (J/(kg*K) * K) = g/s
-
-// }
-// float get_massairflow() {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
+// float get_massairflow(float map = NAN, float airflow = NAN, float ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
 //     TemperatureSensor* sensor = temperature_sensor_manager.get_sensor(sensor_location::ambient);
-//     return calc_maf(map_sensor.get_filtered_value(), airflow_sensor.get_filtered_value(), sensor->get_temperature());
+//     float T = degF_to_K(std::isnan(ambient) ? sensor->get_temperature() : ambient);  // in K
+//     float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
+//     float v = 0.447 * std::isnan(airflow) ? airflow_sensor.get_filtered_value() : airflow; // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
+//     float A = 0.0020268;  // in m2    1.0 in2 * pi * 0.00064516 m2/in2
+//     float P = 6894.76 * std::isnan(map) ? map_sensor.get_filtered_value() : map;  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
+//     return 1000.0 * v * A * P / (R * T);  // in g/s   (g/kg * m/s * m2 * J/m3) / (J/(kg*K) * K) = g/s
 // }
-// float maf_gps;  // Mass airflow in grams per second
-// float maf_min_gps = 0.0;
-// float maf_max_gps = calc_maf(map_sensor.get_max_psi(), airflow_sensor.get_max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
