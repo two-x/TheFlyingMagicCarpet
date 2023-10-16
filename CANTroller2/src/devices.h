@@ -1264,10 +1264,11 @@ class Simulator {
             }
         }
         
-        bool potmapping(sensor s) { return can_sim(s) && _potmap == s; }
+        bool potmapping(sensor s) { return can_sim(s) && _potmap == s; }  // query if a certain sensor is being potmapped
+        bool potmapping() { return !(_potmap == sensor::none); }  // query if any sensors are being potmapped
+        sensor potmap() { return _potmap; }  // query which sensor is being potmapped
         bool enabled() { return _enabled; }
         bool* enabled_ptr() { return &_enabled; }
-        sensor potmap() { return _potmap; }
 };
 
 class Brake {  // This class wraps all brake activity to provide monitoring functions and coordination
