@@ -161,7 +161,7 @@ int32_t neodesat = 0;  // lets us de/saturate the neopixels
 Potentiometer pot(pot_wipe_pin);
 
 // simulator related
-Simulator simulator(pot);
+Simulator sim(pot);
 bool simulating_last = false;
 Timer simTimer; // NOTE: unused
 int32_t sim_edit_delta = 0;
@@ -347,13 +347,13 @@ float brake_spid_initial_kp = 0.323;                                            
 float brake_spid_initial_ki_hz = 0.000;                                                                      // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
 float brake_spid_initial_kd_s = 0.000;                                                                       // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
 
-QPID brakeQPID(pressure_sensor.get_filtered_value_ptr().get(), &brake_out_pc, &pressure_target_psi,     // input, target, output variable references
+qpid brake_pid(pressure_sensor.get_filtered_value_ptr().get(), &brake_out_pc, &pressure_target_psi,     // input, target, output variable references
                brake_extend_pc, brake_retract_pc,                                                  // output min, max
                brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,                     // Kp, Ki, and Kd tuning constants
-               QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwCondition, QPID::Action::direct,  // settings  // iAwRoundCond, iAwClamp
-               brake_pid_period_us, QPID::Control::timer, QPID::centMode::center, brake_stop_pc); // period, more settings
-               // QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwRound, QPID::Action::direct,  // settings  // iAwRoundCond, iAwClamp
-               // brake_pid_period_us, QPID::Control::timer, QPID::centMode::centerStrict, brake_stop_pc); // period, more settings
+               qpid::pmode_t::ponerr, qpid::dmode_t::donerr, qpid::iawmode_t::iawcond, qpid::dir_t::direct,  // settings  // iAwRoundCond, iawclamp
+               brake_pid_period_us, qpid::control_t::manual, qpid::centmode_t::center, brake_stop_pc); // period, more settings
+               // qpid::pmode_t::ponerr, qpid::dmode_t::donerr, qpid::iawmode_t::iAwRound, qpid::dir_t::direct,  // settings  // iAwRoundCond, iawclamp
+               // brake_pid_period_us, qpid::control_t::manual, qpid::centmode_t::centerStrict, brake_stop_pc); // period, more settings
 
 // Gas : Controls the throttle to achieve the desired intake airflow and engine rpm
 
@@ -367,11 +367,11 @@ float gas_spid_initial_kp = 0.206;    // PID proportional coefficient (gas) How 
 float gas_spid_initial_ki_hz = 0.000; // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
 float gas_spid_initial_kd_s = 0.000;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
 bool gas_open_loop = true;
-QPID gasQPID(tachometer.get_filtered_value_ptr().get(), &gas_pulse_out_us, &tach_target_rpm,                            // input, target, output variable references
+qpid gas_pid(tachometer.get_filtered_value_ptr().get(), &gas_pulse_out_us, &tach_target_rpm,                            // input, target, output variable references
              gas_pulse_cw_open_us, gas_pulse_ccw_closed_us,                                                             // output min, max
              gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s,                                        // Kp, Ki, and Kd tuning constants
-             QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwClamp, QPID::Action::reverse,              // settings
-             gas_pid_period_us, (gas_open_loop) ? QPID::Control::manual : QPID::Control::timer, QPID::centMode::range); // period, more settings
+             qpid::pmode_t::ponerr, qpid::dmode_t::donerr, qpid::iawmode_t::iawclamp, qpid::dir_t::reverse,              // settings
+             gas_pid_period_us, (gas_open_loop) ? qpid::control_t::manual : qpid::control_t::manual, qpid::centmode_t::range); // period, more settings
 
 // Cruise : is active on demand while driving.
 // Pick from 3 different styles of adjusting cruise setpoint. I prefer throttle_delta.
@@ -393,12 +393,12 @@ Timer cruisePidTimer(cruise_pid_period_us);                                     
 float cruise_spid_initial_kp = 5.57;                                                                         // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
 float cruise_spid_initial_ki_hz = 0.000;                                                                     // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
 float cruise_spid_initial_kd_s = 0.000;                                                                      // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
-QPID cruiseQPID(speedometer.get_filtered_value_ptr().get(), &tach_target_rpm, &speedo_target_mph,            // input, target, output variable references
-                throttle.get_idlespeed(), tach_govern_rpm,                                                   // output min, max
+qpid cruise_pid(speedometer.get_filtered_value_ptr().get(), &tach_target_rpm, &speedo_target_mph,            // input, target, output variable references
+                throttle.idlespeed(), tach_govern_rpm,                                                   // output min, max
                 cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s,                 // Kp, Ki, and Kd tuning constants
-                QPID::pMode::pOnError, QPID::dMode::dOnError, QPID::iAwMode::iAwRound, QPID::Action::direct, // settings
-                cruise_pid_period_us, QPID::Control::timer, QPID::centMode::range);
-// QPID::centMode::centerStrict, (tach_govern_rpm + tach_idle_rpm)/2);  // period, more settings
+                qpid::pmode_t::ponerr, qpid::dmode_t::donerr, qpid::iawmode_t::iawround, qpid::dir_t::direct, // settings
+                cruise_pid_period_us, qpid::control_t::manual, qpid::centmode_t::range);
+// qpid::centmode::centerStrict, (tach_govern_rpm + tach_idle_rpm)/2);  // period, more settings
 
 // Trouble codes
 uint32_t err_timeout_us = 175000;
@@ -408,10 +408,10 @@ bool err_temp_engine, err_temp_wheel;
 // Sensor related trouble - this all should be moved to devices.h
 enum err_types_sensor { LOST, RANGE, num_err_types };
 enum err_sensors { e_hrchorz, e_hrcvert, e_hrcch3, e_hrcch4, e_pressure, e_brkpos, e_speedo, e_tach, e_airflow, e_mapsens, e_temps, e_battery, e_starter, e_basicsw, e_num_sensors };
-// enum class SimOption : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, battery, ignition, basicsw, cruisesw, starter, syspower };  // , num_sensors, err_flag };
+// enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, battery, ignition, basicsw, cruisesw, starter, syspower };  // , num_sensors, err_flag };
 
 bool err_sensor_alarm[num_err_types] = { false, false };  // [LOST/RANGE]
-bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_battery/e_basicsw/e_starter]   // SimOption::opt_t::num_sensors]
+bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_battery/e_basicsw/e_starter]   // sensor::opt_t::num_sensors]
 
 void hotrc_toggle_update(int8_t chan) {                                                            //
     hotrc_us[chan][RAW] = hotrc_rmt[chan].readPulseWidth(true);
@@ -439,8 +439,8 @@ void hotrc_calc_params() {
 }
 void calc_governor(void) {
     tach_govern_rpm = map(gas_governor_pc, 0.0, 100.0, 0.0, tachometer.get_redline_rpm()); // Create an artificially reduced maximum for the engine speed
-    cruiseQPID.SetOutputLimits(throttle.get_idlespeed(), tach_govern_rpm);
-    gas_pulse_govern_us = map(tach_govern_rpm, throttle.get_idlespeed(), tachometer.get_redline_rpm(), gas_pulse_ccw_closed_us, gas_pulse_cw_open_us); // Governor must scale the pulse range proportionally
+    cruise_pid.set_outlimits(throttle.idlespeed(), tach_govern_rpm);
+    gas_pulse_govern_us = map(tach_govern_rpm, throttle.idlespeed(), tachometer.get_redline_rpm(), gas_pulse_ccw_closed_us, gas_pulse_cw_open_us); // Governor must scale the pulse range proportionally
     speedo_govern_mph = map(gas_governor_pc, 0.0, 100.0, 0.0, speedometer.get_redline_mph());                                                                                     // Governor must scale the top vehicle speed proportionally
 }
 float steer_safe(float endpoint) {
@@ -475,7 +475,7 @@ void update_temperature_sensors(void *parameter) {
     while (true) {
         if (!dont_take_temperatures)
             temperature_sensor_manager.update_temperatures();
-        if (simulator.can_simulate(SimOption::engtemp) && simulator.get_pot_overload() == SimOption::engtemp) {
+        if (sim.potmapping(sensor::engtemp)) {
             TemperatureSensor *engine_sensor = temperature_sensor_manager.get_sensor(sensor_location::engine);
             if (engine_sensor != nullptr) {
                 engine_sensor->set_temperature(pot.mapToRange(temp_sensor_min_f, temp_sensor_max_f));
@@ -487,10 +487,10 @@ void update_temperature_sensors(void *parameter) {
 
 void set_board_defaults(bool devboard) {  // true for dev boards, false for printed board (on the car)
     if (devboard) {
-        simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), 1));
-        simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), 1));
-        simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), 1));
-        simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), 1));
+        sim.set_can_sim(sensor::pressure, adj_bool(sim.can_sim(sensor::pressure), 1));
+        sim.set_can_sim(sensor::brkpos, adj_bool(sim.can_sim(sensor::brkpos), 1));
+        sim.set_can_sim(sensor::tach, adj_bool(sim.can_sim(sensor::tach), 1));
+        sim.set_can_sim(sensor::speedo, adj_bool(sim.can_sim(sensor::speedo), 1));
     }
     else {
         console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
@@ -508,7 +508,7 @@ void starter_update () {
             starter_drive = false;
             set_pin (starter_pin, INPUT_PULLDOWN);  // we never assert low on the pin, just set pin as input and let the pulldown bring it low
         }
-        if (!starter_drive && (starter_request != st_on) && !simulator.simulating(SimOption::starter)) {  // If we haven't been and shouldn't be driving, and not simulating
+        if (!starter_drive && (starter_request != st_on) && !sim.simulating(sensor::starter)) {  // If we haven't been and shouldn't be driving, and not simulating
             do {
                 starter = digitalRead(starter_pin);  // then read the pin, starter variable will store if starter is turned on externally
             } while (starter != digitalRead(starter_pin)); // starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
@@ -704,11 +704,11 @@ float degF_to_K(float degF) {
 // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
 float get_massairflow(float map = NAN, float airflow = NAN, float ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
     TemperatureSensor* sensor = temperature_sensor_manager.get_sensor(sensor_location::ambient);
-    float T = degF_to_K((ambient == NAN) ? sensor->get_temperature() : ambient);  // in K
+    float T = degF_to_K(ambient);  // in K
     float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
-    float v = 0.447 * (airflow == NAN) ? airflow_sensor.get_filtered_value() : airflow; // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
+    float v = 0.447 * airflow; // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
     float A = 0.0020268;  // in m2    1.0 in2 * pi * 0.00064516 m2/in2
-    float P = 6894.76 * (map == NAN) ? map_sensor.get_filtered_value() : map;  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
+    float P = 6894.76 * map;  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
     return 1000.0 * v * A * P / (R * T);  // in g/s   (g/kg * m/s * m2 * J/m3) / (J/(kg*K) * K) = g/s
 }
 float maf_gps;  // Mass airflow in grams per second
@@ -719,7 +719,7 @@ float maf_max_gps = get_massairflow(map_sensor.get_max_psi(), airflow_sensor.get
 //     TemperatureSensor* sensor = temperature_sensor_manager.get_sensor(sensor_location::ambient);
 //     float T = degF_to_K(std::isnan(ambient) ? sensor->get_temperature() : ambient);  // in K
 //     float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
-//     float v = 0.447 * std::isnan(airflow) ? airflow_sensor.get_filtered_value() : airflow; // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
+//     float v = 0.447 * (std::isnan(airflow) ? airflow_sensor.get_filtered_value() : airflow); // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
 //     float A = 0.0020268;  // in m2    1.0 in2 * pi * 0.00064516 m2/in2
 //     float P = 6894.76 * std::isnan(map) ? map_sensor.get_filtered_value() : map;  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
 //     return 1000.0 * v * A * P / (R * T);  // in g/s   (g/kg * m/s * m2 * J/m3) / (J/(kg*K) * K) = g/s
