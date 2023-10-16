@@ -91,49 +91,49 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     encoder.setup();
 
     printf("Brake pressure sensor.. ");
-    pressure_sensor.setup();
+    pressure.setup();
     printf("done\nBrake position sensor.. ");
-    brkpos_sensor.setup();
+    brakepos.setup();
     printf("done\nVehicle battery sense.. ");
-    battery_sensor.setup();
+    mulebatt.setup();
     printf("done\nTachometer.. ");
-    tachometer.setup();
+    tach.setup();
     printf("done\nSpeedometer.. ");
-    speedometer.setup();
+    speedo.setup();
     printf("done..\n");
 
     printf ("Init i2c and i2c-enabled devices.."); delay(1);  // Attempt to force print to happen before init
     i2c.init();
-    airflow_sensor.setup(); // must be done after i2c is started
-    map_sensor.setup();
+    airflow.setup(); // must be done after i2c is started
+    mapsens.setup();
 
     printf("Simulator setup..\n");
-    sim.register_device(sensor::pressure, pressure_sensor, pressure_sensor.source());
-    sim.register_device(sensor::brkpos, brkpos_sensor, brkpos_sensor.source());
-    sim.register_device(sensor::airflow, airflow_sensor, airflow_sensor.source());
-    sim.register_device(sensor::mapsens, map_sensor, map_sensor.source());
-    sim.register_device(sensor::tach, tachometer, tachometer.source());
-    sim.register_device(sensor::speedo, speedometer, speedometer.source());
+    sim.register_device(sensor::pressure, pressure, pressure.source());
+    sim.register_device(sensor::brkpos, brakepos, brakepos.source());
+    sim.register_device(sensor::airflow, airflow, airflow.source());
+    sim.register_device(sensor::mapsens, mapsens, mapsens.source());
+    sim.register_device(sensor::tach, tach, tach.source());
+    sim.register_device(sensor::speedo, speedo, speedo.source());
 
     printf ("Configure timers for PWM out..\n");
     ESP32PWM::allocateTimer(0);
 	ESP32PWM::allocateTimer(1);
 	ESP32PWM::allocateTimer(2);
 	ESP32PWM::allocateTimer(3);
-	brake_servo.setPeriodHertz(50);
+	brakemotor.setPeriodHertz(50);
     gas_servo.setPeriodHertz(60);
-	steer_servo.setPeriodHertz(50);
+	steermotor.setPeriodHertz(50);
 
-    brake_servo.attach (brake_pwm_pin, brake_pulse_extend_us, brake_pulse_retract_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
-    steer_servo.attach (steer_pwm_pin, steer_pulse_left_us, steer_pulse_right_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
+    brakemotor.attach (brake_pwm_pin, brake_pulse_extend_us, brake_pulse_retract_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
+    steermotor.attach (steer_pwm_pin, steer_pulse_left_us, steer_pulse_right_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
     gas_servo.attach (gas_pwm_pin, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     // Servo() argument 2 is channel (0-15) of the esp timer (?). set to Servo::CHANNEL_NOT_ATTACHED to auto grab a channel
     // gas_servo.setup();
     // gas_servo.set_native_limits();  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
 
-    temperature_sensor_manager.setup();  // Onewire bus and temp sensors
+    temp_manager.setup();  // Onewire bus and temp sensors
     
-    throttle.setup(temperature_sensor_manager.get_sensor(sensor_location::engine));
+    throttle.setup(temp_manager.get_sensor(sensor_location::engine));
     // Create a new task that runs the update_temperature_sensors function
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);
     
@@ -205,23 +205,23 @@ void loop() {
     starter_update();  // Runs starter bidirectional handler
     encoder.update();  // Read encoder input signals
     pot.update();
-    brkpos_sensor.update();  // Brake position
+    brakepos.update();  // Brake position
     
-    tachometer.update();  // Tach
-    throttle.push_tach_reading(tachometer.human(), tachometer.last_read_time());
+    tach.update();  // Tach
+    throttle.push_tach_reading(tach.human(), tach.last_read_time());
     
     if (i2cReadTimer.expireset()) {
         // ++i2creadsensor %= num_i2csensors;
         // if (i2creadsensor == AIRFLOW) 
-        airflow_sensor.update();  // Airflow sensor  // takes 900 us (!)
-        // else if (i2creadsensor == MAP) map_sensor.update();  // MAP sensor  // takes 6800 us (!!)
+        airflow.update();  // Airflow sensor  // takes 900 us (!)
+        // else if (i2creadsensor == MAP) mapsens.update();  // MAP sensor  // takes 6800 us (!!)
         maf_gps = get_massairflow();  // Recalculate intake mass airflow
     }
-    map_sensor.update();  // MAP sensor  // takes 6800 us (!!)
+    mapsens.update();  // MAP sensor  // takes 6800 us (!!)
     
-    speedometer.update();  // Speedo
-    pressure_sensor.update();  // Brake pressure
-    battery_sensor.update();
+    speedo.update();  // Speedo
+    pressure.update();  // Brake pressure
+    mulebatt.update();
 
     // Controller handling
     // 1. Handle any toggle button events (ch3 and ch4)
@@ -275,7 +275,7 @@ void loop() {
         if (steer_out_pc >= steer_stop_pc)
             steer_pulse_out_us = map (steer_out_pc, steer_stop_pc, steer_right_pc, steer_pulse_stop_us, steer_pulse_right_us);
         else steer_pulse_out_us = map (steer_out_pc, steer_stop_pc, steer_left_pc, steer_pulse_stop_us, steer_pulse_left_us);
-        steer_servo.writeMicroseconds ((int32_t)steer_pulse_out_us);   // Write steering value to jaguar servo interface
+        steermotor.writeMicroseconds ((int32_t)steer_pulse_out_us);   // Write steering value to jaguar servo interface
     }
     // Brakes - Determine motor output and write it to motor
     if (brakePidTimer.expireset()) {
@@ -291,16 +291,16 @@ void loop() {
             else brake_out_pc = (float)brake_stop_pc;
         }
         else if (park_the_motors) {
-            if (brkpos_sensor.filt() + BrakePositionSensor::margin_in <= BrakePositionSensor::park_in)  // If brake is retracted from park point, extend toward park point, slowing as we approach
-                brake_out_pc = map (brkpos_sensor.filt(), BrakePositionSensor::park_in, BrakePositionSensor::nom_lim_retract_in, brake_stop_pc, brake_extend_pc);
-            else if (brkpos_sensor.filt() - BrakePositionSensor::margin_in >= BrakePositionSensor::park_in)  // If brake is extended from park point, retract toward park point, slowing as we approach
-                brake_out_pc = map (brkpos_sensor.filt(), BrakePositionSensor::park_in, BrakePositionSensor::nom_lim_extend_in, brake_stop_pc, brake_retract_pc);
+            if (brakepos.filt() + BrakePositionSensor::margin_in <= BrakePositionSensor::park_in)  // If brake is retracted from park point, extend toward park point, slowing as we approach
+                brake_out_pc = map (brakepos.filt(), BrakePositionSensor::park_in, BrakePositionSensor::nom_lim_retract_in, brake_stop_pc, brake_extend_pc);
+            else if (brakepos.filt() - BrakePositionSensor::margin_in >= BrakePositionSensor::park_in)  // If brake is extended from park point, retract toward park point, slowing as we approach
+                brake_out_pc = map (brakepos.filt(), BrakePositionSensor::park_in, BrakePositionSensor::nom_lim_extend_in, brake_stop_pc, brake_retract_pc);
         }
         else if (runmode == CAL || runmode == BASIC || runmode == SHUTDOWN) brake_out_pc = (float)brake_stop_pc;
         else {  // First attenuate max power to avoid blowing out the motor like in bm2023, if retracting, as a proportion of position from zeropoint to fully retracted
 
             // To-Do Finish this brake governing calculation
-            // brake_pulse_retract_effective_us = map(brkpos_sensor.filt(), brkpos_sensor.zeropoint(), BrakePositionSensor::abs_min_retract_in, )) {    
+            // brake_pulse_retract_effective_us = map(brakepos.filt(), brakepos.zeropoint(), BrakePositionSensor::abs_min_retract_in, )) {    
             // brake_motor_govern_duty_ratio = 0.25;  // 25% = Max motor duty cycle under load given by datasheet. Results in: 1500 + 0.25 * (2330 - 1500) = 1707.5 us max pulsewidth at position = minimum
             brake_pulse_retract_effective_max_us = brake_pulse_stop_us + brake_motor_govern_duty_pc * (brake_pulse_retract_us - brake_pulse_stop_us);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
 
@@ -309,7 +309,7 @@ void loop() {
         // Step 3 : Fix motor pc value if it's out of range or exceeding positional limits
         if (runmode == CAL && cal_joyvert_brkmotor_mode)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
             brake_out_pc = constrain (brake_out_pc, brake_extend_min_pc, brake_retract_max_pc);  // Constrain to full potential range when calibrating. Caution don't break anything!
-        else if ((brake_out_pc < brake_stop_pc && brkpos_sensor.filt() > BrakePositionSensor::park_in - BrakePositionSensor::margin_in) || (brake_out_pc > brake_stop_pc && brkpos_sensor.filt() < BrakePositionSensor::nom_lim_retract_in + BrakePositionSensor::margin_in))  // If brake is at position limits and we're tring to go further, stop the motor
+        else if ((brake_out_pc < brake_stop_pc && brakepos.filt() > BrakePositionSensor::park_in - BrakePositionSensor::margin_in) || (brake_out_pc > brake_stop_pc && brakepos.filt() < BrakePositionSensor::nom_lim_retract_in + BrakePositionSensor::margin_in))  // If brake is at position limits and we're tring to go further, stop the motor
             brake_out_pc = brake_stop_pc;
         else brake_out_pc = constrain (brake_out_pc, brake_extend_pc, brake_retract_pc);  // Send to the actuator. Refuse to exceed range
 
@@ -320,14 +320,14 @@ void loop() {
 
         // Step 5 : Write to motor
         if (!(runmode == BASIC && !park_the_motors) && !(runmode == CAL && !cal_joyvert_brkmotor_mode) && !(runmode == SHUTDOWN && !shutdown_incomplete)) {
-            brake_servo.writeMicroseconds ((int32_t)brake_pulse_out_us);  // Write result to jaguar servo interface
+            brakemotor.writeMicroseconds ((int32_t)brake_pulse_out_us);  // Write result to jaguar servo interface
         }
     }
     throttle.update();  // Allow idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
 
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
     if (runmode == CRUISE && (cruise_setpoint_mode == pid_suspend_fly) && cruisePidTimer.expireset()) {
-        if (cruise_adjusting) speedo_target_mph = speedometer.filt();
+        if (cruise_adjusting) speedo_target_mph = speedo.filt();
         else {
             cruise_pid.set_outlimits (throttle.idlespeed(), tach_govern_rpm);  // because cruise pid has internal variable for idlespeed which may need updating
             tach_target_rpm = throttle.target();  // tach_target_rpm is pointed to as the output of the cruise pid loop, need to update it before doing pid math
@@ -346,7 +346,7 @@ void loop() {
             else gas_pulse_out_us = map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBTOP], hotrc_pc[VERT][MAX], gas_pulse_ccw_closed_us, gas_pulse_govern_us);  // Actuators still respond and everything, even tho engine is turned off
         }
         else if (runmode == CAL && cal_pot_gasservo_mode)
-            gas_pulse_out_us = map (pot.get(), pot.min(), pot.max(), gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
+            gas_pulse_out_us = map (pot.val(), pot.min(), pot.max(), gas_pulse_ccw_max_us, gas_pulse_cw_min_us);
         else if (runmode == CRUISE && (cruise_setpoint_mode != pid_suspend_fly))
             gas_pulse_out_us = gas_pulse_cruise_us;
         else if (runmode != BASIC) {
@@ -372,7 +372,7 @@ void loop() {
         }
     }
     if (park_the_motors) {  //  When parking motors, IF the timeout expires OR the brake and gas motors are both close enough to the park position, OR runmode has changed THEN stop trying to park the motors
-        bool brake_parked = brkpos_sensor.parked();
+        bool brake_parked = brakepos.parked();
         bool gas_parked = ((gas_pulse_out_us == gas_pulse_ccw_closed_us + gas_pulse_park_slack_us) && gasServoTimer.expired());
         if ((brake_parked && gas_parked) || motorParkTimer.expired() || (runmode != SHUTDOWN && runmode != BASIC))
             park_the_motors = false;
@@ -435,13 +435,13 @@ void loop() {
         else if (dataset_page == PG_CAR) {
             if (selected_value == 2) throttle.set_idlehot(throttle.idlehot(), 0.1*(float)sim_edit_delta);
             else if (selected_value == 3) throttle.set_idlecold(throttle.idlecold(), 0.1*(float)sim_edit_delta);
-            else if (selected_value == 4) adj = adj_val (tachometer.redline_rpm_ptr().get(), 0.1*(float)sim_edit_delta, throttle.idlehigh(), tachometer.max_rpm());
-            else if (selected_value == 5) adj_val (airflow_sensor.max_mph_ptr().get(), 0.01*(float)sim_edit_delta, 0, airflow_sensor.abs_max_mph());
-            else if (selected_value == 6) adj_val (map_sensor.min_psi_ptr().get(), 0.1*(float)sim_edit_delta, map_sensor.abs_min_psi(), map_sensor.abs_max_psi());
-            else if (selected_value == 6) adj_val (map_sensor.max_psi_ptr().get(), 0.1*(float)sim_edit_delta, map_sensor.abs_min_psi(), map_sensor.abs_max_psi());
-            else if (selected_value == 8) adj_val (&speedo_idle_mph, 0.01*(float)sim_edit_delta, 0, speedometer.redline_mph() - 1);
-            else if (selected_value == 9) adj_val (speedometer.redline_mph_ptr().get(), 0.01*(float)sim_edit_delta, speedo_idle_mph, 30);
-            else if (selected_value == 10) adj_val (brkpos_sensor.zeropoint_ptr().get(), 0.001*(float)sim_edit_delta, BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
+            else if (selected_value == 4) adj = adj_val (tach.redline_rpm_ptr(), 0.1*(float)sim_edit_delta, throttle.idlehigh(), tach.max_rpm());
+            else if (selected_value == 5) adj_val (airflow.max_mph_ptr(), 0.01*(float)sim_edit_delta, 0, airflow.abs_max_mph());
+            else if (selected_value == 6) adj_val (mapsens.min_psi_ptr(), 0.1*(float)sim_edit_delta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
+            else if (selected_value == 6) adj_val (mapsens.max_psi_ptr(), 0.1*(float)sim_edit_delta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
+            else if (selected_value == 8) adj_val (&speedo_idle_mph, 0.01*(float)sim_edit_delta, 0, speedo.redline_mph() - 1);
+            else if (selected_value == 9) adj_val (speedo.redline_mph_ptr(), 0.01*(float)sim_edit_delta, speedo_idle_mph, 30);
+            else if (selected_value == 10) adj_val (brakepos.zeropoint_ptr(), 0.001*(float)sim_edit_delta, BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
         }
         else if (dataset_page == PG_PWMS) {
             if (selected_value == 3) adj_val (&steer_pulse_left_us, sim_edit_delta, steer_pulse_left_min_us, steer_pulse_stop_us - 1);
@@ -483,15 +483,15 @@ void loop() {
             if (selected_value == 10) adj_bool (&dont_take_temperatures, sim_edit_delta);
          }
         else if (dataset_page == PG_SIM) {
-            if (selected_value == 0) sim.set_can_sim(sensor::joy, adj_bool(sim.can_sim(sensor::joy), sim_edit_delta));
-            else if (selected_value == 1) sim.set_can_sim(sensor::pressure, adj_bool(sim.can_sim(sensor::pressure), sim_edit_delta));
-            else if (selected_value == 2) sim.set_can_sim(sensor::brkpos, adj_bool(sim.can_sim(sensor::brkpos), sim_edit_delta));
-            else if (selected_value == 3) sim.set_can_sim(sensor::speedo, adj_bool(sim.can_sim(sensor::speedo), sim_edit_delta));
-            else if (selected_value == 4) sim.set_can_sim(sensor::tach, adj_bool(sim.can_sim(sensor::tach), sim_edit_delta));
-            else if (selected_value == 5) sim.set_can_sim(sensor::airflow, adj_bool(sim.can_sim(sensor::airflow), sim_edit_delta));
-            else if (selected_value == 6) sim.set_can_sim(sensor::mapsens, adj_bool(sim.can_sim(sensor::mapsens), sim_edit_delta));
-            // else if (selected_value == 7) sim.set_can_sim(sensor::starter, adj_bool(sim.can_sim(sensor::starter), sim_edit_delta));
-            else if (selected_value == 7) sim.set_can_sim(sensor::basicsw, adj_bool(sim.can_sim(sensor::basicsw), sim_edit_delta));
+            if (selected_value == 0) sim.set_can_sim(sensor::joy, sim_edit_delta);
+            else if (selected_value == 1) sim.set_can_sim(sensor::pressure, sim_edit_delta);
+            else if (selected_value == 2) sim.set_can_sim(sensor::brkpos, sim_edit_delta);
+            else if (selected_value == 3) sim.set_can_sim(sensor::speedo, sim_edit_delta);
+            else if (selected_value == 4) sim.set_can_sim(sensor::tach, sim_edit_delta);
+            else if (selected_value == 5) sim.set_can_sim(sensor::airflow, sim_edit_delta);
+            else if (selected_value == 6) sim.set_can_sim(sensor::mapsens, sim_edit_delta);
+            // else if (selected_value == 7) sim.set_can_sim(sensor::starter, sim_edit_delta);
+            else if (selected_value == 7) sim.set_can_sim(sensor::basicsw, sim_edit_delta);
             else if (selected_value == 8) sim.set_potmap(static_cast<sensor>(adj_val(static_cast<int32_t>(sim.potmap()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));            
             else if (selected_value == 9 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor_mode, sim_edit_delta);
             else if (selected_value == 10 && runmode == CAL) adj_bool (&cal_pot_gasservo_mode, (sim_edit_delta < 0 || cal_pot_gasservo_ready) ? sim_edit_delta : -1);
@@ -516,17 +516,17 @@ void loop() {
         syspower_toggle_request = false;
     }
     if (ignition_toggle_request) {
-        if (ignition && !speedometer.car_stopped()) panic_stop = true;  // if ignition was turned off on HotRC, panic .
+        if (ignition && !speedo.car_stopped()) panic_stop = true;  // if ignition was turned off on HotRC, panic .
         ignition = !ignition;
         write_pin (ign_out_pin, ignition);  // Turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
         ignition_toggle_request = false;  // Make sure this goes after the last comparison
     }
-    if (!speedometer.car_stopped() && !sim.simulating(sensor::joy) && hotrc_radio_lost) panic_stop = true;
+    if (!speedo.car_stopped() && !sim.simulating(sensor::joy) && hotrc_radio_lost) panic_stop = true;
     if (panic_stop && !panic_stop_last) {
         panicTimer.reset();
         if (ignition) ignition_toggle_request = true;  // If panic stop didn't already result from ignition cut, we will cut it. Will lead to shutdown mode and braking
     }
-    else if (speedometer.car_stopped() || panicTimer.expired()) panic_stop = false;  // Cancel panic stop if car is stopped
+    else if (speedo.car_stopped() || panicTimer.expired()) panic_stop = false;  // Cancel panic stop if car is stopped
     panic_stop_last = panic_stop;
 
     neo.heartbeat_update(((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]));  // Update our beating heart

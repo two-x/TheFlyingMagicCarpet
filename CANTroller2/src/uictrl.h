@@ -34,7 +34,7 @@ class Potentiometer {
         VAL_T mapToRange(VAL_T min, VAL_T max) {
             return static_cast<VAL_T>(map(_val, _pc_min, _pc_max, static_cast<float>(min), static_cast<float>(max)));
         }
-        float get() { return _val; }
+        float val() { return _val; }
         float min() { return _pc_min; }
         float max() { return _pc_max; }
 };

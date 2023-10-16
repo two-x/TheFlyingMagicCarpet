@@ -67,11 +67,11 @@ class Param {
     // NOTE: if using external limits, it's (currently) possible to get stale values, since there is no
     //       callback mechanism in place. We could get around this by calling constrain_value() on every
     //       get() call, but that seems like overkill...
-    Param(VALUE_T arg_val, std::shared_ptr<VALUE_T> arg_min, std::shared_ptr<VALUE_T> arg_max) {
+    Param(VALUE_T arg_val, std::shared_ptr<VALUE_T> arg_min_ptr, std::shared_ptr<VALUE_T> arg_max_ptr) {
         _val = std::make_shared<VALUE_T>(arg_val);
         _min = std::make_shared<VALUE_T>();
         _max = std::make_shared<VALUE_T>();
-        set_limits(arg_min, arg_max);
+        set_limits(arg_min_ptr, arg_max_ptr);
         _last = *_val;
     } 
 
@@ -84,12 +84,12 @@ class Param {
             constrain_value();
         }
     }
-    void set_limits(std::shared_ptr<VALUE_T> arg_min, std::shared_ptr<VALUE_T> arg_max) { // Use if min/max are external
-        if (arg_min.get() > arg_max.get())
+    void set_limits(std::shared_ptr<VALUE_T> arg_min_ptr, std::shared_ptr<VALUE_T> arg_max_ptr) { // Use if min/max are external
+        if (arg_min_ptr.get() > arg_max_ptr.get())
             printf("Error: *min is > *max\n");
         else {
-            _min = arg_min;
-            _max = arg_max;
+            _min = arg_min_ptr;
+            _max = arg_max_ptr;
             constrain_value();
         }
     }
@@ -109,13 +109,15 @@ class Param {
         return set(*_val + arg_add);
     }
 
-    VALUE_T get() { return *_val; }  // shouldn't need this?
     VALUE_T val() { return *_val; }
     VALUE_T min() { return *_min; }
     VALUE_T max() { return *_max; }
-    std::shared_ptr<VALUE_T> ptr() { return _val; }
-    std::shared_ptr<VALUE_T> min_ptr() { return _min; }
-    std::shared_ptr<VALUE_T> max_ptr() { return _max; }
+    VALUE_T* ptr() { return _val.get(); }
+    VALUE_T* min_ptr() { return _min.get(); }
+    VALUE_T* max_ptr() { return _max.get(); }
+    std::shared_ptr<VALUE_T> ptr_obj() { return _val; }
+    std::shared_ptr<VALUE_T> min_ptr_obj() { return _min; }
+    std::shared_ptr<VALUE_T> max_ptr_obj() { return _max; }
     VALUE_T last() { return _last; } // NOTE: currently unused, do we still need this for drawing purposes?
     bool saturated() { return _saturated; }
 };
@@ -361,8 +363,10 @@ class Transducer : public Device {
     NATIVE_T max_native() { return _native.max(); }
     HUMAN_T min_human() { return _human.min(); }
     HUMAN_T max_human() { return _human.max(); }
-    std::shared_ptr<NATIVE_T> native_ptr() { return _native.ptr(); }
-    std::shared_ptr<HUMAN_T> human_ptr() { return _human.ptr(); }
+    NATIVE_T* native_ptr() { return _native.ptr(); }
+    HUMAN_T* human_ptr() { return _human.ptr(); }
+    std::shared_ptr<NATIVE_T> native_ptr_obj() { return _native.ptr_obj(); }
+    std::shared_ptr<HUMAN_T> human_ptr_obj() { return _human.ptr_obj(); }
 };
 
 // Sensor class - is a base class for control system sensors, ie anything that measures real world data or electrical signals 
@@ -393,7 +397,7 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
         this->_val_filt.set(this->_human.val()); // don't filter the value we get from the pot, the pot output is already filtered
     }
 
-    virtual void handle_set_human_limits() { _val_filt.set_limits(this->_human.min_ptr(), this->_human.max_ptr()); } // make sure our filtered value has the same limits as our regular value
+    virtual void handle_set_human_limits() { _val_filt.set_limits(this->_human.min_ptr_obj(), this->_human.max_ptr_obj()); } // make sure our filtered value has the same limits as our regular value
     virtual void handle_mode_change() { if (this->_source == ControllerMode::PIN) _should_filter = false; } // if we just switched to pin input, the old filtered value is not valid
 
   public:
@@ -401,7 +405,8 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
     void set_ema_alpha(float arg_alpha) { _ema_alpha = arg_alpha; }
     float ema_alpha() { return _ema_alpha; }
     HUMAN_T filt() { return _val_filt.val(); }
-    std::shared_ptr<HUMAN_T> filt_ptr() { return _val_filt.ptr(); } // NOTE: should just be public?
+    HUMAN_T* filt_ptr() { return _val_filt.ptr(); }
+    std::shared_ptr<HUMAN_T> filt_ptr_obj() { return _val_filt.ptr_obj(); } // NOTE: should just be public?
 };
 
 // Base class for sensors which communicate using i2c.
@@ -429,8 +434,8 @@ class I2CSensor : public Sensor<float,float> {
         }
     
         virtual void handle_set_human_limits() {
-            _native.set_limits(_human.min_ptr(), _human.max_ptr());
-            _val_filt.set_limits(_human.min_ptr(), _human.max_ptr());
+            _native.set_limits(_human.min_ptr_obj(), _human.max_ptr_obj());  // Soren: why are the arguments _human not _native?
+            _val_filt.set_limits(_human.min_ptr_obj(), _human.max_ptr_obj());
         }
     public:
         I2CSensor(I2C &i2c_arg, uint8_t i2c_address_arg) : Sensor<float,float>(-1), _i2c(i2c_arg), _i2c_address(i2c_address_arg) { set_can_source(ControllerMode::PIN, true); }
@@ -485,7 +490,8 @@ class AirflowSensor : public I2CSensor {
         float min_mph() { return _human.min(); }
         float max_mph() { return _human.max(); }
         float abs_max_mph() { return _abs_max_mph; }
-        std::shared_ptr<float> max_mph_ptr() { return _human.max_ptr(); }
+        float* max_mph_ptr() { return _human.max_ptr(); }
+        std::shared_ptr<float> max_mph_ptr_obj() { return _human.max_ptr_obj(); }
 };
 
 // MAPSensor measures the air pressure of the engine manifold in PSI. It communicates with the external sensor using i2c.
@@ -539,8 +545,10 @@ class MAPSensor : public I2CSensor {
         float max_psi() { return _human.max(); }
         float abs_min_psi() { return _abs_min_psi; }
         float abs_max_psi() { return _abs_max_psi; }
-        std::shared_ptr<float> min_psi_ptr() { return _human.min_ptr(); }
-        std::shared_ptr<float> max_psi_ptr() { return _human.max_ptr(); }
+        float* min_psi_ptr() { return _human.min_ptr(); }
+        float* max_psi_ptr() { return _human.max_ptr(); }
+        std::shared_ptr<float> min_psi_ptr_obj() { return _human.min_ptr_obj(); }
+        std::shared_ptr<float> max_psi_ptr_obj() { return _human.max_ptr_obj(); }
 };
 
 // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
@@ -652,7 +660,8 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         float park_position() { return park_in; }
         float margin() { return margin_in; }
         float zeropoint() { return *_zeropoint; }
-        std::shared_ptr<float> zeropoint_ptr() { return _zeropoint; }
+        float* zeropoint_ptr() { return _zeropoint.get(); }
+        std::shared_ptr<float> zeropoint_ptr_obj() { return _zeropoint; }
 };
 
 // class PulseSensor are hall-monitor sensors where the value is based on magnetic pulse timing of a rotational source (eg tachometer, speedometer)
@@ -743,7 +752,8 @@ class Tachometer : public PulseSensor<float> {
         bool engine_stopped() { return stopped(); }
         float redline_rpm() { return _human.max(); }
         float max_rpm() { return _max_rpm; }
-        std::shared_ptr<float> redline_rpm_ptr() { return _human.max_ptr(); }
+        float* redline_rpm_ptr() { return _human.max_ptr(); }
+        std::shared_ptr<float> redline_rpm_ptr_obj() { return _human.max_ptr_obj(); }
 };
 
 // Speedometer represents a magnetic pulse measurement of the enginge rotation.
@@ -775,7 +785,8 @@ class Speedometer : public PulseSensor<float> {
         bool car_stopped() { return stopped(); }
         float redline_mph() { return _human.max(); }
         float max_mph() { return _max_mph; }
-        std::shared_ptr<float> redline_mph_ptr() { return _human.max_ptr(); }
+        float* redline_mph_ptr() { return _human.max_ptr(); }
+        std::shared_ptr<float> redline_mph_ptr_obj() { return _human.max_ptr_obj(); }
 };
 
 class HotrcManager {
@@ -784,9 +795,9 @@ class HotrcManager {
     int32_t spike_cliff, spike_length, this_delta, interpolated_slope, loopindex, previndex;
     int32_t prespike_index = -1;
     int32_t index = 1;  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
-    int32_t depth = 9;  // Longest spike the filter can detect
-    int32_t filt_history[9];  // Values after filtering.  It didn't accept filt_history[depth] - wtf
-    int32_t raw_history[9];  // Copies of the values read (don't need separate buffer, but useful to debug the filter)
+    static const int32_t depth = 9;  // more depth will reject longer spikes at the expense of controller delay
+    int32_t filt_history[depth];  // Values after filtering.
+    int32_t raw_history[depth];  // Copies of the values read (don't need separate buffer, but useful to debug the filter)
   public:
     HotrcManager (int32_t spike_threshold) { spike_cliff = spike_threshold; }
     // Spike filter pushes new hotrc readings into a LIFO ring buffer, replaces any well-defined spikes with values 
@@ -823,9 +834,8 @@ class HotrcManager {
         if (!spike_length) return;  // Two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
         interpolated_slope = (endspike_val - filt_history[prespike_index]) / spike_length;
         loopindex = 0;
-        while (++loopindex <= spike_length) {
+        while (++loopindex <= spike_length)
             filt_history[(prespike_index + loopindex) % depth] = filt_history[prespike_index] + loopindex * interpolated_slope;
-        }
     }
     int32_t next_rawval () { return raw_history[index]; }  // helps to debug the filter from outside the class
 };
@@ -1063,7 +1073,7 @@ class OutToggle : public Toggle {
 
 // This enum class represent the components which can be simulated (sensor). It's a uint8_t type under the covers, so it can be used as an index
 typedef uint8_t opt_t;
-enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, battery, starter, basicsw };  //, ignition, syspower };  // , num_sensors, err_flag };
+enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, mulebatt, starter, basicsw };  //, ignition, syspower };  // , num_sensors, err_flag };
 
 // Simulator manages the ControllerMode handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
 // NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use ControllerModes,
@@ -1092,7 +1102,7 @@ class Simulator {
         // static constexpr bool initial_sim_ignition = false;  // Ignition cannot be simulated as its source is not external
         static constexpr bool initial_sim_airflow = false;
         static constexpr bool initial_sim_mapsens = false;
-        static constexpr bool initial_sim_battery = false;
+        static constexpr bool initial_sim_mulebatt = false;
         static constexpr bool initial_sim_engtemp = false;
 
         Simulator(Potentiometer& pot_arg, sensor potmap_arg=sensor::none) : _pot(pot_arg) {
@@ -1108,7 +1118,7 @@ class Simulator {
             // set_can_sim(sensor::ignition, initial_sim_ignition);  // Ignition cannot be simulated as its source is not external
             set_can_sim(sensor::airflow, initial_sim_airflow);
             set_can_sim(sensor::mapsens, initial_sim_mapsens);
-            set_can_sim(sensor::battery, initial_sim_battery);
+            set_can_sim(sensor::mulebatt, initial_sim_mulebatt);
             set_can_sim(sensor::engtemp, initial_sim_engtemp);
             set_potmap(potmap_arg); // set initial pot map
         }
@@ -1158,18 +1168,18 @@ class Simulator {
         }
 
         // check if a componenet is currently being simulated (by either the touchscreen or the pot)
-        bool simulating(sensor option) {
-            return can_sim(option) && (_enabled || _potmap == option);
+        bool simulating(sensor arg_sensor) {
+            return can_sim(arg_sensor) && (_enabled || _potmap == arg_sensor);
         }
 
         // associate a Device and a given fall-back ControllerMode with a sensor
-        void register_device(sensor option, Device &d, ControllerMode default_mode) {
+        void register_device(sensor arg_sensor, Device &d, ControllerMode default_mode) {
             bool can_sim = false; // by default, disable simulation for this component
-            auto kv = _devices.find(option); // look for the component
+            auto kv = _devices.find(arg_sensor); // look for the component
             if (kv != _devices.end()) {
                 can_sim = std::get<0>(kv->second); // if an entry for the component already existed, preserve its simulatability status
                 if (can_sim) { // if simulability has already been enabled...
-                    if (option == _potmap) { // ...and the pot is supposed to map to this component...
+                    if (arg_sensor == _potmap) { // ...and the pot is supposed to map to this component...
                         d.set_source(ControllerMode::POT); // ...then set the input source for the associated Device to read from the pot
                     } else if (_enabled) { // ...and the pot isn't mapping to this component, but the simulator is running...
                         d.set_source(ControllerMode::TOUCH); // ...then set the input source for the associated Device to read from the touchscreen
@@ -1179,12 +1189,12 @@ class Simulator {
             if (d.can_source(ControllerMode::POT)) {
                 d.attach_pot(_pot); // if this device can be mapped from the pot, connect it to pot input
             }
-            _devices[option] = simulable_t(can_sim, &d, default_mode); // store info for this component
+            _devices[arg_sensor] = simulable_t(can_sim, &d, default_mode); // store info for this component
         }
 
         // check if a component can be simulated (by either the touchscreen or the pot)
-        bool can_sim(sensor option) {
-            auto kv = _devices.find(option); // look for the component
+        bool can_sim(sensor arg_sensor) {
+            auto kv = _devices.find(arg_sensor); // look for the component
             if (kv != _devices.end()) {
                 return std::get<0>(kv->second); // if it exists, check the simulability status
             }
@@ -1192,8 +1202,10 @@ class Simulator {
         }
 
         // set simulatability status for a component
-        void set_can_sim(sensor option, bool can_sim) {
-            auto kv = _devices.find(option); // look for component
+        void set_can_sim(sensor arg_sensor, int32_t can_sim) { set_can_sim(arg_sensor, (can_sim > 0)); }  // allows interpreting -1 as 0, convenient for our tuner etc.
+        
+        void set_can_sim(sensor arg_sensor, bool can_sim) {
+            auto kv = _devices.find(arg_sensor); // look for component
             if (kv != _devices.end()) { // if an entry for this component already exists, check if the new simulatability status is different from the old
                 bool old_can_sim = std::get<0>(kv->second);
                 if (can_sim != old_can_sim) { // if the simulation status has changed, we need to update the input source for the component
@@ -1202,7 +1214,7 @@ class Simulator {
                     if (d != nullptr) { // if there is no associated Device with this component then input handling is done in the main code
                         default_mode = std::get<2>(kv->second); // preserve the stored default controller mode
                         if (can_sim) { // if we just enabled simulatability...
-                            if (option == _potmap) { // ...and the pot is supposed to map to this component...
+                            if (arg_sensor == _potmap) { // ...and the pot is supposed to map to this component...
                                     d->set_source(ControllerMode::POT); // ...then set the input source for the associated Device to read from the pot
                             } else if (_enabled) { // ...and the pot isn't mapping to this component, but the simulator is running...
                                     d->set_source(ControllerMode::TOUCH); // ...then set the input source for the associated Device to read from the touchscreen
@@ -1214,13 +1226,13 @@ class Simulator {
                     kv->second = simulable_t(can_sim, d, default_mode); // update the entry with the new simulatability status
                 }
             } else {
-                _devices[option] = simulable_t(can_sim, nullptr, ControllerMode::UNDEF); // add a new entry with the simulatability status for this component
+                _devices[arg_sensor] = simulable_t(can_sim, nullptr, ControllerMode::UNDEF); // add a new entry with the simulatability status for this component
             }
         }
 
         // set the component to be overridden by the pot (the pot can only override one component at a time)
-        void set_potmap(sensor option) {
-            if (option != _potmap) { // if we're mapping to a different component, we need to reset the input source for the old one
+        void set_potmap(sensor arg_sensor) {
+            if (arg_sensor != _potmap) { // if we're mapping to a different component, we need to reset the input source for the old one
                 auto kv = _devices.find(_potmap);
                 if (kv != _devices.end()) {
                     Device *d = std::get<1>(kv->second);
@@ -1234,7 +1246,7 @@ class Simulator {
                         }
                     } // ...else this component is a boolean, and input source handling is done elsewhere
                 }
-                kv = _devices.find(option); // we need to set the input source of the newly-overridden component
+                kv = _devices.find(arg_sensor); // we need to set the input source of the newly-overridden component
                 if (kv != _devices.end()) {
                     Device *d = std::get<1>(kv->second);
                     if (d != nullptr ) { // if  we're mapping to a component with an associated device, we need to change the input source to the pot
@@ -1244,11 +1256,11 @@ class Simulator {
                                 d->set_source(ControllerMode::POT); // ...then set its input source to the pot
                             }
                         } else {
-                            printf("invalid pot map selected: %d/n", option);
+                            printf("invalid pot map selected: %d/n", arg_sensor);
                         }
                     }
                 }
-                _potmap = option;
+                _potmap = arg_sensor;
             }
         }
         

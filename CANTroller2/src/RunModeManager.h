@@ -52,7 +52,7 @@ private:
     runmodes modeChanger() {
         if (basicmodesw) _currentMode = BASIC;  // if basicmode switch on --> Basic Mode
         else if ((_currentMode != CAL) && (panic_stop || !ignition)) _currentMode = SHUTDOWN;
-        else if ((_currentMode != CAL) && tachometer.engine_stopped()) _currentMode = STALL;;  // otherwise if engine not running --> Stall Mode
+        else if ((_currentMode != CAL) && tach.engine_stopped()) _currentMode = STALL;;  // otherwise if engine not running --> Stall Mode
         we_just_switched_modes = (_currentMode != _oldMode);  // currentMode should not be changed after this point in loop
         if (we_just_switched_modes) {
             disp_runmode_dirty = true;
@@ -83,7 +83,7 @@ private:
             motorParkTimer.reset();  // Set a timer to timebox this effort
             park_the_motors = true;  // Flags the motor parking to happen
         }
-        else if (!basicmodesw && !tachometer.engine_stopped()) updateMode( speedometer.car_stopped() ? HOLD : FLY );  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
+        else if (!basicmodesw && !tach.engine_stopped()) updateMode( speedo.car_stopped() ? HOLD : FLY );  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
     }
     void handleShutdownMode() { // In shutdown mode we stop the car if it's moving then park the motors.
         if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
@@ -92,7 +92,7 @@ private:
             shutdown_color = LPNK;
             disp_runmode_dirty = true;
             calmode_request = false;
-            if (!speedometer.car_stopped() && !autostop_disabled) {
+            if (!speedo.car_stopped() && !autostop_disabled) {
                 if (panic_stop && pressure_target_psi < pressure_panic_initial_psi) pressure_target_psi = pressure_panic_initial_psi;
                 else if (!panic_stop && pressure_target_psi < pressure_hold_initial_psi) pressure_target_psi = pressure_hold_initial_psi;
                 brakeIntervalTimer.reset();
@@ -101,9 +101,9 @@ private:
             }
         }
         // else if (ignition && engine_stopped()) updateMode(STALL);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
-        else if ((speedometer.car_stopped() || allow_rolling_start || autostop_disabled) && ignition && !panic_stop && !tachometer.engine_stopped()) updateMode(HOLD);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
+        else if ((speedo.car_stopped() || allow_rolling_start || autostop_disabled) && ignition && !panic_stop && !tach.engine_stopped()) updateMode(HOLD);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
         if (shutdown_incomplete) {  // If we haven't yet stopped the car and then released the brakes and gas all the way
-            if (speedometer.car_stopped() || stopcarTimer.expired() || autostop_disabled) {  // If car has stopped, or timeout expires, then release the brake
+            if (speedo.car_stopped() || stopcarTimer.expired() || autostop_disabled) {  // If car has stopped, or timeout expires, then release the brake
                 if (shutdown_color == LPNK) {  // On first time through here
                     park_the_motors = true;  // Flags the motor parking to happen, only once
                     gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
@@ -130,15 +130,15 @@ private:
         }
     }
     void handleStallMode() {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
-        if (get_joydir() != joy_down) pressure_target_psi = pressure_sensor.min_human();  // If in deadband or being pushed up, no pressure target
-        else pressure_target_psi = map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBBOT], hotrc_pc[VERT][MIN], pressure_sensor.min_human(), pressure_sensor.max_human());  // Scale joystick value to pressure adc setpoint
-        if (!tachometer.engine_stopped()) updateMode(HOLD);  // If we started the car, enter hold mode once starter is released
-        if (starter || !tachometer.engine_stopped()) updateMode(HOLD);  // If we started the car, enter hold mode once starter is released
+        if (get_joydir() != joy_down) pressure_target_psi = pressure.min_human();  // If in deadband or being pushed up, no pressure target
+        else pressure_target_psi = map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBBOT], hotrc_pc[VERT][MIN], pressure.min_human(), pressure.max_human());  // Scale joystick value to pressure adc setpoint
+        if (!tach.engine_stopped()) updateMode(HOLD);  // If we started the car, enter hold mode once starter is released
+        if (starter || !tach.engine_stopped()) updateMode(HOLD);  // If we started the car, enter hold mode once starter is released
     }
     void handleHoldMode() {
         if (we_just_switched_modes) {  // Release throttle and push brake upon entering hold mode
             if (!autostop_disabled) {
-                if (speedometer.car_stopped()) pressure_target_psi = pressure_sensor.filt() + starter ? pressure_panic_increment_psi : pressure_hold_increment_psi; // If the car is already stopped then just add a touch more pressure and then hold it.
+                if (speedo.car_stopped()) pressure_target_psi = pressure.filt() + starter ? pressure_panic_increment_psi : pressure_hold_increment_psi; // If the car is already stopped then just add a touch more pressure and then hold it.
                 else if (pressure_target_psi < pressure_hold_initial_psi) pressure_target_psi = starter ? pressure_panic_initial_psi : pressure_hold_initial_psi;  //  These hippies need us to stop the car for them
             }
             brakeIntervalTimer.reset();
@@ -146,19 +146,19 @@ private:
             joy_centered = false;  // Fly mode will be locked until the joystick first is put at or below center
         }
         throttle.goto_idle();  // Let off gas (if gas using PID mode) and keep target updated to possibly changing idle value
-        if (brakeIntervalTimer.expireset() && !speedometer.car_stopped() && !stopcarTimer.expired() && !autostop_disabled)
-            pressure_target_psi = min (pressure_target_psi + starter ? pressure_panic_increment_psi : pressure_hold_increment_psi, pressure_sensor.max_human());  // If the car is still moving, push harder
+        if (brakeIntervalTimer.expireset() && !speedo.car_stopped() && !stopcarTimer.expired() && !autostop_disabled)
+            pressure_target_psi = min (pressure_target_psi + starter ? pressure_panic_increment_psi : pressure_hold_increment_psi, pressure.max_human());  // If the car is still moving, push harder
         if (get_joydir() != joy_up) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
         else if (joy_centered && !starter && !hotrc_radio_lost) updateMode(FLY); // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
     }
     void handleFlyMode() {
-        if (we_just_switched_modes) car_hasnt_moved = speedometer.car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
+        if (we_just_switched_modes) car_hasnt_moved = speedo.car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
         joydir = get_joydir();
         if (car_hasnt_moved) {
             if (joydir != joy_up) updateMode(HOLD);  // Must keep pulling trigger until car moves, or it drops back to hold mode
-            else if (!speedometer.car_stopped()) car_hasnt_moved = false;  // Once car moves, we're allowed to release the trigger without falling out of fly mode
+            else if (!speedo.car_stopped()) car_hasnt_moved = false;  // Once car moves, we're allowed to release the trigger without falling out of fly mode
         }
-        else if (speedometer.car_stopped()) updateMode(HOLD);  // Go to Hold Mode if we have come to a stop after moving  // && hotrc_pc[VERT][FILT] <= hotrc_pc[VERT][DBBOT]
+        else if (speedo.car_stopped()) updateMode(HOLD);  // Go to Hold Mode if we have come to a stop after moving  // && hotrc_pc[VERT][FILT] <= hotrc_pc[VERT][DBBOT]
 
         if (!sim.simulating(sensor::joy) && hotrc_radio_lost) updateMode(HOLD);  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
         else {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
@@ -167,8 +167,8 @@ private:
             else throttle.goto_idle();  // Else let off gas (if gas using PID mode)
             
             if (joydir == joy_down)  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
-                pressure_target_psi = map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBBOT], hotrc_pc[VERT][MIN], pressure_sensor.min_human(), pressure_sensor.max_human());
-            else pressure_target_psi = pressure_sensor.min_human();  // Else let off the brake   
+                pressure_target_psi = map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBBOT], hotrc_pc[VERT][MIN], pressure.min_human(), pressure.max_human());
+            else pressure_target_psi = pressure.min_human();  // Else let off the brake   
         }
         // Cruise mode can be entered/exited by pressing a controller button, or exited by holding the brake on full for a half second
         // The gesture involves pushing the joystick from the center to the top, then to the bottom, then back to center, quickly enough.
@@ -177,9 +177,9 @@ private:
     }
     void handleCruiseMode() {
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
-            speedo_target_mph = speedometer.filt();
-            pressure_target_psi = pressure_sensor.min_human();  // Let off the brake and keep it there till out of Cruise mode
-            throttle.set_target(tachometer.filt());  // Start off with target set to current tach value
+            speedo_target_mph = speedo.filt();
+            pressure_target_psi = pressure.min_human();  // Let off the brake and keep it there till out of Cruise mode
+            throttle.set_target(tach.filt());  // Start off with target set to current tach value
             gestureFlyTimer.reset();  // reset gesture timer
             cruise_trigger_released = false;  // in case trigger is being pulled as cruise mode is entered, the ability to adjust is only unlocked after the trigger is subsequently released to the center
             gas_pulse_cruise_us = gas_pulse_out_us;  //  if cruise_fixed throttle is true, this variable stores the setpoint of throttle angle
@@ -206,7 +206,7 @@ private:
                     gas_pulse_cruise_us = gas_pulse_adjustpoint_us + ctrlratio * cruise_angle_attenuator * (((joydir == joy_up) ? gas_pulse_govern_us : gas_pulse_ccw_closed_us) - gas_pulse_adjustpoint_us);
                 }
                 else if (cruise_setpoint_mode == pid_suspend_fly) {
-                    if (!cruise_adjusting) tach_adjustpoint_rpm = tachometer.filt();
+                    if (!cruise_adjusting) tach_adjustpoint_rpm = tach.filt();
                     throttle.set_target(tach_adjustpoint_rpm + ctrlratio * (((joydir == joy_up) ? tach_govern_rpm : throttle.idlespeed()) - tach_adjustpoint_rpm));
                 }
                 cruise_ctrl_extent_pc = std::abs(hotrc_pc[VERT][FILT]);
@@ -219,7 +219,7 @@ private:
         // If joystick is held full-brake for more than X, driver could be confused & panicking, drop to fly mode so fly mode will push the brakes
         if (hotrc_pc[VERT][FILT] > hotrc_pc[VERT][MIN] + flycruise_vert_margin_pc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
         else if (gestureFlyTimer.expired()) updateMode(FLY);  // New gesture to drop to fly mode is hold the brake all the way down for more than X ms
-        if (speedometer.car_stopped()) updateMode(HOLD);  // In case we slam into camp Q woofer stack, get out of cruise mode
+        if (speedo.car_stopped()) updateMode(HOLD);  // In case we slam into camp Q woofer stack, get out of cruise mode
     }
 
     void handleCalMode() {  // Calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration. Don't use it unless you know how.
