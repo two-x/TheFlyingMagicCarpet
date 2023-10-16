@@ -419,10 +419,11 @@ void hotrc_toggle_update(int8_t chan) {                                         
     if (hotrc_sw[chan] != hotrc_sw[chan-2]) hotrc_sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false
     hotrc_sw[chan-2] = hotrc_sw[chan];  // chan-2 index being used to store previous values of index chan
 }
-float hotrc_us_to_pc(int8_t axis, int32_t us) {
-    if (us >= hotrc_us[axis][CENT])
-        return map((float)us, (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MAX], hotrc_pc[axis][CENT], hotrc_pc[axis][MAX]);
-    else return map((float)us, (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MIN], hotrc_pc[axis][CENT], hotrc_pc[axis][MIN]);
+float hotrc_us_to_pc(int32_t us) {  // float hotrc_us_to_pc(int8_t axis, int32_t us) {
+    return (float)us * (hotrc_pc[VERT][MAX] - hotrc_pc[VERT][MIN]) / (float)(hotrc_us[VERT][MAX] - hotrc_us[VERT][MIN]);
+    // if (us >= hotrc_us[axis][CENT])
+    //     return map((float)us, (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MAX], hotrc_pc[axis][CENT], hotrc_pc[axis][MAX]);
+    // else return map((float)us, (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MIN], hotrc_pc[axis][CENT], hotrc_pc[axis][MIN]);
 }
 void hotrc_calc_params() {
     for (int8_t axis=HORZ; axis<=VERT; axis++) {
@@ -432,9 +433,9 @@ void hotrc_calc_params() {
         hotrc_pc[axis][MIN] = -100.0;
         hotrc_pc[axis][CENT] = 0.0;
         hotrc_pc[axis][MAX] = 100.0;
-        hotrc_pc[axis][DBBOT] = hotrc_pc[axis][CENT] - hotrc_us_to_pc(axis, hotrc_deadband_us);
-        hotrc_pc[axis][DBTOP] = hotrc_pc[axis][CENT] + hotrc_us_to_pc(axis, hotrc_deadband_us);
-        hotrc_pc[axis][MARGIN] = hotrc_us_to_pc(axis, hotrc_margin_us);
+        hotrc_pc[axis][DBBOT] = hotrc_pc[axis][CENT] - hotrc_us_to_pc(hotrc_deadband_us);  // hotrc_us_to_pc(axis, hotrc_deadband_us);
+        hotrc_pc[axis][DBTOP] = hotrc_pc[axis][CENT] + hotrc_us_to_pc(hotrc_deadband_us);  // hotrc_us_to_pc(axis, hotrc_deadband_us);
+        hotrc_pc[axis][MARGIN] = hotrc_us_to_pc(hotrc_margin_us);  // hotrc_us_to_pc(axis, hotrc_margin_us);
     }
 }
 void calc_governor(void) {
