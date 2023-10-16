@@ -448,6 +448,11 @@ float steer_safe(float endpoint) {
     return steer_stop_pc + (endpoint - steer_stop_pc) * (1.0 - steer_safe_pc * speedo.filt() / (100.0 * speedo.redline_mph()));
 }
 
+enum joydirs { joy_down = -1, joy_cent = 0, joy_up = 1 };
+joydirs get_joydir() {
+    return (hotrc_pc[VERT][FILT] > hotrc_pc[VERT][DBTOP]) ? joy_up : ((hotrc_pc[VERT][FILT] < hotrc_pc[VERT][DBBOT]) ? joy_down : joy_cent);
+}
+
 // int* x is c++ style, int *x is c style
 template <typename T>
 T adj_val(T variable, T modify, T low_limit, T high_limit) {
