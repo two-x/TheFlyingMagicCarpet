@@ -347,7 +347,7 @@ float brake_spid_initial_kp = 0.323;                                            
 float brake_spid_initial_ki_hz = 0.000;                                                                      // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
 float brake_spid_initial_kd_s = 0.000;                                                                       // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
 
-qpid brake_pid(pressure_sensor.get_filtered_value_ptr().get(), &brake_out_pc, &pressure_target_psi,     // input, target, output variable references
+qpid brake_pid(pressure_sensor.filt_ptr().get(), &brake_out_pc, &pressure_target_psi,     // input, target, output variable references
                brake_extend_pc, brake_retract_pc,                                                  // output min, max
                brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,                     // Kp, Ki, and Kd tuning constants
                qpid::pmode_t::ponerr, qpid::dmode_t::donerr, qpid::iawmode_t::iawcond, qpid::dir_t::direct,  // settings  // iAwRoundCond, iawclamp
@@ -357,7 +357,7 @@ qpid brake_pid(pressure_sensor.get_filtered_value_ptr().get(), &brake_out_pc, &p
 
 // Gas : Controls the throttle to achieve the desired intake airflow and engine rpm
 
-ThrottleControl throttle(tachometer.get_human_ptr().get(), tachometer.get_filtered_value_ptr().get(),
+ThrottleControl throttle(tachometer.human_ptr().get(), tachometer.filt_ptr().get(),
                          tach_idle_high_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm,
                          temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][WARNING],
                          50, ThrottleControl::idlemodes::control);
@@ -367,7 +367,7 @@ float gas_spid_initial_kp = 0.206;    // PID proportional coefficient (gas) How 
 float gas_spid_initial_ki_hz = 0.000; // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
 float gas_spid_initial_kd_s = 0.000;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
 bool gas_open_loop = true;
-qpid gas_pid(tachometer.get_filtered_value_ptr().get(), &gas_pulse_out_us, &tach_target_rpm,                            // input, target, output variable references
+qpid gas_pid(tachometer.filt_ptr().get(), &gas_pulse_out_us, &tach_target_rpm,                            // input, target, output variable references
              gas_pulse_cw_open_us, gas_pulse_ccw_closed_us,                                                             // output min, max
              gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s,                                        // Kp, Ki, and Kd tuning constants
              qpid::pmode_t::ponerr, qpid::dmode_t::donerr, qpid::iawmode_t::iawclamp, qpid::dir_t::reverse,              // settings
@@ -393,7 +393,7 @@ Timer cruisePidTimer(cruise_pid_period_us);                                     
 float cruise_spid_initial_kp = 5.57;                                                                         // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
 float cruise_spid_initial_ki_hz = 0.000;                                                                     // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
 float cruise_spid_initial_kd_s = 0.000;                                                                      // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
-qpid cruise_pid(speedometer.get_filtered_value_ptr().get(), &tach_target_rpm, &speedo_target_mph,            // input, target, output variable references
+qpid cruise_pid(speedometer.filt_ptr().get(), &tach_target_rpm, &speedo_target_mph,            // input, target, output variable references
                 throttle.idlespeed(), tach_govern_rpm,                                                   // output min, max
                 cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s,                 // Kp, Ki, and Kd tuning constants
                 qpid::pmode_t::ponerr, qpid::dmode_t::donerr, qpid::iawmode_t::iawround, qpid::dir_t::direct, // settings
@@ -439,13 +439,13 @@ void hotrc_calc_params() {
     }
 }
 void calc_governor(void) {
-    tach_govern_rpm = map(gas_governor_pc, 0.0, 100.0, 0.0, tachometer.get_redline_rpm()); // Create an artificially reduced maximum for the engine speed
+    tach_govern_rpm = map(gas_governor_pc, 0.0, 100.0, 0.0, tachometer.redline_rpm()); // Create an artificially reduced maximum for the engine speed
     cruise_pid.set_outlimits(throttle.idlespeed(), tach_govern_rpm);
-    gas_pulse_govern_us = map(tach_govern_rpm, throttle.idlespeed(), tachometer.get_redline_rpm(), gas_pulse_ccw_closed_us, gas_pulse_cw_open_us); // Governor must scale the pulse range proportionally
-    speedo_govern_mph = map(gas_governor_pc, 0.0, 100.0, 0.0, speedometer.get_redline_mph());                                                                                     // Governor must scale the top vehicle speed proportionally
+    gas_pulse_govern_us = map(tach_govern_rpm, throttle.idlespeed(), tachometer.redline_rpm(), gas_pulse_ccw_closed_us, gas_pulse_cw_open_us); // Governor must scale the pulse range proportionally
+    speedo_govern_mph = map(gas_governor_pc, 0.0, 100.0, 0.0, speedometer.redline_mph());                                                                                     // Governor must scale the top vehicle speed proportionally
 }
 float steer_safe(float endpoint) {
-    return steer_stop_pc + (endpoint - steer_stop_pc) * (1.0 - steer_safe_pc * speedometer.get_filtered_value() / (100.0 * speedometer.get_redline_mph()));
+    return steer_stop_pc + (endpoint - steer_stop_pc) * (1.0 - steer_safe_pc * speedometer.filt() / (100.0 * speedometer.redline_mph()));
 }
 
 // int* x is c++ style, int *x is c style
@@ -622,12 +622,12 @@ void detect_errors() {
         // TODO : The logic of this for each sensor should be moved to devices.h objects
         uint32_t val;
         val = analogRead(brake_pos_pin);
-        err_sensor[RANGE][e_brkpos] = (val < brkpos_sensor.get_min_native() || val > brkpos_sensor.get_max_native());
+        err_sensor[RANGE][e_brkpos] = (val < brkpos_sensor.min_native() || val > brkpos_sensor.max_native());
         err_sensor[LOST][e_brkpos] = (val < err_margin_adc);
         val = analogRead(pressure_pin);
-        err_sensor[RANGE][e_pressure] = ((val && val < pressure_sensor.get_min_native()) || val > pressure_sensor.get_max_native());
+        err_sensor[RANGE][e_pressure] = ((val && val < pressure_sensor.min_native()) || val > pressure_sensor.max_native());
         err_sensor[LOST][e_pressure] = (val < err_margin_adc);
-        err_sensor[LOST][e_battery] = (analogRead(mulebatt_pin) > battery_sensor.get_max_native());
+        err_sensor[LOST][e_battery] = (analogRead(mulebatt_pin) > battery_sensor.max_native());
         for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
             err_sensor[RANGE][ch] = !hotrc_radio_lost && ((hotrc_us[ch][RAW] < hotrc_us[ch][MIN] - (hotrc_us[ch][MARGIN] >> 1)) 
                                     || (hotrc_us[ch][RAW] > hotrc_us[ch][MAX] + (hotrc_us[ch][MARGIN] >> 1)));  // && ch != VERT
@@ -714,14 +714,14 @@ float get_massairflow(float map = NAN, float airflow = NAN, float ambient = NAN)
 }
 float maf_gps;  // Mass airflow in grams per second
 float maf_min_gps = 0.0;
-float maf_max_gps = get_massairflow(map_sensor.get_max_psi(), airflow_sensor.get_max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
+float maf_max_gps = get_massairflow(map_sensor.max_psi(), airflow_sensor.max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
 
 // float get_massairflow(float map = NAN, float airflow = NAN, float ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
 //     TemperatureSensor* sensor = temperature_sensor_manager.get_sensor(sensor_location::ambient);
 //     float T = degF_to_K(std::isnan(ambient) ? sensor->get_temperature() : ambient);  // in K
 //     float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
-//     float v = 0.447 * (std::isnan(airflow) ? airflow_sensor.get_filtered_value() : airflow); // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
+//     float v = 0.447 * (std::isnan(airflow) ? airflow_sensor.filt() : airflow); // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
 //     float A = 0.0020268;  // in m2    1.0 in2 * pi * 0.00064516 m2/in2
-//     float P = 6894.76 * std::isnan(map) ? map_sensor.get_filtered_value() : map;  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
+//     float P = 6894.76 * std::isnan(map) ? map_sensor.filt() : map;  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
 //     return 1000.0 * v * A * P / (R * T);  // in g/s   (g/kg * m/s * m2 * J/m3) / (J/(kg*K) * K) = g/s
 // }

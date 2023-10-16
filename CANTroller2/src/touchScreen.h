@@ -147,7 +147,7 @@ public:
                     touch_longpress_valid = false;
                 }
             }
-            else if (sim.get_enabled()) {
+            else if (sim.enabled()) {
                 if (tcol == 3 && trow == 0 && sim.can_sim(sensor::basicsw) && !touch_now_touched) basicmodesw = !basicmodesw;
                 else if (tcol == 3 && trow == 1 && sim.can_sim(sensor::pressure) && pressure_sensor.source() == ControllerMode::TOUCH) pressure_sensor.add_human((float)touch_accel); // (+= 25) Pressed the increase brake pressure button
                 else if (tcol == 3 && trow == 2 && sim.can_sim(sensor::pressure) && pressure_sensor.source() == ControllerMode::TOUCH) pressure_sensor.add_human((float)(-touch_accel)); // (-= 25) Pressed the decrease brake pressure button

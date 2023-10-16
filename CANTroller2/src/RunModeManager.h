@@ -130,15 +130,15 @@ private:
         }
     }
     void handleStallMode() {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
-        if (get_joydir() != joy_down) pressure_target_psi = pressure_sensor.get_min_human();  // If in deadband or being pushed up, no pressure target
-        else pressure_target_psi = map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBBOT], hotrc_pc[VERT][MIN], pressure_sensor.get_min_human(), pressure_sensor.get_max_human());  // Scale joystick value to pressure adc setpoint
+        if (get_joydir() != joy_down) pressure_target_psi = pressure_sensor.min_human();  // If in deadband or being pushed up, no pressure target
+        else pressure_target_psi = map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBBOT], hotrc_pc[VERT][MIN], pressure_sensor.min_human(), pressure_sensor.max_human());  // Scale joystick value to pressure adc setpoint
         if (!tachometer.engine_stopped()) updateMode(HOLD);  // If we started the car, enter hold mode once starter is released
         if (starter || !tachometer.engine_stopped()) updateMode(HOLD);  // If we started the car, enter hold mode once starter is released
     }
     void handleHoldMode() {
         if (we_just_switched_modes) {  // Release throttle and push brake upon entering hold mode
             if (!autostop_disabled) {
-                if (speedometer.car_stopped()) pressure_target_psi = pressure_sensor.get_filtered_value() + starter ? pressure_panic_increment_psi : pressure_hold_increment_psi; // If the car is already stopped then just add a touch more pressure and then hold it.
+                if (speedometer.car_stopped()) pressure_target_psi = pressure_sensor.filt() + starter ? pressure_panic_increment_psi : pressure_hold_increment_psi; // If the car is already stopped then just add a touch more pressure and then hold it.
                 else if (pressure_target_psi < pressure_hold_initial_psi) pressure_target_psi = starter ? pressure_panic_initial_psi : pressure_hold_initial_psi;  //  These hippies need us to stop the car for them
             }
             brakeIntervalTimer.reset();
@@ -147,7 +147,7 @@ private:
         }
         throttle.goto_idle();  // Let off gas (if gas using PID mode) and keep target updated to possibly changing idle value
         if (brakeIntervalTimer.expireset() && !speedometer.car_stopped() && !stopcarTimer.expired() && !autostop_disabled)
-            pressure_target_psi = min (pressure_target_psi + starter ? pressure_panic_increment_psi : pressure_hold_increment_psi, pressure_sensor.get_max_human());  // If the car is still moving, push harder
+            pressure_target_psi = min (pressure_target_psi + starter ? pressure_panic_increment_psi : pressure_hold_increment_psi, pressure_sensor.max_human());  // If the car is still moving, push harder
         if (get_joydir() != joy_up) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
         else if (joy_centered && !starter && !hotrc_radio_lost) updateMode(FLY); // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
     }
@@ -167,8 +167,8 @@ private:
             else throttle.goto_idle();  // Else let off gas (if gas using PID mode)
             
             if (joydir == joy_down)  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
-                pressure_target_psi = map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBBOT], hotrc_pc[VERT][MIN], pressure_sensor.get_min_human(), pressure_sensor.get_max_human());
-            else pressure_target_psi = pressure_sensor.get_min_human();  // Else let off the brake   
+                pressure_target_psi = map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBBOT], hotrc_pc[VERT][MIN], pressure_sensor.min_human(), pressure_sensor.max_human());
+            else pressure_target_psi = pressure_sensor.min_human();  // Else let off the brake   
         }
         // Cruise mode can be entered/exited by pressing a controller button, or exited by holding the brake on full for a half second
         // The gesture involves pushing the joystick from the center to the top, then to the bottom, then back to center, quickly enough.
@@ -177,9 +177,9 @@ private:
     }
     void handleCruiseMode() {
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
-            speedo_target_mph = speedometer.get_filtered_value();
-            pressure_target_psi = pressure_sensor.get_min_human();  // Let off the brake and keep it there till out of Cruise mode
-            throttle.set_target(tachometer.get_filtered_value());  // Start off with target set to current tach value
+            speedo_target_mph = speedometer.filt();
+            pressure_target_psi = pressure_sensor.min_human();  // Let off the brake and keep it there till out of Cruise mode
+            throttle.set_target(tachometer.filt());  // Start off with target set to current tach value
             gestureFlyTimer.reset();  // reset gesture timer
             cruise_trigger_released = false;  // in case trigger is being pulled as cruise mode is entered, the ability to adjust is only unlocked after the trigger is subsequently released to the center
             gas_pulse_cruise_us = gas_pulse_out_us;  //  if cruise_fixed throttle is true, this variable stores the setpoint of throttle angle
@@ -206,7 +206,7 @@ private:
                     gas_pulse_cruise_us = gas_pulse_adjustpoint_us + ctrlratio * cruise_angle_attenuator * (((joydir == joy_up) ? gas_pulse_govern_us : gas_pulse_ccw_closed_us) - gas_pulse_adjustpoint_us);
                 }
                 else if (cruise_setpoint_mode == pid_suspend_fly) {
-                    if (!cruise_adjusting) tach_adjustpoint_rpm = tachometer.get_filtered_value();
+                    if (!cruise_adjusting) tach_adjustpoint_rpm = tachometer.filt();
                     throttle.set_target(tach_adjustpoint_rpm + ctrlratio * (((joydir == joy_up) ? tach_govern_rpm : throttle.idlespeed()) - tach_adjustpoint_rpm));
                 }
                 cruise_ctrl_extent_pc = std::abs(hotrc_pc[VERT][FILT]);

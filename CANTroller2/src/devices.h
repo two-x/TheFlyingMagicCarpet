@@ -109,14 +109,15 @@ class Param {
         return set(*_val + arg_add);
     }
 
-    VALUE_T get() { return *_val; }
-    VALUE_T get_min() { return *_min; }
-    VALUE_T get_max() { return *_max; }
-    std::shared_ptr<VALUE_T> get_ptr() { return _val; }
-    std::shared_ptr<VALUE_T> get_min_ptr() { return _min; }
-    std::shared_ptr<VALUE_T> get_max_ptr() { return _max; }
-    VALUE_T get_last() { return _last; } // NOTE: currently unused, do we still need this for drawing purposes?
-    bool get_saturated() { return _saturated; }
+    VALUE_T get() { return *_val; }  // shouldn't need this?
+    VALUE_T val() { return *_val; }
+    VALUE_T min() { return *_min; }
+    VALUE_T max() { return *_max; }
+    std::shared_ptr<VALUE_T> ptr() { return _val; }
+    std::shared_ptr<VALUE_T> min_ptr() { return _min; }
+    std::shared_ptr<VALUE_T> max_ptr() { return _max; }
+    VALUE_T last() { return _last; } // NOTE: currently unused, do we still need this for drawing purposes?
+    bool saturated() { return _saturated; }
 };
 
 enum class ControllerMode : uint8_t {UNDEF=0, FIXED, PIN, TOUCH, POT, CALC};
@@ -195,8 +196,8 @@ class Device {
     void set_enabled(bool arg_enable) { _enabled = arg_enable; }
     void set_can_source(ControllerMode arg_source, bool is_possible) { _can_source[static_cast<uint8_t>(arg_source)] = is_possible; }
     ControllerMode source() { return _source; }
-    uint8_t get_pin() { return _pin; }
-    bool get_enabled() { return _enabled; }
+    uint8_t pin() { return _pin; }
+    bool enabled() { return _enabled; }
 };
 
 // Device::Transducer is a base class for any system devices that convert real-world values <--> signals in either direction. It has a "native"
@@ -216,8 +217,8 @@ class Transducer : public Device {
     // conversion functions (can be overridden in child classes different conversion methods are needed)
     virtual HUMAN_T from_native(NATIVE_T arg_val_native) {
         float arg_val_f = static_cast<float>(arg_val_native); // convert everything to floats so we don't introduce rounding errors
-        float min_f = static_cast<float>(native.get_min());
-        float max_f = static_cast<float>(native.get_max());
+        float min_f = static_cast<float>(_native.min());
+        float max_f = static_cast<float>(_native.max());
         float ret = -1;
         if (!_invert) {
             if (dir == TransducerDirection::REV) {
@@ -238,8 +239,8 @@ class Transducer : public Device {
 
     virtual NATIVE_T to_native(HUMAN_T arg_val_human) {
         float arg_val_f = static_cast<float>(arg_val_human); // convert everything to floats so we don't introduce rounding errors
-        float min_f = static_cast<float>(human.get_min());
-        float max_f = static_cast<float>(human.get_max());
+        float min_f = static_cast<float>(_human.min());
+        float max_f = static_cast<float>(_human.max());
         float ret = -1;
         if (dir == TransducerDirection::REV) {
             arg_val_f = min_f + max_f - arg_val_f;
@@ -258,8 +259,8 @@ class Transducer : public Device {
 
     // NOTE: do we really need two values? or should this just be a single value and get converted wherever needed?
     // To hold val/min/max display values in display units (like V, mph, etc.)
-    Param<HUMAN_T> human;
-    Param<NATIVE_T> native;
+    Param<HUMAN_T> _human;
+    Param<NATIVE_T> _native;
     
     // override these in children that need to react to limits changing
     virtual void handle_set_native_limits() {}
@@ -269,78 +270,78 @@ class Transducer : public Device {
     Transducer() = delete;
 
     void set_native_limits(Param<NATIVE_T> &arg_min, Param<NATIVE_T> &arg_max) {
-        if (arg_min.get() > arg_max.get()) {
+        if (arg_min.val() > arg_max.val()) {
             dir = TransducerDirection::REV;
-            native.set_limits(arg_max.get(), arg_min.get());
+            _native.set_limits(arg_max.val(), arg_min.val());
         }
         else {
             dir = TransducerDirection::FWD;
-            native.set_limits(arg_min.get(), arg_max.get());
+            _native.set_limits(arg_min.val(), arg_max.val());
         }
         handle_set_native_limits();
     }
     void set_human_limits(Param<HUMAN_T> &arg_min, Param<HUMAN_T> &arg_max) {
-        if (arg_min.get() > arg_max.get()) {
+        if (arg_min.val() > arg_max.val()) {
             dir = TransducerDirection::REV;
-            human.set_limits(arg_max.get(), arg_min.get());
+            _human.set_limits(arg_max.val(), arg_min.val());
         }
         else {
             dir = TransducerDirection::FWD;
-            human.set_limits(arg_min.get(), arg_max.get());
+            _human.set_limits(arg_min.val(), arg_max.val());
         }
         handle_set_human_limits();
     }
     void set_native_limits(NATIVE_T arg_min, NATIVE_T arg_max) {
         if (arg_min > arg_max) {
             dir = TransducerDirection::REV;
-            native.set_limits(arg_max, arg_min);
+            _native.set_limits(arg_max, arg_min);
         }
         else {
             dir = TransducerDirection::FWD;
-            native.set_limits(arg_min, arg_max);
+            _native.set_limits(arg_min, arg_max);
         }
         handle_set_native_limits();
     }
     void set_human_limits(HUMAN_T arg_min, HUMAN_T arg_max) {
         if (arg_min > arg_max) {
             dir = TransducerDirection::REV;
-            human.set_limits(arg_max, arg_min);
+            _human.set_limits(arg_max, arg_min);
         }
         else {
             dir = TransducerDirection::FWD;
-            human.set_limits(arg_min, arg_max);
+            _human.set_limits(arg_min, arg_max);
         }
         handle_set_human_limits();
     }
 
     bool set_native(NATIVE_T arg_val_native) {
         _val_raw = arg_val_native;
-        if (native.set(arg_val_native)) {
-            human.set(from_native(native.get()));
+        if (_native.set(arg_val_native)) {
+            _human.set(from_native(_native.val()));
             return true;
         }
         return false;
     }
     bool add_native(NATIVE_T arg_add_native) {
         _val_raw += arg_add_native;
-        if (native.add(arg_add_native)) {
-            human.set(from_native(native.get()));
+        if (_native.add(arg_add_native)) {
+            _human.set(from_native(_native.val()));
             return true;
         }
         return false;
     }
     bool set_human(HUMAN_T arg_val_human) {
         _val_raw = to_native(arg_val_human);
-        if (human.set(arg_val_human)) {
-            native.set(to_native(human.get()));
+        if (_human.set(arg_val_human)) {
+            _native.set(to_native(_human.val()));
             return true;
         }
         return false;
     }
     bool add_human(HUMAN_T arg_add_human) {
         _val_raw += to_native(arg_add_human);
-        if (human.add(arg_add_human)) {
-            native.set(to_native(human.get()));
+        if (_human.add(arg_add_human)) {
+            _native.set(to_native(_human.val()));
             return true;
         }
         return false;
@@ -353,15 +354,15 @@ class Transducer : public Device {
         _invert = arg_invert;
     }
 
-    NATIVE_T get_native() { return native.get(); }
-    HUMAN_T get_human() { return human.get(); }
-    NATIVE_T get_raw() { return _val_raw; }
-    NATIVE_T get_min_native() { return native.get_min(); }
-    NATIVE_T get_max_native() { return native.get_max(); }
-    HUMAN_T get_min_human() { return human.get_min(); }
-    HUMAN_T get_max_human() { return human.get_max(); }
-    std::shared_ptr<NATIVE_T> get_native_ptr() { return native.get_ptr(); }
-    std::shared_ptr<HUMAN_T> get_human_ptr() { return human.get_ptr(); }
+    NATIVE_T native() { return _native.val(); }
+    HUMAN_T human() { return _human.val(); }
+    NATIVE_T raw() { return _val_raw; }
+    NATIVE_T min_native() { return _native.min(); }
+    NATIVE_T max_native() { return _native.max(); }
+    HUMAN_T min_human() { return _human.min(); }
+    HUMAN_T max_human() { return _human.max(); }
+    std::shared_ptr<NATIVE_T> native_ptr() { return _native.ptr(); }
+    std::shared_ptr<HUMAN_T> human_ptr() { return _human.ptr(); }
 };
 
 // Sensor class - is a base class for control system sensors, ie anything that measures real world data or electrical signals 
@@ -374,33 +375,33 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
 
     void calculate_ema() { // Exponential Moving Average
         if (_should_filter) {
-            float cur_val = static_cast<float>(this->human.get());
-            float filt_val = static_cast<float>(_val_filt.get());
+            float cur_val = static_cast<float>(this->_human.val());
+            float filt_val = static_cast<float>(_val_filt.val());
             _val_filt.set(ema_filt(cur_val, filt_val, _ema_alpha));
         } else {
-            _val_filt.set(this->human.get());
+            _val_filt.set(this->_human.val());
             _should_filter = true;
         }
     }
 
     virtual void handle_touch_mode() {
-        this->_val_filt.set(this->human.get());
+        this->_val_filt.set(this->_human.val());
     }
     virtual void handle_pot_mode() {
-        this->human.set(this->_pot->mapToRange(this->human.get_min(), this->human.get_max()));
-        this->_val_raw = this->native.get();  // Arguably pot should set the raw value and let the filter work normally, instead of this
-        this->_val_filt.set(this->human.get()); // don't filter the value we get from the pot, the pot output is already filtered
+        this->_human.set(this->_pot->mapToRange(this->_human.min(), this->_human.max()));
+        this->_val_raw = this->_native.val();  // Arguably pot should set the raw value and let the filter work normally, instead of this
+        this->_val_filt.set(this->_human.val()); // don't filter the value we get from the pot, the pot output is already filtered
     }
 
-    virtual void handle_set_human_limits() { _val_filt.set_limits(this->human.get_min_ptr(), this->human.get_max_ptr()); } // make sure our filtered value has the same limits as our regular value
+    virtual void handle_set_human_limits() { _val_filt.set_limits(this->_human.min_ptr(), this->_human.max_ptr()); } // make sure our filtered value has the same limits as our regular value
     virtual void handle_mode_change() { if (this->_source == ControllerMode::PIN) _should_filter = false; } // if we just switched to pin input, the old filtered value is not valid
 
   public:
     Sensor(uint8_t pin) : Transducer<NATIVE_T, HUMAN_T>(pin) {}  
     void set_ema_alpha(float arg_alpha) { _ema_alpha = arg_alpha; }
-    float get_ema_alpha() { return _ema_alpha; }
-    HUMAN_T get_filtered_value() { return _val_filt.get(); }
-    std::shared_ptr<HUMAN_T> get_filtered_value_ptr() { return _val_filt.get_ptr(); } // NOTE: should just be public?
+    float ema_alpha() { return _ema_alpha; }
+    HUMAN_T filt() { return _val_filt.val(); }
+    std::shared_ptr<HUMAN_T> filt_ptr() { return _val_filt.ptr(); } // NOTE: should just be public?
 };
 
 // Base class for sensors which communicate using i2c.
@@ -422,14 +423,14 @@ class I2CSensor : public Sensor<float,float> {
         }
 
         virtual void handle_pot_mode() {
-            this->human.set(this->_pot->mapToRange(this->human.get_min(), this->human.get_max()));
-            this->_val_raw = this->native.get();
-            this->_val_filt.set(this->human.get()); // don't filter the value we get from the pot, the pot output is already filtered
+            this->_human.set(this->_pot->mapToRange(this->_human.min(), this->_human.max()));
+            this->_val_raw = this->_native.val();
+            this->_val_filt.set(this->_human.val()); // don't filter the value we get from the pot, the pot output is already filtered
         }
     
         virtual void handle_set_human_limits() {
-            native.set_limits(human.get_min_ptr(), human.get_max_ptr());
-            _val_filt.set_limits(human.get_min_ptr(), human.get_max_ptr());
+            _native.set_limits(_human.min_ptr(), _human.max_ptr());
+            _val_filt.set_limits(_human.min_ptr(), _human.max_ptr());
         }
     public:
         I2CSensor(I2C &i2c_arg, uint8_t i2c_address_arg) : Sensor<float,float>(-1), _i2c(i2c_arg), _i2c_address(i2c_address_arg) { set_can_source(ControllerMode::PIN, true); }
@@ -481,10 +482,10 @@ class AirflowSensor : public I2CSensor {
             }
         }
 
-        float get_min_mph() { return human.get_min(); }
-        float get_max_mph() { return human.get_max(); }
-        float get_abs_max_mph() { return _abs_max_mph; }
-        std::shared_ptr<float> get_max_mph_ptr() { return human.get_max_ptr(); }
+        float min_mph() { return _human.min(); }
+        float max_mph() { return _human.max(); }
+        float abs_max_mph() { return _abs_max_mph; }
+        std::shared_ptr<float> max_mph_ptr() { return _human.max_ptr(); }
 };
 
 // MAPSensor measures the air pressure of the engine manifold in PSI. It communicates with the external sensor using i2c.
@@ -534,12 +535,12 @@ class MAPSensor : public I2CSensor {
             }
         }
 
-        float get_min_psi() { return human.get_min(); }
-        float get_max_psi() { return human.get_max(); }
-        float get_abs_min_psi() { return _abs_min_psi; }
-        float get_abs_max_psi() { return _abs_max_psi; }
-        std::shared_ptr<float> get_min_psi_ptr() { return human.get_min_ptr(); }
-        std::shared_ptr<float> get_max_psi_ptr() { return human.get_max_ptr(); }
+        float min_psi() { return _human.min(); }
+        float max_psi() { return _human.max(); }
+        float abs_min_psi() { return _abs_min_psi; }
+        float abs_max_psi() { return _abs_max_psi; }
+        std::shared_ptr<float> min_psi_ptr() { return _human.min_ptr(); }
+        std::shared_ptr<float> max_psi_ptr() { return _human.max_ptr(); }
 };
 
 // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
@@ -571,14 +572,14 @@ class BatterySensor : public AnalogSensor<int32_t, float> {
         BatterySensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
             _ema_alpha = _initial_ema_alpha;
             _m_factor = _initial_v_per_adc;
-            human.set_limits(_min_v, _max_v);
-            native.set_limits(0.0, adcrange_adc - 5);
+            _human.set_limits(_min_v, _max_v);
+            _native.set_limits(0.0, adcrange_adc - 5);
             set_native(_initial_adc);
             set_can_source(ControllerMode::PIN, true);
         }
         BatterySensor() = delete;
-        float get_min_v() { return human.get_min(); }
-        float get_max_v() { return human.get_max(); }
+        float min_v() { return _human.min(); }
+        float max_v() { return _human.max(); }
 };
 
 // PressureSensor represents a brake fluid pressure sensor.
@@ -646,12 +647,12 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         BrakePositionSensor() = delete;
 
         // is tha brake motor parked?
-        bool parked() { return abs(_val_filt.get() - park_in) <= margin_in; }
+        bool parked() { return abs(_val_filt.val() - park_in) <= margin_in; }
 
-        float get_park_position() { return park_in; }
-        float get_margin() { return margin_in; }
-        float get_zeropoint() { return *_zeropoint; }
-        std::shared_ptr<float> get_zeropoint_ptr() { return _zeropoint; }
+        float park_position() { return park_in; }
+        float margin() { return margin_in; }
+        float zeropoint() { return *_zeropoint; }
+        std::shared_ptr<float> zeropoint_ptr() { return _zeropoint; }
 };
 
 // class PulseSensor are hall-monitor sensors where the value is based on magnetic pulse timing of a rotational source (eg tachometer, speedometer)
@@ -694,7 +695,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
             }
             // NOTE: should be checking filt here maybe?
             if (_stop_timer.expired()) {  // If time between pulses is long enough an engine can't run that slow
-                this->human.set(0.0);
+                this->_human.set(0.0);
                 this->_val_filt.set(0.0);
             }        
         }
@@ -707,8 +708,8 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
             attachInterrupt(digitalPinToInterrupt(this->_pin), [this]{ _isr(); }, _negative ? FALLING : RISING);
             this->set_source(ControllerMode::PIN);
         }
-        bool stopped() { return this->_val_filt.get() < _stop_thresh; }  // Note due to weird float math stuff, can not just check if tach == 0.0
-        float get_last_read_time() { return _last_read_time_us; }
+        bool stopped() { return this->_val_filt.val() < _stop_thresh; }  // Note due to weird float math stuff, can not just check if tach == 0.0
+        float last_read_time() { return _last_read_time_us; }
 };
 
 // Tachometer represents a magnetic pulse measurement of the enginge rotation.
@@ -740,9 +741,9 @@ class Tachometer : public PulseSensor<float> {
         Tachometer() = delete;
 
         bool engine_stopped() { return stopped(); }
-        float get_redline_rpm() { return human.get_max(); }
-        float get_max_rpm() { return _max_rpm; }
-        std::shared_ptr<float> get_redline_rpm_ptr() { return human.get_max_ptr(); }
+        float redline_rpm() { return _human.max(); }
+        float max_rpm() { return _max_rpm; }
+        std::shared_ptr<float> redline_rpm_ptr() { return _human.max_ptr(); }
 };
 
 // Speedometer represents a magnetic pulse measurement of the enginge rotation.
@@ -772,9 +773,9 @@ class Speedometer : public PulseSensor<float> {
         Speedometer() = delete;
 
         bool car_stopped() { return stopped(); }
-        float get_redline_mph() { return human.get_max(); }
-        float get_max_mph() { return _max_mph; }
-        std::shared_ptr<float> get_redline_mph_ptr() { return human.get_max_ptr(); }
+        float redline_mph() { return _human.max(); }
+        float max_mph() { return _max_mph; }
+        std::shared_ptr<float> redline_mph_ptr() { return _human.max_ptr(); }
 };
 
 class HotrcManager {
@@ -826,7 +827,7 @@ class HotrcManager {
             filt_history[(prespike_index + loopindex) % depth] = filt_history[prespike_index] + loopindex * interpolated_slope;
         }
     }
-    int32_t get_next_rawval () { return raw_history[index]; }  // helps to debug the filter from outside the class
+    int32_t next_rawval () { return raw_history[index]; }  // helps to debug the filter from outside the class
 };
 
 // Sensor (int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max)  // std::string& eng_name, 
@@ -913,12 +914,12 @@ class ServoPWM : public Transducer<NATIVE_T, HUMAN_T> {
     // NOTE: should be marked 'override' but compiler says it doesn't override anything...?
     void set_native_limits(Param<NATIVE_T> &minParam, Param<NATIVE_T> &maxParam) {
         this->set_native_limits(minParam, maxParam);
-        _servo.attach(this->_pin, this->min_native->get(), this->max_native->get());
+        _servo.attach(this->_pin, this->min_native->val(), this->max_native->val());
     }
 
     void set_human_limits(Param<HUMAN_T> &minParam, Param<HUMAN_T> &maxParam) {
         this->set_human_limits(minParam, maxParam);
-        _servo.attach(this->_pin, this->min_native->get(), this->max_native->get());
+        _servo.attach(this->_pin, this->min_native->val(), this->max_native->val());
     }
 
   public:
@@ -930,7 +931,7 @@ class ServoPWM : public Transducer<NATIVE_T, HUMAN_T> {
         set_pin(this->_pin, OUTPUT);
     }
     void write() {
-        this->_val_raw = this->native.get();
+        this->_val_raw = this->_native.val();
         _servo.writeMicroseconds((int32_t)this->_val_raw);  // Write result to servo interface
     }
 };
@@ -1252,9 +1253,9 @@ class Simulator {
         }
         
         bool potmapping(sensor s) { return can_sim(s) && _potmap == s; }
-        bool get_enabled() { return _enabled; }
-        bool* get_enabled_ptr() { return &_enabled; }
-        sensor get_potmap() { return _potmap; }
+        bool enabled() { return _enabled; }
+        bool* enabled_ptr() { return &_enabled; }
+        sensor potmap() { return _potmap; }
 };
 
 class Brake {  // This class wraps all brake activity to provide monitoring functions and coordination

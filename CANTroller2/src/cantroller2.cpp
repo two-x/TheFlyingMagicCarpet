@@ -208,7 +208,7 @@ void loop() {
     brkpos_sensor.update();  // Brake position
     
     tachometer.update();  // Tach
-    throttle.push_tach_reading(tachometer.get_human(), tachometer.get_last_read_time());
+    throttle.push_tach_reading(tachometer.human(), tachometer.last_read_time());
     
     if (i2cReadTimer.expireset()) {
         // ++i2creadsensor %= num_i2csensors;
@@ -291,16 +291,16 @@ void loop() {
             else brake_out_pc = (float)brake_stop_pc;
         }
         else if (park_the_motors) {
-            if (brkpos_sensor.get_filtered_value() + BrakePositionSensor::margin_in <= BrakePositionSensor::park_in)  // If brake is retracted from park point, extend toward park point, slowing as we approach
-                brake_out_pc = map (brkpos_sensor.get_filtered_value(), BrakePositionSensor::park_in, BrakePositionSensor::nom_lim_retract_in, brake_stop_pc, brake_extend_pc);
-            else if (brkpos_sensor.get_filtered_value() - BrakePositionSensor::margin_in >= BrakePositionSensor::park_in)  // If brake is extended from park point, retract toward park point, slowing as we approach
-                brake_out_pc = map (brkpos_sensor.get_filtered_value(), BrakePositionSensor::park_in, BrakePositionSensor::nom_lim_extend_in, brake_stop_pc, brake_retract_pc);
+            if (brkpos_sensor.filt() + BrakePositionSensor::margin_in <= BrakePositionSensor::park_in)  // If brake is retracted from park point, extend toward park point, slowing as we approach
+                brake_out_pc = map (brkpos_sensor.filt(), BrakePositionSensor::park_in, BrakePositionSensor::nom_lim_retract_in, brake_stop_pc, brake_extend_pc);
+            else if (brkpos_sensor.filt() - BrakePositionSensor::margin_in >= BrakePositionSensor::park_in)  // If brake is extended from park point, retract toward park point, slowing as we approach
+                brake_out_pc = map (brkpos_sensor.filt(), BrakePositionSensor::park_in, BrakePositionSensor::nom_lim_extend_in, brake_stop_pc, brake_retract_pc);
         }
         else if (runmode == CAL || runmode == BASIC || runmode == SHUTDOWN) brake_out_pc = (float)brake_stop_pc;
         else {  // First attenuate max power to avoid blowing out the motor like in bm2023, if retracting, as a proportion of position from zeropoint to fully retracted
 
             // To-Do Finish this brake governing calculation
-            // brake_pulse_retract_effective_us = map(brkpos_sensor.get_filtered_value(), brkpos_sensor.get_zeropoint(), BrakePositionSensor::abs_min_retract_in, )) {    
+            // brake_pulse_retract_effective_us = map(brkpos_sensor.filt(), brkpos_sensor.zeropoint(), BrakePositionSensor::abs_min_retract_in, )) {    
             // brake_motor_govern_duty_ratio = 0.25;  // 25% = Max motor duty cycle under load given by datasheet. Results in: 1500 + 0.25 * (2330 - 1500) = 1707.5 us max pulsewidth at position = minimum
             brake_pulse_retract_effective_max_us = brake_pulse_stop_us + brake_motor_govern_duty_pc * (brake_pulse_retract_us - brake_pulse_stop_us);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
 
@@ -309,7 +309,7 @@ void loop() {
         // Step 3 : Fix motor pc value if it's out of range or exceeding positional limits
         if (runmode == CAL && cal_joyvert_brkmotor_mode)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
             brake_out_pc = constrain (brake_out_pc, brake_extend_min_pc, brake_retract_max_pc);  // Constrain to full potential range when calibrating. Caution don't break anything!
-        else if ((brake_out_pc < brake_stop_pc && brkpos_sensor.get_filtered_value() > BrakePositionSensor::park_in - BrakePositionSensor::margin_in) || (brake_out_pc > brake_stop_pc && brkpos_sensor.get_filtered_value() < BrakePositionSensor::nom_lim_retract_in + BrakePositionSensor::margin_in))  // If brake is at position limits and we're tring to go further, stop the motor
+        else if ((brake_out_pc < brake_stop_pc && brkpos_sensor.filt() > BrakePositionSensor::park_in - BrakePositionSensor::margin_in) || (brake_out_pc > brake_stop_pc && brkpos_sensor.filt() < BrakePositionSensor::nom_lim_retract_in + BrakePositionSensor::margin_in))  // If brake is at position limits and we're tring to go further, stop the motor
             brake_out_pc = brake_stop_pc;
         else brake_out_pc = constrain (brake_out_pc, brake_extend_pc, brake_retract_pc);  // Send to the actuator. Refuse to exceed range
 
@@ -327,7 +327,7 @@ void loop() {
 
     // Cruise - Update gas target. Controls gas rpm target to keep speed equal to cruise mph target, except during cruise target adjustment, gas target is determined in cruise mode logic.
     if (runmode == CRUISE && (cruise_setpoint_mode == pid_suspend_fly) && cruisePidTimer.expireset()) {
-        if (cruise_adjusting) speedo_target_mph = speedometer.get_filtered_value();
+        if (cruise_adjusting) speedo_target_mph = speedometer.filt();
         else {
             cruise_pid.set_outlimits (throttle.idlespeed(), tach_govern_rpm);  // because cruise pid has internal variable for idlespeed which may need updating
             tach_target_rpm = throttle.target();  // tach_target_rpm is pointed to as the output of the cruise pid loop, need to update it before doing pid math
@@ -383,7 +383,7 @@ void loop() {
     ts.handleTouch(); // Handle touch events and actions
     // ts.printTouchInfo(); 
     // This doesn't work for some reason, and causes Wire.cpp i2c errors:
-    // if (ts.touched() && !sim.get_enabled()) screen.sprite_touch(ts.getX(), ts.getY());
+    // if (ts.touched() && !sim.enabled()) screen.sprite_touch(ts.getX(), ts.getY());
     
     // Encoder handling
     uint32_t encoder_sw_action = encoder.handleSwitchAction();
@@ -435,13 +435,13 @@ void loop() {
         else if (dataset_page == PG_CAR) {
             if (selected_value == 2) throttle.set_idlehot(throttle.idlehot(), 0.1*(float)sim_edit_delta);
             else if (selected_value == 3) throttle.set_idlecold(throttle.idlecold(), 0.1*(float)sim_edit_delta);
-            else if (selected_value == 4) adj = adj_val (tachometer.get_redline_rpm_ptr().get(), 0.1*(float)sim_edit_delta, throttle.idlehigh(), tachometer.get_max_rpm());
-            else if (selected_value == 5) adj_val (airflow_sensor.get_max_mph_ptr().get(), 0.01*(float)sim_edit_delta, 0, airflow_sensor.get_abs_max_mph());
-            else if (selected_value == 6) adj_val (map_sensor.get_min_psi_ptr().get(), 0.1*(float)sim_edit_delta, map_sensor.get_abs_min_psi(), map_sensor.get_abs_max_psi());
-            else if (selected_value == 6) adj_val (map_sensor.get_max_psi_ptr().get(), 0.1*(float)sim_edit_delta, map_sensor.get_abs_min_psi(), map_sensor.get_abs_max_psi());
-            else if (selected_value == 8) adj_val (&speedo_idle_mph, 0.01*(float)sim_edit_delta, 0, speedometer.get_redline_mph() - 1);
-            else if (selected_value == 9) adj_val (speedometer.get_redline_mph_ptr().get(), 0.01*(float)sim_edit_delta, speedo_idle_mph, 30);
-            else if (selected_value == 10) adj_val (brkpos_sensor.get_zeropoint_ptr().get(), 0.001*(float)sim_edit_delta, BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
+            else if (selected_value == 4) adj = adj_val (tachometer.redline_rpm_ptr().get(), 0.1*(float)sim_edit_delta, throttle.idlehigh(), tachometer.max_rpm());
+            else if (selected_value == 5) adj_val (airflow_sensor.max_mph_ptr().get(), 0.01*(float)sim_edit_delta, 0, airflow_sensor.abs_max_mph());
+            else if (selected_value == 6) adj_val (map_sensor.min_psi_ptr().get(), 0.1*(float)sim_edit_delta, map_sensor.abs_min_psi(), map_sensor.abs_max_psi());
+            else if (selected_value == 6) adj_val (map_sensor.max_psi_ptr().get(), 0.1*(float)sim_edit_delta, map_sensor.abs_min_psi(), map_sensor.abs_max_psi());
+            else if (selected_value == 8) adj_val (&speedo_idle_mph, 0.01*(float)sim_edit_delta, 0, speedometer.redline_mph() - 1);
+            else if (selected_value == 9) adj_val (speedometer.redline_mph_ptr().get(), 0.01*(float)sim_edit_delta, speedo_idle_mph, 30);
+            else if (selected_value == 10) adj_val (brkpos_sensor.zeropoint_ptr().get(), 0.001*(float)sim_edit_delta, BrakePositionSensor::nom_lim_retract_in, BrakePositionSensor::nom_lim_extend_in);
         }
         else if (dataset_page == PG_PWMS) {
             if (selected_value == 3) adj_val (&steer_pulse_left_us, sim_edit_delta, steer_pulse_left_min_us, steer_pulse_stop_us - 1);
@@ -492,7 +492,7 @@ void loop() {
             else if (selected_value == 6) sim.set_can_sim(sensor::mapsens, adj_bool(sim.can_sim(sensor::mapsens), sim_edit_delta));
             // else if (selected_value == 7) sim.set_can_sim(sensor::starter, adj_bool(sim.can_sim(sensor::starter), sim_edit_delta));
             else if (selected_value == 7) sim.set_can_sim(sensor::basicsw, adj_bool(sim.can_sim(sensor::basicsw), sim_edit_delta));
-            else if (selected_value == 8) sim.set_potmap(static_cast<sensor>(adj_val(static_cast<int32_t>(sim.get_potmap()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));            
+            else if (selected_value == 8) sim.set_potmap(static_cast<sensor>(adj_val(static_cast<int32_t>(sim.potmap()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));            
             else if (selected_value == 9 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor_mode, sim_edit_delta);
             else if (selected_value == 10 && runmode == CAL) adj_bool (&cal_pot_gasservo_mode, (sim_edit_delta < 0 || cal_pot_gasservo_ready) ? sim_edit_delta : -1);
         }
@@ -545,7 +545,7 @@ void loop() {
     dataset_page_last = dataset_page;
     selected_value_last = selected_value;
     tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
-    simulating_last = sim.get_enabled();
+    simulating_last = sim.enabled();
 
     // Watchdog.reset();  // Kick the watchdog to keep us alive
     // if (display_enabled) screen.watchdog();
