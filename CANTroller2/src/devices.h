@@ -1168,6 +1168,8 @@ class Simulator {
         }
 
         // check if a componenet is currently being simulated (by either the touchscreen or the pot)
+        bool simulating() { return _enabled; }  // equivalent to enabled()  // Maybe include || potmapping() too ?
+
         bool simulating(sensor arg_sensor) {
             return can_sim(arg_sensor) && (_enabled || _potmap == arg_sensor);
         }
@@ -1265,7 +1267,7 @@ class Simulator {
         }
         
         bool potmapping(sensor s) { return can_sim(s) && _potmap == s; }  // query if a certain sensor is being potmapped
-        bool potmapping() { return !(_potmap == sensor::none); }  // query if any sensors are being potmapped
+        bool potmapping() { return can_sim(_potmap) && !(_potmap == sensor::none); }  // query if any sensors are being potmapped
         sensor potmap() { return _potmap; }  // query which sensor is being potmapped
         bool enabled() { return _enabled; }
         bool* enabled_ptr() { return &_enabled; }
