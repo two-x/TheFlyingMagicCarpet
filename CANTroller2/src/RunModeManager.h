@@ -137,7 +137,6 @@ private:
     }
     void handleHoldMode() {
         if (we_just_switched_modes) {  // Release throttle and push brake upon entering hold mode
-            throttle.goto_idle();  // Let off gas (if gas using PID mode)
             if (!autostop_disabled) {
                 if (speedometer.car_stopped()) pressure_target_psi = pressure_sensor.get_filtered_value() + starter ? pressure_panic_increment_psi : pressure_hold_increment_psi; // If the car is already stopped then just add a touch more pressure and then hold it.
                 else if (pressure_target_psi < pressure_hold_initial_psi) pressure_target_psi = starter ? pressure_panic_initial_psi : pressure_hold_initial_psi;  //  These hippies need us to stop the car for them
@@ -146,14 +145,12 @@ private:
             stopcarTimer.reset();
             joy_centered = false;  // Fly mode will be locked until the joystick first is put at or below center
         }
-        if (brakeIntervalTimer.expireset()) {  // On an interval ...
-            throttle.goto_idle();  // Keep target updated to possibly changing idle value
-            if (!speedometer.car_stopped() && !stopcarTimer.expired() && !autostop_disabled) pressure_target_psi = min (pressure_target_psi + starter ? pressure_panic_increment_psi : pressure_hold_increment_psi, pressure_sensor.get_max_human());  // If the car is still moving, push harder
-        }
+        throttle.goto_idle();  // Let off gas (if gas using PID mode) and keep target updated to possibly changing idle value
+        if (brakeIntervalTimer.expireset() && !speedometer.car_stopped() && !stopcarTimer.expired() && !autostop_disabled)
+            pressure_target_psi = min (pressure_target_psi + starter ? pressure_panic_increment_psi : pressure_hold_increment_psi, pressure_sensor.get_max_human());  // If the car is still moving, push harder
         if (get_joydir() != joy_up) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
         else if (joy_centered && !starter && !hotrc_radio_lost) updateMode(FLY); // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
     }
-
     void handleFlyMode() {
         if (we_just_switched_modes) car_hasnt_moved = speedometer.car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
         joydir = get_joydir();
@@ -163,10 +160,10 @@ private:
         }
         else if (speedometer.car_stopped()) updateMode(HOLD);  // Go to Hold Mode if we have come to a stop after moving  // && hotrc_pc[VERT][FILT] <= hotrc_pc[VERT][DBBOT]
 
-        if (!simulator.simulating(SimOption::joy) && hotrc_radio_lost) updateMode(HOLD);  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
+        if (!sim.simulating(sensor::joy) && hotrc_radio_lost) updateMode(HOLD);  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
         else {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
             if (joydir == joy_up)  // If we are trying to accelerate, scale joystick value to determine gas setpoint
-                throttle.set_target (map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBTOP], hotrc_pc[VERT][MAX], throttle.get_idlespeed(), tach_govern_rpm));
+                throttle.set_target (map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBTOP], hotrc_pc[VERT][MAX], throttle.idlespeed(), tach_govern_rpm));
             else throttle.goto_idle();  // Else let off gas (if gas using PID mode)
             
             if (joydir == joy_down)  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
@@ -210,7 +207,7 @@ private:
                 }
                 else if (cruise_setpoint_mode == pid_suspend_fly) {
                     if (!cruise_adjusting) tach_adjustpoint_rpm = tachometer.get_filtered_value();
-                    throttle.set_target(tach_adjustpoint_rpm + ctrlratio * (((joydir == joy_up) ? tach_govern_rpm : throttle.get_idlespeed()) - tach_adjustpoint_rpm));
+                    throttle.set_target(tach_adjustpoint_rpm + ctrlratio * (((joydir == joy_up) ? tach_govern_rpm : throttle.idlespeed()) - tach_adjustpoint_rpm));
                 }
                 cruise_ctrl_extent_pc = std::abs(hotrc_pc[VERT][FILT]);
             }

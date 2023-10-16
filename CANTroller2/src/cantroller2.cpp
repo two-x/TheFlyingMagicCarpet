@@ -1,6 +1,6 @@
 // Carpet CANTroller II  Source Code  - For ESP32-S3-DevKitC-1-N8
 #include <SPI.h>  // SPI serial bus
-#include <Adafruit_SleepyDog.h>  // Watchdog
+// #include <Adafruit_SleepyDog.h>  // Watchdog
 #include <vector>
 #include <iomanip>  // Formatting cout
 #include "globals.h"
@@ -108,12 +108,12 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     map_sensor.setup();
 
     printf("Simulator setup..\n");
-    simulator.register_device(SimOption::pressure, pressure_sensor, pressure_sensor.source());
-    simulator.register_device(SimOption::brkpos, brkpos_sensor, brkpos_sensor.source());
-    simulator.register_device(SimOption::airflow, airflow_sensor, airflow_sensor.source());
-    simulator.register_device(SimOption::mapsens, map_sensor, map_sensor.source());
-    simulator.register_device(SimOption::tach, tachometer, tachometer.source());
-    simulator.register_device(SimOption::speedo, speedometer, speedometer.source());
+    sim.register_device(sensor::pressure, pressure_sensor, pressure_sensor.source());
+    sim.register_device(sensor::brkpos, brkpos_sensor, brkpos_sensor.source());
+    sim.register_device(sensor::airflow, airflow_sensor, airflow_sensor.source());
+    sim.register_device(sensor::mapsens, map_sensor, map_sensor.source());
+    sim.register_device(sensor::tach, tachometer, tachometer.source());
+    sim.register_device(sensor::speedo, speedometer, speedometer.source());
 
     printf ("Configure timers for PWM out..\n");
     ESP32PWM::allocateTimer(0);
@@ -164,8 +164,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     // Initialize sensor error flags to false
     for (int32_t i=0; i<num_err_types; i++) for (int32_t j=0; j<e_num_sensors; j++) err_sensor[i][j] = false;
 
-    int32_t watchdog_time_ms = Watchdog.enable(2500);  // Start 2.5 sec watchdog
-    printf ("Watchdog.. timer set to %ld ms\n", watchdog_time_ms);
+    // int32_t watchdog_time_ms = Watchdog.enable(2500);  // Start 2.5 sec watchdog
+    // printf ("Watchdog.. timer set to %ld ms\n", watchdog_time_ms);
     printf ("Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     panicTimer.reset();
@@ -196,7 +196,7 @@ void loop() {
         boot_button_suppress_click = false;  // End click suppression
     }
     // External digital inputs
-    if (!simulator.simulating(SimOption::basicsw)) {  // Basic Mode switch
+    if (!sim.simulating(sensor::basicsw)) {  // Basic Mode switch
         do {
             basicmodesw = !digitalRead(basicmodesw_pin);   // !value because electrical signal is active low
         } while (basicmodesw != !digitalRead(basicmodesw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
@@ -234,12 +234,12 @@ void loop() {
         }
     }
     for (int8_t ch = CH3; ch <= CH4; ch++) hotrc_sw_event[ch] = false;
-    // 2. Read horz and vert pulse inputs, spike filter, convert to percent, ema filter, constrain, and center within deadband
+    // 2. Read horz and vert pulse inputs, spike filter, convert to percent, ema filter, constrain, and center if within deadband
     for (int8_t axis = HORZ; axis <= VERT; axis++) {
         hotrc_us[axis][RAW] = (int32_t)hotrc_rmt[axis].readPulseWidth();
         hotrc_us[axis][RAW] = hotrcManager[axis].spike_filter(hotrc_us[axis][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
         ema_filt(hotrc_us[axis][RAW], &hotrc_ema_us[axis], hotrc_ema_alpha);  // Need unconstrained ema-filtered vertical for radio lost detection 
-        if (!simulator.simulating(SimOption::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
+        if (!sim.simulating(sensor::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
             hotrc_pc[axis][RAW] = hotrc_us_to_pc(axis, hotrc_us[axis][RAW]);
             ema_filt(hotrc_pc[axis][RAW], &(hotrc_pc[axis][FILT]), hotrc_ema_alpha);  // do ema filter to determine joy_vert_filt
             hotrc_pc[axis][FILT] = constrain(hotrc_pc[axis][FILT], hotrc_pc[axis][MIN], hotrc_pc[axis][MAX]);
@@ -247,9 +247,8 @@ void loop() {
                 hotrc_pc[axis][FILT] = hotrc_pc[axis][CENT];  // if within the deadband set joy_axis_filt to center value
         }
     }
-    // 3. Pot overload can rudely overwrite the horz value
-    if (simulator.can_simulate(SimOption::joy) && simulator.get_pot_overload() == SimOption::joy)
-        hotrc_pc[HORZ][FILT] = pot.mapToRange(steer_pulse_left_us, steer_pulse_right_us);
+    // 3. Pot map can rudely overwrite the horz value
+    if (sim.potmapping(sensor::joy)) hotrc_pc[HORZ][FILT] = pot.mapToRange(steer_pulse_left_us, steer_pulse_right_us);
     // 4. Determine if the radio is lost
     if (hotrc_ema_us[VERT] > hotrc_failsafe_us + hotrc_failsafe_margin_us) {
         hotrcFailsafeTimer.reset();
@@ -303,7 +302,7 @@ void loop() {
             // brake_motor_govern_duty_ratio = 0.25;  // 25% = Max motor duty cycle under load given by datasheet. Results in: 1500 + 0.25 * (2330 - 1500) = 1707.5 us max pulsewidth at position = minimum
             brake_pulse_retract_effective_max_us = brake_pulse_stop_us + brake_motor_govern_duty_pc * (brake_pulse_retract_us - brake_pulse_stop_us);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
 
-            brakeQPID.Compute();  // Otherwise the pid control is active
+            brake_pid.compute();  // Otherwise the pid control is active
         }
         // Step 3 : Fix motor pc value if it's out of range or exceeding positional limits
         if (runmode == CAL && cal_joyvert_brkmotor_mode)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
@@ -328,9 +327,9 @@ void loop() {
     if (runmode == CRUISE && (cruise_setpoint_mode == pid_suspend_fly) && cruisePidTimer.expireset()) {
         if (cruise_adjusting) speedo_target_mph = speedometer.get_filtered_value();
         else {
-            cruiseQPID.SetOutputLimits (throttle.get_idlespeed(), tach_govern_rpm);  // because cruise pid has internal variable for idlespeed which may need updating
-            tach_target_rpm = throttle.get_target();  // tach_target_rpm is pointed to as the output of the cruise pid loop, need to update it before doing pid math
-            cruiseQPID.Compute();  // cruise pid calculates new output (tach_target_rpm) based on input (speedmeter::human) and target (speedo_target_mph)
+            cruise_pid.set_outlimits (throttle.idlespeed(), tach_govern_rpm);  // because cruise pid has internal variable for idlespeed which may need updating
+            tach_target_rpm = throttle.target();  // tach_target_rpm is pointed to as the output of the cruise pid loop, need to update it before doing pid math
+            cruise_pid.compute();  // cruise pid calculates new output (tach_target_rpm) based on input (speedmeter::human) and target (speedo_target_mph)
             throttle.set_target(tach_target_rpm);  // conversely to above, update throttle manager with new value from the pid calculation
         }
     }
@@ -349,10 +348,10 @@ void loop() {
         else if (runmode == CRUISE && (cruise_setpoint_mode != pid_suspend_fly))
             gas_pulse_out_us = gas_pulse_cruise_us;
         else if (runmode != BASIC) {
-            tach_target_rpm = throttle.get_target();
-            if (gasQPID.GetMode() == (uint8_t)QPID::Control::manual)  // This isn't really open loop, more like simple proportional control, with output set proportional to target
-                gas_pulse_out_us = map (throttle.get_target(), throttle.get_idlespeed(), tach_govern_rpm, gas_pulse_ccw_closed_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
-            else gasQPID.Compute();  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
+            tach_target_rpm = throttle.target();
+            if (gas_open_loop)  // This isn't really open loop, more like simple proportional control, with output set proportional to target
+                gas_pulse_out_us = map (throttle.target(), throttle.idlespeed(), tach_govern_rpm, gas_pulse_ccw_closed_us, gas_pulse_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
+            else gas_pid.compute();  // Do proper pid math to determine gas_pulse_out_us from engine rpm error
         }
         // Step 2 : Constrain if out of range
         if (runmode == BASIC || runmode == SHUTDOWN)
@@ -382,7 +381,7 @@ void loop() {
     ts.handleTouch(); // Handle touch events and actions
     // ts.printTouchInfo(); 
     // This doesn't work for some reason, and causes Wire.cpp i2c errors:
-    // if (ts.touched() && !simulator.get_enabled()) screen.sprite_touch(ts.getX(), ts.getY());
+    // if (ts.touched() && !sim.get_enabled()) screen.sprite_touch(ts.getX(), ts.getY());
     
     // Encoder handling
     uint32_t encoder_sw_action = encoder.handleSwitchAction();
@@ -432,9 +431,9 @@ void loop() {
             }
         }
         else if (dataset_page == PG_CAR) {
-            if (selected_value == 2) throttle.set_idlehot(throttle.get_idlehot(), 0.1*(float)sim_edit_delta);
-            else if (selected_value == 3) throttle.set_idlecold(throttle.get_idlecold(), 0.1*(float)sim_edit_delta);
-            else if (selected_value == 4) adj = adj_val (tachometer.get_redline_rpm_ptr().get(), 0.1*(float)sim_edit_delta, throttle.get_idlehigh(), tachometer.get_max_rpm());
+            if (selected_value == 2) throttle.set_idlehot(throttle.idlehot(), 0.1*(float)sim_edit_delta);
+            else if (selected_value == 3) throttle.set_idlecold(throttle.idlecold(), 0.1*(float)sim_edit_delta);
+            else if (selected_value == 4) adj = adj_val (tachometer.get_redline_rpm_ptr().get(), 0.1*(float)sim_edit_delta, throttle.idlehigh(), tachometer.get_max_rpm());
             else if (selected_value == 5) adj_val (airflow_sensor.get_max_mph_ptr().get(), 0.01*(float)sim_edit_delta, 0, airflow_sensor.get_abs_max_mph());
             else if (selected_value == 6) adj_val (map_sensor.get_min_psi_ptr().get(), 0.1*(float)sim_edit_delta, map_sensor.get_abs_min_psi(), map_sensor.get_abs_max_psi());
             else if (selected_value == 6) adj_val (map_sensor.get_max_psi_ptr().get(), 0.1*(float)sim_edit_delta, map_sensor.get_abs_min_psi(), map_sensor.get_abs_max_psi());
@@ -453,48 +452,45 @@ void loop() {
             else if (selected_value == 10) adj_val (&gas_pulse_cw_open_us, sim_edit_delta, gas_pulse_cw_min_us, gas_pulse_ccw_closed_us - 1);
         }
         else if (dataset_page == PG_IDLE) {
-            if (selected_value == 4) throttle.set_idlehigh (throttle.get_idlehigh(), (float)sim_edit_delta);
-            else if (selected_value == 5) throttle.set_idlecold (throttle.get_idlecold(), (float)sim_edit_delta);
-            else if (selected_value == 6) throttle.set_idlehot (throttle.get_idlehot(), (float)sim_edit_delta);
-            else if (selected_value == 7) throttle.set_tempcold (throttle.get_tempcold(), (float)sim_edit_delta);
-            else if (selected_value == 8) throttle.set_temphot (throttle.get_temphot(), (float)sim_edit_delta);
-            else if (selected_value == 9) throttle.set_settlerate (throttle.get_settlerate() + sim_edit_delta);
+            if (selected_value == 4) throttle.set_idlehigh (throttle.idlehigh(), (float)sim_edit_delta);
+            else if (selected_value == 5) throttle.set_idlecold (throttle.idlecold(), (float)sim_edit_delta);
+            else if (selected_value == 6) throttle.set_idlehot (throttle.idlehot(), (float)sim_edit_delta);
+            else if (selected_value == 7) throttle.set_tempcold (throttle.tempcold(), (float)sim_edit_delta);
+            else if (selected_value == 8) throttle.set_temphot (throttle.temphot(), (float)sim_edit_delta);
+            else if (selected_value == 9) throttle.set_settlerate (throttle.settlerate() + sim_edit_delta);
             else if (selected_value == 10) throttle.cycle_idlemode (sim_edit_delta);
         }
         else if (dataset_page == PG_BPID) {
-            if (selected_value == 8) brakeQPID.SetKp (brakeQPID.GetKp() + 0.001 * (float)sim_edit_delta);
-            else if (selected_value == 9) brakeQPID.SetKi (brakeQPID.GetKi() + 0.001 * (float)sim_edit_delta);
-            else if (selected_value == 10) brakeQPID.SetKd (brakeQPID.GetKd() + 0.001 * (float)sim_edit_delta);
+            if (selected_value == 8) brake_pid.set_kp (brake_pid.kp() + 0.001 * (float)sim_edit_delta);
+            else if (selected_value == 9) brake_pid.set_ki (brake_pid.ki() + 0.001 * (float)sim_edit_delta);
+            else if (selected_value == 10) brake_pid.set_kd (brake_pid.kd() + 0.001 * (float)sim_edit_delta);
         }
         else if (dataset_page == PG_GPID) {
-            if (selected_value == 7) {
-                adj_bool (&gas_open_loop, sim_edit_delta);
-                gasQPID.SetMode (gas_open_loop ? QPID::Control::manual : QPID::Control::timer);
-            }
-            else if (selected_value == 8) gasQPID.SetKp (gasQPID.GetKp() + 0.001 * (float)sim_edit_delta);
-            else if (selected_value == 9) gasQPID.SetKi (gasQPID.GetKi() + 0.001 * (float)sim_edit_delta);
-            else if (selected_value == 10) gasQPID.SetKd (gasQPID.GetKd() + 0.001 * (float)sim_edit_delta);
+            if (selected_value == 7) { adj_bool (&gas_open_loop, sim_edit_delta); }  // gas_pid.SetMode (gas_open_loop ? qpid::control_t::manual : qpid::control_t::timer);
+            else if (selected_value == 8) gas_pid.set_kp (gas_pid.kp() + 0.001 * (float)sim_edit_delta);
+            else if (selected_value == 9) gas_pid.set_ki (gas_pid.ki() + 0.001 * (float)sim_edit_delta);
+            else if (selected_value == 10) gas_pid.set_kd (gas_pid.kd() + 0.001 * (float)sim_edit_delta);
         }
         else if (dataset_page == PG_CPID) {
             if (selected_value == 7) adj_val(&cruise_delta_max_us_per_s, sim_edit_delta, 1, 1000);
-            else if (selected_value == 8) cruiseQPID.SetKp (cruiseQPID.GetKp() + 0.001 * (float)sim_edit_delta);
-            else if (selected_value == 9) cruiseQPID.SetKi (cruiseQPID.GetKi() + 0.001 * (float)sim_edit_delta);
-            else if (selected_value == 10) cruiseQPID.SetKd (cruiseQPID.GetKd() + 0.001 * (float)sim_edit_delta);
+            else if (selected_value == 8) cruise_pid.set_kp (cruise_pid.kp() + 0.001 * (float)sim_edit_delta);
+            else if (selected_value == 9) cruise_pid.set_ki (cruise_pid.ki() + 0.001 * (float)sim_edit_delta);
+            else if (selected_value == 10) cruise_pid.set_kd (cruise_pid.kd() + 0.001 * (float)sim_edit_delta);
         }
         else if (dataset_page == PG_TEMP) {
             if (selected_value == 10) adj_bool (&dont_take_temperatures, sim_edit_delta);
          }
         else if (dataset_page == PG_SIM) {
-            if (selected_value == 0) simulator.set_can_simulate(SimOption::joy, adj_bool(simulator.can_simulate(SimOption::joy), sim_edit_delta));
-            else if (selected_value == 1) simulator.set_can_simulate(SimOption::pressure, adj_bool(simulator.can_simulate(SimOption::pressure), sim_edit_delta));
-            else if (selected_value == 2) simulator.set_can_simulate(SimOption::brkpos, adj_bool(simulator.can_simulate(SimOption::brkpos), sim_edit_delta));
-            else if (selected_value == 3) simulator.set_can_simulate(SimOption::speedo, adj_bool(simulator.can_simulate(SimOption::speedo), sim_edit_delta));
-            else if (selected_value == 4) simulator.set_can_simulate(SimOption::tach, adj_bool(simulator.can_simulate(SimOption::tach), sim_edit_delta));
-            else if (selected_value == 5) simulator.set_can_simulate(SimOption::airflow, adj_bool(simulator.can_simulate(SimOption::airflow), sim_edit_delta));
-            else if (selected_value == 6) simulator.set_can_simulate(SimOption::mapsens, adj_bool(simulator.can_simulate(SimOption::mapsens), sim_edit_delta));
-            // else if (selected_value == 7) simulator.set_can_simulate(SimOption::starter, adj_bool(simulator.can_simulate(SimOption::starter), sim_edit_delta));
-            else if (selected_value == 7) simulator.set_can_simulate(SimOption::basicsw, adj_bool(simulator.can_simulate(SimOption::basicsw), sim_edit_delta));
-            else if (selected_value == 8) simulator.set_pot_overload(static_cast<SimOption>(adj_val(static_cast<int32_t>(simulator.get_pot_overload()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));            
+            if (selected_value == 0) sim.set_can_sim(sensor::joy, adj_bool(sim.can_sim(sensor::joy), sim_edit_delta));
+            else if (selected_value == 1) sim.set_can_sim(sensor::pressure, adj_bool(sim.can_sim(sensor::pressure), sim_edit_delta));
+            else if (selected_value == 2) sim.set_can_sim(sensor::brkpos, adj_bool(sim.can_sim(sensor::brkpos), sim_edit_delta));
+            else if (selected_value == 3) sim.set_can_sim(sensor::speedo, adj_bool(sim.can_sim(sensor::speedo), sim_edit_delta));
+            else if (selected_value == 4) sim.set_can_sim(sensor::tach, adj_bool(sim.can_sim(sensor::tach), sim_edit_delta));
+            else if (selected_value == 5) sim.set_can_sim(sensor::airflow, adj_bool(sim.can_sim(sensor::airflow), sim_edit_delta));
+            else if (selected_value == 6) sim.set_can_sim(sensor::mapsens, adj_bool(sim.can_sim(sensor::mapsens), sim_edit_delta));
+            // else if (selected_value == 7) sim.set_can_sim(sensor::starter, adj_bool(sim.can_sim(sensor::starter), sim_edit_delta));
+            else if (selected_value == 7) sim.set_can_sim(sensor::basicsw, adj_bool(sim.can_sim(sensor::basicsw), sim_edit_delta));
+            else if (selected_value == 8) sim.set_potmap(static_cast<sensor>(adj_val(static_cast<int32_t>(sim.get_potmap()), sim_edit_delta, 0, arraysize(sensorcard) - 1)));            
             else if (selected_value == 9 && runmode == CAL) adj_bool (&cal_joyvert_brkmotor_mode, sim_edit_delta);
             else if (selected_value == 10 && runmode == CAL) adj_bool (&cal_pot_gasservo_mode, (sim_edit_delta < 0 || cal_pot_gasservo_ready) ? sim_edit_delta : -1);
         }
@@ -523,7 +519,7 @@ void loop() {
         write_pin (ign_out_pin, ignition);  // Turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
         ignition_toggle_request = false;  // Make sure this goes after the last comparison
     }
-    if (!speedometer.car_stopped() && !simulator.simulating(SimOption::joy) && hotrc_radio_lost) panic_stop = true;
+    if (!speedometer.car_stopped() && !sim.simulating(sensor::joy) && hotrc_radio_lost) panic_stop = true;
     if (panic_stop && !panic_stop_last) {
         panicTimer.reset();
         if (ignition) ignition_toggle_request = true;  // If panic stop didn't already result from ignition cut, we will cut it. Will lead to shutdown mode and braking
@@ -540,19 +536,16 @@ void loop() {
     neo.refresh();
     loop_marktime ("-");
     
-    if (display_enabled) {  // Display updates
-        screen.update_idiots();
-        screen.update();
-    }
-    else if (dataset_page_last != dataset_page) config.putUInt ("dpage", dataset_page);
+    screen.update();  // Display updates
+    if (!display_enabled && dataset_page_last != dataset_page) config.putUInt ("dpage", dataset_page);
     loop_marktime ("dis");
 
     dataset_page_last = dataset_page;
     selected_value_last = selected_value;
     tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
-    simulating_last = simulator.get_enabled();
+    simulating_last = sim.get_enabled();
 
-    Watchdog.reset();  // Kick the watchdog to keep us alive
+    // Watchdog.reset();  // Kick the watchdog to keep us alive
     // if (display_enabled) screen.watchdog();
     loop_print_timing();
 }

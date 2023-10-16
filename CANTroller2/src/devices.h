@@ -1060,9 +1060,9 @@ class OutToggle : public Toggle {
 
 // NOTE: if devices.h gets to be too long, we can (and maybe just should) move this to a separate file, it's not really a device...
 
-// This enum class represent the components which can be simulated (SimOption). It's a uint8_t type under the covers, so it can be used as an index
+// This enum class represent the components which can be simulated (sensor). It's a uint8_t type under the covers, so it can be used as an index
 typedef uint8_t opt_t;
-enum class SimOption : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, battery, starter, basicsw };  //, ignition, syspower };  // , num_sensors, err_flag };
+enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, battery, starter, basicsw };  //, ignition, syspower };  // , num_sensors, err_flag };
 
 // Simulator manages the ControllerMode handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
 // NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use ControllerModes,
@@ -1073,9 +1073,9 @@ class Simulator {
         // 3-tuple for a given component, keeping track of simulability status (whether this component is allowed to be simulated), an associated Device (a pointer to the actual component),
         // and a default ControllerMode (the mode we would like the component to switch back to when it stops being simulated)
         typedef std::tuple<bool, Device*, ControllerMode> simulable_t;
-        std::map<SimOption, simulable_t> _devices; // a collection of simulatable components
+        std::map<sensor, simulable_t> _devices; // a collection of simulatable components
         bool _enabled = false; // keep track of whether the simulator is running or not
-        SimOption _pot_overload; // keep track of which component is getting info from the pot
+        sensor _potmap; // keep track of which component is getting info from the pot
 
         Potentiometer& _pot;
     public:
@@ -1094,22 +1094,22 @@ class Simulator {
         static constexpr bool initial_sim_battery = false;
         static constexpr bool initial_sim_engtemp = false;
 
-        Simulator(Potentiometer& pot_arg, SimOption overload_arg=SimOption::none) : _pot(pot_arg) {
+        Simulator(Potentiometer& pot_arg, sensor potmap_arg=sensor::none) : _pot(pot_arg) {
             // set initial simulatability status for all components
-            set_can_simulate(SimOption::joy, initial_sim_joy);
-            set_can_simulate(SimOption::tach, initial_sim_tach);
-            set_can_simulate(SimOption::speedo, initial_sim_speedo);
-            set_can_simulate(SimOption::brkpos, initial_sim_brkpos);
-            set_can_simulate(SimOption::basicsw, initial_sim_basicsw);
-            set_can_simulate(SimOption::pressure, initial_sim_pressure);
-            // set_can_simulate(SimOption::syspower, initial_sim_syspower);  // Syspower cannot be simulated as its source is not external
-            set_can_simulate(SimOption::starter, initial_sim_starter);
-            // set_can_simulate(SimOption::ignition, initial_sim_ignition);  // Ignition cannot be simulated as its source is not external
-            set_can_simulate(SimOption::airflow, initial_sim_airflow);
-            set_can_simulate(SimOption::mapsens, initial_sim_mapsens);
-            set_can_simulate(SimOption::battery, initial_sim_battery);
-            set_can_simulate(SimOption::engtemp, initial_sim_engtemp);
-            set_pot_overload(overload_arg); // set initial pot overload
+            set_can_sim(sensor::joy, initial_sim_joy);
+            set_can_sim(sensor::tach, initial_sim_tach);
+            set_can_sim(sensor::speedo, initial_sim_speedo);
+            set_can_sim(sensor::brkpos, initial_sim_brkpos);
+            set_can_sim(sensor::basicsw, initial_sim_basicsw);
+            set_can_sim(sensor::pressure, initial_sim_pressure);
+            // set_can_sim(sensor::syspower, initial_sim_syspower);  // Syspower cannot be simulated as its source is not external
+            set_can_sim(sensor::starter, initial_sim_starter);
+            // set_can_sim(sensor::ignition, initial_sim_ignition);  // Ignition cannot be simulated as its source is not external
+            set_can_sim(sensor::airflow, initial_sim_airflow);
+            set_can_sim(sensor::mapsens, initial_sim_mapsens);
+            set_can_sim(sensor::battery, initial_sim_battery);
+            set_can_sim(sensor::engtemp, initial_sim_engtemp);
+            set_potmap(potmap_arg); // set initial pot map
         }
 
         void updateSimulationStatus(bool enableSimulation) {
@@ -1120,8 +1120,8 @@ class Simulator {
             // Iterate over all devices
             for (auto &deviceEntry : _devices) {
                 bool can_sim = std::get<0>(deviceEntry.second);
-                // If the device can be simulated and isn't being overloaded by the potentiometer
-                if (can_sim && _pot_overload != deviceEntry.first) {
+                // If the device can be simulated and isn't being mapped from the potentiometer
+                if (can_sim && _potmap != deviceEntry.first) {
                     Device *d = std::get<1>(deviceEntry.second);
                     // If the device exists
                     // NOTE: the nullptr checks here and below exist so that we can work with boolean components as well as Devices, for backwards compatability
@@ -1147,7 +1147,7 @@ class Simulator {
             updateSimulationStatus(true);
         }
 
-        // turn off the simulator. all devices will be set to their default input (if they are not being overloaded by the pot)
+        // turn off the simulator. all devices will be set to their default input (if they are not being mapped from the pot)
         void disable() {
             updateSimulationStatus(false);
         }
@@ -1157,32 +1157,32 @@ class Simulator {
         }
 
         // check if a componenet is currently being simulated (by either the touchscreen or the pot)
-        bool simulating(SimOption option) {
-            return can_simulate(option) && (_enabled || _pot_overload == option);
+        bool simulating(sensor option) {
+            return can_sim(option) && (_enabled || _potmap == option);
         }
 
-        // associate a Device and a given fall-back ControllerMode with a SimOption
-        void register_device(SimOption option, Device &d, ControllerMode default_mode) {
+        // associate a Device and a given fall-back ControllerMode with a sensor
+        void register_device(sensor option, Device &d, ControllerMode default_mode) {
             bool can_sim = false; // by default, disable simulation for this component
             auto kv = _devices.find(option); // look for the component
             if (kv != _devices.end()) {
                 can_sim = std::get<0>(kv->second); // if an entry for the component already existed, preserve its simulatability status
                 if (can_sim) { // if simulability has already been enabled...
-                    if (option == _pot_overload) { // ...and the pot is supposed to overload this component...
+                    if (option == _potmap) { // ...and the pot is supposed to map to this component...
                         d.set_source(ControllerMode::POT); // ...then set the input source for the associated Device to read from the pot
-                    } else if (_enabled) { // ...and the pot isn't overloading this component, but the simulator is running...
+                    } else if (_enabled) { // ...and the pot isn't mapping to this component, but the simulator is running...
                         d.set_source(ControllerMode::TOUCH); // ...then set the input source for the associated Device to read from the touchscreen
                     }
                 }
             }
             if (d.can_source(ControllerMode::POT)) {
-                d.attach_pot(_pot); // if this device can be overloaded by the pot, connect it to pot input
+                d.attach_pot(_pot); // if this device can be mapped from the pot, connect it to pot input
             }
             _devices[option] = simulable_t(can_sim, &d, default_mode); // store info for this component
         }
 
         // check if a component can be simulated (by either the touchscreen or the pot)
-        bool can_simulate(SimOption option) {
+        bool can_sim(sensor option) {
             auto kv = _devices.find(option); // look for the component
             if (kv != _devices.end()) {
                 return std::get<0>(kv->second); // if it exists, check the simulability status
@@ -1191,7 +1191,7 @@ class Simulator {
         }
 
         // set simulatability status for a component
-        void set_can_simulate(SimOption option, bool can_sim) {
+        void set_can_sim(sensor option, bool can_sim) {
             auto kv = _devices.find(option); // look for component
             if (kv != _devices.end()) { // if an entry for this component already exists, check if the new simulatability status is different from the old
                 bool old_can_sim = std::get<0>(kv->second);
@@ -1201,9 +1201,9 @@ class Simulator {
                     if (d != nullptr) { // if there is no associated Device with this component then input handling is done in the main code
                         default_mode = std::get<2>(kv->second); // preserve the stored default controller mode
                         if (can_sim) { // if we just enabled simulatability...
-                            if (option == _pot_overload) { // ...and the pot is supposed to overload this component...
+                            if (option == _potmap) { // ...and the pot is supposed to map to this component...
                                     d->set_source(ControllerMode::POT); // ...then set the input source for the associated Device to read from the pot
-                            } else if (_enabled) { // ...and the pot isn't overloading this component, but the simulator is running...
+                            } else if (_enabled) { // ...and the pot isn't mapping to this component, but the simulator is running...
                                     d->set_source(ControllerMode::TOUCH); // ...then set the input source for the associated Device to read from the touchscreen
                             }
                         } else {
@@ -1218,12 +1218,12 @@ class Simulator {
         }
 
         // set the component to be overridden by the pot (the pot can only override one component at a time)
-        void set_pot_overload(SimOption option) {
-            if (option != _pot_overload) { // if we're overloading a different component, we need to reset the input source for the old one
-                auto kv = _devices.find(_pot_overload);
+        void set_potmap(sensor option) {
+            if (option != _potmap) { // if we're mapping to a different component, we need to reset the input source for the old one
+                auto kv = _devices.find(_potmap);
                 if (kv != _devices.end()) {
                     Device *d = std::get<1>(kv->second);
-                    if (d != nullptr) { // if we were overloading a component with an associated Device...
+                    if (d != nullptr) { // if we were mapping to a component with an associated Device...
                         bool can_sim = std::get<0>(kv->second);
                         if (_enabled && can_sim) { // ...and the simulator is on, and we're able to be simulated...
                             d->set_source(ControllerMode::TOUCH); // ...then set the input source to the touchscreen
@@ -1236,24 +1236,25 @@ class Simulator {
                 kv = _devices.find(option); // we need to set the input source of the newly-overridden component
                 if (kv != _devices.end()) {
                     Device *d = std::get<1>(kv->second);
-                    if (d != nullptr ) { // if  we're overloading a component with an associated device, we need to change the input source to the pot
-                        if (d->can_source(ControllerMode::POT)) { // ...and we're allowed to overload this component...
+                    if (d != nullptr ) { // if  we're mapping to a component with an associated device, we need to change the input source to the pot
+                        if (d->can_source(ControllerMode::POT)) { // ...and we're allowed to map to this component...
                             bool can_sim = std::get<0>(kv->second);
                             if (can_sim) { // if we allow simualation for this componenent...
                                 d->set_source(ControllerMode::POT); // ...then set its input source to the pot
                             }
                         } else {
-                            printf("invalid pot overload selected: %d/n", option);
+                            printf("invalid pot map selected: %d/n", option);
                         }
                     }
                 }
-                _pot_overload = option;
+                _potmap = option;
             }
         }
-
+        
+        bool potmapping(sensor s) { return can_sim(s) && _potmap == s; }
         bool get_enabled() { return _enabled; }
         bool* get_enabled_ptr() { return &_enabled; }
-        SimOption get_pot_overload() { return _pot_overload; }
+        sensor get_potmap() { return _potmap; }
 };
 
 class Brake {  // This class wraps all brake activity to provide monitoring functions and coordination
