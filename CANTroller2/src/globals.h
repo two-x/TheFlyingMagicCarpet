@@ -331,7 +331,7 @@ Timer tachIdleTimer(5000000);         // How often to update tach idle value bas
 enum i2csensor { AIRFLOW, MAP, num_i2csensors };
 AirflowSensor airflow(i2c);
 MAPSensor mapsens(i2c);  // map sensor related
-Timer i2cReadTimer(25000);  // How often to read an i2c sensor
+Timer airflowTimer(25000);  // How often to read an i2c sensor
 int32_t i2creadsensor = AIRFLOW;
 
 // Motor control:
@@ -530,7 +530,36 @@ void starter_update () {
     }
     else starter = LOW;
 }
-
+void basicsw_update() {
+    if (!sim.simulating(sensor::basicsw)) {  // Basic Mode switch
+        do {
+            basicmodesw = !digitalRead(basicmodesw_pin);   // !value because electrical signal is active low
+        } while (basicmodesw != !digitalRead(basicmodesw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+    }
+}
+Timer dispResetButtonTimer (500000);  // How long to press esp32 "boot" button before screen will reset and redraw
+void bootbutton_update() {
+    // ESP32 "boot" button. generates boot_button_action flags of LONG or SHORT presses which can be handled wherever. Handler must reset boot_button_action = NONE
+    if (!read_pin (bootbutton_pin)) {
+        if (!boot_button) {  // If press just occurred
+            dispResetButtonTimer.reset();  // Looks like someone just pushed the esp32 "boot" button
+            boot_button_timer_active = true;  // flag to indicate timing for a possible long press
+        }
+        else if (boot_button_timer_active && dispResetButtonTimer.expired()) {
+            boot_button_action = LONG;  // Set flag to handle the long press event. Note, routine handling press should clear this
+            boot_button_timer_active = false;  // Clear timer active flag
+            boot_button_suppress_click = true;  // Prevents the switch release after a long press from causing a short press
+        }
+        boot_button = true;  // Store press is in effect
+    }
+    else {  // if button is not being pressed
+        if (boot_button && !boot_button_suppress_click) boot_button_action = SHORT;  // if the button was just released, a short press occurred, which must be handled
+        // else boot_button_action = NONE;  // This would auto-reset the button action flag but require it get handled in this loop. Otherwise the handler must set this
+        boot_button_timer_active = false;  // Clear timer active flag
+        boot_button = false;  // Store press is not in effect
+        boot_button_suppress_click = false;  // End click suppression
+    }
+}
 Timer loopTimer(1000000); // how long the previous main loop took to run (in us)
 float looptime_sum_s;
 int32_t loopno = 1;
@@ -708,20 +737,24 @@ float degF_to_K(float degF) {
 }
 
 // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
-float get_massairflow(float map = NAN, float airflow = NAN, float ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
-    TemperatureSensor* sensor = temp_manager.get_sensor(sensor_location::ambient);
-    float T = degF_to_K(ambient);  // in K
+float massairflow(float _map = NAN, float _airflow = NAN, float _ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
+    float temp = _ambient;
+    if (std::isnan(_ambient)) {
+        TemperatureSensor* sensor = temp_manager.get_sensor(sensor_location::engine);  // ambient
+        temp = sensor->get_temperature();
+    }
+    float T = degF_to_K(temp);  // in K
     float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
-    float v = 0.447 * airflow; // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
+    float v = 0.447 * std::isnan(_airflow) ? airflow.filt() : _airflow; // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
     float A = 0.0020268;  // in m2    1.0 in2 * pi * 0.00064516 m2/in2
-    float P = 6894.76 * map;  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
-    return 1000.0 * v * A * P / (R * T);  // in g/s   (g/kg * m/s * m2 * J/m3) / (J/(kg*K) * K) = g/s
+    float P = 6894.76 * std::isnan(_map) ? mapsens.filt() : _map;  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
+    return 1000000.0 * v * A * P / (R * T);  // in mg/s   (mg/kg * m/s * m2 * J/m3) / (J/(kg*K) * K) = g/s
 }
-float maf_gps;  // Mass airflow in grams per second
-float maf_min_gps = 0.0;
-float maf_max_gps = get_massairflow(mapsens.max_psi(), airflow.max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
+float maf_mgps;  // Mass airflow in milligrams per second
+float maf_min_mgps = 0.0;
+float maf_max_mgps = massairflow(mapsens.max_psi(), airflow.max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
 
-// float get_massairflow(float map = NAN, float airflow = NAN, float ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
+// float massairflow(float map = NAN, float airflow = NAN, float ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
 //     TemperatureSensor* sensor = temp_manager.get_sensor(sensor_location::ambient);
 //     float T = degF_to_K(std::isnan(ambient) ? sensor->get_temperature() : ambient);  // in K
 //     float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2

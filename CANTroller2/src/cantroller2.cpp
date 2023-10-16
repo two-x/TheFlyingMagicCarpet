@@ -137,51 +137,17 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
 void loop() {
     // Update inputs.  Fresh sensor data, and filtering
-
-    // ESP32 "boot" button. generates boot_button_action flags of LONG or SHORT presses which can be handled wherever. Handler must reset boot_button_action = NONE
-    if (!read_pin (bootbutton_pin)) {
-        if (!boot_button) {  // If press just occurred
-            dispResetButtonTimer.reset();  // Looks like someone just pushed the esp32 "boot" button
-            boot_button_timer_active = true;  // flag to indicate timing for a possible long press
-        }
-        else if (boot_button_timer_active && dispResetButtonTimer.expired()) {
-            boot_button_action = LONG;  // Set flag to handle the long press event. Note, routine handling press should clear this
-            boot_button_timer_active = false;  // Clear timer active flag
-            boot_button_suppress_click = true;  // Prevents the switch release after a long press from causing a short press
-        }
-        boot_button = true;  // Store press is in effect
-    }
-    else {  // if button is not being pressed
-        if (boot_button && !boot_button_suppress_click) boot_button_action = SHORT;  // if the button was just released, a short press occurred, which must be handled
-        // else boot_button_action = NONE;  // This would auto-reset the button action flag but require it get handled in this loop. Otherwise the handler must set this
-        boot_button_timer_active = false;  // Clear timer active flag
-        boot_button = false;  // Store press is not in effect
-        boot_button_suppress_click = false;  // End click suppression
-    }
-    // External digital inputs
-    if (!sim.simulating(sensor::basicsw)) {  // Basic Mode switch
-        do {
-            basicmodesw = !digitalRead(basicmodesw_pin);   // !value because electrical signal is active low
-        } while (basicmodesw != !digitalRead(basicmodesw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
-    }
-
+    bootbutton_update();
+    basicsw_update();
     starter_update();  // Runs starter bidirectional handler
     encoder.update();  // Read encoder input signals
     pot.update();
     brakepos.update();  // Brake position
-    
     tach.update();  // Tach
-    throttle.push_tach_reading(tach.human(), tach.last_read_time());
-    
-    if (i2cReadTimer.expireset()) {
-        // ++i2creadsensor %= num_i2csensors;
-        // if (i2creadsensor == AIRFLOW) 
-        airflow.update();  // Airflow sensor  // takes 900 us (!)
-        // else if (i2creadsensor == MAP) mapsens.update();  // MAP sensor  // takes 6800 us (!!)
-        maf_gps = get_massairflow();  // Recalculate intake mass airflow
-    }
+    throttle.push_tach_reading(tach.human(), tach.last_read_time());    
+    if (airflowTimer.expireset()) airflow.update();
     mapsens.update();  // MAP sensor  // takes 6800 us (!!)
-    
+    maf_mgps = massairflow();  // Recalculate intake mass airflow
     speedo.update();  // Speedo
     pressure.update();  // Brake pressure
     mulebatt.update();
