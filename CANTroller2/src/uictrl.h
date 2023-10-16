@@ -340,6 +340,25 @@ class neopixelStrip {
         }
         return colortype(rgb[0], rgb[1], rgb[2]);
     }
+    struct hsv { float h; float s; float v; };
+    // uint32_t rgb_to_hsv(uint32_t rgb) { return rgb_to_hsv((uint8_t)(rgb >> 16) | (uint8_t)((rgb & 0xff00 >> 8)) | (rgb & 0xff)); }
+    // hsv rgb_to_hsv(uint8_t r, uint8_t g, uint8_t b) {
+    //     // convert RGB values to the range 0-1
+    //     float ro = (float)r / 255.0;
+    //     float go = (float)g / 255.0;
+    //     float bo = (float)b / 255.0;
+    //     float cmax = maxelement(ro, go, bo);
+    //     float cmin = minelement(ro, go, bo);
+    //     float delta = cmax - cmin;
+    //     float h = 0.0;  // hue
+    //     if (delta == 0.0) h = 0.0; // undefined, but typically set to 0
+    //     else if (cmax == ro) h = 60 * fmod(((go - bo) / delta), 6);
+    //     else if (cmax == go) h = 60 * (((bo - ro) / delta) + 2);
+    //     else if (cmax == bo) h = 60 * (((ro - go) / delta) + 4);
+    //     float s = (cmax == 0.0) ? 0.0 : delta / cmax;  // saturation
+    //     float v = cmax;  // brightness
+    //     return { h, s, v };
+    // }
     uint32_t color_Rgb_to_32b(colortype color) {  // Convert 5-6-5 encoded 16-bit color value to type suitable for library
         return (static_cast<uint32_t>(color.R) << 16) | (static_cast<uint32_t>(color.G) << 8) | static_cast<uint32_t>(color.B);  // (static_cast<uint32_t>(color.W) << 24) | 
     }

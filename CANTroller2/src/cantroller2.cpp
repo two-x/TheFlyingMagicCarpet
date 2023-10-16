@@ -99,8 +99,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     gas_servo.attach (gas_pwm_pin, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     // Servo() argument 2 is channel (0-15) of the esp timer (?). set to Servo::CHANNEL_NOT_ATTACHED to auto grab a channel
     // gas_servo.set_native_limits();  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
-    temp_manager.setup();  // Onewire bus and temp sensors
-    throttle.setup(temp_manager.get_sensor(sensor_location::engine));
+    tempsens.setup();  // Onewire bus and temp sensors
+    throttle.setup(tempsens.get_sensor(location::engine));
     // Create a new task that runs the update_temperature_sensors function
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);
     printf ("Init screen.. ");

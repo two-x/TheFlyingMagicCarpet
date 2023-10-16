@@ -8,7 +8,7 @@
 #include <DallasTemperature.h>
 #include "utils.h"
 
-enum class sensor_location { ambient, engine, wheel_fl, wheel_fr, wheel_rl, wheel_rr };  // , SOREN_DEV0, SOREN_DEV1, num_known_ };
+enum class location { ambient, engine, wheel_fl, wheel_fr, wheel_rl, wheel_rr };  // , SOREN_DEV0, SOREN_DEV1, num_known_ };
 
 class TemperatureSensor {
 public:
@@ -16,13 +16,13 @@ public:
     using DeviceAddress = std::array<uint8_t, 8>;
 
 private:
-    sensor_location _location;
+    location _location;
     DeviceAddress _address;
     float _temperature;
     DallasTemperature* _tempsensebus;
 
 public:
-    TemperatureSensor(sensor_location location, const DeviceAddress& address, DallasTemperature* tempsensebus)
+    TemperatureSensor(location location, const DeviceAddress& address, DallasTemperature* tempsensebus)
    : _location(location), _address(address), _tempsensebus(tempsensebus), _temperature(-999) {}
 
     TemperatureSensor() = delete; // always create with a pointer to the tempsensorbus
@@ -45,7 +45,7 @@ public:
     float read_temperature() {
         float temp = _tempsensebus->getTempF(_address.data());
         if (temp == DEVICE_DISCONNECTED_F) {
-            printf("  disconnected device %s w/ addr: ", sensor_location_to_string(_location));
+            printf("  disconnected device %s w/ addr: ", location_to_string(_location));
             print_address();
             printf("\n");
             return DEVICE_DISCONNECTED_F;
@@ -55,12 +55,12 @@ public:
     }
 
     // getters
-    sensor_location get_location() const { return _location; }
+    location get_location() const { return _location; }
     float get_temperature() const { return _temperature; }
     const DeviceAddress& get_address() const { return _address; }
     
     // setters
-    void set_location(sensor_location location) { _location = location; }
+    void set_location(location location) { _location = location; }
     void set_temperature(float temperature) { _temperature = temperature; }
     void set_address(DeviceAddress address) {
         _address = address;
@@ -72,19 +72,19 @@ public:
     }
 
     void print_sensor_info() const {
-        printf("  location: %s, assigned addr: ", sensor_location_to_string(_location).c_str());
+        printf("  location: %s, assigned addr: ", location_to_string(_location).c_str());
         print_address();
         printf("\n");
     }
 
-    static std::string sensor_location_to_string(sensor_location location) {
+    static std::string location_to_string(location location) {
         switch(location) {
-            case sensor_location::ambient: return "ambient";
-            case sensor_location::engine: return "engine";
-            case sensor_location::wheel_fl: return "wheel_fl";
-            case sensor_location::wheel_fr: return "wheel_fr";
-            case sensor_location::wheel_rl: return "wheel_rl";
-            case sensor_location::wheel_rr: return "wheel_rr";
+            case location::ambient: return "ambient";
+            case location::engine: return "engine";
+            case location::wheel_fl: return "wheel_fl";
+            case location::wheel_fr: return "wheel_fr";
+            case location::wheel_rl: return "wheel_rl";
+            case location::wheel_rr: return "wheel_rr";
             default: return "unknown";
         }
     }
@@ -112,24 +112,24 @@ private:
     DallasTemperature tempsensebus;
 
     std::vector<DeviceAddress> detected_addresses;
-    std::vector<sensor_location> all_locations = {
-        sensor_location::engine,
-        sensor_location::ambient,
-        sensor_location::wheel_fl,
-        sensor_location::wheel_fr,
-        sensor_location::wheel_rl,
-        sensor_location::wheel_rr
+    std::vector<location> all_locations = {
+        location::engine,
+        location::ambient,
+        location::wheel_fl,
+        location::wheel_fr,
+        location::wheel_rl,
+        location::wheel_rr
         };
-    std::map<sensor_location, DeviceAddress> known_addresses = {
-        {sensor_location::engine, {0x28, 0x1a, 0x27, 0x90, 0x5c, 0x21, 0x01, 0x59}},
-        {sensor_location::ambient, {0x28, 0x3c, 0xf3, 0xa7, 0xc1, 0x21, 0x06, 0x69}},
-        {sensor_location::wheel_fl, {0x28, 0x55, 0x42, 0x8f, 0x5c, 0x21, 0x01, 0x69}},
-        {sensor_location::wheel_fr, {0x28, 0x70, 0x73, 0xb3, 0x5c, 0x21, 0x01, 0x27}},
-        {sensor_location::wheel_rl, {0x28, 0x54, 0xfb, 0x88, 0x5c, 0x21, 0x01, 0x64}},
-        {sensor_location::wheel_rr, {0x28, 0x6f, 0xcd, 0xba, 0x5c, 0x21, 0x01, 0x26}}
+    std::map<location, DeviceAddress> known_addresses = {
+        {location::engine, {0x28, 0x1a, 0x27, 0x90, 0x5c, 0x21, 0x01, 0x59}},
+        {location::ambient, {0x28, 0x3c, 0xf3, 0xa7, 0xc1, 0x21, 0x06, 0x69}},
+        {location::wheel_fl, {0x28, 0x55, 0x42, 0x8f, 0x5c, 0x21, 0x01, 0x69}},
+        {location::wheel_fr, {0x28, 0x70, 0x73, 0xb3, 0x5c, 0x21, 0x01, 0x27}},
+        {location::wheel_rl, {0x28, 0x54, 0xfb, 0x88, 0x5c, 0x21, 0x01, 0x64}},
+        {location::wheel_rr, {0x28, 0x6f, 0xcd, 0xba, 0x5c, 0x21, 0x01, 0x26}}
     };
 
-    std::map<sensor_location, TemperatureSensor> sensors;
+    std::map<location, TemperatureSensor> sensors;
 
     // Assigns known addresses to Sensors. The sensors will have locations like engine or ambient
     void assign_known_addresses() {
@@ -146,7 +146,7 @@ private:
                     // The sensor doesn't exist yet, so create it and add it to the map
                     sensors.emplace(known_address.first, TemperatureSensor(known_address.first, *detected_address_it, &tempsensebus));
                     // Print the sensor address for debugging purposes
-                    Serial.printf("  assigned known sensor %s at addr: ", TemperatureSensor::sensor_location_to_string(known_address.first).c_str());
+                    Serial.printf("  assigned known sensor %s at addr: ", TemperatureSensor::location_to_string(known_address.first).c_str());
                     sensors.at(known_address.first).print_address();
                     
                 } else {
@@ -159,16 +159,16 @@ private:
                 }
             } else {
                 // The known address was not detected, so log a warning message
-                Serial.printf("  known sensor %s not detected\n", TemperatureSensor::sensor_location_to_string(known_address.first).c_str());
+                Serial.printf("  known sensor %s not detected\n", TemperatureSensor::location_to_string(known_address.first).c_str());
             }
         }
     }
 
-    // Assign remaining addresses to any unassigned locations, in order of the sensor_locations enum
+    // Assign remaining addresses to any unassigned locations, in order of the locations enum
     void assign_remaining_addresses() {
         auto it = all_locations.begin();
         for (auto& detected_address : detected_addresses) {
-            if (std::find_if(sensors.begin(), sensors.end(), [&](const std::pair<const sensor_location, TemperatureSensor>& pair) {
+            if (std::find_if(sensors.begin(), sensors.end(), [&](const std::pair<const location, TemperatureSensor>& pair) {
                 return std::equal(pair.second.get_address().begin(), pair.second.get_address().end(), detected_address.begin());
             }) == sensors.end()) {
                 while (it != all_locations.end() && sensors.find(*it) != sensors.end()) {
@@ -265,7 +265,7 @@ public:
     }
 
     // Method to get a sensor by its location
-    TemperatureSensor* get_sensor(sensor_location location) {
+    TemperatureSensor* get_sensor(location location) {
         auto it = sensors.find(location);
         if (it != sensors.end()) {
             // The sensor exists in the map, so return it
