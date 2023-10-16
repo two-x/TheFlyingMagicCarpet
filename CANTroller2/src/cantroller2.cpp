@@ -1,6 +1,5 @@
 // Carpet CANTroller II  Source Code  - For ESP32-S3-DevKitC-1-N8
 #include <SPI.h>  // SPI serial bus
-// #include <Adafruit_SleepyDog.h>  // Watchdog
 #include <vector>
 #include <iomanip>  // Formatting cout
 #include "globals.h"
@@ -9,21 +8,13 @@
 #include "RunModeManager.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-
 HotrcManager hotrcManager[2] = { 6, 6 };  // [HORZ/VERT]
 RunModeManager runModeManager;
 Display screen;
 ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
 neopixelStrip neo;
-
 // void update_saver(void* parameter) { while (1) { screen.saver_update(); delay(10); } }  // Struggles, choppy, crashes, etc. as task
-
-#ifdef CAP_TOUCH
-TouchScreen ts;
-#else
 TouchScreen ts(touch_cs_pin, touch_irq_pin);
-#endif
-    
 #define RUN_TESTS 0
 #if RUN_TESTS
 #include "tests.h"
@@ -35,13 +26,10 @@ void run_tests() {
         for(;;) {} // loop forever
 }
 #else
-void run_tests() {}
+    void run_tests() {}
 #endif
-
 void setup() {  // Setup just configures pins (and detects touchscreen type)
-    if (RUN_TESTS) {
-        run_tests();
-    }    
+    if (RUN_TESTS) run_tests();   
     set_pin (tft_dc_pin, OUTPUT);
     set_pin (gas_pwm_pin, OUTPUT);
     set_pin (basicmodesw_pin, INPUT_PULLUP);
@@ -57,39 +45,26 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin (brake_pwm_pin, OUTPUT);
     set_pin (steer_pwm_pin, OUTPUT);
     analogReadResolution (adcbits);  // Set Arduino Due to 12-bit resolution (default is same as Mega=10bit)
-
     write_pin (tft_cs_pin, HIGH);   // Prevent bus contention
     write_pin (sdcard_cs_pin, HIGH);   // Prevent bus contention
     write_pin (tft_dc_pin, LOW);
     write_pin (ign_out_pin, LOW);
     write_pin (syspower_pin, syspower);
-    
-    // Calculate some derived variables
-    // calc_ctrl_lims();
     calc_governor();
-
-    // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
-    set_pin (uart_tx_pin, INPUT);  // 
+    set_pin (uart_tx_pin, INPUT);  // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
     running_on_devboard = (read_pin(uart_tx_pin));
     set_board_defaults(running_on_devboard);
     set_pin (uart_tx_pin, OUTPUT);  // 
     Serial.begin (115200);  // Open console serial port
     delay (800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
-    printf ("Console started..\nUsing %s defaults..\n", (running_on_devboard) ? "vehicle-pcb" : "dev-board");
-
-    // Set up 4 RMT receivers, one per channel
+    printf ("Console started..\nUsing %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
     printf ("Init rmt for hotrc..\n");
     hotrc_calc_params();  // Need to establish derived parameter values
-    
-    for (int axis=HORZ; axis<=CH4; axis++)
-        hotrc_rmt[axis].init();
-    
+    for (int axis=HORZ; axis<=CH4; axis++) hotrc_rmt[axis].init();  // Set up 4 RMT receivers, one per channel
     printf("Pot setup..\n");
     pot.setup();
-
     printf("Encoder setup..\n");
     encoder.setup();
-
     printf("Brake pressure sensor.. ");
     pressure.setup();
     printf("done\nBrake position sensor.. ");
@@ -100,13 +75,10 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     tach.setup();
     printf("done\nSpeedometer.. ");
     speedo.setup();
-    printf("done..\n");
-
-    printf ("Init i2c and i2c-enabled devices.."); delay(1);  // Attempt to force print to happen before init
+    printf ("done..\nInit i2c and i2c-enabled devices.."); delay(1);  // Attempt to force print to happen before init
     i2c.init();
     airflow.setup(); // must be done after i2c is started
     mapsens.setup();
-
     printf("Simulator setup..\n");
     sim.register_device(sensor::pressure, pressure, pressure.source());
     sim.register_device(sensor::brkpos, brakepos, brakepos.source());
@@ -114,7 +86,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     sim.register_device(sensor::mapsens, mapsens, mapsens.source());
     sim.register_device(sensor::tach, tach, tach.source());
     sim.register_device(sensor::speedo, speedo, speedo.source());
-
     printf ("Configure timers for PWM out..\n");
     ESP32PWM::allocateTimer(0);
 	ESP32PWM::allocateTimer(1);
@@ -123,20 +94,15 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 	brakemotor.setPeriodHertz(50);
     gas_servo.setPeriodHertz(60);
 	steermotor.setPeriodHertz(50);
-
     brakemotor.attach (brake_pwm_pin, brake_pulse_extend_us, brake_pulse_retract_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
     steermotor.attach (steer_pwm_pin, steer_pulse_left_us, steer_pulse_right_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
     gas_servo.attach (gas_pwm_pin, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     // Servo() argument 2 is channel (0-15) of the esp timer (?). set to Servo::CHANNEL_NOT_ATTACHED to auto grab a channel
-    // gas_servo.setup();
     // gas_servo.set_native_limits();  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
-
     temp_manager.setup();  // Onewire bus and temp sensors
-    
     throttle.setup(temp_manager.get_sensor(sensor_location::engine));
     // Create a new task that runs the update_temperature_sensors function
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);
-    
     printf ("Init screen.. ");
     if (display_enabled) {
         config.begin("FlyByWire", false);
@@ -147,9 +113,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         ts.init();
         printf ("touchscreen initialized..\n");
     }
-
-    // xTaskCreate(update_saver, "Update Screensaver", 2048, NULL, 4, NULL);
-
     std::cout << "Init neopixel.. ";
     neo.init((uint8_t)neopixel_pin, 1);
     // neo.init((uint8_t)neopixel_pin, !running_on_devboard);
@@ -257,11 +220,8 @@ void loop() {
         hotrc_radio_lost = false;
     }
     else if (!hotrc_radio_lost && hotrcFailsafeTimer.expired()) hotrc_radio_lost = true;
-
     runmode = runModeManager.handle_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
-
     // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
-
     // Steering - Determine motor output and send to the motor
     if (steerPidTimer.expireset()) {
         if (runmode == SHUTDOWN && !shutdown_incomplete)
@@ -280,7 +240,6 @@ void loop() {
     }
     // Brakes - Determine motor output and write it to motor
     if (brakePidTimer.expireset()) {
-
         // Step 1 : Determine motor percent value
         if (runmode == SHUTDOWN && !shutdown_incomplete)
             brake_out_pc = brake_stop_pc; // if we're shutdown, stop the motor
@@ -299,12 +258,10 @@ void loop() {
         }
         else if (runmode == CAL || runmode == BASIC || runmode == SHUTDOWN) brake_out_pc = (float)brake_stop_pc;
         else {  // First attenuate max power to avoid blowing out the motor like in bm2023, if retracting, as a proportion of position from zeropoint to fully retracted
-
             // To-Do Finish this brake governing calculation
             // brake_pulse_retract_effective_us = map(brakepos.filt(), brakepos.zeropoint(), BrakePositionSensor::abs_min_retract_in, )) {    
             // brake_motor_govern_duty_ratio = 0.25;  // 25% = Max motor duty cycle under load given by datasheet. Results in: 1500 + 0.25 * (2330 - 1500) = 1707.5 us max pulsewidth at position = minimum
             brake_pulse_retract_effective_max_us = brake_pulse_stop_us + brake_motor_govern_duty_pc * (brake_pulse_retract_us - brake_pulse_stop_us);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
-
             brake_pid.compute();  // Otherwise the pid control is active
         }
         // Step 3 : Fix motor pc value if it's out of range or exceeding positional limits
@@ -313,12 +270,10 @@ void loop() {
         else if ((brake_out_pc < brake_stop_pc && brakepos.filt() > BrakePositionSensor::park_in - BrakePositionSensor::margin_in) || (brake_out_pc > brake_stop_pc && brakepos.filt() < BrakePositionSensor::nom_lim_retract_in + BrakePositionSensor::margin_in))  // If brake is at position limits and we're tring to go further, stop the motor
             brake_out_pc = brake_stop_pc;
         else brake_out_pc = constrain (brake_out_pc, brake_extend_pc, brake_retract_pc);  // Send to the actuator. Refuse to exceed range
-
         // Step 4 : Convert motor percent value to pulse width
         if (brake_out_pc >= brake_stop_pc)
             brake_pulse_out_us = map (brake_out_pc, brake_stop_pc, brake_retract_pc, brake_pulse_stop_us, brake_pulse_retract_us);
         else brake_pulse_out_us = map (brake_out_pc, brake_stop_pc, brake_extend_pc, brake_pulse_stop_us, brake_pulse_extend_us);
-
         // Step 5 : Write to motor
         if (!(runmode == BASIC && !park_the_motors) && !(runmode == CAL && !cal_joyvert_brkmotor_mode) && !(runmode == SHUTDOWN && !shutdown_incomplete)) {
             brakemotor.writeMicroseconds ((int32_t)brake_pulse_out_us);  // Write result to jaguar servo interface
@@ -362,7 +317,6 @@ void loop() {
         else if (runmode == CAL && cal_pot_gasservo_mode)  // Constrain to operating limits. 
             gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_cw_min_us, gas_pulse_ccw_max_us);
         else gas_pulse_out_us = constrain (gas_pulse_out_us, gas_pulse_govern_us, gas_pulse_ccw_closed_us);
-
         // Step 3 : Write to servo
         if (!(runmode == BASIC && !park_the_motors) && !(runmode == CAL && !cal_pot_gasservo_mode) && !(runmode == SHUTDOWN && !shutdown_incomplete)) {
             if (reverse_gas_servo)
@@ -378,14 +332,8 @@ void loop() {
         if ((brake_parked && gas_parked) || motorParkTimer.expired() || (runmode != SHUTDOWN && runmode != BASIC))
             park_the_motors = false;
     }
-
     detect_errors();  // Look for screwy conditions and update warning idiot lights
-        
     ts.handleTouch(); // Handle touch events and actions
-    // ts.printTouchInfo(); 
-    // This doesn't work for some reason, and causes Wire.cpp i2c errors:
-    // if (ts.touched() && !sim.enabled()) screen.sprite_touch(ts.getX(), ts.getY());
-    
     // Encoder handling
     uint32_t encoder_sw_action = encoder.handleSwitchAction();
     if (encoder_sw_action != Encoder::NONE) {  // First deal with any unhandled switch press events
@@ -538,17 +486,12 @@ void loop() {
         }
     neo.refresh();
     loop_marktime ("-");
-    
     screen.update();  // Display updates
     if (!display_enabled && dataset_page_last != dataset_page) config.putUInt ("dpage", dataset_page);
     loop_marktime ("dis");
-
     dataset_page_last = dataset_page;
     selected_value_last = selected_value;
     tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
     simulating_last = sim.enabled();
-
-    // Watchdog.reset();  // Kick the watchdog to keep us alive
-    // if (display_enabled) screen.watchdog();
     loop_print_timing();
 }
