@@ -1,6 +1,8 @@
 #pragma once
 #include <TFT_eSPI.h>
 #include "globals.h"
+#include <iostream>  // for gamma correction
+#include <cmath>  // for gamma correction
 
 #undef USE_DMA_TO_TFT
 #ifdef USE_DMA_TO_TFT
@@ -77,6 +79,19 @@
 #define disp_saver_width 155
 #define disp_saver_height 192
 
+float globalgamma = 2.2;  // Standard gamma is 2.2
+
+uint16_t gamma_x(uint16_t element565, float gamma = globalgamma) {  // (31.0 * (float)(bits * 2 - 10)
+    float gamma565 = static_cast<float>(element565) / 31.0;  // Convert the original 5-6-5 bit value to the range 0-1
+    gamma565 = std::pow(gamma565, gamma);  // Apply gamma correction
+    return static_cast<uint16_t>(gamma565 * 31.0);  // Convert the corrected value back to 5-6-5 bit range
+}
+uint16_t gamma16(uint16_t element565, float gamma = globalgamma) {
+    uint16_t r = (element565 >> 11) & 0x1f;
+    uint16_t g = (element565 >> 5) & 0x3f;
+    uint16_t b = element565 & 0x1f;
+    return (gamma_x(r, gamma) << 11) | (gamma_x(g, gamma) << 5) | gamma_x(b, gamma);
+}
 uint32_t color_16b_to_uint32(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to uint32 in format 0x00RRGGBB
     return (((uint32_t)color565 & 0xf800) << 8) | (((uint32_t)color565 & 0x7e0) << 5) | (((uint32_t)color565 & 0x1f) << 3);
 }
@@ -123,7 +138,7 @@ char units[disp_fixed_lines][5] = { "%   ", "mph ", "rpm ", "us  ", "psi ", "%  
 
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, num_datapages };
 char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-int32_t tuning_first_editable_line[dataset_pages::num_datapages] = { 9, 9, 5, 3, 4, 8, 7, 7, 10, 0, 8 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[dataset_pages::num_datapages] = { 9, 9, 5, 3, 4, 8, 7, 7, 10, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
     { brAk"Posn", "MuleBatt", "     Pot", "AirSpeed", "     MAP", "MasAirFl", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
@@ -136,7 +151,7 @@ char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "LoopFreq", "Loop Avg", "LoopPeak", __________, __________, __________, __________, __________, neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
+    { "LoopFreq", "Loop Avg", "LoopPeak", __________, __________, __________, __________, "   Gamma", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
 };
 char tuneunits[dataset_pages::num_datapages][disp_tuning_lines][5] = {
     { "in  ", "V   ", "%   ", "mph ", "psi ", "mgs ", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
@@ -163,6 +178,7 @@ char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", 
 uint16_t idiotcolors[arraysize(idiotlights)];
 uint8_t idiot_saturation = 225;  // 170-195 makes nice bright yet distinguishable colors
 uint8_t idiot_hue_offset = 240;
+bool idiots_dirty = true;
 bool idiotlasts[arraysize(idiotlights)];
 // 11x7 pixel idiot light bitmaps.  Format: Each byte is one pixel column (left->right) with LSB->MSB within each byte being the top->bottom pixels in that column
 // The high bit (bottom pixel) of every byte is 0 due to 7-pixel height. Set high bit of first byte to 1 to skip bitmap and use letters instead
@@ -186,7 +202,8 @@ void set_idiotcolors() {
     for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
         int division = disp_idiots_per_row;
         uint32_t color32 = hsv_to_rgb((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 220);
-        idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
+        idiotcolors[idiot] = gamma16(color_uint32_to_16b(color32));  // 5957 = 2^16/11
+        idiots_dirty = true;
     }
 }
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
@@ -634,7 +651,7 @@ class Display {
         }
         void update() {
             if (!display_enabled) return;
-            update_idiots(_disp_redraw_all);
+            update_idiots(_disp_redraw_all || idiots_dirty);
             if (sim.enabled()) {
                 if (!simulating_last || _disp_redraw_all) {
                     draw_simbuttons(sim.enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
@@ -806,7 +823,8 @@ class Display {
                     draw_dynamic(9, loopfreq_hz);
                     draw_dynamic(10, (int32_t)looptime_avg_us, 0, loop_maxloop_us);
                     draw_dynamic(11, looptime_peak_us, 0, loop_maxloop_us);
-                    for (int line=12; line<=16; line++) draw_eraseval(line);
+                    for (int line=12; line<=15; line++) draw_eraseval(line);
+                    draw_dynamic(16, globalgamma, 0.1, 2.57, -1, 3);
                     draw_dynamic(17, neobright, 1.0, 100.0, -1, 3);
                     draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
                     draw_truth(19, screensaver, 0);
@@ -873,15 +891,16 @@ class Display {
                         }
                     }
                 }
-                uint16_t color = savercycle ? random(0x10000) : BLK; // Returns colour 0 - 0xFFFF
+                uint16_t color = savercycle ? gamma16(random(0x10000)) : BLK; // Returns colour 0 - 0xFFFF
                 long star_x1 = random(disp_saver_width);        // Random x coordinate
                 long star_y1 = random(disp_saver_height);       // Random y coordinate
                 if (!(saver_lines_mode == 0 && (savercycle == 0b10))) {
                     if (savershape == 0) _saver.drawLine(star_x0, star_y0, star_x1, star_y1, color); 
-                    else if (savershape == 1) _saver.drawCircle(random(disp_saver_width), random(disp_saver_height), random(20), random(0x10000));
+                    else if (savershape == 1) _saver.drawCircle(random(disp_saver_width), random(disp_saver_height), random(20), gamma16(random(0x10000)));
                     else if (savershape == 2)      // Draw pixels in sprite
-                        for (int star=0; star<25; star++) 
-                            _saver.drawPixel(random(disp_saver_width), random(disp_saver_height), random(0x10000));      // Draw pixel in sprite
+                        for (int star=0; star<10; star++) 
+                            _saver.drawRect(random(disp_saver_width), random(disp_saver_height), 2, 2, gamma16(random(0x10000)));      // Draw pixel in sprite
+                            // _saver.drawPixel(random(disp_saver_width), random(disp_saver_height), gamma(random(0x10000)));      // Draw pixel in sprite
                 }
                 if (saver_lines_mode == 1 && !savercycle) _saver.drawLine(star_x0+1, star_y0+1, star_x1+1, star_y1+1, color);
                 // 

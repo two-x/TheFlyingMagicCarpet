@@ -412,7 +412,11 @@ void loop() {
             else if (selected_value == 10 && runmode == CAL) adj_bool (&cal_pot_gasservo_mode, (sim_edit_delta < 0 || cal_pot_gasservo_ready) ? sim_edit_delta : -1);
         }
         else if (dataset_page == PG_UI) {
-            if (selected_value == 8) {
+            if (selected_value == 7) {
+                adj_val (&globalgamma, 0.01*(float)sim_edit_delta, 0.1, 2.57);  // 2.57);
+                set_idiotcolors();
+            }
+            else if (selected_value == 8) {
                 adj_val (&neobright, sim_edit_delta, 1, 100);
                 neo.setbright(neobright);
             }
