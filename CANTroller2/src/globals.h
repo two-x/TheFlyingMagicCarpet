@@ -54,7 +54,7 @@ bool flip_the_screen = true;
 #define encoder_a_pin 41        // Int input, The A (aka CLK) pin of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
 #define encoder_sw_pin 42       // Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
 #define uart_tx_pin 43          // "TX" (uart0 tx) - Serial monitor data out. Also used to detect devboard vs. pcb at boot time (using pullup/pulldown, see below)
-#define uart_rx_pin 44          // "RX" (uart0 rx) - Serial monitor data in.
+#define uart_rx_pin 44          // "RX" (uart0 rx) - Serial monitor data in. Maybe could repurpose during runtime since we only need outgoing console data?
 #define ign_out_pin 45          // (bootstrap low) - Output for Hotrc to a relay to kill the car ignition. Note, Joystick ign button overrides this if connected and pressed
 #define syspower_pin 46         // (bootstrap low) - Output, flips a relay to power all the tranducers. This is actually the neopixel pin on all v1.1 devkit boards.
 #define touch_cs_pin 47         // Output, chip select for resistive touchscreen, active low
@@ -209,16 +209,16 @@ float temp_room = 77.0;          // "Room" temperature is 25 C = 77 F  Who cares
 float temp_sensor_min_f = -67.0; // Minimum reading of sensor is -25 C = -67 F
 float temp_sensor_max_f = 257.0; // Maximum reading of sensor is 125 C = 257 F
 
-TemperatureSensorManager temperature_sensor_manager(onewire_pin);
+TemperatureSensorManager temp_manager(onewire_pin);
 
 // encoder related
 Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 
 // mule battery related
-BatterySensor battery_sensor(mulebatt_pin);
+BatterySensor mulebatt(mulebatt_pin);
 
-static Servo brake_servo;
-static Servo steer_servo;
+static Servo brakemotor;
+static Servo steermotor;
 static Servo gas_servo;
 
 // controller related
@@ -259,7 +259,7 @@ float steer_pulse_right_max_us = 2500; // Longest pulsewidth acceptable to jagua
 float steer_pulse_out_us = steer_pulse_stop_us;              // pid loop output to send to the actuator (steering)
 
 // brake pressure related
-PressureSensor pressure_sensor(pressure_pin);
+PressureSensor pressure(pressure_pin);
 float pressure_hold_initial_psi = 45;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
 float pressure_hold_increment_psi = 3;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 float pressure_panic_initial_psi = 80; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
@@ -286,10 +286,10 @@ float brake_motor_govern_duty_pc = 25;  // From motor datasheet
 float brake_pulse_retract_effective_max_us;   // 
 
 // brake actuator position related
-BrakePositionSensor brkpos_sensor(brake_pos_pin);
+BrakePositionSensor brakepos(brake_pos_pin);
 
 // carspeed/speedo related
-Speedometer speedometer(speedo_pulse_pin);
+Speedometer speedo(speedo_pulse_pin);
 float speedo_target_mph;
 float speedo_govern_mph;      // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
 float speedo_idle_mph = 4.50; // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
@@ -315,8 +315,8 @@ float gas_pulse_park_slack_us = 30;   // Gas pulsewidth beyond gas_pulse_ccw_clo
 // float gas_angle_us[num_pwmvals] = { 718, 1500, 2000, 2000, 718, 500, 2500, 2030 };
 // bool gas_angle_opt[num_pwmopts] = { true, false, true };
 
-// tachometer related
-Tachometer tachometer(tach_pulse_pin);
+// tach related
+Tachometer tach(tach_pulse_pin);
 float tach_target_rpm, tach_adjustpoint_rpm;
 float tach_govern_rpm;        // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
 float tach_margin_rpm = 15.0; // Margin of error for checking engine rpm (in rpm)
@@ -329,8 +329,8 @@ Timer tachIdleTimer(5000000);         // How often to update tach idle value bas
 
 // i2c sensor related
 enum i2csensor { AIRFLOW, MAP, num_i2csensors };
-AirflowSensor airflow_sensor(i2c);
-MAPSensor map_sensor(i2c);  // map sensor related
+AirflowSensor airflow(i2c);
+MAPSensor mapsens(i2c);  // map sensor related
 Timer i2cReadTimer(25000);  // How often to read an i2c sensor
 int32_t i2creadsensor = AIRFLOW;
 
@@ -347,7 +347,7 @@ float brake_spid_initial_kp = 0.323;                                            
 float brake_spid_initial_ki_hz = 0.000;                                                                      // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
 float brake_spid_initial_kd_s = 0.000;                                                                       // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
 
-qpid brake_pid(pressure_sensor.filt_ptr().get(), &brake_out_pc, &pressure_target_psi,     // input, target, output variable references
+qpid brake_pid(pressure.filt_ptr(), &brake_out_pc, &pressure_target_psi,     // input, target, output variable references
                brake_extend_pc, brake_retract_pc,                                                  // output min, max
                brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,                     // Kp, Ki, and Kd tuning constants
                qpid::pmode_t::ponerr, qpid::dmode_t::donerr, qpid::iawmode_t::iawcond, qpid::dir_t::direct,  // settings  // iAwRoundCond, iawclamp
@@ -357,7 +357,7 @@ qpid brake_pid(pressure_sensor.filt_ptr().get(), &brake_out_pc, &pressure_target
 
 // Gas : Controls the throttle to achieve the desired intake airflow and engine rpm
 
-ThrottleControl throttle(tachometer.human_ptr().get(), tachometer.filt_ptr().get(),
+ThrottleControl throttle(tach.human_ptr(), tach.filt_ptr(),
                          tach_idle_high_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm,
                          temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][WARNING],
                          50, ThrottleControl::idlemodes::control);
@@ -367,7 +367,7 @@ float gas_spid_initial_kp = 0.206;    // PID proportional coefficient (gas) How 
 float gas_spid_initial_ki_hz = 0.000; // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
 float gas_spid_initial_kd_s = 0.000;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
 bool gas_open_loop = true;
-qpid gas_pid(tachometer.filt_ptr().get(), &gas_pulse_out_us, &tach_target_rpm,                            // input, target, output variable references
+qpid gas_pid(tach.filt_ptr(), &gas_pulse_out_us, &tach_target_rpm,                            // input, target, output variable references
              gas_pulse_cw_open_us, gas_pulse_ccw_closed_us,                                                             // output min, max
              gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s,                                        // Kp, Ki, and Kd tuning constants
              qpid::pmode_t::ponerr, qpid::dmode_t::donerr, qpid::iawmode_t::iawclamp, qpid::dir_t::reverse,              // settings
@@ -393,7 +393,7 @@ Timer cruisePidTimer(cruise_pid_period_us);                                     
 float cruise_spid_initial_kp = 5.57;                                                                         // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
 float cruise_spid_initial_ki_hz = 0.000;                                                                     // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
 float cruise_spid_initial_kd_s = 0.000;                                                                      // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
-qpid cruise_pid(speedometer.filt_ptr().get(), &tach_target_rpm, &speedo_target_mph,            // input, target, output variable references
+qpid cruise_pid(speedo.filt_ptr(), &tach_target_rpm, &speedo_target_mph,            // input, target, output variable references
                 throttle.idlespeed(), tach_govern_rpm,                                                   // output min, max
                 cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s,                 // Kp, Ki, and Kd tuning constants
                 qpid::pmode_t::ponerr, qpid::dmode_t::donerr, qpid::iawmode_t::iawround, qpid::dir_t::direct, // settings
@@ -407,11 +407,11 @@ uint32_t err_margin_adc = 5;
 bool err_temp_engine, err_temp_wheel;
 // Sensor related trouble - this all should be moved to devices.h
 enum err_types_sensor { LOST, RANGE, num_err_types };
-enum err_sensors { e_hrchorz, e_hrcvert, e_hrcch3, e_hrcch4, e_pressure, e_brkpos, e_speedo, e_tach, e_airflow, e_mapsens, e_temps, e_battery, e_starter, e_basicsw, e_num_sensors };
-// enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, battery, ignition, basicsw, cruisesw, starter, syspower };  // , num_sensors, err_flag };
+enum err_sensors { e_hrchorz, e_hrcvert, e_hrcch3, e_hrcch4, e_pressure, e_brkpos, e_speedo, e_tach, e_airflow, e_mapsens, e_temps, e_mulebatt, e_starter, e_basicsw, e_num_sensors };
+// enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, mulebatt, ignition, basicsw, cruisesw, starter, syspower };  // , num_sensors, err_flag };
 
 bool err_sensor_alarm[num_err_types] = { false, false };  // [LOST/RANGE]
-bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_battery/e_basicsw/e_starter]   // sensor::opt_t::num_sensors]
+bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_mulebatt/e_basicsw/e_starter]   // sensor::opt_t::num_sensors]
 
 void hotrc_toggle_update(int8_t chan) {                                                            //
     hotrc_us[chan][RAW] = hotrc_rmt[chan].readPulseWidth(true);
@@ -439,13 +439,13 @@ void hotrc_calc_params() {
     }
 }
 void calc_governor(void) {
-    tach_govern_rpm = map(gas_governor_pc, 0.0, 100.0, 0.0, tachometer.redline_rpm()); // Create an artificially reduced maximum for the engine speed
+    tach_govern_rpm = map(gas_governor_pc, 0.0, 100.0, 0.0, tach.redline_rpm()); // Create an artificially reduced maximum for the engine speed
     cruise_pid.set_outlimits(throttle.idlespeed(), tach_govern_rpm);
-    gas_pulse_govern_us = map(tach_govern_rpm, throttle.idlespeed(), tachometer.redline_rpm(), gas_pulse_ccw_closed_us, gas_pulse_cw_open_us); // Governor must scale the pulse range proportionally
-    speedo_govern_mph = map(gas_governor_pc, 0.0, 100.0, 0.0, speedometer.redline_mph());                                                                                     // Governor must scale the top vehicle speed proportionally
+    gas_pulse_govern_us = map(tach_govern_rpm, throttle.idlespeed(), tach.redline_rpm(), gas_pulse_ccw_closed_us, gas_pulse_cw_open_us); // Governor must scale the pulse range proportionally
+    speedo_govern_mph = map(gas_governor_pc, 0.0, 100.0, 0.0, speedo.redline_mph());                                                                                     // Governor must scale the top vehicle speed proportionally
 }
 float steer_safe(float endpoint) {
-    return steer_stop_pc + (endpoint - steer_stop_pc) * (1.0 - steer_safe_pc * speedometer.filt() / (100.0 * speedometer.redline_mph()));
+    return steer_stop_pc + (endpoint - steer_stop_pc) * (1.0 - steer_safe_pc * speedo.filt() / (100.0 * speedo.redline_mph()));
 }
 
 // int* x is c++ style, int *x is c style
@@ -465,7 +465,7 @@ bool adj_val(float *variable, float modify, float low_limit, float high_limit) {
     *variable = adj_val(*variable, modify, low_limit, high_limit);
     return (*variable != oldval);
 }
-bool adj_bool(bool val, int32_t delta) { return delta != 0 ? delta > 0 : val; } // sets a bool reference to 1 on 1 delta or 0 on -1 delta
+bool adj_bool(bool val, int32_t delta) { return delta != 0 ? delta > 0 : val; } // returns 1 on delta=1, 0 on delta=-1, or val on delta=0
 void adj_bool(bool *val, int32_t delta) { *val = adj_bool(*val, delta); }       // sets a bool reference to 1 on 1 delta or 0 on -1 delta
 
 // tasks for RTOS, this section is currently going to be where we keep sensor update loops.
@@ -475,9 +475,9 @@ void adj_bool(bool *val, int32_t delta) { *val = adj_bool(*val, delta); }       
 void update_temperature_sensors(void *parameter) {
     while (true) {
         if (!dont_take_temperatures)
-            temperature_sensor_manager.update_temperatures();
+            temp_manager.update_temperatures();
         if (sim.potmapping(sensor::engtemp)) {
-            TemperatureSensor *engine_sensor = temperature_sensor_manager.get_sensor(sensor_location::engine);
+            TemperatureSensor *engine_sensor = temp_manager.get_sensor(sensor_location::engine);
             if (engine_sensor != nullptr) {
                 engine_sensor->set_temperature(pot.mapToRange(temp_sensor_min_f, temp_sensor_max_f));
             }
@@ -488,10 +488,10 @@ void update_temperature_sensors(void *parameter) {
 
 void set_board_defaults(bool devboard) {  // true for dev boards, false for printed board (on the car)
     if (devboard) {
-        sim.set_can_sim(sensor::pressure, adj_bool(sim.can_sim(sensor::pressure), 1));
-        sim.set_can_sim(sensor::brkpos, adj_bool(sim.can_sim(sensor::brkpos), 1));
-        sim.set_can_sim(sensor::tach, adj_bool(sim.can_sim(sensor::tach), 1));
-        sim.set_can_sim(sensor::speedo, adj_bool(sim.can_sim(sensor::speedo), 1));
+        sim.set_can_sim(sensor::pressure, true);
+        sim.set_can_sim(sensor::brkpos, true);
+        sim.set_can_sim(sensor::tach, true);
+        sim.set_can_sim(sensor::speedo, true);
     }
     else {
         console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
@@ -594,7 +594,7 @@ void detect_errors() {
         // This section should become a real time self-diagnostic system, to look for anything that doesn't seem right and display an
         // informed trouble code. Much like the engine computer in cars nowadays, which keep track of any detectable failures for you to
         // retreive with an OBD tool. Some checks are below, along with other possible things to check for:
-        if (!ignition && !tachometer.engine_stopped()) {  // Check: if engine is turning when ignition signal is off
+        if (!ignition && !tach.engine_stopped()) {  // Check: if engine is turning when ignition signal is off
             if (diag_ign_error_enabled) { // See if the engine is turning despite the ignition being off
                 Serial.println (F("Detected engine rotation in the absense of ignition signal"));  // , tach_filt_rpm, ignition
                 diag_ign_error_enabled = false;  // Prevents endless error reporting the same error
@@ -605,29 +605,29 @@ void detect_errors() {
         // different approach
         bool check_wheels;
         check_wheels = false;
-        TemperatureSensor * temp_fl = temperature_sensor_manager.get_sensor(sensor_location::wheel_fl);
-        TemperatureSensor * temp_fr = temperature_sensor_manager.get_sensor(sensor_location::wheel_fr);
-        TemperatureSensor * temp_rl = temperature_sensor_manager.get_sensor(sensor_location::wheel_rl);
-        TemperatureSensor * temp_rr = temperature_sensor_manager.get_sensor(sensor_location::wheel_rr);
+        TemperatureSensor * temp_fl = temp_manager.get_sensor(sensor_location::wheel_fl);
+        TemperatureSensor * temp_fr = temp_manager.get_sensor(sensor_location::wheel_fr);
+        TemperatureSensor * temp_rl = temp_manager.get_sensor(sensor_location::wheel_rl);
+        TemperatureSensor * temp_rr = temp_manager.get_sensor(sensor_location::wheel_rr);
         if (temp_fl != nullptr && temp_fl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
         if (temp_fr != nullptr && temp_fr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
         if (temp_rl != nullptr && temp_rl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
         if (temp_rr != nullptr && temp_rr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
         err_temp_wheel = check_wheels;
 
-        TemperatureSensor * temp_eng = temperature_sensor_manager.get_sensor(sensor_location::engine);
+        TemperatureSensor * temp_eng = temp_manager.get_sensor(sensor_location::engine);
         err_temp_engine = temp_eng != nullptr ? temp_eng->get_temperature() >= temp_lims_f[ENGINE][WARNING] : -999;
         
         // Detect sensors disconnected or giving out-of-range readings.
         // TODO : The logic of this for each sensor should be moved to devices.h objects
         uint32_t val;
         val = analogRead(brake_pos_pin);
-        err_sensor[RANGE][e_brkpos] = (val < brkpos_sensor.min_native() || val > brkpos_sensor.max_native());
+        err_sensor[RANGE][e_brkpos] = (val < brakepos.min_native() || val > brakepos.max_native());
         err_sensor[LOST][e_brkpos] = (val < err_margin_adc);
         val = analogRead(pressure_pin);
-        err_sensor[RANGE][e_pressure] = ((val && val < pressure_sensor.min_native()) || val > pressure_sensor.max_native());
+        err_sensor[RANGE][e_pressure] = ((val && val < pressure.min_native()) || val > pressure.max_native());
         err_sensor[LOST][e_pressure] = (val < err_margin_adc);
-        err_sensor[LOST][e_battery] = (analogRead(mulebatt_pin) > battery_sensor.max_native());
+        err_sensor[LOST][e_mulebatt] = (analogRead(mulebatt_pin) > mulebatt.max_native());
         for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
             err_sensor[RANGE][ch] = !hotrc_radio_lost && ((hotrc_us[ch][RAW] < hotrc_us[ch][MIN] - (hotrc_us[ch][MARGIN] >> 1)) 
                                     || (hotrc_us[ch][RAW] > hotrc_us[ch][MAX] + (hotrc_us[ch][MARGIN] >> 1)));  // && ch != VERT
@@ -704,7 +704,7 @@ float degF_to_K(float degF) {
 
 // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
 float get_massairflow(float map = NAN, float airflow = NAN, float ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
-    TemperatureSensor* sensor = temperature_sensor_manager.get_sensor(sensor_location::ambient);
+    TemperatureSensor* sensor = temp_manager.get_sensor(sensor_location::ambient);
     float T = degF_to_K(ambient);  // in K
     float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
     float v = 0.447 * airflow; // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
@@ -714,14 +714,14 @@ float get_massairflow(float map = NAN, float airflow = NAN, float ambient = NAN)
 }
 float maf_gps;  // Mass airflow in grams per second
 float maf_min_gps = 0.0;
-float maf_max_gps = get_massairflow(map_sensor.max_psi(), airflow_sensor.max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
+float maf_max_gps = get_massairflow(mapsens.max_psi(), airflow.max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
 
 // float get_massairflow(float map = NAN, float airflow = NAN, float ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
-//     TemperatureSensor* sensor = temperature_sensor_manager.get_sensor(sensor_location::ambient);
+//     TemperatureSensor* sensor = temp_manager.get_sensor(sensor_location::ambient);
 //     float T = degF_to_K(std::isnan(ambient) ? sensor->get_temperature() : ambient);  // in K
 //     float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
-//     float v = 0.447 * (std::isnan(airflow) ? airflow_sensor.filt() : airflow); // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
+//     float v = 0.447 * (std::isnan(airflow) ? airflow.filt() : airflow); // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
 //     float A = 0.0020268;  // in m2    1.0 in2 * pi * 0.00064516 m2/in2
-//     float P = 6894.76 * std::isnan(map) ? map_sensor.filt() : map;  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
+//     float P = 6894.76 * std::isnan(map) ? mapsens.filt() : map;  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
 //     return 1000.0 * v * A * P / (R * T);  // in g/s   (g/kg * m/s * m2 * J/m3) / (J/(kg*K) * K) = g/s
 // }

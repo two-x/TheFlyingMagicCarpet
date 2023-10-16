@@ -623,7 +623,7 @@ class Display {
                     draw_idiotlight (ilite, x + (2 * disp_font_width + 2) * ((ilite % disp_idiots_per_row) % disp_idiots_per_row), y + disp_idiot_row_height * (int32_t)(ilite / disp_idiots_per_row));
         }
         void draw_temperature(sensor_location location, int draw_index) {
-            TemperatureSensor* sensor = temperature_sensor_manager.get_sensor(location);
+            TemperatureSensor* sensor = temp_manager.get_sensor(location);
             if (sensor) {
                 draw_dynamic(draw_index, sensor->get_temperature(), static_cast<float>(temp_lims_f[static_cast<int>(location)][DISP_MIN]), static_cast<float>(temp_lims_f[static_cast<int>(location)][DISP_MAX]));
             } else {
@@ -669,19 +669,19 @@ class Display {
                 dispRefreshTimer.reset();
                 float drange;
                 draw_dynamic(1, hotrc_pc[VERT][FILT], hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
-                draw_dynamic(2, speedometer.filt(), 0.0, speedometer.redline_mph(), speedo_target_mph);
-                draw_dynamic(3, tachometer.filt(), 0.0, tachometer.redline_rpm(), tach_target_rpm);
+                draw_dynamic(2, speedo.filt(), 0.0, speedo.redline_mph(), speedo_target_mph);
+                draw_dynamic(3, tach.filt(), 0.0, tach.redline_rpm(), tach_target_rpm);
                 draw_dynamic(4, gas_pulse_out_us, gas_pulse_cw_open_us, gas_pulse_ccw_closed_us);
-                draw_dynamic(5, pressure_sensor.filt(), pressure_sensor.min_human(), pressure_sensor.max_human(), pressure_target_psi);  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
+                draw_dynamic(5, pressure.filt(), pressure.min_human(), pressure.max_human(), pressure_target_psi);  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
                 draw_dynamic(6, brake_out_pc, brake_extend_pc, brake_retract_pc);
                 draw_dynamic(7, hotrc_pc[HORZ][FILT], hotrc_pc[HORZ][MIN], hotrc_pc[HORZ][MAX]);
                 draw_dynamic(8, steer_out_pc, steer_left_pc, steer_right_pc);
                 if (dataset_page == PG_RUN) {
-                    draw_dynamic(9, brkpos_sensor.filt(), BrakePositionSensor::abs_min_retract_in, BrakePositionSensor::abs_max_extend_in);
-                    draw_dynamic(10, battery_sensor.filt(), battery_sensor.min_v(), battery_sensor.max_v());
-                    draw_dynamic(11, pot.get(), pot.min(), pot.max());
-                    draw_dynamic(12, airflow_sensor.filt(), airflow_sensor.min_mph(), airflow_sensor.max_mph());
-                    draw_dynamic(13, map_sensor.filt(), map_sensor.min_psi(), map_sensor.max_psi());
+                    draw_dynamic(9, brakepos.filt(), BrakePositionSensor::abs_min_retract_in, BrakePositionSensor::abs_max_extend_in);
+                    draw_dynamic(10, mulebatt.filt(), mulebatt.min_v(), mulebatt.max_v());
+                    draw_dynamic(11, pot.val(), pot.min(), pot.max());
+                    draw_dynamic(12, airflow.filt(), airflow.min_mph(), airflow.max_mph());
+                    draw_dynamic(13, mapsens.filt(), mapsens.min_psi(), mapsens.max_psi());
                     draw_dynamic(14, maf_gps, maf_min_gps, maf_max_gps);
                     draw_eraseval(15);
                     draw_eraseval(16);
@@ -703,14 +703,14 @@ class Display {
                     draw_dynamic(19, hotrc_deadband_us, 0, 100);
                 }
                 else if (dataset_page == PG_CAR) {
-                    draw_dynamic(9, pressure_sensor.native(), pressure_sensor.min_native(), pressure_sensor.max_native());                    
+                    draw_dynamic(9, pressure.native(), pressure.min_native(), pressure.max_native());                    
                     for (int line=10; line<=13; line++) draw_eraseval(line);
-                    draw_dynamic(14, airflow_sensor.max_mph(), 0.0, airflow_sensor.abs_max_mph());
-                    draw_dynamic(15, map_sensor.min_psi(), map_sensor.abs_min_psi(), map_sensor.abs_max_psi());
-                    draw_dynamic(16, map_sensor.max_psi(), map_sensor.abs_min_psi(), map_sensor.abs_max_psi());
-                    draw_dynamic(17, speedo_idle_mph, 0.0, speedometer.redline_mph());
-                    draw_dynamic(18, speedometer.redline_mph(), 0.0, speedometer.max_human());
-                    draw_dynamic(19, brkpos_sensor.zeropoint(), BrakePositionSensor::abs_min_retract_in, BrakePositionSensor::abs_max_extend_in);
+                    draw_dynamic(14, airflow.max_mph(), 0.0, airflow.abs_max_mph());
+                    draw_dynamic(15, mapsens.min_psi(), mapsens.abs_min_psi(), mapsens.abs_max_psi());
+                    draw_dynamic(16, mapsens.max_psi(), mapsens.abs_min_psi(), mapsens.abs_max_psi());
+                    draw_dynamic(17, speedo_idle_mph, 0.0, speedo.redline_mph());
+                    draw_dynamic(18, speedo.redline_mph(), 0.0, speedo.max_human());
+                    draw_dynamic(19, brakepos.zeropoint(), BrakePositionSensor::abs_min_retract_in, BrakePositionSensor::abs_max_extend_in);
                 }
                 else if (dataset_page == PG_PWMS) {
                     draw_dynamic(9, brake_pulse_out_us, brake_pulse_retract_us, brake_pulse_extend_us);
@@ -727,7 +727,7 @@ class Display {
                 }
                 else if (dataset_page == PG_IDLE) {
                     draw_asciiname(9, idlestatecard[throttle.targetstate()]);
-                    draw_dynamic(10, tach_target_rpm, 0.0, tachometer.redline_rpm());
+                    draw_dynamic(10, tach_target_rpm, 0.0, tach.redline_rpm());
                     draw_dynamic(11, throttle.stallpoint(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
                     draw_dynamic(12, throttle.idlespeed(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);  // throttle.idlehot(), throttle.idlecold());
                     draw_dynamic(13, throttle.idlehigh(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
@@ -740,21 +740,21 @@ class Display {
                 }
                 else if (dataset_page == PG_BPID) {
                     drange = brake_pulse_extend_us-brake_pulse_retract_us;
-                    draw_dynamic(9, pressure_target_psi, pressure_sensor.min_human(), pressure_sensor.max_human());
-                    draw_dynamic(10, brake_pid.err(), pressure_sensor.min_human()-pressure_sensor.max_human(), pressure_sensor.max_human()-pressure_sensor.min_human());
+                    draw_dynamic(9, pressure_target_psi, pressure.min_human(), pressure.max_human());
+                    draw_dynamic(10, brake_pid.err(), pressure.min_human()-pressure.max_human(), pressure.max_human()-pressure.min_human());
                     draw_dynamic(11, brake_pid.pterm(), -drange, drange);
                     draw_dynamic(12, brake_pid.iterm(), -drange, drange);
                     draw_dynamic(13, brake_pid.dterm(), -drange, drange);
                     draw_dynamic(14, brake_pid.outsum(), -brake_pid.outrange(), brake_pid.outrange());  // brake_spid_speedo_delta_adc, -range, range);
                     draw_dynamic(15, brake_pulse_out_us, brake_pulse_extend_us, brake_pulse_retract_us);
-                    draw_dynamic(16, pressure_sensor.native(), pressure_sensor.min_native(), pressure_sensor.max_native());
+                    draw_dynamic(16, pressure.native(), pressure.min_native(), pressure.max_native());
                     draw_dynamic(17, brake_pid.kp(), 0.0, 2.0);
                     draw_dynamic(18, brake_pid.ki(), 0.0, 2.0);
                     draw_dynamic(19, brake_pid.kd(), 0.0, 2.0);
                 }
                 else if (dataset_page == PG_GPID) {
                     drange = gas_pulse_ccw_closed_us-gas_pulse_govern_us;
-                    draw_dynamic(9, tach_target_rpm, 0.0, tachometer.redline_rpm());
+                    draw_dynamic(9, tach_target_rpm, 0.0, tach.redline_rpm());
                     draw_dynamic(10, gas_pid.err(), throttle.idlespeed() - tach_govern_rpm, tach_govern_rpm - throttle.idlespeed());
                     draw_dynamic(11, gas_pid.pterm(), -drange, drange);
                     draw_dynamic(12, gas_pid.iterm(), -drange, drange);
