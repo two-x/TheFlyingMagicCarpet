@@ -264,14 +264,15 @@ void loop() {
 
     // Steering - Determine motor output and send to the motor
     if (steerPidTimer.expireset()) {
-        if (runmode == SHUTDOWN && !shutdown_incomplete) steer_out_pc = steer_stop_pc;  // Stop the steering motor if in shutdown mode and shutdown is complete
-        else if (hotrc_pc[HORZ][FILT] >= hotrc_pc[HORZ][DBTOP])  // If above the top edge of the deadband, turning right
-            steer_out_pc = map (hotrc_pc[HORZ][FILT], hotrc_pc[HORZ][DBTOP], hotrc_pc[HORZ][MAX], steer_stop_pc, steer_safe (steer_right_pc));  // Figure out the steering setpoint if joy to the right of deadband
-        else if (hotrc_pc[HORZ][FILT] <= hotrc_pc[HORZ][DBBOT])  // If below the bottom edge of the deadband, turning left
-            steer_out_pc = map (hotrc_pc[HORZ][FILT], hotrc_pc[HORZ][DBBOT], hotrc_pc[HORZ][MIN], steer_stop_pc, steer_safe (steer_left_pc));  // Figure out the steering setpoint if joy to the left of deadband
-        else steer_out_pc = steer_stop_pc;  // Stop the steering motor if inside the deadband
+        if (runmode == SHUTDOWN && !shutdown_incomplete)
+            steer_out_pc = steer_stop_pc;  // Stop the steering motor if in shutdown mode and shutdown is complete
+        else {
+            int8_t joydir = get_joydir();
+            if (joydir == joy_up) steer_out_pc = map (hotrc_pc[HORZ][FILT], hotrc_pc[HORZ][DBTOP], hotrc_pc[HORZ][MAX], steer_stop_pc, steer_safe (steer_right_pc));  // if joy to the right of deadband
+            else if (joydir == joy_down) steer_out_pc = map (hotrc_pc[HORZ][FILT], hotrc_pc[HORZ][DBBOT], hotrc_pc[HORZ][MIN], steer_stop_pc, steer_safe (steer_left_pc));  // if joy to the left of deadband
+            else steer_out_pc = steer_stop_pc;  // Stop the steering motor if inside the deadband
+        }
         steer_out_pc = constrain (steer_out_pc, steer_left_pc, steer_right_pc);  // Don't be out of range
-        
         if (steer_out_pc >= steer_stop_pc)
             steer_pulse_out_us = map (steer_out_pc, steer_stop_pc, steer_right_pc, steer_pulse_stop_us, steer_pulse_right_us);
         else steer_pulse_out_us = map (steer_out_pc, steer_stop_pc, steer_left_pc, steer_pulse_stop_us, steer_pulse_left_us);

@@ -16,23 +16,14 @@ public:
     // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     runmodes handle_runmode() {
         updateMode(runmodes(runmode)); // Update the current mode if needed, this also sets we_just_switched_modes
-        
-        if (_currentMode == BASIC) {
-            handleBasicMode(); // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
-        } else if (_currentMode == SHUTDOWN) {
-            handleShutdownMode();
-        } else if (_currentMode == STALL) {
-            handleStallMode();
-        } else if (_currentMode == HOLD) {
-            handleHoldMode();
-        } else if (_currentMode == FLY) {
-            handleFlyMode();
-        } else if (_currentMode == CRUISE) {
-            handleCruiseMode();
-        } else if (_currentMode == CAL) {
-            handleCalMode();
-        } else {
-            // Obviously this should never happen
+        if (_currentMode == BASIC) handleBasicMode(); // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
+        else if (_currentMode == SHUTDOWN) handleShutdownMode();
+        else if (_currentMode == STALL) handleStallMode();
+        else if (_currentMode == HOLD) handleHoldMode();
+        else if (_currentMode == FLY) handleFlyMode();
+        else if (_currentMode == CRUISE) handleCruiseMode();
+        else if (_currentMode == CAL) handleCalMode();
+        else {  // Obviously this should never happen
             Serial.println (F("Error: Invalid runmode entered"));
             updateMode(SHUTDOWN);
         }
