@@ -740,7 +740,9 @@ float degF_to_K(float degF) {
 float massairflow(float _map = NAN, float _airflow = NAN, float _ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
     float temp = _ambient;
     if (std::isnan(_ambient)) {
-        TemperatureSensor* sensor = tempsens.get_sensor(location::engine);  // ambient
+        TemperatureSensor* sensor = tempsens.get_sensor(location::ambient);  // ambient
+        if (!sensor && running_on_devboard) sensor = tempsens.get_sensor(location::engine);
+        if (!sensor) return 0.0;  // Avoid crashing due to trying to read absent sensor
         temp = sensor->get_temperature();
     }
     float T = degF_to_K(temp);  // in K
