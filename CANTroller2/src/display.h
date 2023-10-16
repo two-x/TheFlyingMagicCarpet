@@ -621,8 +621,8 @@ class Display {
                 if (force || (*(idiotlights[ilite]) ^ idiotlasts[ilite]))
                     draw_idiotlight (ilite, x + (2 * disp_font_width + 2) * ((ilite % disp_idiots_per_row) % disp_idiots_per_row), y + disp_idiot_row_height * (int32_t)(ilite / disp_idiots_per_row));
         }
-        void draw_temperature(sensor_location location, int draw_index) {
-            TemperatureSensor* sensor = temp_manager.get_sensor(location);
+        void draw_temperature(location location, int draw_index) {
+            TemperatureSensor* sensor = tempsens.get_sensor(location);
             if (sensor) {
                 draw_dynamic(draw_index, sensor->get_temperature(), static_cast<float>(temp_lims_f[static_cast<int>(location)][DISP_MIN]), static_cast<float>(temp_lims_f[static_cast<int>(location)][DISP_MAX]));
             } else {
@@ -732,8 +732,8 @@ class Display {
                     draw_dynamic(13, throttle.idlehigh(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
                     draw_dynamic(14, throttle.idlecold(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
                     draw_dynamic(15, throttle.idlehot(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
-                    draw_dynamic(16, throttle.tempcold(), temp_lims_f[static_cast<int>(sensor_location::engine)][DISP_MIN], temp_lims_f[static_cast<int>(sensor_location::engine)][DISP_MAX]);
-                    draw_dynamic(17, throttle.temphot(), temp_lims_f[static_cast<int>(sensor_location::engine)][DISP_MIN], temp_lims_f[static_cast<int>(sensor_location::engine)][DISP_MAX]);
+                    draw_dynamic(16, throttle.tempcold(), temp_lims_f[static_cast<int>(location::engine)][DISP_MIN], temp_lims_f[static_cast<int>(location::engine)][DISP_MAX]);
+                    draw_dynamic(17, throttle.temphot(), temp_lims_f[static_cast<int>(location::engine)][DISP_MIN], temp_lims_f[static_cast<int>(location::engine)][DISP_MAX]);
                     draw_dynamic(18, (int32_t)throttle.settlerate(), 0, 500);
                     draw_asciiname(19, idlemodecard[(int32_t)throttle.idlemode()]);
                 }
@@ -780,12 +780,12 @@ class Display {
                     draw_dynamic(19, cruise_pid.kd(), 0.0, 10.0);
                 }
                 else if (dataset_page == PG_TEMP) {
-                    draw_temperature(sensor_location::ambient, 9);
-                    draw_temperature(sensor_location::engine, 10);
-                    draw_temperature(sensor_location::wheel_fl, 11);
-                    draw_temperature(sensor_location::wheel_fr, 12);
-                    draw_temperature(sensor_location::wheel_rl, 13);
-                    draw_temperature(sensor_location::wheel_rr, 14);
+                    draw_temperature(location::ambient, 9);
+                    draw_temperature(location::engine, 10);
+                    draw_temperature(location::wheel_fl, 11);
+                    draw_temperature(location::wheel_fr, 12);
+                    draw_temperature(location::wheel_rl, 13);
+                    draw_temperature(location::wheel_rr, 14);
                     for (int line=15; line<=18; line++) draw_eraseval(line);
                     draw_truth(19, dont_take_temperatures, 2);
                 }

@@ -209,7 +209,7 @@ float temp_room = 77.0;          // "Room" temperature is 25 C = 77 F  Who cares
 float temp_sensor_min_f = -67.0; // Minimum reading of sensor is -25 C = -67 F
 float temp_sensor_max_f = 257.0; // Maximum reading of sensor is 125 C = 257 F
 
-TemperatureSensorManager temp_manager(onewire_pin);
+TemperatureSensorManager tempsens(onewire_pin);
 
 // encoder related
 Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
@@ -480,9 +480,9 @@ void adj_bool(bool *val, int32_t delta) { *val = adj_bool(*val, delta); }       
 void update_temperature_sensors(void *parameter) {
     while (true) {
         if (!dont_take_temperatures)
-            temp_manager.update_temperatures();
+            tempsens.update_temperatures();
         if (sim.potmapping(sensor::engtemp)) {
-            TemperatureSensor *engine_sensor = temp_manager.get_sensor(sensor_location::engine);
+            TemperatureSensor *engine_sensor = tempsens.get_sensor(location::engine);
             if (engine_sensor != nullptr) {
                 engine_sensor->set_temperature(pot.mapToRange(temp_sensor_min_f, temp_sensor_max_f));
             }
@@ -639,17 +639,17 @@ void detect_errors() {
         // different approach
         bool check_wheels;
         check_wheels = false;
-        TemperatureSensor * temp_fl = temp_manager.get_sensor(sensor_location::wheel_fl);
-        TemperatureSensor * temp_fr = temp_manager.get_sensor(sensor_location::wheel_fr);
-        TemperatureSensor * temp_rl = temp_manager.get_sensor(sensor_location::wheel_rl);
-        TemperatureSensor * temp_rr = temp_manager.get_sensor(sensor_location::wheel_rr);
+        TemperatureSensor * temp_fl = tempsens.get_sensor(location::wheel_fl);
+        TemperatureSensor * temp_fr = tempsens.get_sensor(location::wheel_fr);
+        TemperatureSensor * temp_rl = tempsens.get_sensor(location::wheel_rl);
+        TemperatureSensor * temp_rr = tempsens.get_sensor(location::wheel_rr);
         if (temp_fl != nullptr && temp_fl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
         if (temp_fr != nullptr && temp_fr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
         if (temp_rl != nullptr && temp_rl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
         if (temp_rr != nullptr && temp_rr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
         err_temp_wheel = check_wheels;
 
-        TemperatureSensor * temp_eng = temp_manager.get_sensor(sensor_location::engine);
+        TemperatureSensor * temp_eng = tempsens.get_sensor(location::engine);
         err_temp_engine = temp_eng != nullptr ? temp_eng->get_temperature() >= temp_lims_f[ENGINE][WARNING] : -999;
         
         // Detect sensors disconnected or giving out-of-range readings.
@@ -740,7 +740,7 @@ float degF_to_K(float degF) {
 float massairflow(float _map = NAN, float _airflow = NAN, float _ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
     float temp = _ambient;
     if (std::isnan(_ambient)) {
-        TemperatureSensor* sensor = temp_manager.get_sensor(sensor_location::engine);  // ambient
+        TemperatureSensor* sensor = tempsens.get_sensor(location::engine);  // ambient
         temp = sensor->get_temperature();
     }
     float T = degF_to_K(temp);  // in K
@@ -755,7 +755,7 @@ float maf_min_mgps = 0.0;
 float maf_max_mgps = massairflow(mapsens.max_psi(), airflow.max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
 
 // float massairflow(float map = NAN, float airflow = NAN, float ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
-//     TemperatureSensor* sensor = temp_manager.get_sensor(sensor_location::ambient);
+//     TemperatureSensor* sensor = tempsens.get_sensor(location::ambient);
 //     float T = degF_to_K(std::isnan(ambient) ? sensor->get_temperature() : ambient);  // in K
 //     float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
 //     float v = 0.447 * (std::isnan(airflow) ? airflow.filt() : airflow); // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
