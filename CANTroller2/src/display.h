@@ -139,7 +139,7 @@ char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
     { "LoopFreq", "Loop Avg", "LoopPeak", __________, __________, __________, __________, __________, neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
 };
 char tuneunits[dataset_pages::num_datapages][disp_tuning_lines][5] = {
-    { "in  ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
+    { "in  ", "V   ", "%   ", "mph ", "psi ", "mgs ", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
     { "us  ", "us  ", "us  ", "us  ", "%   ", "%   ", ______, ______, ______, "us  ", "us  ", },  // PG_JOY
     { "adc ", ______, ______, ______, ______, "mph ", "psi ", "psi ", "mph ", "mph ", "in  ", },  // PG_CAR
     { "us  ", "us  ", ______, "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", },  // PG_PWMS
@@ -204,7 +204,6 @@ int32_t disp_targets[disp_lines];
 int32_t disp_age_quanta[disp_lines];
 Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
 Timer dispRefreshTimer (100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
-Timer dispResetButtonTimer (500000);  // How long to press esp32 "boot" button before screen will reset and redraw
 uint32_t tft_watchdog_timeout_us = 100000;
 
 // tuning-ui related globals
@@ -682,7 +681,7 @@ class Display {
                     draw_dynamic(11, pot.val(), pot.min(), pot.max());
                     draw_dynamic(12, airflow.filt(), airflow.min_mph(), airflow.max_mph());
                     draw_dynamic(13, mapsens.filt(), mapsens.min_psi(), mapsens.max_psi());
-                    draw_dynamic(14, maf_gps, maf_min_gps, maf_max_gps);
+                    draw_dynamic(14, maf_mgps, maf_min_mgps, maf_max_mgps);
                     draw_eraseval(15);
                     draw_eraseval(16);
                     draw_eraseval(17);
