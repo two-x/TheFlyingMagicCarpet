@@ -12,7 +12,7 @@
 // #include "driver/mcpwm.h"  // MCPWM pulse measurement code
 #include "driver/rmt.h"
 #include "RMT_Input.h"
-#include "qpid.h" // This is quickpid library except i have to edit some of it
+#include "QPID.h" // This is quickpid library except i have to edit some of it
 #include "utils.h"
 #include "uictrl.h"
 #include "devices.h"
@@ -328,11 +328,8 @@ float tach_idle_abs_max_rpm = 1000.0; // High limit of idle speed adjustability
 Timer tachIdleTimer(5000000);         // How often to update tach idle value based on engine temperature
 
 // i2c sensor related
-enum i2csensor { AIRFLOW, MAP, num_i2csensors };
 AirflowSensor airflow(i2c);
 MAPSensor mapsens(i2c);  // map sensor related
-Timer airflowTimer(25000);  // How often to read an i2c sensor
-int32_t i2creadsensor = AIRFLOW;
 
 // Motor control:
 // Steering : Controls the steering motor proportionally based on the joystick
@@ -347,13 +344,13 @@ float brake_spid_initial_kp = 0.323;                                            
 float brake_spid_initial_ki_hz = 0.000;                                                                      // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
 float brake_spid_initial_kd_s = 0.000;                                                                       // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
 
-qpid brake_pid(pressure.filt_ptr(), &brake_out_pc, &pressure_target_psi,     // input, target, output variable references
+QPID brake_pid(pressure.filt_ptr(), &brake_out_pc, &pressure_target_psi,     // input, target, output variable references
                brake_extend_pc, brake_retract_pc,                                                  // output min, max
                brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,                     // Kp, Ki, and Kd tuning constants
-               qpid::pmode_t::ponerr, qpid::dmode_t::donerr, qpid::iawmode_t::iawcond, qpid::dir_t::direct,  // settings  // iAwRoundCond, iawclamp
-               brake_pid_period_us, qpid::control_t::manual, qpid::centmode_t::center, brake_stop_pc); // period, more settings
-               // qpid::pmode_t::ponerr, qpid::dmode_t::donerr, qpid::iawmode_t::iAwRound, qpid::dir_t::direct,  // settings  // iAwRoundCond, iawclamp
-               // brake_pid_period_us, qpid::control_t::manual, qpid::centmode_t::centerStrict, brake_stop_pc); // period, more settings
+               QPID::Pmode::ponerr, QPID::Dmode::donerr, QPID::Awmode::iawcond, QPID::Dir::direct,  // settings  // iAwRoundCond, iawclamp
+               brake_pid_period_us, QPID::Control::manual, QPID::Centmode::center, brake_stop_pc); // period, more settings
+               // QPID::Pmode::ponerr, QPID::Dmode::donerr, QPID::Awmode::iAwRound, QPID::Dir::direct,  // settings  // iAwRoundCond, iawclamp
+               // brake_pid_period_us, QPID::Control::manual, QPID::Centmode::centerStrict, brake_stop_pc); // period, more settings
 
 // Gas : Controls the throttle to achieve the desired intake airflow and engine rpm
 
@@ -367,11 +364,11 @@ float gas_spid_initial_kp = 0.206;    // PID proportional coefficient (gas) How 
 float gas_spid_initial_ki_hz = 0.000; // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
 float gas_spid_initial_kd_s = 0.000;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
 bool gas_open_loop = true;
-qpid gas_pid(tach.filt_ptr(), &gas_pulse_out_us, &tach_target_rpm,                            // input, target, output variable references
+QPID gas_pid(tach.filt_ptr(), &gas_pulse_out_us, &tach_target_rpm,                            // input, target, output variable references
              gas_pulse_cw_open_us, gas_pulse_ccw_closed_us,                                                             // output min, max
              gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s,                                        // Kp, Ki, and Kd tuning constants
-             qpid::pmode_t::ponerr, qpid::dmode_t::donerr, qpid::iawmode_t::iawclamp, qpid::dir_t::reverse,              // settings
-             gas_pid_period_us, (gas_open_loop) ? qpid::control_t::manual : qpid::control_t::manual, qpid::centmode_t::range); // period, more settings
+             QPID::Pmode::ponerr, QPID::Dmode::donerr, QPID::Awmode::iawclamp, QPID::Dir::reverse,              // settings
+             gas_pid_period_us, (gas_open_loop) ? QPID::Control::manual : QPID::Control::manual, QPID::Centmode::range); // period, more settings
 
 // Cruise : is active on demand while driving.
 // Pick from 3 different styles of adjusting cruise setpoint. I prefer throttle_delta.
@@ -393,12 +390,12 @@ Timer cruisePidTimer(cruise_pid_period_us);                                     
 float cruise_spid_initial_kp = 5.57;                                                                         // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
 float cruise_spid_initial_ki_hz = 0.000;                                                                     // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
 float cruise_spid_initial_kd_s = 0.000;                                                                      // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
-qpid cruise_pid(speedo.filt_ptr(), &tach_target_rpm, &speedo_target_mph,            // input, target, output variable references
+QPID cruise_pid(speedo.filt_ptr(), &tach_target_rpm, &speedo_target_mph,            // input, target, output variable references
                 throttle.idlespeed(), tach_govern_rpm,                                                   // output min, max
                 cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s,                 // Kp, Ki, and Kd tuning constants
-                qpid::pmode_t::ponerr, qpid::dmode_t::donerr, qpid::iawmode_t::iawround, qpid::dir_t::direct, // settings
-                cruise_pid_period_us, qpid::control_t::manual, qpid::centmode_t::range);
-// qpid::centmode::centerStrict, (tach_govern_rpm + tach_idle_rpm)/2);  // period, more settings
+                QPID::Pmode::ponerr, QPID::Dmode::donerr, QPID::Awmode::iawround, QPID::Dir::direct, // settings
+                cruise_pid_period_us, QPID::Control::manual, QPID::Centmode::range);
+// QPID::centmode::centerStrict, (tach_govern_rpm + tach_idle_rpm)/2);  // period, more settings
 
 // Trouble codes
 uint32_t err_timeout_us = 175000;
