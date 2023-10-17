@@ -135,13 +135,13 @@ class Device {
     bool _can_source[6] = { true, true, false, true, false, false };
                         // UNDEF, FIXED,  PIN, TOUCH,  POT,  CALC
     // source handling functions (should be overridden in child classes as needed)
-    virtual void assign_undef_source() {}
-    virtual void assign_fixed_source() {}
-    virtual void assign_pin_source() {}
-    virtual void assign_touch_source() {}
-    virtual void assign_pot_source() {}
-    virtual void assign_calc_source() {}
-    virtual void handle_mode_change() {}
+    virtual void assign_from_undef() {}
+    virtual void assign_from_fixed() {}
+    virtual void assign_from_pin() {}
+    virtual void assign_from_touch() {}
+    virtual void assign_from_pot() {}
+    virtual void assign_from_calc() {}
+    virtual void update_source() {}
   public:
     Timer timer;  // Can be used for external purposes
 
@@ -153,7 +153,7 @@ class Device {
     bool set_source(Source arg_source) {
         if (_can_source[static_cast<uint8_t>(arg_source)]) {
             _source = arg_source;
-            handle_mode_change();
+            update_source();
             return true;
         } 
         return false;
@@ -163,22 +163,22 @@ class Device {
         if (!_enabled) return; // do nothing if the Device is disabled
         switch (_source) {
             case Source::UNDEF:
-                assign_undef_source();
+                assign_from_undef();
                 break;
             case Source::FIXED:
-                assign_fixed_source();
+                assign_from_fixed();
                 break;
             case Source::PIN:
-                assign_pin_source();
+                assign_from_pin();
                 break;
             case Source::TOUCH:
-                assign_touch_source();
+                assign_from_touch();
                 break;
             case Source::POT:
-                assign_pot_source();
+                assign_from_pot();
                 break;
             case Source::CALC:
-                assign_calc_source();
+                assign_from_calc();
                 break;
             default:
                 // should never get here
@@ -383,17 +383,17 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
         }
     }
 
-    virtual void assign_touch_source() {
+    virtual void assign_from_touch() {
         this->_val_filt.set(this->_human.val());
     }
-    virtual void assign_pot_source() {
+    virtual void assign_from_pot() {
         this->_human.set(this->_pot->mapToRange(this->_human.min(), this->_human.max()));
         this->_val_raw = this->_native.val();  // Arguably pot should set the raw value and let the filter work normally, instead of this
         this->_val_filt.set(this->_human.val()); // don't filter the value we get from the pot, the pot output is already filtered
     }
 
     virtual void update_human_limits() { _val_filt.set_limits(this->_human.min_shptr(), this->_human.max_shptr()); } // make sure our filtered value has the same limits as our regular value
-    virtual void handle_mode_change() { if (this->_source == Source::PIN) _should_filter = false; } // if we just switched to pin input, the old filtered value is not valid
+    virtual void update_source() { if (this->_source == Source::PIN) _should_filter = false; } // if we just switched to pin input, the old filtered value is not valid
 
   public:
     Sensor(uint8_t pin) : Transducer<NATIVE_T, HUMAN_T>(pin) {}  
@@ -417,12 +417,12 @@ class I2CSensor : public Sensor<float,float> {
         // implement in child classes using the appropriate i2c sensor
         virtual float read_sensor() = 0;
 
-        virtual void assign_pin_source() {
+        virtual void assign_from_pin() {
             this->set_native(read_sensor());
             calculate_ema();  // Sensor EMA filter
         }
 
-        virtual void assign_pot_source() {
+        virtual void assign_from_pot() {
             this->_human.set(this->_pot->mapToRange(this->_human.min(), this->_human.max()));
             this->_val_raw = this->_native.val();
             this->_val_filt.set(this->_human.val()); // don't filter the value we get from the pot, the pot output is already filtered
@@ -551,7 +551,7 @@ class MAPSensor : public I2CSensor {
 template<typename NATIVE_T, typename HUMAN_T>
 class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
   protected:
-    virtual void assign_pin_source() {
+    virtual void assign_from_pin() {
         this->set_native(static_cast<NATIVE_T>(analogRead(this->_pin)));  // Soren: can this be done without two casts?
         this->calculate_ema(); // filtered values are kept in human format
     }
@@ -628,7 +628,7 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     protected:
         // TODO: add description
         std::shared_ptr<float> _zeropoint;
-        void assign_touch_source() { _val_filt.set((nom_lim_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
+        void assign_from_touch() { _val_filt.set((nom_lim_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
     public:
         static constexpr int32_t min_adc = 0.0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
         static constexpr int32_t max_adc = adcrange_adc;
@@ -699,7 +699,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
             }
         }
 
-        virtual void assign_pin_source() {
+        virtual void assign_from_pin() {
             _isr_buf_us = static_cast<int32_t>(_isr_us);  // Copy delta value (in case another interrupt happens during handling)
             _isr_us = 0;  // Indicates to isr we processed this value
             if (_isr_buf_us) {  // If a valid rotation has happened since last time, delta will have a value
