@@ -7,10 +7,10 @@ class QPID {
   public:
     enum class Control : uint8_t {manual, automatic, toggle};  // controller mode
     enum class Dir : uint8_t {direct, reverse};                    // controller direction
-    enum class Pmode : uint8_t {ponerr, ponmeas, ponerrmeas};     // proportional mode
-    enum class Dmode : uint8_t {donerr, donmeas};                   // derivative mode
-    enum class Awmode : uint8_t {iawcond, iawclamp, iawoff, iawround, iawroundcond};    // integral anti-windup mode  // Soren edit
-    enum class Centmode : uint8_t {range, center, centerstrict};    // Soren - Allows a defined output zero point
+    enum class Pmode : uint8_t {onerr, onmeas, onerrmeas};     // proportional mode
+    enum class Dmode : uint8_t {onerr, onmeas};                   // derivative mode
+    enum class Awmode : uint8_t {cond, clamp, off, round, roundcond};    // integral anti-windup mode  // Soren edit
+    enum class Centmode : uint8_t {off, on, strict};    // Soren - Allows a defined output zero point
   private:
     float dispkp = 0; float dispki = 0; float dispkd = 0;
     float _pterm, _iterm, _dterm, _kp, _ki, _kd, _outmin, _outmax, _err, lasterr, lastin, _cent, _outsum;
@@ -19,10 +19,10 @@ class QPID {
     float *mytarg;  // to constantly tell us what these values are. With pointers we'll just know.
     Control _mode = Control::manual;
     Dir _dir = Dir::direct;
-    Pmode _pmode = Pmode::ponerr;
-    Dmode _dmode = Dmode::donmeas;
-    Awmode _awmode = Awmode::iawcond;
-    Centmode _centmode = Centmode::range;  // Soren
+    Pmode _pmode = Pmode::onerr;
+    Dmode _dmode = Dmode::onmeas;
+    Awmode _awmode = Awmode::cond;
+    Centmode _centmode = Centmode::off;  // Soren
     uint32_t sampletime, lasttime;
   public:
     QPID();  // Default constructor
@@ -50,7 +50,7 @@ class QPID {
     void set_pmode(uint8_t arg_pmode);
     void set_dmode(Dmode arg_dmode);  // Sets the computation method for the derivative term, to compute based either on error or measurement (default).
     void set_dmode(uint8_t arg_dmode);
-    void set_awmode(Awmode arg_awmode);  // Sets the integral anti-windup mode to one of iawClamp, which clamps the output after adding integral and proportional (on measurement) terms, or iawcond (default), which provides some integral correction, prevents deep saturation and reduces overshoot. Option iawOff disables anti-windup altogether.
+    void set_awmode(Awmode arg_awmode);  // Sets the integral anti-windup mode to one of awClamp, which clamps the output after adding integral and proportional (on measurement) terms, or awcond (default), which provides some integral correction, prevents deep saturation and reduces overshoot. Option awOff disables anti-windup altogether.
     void set_awmode(uint8_t arg_awmode);
     void set_outsum(float arg_outsum);  // sets the output summation value
     void init();        // Ensure a bumpless transfer from manual to automatic mode
@@ -87,17 +87,17 @@ QPID::QPID() {}
 // Constructor that allows all parameters to get set
 QPID::QPID(float* arg_in, float* arg_out, float* arg_targ, float arg_min, float arg_max,
           float arg_kp = 0, float arg_ki = 0, float arg_kd = 0,  // Soren edit
-          Pmode arg_pmode = Pmode::ponerr, Dmode arg_dmode = Dmode::donmeas,
-          Awmode arg_awmode = Awmode::iawcond, Dir arg_dir = Dir::direct,
+          Pmode arg_pmode = Pmode::onerr, Dmode arg_dmode = Dmode::onmeas,
+          Awmode arg_awmode = Awmode::cond, Dir arg_dir = Dir::direct,
           uint32_t arg_sampletime = 100000, Control arg_mode = Control::manual, 
-          Centmode arg_centmode = Centmode::range, float arg_cent = NAN) {  // Soren edit
+          Centmode arg_centmode = Centmode::off, float arg_cent = NAN) {  // Soren edit
   myout = arg_out;
   myin = arg_in;
   mytarg = arg_targ;
   _mode = arg_mode;
   QPID::set_outlimits(arg_min, arg_max);  // same default as Arduino PWM limit - Soren edit
   QPID::set_centmode(arg_centmode);  // Soren
-  if (_centmode != Centmode::range && !std::isnan(arg_cent)) {  // Soren
+  if (_centmode != Centmode::off && !std::isnan(arg_cent)) {  // Soren
     set_cent(arg_cent);  // Soren
     _outsum = _cent;
   }
@@ -128,32 +128,32 @@ bool QPID::compute() {
 
   float peterm = _kp * _err;
   float pmterm = _kp * din;
-  if (_pmode == Pmode::ponerr) pmterm = 0;
-  else if (_pmode == Pmode::ponmeas) peterm = 0;
-  else { //ponerrmeas
+  if (_pmode == Pmode::onerr) pmterm = 0;
+  else if (_pmode == Pmode::onmeas) peterm = 0;
+  else { //onerrmeas
     peterm *= 0.5f;
     pmterm *= 0.5f;
   }
   _pterm = peterm - pmterm;
   _iterm = _ki * _err;
-  if (_dmode == Dmode::donerr) _dterm = _kd * derr;
-  else _dterm = -_kd * din; // donmeas
+  if (_dmode == Dmode::onerr) _dterm = _kd * derr;
+  else _dterm = -_kd * din; // onmeas
 
-  if (_awmode == Awmode::iawcond || _awmode == Awmode::iawroundcond) {  // condition anti-windup (default)
+  if (_awmode == Awmode::cond || _awmode == Awmode::roundcond) {  // condition anti-windup (default)
     bool aw = false;
     float _itermout = (peterm - pmterm) + _ki * (_iterm + _err);
     if (_itermout > _outmax && derr > 0) aw = true;
     else if (_itermout < _outmin && derr < 0) aw = true;
     if (aw && _ki) _iterm = constrain(_itermout, -_outmax, _outmax);
   }
-  else if ((_awmode == Awmode::iawround || _awmode == Awmode::iawroundcond) && _err < 0.001 && _err > -0.001) {
+  else if ((_awmode == Awmode::round || _awmode == Awmode::roundcond) && _err < 0.001 && _err > -0.001) {
       _err = 0.0;
-      if (_centmode == Centmode::center || _centmode == Centmode::centerstrict) _outsum = _cent;     
+      if (_centmode == Centmode::on || _centmode == Centmode::strict) _outsum = _cent;     
   }
-  if (_centmode == Centmode::centerstrict && _err * lasterr < 0) _outsum = _cent;  // Soren - Recenters any old integral when error crosses zero
+  if (_centmode == Centmode::strict && _err * lasterr < 0) _outsum = _cent;  // Soren - Recenters any old integral when error crosses zero
   
   _outsum += _iterm - pmterm;  // by default, compute output as per PID_v1    // include integral amount and pmterm
-  if (_awmode != Awmode::iawoff) _outsum = constrain(_outsum, _outmin, _outmax);  // Clamp
+  if (_awmode != Awmode::off) _outsum = constrain(_outsum, _outmin, _outmax);  // Clamp
   
   *myout = constrain(_outsum + peterm + _dterm, _outmin, _outmax);  // include _dterm, clamp and drive output
 
@@ -168,8 +168,8 @@ bool QPID::compute() {
   it's called automatically from the constructor, but tunings can also
   be adjusted on the fly during normal operation.
 ******************************************************************************/
-void QPID::set_tunings(float arg_kp, float arg_ki, float arg_kd, Pmode arg_pmode = Pmode::ponerr,
-    Dmode arg_dmode = Dmode::donmeas, Awmode arg_awmode = Awmode::iawcond) {
+void QPID::set_tunings(float arg_kp, float arg_ki, float arg_kd, Pmode arg_pmode = Pmode::onerr,
+    Dmode arg_dmode = Dmode::onmeas, Awmode arg_awmode = Awmode::cond) {
   if (arg_kp < 0 || arg_ki < 0 || arg_kd < 0 || !sampletime) return;  // Soren - added divide by zero protection
   if (arg_ki == 0) _outsum = 0;
   _pmode = arg_pmode; _dmode = arg_dmode; _awmode = arg_awmode;
@@ -220,7 +220,7 @@ void QPID::set_outlimits(float arg_min, float arg_max) {
 void QPID::set_centmode(Centmode arg_centmode) { _centmode = arg_centmode; }  // Soren
 void QPID::set_centmode(uint8_t arg_centmode) { _centmode = (Centmode)arg_centmode; }  // Soren
 void QPID::set_cent(float arg_cent) { if (_outmin <= arg_cent && _outmax >= arg_cent) _cent = arg_cent; }  // Soren
-// if (_centmode == Centmode::range) _centmode = Centmode::centerStrict;  // Soren - does definition of center imply to use center mode?
+// if (_centmode == Centmode::off) _centmode = Centmode::strict;  // Soren - does definition of center imply to use center mode?
 
 /* set_mode(.)*****************************************************************
   Sets the controller mode to manual (0), automatic (1) or timer (2)
@@ -270,11 +270,11 @@ void QPID::set_dmode(Dmode arg_dmode) { _dmode = arg_dmode; }
 void QPID::set_dmode(uint8_t arg_dmode) { _dmode = (Dmode)arg_dmode; }
 
 /* set_AntiWindupmode(.)*******************************************************
-  Sets the integral anti-windup mode to one of iawClamp, which clamps
+  Sets the integral anti-windup mode to one of clamp, which clamps
   the output after adding integral and proportional (on measurement) terms,
-  or iawcond (default), which provides some integral correction, prevents
+  or cond (default), which provides some integral correction, prevents
   deep saturation and reduces overshoot.
-  Option iawOff disables anti-windup altogether.
+  Option off disables anti-windup altogether.
 ******************************************************************************/
 void QPID::set_awmode(Awmode arg_awmode) { _awmode = arg_awmode; }
 void QPID::set_awmode(uint8_t arg_awmode) { _awmode = (Awmode)arg_awmode; }

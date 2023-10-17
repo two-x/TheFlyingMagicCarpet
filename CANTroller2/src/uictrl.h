@@ -47,8 +47,8 @@ class Encoder {
         //  ---- tunable ----
         // TODO: these are all currently private const, if we ever actually want to tune them live we would need to change this
         static const uint32_t _spinrate_min_us = 2500;  // Will reject spins faster than this as an attempt to debounce behavior
-        static const uint32_t _accel_thresh_us = 100000;  // Spins faster than this will be accelerated
-        static const int32_t _accel_max = 50;  // Maximum acceleration factor
+        static const uint32_t _accel_thresh_us = 60000;  // Spins faster than this will be accelerated
+        static const int32_t _accel_max = 15;  // Maximum acceleration factor
         static const uint32_t _longPressTime = 350000;
 
         // instance vars
@@ -63,8 +63,6 @@ class Encoder {
         int32_t _state = 0;
         int32_t _sw_action = NONE;  // Flag for encoder handler to know an encoder switch action needs to be handled
         uint32_t _spinrate_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
-        uint32_t _spinrate_last_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
-        uint32_t _spinrate_old_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
         bool _sw = false;  // Remember whether switch is being pressed
         bool _timer_active = false;  // Flag to prevent re-handling long presses if the sw is just kept down
         bool _suppress_click = false;  // Flag to prevent a short click on switch release after successful long press
@@ -141,8 +139,6 @@ class Encoder {
             uint32_t d = 0;
             if (_delta) {  // Now handle any new rotations
                 if (_spinrate_isr_us >= _spinrate_min_us) {  // Reject clicks coming in too fast as bounces
-                    _spinrate_old_us = _spinrate_last_us;  // Store last few spin times for filtering purposes ...
-                    _spinrate_last_us = _spinrate_us;  // ...
                     _spinrate_us = constrain (_spinrate_isr_us, _spinrate_min_us, _accel_thresh_us);
                     d = constrain (_delta, -1, 1);  // Only change one at a time when selecting or turning pages
                 }
@@ -155,13 +151,9 @@ class Encoder {
             uint32_t d = 0;
             if (_delta) {  // Handle any new rotations
                 if (_spinrate_isr_us >= _spinrate_min_us) {  // Reject clicks coming in too fast as bounces
-                    _spinrate_old_us = _spinrate_last_us;  // Store last few spin times for filtering purposes ...
-                    _spinrate_last_us = _spinrate_us;  // ...
                     _spinrate_us = constrain(_spinrate_isr_us, _spinrate_min_us, _accel_thresh_us);
-                    int32_t _temp = (_spinrate_old_us > _spinrate_last_us) ? _spinrate_old_us : _spinrate_last_us;  // Find the slowest of the last 3 detents ...
-                    if (_temp < _spinrate_us) _temp = _spinrate_us;
-                    _temp = map (_temp, _spinrate_min_us, _accel_thresh_us, _accel_max, 1);  // if turning faster than 100ms/det, proportionally accelerate the effect of each detent by up to 50x. encoder_temp variable repurposed here to hold # of edits per detent turned
-                    d = _delta * _temp;  // If a tunable value is being edited, turning the encoder changes the value
+                    _spinrate_us = map (_spinrate_us, _spinrate_min_us, _accel_thresh_us, _accel_max, 1);  // if turning faster than 100ms/det, proportionally accelerate the effect of each detent by up to 50x. encoder_temp variable repurposed here to hold # of edits per detent turned
+                    d = _delta * _spinrate_us;  // If a tunable value is being edited, turning the encoder changes the value
                 }
                 _delta = 0;  // Our responsibility to reset this flag after handling events
             }
