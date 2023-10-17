@@ -746,9 +746,9 @@ float massairflow(float _map = NAN, float _airflow = NAN, float _ambient = NAN) 
     float T = degF_to_K(temp);  // in K
     float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
     float v = 0.447 * std::isnan(_airflow) ? airflow.filt() : _airflow; // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
-    float A = 0.0020268;  // in m2    1.0 in2 * pi * 0.00064516 m2/in2
+    float Ain2 = 3.1415926;  // in m2    1.0^2 in2 * pi  // will still need to divide by 1550 in2/m2
     float P = 6894.76 * std::isnan(_map) ? mapsens.filt() : _map;  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
-    return 1000000000.0 * v * A * P / (R * T);  // in mg/s   (mg/kg * m/s * m2 * J/m3) / (J/(kg*K) * K) = g/s
+    return 1000000000.0 * v * Ain2 * P / (R * T * 1550);  // in mg/s   (mg/kg * m/s * in2 * J/m3) / (J/(kg*K) * K * 1550 in2/m2) = g/s
 }
 float maf_ugps;  // Mass airflow in milligrams per second
 float maf_min_ugps = 0.0;
