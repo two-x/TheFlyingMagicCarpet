@@ -292,4 +292,11 @@ public:
     // int get_micros_to_wait_for_conversion(int microseconds) {
     //     return 1000 * tempsensebus.millisToWaitForConversion(microseconds);
     // }
+
+    // Soren: I made this function for code to easily get most recently read temp value from a location
+    float val(location locat) {
+        TemperatureSensor* sens = get_sensor(locat);  // ambient
+        if (!sens) return NAN;  // avoid crashing if undetected location is indicated
+        return sens->get_temperature();
+    }
 };
