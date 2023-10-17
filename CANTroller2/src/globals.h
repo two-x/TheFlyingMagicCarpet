@@ -102,6 +102,7 @@ bool allow_rolling_start = false;    // May be a smart prerequisite, may be us p
 // Dev-board-only options:
 // Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
 bool dont_take_temperatures = false;  // In case debugging dallas sensors or causing problems
+bool gamma_correct_enabled = false;
 bool console_enabled = true;         // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
 bool keep_system_powered = false;    // Use true during development
 bool screensaver = false;  // Can enable experiment with animated screen draws
@@ -496,6 +497,7 @@ void set_board_defaults(bool devboard) {  // true for dev boards, false for prin
         sim.set_can_sim(sensor::speedo, true);
     }
     else {
+        gamma_correct_enabled = false;
         console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
         keep_system_powered = false; // Use true during development
         screensaver = false;         // Can enable experiment with animated screen draws
