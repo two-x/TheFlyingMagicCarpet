@@ -106,7 +106,7 @@ bool gamma_correct_enabled = false;
 bool console_enabled = true;         // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
 bool keep_system_powered = false;    // Use true during development
 bool screensaver = false;  // Can enable experiment with animated screen draws
-bool timestamp_loop = true;         // Makes code write out timestamps throughout loop to serial port
+bool timestamp_loop = false;         // Makes code write out timestamps throughout loop to serial port
 uint32_t timestamp_loop_linefeed_threshold = 0;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
 
 enum hotrc_axis { HORZ, VERT, CH3, CH4 };
