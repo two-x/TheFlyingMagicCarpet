@@ -348,10 +348,10 @@ float brake_spid_initial_kd_s = 0.000;                                          
 QPID brake_pid(pressure.filt_ptr(), &brake_out_pc, &pressure_target_psi,     // input, target, output variable references
                brake_extend_pc, brake_retract_pc,                                                  // output min, max
                brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,                     // Kp, Ki, and Kd tuning constants
-               QPID::Pmode::ponerr, QPID::Dmode::donerr, QPID::Awmode::iawcond, QPID::Dir::direct,  // settings  // iAwRoundCond, iawclamp
-               brake_pid_period_us, QPID::Control::manual, QPID::Centmode::center, brake_stop_pc); // period, more settings
-               // QPID::Pmode::ponerr, QPID::Dmode::donerr, QPID::Awmode::iAwRound, QPID::Dir::direct,  // settings  // iAwRoundCond, iawclamp
-               // brake_pid_period_us, QPID::Control::manual, QPID::Centmode::centerStrict, brake_stop_pc); // period, more settings
+               QPID::Pmode::onerr, QPID::Dmode::onerr, QPID::Awmode::cond, QPID::Dir::direct,  // settings  // roundcond, clamp
+               brake_pid_period_us, QPID::Control::manual, QPID::Centmode::on, brake_stop_pc); // period, more settings
+               // QPID::Pmode::onerr, QPID::Dmode::onerr, QPID::Awmode::round, QPID::Dir::direct,  // settings  // roundcond, clamp
+               // brake_pid_period_us, QPID::Control::manual, QPID::Centmode::strict, brake_stop_pc); // period, more settings
 
 // Gas : Controls the throttle to achieve the desired intake airflow and engine rpm
 
@@ -368,8 +368,8 @@ bool gas_open_loop = true;
 QPID gas_pid(tach.filt_ptr(), &gas_pulse_out_us, &tach_target_rpm,                            // input, target, output variable references
              gas_pulse_cw_open_us, gas_pulse_ccw_closed_us,                                                             // output min, max
              gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s,                                        // Kp, Ki, and Kd tuning constants
-             QPID::Pmode::ponerr, QPID::Dmode::donerr, QPID::Awmode::iawclamp, QPID::Dir::reverse,              // settings
-             gas_pid_period_us, (gas_open_loop) ? QPID::Control::manual : QPID::Control::manual, QPID::Centmode::range); // period, more settings
+             QPID::Pmode::onerr, QPID::Dmode::onerr, QPID::Awmode::clamp, QPID::Dir::reverse,              // settings
+             gas_pid_period_us, (gas_open_loop) ? QPID::Control::manual : QPID::Control::manual, QPID::Centmode::off); // period, more settings
 
 // Cruise : is active on demand while driving.
 // Pick from 3 different styles of adjusting cruise setpoint. I prefer throttle_delta.
@@ -394,8 +394,8 @@ float cruise_spid_initial_kd_s = 0.000;                                         
 QPID cruise_pid(speedo.filt_ptr(), &tach_target_rpm, &speedo_target_mph,            // input, target, output variable references
                 throttle.idlespeed(), tach_govern_rpm,                                                   // output min, max
                 cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s,                 // Kp, Ki, and Kd tuning constants
-                QPID::Pmode::ponerr, QPID::Dmode::donerr, QPID::Awmode::iawround, QPID::Dir::direct, // settings
-                cruise_pid_period_us, QPID::Control::manual, QPID::Centmode::range);
+                QPID::Pmode::onerr, QPID::Dmode::onerr, QPID::Awmode::round, QPID::Dir::direct, // settings
+                cruise_pid_period_us, QPID::Control::manual, QPID::Centmode::off);
 // QPID::centmode::centerStrict, (tach_govern_rpm + tach_idle_rpm)/2);  // period, more settings
 
 // Trouble codes
