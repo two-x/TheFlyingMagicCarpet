@@ -108,21 +108,21 @@ class Param {
     bool add(VALUE_T arg_add) {
         return set(*_val + arg_add);
     }
-
+    // Getter functions
     VALUE_T val() { return *_val; }
     VALUE_T min() { return *_min; }
     VALUE_T max() { return *_max; }
     VALUE_T* ptr() { return _val.get(); }
     VALUE_T* min_ptr() { return _min.get(); }
     VALUE_T* max_ptr() { return _max.get(); }
-    std::shared_ptr<VALUE_T> ptr_obj() { return _val; }
-    std::shared_ptr<VALUE_T> min_ptr_obj() { return _min; }
-    std::shared_ptr<VALUE_T> max_ptr_obj() { return _max; }
+    std::shared_ptr<VALUE_T> shptr() { return _val; }
+    std::shared_ptr<VALUE_T> min_shptr() { return _min; }
+    std::shared_ptr<VALUE_T> max_shptr() { return _max; }
     VALUE_T last() { return _last; } // NOTE: currently unused, do we still need this for drawing purposes?
     bool saturated() { return _saturated; }
 };
 
-enum class ControllerMode : uint8_t {UNDEF=0, FIXED, PIN, TOUCH, POT, CALC};
+enum class Source : uint8_t {UNDEF=0, FIXED, PIN, TOUCH, POT, CALC};
 
 // Device class - is a base class for any connected system device or signal associated with a pin
 class Device {
@@ -131,21 +131,16 @@ class Device {
     uint8_t _pin;
     bool _enabled = true;
     Potentiometer* _pot; // to pull input from the pot if we're in simulation mode
-    ControllerMode _source = ControllerMode::UNDEF;
-    bool _can_source[6] = { true,       // UNDEF
-                            true,       // FIXED
-                            false,      // PIN
-                            true,       // TOUCH
-                            false,      // POT
-                            false };    // CALC
-
+    Source _source = Source::UNDEF;
+    bool _can_source[6] = { true, true, false, true, false, false };
+                        // UNDEF, FIXED,  PIN, TOUCH,  POT,  CALC
     // source handling functions (should be overridden in child classes as needed)
-    virtual void handle_undef_mode() {}
-    virtual void handle_fixed_mode() {}
-    virtual void handle_pin_mode() {}
-    virtual void handle_touch_mode() {}
-    virtual void handle_pot_mode() {}
-    virtual void handle_calc_mode() {}
+    virtual void assign_undef_source() {}
+    virtual void assign_fixed_source() {}
+    virtual void assign_pin_source() {}
+    virtual void assign_touch_source() {}
+    virtual void assign_pot_source() {}
+    virtual void assign_calc_source() {}
     virtual void handle_mode_change() {}
   public:
     Timer timer;  // Can be used for external purposes
@@ -154,8 +149,8 @@ class Device {
     // NOTE: should we start in PIN mode?
     Device(uint8_t arg_pin) : _pin(arg_pin) {}
 
-    bool can_source(ControllerMode arg_source) { return _can_source[static_cast<uint8_t>(arg_source)]; }
-    bool set_source(ControllerMode arg_source) {
+    bool can_source(Source arg_source) { return _can_source[static_cast<uint8_t>(arg_source)]; }
+    bool set_source(Source arg_source) {
         if (_can_source[static_cast<uint8_t>(arg_source)]) {
             _source = arg_source;
             handle_mode_change();
@@ -167,23 +162,23 @@ class Device {
     void update() {
         if (!_enabled) return; // do nothing if the Device is disabled
         switch (_source) {
-            case ControllerMode::UNDEF:
-                handle_undef_mode();
+            case Source::UNDEF:
+                assign_undef_source();
                 break;
-            case ControllerMode::FIXED:
-                handle_fixed_mode();
+            case Source::FIXED:
+                assign_fixed_source();
                 break;
-            case ControllerMode::PIN:
-                handle_pin_mode();
+            case Source::PIN:
+                assign_pin_source();
                 break;
-            case ControllerMode::TOUCH:
-                handle_touch_mode();
+            case Source::TOUCH:
+                assign_touch_source();
                 break;
-            case ControllerMode::POT:
-                handle_pot_mode();
+            case Source::POT:
+                assign_pot_source();
                 break;
-            case ControllerMode::CALC:
-                handle_calc_mode();
+            case Source::CALC:
+                assign_calc_source();
                 break;
             default:
                 // should never get here
@@ -194,10 +189,10 @@ class Device {
     void attach_pot(Potentiometer &pot_arg) {
         _pot = &pot_arg;
     }
-
+    // Setters and getters
     void set_enabled(bool arg_enable) { _enabled = arg_enable; }
-    void set_can_source(ControllerMode arg_source, bool is_possible) { _can_source[static_cast<uint8_t>(arg_source)] = is_possible; }
-    ControllerMode source() { return _source; }
+    void set_can_source(Source arg_source, bool is_possible) { _can_source[static_cast<uint8_t>(arg_source)] = is_possible; }
+    Source source() { return _source; }
     uint8_t pin() { return _pin; }
     bool enabled() { return _enabled; }
 };
@@ -265,8 +260,8 @@ class Transducer : public Device {
     Param<NATIVE_T> _native;
     
     // override these in children that need to react to limits changing
-    virtual void handle_set_native_limits() {}
-    virtual void handle_set_human_limits() {}
+    virtual void update_native_limits() {}
+    virtual void update_human_limits() {}
   public:
     Transducer(uint8_t arg_pin) : Device(arg_pin) {}
     Transducer() = delete;
@@ -280,7 +275,7 @@ class Transducer : public Device {
             dir = TransducerDirection::FWD;
             _native.set_limits(arg_min.val(), arg_max.val());
         }
-        handle_set_native_limits();
+        update_native_limits();
     }
     void set_human_limits(Param<HUMAN_T> &arg_min, Param<HUMAN_T> &arg_max) {
         if (arg_min.val() > arg_max.val()) {
@@ -291,7 +286,7 @@ class Transducer : public Device {
             dir = TransducerDirection::FWD;
             _human.set_limits(arg_min.val(), arg_max.val());
         }
-        handle_set_human_limits();
+        update_human_limits();
     }
     void set_native_limits(NATIVE_T arg_min, NATIVE_T arg_max) {
         if (arg_min > arg_max) {
@@ -302,7 +297,7 @@ class Transducer : public Device {
             dir = TransducerDirection::FWD;
             _native.set_limits(arg_min, arg_max);
         }
-        handle_set_native_limits();
+        update_native_limits();
     }
     void set_human_limits(HUMAN_T arg_min, HUMAN_T arg_max) {
         if (arg_min > arg_max) {
@@ -313,7 +308,7 @@ class Transducer : public Device {
             dir = TransducerDirection::FWD;
             _human.set_limits(arg_min, arg_max);
         }
-        handle_set_human_limits();
+        update_human_limits();
     }
 
     bool set_native(NATIVE_T arg_val_native) {
@@ -355,18 +350,18 @@ class Transducer : public Device {
         _b_offset = arg_b_offset;
         _invert = arg_invert;
     }
-
+    // Getter functions
     NATIVE_T native() { return _native.val(); }
     HUMAN_T human() { return _human.val(); }
-    NATIVE_T raw() { return _val_raw; }
+    NATIVE_T raw() { return _val_raw; }  // This is a native unit value, unconstrained and unfiltered
     NATIVE_T min_native() { return _native.min(); }
     NATIVE_T max_native() { return _native.max(); }
     HUMAN_T min_human() { return _human.min(); }
     HUMAN_T max_human() { return _human.max(); }
     NATIVE_T* native_ptr() { return _native.ptr(); }
     HUMAN_T* human_ptr() { return _human.ptr(); }
-    std::shared_ptr<NATIVE_T> native_ptr_obj() { return _native.ptr_obj(); }
-    std::shared_ptr<HUMAN_T> human_ptr_obj() { return _human.ptr_obj(); }
+    std::shared_ptr<NATIVE_T> native_shptr() { return _native.shptr(); }
+    std::shared_ptr<HUMAN_T> human_shptr() { return _human.shptr(); }
 };
 
 // Sensor class - is a base class for control system sensors, ie anything that measures real world data or electrical signals 
@@ -388,17 +383,17 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
         }
     }
 
-    virtual void handle_touch_mode() {
+    virtual void assign_touch_source() {
         this->_val_filt.set(this->_human.val());
     }
-    virtual void handle_pot_mode() {
+    virtual void assign_pot_source() {
         this->_human.set(this->_pot->mapToRange(this->_human.min(), this->_human.max()));
         this->_val_raw = this->_native.val();  // Arguably pot should set the raw value and let the filter work normally, instead of this
         this->_val_filt.set(this->_human.val()); // don't filter the value we get from the pot, the pot output is already filtered
     }
 
-    virtual void handle_set_human_limits() { _val_filt.set_limits(this->_human.min_ptr_obj(), this->_human.max_ptr_obj()); } // make sure our filtered value has the same limits as our regular value
-    virtual void handle_mode_change() { if (this->_source == ControllerMode::PIN) _should_filter = false; } // if we just switched to pin input, the old filtered value is not valid
+    virtual void update_human_limits() { _val_filt.set_limits(this->_human.min_shptr(), this->_human.max_shptr()); } // make sure our filtered value has the same limits as our regular value
+    virtual void handle_mode_change() { if (this->_source == Source::PIN) _should_filter = false; } // if we just switched to pin input, the old filtered value is not valid
 
   public:
     Sensor(uint8_t pin) : Transducer<NATIVE_T, HUMAN_T>(pin) {}  
@@ -406,7 +401,7 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
     float ema_alpha() { return _ema_alpha; }
     HUMAN_T filt() { return _val_filt.val(); }
     HUMAN_T* filt_ptr() { return _val_filt.ptr(); }
-    std::shared_ptr<HUMAN_T> filt_ptr_obj() { return _val_filt.ptr_obj(); } // NOTE: should just be public?
+    std::shared_ptr<HUMAN_T> filt_shptr() { return _val_filt.shptr(); } // NOTE: should just be public?
 };
 
 // Base class for sensors which communicate using i2c.
@@ -422,27 +417,27 @@ class I2CSensor : public Sensor<float,float> {
         // implement in child classes using the appropriate i2c sensor
         virtual float read_sensor() = 0;
 
-        virtual void handle_pin_mode() {
+        virtual void assign_pin_source() {
             this->set_native(read_sensor());
             calculate_ema();  // Sensor EMA filter
         }
 
-        virtual void handle_pot_mode() {
+        virtual void assign_pot_source() {
             this->_human.set(this->_pot->mapToRange(this->_human.min(), this->_human.max()));
             this->_val_raw = this->_native.val();
             this->_val_filt.set(this->_human.val()); // don't filter the value we get from the pot, the pot output is already filtered
         }
     
-        virtual void handle_set_human_limits() {
-            _native.set_limits(_human.min_ptr_obj(), _human.max_ptr_obj());  // Soren: why are the arguments _human not _native?
-            _val_filt.set_limits(_human.min_ptr_obj(), _human.max_ptr_obj());
+        virtual void update_human_limits() {
+            _native.set_limits(_human.min_shptr(), _human.max_shptr());  // Soren: why are the arguments _human not _native?
+            _val_filt.set_limits(_human.min_shptr(), _human.max_shptr());
         }
     public:
-        I2CSensor(I2C &i2c_arg, uint8_t i2c_address_arg) : Sensor<float,float>(-1), _i2c(i2c_arg), _i2c_address(i2c_address_arg) { set_can_source(ControllerMode::PIN, true); }
+        I2CSensor(I2C &i2c_arg, uint8_t i2c_address_arg) : Sensor<float,float>(-1), _i2c(i2c_arg), _i2c_address(i2c_address_arg) { set_can_source(Source::PIN, true); }
         I2CSensor() = delete;
         virtual void setup() {
             _detected = _i2c.device_detected(_i2c_address);
-            set_source(ControllerMode::PIN); // we aren't actually reading from a pin but the point is the same...
+            set_source(Source::PIN); // we aren't actually reading from a pin but the point is the same...
         }
 };
 
@@ -457,17 +452,22 @@ class AirflowSensor : public I2CSensor {
         static constexpr float _initial_airflow_mph = 0.0;
         static constexpr float _initial_ema_alpha = 0.2;
         FS3000 _sensor;
+        float goodreading;
+        int64_t airflow_read_period_us = 35000;
+        Timer airflowTimer;
         virtual float read_sensor() {
-            return _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
-            // float temp = _sensor.readMilesPerHour();
-            // this->_val_raw = (NATIVE_T)temp;  // note, this returns a float from 0-33.55 for the FS3000-1015 
-            // return temp;
+            if (airflowTimer.expireset()) {
+                goodreading = _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
+                // this->_val_raw = this->human_val();  // (NATIVE_T)goodreading; // note, this returns a float from 0-33.55 for the FS3000-1015             
+            }
+            return goodreading;
         }
     public:
         AirflowSensor(I2C &i2c_arg) : I2CSensor(i2c_arg, _i2c_address) {
             _ema_alpha = _initial_ema_alpha;
             set_human_limits(_min_mph, _initial_max_mph);
-            set_can_source(ControllerMode::POT, true);
+            set_can_source(Source::POT, true);
+            airflowTimer.set(airflow_read_period_us);
         }
         AirflowSensor() = delete;
 
@@ -477,21 +477,21 @@ class AirflowSensor : public I2CSensor {
             if (_detected) {
                 if (_sensor.begin() == false) {
                     printf("  Sensor not responding\n");  // Begin communication with air flow sensor) over I2C 
-                    set_source(ControllerMode::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
+                    set_source(Source::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
                 } else {
                     _sensor.setRange(AIRFLOW_RANGE_15_MPS);
                     printf ("  Sensor responding properly\n");
                 }
             } else {
-                set_source(ControllerMode::UNDEF); // don't even have a device at all...
+                set_source(Source::UNDEF); // don't even have a device at all...
             }
         }
-
+        // Getter functions
         float min_mph() { return _human.min(); }
         float max_mph() { return _human.max(); }
         float abs_max_mph() { return _abs_max_mph; }
         float* max_mph_ptr() { return _human.max_ptr(); }
-        std::shared_ptr<float> max_mph_ptr_obj() { return _human.max_ptr_obj(); }
+        std::shared_ptr<float> max_mph_shptr() { return _human.max_shptr(); }
 };
 
 // MAPSensor measures the air pressure of the engine manifold in PSI. It communicates with the external sensor using i2c.
@@ -508,20 +508,16 @@ class MAPSensor : public I2CSensor {
         float good_reading = -1;
         SparkFun_MicroPressure _sensor;
         virtual float read_sensor() {
-            // float temp = _sensor.readPressure(PSI, true);
-            float temp = _sensor.readPressure(PSI, true);
-            
+            float temp = _sensor.readPressure(PSI, true);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
             if (!std::isnan(temp)) good_reading = temp;
+            // this->_val_raw = (NATIVE_T)good_reading;  // note, this returns a float from 0-33.55 for the FS3000-1015 
             return good_reading;
-            // float temp = _sensor.readPressure(PSI);
-            // this->_val_raw = (NATIVE_T)temp;  // note, this returns a float from 0-33.55 for the FS3000-1015 
-            // return temp;
         }
     public:
         MAPSensor(I2C &i2c_arg) : I2CSensor(i2c_arg, _i2c_address) {
             _ema_alpha = _initial_ema_alpha;
             set_human_limits(_initial_min_psi, _initial_max_psi);
-            set_can_source(ControllerMode::POT, true);
+            set_can_source(Source::POT, true);
         }
         MAPSensor() = delete;
 
@@ -531,31 +527,31 @@ class MAPSensor : public I2CSensor {
             if (_detected) {
                 if (_sensor.begin() == false) {
                     printf("  Sensor not responding\n");  // Begin communication with air flow sensor) over I2C 
-                    set_source(ControllerMode::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
+                    set_source(Source::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
                 } else {
                     printf("  Reading %f atm manifold pressure\n", _sensor.readPressure(ATM));
                     printf("  Sensor responding properly\n");
                 }
             } else {
-                set_source(ControllerMode::UNDEF); // don't even have a device at all...
+                set_source(Source::UNDEF); // don't even have a device at all...
             }
         }
-
+        // Getter functions
         float min_psi() { return _human.min(); }
         float max_psi() { return _human.max(); }
         float abs_min_psi() { return _abs_min_psi; }
         float abs_max_psi() { return _abs_max_psi; }
         float* min_psi_ptr() { return _human.min_ptr(); }
         float* max_psi_ptr() { return _human.max_ptr(); }
-        std::shared_ptr<float> min_psi_ptr_obj() { return _human.min_ptr_obj(); }
-        std::shared_ptr<float> max_psi_ptr_obj() { return _human.max_ptr_obj(); }
+        std::shared_ptr<float> min_psi_shptr() { return _human.min_shptr(); }
+        std::shared_ptr<float> max_psi_shptr() { return _human.max_shptr(); }
 };
 
 // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
 template<typename NATIVE_T, typename HUMAN_T>
 class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
   protected:
-    virtual void handle_pin_mode() {
+    virtual void assign_pin_source() {
         this->set_native(static_cast<NATIVE_T>(analogRead(this->_pin)));  // Soren: can this be done without two casts?
         this->calculate_ema(); // filtered values are kept in human format
     }
@@ -563,7 +559,7 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
     AnalogSensor(uint8_t arg_pin) : Sensor<NATIVE_T, HUMAN_T>(arg_pin) {}
     void setup() {
         set_pin(this->_pin, INPUT);
-        this->set_source(ControllerMode::PIN);
+        this->set_source(Source::PIN);
     }
 };
 
@@ -583,7 +579,7 @@ class BatterySensor : public AnalogSensor<int32_t, float> {
             _human.set_limits(_min_v, _max_v);
             _native.set_limits(0.0, adcrange_adc - 5);
             set_native(_initial_adc);
-            set_can_source(ControllerMode::PIN, true);
+            set_can_source(Source::PIN, true);
         }
         BatterySensor() = delete;
         float min_v() { return _human.min(); }
@@ -612,8 +608,8 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
             set_native_limits(min_adc, max_adc);
             set_human_limits(from_native(min_adc), from_native(max_adc));
             set_native(min_adc);
-            set_can_source(ControllerMode::PIN, true);
-            set_can_source(ControllerMode::POT, true);
+            set_can_source(Source::PIN, true);
+            set_can_source(Source::POT, true);
         }
         PressureSensor() = delete;
 };
@@ -625,7 +621,7 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     protected:
         // TODO: add description
         std::shared_ptr<float> _zeropoint;
-        void handle_touch_mode() { _val_filt.set((nom_lim_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
+        void assign_touch_source() { _val_filt.set((nom_lim_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
     public:
         static constexpr int32_t min_adc = 0.0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
         static constexpr int32_t max_adc = adcrange_adc;
@@ -649,8 +645,8 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
             _zeropoint = std::make_shared<float>(initial_zeropoint_in);
             set_native_limits(min_adc, max_adc);
             set_human_limits(abs_min_retract_in, abs_max_extend_in);
-            set_can_source(ControllerMode::PIN, true);
-            set_can_source(ControllerMode::POT, true);
+            set_can_source(Source::PIN, true);
+            set_can_source(Source::POT, true);
         }
         BrakePositionSensor() = delete;
 
@@ -661,10 +657,10 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         float margin() { return margin_in; }
         float zeropoint() { return *_zeropoint; }
         float* zeropoint_ptr() { return _zeropoint.get(); }
-        std::shared_ptr<float> zeropoint_ptr_obj() { return _zeropoint; }
+        std::shared_ptr<float> zeropoint_shptr() { return _zeropoint; }
 };
 
-// class PulseSensor are hall-monitor sensors where the value is based on magnetic pulse timing of a rotational source (eg tachometer, speedometer)
+// class PulseSensor are hall-monitor sensors where the value is based on magnetic pulse timing of a rotational Source (eg tachometer, speedometer)
 template<typename HUMAN_T>
 class PulseSensor : public Sensor<int32_t, HUMAN_T> {
     protected:
@@ -693,7 +689,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
             }
         }
 
-        virtual void handle_pin_mode() {
+        virtual void assign_pin_source() {
             _isr_buf_us = static_cast<int32_t>(_isr_us);  // Copy delta value (in case another interrupt happens during handling)
             _isr_us = 0;  // Indicates to isr we processed this value
             if (_isr_buf_us) {  // If a valid rotation has happened since last time, delta will have a value
@@ -715,7 +711,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
         void setup() {
             set_pin(this->_pin, INPUT_PULLUP);
             attachInterrupt(digitalPinToInterrupt(this->_pin), [this]{ _isr(); }, _negative ? FALLING : RISING);
-            this->set_source(ControllerMode::PIN);
+            this->set_source(Source::PIN);
         }
         bool stopped() { return this->_val_filt.val() < _stop_thresh; }  // Note due to weird float math stuff, can not just check if tach == 0.0
         float last_read_time() { return _last_read_time_us; }
@@ -744,16 +740,16 @@ class Tachometer : public PulseSensor<float> {
             set_human_limits(_min_rpm, _initial_redline_rpm);
             set_native_limits(0.0, _stop_timeout_us);
             set_human(_initial_rpm);
-            set_can_source(ControllerMode::PIN, true);
-            set_can_source(ControllerMode::POT, true);
+            set_can_source(Source::PIN, true);
+            set_can_source(Source::POT, true);
         }
         Tachometer() = delete;
-
+        // Query/getter functions
         bool engine_stopped() { return stopped(); }
         float redline_rpm() { return _human.max(); }
         float max_rpm() { return _max_rpm; }
         float* redline_rpm_ptr() { return _human.max_ptr(); }
-        std::shared_ptr<float> redline_rpm_ptr_obj() { return _human.max_ptr_obj(); }
+        std::shared_ptr<float> redline_rpm_shptr() { return _human.max_shptr(); }
 };
 
 // Speedometer represents a magnetic pulse measurement of the enginge rotation.
@@ -777,142 +773,17 @@ class Speedometer : public PulseSensor<float> {
             set_human_limits(_min_mph, _initial_redline_mph);
             set_native_limits(0.0, _stop_timeout_us);
             set_human(_initial_mph);
-            set_can_source(ControllerMode::PIN, true);
-            set_can_source(ControllerMode::POT, true);
+            set_can_source(Source::PIN, true);
+            set_can_source(Source::POT, true);
         }
         Speedometer() = delete;
-
+        // Query/getter functions
         bool car_stopped() { return stopped(); }
         float redline_mph() { return _human.max(); }
         float max_mph() { return _max_mph; }
         float* redline_mph_ptr() { return _human.max_ptr(); }
-        std::shared_ptr<float> redline_mph_ptr_obj() { return _human.max_ptr_obj(); }
+        std::shared_ptr<float> redline_mph_shptr() { return _human.max_shptr(); }
 };
-
-class HotrcManager {
-  protected:
-    bool spike_signbit;
-    int32_t spike_cliff, spike_length, this_delta, interpolated_slope, loopindex, previndex;
-    int32_t prespike_index = -1;
-    int32_t index = 1;  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
-    static const int32_t depth = 9;  // more depth will reject longer spikes at the expense of controller delay
-    int32_t filt_history[depth];  // Values after filtering.
-    int32_t raw_history[depth];  // Copies of the values read (don't need separate buffer, but useful to debug the filter)
-  public:
-    HotrcManager (int32_t spike_threshold) { spike_cliff = spike_threshold; }
-    // Spike filter pushes new hotrc readings into a LIFO ring buffer, replaces any well-defined spikes with values 
-    // interpolated from before and after the spike. Also smoothes out abrupt value changes that don't recover later
-    int32_t spike_filter (int32_t new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
-        previndex = (depth + index - 1) % depth;  // previndex is where the incoming new value will be stored
-        this_delta = new_val - filt_history[previndex];  // Value change since last reading
-        if (std::abs(this_delta) > spike_cliff) {  // If new value is a cliff edge (start or end of a spike)
-            if (prespike_index == -1) {  // If this cliff edge is the start of a new spike
-                prespike_index = previndex;  // save index of last good value just before the cliff
-                spike_signbit = signbit (this_delta);  // Save the direction of the cliff
-            }
-            else if (spike_signbit == signbit (this_delta)) {  // If this cliff edge deepens an in-progress spike (or more likely the change is valid)
-                inject_interpolations (previndex, filt_history[previndex]);  // Smoothly grade the values from before the last cliff to previous value
-                prespike_index = previndex;  // Consider this cliff edge the start of the spike instead
-            }
-            else {  // If this cliff edge is a recovery of an in-progress spike
-                inject_interpolations (index, new_val);  // Fill in the spiked values with interpolated values
-                prespike_index = -1;  // Cancel the current spike
-            }
-        }
-        else if (prespike_index == index) {  // If a current spike lasted thru our whole buffer
-            inject_interpolations (previndex, filt_history[previndex]);  // Smoothly grade the whole buffer
-            prespike_index = -1;  // Cancel the current spike
-        }
-        int32_t returnval = filt_history[index];  // Save the incumbent value at current index (oldest value) into buffer
-        filt_history[index] = new_val;
-        raw_history[index] = new_val;
-        index = (index + 1) % depth;  // Update index for next time
-        return returnval;  // Return the saved old value
-    }
-    void inject_interpolations (int32_t endspike_index, int32_t endspike_val) {  // Replaces values between indexes with linear interpolated values
-        spike_length = ((depth + endspike_index - prespike_index) % depth) - 1;  // Equal to the spiking values count plus one
-        if (!spike_length) return;  // Two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
-        interpolated_slope = (endspike_val - filt_history[prespike_index]) / spike_length;
-        loopindex = 0;
-        while (++loopindex <= spike_length)
-            filt_history[(prespike_index + loopindex) % depth] = filt_history[prespike_index] + loopindex * interpolated_slope;
-    }
-    int32_t next_rawval () { return raw_history[index]; }  // helps to debug the filter from outside the class
-};
-
-// Sensor (int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max)  // std::string& eng_name, 
-// : Transducer (arg_pin, arg_dir) {
-//     set_limits(arg_val_min, arg_val_max);
-// }
-// Sensor (int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max, float arg_val_cent)  // std::string& eng_name, 
-// : Sensor (arg_pin, arg_dir, arg_val_min, arg_val_max) {
-//     set_center(arg_val_cent);
-// }
-// Sensor (int32_t arg_pin) 
-// : Device (arg_pin) {}
-// float getval (int32_t arg_hist) {  // returns the output value _RAW or _FILT. Use hist to retreive past values 0 (newest) - 9 (oldest)
-//     if (arg_hist < 0 || arg_hist >= sizeof(vals)) printf ("Transducer::val(): Max value history is past %d values\n", sizeof(vals)-1);            
-//     else return vals[d_val - &vals[0] + sizeof(vals) - arg_hist];
-// }
-
-// // Device::Transducer::Sensor::PulseSensor are sensors where the value is based on the measured period between successive pulses (eg tach, speedo)
-// class PulseSensor : public Sensor {
-//   protected:
-//     Timer PulseTimer;  // OK to not be volatile?
-//   public:
-//     volatile int32_t delta_us;
-//     int32_t delta_impossible_us, stop_timeout_us;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
-
-//     PulseSensor(int32_t arg_pin, int32_t arg_impossible_us, int32_t arg_stop_timeout_us) 
-//     : Device(arg_pin) {
-//         delta_us = 0;
-//         delta_impossible_us = arg_impossible_us;
-//         stop_timeout_us = arg_stop_timeout_us;
-//         val_source = _LIVE;
-//         // pinMode(pin, INPUT_PULLUP);
-//         // attachInterrupt(digitalPinToInterrupt(pin), isr, RISING);
-//     }
-//     void isr(void) {  //  A better approach would be to read, reset, and restart a hardware interval timer in the isr.  Better still would be to regularly read a hardware binary counter clocked by the pin - no isr.
-//         int32_t temp_us = PulseTimer.elapsed();
-//         if (temp_us > delta_impossible_us) {
-//             delta_us = temp_us;    
-//             PulseTimer.reset();
-//         }
-//     }
-//     void calc() {
-//         if (val_source != _TOUCH && val_source != _POT) {
-//             float val_temp;
-//             if (PulseTimer.elapsed() < stop_timeout_us) {
-//                 if (delta_us <= 0) printf ("Warning: PulseSensor::calc sees delta_us <= 0\n");
-//                 else val_temp = conversion_factor/delta_us;
-//             }
-//             else val_temp = 0;     
-//             if (filt_lp_spike(val_temp)) {
-//                 if (val_temp == 0) assign_val(0.0);
-//                 else assign_val ( filt_ema(val_temp, *d_val, ema_alpha) );
-//             }
-//         }
-//     }
-// };
-// // Device::Transducer::Sensor::InPWM are servo-pwm standard signals being read in, with variable pulsewidth
-// class InPWM : public Sensor {
-//   protected:
-//     Timer PulseTimer;  // OK to not be volatile?
-//   public:
-//     InPWM(int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max, float arg_val_cent)
-//     : Sensor(arg_pin, arg_dir, arg_val_min, arg_val_max, arg_val_cent)  {}
-
-// };
-// // Device::Transducer::Sensor::InPWM::InPWMToggle are servo-pwm standard signals being read in, but only valid values are pulse_min (0) and pulse_max (1) (eg hotrc ch3-4)
-// class InPWMToggle : public InPWM {
-//   protected:
-//     Timer PulseTimer;  // OK to not be volatile?
-//   public:
-//     InPWMToggle(int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max, float arg_val_cent)
-//     : Sensor(arg_pin, arg_dir, arg_val_min, arg_val_max, arg_val_cent)  {}
-
-// };
-
 // NOTE: I implemented the gas servo, but it looks like it's all in native units. should it still be a transducer?
 // ServoPWM is a base class for our type of actuators, where by varying a pulse width (in us), motors move.
 //    e.g. the gas, brake and steering motors. The gas motor is an actual servo, the others are controlled with servo signaling via jaguars.
@@ -970,11 +841,11 @@ class Toggle : public Device {
 class InToggle : public Toggle {
   public:
     InToggle(int32_t arg_pin) : Toggle(arg_pin) {
-        set_can_source(ControllerMode::PIN, true);
-        _source = ControllerMode::PIN;
+        set_can_source(Source::PIN, true);
+        _source = Source::PIN;
     }
     void set_val(bool arg_val) {
-        if (_source != ControllerMode::PIN) {
+        if (_source != Source::PIN) {
             val_last = val;
             val = arg_val;
         }
@@ -1001,133 +872,98 @@ class OutToggle : public Toggle {
         digitalWrite(_pin, val);
     }
 };
-
-// NOTE: what functions does a controller need?
-// class Controller {};
-
-// class HotRc : public Controller {
-//   protected:
-//     InPWM horz, vert;
-//     InPWMToggle ch3, ch4;
-//   public:
-//     HotRC (int32_t arg_horz_pin, int32_t arg_vert_pin, int32_t arg_ch3_pin, int32_t arg_ch4_pin) {
-//         InPWM horz(arg_horz_pin, )
-//     }
-// };
-
-// class Joystick : public Controller {
-//   protected:
-//     AnalogSensor Horz, Vert;  
-// };
-
-// // Device::Transducer is a base class for any system devices that convert real_world <--> signals in either direction
-// class Transducer : virtual public Device {
-//   protected:
-//     bool centermode, saturated;
-//     float vhist[5];  // vals[] is some past values, [0] beling most recent. 
-//     void hist_init (float arg_val) {
-//         for (int x = 0; x < sizeof(vals); x++) vhist[x] = arg_val;
-//     }
-//     void new_val (float new_val) {
-//         for (int x = sizeof(vhist)-1; x >= 1; x--) vhist[x] = vhist[x-1];
-//         vhist[0] = *val;
-//         *val = new_val;
-//     }
-//   public:
-//     enum relativity { ABSOLUTE, RELATIVE };
-//     float val_cent, val_margin;
-//     Transducer (int32_t arg_pin) 
-//     : Device (arg_pin) { // std::string& eng_name, 
-//         centermode = ABSOLUTE;
-//         val_margin = 0.0;
-//         val_cent = 
-//         // set_limits(arg_val_min, arg_val_max);
-//         hist_init(0);
-//     }
-//     void set_center (float arg_val_cent) {
-//         if (arg_val_cent <= min_val || arg_val_cent >= max_val) {
-//             printf ("Transducer::set_limits(): Centerpoint must fall within min/max limits\n");
-//             return;
-//         }
-//         else {
-//             val_cent = arg_val_cent;
-//             centermode = RELATIVE;
-//         }
-//     }
-//     void set (float val) {
-//     }
-// };
-// // Transducer (int32_t arg_pin, bool arg_dir, float arg_val_min, float arg_val_max) { // std::string& eng_name, 
-// void add_val (float arg_add_val) {  // 
-//     assign_val(*d_val + arg_add_val);
-// }
-
-// class TuneEditor {
-// };
-// class Simulator {
-// };
-// class Settings {
+class HotrcManager {
+  protected:
+    bool spike_signbit;
+    int32_t spike_cliff, spike_length, this_delta, interpolated_slope, loopindex, previndex;
+    int32_t prespike_index = -1;
+    int32_t index = 1;  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
+    static const int32_t depth = 9;  // more depth will reject longer spikes at the expense of controller delay
+    int32_t filt_history[depth];  // Values after filtering.
+    int32_t raw_history[depth];  // Copies of the values read (don't need separate buffer, but useful to debug the filter)
+  public:
+    HotrcManager (int32_t spike_threshold) { spike_cliff = spike_threshold; }
+    // Spike filter pushes new hotrc readings into a LIFO ring buffer, replaces any well-defined spikes with values 
+    // interpolated from before and after the spike. Also smoothes out abrupt value changes that don't recover later
+    int32_t spike_filter (int32_t new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
+        previndex = (depth + index - 1) % depth;  // previndex is where the incoming new value will be stored
+        this_delta = new_val - filt_history[previndex];  // Value change since last reading
+        if (std::abs(this_delta) > spike_cliff) {  // If new value is a cliff edge (start or end of a spike)
+            if (prespike_index == -1) {  // If this cliff edge is the start of a new spike
+                prespike_index = previndex;  // save index of last good value just before the cliff
+                spike_signbit = signbit (this_delta);  // Save the direction of the cliff
+            }
+            else if (spike_signbit == signbit (this_delta)) {  // If this cliff edge deepens an in-progress spike (or more likely the change is valid)
+                inject_interpolations (previndex, filt_history[previndex]);  // Smoothly grade the values from before the last cliff to previous value
+                prespike_index = previndex;  // Consider this cliff edge the start of the spike instead
+            }
+            else {  // If this cliff edge is a recovery of an in-progress spike
+                inject_interpolations (index, new_val);  // Fill in the spiked values with interpolated values
+                prespike_index = -1;  // Cancel the current spike
+            }
+        }
+        else if (prespike_index == index) {  // If a current spike lasted thru our whole buffer
+            inject_interpolations (previndex, filt_history[previndex]);  // Smoothly grade the whole buffer
+            prespike_index = -1;  // Cancel the current spike
+        }
+        int32_t returnval = filt_history[index];  // Save the incumbent value at current index (oldest value) into buffer
+        filt_history[index] = new_val;
+        raw_history[index] = new_val;
+        index = (index + 1) % depth;  // Update index for next time
+        return returnval;  // Return the saved old value
+    }
+    void inject_interpolations (int32_t endspike_index, int32_t endspike_val) {  // Replaces values between indexes with linear interpolated values
+        spike_length = ((depth + endspike_index - prespike_index) % depth) - 1;  // Equal to the spiking values count plus one
+        if (!spike_length) return;  // Two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
+        interpolated_slope = (endspike_val - filt_history[prespike_index]) / spike_length;
+        loopindex = 0;
+        while (++loopindex <= spike_length)
+            filt_history[(prespike_index + loopindex) % depth] = filt_history[prespike_index] + loopindex * interpolated_slope;
+    }
+    int32_t next_rawval () { return raw_history[index]; }  // helps to debug the filter from outside the class
+};
+// class Brake {  // This class wraps all brake activity to provide monitoring functions and coordination
+//     Todo: Write a duty cycle monitor which uses historical motor and pressure readings to estimate motor heat accumulation
+//           Ultimately the motor should not be allowed to average over 25% of full power over any period of time less than what
+//           it takes for it to cool.
+//     Todo: Detect system faults, such as:
+//           1. The brake chain is not connected (evidenced by change in brake position without expected pressure changes)
+//           2. Obstruction, motor failure, or inaccurate position. Evidenced by motor instructed to move but position not changing even when pressure is low.
+//           3. Brake hydraulics failure or inaccurate pressure. Evidenced by normal positional change not causing expected increase in pressure.
+//           4. 
+//     Todo: Startup brake press to detect faults and validity of parameters before starting normal operation
+//     Todo: Brake motor temperature sensor? 
 // };
 
 // NOTE: if devices.h gets to be too long, we can (and maybe just should) move this to a separate file, it's not really a device...
 
 // This enum class represent the components which can be simulated (sensor). It's a uint8_t type under the covers, so it can be used as an index
 typedef uint8_t opt_t;
-enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, mulebatt, starter, basicsw };  //, ignition, syspower };  // , num_sensors, err_flag };
+enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, mulebatt, starter, basicsw, num_sensors };  //, ignition, syspower };  // , num_sensors, err_flag };
 
-// Simulator manages the ControllerMode handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
-// NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use ControllerModes,
+// Simulator manages the source handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
+// NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use sources,
 //       we can simplify the logic here a lot.
 class Simulator {
     private:
-        // NOTE: if we only simulated devices, we could keep track of simulability in the Device class. We could keep the default ControllerMode in Device the same way.
+        // NOTE: if we only simulated devices, we could keep track of simulability in the Device class. We could keep the default source in Device the same way.
         // 3-tuple for a given component, keeping track of simulability status (whether this component is allowed to be simulated), an associated Device (a pointer to the actual component),
-        // and a default ControllerMode (the mode we would like the component to switch back to when it stops being simulated)
-        typedef std::tuple<bool, Device*, ControllerMode> simulable_t;
+        // and a default source (the mode we would like the component to switch back to when it stops being simulated)
+        typedef std::tuple<bool, Device*, Source> simulable_t;
         std::map<sensor, simulable_t> _devices; // a collection of simulatable components
         bool _enabled = false; // keep track of whether the simulator is running or not
         sensor _potmap; // keep track of which component is getting info from the pot
-
         Potentiometer& _pot;
     public:
-        // initial simulation settings
-        static constexpr bool initial_sim_joy = false;
-        static constexpr bool initial_sim_tach = false;
-        static constexpr bool initial_sim_speedo = false;
-        static constexpr bool initial_sim_brkpos = false;
-        static constexpr bool initial_sim_basicsw = false;
-        static constexpr bool initial_sim_pressure = false;
-        // static constexpr bool initial_sim_syspower = false;  // Syspower cannot be simulated as its source is not external
-        static constexpr bool initial_sim_starter = false;
-        // static constexpr bool initial_sim_ignition = false;  // Ignition cannot be simulated as its source is not external
-        static constexpr bool initial_sim_airflow = false;
-        static constexpr bool initial_sim_mapsens = false;
-        static constexpr bool initial_sim_mulebatt = false;
-        static constexpr bool initial_sim_engtemp = false;
-
         Simulator(Potentiometer& pot_arg, sensor potmap_arg=sensor::none) : _pot(pot_arg) {
-            // set initial simulatability status for all components
-            set_can_sim(sensor::joy, initial_sim_joy);
-            set_can_sim(sensor::tach, initial_sim_tach);
-            set_can_sim(sensor::speedo, initial_sim_speedo);
-            set_can_sim(sensor::brkpos, initial_sim_brkpos);
-            set_can_sim(sensor::basicsw, initial_sim_basicsw);
-            set_can_sim(sensor::pressure, initial_sim_pressure);
-            // set_can_sim(sensor::syspower, initial_sim_syspower);  // Syspower cannot be simulated as its source is not external
-            set_can_sim(sensor::starter, initial_sim_starter);
-            // set_can_sim(sensor::ignition, initial_sim_ignition);  // Ignition cannot be simulated as its source is not external
-            set_can_sim(sensor::airflow, initial_sim_airflow);
-            set_can_sim(sensor::mapsens, initial_sim_mapsens);
-            set_can_sim(sensor::mulebatt, initial_sim_mulebatt);
-            set_can_sim(sensor::engtemp, initial_sim_engtemp);
+            for (uint8_t sens = (uint8_t)sensor::none + 1; sens < (uint8_t)sensor::num_sensors; sens++ )
+                set_can_sim((sensor)sens, false);   // initially turn off simulation of sensors  // static constexpr bool initial_sim_joy = false;
             set_potmap(potmap_arg); // set initial pot map
-        }
+        }  // syspower, ignition removed, as they are not sensors or even inputs
 
         void updateSimulationStatus(bool enableSimulation) {
             // If the simulation status hasn't changed, there's nothing to do
-            if (_enabled == enableSimulation) {
-                return;
-            }
+            if (_enabled == enableSimulation) return;
             // Iterate over all devices
             for (auto &deviceEntry : _devices) {
                 bool can_sim = std::get<0>(deviceEntry.second);
@@ -1140,9 +976,9 @@ class Simulator {
                         // If we're enabling the simulation, set the device's source to the touchscreen
                         // Otherwise, set it to its default mode
                         if (enableSimulation) {
-                            d->set_source(ControllerMode::TOUCH);
+                            d->set_source(Source::TOUCH);
                         } else {
-                            ControllerMode default_mode = std::get<2>(deviceEntry.second);
+                            Source default_mode = std::get<2>(deviceEntry.second);
                             d->set_source(default_mode);
                         }
                     }
@@ -1174,21 +1010,21 @@ class Simulator {
             return can_sim(arg_sensor) && (_enabled || _potmap == arg_sensor);
         }
 
-        // associate a Device and a given fall-back ControllerMode with a sensor
-        void register_device(sensor arg_sensor, Device &d, ControllerMode default_mode) {
+        // associate a Device and a given fall-back source with a sensor
+        void register_device(sensor arg_sensor, Device &d, Source default_mode) {
             bool can_sim = false; // by default, disable simulation for this component
             auto kv = _devices.find(arg_sensor); // look for the component
             if (kv != _devices.end()) {
                 can_sim = std::get<0>(kv->second); // if an entry for the component already existed, preserve its simulatability status
                 if (can_sim) { // if simulability has already been enabled...
                     if (arg_sensor == _potmap) { // ...and the pot is supposed to map to this component...
-                        d.set_source(ControllerMode::POT); // ...then set the input source for the associated Device to read from the pot
+                        d.set_source(Source::POT); // ...then set the input source for the associated Device to read from the pot
                     } else if (_enabled) { // ...and the pot isn't mapping to this component, but the simulator is running...
-                        d.set_source(ControllerMode::TOUCH); // ...then set the input source for the associated Device to read from the touchscreen
+                        d.set_source(Source::TOUCH); // ...then set the input source for the associated Device to read from the touchscreen
                     }
                 }
             }
-            if (d.can_source(ControllerMode::POT)) {
+            if (d.can_source(Source::POT)) {
                 d.attach_pot(_pot); // if this device can be mapped from the pot, connect it to pot input
             }
             _devices[arg_sensor] = simulable_t(can_sim, &d, default_mode); // store info for this component
@@ -1211,15 +1047,15 @@ class Simulator {
             if (kv != _devices.end()) { // if an entry for this component already exists, check if the new simulatability status is different from the old
                 bool old_can_sim = std::get<0>(kv->second);
                 if (can_sim != old_can_sim) { // if the simulation status has changed, we need to update the input source for the component
-                    ControllerMode default_mode = ControllerMode::UNDEF;
+                    Source default_mode = Source::UNDEF;
                     Device *d = std::get<1>(kv->second);
                     if (d != nullptr) { // if there is no associated Device with this component then input handling is done in the main code
                         default_mode = std::get<2>(kv->second); // preserve the stored default controller mode
                         if (can_sim) { // if we just enabled simulatability...
                             if (arg_sensor == _potmap) { // ...and the pot is supposed to map to this component...
-                                    d->set_source(ControllerMode::POT); // ...then set the input source for the associated Device to read from the pot
+                                    d->set_source(Source::POT); // ...then set the input source for the associated Device to read from the pot
                             } else if (_enabled) { // ...and the pot isn't mapping to this component, but the simulator is running...
-                                    d->set_source(ControllerMode::TOUCH); // ...then set the input source for the associated Device to read from the touchscreen
+                                    d->set_source(Source::TOUCH); // ...then set the input source for the associated Device to read from the touchscreen
                             }
                         } else {
                             d->set_source(default_mode); // we disabled simulation for this component, set it back to its default input source
@@ -1228,7 +1064,7 @@ class Simulator {
                     kv->second = simulable_t(can_sim, d, default_mode); // update the entry with the new simulatability status
                 }
             } else {
-                _devices[arg_sensor] = simulable_t(can_sim, nullptr, ControllerMode::UNDEF); // add a new entry with the simulatability status for this component
+                _devices[arg_sensor] = simulable_t(can_sim, nullptr, Source::UNDEF); // add a new entry with the simulatability status for this component
             }
         }
 
@@ -1241,9 +1077,9 @@ class Simulator {
                     if (d != nullptr) { // if we were mapping to a component with an associated Device...
                         bool can_sim = std::get<0>(kv->second);
                         if (_enabled && can_sim) { // ...and the simulator is on, and we're able to be simulated...
-                            d->set_source(ControllerMode::TOUCH); // ...then set the input source to the touchscreen
+                            d->set_source(Source::TOUCH); // ...then set the input source to the touchscreen
                         } else { // ...and either the simulator is off or we aren't allowing simualtion for this component...
-                            ControllerMode default_mode = std::get<2>(kv->second);
+                            Source default_mode = std::get<2>(kv->second);
                             d->set_source(default_mode); // then set the input source for the component to its default
                         }
                     } // ...else this component is a boolean, and input source handling is done elsewhere
@@ -1252,10 +1088,10 @@ class Simulator {
                 if (kv != _devices.end()) {
                     Device *d = std::get<1>(kv->second);
                     if (d != nullptr ) { // if  we're mapping to a component with an associated device, we need to change the input source to the pot
-                        if (d->can_source(ControllerMode::POT)) { // ...and we're allowed to map to this component...
+                        if (d->can_source(Source::POT)) { // ...and we're allowed to map to this component...
                             bool can_sim = std::get<0>(kv->second);
                             if (can_sim) { // if we allow simualation for this componenent...
-                                d->set_source(ControllerMode::POT); // ...then set its input source to the pot
+                                d->set_source(Source::POT); // ...then set its input source to the pot
                             }
                         } else {
                             printf("invalid pot map selected: %d/n", arg_sensor);
@@ -1265,23 +1101,10 @@ class Simulator {
                 _potmap = arg_sensor;
             }
         }
-        
+        // Getter functions
         bool potmapping(sensor s) { return can_sim(s) && _potmap == s; }  // query if a certain sensor is being potmapped
         bool potmapping() { return can_sim(_potmap) && !(_potmap == sensor::none); }  // query if any sensors are being potmapped
         sensor potmap() { return _potmap; }  // query which sensor is being potmapped
         bool enabled() { return _enabled; }
         bool* enabled_ptr() { return &_enabled; }
-};
-
-class Brake {  // This class wraps all brake activity to provide monitoring functions and coordination
-    // Todo: Write a duty cycle monitor which uses historical motor and pressure readings to estimate motor heat accumulation
-    //       Ultimately the motor should not be allowed to average over 25% of full power over any period of time less than what
-    //       it takes for it to cool.
-    // Todo: Detect system faults, such as:
-    //       1. The brake chain is not connected (evidenced by change in brake position without expected pressure changes)
-    //       2. Obstruction, motor failure, or inaccurate position. Evidenced by motor instructed to move but position not changing even when pressure is low.
-    //       3. Brake hydraulics failure or inaccurate pressure. Evidenced by normal positional change not causing expected increase in pressure.
-    //       4. 
-    // Todo: Startup brake press to detect faults and validity of parameters before starting normal operation
-    // Todo: Brake motor temperature sensor? 
 };

@@ -145,12 +145,12 @@ void loop() {
     brakepos.update();  // Brake position
     tach.update();  // Tach
     throttle.push_tach_reading(tach.human(), tach.last_read_time());    
-    if (airflowTimer.expireset()) airflow.update();
-    mapsens.update();  // MAP sensor  // takes 6800 us (!!)
-    maf_mgps = massairflow();  // Recalculate intake mass airflow
     speedo.update();  // Speedo
     pressure.update();  // Brake pressure
     mulebatt.update();
+    airflow.update();
+    mapsens.update();  // MAP sensor  // takes 6800 us (!!)
+    maf_mgps = massairflow();  // Recalculate intake mass airflow
 
     // Controller handling
     // 1. Handle any toggle button events (ch3 and ch4)
@@ -383,7 +383,7 @@ void loop() {
             else if (selected_value == 10) brake_pid.set_kd (brake_pid.kd() + 0.001 * (float)sim_edit_delta);
         }
         else if (dataset_page == PG_GPID) {
-            if (selected_value == 7) { adj_bool (&gas_open_loop, sim_edit_delta); }  // gas_pid.SetMode (gas_open_loop ? qpid::control_t::manual : qpid::control_t::timer);
+            if (selected_value == 7) { adj_bool (&gas_open_loop, sim_edit_delta); }  // gas_pid.SetMode (gas_open_loop ? QPID::Control::manual : QPID::Control::automatic);
             else if (selected_value == 8) gas_pid.set_kp (gas_pid.kp() + 0.001 * (float)sim_edit_delta);
             else if (selected_value == 9) gas_pid.set_ki (gas_pid.ki() + 0.001 * (float)sim_edit_delta);
             else if (selected_value == 10) gas_pid.set_kd (gas_pid.kd() + 0.001 * (float)sim_edit_delta);
