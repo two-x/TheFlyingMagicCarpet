@@ -561,6 +561,9 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
         set_pin(this->_pin, INPUT);
         this->set_source(Source::PIN);
     }
+    // virtual int32_t adc() { return _native.val(); }
+    // virtual int32_t min_adc() { return _native.min(); }
+    // virtual int32_t max_adc() { return _native.max(); }
 };
 
 // BatterySensor reads the voltage level from the Mule battery
@@ -582,6 +585,7 @@ class BatterySensor : public AnalogSensor<int32_t, float> {
             set_can_source(Source::PIN, true);
         }
         BatterySensor() = delete;
+        float v() { return _human.val(); }
         float min_v() { return _human.min(); }
         float max_v() { return _human.max(); }
 };
@@ -609,9 +613,12 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
             set_human_limits(from_native(min_adc), from_native(max_adc));
             set_native(min_adc);
             set_can_source(Source::PIN, true);
-            set_can_source(Source::POT, true);
+            set_can_source(Source::POT, true);            
         }
         PressureSensor() = delete;
+        float psi() { return _human.val(); }
+        float min_psi() { return _human.min(); }
+        float max_psi() { return _human.max(); }
 };
 
 // BrakePositionSensor represents a linear position sensor
@@ -653,6 +660,9 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         // is tha brake motor parked?
         bool parked() { return abs(_val_filt.val() - park_in) <= margin_in; }
 
+        float in() { return _human.val(); }
+        float min_in() { return _human.min(); }
+        float max_in() { return _human.max(); }
         float park_position() { return park_in; }
         float margin() { return margin_in; }
         float zeropoint() { return *_zeropoint; }
