@@ -215,7 +215,8 @@ void set_idiotcolors() {
     for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
         int division = disp_idiots_per_row;
         uint32_t color32 = hsv_to_rgb((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 220);
-        idiotcolors[idiot] = gamma16(color_uint32_to_16b(color32));  // 5957 = 2^16/11
+        idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
+        if (gamma_correct_enabled) idiotcolors[idiot] = gamma16(idiotcolors[idiot]);
         idiots_dirty = true;
     }
 }
@@ -922,15 +923,15 @@ class Display {
                         }
                     }
                 }
-                uint16_t color = savercycle ? gamma16(random(0x10000)) : BLK; // Returns colour 0 - 0xFFFF
+                uint16_t color = savercycle ? random(0x10000) : BLK; // Returns colour 0 - 0xFFFF
                 long star_x1 = random(disp_saver_width);        // Random x coordinate
                 long star_y1 = random(disp_saver_height);       // Random y coordinate
                 if (!(saver_lines_mode == 0 && (savercycle == 0b10))) {
                     if (savershape == 0) _saver.drawLine(star_x0, star_y0, star_x1, star_y1, color); 
-                    else if (savershape == 1) _saver.drawCircle(random(disp_saver_width), random(disp_saver_height), random(20), gamma16(random(0x10000)));
+                    else if (savershape == 1) _saver.drawCircle(random(disp_saver_width), random(disp_saver_height), random(20), random(0x10000));
                     else if (savershape == 2)      // Draw pixels in sprite
                         for (int star=0; star<10; star++) 
-                            _saver.drawRect(random(disp_saver_width), random(disp_saver_height), 2, 2, gamma16(random(0x10000)));      // Draw pixel in sprite
+                            _saver.drawRect(random(disp_saver_width), random(disp_saver_height), 2, 2, random(0x10000));      // Draw pixel in sprite
                             // _saver.drawPixel(random(disp_saver_width), random(disp_saver_height), gamma(random(0x10000)));      // Draw pixel in sprite
                 }
                 if (saver_lines_mode == 1 && !savercycle) _saver.drawLine(star_x0+1, star_y0+1, star_x1+1, star_y1+1, color);
