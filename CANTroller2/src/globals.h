@@ -739,10 +739,9 @@ float degF_to_K(float degF) {
 float massairflow(float _map = NAN, float _airflow = NAN, float _ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
     float temp = _ambient;
     if (std::isnan(_ambient)) {
-        TemperatureSensor* sensor = tempsens.get_sensor(location::ambient);  // ambient
-        if (!sensor && running_on_devboard) sensor = tempsens.get_sensor(location::engine);
-        if (!sensor) return 0.0;  // Avoid crashing due to trying to read absent sensor
-        temp = sensor->get_temperature();
+        temp = tempsens.val(location::ambient);
+        if (std::isnan(temp) && running_on_devboard) temp = tempsens.val(location::engine);
+        if (std::isnan(temp)) return -1;  // Avoid crashing due to trying to read absent sensor
     }
     float T = degF_to_K(temp);  // in K
     float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2

@@ -671,12 +671,9 @@ class Display {
                     draw_idiotlight (ilite, x + (2 * disp_font_width + 2) * ((ilite % disp_idiots_per_row) % disp_idiots_per_row), y + disp_idiot_row_height * (int32_t)(ilite / disp_idiots_per_row));
         }
         void draw_temperature(location location, int draw_index) {
-            TemperatureSensor* sensor = tempsens.get_sensor(location);
-            if (sensor) {
-                draw_dynamic(draw_index, sensor->get_temperature(), static_cast<float>(temp_lims_f[static_cast<int>(location)][DISP_MIN]), static_cast<float>(temp_lims_f[static_cast<int>(location)][DISP_MAX]));
-            } else {
-                draw_eraseval(draw_index);
-            }
+            float reading = tempsens.val(location);
+            if (std::isnan(reading)) draw_eraseval(draw_index);
+            else draw_dynamic(draw_index, reading, static_cast<float>(temp_lims_f[static_cast<int>(location)][DISP_MIN]), static_cast<float>(temp_lims_f[static_cast<int>(location)][DISP_MAX]));
         }
         void update_idiots(bool force = false) {
             draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, force);
