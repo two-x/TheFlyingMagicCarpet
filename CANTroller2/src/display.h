@@ -684,6 +684,7 @@ class Display {
         void update() {
             if (!display_enabled) return;
             update_idiots(_disp_redraw_all || idiots_dirty);
+            idiots_dirty = false;
             if (sim.enabled()) {
                 if (!simulating_last || _disp_redraw_all) {
                     draw_simbuttons(sim.enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
@@ -924,6 +925,7 @@ class Display {
                     }
                 }
                 uint16_t color = savercycle ? random(0x10000) : BLK; // Returns colour 0 - 0xFFFF
+                if (gamma_correct_enabled) color = gamma16(color);
                 long star_x1 = random(disp_saver_width);        // Random x coordinate
                 long star_y1 = random(disp_saver_height);       // Random y coordinate
                 if (!(saver_lines_mode == 0 && (savercycle == 0b10))) {
