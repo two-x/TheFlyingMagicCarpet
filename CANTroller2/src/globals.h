@@ -747,8 +747,8 @@ float massairflow(float _map = NAN, float _airflow = NAN, float _ambient = NAN) 
     float v = 0.447 * std::isnan(_airflow) ? airflow.filt() : _airflow; // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
     float A = 0.0020268;  // in m2    1.0 in2 * pi * 0.00064516 m2/in2
     float P = 6894.76 * std::isnan(_map) ? mapsens.filt() : _map;  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
-    return 1000000.0 * v * A * P / (R * T);  // in mg/s   (mg/kg * m/s * m2 * J/m3) / (J/(kg*K) * K) = g/s
+    return 1000000000.0 * v * A * P / (R * T);  // in mg/s   (mg/kg * m/s * m2 * J/m3) / (J/(kg*K) * K) = g/s
 }
-float maf_mgps;  // Mass airflow in milligrams per second
-float maf_min_mgps = 0.0;
-float maf_max_mgps = massairflow(mapsens.max_psi(), airflow.max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
+float maf_ugps;  // Mass airflow in milligrams per second
+float maf_min_ugps = 0.0;
+float maf_max_ugps = massairflow(mapsens.max_psi(), airflow.max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);

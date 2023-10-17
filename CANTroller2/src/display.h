@@ -154,11 +154,11 @@ char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
     { "LoopFreq", "Loop Avg", "LoopPeak", __________, __________, __________, __________, "   Gamma", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
 };
 char tuneunits[dataset_pages::num_datapages][disp_tuning_lines][5] = {
-    { "in  ", "V   ", "%   ", "mph ", "psi ", "mgs ", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
+    { "in  ", "V   ", "%   ", "mph ", "psi ", "ugps", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
     { "us  ", "us  ", "us  ", "us  ", "%   ", "%   ", ______, ______, ______, "us  ", "us  ", },  // PG_JOY
     { "adc ", ______, ______, ______, ______, "mph ", "psi ", "psi ", "mph ", "mph ", "in  ", },  // PG_CAR
     { "us  ", "us  ", ______, "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", },  // PG_PWMS
-    { scroll, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", degreF, degreF, RperMS, scroll, },  // PG_IDLE
+    { scroll, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", degreF, degreF, "rpms", scroll, },  // PG_IDLE
     { "psi ", "psi ", "%   ", "%   ", "%   ", "%   ", "us  ", "adc ", ______, "Hz  ", "s   ", },  // PG_BPID
     { "rpm ", "rpm ", "us  ", "us  ", "us  ", "us  ", ______, b1nary, ______, "Hz  ", "s   ", },  // PG_GPID
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "us  ", "u/s ", ______, "Hz  ", "s   ", },  // PG_CPID
@@ -172,6 +172,16 @@ char simgrid[4][3][5] = {
     { ______, " \x1e  ", ______ },
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters is the left-side map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
+
+char unitmapnames[5][5] = { "ugps", "us  ", "rpms", scroll, b1nary, };
+uint32_t unitmaps[5][17] = {
+    { 0x7e, 0x04, 0x7c, 0x04, 0x00, 0x30, 0x4a, 0x52, 0x3c, 0x00, 0x06, 0x18, 0x60, 0x00, 0x34, 0x54, 0x4c, },  // ugps
+    { 0x02, 0x7e, 0x04, 0x04, 0x38, 0x04, 0x00, 0x00, 0x30, 0x54, 0x54, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, },  // us
+    { 0x7c, 0x20, 0x00, 0x7e, 0x48, 0x30, 0x00, 0x78, 0x40, 0x38, 0x40, 0x38, 0x02, 0x3c, 0x20, 0x1a, 0x2c, },  // rpms
+    { 0x10, 0x38, 0x7c, 0x00, 0x00, 0x00, 0x00, 0x7c, 0x00, 0x7c, 0x00, 0x7c, 0x00, 0x00, 0x7c, 0x38, 0x10, },  // scroll
+    { 0x00, 0x00, 0x00, 0x3c, 0x42, 0x42, 0x42, 0x3c, 0x00, 0x00, 0x0c, 0x30, 0x00, 0x00, 0x7e, 0x00, 0x00, },  // b1nary
+    // { 0x3e222222, 0x2222223e, 0x22224646, 0x8afa8a46, 0x3e000000, },  // b1nary (alt)
+};
 
 bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, sim.enabled_ptr(), &running_on_devboard };
 char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
@@ -381,10 +391,28 @@ class Display {
                 }
             }
         }
+        void draw_unitmap (int8_t index, int32_t x, int32_t y, uint16_t color) {
+            for (int32_t xo = 0; xo < disp_font_width * 3 - 1; xo++)
+                for (int32_t yo = disp_font_height - 2; yo >= 0; yo--)
+                    if ((unitmaps[index][xo] >> (disp_font_height - yo - 1)) & 1) disp.drawPixel (x + xo, y + yo - 1, color);
+        }
         void draw_string_units (int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
-            disp.setCursor (x, y);
-            disp.setTextColor (bgcolor);
-            disp.print (oldtext);  // Erase the old content
+            bool drawn = false;
+            for (int8_t i = 0; i<arraysize(unitmaps); i++)
+                if (!strcmp(unitmapnames[i], oldtext)) {
+                    draw_unitmap(i, x, y, bgcolor);
+                    drawn = true;
+                }
+            if (!drawn) {
+                disp.setCursor (x, y);
+                disp.setTextColor (bgcolor);
+                disp.print (oldtext);  // Erase the old content
+            }
+            for (int8_t i = 0; i<arraysize(unitmaps); i++)
+                if (!strcmp(unitmapnames[i], text)) {
+                    draw_unitmap(i, x, y, color);
+                    return;
+                }
             disp.setCursor (x, y);
             disp.setTextColor (color);
             disp.print (text);  // Erase the old content
@@ -698,7 +726,7 @@ class Display {
                     draw_dynamic(11, pot.val(), pot.min(), pot.max());
                     draw_dynamic(12, airflow.filt(), airflow.min_mph(), airflow.max_mph());
                     draw_dynamic(13, mapsens.filt(), mapsens.min_psi(), mapsens.max_psi());
-                    draw_dynamic(14, maf_mgps, maf_min_mgps, maf_max_mgps);
+                    draw_dynamic(14, maf_ugps, maf_min_ugps, maf_max_ugps);
                     draw_eraseval(15);
                     draw_eraseval(16);
                     draw_eraseval(17);

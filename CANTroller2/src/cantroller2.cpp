@@ -150,7 +150,7 @@ void loop() {
     mulebatt.update();
     airflow.update();
     mapsens.update();  // MAP sensor  // takes 6800 us (!!)
-    maf_mgps = massairflow();  // Recalculate intake mass airflow
+    maf_ugps = massairflow();  // Recalculate intake mass airflow
 
     // Controller handling
     // 1. Handle any toggle button events (ch3 and ch4)
