@@ -14,6 +14,7 @@
 #define ceiling(amt, lim) ((amt >= lim) ? lim : amt)
 
 // TODO: check to see if these are different from the builtins, if not then we shouldn't bother redefining them
+
 #undef max
 inline float max (float a, float b) { return (a > b) ? a : b; }
 inline int32_t max (int32_t a, int32_t b) { return (a > b) ? a : b; }
@@ -30,12 +31,20 @@ inline uint32_t min (uint32_t a, uint32_t b, uint32_t c) { return (a < b) ? ((c 
 inline float constrain (float amt, float low, float high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline int32_t constrain (int32_t amt, int32_t low, int32_t high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline uint32_t constrain (uint32_t amt, uint32_t low, uint32_t high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
-// inline float constrain (float amt, float end1, float end2) {
-//     float low = end1, high = end2;
-//     if (end1 > end2) { low = end2; high = end1; }
+
+// Maybe go with templates for these
+// template <typename T> inline T max(T a, T b) { return (a > b) ? a : b; }
+// template <typename T> inline T max(T a, T b, T c) { return (a > b) ? ((c > a) ? c : a) : ((c > b) ? c : b); }
+// template <typename T> inline T min(T a, T b) { return (a < b) ? a : b; }
+// template <typename T> inline T min(T a, T b, T c) { return (a < b) ? ((c < a) ? c : a) : ((c < b) ? c : b); }
+// template <typename T> inline T constrain(T amt, T low, T high) {
 //     return (amt < low) ? low : ((amt > high) ? high : amt);
 // }
-// inline float constrain (float amt, float end1, float end2) { return (amt < end1 && amt < end2) ? min(end1, end2) : ((amt > end1 && amt > end2) ? max(end1, end2) : amt); }
+// template <typename T> inline T map(T x, T in_min, T in_max, T out_min, T out_max) {
+//     if (in_max - in_min > (T)0.001) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
+//     printf ("map not dividing by zero\n");
+//     return out_max;  // Instead of dividing by zero, return the highest valid result
+// }
 
 #undef map
 inline float map(float x, float in_min, float in_max, float out_min, float out_max) {

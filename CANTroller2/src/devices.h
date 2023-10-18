@@ -561,9 +561,9 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
         set_pin(this->_pin, INPUT);
         this->set_source(Source::PIN);
     }
-    // virtual int32_t adc() { return _native.val(); }
-    // virtual int32_t min_adc() { return _native.min(); }
-    // virtual int32_t max_adc() { return _native.max(); }
+    virtual int32_t adc() { return this->_native.val(); }  // Soren: I created these to be available to any child sensors, but untested and not confident it's right
+    virtual int32_t min_adc() { return this->_native.min(); }
+    virtual int32_t max_adc() { return this->_native.max(); }
 };
 
 // BatterySensor reads the voltage level from the Mule battery
@@ -674,8 +674,7 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
 template<typename HUMAN_T>
 class PulseSensor : public Sensor<int32_t, HUMAN_T> {
     protected:
-        static constexpr int64_t _stop_timeout_us = 2000000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
-
+        static constexpr int64_t _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
         Timer _stop_timer;
         bool _negative = false;
         float _stop_thresh;
@@ -725,6 +724,11 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
         }
         bool stopped() { return this->_val_filt.val() < _stop_thresh; }  // Note due to weird float math stuff, can not just check if tach == 0.0
         float last_read_time() { return _last_read_time_us; }
+
+        virtual int32_t us() { return this->_native.val(); }  // Soren: I created these to be available to any child sensors, but untested and not confident it's right
+        virtual int32_t min_us() { return this->_native.min(); }
+        virtual int32_t max_us() { return this->_native.max(); }
+
 };
 
 // Tachometer represents a magnetic pulse measurement of the enginge rotation.
@@ -733,11 +737,10 @@ class Tachometer : public PulseSensor<float> {
     protected:
         static constexpr int64_t _delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
         static constexpr float _stop_thresh_rpm = 0.2;  // Below which the engine is considered stopped
-        static constexpr float _min_rpm = 0.0;
-        static constexpr float _max_rpm = 7000.0;  // Max possible engine rotation speed
+        static constexpr float _abs_max_rpm = 7000.0;  // Max possible engine rotation speed
+        static constexpr float _redline_rpm = 5500.0;  // Max possible engine rotation speed
         // NOTE: should we start at 50rpm? shouldn't it be zero?
         static constexpr float _initial_rpm = 50.0; // Current engine speed, raw value converted to rpm (in rpm)
-        static constexpr float _initial_redline_rpm = 5500.0;  // Max value for tach_rpm, pedal to the metal (in rpm). 20000 rotations/mile * 15 mi/hr * 1/60 hr/min = 5000 rpm
         static constexpr float _initial_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
         static constexpr bool _initial_invert = true;
         static constexpr float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
@@ -747,7 +750,7 @@ class Tachometer : public PulseSensor<float> {
             _m_factor = _initial_rpm_per_rpus;
             _invert = _initial_invert;
             _negative = true;
-            set_human_limits(_min_rpm, _initial_redline_rpm);
+            set_human_limits(0.0, _redline_rpm);
             set_native_limits(0.0, _stop_timeout_us);
             set_human(_initial_rpm);
             set_can_source(Source::PIN, true);
@@ -755,9 +758,10 @@ class Tachometer : public PulseSensor<float> {
         }
         Tachometer() = delete;
         // Query/getter functions
+        float rpm() { return _human.val(); }
         bool engine_stopped() { return stopped(); }
         float redline_rpm() { return _human.max(); }
-        float max_rpm() { return _max_rpm; }
+        float abs_max_rpm() { return _abs_max_rpm; }
         float* redline_rpm_ptr() { return _human.max_ptr(); }
         std::shared_ptr<float> redline_rpm_shptr() { return _human.max_shptr(); }
 };
@@ -788,6 +792,7 @@ class Speedometer : public PulseSensor<float> {
         }
         Speedometer() = delete;
         // Query/getter functions
+        float mph() { return _human.val(); }
         bool car_stopped() { return stopped(); }
         float redline_mph() { return _human.max(); }
         float max_mph() { return _max_mph; }

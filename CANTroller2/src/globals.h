@@ -318,8 +318,7 @@ float gas_pulse_park_slack_us = 30;   // Gas pulsewidth beyond gas_pulse_ccw_clo
 
 // tach related
 Tachometer tach(tach_pulse_pin);
-float tach_target_rpm, tach_adjustpoint_rpm;
-float tach_govern_rpm;        // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
+float tach_target_rpm, tach_adjustpoint_rpm, tach_govern_rpm;        // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
 float tach_margin_rpm = 15.0; // Margin of error for checking engine rpm (in rpm)
 float tach_idle_abs_min_rpm = 450.0;  // Low limit of idle speed adjustability
 float tach_idle_hot_min_rpm = 550.0;  // Idle speed at nom_max engine temp

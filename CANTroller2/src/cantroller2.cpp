@@ -350,7 +350,7 @@ void loop() {
         else if (dataset_page == PG_CAR) {
             if (selected_value == 2) throttle.set_idlehot(throttle.idlehot(), 0.1*(float)sim_edit_delta);
             else if (selected_value == 3) throttle.set_idlecold(throttle.idlecold(), 0.1*(float)sim_edit_delta);
-            else if (selected_value == 4) adj = adj_val (tach.redline_rpm_ptr(), 0.1*(float)sim_edit_delta, throttle.idlehigh(), tach.max_rpm());
+            else if (selected_value == 4) adj = adj_val (tach.redline_rpm_ptr(), 0.1*(float)sim_edit_delta, throttle.idlehigh(), tach.abs_max_rpm());
             else if (selected_value == 5) adj_val (airflow.max_mph_ptr(), 0.01*(float)sim_edit_delta, 0, airflow.abs_max_mph());
             else if (selected_value == 6) adj_val (mapsens.min_psi_ptr(), 0.1*(float)sim_edit_delta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
             else if (selected_value == 6) adj_val (mapsens.max_psi_ptr(), 0.1*(float)sim_edit_delta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
