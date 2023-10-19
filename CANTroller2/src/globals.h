@@ -407,9 +407,9 @@ bool err_temp_engine, err_temp_wheel;
 enum err_types_sensor { LOST, RANGE, num_err_types };
 enum err_sensors { e_hrchorz, e_hrcvert, e_hrcch3, e_hrcch4, e_pressure, e_brkpos, e_speedo, e_tach, e_airflow, e_mapsens, e_temps, e_mulebatt, e_starter, e_basicsw, e_num_sensors };
 // enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, mulebatt, ignition, basicsw, cruisesw, starter, syspower };  // , num_sensors, err_flag };
-
-bool err_sensor_alarm[num_err_types] = { false, false };  // [LOST/RANGE]
-int8_t err_sensor_count[num_err_types] = { 0, 0 };  // [LOST/RANGE]
+bool err_sensor_alarm[num_err_types] = { false, false };
+int8_t err_sensor_flashes[num_err_types] = { 0, 0 };  // [LOST/RANGE]
+int8_t err_sensor_posts[num_err_types] = { 0, 0 };  // [LOST/RANGE]
 bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_mulebatt/e_basicsw/e_starter]   // sensor::opt_t::num_sensors]
 
 void hotrc_toggle_update(int8_t chan) {                                                            //
@@ -676,12 +676,14 @@ void detect_errors() {
         
         // printf ("Sensor check: ");
         for (int32_t t=LOST; t<=RANGE; t++) {
+            err_sensor_flashes[t] = 0;
+            err_sensor_posts[t] = 0;
             err_sensor_alarm[t] = false;
-            err_sensor_count[t] = 0;
             for (int32_t s=0; s<e_num_sensors; s++)
                 if (err_sensor[t][s]) {
-                    err_sensor_count[t]++;
                     err_sensor_alarm[t] = true;
+                    err_sensor_posts[t]++;
+                    err_sensor_flashes[t] = (err_sensor_posts[t] + 1) / 2;
                     // if (s <= 3) printf ("hotrc-ch%d is %s, ", s, t ? "Rang" : "Lost");
                     // else printf ("%d is %s, ", s, t ? "Rang" : "Lost");
                 }
