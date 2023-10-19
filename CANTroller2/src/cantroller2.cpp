@@ -114,7 +114,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         printf ("touchscreen initialized..\n");
     }
     std::cout << "Init neopixel.. ";
-    neo.init((uint8_t)neopixel_pin, 1);
+    neo.init((uint8_t)neopixel_pin, running_on_devboard, 1);
     // neo.init((uint8_t)neopixel_pin, !running_on_devboard);
     neo.setbright(neobright);
     neo.setdesaturation(neodesat);
@@ -452,6 +452,10 @@ void loop() {
     for (int32_t idiot = 0; idiot < arraysize(idiotlights); idiot++)
         if (idiot <= neo.neopixelsAvailable() && (*(idiotlights[idiot]) != idiotlasts[idiot])) {
             neo.setBoolState(idiot, *idiotlights[idiot]);
+            for (int8_t t=LOST; t<=RANGE; t++) {
+                neo.setFlashes(t, err_sensor_alarm[t]);  // make idiot light flash if alarm true
+                neo.setPosts(t, err_sensor_count[t]);  // make idiot light pulse to indicate failed sensor count
+            }
             neo.updateIdiot(idiot);
         }
     neo.refresh();
