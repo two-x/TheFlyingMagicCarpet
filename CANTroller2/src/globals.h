@@ -15,6 +15,7 @@
 #include "QPID.h" // This is quickpid library except i have to edit some of it
 #include "utils.h"
 #include "uictrl.h"
+#include "neo.h"
 #include "devices.h"
 #include "temperature.h"
 
@@ -42,14 +43,14 @@ bool flip_the_screen = true;
 #define gas_pwm_pin 16          // (pwm1 / adc2ch5) - Output, PWM signal duty cycle controls throttle target. On Due this is the pin labeled DAC1 (where A13 is on Mega)
 #define brake_pwm_pin 17        // (pwm0 / adc2ch6 / tx1) - Output, PWM signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% is stopped)
 #define steer_pwm_pin 18        // (pwm0 / adc2ch7 / rx1) - Output, PWM signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
-#define onewire_pin 19          // (usb-otg / adc2ch8) - Onewire bus for temperature sensor data
-#define hotrc_ch3_ign_pin 20    // (usb-otg / adc2ch9) - Ignition control, Hotrc Ch3 PWM toggle signal
+#define onewire_pin 19          // (usb-d- / adc2ch8) - Onewire bus for temperature sensor data
+#define hotrc_ch3_ign_pin 20    // (usb-d+ / adc2ch9) - Ignition control, Hotrc Ch3 PWM toggle signal
 #define hotrc_ch4_cruise_pin 21 // (pwm0) - Cruise control, Hotrc Ch4 PWM toggle signal
 #define speedo_pulse_pin 35     // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
-#define starter_pin 36          // (spi-ram / oct-spi) - Input/Output (both active high), output when starter is being driven, otherwise input senses external starter activation
+#define starter_pin 36          // (spi-ram / oct-spi / glitch) - Input/Output (both active high), output when starter is being driven, otherwise input senses external starter activation
 #define tach_pulse_pin 37       // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup) - Note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define sdcard_cs_pin 38        // (spi-ram / oct-spi) - Output, chip select for SD card controller on SPI bus
-#define basicmodesw_pin 39      // Input, asserted to tell us to run in basic mode, active low (has ext pullup) - Note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
+#define basicmodesw_pin 39      // (glitch) Input, asserted to tell us to run in basic mode, active low (has ext pullup) - Note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define encoder_b_pin 40        // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define encoder_a_pin 41        // Int input, The A (aka CLK) pin of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
 #define encoder_sw_pin 42       // Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
@@ -408,6 +409,7 @@ enum err_sensors { e_hrchorz, e_hrcvert, e_hrcch3, e_hrcch4, e_pressure, e_brkpo
 // enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, mulebatt, ignition, basicsw, cruisesw, starter, syspower };  // , num_sensors, err_flag };
 
 bool err_sensor_alarm[num_err_types] = { false, false };  // [LOST/RANGE]
+int8_t err_sensor_count[num_err_types] = { 0, 0 };  // [LOST/RANGE]
 bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_mulebatt/e_basicsw/e_starter]   // sensor::opt_t::num_sensors]
 
 void hotrc_toggle_update(int8_t chan) {                                                            //
@@ -675,8 +677,10 @@ void detect_errors() {
         // printf ("Sensor check: ");
         for (int32_t t=LOST; t<=RANGE; t++) {
             err_sensor_alarm[t] = false;
+            err_sensor_count[t] = 0;
             for (int32_t s=0; s<e_num_sensors; s++)
                 if (err_sensor[t][s]) {
+                    err_sensor_count[t]++;
                     err_sensor_alarm[t] = true;
                     // if (s <= 3) printf ("hotrc-ch%d is %s, ", s, t ? "Rang" : "Lost");
                     // else printf ("%d is %s, ", s, t ? "Rang" : "Lost");
