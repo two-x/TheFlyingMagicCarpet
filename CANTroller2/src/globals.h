@@ -21,7 +21,6 @@
 
 // #define CAP_TOUCH
 bool flip_the_screen = true;
-
 // #define pinout_bm2023  // uncomment this to get pin assignments for old control box
 
 #define bootbutton_pin 0        // (button0 / bootstrap high) - This is the "Boot" button on the esp32 board. Active low (existing onboard pullup)#define steer_enc_a_pin 1       // (adc) - Reserved for a steering quadrature encoder. Encoder "A" signal
@@ -408,6 +407,7 @@ enum err_types_sensor { LOST, RANGE, num_err_types };
 enum err_sensors { e_hrchorz, e_hrcvert, e_hrcch3, e_hrcch4, e_pressure, e_brkpos, e_speedo, e_tach, e_airflow, e_mapsens, e_temps, e_mulebatt, e_starter, e_basicsw, e_num_sensors };
 // enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, mulebatt, ignition, basicsw, cruisesw, starter, syspower };  // , num_sensors, err_flag };
 bool err_sensor_alarm[num_err_types] = { false, false };
+int8_t err_sensor_fails[num_err_types] = { 0, 0 };
 int8_t err_sensor_flashes[num_err_types] = { 0, 0 };  // [LOST/RANGE]
 int8_t err_sensor_posts[num_err_types] = { 0, 0 };  // [LOST/RANGE]
 bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_mulebatt/e_basicsw/e_starter]   // sensor::opt_t::num_sensors]
@@ -676,14 +676,12 @@ void detect_errors() {
         
         // printf ("Sensor check: ");
         for (int32_t t=LOST; t<=RANGE; t++) {
-            err_sensor_flashes[t] = 0;
-            err_sensor_posts[t] = 0;
             err_sensor_alarm[t] = false;
+            err_sensor_fails[t] = 0;
             for (int32_t s=0; s<e_num_sensors; s++)
                 if (err_sensor[t][s]) {
                     err_sensor_alarm[t] = true;
-                    err_sensor_posts[t]++;
-                    err_sensor_flashes[t] = (err_sensor_posts[t] + 1) / 2;
+                    err_sensor_fails[t]++;
                     // if (s <= 3) printf ("hotrc-ch%d is %s, ", s, t ? "Rang" : "Lost");
                     // else printf ("%d is %s, ", s, t ? "Rang" : "Lost");
                 }
