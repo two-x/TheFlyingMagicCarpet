@@ -450,16 +450,12 @@ void loop() {
 
     neo.heartbeat_update(((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]));  // Update our beating heart
     for (int32_t idiot = 0; idiot < arraysize(idiotlights); idiot++) {
-        if (idiot <= neo.neopixelsAvailable()) {
+        if (idiot <= neo.neopixelsAvailable())
             if (*(idiotlights[idiot]) != idiotlasts[idiot]) neo.setBoolState(idiot, *idiotlights[idiot]);
-            if (idiot <= 1) {
-                neo.setFlashes(idiot, err_sensor_flashes[idiot]);  // make idiot light flash if alarm true
-                neo.setPosts(idiot, err_sensor_posts[idiot]);  // make idiot light pulse to indicate failed sensor count
-            }
-            else if (idiot == 6) neo.setFlashes(idiot, *(idiotlights[idiot]));
-            neo.updateIdiot(idiot);
-        }
     }
+    neo.setFlashes(LOST, err_sensor_fails[LOST]);  // make idiot light pulse to indicate failed sensor count            }
+    neo.setPosts(RANGE, err_sensor_fails[RANGE]);  // make idiot light pulse to indicate failed sensor count            }
+    neo.updateAll();
     neo.refresh();
     loop_marktime ("-");
     screen.update();  // Display updates
