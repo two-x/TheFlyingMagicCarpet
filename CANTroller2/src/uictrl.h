@@ -121,32 +121,37 @@ class Encoder {
                 _suppress_click = false;  // End click suppression
             }
         }
-
-        uint32_t handleSwitchAction() {
+        bool pressed() {
+            return _sw;
+        }
+        uint32_t press_event(bool autoreset = true) {
             uint32_t ret = _sw_action;
-            _sw_action = NONE;
+            if (autoreset) _sw_action = NONE;
             return ret;
         }
-
-        uint32_t handleSelection() {
-            uint32_t d = 0;
+        void press_reset() {
+            _sw_action = NONE;
+        }
+        bool longpress() {  // code may call this to check for long press and if so act upon it. Resets the long press if asserted
+            bool ret = (_sw_action == LONG);
+            if (ret) _sw_action = NONE;
+            return ret;
+        }
+        bool shortpress() {  // code may call this to check for short press and if so act upon it. Resets the long press if asserted
+            bool ret = (_sw_action == SHORT);
+            if (ret) _sw_action = NONE;
+            return ret;
+        }
+        int32_t rotation(bool accel = false) {  // Returns detents spun since last call, accelerated by spin rate or not
+            int32_t d = 0;
             if (_delta) {  // Now handle any new rotations
                 if (_spinrate_isr_us >= _spinrate_min_us) {  // Reject clicks coming in too fast as bounces
-                    _spinrate_us = constrain (_spinrate_isr_us, _spinrate_min_us, _accel_thresh_us);
-                    d = constrain (_delta, -1, 1);  // Only change one at a time when selecting or turning pages
-                }
-                _delta = 0;  // Our responsibility to reset this flag after handling events
-            }
-            return d;
-        }
-
-        uint32_t handleTuning() {
-            uint32_t d = 0;
-            if (_delta) {  // Handle any new rotations
-                if (_spinrate_isr_us >= _spinrate_min_us) {  // Reject clicks coming in too fast as bounces
-                    _spinrate_us = constrain(_spinrate_isr_us, _spinrate_min_us, _accel_thresh_us);
-                    _spinrate_us = map (_spinrate_us, _spinrate_min_us, _accel_thresh_us, _accel_max, 1);  // if turning faster than 100ms/det, proportionally accelerate the effect of each detent by up to 50x. encoder_temp variable repurposed here to hold # of edits per detent turned
-                    d = _delta * _spinrate_us;  // If a tunable value is being edited, turning the encoder changes the value
+                    if (accel) {
+                        _spinrate_us = constrain (_spinrate_isr_us, _spinrate_min_us, _accel_thresh_us);
+                        _spinrate_us = map (_spinrate_us, _spinrate_min_us, _accel_thresh_us, _accel_max, 1);  // if turning faster than 100ms/det, proportionally accelerate the effect of each detent by up to 50x. encoder_temp variable repurposed here to hold # of edits per detent turned
+                        d = _delta * _spinrate_us;  // If a tunable value is being edited, turning the encoder changes the value
+                    }
+                    else d = constrain (_delta, -1, 1);  // Only change one at a time when selecting or turning pages
                 }
                 _delta = 0;  // Our responsibility to reset this flag after handling events
             }

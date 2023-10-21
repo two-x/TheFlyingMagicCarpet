@@ -276,6 +276,7 @@ class Transducer : public Device {
             _native.set_limits(arg_min.val(), arg_max.val());
         }
         update_native_limits();
+
     }
     void set_human_limits(Param<HUMAN_T> &arg_min, Param<HUMAN_T> &arg_max) {
         if (arg_min.val() > arg_max.val()) {
@@ -298,6 +299,9 @@ class Transducer : public Device {
             _native.set_limits(arg_min, arg_max);
         }
         update_native_limits();
+        // Need to set human limits here.
+        // HUMAN_T human_min = from_native(_native.min());
+        // HUMAN_T human_max = from_native(_native.max());
     }
     void set_human_limits(HUMAN_T arg_min, HUMAN_T arg_max) {
         if (arg_min > arg_max) {
@@ -309,6 +313,9 @@ class Transducer : public Device {
             _human.set_limits(arg_min, arg_max);
         }
         update_human_limits();
+        // need to set native limits here
+        // _human.set_native_limits(from_human(_human.min()), from_human(_human.max()));
+
     }
 
     bool set_native(NATIVE_T arg_val_native) {
@@ -628,16 +635,16 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     protected:
         // TODO: add description
         std::shared_ptr<float> _zeropoint;
-        void assign_from_touch() { _val_filt.set((nom_lim_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
+        void assign_from_touch() { _val_filt.set((nom_min_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
     public:
         static constexpr int32_t min_adc = 0.0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
         static constexpr int32_t max_adc = adcrange_adc;
         static constexpr float park_in = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
-        static constexpr float nom_lim_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-        static constexpr float nom_lim_extend_in = park_in; // 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
+        static constexpr float nom_min_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
+        static constexpr float nom_max_extend_in = park_in; // 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
         static constexpr float abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
         static constexpr float abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
-        static constexpr float margin_in = .029;  // TODO: add description
+        static constexpr float margin_in = .01;  // TODO: add description
         static constexpr float initial_in_per_adc = 3.3 * 10000.0 / (3.3 * adcrange_adc * 557); // 3.3 v * 10k ohm * 1/5 1/v * 1/4095 1/adc * 1/557 in/ohm = 0.0029 in/adc
         static constexpr float initial_zeropoint_in = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
         static constexpr float initial_ema_alpha = 0.25;
@@ -650,8 +657,10 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
             _invert = initial_invert;
             _b_offset = initial_offset;
             _zeropoint = std::make_shared<float>(initial_zeropoint_in);
+            // Soren: this line might be why we broke our brake motor at bm23:
+            // set_human_limits(nom_min_retract_in, nom_max_extend_in);  // wouldn't this be safer?
+            set_human_limits(abs_min_retract_in, abs_max_extend_in);            
             set_native_limits(min_adc, max_adc);
-            set_human_limits(abs_min_retract_in, abs_max_extend_in);
             set_can_source(Source::PIN, true);
             set_can_source(Source::POT, true);
         }
@@ -663,7 +672,11 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         float in() { return _human.val(); }
         float min_in() { return _human.min(); }
         float max_in() { return _human.max(); }
-        float park_position() { return park_in; }
+        float nom_min_in() { return nom_min_retract_in; }
+        float nom_max_in() { return nom_max_extend_in; }
+        // float absmin_in() { return abs_min_retract_in; }
+        // float absmax_in() { return abs_max_extend_in; }
+        float parkpos() { return park_in; }
         float margin() { return margin_in; }
         float zeropoint() { return *_zeropoint; }
         float* zeropoint_ptr() { return _zeropoint.get(); }

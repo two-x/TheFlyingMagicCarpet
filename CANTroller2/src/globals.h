@@ -34,20 +34,20 @@ bool flip_the_screen = true;
 #define i2c_sda_pin 8           // (i2c0 sda / adc1ch7) - i2c bus for airspeed/map sensors, lighting board, cap touchscreen
 #define i2c_scl_pin 9           // (i2c0 scl / adc1ch8) - i2c bus for airspeed/map sensors, lighting board, cap touchscreen
 #define tft_cs_pin 10           // (spi0 cs / adc1ch9) - Output, active low, Chip select allows ILI9341 display chip use of the SPI bus
-#define tft_mosi_pin 11         // (spi0 mosi / adc2ch0) - Used as spi interface data for touchscreen, sd card and tft screen
-#define tft_sclk_pin 12         // (spi0 sclk / adc2ch1) - Used as spi interface clock for touchscreen, sd card and tft screen
-#define tft_miso_pin 13         // (spi0 miso / adc2ch2) - Used as spi interface data from sd card and possibly (?) tft screen
+#define spi_mosi_pin 11         // (spi0 mosi / adc2ch0) - Used as spi interface data for touchscreen, sd card and tft screen
+#define spi_sclk_pin 12         // (spi0 sclk / adc2ch1) - Used as spi interface clock for touchscreen, sd card and tft screen
+#define spi_miso_pin 13         // (spi0 miso / adc2ch2) - Used as spi interface data from sd card and possibly (?) tft screen
 #define hotrc_ch2_vert_pin 14   // (pwm0 / adc2ch3) - Hotrc Ch2 bidirectional trigger input
 #define hotrc_ch1_horz_pin 15   // (pwm1 / adc2ch4) - Hotrc Ch1 thumb joystick input
 #define gas_pwm_pin 16          // (pwm1 / adc2ch5) - Output, PWM signal duty cycle controls throttle target. On Due this is the pin labeled DAC1 (where A13 is on Mega)
 #define brake_pwm_pin 17        // (pwm0 / adc2ch6 / tx1) - Output, PWM signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% is stopped)
 #define steer_pwm_pin 18        // (pwm0 / adc2ch7 / rx1) - Output, PWM signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
 #define onewire_pin 19          // (usb-d- / adc2ch8) - Onewire bus for temperature sensor data
-#define hotrc_ch3_ign_pin 20    // (usb-d+ / adc2ch9) - Ignition control, Hotrc Ch3 PWM toggle signal
-#define hotrc_ch4_cruise_pin 21 // (pwm0) - Cruise control, Hotrc Ch4 PWM toggle signal
-#define speedo_pulse_pin 35     // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
+#define hotrc_ch3_pin 20        // (usb-d+ / adc2ch9) - Ignition control, Hotrc Ch3 PWM toggle signal
+#define hotrc_ch4_pin 21        // (pwm0) - Cruise control, Hotrc Ch4 PWM toggle signal
+#define speedo_pin 35           // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
 #define starter_pin 36          // (spi-ram / oct-spi / glitch) - Input/Output (both active high), output when starter is being driven, otherwise input senses external starter activation
-#define tach_pulse_pin 37       // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup) - Note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
+#define tach_pin 37             // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup) - Note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define sdcard_cs_pin 38        // (spi-ram / oct-spi) - Output, chip select for SD card controller on SPI bus
 #define basicmodesw_pin 39      // (glitch) Input, asserted to tell us to run in basic mode, active low (has ext pullup) - Note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define encoder_b_pin 40        // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
@@ -55,14 +55,14 @@ bool flip_the_screen = true;
 #define encoder_sw_pin 42       // Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
 #define uart_tx_pin 43          // "TX" (uart0 tx) - Serial monitor data out. Also used to detect devboard vs. pcb at boot time (using pullup/pulldown, see below)
 #define uart_rx_pin 44          // "RX" (uart0 rx) - Serial monitor data in. Maybe could repurpose during runtime since we only need outgoing console data?
-#define ign_out_pin 45          // (bootstrap low) - Output for Hotrc to a relay to kill the car ignition. Note, Joystick ign button overrides this if connected and pressed
+#define ignition_pin 45          // (bootstrap low) - Output for Hotrc to a relay to kill the car ignition. Note, Joystick ign button overrides this if connected and pressed
 #define syspower_pin 46         // (bootstrap low) - Output, flips a relay to power all the tranducers. This is actually the neopixel pin on all v1.1 devkit boards.
 #define touch_cs_pin 47         // Output, chip select for resistive touchscreen, active low
 #define neopixel_pin 48         // (rgb led) - Data line to onboard Neopixel WS281x (on all v1 devkit boards - pin 38 is used on v1.1 boards). Also used for onboard and external neopoxels
 
 #ifdef pinout_bm2023            // Swapped these signals from pins below (bm2023) to above (bm2024)
-    #define tach_pulse_pin 36   // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup) - Note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
-    #define ign_out_pin 37      // (spi-ram / oct-spi) - Output for Hotrc to a relay to kill the car ignition. Note, Joystick ign button overrides this if connected and pressed
+    #define tach_pin 36   // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup) - Note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
+    #define ignition_pin 37      // (spi-ram / oct-spi) - Output for Hotrc to a relay to kill the car ignition. Note, Joystick ign button overrides this if connected and pressed
     #define syspower_pin 38     // (spi-ram / oct-spi) - Output, flips a relay to power all the tranducers. This is actually the neopixel pin on all v1.1 devkit boards.
     #define starter_pin 45      // (bootstrap low) - Input, active high when vehicle starter is engaged (needs pulldown)
     #define sdcard_cs_pin 46    // (bootstrap low) - Output, chip select for SD card controller on SPI bus,
@@ -71,13 +71,13 @@ bool flip_the_screen = true;
 // External components needed (pullup/pulldown resistors, capacitors, etc.): (Note: "BB" = On dev breadboards only, "PCB" = On vehicle PCB only)
 // 1. brake_pos_pin: Add 1M-ohm to GND. Allows detecting unconnected sensor or broken connection.
 // 2. onewire_pin: Add 4.7k-ohm to 3.3V. Needed for open collector sensor output, to define logic-high voltage level.
-// 3. tach_pulse_pin, speedo_pulse_pin: (PCB) Add 4.7k-ohm to 3.3V. For open collector sensor outputs. (BB) If no sensor is present: connect 4.7k-ohm to GND instead. Allows sensor detection.
+// 3. tach_pin, speedo_pin: (PCB) Add 4.7k-ohm to 3.3V. For open collector sensor outputs. (BB) If no sensor is present: connect 4.7k-ohm to GND instead. Allows sensor detection.
 // 4. neopixel_pin: (PCB) Add 330 ohm in series (between pin and the DataIn pin of the 1st pixel). (BB) Same, but this one is likely optional, e.g. mine works w/o it.  For signal integrity over long wires. 
 // 5. uart_tx_pin: (PCB) Add 22k-ohm to GND. (BB) Connect the 22k-ohm to 3.3V instead. For boot detection of vehicle PCB, so defaults are set appropriately.
 // 6. ADC inputs (mulebatt_pin, pressure_pin, brake_pos_pin, pot_wipe_pin) should have 100nF cap to gnd, tho it works w/o it.
 // 7. encoder_a_pin, encoder_b_pin, encoder_sw_pin: should have 10nF to gnd, tho it should work w/o it. Pullups to 3.3V (4.7k-ohm is good) are also necessary, but the encoder we're using includes these.
 // 8. Resistor dividers are needed for these inputs: starter_pin (16V->3.3V), mulebatt_pin (16V->3.3V), and pressure_pin (5V->3.3V).
-// 9. ign_out_pin, syspower_pin, starter_pin: require pulldowns to gnd, this is provided by nfet gate pulldown.
+// 9. ignition_pin, syspower_pin, starter_pin: require pulldowns to gnd, this is provided by nfet gate pulldown.
 // 10. gas_pwm_pin: should have a series ~680-ohm R going to the servo.
 
 // ESP32-S3 TRM: https://www.espressif.com/sites/default/files/documentation/esp32-s3_technical_reference_manual_en.pdf#dma
@@ -122,8 +122,8 @@ I2C i2c(i2c_sda_pin, i2c_scl_pin);
 RMTInput hotrc_rmt[4] = {
     RMTInput(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_horz_pin)),  // hotrc[HORZ]
     RMTInput(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_vert_pin)),  // hotrc[VERT]
-    RMTInput(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_ign_pin)),  // hotrc[CH3]
-    RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_cruise_pin))  // hotrc[CH4]
+    RMTInput(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_pin)),  // hotrc[CH3]
+    RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_pin))  // hotrc[CH4]
 };
 
 // Globals -------------------
@@ -165,9 +165,9 @@ Potentiometer pot(pot_wipe_pin);
 Simulator sim(pot);
 bool simulating_last = false;
 Timer simTimer; // NOTE: unused
-int32_t sim_edit_delta = 0;
-int32_t sim_edit_delta_touch = 0;
-int32_t sim_edit_delta_encoder = 0;
+int32_t simdelta = 0;
+int32_t simdelta_touch = 0;
+int32_t simdelta_encoder = 0;
 
 // calibration related
 bool cal_joyvert_brkmotor_mode = false; // Allows direct control of brake motor using controller vert
@@ -252,12 +252,12 @@ float steer_stop_pc = 0.0;
 float steer_left_pc = -100.0;
 float steer_left_min_pc = -100.0;
 float steer_margin_pc = 2.4;
-float steer_pulse_left_min_us = 500;   // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
-float steer_pulse_left_us = 670;       // Steering pulsewidth corresponding to full-speed right steering (in us). Default setting for jaguar is max 670us
-float steer_pulse_stop_us = 1500;      // Steering pulsewidth corresponding to zero steering motor movement (in us)
-float steer_pulse_right_us = 2330;     // Steering pulsewidth corresponding to full-speed left steering (in us). Default setting for jaguar is max 2330us
-float steer_pulse_right_max_us = 2500; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
-float steer_pulse_out_us = steer_pulse_stop_us;              // pid loop output to send to the actuator (steering)
+float steer_left_min_us = 500;   // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
+float steer_left_us = 670;       // Steering pulsewidth corresponding to full-speed right steering (in us). Default setting for jaguar is max 670us
+float steer_stop_us = 1500;      // Steering pulsewidth corresponding to zero steering motor movement (in us)
+float steer_right_us = 2330;     // Steering pulsewidth corresponding to full-speed left steering (in us). Default setting for jaguar is max 2330us
+float steer_right_max_us = 2500; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
+float steer_out_us = steer_stop_us;              // pid loop output to send to the actuator (steering)
 
 // brake pressure related
 PressureSensor pressure(pressure_pin);
@@ -277,20 +277,20 @@ float brake_stop_pc = 0.0;          // Brake pulsewidth corresponding to center 
 float brake_extend_pc = -100.0;     // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
 float brake_extend_min_pc = -100.0; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
 float brake_margin_pc = 2.4;        // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated
-float brake_pulse_extend_min_us = 670; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
-float brake_pulse_extend_us = 670;     // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
-float brake_pulse_stop_us = 1500;       // Brake pulsewidth corresponding to center point where motor movement stops (in us)
-float brake_pulse_retract_us = 2330;     // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
-float brake_pulse_retract_max_us = 2330; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
-float brake_pulse_out_us = brake_pulse_stop_us;               // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
+float brake_extend_min_us = 670; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
+float brake_extend_us = 670;     // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
+float brake_stop_us = 1500;       // Brake pulsewidth corresponding to center point where motor movement stops (in us)
+float brake_retract_us = 2330;     // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
+float brake_retract_max_us = 2330; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
+float brake_out_us = brake_stop_us;               // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
 float brake_motor_govern_duty_pc = 25;  // From motor datasheet
-float brake_pulse_retract_effective_max_us;   // 
+float brake_retract_effective_max_us;   // 
 
 // brake actuator position related
 BrakePositionSensor brakepos(brake_pos_pin);
 
 // carspeed/speedo related
-Speedometer speedo(speedo_pulse_pin);
+Speedometer speedo(speedo_pin);
 float speedo_target_mph;
 float speedo_govern_mph;      // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
 float speedo_idle_mph = 4.50; // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
@@ -298,16 +298,16 @@ float speedo_idle_mph = 4.50; // What is our steady state speed at engine idle? 
 // throttle servo related
 float gas_governor_pc = 95;      // Software governor will only allow this percent of full-open throttle (percent 0-100)
 Timer gasServoTimer(500000);          // We expect the servo to find any new position within this time
-float gas_pulse_adjustpoint_us;       // Used for adjusting cruise fixed throttle level
+float gas_adjustpoint_us;       // Used for adjusting cruise fixed throttle level
 
 bool reverse_gas_servo = true;
-float gas_pulse_out_us = 1501;        // pid loop output to send to the actuator (gas)
-float gas_pulse_govern_us = 1502;     // Governor must scale the pulse range proportionally. This is given a value in the loop
-float gas_pulse_cw_min_us = 500;      // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
-float gas_pulse_cw_open_us = 718;     // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
-float gas_pulse_ccw_closed_us = 2000; // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
-float gas_pulse_ccw_max_us = 2500;    // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
-float gas_pulse_park_slack_us = 30;   // Gas pulsewidth beyond gas_pulse_ccw_closed_us where to park the servo out of the way so we can drive manually (in us)
+float gas_out_us = 1501;        // pid loop output to send to the actuator (gas)
+float gas_govern_us = 1502;     // Governor must scale the pulse range proportionally. This is given a value in the loop
+float gas_cw_min_us = 500;      // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
+float gas_cw_open_us = 718;     // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
+float gas_ccw_closed_us = 2000; // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
+float gas_ccw_max_us = 2500;    // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
+float gas_park_slack_us = 30;   // Gas pulsewidth beyond gas_ccw_closed_us where to park the servo out of the way so we can drive manually (in us)
 
 // Misguided beginnings of attempt to restructure pwm variables above
 // enum pwm_val { OUT=3, GOV=4, ABSMIN=5, ABSMAX=6, PARK=7, num_pwmvals=8 };  // { MIN=0, CENT=1, MAX=2 }
@@ -317,7 +317,7 @@ float gas_pulse_park_slack_us = 30;   // Gas pulsewidth beyond gas_pulse_ccw_clo
 // bool gas_angle_opt[num_pwmopts] = { true, false, true };
 
 // tach related
-Tachometer tach(tach_pulse_pin);
+Tachometer tach(tach_pin);
 float tach_target_rpm, tach_adjustpoint_rpm, tach_govern_rpm;        // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
 float tach_margin_rpm = 15.0; // Margin of error for checking engine rpm (in rpm)
 float tach_idle_abs_min_rpm = 450.0;  // Low limit of idle speed adjustability
@@ -339,7 +339,7 @@ Timer steerPidTimer(steer_pid_period_us); // not actually tunable, just needs va
 // Brake : Controls the brake motor to achieve the desired brake fluid pressure
 uint32_t brake_pid_period_us = 85000;    // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer brakePidTimer(brake_pid_period_us); // not actually tunable, just needs value above
-// float brake_perc_per_us = (100.0 - (-100.0)) / (brake_pulse_extend_us - brake_pulse_retract_us);  // (100 - 0) percent / (us-max - us-min) us = 1/8.3 = 0.12 percent/us
+// float brake_perc_per_us = (100.0 - (-100.0)) / (brake_extend_us - brake_retract_us);  // (100 - 0) percent / (us-max - us-min) us = 1/8.3 = 0.12 percent/us
 float brake_spid_initial_kp = 0.323;                                                                         // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
 float brake_spid_initial_ki_hz = 0.000;                                                                      // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
 float brake_spid_initial_kd_s = 0.000;                                                                       // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
@@ -364,8 +364,8 @@ float gas_spid_initial_kp = 0.206;    // PID proportional coefficient (gas) How 
 float gas_spid_initial_ki_hz = 0.000; // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
 float gas_spid_initial_kd_s = 0.000;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
 bool gas_open_loop = true;
-QPID gas_pid(tach.filt_ptr(), &gas_pulse_out_us, &tach_target_rpm,                            // input, target, output variable references
-             gas_pulse_cw_open_us, gas_pulse_ccw_closed_us,                                                             // output min, max
+QPID gas_pid(tach.filt_ptr(), &gas_out_us, &tach_target_rpm,                            // input, target, output variable references
+             gas_cw_open_us, gas_ccw_closed_us,                                                             // output min, max
              gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s,                                        // Kp, Ki, and Kd tuning constants
              QPID::Pmode::onerr, QPID::Dmode::onerr, QPID::Awmode::clamp, QPID::Dir::reverse,              // settings
              gas_pid_period_us, (gas_open_loop) ? QPID::Control::manual : QPID::Control::manual, QPID::Centmode::off); // period, more settings
@@ -383,7 +383,7 @@ int32_t cruise_delta_max_us_per_s = 200;  // (in throttle_delta mode) What's the
 float cruise_angle_attenuator = 0.25;  // (in throttle_angle mode) Limits the change of each adjust trigger pull to this fraction of what's possible
 bool flycruise_toggle_request = false;
 float flycruise_vert_margin_pc = 0.3; // Margin of error for determining hard brake value for dropping out of cruise mode
-float gas_pulse_cruise_us;  // Gas pulsewidth value fixed by cruise mode when in fixed throttle mode 
+float gas_cruise_us;  // Gas pulsewidth value fixed by cruise mode when in fixed throttle mode 
 
 uint32_t cruise_pid_period_us = 85000;                                                                      // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer cruisePidTimer(cruise_pid_period_us);                                                                  // not actually tunable, just needs value above
@@ -440,7 +440,7 @@ void hotrc_calc_params() {
 void calc_governor(void) {
     tach_govern_rpm = map(gas_governor_pc, 0.0, 100.0, 0.0, tach.redline_rpm()); // Create an artificially reduced maximum for the engine speed
     cruise_pid.set_outlimits(throttle.idlespeed(), tach_govern_rpm);
-    gas_pulse_govern_us = map(tach_govern_rpm, throttle.idlespeed(), tach.redline_rpm(), gas_pulse_ccw_closed_us, gas_pulse_cw_open_us); // Governor must scale the pulse range proportionally
+    gas_govern_us = map(tach_govern_rpm, throttle.idlespeed(), tach.redline_rpm(), gas_ccw_closed_us, gas_cw_open_us); // Governor must scale the pulse range proportionally
     speedo_govern_mph = map(gas_governor_pc, 0.0, 100.0, 0.0, speedo.redline_mph());                                                                                     // Governor must scale the top vehicle speed proportionally
 }
 float steer_safe(float endpoint) {
@@ -682,8 +682,6 @@ void detect_errors() {
                 if (err_sensor[t][s]) {
                     err_sensor_alarm[t] = true;
                     err_sensor_fails[t]++;
-                    // if (s <= 3) printf ("hotrc-ch%d is %s, ", s, t ? "Rang" : "Lost");
-                    // else printf ("%d is %s, ", s, t ? "Rang" : "Lost");
                 }
         }
         // printf ("\n");
@@ -734,10 +732,6 @@ void detect_errors() {
         // * The control system has nonsensical values in its variables.
     }
 }
-float degF_to_K(float degF) {
-    return 0.556 * (degF - 32) + 273.15;
-}
-
 // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
 float massairflow(float _map = NAN, float _airflow = NAN, float _ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
     float temp = _ambient;
@@ -746,13 +740,13 @@ float massairflow(float _map = NAN, float _airflow = NAN, float _ambient = NAN) 
         if (std::isnan(temp) && running_on_devboard) temp = tempsens.val(location::engine);
         if (std::isnan(temp)) return -1;  // Avoid crashing due to trying to read absent sensor
     }
-    float T = degF_to_K(temp);  // in K
+    float T = 0.556 * (temp - 32) + 273.15;  // in K.  This converts from degF to K
     float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
     float v = 0.447 * std::isnan(_airflow) ? airflow.filt() : _airflow; // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
     float Ain2 = 3.1415926;  // in in2    1.0^2 in2 * pi  // will still need to divide by 1550 in2/m2
     float P = 6894.76 * std::isnan(_map) ? mapsens.filt() : _map;  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
-    return v * Ain2 * P * (1000000000.0 / (R * T * 1550));  // in ug/s   (1B ug/kg * m/s * in2 * J/m3) / (J/(kg*K) * K * 1550 in2/m2) = ug/s
+    return v * Ain2 * P * (1000000000.0 / (R * T * 1550));  // mass air flow in micrograms per second (ug/s)   (1B ug/kg * m/s * in2 * J/m3) / (J/(kg*K) * K * 1550 in2/m2) = ug/s
 }
-float maf_ugps;  // Mass airflow in milligrams per second
+float maf_ugps;  // Manifold mass airflow in micrograms per second
 float maf_min_ugps = 0.0;
 float maf_max_ugps = massairflow(mapsens.max_psi(), airflow.max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
