@@ -43,15 +43,14 @@ class neopixelStrip {
     int32_t pulsetime_us[2][2] = { { 45000, 55000 }, { 175000, 74000 } };  // [flashes/posts][flashcolor/normalcolor] 
     int32_t flashtimeout;
     Timer flashtimer[idiotcount];
-    bool pulseseq = false;
+    bool pulseseq = false; bool breadboard = false; bool switchpulses = false;
     int8_t idiotpulses[idiotcount][2];
     int8_t idiotnowpulse[idiotcount][2];
     colortype pulsecolor[2] = { colortype(0xff, 0xff, 0xff), colortype(0x00, 0x00, 0x00) };
     Timer pulseSeqTimer;
     colortype neostrip[numpixels];
-    colortype heartbeatColor, heartbeatNow, heartbeatColor_last, flashcolor;
+    colortype heartbeatColor, heartbeatNow, heartbeatColor_last;
     Timer debugtimer;
-    bool breadboard = false;
     uint32_t color_Rgb_to_32b(colortype color) {  // Convert 5-6-5 encoded 16-bit color value to type suitable for library
         return (static_cast<uint32_t>(color.R) << 16) | (static_cast<uint32_t>(color.G) << 8) | static_cast<uint32_t>(color.B);  // (static_cast<uint32_t>(color.W) << 24) | 
     }
@@ -116,6 +115,35 @@ class neopixelStrip {
         }
         return colortype(rgb[0], rgb[1], rgb[2]);
     }
+    void updateIdiot(uint8_t idiot, bool switchpulses = false) {
+        if (switchpulses) idiotnowpulse[idiot][pulseseq] = (idiotpulses[idiot][pulseseq] > 0);
+        if (switchpulses || flashtimer[idiot].expired()) {  // figure out flashing/posts situation
+            idiotstate[idiot][bright] = (idiotpulses[idiot][flashes] > 0 || idiotstate[idiot][onoff] > 0) ? hibright : lobright;  // If flashing the led is always bright
+            idiotcolor[idiot][effect] = dimmer(idiotcolor[idiot][normal], idiotstate[idiot][bright]);
+            idiotcolor[idiot][effect] = desaturate(idiotcolor[idiot][effect], desatlevel);
+            if ((idiotpulses[idiot][flashes] == 0) && idiotpulses[idiot][posts] == 0) {
+                idiotcolor[idiot][now] = idiotcolor[idiot][effect];  // we aren't flashing or posting, so just stay lit
+                flashtimeout = 2000000;
+            }
+            else if (idiotpulses[idiot][flashes] == 4) {
+                // Implement constant strobe effect here
+            }
+            else if ((idiotpulses[idiot][pulseseq]) && idiotnowpulse[idiot][pulseseq] <= idiotpulses[idiot][pulseseq]){ // now flashing
+                if (idiotstate[idiot][nowphase]) idiotcolor[idiot][now] = pulsecolor[pulseseq];
+                else idiotcolor[idiot][now] = idiotcolor[idiot][effect];
+                idiotstate[idiot][nowphase] = !idiotstate[idiot][nowphase];
+                if (idiotstate[idiot][nowphase]) idiotnowpulse[idiot][pulseseq]++;
+                // if (idiot <= 1) printf ("i%d: s:%d", idiot, (uint8_t)flashseq);
+                if (idiotnowpulse[idiot][pulseseq] <= idiotpulses[idiot][pulseseq]) flashtimeout = pulsetime_us[pulseseq][idiotstate[idiot][nowphase]];
+                else flashtimeout = 2000000;
+                // flashtimeout = postflash_ekg_us[0] / ((idiotstate[idiot][posts] > 0) + (idiotpulses[idiot][flashes] > 0)) - idiotpulses[idiot][pulseseq] * (postflash_ekg_us[1] + postflash_ekg_us[2]);  // end of these pulses             
+            }
+            flashtimer[idiot].set(flashtimeout);
+            // if (idiot == 1) printf ("i:%d p:%d/%d pol:%d ", idiot, idiotnowpulse[idiot][pulseseq], idiotpulses[idiot][pulseseq], idiotstate[idiot][nowphase]);
+            // if (idiot == 1) std::cout << " s:" << pulseseq << " c:" << color_Rgb_to_32b(idiotcolor[idiot][now]) << " t:" << flashtimeout << std::endl;
+        }
+        // neostrip[1+idiot] = idiotcolor[idiot][now];
+    }
     // struct hsv { float h; float s; float v; };
     // uint32_t rgb_to_hsv(uint32_t rgb) { return rgb_to_hsv((uint8_t)(rgb >> 16) | (uint8_t)((rgb & 0xff00 >> 8)) | (rgb & 0xff)); }
     // hsv rgb_to_hsv(uint8_t r, uint8_t g, uint8_t b) {
@@ -161,6 +189,7 @@ class neopixelStrip {
         neoHeartbeatTimer.set(heartbeat_ekg_us[3]);
         neoFadeTimer.set((int64_t)neo_fade_timeout_us);
         pulseSeqTimer.set(1000000);
+        pulsecolor[flashes] = dimmer(colortype(0xff, 0xff, 0xff), (255 + hibright)/2);
         std::cout << "refresh strip.. ";
         refresh();
         std::cout << std::endl;
@@ -172,12 +201,10 @@ class neopixelStrip {
             heartbright = hibright;  // (uint8_t)((float)hibright * 0.75);
             heartlobright = lobright;
         }
-        flashcolor = dimmer(color_16b_to_Rgb(0xffff), hibright);
-        updateAll();
+        pulsecolor[flashes] = dimmer(colortype(0xff, 0xff, 0xff), (255 + hibright)/2);
     }
     void setdesaturation(float newlev) {  // a way to specify nite or daytime brightness levels
         desatlevel = newlev;
-        updateAll();
     }
     void heartbeat(bool onoroff) {
         neo_heartbeat = onoroff;  // Start heart beating
@@ -242,47 +269,17 @@ class neopixelStrip {
         idiotnowpulse[idiot][posts] = (idiotpulses[idiot][posts] > 0);
     }
     void setFlashes(uint8_t idiot, uint8_t argflashes) {
-        if (idiot < idiotcount) idiotpulses[idiot][flashes] = (argflashes > 4) ? 4 : argflashes;
+        if (idiot < idiotcount) idiotpulses[idiot][flashes] = min(4, argflashes);
         idiotnowpulse[idiot][flashes] = (idiotpulses[idiot][flashes] > 0);
     }
-    void updateAll() {
-        bool switchpulses;
-        switchpulses = false;
+    void update() {
         if (pulseSeqTimer.expireset()) {  // figure out flashing/posts situation
             pulseseq = !pulseseq;
             switchpulses = true;
         }
         for (int32_t idiot=0; idiot<idiotcount; idiot++) updateIdiot(idiot, switchpulses);
-    }
-    void updateIdiot(uint8_t idiot, bool switchpulses = false) {
-        // if (!idiotstate[idiot][onoff]) idiotcolor[idiot][effect] = colortype(0);  // Turn off the light
-        if (switchpulses) idiotnowpulse[idiot][pulseseq] = (idiotpulses[idiot][pulseseq] > 0);
-        if (switchpulses || flashtimer[idiot].expired()) {  // figure out flashing/posts situation
-            idiotstate[idiot][bright] = (idiotpulses[idiot][flashes] > 0 || idiotstate[idiot][onoff] > 0) ? hibright : lobright;  // If flashing the led is always bright
-            idiotcolor[idiot][effect] = dimmer(idiotcolor[idiot][normal], idiotstate[idiot][bright]);
-            // idiotcolor[idiot][effect] = desaturate(idiotcolor[idiot][effect], desatlevel);
-            if ((idiotpulses[idiot][flashes] == 0) && idiotpulses[idiot][posts] == 0) {
-                idiotcolor[idiot][now] = idiotcolor[idiot][effect];  // we aren't flashing or posting, so just stay lit
-                flashtimeout = 2000000;
-            }
-            else if (idiotpulses[idiot][flashes] == 4) {
-                // Implement constant strobe effect here
-            }
-            else if ((idiotpulses[idiot][pulseseq]) && idiotnowpulse[idiot][pulseseq] <= idiotpulses[idiot][pulseseq]){ // now flashing
-                if (idiotstate[idiot][nowphase]) idiotcolor[idiot][now] = pulsecolor[pulseseq];
-                else idiotcolor[idiot][now] = idiotcolor[idiot][effect];
-                idiotstate[idiot][nowphase] = !idiotstate[idiot][nowphase];
-                if (idiotstate[idiot][nowphase]) idiotnowpulse[idiot][pulseseq]++;
-                // if (idiot <= 1) printf ("i%d: s:%d", idiot, (uint8_t)flashseq);
-                if (idiotnowpulse[idiot][pulseseq] <= idiotpulses[idiot][pulseseq]) flashtimeout = pulsetime_us[pulseseq][idiotstate[idiot][nowphase]];
-                else flashtimeout = 2000000;
-                flashtimer[idiot].set(flashtimeout);
-                // flashtimeout = postflash_ekg_us[0] / ((idiotstate[idiot][posts] > 0) + (idiotpulses[idiot][flashes] > 0)) - idiotpulses[idiot][pulseseq] * (postflash_ekg_us[1] + postflash_ekg_us[2]);  // end of these pulses             
-            }
-            // if (idiot == 1) printf ("i:%d p:%d/%d pol:%d ", idiot, idiotnowpulse[idiot][pulseseq], idiotpulses[idiot][pulseseq], idiotstate[idiot][nowphase]);
-            // if (idiot == 1) std::cout << " s:" << pulseseq << " c:" << color_Rgb_to_32b(idiotcolor[idiot][now]) << " t:" << flashtimeout << std::endl;
-        }
-        // neostrip[1+idiot] = idiotcolor[idiot][now];
+        switchpulses = false;
+        refresh();
     }
     uint32_t idiot_neo_color(uint8_t idiot) { return color_Rgb_to_32b(idiotcolor[idiot][now]); }
 };

@@ -113,14 +113,14 @@ public:
             }
             else if (tcol == 0 && trow == 2) {  // Pressed the increase value button, for real-time tuning of variables
                 if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change the value yet
-                else if (tuning_ctrl == EDIT) sim_edit_delta_touch = touch_accel;  // If in edit mode, increase the value
-                // else adj_val(&idiot_hue_offset, sim_edit_delta_touch, 0, 255);
+                else if (tuning_ctrl == EDIT) simdelta_touch = touch_accel;  // If in edit mode, increase the value
+                // else adj_val(&idiot_hue_offset, simdelta_touch, 0, 255);
                 // set_idiotcolors();
             }
             else if (tcol == 0 && trow == 3) {  // Pressed the decrease value button, for real-time tuning of variables
                 if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change the value yet
-                else if (tuning_ctrl == EDIT) sim_edit_delta_touch = -touch_accel;  // If in edit mode, decrease the value
-                // else adj_val(&idiot_hue_offset -sim_edit_delta_touch, 0, 255);
+                else if (tuning_ctrl == EDIT) simdelta_touch = -touch_accel;  // If in edit mode, decrease the value
+                // else adj_val(&idiot_hue_offset -simdelta_touch, 0, 255);
                 // set_idiotcolors();
             }
             else if (tcol == 0 && trow == 4) {  // Pressed the simulation mode toggle. Needs long-press
@@ -168,7 +168,7 @@ public:
             
             touch_now_touched = true;
         } else { // If not being touched, put momentarily-set simulated button values back to default values
-            sim_edit_delta_touch = 0;  // Stop changing the value
+            simdelta_touch = 0;  // Stop changing the value
             if (touch_now_touched) touchDoublePressTimer.reset();  // Upon end of a touch, begin timer to reject any accidental double touches
             touch_now_touched = false;  // Remember the last touch state
             touch_accel_exponent = 0;
