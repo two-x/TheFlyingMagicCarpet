@@ -454,7 +454,9 @@ void loop() {
             if (*(idiotlights[idiot]) != idiotlasts[idiot]) neo.setBoolState(idiot, *idiotlights[idiot]);
     }
     neo.setFlashes(LOST, 2); // err_sensor_fails[LOST]);  // make idiot light pulse to indicate failed sensor count            }
-    neo.setPosts(RANGE, err_sensor_fails[RANGE]);  // make idiot light pulse to indicate failed sensor count            }
+    neo.setPosts(RANGE, 1);  // err_sensor_fails[RANGE]);  // make idiot light pulse to indicate failed sensor count            }
+    neo.setFlashes(2, 4);  // should start constant strobe
+    neo.setFlashes(3, 1);  // should start constant strobe
     neo.update();
     loop_marktime ("-");
     screen.update();  // Display updates
