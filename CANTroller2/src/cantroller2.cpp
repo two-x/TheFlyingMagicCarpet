@@ -12,7 +12,7 @@ HotrcManager hotrcManager[2] = { 6, 6 };  // [HORZ/VERT]
 RunModeManager runModeManager;
 Display screen;
 ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
-neopixelStrip neo;
+neopixelstrip neo;
 // void update_saver(void* parameter) { while (1) { screen.saver_update(); delay(10); } }  // Struggles, choppy, crashes, etc. as task
 TouchScreen touch(touch_cs_pin, touch_irq_pin);
 #define RUN_TESTS 0
