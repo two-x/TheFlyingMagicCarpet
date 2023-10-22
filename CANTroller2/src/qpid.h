@@ -238,44 +238,27 @@ void QPID::set_mode(Control arg_mode) {
 }
 void QPID::set_mode(uint8_t arg_mode) { set_mode((Control)arg_mode); }
 
-/* initialize()****************************************************************
-  Does all the things that need to happen to ensure a bumpless transfer
-  from manual to automatic mode.
-******************************************************************************/
+// Does all the things that need to happen to ensure a bumpless transfer from manual to automatic mode.
 void QPID::init() {
   _outsum = (float)*myout;  // Soren
   lastin = *myin;
   _outsum = constrain(_outsum, _outmin, _outmax);
 }
 
-/* set_controllerdir(.)**************************************************
-  The PID will either be connected to a direct acting process (+output leads
-  to +input) or a reverse acting process(+output leads to -input).
-******************************************************************************/
+// The PID will either be connected to a direct acting process (+output leads to +input) or a reverse acting process(+output leads to -input).
 void QPID::set_dir(Dir arg_dir) { _dir = arg_dir; }
 void QPID::set_dir(uint8_t arg_dir) { _dir = (Dir)arg_dir; }
 
-/* set_Proportionalmode(.)*****************************************************
-  Sets the computation method for the proportional term, to compute based
-  either on error (default), on measurement, or the average of both.
-******************************************************************************/
+// Sets the computation method for the proportional term, to compute based either on error (default), on measurement, or the average of both.
 void QPID::set_pmode(Pmode arg_pmode) { _pmode = arg_pmode; }
 void QPID::set_pmode(uint8_t arg_pmode) { _pmode = (Pmode)arg_pmode; }
 
-/* set_Derivativemode(.)*******************************************************
-  Sets the computation method for the derivative term, to compute based
-  either on error or on measurement (default).
-******************************************************************************/
+// Sets the computation method for the derivative term, to compute based either on error or on measurement (default).
 void QPID::set_dmode(Dmode arg_dmode) { _dmode = arg_dmode; }
 void QPID::set_dmode(uint8_t arg_dmode) { _dmode = (Dmode)arg_dmode; }
 
-/* set_AntiWindupmode(.)*******************************************************
-  Sets the integral anti-windup mode to one of clamp, which clamps
-  the output after adding integral and proportional (on measurement) terms,
-  or cond (default), which provides some integral correction, prevents
-  deep saturation and reduces overshoot.
-  Option off disables anti-windup altogether.
-******************************************************************************/
+// Sets the integral anti-windup mode to one of clamp, which clamps the output after adding integral and proportional (on measurement) terms,
+// or cond (default), which provides some integral correction, prevents deep saturation and reduces overshoot. Option off disables anti-windup altogether.
 void QPID::set_awmode(Awmode arg_awmode) { _awmode = arg_awmode; }
 void QPID::set_awmode(uint8_t arg_awmode) { _awmode = (Awmode)arg_awmode; }
 
