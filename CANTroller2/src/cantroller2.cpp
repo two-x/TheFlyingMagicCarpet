@@ -8,11 +8,13 @@
 #include "RunModeManager.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+// #include "driver/mcpwm.h"  // MCPWM pulse measurement code
 HotrcManager hotrcManager[2] = { 6, 6 };  // [HORZ/VERT]
 RunModeManager runModeManager;
 Display screen;
-ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
 neopixelstrip neo;
+ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
+
 // void update_saver(void* parameter) { while (1) { screen.saver_update(); delay(10); } }  // Struggles, choppy, crashes, etc. as task
 TouchScreen touch(touch_cs_pin, touch_irq_pin);
 #define RUN_TESTS 0
@@ -28,6 +30,21 @@ void run_tests() {
 #else
     void run_tests() {}
 #endif
+
+void neo_idiots_update() {
+    for (int32_t idiot = 0; idiot < arraysize(idiotlights); idiot++) {
+        if (idiot <= neo.neopixelsAvailable())
+            if (*(idiotlights[idiot]) != idiotlasts[idiot]) neo.setBoolState(idiot, *idiotlights[idiot]);
+        if (idiot == LOST || idiot == RANGE) {
+            if (highest_pri_failing_last[idiot] != highest_pri_failing_sensor[idiot]) {
+                if (highest_pri_failing_sensor[idiot] != e_none) neo.setflash((int)idiot, highest_pri_failing_sensor[idiot] + 1, 2, 4, 0, 1);
+                else neo.setflash((int)idiot, 0);
+            }
+            highest_pri_failing_last[idiot] = highest_pri_failing_sensor[idiot];
+        }
+    }
+}
+
 void setup() {  // Setup just configures pins (and detects touchscreen type)
     if (RUN_TESTS) run_tests();   
     set_pin (tft_dc_pin, OUTPUT);
@@ -123,10 +140,11 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     for (int32_t idiot = 0; idiot < idiots; idiot++)
         neo.newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
     // neo.setflash(idiot, count, pulseh, pulsel, color=0xffffff, onbrit=0);
-    neo.setflash((int)LOST, 2, 1, 2, 0xffffff, 50); // err_sensor_fails[LOST]);  // make idiot light pulse to indicate failed sensor count            }
+    // neo.setflash((int)LOST, 2, 1, 2, 0xffffff, 50); // err_sensor_fails[LOST]);  // make idiot light pulse to indicate failed sensor count            }
     // neo.setflash((int)RANGE, 3, 2, 2, 0, 50);  // err_sensor_fails[RANGE]);  // make idiot light pulse to indicate failed sensor count            }
-    neo.setflash(2, 4, 4, 4, 0xa0a030, 5);  // should start constant strobe
-    neo.setflash(3, 3, 3, 3, 0, 0);  // should start constant strobe
+    // neo.setflash(2, 2, 8, 1, 0xffffff, 35);  // should start constant strobe
+    neo.setflash(5, 2, 1, 2, 0xffffff, 85);  // should start constant strobe
+    // neo.setflash(4, 16, 2, 2, 0, 0);  // should start constant strobe
     std::cout << "set up heartbeat led and " << idiots << " neopixel idiot lights" << std::endl;
 
     // Initialize sensor error flags to false
@@ -452,14 +470,8 @@ void loop() {
     }
     else if (speedo.car_stopped() || panicTimer.expired()) panic_stop = false;  // Cancel panic stop if car is stopped
     panic_stop_last = panic_stop;
-
+    neo_idiots_update();
     neo.heartbeat_update(((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]));  // Update our beating heart
-    for (int32_t idiot = 0; idiot < arraysize(idiotlights); idiot++) {
-        if (idiot <= neo.neopixelsAvailable())
-            if (*(idiotlights[idiot]) != idiotlasts[idiot]) neo.setBoolState(idiot, *idiotlights[idiot]);
-    }
-    // neo.setflash((int)LOST, err_sensor_fails[LOST], 1, 1); // );  // make idiot light pulse to indicate failed sensor count            }
-    // neo.setflash((int)RANGE, err_sensor_fails[RANGE], 2, 2, 0);  // );  // make idiot light pulse to indicate failed sensor count            }
     neo.update();
     loop_marktime ("-");
     screen.update();  // Display updates

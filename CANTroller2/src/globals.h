@@ -1,21 +1,17 @@
 #pragma once
-// #include <SdFat.h>  // SD card & FAT filesystem library
 #include <ESP32Servo.h>        // Makes PWM output to control motors (for rudimentary control of our gas and steering)
 #include <DallasTemperature.h>
 #include <Wire.h>
-#include "map.h"
 #include <Preferences.h>
 #include <iostream>
 #include <iomanip>  // For formatting console cout strings
-// #include "freertos/FreeRTOS.h"  // MCPWM pulse measurement code
-// #include "freertos/task.h"  // MCPWM pulse measurement code
-// #include "driver/mcpwm.h"  // MCPWM pulse measurement code
 #include "driver/rmt.h"
 #include "RMT_Input.h"
 #include "QPID.h" // This is quickpid library except i have to edit some of it
 #include "utils.h"
 #include "uictrl.h"
 #include "neo.h"
+#include "map.h"
 #include "devices.h"
 #include "temperature.h"
 
@@ -397,21 +393,6 @@ QPID cruise_pid(speedo.filt_ptr(), &tach_target_rpm, &speedo_target_mph,        
                 cruise_pid_period_us, QPID::Control::manual, QPID::Centmode::off);
 // QPID::centmode::centerStrict, (tach_govern_rpm + tach_idle_rpm)/2);  // period, more settings
 
-// Trouble codes
-uint32_t err_timeout_us = 175000;
-Timer errTimer((int64_t)err_timeout_us);
-uint32_t err_margin_adc = 5;
-bool err_temp_engine, err_temp_wheel;
-// Sensor related trouble - this all should be moved to devices.h
-enum err_types_sensor { LOST, RANGE, num_err_types };
-enum err_sensors { e_hrchorz, e_hrcvert, e_hrcch3, e_hrcch4, e_pressure, e_brkpos, e_speedo, e_tach, e_airflow, e_mapsens, e_temps, e_mulebatt, e_starter, e_basicsw, e_num_sensors };
-// enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, mulebatt, ignition, basicsw, cruisesw, starter, syspower };  // , num_sensors, err_flag };
-bool err_sensor_alarm[num_err_types] = { false, false };
-int8_t err_sensor_fails[num_err_types] = { 0, 0 };
-int8_t err_sensor_flashes[num_err_types] = { 0, 0 };  // [LOST/RANGE]
-int8_t err_sensor_posts[num_err_types] = { 0, 0 };  // [LOST/RANGE]
-bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_mulebatt/e_basicsw/e_starter]   // sensor::opt_t::num_sensors]
-
 void hotrc_toggle_update(int8_t chan) {                                                            //
     hotrc_us[chan][RAW] = hotrc_rmt[chan].readPulseWidth(true);
     hotrc_sw[chan] = (hotrc_us[chan][RAW] <= hotrc_us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  hotrc_us[CH3][CENT]
@@ -620,6 +601,23 @@ void loop_print_timing() {  // Call once each loop at the very end
     ++loop_now %= loop_history;
     loopno++;  // I like to count how many loops
 }
+
+// Trouble codes
+uint32_t err_timeout_us = 175000;
+Timer errTimer((int64_t)err_timeout_us);
+uint32_t err_margin_adc = 5;
+bool err_temp_engine, err_temp_wheel;
+// Sensor related trouble - this all should be moved to devices.h
+enum err_type { LOST, RANGE, CALIB, WARN, CRIT, INFO, num_err_types };
+enum err_sensor { e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, e_basicsw, e_mulebatt, e_airflow, e_mapsens, e_num_sensors, e_none };  // these are in order of priority
+char err_type_card[num_err_types][5] = { "Lost", "Rang", "Cal", "Warn", "Crit", "Info" };
+char err_sensor_card[e_num_sensors+1][7] = { "HrcV", "HrcCh3", "BrPres", "BrkPos", "Speedo", "HrcH", "Tach", "Temps", "Startr", "HrcCh4", "Basic", "Batery", "Airflw", "MAP", "None" };
+// enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, mulebatt, ignition, basicsw, cruisesw, starter, syspower };  // , num_sensors, err_flag };
+bool err_sensor_alarm[num_err_types] = { false, false, false, false, false, false };
+int8_t err_sensor_fails[num_err_types] = { 0, 0, 0, 0, 0, 0 };
+bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_mulebatt/e_basicsw/e_starter]   // sensor::opt_t::num_sensors]
+uint8_t highest_pri_failing_sensor[num_err_types];
+uint8_t highest_pri_failing_last[num_err_types];
 void detect_errors() {
     if (errTimer.expireset()) {
 
@@ -676,10 +674,12 @@ void detect_errors() {
         
         // printf ("Sensor check: ");
         for (int32_t t=LOST; t<=RANGE; t++) {
+            highest_pri_failing_sensor[t] = e_none;
             err_sensor_alarm[t] = false;
             err_sensor_fails[t] = 0;
             for (int32_t s=0; s<e_num_sensors; s++)
                 if (err_sensor[t][s]) {
+                    if (highest_pri_failing_sensor[t] = e_none) highest_pri_failing_sensor[t] = s;
                     err_sensor_alarm[t] = true;
                     err_sensor_fails[t]++;
                 }
@@ -730,6 +730,16 @@ void detect_errors() {
         //   C) Mule seems to be accelerating like a Tesla.
         //   D) Car is accelerating yet engine is at idle.
         // * The control system has nonsensical values in its variables.
+    }
+}
+void err_print_info() {
+    for (int32_t t=LOST; t<=INFO; t++) {
+        printf ("diag err: %s (%d): ", err_type_card[t], err_sensor_fails[t]);
+        for (int32_t s=0; s<=e_num_sensors; s++) {
+            if (s == e_num_sensors) s++;
+            if (err_sensor[t][s]) printf ("%s, ", err_sensor_card[s]);
+        }
+        printf("\n");
     }
 }
 // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
