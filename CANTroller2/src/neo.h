@@ -272,8 +272,8 @@ void neopixelstrip::setBoolState(uint8_t idiot, bool state) {
 }
 void neopixelstrip::setflash(uint8_t idiot, uint8_t count, uint8_t pulseh, uint8_t pulsel, uint32_t color, uint8_t onbrit) {
     fset[idiot][fcount] = count;
-    fset[idiot][fpulseh] = min(pulseh, 1);
-    fset[idiot][fpulsel] = min(pulsel, 1);
+    fset[idiot][fpulseh] = max(pulseh, 1);
+    fset[idiot][fpulsel] = max(pulsel, 1);
     fset[idiot][fonbrit] = onbrit;
     // fset[idiot][foffbrit] = hibright;
     // cidiot[idiot][cflash] = desaturate(dimmer(color_32b_to_Rgb(color), hibright + (fset[idiot][fonbrit] * (255 - hibright))/255), desat_of_ten);
@@ -282,12 +282,12 @@ void neopixelstrip::setflash(uint8_t idiot, uint8_t count, uint8_t pulseh, uint8
     // cidiot[idiot][cflashoff] = (fset[idiot][onoff]) ? cidiot[idiot][con], cidiot[idiot][coff];
     fevents[idiot] = 0;
     uint32_t filled = 0;
-    while (filled < fset[idiot][fcount] * (fset[idiot][fpulseh] + fset[idiot][fpulsel])) {    
-        for (uint8_t bt = 0; bt < fset[idiot][fpulseh]; bt++) {
-            fevents[idiot] |= (1 << (bt + filled));
-            filled++;
-        }
-        filled += fset[idiot][fpulsel];
+    uint8_t lstop = min(32, fset[idiot][fcount] * (fset[idiot][fpulseh] + fset[idiot][fpulsel]));
+    while (filled < lstop) {
+        for (uint8_t lbit = 0; lbit < fset[idiot][fpulsel]; lbit++)
+            if (filled < lstop) fevents[idiot] |= (0 << filled++);
+        for (uint8_t hbit = 0; hbit < fset[idiot][fpulseh]; hbit++)
+            if (filled < lstop) fevents[idiot] |= (1 << filled++);
     }
     // printf ("S i:%d v:%d nt:%ld ne:%d cn:0x%06x cw:0x%06x cl:0x%06x cf1:0x%06x cf0:0x%06x ev:0x%08x ph:%d pl:%d\n", idiot, fset[idiot][onoff], 0, 0,
     //     color_Rgb_to_32b(cidiot[idiot][cnormal]), color_Rgb_to_32b(cidiot[idiot][cnow]), color_Rgb_to_32b(cidiot[idiot][clast]), color_Rgb_to_32b(cidiot[idiot][cflash]), color_Rgb_to_32b(cidiot[idiot][cflashoff]),
@@ -306,8 +306,8 @@ void neopixelstrip::update() {
         colortype newnow = (fset[idiot][onoff]) ? cidiot[idiot][con] : cidiot[idiot][coff];
         if (!fset[idiot][fcount]) cidiot[idiot][cnow] = newnow;
         else cidiot[idiot][cnow] = ((fevents[idiot] >> nowepoch) & 1) ? cidiot[idiot][cflash] : newnow;
-        // if (idiot == 4 && (cidiot[idiot][clast] != cidiot[idiot][cnow])) {
-        //     printf ("U i:%d 01:%d flv:%d ct:%d, nt:%ld ne:%d cn:0x%06x cw:0x%06x cl:0x%06x cf1:0x%06x c1:0x%06x c0:0x%06x ev:0x%08x ph:%d pl:%d\n", idiot, fset[idiot][onoff], fset[idiot][fcount], ((fevents[idiot] >> nowepoch) & 1), nowtime_us, nowepoch,
+        // if (idiot != 9 && (cidiot[idiot][clast] != cidiot[idiot][cnow])) {
+        //     printf ("U i:%d 01:%d flv:%d ct:%d, nt:%ld ne:%d cn:0x%06x cw:0x%06x cl:0x%06x cf1:0x%06x c1:0x%06x c0:0x%06x ev:0x%08x ph:%d pl:%d\n", idiot, fset[idiot][onoff], ((fevents[idiot] >> nowepoch) & 1), fset[idiot][fcount],  nowtime_us, nowepoch,
         //         color_Rgb_to_32b(cidiot[idiot][cnormal]), color_Rgb_to_32b(cidiot[idiot][cnow]), color_Rgb_to_32b(cidiot[idiot][clast]), color_Rgb_to_32b(cidiot[idiot][cflash]), color_Rgb_to_32b(cidiot[idiot][con]), color_Rgb_to_32b(cidiot[idiot][coff]),
         //         fevents[idiot], fset[idiot][fpulseh], fset[idiot][fpulsel] );
         // }
