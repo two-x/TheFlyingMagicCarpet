@@ -637,21 +637,21 @@ void detect_errors() {
         else diag_ign_error_enabled = true;
 
         // different approach
+        if (!tempsens.detected(location::ambient)) err_sensor[LOST][e_temps] = true;
+        if (!tempsens.detected(location::engine)) err_sensor[LOST][e_temps] = true;
+        else if (tempsens.val(location::engine) >= temp_lims_f[ENGINE][WARNING]) err_temp_engine = true;
         bool check_wheels;
         check_wheels = false;
-        TemperatureSensor * temp_fl = tempsens.get_sensor(location::wheel_fl);
-        TemperatureSensor * temp_fr = tempsens.get_sensor(location::wheel_fr);
-        TemperatureSensor * temp_rl = tempsens.get_sensor(location::wheel_rl);
-        TemperatureSensor * temp_rr = tempsens.get_sensor(location::wheel_rr);
-        if (temp_fl != nullptr && temp_fl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-        if (temp_fr != nullptr && temp_fr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-        if (temp_rl != nullptr && temp_rl->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-        if (temp_rr != nullptr && temp_rr->get_temperature() >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+        if (!tempsens.detected(location::wheel_fl)) err_sensor[LOST][e_temps] = true;
+        else if (tempsens.val(location::wheel_fl) >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+        if (!tempsens.detected(location::wheel_fr)) err_sensor[LOST][e_temps] = true;
+        else if (tempsens.val(location::wheel_fr) >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+        if (!tempsens.detected(location::wheel_rl)) err_sensor[LOST][e_temps] = true;
+        else if (tempsens.val(location::wheel_rl) >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
+        if (!tempsens.detected(location::wheel_rr)) err_sensor[LOST][e_temps] = true;
+        else if (tempsens.val(location::wheel_rr) >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
         err_temp_wheel = check_wheels;
 
-        TemperatureSensor * temp_eng = tempsens.get_sensor(location::engine);
-        err_temp_engine = temp_eng != nullptr ? temp_eng->get_temperature() >= temp_lims_f[ENGINE][WARNING] : -999;
-        
         // Detect sensors disconnected or giving out-of-range readings.
         // TODO : The logic of this for each sensor should be moved to devices.h objects
         uint32_t val;

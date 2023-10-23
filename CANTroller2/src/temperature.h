@@ -299,4 +299,8 @@ public:
         if (!sens) return NAN;  // avoid crashing if undetected location is indicated
         return sens->get_temperature();
     }
+    bool detected(location locat) {
+        TemperatureSensor* sens = get_sensor(locat);  // ambient
+        return (bool)sens; 
+    }
 };

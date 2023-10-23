@@ -144,11 +144,11 @@ char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
     { brAk"Posn", "MuleBatt", "     Pot", "AirSpeed", "     MAP", "MasAirFl", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
     { "Pres ADC", __________, __________, __________, __________, "AirSpMax", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_CAR
-    { "BrakePWM", "SteerPWM", __________, stEr"Left", stEr"Stop", stEr"Rght", brAk"Extd", brAk"Stop", brAk"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
+    { "BrakePWM", "SteerPWM", __________, stEr"Left", stEr"Stop", stEr"Rigt", brAk"Extd", brAk"Stop", brAk"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
-    { "PresTarg", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", brAk"Motr", brAk"Pres", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_BPID
-    { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, "OpenLoop", "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_GPID
-    { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "  Kp (P)", "  Ki (I)", "  Kd (D)", },  // PG_CPID
+    { "PresTarg", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", brAk"Motr", brAk"Pres", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
+    { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, "OpenLoop", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
+    { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
     { "LoopFreq", "Loop Avg", "LoopPeak", __________, __________, __________, __________, "   Gamma", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
