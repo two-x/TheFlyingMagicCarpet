@@ -38,7 +38,7 @@ class neopixelstrip {
     colortype heartbeatColor, heartbeatNow, heartbeatColor_last;
     Timer debugtimer;
     bool breadboard = false;
-    enum ledset { onoff, fcount, fpulseh, fpulsel, foffbrit, fonbrit, fnumset };  // just a bunch of int variables needed for each of the neo idiot lights
+    enum ledset { onoff, fcount, fpulseh, fpulsel, fonbrit, fnumset };  // just a bunch of int variables needed for each of the neo idiot lights
     enum ledcolor { cnow, clast, cnormal, coff, con, cflash, cnumcolors };
     uint8_t fset[idiotcount][fnumset];
     colortype cidiot[idiotcount][cnumcolors];
@@ -275,7 +275,7 @@ void neopixelstrip::setflash(uint8_t idiot, uint8_t count, uint8_t pulseh, uint8
     fset[idiot][fpulseh] = min(pulseh, 1);
     fset[idiot][fpulsel] = min(pulsel, 1);
     fset[idiot][fonbrit] = onbrit;
-    fset[idiot][foffbrit] = hibright;
+    // fset[idiot][foffbrit] = hibright;
     // cidiot[idiot][cflash] = desaturate(dimmer(color_32b_to_Rgb(color), hibright + (fset[idiot][fonbrit] * (255 - hibright))/255), desat_of_ten);
     cidiot[idiot][cflash] = dimmer(color_32b_to_Rgb(color), hibright);
     cidiot[idiot][cflash] = desaturate(dimmer(cidiot[idiot][cflash], fset[idiot][fonbrit]), desat_of_ten);
