@@ -306,11 +306,11 @@ void neopixelstrip::update() {
         colortype newnow = (fset[idiot][onoff]) ? cidiot[idiot][con] : cidiot[idiot][coff];
         if (!fset[idiot][fcount]) cidiot[idiot][cnow] = newnow;
         else cidiot[idiot][cnow] = ((fevents[idiot] >> nowepoch) & 1) ? cidiot[idiot][cflash] : newnow;
-        if (idiot == 4 && (cidiot[idiot][clast] != cidiot[idiot][cnow])) {
-            printf ("U i:%d 01:%d flv:%d ct:%d, nt:%ld ne:%d cn:0x%06x cw:0x%06x cl:0x%06x cf1:0x%06x c1:0x%06x c0:0x%06x ev:0x%08x ph:%d pl:%d\n", idiot, fset[idiot][onoff], fset[idiot][fcount], ((fevents[idiot] >> nowepoch) & 1), nowtime_us, nowepoch,
-                color_Rgb_to_32b(cidiot[idiot][cnormal]), color_Rgb_to_32b(cidiot[idiot][cnow]), color_Rgb_to_32b(cidiot[idiot][clast]), color_Rgb_to_32b(cidiot[idiot][cflash]), color_Rgb_to_32b(cidiot[idiot][con]), color_Rgb_to_32b(cidiot[idiot][coff]),
-                fevents[idiot], fset[idiot][fpulseh], fset[idiot][fpulsel] );
-        }
+        // if (idiot == 4 && (cidiot[idiot][clast] != cidiot[idiot][cnow])) {
+        //     printf ("U i:%d 01:%d flv:%d ct:%d, nt:%ld ne:%d cn:0x%06x cw:0x%06x cl:0x%06x cf1:0x%06x c1:0x%06x c0:0x%06x ev:0x%08x ph:%d pl:%d\n", idiot, fset[idiot][onoff], fset[idiot][fcount], ((fevents[idiot] >> nowepoch) & 1), nowtime_us, nowepoch,
+        //         color_Rgb_to_32b(cidiot[idiot][cnormal]), color_Rgb_to_32b(cidiot[idiot][cnow]), color_Rgb_to_32b(cidiot[idiot][clast]), color_Rgb_to_32b(cidiot[idiot][cflash]), color_Rgb_to_32b(cidiot[idiot][con]), color_Rgb_to_32b(cidiot[idiot][coff]),
+        //         fevents[idiot], fset[idiot][fpulseh], fset[idiot][fpulsel] );
+        // }
     }
     refresh();
         // for (int32_t idiot=0; idiot<idiotcount; idiot++) 
