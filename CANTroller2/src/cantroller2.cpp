@@ -122,6 +122,11 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     int32_t idiots = min((uint32_t)arraysize(idiotlights), neo.neopixelsAvailable());
     for (int32_t idiot = 0; idiot < idiots; idiot++)
         neo.newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
+    neo.setflash((int)LOST, 2, 2, 3, 0xffffff, 200); // err_sensor_fails[LOST]);  // make idiot light pulse to indicate failed sensor count            }
+    neo.setflash((int)RANGE, 4, 4, 4, 0, 255);  // err_sensor_fails[RANGE]);  // make idiot light pulse to indicate failed sensor count            }
+    neo.setflash(2, 4, 5, 5, 0x0000ff, 255);  // should start constant strobe
+    neo.setflash(3, 32, 2, 2);  // should start constant strobe
+
     std::cout << "set up heartbeat led and " << idiots << " neopixel idiot lights" << std::endl;
 
     // Initialize sensor error flags to false
@@ -453,12 +458,8 @@ void loop() {
         if (idiot <= neo.neopixelsAvailable())
             if (*(idiotlights[idiot]) != idiotlasts[idiot]) neo.setBoolState(idiot, *idiotlights[idiot]);
     }
-
-
-    neo.setflash(LOST, 2, 1, 1); // err_sensor_fails[LOST]);  // make idiot light pulse to indicate failed sensor count            }
-    neo.setflash(RANGE, 1, 2, 2, 0);  // err_sensor_fails[RANGE]);  // make idiot light pulse to indicate failed sensor count            }
-    neo.setflash(2, 1, 3, 0x0000ff, 255);  // should start constant strobe
-    neo.setflash(3, 1);  // should start constant strobe
+    // neo.setflash((int)LOST, err_sensor_fails[LOST], 1, 1); // );  // make idiot light pulse to indicate failed sensor count            }
+    // neo.setflash((int)RANGE, err_sensor_fails[RANGE], 2, 2, 0);  // );  // make idiot light pulse to indicate failed sensor count            }
     neo.update();
     loop_marktime ("-");
     screen.update();  // Display updates
