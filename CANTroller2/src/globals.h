@@ -740,7 +740,7 @@ float massairflow(float _map = NAN, float _airflow = NAN, float _ambient = NAN) 
         if (std::isnan(temp) && running_on_devboard) temp = tempsens.val(location::engine);
         if (std::isnan(temp)) return -1;  // Avoid crashing due to trying to read absent sensor
     }
-    float T = 0.556 * (temp - 32) + 273.15;  // in K.  This converts from degF to K
+    float T = 0.556 * (temp - 32.0) + 273.15;  // in K.  This converts from degF to K
     float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
     float v = 0.447 * std::isnan(_airflow) ? airflow.filt() : _airflow; // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
     float Ain2 = 3.1415926;  // in in2    1.0^2 in2 * pi  // will still need to divide by 1550 in2/m2
