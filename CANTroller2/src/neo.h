@@ -30,7 +30,7 @@ class neopixelstrip {
     uint32_t neobright_last;
     int32_t heartbeat_state = 0;
     int32_t heartbeat_level = 0;
-    int64_t heartbeat_ekg_us[4] = {250000, 200000, 620000, 2000000};  // {187500, 125000, 562500, 1250000};
+    int64_t heartbeat_ekg_us[4] = {250000, 240000, 620000, 2000000};  // {187500, 125000, 562500, 1250000};
     int32_t heartbeat_pulse = 255;
     static const uint8_t idiotcount = 7;
     static const uint8_t numpixels = 1 + idiotcount;  //  + extIdiotCount;  // 15 pixels = heartbeat RGB + 7 onboard RGB + 7 external RGBW
@@ -42,11 +42,15 @@ class neopixelstrip {
     enum ledcolor { cnow, clast, cnormal, coff, con, cflash, cnumcolors };
     uint8_t fset[idiotcount][fnumset];
     colortype cidiot[idiotcount][cnumcolors];
-    uint32_t fquantum_us = 75000;  // time resolution of flashes
-    // uint32_t fevmask[idiotcount]; 
-    uint32_t fevents[idiotcount];
-    uint32_t nowtime_us, nowepoch;  // , fevmask_master;
+    uint32_t fquantum_us = 55000;  // time resolution of flashes
+    // uint32_t fevmask[idiotcount]; fevfilled
+    static const uint8_t fevresolution = 96;
+    static const uint8_t fevpages = 3;  // fevresolution / 32;  <- but if I use that math instead, seg fault
+    uint32_t fevents[idiotcount][fevpages];
+    // uint64_t fevents[idiotcount];
+    uint8_t fevcurrpage = 0; uint8_t fevfilled = 0; uint32_t nowtime_us, nowepoch;  // , fevmask_master;
     Timer flashtimer;
+    // bool idiot_off_flashing = false;  // Will auto stop flashing if idiot light is off (unless flash color is black)
     // setflash(idiot, fcount, fperiod=1, fpulsew=1, foffbrit=0, fonbrit=0): set args, cflashoff, cflash, fevents, fevmask. calc/set cflashoff & cflash
     // update(): update() idiots, refresh
     // update_idiot(idiot): calc nowtime, if fcount=0, set now=coff/con else lookup in fevents/fevmasks and set to cflash/cflashoff
@@ -64,6 +68,8 @@ class neopixelstrip {
     colortype desaturate(colortype color, int32_t _desat_of_ten);  // desat_pc=0 has no effect, =10 desaturates all the way to greyscale, =-99 saturates to max. without change in brightness
     colortype hue_to_rgb(uint8_t hue);
     void recolor_idiots(int8_t argidiot = -1);
+    bool fevpop(uint8_t idiot, int8_t pop_off);
+    void fevpush(uint8_t idiot, int8_t push_off, bool push_val);
     // struct hsv { float h; float s; float v; };
     // uint32_t rgb_to_hsv(uint32_t rgb);
     // hsv rgb_to_hsv(uint8_t r, uint8_t g, uint8_t b);
@@ -195,7 +201,7 @@ void neopixelstrip::init(uint8_t argpin, bool argbreadboard, bool viewcontext) {
     neoHeartbeatTimer.set(heartbeat_ekg_us[3]);
     neoFadeTimer.set((int64_t)neo_fade_timeout_us);
     std::cout << "refresh strip.. ";
-    flashtimer.set(fquantum_us * 32);
+    flashtimer.set(fquantum_us * fevresolution);
     refresh();
     std::cout << std::endl;
 }
@@ -259,7 +265,7 @@ bool neopixelstrip::newIdiotLight(uint8_t idiot, uint16_t color565, bool startbo
     cidiot[idiot][clast] = color_32b_to_Rgb(0);
     fset[idiot][fcount] = 0;
     setBoolState(idiot, startboolstate);
-    fevents[idiot] = 0;
+    for (uint8_t pg = 0; pg < fevpages; pg++) fevents[idiot][pg] = 0;
     recolor_idiots(idiot);
     // updateidiot(idiot);
     // printf ("N i:%d v:%d nt:%ld ne:%d cn:0x%06x cw:0x%06x cl:0x%06x cf1:0x%06x cf0:0x%06x ev:0x%08x ph:%d pl:%d\n", idiot, fset[idiot][onoff], 0, 0,
@@ -269,6 +275,14 @@ bool neopixelstrip::newIdiotLight(uint8_t idiot, uint16_t color565, bool startbo
 void neopixelstrip::setBoolState(uint8_t idiot, bool state) {
     fset[idiot][onoff] = state;
     // cidiot[idiot][cflashoff] = (fset[idiot][onoff]) ? cidiot[idiot][con], cidiot[idiot][coff];
+}
+bool neopixelstrip::fevpop(uint8_t idiot, int8_t pop_off) {
+    int8_t page = pop_off / 32;
+    return (fevents[idiot][page] >> (pop_off - 32 * page)) & 1;  // pop a bit off the stack and return it
+}
+void neopixelstrip::fevpush(uint8_t idiot, int8_t push_off, bool push_val) {
+    int8_t page = push_off / 32;
+    fevents[idiot][page] |= (push_val << (push_off - 32 * page));
 }
 void neopixelstrip::setflash(uint8_t idiot, uint8_t count, uint8_t pulseh, uint8_t pulsel, uint32_t color, uint8_t onbrit) {
     fset[idiot][fcount] = count;
@@ -280,14 +294,14 @@ void neopixelstrip::setflash(uint8_t idiot, uint8_t count, uint8_t pulseh, uint8
     cidiot[idiot][cflash] = dimmer(color_32b_to_Rgb(color), hibright);
     cidiot[idiot][cflash] = desaturate(dimmer(cidiot[idiot][cflash], fset[idiot][fonbrit]), desat_of_ten);
     // cidiot[idiot][cflashoff] = (fset[idiot][onoff]) ? cidiot[idiot][con], cidiot[idiot][coff];
-    fevents[idiot] = 0;
-    uint32_t filled = 0;
-    uint8_t lstop = min(32, fset[idiot][fcount] * (fset[idiot][fpulseh] + fset[idiot][fpulsel]));
+    for (uint8_t pg = 0; pg < fevpages; pg++) fevents[idiot][pg] = 0;
+    uint8_t filled = 0;
+    uint8_t lstop = min(fevresolution, fset[idiot][fcount] * (fset[idiot][fpulseh] + fset[idiot][fpulsel]));
     while (filled < lstop) {
-        for (uint8_t lbit = 0; lbit < fset[idiot][fpulsel]; lbit++)
-            if (filled < lstop) fevents[idiot] |= (0 << filled++);
         for (uint8_t hbit = 0; hbit < fset[idiot][fpulseh]; hbit++)
-            if (filled < lstop) fevents[idiot] |= (1 << filled++);
+            if (filled < lstop) fevpush(idiot, filled++, 1);
+        for (uint8_t lbit = 0; lbit < fset[idiot][fpulsel]; lbit++)
+            if (filled < lstop) fevpush(idiot, filled++, 0); 
     }
     // printf ("S i:%d v:%d nt:%ld ne:%d cn:0x%06x cw:0x%06x cl:0x%06x cf1:0x%06x cf0:0x%06x ev:0x%08x ph:%d pl:%d\n", idiot, fset[idiot][onoff], 0, 0,
     //     color_Rgb_to_32b(cidiot[idiot][cnormal]), color_Rgb_to_32b(cidiot[idiot][cnow]), color_Rgb_to_32b(cidiot[idiot][clast]), color_Rgb_to_32b(cidiot[idiot][cflash]), color_Rgb_to_32b(cidiot[idiot][cflashoff]),
@@ -299,17 +313,22 @@ void neopixelstrip::setflash(uint8_t idiot, uint8_t count, uint8_t pulseh, uint8
 //     cidiot[idiot][cflashoff] = desaturate(dimmer(cidiot[idiot][cnormal], fset[idiot][foffbrit]), desat_of_ten);
 // }
 void neopixelstrip::update() {
+    bool pop;
     nowtime_us = (uint32_t)flashtimer.elapsed();
     nowepoch = nowtime_us / fquantum_us;
     for (int32_t idiot=0; idiot<idiotcount; idiot++) {
         cidiot[idiot][clast] = cidiot[idiot][cnow];
         colortype newnow = (fset[idiot][onoff]) ? cidiot[idiot][con] : cidiot[idiot][coff];
-        if (!fset[idiot][fcount]) cidiot[idiot][cnow] = newnow;
-        else cidiot[idiot][cnow] = ((fevents[idiot] >> nowepoch) & 1) ? cidiot[idiot][cflash] : newnow;
+        if (!fset[idiot][fcount])  // || !(idiot_off_flashing || (color_Rgb_to_32b(cidiot[idiot][cflash]) == 0)))
+            cidiot[idiot][cnow] = newnow;
+        else {
+            pop = fevpop(idiot, nowepoch);
+            cidiot[idiot][cnow] = pop ? cidiot[idiot][cflash] : newnow;
+        }
         // if (idiot != 9 && (cidiot[idiot][clast] != cidiot[idiot][cnow])) {
-        //     printf ("U i:%d 01:%d flv:%d ct:%d, nt:%ld ne:%d cn:0x%06x cw:0x%06x cl:0x%06x cf1:0x%06x c1:0x%06x c0:0x%06x ev:0x%08x ph:%d pl:%d\n", idiot, fset[idiot][onoff], ((fevents[idiot] >> nowepoch) & 1), fset[idiot][fcount],  nowtime_us, nowepoch,
+        //     printf ("U i:%d 01:%d pop:%d ct:%d, nt:%ld ne:%d cn:0x%06x cw:0x%06x cl:0x%06x cf1:0x%06x c1:0x%06x c0:0x%06x evH:0x%08x ev2:0x%08x ev1:0x%08x evL:0x%08x ph:%d pl:%d\n", idiot, fset[idiot][onoff], pop, fset[idiot][fcount],  nowtime_us, nowepoch,
         //         color_Rgb_to_32b(cidiot[idiot][cnormal]), color_Rgb_to_32b(cidiot[idiot][cnow]), color_Rgb_to_32b(cidiot[idiot][clast]), color_Rgb_to_32b(cidiot[idiot][cflash]), color_Rgb_to_32b(cidiot[idiot][con]), color_Rgb_to_32b(cidiot[idiot][coff]),
-        //         fevents[idiot], fset[idiot][fpulseh], fset[idiot][fpulsel] );
+        //         fevents[idiot][3], fevents[idiot][2], fevents[idiot][1], fevents[idiot][0], fset[idiot][fpulseh], fset[idiot][fpulsel] );
         // }
     }
     refresh();
