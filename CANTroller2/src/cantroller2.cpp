@@ -44,7 +44,6 @@ void neo_idiots_update() {
         }
     }
 }
-
 void setup() {  // Setup just configures pins (and detects touchscreen type)
     if (RUN_TESTS) run_tests();   
     set_pin (tft_dc_pin, OUTPUT);
