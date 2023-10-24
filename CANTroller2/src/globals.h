@@ -19,20 +19,20 @@
 bool flip_the_screen = true;
 // #define pinout_bm2023  // uncomment this to get pin assignments for old control box
 
-#define bootbutton_pin 0        // (button0 / bootstrap high) - This is the "Boot" button on the esp32 board. Active low (existing onboard pullup)#define steer_enc_a_pin 1       // (adc) - Reserved for a steering quadrature encoder. Encoder "A" signal
+#define bootbutton_pin 0        // (button0 / bootstrap high) - This is the "Boot" button on the esp32 board. Active low (existing onboard pullup)
 #define steer_enc_a_pin 1       // (adc1ch0) - Reserved for a steering quadrature encoder. Encoder "A" signal
 #define steer_enc_b_pin 2       // (adc1ch1) - Reserved for a steering quadrature encoder. Encoder "B" signal
-#define tft_dc_pin 3            // (adc1ch2 / strap X) - Output, Assert when sending data to display chip to indicate commands vs. screen data
+#define tft_dc_pin 3            // (adc1ch2 / strap X) - Output, Assert when sending data to display chip to indicate commands vs. screen data - ! pin is also defined in tft_setup.h
 #define mulebatt_pin 4          // (adc1ch3) - Analog input, battery voltage sense, full scale is 16V
 #define pot_wipe_pin 5          // (adc1ch4) - Analog in from 20k pot
 #define brake_pos_pin 6         // (adc1ch5) - Analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
 #define pressure_pin 7          // (adc1ch6) - Analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V.
 #define i2c_sda_pin 8           // (i2c0 sda / adc1ch7) - i2c bus for airspeed/map sensors, lighting board, cap touchscreen
 #define i2c_scl_pin 9           // (i2c0 scl / adc1ch8) - i2c bus for airspeed/map sensors, lighting board, cap touchscreen
-#define tft_cs_pin 10           // (spi0 cs / adc1ch9) - Output, active low, Chip select allows ILI9341 display chip use of the SPI bus
-#define spi_mosi_pin 11         // (spi0 mosi / adc2ch0) - Used as spi interface data for touchscreen, sd card and tft screen
-#define spi_sclk_pin 12         // (spi0 sclk / adc2ch1) - Used as spi interface clock for touchscreen, sd card and tft screen
-#define spi_miso_pin 13         // (spi0 miso / adc2ch2) - Used as spi interface data from sd card and possibly (?) tft screen
+#define tft_cs_pin 10           // (spi0 cs / adc1ch9) - Output, active low, Chip select allows ILI9341 display chip use of the SPI bus - ! pin is also defined in tft_setup.h
+#define spi_mosi_pin 11         // (spi0 mosi / adc2ch0) - Used as spi interface data for touchscreen, sd card and tft screen - ! pin is also defined in tft_setup.h
+#define spi_sclk_pin 12         // (spi0 sclk / adc2ch1) - Used as spi interface clock for touchscreen, sd card and tft screen - ! pin is also defined in tft_setup.h
+#define spi_miso_pin 13         // (spi0 miso / adc2ch2) - Used as spi interface data from sd card and possibly (?) tft screen - ! pin is also defined in tft_setup.h
 #define hotrc_ch2_vert_pin 14   // (pwm0 / adc2ch3) - Hotrc Ch2 bidirectional trigger input
 #define hotrc_ch1_horz_pin 15   // (pwm1 / adc2ch4) - Hotrc Ch1 thumb joystick input
 #define gas_pwm_pin 16          // (pwm1 / adc2ch5) - Output, PWM signal duty cycle controls throttle target. On Due this is the pin labeled DAC1 (where A13 is on Mega)
@@ -51,10 +51,10 @@ bool flip_the_screen = true;
 #define encoder_sw_pin 42       // Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
 #define uart_tx_pin 43          // "TX" (uart0 tx) - Serial monitor data out. Also used to detect devboard vs. pcb at boot time (using pullup/pulldown, see below)
 #define uart_rx_pin 44          // "RX" (uart0 rx) - Serial monitor data in. Maybe could repurpose during runtime since we only need outgoing console data?
-#define ignition_pin 45          // (bootstrap low) - Output for Hotrc to a relay to kill the car ignition. Note, Joystick ign button overrides this if connected and pressed
+#define ignition_pin 45         // (bootstrap low) - Output for Hotrc to a relay to kill the car ignition. Note, Joystick ign button overrides this if connected and pressed
 #define syspower_pin 46         // (bootstrap low) - Output, flips a relay to power all the tranducers. This is actually the neopixel pin on all v1.1 devkit boards.
-#define touch_cs_pin 47         // Output, chip select for resistive touchscreen, active low
-#define neopixel_pin 48         // (rgb led) - Data line to onboard Neopixel WS281x (on all v1 devkit boards - pin 38 is used on v1.1 boards). Also used for onboard and external neopoxels
+#define touch_cs_pin 47         // Output, chip select for resistive touchscreen, active low - ! pin is also defined in tft_setup.h
+#define neopixel_pin 48         // (rgb led) - Data line to onboard Neopixel WS281x (on all v1 devkit boards - pin 38 is used on v1.1 boards). Also used for onboard and external neopoxels - ! pin is also defined in neo.h
 
 #ifdef pinout_bm2023            // Swapped these signals from pins below (bm2023) to above (bm2024)
     #define tach_pin 36   // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup) - Note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
