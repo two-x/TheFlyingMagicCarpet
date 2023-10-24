@@ -1,12 +1,12 @@
 #pragma once
-// This is a setup file from the TFT_eSPI library, with edits for our setup.
-// Whenever the library is first installed or updated, to make it include this you need
-// to edit the following file (within the library package):
-// <project-dir>/.pio/libdeps/esp32-s3-devkitc-1-n8/TFT_eSPI/User_Setup_Select.h
+// This file contains settings for the TFT_eSPI library. It is necessary to edit one of the
+// library files to source this, or the display wont work. The edit must be redone for any new
+// environment installation or any time the library gets updated.  Here is the edit:
 //
-// Make this edit:
-// #include <User_Setup.h>                // Replace this line 
-// #include <../../../../src/tftsetup.h>  // with this one
+// Open this file ->  <project-dir>/.pio/libdeps/esp32-s3-devkitc-1-n8/TFT_eSPI/User_Setup_Select.h
+//
+// #include <User_Setup.h>                // <- Replace this line 
+// #include <../../../../src/tftsetup.h>  // <- with this one
 
 // User defined information reported by "Read_User_Setup" test & diagnostics example
 #define USER_SETUP_INFO "FlyingCarpet"
@@ -29,7 +29,7 @@
 // #define TFT_BACKLIGHT_ON HIGH  // Level to turn ON back-light (HIGH or LOW)
 
 // ###### EDIT THE PIN NUMBERS IN THE LINES FOLLOWING TO SUIT YOUR ESP32 SETUP   ######
-// For ESP32 Dev board (only tested with ILI9341 display). The hardware SPI can be mapped to any pins
+// For ESP32 Dev board (only tested with ILI9341 display). The hardware SPI can map to any pins
 #define TFT_MISO 13
 #define TFT_MOSI 11
 #define TFT_SCLK 12
@@ -38,7 +38,6 @@
 // #define TFT_RST   4  // Reset pin (could connect to RST pin)
 #define TFT_RST  -1  // Set TFT_RST to -1 if display RESET is connected to ESP32 board RST
 #define TOUCH_CS 47     // Chip select pin (T_CS) of touch screen  - Soren:  was 39 before I changed that
-//#define TFT_WR 22    // Write strobe for modified Raspberry Pi TFT only
 
 // The ESP32 and TFT the pins used for testing are:
 //#define TFT_CS   33  // Chip select control pin (library pulls permanently low
