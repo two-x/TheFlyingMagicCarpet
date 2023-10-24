@@ -17,16 +17,16 @@ ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
 
 // void update_saver(void* parameter) { while (1) { screen.saver_update(); delay(10); } }  // Struggles, choppy, crashes, etc. as task
 TouchScreen touch(touch_cs_pin, touch_irq_pin);
-#define RUN_TESTS 0
+#define RUN_TESTS 1
 #if RUN_TESTS
-#include "tests.h"
-void run_tests() {
+    #include "tests.h"
+    void run_tests() {
         printf("Running tests...\n");
         delay(5000);
         test_Param();
         printf("Tests complete.\n");
         for(;;) {} // loop forever
-}
+    }
 #else
     void run_tests() {}
 #endif
