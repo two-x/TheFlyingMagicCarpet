@@ -37,7 +37,7 @@
 #define TFT_DC    3  // Data Command control pin
 // #define TFT_RST   4  // Reset pin (could connect to RST pin)
 #define TFT_RST  -1  // Set TFT_RST to -1 if display RESET is connected to ESP32 board RST
-#define TOUCH_CS 39     // Chip select pin (T_CS) of touch screen
+#define TOUCH_CS 47     // Chip select pin (T_CS) of touch screen  - Soren:  was 39 before I changed that
 //#define TFT_WR 22    // Write strobe for modified Raspberry Pi TFT only
 
 // The ESP32 and TFT the pins used for testing are:
@@ -80,15 +80,15 @@
 // #define SPI_FREQUENCY   5000000
 // #define SPI_FREQUENCY  10000000
 // #define SPI_FREQUENCY  20000000
-//#define SPI_FREQUENCY  27000000  // Soren: This was the default setting
+//#define SPI_FREQUENCY  27000000  // Soren: This was the default setting. Screen saver loops around ~22-24ms
 // #define SPI_FREQUENCY  40000000
 // #define SPI_FREQUENCY  55000000 // STM32 SPI1 only (SPI2 maximum is 27MHz)
-// #define SPI_FREQUENCY  80000000
-#define SPI_FREQUENCY  60000000  // Soren: I invented this one, b/c 80MHz didn't work. This runs screen saver 20-25% faster!
+#define SPI_FREQUENCY  60000000  // Soren: I invented this one, it works, seems to be stable. Screen saver loops at ~16-17ms
+// #define SPI_FREQUENCY  75000000  // Soren: I invented this one, run ok when i tried it.  Screen saver loops at ~15-16ms
+// #define SPI_FREQUENCY  80000000  // Soren: tested this once, screen doesn't start up on my breadboard.
 
 // Optional reduced SPI frequency for reading TFT
 #define SPI_READ_FREQUENCY  20000000
-
 // The XPT2046 requires a lower SPI clock rate of 2.5MHz so we define that here:
 #define SPI_TOUCH_FREQUENCY  2500000
 
