@@ -180,8 +180,7 @@ uint8_t unitmaps[5][17] = {  // 17x7-pixel bitmaps to represent units that use s
     { 0x1e, 0x02, 0x00, 0x7e, 0x12, 0x0c, 0x00, 0x1e, 0x02, 0x1c, 0x02, 0x1c, 0x40, 0x3c, 0x02, 0x58, 0x74, },  // rpm/s (or rot/m*s) - rate of change of engine rpm
     { 0x04, 0x02, 0x7f, 0x02, 0x04, 0x00, 0x10, 0x20, 0x7f, 0x20, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // scroll arrows - to indicate multiple choice
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3e, 0x00, 0x00, 0x1c, 0x22, 0x22, 0x1c, 0x00, 0x00, },  // 0/1 - to indicate binary value
-};
-
+};  // These bitmaps are in the same format as the idiot light bitmaps, described below
 bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, sim.enabled_ptr(), &running_on_devboard };
 char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
 uint16_t idiotcolors[arraysize(idiotlights)];
@@ -216,6 +215,7 @@ void set_idiotcolors() {
         idiots_dirty = true;
     }
 }
+
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
@@ -314,6 +314,7 @@ class Display {
             for (int32_t row=0; row<arraysize (disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
             for (int32_t row=0; row<arraysize (disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
             yield();
+            // set_runmodecolors();
             disp.fillScreen (BLK);  // Black out the whole screen
             draw_touchgrid (false);
             draw_fixed (dataset_page, dataset_page_last, false);
@@ -346,7 +347,16 @@ class Display {
             else tft_reset();
         }
         bool get_reset_finished() { return reset_finished; }
-
+        void set_runmodecolors() {
+            uint8_t saturat = 255;  uint8_t hue_offset = 0;
+            for (int32_t rm=0; rm<arraysize(colorcard); rm++) {
+                int division = num_runmodes;
+                uint32_t color32 = hsv_to_rgb((int8_t)(255 * (rm % division) / division + hue_offset), saturat, 255, 0, 220);
+                colorcard[rm] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
+                if (gamma_correct_enabled) colorcard[rm] = gamma16(colorcard[rm]);
+                disp_runmode_dirty = true;
+            }
+        }
         void draw_bargraph_base (int32_t corner_x, int32_t corner_y, int32_t width) {  // draws a horizontal bargraph scale.  124, y, 40
             disp.drawFastHLine (corner_x+disp_bargraph_squeeze, corner_y, width-disp_bargraph_squeeze*2, GRY1);
             for (int32_t offset=0; offset<=2; offset++) disp.drawFastVLine ((corner_x+disp_bargraph_squeeze)+offset*(width/2 - disp_bargraph_squeeze), corner_y-1, 3, WHT);

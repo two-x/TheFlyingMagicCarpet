@@ -130,7 +130,7 @@ RMTInput hotrc_rmt[4] = {
 // HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
 
 // run state machine related
-enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL };
+enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, num_runmodes };
 bool running_on_devboard = false;  // will overwrite with value read thru pull resistor on tx pin at boot
 runmodes runmode = SHUTDOWN;
 runmodes disp_oldmode = SHUTDOWN;   // So we can tell when the mode has just changed. start as different to trigger_mode start algo
