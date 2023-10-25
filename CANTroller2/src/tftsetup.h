@@ -26,7 +26,7 @@
 // needs to know if the LEDs are ON with the pin HIGH or LOW. If the LEDs are to be
 // driven with a PWM signal or turned OFF/ON then this must be handled by user code
 // #define TFT_BL   32            // LED back-light control pin
-// #define TFT_BACKLIGHT_ON HIGH  // Level to turn ON back-light (HIGH or LOW)
+#define TFT_BACKLIGHT_ON HIGH  // Level to turn ON back-light (HIGH or LOW)
 
 // ###### EDIT THE PIN NUMBERS IN THE LINES FOLLOWING TO SUIT YOUR ESP32 SETUP   ######
 // For ESP32 Dev board (only tested with ILI9341 display). The hardware SPI can map to any pins
@@ -38,21 +38,6 @@
 // #define TFT_RST   4  // Reset pin (could connect to RST pin)
 #define TFT_RST  -1  // Set TFT_RST to -1 if display RESET is connected to ESP32 board RST
 #define TOUCH_CS 47     // Chip select pin (T_CS) of touch screen  - Soren:  was 39 before I changed that
-
-// The ESP32 and TFT the pins used for testing are:
-//#define TFT_CS   33  // Chip select control pin (library pulls permanently low
-//#define TFT_DC   15  // Data Command control pin - must use a pin in the range 0-31
-//#define TFT_RST  32  // Reset pin, toggles on startup
-//#define TFT_WR    4  // Write strobe control pin - must use a pin in the range 0-31
-//#define TFT_RD    2  // Read strobe control pin
-//#define TFT_D0   12  // Must use pins in the range 0-31 for the data bus
-//#define TFT_D1   13  // so a single register write sets/clears all bits.
-//#define TFT_D2   26  // Pins can be randomly assigned, this does not affect
-//#define TFT_D3   25  // TFT screen update performance.
-//#define TFT_D4   17
-//#define TFT_D5   16
-//#define TFT_D6   27
-//#define TFT_D7   14
 
 // Section 3. Define the fonts that are to be used here
 // Comment out the #defines below with // to stop that font being loaded
@@ -66,35 +51,28 @@
 #define LOAD_FONT6  // Font 6. Large 48 pixel font, needs ~2666 bytes in FLASH, only characters 1234567890:-.apm
 #define LOAD_FONT7  // Font 7. 7 segment 48 pixel font, needs ~2438 bytes in FLASH, only characters 1234567890:-.
 #define LOAD_FONT8  // Font 8. Large 75 pixel font needs ~3256 bytes in FLASH, only characters 1234567890:-.
-//#define LOAD_FONT8N // Font 8. Alternative to Font 8 above, slightly narrower, so 3 digits fit a 160 pixel TFT
+// #define LOAD_FONT8N // Font 8. Alternative to Font 8 above, slightly narrower, so 3 digits fit a 160 pixel TFT
 #define LOAD_GFXFF  // FreeFonts. Include access to the 48 Adafruit_GFX free fonts FF1 to FF48 and custom fonts
 // Comment out the #define below to stop the SPIFFS filing system and smooth font code being loaded - saves ~20kbytes FLASH
 #define SMOOTH_FONT
 
 // Section 4. Other options
-// Define the SPI clock frequency, this affects the graphics rendering speed. Too
-// fast and the TFT driver will not keep up and display corruption appears.
-// With an ILI9341 display 40MHz works OK, 80MHz sometimes fails
-// #define SPI_FREQUENCY   1000000
-// #define SPI_FREQUENCY   5000000
-// #define SPI_FREQUENCY  10000000
-// #define SPI_FREQUENCY  20000000
-//#define SPI_FREQUENCY  27000000  // Soren: This was the default setting. Screen saver loops around ~22-24ms
-// #define SPI_FREQUENCY  40000000
-// #define SPI_FREQUENCY  55000000 // STM32 SPI1 only (SPI2 maximum is 27MHz)
-#define SPI_FREQUENCY  60000000  // Soren: I invented this one, it works, seems to be stable. Screen saver loops at ~16-17ms
-// #define SPI_FREQUENCY  75000000  // Soren: I invented this one, run ok when i tried it.  Screen saver loops at ~15-16ms
-// #define SPI_FREQUENCY  80000000  // Soren: tested this once, screen doesn't start up on my breadboard.
+// Define the SPI clock frequency, this affects the graphics rendering speed. Too fast and the TFT driver will not keep
+// up and display corruption appears. With an ILI9341 display 40MHz works OK, 80MHz sometimes fails
+// Soren: default was 27MHz (27000000). I tested up to 75MHz successfully, but 80MHz failed.  40MHz is used by ESP32-S3 example
+#define SPI_FREQUENCY  40000000  // Soren: Used by ILI9341_ESP32.h under User_Setups folder in the library
 
 // Optional reduced SPI frequency for reading TFT
-#define SPI_READ_FREQUENCY  20000000
+// Soren: Default was 2MHz (2000000)
+#define SPI_READ_FREQUENCY  16000000  // Soren: Taken from ILI9341_ESP32.h under User_Setups folder in the library
+
 // The XPT2046 requires a lower SPI clock rate of 2.5MHz so we define that here:
 #define SPI_TOUCH_FREQUENCY  2500000
 
 // The ESP32 has 2 free SPI ports i.e. VSPI and HSPI, the VSPI is the default.
 // If the VSPI port is in use and pins are not accessible (e.g. TTGO T-Beam)
 // then uncomment the following line:
-//#define USE_HSPI_PORT
+// #define USE_HSPI_PORT
 
 // Comment out the following #define if "SPI Transactions" do not need to be
 // supported. When commented out the code size will be smaller and sketches will

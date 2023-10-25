@@ -7,7 +7,7 @@
 #include <iomanip>  // For formatting console cout strings
 #include "driver/rmt.h"
 #include "RMT_Input.h"
-#include "QPID.h" // This is quickpid library except i have to edit some of it
+#include "qpid.h" // This is quickpid library except i have to edit some of it
 #include "utils.h"
 #include "uictrl.h"
 #include "neo.h"
@@ -102,8 +102,8 @@ bool gamma_correct_enabled = false;
 bool console_enabled = true;         // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
 bool keep_system_powered = false;    // Use true during development
 bool screensaver = false;  // Can enable experiment with animated screen draws
-bool timestamp_loop = false;         // Makes code write out timestamps throughout loop to serial port
-uint32_t timestamp_loop_linefeed_threshold = 0;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
+bool looptime_print = false;         // Makes code write out timestamps throughout loop to serial port
+uint32_t looptime_linefeed_threshold = 0;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
 
 enum hotrc_axis { HORZ, VERT, CH3, CH4 };
 enum hotrc_val { MIN, CENT, MAX, RAW, FILT, DBBOT, DBTOP, MARGIN };
@@ -121,10 +121,6 @@ RMTInput hotrc_rmt[4] = {
     RMTInput(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_pin)),  // hotrc[CH3]
     RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_pin))  // hotrc[CH4]
 };
-
-// Globals -------------------
-//
-
 // In case we ever talk to jaguars over asynchronous serial port, replace with this:
 // #include <HardwareSerial.h>
 // HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
@@ -133,17 +129,12 @@ RMTInput hotrc_rmt[4] = {
 enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, num_runmodes };
 bool running_on_devboard = false;  // will overwrite with value read thru pull resistor on tx pin at boot
 runmodes runmode = SHUTDOWN;
-runmodes disp_oldmode = SHUTDOWN;   // So we can tell when the mode has just changed. start as different to trigger_mode start algo
-int32_t gesture_progress = 0;       // How many steps of the Cruise Mode gesture have you completed successfully (from Fly Mode)
 bool shutdown_incomplete = true;     // Shutdown mode has not completed its work and can't yet stop activity
 bool we_just_switched_modes = true; // For mode logic to set things up upon first entry into mode
 bool park_the_motors = false;       // Indicates we should release the brake & gas so the pedals can be used manually without interference
 bool car_hasnt_moved = false;         // Whether car has moved at all since entering fly mode
 bool calmode_request = false;
 bool joy_centered = false;
-bool panic_stop = false;
-bool panic_stop_last = false;
-Timer panicTimer(20000000);  // How long should a panic stop last?  We can't stay mad forever
 // Timer cruiseSwTimer;  // Was used to require a medium-length hold time pushing cruise button to switch modes
 Timer sleepInactivityTimer(15000000);           // After shutdown how long to wait before powering down to sleep
 Timer stopcarTimer(8000000);                    // Allows code to fail in a sensible way after a delay if nothing is happening
@@ -173,27 +164,21 @@ bool cal_pot_gasservo_ready = false;    // Whether pot is in valid range
 // diag/monitoring variables
 bool diag_ign_error_enabled = true;
 
-// pushbutton related
-enum sw_presses { NONE, SHORT, LONG }; // used by encoder sw and button algorithms
-bool boot_button_last = 0;
-bool boot_button = 0;
-bool boot_button_timer_active = false;
-bool boot_button_suppress_click = false;
-bool boot_button_action = NONE;
-
 // external digital input and output signal related
 bool basicmodesw = LOW;
 
-bool ignition = LOW;  // Set by handler only. Reflects current state of the signal
-bool ignition_toggle_request = false;  // Setting to true tells handler to toggle the signal. Handler will set to false.
-bool syspower = HIGH;  // Set by handler only. Reflects current state of the signal
-bool syspower_toggle_request = false;  // Setting to true tells handler to toggle the signal. Handler will set to false.
-
-enum starter_requests { st_nop = -1, st_off = 0, st_on = 1, st_tog = 2 };  // code can set starter_request to these things, handler will make starter do it
+enum handler_request { req_na = -1, req_off = 0, req_on = 1, req_tog = 2 };  // requesting handler actions of digital values with handler functions
 bool starter = LOW;  // Set by handler only. Reflects current state of starter signal (does not indicate source)
+bool ignition = LOW;  // Set by handler only. Reflects current state of the signal
+bool syspower = HIGH;  // Set by handler only. Reflects current state of the signal
+bool panicstop = false;
 bool starter_drive = false;  // Set by handler only. High when we're driving starter, otherwise starter is an input
-int8_t starter_request = st_nop;  // Code can set for handler to drive the pin. -1 = nop, LOW = turn off starter, HIGH = turn on starter
+int8_t starter_request = req_na;
+int8_t ignition_request = req_na;
+int8_t syspower_request = req_na;
+int8_t panicstop_request = req_on;  // On powerup we assume the code just crashed during a drive, because it could have
 Timer starterTimer(5000000);  // If remotely-started starting event is left on for this long, end it automatically  
+Timer panicTimer(20000000);  // How long should a panic stop last?  We can't stay mad forever
 
 enum temp_categories { AMBIENT = 0, ENGINE = 1, WHEEL = 2 };
 enum temp_lims { DISP_MIN, NOM_MIN, NOM_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
@@ -483,33 +468,64 @@ void set_board_defaults(bool devboard) {  // true for dev boards, false for prin
         console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
         keep_system_powered = false; // Use true during development
         screensaver = false;         // Can enable experiment with animated screen draws
-        timestamp_loop = false;      // Makes code write out timestamps throughout loop to serial port
+        looptime_print = false;      // Makes code write out timestamps throughout loop to serial port
         dont_take_temperatures = false;
     }
 }
-// Starter bidirectional handler logic.  Outside code interacts with handler by setting starter_request = st_off, st_on, or st_tog    
+// Starter bidirectional handler logic.  Outside code interacts with handler by setting starter_request = req_off, req_on, or req_tog    
 void starter_update () {
     if (starter_signal_support) {
-        if (starter_request == st_tog) starter_request = !starter_drive;  // translate toggle request to a drive request opposite to the current drive state
-        if (starter_drive && ((starter_request == st_off) || starterTimer.expired())) {  // If we're driving the motor but need to stop
+        if (starter_request == req_tog) starter_request = !starter_drive;  // translate toggle request to a drive request opposite to the current drive state
+        if (starter_drive && ((starter_request == req_off) || starterTimer.expired())) {  // If we're driving the motor but need to stop
             starter_drive = false;
             set_pin (starter_pin, INPUT_PULLDOWN);  // we never assert low on the pin, just set pin as input and let the pulldown bring it low
         }
-        if (!starter_drive && (starter_request != st_on) && !sim.simulating(sensor::starter)) {  // If we haven't been and shouldn't be driving, and not simulating
+        if (!starter_drive && (starter_request != req_on) && !sim.simulating(sensor::starter)) {  // If we haven't been and shouldn't be driving, and not simulating
             do {
                 starter = digitalRead(starter_pin);  // then read the pin, starter variable will store if starter is turned on externally
             } while (starter != digitalRead(starter_pin)); // starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
         }
-        else if (!starter && (starter_request == st_on) && remote_start_support) {  // If we got a request to start the motor, and it's not already being driven externally
+        else if (!starter && (starter_request == req_on) && remote_start_support) {  // If we got a request to start the motor, and it's not already being driven externally
             starter_drive = true;
             starter = HIGH;
             set_pin (starter_pin, OUTPUT);  // then set pin to an output
             write_pin (starter_pin, starter);  // and start the motor
             starterTimer.reset();  // if left on the starter will turn off automatically after X seconds
         }
-        starter_request = st_nop;  // we have serviced whatever requests
+        starter_request = req_na;  // we have serviced whatever requests
     }
     else starter = LOW;
+}
+void syspower_update() {  // Soren: A lot of duplicate code with ignition/panicstop and syspower routines here ...
+    if (syspower_request == req_tog) syspower_request = (int8_t)(!syspower);
+    // else if (syspower_request == syspower) syspower_request = req_na;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
+    if (syspower_request == req_off && (!speedo.car_stopped() || keep_system_powered)) syspower_request = req_na;
+    if (syspower_request != req_na) {
+        syspower = syspower_request;
+        write_pin(syspower_pin, syspower);
+    }
+    syspower_request = req_na;
+}
+void ignition_panic_update() {  // Run once each main loop, directly before panicstop_update()
+    if (panicstop) ignition_request = req_off;  // panic stop causes ignition cut
+    if (ignition_request == req_tog) ignition_request = (int8_t)(!ignition);
+    // else if (ignition_request == ignition) ignition_request = req_na;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
+    if (panicstop_request == req_tog) panicstop_request = (int8_t)(!panicstop);
+    if (speedo.car_stopped() || panicTimer.expired()) panicstop_request = req_off;  // Cancel panic stop if car is stopped
+    if (!speedo.car_stopped()) {
+        if (ignition && ignition_request == req_off) panicstop_request = req_on;  // ignition cut causes panic stop
+        if (!sim.simulating(sensor::joy) && hotrc_radio_lost) panicstop_request = req_on;
+    }
+    if (panicstop_request != req_na) {
+        panicstop = panicstop_request;
+        if (panicstop) panicTimer.reset();
+    }
+    panicstop_request = req_na;
+    if (ignition_request != req_na) {
+        ignition = ignition_request;
+        write_pin (ignition_pin, ignition);  // Turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
+    }
+    ignition_request = req_na;  // Make sure this goes after the last comparison
 }
 void basicsw_update() {
     if (!sim.simulating(sensor::basicsw)) {  // Basic Mode switch
@@ -519,6 +535,15 @@ void basicsw_update() {
     }
 }
 Timer dispResetButtonTimer (500000);  // How long to press esp32 "boot" button before screen will reset and redraw
+
+// pushbutton related
+enum sw_presses { NONE, SHORT, LONG }; // used by encoder sw and button algorithms
+bool boot_button_last = 0;
+bool boot_button = 0;
+bool boot_button_timer_active = false;
+bool boot_button_suppress_click = false;
+bool boot_button_action = NONE;
+
 void bootbutton_update() {
     // ESP32 "boot" button. generates boot_button_action flags of LONG or SHORT presses which can be handled wherever. Handler must reset boot_button_action = NONE
     if (!read_pin (bootbutton_pin)) {
@@ -541,6 +566,8 @@ void bootbutton_update() {
         boot_button_suppress_click = false;  // End click suppression
     }
 }
+
+// Loop timing related
 Timer loopTimer(1000000); // how long the previous main loop took to run (in us)
 float looptime_sum_s;
 int32_t loopno = 1;
@@ -556,8 +583,8 @@ uint32_t loop_now = 0;
 float looptime_avg_us, loopfreq_hz;
 std::vector<std::string> loop_names(20);
 
-void looptiming_init() {  // Run once at end of setup()
-    if (timestamp_loop) {
+void looptime_init() {  // Run once at end of setup()
+    if (looptime_print) {
         for (int32_t x=1; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
         loop_names[0] = std::string("top");
         loop_dirty[0] = false;
@@ -566,8 +593,8 @@ void looptiming_init() {  // Run once at end of setup()
     }
     loopTimer.reset();  // start timer to measure the first loop
 }
-void loop_marktime(std::string loopname = std::string("")) {  // Add these throughout loop with short names
-    if (timestamp_loop) {
+void looptime_mark(std::string loopname = std::string("")) {  // Add marks wherever you want in the main loop, set looptime_print true, will report times between all adjacent marks
+    if (looptime_print) {
         if (loop_dirty[loopindex]) {
             loop_names[loopindex] = loopname;  // names[index], name);
             loop_dirty[loopindex] = false;
@@ -576,7 +603,7 @@ void loop_marktime(std::string loopname = std::string("")) {  // Add these throu
         loopindex++;
     }
 }
-void loop_print_timing() {  // Call once each loop at the very end
+void looptime_update() {  // Call once each loop at the very end
     loop_periods_us[loop_now] = (uint32_t)loopTimer.elapsed();  // us since beginning of this loop
     loopTimer.reset();
     looptime_sum_s += (float)loop_periods_us[loop_now] / 1000000;
@@ -585,7 +612,7 @@ void loop_print_timing() {  // Call once each loop at the very end
     if (loopno > 10 && loop_periods_us[loop_now] > loop_maxloop_us) loop_maxloop_us = (float)loop_periods_us[loop_now];
     looptime_peak_us = 0;
     for (int8_t i=0; i<loop_history; i++) if (looptime_peak_us < loop_periods_us[i]) looptime_peak_us = loop_periods_us[i]; 
-    if (timestamp_loop) {
+    if (looptime_print) {
         looptime_cout_mark_us = esp_timer_get_time();
         std::cout << std::fixed << std::setprecision(0);
         std::cout << "\r" << (uint32_t)looptime_sum_s << "s #" << loopno;  //  << " av:" << std::setw(5) << (int32_t)(looptime_avg_us);  //  << " av:" << std::setw(3) << looptime_avg_ms 
@@ -593,10 +620,10 @@ void loop_print_timing() {  // Call once each loop at the very end
         for (int32_t x=1; x<loopindex; x++)
             std::cout << std::setw(3) << loop_names[x] << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1] << " ";
         std::cout << " cout:" << std::setw(5) << looptime_cout_us;
-        if (loop_periods_us[loop_now]-looptime_cout_us > timestamp_loop_linefeed_threshold || !timestamp_loop_linefeed_threshold) std::cout << std::endl;
+        if (loop_periods_us[loop_now]-looptime_cout_us > looptime_linefeed_threshold || !looptime_linefeed_threshold) std::cout << std::endl;
         looptime_cout_us = (uint32_t)(esp_timer_get_time() - looptime_cout_mark_us);
         loopindex = 0;
-        loop_marktime ("top");
+        looptime_mark ("top");
     }
     ++loop_now %= loop_history;
     loopno++;  // I like to count how many loops

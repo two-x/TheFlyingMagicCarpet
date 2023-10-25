@@ -136,14 +136,14 @@ public:
                 }
             }
             else if (tcol == 4 && trow == 0) {
-                if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
-                    ignition_toggle_request = true;
+                if (touch_longpress_valid && touchHoldTimer.elapsed() > 2 * touchHoldTimer.get_timeout()) {  // Double hold time for some extra safety
+                    ignition_request = req_tog;
                     touch_longpress_valid = false;
                 }
             }
             else if (tcol == 5 && trow == 0) {
-                if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
-                    syspower_toggle_request = true;
+                if (touch_longpress_valid && touchHoldTimer.elapsed() > 2 * touchHoldTimer.get_timeout()) {  // Double hold time for some extra safety
+                    syspower_request = req_tog;
                     touch_longpress_valid = false;
                 }
             }
