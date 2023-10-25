@@ -158,6 +158,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
 void loop() {
     // Update inputs.  Fresh sensor data, and filtering
+    syspower_update();  // handler for system power pin output.
+    ignition_panic_update();  // handler for ignition pin output and panicstop status.
     bootbutton_update();
     basicsw_update();
     starter_update();  // Runs starter bidirectional handler
@@ -318,8 +320,7 @@ void loop() {
         if ((brake_parked && gas_parked) || motorParkTimer.expired() || (runmode != SHUTDOWN && runmode != BASIC))
             park_the_motors = false;
     }
-    detect_errors();  // Look for screwy conditions and update warning idiot lights
-    touch.handleTouch(); // Handle touch events and actions
+    touch.update(); // Handle touch events and actions
     // Encoder handling
     uint32_t encoder_sw_action = encoder.press_event();  // true = autoreset the event if there is one
     if (encoder_sw_action != Encoder::NONE) {  // First deal with any unhandled switch press events
@@ -448,10 +449,7 @@ void loop() {
         }
         simdelta = 0;
     }
-    // Handlers for Panic Stop, Ignition, and Syspower
-    syspower_update();  // handler for system power pin output.
-    ignition_panic_update();  // handler for ignition pin output and panicstop status.
-
+    error_detect_update();  // Look for screwy conditions and update warning idiot lights
     neo_idiots_update();
     neo.set_heartcolor((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]);
     neo.update();
