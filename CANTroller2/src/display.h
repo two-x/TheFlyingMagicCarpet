@@ -181,7 +181,7 @@ uint8_t unitmaps[5][17] = {  // 17x7-pixel bitmaps to represent units that use s
     { 0x04, 0x02, 0x7f, 0x02, 0x04, 0x00, 0x10, 0x20, 0x7f, 0x20, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // scroll arrows - to indicate multiple choice
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3e, 0x00, 0x00, 0x1c, 0x22, 0x22, 0x1c, 0x00, 0x00, },  // 0/1 - to indicate binary value
 };  // These bitmaps are in the same format as the idiot light bitmaps, described below
-bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panic_stop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, sim.enabled_ptr(), &running_on_devboard };
+bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &err_temp_engine, &err_temp_wheel, &panicstop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, sim.enabled_ptr(), &running_on_devboard };
 char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
 uint16_t idiotcolors[arraysize(idiotlights)];
 uint8_t idiot_saturation = 225;  // 170-195 makes nice bright yet distinguishable colors
@@ -257,7 +257,7 @@ class Display {
             // TFT_eSprite _tft = TFT_eSprite(&_panel); // LCD screen
         #else
             TFT_eSPI _tft = TFT_eSPI();
-            TFT_eSprite _saver = TFT_eSprite(&_tft);  // Declare screensaver sprite object "spr" with pointer to "tft" object
+            TFT_eSprite _saver = TFT_eSprite(&_tft);  // Declare screensaver sprite object with pointer to tft object
         #endif
         Timer _tftResetTimer;
         Timer _tftDelayTimer;
@@ -281,6 +281,7 @@ class Display {
         uint32_t saver_cycletime_us = 60000000;
         Timer saverRefreshTimer, saverCycleTimer;
         int16_t saver_lines_mode = 0;  // 0 = eraser, 1 = do drugs
+        uint32_t disp_oldmode = SHUTDOWN;   // So we can tell when the mode has just changed. start as different to trigger_mode start algo
     public:
 
         #ifdef USE_DMA_TO_TFT
@@ -931,19 +932,19 @@ class Display {
                 if (gamma_correct_enabled) color = gamma16(color);
                 long star_x1 = random(disp_saver_width);        // Random x coordinate
                 long star_y1 = random(disp_saver_height);       // Random y coordinate
-                if (!(saver_lines_mode == 0 && (savercycle == 0b10))) {
+                if (saver_lines_mode || (savercycle != 0b10)) {
                     if (savershape == 0) _saver.drawLine(star_x0, star_y0, star_x1, star_y1, color); 
                     else if (savershape == 1) _saver.drawCircle(random(disp_saver_width), random(disp_saver_height), random(20), random(0x10000));
                     else if (savershape == 2)      // Draw pixels in sprite
                         for (int star=0; star<10; star++) 
-                            _saver.drawRect(random(disp_saver_width), random(disp_saver_height), 2, 2, random(0x10000));      // Draw pixel in sprite
-                            // _saver.drawPixel(random(disp_saver_width), random(disp_saver_height), gamma(random(0x10000)));      // Draw pixel in sprite
+                            _saver.drawRect(random(disp_saver_width), random(disp_saver_height), 2, 2, random(0x10000));
+                            // _saver.drawPixel(random(disp_saver_width), random(disp_saver_height), gamma(random(0x10000)));
                 }
-                if (saver_lines_mode == 1) {
+                if (saver_lines_mode) {
                     if (!savercycle) _saver.drawLine(star_x0+1, star_y0+1, star_x1+1, star_y1+1, color);
                     _saver.drawString("do drugs", disp_saver_width / 2, disp_saver_height / 2, 4);
                 }
-                else if (saver_lines_mode == 0 && savercycle != 0b01) {
+                else if (savercycle != 0b01) {
                     for (int axis=0; axis<=1; axis++) {
                         eraser_pos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
                         if (eraser_pos[axis] * eraser_velo_sign[axis] >= eraser_pos_max[axis]) {

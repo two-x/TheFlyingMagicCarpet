@@ -7,11 +7,11 @@ private:
     joydirs joydir;
     float cruise_ctrl_extent_pc;       // During cruise adjustments, saves farthest trigger position read
     bool cruise_trigger_released = false;
-    Timer cruiseDeltaTimer;
+    static const uint32_t gesture_flytimeout_us = 1250000;        // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
+    Timer gestureFlyTimer, cruiseDeltaTimer;
+    runmodes _currentMode; // note these are more here in caseA we eventually don't use the globals
+    runmodes _oldMode;
 public:
-
-    RunModeManager() : _currentMode(SHUTDOWN), _oldMode(SHUTDOWN) {}
-
     // Call this function in the main loop to manage run modes
     // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     runmodes execute() {
@@ -29,11 +29,7 @@ public:
         }
         return modeChanger();
     }
-
 private:
-    runmodes _currentMode; // note these are more here in case we eventually don't use the globals
-    runmodes _oldMode;
-
     joydirs get_joydir() {
         return (hotrc_pc[VERT][FILT] > hotrc_pc[VERT][DBTOP]) ? joy_up : ((hotrc_pc[VERT][FILT] < hotrc_pc[VERT][DBBOT]) ? joy_down : joy_cent);
     }
@@ -42,7 +38,7 @@ private:
 
     runmodes modeChanger() {
         if (basicmodesw) _currentMode = BASIC;  // if basicmode switch on --> Basic Mode
-        else if ((_currentMode != CAL) && (panic_stop || !ignition)) _currentMode = SHUTDOWN;
+        else if ((_currentMode != CAL) && (panicstop || !ignition)) _currentMode = SHUTDOWN;
         else if ((_currentMode != CAL) && tach.engine_stopped()) _currentMode = STALL;;  // otherwise if engine not running --> Stall Mode
         we_just_switched_modes = (_currentMode != _oldMode);  // currentMode should not be changed after this point in loop
         if (we_just_switched_modes) {
@@ -61,7 +57,7 @@ private:
         else if (_oldMode == STALL);
         else if (_oldMode == HOLD) {
             joy_centered = false;
-            starter_request = st_off;  // Stop any in-progress startings
+            starter_request = req_off;  // Stop any in-progress startings
         }
         else if (_oldMode == FLY) car_hasnt_moved = false;
         else if (_oldMode == CRUISE) cruise_adjusting = false;
@@ -87,15 +83,15 @@ private:
             disp_runmode_dirty = true;
             calmode_request = false;
             if (!speedo.car_stopped() && !autostop_disabled) {
-                if (panic_stop && pressure_target_psi < pressure_panic_initial_psi) pressure_target_psi = pressure_panic_initial_psi;
-                else if (!panic_stop && pressure_target_psi < pressure_hold_initial_psi) pressure_target_psi = pressure_hold_initial_psi;
+                if (panicstop && pressure_target_psi < pressure_panic_initial_psi) pressure_target_psi = pressure_panic_initial_psi;
+                else if (!panicstop && pressure_target_psi < pressure_hold_initial_psi) pressure_target_psi = pressure_hold_initial_psi;
                 brakeIntervalTimer.reset();
                 stopcarTimer.reset();
                 park_the_motors = false;
             }
         }
         // else if (ignition && engine_stopped()) updateMode(STALL);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
-        else if ((speedo.car_stopped() || allow_rolling_start || autostop_disabled) && ignition && !panic_stop && !tach.engine_stopped()) updateMode(HOLD);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
+        else if ((speedo.car_stopped() || allow_rolling_start || autostop_disabled) && ignition && !panicstop && !tach.engine_stopped()) updateMode(HOLD);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
         if (shutdown_incomplete) {  // If we haven't yet stopped the car and then released the brakes and gas all the way
             if (speedo.car_stopped() || stopcarTimer.expired() || autostop_disabled) {  // If car has stopped, or timeout expires, then release the brake
                 if (shutdown_color == LPNK) {  // On first time through here
@@ -113,7 +109,7 @@ private:
                 }
             }
             else if (brakeIntervalTimer.expireset()) {
-                if (!autostop_disabled) pressure_target_psi = pressure_target_psi + (panic_stop) ? pressure_panic_increment_psi : pressure_hold_increment_psi;  // Slowly add more brakes until car stops
+                if (!autostop_disabled) pressure_target_psi = pressure_target_psi + (panicstop) ? pressure_panic_increment_psi : pressure_hold_increment_psi;  // Slowly add more brakes until car stops
                 throttle.goto_idle();  // Keep target updated to possibly changing idle value
             }
         }

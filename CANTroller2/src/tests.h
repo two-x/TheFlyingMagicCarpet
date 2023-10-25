@@ -2,6 +2,7 @@
 /* Contains unit tests */
 #pragma once
 #include <cassert>  // for assert
+#include "devices.h"
 #include "utils.h"
 #include <memory>
 

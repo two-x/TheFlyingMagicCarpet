@@ -1,5 +1,6 @@
-// Soren: I stole and modified this SparkFun_MicroPressure library to prevent it from blocking for 6 ms. Now, instead of waiting (blocking)
-// until the reading is ready, you have to keep calling it, when it's ready you'll get a reading, and otherwise NAN.
+// map.h - an i2c sensor to track the air pressure in our intake manifold. This, together with the air velocity
+// and temperature gives us the mass air flow which is proportional to how hard the engine is working - Soren
+// I stole this library and modified it as such. to not block for 6-7ms on each read.
 // SparkFun_MicroPressure library by Alex Wende July 2020 (Beerware license)
 // This is a library for the Qwiic MicroPressure Sensor, which can read from 0 to 25 PSI.
 #pragma once

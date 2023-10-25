@@ -37,7 +37,7 @@ void neo_idiots_update() {
             if (*(idiotlights[idiot]) != idiotlasts[idiot]) neo.setBoolState(idiot, *idiotlights[idiot]);
         if (idiot == LOST || idiot == RANGE) {
             if (highest_pri_failing_last[idiot] != highest_pri_failing_sensor[idiot]) {
-                if (highest_pri_failing_sensor[idiot] != e_none) neo.setflash((int)idiot, highest_pri_failing_sensor[idiot] + 1, 2, 4, 0, 1);
+                if (highest_pri_failing_sensor[idiot] != e_none) neo.setflash((int)idiot, highest_pri_failing_sensor[idiot] + 1, 2, 6, 1, 0);
                 else neo.setflash((int)idiot, 0);
             }
             highest_pri_failing_last[idiot] = highest_pri_failing_sensor[idiot];
@@ -78,8 +78,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     hotrc_calc_params();  // Need to establish derived parameter values
     for (int axis=HORZ; axis<=CH4; axis++) hotrc_rmt[axis].init();  // Set up 4 RMT receivers, one per channel
     printf("Pot setup..\n");
-    pot.setup();
-    printf("Encoder setup..\n");
+    pot.setup();             printf("Encoder setup..\n");
     encoder.setup();
     printf("Brake pressure sensor.. ");
     pressure.setup();
@@ -108,7 +107,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 	ESP32PWM::allocateTimer(2);
 	ESP32PWM::allocateTimer(3);
 	brakemotor.setPeriodHertz(50);
-    gas_servo.setPeriodHertz(60);
+    gas_servo.setPeriodHertz(60);  // critically this pwm is a different frequency than the other two motors
 	steermotor.setPeriodHertz(50);
     brakemotor.attach (brake_pwm_pin, brake_extend_us, brake_retract_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
     steermotor.attach (steer_pwm_pin, steer_left_us, steer_right_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
@@ -138,12 +137,12 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     int32_t idiots = min((uint32_t)arraysize(idiotlights), neo.neopixelsAvailable());
     for (int32_t idiot = 0; idiot < idiots; idiot++)
         neo.newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
-    // neo.setflash(idiot, count, pulseh, pulsel, color=0xffffff, onbrit=0);
-    // neo.setflash((int)LOST, 2, 1, 2, 0xffffff, 50); // err_sensor_fails[LOST]);  // make idiot light pulse to indicate failed sensor count            }
-    // neo.setflash((int)RANGE, 3, 2, 2, 0, 50);  // err_sensor_fails[RANGE]);  // make idiot light pulse to indicate failed sensor count            }
-    // neo.setflash(2, 2, 8, 1, 0xffffff, 35);  // should start constant strobe
-    neo.setflash(5, 2, 1, 2, 0xffffff, 85);  // should start constant strobe
-    // neo.setflash(4, 16, 2, 2, 0, 0);  // should start constant strobe
+
+    // Just testing the neo flashing code
+    neo.setflash(4, 8, 8, 8, 20, -1);  // brightness toggle in a continuous squarewave
+    neo.setflash(5, 3, 1, 2, 85);      // three super-quick bright white flashes
+    neo.setflash(6, 2, 5, 5, 0, 0);    // two short black pulses
+
     std::cout << "set up heartbeat led and " << idiots << " neopixel idiot lights" << std::endl;
 
     // Initialize sensor error flags to false
@@ -154,7 +153,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     printf ("Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     panicTimer.reset();
-    looptiming_init();
+    looptime_init();
 }
 
 void loop() {
@@ -178,10 +177,10 @@ void loop() {
     // 1. Handle any toggle button events (ch3 and ch4)
     for (int8_t ch = CH3; ch <= CH4; ch++) hotrc_toggle_update(ch);
     if (!hotrc_radio_lost) {  // Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
-        if (hotrc_sw_event[CH3]) ignition_toggle_request = true;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
+        if (hotrc_sw_event[CH3]) ignition_request = req_tog;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
         if (hotrc_sw_event[CH4]) {
             if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
-            else if (runmode == STALL) starter_request = st_tog;
+            else if (runmode == STALL) starter_request = req_tog;
         }
     }
     for (int8_t ch = CH3; ch <= CH4; ch++) hotrc_sw_event[ch] = false;
@@ -244,7 +243,8 @@ void loop() {
             else if (brakepos.filt() - brakepos.margin() >= brakepos.parkpos())  // If brake is extended from park point, retract toward park point, slowing as we approach
                 brake_out_pc = map (brakepos.filt(), brakepos.parkpos(), brakepos.max_in(), brake_stop_pc, brake_retract_pc);
         }
-        else if (runmode == CAL || runmode == BASIC || runmode == SHUTDOWN) brake_out_pc = (float)brake_stop_pc;
+        else if (runmode == CAL || runmode == BASIC || runmode == SHUTDOWN)
+            brake_out_pc = (float)brake_stop_pc;
         else {  // First attenuate max power to avoid blowing out the motor like in bm2023, if retracting, as a proportion of position from zeropoint to fully retracted
             // To-Do Finish this brake governing calculation
             // brake_retract_effective_us = map(brakepos.filt(), brakepos.zeropoint(), BrakePositionSensor::abs_min_retract_in, )) {    
@@ -287,7 +287,7 @@ void loop() {
         else if (runmode == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
             if (hotrc_pc[VERT][FILT] < hotrc_pc[VERT][DBTOP]) 
                 gas_out_us = gas_ccw_closed_us;  // If in deadband or being pushed down, we want idle
-            else gas_out_us = map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBTOP], hotrc_pc[VERT][MAX], gas_ccw_closed_us, gas_govern_us);  // Actuators still respond and everything, even tho engine is turned off
+            else gas_out_us = map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBTOP], hotrc_pc[VERT][MAX], gas_ccw_closed_us, gas_govern_us);  // actuators still respond even w/ engine turned off
         }
         else if (runmode == CAL && cal_pot_gasservo_mode)
             gas_out_us = map (pot.val(), pot.min(), pot.max(), gas_ccw_max_us, gas_cw_min_us);
@@ -307,10 +307,8 @@ void loop() {
         else gas_out_us = constrain (gas_out_us, gas_govern_us, gas_ccw_closed_us);
         // Step 3 : Write to servo
         if (!(runmode == BASIC && !park_the_motors) && !(runmode == CAL && !cal_pot_gasservo_mode) && !(runmode == SHUTDOWN && !shutdown_incomplete)) {
-            if (reverse_gas_servo)
-                gas_servo.writeMicroseconds((int32_t)(3000 - gas_out_us));
-            else
-                gas_servo.writeMicroseconds ((int32_t)gas_out_us);  // Write result to servo
+            if (reverse_gas_servo) gas_servo.writeMicroseconds((int32_t)(3000 - gas_out_us));
+            else gas_servo.writeMicroseconds ((int32_t)gas_out_us);  // Write result to servo
             // if (boot_button) printf (" Gas:%4ld\n", (int32_t)gas_out_us);
         }
     }
@@ -451,34 +449,19 @@ void loop() {
         simdelta = 0;
     }
     // Handlers for Panic Stop, Ignition, and Syspower
-    if (syspower_toggle_request && !keep_system_powered) {
-        syspower = !syspower;
-        write_pin(syspower_pin, syspower); // delay (val * 500);
-        syspower_toggle_request = false;
-    }
-    if (ignition_toggle_request) {
-        if (ignition && !speedo.car_stopped()) panic_stop = true;  // if ignition was turned off on HotRC, panic .
-        ignition = !ignition;
-        write_pin (ignition_pin, ignition);  // Turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
-        ignition_toggle_request = false;  // Make sure this goes after the last comparison
-    }
-    if (!speedo.car_stopped() && !sim.simulating(sensor::joy) && hotrc_radio_lost) panic_stop = true;
-    if (panic_stop && !panic_stop_last) {
-        panicTimer.reset();
-        if (ignition) ignition_toggle_request = true;  // If panic stop didn't already result from ignition cut, we will cut it. Will lead to shutdown mode and braking
-    }
-    else if (speedo.car_stopped() || panicTimer.expired()) panic_stop = false;  // Cancel panic stop if car is stopped
-    panic_stop_last = panic_stop;
+    syspower_update();  // handler for system power pin output.
+    ignition_panic_update();  // handler for ignition pin output and panicstop status.
+
     neo_idiots_update();
-    neo.heartbeat_update(((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]));  // Update our beating heart
+    neo.set_heartcolor((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]);
     neo.update();
-    loop_marktime ("-");
+    looptime_mark("-");
     screen.update();  // Display updates
     if (!display_enabled && dataset_page_last != dataset_page) config.putUInt ("dpage", dataset_page);
-    loop_marktime ("dis");
+    looptime_mark("dis");
     dataset_page_last = dataset_page;
     selected_value_last = selected_value;
     tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
     simulating_last = sim.enabled();
-    loop_print_timing();
+    looptime_update();
 }
