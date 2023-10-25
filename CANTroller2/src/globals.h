@@ -499,7 +499,8 @@ void starter_update () {
 void syspower_update() {  // Soren: A lot of duplicate code with ignition/panicstop and syspower routines here ...
     if (syspower_request == req_tog) syspower_request = (int8_t)(!syspower);
     // else if (syspower_request == syspower) syspower_request = req_na;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
-    if (syspower_request == req_off && (!speedo.car_stopped() || keep_system_powered)) syspower_request = req_na;
+    if (syspower_request == req_off && !speedo.car_stopped()) syspower_request = req_na;
+    if (!syspower && keep_system_powered) syspower_request = req_on;
     if (syspower_request != req_na) {
         syspower = syspower_request;
         write_pin(syspower_pin, syspower);
@@ -507,20 +508,21 @@ void syspower_update() {  // Soren: A lot of duplicate code with ignition/panics
     syspower_request = req_na;
 }
 void ignition_panic_update() {  // Run once each main loop, directly before panicstop_update()
-    if (panicstop) ignition_request = req_off;  // panic stop causes ignition cut
+    if (panicstop_request == req_tog) panicstop_request = (int8_t)(!panicstop);
     if (ignition_request == req_tog) ignition_request = (int8_t)(!ignition);
     // else if (ignition_request == ignition) ignition_request = req_na;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
-    if (panicstop_request == req_tog) panicstop_request = (int8_t)(!panicstop);
     if (speedo.car_stopped() || panicTimer.expired()) panicstop_request = req_off;  // Cancel panic stop if car is stopped
     if (!speedo.car_stopped()) {
         if (ignition && ignition_request == req_off) panicstop_request = req_on;  // ignition cut causes panic stop
         if (!sim.simulating(sensor::joy) && hotrc_radio_lost) panicstop_request = req_on;
     }
+    bool paniclast = panicstop;
     if (panicstop_request != req_na) {
         panicstop = panicstop_request;
-        if (panicstop) panicTimer.reset();
+        if (panicstop && !paniclast) panicTimer.reset();
     }
     panicstop_request = req_na;
+    if (panicstop) ignition_request = req_off;  // panic stop causes ignition cut
     if (ignition_request != req_na) {
         ignition = ignition_request;
         write_pin (ignition_pin, ignition);  // Turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
