@@ -58,7 +58,7 @@ public:
         return getPoint().y; 
     }
 
-    void handleTouch() {
+    void update() {
         int32_t touch_x, touch_y, trow, tcol;
         // printf ("elaps:%8ld now:%d if:", touchDoublePressTimer.elapsed(), touch_now_touched);
         if (touched() && touchDoublePressTimer.expired()) { // Take actions if one touch is detected. This panel can read up to two simultaneous touchpoints

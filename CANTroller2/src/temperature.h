@@ -8,7 +8,7 @@
 #include <DallasTemperature.h>
 #include "utils.h"
 
-enum class location { ambient, engine, wheel_fl, wheel_fr, wheel_rl, wheel_rr };  // , SOREN_DEV0, SOREN_DEV1, num_known_ };
+enum class location { ambient, engine, wheel_fl, wheel_fr, wheel_rl, wheel_rr, num_locations };  // , SOREN_DEV0, SOREN_DEV1, num_known_ };
 
 class TemperatureSensor {
 public:
@@ -303,4 +303,14 @@ public:
         TemperatureSensor* sens = get_sensor(locat);  // ambient
         return (bool)sens; 
     }
+    int locint(location locat) {
+        return static_cast<int>(locat);
+    }
+    int errclass(location locat) {
+        if (locat == location::ambient || locat == location::engine) return static_cast<int>(locat);
+        return static_cast<int>(location::wheel_fl);  // All wheels use this error class
+    }
+    int errclass(int locat) { return errclass(static_cast<location>(locat)); }
+    float val(int locat) { return val(static_cast<location>(locat)); }
+    bool detected(int locat) { return detected(static_cast<location>(locat)); }
 };

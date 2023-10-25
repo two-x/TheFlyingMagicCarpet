@@ -180,16 +180,17 @@ int8_t panicstop_request = req_on;  // On powerup we assume the code just crashe
 Timer starterTimer(5000000);  // If remotely-started starting event is left on for this long, end it automatically  
 Timer panicTimer(20000000);  // How long should a panic stop last?  We can't stay mad forever
 
-enum temp_categories { AMBIENT = 0, ENGINE = 1, WHEEL = 2 };
+enum temp_categories { AMBIENT = 0, ENGINE = 1, WHEEL = 2, num_temp_categories };
 enum temp_lims { DISP_MIN, NOM_MIN, NOM_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
 float temp_lims_f[3][6]{
     {0.0, 45.0, 115.0, 120.0, 130.0, 220.0},  // [AMBIENT][DISP_MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
     {0.0, 178.0, 198.0, 202.0, 205.0, 220.0}, // [ENGINE][DISP_MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
-    {0.0, 50.0, 120.0, 130.0, 140.0, 220.0},
-};                               // [WHEEL][DISP_MIN/NOM_MIN/NOM_MAX/WARNING/ALARM] (applies to all wheels)
+    {0.0, 50.0, 120.0, 130.0, 140.0, 220.0},  // [WHEEL][DISP_MIN/NOM_MIN/NOM_MAX/WARNING/ALARM] (applies to all wheels)
+};
 float temp_room = 77.0;          // "Room" temperature is 25 C = 77 F  Who cares?
 float temp_sensor_min_f = -67.0; // Minimum reading of sensor is -25 C = -67 F
 float temp_sensor_max_f = 257.0; // Maximum reading of sensor is 125 C = 257 F
+bool temp_err[num_temp_categories];  // [AMBIENT/ENGINE/WHEEL]
 
 TemperatureSensorManager tempsens(onewire_pin);
 
@@ -635,7 +636,6 @@ void looptime_update() {  // Call once each loop at the very end
 uint32_t err_timeout_us = 175000;
 Timer errTimer((int64_t)err_timeout_us);
 uint32_t err_margin_adc = 5;
-bool err_temp_engine, err_temp_wheel;
 // Sensor related trouble - this all should be moved to devices.h
 enum err_type { LOST, RANGE, CALIB, WARN, CRIT, INFO, num_err_types };
 enum err_sensor { e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, e_basicsw, e_mulebatt, e_airflow, e_mapsens, e_num_sensors, e_none };  // these are in order of priority
@@ -647,7 +647,7 @@ int8_t err_sensor_fails[num_err_types] = { 0, 0, 0, 0, 0, 0 };
 bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_mulebatt/e_basicsw/e_starter]   // sensor::opt_t::num_sensors]
 uint8_t highest_pri_failing_sensor[num_err_types];
 uint8_t highest_pri_failing_last[num_err_types];
-void detect_errors() {
+void error_detect_update() {
     if (errTimer.expireset()) {
 
         // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
@@ -664,21 +664,15 @@ void detect_errors() {
         else diag_ign_error_enabled = true;
 
         // different approach
-        if (!tempsens.detected(location::ambient)) err_sensor[LOST][e_temps] = true;
-        if (!tempsens.detected(location::engine)) err_sensor[LOST][e_temps] = true;
-        else if (tempsens.val(location::engine) >= temp_lims_f[ENGINE][WARNING]) err_temp_engine = true;
-        bool check_wheels;
-        check_wheels = false;
-        if (!tempsens.detected(location::wheel_fl)) err_sensor[LOST][e_temps] = true;
-        else if (tempsens.val(location::wheel_fl) >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-        if (!tempsens.detected(location::wheel_fr)) err_sensor[LOST][e_temps] = true;
-        else if (tempsens.val(location::wheel_fr) >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-        if (!tempsens.detected(location::wheel_rl)) err_sensor[LOST][e_temps] = true;
-        else if (tempsens.val(location::wheel_rl) >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-        if (!tempsens.detected(location::wheel_rr)) err_sensor[LOST][e_temps] = true;
-        else if (tempsens.val(location::wheel_rr) >= temp_lims_f[WHEEL][WARNING]) check_wheels = true;
-        err_temp_wheel = check_wheels;
-
+        bool not_detected;
+        not_detected = false;  // first reset
+        for (int cat = 0; cat < num_temp_categories; cat++) temp_err[cat] = false;  // first reset
+        for (int loc = 0; loc < tempsens.locint(location::num_locations); loc++) {
+            if (!tempsens.detected(loc)) not_detected = true;
+            else if (tempsens.val(loc) >= temp_lims_f[tempsens.errclass(loc)][WARNING]) temp_err[tempsens.errclass(loc)] = true;
+        }
+        err_sensor[LOST][e_temps] = not_detected;
+        
         // Detect sensors disconnected or giving out-of-range readings.
         // TODO : The logic of this for each sensor should be moved to devices.h objects
         uint32_t val;
