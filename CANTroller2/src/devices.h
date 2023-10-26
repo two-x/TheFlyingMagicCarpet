@@ -221,15 +221,15 @@ class Transducer : public Device {
             if (dir == TransducerDirection::REV) {
                 ret = min_f + max_f - _b_offset - _m_factor * arg_val_f;
             }
-            ret = _b_offset + _m_factor * arg_val_f;
-        } else if (arg_val_f) { // NOTE: isn't 0.0 a valid value tho?
+            else ret = _b_offset + _m_factor * arg_val_f;
+        } else if (arg_val_f) { // NOTE: isn't 0.0 a valid value tho?  Soren: Only if the pulley can rotate all the way around in under 1 planck time
             if (dir == TransducerDirection::REV) {
                 ret = min_f + max_f - _b_offset - _m_factor / arg_val_f;
             }
-            ret = _b_offset + _m_factor / arg_val_f;
+            else ret = _b_offset + _m_factor / arg_val_f;
         } else {
             printf ("Error: unit conversion refused to divide by zero\n");
-            ret = min_f;  // Best return given _m_factor/0 would be infinite
+            ret = max_f;  // Best return given division would be infinite
         }
         return static_cast<HUMAN_T>(ret);
     }
@@ -242,14 +242,13 @@ class Transducer : public Device {
         if (dir == TransducerDirection::REV) {
             arg_val_f = min_f + max_f - arg_val_f;
         }
-        if (_invert && (arg_val_f - _b_offset)) {
+        if (_invert && (arg_val_f - _b_offset)) {  // risk here of floating point error comparing near-zero values
             ret = _m_factor / (arg_val_f - _b_offset);
-        } else if (!_invert && _m_factor) {
+        } else if (!_invert && _m_factor) {  // risk here of floating point error comparing near-zero values
             ret = (arg_val_f - _b_offset) / _m_factor;
         } else {
             printf ("Error: unit conversion refused to divide by zero\n");
-            ret = max_f;  // Best return given /_m_factor would be infinite
-            // NOTE: hmmmm, couldn't -1 be a valid value in some caes?
+            ret = max_f;  // Best return given division would be infinite
         }
         return static_cast<NATIVE_T>(ret);
     }
@@ -436,7 +435,7 @@ class I2CSensor : public Sensor<float,float> {
         }
     
         virtual void update_human_limits() {
-            _native.set_limits(_human.min_shptr(), _human.max_shptr());  // Soren: why are the arguments _human not _native?
+            _native.set_limits(_human.min_shptr(), _human.max_shptr());  // Our two i2c sensors (airflow & MAP) don't reveal low-level readings, so we only get human units
             _val_filt.set_limits(_human.min_shptr(), _human.max_shptr());
         }
     public:
@@ -578,15 +577,15 @@ class BatterySensor : public AnalogSensor<int32_t, float> {
     protected:
         static constexpr float _initial_adc = adcmidscale_adc;
         static constexpr float _initial_v = 10.0;
-        static constexpr float _min_v = 0.0; // The min vehicle voltage we can sense.
-        static constexpr float _max_v = 16.0;  // The max vehicle voltage we can sense. Resistor divider is designed so max 16.0 V = (adcrange_adc - 5) plus a weak pullup, so values > (adcrange - 5) indicates broken connection.
-        static constexpr float _initial_v_per_adc = _max_v / (adcrange_adc - 5);
+        static constexpr float _op_min_v = 0.0; // The min vehicle voltage we can sense.
+        static constexpr float _op_max_v = 16.0;  // The max vehicle voltage we can sense. Resistor divider is designed so max 16.0 V = (adcrange_adc - 5) plus a weak pullup, so values > (adcrange - 5) indicates broken connection.
+        static constexpr float _initial_v_per_adc = _op_max_v / (adcrange_adc - 5);
         static constexpr float _initial_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
     public:
         BatterySensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
             _ema_alpha = _initial_ema_alpha;
             _m_factor = _initial_v_per_adc;
-            _human.set_limits(_min_v, _max_v);
+            _human.set_limits(_op_min_v, _op_max_v);
             _native.set_limits(0.0, adcrange_adc - 5);
             set_native(_initial_adc);
             set_can_source(Source::PIN, true);
@@ -602,11 +601,11 @@ class BatterySensor : public AnalogSensor<int32_t, float> {
 // and converting the ADC value to a pressure value in PSI.
 class PressureSensor : public AnalogSensor<int32_t, float> {
     public:
-        static constexpr int32_t min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
+        static constexpr int32_t op_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
         // Soren 230920: Reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
-        static constexpr int32_t max_adc = 1700; // ~208psi by this math - "Maximum" braking
+        static constexpr int32_t op_max_adc = 1700; // ~208psi by this math - "Maximum" braking
         // static constexpr int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
-        static constexpr float initial_psi_per_adc = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - min_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
+        static constexpr float initial_psi_per_adc = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - op_min_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
         static constexpr float initial_ema_alpha = 0.1;
         static constexpr float initial_offset = 0.0;
         static constexpr bool initial_invert = false;
@@ -614,11 +613,11 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
         PressureSensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
             _ema_alpha = initial_ema_alpha;
             _m_factor = initial_psi_per_adc;
-            _b_offset = -from_native(min_adc);
+            _b_offset = -from_native(op_min_adc);
             _invert = initial_invert;
-            set_native_limits(min_adc, max_adc);
-            set_human_limits(from_native(min_adc), from_native(max_adc));
-            set_native(min_adc);
+            set_native_limits(op_min_adc, op_max_adc);
+            set_human_limits(from_native(op_min_adc), from_native(op_max_adc));
+            set_native(op_min_adc);
             set_can_source(Source::PIN, true);
             set_can_source(Source::POT, true);            
         }
@@ -637,11 +636,13 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         std::shared_ptr<float> _zeropoint;
         void set_val_from_touch() { _val_filt.set((op_min_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
     public:
-        static constexpr int32_t min_adc = 0.0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
-        static constexpr int32_t max_adc = adcrange_adc;
+        static constexpr int32_t abs_min_retract_adc = 0.0;
+        static constexpr int32_t abs_max_extend_adc = adcrange_adc;
         static constexpr float park_in = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
         static constexpr float op_min_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
         static constexpr float op_max_extend_in = park_in; // 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
+        static constexpr int32_t op_min_retract_adc = 76;  // Calculated on windows calculator. Calculate it here, silly
+        static constexpr int32_t op_max_extend_adc = 965;  // Calculated on windows calculator. Calculate it here, silly
         static constexpr float abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
         static constexpr float abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
         static constexpr float margin_in = .01;  // TODO: add description
@@ -660,7 +661,7 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
             // Soren: this line might be why we broke our brake motor at bm23:
             // set_human_limits(op_min_retract_in, op_max_extend_in);  // wouldn't this be safer?
             set_human_limits(abs_min_retract_in, abs_max_extend_in);            
-            set_native_limits(min_adc, max_adc);
+            set_native_limits(abs_min_retract_adc, abs_max_extend_adc);
             set_can_source(Source::PIN, true);
             set_can_source(Source::POT, true);
         }
