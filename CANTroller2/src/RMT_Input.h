@@ -28,18 +28,18 @@ RMTInput::RMTInput(rmt_channel_t channel, gpio_num_t gpio)
 void RMTInput::init()
 {
 
-  rmt_config_t config;
-  config.channel = channel_;
-  config.gpio_num = gpio_;
-  config.clk_div = 50; // slowed from 80 because the buffer was getting full
-  config.mem_block_num = 1;
-  config.rmt_mode = RMT_MODE_RX;
-  config.flags = 0;
-  config.rx_config.filter_en = true;          // Enable the filter
-  config.rx_config.filter_ticks_thresh = 100; // Set the filter threshold
-  config.rx_config.idle_threshold = 12000;    // Set the idle threshold
+  rmt_config_t _config;
+  _config.channel = channel_;
+  _config.gpio_num = gpio_;
+  _config.clk_div = 50; // slowed from 80 because the buffer was getting full
+  _config.mem_block_num = 1;
+  _config.rmt_mode = RMT_MODE_RX;
+  _config.flags = 0;
+  _config.rx_config.filter_en = true;          // Enable the filter
+  _config.rx_config.filter_ticks_thresh = 100; // Set the filter threshold
+  _config.rx_config.idle_threshold = 12000;    // Set the idle threshold
 
-  esp_err_t config_result = rmt_config(&config);
+  esp_err_t config_result = rmt_config(&_config);
   if (config_result != ESP_OK)
   {
     Serial.printf("Failed to configure RMT: %d\n", config_result);

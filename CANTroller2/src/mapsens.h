@@ -22,11 +22,11 @@ class SparkFun_MicroPressure {
     uint8_t readStatus(void);
     float readPressure(Pressure_Units units=PSI, bool noblock=false);
   private:
-    bool ready;
+    bool ready = true;
     float pressure = NAN;
     int8_t _address, _eoc, _rst;
-    uint8_t _minPsi, _maxPsi, status;
-    TwoWire *_i2cPort;
+    uint8_t _minPsi, _maxPsi, _status;
+    TwoWire *_i2cPort = &Wire;
     // bool statusreadable();
 };
 // Constructor and sets default values.
@@ -95,17 +95,17 @@ float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
         }
     }
     else { // Check status byte if GPIO is not defined
-        uint8_t status = readStatus();
-        while((status&BUSY_FLAG) && (status!=0xFF)) {
+        _status = readStatus();
+        while((_status&BUSY_FLAG) && (_status!=0xFF)) {
             if (noblock) return NAN;
             delay(1);
-            status = readStatus();
+            _status = readStatus();
         }
     }
     ready = true;
     _i2cPort->requestFrom(_address,4);
-    status = _i2cPort->read();
-    if((status & INTEGRITY_FLAG) || (status & MATH_SAT_FLAG)) return NAN; //  check memory integrity and math saturation bit
+    _status = _i2cPort->read();
+    if((_status & INTEGRITY_FLAG) || (_status & MATH_SAT_FLAG)) return NAN; //  check memory integrity and math saturation bit
     uint32_t reading = 0;
     for(uint8_t i=0;i<3;i++) {  //  read 24-bit pressure
         reading |= _i2cPort->read();

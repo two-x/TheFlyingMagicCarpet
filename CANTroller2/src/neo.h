@@ -70,6 +70,7 @@ class neopixelstrip {
     bool fevpop(uint8_t idiot, int8_t pop_off);
     void fevpush(uint8_t idiot, int8_t push_off, bool push_val);
     void update_idiot(uint32_t idiot);
+    void calc_lobright();
     // struct hsv { float h; float s; float v; };
     // uint32_t rgb_to_hsv(uint32_t rgb);
     // hsv rgb_to_hsv(uint8_t r, uint8_t g, uint8_t b);
@@ -77,7 +78,6 @@ class neopixelstrip {
     neopixelstrip() {}
     void refresh();
     void init(uint8_t argpin, bool argbreadboard=false, bool viewcontext=NITE);
-    void calc_lobright();
     void setbright(uint8_t bright_pc);
     void setdesaturation(float _desat_of_ten);  // a way to specify nite or daytime brightness levels
     void heartbeat(bool onoroff);
@@ -301,7 +301,6 @@ void neopixelstrip::setflash(uint8_t idiot, uint8_t count, uint8_t pulseh, uint8
     cidiot[idiot][cflash] = desaturate(dimmer(cidiot[idiot][cflash], fset[idiot][fonbrit]), desat_of_ten);
     // cidiot[idiot][cflashoff] = (fset[idiot][onoff]) ? cidiot[idiot][con], cidiot[idiot][coff];
     for (uint8_t pg = 0; pg < fevpages; pg++) fevents[idiot][pg] = 0;
-    bool full = false;
     uint8_t filled = 0;
     uint8_t lstop;
     uint8_t patternlen = fset[idiot][fcount] * (fset[idiot][fpulseh] + fset[idiot][fpulsel]);
