@@ -111,9 +111,9 @@ uint32_t hsv_to_rgb32(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool
     return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
 }
 uint32_t hue_to_rgb16(uint8_t hue) {  // returns uint16 color
-    if (hue <= 85) return (((3 * ((255 - hue) % 85)) & 0xf8) << 8) | (((255 - 3 * ((255 - hue) % 85)) & 0xf8) << 3);
-    else if (hue <= 170) return (((3 * ((255 - hue) % 85)) & 0xfc) << 3) | ((255 - 3 * ((255 - hue) % 85)) >> 3);
-    else return (((255 - 3 * ((255 - hue) % 85)) & 0xf8) << 8) | ((3 * ((255 - hue) % 85)) >> 3);
+    if (hue <= 85) return (((3 * ((255 - hue) % 85)) & 0xf8) << 8) | (((255 - 3 * ((255 - hue) % 85)) & 0xfc) << 3);
+    if (hue <= 170) return (((3 * ((255 - hue) % 85)) & 0xfc) << 3) | ((255 - 3 * ((255 - hue) % 85)) >> 3);
+    return (((255 - 3 * ((255 - hue) % 85)) & 0xf8) << 8) | ((3 * ((255 - hue) % 85)) >> 3);
 }
 
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
@@ -128,7 +128,6 @@ char idlestatecard[ThrottleControl::targetstates::num_states][7] = { "todriv", "
 #define stEr "St\x88r"
 #define brAk "Br\x83k"
 #define spEd "Sp\x88""d"
-#define RperMS "rp\xf0 "
 #define b1nary "  \xa7 "
 #define scroll "\x12   "
 #define degreF "\xf7""F  "  // "\x09""F  "
@@ -138,12 +137,12 @@ char idlestatecard[ThrottleControl::targetstates::num_states][7] = { "todriv", "
 #define maxadjrate "MaxAjR\x83t"
 #define horfailsaf "HFails\x83""f"
 
-char telemetry[disp_fixed_lines][9] = { "TriggerV", "   Speed", "    Tach", "ThrotPWM", brAk"Pres", brAk"Motr", "Joy Horz", stEr"Motr", };  // Fixed rows
+char telemetry[disp_fixed_lines][9] = { "TriggerV", "   Speed", "    Tach", "ThrotPWM", brAk"Pres", brAk"Motr", "JoysticH", stEr"Motr", };  // Fixed rows
 char units[disp_fixed_lines][5] = { "%   ", "mph ", "rpm ", "us  ", "psi ", "%   ", "%   ", "%   " };  // Fixed rows
 
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, num_datapages };
 char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-int32_t tuning_first_editable_line[dataset_pages::num_datapages] = { 9, 9, 5, 3, 4, 8, 7, 7, 10, 0, 6 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[dataset_pages::num_datapages] = { 9, 9, 5, 3, 4, 8, 7, 7, 10, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
     { brAk"Posn", "MuleBatt", "     Pot", "AirSpeed", "     MAP", "MasAirFl", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
@@ -156,20 +155,20 @@ char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "LoopFreq", "Loop Avg", "LoopPeak", __________, __________, __________, "FlshDemo", "   Gamma", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
+    { "LoopFreq", "Loop Avg", "LoopPeak", " Touch X", " Touch Y", " Touch X", " Touch Y", "FlshDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI      // "   Gamma"
 };
 char tuneunits[dataset_pages::num_datapages][disp_tuning_lines][5] = {
-    { "in  ", "V   ", "%   ", "mph ", "psi ", "ugps", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
+    { "in  ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
     { "us  ", "us  ", "us  ", "us  ", "%   ", "%   ", ______, ______, ______, "us  ", "us  ", },  // PG_JOY
     { "adc ", ______, ______, ______, ______, "mph ", "psi ", "psi ", "mph ", "mph ", "in  ", },  // PG_CAR
     { "us  ", "us  ", ______, "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", },  // PG_PWMS
     { scroll, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", degreF, degreF, "rpms", scroll, },  // PG_IDLE
     { "psi ", "psi ", "%   ", "%   ", "%   ", "%   ", "us  ", "adc ", ______, "Hz  ", "s   ", },  // PG_BPID
     { "rpm ", "rpm ", "us  ", "us  ", "us  ", "us  ", ______, b1nary, ______, "Hz  ", "s   ", },  // PG_GPID
-    { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "us  ", "u/s ", ______, "Hz  ", "s   ", },  // PG_CPID
+    { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "us  ", "usps", ______, "Hz  ", "s   ", },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, b1nary, },  // PG_TEMP
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "Hz  ", "us  ", "us  ", ______, ______, ______, b1nary, ______, "%   ", "/10 ", b1nary, },  // PG_UI
+    { "Hz  ", "us  ", "us  ", "pix ", "pix ", "ntv ", "ntv ", b1nary, "%   ", "/10 ", b1nary, },  // PG_UI
 };
 char simgrid[4][3][5] = {
     { "psi\x18", "rpm\x18", "mph\x18" },
@@ -178,14 +177,16 @@ char simgrid[4][3][5] = {
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters is the left-side map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
-char unitmapnames[5][5] = { "ugps", "us  ", "rpms", scroll, b1nary, };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
-uint8_t unitmaps[5][17] = {  // 17x7-pixel bitmaps for where units use symbols not present in the font, are longer than 3 characters, or are just special
-    { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
+char unitmapnames[6][5] = { "usps", "us  ", "rpms", scroll, b1nary, "%   " };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
+uint8_t unitmaps[6][17] = {  // 17x7-pixel bitmaps for where units use symbols not present in the font, are longer than 3 characters, or are just special
+    { 0x7e, 0x20, 0x20, 0x3c, 0x00, 0x24, 0x2a, 0x2a, 0x12, 0x00, 0x70, 0x0e, 0x00, 0x24, 0x2a, 0x2a, 0x12, },  // usps - microseconds per second
     { 0x40, 0x7e, 0x20, 0x20, 0x1c, 0x20, 0x00, 0x24, 0x2a, 0x2a, 0x2a, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, },  // us - b/c the font's "mu" character doesn't work
     { 0x0f, 0x01, 0x00, 0x1f, 0x05, 0x06, 0x00, 0x0f, 0x01, 0x0e, 0x01, 0x0e, 0x60, 0x18, 0x00, 0x58, 0x74, },  // rpm/s (or rot/m*s) - rate of change of engine rpm
     { 0x04, 0x02, 0x7f, 0x02, 0x04, 0x00, 0x10, 0x20, 0x7f, 0x20, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // scroll arrows - to indicate multiple choice
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3e, 0x00, 0x00, 0x1c, 0x22, 0x22, 0x1c, 0x00, 0x00, },  // 0/1 - to indicate binary value
+    { 0x02, 0x45, 0x25, 0x12, 0x08, 0x24, 0x52, 0x51, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // % - just because the font one is feeble
 };  // These bitmaps are in the same format as the idiot light bitmaps, described below
+//  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
 bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &(temp_err[ENGINE]), &(temp_err[WHEEL]), &panicstop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, sim.enabled_ptr(), &running_on_devboard };
 char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
 uint16_t idiotcolors[arraysize(idiotlights)];
@@ -280,6 +281,10 @@ class Display {
         long eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) };
         long eraser_pos_max[2] = { disp_saver_width / 2 - eraser_rad, disp_saver_height / 2 - eraser_rad }; 
         long eraser_velo_sign[2] = { 1, 1 };
+        uint8_t penhue = 0;
+        uint16_t pencolor = RED;
+        uint32_t pentimeout = 70000;
+        Timer pentimer;
         int savernumcycles; int savercycle = 1; int savershape_last;
         int savershapes = 3;  // 4
         int savershape = random(savershapes);  // 3
@@ -655,6 +660,16 @@ class Display {
                 }
             }
         }
+        void draw_reticle(uint32_t x, uint32_t y) {
+            disp.drawFastHLine (x - 2, y, 5, WHT);
+            disp.drawFastVLine (x, y - 2, 5, WHT);
+        }
+        void draw_reticles() {
+            draw_reticle(260, 50);
+            draw_reticle(60, 50);
+            draw_reticle(60, 189);
+            draw_reticle(260, 189);
+        }
         uint16_t darken_color (uint16_t color, int32_t halvings = 1) {  // halves each of r, g, and b of a 5-6-5 formatted 16-bit color value either once or twice
             if (halvings == 1) return ((color & 0xf000) | (color & 0x7c0) | (color & 0x1e)) >> 1;
             else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
@@ -857,7 +872,7 @@ class Display {
                     draw_truth(14, sim.can_sim(sensor::airflow), 0);
                     draw_truth(15, sim.can_sim(sensor::mapsens), 0);
                     draw_truth(16, sim.can_sim(sensor::basicsw), 0);                    
-                    draw_asciiname(17, sensorcard[static_cast<uint8_t>(sim.potmap())]);
+                    draw_asciiname(17, sensorcard[sim.potmap()]);
                     draw_truth(18, cal_joyvert_brkmotor_mode, 0);
                     draw_truth(19, cal_pot_gasservo_mode, 0);
                 }
@@ -865,9 +880,13 @@ class Display {
                     draw_dynamic(9, loopfreq_hz);
                     draw_dynamic(10, (int32_t)looptime_avg_us, 0, loop_maxloop_us);
                     draw_dynamic(11, looptime_peak_us, 0, loop_maxloop_us);
-                    for (int line=12; line<=14; line++) draw_eraseval(line);
-                    draw_truth(15, flashdemo, 0);
-                    draw_dynamic(16, globalgamma, 0.1, 2.57, -1, 3);
+                    draw_dynamic(12, touch_pt[0], 0, disp_width_pix);
+                    draw_dynamic(13, touch_pt[1], 0, disp_height_pix);
+                    draw_dynamic(14, touch_pt[2], 340, 3980);
+                    draw_dynamic(15, touch_pt[3], 180, 3980);
+
+                    draw_truth(16, flashdemo, 0);
+                    // draw_dynamic(16, globalgamma, 0.1, 2.57, -1, 3);
                     draw_dynamic(17, neobright, 1.0, 100.0, -1, 3);
                     draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
                     draw_truth(19, screensaver, 0);
@@ -897,13 +916,15 @@ class Display {
         void saver_touch(int16_t x, int16_t y) {
             touchpoint_x = x;
             touchpoint_y = y;
-            printf("Got X=%d, Y=%d\n", touchpoint_x, touchpoint_y);
             if (touchpoint_x >= disp_simbuttons_x && touchpoint_y >= disp_simbuttons_y) {
-                _saver.fillCircle(touchpoint_x-disp_simbuttons_x, touchpoint_y-disp_simbuttons_y, 4, random(0x10000));
+                if (pentimer.expireset()) {
+                    if (savercycle == 1) pencolor = random(0x10000);
+                    else pencolor = hue_to_rgb16(++penhue);
+                }
+                _saver.fillCircle(touchpoint_x-disp_simbuttons_x, touchpoint_y-disp_simbuttons_y, 4, pencolor);
                 touchpoint_x = -1;
                 touchpoint_y = -1;
             }
-            printf("Got X=%d, Y=%d\n", touchpoint_x, touchpoint_y);
         }
         void saver_setup() {
             // _saver.setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
@@ -917,6 +938,7 @@ class Display {
             _saver.setTextColor(BLK);
             saverRefreshTimer.set(50000);
             saverCycleTimer.set((int64_t)saver_cycletime_us);
+            pentimer.set(pentimeout);
         }
         void saver_update() {
             if (saverRefreshTimer.expireset()) {

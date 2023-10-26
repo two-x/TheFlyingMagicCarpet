@@ -103,6 +103,7 @@ bool console_enabled = true;         // safer to disable because serial printing
 bool keep_system_powered = false;    // Use true during development
 bool screensaver = false;  // Can enable experiment with animated screen draws
 bool looptime_print = false;         // Makes code write out timestamps throughout loop to serial port
+bool touch_reticles = true;
 uint32_t looptime_linefeed_threshold = 0;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
 
 enum hotrc_axis { HORZ, VERT, CH3, CH4 };
@@ -121,6 +122,7 @@ RMTInput hotrc_rmt[4] = {
     RMTInput(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_pin)),  // hotrc[CH3]
     RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_pin))  // hotrc[CH4]
 };
+
 // In case we ever talk to jaguars over asynchronous serial port, replace with this:
 // #include <HardwareSerial.h>
 // HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
@@ -142,8 +144,6 @@ uint32_t motor_park_timeout_us = 4000000;       // If we can't park the motors f
 uint32_t gesture_flytimeout_us = 1250000;        // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
 Timer gestureFlyTimer(gesture_flytimeout_us); // Used to keep track of time for gesturing for going in and out of fly/cruise modes
 Timer motorParkTimer(motor_park_timeout_us);
-int32_t neobright = 10;  // lets us dim/brighten the neopixels
-int32_t neodesat = 0;  // lets us de/saturate the neopixels
 
 // potentiometer related
 Potentiometer pot(pot_wipe_pin);
@@ -160,25 +160,6 @@ int32_t simdelta_encoder = 0;
 bool cal_joyvert_brkmotor_mode = false; // Allows direct control of brake motor using controller vert
 bool cal_pot_gasservo_mode = false;     // Allows direct control of gas servo using pot. First requires pot to be in valid position before mode is entered
 bool cal_pot_gasservo_ready = false;    // Whether pot is in valid range
-
-// diag/monitoring variables
-bool diag_ign_error_enabled = true;
-
-// external digital input and output signal related
-bool basicmodesw = LOW;
-
-enum handler_request { req_na = -1, req_off = 0, req_on = 1, req_tog = 2 };  // requesting handler actions of digital values with handler functions
-bool starter = LOW;  // Set by handler only. Reflects current state of starter signal (does not indicate source)
-bool ignition = LOW;  // Set by handler only. Reflects current state of the signal
-bool syspower = HIGH;  // Set by handler only. Reflects current state of the signal
-bool panicstop = false;
-bool starter_drive = false;  // Set by handler only. High when we're driving starter, otherwise starter is an input
-int8_t starter_request = req_na;
-int8_t ignition_request = req_na;
-int8_t syspower_request = req_na;
-int8_t panicstop_request = req_on;  // On powerup we assume the code just crashed during a drive, because it could have
-Timer starterTimer(5000000);  // If remotely-started starting event is left on for this long, end it automatically  
-Timer panicTimer(20000000);  // How long should a panic stop last?  We can't stay mad forever
 
 enum temp_categories { AMBIENT = 0, ENGINE = 1, WHEEL = 2, num_temp_categories };
 enum temp_lims { DISP_MIN, OP_MIN, OP_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
@@ -203,27 +184,6 @@ BatterySensor mulebatt(mulebatt_pin);
 static Servo brakemotor;
 static Servo steermotor;
 static Servo gas_servo;
-
-// controller related
-float hotrc_ema_alpha = 0.075;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
-float hotrc_pc[2][8];           // values range from -100% to 100% are all derived or auto-assigned
-int32_t hotrc_us[4][8] =
-    { {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [HORZ] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-      { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-      { 1151, 1500, 1848, 0, 1500, 0, 0, 0 },     // 1000+150+1,   1500, 2000-150-2,  // [CH3] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-      { 1251, 1500, 1748, 0, 1500, 0, 0, 0 }, };  // 1000+250+1,   1500, 2000-250-2,  // [CH4] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-float hotrc_ema_us[2] = { 1500.0, 1500.0 };  // [HORZ/VERT]
-int32_t hotrc_absmin_us = 880;
-int32_t hotrc_absmax_us = 2080;
-int32_t hotrc_deadband_us = 13;  // All [DBBOT] and [DBTOP] values above are derived from this by calling hotrc_calc_params()
-int32_t hotrc_margin_us = 20;  // All [MARGIN] values above are derived from this by calling hotrc_calc_params()
-int32_t hotrc_failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
-int32_t hotrc_failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
-int32_t hotrc_failsafe_pad_us = 10;
-Timer hotrcFailsafeTimer(15000);  // How long to receive failsafe pulse value continuously before recognizing radio is lost. To prevent false positives
-bool hotrc_radio_lost = true;
-bool hotrc_sw[4] = { 1, 1, 0, 0 };  // index[2]=CH3, index[3]=CH4 and using [0] and [1] indices for LAST values of ch3 and ch4 respectively
-bool hotrc_sw_event[4];  // First 2 indices are unused.  What a tragic waste
 
 // steering related
 float steer_safe_pc = 72.0; // Steering is slower at high speed. How strong is this effect
@@ -379,6 +339,27 @@ QPID cruise_pid(speedo.filt_ptr(), &tach_target_rpm, &speedo_target_mph,        
                 cruise_pid_period_us, QPID::Control::manual, QPID::Centmode::off);
 // QPID::centmode::centerStrict, (tach_govern_rpm + tach_idle_rpm)/2);  // period, more settings
 
+// controller related
+float hotrc_ema_alpha = 0.075;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
+float hotrc_pc[2][8];           // values range from -100% to 100% are all derived or auto-assigned
+int32_t hotrc_us[4][8] =
+    { {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [HORZ] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+      { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+      { 1151, 1500, 1848, 0, 1500, 0, 0, 0 },     // 1000+150+1,   1500, 2000-150-2,  // [CH3] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+      { 1251, 1500, 1748, 0, 1500, 0, 0, 0 }, };  // 1000+250+1,   1500, 2000-250-2,  // [CH4] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+float hotrc_ema_us[2] = { 1500.0, 1500.0 };  // [HORZ/VERT]
+int32_t hotrc_absmin_us = 880;
+int32_t hotrc_absmax_us = 2080;
+int32_t hotrc_deadband_us = 13;  // All [DBBOT] and [DBTOP] values above are derived from this by calling hotrc_calc_params()
+int32_t hotrc_margin_us = 20;  // All [MARGIN] values above are derived from this by calling hotrc_calc_params()
+int32_t hotrc_failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
+int32_t hotrc_failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
+int32_t hotrc_failsafe_pad_us = 10;
+Timer hotrcFailsafeTimer(15000);  // How long to receive failsafe pulse value continuously before recognizing radio is lost. To prevent false positives
+bool hotrc_radio_lost = true;
+bool hotrc_sw[4] = { 1, 1, 0, 0 };  // index[2]=CH3, index[3]=CH4 and using [0] and [1] indices for LAST values of ch3 and ch4 respectively
+bool hotrc_sw_event[4];  // First 2 indices are unused.  What a tragic waste
+
 void hotrc_toggle_update(int8_t chan) {                                                            //
     hotrc_us[chan][RAW] = hotrc_rmt[chan].readPulseWidth(true);
     hotrc_sw[chan] = (hotrc_us[chan][RAW] <= hotrc_us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  hotrc_us[CH3][CENT]
@@ -404,6 +385,12 @@ void hotrc_calc_params() {
         hotrc_pc[axis][MARGIN] = hotrc_us_to_pc(hotrc_margin_us);  // hotrc_us_to_pc(axis, hotrc_margin_us);
     }
 }
+enum joydirs { joy_down = -1, joy_cent = 0, joy_up = 1, joy_lt = 2, joy_rt = 3 };
+joydirs get_joydir(uint8_t axis = VERT) {
+    if (axis == VERT) return (hotrc_pc[axis][FILT] > hotrc_pc[axis][DBTOP]) ? joy_up : ((hotrc_pc[axis][FILT] < hotrc_pc[axis][DBBOT]) ? joy_down : joy_cent);
+    return (hotrc_pc[axis][FILT] > hotrc_pc[axis][DBTOP]) ? joy_rt : ((hotrc_pc[axis][FILT] < hotrc_pc[axis][DBBOT]) ? joy_lt : joy_cent);
+}
+
 void calc_governor(void) {
     tach_govern_rpm = map(gas_governor_pc, 0.0, 100.0, 0.0, tach.redline_rpm()); // Create an artificially reduced maximum for the engine speed
     cruise_pid.set_outlimits(throttle.idlespeed(), tach_govern_rpm);
@@ -412,11 +399,6 @@ void calc_governor(void) {
 }
 float steer_safe(float endpoint) {
     return steer_stop_pc + (endpoint - steer_stop_pc) * (1.0 - steer_safe_pc * speedo.filt() / (100.0 * speedo.redline_mph()));
-}
-
-enum joydirs { joy_down = -1, joy_cent = 0, joy_up = 1 };
-joydirs get_joydir() {
-    return (hotrc_pc[VERT][FILT] > hotrc_pc[VERT][DBTOP]) ? joy_up : ((hotrc_pc[VERT][FILT] < hotrc_pc[VERT][DBBOT]) ? joy_down : joy_cent);
 }
 
 // int* x is c++ style, int *x is c style
@@ -459,10 +441,14 @@ void update_temperature_sensors(void *parameter) {
 
 void set_board_defaults(bool devboard) {  // true for dev boards, false for printed board (on the car)
     if (devboard) {
+        sim.set_potmap(sensor::tach);
         sim.set_can_sim(sensor::pressure, true);
         sim.set_can_sim(sensor::brkpos, true);
         sim.set_can_sim(sensor::tach, true);
         sim.set_can_sim(sensor::speedo, true);
+        sim.set_can_sim(sensor::mapsens, true);
+        sim.set_can_sim(sensor::airflow, true);
+        sim.set_can_sim(sensor::basicsw, true);
     }
     else {
         gamma_correct_enabled = false;
@@ -471,9 +457,18 @@ void set_board_defaults(bool devboard) {  // true for dev boards, false for prin
         screensaver = false;         // Can enable experiment with animated screen draws
         looptime_print = false;      // Makes code write out timestamps throughout loop to serial port
         dont_take_temperatures = false;
+        touch_reticles = false;
     }
 }
+
+enum handler_request { req_na = -1, req_off = 0, req_on = 1, req_tog = 2 };  // requesting handler actions of digital values with handler functions
+
 // Starter bidirectional handler logic.  Outside code interacts with handler by setting starter_request = req_off, req_on, or req_tog    
+bool starter = LOW;  // Set by handler only. Reflects current state of starter signal (does not indicate source)
+bool starter_drive = false;  // Set by handler only. High when we're driving starter, otherwise starter is an input
+int8_t starter_request = req_na;
+Timer starterTimer(5000000);  // If remotely-started starting event is left on for this long, end it automatically  
+//
 void starter_update () {
     if (starter_signal_support) {
         if (starter_request == req_tog) starter_request = !starter_drive;  // translate toggle request to a drive request opposite to the current drive state
@@ -497,6 +492,10 @@ void starter_update () {
     }
     else starter = LOW;
 }
+
+bool syspower = HIGH;  // Set by handler only. Reflects current state of the signal
+int8_t syspower_request = req_na;
+//
 void syspower_update() {  // Soren: A lot of duplicate code with ignition/panicstop and syspower routines here ...
     if (syspower_request == req_tog) syspower_request = (int8_t)(!syspower);
     // else if (syspower_request == syspower) syspower_request = req_na;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
@@ -508,6 +507,14 @@ void syspower_update() {  // Soren: A lot of duplicate code with ignition/panics
     }
     syspower_request = req_na;
 }
+
+// Ignition and panic stop handler
+bool ignition = LOW;  // Set by handler only. Reflects current state of the signal
+int8_t ignition_request = req_na;
+bool panicstop = false;
+int8_t panicstop_request = req_on;  // On powerup we assume the code just crashed during a drive, because it could have
+Timer panicTimer(20000000);  // How long should a panic stop last?  We can't stay mad forever
+//
 void ignition_panic_update() {  // Run once each main loop, directly before panicstop_update()
     if (panicstop_request == req_tog) panicstop_request = (int8_t)(!panicstop);
     if (ignition_request == req_tog) ignition_request = (int8_t)(!ignition);
@@ -530,6 +537,8 @@ void ignition_panic_update() {  // Run once each main loop, directly before pani
     }
     ignition_request = req_na;  // Make sure this goes after the last comparison
 }
+// basic mode switch
+bool basicmodesw = LOW;
 void basicsw_update() {
     if (!sim.simulating(sensor::basicsw)) {  // Basic Mode switch
         do {
@@ -537,8 +546,6 @@ void basicsw_update() {
         } while (basicmodesw != !digitalRead(basicmodesw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
     }
 }
-Timer dispResetButtonTimer (500000);  // How long to press esp32 "boot" button before screen will reset and redraw
-
 // pushbutton related
 enum sw_presses { NONE, SHORT, LONG }; // used by encoder sw and button algorithms
 bool boot_button_last = 0;
@@ -546,15 +553,16 @@ bool boot_button = 0;
 bool boot_button_timer_active = false;
 bool boot_button_suppress_click = false;
 bool boot_button_action = NONE;
-
+Timer boot_button_timer(400000);
+//
 void bootbutton_update() {
     // ESP32 "boot" button. generates boot_button_action flags of LONG or SHORT presses which can be handled wherever. Handler must reset boot_button_action = NONE
     if (!read_pin (bootbutton_pin)) {
         if (!boot_button) {  // If press just occurred
-            dispResetButtonTimer.reset();  // Looks like someone just pushed the esp32 "boot" button
+            boot_button_timer.reset();  // Looks like someone just pushed the esp32 "boot" button
             boot_button_timer_active = true;  // flag to indicate timing for a possible long press
         }
-        else if (boot_button_timer_active && dispResetButtonTimer.expired()) {
+        else if (boot_button_timer_active && boot_button_timer.expired()) {
             boot_button_action = LONG;  // Set flag to handle the long press event. Note, routine handling press should clear this
             boot_button_timer_active = false;  // Clear timer active flag
             boot_button_suppress_click = true;  // Prevents the switch release after a long press from causing a short press
@@ -585,7 +593,7 @@ uint32_t loop_periods_us[loop_history];
 uint32_t loop_now = 0;
 float looptime_avg_us, loopfreq_hz;
 std::vector<std::string> loop_names(20);
-
+//
 void looptime_init() {  // Run once at end of setup()
     if (looptime_print) {
         for (int32_t x=1; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
@@ -632,7 +640,8 @@ void looptime_update() {  // Call once each loop at the very end
     loopno++;  // I like to count how many loops
 }
 
-// Trouble codes
+
+// Diag / trouble codes
 uint32_t err_timeout_us = 175000;
 Timer errTimer((int64_t)err_timeout_us);
 uint32_t err_margin_adc = 5;
@@ -647,6 +656,7 @@ int8_t err_sensor_fails[num_err_types] = { 0, 0, 0, 0, 0, 0 };
 bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_mulebatt/e_basicsw/e_starter]   // sensor::opt_t::num_sensors]
 uint8_t highest_pri_failing_sensor[num_err_types];
 uint8_t highest_pri_failing_last[num_err_types];
+bool diag_ign_error_enabled = true;
 
 void diag_update() {
     if (errTimer.expireset()) {
@@ -766,6 +776,32 @@ void err_print_info() {
         printf("\n");
     }
 }
+int16_t touch_pt[4];
+
+// Neopixel stuff
+neopixelstrip neo;
+int32_t neobright = 10;  // lets us dim/brighten the neopixels
+int32_t neodesat = 0;  // lets us de/saturate the neopixels
+
+void neo_setup() {
+    neo.init((uint8_t)neopixel_pin, running_on_devboard, 1);
+    // neo.init((uint8_t)neopixel_pin, !running_on_devboard);
+    neo.setbright(neobright);
+    neo.setdesaturation(neodesat);
+    neo.heartbeat(neopixel_pin >= 0);
+}
+void enable_flashdemo(bool ena) {
+    if (ena) {
+        neo.setflash(4, 8, 8, 8, 20, -1);  // brightness toggle in a continuous squarewave
+        neo.setflash(5, 3, 1, 2, 85);      // three super-quick bright white flashes
+        neo.setflash(6, 2, 5, 5, 0, 0);    // two short black pulses
+    }
+    else {
+        neo.setflash(4, 0);
+        neo.setflash(5, 0);
+        neo.setflash(6, 0);
+    }
+}
 // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
 float massairflow(float _map = NAN, float _airflow = NAN, float _ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
     float temp = _ambient;
@@ -779,9 +815,9 @@ float massairflow(float _map = NAN, float _airflow = NAN, float _ambient = NAN) 
     float v = 0.447 * (std::isnan(_airflow) ? airflow.filt() : _airflow); // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
     float Ain2 = 3.1415926;  // in in2    1.0^2 in2 * pi  // will still need to divide by 1550 in2/m2
     float P = 6894.76 * (std::isnan(_map) ? mapsens.filt() : _map);  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
-    return v * Ain2 * P * (1000000000.0 / (R * T * 1550));  // mass air flow in micrograms per second (ug/s)   (1B ug/kg * m/s * in2 * J/m3) / (J/(kg*K) * K * 1550 in2/m2) = ug/s
+    return v * Ain2 * P * 1000.0 / (R * T * 1550);  // mass air flow in grams per second (ug/s)   (1k g/kg * m/s * in2 * J/m3) / (J/(kg*K) * K * 1550 in2/m2) = g/s
 }
-float maf_ugps;  // Manifold mass airflow in micrograms per second
+float maf_ugps;  // Manifold mass airflow in grams per second
 float maf_min_ugps = 0.0;
 float maf_max_ugps = massairflow(mapsens.max_psi(), airflow.max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
 bool flashdemo = false;
