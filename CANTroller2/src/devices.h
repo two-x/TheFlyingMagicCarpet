@@ -228,7 +228,7 @@ class Transducer : public Device {
             }
             else ret = _b_offset + _m_factor / arg_val_f;
         } else {
-            printf ("Error: unit conversion refused to divide by zero\n");
+            printf ("err: from_native unit conversion divide by zero attempt. max = %f\n", max_f);
             ret = max_f;  // Best return given division would be infinite
         }
         return static_cast<HUMAN_T>(ret);
@@ -247,7 +247,7 @@ class Transducer : public Device {
         } else if (!_invert && _m_factor) {  // risk here of floating point error comparing near-zero values
             ret = (arg_val_f - _b_offset) / _m_factor;
         } else {
-            printf ("Error: unit conversion refused to divide by zero\n");
+            printf ("err: to_native unit conversion divide by zero attempt. max = %f\n", max_f);
             ret = max_f;  // Best return given division would be infinite
         }
         return static_cast<NATIVE_T>(ret);
@@ -534,9 +534,9 @@ class MAPSensor : public I2CSensor {
                 if (_sensor.begin() == false) {
                     printf("  Sensor not responding\n");  // Begin communication with air flow sensor) over I2C 
                     set_source(Source::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
-                } else {
-                    printf("  Reading %f atm manifold pressure\n", _sensor.readPressure(ATM));
-                    printf("  Sensor responding properly\n");
+                // } else {
+                //     printf("  Reading %f atm manifold pressure\n", _sensor.readPressure(ATM));
+                //     printf("  Sensor responding properly\n");
                 }
             } else {
                 set_source(Source::UNDEF); // don't even have a device at all...
@@ -1013,7 +1013,6 @@ class Simulator {
                     }
                 }
             }
-
             // Update the simulation status
             _enabled = enableSimulation;
         }
@@ -1130,10 +1129,13 @@ class Simulator {
                 _potmap = arg_sensor;
             }
         }
+        void set_potmap(int32_t arg_sensor) { set_potmap(static_cast<sensor>(arg_sensor)); }
+
         // Getter functions
         bool potmapping(sensor s) { return can_sim(s) && _potmap == s; }  // query if a certain sensor is being potmapped
+        bool potmapping(int32_t s) { return can_sim(static_cast<sensor>(s)) && (_potmap == static_cast<sensor>(s)); }  // query if a certain sensor is being potmapped        
         bool potmapping() { return can_sim(_potmap) && !(_potmap == sensor::none); }  // query if any sensors are being potmapped
-        sensor potmap() { return _potmap; }  // query which sensor is being potmapped
+        int32_t potmap() { return static_cast<int32_t>(_potmap); }  // query which sensor is being potmapped
         bool enabled() { return _enabled; }
         bool* enabled_ptr() { return &_enabled; }
 };

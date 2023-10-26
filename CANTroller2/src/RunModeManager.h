@@ -3,7 +3,7 @@
 
 class RunModeManager {
 private:
-    enum joydirs { joy_down = -1, joy_cent = 0, joy_up = 1 };
+    enum joydirs { joy_down = -1, joy_cent = 0, joy_up = 1, joy_rt = 2, joy_lt = 3 };
     joydirs joydir;
     float cruise_ctrl_extent_pc;       // During cruise adjustments, saves farthest trigger position read
     bool cruise_trigger_released = false;
@@ -14,15 +14,15 @@ private:
 public:
     // Call this function in the main loop to manage run modes
     // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
-    runmodes do_runmode() {
+    runmodes run_runmode() {
         updateMode(runmodes(runmode)); // Update the current mode if needed, this also sets we_just_switched_modes
-        if (_currentMode == BASIC) do_basicMode(); // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
-        else if (_currentMode == SHUTDOWN) do_shutdownMode();
-        else if (_currentMode == STALL) do_stallMode();
-        else if (_currentMode == HOLD) do_holdMode();
-        else if (_currentMode == FLY) do_flyMode();
-        else if (_currentMode == CRUISE) do_cruiseMode();
-        else if (_currentMode == CAL) do_calMode();
+        if (_currentMode == BASIC) run_basicMode(); // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
+        else if (_currentMode == SHUTDOWN) run_shutdownMode();
+        else if (_currentMode == STALL) run_stallMode();
+        else if (_currentMode == HOLD) run_holdMode();
+        else if (_currentMode == FLY) run_flyMode();
+        else if (_currentMode == CRUISE) run_cruiseMode();
+        else if (_currentMode == CAL) run_calMode();
         else {  // Obviously this should never happen
             Serial.println (F("Error: Invalid runmode entered"));
             updateMode(SHUTDOWN);
@@ -30,21 +30,23 @@ public:
         return modeChanger();
     }
 private:
-    joydirs get_joydir() {
-        return (hotrc_pc[VERT][FILT] > hotrc_pc[VERT][DBTOP]) ? joy_up : ((hotrc_pc[VERT][FILT] < hotrc_pc[VERT][DBBOT]) ? joy_down : joy_cent);
+    joydirs get_joydir(uint8_t axis = VERT) {
+        if (axis == VERT) return (hotrc_pc[axis][FILT] > hotrc_pc[axis][DBTOP]) ? joy_up : ((hotrc_pc[axis][FILT] < hotrc_pc[axis][DBBOT]) ? joy_down : joy_cent);
+        return (hotrc_pc[axis][FILT] > hotrc_pc[axis][DBTOP]) ? joy_rt : ((hotrc_pc[axis][FILT] < hotrc_pc[axis][DBBOT]) ? joy_lt : joy_cent);
     }
     
     void updateMode(runmodes newmode) { _currentMode = newmode; }
 
     runmodes modeChanger() {
-        if (basicmodesw) _currentMode = BASIC;  // if basicmode switch on --> Basic Mode
+        if (!syspower) _currentMode = SHUTDOWN;
+        else if (basicmodesw) _currentMode = BASIC;  // if basicmode switch on --> Basic Mode
         else if ((_currentMode != CAL) && (panicstop || !ignition)) _currentMode = SHUTDOWN;
         else if ((_currentMode != CAL) && tach.engine_stopped()) _currentMode = STALL;;  // otherwise if engine not running --> Stall Mode
         we_just_switched_modes = (_currentMode != _oldMode);  // currentMode should not be changed after this point in loop
         if (we_just_switched_modes) {
             disp_runmode_dirty = true;
             cleanup_state_variables();
-            syspower = HIGH;
+            syspower_request = req_on;
         }
         _oldMode = _currentMode;
         return _currentMode;
@@ -67,7 +69,7 @@ private:
             cal_joyvert_brkmotor_mode = false;
         }
     }
-    void do_basicMode() { // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
+    void run_basicMode() { // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         if (we_just_switched_modes) {  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
             gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
             motorParkTimer.reset();  // Set a timer to timebox this effort
@@ -75,7 +77,7 @@ private:
         }
         else if (!basicmodesw && !tach.engine_stopped()) updateMode( speedo.car_stopped() ? HOLD : FLY );  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
     }
-    void do_shutdownMode() { // In shutdown mode we stop the car if it's moving then park the motors.
+    void run_shutdownMode() { // In shutdown mode we stop the car if it's moving then park the motors.
         if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
             throttle.goto_idle();  //  Release the throttle 
             shutdown_incomplete = true;
@@ -90,7 +92,6 @@ private:
                 park_the_motors = false;
             }
         }
-        // else if (ignition && engine_stopped()) updateMode(STALL);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
         else if ((speedo.car_stopped() || allow_rolling_start || autostop_disabled) && ignition && !panicstop && !tach.engine_stopped()) updateMode(HOLD);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
         if (shutdown_incomplete) {  // If we haven't yet stopped the car and then released the brakes and gas all the way
             if (speedo.car_stopped() || stopcarTimer.expired() || autostop_disabled) {  // If car has stopped, or timeout expires, then release the brake
@@ -115,17 +116,17 @@ private:
         }
         else if (calmode_request) updateMode(CAL);  // if fully shut down and cal mode requested, go to cal mode
         else if (sleepInactivityTimer.expired()) {
-            syspower = LOW; // Power down devices to save battery
+            syspower_request = req_off; // Power down devices to save battery
             // go to sleep, would happen here 
         }
     }
-    void do_stallMode() {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
-        if (get_joydir() != joy_down) pressure_target_psi = pressure.min_human();  // If in deadband or being pushed up, no pressure target
+    void run_stallMode() {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
+        if (get_joydir(VERT) != joy_down) pressure_target_psi = pressure.min_human();  // If in deadband or being pushed up, no pressure target
         else pressure_target_psi = map (hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBBOT], hotrc_pc[VERT][MIN], pressure.min_human(), pressure.max_human());  // Scale joystick value to pressure adc setpoint
         if (!tach.engine_stopped()) updateMode(HOLD);  // If we started the car, enter hold mode once starter is released
         if (starter || !tach.engine_stopped()) updateMode(HOLD);  // If we started the car, enter hold mode once starter is released
     }
-    void do_holdMode() {
+    void run_holdMode() {
         if (we_just_switched_modes) {  // Release throttle and push brake upon entering hold mode
             if (!autostop_disabled) {
                 if (speedo.car_stopped()) pressure_target_psi = pressure.filt() + (starter ? pressure_panic_increment_psi : pressure_hold_increment_psi); // If the car is already stopped then just add a touch more pressure and then hold it.
@@ -138,12 +139,12 @@ private:
         throttle.goto_idle();  // Let off gas (if gas using PID mode) and keep target updated to possibly changing idle value
         if (brakeIntervalTimer.expireset() && !speedo.car_stopped() && !stopcarTimer.expired() && !autostop_disabled)
             pressure_target_psi = min (pressure_target_psi + (starter ? pressure_panic_increment_psi : pressure_hold_increment_psi), pressure.max_human());  // If the car is still moving, push harder
-        if (get_joydir() != joy_up) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
+        if (get_joydir(VERT) != joy_up) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
         else if (joy_centered && !starter && !hotrc_radio_lost) updateMode(FLY); // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
     }
-    void do_flyMode() {
+    void run_flyMode() {
         if (we_just_switched_modes) car_hasnt_moved = speedo.car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
-        joydir = get_joydir();
+        joydir = get_joydir(VERT);
         if (car_hasnt_moved) {
             if (joydir != joy_up) updateMode(HOLD);  // Must keep pulling trigger until car moves, or it drops back to hold mode
             else if (!speedo.car_stopped()) car_hasnt_moved = false;  // Once car moves, we're allowed to release the trigger without falling out of fly mode
@@ -165,7 +166,7 @@ private:
         if (flycruise_toggle_request) updateMode(CRUISE);
         flycruise_toggle_request = false;
     }
-    void do_cruiseMode() {
+    void run_cruiseMode() {
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
             speedo_target_mph = speedo.filt();
             pressure_target_psi = pressure.min_human();  // Let off the brake and keep it there till out of Cruise mode
@@ -177,7 +178,7 @@ private:
             cruise_ctrl_extent_pc = hotrc_pc[VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
             cruise_adjusting = false;
         }
-        joydir = get_joydir();
+        joydir = get_joydir(VERT);
         if (joydir == joy_cent) {
             cruise_trigger_released = true;
             cruise_ctrl_extent_pc = hotrc_pc[VERT][CENT];
@@ -211,7 +212,7 @@ private:
         else if (gestureFlyTimer.expired()) updateMode(FLY);  // New gesture to drop to fly mode is hold the brake all the way down for more than X ms
         if (speedo.car_stopped()) updateMode(HOLD);  // In case we slam into camp Q woofer stack, get out of cruise mode
     }
-    void do_calMode() {  // Calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration. Don't use it unless you know how.
+    void run_calMode() {  // Calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration. Don't use it unless you know how.
         if (we_just_switched_modes) {  // Entering Cal mode: From fully shut down state, open simulator and long-press the Cal button. Each feature starts disabled but can be enabled with the tuner.
             calmode_request = false;
             cal_pot_gasservo_mode = false;
@@ -227,59 +228,49 @@ private:
 //
 // ** Basic Mode **
 // - Required: BasicMode switch On
-// - Priority: 1 (Highest)
-// The gas and brake don't do anything in Basic Mode. Just the steering works, so use the pedals.
-// This mode is enabled with a toggle switch in the controller box.  When in Basic Mode, the only
-// other valid mode is Shutdown Mode. Shutdown Mode may override Basic Mode.
-// - Actions: Release and deactivate brake and gas actuators.  Steering PID keep active  
+// At startup it attempts to park the gas servo and brake motor, to a position out of the way of the 
+// driver's feet, and thereafter the gas and brake don't do anything in Basic Mode. Only the steering
+// works, so use the pedals. This mode is enabled by a switch on the controller box. The only way to 
+// leave Basic Mode is by turning off the syspower signal or turn off the basic switch.  
 //
 // ** Shutdown Mode **
 // - Required: BasicMode switch Off & Ignition Off
-// - Priority: 2
-// This mode is active whenever the ignition is off.  In other words, whenever the
-// little red pushbutton switch by the joystick is unclicked.  This happens before the
-// ignition is pressed before driving, but it also may happen if the driver needs to
-// panic and E-stop due to loss of control or any other reason.  The ignition will get cut
-// independent of the controller, but we can help stop the car faster by applying the
-// brakes. Once car is stopped, we release all actuators and then go idle.
-// - Actions: 1. Release throttle. If car is moving AND BasicMode Off, apply brakes to stop car
-// - Actions: 2: Release brakes and deactivate all actuators including steering
+// This mode is active at boot, or whenever the ignition is off or when panic stopping. If the car is
+// moving, then like hold mode, shutdown mode will try to stop the car. Once stopped, then like basic mode,
+// it will park the motors out of the way and all systems stop. After a timeout it will power down into
+// deep sleep (not yet implemented).
 //
 // ** Stall Mode **
 // - Required: Engine stopped & BasicMode switch Off & Ignition On
-// - Priority: 3
 // This mode is active when the engine is not running.  If car is moving, then it presumably may
-// coast to a stop.  The actuators are all enabled and work normally.  Starting the engine will 
-// bring you into Hold Mode.  Shutdown Mode and Basic Mode both override Stall Mode. Note: This
-// mode allows for driver to steer while being towed or pushed, or working on the car.
-// - Actions: Enable all actuators
+// coast to a stop.  The actuators are all enabled and work, but the gas drops to open-loop control.
+// The starter may be turned on or off freely here by hitting the hotrc ch4 button. If the engine 
+// turns, then it'll go to hold mode. May be useful if beoing pushed or towed, or when servicing.
 //
 // ** Hold Mode **
 // - Required: Engine running & JoyVert<=Center & BasicMode switch Off & Ignition On
-// - Priority: 4
-// This mode is entered from Stall Mode once engine is started, and also, whenever the car comes
-// to a stop while driving around in Fly Mode.  This mode releases the throttle and will 
-// continuously increase the brakes until the car is stopped, if it finds the car is moving. 
-// Pushing up on the joystick from Hold mode releases the brakes & begins Fly Mode.
-// Shutdown, Basic & Stall Modes override Hold Mode.
-// # Actions: Close throttle, and Apply brake to stop car, continue to ensure it stays stopped.
+// This mode ensures the car is stopped and stays stopped until you pull the trigger to give it gas, at which
+// point it goes to fly mode. This mode is entered from fly mode if the car comes to a stop, or from Stall Mode if
+// the engine starts turning. The starter can possibly be on through that transition, and thereafter it may be 
+// turned off but not on from hold mode.
 //
 // ** Fly Mode **
-// - Required: (Car Moving OR JoyVert>Center) & In gear & Engine running & BasicMode Off & Ign On
-// - Priority: 5
-// This mode is for driving under manual control. In Fly Mode, vertical joystick positions
-// result in a proportional level of gas or brake (AKA "Manual" control).  Fly Mode is
-// only active when the car is moving - Once stopped or taken out of gear, we go back to Hold Mode.
-// If the driver performs a special secret "cruise gesture" on the joystick, then go to Cruise Mode.
-// Special cruise gesture might be: Pair of sudden full-throttle motions in rapid succession
-// - Actions: Enable all actuators, Watch for gesture
+// - Required: JoyVert>Center & Engine running & BasicMode Off & Ign On
+// This mode is for driving under manual control. This mode is entered from hold mode by pulling the gas trigger.
+// If the trigger is released again before the car moves, it's back to hold mode though. Trigger pull controls throttle
+// and trigger push controls brake, either/or. Whenever the car stops, then back to hold mode. Cruise mode may be 
+// entered from fly mode by pressing the cruise toggle button (ch4).
 //
 // ** Cruise Mode **
-// - Required: Car Moving & In gear & Engine running & BasicMode switch Off & Ignition On
-// - Priority: 6 (Lowest)
-// This mode is entered from Fly Mode by doing a special joystick gesture. In Cruise Mode,
-// the brake is disabled, and the joystick vertical is different: If joyv at center, the
-// throttle will actively maintain current car speed.  Up or down momentary joystick presses
-// serve to adjust that target speed. A sharp, full-downward gesture will drop us back to 
-// Fly Mode, promptly resulting in braking (if kept held down).
-// - Actions: Release brake, Maintain car speed, Handle joyvert differently, Watch for gesture
+// - Required: Car Moving & Engine running & BasicMode switch Off & Ignition On
+// This mode is entered from Fly Mode by pushing the cruise toggle button, and pushing it again will take you back.
+// There are no brakes in cruise mode, and pushing away on the trigger instead allows decreasing the cruise setpoint
+// (or pull it to increase the setpoint) Cruise can be run in three different modes which work differently. The 
+// default "throttle_delta_mode" holds the throttle servo position as long as the trigger is at center, and if not,
+// it adjusts the setpoint up or down proportional to how far and how long you hold the trigger away from center.
+// If you panic and push full brake for over 500ms, it will drop to fly mode and then push brakes.
+//
+// ** Cal Mode **
+// This is god mode,it allows direct control of some actuators without respecting limits of motion, for purpose of
+// calibrating those very limits. It can be entered from shutdown mode with simulator on by long-pressing the CAL
+// button. Be careful with it.
