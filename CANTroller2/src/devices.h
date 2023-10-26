@@ -135,12 +135,12 @@ class Device {
     bool _can_source[6] = { true, true, false, true, false, false };
                         // UNDEF, FIXED,  PIN, TOUCH,  POT,  CALC
     // source handling functions (should be overridden in child classes as needed)
-    virtual void assign_from_undef() {}
-    virtual void assign_from_fixed() {}
-    virtual void assign_from_pin() {}
-    virtual void assign_from_touch() {}
-    virtual void assign_from_pot() {}
-    virtual void assign_from_calc() {}
+    virtual void set_val_from_undef() {}
+    virtual void set_val_from_fixed() {}
+    virtual void set_val_from_pin() {}
+    virtual void set_val_from_touch() {}
+    virtual void set_val_from_pot() {}
+    virtual void set_val_from_calc() {}
     virtual void update_source() {}
   public:
     Timer timer;  // Can be used for external purposes
@@ -163,22 +163,22 @@ class Device {
         if (!_enabled) return; // do nothing if the Device is disabled
         switch (_source) {
             case Source::UNDEF:
-                assign_from_undef();
+                set_val_from_undef();
                 break;
             case Source::FIXED:
-                assign_from_fixed();
+                set_val_from_fixed();
                 break;
             case Source::PIN:
-                assign_from_pin();
+                set_val_from_pin();
                 break;
             case Source::TOUCH:
-                assign_from_touch();
+                set_val_from_touch();
                 break;
             case Source::POT:
-                assign_from_pot();
+                set_val_from_pot();
                 break;
             case Source::CALC:
-                assign_from_calc();
+                set_val_from_calc();
                 break;
             default:
                 // should never get here
@@ -390,10 +390,10 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
         }
     }
 
-    virtual void assign_from_touch() {
+    virtual void set_val_from_touch() {
         this->_val_filt.set(this->_human.val());
     }
-    virtual void assign_from_pot() {
+    virtual void set_val_from_pot() {
         this->_human.set(this->_pot->mapToRange(this->_human.min(), this->_human.max()));
         this->_val_raw = this->_native.val();  // Arguably pot should set the raw value and let the filter work normally, instead of this
         this->_val_filt.set(this->_human.val()); // don't filter the value we get from the pot, the pot output is already filtered
@@ -424,12 +424,12 @@ class I2CSensor : public Sensor<float,float> {
         // implement in child classes using the appropriate i2c sensor
         virtual float read_sensor() = 0;
 
-        virtual void assign_from_pin() {
+        virtual void set_val_from_pin() {
             this->set_native(read_sensor());
             calculate_ema();  // Sensor EMA filter
         }
 
-        virtual void assign_from_pot() {
+        virtual void set_val_from_pot() {
             this->_human.set(this->_pot->mapToRange(this->_human.min(), this->_human.max()));
             this->_val_raw = this->_native.val();
             this->_val_filt.set(this->_human.val()); // don't filter the value we get from the pot, the pot output is already filtered
@@ -558,7 +558,7 @@ class MAPSensor : public I2CSensor {
 template<typename NATIVE_T, typename HUMAN_T>
 class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
   protected:
-    virtual void assign_from_pin() {
+    virtual void set_val_from_pin() {
         this->set_native(static_cast<NATIVE_T>(analogRead(this->_pin)));  // Soren: can this be done without two casts?
         this->calculate_ema(); // filtered values are kept in human format
     }
@@ -568,9 +568,9 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
         set_pin(this->_pin, INPUT);
         this->set_source(Source::PIN);
     }
-    virtual int32_t adc() { return this->_native.val(); }  // Soren: I created these to be available to any child sensors, but untested and not confident it's right
-    virtual int32_t min_adc() { return this->_native.min(); }
-    virtual int32_t max_adc() { return this->_native.max(); }
+    int32_t adc() { return this->_native.val(); }  // Soren: I created these to be available to any child sensors, but untested and not confident it's right
+    int32_t min_adc() { return this->_native.min(); }
+    int32_t max_adc() { return this->_native.max(); }
 };
 
 // BatterySensor reads the voltage level from the Mule battery
@@ -635,13 +635,13 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     protected:
         // TODO: add description
         std::shared_ptr<float> _zeropoint;
-        void assign_from_touch() { _val_filt.set((nom_min_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
+        void set_val_from_touch() { _val_filt.set((op_min_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
     public:
         static constexpr int32_t min_adc = 0.0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
         static constexpr int32_t max_adc = adcrange_adc;
         static constexpr float park_in = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
-        static constexpr float nom_min_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-        static constexpr float nom_max_extend_in = park_in; // 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
+        static constexpr float op_min_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
+        static constexpr float op_max_extend_in = park_in; // 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
         static constexpr float abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
         static constexpr float abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
         static constexpr float margin_in = .01;  // TODO: add description
@@ -658,7 +658,7 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
             _b_offset = initial_offset;
             _zeropoint = std::make_shared<float>(initial_zeropoint_in);
             // Soren: this line might be why we broke our brake motor at bm23:
-            // set_human_limits(nom_min_retract_in, nom_max_extend_in);  // wouldn't this be safer?
+            // set_human_limits(op_min_retract_in, op_max_extend_in);  // wouldn't this be safer?
             set_human_limits(abs_min_retract_in, abs_max_extend_in);            
             set_native_limits(min_adc, max_adc);
             set_can_source(Source::PIN, true);
@@ -672,8 +672,8 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         float in() { return _human.val(); }
         float min_in() { return _human.min(); }
         float max_in() { return _human.max(); }
-        float nom_min_in() { return nom_min_retract_in; }
-        float nom_max_in() { return nom_max_extend_in; }
+        float op_min_in() { return op_min_retract_in; }
+        float op_max_in() { return op_max_extend_in; }
         // float absmin_in() { return abs_min_retract_in; }
         // float absmax_in() { return abs_max_extend_in; }
         float parkpos() { return park_in; }
@@ -711,7 +711,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
             }
         }
 
-        virtual void assign_from_pin() {
+        virtual void set_val_from_pin() {
             _isr_buf_us = static_cast<int32_t>(_isr_us);  // Copy delta value (in case another interrupt happens during handling)
             _isr_us = 0;  // Indicates to isr we processed this value
             if (_isr_buf_us) {  // If a valid rotation has happened since last time, delta will have a value
@@ -738,9 +738,9 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
         bool stopped() { return this->_val_filt.val() < _stop_thresh; }  // Note due to weird float math stuff, can not just check if tach == 0.0
         float last_read_time() { return _last_read_time_us; }
 
-        virtual int32_t us() { return this->_native.val(); }  // Soren: I created these to be available to any child sensors, but untested and not confident it's right
-        virtual int32_t min_us() { return this->_native.min(); }
-        virtual int32_t max_us() { return this->_native.max(); }
+        int32_t us() { return this->_native.val(); }  // Soren: I created these to be available to any child sensors, but untested and not confident it's right
+        int32_t min_us() { return this->_native.min(); }
+        int32_t max_us() { return this->_native.max(); }
 
 };
 
