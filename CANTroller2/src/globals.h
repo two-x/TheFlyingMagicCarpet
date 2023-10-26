@@ -647,7 +647,8 @@ int8_t err_sensor_fails[num_err_types] = { 0, 0, 0, 0, 0, 0 };
 bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_mulebatt/e_basicsw/e_starter]   // sensor::opt_t::num_sensors]
 uint8_t highest_pri_failing_sensor[num_err_types];
 uint8_t highest_pri_failing_last[num_err_types];
-void error_detect_update() {
+
+void diag_update() {
     if (errTimer.expireset()) {
 
         // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
@@ -676,13 +677,13 @@ void error_detect_update() {
         // Detect sensors disconnected or giving out-of-range readings.
         // TODO : The logic of this for each sensor should be moved to devices.h objects
         uint32_t val;
-        val = analogRead(brake_pos_pin);
+        val = brakepos.raw();
         err_sensor[RANGE][e_brkpos] = (val < brakepos.min_native() || val > brakepos.max_native());
         err_sensor[LOST][e_brkpos] = (val < err_margin_adc);
-        val = analogRead(pressure_pin);
+        val = pressure.raw();
         err_sensor[RANGE][e_pressure] = ((val && val < pressure.min_native()) || val > pressure.max_native());
         err_sensor[LOST][e_pressure] = (val < err_margin_adc);
-        err_sensor[LOST][e_mulebatt] = (analogRead(mulebatt_pin) > mulebatt.max_native());
+        err_sensor[LOST][e_mulebatt] = (mulebatt.raw() > mulebatt.max_adc());
         for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
             err_sensor[RANGE][ch] = !hotrc_radio_lost && ((hotrc_us[ch][RAW] < hotrc_us[ch][MIN] - (hotrc_us[ch][MARGIN] >> 1)) 
                                     || (hotrc_us[ch][RAW] > hotrc_us[ch][MAX] + (hotrc_us[ch][MARGIN] >> 1)));  // && ch != VERT

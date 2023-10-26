@@ -329,8 +329,12 @@ void loop() {
         if ((brake_parked && gas_parked) || motorParkTimer.expired() || (runmode != SHUTDOWN && runmode != BASIC))
             park_the_motors = false;
     }
+
+    // UI input handling : get any new action from the touchscreen or rotary encoder
+    selected_value_last = selected_value;
+    dataset_page_last = dataset_page;
+    tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
     touch.update(); // Handle touch events and actions
-    // Encoder handling
     uint32_t encoder_sw_action = encoder.press_event();  // true = autoreset the event if there is one
     if (encoder_sw_action != Encoder::NONE) {  // First deal with any unhandled switch press events
         if (encoder_sw_action == Encoder::SHORT)  {  // if short press
@@ -460,7 +464,7 @@ void loop() {
         }
         simdelta = 0;
     }
-    error_detect_update();  // Look for screwy conditions and update warning idiot lights
+    diag_update();  // Look for screwy conditions and update warning idiot lights
     neo_idiots_update();
     neo.set_heartcolor((runmode == SHUTDOWN) ? shutdown_color : colorcard[runmode]);
     neo.update();
@@ -468,9 +472,5 @@ void loop() {
     screen.update();  // Display updates
     if (!display_enabled && dataset_page_last != dataset_page) config.putUInt ("dpage", dataset_page);
     looptime_mark("dis");
-    dataset_page_last = dataset_page;
-    selected_value_last = selected_value;
-    tuning_ctrl_last = tuning_ctrl; // Make sure this goes after the last comparison
-    simulating_last = sim.enabled();
     looptime_update();
 }

@@ -99,7 +99,7 @@ uint16_t color_uint32_to_16b(uint32_t color32b) {  // Convert uint32 color in fo
     return (uint16_t)(((color32b & 0xf80000) >> 8) | ((color32b & 0xfc00) >> 5) | ((color32b & 0xf8) >> 3));
 }
 // hue: 0,255 = red, 85 = grn, 170 = blu | sat: 0 = saturated up to greyscale, 255 = pure color | bright: 0 = blk, 255 = "full" | bright_flat: if =1, "full" brightness varies w/ hue for consistent luminance, otherwise "full" always ranges to 255 (mixed-element colors are brighter) | blu_boost: adds blu_boost/255 desaturation as a ratio of blu dominance
-uint32_t hsv_to_rgb(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool bright_flat = 1, uint8_t blu_boost = 0) {  // returns uint32 color in format 0x00RRGGBB
+uint32_t hsv_to_rgb32(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool bright_flat = 1, uint8_t blu_boost = 0) {  // returns uint32 color in format 0x00RRGGBB
     uint32_t rgb[3] = { 255 - 3 * (uint32_t)((255 - hue) % 85), 0, 3 * (uint32_t)((255 - hue) % 85) };
     float maxc = (float)((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]);
     if (hue <= 85) { rgb[1] = rgb[0]; rgb[0] = rgb[2]; rgb[2] = 0; }
@@ -109,6 +109,11 @@ uint32_t hsv_to_rgb(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool b
     for (int led=0; led<=2; led++) 
         rgb[led] = brightener * ((float)rgb[led] + blu_booster * (255.0 - sat) * (float)(maxc - rgb[led]) / 255.0);
     return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
+}
+uint32_t hue_to_rgb16(uint8_t hue) {  // returns uint16 color
+    if (hue <= 85) return (((3 * ((255 - hue) % 85)) & 0xf8) << 8) | (((255 - 3 * ((255 - hue) % 85)) & 0xf8) << 3);
+    else if (hue <= 170) return (((3 * ((255 - hue) % 85)) & 0xfc) << 3) | ((255 - 3 * ((255 - hue) % 85)) >> 3);
+    else return (((255 - 3 * ((255 - hue) % 85)) & 0xf8) << 8) | ((3 * ((255 - hue) % 85)) >> 3);
 }
 
 char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
@@ -209,7 +214,7 @@ uint8_t idiotmaps[arraysize(idiotlights)][11] = {
 void set_idiotcolors() {
     for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
         int division = disp_idiots_per_row;
-        uint32_t color32 = hsv_to_rgb((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 220);
+        uint32_t color32 = hsv_to_rgb32((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 220);
         idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
         if (gamma_correct_enabled) idiotcolors[idiot] = gamma16(idiotcolors[idiot]);
         idiots_dirty = true;
@@ -352,7 +357,7 @@ class Display {
             uint8_t saturat = 255;  uint8_t hue_offset = 0;
             for (int32_t rm=0; rm<arraysize(colorcard); rm++) {
                 int division = num_runmodes;
-                uint32_t color32 = hsv_to_rgb((int8_t)(255 * (rm % division) / division + hue_offset), saturat, 255, 0, 220);
+                uint32_t color32 = hsv_to_rgb32((int8_t)(255 * (rm % division) / division + hue_offset), saturat, 255, 0, 220);
                 colorcard[rm] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
                 if (gamma_correct_enabled) colorcard[rm] = gamma16(colorcard[rm]);
                 disp_runmode_dirty = true;
@@ -695,6 +700,7 @@ class Display {
                 }
             }
             else if (simulating_last) draw_simbuttons(sim.enabled());
+            simulating_last = sim.enabled();
             if ((disp_dataset_page_dirty || _disp_redraw_all)) {
                 static bool first = true;
                 draw_dataset_page(dataset_page, dataset_page_last, first);
@@ -928,22 +934,21 @@ class Display {
                         }
                     }
                 }
-                uint16_t color = savercycle ? random(0x10000) : BLK; // Returns colour 0 - 0xFFFF
+                uint16_t color = savercycle ? hue_to_rgb16(random(255)) : BLK; // Returns colour 0 - 0xFFFF
                 if (gamma_correct_enabled) color = gamma16(color);
                 long star_x1 = random(disp_saver_width);        // Random x coordinate
                 long star_y1 = random(disp_saver_height);       // Random y coordinate
                 if (saver_lines_mode || (savercycle != 0b10)) {
-                    if (savershape == 0) _saver.drawLine(star_x0, star_y0, star_x1, star_y1, color); 
-                    else if (savershape == 1) _saver.drawCircle(random(disp_saver_width), random(disp_saver_height), random(20), random(0x10000));
+                    if (savershape == 0) {
+                        _saver.drawLine(star_x0, star_y0, star_x1, star_y1, color); 
+                        if (savercycle) _saver.drawLine(star_x0+1, star_y0+1, star_x1+1, star_y1+1, color);
+                    }
+                    else if (savershape == 1) _saver.drawCircle(random(disp_saver_width), random(disp_saver_height), random(20), hue_to_rgb16(random(255)));
                     else if (savershape == 2)      // Draw pixels in sprite
                         for (int star=0; star<10; star++) 
-                            _saver.drawRect(random(disp_saver_width), random(disp_saver_height), 2, 2, random(0x10000));
-                            // _saver.drawPixel(random(disp_saver_width), random(disp_saver_height), gamma(random(0x10000)));
-                }
-                if (saver_lines_mode) {
-                    if (!savercycle) _saver.drawLine(star_x0+1, star_y0+1, star_x1+1, star_y1+1, color);
-                    _saver.drawString("do drugs", disp_saver_width / 2, disp_saver_height / 2, 4);
-                }
+                            _saver.drawRect(random(disp_saver_width), random(disp_saver_height), 2, 2, hue_to_rgb16(random(255)));      
+                }  // _saver.drawPixel(random(disp_saver_width), random(disp_saver_height), gamma(random(0x10000)));
+                if (saver_lines_mode) _saver.drawString("do drugs", disp_saver_width / 2, disp_saver_height / 2, 4);
                 else if (savercycle != 0b01) {
                     for (int axis=0; axis<=1; axis++) {
                         eraser_pos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
