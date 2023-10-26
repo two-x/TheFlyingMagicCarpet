@@ -138,7 +138,7 @@ char units[disp_fixed_lines][5] = { "%   ", "mph ", "rpm ", "us  ", "psi ", "%  
 
 enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, num_datapages };
 char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-int32_t tuning_first_editable_line[dataset_pages::num_datapages] = { 9, 9, 5, 3, 4, 8, 7, 7, 10, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[dataset_pages::num_datapages] = { 9, 9, 5, 3, 4, 8, 7, 7, 10, 0, 6 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
     { brAk"Posn", "MuleBatt", "     Pot", "AirSpeed", "     MAP", "MasAirFl", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
@@ -151,7 +151,7 @@ char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "LoopFreq", "Loop Avg", "LoopPeak", __________, __________, __________, __________, "   Gamma", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
+    { "LoopFreq", "Loop Avg", "LoopPeak", __________, __________, __________, "FlshDemo", "   Gamma", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
 };
 char tuneunits[dataset_pages::num_datapages][disp_tuning_lines][5] = {
     { "in  ", "V   ", "%   ", "mph ", "psi ", "ugps", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
@@ -164,7 +164,7 @@ char tuneunits[dataset_pages::num_datapages][disp_tuning_lines][5] = {
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "us  ", "u/s ", ______, "Hz  ", "s   ", },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, b1nary, },  // PG_TEMP
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "Hz  ", "us  ", "us  ", ______, ______, ______, ______, ______, "%   ", "/10 ", b1nary, },  // PG_UI
+    { "Hz  ", "us  ", "us  ", ______, ______, ______, b1nary, ______, "%   ", "/10 ", b1nary, },  // PG_UI
 };
 char simgrid[4][3][5] = {
     { "psi\x18", "rpm\x18", "mph\x18" },
@@ -177,8 +177,7 @@ char unitmapnames[5][5] = { "ugps", "us  ", "rpms", scroll, b1nary, };  // unit 
 uint8_t unitmaps[5][17] = {  // 17x7-pixel bitmaps for where units use symbols not present in the font, are longer than 3 characters, or are just special
     { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
     { 0x40, 0x7e, 0x20, 0x20, 0x1c, 0x20, 0x00, 0x24, 0x2a, 0x2a, 0x2a, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, },  // us - b/c the font's "mu" character doesn't work
-    { 0x0f, 0x01, 0x00, 0x3f, 0x05, 0x06, 0x00, 0x0f, 0x01, 0x0e, 0x01, 0x0e, 0x60, 0x18, 0x00, 0x5a, 0x74, },  // rpm/s (or rot/m*s) - rate of change of engine rpm
-    // { 0x1e, 0x02, 0x00, 0x7e, 0x12, 0x0c, 0x00, 0x1e, 0x02, 0x1c, 0x02, 0x1c, 0x40, 0x3c, 0x02, 0x58, 0x74, },  // rpm/s (or rot/m*s) - rate of change of engine rpm
+    { 0x0f, 0x01, 0x00, 0x1f, 0x05, 0x06, 0x00, 0x0f, 0x01, 0x0e, 0x01, 0x0e, 0x60, 0x18, 0x00, 0x58, 0x74, },  // rpm/s (or rot/m*s) - rate of change of engine rpm
     { 0x04, 0x02, 0x7f, 0x02, 0x04, 0x00, 0x10, 0x20, 0x7f, 0x20, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // scroll arrows - to indicate multiple choice
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3e, 0x00, 0x00, 0x1c, 0x22, 0x22, 0x1c, 0x00, 0x00, },  // 0/1 - to indicate binary value
 };  // These bitmaps are in the same format as the idiot light bitmaps, described below
@@ -860,7 +859,8 @@ class Display {
                     draw_dynamic(9, loopfreq_hz);
                     draw_dynamic(10, (int32_t)looptime_avg_us, 0, loop_maxloop_us);
                     draw_dynamic(11, looptime_peak_us, 0, loop_maxloop_us);
-                    for (int line=12; line<=15; line++) draw_eraseval(line);
+                    for (int line=12; line<=14; line++) draw_eraseval(line);
+                    draw_truth(15, flashdemo, 0);
                     draw_dynamic(16, globalgamma, 0.1, 2.57, -1, 3);
                     draw_dynamic(17, neobright, 1.0, 100.0, -1, 3);
                     draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);

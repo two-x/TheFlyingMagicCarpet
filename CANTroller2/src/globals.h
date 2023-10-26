@@ -783,3 +783,4 @@ float massairflow(float _map = NAN, float _airflow = NAN, float _ambient = NAN) 
 float maf_ugps;  // Manifold mass airflow in micrograms per second
 float maf_min_ugps = 0.0;
 float maf_max_ugps = massairflow(mapsens.max_psi(), airflow.max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
+bool flashdemo = false;
