@@ -44,6 +44,19 @@ void neo_idiots_update() {
         }
     }
 }
+void enable_flashdemo(bool ena) {
+    if (ena) {
+        neo.setflash(4, 8, 8, 8, 20, -1);  // brightness toggle in a continuous squarewave
+        neo.setflash(5, 3, 1, 2, 85);      // three super-quick bright white flashes
+        neo.setflash(6, 2, 5, 5, 0, 0);    // two short black pulses
+    }
+    else {
+        neo.setflash(4, 0);
+        neo.setflash(5, 0);
+        neo.setflash(6, 0);
+    }
+}
+
 void setup() {  // Setup just configures pins (and detects touchscreen type)
     if (RUN_TESTS) run_tests();   
     set_pin (tft_dc_pin, OUTPUT);
@@ -139,10 +152,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         neo.newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
 
     // Just testing the neo flashing code
-    neo.setflash(4, 8, 8, 8, 20, -1);  // brightness toggle in a continuous squarewave
-    neo.setflash(5, 3, 1, 2, 85);      // three super-quick bright white flashes
-    neo.setflash(6, 2, 5, 5, 0, 0);    // two short black pulses
-
     std::cout << "set up heartbeat led and " << idiots << " neopixel idiot lights" << std::endl;
 
     // Initialize sensor error flags to false
@@ -431,7 +440,11 @@ void loop() {
             else if (selected_value == 10 && runmode == CAL) adj_bool (&cal_pot_gasservo_mode, (simdelta < 0 || cal_pot_gasservo_ready) ? simdelta : -1);
         }
         else if (dataset_page == PG_UI) {
-            if (selected_value == 7) {
+            if (selected_value == 6) {
+                adj_bool (&flashdemo, simdelta);
+                enable_flashdemo(flashdemo);
+            }
+            else if (selected_value == 7) {
                 adj_val (&globalgamma, 0.01*(float)simdelta, 0.1, 2.57);  // 2.57);
                 set_idiotcolors();
             }
