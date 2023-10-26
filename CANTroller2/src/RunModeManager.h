@@ -109,7 +109,7 @@ private:
                 }
             }
             else if (brakeIntervalTimer.expireset()) {
-                if (!autostop_disabled) pressure_target_psi = pressure_target_psi + (panicstop) ? pressure_panic_increment_psi : pressure_hold_increment_psi;  // Slowly add more brakes until car stops
+                if (!autostop_disabled) pressure_target_psi = pressure_target_psi + (panicstop ? pressure_panic_increment_psi : pressure_hold_increment_psi);  // Slowly add more brakes until car stops
                 throttle.goto_idle();  // Keep target updated to possibly changing idle value
             }
         }
@@ -128,7 +128,7 @@ private:
     void do_holdMode() {
         if (we_just_switched_modes) {  // Release throttle and push brake upon entering hold mode
             if (!autostop_disabled) {
-                if (speedo.car_stopped()) pressure_target_psi = pressure.filt() + starter ? pressure_panic_increment_psi : pressure_hold_increment_psi; // If the car is already stopped then just add a touch more pressure and then hold it.
+                if (speedo.car_stopped()) pressure_target_psi = pressure.filt() + (starter ? pressure_panic_increment_psi : pressure_hold_increment_psi); // If the car is already stopped then just add a touch more pressure and then hold it.
                 else if (pressure_target_psi < pressure_hold_initial_psi) pressure_target_psi = starter ? pressure_panic_initial_psi : pressure_hold_initial_psi;  //  These hippies need us to stop the car for them
             }
             brakeIntervalTimer.reset();
@@ -137,7 +137,7 @@ private:
         }
         throttle.goto_idle();  // Let off gas (if gas using PID mode) and keep target updated to possibly changing idle value
         if (brakeIntervalTimer.expireset() && !speedo.car_stopped() && !stopcarTimer.expired() && !autostop_disabled)
-            pressure_target_psi = min (pressure_target_psi + starter ? pressure_panic_increment_psi : pressure_hold_increment_psi, pressure.max_human());  // If the car is still moving, push harder
+            pressure_target_psi = min (pressure_target_psi + (starter ? pressure_panic_increment_psi : pressure_hold_increment_psi), pressure.max_human());  // If the car is still moving, push harder
         if (get_joydir() != joy_up) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
         else if (joy_centered && !starter && !hotrc_radio_lost) updateMode(FLY); // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
     }

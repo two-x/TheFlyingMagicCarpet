@@ -351,12 +351,10 @@ void loop() {
         if (selected_value != selected_value_last) disp_selected_val_dirty = true;
     }
     if (tuning_ctrl != tuning_ctrl_last || disp_dataset_page_dirty) disp_selected_val_dirty = true;
-    bool adj;
-    adj = false;
     if (tuning_ctrl == EDIT && simdelta != 0) {  // Change tunable values when editing
         if (dataset_page == PG_RUN) {
             if (selected_value == 9) {
-                adj = adj_val (&gas_governor_pc, simdelta, 0, 100);
+                adj_val (&gas_governor_pc, simdelta, 0, 100);
                 calc_governor();
             }
             else if (selected_value == 10) adj_val (&steer_safe_pc, simdelta, 0, 100);
@@ -371,12 +369,12 @@ void loop() {
         else if (dataset_page == PG_CAR) {
             if (selected_value == 2) throttle.set_idlehot(throttle.idlehot(), 0.1*(float)simdelta);
             else if (selected_value == 3) throttle.set_idlecold(throttle.idlecold(), 0.1*(float)simdelta);
-            else if (selected_value == 4) adj = adj_val (tach.redline_rpm_ptr(), 0.1*(float)simdelta, throttle.idlehigh(), tach.abs_max_rpm());
+            else if (selected_value == 4) adj_val (tach.redline_rpm_ptr(), 0.1*(float)simdelta, throttle.idlehigh(), tach.abs_max_rpm());
             else if (selected_value == 5) adj_val (airflow.max_mph_ptr(), 0.01*(float)simdelta, 0, airflow.abs_max_mph());
             else if (selected_value == 6) adj_val (mapsens.min_psi_ptr(), 0.1*(float)simdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
             else if (selected_value == 6) adj_val (mapsens.max_psi_ptr(), 0.1*(float)simdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
             else if (selected_value == 8) adj_val (&speedo_idle_mph, 0.01*(float)simdelta, 0, speedo.redline_mph() - 1);
-            else if (selected_value == 9) adj_val (speedo.redline_mph_ptr(), 0.01*(float)simdelta, speedo_idle_mph, 30);
+            else if (selected_value == 9) adj_val (speedo.redline_mph_ptr(), 0.01*(float)simdelta, speedo_idle_mph, 20);
             else if (selected_value == 10) adj_val (brakepos.zeropoint_ptr(), 0.001*(float)simdelta, brakepos.op_min_in(), brakepos.op_max_in());
         }
         else if (dataset_page == PG_PWMS) {
