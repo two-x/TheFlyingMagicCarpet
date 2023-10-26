@@ -14,12 +14,12 @@ RunModeManager runModeManager;
 Display screen;
 neopixelstrip neo;
 ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
+TouchScreen touch(touch_cs_pin, touch_irq_pin);
 
 // void update_saver(void* parameter) { while (1) { screen.saver_update(); delay(10); } }  // Struggles, choppy, crashes, etc. as task
-TouchScreen touch(touch_cs_pin, touch_irq_pin);
 #define RUN_TESTS 0
 #if RUN_TESTS
-    #include "tests.h"
+    #include "unittests.h"
     void run_tests() {
         printf("Running tests...\n");
         delay(5000);
@@ -209,7 +209,7 @@ void loop() {
         hotrc_radio_lost = false;
     }
     else if (!hotrc_radio_lost && hotrcFailsafeTimer.expired()) hotrc_radio_lost = true;
-    runmode = runModeManager.execute();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
+    runmode = runModeManager.do_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     // Update motor outputs - takes 185 us to handle every 30ms when the pid timer expires, otherwise 5 us
     // Steering - Determine motor output and send to the motor
     if (steerPidTimer.expireset()) {
@@ -377,7 +377,7 @@ void loop() {
             else if (selected_value == 6) adj_val (mapsens.max_psi_ptr(), 0.1*(float)simdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
             else if (selected_value == 8) adj_val (&speedo_idle_mph, 0.01*(float)simdelta, 0, speedo.redline_mph() - 1);
             else if (selected_value == 9) adj_val (speedo.redline_mph_ptr(), 0.01*(float)simdelta, speedo_idle_mph, 30);
-            else if (selected_value == 10) adj_val (brakepos.zeropoint_ptr(), 0.001*(float)simdelta, brakepos.nom_min_in(), brakepos.nom_max_in());
+            else if (selected_value == 10) adj_val (brakepos.zeropoint_ptr(), 0.001*(float)simdelta, brakepos.op_min_in(), brakepos.op_max_in());
         }
         else if (dataset_page == PG_PWMS) {
             if (selected_value == 3) adj_val (&steer_left_us, simdelta, steer_left_min_us, steer_stop_us - 1);

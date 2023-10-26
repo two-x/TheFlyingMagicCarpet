@@ -11,7 +11,7 @@
 #include "utils.h"
 #include "uictrl.h"
 #include "neo.h"
-#include "map.h"
+#include "mapsens.h"
 #include "devices.h"
 #include "temperature.h"
 
@@ -181,11 +181,11 @@ Timer starterTimer(5000000);  // If remotely-started starting event is left on f
 Timer panicTimer(20000000);  // How long should a panic stop last?  We can't stay mad forever
 
 enum temp_categories { AMBIENT = 0, ENGINE = 1, WHEEL = 2, num_temp_categories };
-enum temp_lims { DISP_MIN, NOM_MIN, NOM_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
+enum temp_lims { DISP_MIN, OP_MIN, OP_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
 float temp_lims_f[3][6]{
-    {0.0, 45.0, 115.0, 120.0, 130.0, 220.0},  // [AMBIENT][DISP_MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
-    {0.0, 178.0, 198.0, 202.0, 205.0, 220.0}, // [ENGINE][DISP_MIN/NOM_MIN/NOM_MAX/WARNING/ALARM]
-    {0.0, 50.0, 120.0, 130.0, 140.0, 220.0},  // [WHEEL][DISP_MIN/NOM_MIN/NOM_MAX/WARNING/ALARM] (applies to all wheels)
+    {0.0, 45.0, 115.0, 120.0, 130.0, 220.0},  // [AMBIENT][DISP_MIN/OP_MIN/OP_MAX/WARNING/ALARM]
+    {0.0, 178.0, 198.0, 202.0, 205.0, 220.0}, // [ENGINE][DISP_MIN/OP_MIN/OP_MAX/WARNING/ALARM]
+    {0.0, 50.0, 120.0, 130.0, 140.0, 220.0},  // [WHEEL][DISP_MIN/OP_MIN/OP_MAX/WARNING/ALARM] (applies to all wheels)
 };
 float temp_room = 77.0;          // "Room" temperature is 25 C = 77 F  Who cares?
 float temp_sensor_min_f = -67.0; // Minimum reading of sensor is -25 C = -67 F
@@ -303,8 +303,8 @@ Tachometer tach(tach_pin);
 float tach_target_rpm, tach_adjustpoint_rpm, tach_govern_rpm;        // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
 float tach_margin_rpm = 15.0; // Margin of error for checking engine rpm (in rpm)
 float tach_idle_abs_min_rpm = 450.0;  // Low limit of idle speed adjustability
-float tach_idle_hot_min_rpm = 550.0;  // Idle speed at nom_max engine temp
-float tach_idle_cold_max_rpm = 775.0; // Idle speed at nom_min engine temp
+float tach_idle_hot_min_rpm = 550.0;  // Idle speed at op_max engine temp
+float tach_idle_cold_max_rpm = 775.0; // Idle speed at op_min engine temp
 float tach_idle_high_rpm = 950.0;     // Elevated rpm above idle guaranteed never to stall
 float tach_idle_abs_max_rpm = 1000.0; // High limit of idle speed adjustability
 Timer tachIdleTimer(5000000);         // How often to update tach idle value based on engine temperature
@@ -338,7 +338,7 @@ QPID brake_pid(pressure.filt_ptr(), &brake_out_pc, &pressure_target_psi,     // 
 
 ThrottleControl throttle(tach.human_ptr(), tach.filt_ptr(),
                          tach_idle_high_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm,
-                         temp_lims_f[ENGINE][NOM_MIN], temp_lims_f[ENGINE][WARNING],
+                         temp_lims_f[ENGINE][OP_MIN], temp_lims_f[ENGINE][WARNING],
                          50, ThrottleControl::idlemodes::control);
 uint32_t gas_pid_period_us = 22500;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer gasPidTimer(gas_pid_period_us); // not actually tunable, just needs value above
@@ -672,7 +672,7 @@ void error_detect_update() {
             else if (tempsens.val(loc) >= temp_lims_f[tempsens.errclass(loc)][WARNING]) temp_err[tempsens.errclass(loc)] = true;
         }
         err_sensor[LOST][e_temps] = not_detected;
-        
+
         // Detect sensors disconnected or giving out-of-range readings.
         // TODO : The logic of this for each sensor should be moved to devices.h objects
         uint32_t val;
