@@ -59,8 +59,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin(tft_cs_pin, OUTPUT);
     set_pin(bootbutton_pin, INPUT_PULLUP);
     set_pin(starter_pin, INPUT_PULLDOWN);
-    set_pin(steer_enc_a_pin, INPUT_PULLUP);
-    set_pin(steer_enc_b_pin, INPUT_PULLUP);
+    if (!usb_jtag) set_pin(steer_enc_a_pin, INPUT_PULLUP);
+    if (!usb_jtag) set_pin(steer_enc_b_pin, INPUT_PULLUP);
     set_pin(ignition_pin, OUTPUT);
     set_pin(syspower_pin, OUTPUT);  // Then set the put as an output as normal.
     set_pin(brake_pwm_pin, OUTPUT);
@@ -154,6 +154,10 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
 void loop() {
     // Update inputs.  Fresh sensor data, and filtering
+    if (boot_button_action == SHORT) {
+        syspower_request = req_on;
+        boot_button_action == NONE;
+    }
     syspower_update();  // handler for system power pin output.
     ignition_panic_update();  // handler for ignition pin output and panicstop status.
     bootbutton_update();
@@ -180,6 +184,7 @@ void loop() {
         if (hotrc_sw_event[CH4]) {
             if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
             else if (runmode == STALL) starter_request = req_tog;
+            else if (runmode == SHUTDOWN && !shutdown_incomplete) syspower_request = req_tog;  // Just messing around here 
         }
     }
     for (int8_t ch = CH3; ch <= CH4; ch++) hotrc_sw_event[ch] = false;
