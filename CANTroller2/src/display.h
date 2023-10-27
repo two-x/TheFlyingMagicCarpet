@@ -133,7 +133,7 @@ char idlestatecard[ThrottleControl::targetstates::num_states][7] = { "todriv", "
 #define degreF "\xf7""F  "  // "\x09""F  "
 #define ______ "    "
 #define __________ "      \xf9 "
-#define neo_bright "NeoBr\x8dte"
+#define neo_bright "NeoBr\x8dgt"
 #define maxadjrate "MaxAjR\x83t"
 #define horfailsaf "HFails\x83""f"
 
@@ -145,7 +145,7 @@ char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs
 int32_t tuning_first_editable_line[dataset_pages::num_datapages] = { 9, 9, 5, 3, 4, 8, 7, 7, 10, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
-    { brAk"Posn", "MuleBatt", "     Pot", "AirSpeed", "     MAP", "MasAirFl", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
+    { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
     { "Pres ADC", __________, __________, __________, __________, "AirSpMax", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_CAR
     { "BrakePWM", "SteerPWM", __________, stEr"Left", stEr"Stop", stEr"Rigt", brAk"Extd", brAk"Stop", brAk"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
@@ -155,7 +155,7 @@ char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "LoopFreq", "Loop Avg", "LoopPeak", " Touch X", " Touch Y", " Touch X", " Touch Y", "FlshDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI      // "   Gamma"
+    { "LoopFreq", "Loop Avg", "LoopPeak", " Touch X", " Touch Y", " Touch X", " Touch Y", "BlnkDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI      // "   Gamma"
 };
 char tuneunits[dataset_pages::num_datapages][disp_tuning_lines][5] = {
     { "in  ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
@@ -168,7 +168,7 @@ char tuneunits[dataset_pages::num_datapages][disp_tuning_lines][5] = {
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "us  ", "usps", ______, "Hz  ", "s   ", },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, b1nary, },  // PG_TEMP
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "Hz  ", "us  ", "us  ", "pix ", "pix ", "ntv ", "ntv ", b1nary, "%   ", "/10 ", b1nary, },  // PG_UI
+    { "Hz  ", "us  ", "us  ", "pix ", "pix ", "ohm ", "ohm ", b1nary, "%   ", "/10 ", b1nary, },  // PG_UI
 };
 char simgrid[4][3][5] = {
     { "psi\x18", "rpm\x18", "mph\x18" },
@@ -177,14 +177,15 @@ char simgrid[4][3][5] = {
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters is the left-side map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
-char unitmapnames[6][5] = { "usps", "us  ", "rpms", scroll, b1nary, "%   " };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
-uint8_t unitmaps[6][17] = {  // 17x7-pixel bitmaps for where units use symbols not present in the font, are longer than 3 characters, or are just special
+char unitmapnames[7][5] = { "usps", "us  ", "rpms", scroll, b1nary, "%   ", "ohm " };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
+uint8_t unitmaps[7][17] = {  // 17x7-pixel bitmaps for where units use symbols not present in the font, are longer than 3 characters, or are just special
     { 0x7e, 0x20, 0x20, 0x3c, 0x00, 0x24, 0x2a, 0x2a, 0x12, 0x00, 0x70, 0x0e, 0x00, 0x24, 0x2a, 0x2a, 0x12, },  // usps - microseconds per second
     { 0x40, 0x7e, 0x20, 0x20, 0x1c, 0x20, 0x00, 0x24, 0x2a, 0x2a, 0x2a, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, },  // us - b/c the font's "mu" character doesn't work
     { 0x0f, 0x01, 0x00, 0x1f, 0x05, 0x06, 0x00, 0x0f, 0x01, 0x0e, 0x01, 0x0e, 0x60, 0x18, 0x00, 0x58, 0x74, },  // rpm/s (or rot/m*s) - rate of change of engine rpm
     { 0x04, 0x02, 0x7f, 0x02, 0x04, 0x00, 0x10, 0x20, 0x7f, 0x20, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // scroll arrows - to indicate multiple choice
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3e, 0x00, 0x00, 0x1c, 0x22, 0x22, 0x1c, 0x00, 0x00, },  // 0/1 - to indicate binary value
     { 0x02, 0x45, 0x25, 0x12, 0x08, 0x24, 0x52, 0x51, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // % - just because the font one is feeble
+    { 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // Capital omega - for ohms
 };  // These bitmaps are in the same format as the idiot light bitmaps, described below
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
 bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &(temp_err[ENGINE]), &(temp_err[WHEEL]), &panicstop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, sim.enabled_ptr(), &running_on_devboard };
@@ -661,8 +662,8 @@ class Display {
             }
         }
         void draw_reticle(uint32_t x, uint32_t y) {
-            disp.drawFastHLine (x - 2, y, 5, WHT);
-            disp.drawFastVLine (x, y - 2, 5, WHT);
+            disp.drawFastHLine (x - 2, y, 5, DGRY);
+            disp.drawFastVLine (x, y - 2, 5, DGRY);
         }
         void draw_reticles() {
             draw_reticle(260, 50);
@@ -753,7 +754,7 @@ class Display {
                     draw_dynamic(9, brakepos.filt(), brakepos.min_human(), brakepos.max_human());
                     draw_dynamic(10, mulebatt.filt(), mulebatt.min_v(), mulebatt.max_v());
                     draw_dynamic(11, pot.val(), pot.min(), pot.max());
-                    draw_dynamic(12, airflow.filt(), airflow.min_mph(), airflow.max_mph());
+                    draw_dynamic(12, airvelo.filt(), airvelo.min_mph(), airvelo.max_mph());
                     draw_dynamic(13, mapsens.filt(), mapsens.min_psi(), mapsens.max_psi());
                     draw_dynamic(14, maf_ugps, maf_min_ugps, maf_max_ugps);
                     draw_eraseval(15);
@@ -778,7 +779,7 @@ class Display {
                 else if (dataset_page == PG_CAR) {
                     draw_dynamic(9, pressure.native(), pressure.min_native(), pressure.max_native());                    
                     for (int line=10; line<=13; line++) draw_eraseval(line);
-                    draw_dynamic(14, airflow.max_mph(), 0.0, airflow.abs_max_mph());
+                    draw_dynamic(14, airvelo.max_mph(), 0.0, airvelo.abs_max_mph());
                     draw_dynamic(15, mapsens.min_psi(), mapsens.abs_min_psi(), mapsens.abs_max_psi());
                     draw_dynamic(16, mapsens.max_psi(), mapsens.abs_min_psi(), mapsens.abs_max_psi());
                     draw_dynamic(17, speedo_idle_mph, 0.0, speedo.redline_mph());
@@ -869,7 +870,7 @@ class Display {
                     draw_truth(11, sim.can_sim(sensor::brkpos), 0);
                     draw_truth(12, sim.can_sim(sensor::speedo), 0);
                     draw_truth(13, sim.can_sim(sensor::tach), 0);
-                    draw_truth(14, sim.can_sim(sensor::airflow), 0);
+                    draw_truth(14, sim.can_sim(sensor::airvelo), 0);
                     draw_truth(15, sim.can_sim(sensor::mapsens), 0);
                     draw_truth(16, sim.can_sim(sensor::basicsw), 0);                    
                     draw_asciiname(17, sensorcard[sim.potmap()]);
@@ -956,22 +957,26 @@ class Display {
                         }
                     }
                 }
-                uint16_t color = savercycle ? hue_to_rgb16(random(255)) : BLK; // Returns colour 0 - 0xFFFF
+                uint16_t color = hue_to_rgb16(random(255)); // Returns colour 0 - 0xFFFF
                 if (gamma_correct_enabled) color = gamma16(color);
                 long star_x1 = random(disp_saver_width);        // Random x coordinate
                 long star_y1 = random(disp_saver_height);       // Random y coordinate
-                if (saver_lines_mode || (savercycle != 0b10)) {
-                    if (savershape == 0) {
+                if (saver_lines_mode || (savercycle != 2)) {
+                    if (!savershape) {
                         _saver.drawLine(star_x0, star_y0, star_x1, star_y1, color); 
                         if (savercycle) _saver.drawLine(star_x0+1, star_y0+1, star_x1+1, star_y1+1, color);
                     }
-                    else if (savershape == 1) _saver.drawCircle(random(disp_saver_width), random(disp_saver_height), random(20), hue_to_rgb16(random(255)));
+                    else if (savershape == 1) {
+                        int rad = random(24);
+                        _saver.drawCircle(star_x1, star_y1, rad, color);
+                        _saver.drawCircle(star_x1, star_y1, rad+1, color);
+                    }
                     else if (savershape == 2)      // Draw pixels in sprite
                         for (int star=0; star<10; star++) 
                             _saver.drawRect(random(disp_saver_width), random(disp_saver_height), 2, 2, hue_to_rgb16(random(255)));      
                 }  // _saver.drawPixel(random(disp_saver_width), random(disp_saver_height), gamma(random(0x10000)));
                 if (saver_lines_mode) _saver.drawString("do drugs", disp_saver_width / 2, disp_saver_height / 2, 4);
-                else if (savercycle != 0b01) {
+                else if (savercycle != 1) {
                     for (int axis=0; axis<=1; axis++) {
                         eraser_pos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
                         if (eraser_pos[axis] * eraser_velo_sign[axis] >= eraser_pos_max[axis]) {

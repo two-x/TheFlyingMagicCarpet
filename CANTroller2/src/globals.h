@@ -270,7 +270,7 @@ float tach_idle_abs_max_rpm = 1000.0; // High limit of idle speed adjustability
 Timer tachIdleTimer(5000000);         // How often to update tach idle value based on engine temperature
 
 // i2c sensor related
-AirflowSensor airflow(i2c);
+AirVeloSensor airvelo(i2c);
 MAPSensor mapsens(i2c);  // map sensor related
 
 // Motor control:
@@ -294,7 +294,7 @@ QPID brake_pid(pressure.filt_ptr(), &brake_out_pc, &pressure_target_psi,     // 
                // QPID::Pmode::onerr, QPID::Dmode::onerr, QPID::Awmode::round, QPID::Dir::direct,  // settings  // roundcond, clamp
                // brake_pid_period_us, QPID::Control::manual, QPID::Centmode::strict, brake_stop_pc); // period, more settings
 
-// Gas : Controls the throttle to achieve the desired intake airflow and engine rpm
+// Gas : Controls the throttle to achieve the desired intake airvelo and engine rpm
 
 ThrottleControl throttle(tach.human_ptr(), tach.filt_ptr(),
                          tach_idle_high_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm,
@@ -447,7 +447,7 @@ void set_board_defaults(bool devboard) {  // true for dev boards, false for prin
         sim.set_can_sim(sensor::tach, true);
         sim.set_can_sim(sensor::speedo, true);
         sim.set_can_sim(sensor::mapsens, true);
-        sim.set_can_sim(sensor::airflow, true);
+        sim.set_can_sim(sensor::airvelo, true);
         sim.set_can_sim(sensor::basicsw, true);
     }
     else {
@@ -647,13 +647,13 @@ Timer errTimer((int64_t)err_timeout_us);
 uint32_t err_margin_adc = 5;
 // Sensor related trouble - this all should be moved to devices.h
 enum err_type { LOST, RANGE, CALIB, WARN, CRIT, INFO, num_err_types };
-enum err_sensor { e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, e_basicsw, e_mulebatt, e_airflow, e_mapsens, e_num_sensors, e_none };  // these are in order of priority
+enum err_sensor { e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, e_basicsw, e_mulebatt, e_airvelo, e_mapsens, e_num_sensors, e_none };  // these are in order of priority
 char err_type_card[num_err_types][5] = { "Lost", "Rang", "Cal", "Warn", "Crit", "Info" };
 char err_sensor_card[e_num_sensors+1][7] = { "HrcV", "HrcCh3", "BrPres", "BrkPos", "Speedo", "HrcH", "Tach", "Temps", "Startr", "HrcCh4", "Basic", "Batery", "Airflw", "MAP", "None" };
-// enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, mulebatt, ignition, basicsw, cruisesw, starter, syspower };  // , num_sensors, err_flag };
+// enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airvelo, mapsens, engtemp, mulebatt, ignition, basicsw, cruisesw, starter, syspower };  // , num_sensors, err_flag };
 bool err_sensor_alarm[num_err_types] = { false, false, false, false, false, false };
 int8_t err_sensor_fails[num_err_types] = { 0, 0, 0, 0, 0, 0 };
-bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airflow/e_mapsens/e_temps/e_mulebatt/e_basicsw/e_starter]   // sensor::opt_t::num_sensors]
+bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airvelo/e_mapsens/e_temps/e_mulebatt/e_basicsw/e_starter]   // sensor::opt_t::num_sensors]
 uint8_t highest_pri_failing_sensor[num_err_types];
 uint8_t highest_pri_failing_last[num_err_types];
 bool diag_ign_error_enabled = true;
@@ -733,7 +733,7 @@ void diag_update() {
         // Steering:
         // * Chain derailment or motor or limit switch problem :: Motor told to drive for beyond X volt-seconds in one direction for > Y seconds.
         // Throttle/Engine:
-        // * Airflow/MAP/tach sensor failure :: If any of these three sensor readings are out of range to the other two.
+        // * AirVelo/MAP/tach sensor failure :: If any of these three sensor readings are out of range to the other two.
         // Tach/Speedo:
         // * Sensor read problem :: Derivative of consecutive readings (rate of change) spikes higher than it's possible for the physical rotation to change - (indicates missing pulses)
         // * Disconnected/problematic speed sensor :: ignition is on, tach is nonzero, and runmode = hold/fly/cruise, yet speed is zero. Or, throttle is at idle and brake pressure high for enough time, yet speed readings are nonzero
@@ -744,8 +744,8 @@ void diag_update() {
         // * Axle, brake, etc. wheel issue or wheel sensor problem :: The hottest wheel temp is >= X degF hotter than the 2nd hottest wheel.
         // * Axle, brake, etc. wheel issue or wheel/ambient sensor problem :: A wheel temp >= X degF higher than ambient temp.
         // * Ignition problem, fire alarm, or temp sensor problem :: Ignition is off but a non-ambient temp reading increases to above ambient temp.
-        // Airflow:
-        // * Air filter clogged, or carburetor problem :: Track ratio of airflow/throttle angle whenever throttle is constant. Then, if that ratio lowers over time by X below that level, indicates restricted air. 
+        // AirVelo:
+        // * Air filter clogged, or carburetor problem :: Track ratio of massairflow/throttle angle whenever throttle is constant. Then, if that ratio lowers over time by X below that level, indicates restricted air. 
         // Battery:
         // * Battery low :: Mulebatt readings average is below a given threshold
         // * Inadequate charging :: Mulebatt readings average has decreased over long time period
@@ -776,7 +776,7 @@ void err_print_info() {
         printf("\n");
     }
 }
-int16_t touch_pt[4];
+int16_t touch_pt[4] = { 160, 120, 2230, 2130 };
 
 // Neopixel stuff
 neopixelstrip neo;
@@ -803,7 +803,7 @@ void enable_flashdemo(bool ena) {
     }
 }
 // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
-float massairflow(float _map = NAN, float _airflow = NAN, float _ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
+float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
     float temp = _ambient;
     if (std::isnan(_ambient)) {
         temp = tempsens.val(location::ambient);
@@ -812,12 +812,12 @@ float massairflow(float _map = NAN, float _airflow = NAN, float _ambient = NAN) 
     }
     float T = 0.556 * (temp - 32.0) + 273.15;  // in K.  This converts from degF to K
     float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
-    float v = 0.447 * (std::isnan(_airflow) ? airflow.filt() : _airflow); // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
+    float v = 0.447 * (std::isnan(_airvelo) ? airvelo.filt() : _airvelo); // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
     float Ain2 = 3.1415926;  // in in2    1.0^2 in2 * pi  // will still need to divide by 1550 in2/m2
     float P = 6894.76 * (std::isnan(_map) ? mapsens.filt() : _map);  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
     return v * Ain2 * P * 1000.0 / (R * T * 1550);  // mass air flow in grams per second (ug/s)   (1k g/kg * m/s * in2 * J/m3) / (J/(kg*K) * K * 1550 in2/m2) = g/s
 }
 float maf_ugps;  // Manifold mass airflow in grams per second
 float maf_min_ugps = 0.0;
-float maf_max_ugps = massairflow(mapsens.max_psi(), airflow.max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
+float maf_max_ugps = massairflow(mapsens.max_psi(), airvelo.max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
 bool flashdemo = false;
