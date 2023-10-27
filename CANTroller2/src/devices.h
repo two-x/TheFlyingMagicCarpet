@@ -5,7 +5,7 @@
 #include <map>
 #include <tuple>
 #include <memory> // for std::shared_ptr
-#include <SparkFun_FS3000_Arduino_Library.h>  // For airflow sensor  http://librarymanager/All#SparkFun_FS3000
+#include <SparkFun_FS3000_Arduino_Library.h>  // For air velocity sensor  http://librarymanager/All#SparkFun_FS3000
 #include "Arduino.h"
 #include "FunctionalInterrupt.h"
 #include "utils.h"
@@ -435,7 +435,7 @@ class I2CSensor : public Sensor<float,float> {
         }
     
         virtual void update_human_limits() {
-            _native.set_limits(_human.min_shptr(), _human.max_shptr());  // Our two i2c sensors (airflow & MAP) don't reveal low-level readings, so we only get human units
+            _native.set_limits(_human.min_shptr(), _human.max_shptr());  // Our two i2c sensors (airvelo & MAP) don't reveal low-level readings, so we only get human units
             _val_filt.set_limits(_human.min_shptr(), _human.max_shptr());
         }
     public:
@@ -447,39 +447,39 @@ class I2CSensor : public Sensor<float,float> {
         }
 };
 
-// AirflowSensor measures the air intake into the engine in MPH. It communicates with the external sensor using i2c.
-class AirflowSensor : public I2CSensor {
+// AirVeloSensor measures the air intake into the engine in MPH. It communicates with the external sensor using i2c.
+class AirVeloSensor : public I2CSensor {
     protected:
-        // NOTE: would all AirflowSensors have the same address? how does this get determined?
+        // NOTE: would all AirVeloSensors have the same address? how does this get determined?
         static constexpr uint8_t _i2c_address = 0x28;
         static constexpr float _min_mph = 0.0;
         static constexpr float _abs_max_mph = 33.55; // Sensor maximum mph reading.  Our sensor mounted in 2-in ID intake tube
         static constexpr float _initial_max_mph = 28.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
-        static constexpr float _initial_airflow_mph = 0.0;
+        static constexpr float _initial_airvelo_mph = 0.0;
         static constexpr float _initial_ema_alpha = 0.2;
         FS3000 _sensor;
         float goodreading;
-        int64_t airflow_read_period_us = 35000;
-        Timer airflowTimer;
+        int64_t airvelo_read_period_us = 35000;
+        Timer airveloTimer;
         virtual float read_sensor() {
-            if (airflowTimer.expireset()) {
+            if (airveloTimer.expireset()) {
                 goodreading = _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
                 // this->_val_raw = this->human_val();  // (NATIVE_T)goodreading; // note, this returns a float from 0-33.55 for the FS3000-1015             
             }
             return goodreading;
         }
     public:
-        AirflowSensor(I2C &i2c_arg) : I2CSensor(i2c_arg, _i2c_address) {
+        AirVeloSensor(I2C &i2c_arg) : I2CSensor(i2c_arg, _i2c_address) {
             _ema_alpha = _initial_ema_alpha;
             set_human_limits(_min_mph, _initial_max_mph);
             set_can_source(Source::POT, true);
-            airflowTimer.set(airflow_read_period_us);
+            airveloTimer.set(airvelo_read_period_us);
         }
-        AirflowSensor() = delete;
+        AirVeloSensor() = delete;
 
         void setup() {
             I2CSensor::setup();
-            printf("Airflow sensor.. %sdetected\n", _detected ? "" : "not ");
+            printf("Air velo sensor.. %sdetected\n", _detected ? "" : "not ");
             if (_detected) {
                 if (_sensor.begin() == false) {
                     printf("  Sensor not responding\n");  // Begin communication with air flow sensor) over I2C 
@@ -968,7 +968,7 @@ class HotrcManager {
 
 // This enum class represent the components which can be simulated (sensor). It's a uint8_t type under the covers, so it can be used as an index
 typedef uint8_t opt_t;
-enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airflow, mapsens, engtemp, mulebatt, starter, basicsw, num_sensors };  //, ignition, syspower };  // , num_sensors, err_flag };
+enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airvelo, mapsens, engtemp, mulebatt, starter, basicsw, num_sensors };  //, ignition, syspower };  // , num_sensors, err_flag };
 
 // Simulator manages the source handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
 // NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use sources,

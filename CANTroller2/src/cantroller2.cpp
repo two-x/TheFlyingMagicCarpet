@@ -4,7 +4,7 @@
 #include <iomanip>  // Formatting cout
 #include "globals.h"
 #include "display.h"
-#include "touchscreen.h"
+#include "touch.h"
 #include "RunModeManager.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -97,12 +97,12 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     speedo.setup();
     printf("done..\nInit i2c and i2c-enabled devices.."); delay(1);  // Attempt to force print to happen before init
     i2c.init();
-    airflow.setup(); // must be done after i2c is started
+    airvelo.setup(); // must be done after i2c is started
     mapsens.setup();
     printf("Simulator setup..\n");
     sim.register_device(sensor::pressure, pressure, pressure.source());
     sim.register_device(sensor::brkpos, brakepos, brakepos.source());
-    sim.register_device(sensor::airflow, airflow, airflow.source());
+    sim.register_device(sensor::airvelo, airvelo, airvelo.source());
     sim.register_device(sensor::mapsens, mapsens, mapsens.source());
     sim.register_device(sensor::tach, tach, tach.source());
     sim.register_device(sensor::speedo, speedo, speedo.source());
@@ -167,13 +167,10 @@ void loop() {
     speedo.update();  // Speedo
     pressure.update();  // Brake pressure
     mulebatt.update();
-    airflow.update();
+    airvelo.update();
     mapsens.update();  // MAP sensor  // takes 6800 us (!!)
     maf_ugps = massairflow();  // Recalculate intake mass airflow
-    if (touch_reticles) {
-        get_touchpoint();
-        printf ("x:%d, y:%d\n", touch_pt[0], touch_pt[1]);
-    }
+    if (touch_reticles) get_touchpoint();
 
     // Controller handling
     // 1. Handle any toggle button events (ch3 and ch4)
@@ -375,7 +372,7 @@ void loop() {
             if (selected_value == 2) throttle.set_idlehot(throttle.idlehot(), 0.1 * (float)simdelta);
             else if (selected_value == 3) throttle.set_idlecold(throttle.idlecold(), 0.1 * (float)simdelta);
             else if (selected_value == 4) adj_val(tach.redline_rpm_ptr(), 0.1 * (float)simdelta, throttle.idlehigh(), tach.abs_max_rpm());
-            else if (selected_value == 5) adj_val(airflow.max_mph_ptr(), 0.01 * (float)simdelta, 0, airflow.abs_max_mph());
+            else if (selected_value == 5) adj_val(airvelo.max_mph_ptr(), 0.01 * (float)simdelta, 0, airvelo.abs_max_mph());
             else if (selected_value == 6) adj_val(mapsens.min_psi_ptr(), 0.1 * (float)simdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
             else if (selected_value == 6) adj_val(mapsens.max_psi_ptr(), 0.1 * (float)simdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
             else if (selected_value == 8) adj_val(&speedo_idle_mph, 0.01 * (float)simdelta, 0, speedo.redline_mph() - 1);
@@ -427,7 +424,7 @@ void loop() {
             else if (selected_value == 2) sim.set_can_sim(sensor::brkpos, simdelta);
             else if (selected_value == 3) sim.set_can_sim(sensor::speedo, simdelta);
             else if (selected_value == 4) sim.set_can_sim(sensor::tach, simdelta);
-            else if (selected_value == 5) sim.set_can_sim(sensor::airflow, simdelta);
+            else if (selected_value == 5) sim.set_can_sim(sensor::airvelo, simdelta);
             else if (selected_value == 6) sim.set_can_sim(sensor::mapsens, simdelta);
             // else if (selected_value == 7) sim.set_can_sim(sensor::starter, simdelta);
             else if (selected_value == 7) sim.set_can_sim(sensor::basicsw, simdelta);
