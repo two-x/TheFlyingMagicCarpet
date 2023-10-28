@@ -19,11 +19,11 @@
 bool flip_the_screen = true;
 // #define pinout_bm2023  // uncomment this to get pin assignments for old control box
 
-#define bootbutton_pin 0        // (button0 / bootstrap high) - This is the "Boot" button on the esp32 board. Active low (existing onboard pullup)
-#define encoder_a_pin 1         // (adc1ch0) - Int input, The A (aka CLK) pin of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
+#define encoder_sw_pin 0        // (button0 / bootstrap high) - Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup). Also the esp "Boot" button does the same thing
+#define lipobatt_pin 1          // (adc1ch0) - Analog input, LiPO cell voltage, full scale is ~4.2V
 #define encoder_b_pin 2         // (adc1ch1) - Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define tft_dc_pin 3            // (adc1ch2 / strap X) - Output, Assert when sending data to display chip to indicate commands vs. screen data - ! pin is also defined in tft_setup.h
-#define mulebatt_pin 4          // (adc1ch3) - Analog input, battery voltage sense, full scale is 16V
+#define mulebatt_pin 4          // (adc1ch3) - Analog input, mule battery voltage sense, full scale is 16V
 #define pot_wipe_pin 5          // (adc1ch4) - Analog in from 20k pot
 #define brake_pos_pin 6         // (adc1ch5) - Analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
 #define pressure_pin 7          // (adc1ch6) - Analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V.
@@ -44,11 +44,11 @@ bool flip_the_screen = true;
 #define speedo_pin 35           // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
 #define starter_pin 36          // (spi-ram / oct-spi / glitch) - Input/Output (both active high), output when starter is being driven, otherwise input senses external starter activation
 #define tach_pin 37             // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup) - Note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
-#define encoder_sw_pin 38       // (spi-ram / oct-spi) - Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup)
+#define sdcard_cs_pin 38        // (spi-ram / oct-spi) - Output, chip select for SD card controller on SPI bus
 #define basicmodesw_pin 39      // (jtck / glitch) Input, asserted to tell us to run in basic mode, active low (has ext pullup) - Note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
-#define sdcard_cs_pin 40        // (jtdo) Output, chip select for SD card controller on SPI bus
+#define hotrc_ch4_pin 40        // (jtdo) Cruise control, Hotrc Ch4 PWM toggle signal
 #define hotrc_ch3_pin 41        // (jtdi) Ignition control, Hotrc Ch3 PWM toggle signal
-#define hotrc_ch4_pin 42        // (jtms) Cruise control, Hotrc Ch4 PWM toggle signal
+#define encoder_a_pin 42        // (jtms) Int input, The A (aka CLK) pin of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
 #define uart_tx_pin 43          // "TX" (uart0 tx) - Serial monitor data out. Also used to detect devboard vs. pcb at boot time (using pullup/pulldown, see below)
 #define uart_rx_pin 44          // "RX" (uart0 rx) - Serial monitor data in. Maybe could repurpose during runtime since we only need outgoing console data?
 #define ignition_pin 45         // (bootstrap low) - Output to an nfet/pfet pair to control the car ignition
@@ -56,16 +56,15 @@ bool flip_the_screen = true;
 #define touch_cs_pin 47         // Output, chip select for resistive touchscreen, active low - ! pin is also defined in tft_setup.h
 #define neopixel_pin 48         // (rgb led) - Data line to onboard Neopixel WS281x (on all v1 devkit boards - pin 38 is used on v1.1 boards). Also used for onboard and external neopoxels - ! pin is also defined in neo.h
 
-#ifdef pinout_bm2023           // Swapped these signals from pins below (bm2023) to above (bm2024)
+#ifdef pinout_bm2023           // Here is bm2023 box wiring for signals which have since changed pins
     #define onewire 19
+    #define hotrc_ch3_pin 20 
+    #define hotrc_ch4_pin 21 
     #define tach_pin 36
     #define ignition_pin 37
-    #define syspower_pin 38
     #define encoder_b_pin 40
     #define encoder_a_pin 41
     #define encoder_sw_pin 42
-    #define starter_pin 45
-    #define sdcard_cs_pin 46
 #endif
 
 // External components needed (pullup/pulldown resistors, capacitors, etc.): (Note: "BB" = On dev breadboards only, "PCB" = On vehicle PCB only)
@@ -92,6 +91,7 @@ bool flip_the_screen = true;
 // ESP32 errata 3.11: Pin 36 and 39 will be pulled low for ~80ns when "certain RTC peripherals power up"
 // SPI bus page including DMA information: https://docs.espressif.com/projects/esp-idf/en/v4.4/esp32s3/api-reference/peripherals/spi_master.html
 
+#define bootbutton_pin -1
 #define tft_ledk_pin -1   // Output, optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
 #define touch_irq_pin 255 // Input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - Set to 255 if not used
 #define tft_rst_pin -1    // TFT Reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
@@ -138,12 +138,12 @@ RMTInput hotrc_rmt[4] = {
 enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, num_runmodes };
 bool running_on_devboard = false;  // will overwrite with value read thru pull resistor on tx pin at boot
 runmodes runmode = SHUTDOWN;
-bool shutdown_incomplete = true;     // Shutdown mode has not completed its work and can't yet stop activity
+bool shutdown_incomplete = true;     // minor state variable for shutdown mode - Shutdown mode has not completed its work and can't yet stop activity
 bool we_just_switched_modes = true; // For mode logic to set things up upon first entry into mode
 bool park_the_motors = false;       // Indicates we should release the brake & gas so the pedals can be used manually without interference
-bool car_hasnt_moved = false;         // Whether car has moved at all since entering fly mode
+bool car_hasnt_moved = false;         // minor state variable for fly mode - Whether car has moved at all since entering fly mode
 bool calmode_request = false;
-bool joy_centered = false;
+bool joy_centered = false;  // minor state variable for hold mode
 // Timer cruiseSwTimer;  // Was used to require a medium-length hold time pushing cruise button to switch modes
 Timer sleepInactivityTimer(15000000);           // After shutdown how long to wait before powering down to sleep
 Timer stopcarTimer(8000000);                    // Allows code to fail in a sensible way after a delay if nothing is happening
@@ -217,8 +217,8 @@ float pressure_panic_increment_psi = 5; // Incremental pressure added periodical
 float pressure_target_psi;
 
 // brake actuator motor related
-Timer brakeIntervalTimer(100000);             // How much time between increasing brake force during auto-stop if car still moving?
-int32_t brake_increment_interval_us = 100000; // How often to apply increment during auto-stopping (in us)
+Timer brakeIntervalTimer(1000000);             // How much time between increasing brake force during auto-stop if car still moving?
+int32_t brake_increment_interval_us = 1000000; // How often to apply increment during auto-stopping (in us)
 float brake_out_pc;
 float brake_retract_max_pc = 100.0; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
 float brake_retract_pc = 100.0;     // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
@@ -448,7 +448,6 @@ void update_temperature_sensors(void *parameter) {
 
 void set_board_defaults(bool devboard) {  // true for dev boards, false for printed board (on the car)
     if (devboard) {
-        sim.set_potmap(sensor::tach);
         sim.set_can_sim(sensor::pressure, true);
         sim.set_can_sim(sensor::brkpos, true);
         sim.set_can_sim(sensor::tach, true);
@@ -456,8 +455,9 @@ void set_board_defaults(bool devboard) {  // true for dev boards, false for prin
         sim.set_can_sim(sensor::mapsens, true);
         sim.set_can_sim(sensor::airvelo, true);
         sim.set_can_sim(sensor::basicsw, true);
+        sim.set_potmap(sensor::pressure);
     }
-    else {
+    else {  // override settings if running on the real car
         gamma_correct_enabled = false;
         console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
         keep_system_powered = false; // Use true during development
@@ -564,6 +564,7 @@ Timer boot_button_timer(400000);
 //
 void bootbutton_update() {
     // ESP32 "boot" button. generates boot_button_action flags of LONG or SHORT presses which can be handled wherever. Handler must reset boot_button_action = NONE
+    if (bootbutton_pin < 0) return;
     if (!read_pin (bootbutton_pin)) {
         if (!boot_button) {  // If press just occurred
             boot_button_timer.reset();  // Looks like someone just pushed the esp32 "boot" button
