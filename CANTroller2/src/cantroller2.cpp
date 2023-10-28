@@ -57,7 +57,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin(neopixel_pin, OUTPUT);
     set_pin(sdcard_cs_pin, OUTPUT);
     set_pin(tft_cs_pin, OUTPUT);
-    set_pin(bootbutton_pin, INPUT_PULLUP);
     set_pin(starter_pin, INPUT_PULLDOWN);
     if (!usb_jtag) set_pin(steer_enc_a_pin, INPUT_PULLUP);
     if (!usb_jtag) set_pin(steer_enc_b_pin, INPUT_PULLUP);

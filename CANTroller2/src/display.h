@@ -278,20 +278,20 @@ class Display {
         long star_x0, star_y0;
         long touchpoint_x = -1; long touchpoint_y = -1;
         long eraser_rad = 14;
-        long eraser_velo_min = 2;
-        long eraser_velo_max = 8;
+        long eraser_velo_min = 4;
+        long eraser_velo_max = 10;
         long eraser_pos[2] = { 0, 0 };
         long eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) };
         long eraser_pos_max[2] = { disp_saver_width / 2 - eraser_rad, disp_saver_height / 2 - eraser_rad }; 
         long eraser_velo_sign[2] = { 1, 1 };
         uint8_t penhue = 0;
         uint16_t pencolor = RED;
-        uint32_t pentimeout = 70000;
+        uint32_t pentimeout = 700000;
         Timer pentimer;
         int savernumcycles; int savercycle = 1; int savershape_last;
         int savershapes = 3;  // 4
         int savershape = random(savershapes);  // 3
-        uint32_t saver_cycletime_us = 60000000;
+        uint32_t saver_cycletime_us = 45000000;
         Timer saverRefreshTimer, saverCycleTimer;
         int16_t saver_lines_mode = 0;  // 0 = eraser, 1 = do drugs
         uint32_t disp_oldmode = SHUTDOWN;   // So we can tell when the mode has just changed. start as different to trigger_mode start algo

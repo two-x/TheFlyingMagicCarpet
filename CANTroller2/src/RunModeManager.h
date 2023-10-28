@@ -53,6 +53,7 @@ private:
     }
     void cleanup_state_variables()  {
         if (_oldMode == SHUTDOWN) {
+            syspower_request = req_on;  // all other modes require syspower on
             shutdown_color = colorcard[SHUTDOWN];
             shutdown_incomplete = false;
         }
