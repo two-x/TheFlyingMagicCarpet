@@ -572,28 +572,59 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
     int32_t max_adc() { return this->_native.max(); }
 };
 
-// BatterySensor reads the voltage level from the Mule battery
-class BatterySensor : public AnalogSensor<int32_t, float> {
+// CarBattery reads the voltage level from the Mule battery
+class CarBattery : public AnalogSensor<int32_t, float> {
     protected:
         static constexpr float _initial_adc = adcmidscale_adc;
         static constexpr float _initial_v = 10.0;
-        static constexpr float _op_min_v = 0.0; // The min vehicle voltage we can sense.
-        static constexpr float _op_max_v = 16.0;  // The max vehicle voltage we can sense. Resistor divider is designed so max 16.0 V = (adcrange_adc - 5) plus a weak pullup, so values > (adcrange - 5) indicates broken connection.
-        static constexpr float _initial_v_per_adc = _op_max_v / (adcrange_adc - 5);
-        static constexpr float _initial_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+        static constexpr float _abs_min_v = 0.0; // The min vehicle voltage we can sense.
+        static constexpr float _abs_max_v = 16.0; // The min vehicle voltage we can sense.
+        static constexpr float _op_min_v = 7.0; // The min vehicle voltage we can sense.
+        static constexpr float _op_max_v = 13.8;  // The max vehicle voltage we can sense. Resistor divider is designed so max 16.0 V = (adcrange_adc - 5) plus a weak pullup, so values > (adcrange - 5) indicates broken connection.
+        static constexpr float _v_per_adc = _abs_max_v / (adcrange_adc - 5);
+        static constexpr float _ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
     public:
-        BatterySensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
-            _ema_alpha = _initial_ema_alpha;
-            _m_factor = _initial_v_per_adc;
-            _human.set_limits(_op_min_v, _op_max_v);
+        CarBattery(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
+            _m_factor = _v_per_adc;
+            _human.set_limits(_abs_min_v, _abs_max_v);
             _native.set_limits(0.0, adcrange_adc - 5);
             set_native(_initial_adc);
             set_can_source(Source::PIN, true);
         }
-        BatterySensor() = delete;
+        CarBattery() = delete;
         float v() { return _human.val(); }
         float min_v() { return _human.min(); }
         float max_v() { return _human.max(); }
+        float op_min_v() { return _op_min_v; }
+        float op_max_v() { return _op_max_v; }
+};
+
+// LiPOBatt reads the voltage level from a LiPO cell
+class LiPOBatt : public AnalogSensor<int32_t, float> {
+    protected:
+        static constexpr float _initial_adc = adcmidscale_adc;
+        static constexpr float _initial_v = 10.0;
+        static constexpr float _abs_min_v = 0.0; // The min vehicle voltage we can sense.
+        static constexpr float _abs_max_v = 4.8; // The min vehicle voltage we can sense.
+        static constexpr float _op_min_v = 3.2; // The min vehicle voltage we can sense.
+        static constexpr float _op_max_v = 4.3;  // The max vehicle voltage we can sense. Resistor divider is designed so max 16.0 V = (adcrange_adc - 5) plus a weak pullup, so values > (adcrange - 5) indicates broken connection.
+        static constexpr float _initial_v_per_adc = _abs_max_v / (adcrange_adc - 5);
+        static constexpr float _initial_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+    public:
+        LiPOBatt(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
+            _ema_alpha = _initial_ema_alpha;
+            _m_factor = _initial_v_per_adc;
+            _human.set_limits(_abs_min_v, _abs_max_v);
+            _native.set_limits(0.0, adcrange_adc - 5);
+            set_native(_initial_adc);
+            set_can_source(Source::PIN, true);
+        }
+        LiPOBatt() = delete;
+        float v() { return _human.val(); }
+        float min_v() { return _human.min(); }
+        float max_v() { return _human.max(); }
+        float op_min_v() { return _op_min_v; }
+        float op_max_v() { return _op_max_v; }
 };
 
 // PressureSensor represents a brake fluid pressure sensor.
@@ -603,7 +634,7 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     public:
         static constexpr int32_t op_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
         // Soren 230920: Reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
-        static constexpr int32_t op_max_adc = 1700; // ~208psi by this math - "Maximum" braking
+        static constexpr int32_t op_max_adc = 2080; // ~208psi by this math - "Maximum" braking
         // static constexpr int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
         static constexpr float initial_psi_per_adc = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - op_min_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
         static constexpr float initial_ema_alpha = 0.1;
@@ -968,7 +999,7 @@ class HotrcManager {
 
 // This enum class represent the components which can be simulated (sensor). It's a uint8_t type under the covers, so it can be used as an index
 typedef uint8_t opt_t;
-enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airvelo, mapsens, engtemp, mulebatt, starter, basicsw, num_sensors };  //, ignition, syspower };  // , num_sensors, err_flag };
+enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airvelo, mapsens, engtemp, mulebatt, lipobatt, starter, basicsw, num_sensors };  //, ignition, syspower };  // , num_sensors, err_flag };
 
 // Simulator manages the source handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
 // NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use sources,

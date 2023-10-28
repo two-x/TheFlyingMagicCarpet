@@ -19,8 +19,8 @@
 bool flip_the_screen = true;
 // #define pinout_bm2023  // uncomment this to get pin assignments for old control box
 
-#define encoder_sw_pin 0        // (button0 / bootstrap high) - Input, Encoder above, for the UI.  This is its pushbutton output, active low (needs pullup). Also the esp "Boot" button does the same thing
-#define lipobatt_pin 1          // (adc1ch0) - Analog input, LiPO cell voltage, full scale is ~4.2V
+#define encoder_sw_pin 0        // (button0 / bootstrap high) - Input, Rotary encoder push switch, for the UI. active low (needs pullup). Also the esp "Boot" button does the same thing
+#define lipobatt_pin 1          // (adc1ch0) - Analog input, LiPO cell voltage, full scale is 4.8V
 #define encoder_b_pin 2         // (adc1ch1) - Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define tft_dc_pin 3            // (adc1ch2 / strap X) - Output, Assert when sending data to display chip to indicate commands vs. screen data - ! pin is also defined in tft_setup.h
 #define mulebatt_pin 4          // (adc1ch3) - Analog input, mule battery voltage sense, full scale is 16V
@@ -40,7 +40,7 @@ bool flip_the_screen = true;
 #define steer_pwm_pin 18        // (pwm0 / adc2ch7 / rx1) - Output, PWM signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
 #define steer_enc_a_pin 19      // (usb-d- / adc2ch8) - Reserved for a steering quadrature encoder. Encoder "A" signal
 #define steer_enc_b_pin 20      // (usb-d+ / adc2ch9) - Reserved for a steering quadrature encoder. Encoder "B" signal
-#define onewire_pin 21          // (pwm0) - Onewire bus for temperature sensor data
+#define onewire_pin 21          // (pwm0) - Onewire bus for temperature sensor data. note: tested this does not work on higher-numbered pins (~35+)
 #define speedo_pin 35           // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
 #define starter_pin 36          // (spi-ram / oct-spi / glitch) - Input/Output (both active high), output when starter is being driven, otherwise input senses external starter activation
 #define tach_pin 37             // (spi-ram / oct-spi) - Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup) - Note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
@@ -135,7 +135,7 @@ RMTInput hotrc_rmt[4] = {
 // HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
 
 // run state machine related
-enum runmodes { BASIC, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, num_runmodes };
+enum runmodes { BASIC, ASLEEP, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, num_runmodes };
 bool running_on_devboard = false;  // will overwrite with value read thru pull resistor on tx pin at boot
 runmodes runmode = SHUTDOWN;
 bool shutdown_incomplete = true;     // minor state variable for shutdown mode - Shutdown mode has not completed its work and can't yet stop activity
@@ -144,8 +144,9 @@ bool park_the_motors = false;       // Indicates we should release the brake & g
 bool car_hasnt_moved = false;         // minor state variable for fly mode - Whether car has moved at all since entering fly mode
 bool calmode_request = false;
 bool joy_centered = false;  // minor state variable for hold mode
+bool powering_up = false;  // minor state variable for asleep mode
 // Timer cruiseSwTimer;  // Was used to require a medium-length hold time pushing cruise button to switch modes
-Timer sleepInactivityTimer(15000000);           // After shutdown how long to wait before powering down to sleep
+Timer sleepInactivityTimer(180000000);           // After shutdown how long to wait before powering down to sleep
 Timer stopcarTimer(8000000);                    // Allows code to fail in a sensible way after a delay if nothing is happening
 uint32_t motor_park_timeout_us = 4000000;       // If we can't park the motors faster than this, then give up.
 uint32_t gesture_flytimeout_us = 1250000;        // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
@@ -186,7 +187,8 @@ TemperatureSensorManager tempsens(onewire_pin);
 Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 
 // mule battery related
-BatterySensor mulebatt(mulebatt_pin);
+CarBattery mulebatt(mulebatt_pin);
+LiPOBatt lipobatt(lipobatt_pin);
 
 static Servo brakemotor;
 static Servo steermotor;
@@ -501,19 +503,25 @@ void starter_update () {
 }
 
 bool syspower = HIGH;  // Set by handler only. Reflects current state of the signal
-int8_t syspower_request = req_na;
-//
-void syspower_update() {  // Soren: A lot of duplicate code with ignition/panicstop and syspower routines here ...
-    if (syspower_request == req_tog) syspower_request = (int8_t)(!syspower);
-    // else if (syspower_request == syspower) syspower_request = req_na;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
-    if (syspower_request == req_off && !speedo.car_stopped()) syspower_request = req_na;
-    if (!syspower && keep_system_powered) syspower_request = req_on;
-    if (syspower_request != req_na) {
-        syspower = syspower_request;
-        write_pin(syspower_pin, syspower);
-    }
-    syspower_request = req_na;
+void set_syspower(bool setting) {
+    if (!setting && runmode != ASLEEP) return;
+    syspower = setting;
+    if (keep_system_powered) syspower = HIGH;
+    write_pin(syspower_pin, syspower);
 }
+// int8_t syspower_request = req_na;
+// //
+// void syspower_update() {  // Soren: A lot of duplicate code with ignition/panicstop and syspower routines here ...
+//     if (syspower_request == req_tog) syspower_request = (int8_t)(!syspower);
+//     // else if (syspower_request == syspower) syspower_request = req_na;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
+//     if (syspower_request == req_off && !speedo.car_stopped()) syspower_request = req_na;
+//     if (!syspower && keep_system_powered) syspower_request = req_on;
+//     if (syspower_request != req_na) {
+//         syspower = syspower_request;
+//         write_pin(syspower_pin, syspower);
+//     }
+//     syspower_request = req_na;
+// }
 
 // Ignition and panic stop handler
 bool ignition = LOW;  // Set by handler only. Reflects current state of the signal
@@ -565,6 +573,10 @@ Timer boot_button_timer(400000);
 void bootbutton_update() {
     // ESP32 "boot" button. generates boot_button_action flags of LONG or SHORT presses which can be handled wherever. Handler must reset boot_button_action = NONE
     if (bootbutton_pin < 0) return;
+    // if (boot_button_action == SHORT) {
+    //     syspower_request = req_on;
+    //     boot_button_action == NONE;
+    // }
     if (!read_pin (bootbutton_pin)) {
         if (!boot_button) {  // If press just occurred
             boot_button_timer.reset();  // Looks like someone just pushed the esp32 "boot" button
@@ -585,7 +597,20 @@ void bootbutton_update() {
         boot_button_suppress_click = false;  // End click suppression
     }
 }
-
+int8_t sleep_request = req_na;
+void hotrc_events_update() {
+    for (int8_t ch = CH3; ch <= CH4; ch++) hotrc_toggle_update(ch);
+    if (!hotrc_radio_lost) {  // Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
+        if (hotrc_sw_event[CH3]) ignition_request = req_tog;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
+        if (hotrc_sw_event[CH4]) {
+            if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
+            else if (runmode == STALL) starter_request = req_tog;
+            else if (runmode == SHUTDOWN && !shutdown_incomplete) sleep_request = req_on;  // Just messing around here
+            else if (runmode == ASLEEP) sleep_request = req_off; 
+        }
+    }
+    for (int8_t ch = CH3; ch <= CH4; ch++) hotrc_sw_event[ch] = false;
+}
 // Loop timing related
 Timer loopTimer(1000000); // how long the previous main loop took to run (in us)
 float looptime_sum_s;
@@ -655,13 +680,13 @@ Timer errTimer((int64_t)err_timeout_us);
 uint32_t err_margin_adc = 5;
 // Sensor related trouble - this all should be moved to devices.h
 enum err_type { LOST, RANGE, CALIB, WARN, CRIT, INFO, num_err_types };
-enum err_sensor { e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, e_basicsw, e_mulebatt, e_airvelo, e_mapsens, e_num_sensors, e_none };  // these are in order of priority
+enum err_sensor { e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, e_basicsw, e_mulebatt, e_lipobatt, e_airvelo, e_mapsens, e_num_sensors, e_none };  // these are in order of priority
 char err_type_card[num_err_types][5] = { "Lost", "Rang", "Cal", "Warn", "Crit", "Info" };
-char err_sensor_card[e_num_sensors+1][7] = { "HrcV", "HrcCh3", "BrPres", "BrkPos", "Speedo", "HrcH", "Tach", "Temps", "Startr", "HrcCh4", "Basic", "Batery", "Airflw", "MAP", "None" };
+char err_sensor_card[e_num_sensors+1][7] = { "HrcV", "HrcCh3", "BrPres", "BrkPos", "Speedo", "HrcH", "Tach", "Temps", "Startr", "HrcCh4", "Basic", "MulBat", "LiPO", "Airflw", "MAP", "None" };
 // enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airvelo, mapsens, engtemp, mulebatt, ignition, basicsw, cruisesw, starter, syspower };  // , num_sensors, err_flag };
 bool err_sensor_alarm[num_err_types] = { false, false, false, false, false, false };
 int8_t err_sensor_fails[num_err_types] = { 0, 0, 0, 0, 0, 0 };
-bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airvelo/e_mapsens/e_temps/e_mulebatt/e_basicsw/e_starter]   // sensor::opt_t::num_sensors]
+bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airvelo/e_mapsens/e_temps/e_mulebatt/e_lipobatt/e_basicsw/e_starter]   // sensor::opt_t::num_sensors]
 uint8_t highest_pri_failing_sensor[num_err_types];
 uint8_t highest_pri_failing_last[num_err_types];
 bool diag_ign_error_enabled = true;

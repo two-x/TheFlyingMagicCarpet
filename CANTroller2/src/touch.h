@@ -164,12 +164,12 @@ public:
                 touch_longpress_valid = false;
             }
         }
-        else if (tcol == 5 && trow == 0) {
-            if (touch_longpress_valid && touchHoldTimer.elapsed() > 2 * touchHoldTimer.get_timeout()) {  // Double hold time for some extra safety
-                syspower_request = req_tog;
-                touch_longpress_valid = false;
-            }
-        }
+        // else if (tcol == 5 && trow == 0) {
+        //     if (touch_longpress_valid && touchHoldTimer.elapsed() > 2 * touchHoldTimer.get_timeout()) {  // Double hold time for some extra safety
+        //         syspower_request = req_tog;
+        //         touch_longpress_valid = false;
+        //     }
+        // }
         else if (sim.enabled()) {
             if (tcol == 3 && trow == 0 && sim.can_sim(sensor::basicsw) && !touch_now_touched) basicmodesw = !basicmodesw;
             else if (tcol == 3 && trow == 1 && sim.can_sim(sensor::pressure) && pressure.source() == Source::TOUCH) pressure.add_human((float)touch_accel); // (+= 25) Pressed the increase brake pressure button
