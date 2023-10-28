@@ -1,5 +1,7 @@
 #pragma once
 #include "display.h"
+#include "uictrl.h"  // for encoder button to wake up
+#include "esp_sleep.h"  // for deep sleep
 
 class RunModeManager {
 private:
@@ -8,15 +10,21 @@ private:
     float cruise_ctrl_extent_pc;       // During cruise adjustments, saves farthest trigger position read
     bool cruise_trigger_released = false;
     static const uint32_t gesture_flytimeout_us = 1250000;        // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
-    Timer gestureFlyTimer, cruiseDeltaTimer;
+    Timer gestureFlyTimer, cruiseDeltaTimer, pwrup_timer;
     runmodes _currentMode; // note these are more here in caseA we eventually don't use the globals
     runmodes _oldMode;
+    uint32_t pwrup_timeout = 500000;
+    // bool needs_sleep;
+    Encoder* encoder;
 public:
     // Call this function in the main loop to manage run modes
     // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
+    RunModeManager(Encoder* encod) { encoder = encod; }
+
     runmodes run_runmode() {
         updateMode(runmodes(runmode)); // Update the current mode if needed, this also sets we_just_switched_modes
         if (_currentMode == BASIC) run_basicMode(); // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
+        else if (_currentMode == ASLEEP) run_asleepMode();
         else if (_currentMode == SHUTDOWN) run_shutdownMode();
         else if (_currentMode == STALL) run_stallMode();
         else if (_currentMode == HOLD) run_holdMode();
@@ -34,11 +42,14 @@ private:
         if (axis == VERT) return (hotrc_pc[axis][FILT] > hotrc_pc[axis][DBTOP]) ? joy_up : ((hotrc_pc[axis][FILT] < hotrc_pc[axis][DBBOT]) ? joy_down : joy_cent);
         return (hotrc_pc[axis][FILT] > hotrc_pc[axis][DBTOP]) ? joy_rt : ((hotrc_pc[axis][FILT] < hotrc_pc[axis][DBBOT]) ? joy_lt : joy_cent);
     }
-    
+    // void sleep_for(uint32_t wakeup_us) {
+    //     esp_sleep_enable_timer_wakeup(wakeup_us);
+    //     esp_deep_sleep_start();
+    // }
     void updateMode(runmodes newmode) { _currentMode = newmode; }
 
     runmodes modeChanger() {
-        if (!syspower) _currentMode = SHUTDOWN;
+        if (!syspower) _currentMode = ASLEEP;
         else if (basicmodesw) _currentMode = BASIC;  // if basicmode switch on --> Basic Mode
         else if ((_currentMode != CAL) && (panicstop || !ignition)) _currentMode = SHUTDOWN;
         else if ((_currentMode != CAL) && tach.engine_stopped()) _currentMode = STALL;;  // otherwise if engine not running --> Stall Mode
@@ -46,14 +57,13 @@ private:
         if (we_just_switched_modes) {
             disp_runmode_dirty = true;
             cleanup_state_variables();
-            syspower_request = req_on;
         }
         _oldMode = _currentMode;
         return _currentMode;
     }
     void cleanup_state_variables()  {
+        if (_oldMode == ASLEEP) powering_up = false;
         if (_oldMode == SHUTDOWN) {
-            syspower_request = req_on;  // all other modes require syspower on
             shutdown_color = colorcard[SHUTDOWN];
             shutdown_incomplete = false;
         }
@@ -78,6 +88,20 @@ private:
         }
         else if (!basicmodesw && !tach.engine_stopped()) updateMode( speedo.car_stopped() ? HOLD : FLY );  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
     }
+    void run_asleepMode() {
+        if (we_just_switched_modes) {
+            set_syspower(LOW); // Power down devices to save battery
+            sleep_request = req_na;
+            powering_up = false;
+        }
+        if ((*encoder).pressed() || sleep_request == req_off) {
+            set_syspower(HIGH);
+            sleep_request = req_na;
+            pwrup_timer.set(pwrup_timeout);
+            powering_up = true;
+        }
+        if (powering_up && pwrup_timer.expired()) updateMode(SHUTDOWN);
+    }
     void run_shutdownMode() { // In shutdown mode we stop the car if it's moving then park the motors.
         if (we_just_switched_modes) {  // If basic switch is off, we need to stop the car and release brakes and gas before shutting down                
             throttle.goto_idle();  //  Release the throttle 
@@ -85,6 +109,7 @@ private:
             shutdown_color = LPNK;
             disp_runmode_dirty = true;
             calmode_request = false;
+            sleep_request = req_na;
             if (!speedo.car_stopped() && !autostop_disabled) {
                 if (panicstop && pressure_target_psi < pressure_panic_initial_psi) pressure_target_psi = pressure_panic_initial_psi;
                 else if (!panicstop && pressure_target_psi < pressure_hold_initial_psi) pressure_target_psi = pressure_hold_initial_psi;
@@ -116,10 +141,8 @@ private:
             }
         }
         else if (calmode_request) updateMode(CAL);  // if fully shut down and cal mode requested, go to cal mode
-        else if (sleepInactivityTimer.expired()) {
-            syspower_request = req_off; // Power down devices to save battery
-            // go to sleep, would happen here 
-        }
+        else if (sleepInactivityTimer.expired() || sleep_request == req_on) updateMode(ASLEEP);
+        sleep_request == req_na;
     }
     void run_stallMode() {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
         if (get_joydir(VERT) != joy_down) pressure_target_psi = pressure.min_human();  // If in deadband or being pushed up, no pressure target

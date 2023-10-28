@@ -8,9 +8,11 @@
 #include "RunModeManager.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+
+// RTC_DATA_ATTR int bootcount = 0;
 // #include "driver/mcpwm.h"  // MCPWM pulse measurement code
 HotrcManager hotrcManager[2] = { 6, 6 };  // [HORZ/VERT]
-RunModeManager runModeManager;
+RunModeManager runModeManager(&encoder);
 Display screen;
 ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
 TouchScreen touch(touch_cs_pin, touch_irq_pin);
@@ -50,6 +52,7 @@ void neo_idiots_update() {
     }
 }
 void setup() {  // Setup just configures pins (and detects touchscreen type)
+    // if (bootcount++) { printf ("Waking up..\n"); return; }
     if (RUN_TESTS) run_tests();   
     set_pin(tft_dc_pin, OUTPUT);
     set_pin(gas_pwm_pin, OUTPUT);
@@ -90,6 +93,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     brakepos.setup();
     printf("done\nVehicle battery sense.. ");
     mulebatt.setup();
+    printf("done\nLiPO cell sense.. ");
+    lipobatt.setup();
     printf("done\nTachometer.. ");
     tach.setup();
     printf("done\nSpeedometer.. ");
@@ -153,11 +158,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 
 void loop() {
     // Update inputs.  Fresh sensor data, and filtering
-    if (boot_button_action == SHORT) {
-        syspower_request = req_on;
-        boot_button_action == NONE;
-    }
-    syspower_update();  // handler for system power pin output.
+    // syspower_update();  // handler for system power pin output.
     ignition_panic_update();  // handler for ignition pin output and panicstop status.
     bootbutton_update();
     basicsw_update();
@@ -170,6 +171,7 @@ void loop() {
     speedo.update();  // Speedo
     pressure.update();  // Brake pressure
     mulebatt.update();
+    lipobatt.update();
     airvelo.update();
     mapsens.update();  // MAP sensor  // takes 6800 us (!!)
     maf_ugps = massairflow();  // Recalculate intake mass airflow
@@ -177,16 +179,7 @@ void loop() {
 
     // Controller handling
     // 1. Handle any toggle button events (ch3 and ch4)
-    for (int8_t ch = CH3; ch <= CH4; ch++) hotrc_toggle_update(ch);
-    if (!hotrc_radio_lost) {  // Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
-        if (hotrc_sw_event[CH3]) ignition_request = req_tog;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
-        if (hotrc_sw_event[CH4]) {
-            if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
-            else if (runmode == STALL) starter_request = req_tog;
-            else if (runmode == SHUTDOWN && !shutdown_incomplete) syspower_request = req_tog;  // Just messing around here 
-        }
-    }
-    for (int8_t ch = CH3; ch <= CH4; ch++) hotrc_sw_event[ch] = false;
+    hotrc_events_update();    
     // 2. Read horz and vert pulse inputs, spike filter, convert to percent, ema filter, constrain, and center if within deadband
     for (int8_t axis = HORZ; axis <= VERT; axis++) {
         hotrc_us[axis][RAW] = (int32_t)hotrc_rmt[axis].readPulseWidth();

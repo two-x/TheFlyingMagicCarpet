@@ -116,8 +116,8 @@ uint32_t hue_to_rgb16(uint8_t hue) {  // returns uint16 color
     return (((255 - 3 * ((255 - hue) % 85)) & 0xf8) << 8) | ((3 * ((255 - hue) % 85)) >> 3);
 }
 
-char modecard[7][7] = { "Basic", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
-int32_t colorcard[arraysize(modecard)] = { MGT, RED, ORG, YEL, GRN, TEAL, MBLU };
+char modecard[8][7] = { "Basic", "Asleep", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
+int32_t colorcard[arraysize(modecard)] = { MGT, PUR, RED, ORG, YEL, GRN, TEAL, MBLU };
 
 char sensorcard[14][7] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 
@@ -145,7 +145,7 @@ char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs
 int32_t tuning_first_editable_line[dataset_pages::num_datapages] = { 9, 9, 5, 3, 4, 8, 7, 7, 10, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
-    { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
+    { brAk"Posn", "MuleBatt", "LiPOBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
     { "Pres ADC", __________, __________, __________, __________, "AirSpMax", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_CAR
     { "BrakePWM", "SteerPWM", __________, stEr"Left", stEr"Stop", stEr"Rigt", brAk"Extd", brAk"Stop", brAk"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
@@ -158,7 +158,7 @@ char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
     { "LoopFreq", "Loop Avg", "LoopPeak", " Touch X", " Touch Y", " Touch X", " Touch Y", "BlnkDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI      // "   Gamma"
 };
 char tuneunits[dataset_pages::num_datapages][disp_tuning_lines][5] = {
-    { "in  ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
+    { "in  ", "V   ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, "%   ", "%   ", },  // PG_RUN
     { "us  ", "us  ", "us  ", "us  ", "%   ", "%   ", ______, ______, ______, "us  ", "us  ", },  // PG_JOY
     { "adc ", ______, ______, ______, ______, "mph ", "psi ", "psi ", "mph ", "mph ", "in  ", },  // PG_CAR
     { "us  ", "us  ", ______, "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", },  // PG_PWMS
@@ -190,8 +190,8 @@ uint8_t unitmaps[8][17] = {  // 17x7-pixel bitmaps for where units use symbols n
 };  // These bitmaps are in the same format as the idiot light bitmaps, described below
 //  { 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x41, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x41, 0x3e, 0x00, 0x00, 0x6e, 0x6f, },  // Googly eyes, to point out new features
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
-bool* idiotlights[14] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &(temp_err[ENGINE]), &(temp_err[WHEEL]), &panicstop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, sim.enabled_ptr(), &running_on_devboard };
-char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB" };  // "c3", "c4" };
+bool* idiotlights[15] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &(temp_err[ENGINE]), &(temp_err[WHEEL]), &panicstop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, sim.enabled_ptr(), &running_on_devboard, &powering_up };
+char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB", "PU" };  // "c3", "c4" };
 uint16_t idiotcolors[arraysize(idiotlights)];
 uint8_t idiot_saturation = 225;  // 170-195 makes nice bright yet distinguishable colors
 uint8_t idiot_hue_offset = 240;
@@ -213,7 +213,8 @@ uint8_t idiotmaps[arraysize(idiotlights)][11] = {
     { 0x3e, 0x41, 0x7f, 0x41, 0x41, 0x63, 0x3e, 0x08, 0x7f, 0x55, 0x7f, },     // 10 = motor w/ spur gear
     { 0x01, 0x7f, 0x7f, 0x7f, 0x3f, 0x38, 0x74, 0x70, 0x70, 0x70, 0x60, },     // 11 = boot
     { 0x6e, 0x6b, 0x3b, 0x00, 0x7f, 0x00, 0x7f, 0x06, 0x1c, 0x06, 0x7f, },     // 12 = "SIM"
-    { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, }, };  // 13 = "DEV"
+    { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, },     // 13 = "DEV"
+    { 0x00, 0x00, 0x3e, 0x41, 0x40, 0x4f, 0x40, 0x41, 0x3e, 0x00, 0x00, }, };  // 14 = need bitmap for powering up
 //  { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, }, };  // 14 = N/A (no idiot light bitmap)
 void set_idiotcolors() {
     for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
@@ -753,13 +754,13 @@ class Display {
                 draw_dynamic(7, hotrc_pc[HORZ][FILT], hotrc_pc[HORZ][MIN], hotrc_pc[HORZ][MAX]);
                 draw_dynamic(8, steer_out_pc, steer_left_pc, steer_right_pc);
                 if (dataset_page == PG_RUN) {
-                    draw_dynamic(9, brakepos.filt(), brakepos.min_human(), brakepos.max_human());
-                    draw_dynamic(10, mulebatt.filt(), mulebatt.min_v(), mulebatt.max_v());
-                    draw_dynamic(11, pot.val(), pot.min(), pot.max());
-                    draw_dynamic(12, airvelo.filt(), airvelo.min_mph(), airvelo.max_mph());
-                    draw_dynamic(13, mapsens.filt(), mapsens.min_psi(), mapsens.max_psi());
-                    draw_dynamic(14, maf_ugps, maf_min_ugps, maf_max_ugps);
-                    draw_eraseval(15);
+                    draw_dynamic(9, brakepos.filt(), brakepos.op_min_in(), brakepos.op_max_in());
+                    draw_dynamic(10, mulebatt.filt(), mulebatt.op_min_v(), mulebatt.op_max_v());
+                    draw_dynamic(11, lipobatt.filt(), lipobatt.op_min_v(), lipobatt.op_max_v());
+                    draw_dynamic(12, pot.val(), pot.min(), pot.max());
+                    draw_dynamic(13, airvelo.filt(), airvelo.min_mph(), airvelo.max_mph());
+                    draw_dynamic(14, mapsens.filt(), mapsens.min_psi(), mapsens.max_psi());
+                    draw_dynamic(15, maf_ugps, maf_min_ugps, maf_max_ugps);
                     draw_eraseval(16);
                     draw_eraseval(17);
                     draw_dynamic(18, gas_governor_pc, 0.0, 100.0);
