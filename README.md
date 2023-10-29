@@ -1,2 +1,2 @@
 # TheFlyingMagicCarpet
-Code for the light controller on the flying magic carpet.
+Code for the flying magic carpet light controller and fly-by-wire system.
