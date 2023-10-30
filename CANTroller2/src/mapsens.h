@@ -1,6 +1,6 @@
 // map.h - an i2c sensor to track the air pressure in our intake manifold. This, together with the air velocity
-// and temperature gives us the mass air flow which is proportional to how hard the engine is working - Soren
-// I stole this library and modified it as such. to not block for 6-7ms on each read.
+// and temperature gives us the mass air flow which is proportional to how hard the engine is working.
+// I stole this library and modified it as such. to not block for 6-7ms on each read. - Soren
 // SparkFun_MicroPressure library by Alex Wende July 2020 (Beerware license)
 // This is a library for the Qwiic MicroPressure Sensor, which can read from 0 to 25 PSI.
 #pragma once
@@ -22,14 +22,12 @@ class SparkFun_MicroPressure {
     uint8_t readStatus(void);
     float readPressure(Pressure_Units units=PSI, bool noblock=false);
   private:
-    bool ready = true;
+    bool run_preamble = true;
     float pressure = NAN;
     int8_t _address, _eoc, _rst;
     uint8_t _minPsi, _maxPsi, _status;
     TwoWire *_i2cPort = &Wire;
-    // bool statusreadable();
 };
-// Constructor and sets default values.
 // - (Optional) eoc_pin, End of Conversion indicator. Default: -1 (skip)
 // - (Optional) rst_pin, Reset pin for MPR sensor. Default: -1 (skip)
 // - minimum/maximum PSI, minimum range value of the sensor (in PSI). Default: 0
@@ -40,7 +38,6 @@ SparkFun_MicroPressure::SparkFun_MicroPressure(int8_t eoc_pin, int8_t rst_pin, u
     _minPsi = minimumPSI;
     _maxPsi = maximumPSI;
 }
-// Initialize hardware
 // - deviceAddress, I2C address of the sensor. Default: 0x18
 // - wirePort, sets the I2C bus used for communication. Default: Wire
 // - Returns 0/1: 0: sensor not found, 1: sensor connected  */
@@ -55,39 +52,26 @@ bool SparkFun_MicroPressure::begin(uint8_t deviceAddress, TwoWire &wirePort) {
         digitalWrite(_rst,HIGH);
         delay(5);
     }
-    ready = true;
+    run_preamble = true;
     _i2cPort->beginTransmission(_address);
-
     //return !(_i2cPort->endTransmission());
     uint8_t error = _i2cPort->endTransmission();
     if(error == 0) return true;
     else           return false;
 }
-// Read the status byte of the sensor - Returns status byte
 uint8_t SparkFun_MicroPressure::readStatus(void) {
     _i2cPort->requestFrom(_address,1);
     return _i2cPort->read();
 }
-// bool SparkFun_MicroPressure::statusreadable(void) {
-//     if (_eoc >= 0) return digitalRead(_eoc);
-//     bool bit = readStatus();
-//     return !(bit & BUSY_FLAG) || (bit == 0xff);
-// }
-// Read the Pressure Sensor Reading - (optional) Pressure_Units, can return various pressure units. Default: PSI
 float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
-    if (ready) {
+    if (run_preamble) {
         _i2cPort->beginTransmission(_address);
         _i2cPort->write((uint8_t)0xAA);
         _i2cPort->write((uint8_t)0x00);
         _i2cPort->write((uint8_t)0x00);
         _i2cPort->endTransmission();
     }
-    ready = false;
-    // while (!statusreadable()) {
-    //     if (noblock) return NAN;  // If asked not to block but it's not ready, it sends you packing w/o a result & you have to retry.
-    //     delay(1);
-    // }
-    // ready = true;
+    run_preamble = false;
     if (_eoc != -1) { // Use GPIO pin if defined
         while (!digitalRead(_eoc)) {
             if (noblock) return NAN;
@@ -102,7 +86,7 @@ float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
             _status = readStatus();
         }
     }
-    ready = true;
+    run_preamble = true;
     _i2cPort->requestFrom(_address,4);
     _status = _i2cPort->read();
     if((_status & INTEGRITY_FLAG) || (_status & MATH_SAT_FLAG)) return NAN; //  check memory integrity and math saturation bit

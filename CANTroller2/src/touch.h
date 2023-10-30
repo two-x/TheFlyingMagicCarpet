@@ -17,10 +17,10 @@ private:
     #endif
     bool touch_longpress_valid = true;
     bool touch_now_touched = false;
-    int32_t touch_accel_exponent = 0;
-    int32_t touch_accel = 1 << touch_accel_exponent;
+    int32_t tedit_exponent = 0;
+    int32_t tedit = 1 << tedit_exponent;
     int32_t touch_fudge = 0;
-    int32_t touch_accel_exponent_max = 8;
+    int32_t tedit_exponent_max = 8;
 
     Timer touchHoldTimer{550000};  // Hold this long to count as a long press
     Timer touchAccelTimer{850000};
@@ -74,7 +74,7 @@ public:
         bool ret = false;
         if (touched() && touchDoublePressTimer.expired()) {
             ret = true;
-            touch_accel = 1 << touch_accel_exponent;
+            tedit = 1 << tedit_exponent;
             touchpoint = getPoint();
             tft_touch[xx] = map(touchpoint.x, corners[xx][tsmin], corners[xx][tsmax], 0, disp_width_pix);
             tft_touch[yy] = map(touchpoint.y, corners[yy][tsmin], corners[yy][tsmax], 0, disp_height_pix);
@@ -92,13 +92,13 @@ public:
             idelta_touch = 0;  // Stop changing the value
             if (touch_now_touched) touchDoublePressTimer.reset();  // Upon end of a touch, begin timer to reject any accidental double touches
             touch_now_touched = false;  // Remember the last touch state
-            touch_accel_exponent = 0;
-            touch_accel = 1 << touch_accel_exponent; // Reset touch acceleration value to 1
+            tedit_exponent = 0;
+            tedit = 1 << tedit_exponent; // Reset touch acceleration value to 1
             touchHoldTimer.reset();
             touch_longpress_valid = true;
             return;
         }
-        touch_accel = 1 << touch_accel_exponent;  // Determine value editing rate
+        tedit = 1 << tedit_exponent;  // Determine value editing rate
         #ifdef CAP_TOUCH
             // Rotate touch coordinates to match tft coordinates
             touchpoint.x = map(touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);
@@ -112,37 +112,37 @@ public:
         tcol = (tft_touch[xx] - touch_margin_h_pix) / touch_cell_h_pix;
         // Take appropriate touchscreen actions depending on how we're being touched
         if (tcol == 0 && trow == 0 && !touch_now_touched) {
-            if (++dataset_page >= arraysize(pagecard)) dataset_page -= arraysize(pagecard);  // Displayed dataset page can also be changed outside of simulator
+            if (++datapage >= arraysize(pagecard)) datapage -= arraysize(pagecard);  // Displayed dataset page can also be changed outside of simulator
         }
         else if (tcol == 0 && trow == 1) {  // Long touch to enter/exit editing mode, if in editing mode, press to change the selection of the item to edit
-            if (tuning_ctrl == OFF) {
-                selected_value = 0;  // If entering select mode from off mode, select the first variable
+            if (tunctrl == OFF) {
+                sel_val = 0;  // If entering select mode from off mode, select the first variable
                 if (touch_longpress_valid && touchHoldTimer.expired()) {
-                    tuning_ctrl = SELECT;
+                    tunctrl = SELECT;
                     touch_longpress_valid = false;
                 }
             }
-            else if (tuning_ctrl == EDIT && !touch_now_touched) {
-                tuning_ctrl = SELECT;  // Drop back to select mode
-                selected_value++;  // Move to the next selection
+            else if (tunctrl == EDIT && !touch_now_touched) {
+                tunctrl = SELECT;  // Drop back to select mode
+                sel_val++;  // Move to the next selection
             }
-            else if (tuning_ctrl == SELECT) {
-                if (!touch_now_touched) selected_value = (selected_value + 1) % arraysize(dataset_page_names[dataset_page]);
+            else if (tunctrl == SELECT) {
+                if (!touch_now_touched) sel_val = (sel_val + 1) % arraysize(datapage_names[datapage]);
                 else if (touch_longpress_valid && touchHoldTimer.expired()) {
-                    tuning_ctrl = OFF;
+                    tunctrl = OFF;
                     touch_longpress_valid = false;
                 }
             }
         }
         else if (tcol == 0 && trow == 2) {  // Pressed the increase value button, for real-time tuning of variables
-            if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change the value yet
-            else if (tuning_ctrl == EDIT) idelta_touch = touch_accel;  // If in edit mode, increase the value
+            if (tunctrl == SELECT) tunctrl = EDIT;  // If just entering edit mode, don't change the value yet
+            else if (tunctrl == EDIT) idelta_touch = tedit;  // If in edit mode, increase the value
             // else adj_val(&idiot_hue_offset, idelta_touch, 0, 255);
             // set_idiotcolors();
         }
         else if (tcol == 0 && trow == 3) {  // Pressed the decrease value button, for real-time tuning of variables
-            if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change the value yet
-            else if (tuning_ctrl == EDIT) idelta_touch = -touch_accel;  // If in edit mode, decrease the value
+            if (tunctrl == SELECT) tunctrl = EDIT;  // If just entering edit mode, don't change the value yet
+            else if (tunctrl == EDIT) idelta_touch = -tedit;  // If in edit mode, decrease the value
             // else adj_val(&idiot_hue_offset -idelta_touch, 0, 255);
             // set_idiotcolors();
         }
@@ -158,35 +158,35 @@ public:
                 touch_longpress_valid = false;
             }
         }
-        else if (tcol == 4 && trow == 0) {
-            if (touch_longpress_valid && touchHoldTimer.elapsed() > 2 * touchHoldTimer.get_timeout()) {  // Double hold time for some extra safety
-                ignition_request = req_tog;
-                touch_longpress_valid = false;
-            }
-        }
-        else if (tcol == 5 && trow == 0) {
-            if (touch_longpress_valid && touchHoldTimer.elapsed() > 2 * touchHoldTimer.get_timeout()) {  // Double hold time for some extra safety
-                sleep_request = req_on;  // sleep requests are handled by shutdown mode, otherwise will be ignored
-                touch_longpress_valid = false;
-            }
-        }
         else if (sim.enabled()) {
-            if (tcol == 3 && trow == 0 && sim.can_sim(sensor::basicsw) && !touch_now_touched) basicmodesw = !basicmodesw;
-            else if (tcol == 3 && trow == 1 && sim.can_sim(sensor::pressure) && pressure.source() == Source::TOUCH) pressure.add_human((float)touch_accel); // (+= 25) Pressed the increase brake pressure button
-            else if (tcol == 3 && trow == 2 && sim.can_sim(sensor::pressure) && pressure.source() == Source::TOUCH) pressure.add_human((float)(-touch_accel)); // (-= 25) Pressed the decrease brake pressure button
-            else if (tcol == 3 && trow == 4 && sim.can_sim(sensor::joy)) adj_val(&hotrc_pc[HORZ][FILT], -touch_accel, hotrc_pc[HORZ][MIN], hotrc_pc[HORZ][MAX]);
-            else if (tcol == 4 && trow == 1 && sim.can_sim(sensor::tach) && tach.source() == Source::TOUCH) tach.add_human((float)touch_accel * 0.1);
-            else if (tcol == 4 && trow == 2 && sim.can_sim(sensor::tach) && tach.source() == Source::TOUCH) tach.add_human((float)-touch_accel * 0.1);
-            else if (tcol == 4 && trow == 3 && sim.can_sim(sensor::joy)) adj_val(&hotrc_pc[VERT][FILT], touch_accel, hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
-            else if (tcol == 4 && trow == 4 && sim.can_sim(sensor::joy)) adj_val(&hotrc_pc[VERT][FILT], -touch_accel, hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
-            else if (tcol == 5 && trow == 1 && sim.can_sim(sensor::speedo) && speedo.source() == Source::TOUCH) speedo.add_human((float)touch_accel * 0.05);
-            else if (tcol == 5 && trow == 2 && sim.can_sim(sensor::speedo) && speedo.source() == Source::TOUCH) speedo.add_human((float)-touch_accel * 0.05);
-            else if (tcol == 5 && trow == 4 && sim.can_sim(sensor::joy)) adj_val(&hotrc_pc[HORZ][FILT], touch_accel, hotrc_pc[HORZ][MIN], hotrc_pc[HORZ][MAX]);
+            if (tcol == 4 && trow == 0) {
+                if (touch_longpress_valid && touchHoldTimer.elapsed() > 2 * touchHoldTimer.get_timeout()) {  // Double hold time for some extra safety
+                    ignition_request = req_tog;
+                    touch_longpress_valid = false;
+                }
+            }
+            else if (tcol == 5 && trow == 0) {
+                if (touch_longpress_valid && touchHoldTimer.elapsed() > 2 * touchHoldTimer.get_timeout()) {  // Double hold time for some extra safety
+                    sleep_request = req_on;  // sleep requests are handled by shutdown mode, otherwise will be ignored
+                    touch_longpress_valid = false;
+                }
+            }
+            else if (tcol == 3 && trow == 0 && sim.can_sim(sens::basicsw) && !touch_now_touched) basicmodesw = !basicmodesw;
+            else if (tcol == 3 && trow == 1 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human((float)tedit); // (+= 25) Pressed the increase brake pressure button
+            else if (tcol == 3 && trow == 2 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human((float)(-tedit)); // (-= 25) Pressed the decrease brake pressure button
+            else if (tcol == 3 && trow == 4 && sim.can_sim(sens::joy)) adj_val(&hotrc_pc[HORZ][FILT], -tedit, hotrc_pc[HORZ][MIN], hotrc_pc[HORZ][MAX]);
+            else if (tcol == 4 && trow == 1 && sim.can_sim(sens::tach) && tach.source() == src::TOUCH) tach.add_human((float)tedit * 0.1);
+            else if (tcol == 4 && trow == 2 && sim.can_sim(sens::tach) && tach.source() == src::TOUCH) tach.add_human((float)-tedit * 0.1);
+            else if (tcol == 4 && trow == 3 && sim.can_sim(sens::joy)) adj_val(&hotrc_pc[VERT][FILT], tedit, hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
+            else if (tcol == 4 && trow == 4 && sim.can_sim(sens::joy)) adj_val(&hotrc_pc[VERT][FILT], -tedit, hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
+            else if (tcol == 5 && trow == 1 && sim.can_sim(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human((float)tedit * 0.05);
+            else if (tcol == 5 && trow == 2 && sim.can_sim(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human((float)-tedit * 0.05);
+            else if (tcol == 5 && trow == 4 && sim.can_sim(sens::joy)) adj_val(&hotrc_pc[HORZ][FILT], tedit, hotrc_pc[HORZ][MIN], hotrc_pc[HORZ][MAX]);
         }
-        // Update the touch_accel_exponent if needed
-        if (touch_accel_exponent < touch_accel_exponent_max && (touchHoldTimer.elapsed() > (touch_accel_exponent + 1) * touchAccelTimer.get_timeout())) {
-            touch_accel_exponent++;
-            touch_accel = 1 << touch_accel_exponent; // Update the touch acceleration value
+        // Update the tedit_exponent if needed
+        if (tedit_exponent < tedit_exponent_max && (touchHoldTimer.elapsed() > (tedit_exponent + 1) * touchAccelTimer.get_timeout())) {
+            tedit_exponent++;
+            tedit = 1 << tedit_exponent; // Update the touch acceleration value
         }
         touch_now_touched = true;
     }

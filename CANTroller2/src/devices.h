@@ -122,7 +122,7 @@ class Param {
     bool saturated() { return _saturated; }
 };
 
-enum class Source : uint8_t {UNDEF=0, FIXED, PIN, TOUCH, POT, CALC};
+enum class src : uint8_t {UNDEF=0, FIXED, PIN, TOUCH, POT, CALC};
 
 // Device class - is a base class for any connected system device or signal associated with a pin
 class Device {
@@ -131,7 +131,7 @@ class Device {
     uint8_t _pin;
     bool _enabled = true;
     Potentiometer* _pot; // to pull input from the pot if we're in simulation mode
-    Source _source = Source::UNDEF;
+    src _source = src::UNDEF;
     bool _can_source[6] = { true, true, false, true, false, false };
                         // UNDEF, FIXED,  PIN, TOUCH,  POT,  CALC
     // source handling functions (should be overridden in child classes as needed)
@@ -149,8 +149,8 @@ class Device {
     // NOTE: should we start in PIN mode?
     Device(uint8_t arg_pin) : _pin(arg_pin) {}
 
-    bool can_source(Source arg_source) { return _can_source[static_cast<uint8_t>(arg_source)]; }
-    bool set_source(Source arg_source) {
+    bool can_source(src arg_source) { return _can_source[static_cast<uint8_t>(arg_source)]; }
+    bool set_source(src arg_source) {
         if (_can_source[static_cast<uint8_t>(arg_source)]) {
             _source = arg_source;
             update_source();
@@ -162,22 +162,22 @@ class Device {
     void update() {
         if (!_enabled) return; // do nothing if the Device is disabled
         switch (_source) {
-            case Source::UNDEF:
+            case src::UNDEF:
                 set_val_from_undef();
                 break;
-            case Source::FIXED:
+            case src::FIXED:
                 set_val_from_fixed();
                 break;
-            case Source::PIN:
+            case src::PIN:
                 set_val_from_pin();
                 break;
-            case Source::TOUCH:
+            case src::TOUCH:
                 set_val_from_touch();
                 break;
-            case Source::POT:
+            case src::POT:
                 set_val_from_pot();
                 break;
-            case Source::CALC:
+            case src::CALC:
                 set_val_from_calc();
                 break;
             default:
@@ -191,8 +191,8 @@ class Device {
     }
     // Setters and getters
     void set_enabled(bool arg_enable) { _enabled = arg_enable; }
-    void set_can_source(Source arg_source, bool is_possible) { _can_source[static_cast<uint8_t>(arg_source)] = is_possible; }
-    Source source() { return _source; }
+    void set_can_source(src arg_source, bool is_possible) { _can_source[static_cast<uint8_t>(arg_source)] = is_possible; }
+    src source() { return _source; }
     uint8_t pin() { return _pin; }
     bool enabled() { return _enabled; }
 };
@@ -399,7 +399,7 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
     }
 
     virtual void update_human_limits() { _val_filt.set_limits(this->_human.min_shptr(), this->_human.max_shptr()); } // make sure our filtered value has the same limits as our regular value
-    virtual void update_source() { if (this->_source == Source::PIN) _should_filter = false; } // if we just switched to pin input, the old filtered value is not valid
+    virtual void update_source() { if (this->_source == src::PIN) _should_filter = false; } // if we just switched to pin input, the old filtered value is not valid
 
   public:
     Sensor(uint8_t pin) : Transducer<NATIVE_T, HUMAN_T>(pin) {}  
@@ -439,11 +439,11 @@ class I2CSensor : public Sensor<float,float> {
             _val_filt.set_limits(_human.min_shptr(), _human.max_shptr());
         }
     public:
-        I2CSensor(I2C &i2c_arg, uint8_t i2c_address_arg) : Sensor<float,float>(-1), _i2c(i2c_arg), _i2c_address(i2c_address_arg) { set_can_source(Source::PIN, true); }
+        I2CSensor(I2C &i2c_arg, uint8_t i2c_address_arg) : Sensor<float,float>(-1), _i2c(i2c_arg), _i2c_address(i2c_address_arg) { set_can_source(src::PIN, true); }
         I2CSensor() = delete;
         virtual void setup() {
             _detected = _i2c.device_detected(_i2c_address);
-            set_source(Source::PIN); // we aren't actually reading from a pin but the point is the same...
+            set_source(src::PIN); // we aren't actually reading from a pin but the point is the same...
         }
 };
 
@@ -472,7 +472,7 @@ class AirVeloSensor : public I2CSensor {
         AirVeloSensor(I2C &i2c_arg) : I2CSensor(i2c_arg, _i2c_address) {
             _ema_alpha = _initial_ema_alpha;
             set_human_limits(_min_mph, _initial_max_mph);
-            set_can_source(Source::POT, true);
+            set_can_source(src::POT, true);
             airveloTimer.set(airvelo_read_period_us);
         }
         AirVeloSensor() = delete;
@@ -483,13 +483,13 @@ class AirVeloSensor : public I2CSensor {
             if (_detected) {
                 if (_sensor.begin() == false) {
                     printf("  Sensor not responding\n");  // Begin communication with air flow sensor) over I2C 
-                    set_source(Source::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
+                    set_source(src::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
                 } else {
                     _sensor.setRange(AIRFLOW_RANGE_15_MPS);
                     printf ("  Sensor responding properly\n");
                 }
             } else {
-                set_source(Source::UNDEF); // don't even have a device at all...
+                set_source(src::UNDEF); // don't even have a device at all...
             }
         }
         // Getter functions
@@ -511,11 +511,19 @@ class MAPSensor : public I2CSensor {
         static constexpr float _initial_max_psi = 15.0;
         static constexpr float _initial_psi = 14.696;  // 1 atm = 14.6959 psi
         static constexpr float _initial_ema_alpha = 0.2;
+        Timer map_read_timer;
+        uint32_t map_read_timeout = 100000, map_retry_timeout = 10000;
         float good_reading = -1;
         SparkFun_MicroPressure _sensor;
         virtual float read_sensor() {
-            float temp = _sensor.readPressure(PSI, true);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
-            if (!std::isnan(temp)) good_reading = temp;
+            if (map_read_timer.expired()) {
+                float temp = _sensor.readPressure(PSI, true);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
+                if (!std::isnan(temp)) {
+                    good_reading = temp;
+                    map_read_timer.set(map_read_timeout);
+                }
+                else map_read_timer.set(map_retry_timeout);
+            }
             // this->_val_raw = (NATIVE_T)good_reading;  // note, this returns a float from 0-33.55 for the FS3000-1015 
             return good_reading;
         }
@@ -523,7 +531,8 @@ class MAPSensor : public I2CSensor {
         MAPSensor(I2C &i2c_arg) : I2CSensor(i2c_arg, _i2c_address) {
             _ema_alpha = _initial_ema_alpha;
             set_human_limits(_initial_min_psi, _initial_max_psi);
-            set_can_source(Source::POT, true);
+            set_can_source(src::POT, true);
+            map_read_timer.set(map_read_timeout);
         }
         MAPSensor() = delete;
 
@@ -533,13 +542,13 @@ class MAPSensor : public I2CSensor {
             if (_detected) {
                 if (_sensor.begin() == false) {
                     printf("  Sensor not responding\n");  // Begin communication with air flow sensor) over I2C 
-                    set_source(Source::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
+                    set_source(src::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
                 // } else {
                 //     printf("  Reading %f atm manifold pressure\n", _sensor.readPressure(ATM));
                 //     printf("  Sensor responding properly\n");
                 }
             } else {
-                set_source(Source::UNDEF); // don't even have a device at all...
+                set_source(src::UNDEF); // don't even have a device at all...
             }
         }
         // Getter functions
@@ -565,7 +574,7 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
     AnalogSensor(uint8_t arg_pin) : Sensor<NATIVE_T, HUMAN_T>(arg_pin) {}
     void setup() {
         set_pin(this->_pin, INPUT);
-        this->set_source(Source::PIN);
+        this->set_source(src::PIN);
     }
     int32_t adc() { return this->_native.val(); }  // Soren: I created these to be available to any child sensors, but untested and not confident it's right
     int32_t min_adc() { return this->_native.min(); }
@@ -589,7 +598,7 @@ class CarBattery : public AnalogSensor<int32_t, float> {
             _human.set_limits(_abs_min_v, _abs_max_v);
             _native.set_limits(0.0, adcrange_adc);
             set_native(_initial_adc);
-            set_can_source(Source::PIN, true);
+            set_can_source(src::PIN, true);
         }
         CarBattery() = delete;
         float v() { return _human.val(); }
@@ -617,7 +626,7 @@ class LiPOBatt : public AnalogSensor<int32_t, float> {
             _human.set_limits(_abs_min_v, _abs_max_v);
             _native.set_limits(0.0, adcrange_adc);
             set_native(_initial_adc);
-            set_can_source(Source::PIN, true);
+            set_can_source(src::PIN, true);
         }
         LiPOBatt() = delete;
         float v() { return _human.val(); }
@@ -649,8 +658,8 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
             set_native_limits(op_min_adc, op_max_adc);
             set_human_limits(from_native(op_min_adc), from_native(op_max_adc));
             set_native(op_min_adc);
-            set_can_source(Source::PIN, true);
-            set_can_source(Source::POT, true);            
+            set_can_source(src::PIN, true);
+            set_can_source(src::POT, true);            
         }
         PressureSensor() = delete;
         float psi() { return _human.val(); }
@@ -696,8 +705,8 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
             // set_human_limits(op_min_retract_in, op_max_extend_in);  // wouldn't this be safer?
             set_human_limits(abs_min_retract_in, abs_max_extend_in);            
             set_native_limits(abs_min_retract_adc, abs_max_extend_adc);
-            set_can_source(Source::PIN, true);
-            set_can_source(Source::POT, true);
+            set_can_source(src::PIN, true);
+            set_can_source(src::POT, true);
         }
         BrakePositionSensor() = delete;
 
@@ -768,7 +777,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
         void setup() {
             set_pin(this->_pin, INPUT_PULLUP);
             attachInterrupt(digitalPinToInterrupt(this->_pin), [this]{ _isr(); }, _negative ? FALLING : RISING);
-            this->set_source(Source::PIN);
+            this->set_source(src::PIN);
         }
         bool stopped() { return this->_val_filt.val() < _stop_thresh; }  // Note due to weird float math stuff, can not just check if tach == 0.0
         float last_read_time() { return _last_read_time_us; }
@@ -801,8 +810,8 @@ class Tachometer : public PulseSensor<float> {
             set_human_limits(0.0, _redline_rpm);
             set_native_limits(0.0, _stop_timeout_us);
             set_human(_initial_rpm);
-            set_can_source(Source::PIN, true);
-            set_can_source(Source::POT, true);
+            set_can_source(src::PIN, true);
+            set_can_source(src::POT, true);
         }
         Tachometer() = delete;
         // Query/getter functions
@@ -835,8 +844,8 @@ class Speedometer : public PulseSensor<float> {
             set_human_limits(_min_mph, _initial_redline_mph);
             set_native_limits(0.0, _stop_timeout_us);
             set_human(_initial_mph);
-            set_can_source(Source::PIN, true);
-            set_can_source(Source::POT, true);
+            set_can_source(src::PIN, true);
+            set_can_source(src::POT, true);
         }
         Speedometer() = delete;
         // Query/getter functions
@@ -904,11 +913,11 @@ class Toggle : public Device {
 class InToggle : public Toggle {
   public:
     InToggle(int32_t arg_pin) : Toggle(arg_pin) {
-        set_can_source(Source::PIN, true);
-        _source = Source::PIN;
+        set_can_source(src::PIN, true);
+        _source = src::PIN;
     }
     void set_val(bool arg_val) {
-        if (_source != Source::PIN) {
+        if (_source != src::PIN) {
             val_last = val;
             val = arg_val;
         }
@@ -1002,7 +1011,7 @@ class HotrcManager {
 
 // This enum class represent the components which can be simulated (sensor). It's a uint8_t type under the covers, so it can be used as an index
 typedef uint8_t opt_t;
-enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airvelo, mapsens, engtemp, mulebatt, lipobatt, starter, basicsw, num_sensors };  //, ignition, syspower };  // , num_sensors, err_flag };
+enum class sens : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airvelo, mapsens, engtemp, mulebatt, lipobatt, starter, basicsw, num_sensors };  //, ignition, syspower };  // , num_sensors, err_flag };
 
 // Simulator manages the source handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
 // NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use sources,
@@ -1012,15 +1021,15 @@ class Simulator {
         // NOTE: if we only simulated devices, we could keep track of simulability in the Device class. We could keep the default source in Device the same way.
         // 3-tuple for a given component, keeping track of simulability status (whether this component is allowed to be simulated), an associated Device (a pointer to the actual component),
         // and a default source (the mode we would like the component to switch back to when it stops being simulated)
-        typedef std::tuple<bool, Device*, Source> simulable_t;
-        std::map<sensor, simulable_t> _devices; // a collection of simulatable components
+        typedef std::tuple<bool, Device*, src> simulable_t;
+        std::map<sens, simulable_t> _devices; // a collection of simulatable components
         bool _enabled = false; // keep track of whether the simulator is running or not
-        sensor _potmap; // keep track of which component is getting info from the pot
+        sens _potmap; // keep track of which component is getting info from the pot
         Potentiometer& _pot;
     public:
-        Simulator(Potentiometer& pot_arg, sensor potmap_arg=sensor::none) : _pot(pot_arg) {
-            for (uint8_t sens = (uint8_t)sensor::none + 1; sens < (uint8_t)sensor::num_sensors; sens++ )
-                set_can_sim((sensor)sens, false);   // initially turn off simulation of sensors  // static constexpr bool initial_sim_joy = false;
+        Simulator(Potentiometer& pot_arg, sens potmap_arg=sens::none) : _pot(pot_arg) {
+            for (uint8_t sensor = (uint8_t)sens::none + 1; sensor < (uint8_t)sens::num_sensors; sensor++ )
+                set_can_sim((sens)sensor, false);   // initially turn off simulation of sensors  // static constexpr bool initial_sim_joy = false;
             set_potmap(potmap_arg); // set initial pot map
         }  // syspower, ignition removed, as they are not sensors or even inputs
 
@@ -1039,9 +1048,9 @@ class Simulator {
                         // If we're enabling the simulation, set the device's source to the touchscreen
                         // Otherwise, set it to its default mode
                         if (enableSimulation) {
-                            d->set_source(Source::TOUCH);
+                            d->set_source(src::TOUCH);
                         } else {
-                            Source default_mode = std::get<2>(deviceEntry.second);
+                            src default_mode = std::get<2>(deviceEntry.second);
                             d->set_source(default_mode);
                         }
                     }
@@ -1068,32 +1077,32 @@ class Simulator {
         // check if a componenet is currently being simulated (by either the touchscreen or the pot)
         bool simulating() { return _enabled; }  // equivalent to enabled()  // Maybe include || potmapping() too ?
 
-        bool simulating(sensor arg_sensor) {
+        bool simulating(sens arg_sensor) {
             return can_sim(arg_sensor) && (_enabled || _potmap == arg_sensor);
         }
 
         // associate a Device and a given fall-back source with a sensor
-        void register_device(sensor arg_sensor, Device &d, Source default_mode) {
+        void register_device(sens arg_sensor, Device &d, src default_mode) {
             bool can_sim = false; // by default, disable simulation for this component
             auto kv = _devices.find(arg_sensor); // look for the component
             if (kv != _devices.end()) {
                 can_sim = std::get<0>(kv->second); // if an entry for the component already existed, preserve its simulatability status
                 if (can_sim) { // if simulability has already been enabled...
                     if (arg_sensor == _potmap) { // ...and the pot is supposed to map to this component...
-                        d.set_source(Source::POT); // ...then set the input source for the associated Device to read from the pot
+                        d.set_source(src::POT); // ...then set the input source for the associated Device to read from the pot
                     } else if (_enabled) { // ...and the pot isn't mapping to this component, but the simulator is running...
-                        d.set_source(Source::TOUCH); // ...then set the input source for the associated Device to read from the touchscreen
+                        d.set_source(src::TOUCH); // ...then set the input source for the associated Device to read from the touchscreen
                     }
                 }
             }
-            if (d.can_source(Source::POT)) {
+            if (d.can_source(src::POT)) {
                 d.attach_pot(_pot); // if this device can be mapped from the pot, connect it to pot input
             }
             _devices[arg_sensor] = simulable_t(can_sim, &d, default_mode); // store info for this component
         }
 
         // check if a component can be simulated (by either the touchscreen or the pot)
-        bool can_sim(sensor arg_sensor) {
+        bool can_sim(sens arg_sensor) {
             auto kv = _devices.find(arg_sensor); // look for the component
             if (kv != _devices.end()) {
                 return std::get<0>(kv->second); // if it exists, check the simulability status
@@ -1102,22 +1111,22 @@ class Simulator {
         }
 
         // set simulatability status for a component
-        void set_can_sim(sensor arg_sensor, int32_t can_sim) { set_can_sim(arg_sensor, (can_sim > 0)); }  // allows interpreting -1 as 0, convenient for our tuner etc.
+        void set_can_sim(sens arg_sensor, int32_t can_sim) { set_can_sim(arg_sensor, (can_sim > 0)); }  // allows interpreting -1 as 0, convenient for our tuner etc.
         
-        void set_can_sim(sensor arg_sensor, bool can_sim) {
+        void set_can_sim(sens arg_sensor, bool can_sim) {
             auto kv = _devices.find(arg_sensor); // look for component
             if (kv != _devices.end()) { // if an entry for this component already exists, check if the new simulatability status is different from the old
                 bool old_can_sim = std::get<0>(kv->second);
                 if (can_sim != old_can_sim) { // if the simulation status has changed, we need to update the input source for the component
-                    Source default_mode = Source::UNDEF;
+                    src default_mode = src::UNDEF;
                     Device *d = std::get<1>(kv->second);
                     if (d != nullptr) { // if there is no associated Device with this component then input handling is done in the main code
                         default_mode = std::get<2>(kv->second); // preserve the stored default controller mode
                         if (can_sim) { // if we just enabled simulatability...
                             if (arg_sensor == _potmap) { // ...and the pot is supposed to map to this component...
-                                    d->set_source(Source::POT); // ...then set the input source for the associated Device to read from the pot
+                                    d->set_source(src::POT); // ...then set the input source for the associated Device to read from the pot
                             } else if (_enabled) { // ...and the pot isn't mapping to this component, but the simulator is running...
-                                    d->set_source(Source::TOUCH); // ...then set the input source for the associated Device to read from the touchscreen
+                                    d->set_source(src::TOUCH); // ...then set the input source for the associated Device to read from the touchscreen
                             }
                         } else {
                             d->set_source(default_mode); // we disabled simulation for this component, set it back to its default input source
@@ -1126,12 +1135,12 @@ class Simulator {
                     kv->second = simulable_t(can_sim, d, default_mode); // update the entry with the new simulatability status
                 }
             } else {
-                _devices[arg_sensor] = simulable_t(can_sim, nullptr, Source::UNDEF); // add a new entry with the simulatability status for this component
+                _devices[arg_sensor] = simulable_t(can_sim, nullptr, src::UNDEF); // add a new entry with the simulatability status for this component
             }
         }
 
         // set the component to be overridden by the pot (the pot can only override one component at a time)
-        void set_potmap(sensor arg_sensor) {
+        void set_potmap(sens arg_sensor) {
             if (arg_sensor != _potmap) { // if we're mapping to a different component, we need to reset the input source for the old one
                 auto kv = _devices.find(_potmap);
                 if (kv != _devices.end()) {
@@ -1139,9 +1148,9 @@ class Simulator {
                     if (d != nullptr) { // if we were mapping to a component with an associated Device...
                         bool _can_sim = std::get<0>(kv->second);
                         if (_enabled && _can_sim) { // ...and the simulator is on, and we're able to be simulated...
-                            d->set_source(Source::TOUCH); // ...then set the input source to the touchscreen
+                            d->set_source(src::TOUCH); // ...then set the input source to the touchscreen
                         } else { // ...and either the simulator is off or we aren't allowing simualtion for this component...
-                            Source default_mode = std::get<2>(kv->second);
+                            src default_mode = std::get<2>(kv->second);
                             d->set_source(default_mode); // then set the input source for the component to its default
                         }
                     } // ...else this component is a boolean, and input source handling is done elsewhere
@@ -1150,10 +1159,10 @@ class Simulator {
                 if (kv != _devices.end()) {
                     Device *d = std::get<1>(kv->second);
                     if (d != nullptr ) { // if  we're mapping to a component with an associated device, we need to change the input source to the pot
-                        if (d->can_source(Source::POT)) { // ...and we're allowed to map to this component...
+                        if (d->can_source(src::POT)) { // ...and we're allowed to map to this component...
                             bool _can_sim = std::get<0>(kv->second);
                             if (_can_sim) { // if we allow simualation for this componenent...
-                                d->set_source(Source::POT); // ...then set its input source to the pot
+                                d->set_source(src::POT); // ...then set its input source to the pot
                             }
                         } else {
                             printf("invalid pot map selected: %d/n", arg_sensor);
@@ -1163,12 +1172,12 @@ class Simulator {
                 _potmap = arg_sensor;
             }
         }
-        void set_potmap(int32_t arg_sensor) { set_potmap(static_cast<sensor>(arg_sensor)); }
+        void set_potmap(int32_t arg_sensor) { set_potmap(static_cast<sens>(arg_sensor)); }
 
         // Getter functions
-        bool potmapping(sensor s) { return can_sim(s) && _potmap == s; }  // query if a certain sensor is being potmapped
-        bool potmapping(int32_t s) { return can_sim(static_cast<sensor>(s)) && (_potmap == static_cast<sensor>(s)); }  // query if a certain sensor is being potmapped        
-        bool potmapping() { return can_sim(_potmap) && !(_potmap == sensor::none); }  // query if any sensors are being potmapped
+        bool potmapping(sens s) { return can_sim(s) && _potmap == s; }  // query if a certain sensor is being potmapped
+        bool potmapping(int32_t s) { return can_sim(static_cast<sens>(s)) && (_potmap == static_cast<sens>(s)); }  // query if a certain sensor is being potmapped        
+        bool potmapping() { return can_sim(_potmap) && !(_potmap == sens::none); }  // query if any sensors are being potmapped
         int32_t potmap() { return static_cast<int32_t>(_potmap); }  // query which sensor is being potmapped
         bool enabled() { return _enabled; }
         bool* enabled_ptr() { return &_enabled; }

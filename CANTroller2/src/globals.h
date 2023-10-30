@@ -110,7 +110,7 @@ bool console_enabled = true;         // safer to disable because serial printing
 bool keep_system_powered = false;    // Use true during development
 bool screensaver = false;  // Can enable experiment with animated screen draws
 bool looptime_print = false;         // Makes code write out timestamps throughout loop to serial port
-bool touch_reticles = true;
+bool touch_reticles = false;
 uint32_t looptime_linefeed_threshold = 0;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
 
 enum hotrc_axis { HORZ, VERT, CH3, CH4 };
@@ -135,12 +135,13 @@ RMTInput hotrc_rmt[4] = {
 // HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
 
 // run state machine related
-enum runmodes { BASIC, ASLEEP, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, num_runmodes };
-bool running_on_devboard = false;  // will overwrite with value read thru pull resistor on tx pin at boot
+enum runmode { BASIC, ASLEEP, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, num_runmodes };
+bool running_on_devboard = false;    // will overwrite with value read thru pull resistor on tx pin at boot
 bool shutdown_incomplete = true;     // minor state variable for shutdown mode - Shutdown mode has not completed its work and can't yet stop activity
-bool we_just_switched_modes = true; // For mode logic to set things up upon first entry into mode
-bool park_the_motors = false;       // Indicates we should release the brake & gas so the pedals can be used manually without interference
-bool car_hasnt_moved = false;         // minor state variable for fly mode - Whether car has moved at all since entering fly mode
+bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
+bool park_the_motors = false;        // Indicates we should release the brake & gas so the pedals can be used manually without interference
+bool autostopping = false, autostopping_last = false;           // true when in process of stopping the car (hold or shutdown modes)
+bool car_hasnt_moved = false;        // minor state variable for fly mode - Whether car has moved at all since entering fly mode
 bool calmode_request = false;
 bool joy_centered = false;  // minor state variable for hold mode
 bool powering_up = false;  // minor state variable for asleep mode
@@ -217,21 +218,28 @@ float pressure_target_psi;
 // brake actuator motor related
 Timer brakeIntervalTimer(1000000);             // How much time between increasing brake force during auto-stop if car still moving?
 int32_t brake_increment_interval_us = 1000000; // How often to apply increment during auto-stopping (in us)
-float brake_out_pc;
-float brake_retract_max_pc = 100.0; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
-float brake_retract_pc = 100.0;     // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
+float brake_duty_pc = 25.0;  // From motor datasheet
+float brake_extend_absmin_pc = -100.0; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
 float brake_stop_pc = 0.0;          // Brake pulsewidth corresponding to center point where motor movement stops (in us)
-float brake_extend_pc = -100.0;     // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
-float brake_extend_min_pc = -100.0; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
-float brake_margin_pc = 2.4;        // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated
-float brake_extend_min_us = 670; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
-float brake_extend_us = 670;     // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
+float brake_retract_absmax_pc = 100.0; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
+float brake_margin_pc = 1.8;        // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated
+float brake_extend_absmin_us = 670; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
 float brake_stop_us = 1500;       // Brake pulsewidth corresponding to center point where motor movement stops (in us)
-float brake_retract_us = 2330;     // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
-float brake_retract_max_us = 2330; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
-float brake_out_us = brake_stop_us;               // sets the pulse on-time of the brake control signal. about 1500us is stop, higher is fwd, lower is rev
-float brake_motor_govern_duty_pc = 25;  // From motor datasheet
+float brake_retract_absmax_us = 2330; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
+float brake_out_pc = brake_stop_pc;
+float brake_out_us = brake_stop_us;
 float brake_retract_effective_max_us;   // 
+float brake_extend_min_pc = brake_extend_absmin_pc * brake_duty_pc / 100.0;
+float brake_retract_max_pc = brake_retract_absmax_pc * brake_duty_pc / 100.0;
+float brake_extend_min_us = brake_stop_us - brake_duty_pc * (brake_stop_us - brake_extend_absmin_us) / 100.0;  // Brake pulsewidth corresponding to duty-constrained retraction of brake actuator (in us). Default setting for jaguar is max 670us
+float brake_retract_max_us = brake_stop_us - brake_duty_pc * (brake_stop_us - brake_retract_absmax_us) / 100.0;  // Brake pulsewidth corresponding to duty-constrained extension of brake actuator (in us). Default setting for jaguar is max 2330us
+
+void brake_calc_duty(float duty) {  // call from setup and whenever changing duty cycle
+    brake_extend_min_pc = brake_extend_absmin_pc * duty / 100.0;     // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
+    brake_retract_max_pc = brake_retract_absmax_pc * duty / 100.0;     // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
+    brake_extend_min_us = brake_stop_us - duty * (brake_stop_us - brake_extend_absmin_us) / 100.0;  // Brake pulsewidth corresponding to duty-constrained retraction of brake actuator (in us). Default setting for jaguar is max 670us
+    brake_retract_max_us = brake_stop_us - duty * (brake_stop_us - brake_retract_absmax_us) / 100.0;  // Brake pulsewidth corresponding to duty-constrained extension of brake actuator (in us). Default setting for jaguar is max 2330us
+}
 
 // brake actuator position related
 BrakePositionSensor brakepos(brake_pos_pin);
@@ -239,26 +247,25 @@ BrakePositionSensor brakepos(brake_pos_pin);
 // carspeed/speedo related
 Speedometer speedo(speedo_pin);
 float speedo_target_mph;
-float speedo_govern_mph;      // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
-float speedo_idle_mph = 4.50; // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
+float speedo_govern_mph;       // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
+float speedo_idle_mph = 4.50;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
 
 // throttle servo related
-float gas_governor_pc = 95;      // Software governor will only allow this percent of full-open throttle (percent 0-100)
-Timer gasServoTimer(500000);          // We expect the servo to find any new position within this time
-float gas_adjustpoint_us;       // Used for adjusting cruise fixed throttle level
+float gas_governor_pc = 95;     // Software governor will only allow this percent of full-open throttle (percent 0-100)
+Timer gasServoTimer(500000);    // We expect the servo to find any new position within this time
 
 bool reverse_gas_servo = true;
-float gas_out_us = 1501;        // pid loop output to send to the actuator (gas)
-float gas_govern_us = 1502;     // Governor must scale the pulse range proportionally. This is given a value in the loop
-float gas_cw_min_us = 500;      // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
-float gas_cw_open_us = 718;     // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
-float gas_ccw_closed_us = 2000; // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
-float gas_ccw_max_us = 2500;    // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
-float gas_park_slack_us = 30;   // Gas pulsewidth beyond gas_ccw_closed_us where to park the servo out of the way so we can drive manually (in us)
+float gas_out_us = 1501;         // pid loop output to send to the actuator (gas)
+float gas_govern_us = 1502;      // Governor must scale the pulse range proportionally. This is given a value in the loop
+float gas_cw_min_us = 500;       // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
+float gas_cw_open_us = 718;      // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
+float gas_ccw_closed_us = 2000;  // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
+float gas_ccw_parked_us = 2030;  // Gas pulsewidth beyond gas_ccw_closed_us where to park the servo out of the way so we can drive manually (in us)
+float gas_ccw_max_us = 2500;     // Servo ccw limit pulsewidth. Hotrc controller ch1/2 smin(lt/br) = 1000us, center = 1500us, smax(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
 
 // tach related
 Tachometer tach(tach_pin);
-float tach_target_rpm, tach_adjustpoint_rpm, tach_govern_rpm;        // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
+float tach_target_rpm, tach_govern_rpm;        // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
 float tach_margin_rpm = 15.0; // Margin of error for checking engine rpm (in rpm)
 float tach_idle_abs_min_rpm = 450.0;  // Low limit of idle speed adjustability
 float tach_idle_hot_min_rpm = 550.0;  // Idle speed at op_max engine temp
@@ -279,18 +286,18 @@ Timer steerPidTimer(steer_pid_period_us); // not actually tunable, just needs va
 // Brake : Controls the brake motor to achieve the desired brake fluid pressure
 uint32_t brake_pid_period_us = 85000;    // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer brakePidTimer(brake_pid_period_us); // not actually tunable, just needs value above
-// float brake_perc_per_us = (100.0 - (-100.0)) / (brake_extend_us - brake_retract_us);  // (100 - 0) percent / (us-max - us-min) us = 1/8.3 = 0.12 percent/us
+// float brake_perc_per_us = (100.0 - (-100.0)) / (brake_extend_min_us - brake_retractmx_us);  // (100 - 0) percent / (us-max - us-min) us = 1/8.3 = 0.12 percent/us
 float brake_spid_initial_kp = 0.323;                                                                         // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
 float brake_spid_initial_ki_hz = 0.000;                                                                      // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
 float brake_spid_initial_kd_s = 0.000;                                                                       // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
 
-QPID brake_pid(pressure.filt_ptr(), &brake_out_pc, &pressure_target_psi,     // input, target, output variable references
-               brake_extend_pc, brake_retract_pc,                                                  // output min, max
+qpid brake_pid(pressure.filt_ptr(), &brake_out_pc, &pressure_target_psi,     // input, target, output variable references
+               brake_extend_min_pc, brake_retract_max_pc,                                                  // output min, max
                brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,                     // Kp, Ki, and Kd tuning constants
-               QPID::Pmode::onerr, QPID::Dmode::onerr, QPID::Awmode::cond, QPID::Dir::direct,  // settings  // roundcond, clamp
-               brake_pid_period_us, QPID::Control::manual, QPID::Centmode::on, brake_stop_pc); // period, more settings
-               // QPID::Pmode::onerr, QPID::Dmode::onerr, QPID::Awmode::round, QPID::Dir::direct,  // settings  // roundcond, clamp
-               // brake_pid_period_us, QPID::Control::manual, QPID::Centmode::strict, brake_stop_pc); // period, more settings
+               qpid::pmod::onerr, qpid::dmod::onerr, qpid::awmod::cond, qpid::cdir::direct,  // settings  // roundcond, clamp
+               brake_pid_period_us, qpid::ctrl::manual, qpid::centmod::on, brake_stop_pc); // period, more settings
+               // qpid::pmod::onerr, qpid::dmod::onerr, qpid::awmod::round, qpid::cdir::direct,  // settings  // roundcond, clamp
+               // brake_pid_period_us, qpid::ctrl::manual, qpid::centmod::strict, brake_stop_pc); // period, more settings
 
 // Gas : Controls the throttle to achieve the desired intake airvelo and engine rpm
 
@@ -304,11 +311,11 @@ float gas_spid_initial_kp = 0.206;    // PID proportional coefficient (gas) How 
 float gas_spid_initial_ki_hz = 0.000; // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
 float gas_spid_initial_kd_s = 0.000;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
 bool gas_open_loop = true;
-QPID gas_pid(tach.filt_ptr(), &gas_out_us, &tach_target_rpm,                            // input, target, output variable references
+qpid gas_pid(tach.filt_ptr(), &gas_out_us, &tach_target_rpm,                            // input, target, output variable references
              gas_cw_open_us, gas_ccw_closed_us,                                                             // output min, max
              gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s,                                        // Kp, Ki, and Kd tuning constants
-             QPID::Pmode::onerr, QPID::Dmode::onerr, QPID::Awmode::clamp, QPID::Dir::reverse,              // settings
-             gas_pid_period_us, (gas_open_loop) ? QPID::Control::manual : QPID::Control::manual, QPID::Centmode::off); // period, more settings
+             qpid::pmod::onerr, qpid::dmod::onerr, qpid::awmod::clamp, qpid::cdir::reverse,              // settings
+             gas_pid_period_us, (gas_open_loop) ? qpid::ctrl::manual : qpid::ctrl::manual, qpid::centmod::off); // period, more settings
 
 // Cruise : is active on demand while driving.
 // Pick from 3 different styles of adjusting cruise setpoint. I prefer throttle_delta.
@@ -319,23 +326,22 @@ enum cruise_modes { pid_suspend_fly, throttle_angle, throttle_delta };
 cruise_modes cruise_setpoint_mode = throttle_delta;
 bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool cruise_adjusting = false;
-int32_t cruise_delta_max_us_per_s = 200;  // (in throttle_delta mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
+int32_t cruise_delta_max_us_per_s = 250;  // (in throttle_delta mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
 float cruise_angle_attenuator = 0.25;  // (in throttle_angle mode) Limits the change of each adjust trigger pull to this fraction of what's possible
 bool flycruise_toggle_request = false;
 float flycruise_vert_margin_pc = 0.3; // Margin of error for determining hard brake value for dropping out of cruise mode
 float gas_cruise_us;  // Gas pulsewidth value fixed by cruise mode when in fixed throttle mode 
 
 uint32_t cruise_pid_period_us = 85000;                                                                      // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
-Timer cruisePidTimer(cruise_pid_period_us);                                                                  // not actually tunable, just needs value above
 float cruise_spid_initial_kp = 5.57;                                                                         // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
 float cruise_spid_initial_ki_hz = 0.000;                                                                     // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
 float cruise_spid_initial_kd_s = 0.000;                                                                      // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
-QPID cruise_pid(speedo.filt_ptr(), &tach_target_rpm, &speedo_target_mph,            // input, target, output variable references
+qpid cruise_pid(speedo.filt_ptr(), &tach_target_rpm, &speedo_target_mph,            // input, target, output variable references
                 throttle.idlespeed(), tach_govern_rpm,                                                   // output min, max
                 cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s,                 // Kp, Ki, and Kd tuning constants
-                QPID::Pmode::onerr, QPID::Dmode::onerr, QPID::Awmode::round, QPID::Dir::direct, // settings
-                cruise_pid_period_us, QPID::Control::manual, QPID::Centmode::off);
-// QPID::centmode::centerStrict, (tach_govern_rpm + tach_idle_rpm)/2);  // period, more settings
+                qpid::pmod::onerr, qpid::dmod::onerr, qpid::awmod::round, qpid::cdir::direct, // settings
+                cruise_pid_period_us, qpid::ctrl::manual, qpid::centmod::off);
+// qpid::centmode::centerStrict, (tach_govern_rpm + tach_idle_rpm)/2);  // period, more settings
 
 // controller related
 float hotrc_ema_alpha = 0.075;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
@@ -428,8 +434,8 @@ void update_temperature_sensors(void *parameter) {
     while (true) {
         if (!dont_take_temperatures)
             tempsens.update_temperatures();
-        if (sim.potmapping(sensor::engtemp)) {
-            TemperatureSensor *engine_sensor = tempsens.get_sensor(location::engine);
+        if (sim.potmapping(sens::engtemp)) {
+            TemperatureSensor *engine_sensor = tempsens.get_sensor(loc::engine);
             if (engine_sensor != nullptr) {
                 engine_sensor->set_temperature(pot.mapToRange(temp_sensor_min_f, temp_sensor_max_f));
             }
@@ -440,14 +446,14 @@ void update_temperature_sensors(void *parameter) {
 
 void set_board_defaults(bool devboard) {  // true for dev boards, false for printed board (on the car)
     if (devboard) {
-        sim.set_can_sim(sensor::pressure, true);
-        sim.set_can_sim(sensor::brkpos, true);
-        sim.set_can_sim(sensor::tach, true);
-        sim.set_can_sim(sensor::speedo, true);
-        sim.set_can_sim(sensor::mapsens, true);
-        sim.set_can_sim(sensor::airvelo, true);
-        sim.set_can_sim(sensor::basicsw, true);
-        sim.set_potmap(sensor::pressure);
+        sim.set_can_sim(sens::pressure, true);
+        sim.set_can_sim(sens::brkpos, true);
+        sim.set_can_sim(sens::tach, true);
+        sim.set_can_sim(sens::speedo, true);
+        sim.set_can_sim(sens::mapsens, true);
+        sim.set_can_sim(sens::airvelo, true);
+        sim.set_can_sim(sens::basicsw, true);
+        sim.set_potmap(sens::pressure);
     }
     else {  // override settings if running on the real car
         gamma_correct_enabled = false;
@@ -460,24 +466,24 @@ void set_board_defaults(bool devboard) {  // true for dev boards, false for prin
     }
 }
 
-enum handler_request { req_na = -1, req_off = 0, req_on = 1, req_tog = 2 };  // requesting handler actions of digital values with handler functions
+enum req { req_na = -1, req_off = 0, req_on = 1, req_tog = 2 };  // requesting handler actions of digital values with handler functions
 
 // Starter bidirectional handler logic.  Outside code interacts with handler by setting starter_request = req_off, req_on, or req_tog    
 bool starter = LOW;  // Set by handler only. Reflects current state of starter signal (does not indicate source)
 bool starter_drive = false;  // Set by handler only. High when we're driving starter, otherwise starter is an input
-int8_t starter_request = req_na;
+req starter_request = req_na;
 Timer starterTimer(5000000);  // If remotely-started starting event is left on for this long, end it automatically  
 //
 void starter_update () {
     if (starter_signal_support) {
         if (starter_request != -1) printf ("startreq=%d,  dr=%d st=%d\n", starter_request, starter_drive, starter);
-        if (starter_request == req_tog) starter_request = !starter_drive;  // translate toggle request to a drive request opposite to the current drive state
+        if (starter_request == req_tog) starter_request = (req)(!starter_drive);  // translate toggle request to a drive request opposite to the current drive state
         if (starter_drive && ((starter_request == req_off) || starterTimer.expired())) {  // If we're driving the motor but need to stop
             starter_drive = false;
             set_pin (starter_pin, INPUT_PULLDOWN);  // we never assert low on the pin, just set pin as input and let the pulldown bring it low
             printf ("off startreq=%d,  dr=%d st=%d\n", starter_request, starter_drive, starter);
         }
-        if (!starter_drive && (starter_request != req_on) && !sim.simulating(sensor::starter)) {  // If we haven't been and shouldn't be driving, and not simulating
+        if (!starter_drive && (starter_request != req_on) && !sim.simulating(sens::starter)) {  // If we haven't been and shouldn't be driving, and not simulating
             do {
                 starter = digitalRead(starter_pin);  // then read the pin, starter variable will store if starter is turned on externally
             } while (starter != digitalRead(starter_pin)); // starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
@@ -519,29 +525,29 @@ void set_syspower(bool setting) {
 
 // Ignition and panic stop handler
 bool ignition = LOW;  // Set by handler only. Reflects current state of the signal
-int8_t ignition_request = req_na;
+req ignition_request = req_na;
 bool panicstop = false;
-int8_t panicstop_request = req_on;  // On powerup we assume the code just crashed during a drive, because it could have
+req panicstop_request = req_on;  // On powerup we assume the code just crashed during a drive, because it could have
 Timer panicTimer(20000000);  // How long should a panic stop last?  We can't stay mad forever
 //
 void ignition_panic_update() {  // Run once each main loop, directly before panicstop_update()
-    if (panicstop_request == req_tog) panicstop_request = (int8_t)(!panicstop);
-    if (ignition_request == req_tog) ignition_request = (int8_t)(!ignition);
+    if (panicstop_request == req_tog) panicstop_request = (req)(!panicstop);
+    if (ignition_request == req_tog) ignition_request = (req)(!ignition);
     // else if (ignition_request == ignition) ignition_request = req_na;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
     if (speedo.car_stopped() || panicTimer.expired()) panicstop_request = req_off;  // Cancel panic stop if car is stopped
     if (!speedo.car_stopped()) {
         if (ignition && ignition_request == req_off) panicstop_request = req_on;  // ignition cut causes panic stop
-        if (!sim.simulating(sensor::joy) && hotrc_radio_lost) panicstop_request = req_on;
+        if (!sim.simulating(sens::joy) && hotrc_radio_lost) panicstop_request = req_on;
     }
     bool paniclast = panicstop;
     if (panicstop_request != req_na) {
-        panicstop = panicstop_request;
+        panicstop = (bool)panicstop_request;
         if (panicstop && !paniclast) panicTimer.reset();
     }
     panicstop_request = req_na;
     if (panicstop) ignition_request = req_off;  // panic stop causes ignition cut
     if (ignition_request != req_na) {
-        ignition = ignition_request;
+        ignition = (bool)ignition_request;
         write_pin (ignition_pin, ignition);  // Turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
     }
     ignition_request = req_na;  // Make sure this goes after the last comparison
@@ -549,7 +555,7 @@ void ignition_panic_update() {  // Run once each main loop, directly before pani
 // basic mode switch
 bool basicmodesw = LOW;
 void basicsw_update() {
-    if (!sim.simulating(sensor::basicsw)) {  // Basic Mode switch
+    if (!sim.simulating(sens::basicsw)) {  // Basic Mode switch
         do {
             basicmodesw = !digitalRead(basicmodesw_pin);   // !value because electrical signal is active low
         } while (basicmodesw != !digitalRead(basicmodesw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
@@ -592,7 +598,7 @@ void bootbutton_update() {
     }
 }
 int8_t sleep_request = req_na;
-void hotrc_events_update(runmodes nowmode) {
+void hotrc_events_update(runmode nowmode) {
     for (int8_t ch = CH3; ch <= CH4; ch++) hotrc_toggle_update(ch);
     if (!hotrc_radio_lost) {  // Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
         if (hotrc_sw_event[CH3]) ignition_request = req_tog;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
@@ -612,11 +618,11 @@ float looptime_sum_s;
 int32_t loopno = 1;
 uint32_t looptimes_us[20];
 bool loop_dirty[20];
-int32_t loopindex = 0;
+int32_t loopindex = 0, loop_recentsum = 0, loop_scale_min_us = 0, loop_scale_avg_max_us = 2500, loop_scale_peak_max_us = 25000;
 int64_t looptime_cout_mark_us;
 uint32_t looptime_cout_us, looptime_peak_us;
 uint32_t loop_maxloop_us = 100;
-const uint32_t loop_history = 15;
+const uint32_t loop_history = 100;
 uint32_t loop_periods_us[loop_history];
 uint32_t loop_now = 0;
 float looptime_avg_us, loopfreq_hz;
@@ -642,11 +648,22 @@ void looptime_mark(std::string loopname = std::string("")) {  // Add marks where
         loopindex++;
     }
 }
+float loop_calc_avg(uint32_t _loop_now, uint32_t _thisloop) {
+    if (_loop_now == loop_history + 2) {
+        loop_recentsum = _thisloop;
+        for (int l = 0; l <= loop_history; l++)
+            loop_recentsum += loop_periods_us[(_loop_now + l) % loop_history];
+    }
+    else loop_recentsum += _thisloop - loop_periods_us[loop_now];
+    return (float)loop_recentsum/(float)loop_history;
+}
 void looptime_update() {  // Call once each loop at the very end
-    loop_periods_us[loop_now] = (uint32_t)loopTimer.elapsed();  // us since beginning of this loop
+    uint32_t thisloop = (uint32_t)loopTimer.elapsed();
+    looptime_avg_us = loop_calc_avg(loop_now, thisloop);
+    loop_periods_us[loop_now] = thisloop;  // us since beginning of this loop
     loopTimer.reset();
     looptime_sum_s += (float)loop_periods_us[loop_now] / 1000000;
-    ema_filt(loop_periods_us[loop_now], &looptime_avg_us, 0.05);
+    // ema_filt(loop_periods_us[loop_now], &looptime_avg_us, 0.01);
     if (looptime_avg_us > 1) loopfreq_hz = 1000000/looptime_avg_us;
     if (loopno > 10 && loop_periods_us[loop_now] > loop_maxloop_us) loop_maxloop_us = (float)loop_periods_us[loop_now];
     looptime_peak_us = 0;
@@ -675,13 +692,13 @@ Timer errTimer((int64_t)err_timeout_us);
 uint32_t err_margin_adc = 5;
 // Sensor related trouble - this all should be moved to devices.h
 enum err_type { LOST, RANGE, CALIB, WARN, CRIT, INFO, num_err_types };
-enum err_sensor { e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, e_basicsw, e_mulebatt, e_lipobatt, e_airvelo, e_mapsens, e_num_sensors, e_none };  // these are in order of priority
+enum err_sens { e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, e_basicsw, e_mulebatt, e_lipobatt, e_airvelo, e_mapsens, e_num_sensors, e_none };  // these are in order of priority
 char err_type_card[num_err_types][5] = { "Lost", "Rang", "Cal", "Warn", "Crit", "Info" };
 char err_sensor_card[e_num_sensors+1][7] = { "HrcV", "HrcCh3", "BrPres", "BrkPos", "Speedo", "HrcH", "Tach", "Temps", "Startr", "HrcCh4", "Basic", "MulBat", "LiPO", "Airflw", "MAP", "None" };
 // enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airvelo, mapsens, engtemp, mulebatt, ignition, basicsw, cruisesw, starter, syspower };  // , num_sensors, err_flag };
 bool err_sensor_alarm[num_err_types] = { false, false, false, false, false, false };
 int8_t err_sensor_fails[num_err_types] = { 0, 0, 0, 0, 0, 0 };
-bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airvelo/e_mapsens/e_temps/e_mulebatt/e_lipobatt/e_basicsw/e_starter]   // sensor::opt_t::num_sensors]
+bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airvelo/e_mapsens/e_temps/e_mulebatt/e_lipobatt/e_basicsw/e_starter]   // sens::opt_t::num_sensors]
 uint8_t highest_pri_failing_sensor[num_err_types];
 uint8_t highest_pri_failing_last[num_err_types];
 bool diag_ign_error_enabled = true;
@@ -706,7 +723,7 @@ void diag_update() {
         bool not_detected;
         not_detected = false;  // first reset
         for (int cat = 0; cat < num_temp_categories; cat++) temp_err[cat] = false;  // first reset
-        for (int loc = 0; loc < tempsens.locint(location::num_locations); loc++) {
+        for (int loc = 0; loc < tempsens.locint(loc::num_locations); loc++) {
             if (!tempsens.detected(loc)) not_detected = true;
             else if (tempsens.val(loc) >= temp_lims_f[tempsens.errclass(loc)][WARNING]) temp_err[tempsens.errclass(loc)] = true;
         }
@@ -831,8 +848,8 @@ void enable_flashdemo(bool ena) {
 float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
     float temp = _ambient;
     if (std::isnan(_ambient)) {
-        temp = tempsens.val(location::ambient);
-        if (std::isnan(temp) && running_on_devboard) temp = tempsens.val(location::engine);
+        temp = tempsens.val(loc::ambient);
+        if (std::isnan(temp) && running_on_devboard) temp = tempsens.val(loc::engine);
         if (std::isnan(temp)) return -1;  // Avoid crashing due to trying to read absent sensor
     }
     float T = 0.556 * (temp - 32.0) + 273.15;  // in K.  This converts from degF to K
@@ -842,7 +859,7 @@ float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) 
     float P = 6894.76 * (std::isnan(_map) ? mapsens.filt() : _map);  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
     return v * Ain2 * P * 1000.0 / (R * T * 1550);  // mass air flow in grams per second (ug/s)   (1k g/kg * m/s * in2 * J/m3) / (J/(kg*K) * K * 1550 in2/m2) = g/s
 }
-float maf_ugps;  // Manifold mass airflow in grams per second
-float maf_min_ugps = 0.0;
-float maf_max_ugps = massairflow(mapsens.max_psi(), airvelo.max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
+float maf_gps;  // Manifold mass airflow in grams per second
+float maf_min_gps = 0.0;
+float maf_max_gps = massairflow(mapsens.max_psi(), airvelo.max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
 bool flashdemo = false;

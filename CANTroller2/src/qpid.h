@@ -3,57 +3,61 @@
 #include "utils.h"
 #include "temperature.h"
 
-class QPID {
+// I stole this library and modified it heavily to our purpposes - Soren
+// QPID Library for Arduino - Version 3.1.9 by dlloydev https://github.com/Dlloydev/QPID
+// Based on the Arduino PID_v1 Library. Licensed under the MIT License.
+
+class qpid {
   public:
-    enum class Control : uint8_t {manual, automatic, toggle};  // controller mode
-    enum class Dir : uint8_t {direct, reverse};                    // controller direction
-    enum class Pmode : uint8_t {onerr, onmeas, onerrmeas};     // proportional mode
-    enum class Dmode : uint8_t {onerr, onmeas};                   // derivative mode
-    enum class Awmode : uint8_t {cond, clamp, off, round, roundcond};    // integral anti-windup mode  // Soren edit
-    enum class Centmode : uint8_t {off, on, strict};    // Soren - Allows a defined output zero point
+    enum class ctrl : uint8_t {manual, automatic, toggle};            // controller mode
+    enum class cdir : uint8_t {direct, reverse};                      // controller direction
+    enum class pmod : uint8_t {onerr, onmeas, onerrmeas};             // proportional mode
+    enum class dmod : uint8_t {onerr, onmeas};                        // derivative mode
+    enum class awmod : uint8_t {cond, clamp, off, round, roundcond};  // integral anti-windup mode  // Soren edit
+    enum class centmod : uint8_t {off, on, strict};                   // Soren - Allows a defined output zero point
   private:
     float dispkp = 0; float dispki = 0; float dispkd = 0;
     float _pterm, _iterm, _dterm, _kp, _ki, _kd, _outmin, _outmax, _err, lasterr, lastin, _cent, _outsum;
     float *myin;     // Pointers to the input, output, and target variables. This creates a
     float *myout;    // hard link between the variables and the PID, freeing the user from having
     float *mytarg;  // to constantly tell us what these values are. With pointers we'll just know.
-    Control _mode = Control::manual;
-    Dir _dir = Dir::direct;
-    Pmode _pmode = Pmode::onerr;
-    Dmode _dmode = Dmode::onmeas;
-    Awmode _awmode = Awmode::cond;
-    Centmode _centmode = Centmode::off;  // Soren
+    ctrl _mode = ctrl::manual;
+    cdir _dir = cdir::direct;
+    pmod _pmode = pmod::onerr;
+    dmod _dmode = dmod::onmeas;
+    awmod _awmode = awmod::cond;
+    centmod _centmode = centmod::off;  // Soren
     uint32_t sampletime, lasttime;
   public:
-    QPID();  // Default constructor
+    qpid();  // Default constructor
     // Constructor. Links the PID to input, output, target, initial tuning parameters and control modes.
-    QPID(float *arg_in, float *arg_output, float *arg_targ, float arg_min, float arg_max, float arg_kp, float arg_ki, float arg_kd,  // Soren edit
-         Pmode arg_pmode, Dmode arg_dmode, Awmode arg_awmode, Dir arg_dir, uint32_t arg_sampletime, Control arg_mode, Centmode arg_centmode, float arg_cent);  // Soren edit
-    // QPID(float *in, float *out, float *targ, float Kp, float Ki, float Kd, dir dir);
-    // QPID(float *in, float *out, float *targ);
-    void set_mode(Control arg_mode);
+    qpid(float *arg_in, float *arg_output, float *arg_targ, float arg_min, float arg_max, float arg_kp, float arg_ki, float arg_kd,  // Soren edit
+        pmod arg_pmode, dmod arg_dmode, awmod arg_awmode, cdir arg_dir, uint32_t arg_sampletime, ctrl arg_mode, centmod arg_centmode, float arg_cent);  // Soren edit
+    // qpid(float *in, float *out, float *targ, float Kp, float Ki, float Kd, dir dir);
+    // qpid(float *in, float *out, float *targ);
+    void set_mode(ctrl arg_mode);
     void set_mode(uint8_t arg_mode);
     bool compute();  // Performs the PID calculation
     void set_outlimits(float arg_min, float arg_max);  // Sets and clamps the output to a specific range (0-255 by default).
-    void set_centmode(Centmode arg_centmode);  // Soren
+    void set_centmode(centmod arg_centmode);  // Soren
     void set_centmode(uint8_t arg_centmode);  // Soren
     void set_cent(float arg_cent);  // Soren
     void set_tunings(float arg_kp, float arg_ki, float arg_kd);
-    void set_tunings(float arg_kp, float arg_ki, float arg_kd, Pmode arg_pmode, Dmode arg_dmode, Awmode arg_awmode);
+    void set_tunings(float arg_kp, float arg_ki, float arg_kd, pmod arg_pmode, dmod arg_dmode, awmod arg_awmode);
     void set_kp(float arg_kp);
     void set_ki(float arg_ki);
     void set_kd(float arg_kd);
     void add_kp(float arg_kp);
     void add_ki(float arg_ki);
     void add_kd(float arg_kd);
-    void set_dir(Dir arg_dir);
+    void set_dir(cdir arg_dir);
     void set_dir(uint8_t arg_dir);
     void set_sampletime(uint32_t arg_sampletime);  // in microseconds
-    void set_pmode(Pmode arg_pmode);  // Sets the computation method for the proportional term, to compute based either on error (default), on measurement, or the average of both.
+    void set_pmode(pmod arg_pmode);  // Sets the computation method for the proportional term, to compute based either on error (default), on measurement, or the average of both.
     void set_pmode(uint8_t arg_pmode);
-    void set_dmode(Dmode arg_dmode);  // Sets the computation method for the derivative term, to compute based either on error or measurement (default).
+    void set_dmode(dmod arg_dmode);  // Sets the computation method for the derivative term, to compute based either on error or measurement (default).
     void set_dmode(uint8_t arg_dmode);
-    void set_awmode(Awmode arg_awmode);  // Sets the integral anti-windup mode to one of awClamp, which clamps the output after adding integral and proportional (on measurement) terms, or awcond (default), which provides some integral correction, prevents deep saturation and reduces overshoot. Option awOff disables anti-windup altogether.
+    void set_awmode(awmod arg_awmode);  // Sets the integral anti-windup mode to one of awClamp, which clamps the output after adding integral and proportional (on measurement) terms, or awcond (default), which provides some integral correction, prevents deep saturation and reduces overshoot. Option awOff disables anti-windup altogether.
     void set_awmode(uint8_t arg_awmode);
     void set_outsum(float arg_outsum);  // sets the output summation value
     void init();        // Ensure a bumpless transfer from manual to automatic mode
@@ -79,204 +83,182 @@ class QPID {
     uint8_t centmode() { return static_cast<uint8_t>(_centmode); }  // Soren
 };
 
-/**********************************************************************************
-   QPID Library for Arduino - Version 3.1.9
-   by dlloydev https://github.com/Dlloydev/QPID
-   Based on the Arduino PID_v1 Library. Licensed under the MIT License.
- **********************************************************************************/
-
-QPID::QPID() {}
+qpid::qpid() {}
 
 // Constructor that allows all parameters to get set
-QPID::QPID(float* arg_in, float* arg_out, float* arg_targ, float arg_min, float arg_max,
-          float arg_kp = 0, float arg_ki = 0, float arg_kd = 0,  // Soren edit
-          Pmode arg_pmode = Pmode::onerr, Dmode arg_dmode = Dmode::onmeas,
-          Awmode arg_awmode = Awmode::cond, Dir arg_dir = Dir::direct,
-          uint32_t arg_sampletime = 100000, Control arg_mode = Control::manual, 
-          Centmode arg_centmode = Centmode::off, float arg_cent = NAN) {  // Soren edit
-  myout = arg_out;
-  myin = arg_in;
-  mytarg = arg_targ;
-  _mode = arg_mode;
-  QPID::set_outlimits(arg_min, arg_max);  // same default as Arduino PWM limit - Soren edit
-  QPID::set_centmode(arg_centmode);  // Soren
-  if (_centmode != Centmode::off && !std::isnan(arg_cent)) {  // Soren
-    set_cent(arg_cent);  // Soren
-    _outsum = _cent;
-  }
-  else set_cent(_outmin);  // Soren
-  sampletime = arg_sampletime;              // Soren edit
-  QPID::set_dir(arg_dir);
-  QPID::set_tunings(arg_kp, arg_ki, arg_kd, _pmode, _dmode, _awmode);
-  lasttime = micros() - sampletime;  // Soren edit
+qpid::qpid(float* arg_in, float* arg_out, float* arg_targ, float arg_min, float arg_max,
+    float arg_kp = 0, float arg_ki = 0, float arg_kd = 0,  // Soren edit
+    pmod arg_pmode = pmod::onerr, dmod arg_dmode = dmod::onmeas,
+    awmod arg_awmode = awmod::cond, cdir arg_dir = cdir::direct,
+    uint32_t arg_sampletime = 100000, ctrl arg_mode = ctrl::manual, 
+    centmod arg_centmode = centmod::off, float arg_cent = NAN) {  // Soren edit
+    myout = arg_out;
+    myin = arg_in;
+    mytarg = arg_targ;
+    _mode = arg_mode;
+    qpid::set_outlimits(arg_min, arg_max);  // same default as Arduino PWM limit - Soren edit
+    qpid::set_centmode(arg_centmode);  // Soren
+    if (_centmode != centmod::off && !std::isnan(arg_cent)) {  // Soren
+        set_cent(arg_cent);  // Soren
+        _outsum = _cent;
+    }
+    else set_cent(_outmin);  // Soren
+    sampletime = arg_sampletime;              // Soren edit
+    qpid::set_dir(arg_dir);
+    qpid::set_tunings(arg_kp, arg_ki, arg_kd, _pmode, _dmode, _awmode);
+    lasttime = micros() - sampletime;  // Soren edit
 }
 
-/* Compute() ***********************************************************************
-   This function should be called every time "void loop()" executes. The function
-   will decide whether a new PID output needs to be computed. Returns true
-   when the output is computed, false when nothing has been done.
- **********************************************************************************/
-bool QPID::compute() {
-  uint32_t now = micros();  // Soren edit
-  uint32_t timechange = (now - lasttime);
-  if (_mode == Control::automatic && timechange < sampletime) return false;  // If class is handling the timing and this time was a nop
+// This function should be called every time "void loop()" executes. The function will decide whether a new 
+// PID output needs to be computed. Returns true when the output is computed, false when nothing has been done.
+bool qpid::compute() {
+    uint32_t now = micros();  // Soren edit
+    uint32_t timechange = (now - lasttime);
+    if (_mode == ctrl::automatic && timechange < sampletime) return false;  // If class is handling the timing and this time was a nop
 
-  float in = *myin;
-  float din = in - lastin;
-  if (_dir == Dir::reverse) din = -din;  // Soren
+    float in = *myin;
+    float din = in - lastin;
+    if (_dir == cdir::reverse) din = -din;  // Soren
 
-  _err = *mytarg - in;
-  if (_dir == Dir::reverse) _err = -_err;  // Soren
-  float derr = _err - lasterr;
+    _err = *mytarg - in;
+    if (_dir == cdir::reverse) _err = -_err;  // Soren
+    float derr = _err - lasterr;
 
-  float peterm = _kp * _err;
-  float pmterm = _kp * din;
-  if (_pmode == Pmode::onerr) pmterm = 0;
-  else if (_pmode == Pmode::onmeas) peterm = 0;
-  else { //onerrmeas
-    peterm *= 0.5f;
-    pmterm *= 0.5f;
-  }
-  _pterm = peterm - pmterm;
-  _iterm = _ki * _err;
-  if (_dmode == Dmode::onerr) _dterm = _kd * derr;
-  else _dterm = -_kd * din; // onmeas
+    float peterm = _kp * _err;
+    float pmterm = _kp * din;
+    if (_pmode == pmod::onerr) pmterm = 0;
+    else if (_pmode == pmod::onmeas) peterm = 0;
+    else { //onerrmeas
+        peterm *= 0.5f;
+        pmterm *= 0.5f;
+    }
+    _pterm = peterm - pmterm;
+    _iterm = _ki * _err;
+    if (_dmode == dmod::onerr) _dterm = _kd * derr;
+    else _dterm = -_kd * din; // onmeas
 
-  if (_awmode == Awmode::cond || _awmode == Awmode::roundcond) {  // condition anti-windup (default)
-    bool aw = false;
-    float _itermout = (peterm - pmterm) + _ki * (_iterm + _err);
-    if (_itermout > _outmax && derr > 0) aw = true;
-    else if (_itermout < _outmin && derr < 0) aw = true;
-    if (aw && _ki) _iterm = constrain(_itermout, -_outmax, _outmax);
-  }
-  else if ((_awmode == Awmode::round || _awmode == Awmode::roundcond) && _err < 0.001 && _err > -0.001) {
-      _err = 0.0;
-      if (_centmode == Centmode::on || _centmode == Centmode::strict) _outsum = _cent;     
-  }
-  if (_centmode == Centmode::strict && _err * lasterr < 0) _outsum = _cent;  // Soren - Recenters any old integral when error crosses zero
-  
-  _outsum += _iterm - pmterm;  // by default, compute output as per PID_v1    // include integral amount and pmterm
-  if (_awmode != Awmode::off) _outsum = constrain(_outsum, _outmin, _outmax);  // Clamp
-  
-  *myout = constrain(_outsum + peterm + _dterm, _outmin, _outmax);  // include _dterm, clamp and drive output
+    if (_awmode == awmod::cond || _awmode == awmod::roundcond) {  // condition anti-windup (default)
+        bool aw = false;
+        float _itermout = (peterm - pmterm) + _ki * (_iterm + _err);
+        if (_itermout > _outmax && derr > 0) aw = true;
+        else if (_itermout < _outmin && derr < 0) aw = true;
+        if (aw && _ki) _iterm = constrain(_itermout, -_outmax, _outmax);
+    }
+    else if ((_awmode == awmod::round || _awmode == awmod::roundcond) && _err < 0.001 && _err > -0.001) {
+        _err = 0.0;
+        if (_centmode == centmod::on || _centmode == centmod::strict) _outsum = _cent;     
+    }
+    if (_centmode == centmod::strict && _err * lasterr < 0) _outsum = _cent;  // Soren - Recenters any old integral when error crosses zero
 
-  lasterr = _err;  // Soren
-  lastin = in;
-  lasttime = now;
-  return true;
+    _outsum += _iterm - pmterm;  // by default, compute output as per PID_v1    // include integral amount and pmterm
+    if (_awmode != awmod::off) _outsum = constrain(_outsum, _outmin, _outmax);  // Clamp
+
+    *myout = constrain(_outsum + peterm + _dterm, _outmin, _outmax);  // include _dterm, clamp and drive output
+
+    lasterr = _err;  // Soren
+    lastin = in;
+    lasttime = now;
+    return true;
 }
 
-/* set_Tunings(....)************************************************************
-  This function allows the controller's dynamic performance to be adjusted.
-  it's called automatically from the constructor, but tunings can also
-  be adjusted on the fly during normal operation.
-******************************************************************************/
-void QPID::set_tunings(float arg_kp, float arg_ki, float arg_kd, Pmode arg_pmode = Pmode::onerr,
-    Dmode arg_dmode = Dmode::onmeas, Awmode arg_awmode = Awmode::cond) {
-  if (arg_kp < 0 || arg_ki < 0 || arg_kd < 0 || !sampletime) return;  // Soren - added divide by zero protection
-  if (arg_ki == 0) _outsum = 0;
-  _pmode = arg_pmode; _dmode = arg_dmode; _awmode = arg_awmode;
-  dispkp = arg_kp; dispki = arg_ki; dispkd = arg_kd;
-  float sampletime_sec = (float)sampletime / 1000000;
-  _kp = arg_kp;
-  _ki = arg_ki * sampletime_sec;
-  _kd = arg_kd / sampletime_sec;
+// set_tunings  This function allows the controller's dynamic performance to be adjusted. It's called 
+// automatically from the constructor, but tunings can also be adjusted on the fly during normal operation.
+void qpid::set_tunings(float arg_kp, float arg_ki, float arg_kd, pmod arg_pmode = pmod::onerr,
+    dmod arg_dmode = dmod::onmeas, awmod arg_awmode = awmod::cond) {
+    if (arg_kp < 0 || arg_ki < 0 || arg_kd < 0 || !sampletime) return;  // Soren - added divide by zero protection
+    if (arg_ki == 0) _outsum = 0;
+    _pmode = arg_pmode; _dmode = arg_dmode; _awmode = arg_awmode;
+    dispkp = arg_kp; dispki = arg_ki; dispkd = arg_kd;
+    float sampletime_sec = (float)sampletime / 1000000;
+    _kp = arg_kp;
+    _ki = arg_ki * sampletime_sec;
+    _kd = arg_kd / sampletime_sec;
 }
 
-/* set_Tunings(...)************************************************************
-  Set Tunings using the last remembered pmode, dmode and awmode settings.
-******************************************************************************/
-void QPID::set_tunings(float arg_kp, float arg_ki, float arg_kd) {
-  set_tunings(arg_kp, arg_ki, arg_kd, _pmode, _dmode, _awmode);
+// set_tunings  Set Tunings using the last remembered pmode, dmode and awmode settings.
+void qpid::set_tunings(float arg_kp, float arg_ki, float arg_kd) {
+    set_tunings(arg_kp, arg_ki, arg_kd, _pmode, _dmode, _awmode);
 }
 
 // Soren: I wrote these to facilitate changing only one tuning parameter at a time
-void QPID::set_kp(float arg_kp) { set_tunings(arg_kp, dispki, dispkd, _pmode, _dmode, _awmode); }  // Soren
-void QPID::set_ki(float arg_ki) { set_tunings(dispkp, arg_ki, dispkd, _pmode, _dmode, _awmode); }  // Soren
-void QPID::set_kd(float arg_kd) { set_tunings(dispkp, dispki, arg_kd, _pmode, _dmode, _awmode); }  // Soren
+void qpid::set_kp(float arg_kp) { set_tunings(arg_kp, dispki, dispkd, _pmode, _dmode, _awmode); }  // Soren
+void qpid::set_ki(float arg_ki) { set_tunings(dispkp, arg_ki, dispkd, _pmode, _dmode, _awmode); }  // Soren
+void qpid::set_kd(float arg_kd) { set_tunings(dispkp, dispki, arg_kd, _pmode, _dmode, _awmode); }  // Soren
 
-void QPID::add_kp(float add) { set_kp(_kp + add); }  // Soren
-void QPID::add_ki(float add) { set_ki(_ki + add); }  // Soren
-void QPID::add_kd(float add) { set_kd(_kd + add); }  // Soren
+void qpid::add_kp(float add) { set_kp(_kp + add); }  // Soren
+void qpid::add_ki(float add) { set_ki(_ki + add); }  // Soren
+void qpid::add_kd(float add) { set_kd(_kd + add); }  // Soren
 
-/* set_SampleTime(.)***********************************************************
-  Sets the period, in microseconds, at which the calculation is performed.
-******************************************************************************/
-void QPID::set_sampletime(uint32_t arg_sampletime) {
-  if (arg_sampletime > 0 && sampletime) {  // Soren - added more divide by zero protection
-    float ratio  = (float)arg_sampletime / (float)sampletime;
-    _ki *= ratio;
-    _kd /= ratio;
-    sampletime = arg_sampletime;
-  }
+// set_sampletime  Sets the period, in microseconds, at which the calculation is performed.
+void qpid::set_sampletime(uint32_t arg_sampletime) {
+    if (arg_sampletime > 0 && sampletime) {  // Soren - added more divide by zero protection
+        float ratio  = (float)arg_sampletime / (float)sampletime;
+        _ki *= ratio;
+        _kd /= ratio;
+        sampletime = arg_sampletime;
+    }
 }
 
-/* set_outLimits(..)********************************************************
-  The PID controller is designed to vary its output within a given range.
-  By default this range is 0-255, the Arduino PWM range.
-******************************************************************************/
-void QPID::set_outlimits(float arg_min, float arg_max) {
-  if (arg_min >= arg_max) return;
-  _outmin = arg_min; _outmax = arg_max;
+// set_outLimits  The PID controller is designed to vary its output within a given range, default 0-255
+void qpid::set_outlimits(float arg_min, float arg_max) {
+    if (arg_min >= arg_max) return;
+    _outmin = arg_min; _outmax = arg_max;
 
-  // if (_mode != Control::manual) {
-  *myout = constrain(*myout, _outmin, _outmax);  // Soren
-  _outsum = constrain(_outsum, _outmin, _outmax);
+    // if (_mode != ctrl::manual) {
+    *myout = constrain(*myout, _outmin, _outmax);  // Soren
+    _outsum = constrain(_outsum, _outmin, _outmax);
 }
 
-void QPID::set_centmode(Centmode arg_centmode) { _centmode = arg_centmode; }  // Soren
-void QPID::set_centmode(uint8_t arg_centmode) { _centmode = (Centmode)arg_centmode; }  // Soren
-void QPID::set_cent(float arg_cent) { if (_outmin <= arg_cent && _outmax >= arg_cent) _cent = arg_cent; }  // Soren
-// if (_centmode == Centmode::off) _centmode = Centmode::strict;  // Soren - does definition of center imply to use center mode?
+void qpid::set_centmode(centmod arg_centmode) { _centmode = arg_centmode; }  // Soren
+void qpid::set_centmode(uint8_t arg_centmode) { _centmode = (centmod)arg_centmode; }  // Soren
+void qpid::set_cent(float arg_cent) { if (_outmin <= arg_cent && _outmax >= arg_cent) _cent = arg_cent; }  // Soren
+// if (_centmode == centmod::off) _centmode = centmod::strict;  // Soren - does definition of center imply to use center mode?
 
-/* set_mode(.)*****************************************************************
-  Sets the controller mode to manual (0), automatic (1) or timer (2)
-  when the transition from manual to automatic or timer occurs, the
-  controller is automatically initialized.
-******************************************************************************/
-void QPID::set_mode(Control arg_mode) {
-  if (_mode == Control::manual && arg_mode != Control::manual) { // just went from manual to automatic
-    _mode = Control::automatic;
-    QPID::init();
-  }
-  else if (_mode == Control::automatic && arg_mode != Control::automatic) {
-    _mode = Control::manual;
-  }
+// set_mode Sets the controller mode to manual (0), automatic (1) or timer (2) when the transition 
+// from manual to automatic or timer occurs, the controller is automatically initialized.
+void qpid::set_mode(ctrl arg_mode) {
+    if (_mode == ctrl::manual && arg_mode != ctrl::manual) { // just went from manual to automatic
+        _mode = ctrl::automatic;
+        qpid::init();
+    }
+    else if (_mode == ctrl::automatic && arg_mode != ctrl::automatic) {
+        _mode = ctrl::manual;
+    }
 }
-void QPID::set_mode(uint8_t arg_mode) { set_mode((Control)arg_mode); }
+void qpid::set_mode(uint8_t arg_mode) { set_mode((ctrl)arg_mode); }
 
 // Does all the things that need to happen to ensure a bumpless transfer from manual to automatic mode.
-void QPID::init() {
-  _outsum = (float)*myout;  // Soren
-  lastin = *myin;
-  _outsum = constrain(_outsum, _outmin, _outmax);
+void qpid::init() {
+    _outsum = (float)*myout;  // Soren
+    lastin = *myin;
+    _outsum = constrain(_outsum, _outmin, _outmax);
 }
 
 // The PID will either be connected to a direct acting process (+output leads to +input) or a reverse acting process(+output leads to -input).
-void QPID::set_dir(Dir arg_dir) { _dir = arg_dir; }
-void QPID::set_dir(uint8_t arg_dir) { _dir = (Dir)arg_dir; }
+void qpid::set_dir(cdir arg_dir) { _dir = arg_dir; }
+void qpid::set_dir(uint8_t arg_dir) { _dir = (cdir)arg_dir; }
 
 // Sets the computation method for the proportional term, to compute based either on error (default), on measurement, or the average of both.
-void QPID::set_pmode(Pmode arg_pmode) { _pmode = arg_pmode; }
-void QPID::set_pmode(uint8_t arg_pmode) { _pmode = (Pmode)arg_pmode; }
+void qpid::set_pmode(pmod arg_pmode) { _pmode = arg_pmode; }
+void qpid::set_pmode(uint8_t arg_pmode) { _pmode = (pmod)arg_pmode; }
 
 // Sets the computation method for the derivative term, to compute based either on error or on measurement (default).
-void QPID::set_dmode(Dmode arg_dmode) { _dmode = arg_dmode; }
-void QPID::set_dmode(uint8_t arg_dmode) { _dmode = (Dmode)arg_dmode; }
+void qpid::set_dmode(dmod arg_dmode) { _dmode = arg_dmode; }
+void qpid::set_dmode(uint8_t arg_dmode) { _dmode = (dmod)arg_dmode; }
 
 // Sets the integral anti-windup mode to one of clamp, which clamps the output after adding integral and proportional (on measurement) terms,
 // or cond (default), which provides some integral correction, prevents deep saturation and reduces overshoot. Option off disables anti-windup altogether.
-void QPID::set_awmode(Awmode arg_awmode) { _awmode = arg_awmode; }
-void QPID::set_awmode(uint8_t arg_awmode) { _awmode = (Awmode)arg_awmode; }
+void qpid::set_awmode(awmod arg_awmode) { _awmode = arg_awmode; }
+void qpid::set_awmode(uint8_t arg_awmode) { _awmode = (awmod)arg_awmode; }
 
-void QPID::reset() {
-  lasttime = micros() - sampletime;  // Soren edit
-  lastin = 0; _outsum = 0;
-  _pterm = 0; _iterm = 0; _dterm = 0;
+void qpid::reset() {
+    lasttime = micros() - sampletime;  // Soren edit
+    lastin = 0; _outsum = 0;
+    _pterm = 0; _iterm = 0; _dterm = 0;
 }
 
 // sets the output summation value
-void QPID::set_outsum(float arg_outsum) { _outsum = arg_outsum; }
+void qpid::set_outsum(float arg_outsum) { _outsum = arg_outsum; }
 
 
 class ThrottleControl {  // Soren - To allow creative control of PID targets in case your engine idle problems need that.

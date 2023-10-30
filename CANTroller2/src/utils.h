@@ -16,27 +16,28 @@
 // TODO: check to see if these are different from the builtins, if not then we shouldn't bother redefining them
 
 #undef max
-inline float max (float a, float b) { return (a > b) ? a : b; }
-inline int32_t max (int32_t a, int32_t b) { return (a > b) ? a : b; }
-inline uint32_t max (uint32_t a, uint32_t b) { return (a > b) ? a : b; }
-inline uint32_t max (uint32_t a, uint32_t b, uint32_t c) { return (a > b) ? ((c > a) ? c : a) : ((c > b) ? c : b); }
+inline float smax (float a, float b) { return (a > b) ? a : b; }
+inline int32_t smax (int32_t a, int32_t b) { return (a > b) ? a : b; }
+inline uint32_t smax (uint32_t a, uint32_t b) { return (a > b) ? a : b; }
+inline uint32_t smax (uint32_t a, uint32_t b, uint32_t c) { return (a > b) ? ((c > a) ? c : a) : ((c > b) ? c : b); }
 
 #undef min
-inline float min (float a, float b) { return (a < b) ? a : b; }
-inline int32_t min (int32_t a, int32_t b) { return (a < b) ? a : b; }
-inline uint32_t min (uint32_t a, uint32_t b) { return (a < b) ? a : b; }
-inline uint32_t min (uint32_t a, uint32_t b, uint32_t c) { return (a < b) ? ((c < a) ? c : a) : ((c < b) ? c : b); }
+inline float smin (float a, float b) { return (a < b) ? a : b; }
+inline int32_t smin (int32_t a, int32_t b) { return (a < b) ? a : b; }
+inline uint32_t smin (uint32_t a, uint32_t b) { return (a < b) ? a : b; }
+inline uint32_t smin (uint32_t a, uint32_t b, uint32_t c) { return (a < b) ? ((c < a) ? c : a) : ((c < b) ? c : b); }
 
 #undef constrain
 inline float constrain (float amt, float low, float high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline int32_t constrain (int32_t amt, int32_t low, int32_t high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline uint32_t constrain (uint32_t amt, uint32_t low, uint32_t high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
+inline long constrain (long amt, long low, long high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 
 // Maybe go with templates for these
-// template <typename T> inline T max(T a, T b) { return (a > b) ? a : b; }
-// template <typename T> inline T max(T a, T b, T c) { return (a > b) ? ((c > a) ? c : a) : ((c > b) ? c : b); }
-// template <typename T> inline T min(T a, T b) { return (a < b) ? a : b; }
-// template <typename T> inline T min(T a, T b, T c) { return (a < b) ? ((c < a) ? c : a) : ((c < b) ? c : b); }
+// template <typename T> inline T smaxT a, T b) { return (a > b) ? a : b; }
+// template <typename T> inline T smaxT a, T b, T c) { return (a > b) ? ((c > a) ? c : a) : ((c > b) ? c : b); }
+// template <typename T> inline T smin(T a, T b) { return (a < b) ? a : b; }
+// template <typename T> inline T smin(T a, T b, T c) { return (a < b) ? ((c < a) ? c : a) : ((c < b) ? c : b); }
 // template <typename T> inline T constrain(T amt, T low, T high) {
 //     return (amt < low) ? low : ((amt > high) ? high : amt);
 // }
