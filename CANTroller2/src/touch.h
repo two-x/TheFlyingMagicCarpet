@@ -89,7 +89,7 @@ public:
     }
     void update() {
         if (!get_touchpoint()) { // If not being touched, put momentarily-set simulated button values back to default values
-            simdelta_touch = 0;  // Stop changing the value
+            idelta_touch = 0;  // Stop changing the value
             if (touch_now_touched) touchDoublePressTimer.reset();  // Upon end of a touch, begin timer to reject any accidental double touches
             touch_now_touched = false;  // Remember the last touch state
             touch_accel_exponent = 0;
@@ -136,14 +136,14 @@ public:
         }
         else if (tcol == 0 && trow == 2) {  // Pressed the increase value button, for real-time tuning of variables
             if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change the value yet
-            else if (tuning_ctrl == EDIT) simdelta_touch = touch_accel;  // If in edit mode, increase the value
-            // else adj_val(&idiot_hue_offset, simdelta_touch, 0, 255);
+            else if (tuning_ctrl == EDIT) idelta_touch = touch_accel;  // If in edit mode, increase the value
+            // else adj_val(&idiot_hue_offset, idelta_touch, 0, 255);
             // set_idiotcolors();
         }
         else if (tcol == 0 && trow == 3) {  // Pressed the decrease value button, for real-time tuning of variables
             if (tuning_ctrl == SELECT) tuning_ctrl = EDIT;  // If just entering edit mode, don't change the value yet
-            else if (tuning_ctrl == EDIT) simdelta_touch = -touch_accel;  // If in edit mode, decrease the value
-            // else adj_val(&idiot_hue_offset -simdelta_touch, 0, 255);
+            else if (tuning_ctrl == EDIT) idelta_touch = -touch_accel;  // If in edit mode, decrease the value
+            // else adj_val(&idiot_hue_offset -idelta_touch, 0, 255);
             // set_idiotcolors();
         }
         else if (tcol == 0 && trow == 4) {  // Pressed the simulation mode toggle. Needs long-press
@@ -152,7 +152,7 @@ public:
                 touch_longpress_valid = false;
             }
         }
-        if (tcol == 2 && trow == 0 && (runmode == CAL || (runmode == SHUTDOWN && !shutdown_incomplete))) {
+        if (tcol == 2 && trow == 0) {
             if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
                 calmode_request = true;
                 touch_longpress_valid = false;
@@ -164,12 +164,12 @@ public:
                 touch_longpress_valid = false;
             }
         }
-        // else if (tcol == 5 && trow == 0) {
-        //     if (touch_longpress_valid && touchHoldTimer.elapsed() > 2 * touchHoldTimer.get_timeout()) {  // Double hold time for some extra safety
-        //         syspower_request = req_tog;
-        //         touch_longpress_valid = false;
-        //     }
-        // }
+        else if (tcol == 5 && trow == 0) {
+            if (touch_longpress_valid && touchHoldTimer.elapsed() > 2 * touchHoldTimer.get_timeout()) {  // Double hold time for some extra safety
+                sleep_request = req_on;  // sleep requests are handled by shutdown mode, otherwise will be ignored
+                touch_longpress_valid = false;
+            }
+        }
         else if (sim.enabled()) {
             if (tcol == 3 && trow == 0 && sim.can_sim(sensor::basicsw) && !touch_now_touched) basicmodesw = !basicmodesw;
             else if (tcol == 3 && trow == 1 && sim.can_sim(sensor::pressure) && pressure.source() == Source::TOUCH) pressure.add_human((float)touch_accel); // (+= 25) Pressed the increase brake pressure button

@@ -137,7 +137,6 @@ RMTInput hotrc_rmt[4] = {
 // run state machine related
 enum runmodes { BASIC, ASLEEP, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, num_runmodes };
 bool running_on_devboard = false;  // will overwrite with value read thru pull resistor on tx pin at boot
-runmodes runmode = SHUTDOWN;
 bool shutdown_incomplete = true;     // minor state variable for shutdown mode - Shutdown mode has not completed its work and can't yet stop activity
 bool we_just_switched_modes = true; // For mode logic to set things up upon first entry into mode
 bool park_the_motors = false;       // Indicates we should release the brake & gas so the pedals can be used manually without interference
@@ -160,9 +159,8 @@ Potentiometer pot(pot_wipe_pin);
 Simulator sim(pot);
 bool simulating_last = false;
 Timer simTimer; // NOTE: unused
-int32_t simdelta = 0;
-int32_t simdelta_touch = 0;
-int32_t simdelta_encoder = 0;
+int32_t idelta = 0, idelta_touch = 0, idelta_encoder = 0;
+float fdelta = 0.0;
 
 // calibration related
 bool cal_joyvert_brkmotor_mode = false; // Allows direct control of brake motor using controller vert
@@ -190,9 +188,7 @@ Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 CarBattery mulebatt(mulebatt_pin);
 LiPOBatt lipobatt(lipobatt_pin);
 
-static Servo brakemotor;
-static Servo steermotor;
-static Servo gas_servo;
+static Servo brakemotor, steermotor, gas_servo;
 
 // steering related
 float steer_safe_pc = 72.0; // Steering is slower at high speed. How strong is this effect
@@ -259,13 +255,6 @@ float gas_cw_open_us = 718;     // Gas pulsewidth corresponding to full open thr
 float gas_ccw_closed_us = 2000; // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
 float gas_ccw_max_us = 2500;    // Servo ccw limit pulsewidth. Hotrc controller ch1/2 min(lt/br) = 1000us, center = 1500us, max(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
 float gas_park_slack_us = 30;   // Gas pulsewidth beyond gas_ccw_closed_us where to park the servo out of the way so we can drive manually (in us)
-
-// Misguided beginnings of attempt to restructure pwm variables above
-// enum pwm_val { OUT=3, GOV=4, ABSMIN=5, ABSMAX=6, PARK=7, num_pwmvals=8 };  // { MIN=0, CENT=1, MAX=2 }
-// enum pwm_opts { REVERSED, CENTERED, GOVERNED, num_pwmopts };  // Forward is considered ccw < cw motion
-// float gas_angle_pc[num_pwmvals];
-// float gas_angle_us[num_pwmvals] = { 718, 1500, 2000, 2000, 718, 500, 2500, 2030 };
-// bool gas_angle_opt[num_pwmopts] = { true, false, true };
 
 // tach related
 Tachometer tach(tach_pin);
@@ -394,10 +383,11 @@ void hotrc_calc_params() {
         hotrc_pc[axis][MARGIN] = hotrc_us_to_pc(hotrc_margin_us);  // hotrc_us_to_pc(axis, hotrc_margin_us);
     }
 }
-enum joydirs { joy_down = -1, joy_cent = 0, joy_up = 1, joy_lt = 2, joy_rt = 3 };
+enum joydirs { joy_rt = -2, joy_down = -1, joy_cent = 0, joy_up = 1, joy_lt = 2 };
 joydirs get_joydir(uint8_t axis = VERT) {
     if (axis == VERT) return (hotrc_pc[axis][FILT] > hotrc_pc[axis][DBTOP]) ? joy_up : ((hotrc_pc[axis][FILT] < hotrc_pc[axis][DBBOT]) ? joy_down : joy_cent);
     return (hotrc_pc[axis][FILT] > hotrc_pc[axis][DBTOP]) ? joy_rt : ((hotrc_pc[axis][FILT] < hotrc_pc[axis][DBBOT]) ? joy_lt : joy_cent);
+    // return (hotrc_pc[axis][FILT] > hotrc_pc[axis][DBTOP]) ? ((axis == VERT) ? joy_up : joy_rt) : (hotrc_pc[axis][FILT] < hotrc_pc[axis][DBBOT]) ? ((axis == VERT) ? joy_down : joy_lt) : joy_cent;
 }
 
 void calc_governor(void) {
@@ -480,10 +470,12 @@ Timer starterTimer(5000000);  // If remotely-started starting event is left on f
 //
 void starter_update () {
     if (starter_signal_support) {
+        if (starter_request != -1) printf ("startreq=%d,  dr=%d st=%d\n", starter_request, starter_drive, starter);
         if (starter_request == req_tog) starter_request = !starter_drive;  // translate toggle request to a drive request opposite to the current drive state
         if (starter_drive && ((starter_request == req_off) || starterTimer.expired())) {  // If we're driving the motor but need to stop
             starter_drive = false;
             set_pin (starter_pin, INPUT_PULLDOWN);  // we never assert low on the pin, just set pin as input and let the pulldown bring it low
+            printf ("off startreq=%d,  dr=%d st=%d\n", starter_request, starter_drive, starter);
         }
         if (!starter_drive && (starter_request != req_on) && !sim.simulating(sensor::starter)) {  // If we haven't been and shouldn't be driving, and not simulating
             do {
@@ -496,6 +488,7 @@ void starter_update () {
             set_pin (starter_pin, OUTPUT);  // then set pin to an output
             write_pin (starter_pin, starter);  // and start the motor
             starterTimer.reset();  // if left on the starter will turn off automatically after X seconds
+            printf ("on startreq=%d,  dr=%d st=%d\n", starter_request, starter_drive, starter);
         }
         starter_request = req_na;  // we have serviced whatever requests
     }
@@ -504,9 +497,10 @@ void starter_update () {
 
 bool syspower = HIGH;  // Set by handler only. Reflects current state of the signal
 void set_syspower(bool setting) {
-    if (!setting && runmode != ASLEEP) return;
+    // if (!setting && runmode.mode() != ASLEEP) return;
     syspower = setting;
     if (keep_system_powered) syspower = HIGH;
+    printf("syspower -> %d\n", syspower);
     write_pin(syspower_pin, syspower);
 }
 // int8_t syspower_request = req_na;
@@ -598,15 +592,16 @@ void bootbutton_update() {
     }
 }
 int8_t sleep_request = req_na;
-void hotrc_events_update() {
+void hotrc_events_update(runmodes nowmode) {
     for (int8_t ch = CH3; ch <= CH4; ch++) hotrc_toggle_update(ch);
     if (!hotrc_radio_lost) {  // Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
         if (hotrc_sw_event[CH3]) ignition_request = req_tog;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
         if (hotrc_sw_event[CH4]) {
-            if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
-            else if (runmode == STALL) starter_request = req_tog;
-            else if (runmode == SHUTDOWN && !shutdown_incomplete) sleep_request = req_on;  // Just messing around here
-            else if (runmode == ASLEEP) sleep_request = req_off; 
+            if (nowmode == FLY || nowmode == CRUISE) flycruise_toggle_request = true;
+            else if (nowmode == STALL) starter_request = req_tog;
+            else if (nowmode == HOLD) starter_request = req_off;
+            else if (nowmode == SHUTDOWN && !shutdown_incomplete) sleep_request = req_on;
+            else if (nowmode == ASLEEP) sleep_request = req_off; 
         }
     }
     for (int8_t ch = CH3; ch <= CH4; ch++) hotrc_sw_event[ch] = false;
@@ -719,14 +714,11 @@ void diag_update() {
 
         // Detect sensors disconnected or giving out-of-range readings.
         // TODO : The logic of this for each sensor should be moved to devices.h objects
-        uint32_t val;
-        val = brakepos.raw();
-        err_sensor[RANGE][e_brkpos] = (val < brakepos.min_native() || val > brakepos.max_native());
-        err_sensor[LOST][e_brkpos] = (val < err_margin_adc);
-        val = pressure.raw();
-        err_sensor[RANGE][e_pressure] = ((val && val < pressure.min_native()) || val > pressure.max_native());
-        err_sensor[LOST][e_pressure] = (val < err_margin_adc);
-        err_sensor[LOST][e_mulebatt] = (mulebatt.raw() > mulebatt.max_adc());
+        err_sensor[RANGE][e_brkpos] = (brakepos.in() < brakepos.op_min_in() || brakepos.in() > brakepos.op_max_in());
+        err_sensor[LOST][e_brkpos] = (brakepos.raw() < err_margin_adc);
+        err_sensor[RANGE][e_pressure] = (pressure.psi() < pressure.op_min_psi() || pressure.psi() > pressure.op_max_psi());
+        err_sensor[LOST][e_pressure] = (pressure.raw() < err_margin_adc);
+        err_sensor[RANGE][e_mulebatt] = (mulebatt.v() < mulebatt.op_min_v() || mulebatt.v() > mulebatt.op_max_v());
         for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
             err_sensor[RANGE][ch] = !hotrc_radio_lost && ((hotrc_us[ch][RAW] < hotrc_us[ch][MIN] - (hotrc_us[ch][MARGIN] >> 1)) 
                                     || (hotrc_us[ch][RAW] > hotrc_us[ch][MAX] + (hotrc_us[ch][MARGIN] >> 1)));  // && ch != VERT
