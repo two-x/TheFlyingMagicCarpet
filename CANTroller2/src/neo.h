@@ -17,7 +17,7 @@ class neopixelstrip {
     uint8_t lobright;
     uint8_t heartbright = 22;
     uint8_t hibright = 35;
-    uint8_t heartlobright = 1;
+    uint8_t heartlobright = 2;
     int8_t lomultiplier = 3;  // lobright is hibright divided by this twice
     float desat_of_ten = 0.0;  // out of 10.0
     uint8_t neo_master_brightness = 0xff;
@@ -68,7 +68,7 @@ class neopixelstrip {
     void calc_lobright();
   public:
     neopixelstrip() {}
-    void refresh();
+    void refresh(bool blackout=false);
     void init(uint8_t argpin, bool argbreadboard=false, bool viewcontext=NITE);
     void setbright(uint8_t bright_pc);
     void setdesaturation(float _desat_of_ten);  // a way to specify nite or daytime brightness levels
@@ -80,7 +80,7 @@ class neopixelstrip {
     bool newIdiotLight(uint8_t idiot, uint16_t color565, bool startboolstate = 0);
     void setBoolState(uint8_t idiot, bool state);
     void setflash(uint8_t idiot, uint8_t count, uint8_t pulseh=1, uint8_t pulsel=1, int32_t onbrit=-1, int32_t color=0xffffff);
-    void update();
+    void update(bool blackout=false);
     uint32_t idiot_neo_color(uint8_t idiot);
 };
 
@@ -149,17 +149,24 @@ void neopixelstrip::recolor_idiots(int8_t argidiot) {  // pass in -1 to recolor 
         cidiot[idiot][coff] = desaturate(cidiot[idiot][coff], desat_of_ten);
     }
 }
-void neopixelstrip::refresh() {
+void neopixelstrip::refresh(bool blackout) {
     int32_t numledstowrite = (heartbeatNow != neostrip[0]);
+    // if (blackout) {
+    //     for (int32_t pix=0; pix<numpixels; pix++) neoobj.SetPixelColor(pix, colortype(0));
+    //     numledstowrite = numpixels;
+    // }
+    // else {
     neostrip[0] = heartbeatNow;
     neoobj.SetPixelColor(0, heartbeatNow);
     for (int32_t idiot=0; idiot<idiotcount; idiot++) {
-        if (cidiot[idiot][cnow] != neostrip[idiot+1]) {
+        if (blackout) neostrip[idiot + 1] = colortype(0);
+        else if (cidiot[idiot][cnow] != neostrip[idiot+1]) {
             neoobj.SetPixelColor (1+idiot, cidiot[idiot][cnow]);
             neostrip[idiot + 1] = cidiot[idiot][cnow];  // color_to_Rgb(cidiot[idiot][cnow]);
             numledstowrite = 2 + idiot;  // + idiotCount;
         }
     }
+    if (blackout) numledstowrite = numpixels;
     if (numledstowrite) neoobj.Show(numledstowrite);  // This ability to exclude pixels at the end of the strip that haven't changed from the data write is an advantage of neopixelbus over adafruit
 }
 void neopixelstrip::init(uint8_t argpin, bool argbreadboard, bool viewcontext) {
@@ -298,12 +305,12 @@ void neopixelstrip::update_idiot(uint32_t idiot) {
     //         fevents[idiot][3], fevents[idiot][2], fevents[idiot][1], fevents[idiot][0], fset[idiot][fpulseh], fset[idiot][fpulsel] );
     // }
 }
-void neopixelstrip::update() {
+void neopixelstrip::update(bool blackout) {
     heartbeat_update();  // Update our beating heart
     nowtime_us = (uint32_t)flashtimer.elapsed();
     nowepoch = nowtime_us / fquantum_us;
     for (int32_t idiot=0; idiot<idiotcount; idiot++) update_idiot(idiot);
-    refresh();
+    refresh(blackout);
     // for (int32_t idiot=0; idiot<idiotcount; idiot++) 
     //     printf ("U2 i:%d v:%d nt:%ld ne:%d\n",idiot, ((fevents[idiot] >> nowepoch) & 1), nowtime_us, nowepoch);
     flashtimer.expireset();

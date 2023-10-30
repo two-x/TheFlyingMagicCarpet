@@ -33,7 +33,7 @@
 #define LYEL 0xfff8  // 
 #define GGRN 0x5cac  // a low saturation greyish pastel green
 #define TEAL 0x07f9  // this teal is barely distinguishable from cyan
-#define STBL 0x9e1f  // steel blue is desaturated light blue
+#define STBL 0x767d  // steel blue is desaturated light blue
 #define DCYN 0x0575  // dark cyan
 #define RBLU 0x043f  // royal blue
 #define MBLU 0x009f  // midnight blue
@@ -81,6 +81,20 @@
 
 float globalgamma = 2.2;  // Standard gamma is 2.2
 
+char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
+char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
+char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
+bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
+bool display_enabled = true;  // Should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
+bool disp_bool_values[6];
+bool disp_selected_val_dirty, disp_dataset_page_dirty, disp_data_dirty, disp_sidemenu_dirty, disp_runmode_dirty, disp_simbuttons_dirty, disp_idiots_dirty;
+int32_t disp_needles[disp_lines];
+int32_t disp_targets[disp_lines];
+int32_t disp_age_quanta[disp_lines];
+Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
+Timer dispRefreshTimer (100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
+uint32_t tft_watchdog_timeout_us = 100000;
+
 uint16_t gamma_x(uint16_t element565, float gamma = globalgamma) {  // (31.0 * (float)(bits * 2 - 10)
     float gamma565 = static_cast<float>(element565) / 31.0;  // Convert the original 5-6-5 bit value to the range 0-1
     gamma565 = std::pow(gamma565, gamma);  // Apply gamma correction
@@ -99,7 +113,8 @@ uint16_t color_uint32_to_16b(uint32_t color32b) {  // Convert uint32 color in fo
     return (uint16_t)(((color32b & 0xf80000) >> 8) | ((color32b & 0xfc00) >> 5) | ((color32b & 0xf8) >> 3));
 }
 // hue: 0,255 = red, 85 = grn, 170 = blu | sat: 0 = saturated up to greyscale, 255 = pure color | bright: 0 = blk, 255 = "full" | bright_flat: if =1, "full" brightness varies w/ hue for consistent luminance, otherwise "full" always ranges to 255 (mixed-element colors are brighter) | blu_boost: adds blu_boost/255 desaturation as a ratio of blu dominance
-uint32_t hsv_to_rgb32(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool bright_flat = 1, uint8_t blu_boost = 0) {  // returns uint32 color in format 0x00RRGGBB
+template <typename T>
+T hsv_to_rgb(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool bright_flat = 1, uint8_t blu_boost = 0) {  // returns uint32 color in format 0x00RRGGBB
     uint32_t rgb[3] = { 255 - 3 * (uint32_t)((255 - hue) % 85), 0, 3 * (uint32_t)((255 - hue) % 85) };
     float maxc = (float)((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]);
     if (hue <= 85) { rgb[1] = rgb[0]; rgb[0] = rgb[2]; rgb[2] = 0; }
@@ -108,9 +123,10 @@ uint32_t hsv_to_rgb32(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool
     float blu_booster = 1 + (float)(blu_boost * rgb[2]) / (float)(255.0 * (rgb[0] + rgb[1] + rgb[2]));
     for (int led=0; led<=2; led++) 
         rgb[led] = brightener * ((float)rgb[led] + blu_booster * (255.0 - sat) * (float)(maxc - rgb[led]) / 255.0);
-    return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
+    if (std::is_same<T, uint16_t>::value) return (T)((rgb[0] & 0xf8) << 8) | ((rgb[1] & 0xfc) << 5) | (rgb[2] >> 3);
+    else if (std::is_same<T, uint32_t>::value) return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
 }
-uint32_t hue_to_rgb16(uint8_t hue) {  // returns uint16 color
+uint16_t hue_to_rgb16(uint8_t hue) {  // returns uint16 color
     if (hue <= 85) return (((3 * ((255 - hue) % 85)) & 0xf8) << 8) | (((255 - 3 * ((255 - hue) % 85)) & 0xfc) << 3);
     if (hue <= 170) return (((3 * ((255 - hue) % 85)) & 0xfc) << 3) | ((255 - 3 * ((255 - hue) % 85)) >> 3);
     return (((255 - 3 * ((255 - hue) % 85)) & 0xf8) << 8) | ((3 * ((255 - hue) % 85)) >> 3);
@@ -140,14 +156,14 @@ char idlestatecard[ThrottleControl::targetstates::num_states][7] = { "todriv", "
 char telemetry[disp_fixed_lines][9] = { "TriggerV", "   Speed", "    Tach", "ThrotPWM", brAk"Pres", brAk"Motr", "JoysticH", stEr"Motr", };  // Fixed rows
 char units[disp_fixed_lines][5] = { "%   ", "mph ", "rpm ", "us  ", "psi ", "%   ", "%   ", "%   " };  // Fixed rows
 
-enum dataset_pages { PG_RUN, PG_JOY, PG_CAR, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, num_datapages };
-char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Car ", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
+enum dataset_pages { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, num_datapages };
+char pagecard[dataset_pages::num_datapages][5] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
 int32_t tuning_first_editable_line[dataset_pages::num_datapages] = { 9, 9, 5, 3, 4, 8, 7, 7, 10, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
     { brAk"Posn", "MuleBatt", "LiPOBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
-    { "Pres ADC", __________, __________, __________, __________, "AirSpMax", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_CAR
+    { "PressRaw", "BkPosRaw", __________, __________, __________, "AirSpMax", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "BrakePWM", "SteerPWM", __________, stEr"Left", stEr"Stop", stEr"Rigt", brAk"Extd", brAk"Stop", brAk"Retr", "ThrotCls", "ThrotOpn", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
     { "PresTarg", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", brAk"Motr", brAk"Pres", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
@@ -160,7 +176,7 @@ char dataset_page_names[dataset_pages::num_datapages][disp_tuning_lines][9] = {
 char tuneunits[dataset_pages::num_datapages][disp_tuning_lines][5] = {
     { "in  ", "V   ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, "%   ", "%   ", },  // PG_RUN
     { "us  ", "us  ", "us  ", "us  ", "%   ", "%   ", ______, ______, ______, "us  ", "us  ", },  // PG_JOY
-    { "adc ", ______, ______, ______, ______, "mph ", "psi ", "psi ", "mph ", "mph ", "in  ", },  // PG_CAR
+    { "adc ", "adc ", ______, ______, ______, "mph ", "psi ", "psi ", "mph ", "mph ", "in  ", },  // PG_SENS
     { "us  ", "us  ", ______, "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", "us  ", },  // PG_PWMS
     { scroll, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", degreF, degreF, "rpms", scroll, },  // PG_IDLE
     { "psi ", "psi ", "%   ", "%   ", "%   ", "%   ", "us  ", "adc ", ______, "Hz  ", "s   ", },  // PG_BPID
@@ -168,7 +184,7 @@ char tuneunits[dataset_pages::num_datapages][disp_tuning_lines][5] = {
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "us  ", "usps", ______, "Hz  ", "s   ", },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, b1nary, },  // PG_TEMP
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "Hz  ", "us  ", "us  ", "pix ", "pix ", "ohm ", "ohm ", "eyes", "%   ", "/10 ", "eyes", },  // PG_UI
+    { "Hz  ", "us  ", "us  ", "pix ", "pix ", "ohm ", "ohm ", b1nary, "%   ", "/10 ", b1nary, },  // PG_UI
 };
 char simgrid[4][3][5] = {
     { "psi\x18", "rpm\x18", "mph\x18" },
@@ -188,14 +204,20 @@ uint8_t unitmaps[8][17] = {  // 17x7-pixel bitmaps for where units use symbols n
     { 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // Capital omega - for ohms
     { 0x08, 0x1c, 0x2a, 0x08, 0x00, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x41, 0x3e, },  // Googly eyes, to point out new features
 };  // These bitmaps are in the same format as the idiot light bitmaps, described below
-//  { 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x41, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x41, 0x3e, 0x00, 0x00, 0x6e, 0x6f, },  // Googly eyes, to point out new features
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
-bool* idiotlights[15] = {&(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &(temp_err[ENGINE]), &(temp_err[WHEEL]), &panicstop, &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, &starter, &boot_button, sim.enabled_ptr(), &running_on_devboard, &powering_up };
-char idiotchars[arraysize(idiotlights)][3] = {"SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "Aj", "HM", "St", "BB", "Sm", "DB", "PU" };  // "c3", "c4" };
+bool* idiotlights[15] = {
+    &(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &(temp_err[ENGINE]), &(temp_err[WHEEL]), &panicstop, 
+    &hotrc_radio_lost, &shutdown_incomplete, &park_the_motors, &cruise_adjusting, &car_hasnt_moved, 
+    &starter, &boot_button, sim.enabled_ptr(), &running_on_devboard, &powering_up, 
+};
+char idiotchars[arraysize(idiotlights)][3] = {
+    "SL", "SR", "\xf7""E", "\xf7""W", "P\x13", 
+    "RC", "SI", "Pk", "Aj", "HM", 
+    "St", "BB", "Sm", "DB", "PU",
+};  // "c3", "c4" };
 uint16_t idiotcolors[arraysize(idiotlights)];
 uint8_t idiot_saturation = 225;  // 170-195 makes nice bright yet distinguishable colors
 uint8_t idiot_hue_offset = 240;
-bool idiots_dirty = true;
 bool idiotlasts[arraysize(idiotlights)];
 // 11x7 pixel idiot light bitmaps.  Format: Each byte is one pixel column (left->right) with LSB->MSB within each byte being the top->bottom pixels in that column
 // The high bit (bottom pixel) of every byte is 0 due to 7-pixel height. Set high bit of first byte to 1 to skip bitmap and use letters instead
@@ -210,48 +232,28 @@ uint8_t idiotmaps[arraysize(idiotlights)][11] = {
     { 0x3e, 0x63, 0x41, 0x7d, 0x7d, 0x55, 0x55, 0x5d, 0x49, 0x63, 0x3e, },     // 7 = circle-"P"
     { 0x08, 0x1c, 0x36, 0x00, 0x3e, 0x63, 0x63, 0x00, 0x36, 0x1c, 0x08, },     // 8 = "<C>"
     { 0x1d, 0x23, 0x47, 0x00, 0x3e, 0x63, 0x55, 0x49, 0x55, 0x63, 0x3e, },     // 9 = rotation arrow w/ X wheel
-    { 0x3e, 0x41, 0x7f, 0x41, 0x41, 0x63, 0x3e, 0x08, 0x7f, 0x55, 0x7f, },     // 10 = motor w/ spur gear
+    { 0x3e, 0x41, 0x7f, 0x79, 0x71, 0x73, 0x3e, 0x1c, 0x7f, 0x55, 0x7f, },     // 10 = motor w/ spur gear
     { 0x01, 0x7f, 0x7f, 0x7f, 0x3f, 0x38, 0x74, 0x70, 0x70, 0x70, 0x60, },     // 11 = boot
     { 0x6e, 0x6b, 0x3b, 0x00, 0x7f, 0x00, 0x7f, 0x06, 0x1c, 0x06, 0x7f, },     // 12 = "SIM"
     { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, },     // 13 = "DEV"
-    { 0x00, 0x00, 0x3e, 0x41, 0x40, 0x4f, 0x40, 0x41, 0x3e, 0x00, 0x00, }, };  // 14 = need bitmap for powering up
+    { 0x00, 0x3e, 0x63, 0x41, 0x40, 0x4f, 0x40, 0x41, 0x63, 0x3e, 0x00, }, };  // 14 = power symbol
 //  { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, }, };  // 14 = N/A (no idiot light bitmap)
 void set_idiotcolors() {
     for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
         int division = disp_idiots_per_row;
-        uint32_t color32 = hsv_to_rgb32((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 220);
+        uint32_t color32 = hsv_to_rgb<uint32_t>((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 220);
         idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
         if (gamma_correct_enabled) idiotcolors[idiot] = gamma16(idiotcolors[idiot]);
-        idiots_dirty = true;
+        disp_idiots_dirty = true;
     }
 }
-
-char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
-char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
-char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
-bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
-bool display_enabled = true;  // Should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
-bool disp_bool_values[6];
-bool disp_selected_val_dirty = true;
-bool disp_dataset_page_dirty = true;
-bool disp_sidemenu_dirty = true;
-bool disp_runmode_dirty = true;
-int32_t disp_needles[disp_lines];
-int32_t disp_targets[disp_lines];
-int32_t disp_age_quanta[disp_lines];
-Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
-Timer dispRefreshTimer (100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
-uint32_t tft_watchdog_timeout_us = 100000;
 
 // tuning-ui related globals
 enum disp_draw { ERASE = -1 };
 enum tuning_ctrl_states { OFF, SELECT, EDIT };
-int32_t tuning_ctrl = OFF;
-int32_t tuning_ctrl_last = OFF;
-int32_t dataset_page = PG_RUN;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
-int32_t dataset_page_last = PG_TEMP;
-int32_t selected_value = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
-int32_t selected_value_last = 0;
+int32_t tuning_ctrl = OFF, tuning_ctrl_last = OFF;
+int32_t dataset_page = PG_RUN, dataset_page_last = PG_TEMP;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
+int32_t selected_value = 0, selected_value_last = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
 Timer tuningCtrlTimer (25000000);  // This times out edit mode after a a long period of inactivity
 
 // run state globals
@@ -269,18 +271,12 @@ class Display {
             TFT_eSPI _tft = TFT_eSPI();
             TFT_eSprite _saver = TFT_eSprite(&_tft);  // Declare screensaver sprite object with pointer to tft object
         #endif
-        Timer _tftResetTimer;
-        Timer _tftDelayTimer;
+        Timer _tftResetTimer, _tftDelayTimer;
         int32_t _timing_tft_reset;
-        bool _procrastinate = false, reset_finished = false;
-        bool _disp_redraw_all = true;
-        
+        bool _procrastinate = false, reset_finished = false;        
         // For screensaver sprite
         long star_x0, star_y0;
-        long touchpoint_x = -1; long touchpoint_y = -1;
-        long eraser_rad = 14;
-        long eraser_velo_min = 4;
-        long eraser_velo_max = 10;
+        long touchpoint_x = -1, touchpoint_y = -1, eraser_rad = 14, eraser_velo_min = 4, eraser_velo_max = 10;
         long eraser_pos[2] = { 0, 0 };
         long eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) };
         long eraser_pos_max[2] = { disp_saver_width / 2 - eraser_rad, disp_saver_height / 2 - eraser_rad }; 
@@ -288,12 +284,10 @@ class Display {
         uint8_t penhue = 0;
         uint16_t pencolor = RED;
         uint32_t pentimeout = 700000;
-        Timer pentimer;
-        int savernumcycles; int savercycle = 1; int savershape_last;
-        int savershapes = 3;  // 4
-        int savershape = random(savershapes);  // 3
+        int savernumcycles, savershape_last;
+        int savershapes = 3, savercycle = 1, savershape = random(savershapes);
         uint32_t saver_cycletime_us = 45000000;
-        Timer saverRefreshTimer, saverCycleTimer;
+        Timer saverRefreshTimer, saverCycleTimer, pentimer;
         int16_t saver_lines_mode = 0;  // 0 = eraser, 1 = do drugs
         uint32_t disp_oldmode = SHUTDOWN;   // So we can tell when the mode has just changed. start as different to trigger_mode start algo
     public:
@@ -302,8 +296,8 @@ class Display {
             Display (int8_t cs_pin, int8_t dc_pin) : _panel(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0){}
             Display () : _panel(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0){}
         #else
-            Display (int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0){}
-            Display () : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0){}
+            Display (int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
+            Display () : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
         #endif
 
         void init() {
@@ -336,7 +330,7 @@ class Display {
             yield();
             set_idiotcolors();
             draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, true);
-            _disp_redraw_all = true;
+            all_dirty();
             saver_setup();
         }
         bool tft_reset() {  // call to begin a tft reset, and continue to call every loop until returns true (or get_reset_finished() returns true), then stop
@@ -356,6 +350,16 @@ class Display {
             }
             return reset_finished;
         }
+        void all_dirty() {
+            disp_idiots_dirty = true;
+            disp_data_dirty = true;
+            disp_selected_val_dirty = true;
+            disp_dataset_page_dirty = true;
+            disp_sidemenu_dirty = true;
+            disp_runmode_dirty = true;
+            disp_simbuttons_dirty = true;
+            screensaver = false;
+        }
         void watchdog() {  // Call in every loop to perform a reset upon detection of blocked loops and 
             if (loop_periods_us[loop_now] > tft_watchdog_timeout_us && _timing_tft_reset == 0) _timing_tft_reset = 1;
             if (_timing_tft_reset == 0 || !_tftDelayTimer.expired()) _tftDelayTimer.reset();
@@ -366,7 +370,7 @@ class Display {
             uint8_t saturat = 255;  uint8_t hue_offset = 0;
             for (int32_t rm=0; rm<arraysize(colorcard); rm++) {
                 int division = num_runmodes;
-                uint32_t color32 = hsv_to_rgb32((int8_t)(255 * (rm % division) / division + hue_offset), saturat, 255, 0, 220);
+                uint32_t color32 = hsv_to_rgb<uint32_t>((int8_t)(255 * (rm % division) / division + hue_offset), saturat, 255, 0, 220);
                 colorcard[rm] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
                 if (gamma_correct_enabled) colorcard[rm] = gamma16(colorcard[rm]);
                 disp_runmode_dirty = true;
@@ -419,7 +423,7 @@ class Display {
         void draw_unitmap (int8_t index, int32_t x, int32_t y, uint16_t color) {
             for (int32_t xo = 0; xo < disp_font_width * 3 - 1; xo++)
                 for (int32_t yo = 0; yo < disp_font_height - 1; yo++)
-                    if ((unitmaps[index][xo] >> yo) & 1) disp.drawPixel (x + xo + 1, y + yo + 1, color);
+                    if ((unitmaps[index][xo] >> yo) & 1) disp.drawPixel (x + xo, y + yo, color);
         }
         void draw_string_units (int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
             bool drawn = false;
@@ -472,7 +476,7 @@ class Display {
             int32_t age_us = (color >= 0) ? 11 : (int32_t)((float)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
             int32_t x_base = disp_datapage_values_x;
             bool polarity = (value >= 0);  // polarity 0=negative, 1=positive
-            if (strcmp(disp_values[lineno], disp_string) || value == 1234567 || _disp_redraw_all) {  // If value differs, Erase old value and write new
+            if (strcmp(disp_values[lineno], disp_string) || value == 1234567 || disp_data_dirty) {  // If value differs, Erase old value and write new
                 if (color == -1) color = GRN;
                 int32_t y_pos = lineno*disp_line_height_pix+disp_vshift_pix;
                 if (polarity != disp_polarities[lineno]) draw_hyphen (x_base, y_pos, (!polarity) ? color : BLK);
@@ -500,7 +504,7 @@ class Display {
                     int32_t t_pos = map (target, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
                     int32_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || t_pos < disp_bargraph_squeeze) ? BRN : ( (t_pos != n_pos) ? YEL : GRN );
                     t_pos = corner_x + constrain (t_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
-                    if (t_pos != disp_targets[lineno] || (t_pos == n_pos)^(disp_needles[lineno] != disp_targets[lineno]) || _disp_redraw_all) {
+                    if (t_pos != disp_targets[lineno] || (t_pos == n_pos)^(disp_needles[lineno] != disp_targets[lineno]) || disp_data_dirty) {
                         draw_target_shape (disp_targets[lineno], corner_y, BLK, -1);  // Erase old target
                         disp.drawFastHLine (disp_targets[lineno]-(disp_targets[lineno] != corner_x+disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+7, 2+(disp_targets[lineno] != corner_x+disp_bargraph_width-disp_bargraph_squeeze), GRY1);  // Patch bargraph line where old target got erased
                         for (int32_t offset=0; offset<=2; offset++) disp.drawFastVLine ((corner_x+disp_bargraph_squeeze)+offset*(disp_bargraph_width/2 - disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+6, 3, WHT);  // Redraw bargraph graduations in case one got corrupted by target erasure
@@ -508,7 +512,7 @@ class Display {
                         disp_targets[lineno] = t_pos;  // Remember position of target
                     }
                 }
-                if (n_pos != disp_needles[lineno] || _disp_redraw_all) {
+                if (n_pos != disp_needles[lineno] || disp_data_dirty) {
                     draw_bargraph_needle (n_pos, disp_needles[lineno], corner_y, ncolor);  // Let's draw a needle
                     disp_needles[lineno] = n_pos;  // Remember position of needle
                 }
@@ -600,25 +604,25 @@ class Display {
         void draw_truth (int32_t lineno, bool truthy, int32_t styl=2) {  // 0:on/off, 1:yes/no, 2:true/false .
             draw_dynamic (lineno, (truthy) ? ((styl==0) ? " on" : ((styl==1) ? "yes" : "true")) : ((styl==0) ? "off" : ((styl==1) ? "no" : "false")), 1, -1, -1, -1, (truthy) ? LPUR : GPUR);
         }
-        void draw_runmode (int32_t runmode, int32_t oldmode, int32_t color_override=-1) {  // color_override = -1 uses default color
-            int32_t color = (color_override == -1) ? colorcard[runmode] : color_override;
-            int32_t x_new = disp_runmode_text_x + disp_font_width * (2 + strlen (modecard[runmode])) - 3;
-            int32_t x_old = disp_runmode_text_x + disp_font_width * (2 + strlen (modecard[oldmode])) - 3;
-            draw_string (disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[oldmode], "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-            draw_string (x_old, x_old, disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-            draw_string (disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[runmode], "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
-            draw_string (x_new, x_new, disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+        void draw_runmode (int32_t _nowmode, int32_t _oldmode, int32_t color_override=-1) {  // color_override = -1 uses default color
+            int32_t color = (color_override == -1) ? colorcard[_nowmode] : color_override;
+            int32_t x_new = disp_runmode_text_x + disp_font_width * (2 + strlen (modecard[_nowmode])) - 3;
+            int32_t x_old = disp_runmode_text_x + disp_font_width * (2 + strlen (modecard[_oldmode])) - 3;
+            draw_string (disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[_oldmode], "", BLK, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
+            draw_string (x_old, x_old, disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
+            draw_string (disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[_nowmode], "", color, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
+            draw_string (x_new, x_new, disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
         }
         void draw_dataset_page (int32_t page, int32_t page_last, bool forced=false) {
             draw_fixed (page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
-            draw_string (disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], STBL, BLK, forced); // +6*(arraysize(modecard[runmode])+4-namelen)/2
+            draw_string (disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
         }
         void draw_selected_name (int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
             if (selected_val != selected_last) draw_string (12, 12, 12+(selected_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_last], "", GRY2, BLK);
             draw_string (12, 12, 12+(selected_val+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, dataset_page_names[dataset_page][selected_val], "", (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : GRY2), BLK);
         }
         void draw_bool (bool value, int32_t col) {  // Draws values of boolean data
-            if ((disp_bool_values[col-2] != value) || _disp_redraw_all) {  // If value differs, Erase old value and write new
+            if ((disp_bool_values[col-2] != value) || disp_data_dirty) {  // If value differs, Erase old value and write new
                 int32_t x_mod = touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - arraysize (top_menu_buttons[col-2]-1)*(disp_font_width>>1) - 2;
                 draw_string (x_mod, x_mod, 0, top_menu_buttons[col-2], "", (value) ? GRN : LGRY, DGRY);
                 disp_bool_values[col-2] = value;
@@ -708,41 +712,36 @@ class Display {
         void update_idiots(bool force = false) {
             draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, force);
         }
-        void update() {
+        void update(runmodes _nowmode) {
             if (!display_enabled) return;
-            update_idiots(_disp_redraw_all || idiots_dirty);
-            idiots_dirty = false;
-            if (sim.enabled()) {
-                if (!simulating_last || _disp_redraw_all) {
-                    draw_simbuttons(sim.enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
-                    _procrastinate = true;  // Waits till next loop to draw changed values
-                }
+            update_idiots(disp_idiots_dirty);
+            disp_idiots_dirty = false;
+            if (disp_simbuttons_dirty || (sim.enabled() != simulating_last)) {
+                draw_simbuttons(sim.enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
+                disp_simbuttons_dirty = false;
+                simulating_last = sim.enabled();
             }
-            else if (simulating_last) draw_simbuttons(sim.enabled());
-            simulating_last = sim.enabled();
-            if ((disp_dataset_page_dirty || _disp_redraw_all)) {
+            if ((disp_dataset_page_dirty)) {
                 static bool first = true;
                 draw_dataset_page(dataset_page, dataset_page_last, first);
                 first = false;
                 disp_dataset_page_dirty = false;
                 if (dataset_page_last != dataset_page) config.putUInt("dpage", dataset_page);
-                _procrastinate = true;  // Waits till next loop to draw changed values
             }
-            if ((disp_sidemenu_dirty || _disp_redraw_all)) {
+            if ((disp_sidemenu_dirty)) {
                 draw_touchgrid(true);
                 disp_sidemenu_dirty = false;
-                _procrastinate = true;  // Waits till next loop to draw changed values
             }
-            if (disp_selected_val_dirty || _disp_redraw_all) {
+            if (disp_selected_val_dirty) {
                 draw_selected_name(tuning_ctrl, tuning_ctrl_last, selected_value, selected_value_last);
                 disp_selected_val_dirty = false;
             }
-            if (disp_runmode_dirty || _disp_redraw_all) {
-                draw_runmode(runmode, disp_oldmode, (runmode == SHUTDOWN) ? shutdown_color : -1);
-                disp_oldmode = runmode;
+            if (disp_runmode_dirty) {
+                draw_runmode(_nowmode, disp_oldmode, (_nowmode == SHUTDOWN) ? shutdown_color : -1);
+                disp_oldmode = _nowmode;
                 disp_runmode_dirty = false;
             }
-            if ((dispRefreshTimer.expired() && !_procrastinate) || _disp_redraw_all) {
+            if (dispRefreshTimer.expired()) {
                 dispRefreshTimer.reset();
                 float drange;
                 draw_dynamic(1, hotrc_pc[VERT][FILT], hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
@@ -761,8 +760,7 @@ class Display {
                     draw_dynamic(13, airvelo.filt(), airvelo.min_mph(), airvelo.max_mph());
                     draw_dynamic(14, mapsens.filt(), mapsens.min_psi(), mapsens.max_psi());
                     draw_dynamic(15, maf_ugps, maf_min_ugps, maf_max_ugps);
-                    draw_eraseval(16);
-                    draw_eraseval(17);
+                    for (int line=16; line<=17; line++) draw_eraseval(line);
                     draw_dynamic(18, gas_governor_pc, 0.0, 100.0);
                     draw_dynamic(19, steer_safe_pc, 0.0, 100.0);
                 }
@@ -773,15 +771,14 @@ class Display {
                     draw_dynamic(12, hotrc_us[CH4][RAW], hotrc_us[CH4][MIN], hotrc_us[CH4][MAX]);
                     draw_dynamic(13, hotrc_pc[HORZ][RAW], hotrc_pc[HORZ][MIN], hotrc_pc[HORZ][MAX]);
                     draw_dynamic(14, hotrc_pc[VERT][RAW], hotrc_pc[VERT][MIN], hotrc_pc[VERT][MAX]);
-                    draw_eraseval(15);
-                    draw_eraseval(16);
-                    draw_eraseval(17);
+                    for (int line=15; line<=17; line++) draw_eraseval(line);
                     draw_dynamic(18, hotrc_failsafe_us, hotrc_absmin_us, hotrc_us[VERT][MIN] - hotrc_us[VERT][MARGIN]);
                     draw_dynamic(19, hotrc_deadband_us, 0, 100);
                 }
-                else if (dataset_page == PG_CAR) {
-                    draw_dynamic(9, pressure.native(), pressure.min_native(), pressure.max_native());                    
-                    for (int line=10; line<=13; line++) draw_eraseval(line);
+                else if (dataset_page == PG_SENS) {
+                    draw_dynamic(9, pressure.raw(), pressure.min_native(), pressure.max_native());                    
+                    draw_dynamic(10, brakepos.raw(), brakepos.min_native(), brakepos.max_native());                    
+                    for (int line=11; line<=13; line++) draw_eraseval(line);
                     draw_dynamic(14, airvelo.max_mph(), 0.0, airvelo.abs_max_mph());
                     draw_dynamic(15, mapsens.min_psi(), mapsens.abs_min_psi(), mapsens.abs_max_psi());
                     draw_dynamic(16, mapsens.max_psi(), mapsens.abs_min_psi(), mapsens.abs_max_psi());
@@ -888,23 +885,19 @@ class Display {
                     draw_dynamic(13, touch_pt[1], 0, disp_height_pix);
                     draw_dynamic(14, touch_pt[2], 340, 3980);
                     draw_dynamic(15, touch_pt[3], 180, 3980);
-
-                    draw_truth(16, flashdemo, 0);
-                    // draw_dynamic(16, globalgamma, 0.1, 2.57, -1, 3);
+                    draw_truth(16, flashdemo, 0);  // draw_dynamic(16, globalgamma, 0.1, 2.57, -1, 3);
                     draw_dynamic(17, neobright, 1.0, 100.0, -1, 3);
                     draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
                     draw_truth(19, screensaver, 0);
                 }
-                draw_bool((runmode == CAL), 2);
-                draw_bool((runmode == BASIC), 3);
+                draw_bool((_nowmode == CAL), 2);
+                draw_bool((_nowmode == BASIC), 3);
                 draw_bool(ignition, 4);
                 draw_bool(syspower, 5);
-                _procrastinate = true;
+                disp_data_dirty = false;
+                _procrastinate = true;  // don't do anything else in this same loop
             }
-            if (screensaver && !sim.enabled() && !_procrastinate) {
-                saver_update();
-                _procrastinate = true;
-            }
+            if (screensaver && !sim.enabled() && !_procrastinate) saver_update();
             #ifdef USE_DMA_TO_TFT
                 // if (_panel.dmaBusy()) prime_max++; // Increase processing load until just not busy
                 _panel.pushImageDMA(0, 0, disp_width_pix, disp_height_pix, _sprptr[_sprsel]);
@@ -914,20 +907,12 @@ class Display {
             //     _tft.pushSprite(0, 0);
             #endif
             _procrastinate = false;
-            _disp_redraw_all = false;
-
         }
         void saver_touch(int16_t x, int16_t y) {
-            touchpoint_x = x;
-            touchpoint_y = y;
-            if (touchpoint_x >= disp_simbuttons_x && touchpoint_y >= disp_simbuttons_y) {
-                if (pentimer.expireset()) {
-                    if (savercycle == 1) pencolor = random(0x10000);
-                    else pencolor = hue_to_rgb16(++penhue);
-                }
-                _saver.fillCircle(touchpoint_x-disp_simbuttons_x, touchpoint_y-disp_simbuttons_y, 4, pencolor);
-                touchpoint_x = -1;
-                touchpoint_y = -1;
+            if (x >= disp_simbuttons_x && y >= disp_simbuttons_y) {
+                if (pentimer.expireset()) pencolor = (savercycle == 1) ? random(0x10000) : hsv_to_rgb<uint16_t>(++penhue, random(100), 255);
+                // if (pentimer.expireset()) pencolor = (savercycle == 1) ? random(0x10000) : hue_to_rgb16(++penhue);
+                _saver.fillCircle(x-disp_simbuttons_x, y-disp_simbuttons_y, 4, pencolor);
             }
         }
         void saver_setup() {
@@ -965,19 +950,12 @@ class Display {
                 long star_x1 = random(disp_saver_width);        // Random x coordinate
                 long star_y1 = random(disp_saver_height);       // Random y coordinate
                 if (saver_lines_mode || (savercycle != 2)) {
-                    if (!savershape) {
-                        _saver.drawLine(star_x0, star_y0, star_x1, star_y1, color); 
-                        if (savercycle) _saver.drawLine(star_x0+1, star_y0+1, star_x1+1, star_y1+1, color);
-                    }
-                    else if (savershape == 1) {
-                        int rad = random(24);
-                        _saver.drawCircle(star_x1, star_y1, rad, color);
-                        _saver.drawCircle(star_x1, star_y1, rad+1, color);
-                    }
-                    else if (savershape == 2)      // Draw pixels in sprite
+                    if (!savershape) _saver.drawWedgeLine(star_x0, star_y0, star_x1, star_y1, 1, 1, color, BLK);
+                    else if (savershape == 1) _saver.drawSmoothCircle(star_x1, star_y1, random(24), color, BLK);
+                    else if (savershape == 2)  // Draw pixels in sprite
                         for (int star=0; star<10; star++) 
-                            _saver.drawRect(random(disp_saver_width), random(disp_saver_height), 2, 2, hue_to_rgb16(random(255)));      
-                }  // _saver.drawPixel(random(disp_saver_width), random(disp_saver_height), gamma(random(0x10000)));
+                            _saver.drawSpot(random(disp_saver_width), random(disp_saver_height), 2, hue_to_rgb16(random(255)), BLK);      
+                }
                 if (saver_lines_mode) _saver.drawString("do drugs", disp_saver_width / 2, disp_saver_height / 2, 4);
                 else if (savercycle != 1) {
                     for (int axis=0; axis<=1; axis++) {

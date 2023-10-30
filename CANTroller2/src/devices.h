@@ -577,17 +577,17 @@ class CarBattery : public AnalogSensor<int32_t, float> {
     protected:
         static constexpr float _initial_adc = adcmidscale_adc;
         static constexpr float _initial_v = 10.0;
-        static constexpr float _abs_min_v = 0.0; // The min vehicle voltage we can sense.
-        static constexpr float _abs_max_v = 16.0; // The min vehicle voltage we can sense.
-        static constexpr float _op_min_v = 7.0; // The min vehicle voltage we can sense.
-        static constexpr float _op_max_v = 13.8;  // The max vehicle voltage we can sense. Resistor divider is designed so max 16.0 V = (adcrange_adc - 5) plus a weak pullup, so values > (adcrange - 5) indicates broken connection.
-        static constexpr float _v_per_adc = _abs_max_v / (adcrange_adc - 5);
+        static constexpr float _abs_min_v = 0.0; // The min vehicle voltage we can sense
+        static constexpr float _abs_max_v = 16.0; // The min vehicle voltage we can sense
+        static constexpr float _op_min_v = 7.0; // The min vehicle voltage we expect to see
+        static constexpr float _op_max_v = 13.8;  // The max vehicle voltage we expect to see.
+        static constexpr float _v_per_adc = _abs_max_v / adcrange_adc;
         static constexpr float _ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
     public:
         CarBattery(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
             _m_factor = _v_per_adc;
             _human.set_limits(_abs_min_v, _abs_max_v);
-            _native.set_limits(0.0, adcrange_adc - 5);
+            _native.set_limits(0.0, adcrange_adc);
             set_native(_initial_adc);
             set_can_source(Source::PIN, true);
         }
@@ -604,18 +604,18 @@ class LiPOBatt : public AnalogSensor<int32_t, float> {
     protected:
         static constexpr float _initial_adc = adcmidscale_adc;
         static constexpr float _initial_v = 10.0;
-        static constexpr float _abs_min_v = 0.0; // The min vehicle voltage we can sense.
-        static constexpr float _abs_max_v = 4.8; // The min vehicle voltage we can sense.
-        static constexpr float _op_min_v = 3.2; // The min vehicle voltage we can sense.
-        static constexpr float _op_max_v = 4.3;  // The max vehicle voltage we can sense. Resistor divider is designed so max 16.0 V = (adcrange_adc - 5) plus a weak pullup, so values > (adcrange - 5) indicates broken connection.
-        static constexpr float _initial_v_per_adc = _abs_max_v / (adcrange_adc - 5);
+        static constexpr float _abs_min_v = 0.0; // The min lipo voltage we can sense
+        static constexpr float _abs_max_v = 4.8; // The min lipo voltage we can sense
+        static constexpr float _op_min_v = 3.2; // The min lipo voltage we expect to see
+        static constexpr float _op_max_v = 4.3;  // The max lipo voltage we expect to see
+        static constexpr float _initial_v_per_adc = _abs_max_v / adcrange_adc;
         static constexpr float _initial_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
     public:
         LiPOBatt(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
             _ema_alpha = _initial_ema_alpha;
             _m_factor = _initial_v_per_adc;
             _human.set_limits(_abs_min_v, _abs_max_v);
-            _native.set_limits(0.0, adcrange_adc - 5);
+            _native.set_limits(0.0, adcrange_adc);
             set_native(_initial_adc);
             set_can_source(Source::PIN, true);
         }
@@ -656,6 +656,9 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
         float psi() { return _human.val(); }
         float min_psi() { return _human.min(); }
         float max_psi() { return _human.max(); }
+        float op_min_psi() { return from_native(op_min_adc); }
+        float op_max_psi() { return from_native(op_max_adc); }
+
 };
 
 // BrakePositionSensor represents a linear position sensor

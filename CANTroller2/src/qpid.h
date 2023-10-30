@@ -43,6 +43,9 @@ class QPID {
     void set_kp(float arg_kp);
     void set_ki(float arg_ki);
     void set_kd(float arg_kd);
+    void add_kp(float arg_kp);
+    void add_ki(float arg_ki);
+    void add_kd(float arg_kd);
     void set_dir(Dir arg_dir);
     void set_dir(uint8_t arg_dir);
     void set_sampletime(uint32_t arg_sampletime);  // in microseconds
@@ -191,6 +194,10 @@ void QPID::set_tunings(float arg_kp, float arg_ki, float arg_kd) {
 void QPID::set_kp(float arg_kp) { set_tunings(arg_kp, dispki, dispkd, _pmode, _dmode, _awmode); }  // Soren
 void QPID::set_ki(float arg_ki) { set_tunings(dispkp, arg_ki, dispkd, _pmode, _dmode, _awmode); }  // Soren
 void QPID::set_kd(float arg_kd) { set_tunings(dispkp, dispki, arg_kd, _pmode, _dmode, _awmode); }  // Soren
+
+void QPID::add_kp(float add) { set_kp(_kp + add); }  // Soren
+void QPID::add_ki(float add) { set_ki(_ki + add); }  // Soren
+void QPID::add_kd(float add) { set_kd(_kd + add); }  // Soren
 
 /* set_SampleTime(.)***********************************************************
   Sets the period, in microseconds, at which the calculation is performed.
@@ -423,24 +430,36 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
         if (cycledir) _idlemode = (idlemodes)(constrain ((int32_t)_idlemode + constrain (cycledir, -1, 1), 0, (int32_t)idlemodes::num_idlemodes - 1));
     }
     void set_idlemode (idlemodes _idlemode) {} 
-    void set_idlehigh (float idlehigh, float add = 0.0) { idlehigh_rpm = constrain (idlehigh + add, idlecold_rpm + 1, idle_absmax_rpm); }
-    void set_idlehot (float idlehot, float add = 0.0) { 
-        idlehot_rpm = constrain (idlehot + add, stallpoint_rpm, idlecold_rpm - 1);
+    void set_idlehigh (float idlehigh) { idlehigh_rpm = constrain (idlehigh, idlecold_rpm + 1, idle_absmax_rpm); }
+    void add_idlehigh (float add) { set_idlehigh(idlehigh_rpm + add); }
+    
+    void set_idlehot (float idlehot) { 
+        idlehot_rpm = constrain (idlehot, stallpoint_rpm, idlecold_rpm - 1);
         calc_idlespeed();
     }
-    void set_idlecold (float idlecold, float add = 0.0) { 
-        idlecold_rpm = constrain (idlecold + add, idlehot_rpm + 1, idlehigh_rpm - 1);
+    void add_idlehot (float add) { set_idlehot(idlehot_rpm + add); }
+
+    void set_idlecold (float idlecold) { 
+        idlecold_rpm = constrain (idlecold, idlehot_rpm + 1, idlehigh_rpm - 1);
         calc_idlespeed();
     }
-    void set_temphot (float temphot, float add = 0.0) { 
-        if (temphot + add > tempcold_f) temphot_f = temphot + add;
+    void add_idlecold (float add) { set_idlecold(idlecold_rpm + add); }
+
+    void set_temphot (float temphot) { 
+        if (temphot > tempcold_f) temphot_f = temphot;
         calc_idlespeed();
     }
-    void set_tempcold (float tempcold, float add = 0.0) { 
-        if (tempcold + add < temphot_f) tempcold_f = tempcold + add;
+    void add_temphot (float add) { set_temphot(temphot_f + add); }
+
+    void set_tempcold (float tempcold) { 
+        if (tempcold < temphot_f) tempcold_f = tempcold;
         calc_idlespeed();
     }
+    void add_tempcold (float add) { set_tempcold(tempcold_f + add); }
+
     void set_settlerate (uint32_t settlerate) { if (settlerate) settlerate_rpmps = settlerate; }
+    void add_settlerate (int32_t add) { set_settlerate(settlerate_rpmps + add); }
+
     void set_margin (float margin) { margin_rpm = margin; }
     // Getter functions
     targetstates targetstate (void) { return runstate; } 
