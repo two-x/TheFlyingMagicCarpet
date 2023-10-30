@@ -8,7 +8,7 @@
 #include <DallasTemperature.h>
 #include "utils.h"
 
-enum class location { ambient, engine, wheel_fl, wheel_fr, wheel_rl, wheel_rr, num_locations };  // , SOREN_DEV0, SOREN_DEV1, num_known_ };
+enum class loc { ambient, engine, wheel_fl, wheel_fr, wheel_rl, wheel_rr, num_locations };  // , SOREN_DEV0, SOREN_DEV1, num_known_ };
 
 class TemperatureSensor {
 public:
@@ -16,13 +16,13 @@ public:
     using DeviceAddress = std::array<uint8_t, 8>;
 
 private:
-    location _location;
+    loc _location;
     DeviceAddress _address;
     float _temperature;
     DallasTemperature* _tempsensebus;
 
 public:
-    TemperatureSensor(location location, const DeviceAddress& address, DallasTemperature* tempsensebus)
+    TemperatureSensor(loc location, const DeviceAddress& address, DallasTemperature* tempsensebus)
    : _location(location), _address(address), _tempsensebus(tempsensebus), _temperature(-999) {}
 
     TemperatureSensor() = delete; // always create with a pointer to the tempsensorbus
@@ -55,12 +55,12 @@ public:
     }
 
     // getters
-    location get_location() const { return _location; }
+    loc get_location() const { return _location; }
     float get_temperature() const { return _temperature; }
     const DeviceAddress& get_address() const { return _address; }
     
     // setters
-    void set_location(location location) { _location = location; }
+    void set_location(loc location) { _location = location; }
     void set_temperature(float temperature) { _temperature = temperature; }
     void set_address(DeviceAddress address) {
         _address = address;
@@ -77,14 +77,14 @@ public:
         printf("\n");
     }
 
-    static std::string location_to_string(location location) {
+    static std::string location_to_string(loc location) {
         switch(location) {
-            case location::ambient: return "ambient";
-            case location::engine: return "engine";
-            case location::wheel_fl: return "wheel_fl";
-            case location::wheel_fr: return "wheel_fr";
-            case location::wheel_rl: return "wheel_rl";
-            case location::wheel_rr: return "wheel_rr";
+            case loc::ambient: return "ambient";
+            case loc::engine: return "engine";
+            case loc::wheel_fl: return "wheel_fl";
+            case loc::wheel_fr: return "wheel_fr";
+            case loc::wheel_rl: return "wheel_rl";
+            case loc::wheel_rr: return "wheel_rr";
             default: return "unknown";
         }
     }
@@ -112,24 +112,24 @@ private:
     DallasTemperature tempsensebus;
 
     std::vector<DeviceAddress> detected_addresses;
-    std::vector<location> all_locations = {
-        location::engine,
-        location::ambient,
-        location::wheel_fl,
-        location::wheel_fr,
-        location::wheel_rl,
-        location::wheel_rr
+    std::vector<loc> all_locations = {
+        loc::engine,
+        loc::ambient,
+        loc::wheel_fl,
+        loc::wheel_fr,
+        loc::wheel_rl,
+        loc::wheel_rr
         };
-    std::map<location, DeviceAddress> known_addresses = {
-        {location::engine, {0x28, 0x1a, 0x27, 0x90, 0x5c, 0x21, 0x01, 0x59}},
-        {location::ambient, {0x28, 0x3c, 0xf3, 0xa7, 0xc1, 0x21, 0x06, 0x69}},
-        {location::wheel_fl, {0x28, 0x55, 0x42, 0x8f, 0x5c, 0x21, 0x01, 0x69}},
-        {location::wheel_fr, {0x28, 0x70, 0x73, 0xb3, 0x5c, 0x21, 0x01, 0x27}},
-        {location::wheel_rl, {0x28, 0x54, 0xfb, 0x88, 0x5c, 0x21, 0x01, 0x64}},
-        {location::wheel_rr, {0x28, 0x6f, 0xcd, 0xba, 0x5c, 0x21, 0x01, 0x26}}
+    std::map<loc, DeviceAddress> known_addresses = {
+        {loc::engine, {0x28, 0x1a, 0x27, 0x90, 0x5c, 0x21, 0x01, 0x59}},
+        {loc::ambient, {0x28, 0x3c, 0xf3, 0xa7, 0xc1, 0x21, 0x06, 0x69}},
+        {loc::wheel_fl, {0x28, 0x55, 0x42, 0x8f, 0x5c, 0x21, 0x01, 0x69}},
+        {loc::wheel_fr, {0x28, 0x70, 0x73, 0xb3, 0x5c, 0x21, 0x01, 0x27}},
+        {loc::wheel_rl, {0x28, 0x54, 0xfb, 0x88, 0x5c, 0x21, 0x01, 0x64}},
+        {loc::wheel_rr, {0x28, 0x6f, 0xcd, 0xba, 0x5c, 0x21, 0x01, 0x26}}
     };
 
-    std::map<location, TemperatureSensor> sensors;
+    std::map<loc, TemperatureSensor> sensors;
 
     // Assigns known addresses to Sensors. The sensors will have locations like engine or ambient
     void assign_known_addresses() {
@@ -168,7 +168,7 @@ private:
     void assign_remaining_addresses() {
         auto it = all_locations.begin();
         for (auto& detected_address : detected_addresses) {
-            if (std::find_if(sensors.begin(), sensors.end(), [&](const std::pair<const location, TemperatureSensor>& pair) {
+            if (std::find_if(sensors.begin(), sensors.end(), [&](const std::pair<const loc, TemperatureSensor>& pair) {
                 return std::equal(pair.second.get_address().begin(), pair.second.get_address().end(), detected_address.begin());
             }) == sensors.end()) {
                 while (it != all_locations.end() && sensors.find(*it) != sensors.end()) {
@@ -265,7 +265,7 @@ public:
     }
 
     // Method to get a sensor by its location
-    TemperatureSensor* get_sensor(location location) {
+    TemperatureSensor* get_sensor(loc location) {
         auto it = sensors.find(location);
         if (it != sensors.end()) {
             // The sensor exists in the map, so return it
@@ -294,23 +294,23 @@ public:
     // }
 
     // Soren: I made this function for code to easily get most recently read temp value from a location
-    float val(location locat) {
+    float val(loc locat) {
         TemperatureSensor* sens = get_sensor(locat);  // ambient
         if (!sens) return NAN;  // avoid crashing if undetected location is indicated
         return sens->get_temperature();
     }
-    bool detected(location locat) {
+    bool detected(loc locat) {
         TemperatureSensor* sens = get_sensor(locat);  // ambient
         return (bool)sens; 
     }
-    int locint(location locat) {
+    int locint(loc locat) {
         return static_cast<int>(locat);
     }
-    int errclass(location locat) {
-        if (locat == location::ambient || locat == location::engine) return static_cast<int>(locat);
-        return static_cast<int>(location::wheel_fl);  // All wheels use this error class
+    int errclass(loc locat) {
+        if (locat == loc::ambient || locat == loc::engine) return static_cast<int>(locat);
+        return static_cast<int>(loc::wheel_fl);  // All wheels use this error class
     }
-    int errclass(int locat) { return errclass(static_cast<location>(locat)); }
-    float val(int locat) { return val(static_cast<location>(locat)); }
-    bool detected(int locat) { return detected(static_cast<location>(locat)); }
+    int errclass(int locat) { return errclass(static_cast<loc>(locat)); }
+    float val(int locat) { return val(static_cast<loc>(locat)); }
+    bool detected(int locat) { return detected(static_cast<loc>(locat)); }
 };
