@@ -9,7 +9,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-HotrcManager hotrcManager[2] = { 6, 6 };  // [HORZ/VERT]
+// HotrcManager hotrcManager[2] = { 6, 6 };  // [HORZ/VERT]
 Display screen;
 RunModeManager run(&screen, &encoder);
 TouchScreen touch(touch_cs_pin, touch_irq_pin);
@@ -48,6 +48,18 @@ void neo_idiots_update() {
         }
     }
 }
+void hotrc_events_update(int8_t _rm) {
+    hotrc.toggles_update();
+    if (hotrc.sw_event(CH3)) ignition_request = req_tog;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
+    if (hotrc.sw_event(CH4)) {
+        if (_rm == FLY || _rm == CRUISE) flycruise_toggle_request = true;
+        else if (_rm == STALL) starter_request = req_tog;
+        else if (_rm == HOLD) starter_request = req_off;
+        else if (_rm == SHUTDOWN && !shutdown_incomplete) sleep_request = req_on;
+        else if (_rm == ASLEEP) sleep_request = req_off; 
+    }
+    hotrc.toggles_reset();
+}
 void setup() {  // Setup just configures pins (and detects touchscreen type)
     if (RUN_TESTS) run_tests();
     analogReadResolution(adcbits);  // Set ADC to 12-bit resolution
@@ -78,10 +90,10 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     delay(800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     printf("Console started..\nUsing %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
     printf("Init rmt for hotrc..\n");
-    hotrc_calc_params();  // set derived parameters
     brake_calc_duty(brake_duty_pc);  // set derived parameters
     calc_governor();  // set derived parameters
-    for (int axis=HORZ; axis<=CH4; axis++) hotrc_rmt[axis].init();  // Set up 4 RMT receivers, one per channel
+    // for (int axis=HORZ; axis<=CH4; axis++) hotrc_rmt[axis].init();  // Set up 4 RMT receivers, one per channel
+    hotrc.init();
     printf("Pot setup..\n");
     pot.setup();             printf("Encoder setup..\n");
     encoder.setup();
@@ -116,9 +128,13 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 	brakemotor.setPeriodHertz(50);
     gas_servo.setPeriodHertz(60);  // critically this pwm is a different frequency than the other two motors
 	steermotor.setPeriodHertz(50);
-    brakemotor.attach (brake_pwm_pin, brake_extend_min_us, brake_retract_max_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
-    steermotor.attach (steer_pwm_pin, steer_left_us, steer_right_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
-    gas_servo.attach (gas_pwm_pin, gas_cw_min_us, gas_ccw_max_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
+    // brakemotor.attach (brake_pwm_pin, brake_extend_min_us, brake_retract_max_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
+    // steermotor.attach (steer_pwm_pin, steer_left_us, steer_right_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
+    // gas_servo.attach (gas_pwm_pin, gas_cw_min_us, gas_ccw_max_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
+    brakemotor.attach (brake_pwm_pin, brake_extend_absmin_us, brake_retract_absmax_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
+    steermotor.attach (steer_pwm_pin, steer_left_min_us, steer_right_max_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
+    gas_servo.attach (gas_pwm_pin, gas_servo_reversed ? gas_absmax_us : gas_absmin_us, gas_servo_reversed ? gas_absmin_us : gas_absmax_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
+
     tempsens.setup();  // Onewire bus and temp sensors
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Create a new task that runs the update_temperature_sensors function
     throttle.setup(tempsens.get_sensor(loc::engine));
@@ -166,32 +182,9 @@ void loop() {
     maf_gps = massairflow();  // Recalculate intake mass airflow
     if (touch_reticles) get_touchpoint();
 
-    // Controller handling
-    // 1. Handle any toggle button events (ch3 and ch4)
-    hotrc_events_update(run.mode());    
-    // 2. Read horz and vert pulse inputs, spike filter, convert to percent, ema filter, constrain, and center if within deadband
-    for (int8_t axis = HORZ; axis <= VERT; axis++) {
-        hotrc_us[axis][RAW] = (int32_t)hotrc_rmt[axis].readPulseWidth();
-        hotrc_us[axis][RAW] = hotrcManager[axis].spike_filter(hotrc_us[axis][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
-        ema_filt(hotrc_us[axis][RAW], &hotrc_ema_us[axis], hotrc_ema_alpha);  // Need unconstrained ema-filtered vertical for radio lost detection 
-        if (!sim.simulating(sens::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
-            if (hotrc_us[axis][RAW] >= hotrc_us[axis][CENT])  // hotrc_pc[axis][RAW] = hotrc_us_to_pc(axis, hotrc_us[axis][RAW]);
-                hotrc_pc[axis][RAW] = map((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MAX], hotrc_pc[axis][CENT], hotrc_pc[axis][MAX]);
-            else hotrc_pc[axis][RAW] = map((float)hotrc_us[axis][RAW], (float)hotrc_us[axis][CENT], (float)hotrc_us[axis][MIN], hotrc_pc[axis][CENT], hotrc_pc[axis][MIN]);
-            ema_filt(hotrc_pc[axis][RAW], &(hotrc_pc[axis][FILT]), hotrc_ema_alpha);  // do ema filter to determine joy_vert_filt
-            hotrc_pc[axis][FILT] = constrain(hotrc_pc[axis][FILT], hotrc_pc[axis][MIN], hotrc_pc[axis][MAX]);
-            if (hotrc_radio_lost || (hotrc_ema_us[axis] > hotrc_us[axis][DBBOT] && hotrc_ema_us[axis] < hotrc_us[axis][DBTOP]))
-                hotrc_pc[axis][FILT] = hotrc_pc[axis][CENT];  // if within the deadband set joy_axis_filt to center value
-        }
-    }
-    // 3. Pot map can rudely overwrite the horz value
-    if (sim.potmapping(sens::joy)) hotrc_pc[HORZ][FILT] = pot.mapToRange(steer_left_us, steer_right_us);
-    // 4. Determine if the radio is lost
-    if (hotrc_ema_us[VERT] > hotrc_failsafe_us + hotrc_failsafe_margin_us) {
-        hotrcFailsafeTimer.reset();
-        hotrc_radio_lost = false;
-    }
-    else if (!hotrc_radio_lost && hotrcFailsafeTimer.expired()) hotrc_radio_lost = true;
+    hotrc_events_update(run.mode());
+    hotrc.update();
+    if (sim.potmapping(sens::joy)) hotrc.set_pc(HORZ, FILT, pot.mapToRange(steer_left_us, steer_right_us));
 
     run.run_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     
@@ -200,9 +193,9 @@ void loop() {
         if (run.mode() == SHUTDOWN && !shutdown_incomplete)
             steer_out_pc = steer_stop_pc;  // Stop the steering motor if in shutdown mode and shutdown is complete
         else {
-            int8_t joydir = get_joydir(HORZ);
-            if (joydir == joy_rt) steer_out_pc = map(hotrc_pc[HORZ][FILT], hotrc_pc[HORZ][DBTOP], hotrc_pc[HORZ][MAX], steer_stop_pc, steer_safe (steer_right_pc));  // if joy to the right of deadband
-            else if (joydir == joy_lt) steer_out_pc = map(hotrc_pc[HORZ][FILT], hotrc_pc[HORZ][DBBOT], hotrc_pc[HORZ][MIN], steer_stop_pc, steer_safe (steer_left_pc));  // if joy to the left of deadband
+            joydirs _joydir = joydir(HORZ);
+            if (_joydir == joy_rt) steer_out_pc = map(hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][DBTOP], hotrc.pc[HORZ][MAX], steer_stop_pc, steer_safe (steer_right_pc));  // if joy to the right of deadband
+            else if (_joydir == joy_lt) steer_out_pc = map(hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][DBBOT], hotrc.pc[HORZ][MIN], steer_stop_pc, steer_safe (steer_left_pc));  // if joy to the left of deadband
             else steer_out_pc = steer_stop_pc;  // Stop the steering motor if inside the deadband
         }
         steer_out_pc = constrain(steer_out_pc, steer_left_pc, steer_right_pc);  // Don't be out of range
@@ -221,9 +214,9 @@ void loop() {
                 brake_out_pc = map(brakepos.filt(), brakepos.parkpos(), brakepos.max_in(), brake_stop_pc, brake_retract_max_pc);
         }
         else if (run.mode() == CAL && cal_joyvert_brkmotor_mode) {
-            joydirs joydir = get_joydir();
-            if (joydir == joy_up) brake_out_pc = map(hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBTOP], hotrc_pc[VERT][MAX], brake_stop_pc, brake_retract_max_pc);
-            else if (joydir == joy_down) brake_out_pc = map(hotrc_pc[VERT][FILT], hotrc_pc[VERT][MIN], hotrc_pc[VERT][DBBOT], brake_extend_min_pc, brake_stop_pc);
+            joydirs _joydir = joydir();
+            if (_joydir == joy_up) brake_out_pc = map(hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBTOP], hotrc.pc[VERT][MAX], brake_stop_pc, brake_retract_max_pc);
+            else if (_joydir == joy_down) brake_out_pc = map(hotrc.pc[VERT][FILT], hotrc.pc[VERT][MIN], hotrc.pc[VERT][DBBOT], brake_extend_min_pc, brake_stop_pc);
             else brake_out_pc = brake_stop_pc;
         }
         else if (run.mode() == CAL || run.mode() == BASIC || run.mode() == ASLEEP || (run.mode() == SHUTDOWN && !shutdown_incomplete))
@@ -262,30 +255,29 @@ void loop() {
         }
         // Step 2 : Determine servo pulse width value
         if (park_the_motors || (run.mode() == SHUTDOWN && !shutdown_incomplete))
-            gas_out_us = gas_ccw_parked_us;
+            gas_out_pc = gas_deg_to_pc(gas_parked_deg);
         else if (run.mode() == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
-            if (get_joydir() != joy_up) gas_out_us = gas_ccw_closed_us;  // If in deadband or being pushed down, we want idle
-            else gas_out_us = map(hotrc_pc[VERT][FILT], hotrc_pc[VERT][DBTOP], hotrc_pc[VERT][MAX], gas_ccw_closed_us, gas_govern_us);  // actuators still respond even w/ engine turned off
+            if (joydir() != joy_up) gas_out_pc = 0.0;  // If in deadband or being pushed down, we want idle
+            else gas_out_pc = map(hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBTOP], hotrc.pc[VERT][MAX], 0.0, gas_governor_pc);  // actuators still respond even w/ engine turned off
         }
         else if (run.mode() == CAL && cal_pot_gasservo_mode)
-            gas_out_us = map(pot.val(), pot.min(), pot.max(), gas_ccw_max_us, gas_cw_min_us);
+            gas_out_pc = gas_deg_to_pc(map(pot.val(), pot.min(), pot.max(), 0.0, 180.0));  // gas_ccw_max_us, gas_cw_min_us
         else if (run.mode() == CRUISE && (cruise_setpoint_mode != pid_suspend_fly))
-            gas_out_us = gas_cruise_us;
+            gas_out_pc = gas_cruise_pc;
         else if (run.mode() != BASIC) {
-            if (gas_open_loop) gas_out_us = map(throttle.target(), throttle.idlespeed(), tach_govern_rpm, gas_ccw_closed_us, gas_govern_us); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
+            if (gas_open_loop) gas_out_pc = map(throttle.target(), throttle.idlespeed(), tach_govern_rpm, 0.0, gas_governor_pc); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
             else gas_pid.compute();  // Do proper pid math to determine gas_out_us from engine rpm error
         }
-        // Step 3 : Constrain if out of range
+        // Step 3 : Convert to degrees and constrain if out of range
+        gas_out_deg = gas_pc_to_deg(gas_out_pc);  // convert to degrees
         if (run.mode() == BASIC || run.mode() == SHUTDOWN)
-            gas_out_us = constrain(gas_out_us, gas_govern_us, gas_ccw_parked_us);
+            gas_out_deg = constrain(gas_out_deg, gas_parked_deg, gas_govern_deg);
         else if (run.mode() == CAL && cal_pot_gasservo_mode)  // Constrain to operating limits. 
-            gas_out_us = constrain(gas_out_us, gas_cw_min_us, gas_ccw_max_us);
-        else gas_out_us = constrain(gas_out_us, gas_govern_us, gas_ccw_closed_us);
+            gas_out_deg = constrain(gas_out_deg, 0.0, 180.0);
+        else gas_out_deg = constrain(gas_out_deg, gas_closed_min_deg, gas_govern_deg);
         // Step 4 : Write to servo
-        if (!(run.mode() == BASIC && !park_the_motors) && !(run.mode() == CAL && !cal_pot_gasservo_mode) && !(run.mode() == SHUTDOWN && !shutdown_incomplete) && !(run.mode() == ASLEEP)) {
-            if (reverse_gas_servo) gas_servo.writeMicroseconds((int32_t)(3000 - gas_out_us));
-            else gas_servo.writeMicroseconds ((int32_t)gas_out_us);  // Write result to servo
-        }
+        if (!((run.mode() == BASIC && !park_the_motors) || (run.mode() == CAL && !cal_pot_gasservo_mode) || (run.mode() == SHUTDOWN && !shutdown_incomplete) || (run.mode() == ASLEEP)))
+            gas_servo.writeMicroseconds((int32_t)gas_deg_to_us(gas_out_deg));
     }
 
     // UI input handling : get any new action from the touchscreen or rotary encoder
@@ -332,10 +324,10 @@ void loop() {
             else if (sel_val == 10) adj_val(&steer_safe_pc, idelta, 0, 100);
         }
         else if (datapage == PG_JOY) {
-            if (sel_val == 9) adj_val(&hotrc_failsafe_us, idelta, hotrc_absmin_us, hotrc_us[VERT][MIN] - hotrc_us[VERT][MARGIN]);
+            if (sel_val == 9) adj_val(&hotrc.failsafe_us, idelta, hotrc.absmin_us, hotrc.us[VERT][MIN] - hotrc.us[VERT][MARGIN]);
             else if (sel_val == 10) {
-                adj_val(&hotrc_deadband_us, idelta, 0, 50);
-                hotrc_calc_params();
+                adj_val(&hotrc.deadband_us, idelta, 0, 50);
+                hotrc.calc_params();
             }
         }
         else if (datapage == PG_SENS) {
@@ -353,8 +345,8 @@ void loop() {
             if (sel_val == 4) adj_val(&steer_left_us, fdelta, steer_left_min_us, steer_stop_us - 1);
             else if (sel_val == 5) adj_val(&steer_stop_us, fdelta, steer_left_us + 1, steer_right_us - 1);
             else if (sel_val == 6) adj_val(&steer_right_us, fdelta, steer_stop_us + 1, steer_right_max_us);
-            else if (sel_val == 7) adj_val(&gas_ccw_closed_us, fdelta, gas_cw_open_us + 1, gas_ccw_parked_us);
-            else if (sel_val == 8) adj_val(&gas_cw_open_us, fdelta, gas_cw_min_us, gas_ccw_closed_us - 1);
+            else if (sel_val == 7) adj_val(&gas_closed_min_deg, fdelta, gas_parked_deg + 1, gas_open_max_deg - 1);
+            else if (sel_val == 8) adj_val(&gas_open_max_deg, fdelta, gas_closed_min_deg + 1, 180.0);
             else if (sel_val == 9) adj_val(&brake_stop_us, fdelta, brake_extend_min_us + 1, brake_retract_max_us - 1);
             else if (sel_val == 10) adj_val(&brake_duty_pc, fdelta, 0.0, 100.0);
             if (sel_val >= 9) brake_calc_duty(brake_duty_pc);
@@ -380,7 +372,7 @@ void loop() {
             else if (sel_val == 10) gas_pid.add_kd(0.001 * fdelta);
         }
         else if (datapage == PG_CPID) {
-            if (sel_val == 7) adj_val(&cruise_delta_max_us_per_s, idelta, 1, 1000);
+            if (sel_val == 7) adj_val(&cruise_delta_max_pc_per_s, idelta, 1, 35);
             else if (sel_val == 8) cruise_pid.add_kp(0.001 * fdelta);
             else if (sel_val == 9) cruise_pid.add_ki(0.001 * fdelta);
             else if (sel_val == 10) cruise_pid.add_kd(0.001 * fdelta);

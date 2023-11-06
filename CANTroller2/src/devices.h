@@ -10,6 +10,13 @@
 #include "FunctionalInterrupt.h"
 #include "utils.h"
 #include "uictrl.h"
+#include "driver/rmt.h"
+#include "RMT_Input.h"
+#define hotrc_ch1_horz_pin 15   // (pwm1 / adc2ch4) - Hotrc Ch1 thumb joystick input
+#define hotrc_ch2_vert_pin 14   // (pwm0 / adc2ch3) - Hotrc Ch2 bidirectional trigger input
+#define hotrc_ch3_pin 41        // (jtdi) Ignition control, Hotrc Ch3 PWM toggle signal
+#define hotrc_ch4_pin 40        // (jtdo) Cruise control, Hotrc Ch4 PWM toggle signal
+
 // #include "xtensa/core-macros.h"  // access to ccount register for esp32 timing ticks
 
 // NOTE: the following classes all contain their own initial config values (for simplicity). We could instead use Config objects and pass them in at construction time, which might be
@@ -944,69 +951,6 @@ class OutToggle : public Toggle {
         digitalWrite(_pin, val);
     }
 };
-class HotrcManager {
-  protected:
-    bool spike_signbit;
-    int32_t spike_cliff, spike_length, this_delta, interpolated_slope, loopindex, previndex;
-    int32_t prespike_index = -1;
-    int32_t index = 1;  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
-    static const int32_t depth = 9;  // more depth will reject longer spikes at the expense of controller delay
-    int32_t filt_history[depth];  // Values after filtering.
-    int32_t raw_history[depth];  // Copies of the values read (don't need separate buffer, but useful to debug the filter)
-  public:
-    HotrcManager (int32_t spike_threshold) { spike_cliff = spike_threshold; }
-    // Spike filter pushes new hotrc readings into a LIFO ring buffer, replaces any well-defined spikes with values 
-    // interpolated from before and after the spike. Also smoothes out abrupt value changes that don't recover later
-    int32_t spike_filter (int32_t new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
-        previndex = (depth + index - 1) % depth;  // previndex is where the incoming new value will be stored
-        this_delta = new_val - filt_history[previndex];  // Value change since last reading
-        if (std::abs(this_delta) > spike_cliff) {  // If new value is a cliff edge (start or end of a spike)
-            if (prespike_index == -1) {  // If this cliff edge is the start of a new spike
-                prespike_index = previndex;  // save index of last good value just before the cliff
-                spike_signbit = signbit (this_delta);  // Save the direction of the cliff
-            }
-            else if (spike_signbit == signbit (this_delta)) {  // If this cliff edge deepens an in-progress spike (or more likely the change is valid)
-                inject_interpolations (previndex, filt_history[previndex]);  // Smoothly grade the values from before the last cliff to previous value
-                prespike_index = previndex;  // Consider this cliff edge the start of the spike instead
-            }
-            else {  // If this cliff edge is a recovery of an in-progress spike
-                inject_interpolations (index, new_val);  // Fill in the spiked values with interpolated values
-                prespike_index = -1;  // Cancel the current spike
-            }
-        }
-        else if (prespike_index == index) {  // If a current spike lasted thru our whole buffer
-            inject_interpolations (previndex, filt_history[previndex]);  // Smoothly grade the whole buffer
-            prespike_index = -1;  // Cancel the current spike
-        }
-        int32_t returnval = filt_history[index];  // Save the incumbent value at current index (oldest value) into buffer
-        filt_history[index] = new_val;
-        raw_history[index] = new_val;
-        index = (index + 1) % depth;  // Update index for next time
-        return returnval;  // Return the saved old value
-    }
-    void inject_interpolations (int32_t endspike_index, int32_t endspike_val) {  // Replaces values between indexes with linear interpolated values
-        spike_length = ((depth + endspike_index - prespike_index) % depth) - 1;  // Equal to the spiking values count plus one
-        if (!spike_length) return;  // Two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
-        interpolated_slope = (endspike_val - filt_history[prespike_index]) / spike_length;
-        loopindex = 0;
-        while (++loopindex <= spike_length)
-            filt_history[(prespike_index + loopindex) % depth] = filt_history[prespike_index] + loopindex * interpolated_slope;
-    }
-    int32_t next_rawval () { return raw_history[index]; }  // helps to debug the filter from outside the class
-};
-// class Brake {  // This class wraps all brake activity to provide monitoring functions and coordination
-//     Todo: Write a duty cycle monitor which uses historical motor and pressure readings to estimate motor heat accumulation
-//           Ultimately the motor should not be allowed to average over 25% of full power over any period of time less than what
-//           it takes for it to cool.
-//     Todo: Detect system faults, such as:
-//           1. The brake chain is not connected (evidenced by change in brake position without expected pressure changes)
-//           2. Obstruction, motor failure, or inaccurate position. Evidenced by motor instructed to move but position not changing even when pressure is low.
-//           3. Brake hydraulics failure or inaccurate pressure. Evidenced by normal positional change not causing expected increase in pressure.
-//           4. 
-//     Todo: Startup brake press to detect faults and validity of parameters before starting normal operation
-//     Todo: Brake motor temperature sensor? 
-// };
-
 // NOTE: if devices.h gets to be too long, we can (and maybe just should) move this to a separate file, it's not really a device...
 
 // This enum class represent the components which can be simulated (sensor). It's a uint8_t type under the covers, so it can be used as an index
@@ -1181,4 +1125,350 @@ class Simulator {
         int32_t potmap() { return static_cast<int32_t>(_potmap); }  // query which sensor is being potmapped
         bool enabled() { return _enabled; }
         bool* enabled_ptr() { return &_enabled; }
+};
+
+
+
+// class brake : centralized wrapper for all braking activity, as holistic coordination between sensors, actuator, and intent is critical
+class Brake {
+  public:
+    enum bcmd { na, halt, pid, park, release, autostop, cal, autocal };
+    enum bstat { halted, pidctrl, parked, parking, released, releasing, autostopping, autoadding, holding, caling, autocaling };
+  private:
+    BrakePositionSensor* brakepos;
+    PressureSensor* pressure;
+    Servo* motor;
+    qpid* brakepid;
+    bcmd cmdnow, cmdlast;
+    bstat statnow;
+    bool cmd_change, faultsnow, faultslast;
+    bstat do_autostop();
+    bstat do_park();
+    bstat do_cal();
+    bstat do_pid();
+    bstat do_autocal();
+    bstat do_release();
+    bstat do_halt();
+    int8_t motor_pin, press_pin, posn_pin;
+  public:
+    Brake();
+    // Brake(int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin);
+    void init(Servo* _motor, qpid* _brakepid, PressureSensor* _pressure, BrakePositionSensor* _brakepos);
+    bstat update(bcmd _cmd = na);
+    bstat status();
+    bcmd command(bcmd _cmd);
+    bool fault_detect();
+    bool isactive();
+};
+
+Brake::Brake() {}
+void Brake::init(Servo* _motor, qpid* _brakepid, PressureSensor* _pressure, BrakePositionSensor* _brakepos) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+    motor = _motor;        // motor_pin = _motor_pin;
+    pressure = _pressure;  // press_pin = _press_pin;
+    brakepos = _brakepos;  // posn_pin = _posn_pin;
+    brakepid = _brakepid;
+};
+Brake::bstat Brake::status() {
+    return statnow;
+};
+Brake::bcmd Brake::command(Brake::bcmd _cmd) {
+    if (_cmd != na) {
+        cmd_change = (_cmd != cmdnow);
+        cmdlast = cmdnow;
+        cmdnow = _cmd;
+    }
+    return cmdnow;
+}
+Brake::bstat Brake::update(Brake::bcmd _cmd) {
+    bcmd cmd = command(_cmd);
+    if (_cmd == halt) {
+        do_halt();
+    }
+    else if (_cmd == pid) {
+    }
+    else if (_cmd == park) {
+        do_park();
+    }
+    else if (_cmd == release) {
+        do_release();
+    }
+    else if (_cmd == autostop) {
+        do_autostop();
+    }
+    else if (_cmd == cal) {
+        do_cal();
+    }
+    else if (_cmd == autocal) {
+        do_autocal();
+    }
+    if (fault_detect()) {
+    }
+    cmd_change = false;
+    cmdlast = cmdnow;
+    return statnow;
+};
+Brake::bstat Brake::do_release() {
+    if (cmd_change) {
+        statnow = releasing;
+    }
+    else if (statnow == released) return released;
+
+    // if () statnow = released;
+    return statnow;
+};
+Brake::bstat Brake::do_halt() {
+    if (cmd_change) {}
+    statnow = halted;
+    return statnow;
+};
+Brake::bstat Brake::do_autostop() {
+    if (cmd_change) {
+        statnow = autostopping;
+    }
+    else if (statnow == holding) return holding;
+
+    // if () statnow = autoadding;
+    // else if () statnow = holding;
+    return statnow;
+};
+Brake::bstat Brake::do_park() {
+    if (cmd_change) {
+        statnow = parking;
+    }
+    else if (statnow == parked) return parked;
+    // if (brakepos->filt() + brakepos->margin() <= brakepos->parkpos())  // If brake is retracted from park point, extend toward park point, slowing as we approach
+    //     brake_out_pc = map(brakepos->filt(), brakepos->parkpos(), brakepos->min_in(), brake_stop_pc, brake_extend_min_pc);
+    // else if (brakepos->filt() - brakepos->margin() >= brakepos->parkpos())  // If brake is extended from park point, retract toward park point, slowing as we approach
+    //     brake_out_pc = map(brakepos->filt(), brakepos->parkpos(), brakepos->max_in(), brake_stop_pc, brake_retract_max_pc);
+    // else statnow = parked;
+    return statnow;
+};
+Brake::bstat Brake::do_pid() {
+    statnow = pidctrl;
+    return statnow;
+}
+Brake::bstat Brake::do_cal() {
+    statnow = caling;
+    // if (hotrc::pc[VERT][FILT] > hotrc::pc[VERT][DBTOP]) brake_out_pc = map(hotrc::pc[VERT][FILT], hotrc::pc[VERT][DBTOP], hotrc::pc[VERT][MAX], brake_stop_pc, brake_retract_max_pc);
+    // else if (hotrc::pc[VERT][FILT] < hotrc::pc[VERT][DBBOT]) brake_out_pc = map(hotrc::pc[VERT][FILT], hotrc::pc[VERT][MIN], hotrc::pc[VERT][DBBOT], brake_extend_min_pc, brake_stop_pc);
+    // else brake_out_pc = brake_stop_pc;
+
+    // joydirs _joydir = joydir();
+    // if (_joydir == joy_up) brake_out_pc = map(hotrc::pc[VERT][FILT], hotrc::pc[VERT][DBTOP], hotrc::pc[VERT][MAX], brake_stop_pc, brake_retract_max_pc);
+    // else if (_joydir == joy_down) brake_out_pc = map(hotrc::pc[VERT][FILT], hotrc::pc[VERT][MIN], hotrc::pc[VERT][DBBOT], brake_extend_min_pc, brake_stop_pc);
+    // else brake_out_pc = brake_stop_pc;
+    // statnow = caling;
+    statnow = caling;
+    return statnow;
+}
+Brake::bstat Brake::do_autocal() {
+    if (cmd_change) {
+        statnow = autocaling;
+    }
+
+    return statnow;
+};
+bool Brake::fault_detect() {
+    // Todo: Detect system faults, such as:
+    // 1. The brake chain is not connected (evidenced by change in brake position without expected pressure changes)
+    // 2. Obstruction, motor failure, or inaccurate position. Evidenced by motor instructed to move but position not changing even when pressure is low.
+    // 3. Brake hydraulics failure or inaccurate pressure. Evidenced by normal positional change not causing expected increase in pressure.
+    faultslast = faultsnow;
+    return faultsnow;
+};
+bool Brake::isactive() {
+    return (statnow != halted && statnow != parked && statnow != released);
+}
+
+// bool autostop(req _cmd = req_na) {  // call this regularly during autostop event
+//     req cmd = _cmd;
+//     if (autostop_disabled) autostopping = false;
+//     else {
+//         if (autostopping) {
+//             if (brakeIntervalTimer.expireset())
+//                 pressure_target_psi = smin(pressure_target_psi + (panicstop ? pressure_panic_increment_psi : pressure_hold_increment_psi), pressure.max_human());
+//             if (speedo.car_stopped() || stopcarTimer.expired()) cmd = req_off; 
+//         }
+//         if (cmd == req_tog) cmd = (req)(!autostopping);
+//         if (autostopping && cmd == req_off) {
+//             pressure_target_psi = pressure.min_psi();
+//             autostopping = false;
+//         }
+//         else if (!autostopping && cmd == req_on && !speedo.car_stopped()) {
+//             throttle.goto_idle();  // Keep target updated to possibly changing idle value
+//             pressure_target_psi = smax(pressure.filt(), (panicstop ? pressure_panic_initial_psi : pressure_hold_initial_psi));
+//             brakeIntervalTimer.reset();
+//             stopcarTimer.reset();
+//             autostopping = true;
+//         }
+//     }
+//     return autostopping;
+// }
+// bool park_motors(req _cmd = req_na) {  // call this regularly during motor parking event
+//     req cmd = _cmd;
+//     if (park_the_motors) {
+//         bool brake_parked = brakepos->parked();
+//         bool gas_parked = ((std::abs(gas_out_us - gas_ccw_parked_us) < 1) && gasServoTimer.expired());
+//         if ((brake_parked && gas_parked) || motorParkTimer.expired()) cmd = req_off;
+//     }
+//     if (cmd == req_tog) cmd = (req)(!park_the_motors);
+//     if (park_the_motors && cmd == req_off)  park_the_motors = false;
+//     else if (!park_the_motors && cmd == req_on) {
+//         gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
+//         motorParkTimer.reset();  // Set a timer to timebox this effort
+//         park_the_motors = true;
+//     }
+//     return park_the_motors;
+// }
+
+class Hotrc {
+  public:
+    enum hotrc_nums { num_axes = 2, num_chans = 4 };
+    enum hotrc_axis { HORZ, VERT, CH3, CH4 };
+    enum hotrc_val { MIN, CENT, MAX, RAW, FILT, DBBOT, DBTOP, MARGIN, num_hrcvals };
+    // enum joydirs { joy_rt = -2, joy_down = -1, joy_cent = 0, joy_up = 1, joy_lt = 2 };
+
+    float ema_alpha = 0.075;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
+    float pc[num_axes][num_hrcvals];           // values range from -100% to 100% are all derived or auto-assigned
+    int32_t us[num_chans][num_hrcvals] = {
+        {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [HORZ] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+        { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+        { 1151, 1500, 1848, 0, 1500, 0, 0, 0 },     // 1000+150+1,   1500, 2000-150-2,  // [CH3] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+        { 1251, 1500, 1748, 0, 1500, 0, 0, 0 }, };  // 1000+250+1,   1500, 2000-250-2,  // [CH4] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+    float ema_us[num_axes] = { 1500.0, 1500.0 };  // [HORZ/VERT]
+    int32_t absmin_us = 880;
+    int32_t absmax_us = 2080;
+    int32_t deadband_us = 13;  // All [DBBOT] and [DBTOP] values above are derived from this by calling calc_params()
+    int32_t margin_us = 20;  // All [MARGIN] values above are derived from this by calling calc_params()
+    int32_t failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
+    int32_t failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
+    int32_t failsafe_pad_us = 10;
+    static const uint32_t failsafe_timeout = 15000;
+    Timer failsafe_timer;  // How long to receive failsafe pulse value continuously before recognizing radio is lost. To prevent false positives
+    bool _radiolost = true;
+    bool sw[num_chans] = { 1, 1, 0, 0 };  // index[2]=CH3, index[3]=CH4 and using [0] and [1] indices for LAST values of ch3 and ch4 respectively
+    bool _sw_event[num_chans];  // First 2 indices are unused.  What a tragic waste
+    RMTInput rmt[num_chans] = {
+        RMTInput(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_horz_pin)),  // hotrc[HORZ]
+        RMTInput(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_vert_pin)),  // hotrc[VERT]
+        RMTInput(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_pin)),  // hotrc[CH3]
+        RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_pin)),  // hotrc[CH4]
+    };
+    bool spike_signbit;
+    int32_t spike_cliff[num_axes];
+    int32_t spike_threshold[num_axes] = { 6, 6 };
+    int32_t spike_length, this_delta, interpolated_slope, loopindex, previndex;
+    int32_t prespike_index[num_axes] = { -1, -1 };
+    int32_t index[num_axes] = { 1, 1 };  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
+    static const int32_t depth = 9;  // more depth will reject longer spikes at the expense of controller delay
+    int32_t filt_history[num_axes][depth];  // Values after filtering.
+    int32_t raw_history[num_axes][depth];  // Copies of the values read (don't need separate buffer, but useful to debug the filter)
+    Hotrc() { calc_params(); }
+    void init() {
+        for (int axis=HORZ; axis<=CH4; axis++) rmt[axis].init();  // Set up 4 RMT receivers, one per channel
+        failsafe_timer.set(failsafe_timeout); 
+    }
+    int32_t next_unfilt_rawval (uint8_t axis) { return raw_history[axis][index[axis]]; }  // helps to debug the filter from outside the class
+    // Spike filter pushes new hotrc readings into a LIFO ring buffer, replaces any well-defined spikes with values 
+    // interpolated from before and after the spike. Also smoothes out abrupt value changes that don't recover later
+    int32_t spike_filter (uint8_t axis, int32_t new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
+        previndex = (depth + index[axis] - 1) % depth;  // previndex is where the incoming new value will be stored
+        this_delta = new_val - filt_history[axis][previndex];  // Value change since last reading
+        if (std::abs(this_delta) > spike_cliff[axis]) {  // If new value is a cliff edge (start or end of a spike)
+            if (prespike_index[axis] == -1) {  // If this cliff edge is the start of a new spike
+                prespike_index[axis] = previndex;  // save index of last good value just before the cliff
+                spike_signbit = signbit(this_delta);  // Save the direction of the cliff
+            }
+            else if (spike_signbit == signbit(this_delta)) {  // If this cliff edge deepens an in-progress spike (or more likely the change is valid)
+                inject_interpolations(axis, previndex, filt_history[axis][previndex]);  // Smoothly grade the values from before the last cliff to previous value
+                prespike_index[axis] = previndex;  // Consider this cliff edge the start of the spike instead
+            }
+            else {  // If this cliff edge is a recovery of an in-progress spike
+                inject_interpolations(axis, index[axis], new_val);  // Fill in the spiked values with interpolated values
+                prespike_index[axis] = -1;  // Cancel the current spike
+            }
+        }
+        else if (prespike_index[axis] == index[axis]) {  // If a current spike lasted thru our whole buffer
+            inject_interpolations (axis, previndex, filt_history[axis][previndex]);  // Smoothly grade the whole buffer
+            prespike_index[axis] = -1;  // Cancel the current spike
+        }
+        int32_t returnval = filt_history[axis][index[axis]];  // Save the incumbent value at current index (oldest value) into buffer
+        filt_history[axis][index[axis]] = new_val;
+        raw_history[axis][index[axis]] = new_val;
+        ++(index[axis]) %= depth;  // Update index for next time
+        return returnval;  // Return the saved old value
+    }
+  protected:
+    void inject_interpolations(uint8_t axis, int32_t endspike_index, int32_t endspike_val) {  // Replaces values between indexes with linear interpolated values
+        spike_length = ((depth + endspike_index - prespike_index[axis]) % depth) - 1;  // Equal to the spiking values count plus one
+        if (!spike_length) return;  // Two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
+        interpolated_slope = (endspike_val - filt_history[axis][prespike_index[axis]]) / spike_length;
+        loopindex = 0;
+        while (++loopindex <= spike_length)
+            filt_history[axis][(prespike_index[axis] + loopindex) % depth] = filt_history[axis][prespike_index[axis]] + loopindex * interpolated_slope;
+    }
+    bool radiolost_update() {
+        if (ema_us[VERT] > failsafe_us + failsafe_margin_us) {
+            failsafe_timer.reset();
+            _radiolost = false;
+        }
+        else if (!_radiolost && failsafe_timer.expired()) _radiolost = true;
+        return _radiolost;
+    }
+    float us_to_pc(int8_t _axis, int32_t _us) {  // float us_to_pc(int8_t axis, int32_t us) {
+        return (float)_us * (pc[VERT][MAX] - pc[VERT][MIN]) / (float)(us[VERT][MAX] - us[VERT][MIN]);
+        // if (us >= us[axis][CENT])
+        //     return map((float)us, (float)us[axis][CENT], (float)us[axis][MAX], pc[axis][CENT], pc[axis][MAX]);
+        // else return map((float)us, (float)us[axis][CENT], (float)us[axis][MIN], pc[axis][CENT], pc[axis][MIN]);
+    }
+  public:
+    void calc_params() {
+        for (int8_t axis=HORZ; axis<=VERT; axis++) {
+            us[axis][DBBOT] = us[axis][CENT] - deadband_us;
+            us[axis][DBTOP] = us[axis][CENT] + deadband_us;
+            us[axis][MARGIN] = margin_us;
+            pc[axis][MIN] = -100.0;
+            pc[axis][CENT] = 0.0;
+            pc[axis][MAX] = 100.0;
+            pc[axis][DBBOT] = pc[axis][CENT] - us_to_pc(axis, deadband_us);  // us_to_pc(axis, deadband_us);
+            pc[axis][DBTOP] = pc[axis][CENT] + us_to_pc(axis, deadband_us);  // us_to_pc(axis, deadband_us);
+            pc[axis][MARGIN] = us_to_pc(axis, margin_us);  // us_to_pc(axis, margin_us);
+        }
+    }
+    void toggles_update() {  //
+        for (int8_t chan = CH3; chan <= CH4; chan++) {
+            us[chan][RAW] = (int32_t)(rmt[chan].readPulseWidth(true));
+            sw[chan] = (us[chan][RAW] <= us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  us[CH3][CENT]
+            if ((sw[chan] != sw[chan-2]) && !_radiolost) _sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false. Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
+            sw[chan-2] = sw[chan];  // chan-2 index being used to store previous values of index chan
+        }
+    }
+    void toggles_reset() {  //
+        for (int8_t ch = CH3; ch <= CH4; ch++) _sw_event[ch] = false;
+    }
+    int32_t rmt_read(int8_t chan) {
+        return (int32_t)(rmt[chan].readPulseWidth(true));
+    }
+    void update() {
+        for (int8_t axis = HORZ; axis <= VERT; axis++) {
+            us[axis][RAW] = (int32_t)(rmt[axis].readPulseWidth(true));
+            us[axis][RAW] = spike_filter(axis, us[axis][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
+            ema_filt(us[axis][RAW], &ema_us[axis], ema_alpha);  // Need unconstrained ema-filtered vertical for radio lost detection 
+            // if (!sim.simulating(sens::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
+            if (us[axis][RAW] >= us[axis][CENT])  // pc[axis][RAW] = us_to_pc(axis, us[axis][RAW]);
+                pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][MAX], pc[axis][CENT], pc[axis][MAX]);
+            else pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][MIN], pc[axis][CENT], pc[axis][MIN]);
+            ema_filt(pc[axis][RAW], &(pc[axis][FILT]), ema_alpha);  // do ema filter to determine joy_vert_filt
+            pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][MIN], pc[axis][MAX]);
+            if (_radiolost || (ema_us[axis] > us[axis][DBBOT] && ema_us[axis] < us[axis][DBTOP]))
+                pc[axis][FILT] = pc[axis][CENT];  // if within the deadband set joy_axis_filt to center value
+        }
+        radiolost_update();
+    }
+    bool radiolost() { return _radiolost; }
+    bool* radiolost_ptr() { return &_radiolost; }
+    bool sw_event(uint8_t ch) { return _sw_event[ch]; }
+
+    void set_pc(int8_t axis, int8_t param, float val) { pc[axis][param] = val; }
+    void set_us(int8_t axis, int8_t param, int32_t val) { us[axis][param] = val; }
 };
