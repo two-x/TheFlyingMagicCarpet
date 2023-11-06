@@ -41,28 +41,28 @@ void RMTInput::init()
     if (config_result != ESP_OK)
     {
         Serial.printf("Failed to configure RMT: %d\n", config_result);
-        while (1); // halt execution
+        // while (1); // halt execution
     }
 
     esp_err_t install_result = rmt_driver_install(channel_, 2000, 0);
     if (install_result != ESP_OK)
     {
         Serial.printf("Failed to install RMT driver: %d\n", install_result);
-        while (1); // halt execution
+        // while (1); // halt execution
     }
 
     rmt_get_ringbuf_handle(channel_, &rb_);
     if (rb_ == NULL)
     {
         Serial.println("Failed to initialize ring buffer");
-        while (1); // halt execution
+        // while (1); // halt execution
     }
 
     esp_err_t start_result = rmt_rx_start(channel_, 1);
     if (start_result != ESP_OK)
     {
         Serial.printf("Failed to start RMT receiver: %d\n", start_result);
-        while (1); // halt execution
+        // while (1); // halt execution
     }
 }
 
