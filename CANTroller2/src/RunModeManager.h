@@ -24,6 +24,7 @@ class RunModeManager {
         return newmode;
     }
     runmode mode() { return _currentMode; }
+    runmode* mode_ptr() { return &_currentMode; }
 
     runmode run_runmode() {
         updateMode(); // Update the current mode if needed, this also sets we_just_switched_modes
@@ -74,8 +75,12 @@ class RunModeManager {
             if ((brake_parked && gas_parked) || motorParkTimer.expired()) cmd = req_off;
         }
         if (cmd == req_tog) cmd = (req)(!park_the_motors);
-        if (park_the_motors && cmd == req_off)  park_the_motors = false;
+        if (park_the_motors && cmd == req_off) {
+            brake.command(Brake::job::halt);
+            park_the_motors = false;
+        }
         else if (!park_the_motors && cmd == req_on) {
+            brake.command(Brake::job::park);
             gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
             motorParkTimer.reset();  // Set a timer to timebox this effort
             park_the_motors = true;
