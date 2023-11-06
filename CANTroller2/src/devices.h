@@ -6,17 +6,14 @@
 #include <tuple>
 #include <memory> // for std::shared_ptr
 #include <SparkFun_FS3000_Arduino_Library.h>  // For air velocity sensor  http://librarymanager/All#SparkFun_FS3000
+#include "mapsens.h"
 #include "Arduino.h"
 #include "FunctionalInterrupt.h"
 #include "utils.h"
 #include "uictrl.h"
 #include "driver/rmt.h"
 #include "RMT_Input.h"
-#define hotrc_ch1_horz_pin 15   // (pwm1 / adc2ch4) - Hotrc Ch1 thumb joystick input
-#define hotrc_ch2_vert_pin 14   // (pwm0 / adc2ch3) - Hotrc Ch2 bidirectional trigger input
-#define hotrc_ch3_pin 41        // (jtdi) Ignition control, Hotrc Ch3 PWM toggle signal
-#define hotrc_ch4_pin 40        // (jtdo) Cruise control, Hotrc Ch4 PWM toggle signal
-
+#include "qpid.h"
 // #include "xtensa/core-macros.h"  // access to ccount register for esp32 timing ticks
 
 // NOTE: the following classes all contain their own initial config values (for simplicity). We could instead use Config objects and pass them in at construction time, which might be
@@ -550,9 +547,9 @@ class MAPSensor : public I2CSensor {
                 if (_sensor.begin() == false) {
                     printf("  Sensor not responding\n");  // Begin communication with air flow sensor) over I2C 
                     set_source(src::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
-                // } else {
-                //     printf("  Reading %f atm manifold pressure\n", _sensor.readPressure(ATM));
-                //     printf("  Sensor responding properly\n");
+                } else {
+                    printf("  Reading %f atm manifold pressure\n", _sensor.readPressure(ATM));
+                    // printf("  Sensor responding properly\n");
                 }
             } else {
                 set_source(src::UNDEF); // don't even have a device at all...
@@ -1127,210 +1124,11 @@ class Simulator {
         bool* enabled_ptr() { return &_enabled; }
 };
 
-
-
-// class brake : centralized wrapper for all braking activity, as holistic coordination between sensors, actuator, and intent is critical
-class Brake {
-  public:
-    enum bcmd { na, halt, pid, park, release, autostop, cal, autocal };
-    enum bstat { halted, pidctrl, parked, parking, released, releasing, autostopping, autoadding, holding, caling, autocaling };
-  private:
-    BrakePositionSensor* brakepos;
-    PressureSensor* pressure;
-    Servo* motor;
-    qpid* brakepid;
-    bcmd cmdnow, cmdlast;
-    bstat statnow;
-    bool cmd_change, faultsnow, faultslast;
-    bstat do_autostop();
-    bstat do_park();
-    bstat do_cal();
-    bstat do_pid();
-    bstat do_autocal();
-    bstat do_release();
-    bstat do_halt();
-    int8_t motor_pin, press_pin, posn_pin;
-  public:
-    Brake();
-    // Brake(int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin);
-    void init(Servo* _motor, qpid* _brakepid, PressureSensor* _pressure, BrakePositionSensor* _brakepos);
-    bstat update(bcmd _cmd = na);
-    bstat status();
-    bcmd command(bcmd _cmd);
-    bool fault_detect();
-    bool isactive();
-};
-
-Brake::Brake() {}
-void Brake::init(Servo* _motor, qpid* _brakepid, PressureSensor* _pressure, BrakePositionSensor* _brakepos) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
-    motor = _motor;        // motor_pin = _motor_pin;
-    pressure = _pressure;  // press_pin = _press_pin;
-    brakepos = _brakepos;  // posn_pin = _posn_pin;
-    brakepid = _brakepid;
-};
-Brake::bstat Brake::status() {
-    return statnow;
-};
-Brake::bcmd Brake::command(Brake::bcmd _cmd) {
-    if (_cmd != na) {
-        cmd_change = (_cmd != cmdnow);
-        cmdlast = cmdnow;
-        cmdnow = _cmd;
-    }
-    return cmdnow;
-}
-Brake::bstat Brake::update(Brake::bcmd _cmd) {
-    bcmd cmd = command(_cmd);
-    if (_cmd == halt) {
-        do_halt();
-    }
-    else if (_cmd == pid) {
-    }
-    else if (_cmd == park) {
-        do_park();
-    }
-    else if (_cmd == release) {
-        do_release();
-    }
-    else if (_cmd == autostop) {
-        do_autostop();
-    }
-    else if (_cmd == cal) {
-        do_cal();
-    }
-    else if (_cmd == autocal) {
-        do_autocal();
-    }
-    if (fault_detect()) {
-    }
-    cmd_change = false;
-    cmdlast = cmdnow;
-    return statnow;
-};
-Brake::bstat Brake::do_release() {
-    if (cmd_change) {
-        statnow = releasing;
-    }
-    else if (statnow == released) return released;
-
-    // if () statnow = released;
-    return statnow;
-};
-Brake::bstat Brake::do_halt() {
-    if (cmd_change) {}
-    statnow = halted;
-    return statnow;
-};
-Brake::bstat Brake::do_autostop() {
-    if (cmd_change) {
-        statnow = autostopping;
-    }
-    else if (statnow == holding) return holding;
-
-    // if () statnow = autoadding;
-    // else if () statnow = holding;
-    return statnow;
-};
-Brake::bstat Brake::do_park() {
-    if (cmd_change) {
-        statnow = parking;
-    }
-    else if (statnow == parked) return parked;
-    // if (brakepos->filt() + brakepos->margin() <= brakepos->parkpos())  // If brake is retracted from park point, extend toward park point, slowing as we approach
-    //     brake_out_pc = map(brakepos->filt(), brakepos->parkpos(), brakepos->min_in(), brake_stop_pc, brake_extend_min_pc);
-    // else if (brakepos->filt() - brakepos->margin() >= brakepos->parkpos())  // If brake is extended from park point, retract toward park point, slowing as we approach
-    //     brake_out_pc = map(brakepos->filt(), brakepos->parkpos(), brakepos->max_in(), brake_stop_pc, brake_retract_max_pc);
-    // else statnow = parked;
-    return statnow;
-};
-Brake::bstat Brake::do_pid() {
-    statnow = pidctrl;
-    return statnow;
-}
-Brake::bstat Brake::do_cal() {
-    statnow = caling;
-    // if (hotrc::pc[VERT][FILT] > hotrc::pc[VERT][DBTOP]) brake_out_pc = map(hotrc::pc[VERT][FILT], hotrc::pc[VERT][DBTOP], hotrc::pc[VERT][MAX], brake_stop_pc, brake_retract_max_pc);
-    // else if (hotrc::pc[VERT][FILT] < hotrc::pc[VERT][DBBOT]) brake_out_pc = map(hotrc::pc[VERT][FILT], hotrc::pc[VERT][MIN], hotrc::pc[VERT][DBBOT], brake_extend_min_pc, brake_stop_pc);
-    // else brake_out_pc = brake_stop_pc;
-
-    // joydirs _joydir = joydir();
-    // if (_joydir == joy_up) brake_out_pc = map(hotrc::pc[VERT][FILT], hotrc::pc[VERT][DBTOP], hotrc::pc[VERT][MAX], brake_stop_pc, brake_retract_max_pc);
-    // else if (_joydir == joy_down) brake_out_pc = map(hotrc::pc[VERT][FILT], hotrc::pc[VERT][MIN], hotrc::pc[VERT][DBBOT], brake_extend_min_pc, brake_stop_pc);
-    // else brake_out_pc = brake_stop_pc;
-    // statnow = caling;
-    statnow = caling;
-    return statnow;
-}
-Brake::bstat Brake::do_autocal() {
-    if (cmd_change) {
-        statnow = autocaling;
-    }
-
-    return statnow;
-};
-bool Brake::fault_detect() {
-    // Todo: Detect system faults, such as:
-    // 1. The brake chain is not connected (evidenced by change in brake position without expected pressure changes)
-    // 2. Obstruction, motor failure, or inaccurate position. Evidenced by motor instructed to move but position not changing even when pressure is low.
-    // 3. Brake hydraulics failure or inaccurate pressure. Evidenced by normal positional change not causing expected increase in pressure.
-    faultslast = faultsnow;
-    return faultsnow;
-};
-bool Brake::isactive() {
-    return (statnow != halted && statnow != parked && statnow != released);
-}
-
-// bool autostop(req _cmd = req_na) {  // call this regularly during autostop event
-//     req cmd = _cmd;
-//     if (autostop_disabled) autostopping = false;
-//     else {
-//         if (autostopping) {
-//             if (brakeIntervalTimer.expireset())
-//                 pressure_target_psi = smin(pressure_target_psi + (panicstop ? pressure_panic_increment_psi : pressure_hold_increment_psi), pressure.max_human());
-//             if (speedo.car_stopped() || stopcarTimer.expired()) cmd = req_off; 
-//         }
-//         if (cmd == req_tog) cmd = (req)(!autostopping);
-//         if (autostopping && cmd == req_off) {
-//             pressure_target_psi = pressure.min_psi();
-//             autostopping = false;
-//         }
-//         else if (!autostopping && cmd == req_on && !speedo.car_stopped()) {
-//             throttle.goto_idle();  // Keep target updated to possibly changing idle value
-//             pressure_target_psi = smax(pressure.filt(), (panicstop ? pressure_panic_initial_psi : pressure_hold_initial_psi));
-//             brakeIntervalTimer.reset();
-//             stopcarTimer.reset();
-//             autostopping = true;
-//         }
-//     }
-//     return autostopping;
-// }
-// bool park_motors(req _cmd = req_na) {  // call this regularly during motor parking event
-//     req cmd = _cmd;
-//     if (park_the_motors) {
-//         bool brake_parked = brakepos->parked();
-//         bool gas_parked = ((std::abs(gas_out_us - gas_ccw_parked_us) < 1) && gasServoTimer.expired());
-//         if ((brake_parked && gas_parked) || motorParkTimer.expired()) cmd = req_off;
-//     }
-//     if (cmd == req_tog) cmd = (req)(!park_the_motors);
-//     if (park_the_motors && cmd == req_off)  park_the_motors = false;
-//     else if (!park_the_motors && cmd == req_on) {
-//         gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
-//         motorParkTimer.reset();  // Set a timer to timebox this effort
-//         park_the_motors = true;
-//     }
-//     return park_the_motors;
-// }
-
 class Hotrc {
   public:
-    enum hotrc_nums { num_axes = 2, num_chans = 4 };
-    enum hotrc_axis { HORZ, VERT, CH3, CH4 };
-    enum hotrc_val { MIN, CENT, MAX, RAW, FILT, DBBOT, DBTOP, MARGIN, num_hrcvals };
-    // enum joydirs { joy_rt = -2, joy_down = -1, joy_cent = 0, joy_up = 1, joy_lt = 2 };
-
     float ema_alpha = 0.075;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
-    float pc[num_axes][num_hrcvals];           // values range from -100% to 100% are all derived or auto-assigned
-    int32_t us[num_chans][num_hrcvals] = {
+    float pc[num_axes][num_valus];           // values range from -100% to 100% are all derived or auto-assigned
+    int32_t us[num_chans][num_valus] = {
         {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [HORZ] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
         { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
         { 1151, 1500, 1848, 0, 1500, 0, 0, 0 },     // 1000+150+1,   1500, 2000-150-2,  // [CH3] [MIN/CENT/MAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
@@ -1343,14 +1141,15 @@ class Hotrc {
     int32_t failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
     int32_t failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
     int32_t failsafe_pad_us = 10;
+  private:
     static const uint32_t failsafe_timeout = 15000;
     Timer failsafe_timer;  // How long to receive failsafe pulse value continuously before recognizing radio is lost. To prevent false positives
     bool _radiolost = true;
     bool sw[num_chans] = { 1, 1, 0, 0 };  // index[2]=CH3, index[3]=CH4 and using [0] and [1] indices for LAST values of ch3 and ch4 respectively
     bool _sw_event[num_chans];  // First 2 indices are unused.  What a tragic waste
     RMTInput rmt[num_chans] = {
-        RMTInput(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_horz_pin)),  // hotrc[HORZ]
-        RMTInput(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_vert_pin)),  // hotrc[VERT]
+        RMTInput(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_h_pin)),  // hotrc[HORZ]
+        RMTInput(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_v_pin)),  // hotrc[VERT]
         RMTInput(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_pin)),  // hotrc[CH3]
         RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_pin)),  // hotrc[CH4]
     };
@@ -1363,12 +1162,73 @@ class Hotrc {
     static const int32_t depth = 9;  // more depth will reject longer spikes at the expense of controller delay
     int32_t filt_history[num_axes][depth];  // Values after filtering.
     int32_t raw_history[num_axes][depth];  // Copies of the values read (don't need separate buffer, but useful to debug the filter)
+  public:
     Hotrc() { calc_params(); }
     void init() {
         for (int axis=HORZ; axis<=CH4; axis++) rmt[axis].init();  // Set up 4 RMT receivers, one per channel
         failsafe_timer.set(failsafe_timeout); 
     }
     int32_t next_unfilt_rawval (uint8_t axis) { return raw_history[axis][index[axis]]; }  // helps to debug the filter from outside the class
+    bool radiolost_update() {
+        if (ema_us[VERT] > failsafe_us + failsafe_margin_us) {
+            failsafe_timer.reset();
+            _radiolost = false;
+        }
+        else if (!_radiolost && failsafe_timer.expired()) _radiolost = true;
+        return _radiolost;
+    }
+    void calc_params() {
+        for (int8_t axis=HORZ; axis<=VERT; axis++) {
+            us[axis][DBBOT] = us[axis][CENT] - deadband_us;
+            us[axis][DBTOP] = us[axis][CENT] + deadband_us;
+            us[axis][MARGIN] = margin_us;
+            pc[axis][MIN] = -100.0;
+            pc[axis][CENT] = 0.0;
+            pc[axis][MAX] = 100.0;
+            pc[axis][DBBOT] = pc[axis][CENT] - us_to_pc(axis, deadband_us);  // us_to_pc(axis, deadband_us);
+            pc[axis][DBTOP] = pc[axis][CENT] + us_to_pc(axis, deadband_us);  // us_to_pc(axis, deadband_us);
+            pc[axis][MARGIN] = us_to_pc(axis, margin_us);  // us_to_pc(axis, margin_us);
+        }
+    }
+    void toggles_update() {  //
+        for (int8_t chan = CH3; chan <= CH4; chan++) {
+            us[chan][RAW] = (int32_t)(rmt[chan].readPulseWidth(true));
+            sw[chan] = (us[chan][RAW] <= us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  us[CH3][CENT]
+            if ((sw[chan] != sw[chan-2]) && !_radiolost) _sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false. Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
+            sw[chan-2] = sw[chan];  // chan-2 index being used to store previous values of index chan
+        }
+    }
+    void toggles_reset() {  //
+        for (int8_t ch = CH3; ch <= CH4; ch++) _sw_event[ch] = false;
+    }
+    void update() {
+        for (int8_t axis = HORZ; axis <= VERT; axis++) {
+            us[axis][RAW] = (int32_t)(rmt[axis].readPulseWidth(true));
+            us[axis][RAW] = spike_filter(axis, us[axis][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
+            ema_filt(us[axis][RAW], &ema_us[axis], ema_alpha);  // Need unconstrained ema-filtered vertical for radio lost detection 
+            // if (!sim.simulating(sens::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
+            if (us[axis][RAW] >= us[axis][CENT])  // pc[axis][RAW] = us_to_pc(axis, us[axis][RAW]);
+                pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][MAX], pc[axis][CENT], pc[axis][MAX]);
+            else pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][MIN], pc[axis][CENT], pc[axis][MIN]);
+            ema_filt(pc[axis][RAW], &(pc[axis][FILT]), ema_alpha);  // do ema filter to determine joy_vert_filt
+            pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][MIN], pc[axis][MAX]);
+            if (_radiolost || (ema_us[axis] > us[axis][DBBOT] && ema_us[axis] < us[axis][DBTOP]))
+                pc[axis][FILT] = pc[axis][CENT];  // if within the deadband set joy_axis_filt to center value
+        }
+        radiolost_update();
+    }
+    bool radiolost() { return _radiolost; }
+    bool* radiolost_ptr() { return &_radiolost; }
+    bool sw_event(uint8_t ch) { return _sw_event[ch]; }
+    void set_pc(int8_t axis, int8_t param, float val) { pc[axis][param] = val; }
+    void set_us(int8_t axis, int8_t param, int32_t val) { us[axis][param] = val; }
+  private:
+    float us_to_pc(int8_t _axis, int32_t _us) {  // float us_to_pc(int8_t axis, int32_t us) {
+        return (float)_us * (pc[VERT][MAX] - pc[VERT][MIN]) / (float)(us[VERT][MAX] - us[VERT][MIN]);
+        // if (us >= us[axis][CENT])
+        //     return map((float)us, (float)us[axis][CENT], (float)us[axis][MAX], pc[axis][CENT], pc[axis][MAX]);
+        // else return map((float)us, (float)us[axis][CENT], (float)us[axis][MIN], pc[axis][CENT], pc[axis][MIN]);
+    }
     // Spike filter pushes new hotrc readings into a LIFO ring buffer, replaces any well-defined spikes with values 
     // interpolated from before and after the spike. Also smoothes out abrupt value changes that don't recover later
     int32_t spike_filter (uint8_t axis, int32_t new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
@@ -1398,7 +1258,6 @@ class Hotrc {
         ++(index[axis]) %= depth;  // Update index for next time
         return returnval;  // Return the saved old value
     }
-  protected:
     void inject_interpolations(uint8_t axis, int32_t endspike_index, int32_t endspike_val) {  // Replaces values between indexes with linear interpolated values
         spike_length = ((depth + endspike_index - prespike_index[axis]) % depth) - 1;  // Equal to the spiking values count plus one
         if (!spike_length) return;  // Two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
@@ -1407,68 +1266,199 @@ class Hotrc {
         while (++loopindex <= spike_length)
             filt_history[axis][(prespike_index[axis] + loopindex) % depth] = filt_history[axis][prespike_index[axis]] + loopindex * interpolated_slope;
     }
-    bool radiolost_update() {
-        if (ema_us[VERT] > failsafe_us + failsafe_margin_us) {
-            failsafe_timer.reset();
-            _radiolost = false;
-        }
-        else if (!_radiolost && failsafe_timer.expired()) _radiolost = true;
-        return _radiolost;
-    }
-    float us_to_pc(int8_t _axis, int32_t _us) {  // float us_to_pc(int8_t axis, int32_t us) {
-        return (float)_us * (pc[VERT][MAX] - pc[VERT][MIN]) / (float)(us[VERT][MAX] - us[VERT][MIN]);
-        // if (us >= us[axis][CENT])
-        //     return map((float)us, (float)us[axis][CENT], (float)us[axis][MAX], pc[axis][CENT], pc[axis][MAX]);
-        // else return map((float)us, (float)us[axis][CENT], (float)us[axis][MIN], pc[axis][CENT], pc[axis][MIN]);
-    }
-  public:
-    void calc_params() {
-        for (int8_t axis=HORZ; axis<=VERT; axis++) {
-            us[axis][DBBOT] = us[axis][CENT] - deadband_us;
-            us[axis][DBTOP] = us[axis][CENT] + deadband_us;
-            us[axis][MARGIN] = margin_us;
-            pc[axis][MIN] = -100.0;
-            pc[axis][CENT] = 0.0;
-            pc[axis][MAX] = 100.0;
-            pc[axis][DBBOT] = pc[axis][CENT] - us_to_pc(axis, deadband_us);  // us_to_pc(axis, deadband_us);
-            pc[axis][DBTOP] = pc[axis][CENT] + us_to_pc(axis, deadband_us);  // us_to_pc(axis, deadband_us);
-            pc[axis][MARGIN] = us_to_pc(axis, margin_us);  // us_to_pc(axis, margin_us);
-        }
-    }
-    void toggles_update() {  //
-        for (int8_t chan = CH3; chan <= CH4; chan++) {
-            us[chan][RAW] = (int32_t)(rmt[chan].readPulseWidth(true));
-            sw[chan] = (us[chan][RAW] <= us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  us[CH3][CENT]
-            if ((sw[chan] != sw[chan-2]) && !_radiolost) _sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false. Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
-            sw[chan-2] = sw[chan];  // chan-2 index being used to store previous values of index chan
-        }
-    }
-    void toggles_reset() {  //
-        for (int8_t ch = CH3; ch <= CH4; ch++) _sw_event[ch] = false;
-    }
-    int32_t rmt_read(int8_t chan) {
-        return (int32_t)(rmt[chan].readPulseWidth(true));
-    }
-    void update() {
-        for (int8_t axis = HORZ; axis <= VERT; axis++) {
-            us[axis][RAW] = (int32_t)(rmt[axis].readPulseWidth(true));
-            us[axis][RAW] = spike_filter(axis, us[axis][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
-            ema_filt(us[axis][RAW], &ema_us[axis], ema_alpha);  // Need unconstrained ema-filtered vertical for radio lost detection 
-            // if (!sim.simulating(sens::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
-            if (us[axis][RAW] >= us[axis][CENT])  // pc[axis][RAW] = us_to_pc(axis, us[axis][RAW]);
-                pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][MAX], pc[axis][CENT], pc[axis][MAX]);
-            else pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][MIN], pc[axis][CENT], pc[axis][MIN]);
-            ema_filt(pc[axis][RAW], &(pc[axis][FILT]), ema_alpha);  // do ema filter to determine joy_vert_filt
-            pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][MIN], pc[axis][MAX]);
-            if (_radiolost || (ema_us[axis] > us[axis][DBBOT] && ema_us[axis] < us[axis][DBTOP]))
-                pc[axis][FILT] = pc[axis][CENT];  // if within the deadband set joy_axis_filt to center value
-        }
-        radiolost_update();
-    }
-    bool radiolost() { return _radiolost; }
-    bool* radiolost_ptr() { return &_radiolost; }
-    bool sw_event(uint8_t ch) { return _sw_event[ch]; }
-
-    void set_pc(int8_t axis, int8_t param, float val) { pc[axis][param] = val; }
-    void set_us(int8_t axis, int8_t param, int32_t val) { us[axis][param] = val; }
 };
+// class brake : centralized wrapper for all braking activity, as holistic coordination between sensors, actuator, and intent is critical
+class Brake {
+  public:
+    enum job { na, halt, pid, park, release, autostop, cal, autocal, num_job };
+    // enum bstat { halted, pidctrl, parked, parking, released, releasing, autostopping, autoadding, holding, caling, autocaling };
+  private:
+    BrakePositionSensor* brakepos;
+    PressureSensor* pressure;
+    Hotrc* hotrc;
+    Servo* motor;
+    qpid* brakepid;
+    job bstate, bstate_last;
+    bool change_state, faultsnow, faultslast;
+    job do_autostop();
+    job do_park();
+    job do_cal();
+    job do_pid();
+    job do_autocal();
+    job do_release();
+    job do_halt(bool immediate = false);
+    int8_t motor_pin, press_pin, posn_pin;
+    uint32_t out_timeout = 85000;
+    Timer out_timer;
+  public:
+    Brake();
+    // Brake(int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin);
+    void init(Hotrc* _hotrc, Servo* _motor, qpid* _brakepid, PressureSensor* _pressure, BrakePositionSensor* _brakepos);
+    job update(job _cmd = na, bool vip = false);  // vip == true will skip the timer
+    job status();
+    job command(job _cmd);
+    bool fault_detect();
+    bool isactive();
+
+    // brake actuator motor related
+    uint32_t interval_timeout = 1000000;
+    Timer interval_timer;             // How much time between increasing brake force during auto-stop if car still moving?
+    int32_t increment_interval_us = 1000000; // How often to apply increment during auto-stopping (in us)
+    float duty_pc = 25.0;  // From motor datasheet
+    float extend_absmin_pc = -100.0; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
+    float stop_pc = 0.0;          // Brake pulsewidth corresponding to center point where motor movement stops (in us)
+    float retract_absmax_pc = 100.0; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
+    float margin_pc = 1.8;        // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated
+    float extend_absmin_us = 670; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
+    float stop_us = 1500;       // Brake pulsewidth corresponding to center point where motor movement stops (in us)
+    float retract_absmax_us = 2330; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
+    float out_pc = stop_pc;
+    float out_us = stop_us;
+    float retract_effective_max_us;   // 
+    float extend_min_pc = extend_absmin_pc * duty_pc / 100.0;
+    float retract_max_pc = retract_absmax_pc * duty_pc / 100.0;
+    float extend_min_us = stop_us - duty_pc * (stop_us - extend_absmin_us) / 100.0;  // Brake pulsewidth corresponding to duty-constrained retraction of brake actuator (in us). Default setting for jaguar is max 670us
+    float retract_max_us = stop_us - duty_pc * (stop_us - retract_absmax_us) / 100.0;  // Brake pulsewidth corresponding to duty-constrained extension of brake actuator (in us). Default setting for jaguar is max 2330us
+    static const uint32_t pid_period_us = 85000;    // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+    Timer pid_timer; // not actually tunable, just needs value above
+    // float perc_per_us = (100.0 - (-100.0)) / (extend_min_us - retractmx_us);  // (100 - 0) percent / (us-max - us-min) us = 1/8.3 = 0.12 percent/us
+    float spid_kp = 0.323;     // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+    float spid_ki_hz = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+    float spid_kd_s = 0.000;   // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+};
+
+Brake::Brake() {}
+void Brake::init(Hotrc* _hotrc, Servo* _motor, qpid* _brakepid, PressureSensor* _pressure, BrakePositionSensor* _brakepos) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+    hotrc = _hotrc;
+    motor = _motor;        // motor_pin = _motor_pin;
+    pressure = _pressure;  // press_pin = _press_pin;
+    brakepos = _brakepos;  // posn_pin = _posn_pin;
+    brakepid = _brakepid;
+    pid_timer.set(pid_period_us);
+    interval_timer.set(interval_timeout);
+    out_timer.set(out_timeout);
+}
+Brake::job Brake::status() {
+    return bstate;
+}
+Brake::job Brake::command(Brake::job _cmd) {
+    if ((_cmd != na) && (_cmd != bstate)) {
+        bstate_last = bstate;
+        bstate = _cmd;
+        change_state = true;
+    }
+    return bstate;
+}
+Brake::job Brake::update(Brake::job _cmd, bool vip) {
+    job cmd = command(_cmd);
+    if (out_timer.expireset() || vip) {
+        if (cmd == halt) do_halt();
+        else if (cmd == pid) do_pid();
+        else if (cmd == park) do_park();
+        else if (cmd == release) do_release();
+        else if (cmd == autostop) do_autostop();
+        else if (cmd == cal) do_cal();
+        else if (cmd == autocal) do_autocal();
+        if (fault_detect()) {}
+        change_state = false;
+    }
+    return bstate;
+}
+Brake::job Brake::do_release() {
+    return bstate;
+}
+Brake::job Brake::do_halt(bool immediate) {
+    if (immediate) out_pc = stop_pc;
+    else {
+
+    }
+    return bstate;
+}
+Brake::job Brake::do_autostop() {
+    if (change_state) {
+    }
+    // bool autostop(req _cmd = req_na) {  // call this regularly during autostop event
+    //     req cmd = _cmd;
+    //     if (autostop_disabled) autostopping = false;
+    //     else {
+    //         if (autostopping) {
+    //             if (brakeIntervalTimer.expireset())
+    //                 pressure_target_psi = smin(pressure_target_psi + (panicstop ? pressure_panic_increment_psi : pressure_hold_increment_psi), pressure.max_human());
+    //             if (speedo.car_stopped() || stopcarTimer.expired()) cmd = req_off; 
+    //         }
+    //         if (cmd == req_tog) cmd = (req)(!autostopping);
+    //         if (autostopping && cmd == req_off) {
+    //             pressure_target_psi = pressure.min_psi();
+    //             autostopping = false;
+    //         }
+    //         else if (!autostopping && cmd == req_on && !speedo.car_stopped()) {
+    //             throttle.goto_idle();  // Keep target updated to possibly changing idle value
+    //             pressure_target_psi = smax(pressure.filt(), (panicstop ? pressure_panic_initial_psi : pressure_hold_initial_psi));
+    //             brakeIntervalTimer.reset();
+    //             stopcarTimer.reset();
+    //             autostopping = true;
+    //         }
+    //     }
+    //     return autostopping;
+    // }
+
+    // if () bstate = autoadding;
+    // else if () bstate = holding;
+    return bstate;
+}
+Brake::job Brake::do_park() {
+    if (change_state) bstate = park;
+    if (brakepos->filt() + brakepos->margin() <= brakepos->parkpos())  // If brake is retracted from park point, extend toward park point, slowing as we approach
+        out_pc = map(brakepos->filt(), brakepos->parkpos(), brakepos->min_in(), stop_pc, extend_min_pc);
+    else if (brakepos->filt() - brakepos->margin() >= brakepos->parkpos())  // If brake is extended from park point, retract toward park point, slowing as we approach
+        out_pc = map(brakepos->filt(), brakepos->parkpos(), brakepos->max_in(), stop_pc, retract_max_pc);
+    else command(halt);
+
+    // bool park_motors(req _cmd = req_na) {  // call this regularly during motor parking event
+    //     req cmd = _cmd;
+    //     if (park_the_motors) {
+    //         bool brake_parked = brakepos->parked();
+    //         bool gas_parked = ((std::abs(gas_out_us - gas_ccw_parked_us) < 1) && gasServoTimer.expired());
+    //         if ((brake_parked && gas_parked) || motorParkTimer.expired()) cmd = req_off;
+    //     }
+    //     if (cmd == req_tog) cmd = (req)(!park_the_motors);
+    //     if (park_the_motors && cmd == req_off)  park_the_motors = false;
+    //     else if (!park_the_motors && cmd == req_on) {
+    //         gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
+    //         motorParkTimer.reset();  // Set a timer to timebox this effort
+    //         park_the_motors = true;
+    //     }
+    //     return park_the_motors;
+    // }
+
+    return bstate;
+}
+Brake::job Brake::do_pid() {
+    bstate = pid;
+    return bstate;
+}
+Brake::job Brake::do_cal() {
+    if ((*hotrc).pc[VERT][FILT] > (*hotrc).pc[VERT][DBTOP]) out_pc = map((*hotrc).pc[VERT][FILT], (*hotrc).pc[VERT][DBTOP], (*hotrc).pc[VERT][MAX], stop_pc, retract_max_pc);
+    else if ((*hotrc).pc[VERT][FILT] < (*hotrc).pc[VERT][DBBOT]) out_pc = map((*hotrc).pc[VERT][FILT], (*hotrc).pc[VERT][MIN], (*hotrc).pc[VERT][DBBOT], extend_min_pc, stop_pc);
+    else out_pc = stop_pc;
+    return bstate;
+}
+Brake::job Brake::do_autocal() {
+    if (change_state);
+    return bstate;
+}
+bool Brake::fault_detect() {
+    // Todo: Detect system faults, such as:
+    // 1. The brake chain is not connected (evidenced by change in brake position without expected pressure changes)
+    // 2. Obstruction, motor failure, or inaccurate position. Evidenced by motor instructed to move but position not changing even when pressure is low.
+    // 3. Brake hydraulics failure or inaccurate pressure. Evidenced by normal positional change not causing expected increase in pressure.
+
+    // To-Do Finish this brake governing calculation
+    // brake_retract_effective_us = map(brakepos.filt(), brakepos.zeropoint(), BrakePositionSensor::abs_min_retract_in, )) {    
+    // brake_motor_govern_duty_ratio = 0.25;  // 25% = Max motor duty cycle under load given by datasheet. Results in: 1500 + 0.25 * (2330 - 1500) = 1707.5 us max pulsewidth at position = minimum
+    retract_effective_max_us = stop_us + duty_pc * (retract_max_us - stop_us);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
+
+    faultslast = faultsnow;
+    return faultsnow;
+}
+bool Brake::isactive() { return (bstate != na && bstate != halt); }

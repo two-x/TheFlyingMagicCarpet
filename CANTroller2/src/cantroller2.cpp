@@ -8,26 +8,10 @@
 #include "RunModeManager.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-
-// HotrcManager hotrcManager[2] = { 6, 6 };  // [HORZ/VERT]
 Display screen;
 RunModeManager run(&screen, &encoder);
 TouchScreen touch(touch_cs_pin, touch_irq_pin);
 ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
-
-#define RUN_TESTS 0
-#if RUN_TESTS
-    #include "unittests.h"
-    void run_tests() {
-        printf("Running tests...\n");
-        delay(5000);
-        test_Param();
-        printf("Tests complete.\n");
-        for(;;) {} // loop forever
-    }
-#else
-    void run_tests() {}
-#endif
 
 void get_touchpoint() { 
     touch_pt[0] = touch.touch_pt(0);
@@ -92,7 +76,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     printf("Init rmt for hotrc..\n");
     brake_calc_duty(brake_duty_pc);  // set derived parameters
     calc_governor();  // set derived parameters
-    // for (int axis=HORZ; axis<=CH4; axis++) hotrc_rmt[axis].init();  // Set up 4 RMT receivers, one per channel
     hotrc.init();
     printf("Pot setup..\n");
     pot.setup();             printf("Encoder setup..\n");
@@ -128,15 +111,12 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 	brakemotor.setPeriodHertz(50);
     gas_servo.setPeriodHertz(60);  // critically this pwm is a different frequency than the other two motors
 	steermotor.setPeriodHertz(50);
-    // brakemotor.attach (brake_pwm_pin, brake_extend_min_us, brake_retract_max_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
-    // steermotor.attach (steer_pwm_pin, steer_left_us, steer_right_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
-    // gas_servo.attach (gas_pwm_pin, gas_cw_min_us, gas_ccw_max_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     brakemotor.attach (brake_pwm_pin, brake_extend_absmin_us, brake_retract_absmax_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
     steermotor.attach (steer_pwm_pin, steer_left_min_us, steer_right_max_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
     gas_servo.attach (gas_pwm_pin, gas_servo_reversed ? gas_absmax_us : gas_absmin_us, gas_servo_reversed ? gas_absmin_us : gas_absmax_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
-
     tempsens.setup();  // Onewire bus and temp sensors
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Create a new task that runs the update_temperature_sensors function
+    brake.init(&hotrc, &brakemotor, &brake_pid, &pressure, &brakepos);
     throttle.setup(tempsens.get_sensor(loc::engine));
     printf("Init screen.. ");
     if (display_enabled) {
@@ -181,11 +161,9 @@ void loop() {
     mapsens.update();  // MAP sensor  // takes 6800 us (!!)
     maf_gps = massairflow();  // Recalculate intake mass airflow
     if (touch_reticles) get_touchpoint();
-
     hotrc_events_update(run.mode());
     hotrc.update();
     if (sim.potmapping(sens::joy)) hotrc.set_pc(HORZ, FILT, pot.mapToRange(steer_left_us, steer_right_us));
-
     run.run_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     
     // Steering - Determine motor output and send to the motor
@@ -208,6 +186,7 @@ void loop() {
     if (brakePidTimer.expireset()) {
         // Step 1 : Determine motor percent value
         if (park_the_motors) {
+            // if (park_the_motors) brake.do_park();
             if (brakepos.filt() + brakepos.margin() <= brakepos.parkpos())  // If brake is retracted from park point, extend toward park point, slowing as we approach
                 brake_out_pc = map(brakepos.filt(), brakepos.parkpos(), brakepos.min_in(), brake_stop_pc, brake_extend_min_pc);
             else if (brakepos.filt() - brakepos.margin() >= brakepos.parkpos())  // If brake is extended from park point, retract toward park point, slowing as we approach
@@ -222,10 +201,6 @@ void loop() {
         else if (run.mode() == CAL || run.mode() == BASIC || run.mode() == ASLEEP || (run.mode() == SHUTDOWN && !shutdown_incomplete))
             brake_out_pc = brake_stop_pc;
         else {  // First attenuate max power to avoid blowing out the motor like in bm2023, if retracting, as a proportion of position from zeropoint to fully retracted
-            // To-Do Finish this brake governing calculation
-            // brake_retract_effective_us = map(brakepos.filt(), brakepos.zeropoint(), BrakePositionSensor::abs_min_retract_in, )) {    
-            // brake_motor_govern_duty_ratio = 0.25;  // 25% = Max motor duty cycle under load given by datasheet. Results in: 1500 + 0.25 * (2330 - 1500) = 1707.5 us max pulsewidth at position = minimum
-            brake_retract_effective_max_us = brake_stop_us + brake_duty_pc * (brake_retract_max_us - brake_stop_us);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
             brake_pid.compute();  // Otherwise the pid control is active
         }
         // Step 2 : Fix motor pc value if it's out of range or exceeding positional limits
@@ -411,7 +386,6 @@ void loop() {
         }
         idelta = 0;
     }
-
     diag_update();  // Look for screwy conditions and update warning idiot lights
     neo_idiots_update();
     neo.set_heartcolor(colorcard[run.mode()]);
