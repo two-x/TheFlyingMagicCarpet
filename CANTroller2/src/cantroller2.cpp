@@ -1,7 +1,5 @@
 // Carpet CANTroller II  Source Code  - For ESP32-S3-DevKitC-1-N8
 #include <SPI.h>  // SPI serial bus
-#include <vector>
-#include <iomanip>  // Formatting cout
 #include "globals.h"
 #include "display.h"
 #include "touch.h"
@@ -9,8 +7,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 Display screen;
+TouchScreen touch(touch_cs_pin);
 RunModeManager run(&screen, &encoder);
-TouchScreen touch(touch_cs_pin, touch_irq_pin);
 ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
 
 void get_touchpoint() { 
@@ -165,13 +163,12 @@ void loop() {
     hotrc.update();
     if (sim.potmapping(sens::joy)) hotrc.set_pc(HORZ, FILT, pot.mapToRange(steer_left_us, steer_right_us));
     run.run_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
-    
+    joydirs _joydir = joydir(HORZ);
     // Steering - Determine motor output and send to the motor
     if (steerPidTimer.expireset()) {
         if (run.mode() == SHUTDOWN && !shutdown_incomplete)
             steer_out_pc = steer_stop_pc;  // Stop the steering motor if in shutdown mode and shutdown is complete
         else {
-            joydirs _joydir = joydir(HORZ);
             if (_joydir == joy_rt) steer_out_pc = map(hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][DBTOP], hotrc.pc[HORZ][MAX], steer_stop_pc, steer_safe (steer_right_pc));  // if joy to the right of deadband
             else if (_joydir == joy_lt) steer_out_pc = map(hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][DBBOT], hotrc.pc[HORZ][MIN], steer_stop_pc, steer_safe (steer_left_pc));  // if joy to the left of deadband
             else steer_out_pc = steer_stop_pc;  // Stop the steering motor if inside the deadband
@@ -193,7 +190,6 @@ void loop() {
                 brake_out_pc = map(brakepos.filt(), brakepos.parkpos(), brakepos.max_in(), brake_stop_pc, brake_retract_max_pc);
         }
         else if (run.mode() == CAL && cal_joyvert_brkmotor_mode) {
-            joydirs _joydir = joydir();
             if (_joydir == joy_up) brake_out_pc = map(hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBTOP], hotrc.pc[VERT][MAX], brake_stop_pc, brake_retract_max_pc);
             else if (_joydir == joy_down) brake_out_pc = map(hotrc.pc[VERT][FILT], hotrc.pc[VERT][MIN], hotrc.pc[VERT][DBBOT], brake_extend_min_pc, brake_stop_pc);
             else brake_out_pc = brake_stop_pc;
@@ -201,7 +197,7 @@ void loop() {
         else if (run.mode() == CAL || run.mode() == BASIC || run.mode() == ASLEEP || (run.mode() == SHUTDOWN && !shutdown_incomplete))
             brake_out_pc = brake_stop_pc;
         else {  // First attenuate max power to avoid blowing out the motor like in bm2023, if retracting, as a proportion of position from zeropoint to fully retracted
-            brake_pid.compute();  // Otherwise the pid control is active
+            brake_out_pc = brake_pid.compute();  // Otherwise the pid control is active
         }
         // Step 2 : Fix motor pc value if it's out of range or exceeding positional limits
         if (run.mode() == CAL && cal_joyvert_brkmotor_mode)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
@@ -224,9 +220,9 @@ void loop() {
         throttle.update();  // Allow idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
         if (run.mode() == CRUISE && (cruise_setpoint_mode == pid_suspend_fly) && !cruise_adjusting) {
             cruise_pid.set_outlimits(throttle.idlespeed(), tach_govern_rpm);  // because cruise pid has internal variable for idlespeed which may need updating
-            tach_target_rpm = throttle.target();  // tach_target_rpm is pointed to as the output of the cruise pid loop, need to update it before doing pid math
-            cruise_pid.compute();  // cruise pid calculates new output (tach_target_rpm) based on input (speedmeter::human) and target (speedo_target_mph)
-            throttle.set_target(tach_target_rpm);  // conversely to above, update throttle manager with new value from the pid calculation
+            // tach_target_rpm = throttle.target();  // tach_target_rpm is pointed to as the output of the cruise pid loop, need to update it before doing pid math
+            gas_pid.set_target(cruise_pid.compute());  // cruise pid calculates new output (tach_target_rpm) based on input (speedmeter::human) and target (speedo_target_mph)
+            // throttle.set_target(tach_target_rpm);  // conversely to above, update throttle manager with new value from the pid calculation
         }
         // Step 2 : Determine servo pulse width value
         if (park_the_motors || (run.mode() == SHUTDOWN && !shutdown_incomplete))
@@ -241,7 +237,7 @@ void loop() {
             gas_out_pc = gas_cruise_pc;
         else if (run.mode() != BASIC) {
             if (gas_open_loop) gas_out_pc = map(throttle.target(), throttle.idlespeed(), tach_govern_rpm, 0.0, gas_governor_pc); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
-            else gas_pid.compute();  // Do proper pid math to determine gas_out_us from engine rpm error
+            else gas_out_pc = gas_pid.compute();  // Do proper pid math to determine gas_out_us from engine rpm error
         }
         // Step 3 : Convert to degrees and constrain if out of range
         gas_out_deg = gas_pc_to_deg(gas_out_pc);  // convert to degrees

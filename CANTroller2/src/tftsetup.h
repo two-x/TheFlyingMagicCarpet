@@ -63,7 +63,7 @@
 
 // Optional reduced SPI frequency for reading TFT
 // Soren: Default was 2MHz (6000000)
-#define SPI_READ_FREQUENCY  16000000  // Soren: Most examples use 6MHz. I accidentally set to 16MHz tho and it doesn't break ...
+#define SPI_READ_FREQUENCY  20000000  // Soren: Most examples use 6MHz. I accidentally set to 16MHz tho and it doesn't break ...
 
 // The XPT2046 requires a lower SPI clock rate of 2.5MHz so we define that here:
 #define SPI_TOUCH_FREQUENCY  2500000

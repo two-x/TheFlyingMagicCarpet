@@ -1,15 +1,16 @@
 #pragma once
 #include <ESP32Servo.h>        // Makes PWM output to control motors (for rudimentary control of our gas and steering)
-#include <DallasTemperature.h>
 #include <Wire.h>
 #include <Preferences.h>
 #include <iostream>
 #include <iomanip>  // For formatting console cout strings
-#include "utils.h"
+#include <vector>
+#include "common.h"
 #include "qpid.h" // This is quickpid library except i have to edit some of it
 #include "uictrl.h"
-#include "neo.h"
+#include "neopixel.h"
 #include "devices.h"
+#include "control.h"
 #include "temperature.h"
 
 bool starter_signal_support = true;
@@ -28,7 +29,7 @@ bool looptime_print = false;         // Makes code write out timestamps througho
 bool touch_reticles = false;
 uint32_t looptime_linefeed_threshold = 0;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
 
-// In case we ever talk to jaguars over asynchronous serial port, replace with this:
+// In case we ever talk to jaguars over asynchronous serial port, uncomment:
 // #include <HardwareSerial.h>
 // HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
 
@@ -93,7 +94,6 @@ float pressure_hold_initial_psi = 45;  // Pressure initially applied when brakes
 float pressure_hold_increment_psi = 3;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 float pressure_panic_initial_psi = 80; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
 float pressure_panic_increment_psi = 5; // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
-float pressure_target_psi;
 
 // brake actuator motor related
 Timer brakeIntervalTimer(1000000);             // How much time between increasing brake force during auto-stop if car still moving?
@@ -138,12 +138,11 @@ float gas_spid_initial_kd_s = 0.000;  // PID derivative time factor (gas). How m
 bool gas_open_loop = true;
 
 // carspeed/speedo related
-float speedo_target_mph;
 float speedo_govern_mph;       // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
 float speedo_idle_mph = 4.50;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
 
 // tach related
-float tach_target_rpm, tach_govern_rpm;        // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
+float tach_govern_rpm;        // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
 float tach_margin_rpm = 15.0; // Margin of error for checking engine rpm (in rpm)
 float tach_idle_abs_min_rpm = 450.0;  // Low limit of idle speed adjustability
 float tach_idle_hot_min_rpm = 550.0;  // Idle speed at op_max engine temp
@@ -187,48 +186,43 @@ enum sw_presses { NONE, SHORT, LONG }; // used by encoder sw and button algorith
 int8_t sleep_request = req_na;
 
 // Instantiate objects
-Preferences config;  // Persistent config storage
-I2C i2c(i2c_sda_pin, i2c_scl_pin);
-Hotrc hotrc;
-Potentiometer pot(pot_wipe_pin);
-Simulator sim(pot);
-TemperatureSensorManager tempsens(onewire_pin);
-Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
-CarBattery mulebatt(mulebatt_pin);
-LiPOBatt lipobatt(lipobatt_pin);
+static Preferences config;  // Persistent config storage
+static I2C i2c(i2c_sda_pin, i2c_scl_pin);
+static Hotrc hotrc;
+static Potentiometer pot(pot_wipe_pin);
+static Simulator sim(pot);
+static TemperatureSensorManager tempsens(onewire_pin);
+static Encoder encoder(encoder_a_pin, encoder_b_pin, button_pin);
+static CarBattery mulebatt(mulebatt_pin);
+static LiPOBatt lipobatt(lipobatt_pin);
 static Servo brakemotor, steermotor, gas_servo;
-PressureSensor pressure(pressure_pin);
-BrakePositionSensor brakepos(brake_pos_pin);
-Speedometer speedo(speedo_pin);
-Tachometer tach(tach_pin);
-AirVeloSensor airvelo(i2c);
-MAPSensor mapsens(i2c);  // map sensor related
-ThrottleControl throttle(tach.human_ptr(), tach.filt_ptr(), tach_idle_high_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm,
-    temp_lims_f[ENGINE][OP_MIN], temp_lims_f[ENGINE][WARNING], 50, ThrottleControl::idlemodes::control);
+static PressureSensor pressure(pressure_pin);
+static BrakePositionSensor brakepos(brake_pos_pin);
+static Speedometer speedo(speedo_pin);
+static Tachometer tach(tach_pin);
+static AirVeloSensor airvelo(i2c);
+static MAPSensor mapsens(i2c);  // map sensor related
 
-qpid brake_pid(pressure.filt_ptr(), &brake_out_pc, &pressure_target_psi, brake_extend_min_pc, brake_retract_max_pc,  // input, target, output, output min, max variable references
-    brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,                     // Kp, Ki, and Kd tuning constants
-    qpid::pmod::onerr, qpid::dmod::onerr, qpid::awmod::cond, qpid::cdir::direct,  // settings  // roundcond, clamp
-    brake_pid_period_us, qpid::ctrl::manual, qpid::centmod::on, brake_stop_pc); // period, more settings
+static qpid brake_pid(pressure.filt_ptr(), brake_extend_min_pc, brake_retract_max_pc, brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,
+    qpid::pmod::onerr, qpid::dmod::onerr, qpid::awmod::cond, qpid::cdir::direct, brake_pid_period_us, qpid::ctrl::manual, qpid::centmod::on, brake_stop_pc);
 
-qpid gas_pid(tach.filt_ptr(), &gas_out_pc, &tach_target_rpm, 0.0, 100.0,  // input, target, output variable references
-    gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s,  // Kp, Ki, and Kd tuning constants
-    qpid::pmod::onerr, qpid::dmod::onerr, qpid::awmod::clamp, qpid::cdir::direct,              // settings
-    gas_pid_period_us, (gas_open_loop) ? qpid::ctrl::manual : qpid::ctrl::manual, qpid::centmod::off); // period, more settings
+static qpid gas_pid(tach.filt_ptr(), 0.0, 100.0, gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, qpid::pmod::onerr, qpid::dmod::onerr, 
+    qpid::awmod::clamp, qpid::cdir::direct, gas_pid_period_us, (gas_open_loop) ? qpid::ctrl::manual : qpid::ctrl::manual, qpid::centmod::off);
 
-qpid cruise_pid(speedo.filt_ptr(), &tach_target_rpm, &speedo_target_mph, throttle.idlespeed(), tach_govern_rpm,  // input, target, output variable references
-    cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s,                 // Kp, Ki, and Kd tuning constants
-    qpid::pmod::onerr, qpid::dmod::onerr, qpid::awmod::round, qpid::cdir::direct, // settings
-    cruise_pid_period_us, qpid::ctrl::manual, qpid::centmod::off);
+static Throttle throttle(gas_pid.target_ptr(), tach.human_ptr(), tach.filt_ptr(), tach_idle_high_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm,
+    temp_lims_f[ENGINE][OP_MIN], temp_lims_f[ENGINE][WARNING], 50, Throttle::idlemodes::control);
 
-Brake brake;  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+static qpid cruise_pid(speedo.filt_ptr(), throttle.idlespeed(), tach_govern_rpm, cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s,
+    qpid::pmod::onerr, qpid::dmod::onerr, qpid::awmod::round, qpid::cdir::direct, cruise_pid_period_us, qpid::ctrl::manual, qpid::centmod::off);
+
+static Brake brake;  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+static neopixelstrip neo;
 
 joydirs joydir(int8_t axis = VERT) {
     if (axis == VERT) return ((hotrc.pc[axis][FILT] > hotrc.pc[axis][DBTOP]) ? joy_up : ((hotrc.pc[axis][FILT] < hotrc.pc[axis][DBBOT]) ? joy_down : joy_cent));
     return ((hotrc.pc[axis][FILT] > hotrc.pc[axis][DBTOP]) ? joy_rt : ((hotrc.pc[axis][FILT] < hotrc.pc[axis][DBBOT]) ? joy_lt : joy_cent));
     // return (pc[axis][FILT] > pc[axis][DBTOP]) ? ((axis == VERT) ? joy_up : joy_rt) : (pc[axis][FILT] < pc[axis][DBBOT]) ? ((axis == VERT) ? joy_down : joy_lt) : joy_cent;
 }
-
 float gas_pc_to_deg(float _pc) {  // Eventually this should be linearized
     return gas_closed_min_deg + _pc * (gas_open_max_deg - gas_closed_min_deg) / 100.0;
 }
@@ -386,12 +380,12 @@ Timer boot_button_timer(400000);
 //
 void bootbutton_update() {
     // ESP32 "boot" button. generates boot_button_action flags of LONG or SHORT presses which can be handled wherever. Handler must reset boot_button_action = NONE
-    if (bootbutton_pin < 0) return;
+    if (button_pin < 0) return;
     // if (boot_button_action == SHORT) {
     //     syspower_request = req_on;
     //     boot_button_action == NONE;
     // }
-    if (!read_pin (bootbutton_pin)) {
+    if (!read_pin (button_pin)) {
         if (!boot_button) {  // If press just occurred
             boot_button_timer.reset();  // Looks like someone just pushed the esp32 "boot" button
             boot_button_timer_active = true;  // flag to indicate timing for a possible long press
@@ -626,7 +620,6 @@ void err_print_info() {
 int16_t touch_pt[4] = { 160, 120, 2230, 2130 };
 
 // Neopixel stuff
-neopixelstrip neo;
 int32_t neobright = 10;  // lets us dim/brighten the neopixels
 int32_t neodesat = 0;  // lets us de/saturate the neopixels
 

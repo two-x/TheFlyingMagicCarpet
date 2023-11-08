@@ -9,11 +9,11 @@
 #include "mapsens.h"
 #include "Arduino.h"
 #include "FunctionalInterrupt.h"
-#include "utils.h"
+#include "common.h"
 #include "uictrl.h"
 #include "driver/rmt.h"
 #include "RMT_Input.h"
-#include "qpid.h"
+#include <ESP32Servo.h>        // Makes PWM output to control motors (for rudimentary control of our gas and steering)
 // #include "xtensa/core-macros.h"  // access to ccount register for esp32 timing ticks
 
 // NOTE: the following classes all contain their own initial config values (for simplicity). We could instead use Config objects and pass them in at construction time, which might be
@@ -416,7 +416,7 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
 
 // Base class for sensors which communicate using i2c.
 // NOTE: this is a strange type of Sensor, it's not really a Transducer but it does do filtering. maybe we should rethink the hierarchy a little?
-//       I think we can move Param to utils.h and add a class ExponentialMovingAverage there as well that just has the ema functionality, then make
+//       I think we can move Param to common.h and add a class ExponentialMovingAverage there as well that just has the ema functionality, then make
 //       I2CSensor a child of -> Device, ExponentialMovingAverage and not a Sensor at all.
 class I2CSensor : public Sensor<float,float> {
     protected:
@@ -893,14 +893,23 @@ class ServoPWM : public Transducer<NATIVE_T, HUMAN_T> {
     }
 };
 
-// JagMotor is a class specifically for the brake and steering motors. The jaguar stops the motor when receiving 1500 us pulse,
-//    and varies the speed in one direction if pulse is 1500 to (max~2500) us, the other direction if pulse is 1500 to (min~500) us.
-//    Effectively the difference is these have a center value.
-// class JagMotor : public ServoPWM {
-//   public:
-//     JagMotor (int32_t arg_pin) : ServoPWM(arg_pin) {}
-//     JagMotor() = delete;
-// };
+class GasServo : public ServoPWM<float, float> {
+  private:
+  public:
+    GasServo();
+};
+
+class BrakeMotor : public ServoPWM<float, float> {
+  private:
+  public:
+    BrakeMotor();
+};
+
+class SteeringMotor : public ServoPWM<float, float> {
+  private:
+  public:
+    SteeringMotor();
+};
 
 // Device::Toggle is a base class for system signals or devices having a boolean value
 class Toggle : public Device {
@@ -1154,14 +1163,12 @@ class Hotrc {
         RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_pin)),  // hotrc[CH4]
     };
     bool spike_signbit;
-    int32_t spike_cliff[num_axes];
+    int32_t spike_length, this_delta, interpolated_slope, loopindex, previndex, spike_cliff[num_axes];
     int32_t spike_threshold[num_axes] = { 6, 6 };
-    int32_t spike_length, this_delta, interpolated_slope, loopindex, previndex;
     int32_t prespike_index[num_axes] = { -1, -1 };
     int32_t index[num_axes] = { 1, 1 };  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
     static const int32_t depth = 9;  // more depth will reject longer spikes at the expense of controller delay
-    int32_t filt_history[num_axes][depth];  // Values after filtering.
-    int32_t raw_history[num_axes][depth];  // Copies of the values read (don't need separate buffer, but useful to debug the filter)
+    int32_t raw_history[num_axes][depth], filt_history[num_axes][depth];  // Values before and after filtering.
   public:
     Hotrc() { calc_params(); }
     void init() {
@@ -1267,198 +1274,3 @@ class Hotrc {
             filt_history[axis][(prespike_index[axis] + loopindex) % depth] = filt_history[axis][prespike_index[axis]] + loopindex * interpolated_slope;
     }
 };
-// class brake : centralized wrapper for all braking activity, as holistic coordination between sensors, actuator, and intent is critical
-class Brake {
-  public:
-    enum job { na, halt, pid, park, release, autostop, cal, autocal, num_job };
-    // enum bstat { halted, pidctrl, parked, parking, released, releasing, autostopping, autoadding, holding, caling, autocaling };
-  private:
-    BrakePositionSensor* brakepos;
-    PressureSensor* pressure;
-    Hotrc* hotrc;
-    Servo* motor;
-    qpid* brakepid;
-    job bstate, bstate_last;
-    bool change_state, faultsnow, faultslast;
-    job do_autostop();
-    job do_park();
-    job do_cal();
-    job do_pid();
-    job do_autocal();
-    job do_release();
-    job do_halt(bool immediate = false);
-    int8_t motor_pin, press_pin, posn_pin;
-    uint32_t out_timeout = 85000;
-    Timer out_timer;
-  public:
-    Brake();
-    // Brake(int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin);
-    void init(Hotrc* _hotrc, Servo* _motor, qpid* _brakepid, PressureSensor* _pressure, BrakePositionSensor* _brakepos);
-    job update(job _cmd = na, bool vip = false);  // vip == true will skip the timer
-    job status();
-    job command(job _cmd);
-    bool fault_detect();
-    bool isactive();
-
-    // brake actuator motor related
-    uint32_t interval_timeout = 1000000;
-    Timer interval_timer;             // How much time between increasing brake force during auto-stop if car still moving?
-    int32_t increment_interval_us = 1000000; // How often to apply increment during auto-stopping (in us)
-    float duty_pc = 25.0;  // From motor datasheet
-    float extend_absmin_pc = -100.0; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
-    float stop_pc = 0.0;          // Brake pulsewidth corresponding to center point where motor movement stops (in us)
-    float retract_absmax_pc = 100.0; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
-    float margin_pc = 1.8;        // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated
-    float extend_absmin_us = 670; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
-    float stop_us = 1500;       // Brake pulsewidth corresponding to center point where motor movement stops (in us)
-    float retract_absmax_us = 2330; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
-    float out_pc = stop_pc;
-    float out_us = stop_us;
-    float retract_effective_max_us;   // 
-    float extend_min_pc = extend_absmin_pc * duty_pc / 100.0;
-    float retract_max_pc = retract_absmax_pc * duty_pc / 100.0;
-    float extend_min_us = stop_us - duty_pc * (stop_us - extend_absmin_us) / 100.0;  // Brake pulsewidth corresponding to duty-constrained retraction of brake actuator (in us). Default setting for jaguar is max 670us
-    float retract_max_us = stop_us - duty_pc * (stop_us - retract_absmax_us) / 100.0;  // Brake pulsewidth corresponding to duty-constrained extension of brake actuator (in us). Default setting for jaguar is max 2330us
-    static const uint32_t pid_period_us = 85000;    // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
-    Timer pid_timer; // not actually tunable, just needs value above
-    // float perc_per_us = (100.0 - (-100.0)) / (extend_min_us - retractmx_us);  // (100 - 0) percent / (us-max - us-min) us = 1/8.3 = 0.12 percent/us
-    float spid_kp = 0.323;     // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-    float spid_ki_hz = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-    float spid_kd_s = 0.000;   // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-};
-
-Brake::Brake() {}
-void Brake::init(Hotrc* _hotrc, Servo* _motor, qpid* _brakepid, PressureSensor* _pressure, BrakePositionSensor* _brakepos) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
-    hotrc = _hotrc;
-    motor = _motor;        // motor_pin = _motor_pin;
-    pressure = _pressure;  // press_pin = _press_pin;
-    brakepos = _brakepos;  // posn_pin = _posn_pin;
-    brakepid = _brakepid;
-    pid_timer.set(pid_period_us);
-    interval_timer.set(interval_timeout);
-    out_timer.set(out_timeout);
-}
-Brake::job Brake::status() {
-    return bstate;
-}
-Brake::job Brake::command(Brake::job _cmd) {
-    if ((_cmd != na) && (_cmd != bstate)) {
-        bstate_last = bstate;
-        bstate = _cmd;
-        change_state = true;
-    }
-    return bstate;
-}
-Brake::job Brake::update(Brake::job _cmd, bool vip) {
-    job cmd = command(_cmd);
-    if (out_timer.expireset() || vip) {
-        if (cmd == halt) do_halt();
-        else if (cmd == pid) do_pid();
-        else if (cmd == park) do_park();
-        else if (cmd == release) do_release();
-        else if (cmd == autostop) do_autostop();
-        else if (cmd == cal) do_cal();
-        else if (cmd == autocal) do_autocal();
-        if (fault_detect()) {}
-        change_state = false;
-    }
-    return bstate;
-}
-Brake::job Brake::do_release() {
-    return bstate;
-}
-Brake::job Brake::do_halt(bool immediate) {
-    if (immediate) out_pc = stop_pc;
-    else {
-
-    }
-    return bstate;
-}
-Brake::job Brake::do_autostop() {
-    if (change_state) {
-    }
-    // bool autostop(req _cmd = req_na) {  // call this regularly during autostop event
-    //     req cmd = _cmd;
-    //     if (autostop_disabled) autostopping = false;
-    //     else {
-    //         if (autostopping) {
-    //             if (brakeIntervalTimer.expireset())
-    //                 pressure_target_psi = smin(pressure_target_psi + (panicstop ? pressure_panic_increment_psi : pressure_hold_increment_psi), pressure.max_human());
-    //             if (speedo.car_stopped() || stopcarTimer.expired()) cmd = req_off; 
-    //         }
-    //         if (cmd == req_tog) cmd = (req)(!autostopping);
-    //         if (autostopping && cmd == req_off) {
-    //             pressure_target_psi = pressure.min_psi();
-    //             autostopping = false;
-    //         }
-    //         else if (!autostopping && cmd == req_on && !speedo.car_stopped()) {
-    //             throttle.goto_idle();  // Keep target updated to possibly changing idle value
-    //             pressure_target_psi = smax(pressure.filt(), (panicstop ? pressure_panic_initial_psi : pressure_hold_initial_psi));
-    //             brakeIntervalTimer.reset();
-    //             stopcarTimer.reset();
-    //             autostopping = true;
-    //         }
-    //     }
-    //     return autostopping;
-    // }
-
-    // if () bstate = autoadding;
-    // else if () bstate = holding;
-    return bstate;
-}
-Brake::job Brake::do_park() {
-    if (change_state) bstate = park;
-    if (brakepos->filt() + brakepos->margin() <= brakepos->parkpos())  // If brake is retracted from park point, extend toward park point, slowing as we approach
-        out_pc = map(brakepos->filt(), brakepos->parkpos(), brakepos->min_in(), stop_pc, extend_min_pc);
-    else if (brakepos->filt() - brakepos->margin() >= brakepos->parkpos())  // If brake is extended from park point, retract toward park point, slowing as we approach
-        out_pc = map(brakepos->filt(), brakepos->parkpos(), brakepos->max_in(), stop_pc, retract_max_pc);
-    else command(halt);
-
-    // bool park_motors(req _cmd = req_na) {  // call this regularly during motor parking event
-    //     req cmd = _cmd;
-    //     if (park_the_motors) {
-    //         bool brake_parked = brakepos->parked();
-    //         bool gas_parked = ((std::abs(gas_out_us - gas_ccw_parked_us) < 1) && gasServoTimer.expired());
-    //         if ((brake_parked && gas_parked) || motorParkTimer.expired()) cmd = req_off;
-    //     }
-    //     if (cmd == req_tog) cmd = (req)(!park_the_motors);
-    //     if (park_the_motors && cmd == req_off)  park_the_motors = false;
-    //     else if (!park_the_motors && cmd == req_on) {
-    //         gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
-    //         motorParkTimer.reset();  // Set a timer to timebox this effort
-    //         park_the_motors = true;
-    //     }
-    //     return park_the_motors;
-    // }
-
-    return bstate;
-}
-Brake::job Brake::do_pid() {
-    bstate = pid;
-    return bstate;
-}
-Brake::job Brake::do_cal() {
-    if ((*hotrc).pc[VERT][FILT] > (*hotrc).pc[VERT][DBTOP]) out_pc = map((*hotrc).pc[VERT][FILT], (*hotrc).pc[VERT][DBTOP], (*hotrc).pc[VERT][MAX], stop_pc, retract_max_pc);
-    else if ((*hotrc).pc[VERT][FILT] < (*hotrc).pc[VERT][DBBOT]) out_pc = map((*hotrc).pc[VERT][FILT], (*hotrc).pc[VERT][MIN], (*hotrc).pc[VERT][DBBOT], extend_min_pc, stop_pc);
-    else out_pc = stop_pc;
-    return bstate;
-}
-Brake::job Brake::do_autocal() {
-    if (change_state);
-    return bstate;
-}
-bool Brake::fault_detect() {
-    // Todo: Detect system faults, such as:
-    // 1. The brake chain is not connected (evidenced by change in brake position without expected pressure changes)
-    // 2. Obstruction, motor failure, or inaccurate position. Evidenced by motor instructed to move but position not changing even when pressure is low.
-    // 3. Brake hydraulics failure or inaccurate pressure. Evidenced by normal positional change not causing expected increase in pressure.
-
-    // To-Do Finish this brake governing calculation
-    // brake_retract_effective_us = map(brakepos.filt(), brakepos.zeropoint(), BrakePositionSensor::abs_min_retract_in, )) {    
-    // brake_motor_govern_duty_ratio = 0.25;  // 25% = Max motor duty cycle under load given by datasheet. Results in: 1500 + 0.25 * (2330 - 1500) = 1707.5 us max pulsewidth at position = minimum
-    retract_effective_max_us = stop_us + duty_pc * (retract_max_us - stop_us);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
-
-    faultslast = faultsnow;
-    return faultsnow;
-}
-bool Brake::isactive() { return (bstate != na && bstate != halt); }

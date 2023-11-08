@@ -3,7 +3,7 @@
 #pragma once
 #include <cassert>  // for assert
 #include "devices.h"
-#include "utils.h"
+#include "common.h"
 #include <memory>
 
 void test_Param() {
