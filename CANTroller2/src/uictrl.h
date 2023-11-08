@@ -1,6 +1,6 @@
 #pragma once
-#include "utils.h"
 #include "FunctionalInterrupt.h"
+#include "common.h"
 
 // Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class Potentiometer {

@@ -1,20 +1,11 @@
+
 #pragma once
-// #ifdef CAP_TOUCH
-//     #include <Adafruit_FT6206.h>  // For interfacing with the capacitive touchscreen controller chip
-// #else
 #include <XPT2046_Touchscreen.h>
-// #endif
+#include "common.h"
 
 class TouchScreen {
 private:
-    #ifdef CAP_TOUCH
-        #include <Adafruit_FT6206.h>  // For interfacing with the cap touchscreen controller chip
-        Adafruit_FT6206 _ts;  // 2.8in cap touch panel on tft lcd
-    #else
-        #include <XPT2046_Touchscreen.h>
-        XPT2046_Touchscreen _ts;  // 3.2in resistive touch panel on tft lcd
-        // XPT2046_Touchscreen ts (touch_cs_pin);  // 3.2in resistive touch panel on tft lcd
-    #endif
+    XPT2046_Touchscreen _ts;  // 3.5in resistive touch panel on tft lcd
     bool touch_longpress_valid = true;
     bool touch_now_touched = false;
     int32_t tedit_exponent = 0;
@@ -35,19 +26,15 @@ private:
     enum touch_lim { tsmin, tsmax };
     int32_t trow, tcol;
     int32_t tft_touch[2];
-    // These values need to be calibrated to each individual display panel for best accuracy
 
+    // These values need to be calibrated to each individual display panel for best accuracy
     int32_t corners[2][2] = { { 351, 3928 }, { 189, 3950 } };  // [xx/yy][min/max]
     // Soren's breadboard "" { { 351, 3933 }, { 189, 3950 } };  // [xx/yy][min/max]
-    // 
+
     TS_Point touchpoint;
 public:
-    #ifdef CAP_TOUCH
-        TouchScreen() : _ts() {}
-    #else
-        TouchScreen(uint8_t csPin, uint8_t irqPin) : _ts(csPin, irqPin) {}
-    #endif
-
+    TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts(csPin, irqPin) {}
+    
     void init() {
         _ts.begin();
         // _ts.setRotation(1); do we need to rotate?
@@ -99,15 +86,6 @@ public:
             return;
         }
         tedit = 1 << tedit_exponent;  // Determine value editing rate
-        #ifdef CAP_TOUCH
-            // Rotate touch coordinates to match tft coordinates
-            touchpoint.x = map(touchpoint.x, 0, disp_height_pix, disp_height_pix, 0);
-            touchpoint.y = map(touchpoint.y, 0, disp_width_pix, disp_width_pix, 0);
-            touch[yy] = disp_height_pix - touchpoint.x; // Touch point y coordinate in pixels, from the origin at the top-left corner
-            tft_touch[xx] = touchpoint.y; // Touch point x coordinate in pixels, from the origin at the top-left corner
-        #else
-            // Limit touch coordinates to a specific range
-        #endif
         trow = constrain((tft_touch[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
         tcol = (tft_touch[xx] - touch_margin_h_pix) / touch_cell_h_pix;
         // Take appropriate touchscreen actions depending on how we're being touched
@@ -147,26 +125,26 @@ public:
             // set_idiotcolors();
         }
         else if (tcol == 0 && trow == 4) {  // Pressed the simulation mode toggle. Needs long-press
-            if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
+            if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout()) {
                 sim.toggle();
                 touch_longpress_valid = false;
             }
         }
         if (tcol == 2 && trow == 0) {
-            if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.get_timeout()) {
+            if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout()) {
                 calmode_request = true;
                 touch_longpress_valid = false;
             }
         }
         else if (sim.enabled()) {
             if (tcol == 4 && trow == 0) {
-                if (touch_longpress_valid && touchHoldTimer.elapsed() > 2 * touchHoldTimer.get_timeout()) {  // Double hold time for some extra safety
+                if (touch_longpress_valid && touchHoldTimer.elapsed() > 2 * touchHoldTimer.timeout()) {  // Double hold time for some extra safety
                     ignition_request = req_tog;
                     touch_longpress_valid = false;
                 }
             }
             else if (tcol == 5 && trow == 0) {
-                if (touch_longpress_valid && touchHoldTimer.elapsed() > 2 * touchHoldTimer.get_timeout()) {  // Double hold time for some extra safety
+                if (touch_longpress_valid && touchHoldTimer.elapsed() > 2 * touchHoldTimer.timeout()) {  // Double hold time for some extra safety
                     sleep_request = req_on;  // sleep requests are handled by shutdown mode, otherwise will be ignored
                     touch_longpress_valid = false;
                 }
@@ -184,7 +162,7 @@ public:
             else if (tcol == 5 && trow == 4 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], tedit, hotrc.pc[HORZ][MIN], hotrc.pc[HORZ][MAX]);
         }
         // Update the tedit_exponent if needed
-        if (tedit_exponent < tedit_exponent_max && (touchHoldTimer.elapsed() > (tedit_exponent + 1) * touchAccelTimer.get_timeout())) {
+        if (tedit_exponent < tedit_exponent_max && (touchHoldTimer.elapsed() > (tedit_exponent + 1) * touchAccelTimer.timeout())) {
             tedit_exponent++;
             tedit = 1 << tedit_exponent; // Update the touch acceleration value
         }
@@ -203,10 +181,6 @@ public:
                 Serial.print(", ");
                 Serial.println(touchpoint.y);
                 // If available, you can print touch pressure as well (for capacitive touch)
-                #ifdef CAP_TOUCH
-                    Serial.print("Touch Pressure: ");
-                    Serial.println(touchpoint.z);
-                #endif
                 lastTouchPrintTime = currentTime;
             }
         }

@@ -1,6 +1,6 @@
 #pragma once
 #include <stdint.h>
-#include "utils.h"
+#include "common.h"
 #include "temperature.h"
 
 // I stole this library and modified it heavily to our purpposes - Soren
@@ -17,10 +17,8 @@ class qpid {
     enum class centmod : uint8_t {off, on, strict};                   // Soren - Allows a defined output zero point
   private:
     float dispkp = 0; float dispki = 0; float dispkd = 0;
-    float _pterm, _iterm, _dterm, _kp, _ki, _kd, _outmin, _outmax, _err, lasterr, lastin, _cent, _outsum;
+    float _pterm, _iterm, _dterm, _kp, _ki, _kd, _outmin, _outmax, _err, lasterr, lastin, _cent, _outsum, _target, _output;
     float *myin;     // Pointers to the input, output, and target variables. This creates a
-    float *myout;    // hard link between the variables and the PID, freeing the user from having
-    float *mytarg;  // to constantly tell us what these values are. With pointers we'll just know.
     ctrl _mode = ctrl::manual;
     cdir _dir = cdir::direct;
     pmod _pmode = pmod::onerr;
@@ -31,13 +29,13 @@ class qpid {
   public:
     qpid();  // Default constructor
     // Constructor. Links the PID to input, output, target, initial tuning parameters and control modes.
-    qpid(float *arg_in, float *arg_output, float *arg_targ, float arg_min, float arg_max, float arg_kp, float arg_ki, float arg_kd,  // Soren edit
-        pmod arg_pmode, dmod arg_dmode, awmod arg_awmode, cdir arg_dir, uint32_t arg_sampletime, ctrl arg_mode, centmod arg_centmode, float arg_cent);  // Soren edit
+    qpid(float *arg_in, float arg_min, float arg_max, float arg_kp, float arg_ki, float arg_kd, pmod arg_pmode, dmod arg_dmode,
+        awmod arg_awmode, cdir arg_dir, uint32_t arg_sampletime, ctrl arg_mode, centmod arg_centmode, float arg_cent);  // Soren edit
     // qpid(float *in, float *out, float *targ, float Kp, float Ki, float Kd, dir dir);
     // qpid(float *in, float *out, float *targ);
     void set_mode(ctrl arg_mode);
     void set_mode(uint8_t arg_mode);
-    bool compute();  // Performs the PID calculation
+    float compute();  // Performs the PID calculation
     void set_outlimits(float arg_min, float arg_max);  // Sets and clamps the output to a specific range (0-255 by default).
     void set_centmode(centmod arg_centmode);  // Soren
     void set_centmode(uint8_t arg_centmode);  // Soren
@@ -60,6 +58,8 @@ class qpid {
     void set_awmode(awmod arg_awmode);  // Sets the integral anti-windup mode to one of awClamp, which clamps the output after adding integral and proportional (on measurement) terms, or awcond (default), which provides some integral correction, prevents deep saturation and reduces overshoot. Option awOff disables anti-windup altogether.
     void set_awmode(uint8_t arg_awmode);
     void set_outsum(float arg_outsum);  // sets the output summation value
+    void set_target(float arg_target);
+    void set_output(float arg_output);
     void init();        // Ensure a bumpless transfer from manual to automatic mode
     void reset();             // Clears _pterm, _iterm, _dterm and _outsum values
     // Getter functions
@@ -75,26 +75,24 @@ class qpid {
     float outmax() { return _outmax; }  // Soren
     float outrange() { return _outmax - _outmin; }  // Soren
     float cent() { return _cent; }  // Soren
+    float target() { return _target; }  // Soren
+    float output() { return _output; }  // Soren
     uint8_t mode() { return static_cast<uint8_t>(_mode); }
     uint8_t dir() { return static_cast<uint8_t>(_dir); }
     uint8_t pmode() { return static_cast<uint8_t>(_pmode); }
     uint8_t dmode() { return static_cast<uint8_t>(_dmode); }
     uint8_t awmode() { return static_cast<uint8_t>(_awmode); }
     uint8_t centmode() { return static_cast<uint8_t>(_centmode); }  // Soren
+    float* target_ptr() { return &_target; }
 };
 
 qpid::qpid() {}
 
 // Constructor that allows all parameters to get set
-qpid::qpid(float* arg_in, float* arg_out, float* arg_targ, float arg_min, float arg_max,
-    float arg_kp = 0, float arg_ki = 0, float arg_kd = 0,  // Soren edit
-    pmod arg_pmode = pmod::onerr, dmod arg_dmode = dmod::onmeas,
-    awmod arg_awmode = awmod::cond, cdir arg_dir = cdir::direct,
-    uint32_t arg_sampletime = 100000, ctrl arg_mode = ctrl::manual, 
-    centmod arg_centmode = centmod::off, float arg_cent = NAN) {  // Soren edit
-    myout = arg_out;
+qpid::qpid(float* arg_in, float arg_min, float arg_max, float arg_kp = 0, float arg_ki = 0, float arg_kd = 0,  // Soren edit
+    pmod arg_pmode = pmod::onerr, dmod arg_dmode = dmod::onmeas, awmod arg_awmode = awmod::cond, cdir arg_dir = cdir::direct,
+    uint32_t arg_sampletime = 100000, ctrl arg_mode = ctrl::manual, centmod arg_centmode = centmod::off, float arg_cent = NAN) {  // Soren edit
     myin = arg_in;
-    mytarg = arg_targ;
     _mode = arg_mode;
     qpid::set_outlimits(arg_min, arg_max);  // same default as Arduino PWM limit - Soren edit
     qpid::set_centmode(arg_centmode);  // Soren
@@ -111,16 +109,16 @@ qpid::qpid(float* arg_in, float* arg_out, float* arg_targ, float arg_min, float 
 
 // This function should be called every time "void loop()" executes. The function will decide whether a new 
 // PID output needs to be computed. Returns true when the output is computed, false when nothing has been done.
-bool qpid::compute() {
+float qpid::compute() {
     uint32_t now = micros();  // Soren edit
     uint32_t timechange = (now - lasttime);
-    if (_mode == ctrl::automatic && timechange < sampletime) return false;  // If class is handling the timing and this time was a nop
+    if (_mode == ctrl::automatic && timechange < sampletime) return _output;  // If class is handling the timing and this time was a nop
 
     float in = *myin;
     float din = in - lastin;
     if (_dir == cdir::reverse) din = -din;  // Soren
 
-    _err = *mytarg - in;
+    _err = _target - in;
     if (_dir == cdir::reverse) _err = -_err;  // Soren
     float derr = _err - lasterr;
 
@@ -153,12 +151,12 @@ bool qpid::compute() {
     _outsum += _iterm - pmterm;  // by default, compute output as per PID_v1    // include integral amount and pmterm
     if (_awmode != awmod::off) _outsum = constrain(_outsum, _outmin, _outmax);  // Clamp
 
-    *myout = constrain(_outsum + peterm + _dterm, _outmin, _outmax);  // include _dterm, clamp and drive output
+    _output = constrain(_outsum + peterm + _dterm, _outmin, _outmax);  // include _dterm, clamp and drive output
 
     lasterr = _err;  // Soren
     lastin = in;
     lasttime = now;
-    return true;
+    return _output;
 }
 
 // set_tunings  This function allows the controller's dynamic performance to be adjusted. It's called 
@@ -205,14 +203,15 @@ void qpid::set_outlimits(float arg_min, float arg_max) {
     _outmin = arg_min; _outmax = arg_max;
 
     // if (_mode != ctrl::manual) {
-    *myout = constrain(*myout, _outmin, _outmax);  // Soren
+    _output = constrain(_output, _outmin, _outmax);  // Soren
     _outsum = constrain(_outsum, _outmin, _outmax);
 }
 
 void qpid::set_centmode(centmod arg_centmode) { _centmode = arg_centmode; }  // Soren
 void qpid::set_centmode(uint8_t arg_centmode) { _centmode = (centmod)arg_centmode; }  // Soren
 void qpid::set_cent(float arg_cent) { if (_outmin <= arg_cent && _outmax >= arg_cent) _cent = arg_cent; }  // Soren
-// if (_centmode == centmod::off) _centmode = centmod::strict;  // Soren - does definition of center imply to use center mode?
+void qpid::set_target(float arg_target) { _target = arg_target; }
+void qpid::set_output(float arg_output) { _output = constrain(arg_output, _outmin, _outmax); }
 
 // set_mode Sets the controller mode to manual (0), automatic (1) or timer (2) when the transition 
 // from manual to automatic or timer occurs, the controller is automatically initialized.
@@ -229,7 +228,7 @@ void qpid::set_mode(uint8_t arg_mode) { set_mode((ctrl)arg_mode); }
 
 // Does all the things that need to happen to ensure a bumpless transfer from manual to automatic mode.
 void qpid::init() {
-    _outsum = (float)*myout;  // Soren
+    _outsum = _output;  // Soren
     lastin = *myin;
     _outsum = constrain(_outsum, _outmin, _outmax);
 }
@@ -256,12 +255,11 @@ void qpid::reset() {
     lastin = 0; _outsum = 0;
     _pterm = 0; _iterm = 0; _dterm = 0;
 }
-
 // sets the output summation value
 void qpid::set_outsum(float arg_outsum) { _outsum = arg_outsum; }
 
 
-class ThrottleControl {  // Soren - To allow creative control of PID targets in case your engine idle problems need that.
+class Throttle {  // Soren - To allow creative control of PID targets in case your engine idle problems need that.
   public:
     enum class idlemodes : uint32_t { direct, control, minimize, num_idlemodes };  // direct: disable idle management.  control: soft landing to idle rpm.  minimize: attempt to minimize idle to edge of instability
     enum targetstates : uint32_t { todrive, driving, droptohigh, droptolow, idling, minimizing, num_states };
@@ -270,9 +268,9 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
     // String statenames[4] = { "drivng", "tohigh", "tolow", "tostal" };
     targetstates runstate, nextstate;
     idlemodes _idlemode;
-    float target_rpm, targetlast_rpm, idle_rpm, idlehigh_rpm, idlehot_rpm, idlecold_rpm, stallpoint_rpm, dynamic_rpm, temphot_f, tempcold_f, idle_slope_rpmps;
+    float targetlast_rpm, idle_rpm, idlehigh_rpm, idlehot_rpm, idlecold_rpm, stallpoint_rpm, dynamic_rpm, temphot_f, tempcold_f, idle_slope_rpmps;
     float margin_rpm = 10; float idle_absmax_rpm = 1000.0;  // High limit of idle speed adjustability
-    float* measraw_rpm; float* measfilt_rpm; float engine_temp_f;
+    float* target_rpm; float* measraw_rpm; float* measfilt_rpm; float engine_temp_f;
     TemperatureSensor* engine_sensor = nullptr;
     bool we_just_changed_states = true; bool target_externally_set = false; // bool now_trying_to_idle = false;
     uint32_t settlerate_rpmps, index_now, index_last;
@@ -285,14 +283,15 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
     Timer settleTimer, tachHistoryTimer;
     int64_t readtime_last;
   public:
-    ThrottleControl (float* measraw, float* measfilt, // Variable references: idle target, rpm raw, rpm filt
+    Throttle (float* target, float* measraw, float* measfilt, // Variable references: idle target, rpm raw, rpm filt
       float idlehigh, float idlehot, float idlecold,  // Values for: high-idle rpm (will not stall), hot idle nominal rpm, cold idle nominal rpm 
       float tempcold, float temphot,  // Values for: engine operational temp cold (min) and temp hot (max) in degrees-f
       int32_t settlerate = 100,  // Rate to lower idle from high point to low point (in rpm per second)
       idlemodes myidlemode = idlemodes::control) {  // Configure idle control to just soft land or also attempt to minimize idle
+        target_rpm = target;
         measraw_rpm = measraw;
         measfilt_rpm = measfilt;
-        target_rpm = *measfilt_rpm;
+        *target_rpm = *measfilt_rpm;
         set_idlehigh (idlehigh);
         idlehot_rpm = constrain (idlehot, 0.0, idlehigh_rpm);
         stallpoint_rpm = idlehot_rpm - 1;  // Just to give a sane initial value
@@ -300,7 +299,7 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
         set_temphot (temphot);
         set_tempcold (tempcold);        
         calc_idlespeed();
-        targetlast_rpm = target_rpm;
+        targetlast_rpm = *target_rpm;
         settlerate_rpmps = settlerate;
         settleTimer.reset();
         _idlemode = myidlemode;
@@ -342,7 +341,7 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
         readtime_last = readtime;
     }
     void set_target (float argtarget) {
-        if ((int32_t)target_rpm != (int32_t)argtarget) {
+        if ((int32_t)(*target_rpm) != (int32_t)argtarget) {
             target_externally_set = true;
             set_target_internal (argtarget);
         }
@@ -352,9 +351,9 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
     }
   protected:
     void set_target_internal (float argtarget) {
-        if ((int32_t)target_rpm != (int32_t)argtarget) {
-            targetlast_rpm = target_rpm;
-            target_rpm = argtarget;
+        if ((int32_t)(*target_rpm) != (int32_t)argtarget) {
+            targetlast_rpm = *target_rpm;
+            *target_rpm = argtarget;
         }
     }
     void calc_idlespeed (void) {
@@ -363,7 +362,7 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
     }
     void runstate_changer (void) {  // If nextstate was changed during last update, or someone externally changed the target, change our runstate
         if (target_externally_set) {  // If the target has been changed externally, then determine our appropriate runstate based on target value
-            if (target_rpm > idle_rpm + margin_rpm) nextstate = (*measfilt_rpm > idlehigh_rpm) ? driving : todrive;
+            if (*target_rpm > idle_rpm + margin_rpm) nextstate = (*measfilt_rpm > idlehigh_rpm) ? driving : todrive;
             // else nextstate = (_idlemode == idlemodes::minimize) ? minimizing : idling;
         }
         target_externally_set = false;
@@ -443,6 +442,7 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
     void add_settlerate (int32_t add) { set_settlerate(settlerate_rpmps + add); }
 
     void set_margin (float margin) { margin_rpm = margin; }
+    void set_target_ptr (float* arg_ptr) { target_rpm = arg_ptr; }
     // Getter functions
     targetstates targetstate (void) { return runstate; } 
     idlemodes idlemode (void) { return _idlemode; } 
@@ -455,5 +455,6 @@ class ThrottleControl {  // Soren - To allow creative control of PID targets in 
     float idlespeed (void) { return idle_rpm; }
     float margin (void) { return margin_rpm; }
     float stallpoint (void) { return stallpoint_rpm; }
-    float target (void) { return target_rpm; }
+    float target (void) { return *target_rpm; }
+    float* target_ptr (void) { return target_rpm; }
 };

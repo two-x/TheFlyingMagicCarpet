@@ -3,14 +3,6 @@
 #include "globals.h"
 #include <iostream>  // for gamma correction
 #include <cmath>  // for gamma correction
-
-#undef USE_DMA_TO_TFT
-#ifdef USE_DMA_TO_TFT
-    #define disp _tft[_sprsel]
-#else
-    #define disp _tft
-#endif
-
 // LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
 // Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
 #define BLK  0x0000  // greyscale: full black (RGB elements off)
@@ -138,7 +130,7 @@ int32_t colorcard[arraysize(modecard)] = { MGT, MBLU, RED, ORG, YEL, GRN, TEAL, 
 char sensorcard[14][7] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 
 char idlemodecard[3][7] = { "direct", "cntrol", "minimz" };
-char idlestatecard[ThrottleControl::targetstates::num_states][7] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
+char idlestatecard[Throttle::targetstates::num_states][7] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
 
 // These defines are just a convenience to keep the below datapage strings array initializations aligned in neat rows & cols for legibility
 #define stEr "St\x88r"
@@ -266,20 +258,12 @@ Timer tuningCtrlTimer (25000000);  // This times out edit mode after a a long pe
 
 class Display {
     private:
-        #ifdef USE_DMA_TO_TFT
-            TFT_eSPI _panel = TFT_eSPI();
-            TFT_eSprite _tft[2] = {TFT_eSprite(&_panel), TFT_eSprite(&_panel) };
-            bool _sprsel = 0;
-            uint16_t* _sprptr[2];
-            // TFT_eSprite _tft = TFT_eSprite(&_panel); // LCD screen
-        #else
-            TFT_eSPI _tft = TFT_eSPI();
-            TFT_eSprite _saver = TFT_eSprite(&_tft);  // Declare screensaver sprite object with pointer to tft object
-        #endif
+        TFT_eSPI _tft = TFT_eSPI();
+        TFT_eSprite _saver = TFT_eSprite(&_tft);  // Declare screensaver sprite object with pointer to tft object
         uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
         Timer _tftResetTimer, _tftDelayTimer;
         int32_t _timing_tft_reset;
-        bool _procrastinate = false, reset_finished = false;        
+        bool _procrastinate = false, reset_finished = false, saver_lotto = false;        
         // For screensaver sprite
         long star_x0, star_y0;
         long touchpoint_x = -1, touchpoint_y = -1, eraser_rad = 14, eraser_rad_min = 9, eraser_rad_max = 27, eraser_velo_min = 4, eraser_velo_max = 10;
@@ -287,40 +271,23 @@ class Display {
         long eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) };
         long eraser_pos_max[2] = { disp_saver_width / 2 - eraser_rad, disp_saver_height / 2 - eraser_rad }; 
         long eraser_velo_sign[2] = { 1, 1 };
-        uint8_t penhue = 0, spothue = 255;
+        uint8_t saver_illicit_prob = 15, penhue = 0, spothue = 255;
         float pensat = 200.0;
         uint16_t pencolor = RED;
         uint32_t pentimeout = 700000;
         int savernumcycles, savershape_last;
         int savershapes = 5, savercycle = 1, savtouch_last_x = -1, savtouch_last_y = -1, savtouch_last_w = 2, savershape = random(savershapes);
-        uint32_t saver_cycletime_us = 45000000, saver_refresh_us = 45000;
+        uint32_t saver_cycletime_us = 38000000, saver_refresh_us = 45000;
         Timer saverRefreshTimer, saverCycleTimer, pentimer;
-        int16_t saver_lines_mode = 0;  // 0 = eraser, 1 = do drugs
         uint32_t disp_oldmode = SHUTDOWN;   // So we can tell when the mode has just changed. start as different to trigger_mode start algo
     public:
-        #ifdef USE_DMA_TO_TFT
-            Display (int8_t cs_pin, int8_t dc_pin) : _panel(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0){}
-            Display () : _panel(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0){}
-        #else
-            Display (int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
-            Display () : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
-        #endif
-
+        Display (int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
+        Display () : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
         void init() {
             yield();
-            #ifdef USE_DMA_TO_TFT
-                _panel.begin();
-                _panel.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
-                _tft[0].setColorDepth(16);
-                _tft[1].setColorDepth(16);
-                _sprptr[0] = (uint16_t*)_tft[0].createSprite(disp_width_pix, disp_height_pix);
-                _sprptr[1] = (uint16_t*)_tft[1].createSprite(disp_width_pix, disp_height_pix);
-                _panel.initDMA(); // Initialise the DMA engine (tested with STM32F446 and STM32F767)
-            #else
-                _tft.begin();
-                _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
-                _tft.setTouch(touch_cal_data);
-            #endif
+            _tft.begin();
+            _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
+            _tft.setTouch(touch_cal_data);
             for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
                 disp_age_quanta[lineno] = -1;
                 memset (disp_values[lineno], 0, strlen (disp_values[lineno]));
@@ -331,7 +298,7 @@ class Display {
             for (int32_t row=0; row<arraysize (disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
             yield();
             // set_runmodecolors();
-            disp.fillScreen (BLK);  // Black out the whole screen
+            _tft.fillScreen (BLK);  // Black out the whole screen
             draw_touchgrid (false);
             draw_fixed (datapage, datapage_last, false);
             yield();
@@ -384,18 +351,18 @@ class Display {
             }
         }
         void draw_bargraph_base (int32_t corner_x, int32_t corner_y, int32_t width) {  // draws a horizontal bargraph scale.  124, y, 40
-            disp.drawFastHLine (corner_x+disp_bargraph_squeeze, corner_y, width-disp_bargraph_squeeze*2, GRY1);
-            for (int32_t offset=0; offset<=2; offset++) disp.drawFastVLine ((corner_x+disp_bargraph_squeeze)+offset*(width/2 - disp_bargraph_squeeze), corner_y-1, 3, WHT);
+            _tft.drawFastHLine (corner_x+disp_bargraph_squeeze, corner_y, width-disp_bargraph_squeeze*2, GRY1);
+            for (int32_t offset=0; offset<=2; offset++) _tft.drawFastVLine ((corner_x+disp_bargraph_squeeze)+offset*(width/2 - disp_bargraph_squeeze), corner_y-1, 3, WHT);
         }
         void draw_needle_shape (int32_t pos_x, int32_t pos_y, int32_t color) {  // draws a cute little pointy needle
-            disp.drawFastVLine (pos_x-1, pos_y, 2, color);
-            disp.drawFastVLine (pos_x, pos_y, 4, color);
-            disp.drawFastVLine (pos_x+1, pos_y, 2, color);
+            _tft.drawFastVLine (pos_x-1, pos_y, 2, color);
+            _tft.drawFastVLine (pos_x, pos_y, 4, color);
+            _tft.drawFastVLine (pos_x+1, pos_y, 2, color);
         }
         void draw_target_shape (int32_t pos_x, int32_t pos_y, int32_t t_color, int32_t r_color) {  // draws a cute little target symbol
-            disp.drawFastVLine (pos_x-1, pos_y+7, 2, t_color);
-            disp.drawFastVLine (pos_x, pos_y+5, 4, t_color);
-            disp.drawFastVLine (pos_x+1, pos_y+7, 2, t_color);
+            _tft.drawFastVLine (pos_x-1, pos_y+7, 2, t_color);
+            _tft.drawFastVLine (pos_x, pos_y+5, 4, t_color);
+            _tft.drawFastVLine (pos_x+1, pos_y+7, 2, t_color);
         }
         void draw_bargraph_needle (int32_t n_pos_x, int32_t old_n_pos_x, int32_t pos_y, int32_t n_color) {  // draws a cute little pointy needle
             draw_needle_shape (old_n_pos_x, pos_y, BLK);
@@ -404,33 +371,33 @@ class Display {
         void draw_string (int32_t x_new, int32_t x_old, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor, bool forced=false) {  // Send in "" for oldtext if erase isn't needed
             int32_t oldlen = strlen(oldtext);
             int32_t newlen = strlen(text);
-            disp.setTextColor (bgcolor);  
+            _tft.setTextColor (bgcolor);  
             for (int32_t letter=0; letter < oldlen; letter++) {
                 if (newlen - letter < 1) {
-                    disp.setCursor (x_old+disp_font_width*letter, y);
-                    disp.print (oldtext[letter]);
+                    _tft.setCursor (x_old+disp_font_width*letter, y);
+                    _tft.print (oldtext[letter]);
                 }
                 else if (oldtext[letter] != text[letter]) {
-                    disp.setCursor (x_old+disp_font_width*letter, y);
-                    disp.print (oldtext[letter]);
+                    _tft.setCursor (x_old+disp_font_width*letter, y);
+                    _tft.print (oldtext[letter]);
                 }
             }
-            disp.setTextColor (color);  
+            _tft.setTextColor (color);  
             for (int32_t letter=0; letter < newlen; letter++) {
                 if (oldlen - letter < 1) {
-                    disp.setCursor (x_new+disp_font_width*letter, y);
-                    disp.print (text[letter]);
+                    _tft.setCursor (x_new+disp_font_width*letter, y);
+                    _tft.print (text[letter]);
                 }
                 else if (oldtext[letter] != text[letter] || forced) {
-                    disp.setCursor (x_new+disp_font_width*letter, y);
-                    disp.print (text[letter]);
+                    _tft.setCursor (x_new+disp_font_width*letter, y);
+                    _tft.print (text[letter]);
                 }
             }
         }
         void draw_unitmap (int8_t index, int32_t x, int32_t y, uint16_t color) {
             for (int32_t xo = 0; xo < disp_font_width * 3 - 1; xo++)
                 for (int32_t yo = 0; yo < disp_font_height - 1; yo++)
-                    if ((unitmaps[index][xo] >> yo) & 1) disp.drawPixel (x + xo, y + yo, color);
+                    if ((unitmaps[index][xo] >> yo) & 1) _tft.drawPixel (x + xo, y + yo, color);
         }
         void draw_string_units (int32_t x, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
             bool drawn = false;
@@ -440,23 +407,23 @@ class Display {
                     drawn = true;
                 }
             if (!drawn) {
-                disp.setCursor (x, y);
-                disp.setTextColor (bgcolor);
-                disp.print (oldtext);  // Erase the old content
+                _tft.setCursor (x, y);
+                _tft.setTextColor (bgcolor);
+                _tft.print (oldtext);  // Erase the old content
             }
             for (int8_t i = 0; i<arraysize(unitmaps); i++)
                 if (!strcmp(unitmapnames[i], text)) {
                     draw_unitmap(i, x, y, color);
                     return;
                 }
-            disp.setCursor (x, y);
-            disp.setTextColor (color);
-            disp.print (text);  // Erase the old content
+            _tft.setCursor (x, y);
+            _tft.setTextColor (color);
+            _tft.print (text);  // Erase the old content
         }
         // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
         void draw_fixed (int32_t page, int32_t page_last, bool redraw_tuning_corner, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
-            disp.setTextColor (GRY2);
-            disp.setTextSize (1);
+            _tft.setTextColor (GRY2);
+            _tft.setTextSize (1);
             int32_t y_pos;
             if (!redraw_tuning_corner) {
                 for (int32_t lineno = 0; lineno < disp_fixed_lines; lineno++)  {  // Step thru lines of fixed telemetry data
@@ -477,7 +444,7 @@ class Display {
             }
         }
         void draw_hyphen (int32_t x_pos, int32_t y_pos, int32_t color) {  // Draw minus sign in front of negative numbers
-            disp.drawFastHLine (x_pos+2, y_pos+3, 3, color);
+            _tft.drawFastHLine (x_pos+2, y_pos+3, 3, color);
         }
         void draw_dynamic (int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target=-1, int32_t color=-1) {
             int32_t age_us = (color >= 0) ? 11 : (int32_t)((float)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
@@ -513,8 +480,8 @@ class Display {
                     t_pos = corner_x + constrain (t_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
                     if (t_pos != disp_targets[lineno] || (t_pos == n_pos)^(disp_needles[lineno] != disp_targets[lineno]) || disp_data_dirty) {
                         draw_target_shape (disp_targets[lineno], corner_y, BLK, -1);  // Erase old target
-                        disp.drawFastHLine (disp_targets[lineno]-(disp_targets[lineno] != corner_x+disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+7, 2+(disp_targets[lineno] != corner_x+disp_bargraph_width-disp_bargraph_squeeze), GRY1);  // Patch bargraph line where old target got erased
-                        for (int32_t offset=0; offset<=2; offset++) disp.drawFastVLine ((corner_x+disp_bargraph_squeeze)+offset*(disp_bargraph_width/2 - disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+6, 3, WHT);  // Redraw bargraph graduations in case one got corrupted by target erasure
+                        _tft.drawFastHLine (disp_targets[lineno]-(disp_targets[lineno] != corner_x+disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+7, 2+(disp_targets[lineno] != corner_x+disp_bargraph_width-disp_bargraph_squeeze), GRY1);  // Patch bargraph line where old target got erased
+                        for (int32_t offset=0; offset<=2; offset++) _tft.drawFastVLine ((corner_x+disp_bargraph_squeeze)+offset*(disp_bargraph_width/2 - disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+6, 3, WHT);  // Redraw bargraph graduations in case one got corrupted by target erasure
                         draw_target_shape (t_pos, corner_y, tcolor, -1);  // Draw the new target
                         disp_targets[lineno] = t_pos;  // Remember position of target
                     }
@@ -636,15 +603,15 @@ class Display {
             }
         }
         void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
-            disp.fillRect(disp_simbuttons_x, disp_simbuttons_y, disp_saver_width, disp_saver_height, BLK);
-            disp.setTextColor (LYEL);
+            _tft.fillRect(disp_simbuttons_x, disp_simbuttons_y, disp_saver_width, disp_saver_height, BLK);
+            _tft.setTextColor (LYEL);
             for (int32_t row = 0; row < arraysize(simgrid); row++) {
                 for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
                     int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
                     int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
                     if (strcmp (simgrid[row][col], ______ )) {
-                        disp.fillCircle (cntr_x, cntr_y, disp_simbutton_radius_pix, create ? DGRY : BLK);
-                        disp.drawCircle (cntr_x, cntr_y, 19, create ? LYEL : BLK);
+                        _tft.fillCircle (cntr_x, cntr_y, disp_simbutton_radius_pix, create ? DGRY : BLK);
+                        _tft.drawCircle (cntr_x, cntr_y, 19, create ? LYEL : BLK);
                         if (create) {
                             int32_t x_mod = cntr_x-(arraysize (simgrid[row][col])-1)*(disp_font_width>>1);
                             draw_string (x_mod, x_mod, cntr_y-(disp_font_height>>1), simgrid[row][col], "", LYEL, DGRY);
@@ -655,29 +622,29 @@ class Display {
         }
         void draw_touchgrid (bool side_only) {  // draws edge buttons with names in 'em. If replace_names, just updates names
             int32_t namelen = 0;
-            disp.setTextColor (WHT);
+            _tft.setTextColor (WHT);
             for (int32_t row = 0; row < arraysize (side_menu_buttons); row++) {  // Step thru all rows to draw buttons along the left edge
-                disp.fillRoundRect (-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, DGRY);
-                disp.drawRoundRect (-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, LYEL);
+                _tft.fillRoundRect (-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, DGRY);
+                _tft.drawRoundRect (-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, LYEL);
                 namelen = 0;
                 for (uint32_t x = 0 ; x < arraysize (side_menu_buttons[row]) ; x++ ) {
                     if (side_menu_buttons[row][x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
                 }
                 for (int32_t letter = 0; letter < namelen; letter++) {  // Going letter by letter thru each button name so we can write vertically 
-                    disp.setCursor (1, ( touch_cell_v_pix*row) + (touch_cell_v_pix/2) - (int32_t)(4.5*((float)namelen-1)) + (disp_font_height+1)*letter); // adjusts vertical offset depending how many letters in the button name and which letter we're on
-                    disp.println (side_menu_buttons[row][letter]);  // Writes each letter such that the whole name is centered vertically on the button
+                    _tft.setCursor (1, ( touch_cell_v_pix*row) + (touch_cell_v_pix/2) - (int32_t)(4.5*((float)namelen-1)) + (disp_font_height+1)*letter); // adjusts vertical offset depending how many letters in the button name and which letter we're on
+                    _tft.println (side_menu_buttons[row][letter]);  // Writes each letter such that the whole name is centered vertically on the button
                 }
             }
             if (!side_only) {
                 for (int32_t col = 2; col <= 5; col++) {  // Step thru all cols to draw buttons across the top edge
-                    disp.fillRoundRect (touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
-                    disp.drawRoundRect (touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // disp.width()-9, 3, 18, (disp.height()/5)-6, 8, LYEL);
+                    _tft.fillRoundRect (touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
+                    _tft.drawRoundRect (touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // _tft.width()-9, 3, 18, (_tft.height()/5)-6, 8, LYEL);
                 }
             }
         }
         void draw_reticle(uint32_t x, uint32_t y) {
-            disp.drawFastHLine (x - 2, y, 5, DGRY);
-            disp.drawFastVLine (x, y - 2, 5, DGRY);
+            _tft.drawFastHLine (x - 2, y, 5, DGRY);
+            _tft.drawFastVLine (x, y - 2, 5, DGRY);
         }
         void draw_reticles() {
             draw_reticle(260, 50);
@@ -692,17 +659,17 @@ class Display {
         void draw_idiotbitmap (int32_t idiot, int32_t x, int32_t y) {
             uint16_t bg = (*idiotlights[idiot]) ? idiotcolors[idiot] : BLK;
             uint16_t color = (*idiotlights[idiot]) ? BLK : darken_color(idiotcolors[idiot]);
-            disp.drawRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, bg);
+            _tft.drawRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, bg);
             for (int32_t xo = 0; xo < (2 * disp_font_width - 1); xo++)
                 for (int32_t yo = 0; yo < disp_font_height - 1; yo++)
-                    disp.drawPixel (x + xo + 1, y + yo + 1, ((idiotmaps[idiot][xo] >> yo) & 1) ? color : bg);
+                    _tft.drawPixel (x + xo + 1, y + yo + 1, ((idiotmaps[idiot][xo] >> yo) & 1) ? color : bg);
         }
         void draw_idiotlight (int32_t idiot, int32_t x, int32_t y) {
             if (idiotmaps[idiot][0] >= 0x80) {
-                disp.fillRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (*(idiotlights[idiot])) ? idiotcolors[idiot] : BLK);  // GRY1);
-                disp.setTextColor ((*(idiotlights[idiot])) ? BLK : darken_color(idiotcolors[idiot]));  // darken_color ((*(idiotlights[index])) ? BLK : DGRY)
-                disp.setCursor (x+1, y+1);
-                disp.print (idiotchars[idiot]);
+                _tft.fillRoundRect (x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (*(idiotlights[idiot])) ? idiotcolors[idiot] : BLK);  // GRY1);
+                _tft.setTextColor ((*(idiotlights[idiot])) ? BLK : darken_color(idiotcolors[idiot]));  // darken_color ((*(idiotlights[index])) ? BLK : DGRY)
+                _tft.setCursor (x+1, y+1);
+                _tft.print (idiotchars[idiot]);
             }
             else draw_idiotbitmap(idiot, x, y);
             idiotlasts[idiot] = *(idiotlights[idiot]);
@@ -752,10 +719,10 @@ class Display {
                 dispRefreshTimer.reset();
                 float drange;
                 draw_dynamic(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][MIN], hotrc.pc[VERT][MAX]);
-                draw_dynamic(2, speedo.filt(), 0.0, speedo.redline_mph(), speedo_target_mph);
-                draw_dynamic(3, tach.filt(), 0.0, tach.redline_rpm(), tach_target_rpm);
+                draw_dynamic(2, speedo.filt(), 0.0, speedo.redline_mph(), cruise_pid.target());
+                draw_dynamic(3, tach.filt(), 0.0, tach.redline_rpm(), gas_pid.target());
                 draw_dynamic(4, gas_out_pc, 0.0, 100.0);
-                draw_dynamic(5, pressure.filt(), pressure.min_human(), pressure.max_human(), pressure_target_psi);  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
+                draw_dynamic(5, pressure.filt(), pressure.min_human(), pressure.max_human(), brake_pid.target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
                 draw_dynamic(6, brake_out_pc, brake_extend_min_pc, brake_retract_max_pc);
                 draw_dynamic(7, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][MIN], hotrc.pc[HORZ][MAX]);
                 draw_dynamic(8, steer_out_pc, steer_left_pc, steer_right_pc);
@@ -808,7 +775,7 @@ class Display {
                 }
                 else if (datapage == PG_IDLE) {
                     draw_asciiname(9, idlestatecard[throttle.targetstate()]);
-                    draw_dynamic(10, tach_target_rpm, 0.0, tach.redline_rpm());
+                    draw_dynamic(10, gas_pid.target(), 0.0, tach.redline_rpm());
                     draw_dynamic(11, throttle.stallpoint(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
                     draw_dynamic(12, throttle.idlespeed(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);  // throttle.idlehot(), throttle.idlecold());
                     draw_dynamic(13, throttle.idlehigh(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
@@ -821,7 +788,7 @@ class Display {
                 }
                 else if (datapage == PG_BPID) {
                     drange = brake_extend_min_us-brake_retract_max_us;
-                    draw_dynamic(9, pressure_target_psi, pressure.min_human(), pressure.max_human());
+                    draw_dynamic(9, brake_pid.target(), pressure.min_human(), pressure.max_human());
                     draw_dynamic(10, brake_pid.err(), pressure.min_human()-pressure.max_human(), pressure.max_human()-pressure.min_human());
                     draw_dynamic(11, brake_pid.pterm(), -drange, drange);
                     draw_dynamic(12, brake_pid.iterm(), -drange, drange);
@@ -834,7 +801,7 @@ class Display {
                     draw_dynamic(19, brake_pid.kd(), 0.0, 2.0);
                 }
                 else if (datapage == PG_GPID) {
-                    draw_dynamic(9, tach_target_rpm, 0.0, tach.redline_rpm());
+                    draw_dynamic(9, gas_pid.target(), 0.0, tach.redline_rpm());
                     draw_dynamic(10, gas_pid.err(), throttle.idlespeed() - tach_govern_rpm, tach_govern_rpm - throttle.idlespeed());
                     draw_dynamic(11, gas_pid.pterm(), -100.0, 100.0);
                     draw_dynamic(12, gas_pid.iterm(), -100.0, 100.0);
@@ -848,7 +815,7 @@ class Display {
                 }
                 else if (datapage == PG_CPID) {
                     drange = tach_govern_rpm - throttle.idlespeed();
-                    draw_dynamic(9, speedo_target_mph, 0.0, speedo_govern_mph);
+                    draw_dynamic(9, cruise_pid.target(), 0.0, speedo_govern_mph);
                     draw_dynamic(10, cruise_pid.err(), speedo_idle_mph-speedo_govern_mph, speedo_govern_mph-speedo_idle_mph);
                     draw_dynamic(11, cruise_pid.pterm(), -drange, drange);
                     draw_dynamic(12, cruise_pid.iterm(), -drange, drange);
@@ -904,14 +871,6 @@ class Display {
                 _procrastinate = true;  // don't do anything else in this same loop
             }
             if (screensaver && !sim.enabled() && !_procrastinate) saver_update();
-            #ifdef USE_DMA_TO_TFT
-                // if (_panel.dmaBusy()) prime_max++; // Increase processing load until just not busy
-                _panel.pushImageDMA(0, 0, disp_width_pix, disp_height_pix, _sprptr[_sprsel]);
-                _sprsel = !_sprsel;
-                // _panel.endWrite();
-            // #else
-            //     _tft.pushSprite(0, 0);
-            #endif
             _procrastinate = false;
         }
         void saver_touch(int16_t x, int16_t y) {
@@ -934,12 +893,10 @@ class Display {
             _saver.fillSprite(TFT_BLACK);
             star_x0 = random(disp_saver_width);        // Random x coordinate
             star_y0 = random(disp_saver_height);       // Random y coordinate
-            if (saver_lines_mode == 1) savershape = 1;
-            for (int16_t axis=0; axis<=1; axis++) { eraser_velo_sign[axis] = (random(1)) ? 1 : -1; }
+            for (int16_t axis=0; axis<=1; axis++) eraser_velo_sign[axis] = (random(1)) ? 1 : -1;
             _saver.setTextDatum(MC_DATUM);
             _saver.setTextColor(BLK); 
             _saver.setTextSize(1); 
-            // if (savershape) _saver.setFreeFont(FreeSansBold12pt7b);
             saverRefreshTimer.set(saver_refresh_us);
             saverCycleTimer.set((int64_t)saver_cycletime_us);
             pentimer.set(pentimeout);
@@ -948,54 +905,37 @@ class Display {
             if (saverRefreshTimer.expireset()) {
                 if (saverCycleTimer.expired()) {
                     savernumcycles++;
-                    if (saver_lines_mode == 1) {
-                        if (!savercycle) _saver.fillSprite(BLK);
-                        savercycle = !savercycle;
-                        saverCycleTimer.reset();
-                    }
-                    else if (saver_lines_mode == 0) {
-                        if (--savercycle < 1) savercycle = 3;
-                        if (savercycle == 1) {
-                            ++savershape %= savershapes;
-                            // savershape_last = savershape;
-                            // while (savershape == savershape_last) savershape = random(savershapes);
-                        }
-                        saverCycleTimer.set(saver_cycletime_us / ((savercycle == 2) ? 3 : 1));
-                    }
+                    if (--savercycle < 1) savercycle = 3;
+                    if (savercycle == 1) ++savershape %= savershapes;
+                    saver_lotto = !random(saver_illicit_prob);
+                    saverCycleTimer.set(saver_cycletime_us / ((savercycle == 2) ? 3 : 1));
                 }
                 long star_x1 = random(disp_saver_width);        // Random x coordinate
                 long star_y1 = random(disp_saver_height);       // Random y coordinate
-                if (saver_lines_mode || (savercycle != 2)) {
+                if (savercycle != 2) {
                     spothue--;
-                    if (!savershape)
-                        _saver.drawWedgeLine(star_x0, star_y0, star_x1, star_y1, 1+random(3), 1, hsv_to_rgb<uint16_t>(random(255), 63+(spothue>>1)+(spothue>>2), 150+random(105)), BLK);
+                    if (!savershape) _saver.drawWedgeLine(star_x0, star_y0, star_x1, star_y1, 1+random(3), 1, hsv_to_rgb<uint16_t>(random(255), 63+(spothue>>1)+(spothue>>2), 150+random(105)), BLK);
                     else if (savershape == 1) {
                         uint8_t d1 = 10+random(30);
                         uint8_t d2 = 10+random(30);
                         uint8_t hue = random(256);
                         uint8_t sat = (spothue < 128) ? 2*spothue : 2*(255-spothue);
                         uint8_t brt = 180+random(135);
-                        for (int i=0; i<(3 * 3+random(10)); i+=3)
-                            _saver.drawEllipse(star_x1, star_y1, d1 - i, d2 + i, hsv_to_rgb<uint16_t>(hue+2*i, sat, brt));
+                        for (int i=0; i<(3 * 3+random(10)); i+=3) _saver.drawEllipse(star_x1, star_y1, d1 - i, d2 + i, hsv_to_rgb<uint16_t>(hue+2*i, sat, brt));
                     }
-                    else if (savershape == 2) // Draw pixels in sprite
-                        for (int star=0; star<10; star++) 
-                            _saver.drawSpot(random(disp_saver_width), random(disp_saver_height), 2+random(1), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 125+random(130), 180+random(75)), BLK);  // hue_to_rgb16(random(255)), BLK);
-                            // _saver.drawSpot(random(disp_saver_width), random(disp_saver_height), 2+random(1), hsv_to_rgb<uint16_t>(spothue, 105+random(150), 150+random(105)), BLK);  // hue_to_rgb16(random(255)), BLK);
-                    else if (savershape == 3) {
-                        for (int star=0; star<8; star++) {
+                    else if (savershape == 4) _saver.drawSmoothCircle(star_x1, star_y1, random(25), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(105)), BLK);
+                    else for (int star=0; star<10; star++) {
+                        if (savershape == 2) _saver.drawSpot(random(disp_saver_width), random(disp_saver_height), 2+random(1), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(45)), BLK);  // hue_to_rgb16(random(255)), BLK);
+                        else if (savershape == 3) {
                             _saver.setTextColor(hsv_to_rgb<uint16_t>(star_x0 + star_y0 + (spothue>>2), 63+(spothue>>1), 200+random(55)), BLK);
                             char letter = (char)(1 + random(0xbe));
                             _saver.setCursor(star_x1, star_y1);
                             _saver.print((String)letter);
-                            // _saver.drawString((String)letter, star_x1, star_y1, 4);
                         }
                     }
-                    else if (savershape == 4) 
-                        _saver.drawSmoothCircle(star_x1, star_y1, random(25), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(105)), BLK);
-
+                    _saver.setTextColor(BLK);
                 }
-                if (saver_lines_mode) _saver.drawString("do drugs", disp_saver_width / 2, disp_saver_height / 2, 4);
+                if (savercycle == 3 && saver_lotto) _saver.drawString("do drugs", disp_saver_width / 2, disp_saver_height / 2, 4);
                 else if (savercycle != 1) {
                     for (int axis=0; axis<=1; axis++) {
                         eraser_pos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];

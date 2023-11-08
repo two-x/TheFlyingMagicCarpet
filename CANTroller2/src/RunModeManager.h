@@ -48,18 +48,18 @@ class RunModeManager {
         if (autostop_disabled) autostopping = false;
         else {
             if (autostopping) {
-                if (brakeIntervalTimer.expireset())
-                    pressure_target_psi = smin(pressure_target_psi + (panicstop ? pressure_panic_increment_psi : pressure_hold_increment_psi), pressure.max_human());
                 if (speedo.car_stopped() || stopcarTimer.expired()) cmd = req_off; 
+                else if (brakeIntervalTimer.expireset())
+                    brake_pid.set_target(smin(brake_pid.target() + (panicstop ? pressure_panic_increment_psi : pressure_hold_increment_psi), pressure.max_human()));
             }
             if (cmd == req_tog) cmd = (req)(!autostopping);
             if (autostopping && cmd == req_off) {
-                pressure_target_psi = pressure.min_psi();
+                brake_pid.set_target(pressure.min_psi());
                 autostopping = false;
             }
             else if (!autostopping && cmd == req_on && !speedo.car_stopped()) {
                 throttle.goto_idle();  // Keep target updated to possibly changing idle value
-                pressure_target_psi = smax(pressure.filt(), (panicstop ? pressure_panic_initial_psi : pressure_hold_initial_psi));
+                brake_pid.set_target(smax(pressure.filt(), (panicstop ? pressure_panic_initial_psi : pressure_hold_initial_psi)));
                 brakeIntervalTimer.reset();
                 stopcarTimer.reset();
                 autostopping = true;
@@ -76,11 +76,11 @@ class RunModeManager {
         }
         if (cmd == req_tog) cmd = (req)(!park_the_motors);
         if (park_the_motors && cmd == req_off) {
-            brake.command(Brake::job::halt);
+            brake.set_job(halt);
             park_the_motors = false;
         }
         else if (!park_the_motors && cmd == req_on) {
-            brake.command(Brake::job::park);
+            brake.set_job(park);
             gasServoTimer.reset();  // Ensure we give the servo enough time to move to position
             motorParkTimer.reset();  // Set a timer to timebox this effort
             park_the_motors = true;
@@ -167,8 +167,8 @@ class RunModeManager {
         if ((speedo.car_stopped() || allow_rolling_start) && ignition && !panicstop && !tach.engine_stopped()) go_to(HOLD);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
     }
     void run_stallMode() {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
-        if (joydir(VERT) != joy_down) pressure_target_psi = pressure.min_human();  // If in deadband or being pushed up, no pressure target
-        else pressure_target_psi = map (hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBBOT], hotrc.pc[VERT][MIN], pressure.min_human(), pressure.max_human());  // Scale joystick value to pressure adc setpoint
+        if (joydir(VERT) != joy_down) brake_pid.set_target(pressure.min_human());  // If in deadband or being pushed up, no pressure target
+        else brake_pid.set_target(map (hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBBOT], hotrc.pc[VERT][MIN], pressure.min_human(), pressure.max_human()));  // Scale joystick value to pressure adc setpoint
         if (starter || !tach.engine_stopped()) go_to(HOLD);  // If we started the car, enter hold mode once starter is released
     }
     void run_holdMode() {
@@ -189,28 +189,28 @@ class RunModeManager {
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) go_to(HOLD);  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
         else {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
             if (_joydir == joy_up)  // If we are trying to accelerate, scale joystick value to determine gas setpoint
-                throttle.set_target (map (hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBTOP], hotrc.pc[VERT][MAX], throttle.idlespeed(), tach_govern_rpm));
+                gas_pid.set_target(map (hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBTOP], hotrc.pc[VERT][MAX], throttle.idlespeed(), tach_govern_rpm));
             else throttle.goto_idle();  // Else let off gas (if gas using PID mode)
             
             if (_joydir == joy_down)  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
-                pressure_target_psi = map (hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBBOT], hotrc.pc[VERT][MIN], pressure.min_human(), pressure.max_human());
-            else pressure_target_psi = pressure.min_human();  // Else let off the brake   
+                brake_pid.set_target(map (hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBBOT], hotrc.pc[VERT][MIN], pressure.min_human(), pressure.max_human()));
+            else brake_pid.set_target(pressure.min_human());  // Else let off the brake   
         }
         if (flycruise_toggle_request) go_to(CRUISE);  // enter cruise mode by pressing hrc ch4 button
         flycruise_toggle_request = false;
     }
     void run_cruiseMode() {
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
-            pressure_target_psi = pressure.min_human();  // Let off the brake and keep it there till out of Cruise mode
-            speedo_target_mph = speedo.filt();  // set pid loop speed target to current speed  (for pid_suspend_fly mode)
-            throttle.set_target(tach.filt());  // initialize pid output (rpm target) to current rpm  (for pid_suspend_fly mode)
+            brake_pid.set_target(pressure.min_human());  // Let off the brake and keep it there till out of Cruise mode
+            cruise_pid.set_target(speedo.filt());  // set pid loop speed target to current speed  (for pid_suspend_fly mode)
+            gas_pid.set_target(tach.filt());  // initialize pid output (rpm target) to current rpm  (for pid_suspend_fly mode)
             gas_cruise_pc = gas_out_pc;  //  set target throttle angle to current throttle angle  (for throttle_angle/throttle_delta modes)
             cruise_adjusting = cruise_trigger_released = false;  // in case trigger is being pulled as cruise mode is entered, the ability to adjust is only unlocked after the trigger is subsequently released to the center
             gestureFlyTimer.set(gesture_flytimeout_us);  // initialize brake-trigger timer
         }
         _joydir = joydir(VERT);
         if (_joydir == joy_cent) {
-            if (cruise_adjusting) speedo_target_mph = speedo.filt();
+            if (cruise_adjusting) cruise_pid.set_target(speedo.filt());
             cruise_adjusting = false;
             cruise_trigger_released = true;
             cruise_ctrl_extent_pc = hotrc.pc[VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
@@ -229,7 +229,7 @@ class RunModeManager {
                 }
                 else if (cruise_setpoint_mode == pid_suspend_fly) {
                     if (!cruise_adjusting) adjustpoint = tach.filt();
-                    throttle.set_target(adjustpoint + ctrlratio * (((_joydir == joy_up) ? tach_govern_rpm : throttle.idlespeed()) - adjustpoint));
+                    gas_pid.set_target(adjustpoint + ctrlratio * (((_joydir == joy_up) ? tach_govern_rpm : throttle.idlespeed()) - adjustpoint));
                 }
                 cruise_ctrl_extent_pc = std::abs(hotrc.pc[VERT][FILT]);
             }
