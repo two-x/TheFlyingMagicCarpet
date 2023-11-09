@@ -72,7 +72,6 @@
 #define disp_saver_height 192
 
 float globalgamma = 2.2;  // Standard gamma is 2.2
-
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
@@ -234,9 +233,6 @@ uint8_t idiotmaps[arraysize(idiotlights)][11] = {
     { 0x00, 0x3e, 0x63, 0x41, 0x40, 0x4f, 0x40, 0x41, 0x63, 0x3e, 0x00, },     // 15 = power symbol
 };
 //  { 0x56, 0x5d, 0x42, 0x5f, 0x42, 0x4c, 0x52, 0x4c, 0x5e, 0x4a, 0x44, },     // 8 = underline "Stop"
-//  { 0x4e, 0x39, 0x04, 0x7e, 0x04, 0x38, 0x44, 0x38, 0x00, 0x7c, 0x1c, },     // 8 = "Stop"
-//  { 0x01, 0x0a, 0x0c, 0x0e, 0x30, 0x4c, 0x42, 0x32, 0x2c, 0x41, 0x7f, },     // 8 = brake pedal
-//  { 0x3e, 0x7f, 0x49, 0x1c, 0x14, 0x14, 0x14, 0x1c, 0x49, 0x7f, 0x3e, },     // 8 = brake pads - ugly! needs replacement
 //  { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, }, };  // N/A (no idiot light bitmap)
 void set_idiotcolors() {
     for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
@@ -265,7 +261,7 @@ class Display {
         int32_t _timing_tft_reset;
         bool _procrastinate = false, reset_finished = false, saver_lotto = false;        
         // For screensaver sprite
-        long star_x0, star_y0;
+        long sx0, sy0;
         long touchpoint_x = -1, touchpoint_y = -1, eraser_rad = 14, eraser_rad_min = 9, eraser_rad_max = 27, eraser_velo_min = 4, eraser_velo_max = 10;
         long eraser_pos[2] = { 0, 0 };
         long eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) };
@@ -681,7 +677,7 @@ class Display {
         }
         void draw_temperature(loc location, int draw_index) {
             if (!tempsens.detected(location)) draw_eraseval(draw_index);
-            else draw_dynamic(draw_index, tempsens.val(location), temp_lims_f[tempsens.errclass(location)][DISP_MIN], temp_lims_f[tempsens.errclass(location)][DISP_MAX]);
+            else draw_dynamic(draw_index, tempsens.val(location), temp_lims_f[tempsens.errclass(location)][DISP_opmin], temp_lims_f[tempsens.errclass(location)][DISP_MAX]);
         }
         void update_idiots(bool force = false) {
             draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, force);
@@ -718,13 +714,13 @@ class Display {
             if (dispRefreshTimer.expired()) {
                 dispRefreshTimer.reset();
                 float drange;
-                draw_dynamic(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][MIN], hotrc.pc[VERT][MAX]);
+                draw_dynamic(1, hotrc.pc[vert][filt], hotrc.pc[vert][opmin], hotrc.pc[vert][opmax]);
                 draw_dynamic(2, speedo.filt(), 0.0, speedo.redline_mph(), cruise_pid.target());
                 draw_dynamic(3, tach.filt(), 0.0, tach.redline_rpm(), gas_pid.target());
                 draw_dynamic(4, gas_out_pc, 0.0, 100.0);
                 draw_dynamic(5, pressure.filt(), pressure.min_human(), pressure.max_human(), brake_pid.target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
                 draw_dynamic(6, brake_out_pc, brake_extend_min_pc, brake_retract_max_pc);
-                draw_dynamic(7, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][MIN], hotrc.pc[HORZ][MAX]);
+                draw_dynamic(7, hotrc.pc[horz][filt], hotrc.pc[horz][opmin], hotrc.pc[horz][opmax]);
                 draw_dynamic(8, steer_out_pc, steer_left_pc, steer_right_pc);
                 if (datapage == PG_RUN) {
                     draw_dynamic(9, brakepos.filt(), brakepos.op_min_in(), brakepos.op_max_in());
@@ -739,14 +735,14 @@ class Display {
                     draw_dynamic(19, steer_safe_pc, 0.0, 100.0);
                 }
                 else if (datapage == PG_JOY) {
-                    draw_dynamic(9, hotrc.us[HORZ][RAW], hotrc.us[HORZ][MIN], hotrc.us[HORZ][MAX]);
-                    draw_dynamic(10, hotrc.us[VERT][RAW], hotrc.us[VERT][MIN], hotrc.us[VERT][MAX]);
-                    draw_dynamic(11, hotrc.us[CH3][RAW], hotrc.us[CH3][MIN], hotrc.us[CH3][MAX]);
-                    draw_dynamic(12, hotrc.us[CH4][RAW], hotrc.us[CH4][MIN], hotrc.us[CH4][MAX]);
-                    draw_dynamic(13, hotrc.pc[HORZ][RAW], hotrc.pc[HORZ][MIN], hotrc.pc[HORZ][MAX]);
-                    draw_dynamic(14, hotrc.pc[VERT][RAW], hotrc.pc[VERT][MIN], hotrc.pc[VERT][MAX]);
+                    draw_dynamic(9, hotrc.us[horz][raw], hotrc.us[horz][opmin], hotrc.us[horz][opmax]);
+                    draw_dynamic(10, hotrc.us[vert][raw], hotrc.us[vert][opmin], hotrc.us[vert][opmax]);
+                    draw_dynamic(11, hotrc.us[ch3][raw], hotrc.us[ch3][opmin], hotrc.us[ch3][opmax]);
+                    draw_dynamic(12, hotrc.us[ch4][raw], hotrc.us[ch4][opmin], hotrc.us[ch4][opmax]);
+                    draw_dynamic(13, hotrc.pc[horz][raw], hotrc.pc[horz][opmin], hotrc.pc[horz][opmax]);
+                    draw_dynamic(14, hotrc.pc[vert][raw], hotrc.pc[vert][opmin], hotrc.pc[vert][opmax]);
                     for (int line=15; line<=17; line++) draw_eraseval(line);
-                    draw_dynamic(18, hotrc.failsafe_us, hotrc.absmin_us, hotrc.us[VERT][MIN] - hotrc.us[VERT][MARGIN]);
+                    draw_dynamic(18, hotrc.failsafe_us, hotrc.absmin_us, hotrc.us[vert][opmin] - hotrc.us[vert][margin]);
                     draw_dynamic(19, hotrc.deadband_us, 0, 100);
                 }
                 else if (datapage == PG_SENS) {
@@ -781,8 +777,8 @@ class Display {
                     draw_dynamic(13, throttle.idlehigh(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
                     draw_dynamic(14, throttle.idlecold(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
                     draw_dynamic(15, throttle.idlehot(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
-                    draw_dynamic(16, throttle.tempcold(), temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
-                    draw_dynamic(17, throttle.temphot(), temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
+                    draw_dynamic(16, throttle.tempcold(), temp_lims_f[ENGINE][DISP_opmin], temp_lims_f[ENGINE][DISP_MAX]);
+                    draw_dynamic(17, throttle.temphot(), temp_lims_f[ENGINE][DISP_opmin], temp_lims_f[ENGINE][DISP_MAX]);
                     draw_dynamic(18, (int32_t)throttle.settlerate(), 0, 500);
                     draw_asciiname(19, idlemodecard[(int32_t)throttle.idlemode()]);
                 }
@@ -879,9 +875,9 @@ class Display {
                 if (savtouch_last_x == -1) savtouch_last_x = x;
                 if (savtouch_last_y == -1) savtouch_last_y = y;
                 if (pentimer.expireset()) {
-                    pensat = pensat+1.5;
+                    pensat += 1.5;
                     if (pensat > 255.0) pensat = 100.0;
-                    pencolor = (savercycle == 1) ? random(0x10000) : hsv_to_rgb<uint16_t>(++penhue, (uint8_t)pensat, 200+random(55));
+                    pencolor = (savercycle == 1) ? random(0x10000) : hsv_to_rgb<uint16_t>(++penhue, (uint8_t)pensat, 200+random(56));
                 }
                 _saver.drawWedgeLine(savtouch_last_x, savtouch_last_y, x, y, 4, 4, pencolor, pencolor);  // savtouch_last_w, w, pencolor, pencolor);
                 savtouch_last_x = x; savtouch_last_y = y;  // savtouch_last_w = w;
@@ -891,8 +887,8 @@ class Display {
             // _saver.setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
             _saver.createSprite(disp_saver_width, disp_saver_height);  // Create a sprite of defined size
             _saver.fillSprite(TFT_BLACK);
-            star_x0 = random(disp_saver_width);        // Random x coordinate
-            star_y0 = random(disp_saver_height);       // Random y coordinate
+            sx0 = random(disp_saver_width);        // Random x coordinate
+            sy0 = random(disp_saver_height);       // Random y coordinate
             for (int16_t axis=0; axis<=1; axis++) eraser_velo_sign[axis] = (random(1)) ? 1 : -1;
             _saver.setTextDatum(MC_DATUM);
             _saver.setTextColor(BLK); 
@@ -910,26 +906,26 @@ class Display {
                     saver_lotto = !random(saver_illicit_prob);
                     saverCycleTimer.set(saver_cycletime_us / ((savercycle == 2) ? 3 : 1));
                 }
-                long star_x1 = random(disp_saver_width);        // Random x coordinate
-                long star_y1 = random(disp_saver_height);       // Random y coordinate
+                long sx1 = random(disp_saver_width);        // Random x coordinate
+                long sy1 = random(disp_saver_height);       // Random y coordinate
                 if (savercycle != 2) {
                     spothue--;
-                    if (!savershape) _saver.drawWedgeLine(star_x0, star_y0, star_x1, star_y1, 1+random(3), 1, hsv_to_rgb<uint16_t>(random(255), 63+(spothue>>1)+(spothue>>2), 150+random(105)), BLK);
+                    if (!savershape) _saver.drawWedgeLine(sx0, sy0, sx1, sy1, 1+random(3), 1, hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2), 150+random(106)), BLK);
                     else if (savershape == 1) {
                         uint8_t d1 = 10+random(30);
                         uint8_t d2 = 10+random(30);
-                        uint8_t hue = random(256);
+                        uint8_t hue = random(255);
                         uint8_t sat = (spothue < 128) ? 2*spothue : 2*(255-spothue);
-                        uint8_t brt = 180+random(135);
-                        for (int i=0; i<(3 * 3+random(10)); i+=3) _saver.drawEllipse(star_x1, star_y1, d1 - i, d2 + i, hsv_to_rgb<uint16_t>(hue+2*i, sat, brt));
+                        uint8_t brt = 180+random(76);
+                        for (int i=0; i<(3 * 3+random(10)); i+=3) _saver.drawEllipse(sx1, sy1, d1 - i, d2 + i, hsv_to_rgb<uint16_t>(hue+2*i, sat, brt));
                     }
-                    else if (savershape == 4) _saver.drawSmoothCircle(star_x1, star_y1, random(25), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(105)), BLK);
+                    else if (savershape == 4) _saver.drawSmoothCircle(sx1, sy1, random(25), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106)), BLK);
                     else for (int star=0; star<10; star++) {
-                        if (savershape == 2) _saver.drawSpot(random(disp_saver_width), random(disp_saver_height), 2+random(1), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(45)), BLK);  // hue_to_rgb16(random(255)), BLK);
+                        if (savershape == 2) _saver.drawSpot(random(disp_saver_width), random(disp_saver_height), 2+random(1), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(46)), BLK);  // hue_to_rgb16(random(255)), BLK);
                         else if (savershape == 3) {
-                            _saver.setTextColor(hsv_to_rgb<uint16_t>(star_x0 + star_y0 + (spothue>>2), 63+(spothue>>1), 200+random(55)), BLK);
+                            _saver.setTextColor(hsv_to_rgb<uint16_t>(sx0 + sy0 + (spothue>>2), 63+(spothue>>1), 200+random(56)), BLK);
                             char letter = (char)(1 + random(0xbe));
-                            _saver.setCursor(star_x1, star_y1);
+                            _saver.setCursor(sx1, sy1);
                             _saver.print((String)letter);
                         }
                     }
@@ -940,17 +936,17 @@ class Display {
                     for (int axis=0; axis<=1; axis++) {
                         eraser_pos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
                         if (eraser_pos[axis] * eraser_velo_sign[axis] >= eraser_pos_max[axis]) {
-                            eraser_pos[axis] = eraser_pos_max[axis] * eraser_velo_sign[axis];
-                            eraser_velo[axis] = eraser_velo_min + (random(eraser_velo_max - eraser_velo_min) >> ((savershape == 3) ? 1 : 0));
-                            eraser_velo[!axis] = eraser_velo_min + (random(eraser_velo_max - eraser_velo_min) >> ((savershape == 3) ? 1 : 0));
+                            eraser_pos[axis] = eraser_velo_sign[axis] * eraser_pos_max[axis];
+                            eraser_velo[axis] = (eraser_velo_min + random(eraser_velo_max - eraser_velo_min)) >> (savershape == 3);
+                            eraser_velo[!axis] = (eraser_velo_min + random(eraser_velo_max - eraser_velo_min)) >> (savershape == 3);
                             eraser_velo_sign[axis] *= -1;
                             eraser_rad = constrain(eraser_rad + random(5) - 2, eraser_rad_min, eraser_rad_max);
                         }
                     }
                     _saver.fillCircle((disp_saver_width / 2) + eraser_pos[0], (disp_saver_height / 2) + eraser_pos[1], eraser_rad, BLK);
                 } 
-                star_x0 = star_x1;
-                star_y0 = star_y1;
+                sx0 = sx1;
+                sy0 = sy1;
                 yield();
                 _saver.pushSprite(disp_simbuttons_x, disp_simbuttons_y);
             }

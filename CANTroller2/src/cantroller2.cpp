@@ -32,8 +32,8 @@ void neo_idiots_update() {
 }
 void hotrc_events_update(int8_t _rm) {
     hotrc.toggles_update();
-    if (hotrc.sw_event(CH3)) ignition_request = req_tog;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
-    if (hotrc.sw_event(CH4)) {
+    if (hotrc.sw_event(ch3)) ignition_request = req_tog;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
+    if (hotrc.sw_event(ch4)) {
         if (_rm == FLY || _rm == CRUISE) flycruise_toggle_request = true;
         else if (_rm == STALL) starter_request = req_tog;
         else if (_rm == HOLD) starter_request = req_off;
@@ -72,7 +72,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     delay(800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     printf("Console started..\nUsing %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
     printf("Init rmt for hotrc..\n");
-    brake_calc_duty(brake_duty_pc);  // set derived parameters
     calc_governor();  // set derived parameters
     hotrc.init();
     printf("Pot setup..\n");
@@ -106,6 +105,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 	ESP32PWM::allocateTimer(1);
 	ESP32PWM::allocateTimer(2);
 	ESP32PWM::allocateTimer(3);
+    // brakemotor.init(brake_pwm_pin, 50);
+    // gas_servo.init(gas_pwm_pin, 60);
 	brakemotor.setPeriodHertz(50);
     gas_servo.setPeriodHertz(60);  // critically this pwm is a different frequency than the other two motors
 	steermotor.setPeriodHertz(50);
@@ -114,7 +115,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     gas_servo.attach (gas_pwm_pin, gas_servo_reversed ? gas_absmax_us : gas_absmin_us, gas_servo_reversed ? gas_absmin_us : gas_absmax_us);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     tempsens.setup();  // Onewire bus and temp sensors
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Create a new task that runs the update_temperature_sensors function
-    brake.init(&hotrc, &brakemotor, &brake_pid, &pressure, &brakepos);
+    brake.init(&hotrc, &brakemotor, &brake_pid, &pressure, &brakepos, &speedo);
+    gas.init(&hotrc, &gas_servo, &gas_pid, &tach, &pot);
     throttle.setup(tempsens.get_sensor(loc::engine));
     printf("Init screen.. ");
     if (display_enabled) {
@@ -161,16 +163,16 @@ void loop() {
     if (touch_reticles) get_touchpoint();
     hotrc_events_update(run.mode());
     hotrc.update();
-    if (sim.potmapping(sens::joy)) hotrc.set_pc(HORZ, FILT, pot.mapToRange(steer_left_us, steer_right_us));
+    if (sim.potmapping(sens::joy)) hotrc.set_pc(horz, filt, pot.mapToRange(steer_left_us, steer_right_us));
     run.run_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
-    joydirs _joydir = joydir(HORZ);
+    joydirs _joydir = joydir(horz);
     // Steering - Determine motor output and send to the motor
     if (steerPidTimer.expireset()) {
         if (run.mode() == SHUTDOWN && !shutdown_incomplete)
             steer_out_pc = steer_stop_pc;  // Stop the steering motor if in shutdown mode and shutdown is complete
         else {
-            if (_joydir == joy_rt) steer_out_pc = map(hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][DBTOP], hotrc.pc[HORZ][MAX], steer_stop_pc, steer_safe (steer_right_pc));  // if joy to the right of deadband
-            else if (_joydir == joy_lt) steer_out_pc = map(hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][DBBOT], hotrc.pc[HORZ][MIN], steer_stop_pc, steer_safe (steer_left_pc));  // if joy to the left of deadband
+            if (_joydir == joy_rt) steer_out_pc = map(hotrc.pc[horz][filt], hotrc.pc[horz][dbtop], hotrc.pc[horz][opmax], steer_stop_pc, steer_safe (steer_right_pc));  // if joy to the right of deadband
+            else if (_joydir == joy_lt) steer_out_pc = map(hotrc.pc[horz][filt], hotrc.pc[horz][dbbot], hotrc.pc[horz][opmin], steer_stop_pc, steer_safe (steer_left_pc));  // if joy to the left of deadband
             else steer_out_pc = steer_stop_pc;  // Stop the steering motor if inside the deadband
         }
         steer_out_pc = constrain(steer_out_pc, steer_left_pc, steer_right_pc);  // Don't be out of range
@@ -179,6 +181,7 @@ void loop() {
         else steer_out_us = map(steer_out_pc, steer_stop_pc, steer_left_pc, steer_stop_us, steer_left_us);
         steermotor.writeMicroseconds ((int32_t)steer_out_us);   // Write steering value to jaguar servo interface
     }
+    brake.update();
     // Brakes - Determine motor output and write it to motor
     if (brakePidTimer.expireset()) {
         // Step 1 : Determine motor percent value
@@ -190,8 +193,8 @@ void loop() {
                 brake_out_pc = map(brakepos.filt(), brakepos.parkpos(), brakepos.max_in(), brake_stop_pc, brake_retract_max_pc);
         }
         else if (run.mode() == CAL && cal_joyvert_brkmotor_mode) {
-            if (_joydir == joy_up) brake_out_pc = map(hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBTOP], hotrc.pc[VERT][MAX], brake_stop_pc, brake_retract_max_pc);
-            else if (_joydir == joy_down) brake_out_pc = map(hotrc.pc[VERT][FILT], hotrc.pc[VERT][MIN], hotrc.pc[VERT][DBBOT], brake_extend_min_pc, brake_stop_pc);
+            if (_joydir == joy_up) brake_out_pc = map(hotrc.pc[vert][filt], hotrc.pc[vert][dbtop], hotrc.pc[vert][opmax], brake_stop_pc, brake_retract_max_pc);
+            else if (_joydir == joy_down) brake_out_pc = map(hotrc.pc[vert][filt], hotrc.pc[vert][opmin], hotrc.pc[vert][dbbot], brake_extend_min_pc, brake_stop_pc);
             else brake_out_pc = brake_stop_pc;
         }
         else if (run.mode() == CAL || run.mode() == BASIC || run.mode() == ASLEEP || (run.mode() == SHUTDOWN && !shutdown_incomplete))
@@ -225,19 +228,18 @@ void loop() {
             // throttle.set_target(tach_target_rpm);  // conversely to above, update throttle manager with new value from the pid calculation
         }
         // Step 2 : Determine servo pulse width value
-        if (park_the_motors || (run.mode() == SHUTDOWN && !shutdown_incomplete))
+        if (park_the_motors || (run.mode() == SHUTDOWN && !shutdown_incomplete) || run.mode() == ASLEEP)
             gas_out_pc = gas_deg_to_pc(gas_parked_deg);
-        else if (run.mode() == STALL) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
-            if (joydir() != joy_up) gas_out_pc = 0.0;  // If in deadband or being pushed down, we want idle
-            else gas_out_pc = map(hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBTOP], hotrc.pc[VERT][MAX], 0.0, gas_governor_pc);  // actuators still respond even w/ engine turned off
-        }
         else if (run.mode() == CAL && cal_pot_gasservo_mode)
             gas_out_pc = gas_deg_to_pc(map(pot.val(), pot.min(), pot.max(), 0.0, 180.0));  // gas_ccw_max_us, gas_cw_min_us
         else if (run.mode() == CRUISE && (cruise_setpoint_mode != pid_suspend_fly))
             gas_out_pc = gas_cruise_pc;
+        else if (run.mode() == STALL || (gas_open_loop && run.mode() != BASIC)) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
+            if (joydir() != joy_up) gas_out_pc = 0.0;  // If in deadband or being pushed down, we want idle
+            else gas_out_pc = map(hotrc.pc[vert][filt], hotrc.pc[vert][dbtop], hotrc.pc[vert][opmax], 0.0, gas_governor_pc);  // actuators still respond even w/ engine turned off
+        }
         else if (run.mode() != BASIC) {
-            if (gas_open_loop) gas_out_pc = map(throttle.target(), throttle.idlespeed(), tach_govern_rpm, 0.0, gas_governor_pc); // scale gas rpm target onto gas pulsewidth target (unless already set in stall mode logic)
-            else gas_out_pc = gas_pid.compute();  // Do proper pid math to determine gas_out_us from engine rpm error
+            gas_out_pc = gas_pid.compute();  // Do proper pid math to determine gas_out_us from engine rpm error
         }
         // Step 3 : Convert to degrees and constrain if out of range
         gas_out_deg = gas_pc_to_deg(gas_out_pc);  // convert to degrees
@@ -295,7 +297,7 @@ void loop() {
             else if (sel_val == 10) adj_val(&steer_safe_pc, idelta, 0, 100);
         }
         else if (datapage == PG_JOY) {
-            if (sel_val == 9) adj_val(&hotrc.failsafe_us, idelta, hotrc.absmin_us, hotrc.us[VERT][MIN] - hotrc.us[VERT][MARGIN]);
+            if (sel_val == 9) adj_val(&hotrc.failsafe_us, idelta, hotrc.absmin_us, hotrc.us[vert][opmin] - hotrc.us[vert][margin]);
             else if (sel_val == 10) {
                 adj_val(&hotrc.deadband_us, idelta, 0, 50);
                 hotrc.calc_params();

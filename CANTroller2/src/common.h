@@ -1,8 +1,8 @@
-/* Contains utility functions, classes, and defines */
+// Contains utility functions, classes, and defines
 #pragma once
 #include <cstdint> // for uint types
 #include <cstdio> // for printf
-
+// pin assignments  ESP32-S3-DevkitC series
 #define      button_pin  0 // button0/strap-1  // Input, Rotary encoder push switch, for the UI. active low (needs pullup). Also the esp "Boot" button does the same thing
 #define    lipobatt_pin  1 // adc1ch0          // Analog input, LiPO cell voltage, full scale is 4.8V
 #define   encoder_b_pin  2 // adc1ch1          // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
@@ -39,7 +39,6 @@
 #define    syspower_pin 46 // strap-0          // Output to an nfet/pfet pair to power all the tranducers.
 #define    touch_cs_pin 47 // NA               // Output, chip select for resistive touchscreen, active low - ! pin is also defined in tft_setup.h
 #define    neopixel_pin 48 // neopix           // Data line to onboard Neopixel WS281x (on all v1 devkit boards - pin 38 is used on v1.1 boards). Also used for onboard and external neopoxels - ! pin is also defined in neopixel.h
-
 // External components needed (pullup/pulldown resistors, capacitors, etc.): (Note: "BB" = On dev breadboards only, "PCB" = On vehicle PCB only)
 // 1. brake_pos_pin: Add 1M-ohm to GND. Allows detecting unconnected sensor or broken connection.
 // 2. onewire_pin: Add 4.7k-ohm to 3.3V. Needed for open collector sensor output, to define logic-high voltage level.
@@ -69,46 +68,44 @@
 #define touch_irq_pin 255 // Input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - Set to 255 if not used
 #define tft_rst_pin -1    // TFT Reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
 
-/* Value Defines */
 #define adcbits 12
-#define adcrange_adc 4095  // = 2^adcbits-1
+#define adcrange_adc 4095     // = 2^adcbits-1
 #define adcmidscale_adc 2047  // = 2^(adcbits-1)-1
 
-/* Utility Functions */
+// fast macros
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays
 #define floor(amt, lim) ((amt <= lim) ? lim : amt)
 #define ceiling(amt, lim) ((amt >= lim) ? lim : amt)
-
-enum hotrc_axis : int8_t { HORZ, VERT, CH3, CH4 };
-enum hotrc_val : int8_t { MIN, CENT, MAX, RAW, FILT, DBBOT, DBTOP, MARGIN };
-enum hotrc_nums { num_axes = 2, num_chans = 4, num_valus = 8 };
-enum joydirs : int8_t { joy_rt = -2, joy_down = -1, joy_cent = 0, joy_up = 1, joy_lt = 2 };
-enum runmode : int8_t { BASIC, ASLEEP, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, num_runmodes };
-enum req : int8_t { req_na = -1, req_off = 0, req_on = 1, req_tog = 2 };  // requesting handler actions of digital values with handler functions
-enum ctrlmode { manual, pid };
-enum ctrljob { na, halt, control, park, release, autostop, cal, autocal, num_job };
-
-// TODO: check to see if these are different from the builtins, if not then we shouldn't bother redefining them
-
+#undef min
 #undef max
+// these global enums are reeeeally convenient and make code very readable, but error-prone.
+// we need to be careful when changing anything - best to keep all of this here in one place!
+enum hotrc_axis : int { horz=0, vert=1, ch3=2, ch4=3 };
+enum hotrc_val : int { opmin=0, cent=1, opmax=2, raw=3, filt=4, dbbot=5, dbtop=6, margin=7 };
+enum motor_val : int { parked=1, absmin=5, absmax=6, govern=8 };
+enum stop_val : int { stop=1, out=3, parked=4 };
+enum size_enums : int { num_axes = 2, num_chans = 4, num_valus = 8, num_allvals = 9 };
+enum joydirs : int { joy_rt = -2, joy_down = -1, joy_cent = 0, joy_up = 1, joy_lt = 2 };
+enum runmode : int { BASIC, ASLEEP, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, num_runmodes };
+enum req : int { req_na = -1, req_off = 0, req_on = 1, req_tog = 2 };  // requesting handler actions of digital values with handler functions
+enum ctrlmode : int { manual, pid };
+enum ctrljob : int { na, halt, control, park, release, autostop, cal, autocal, num_job };
+
 inline float smax(float a, float b) { return (a > b) ? a : b; }
 inline int32_t smax(int32_t a, int32_t b) { return (a > b) ? a : b; }
 inline uint32_t smax(uint32_t a, uint32_t b) { return (a > b) ? a : b; }
 inline uint32_t smax(uint32_t a, uint32_t b, uint32_t c) { return (a > b) ? ((c > a) ? c : a) : ((c > b) ? c : b); }
-
-#undef min
 inline float smin(float a, float b) { return (a < b) ? a : b; }
 inline int32_t smin(int32_t a, int32_t b) { return (a < b) ? a : b; }
 inline uint32_t smin(uint32_t a, uint32_t b) { return (a < b) ? a : b; }
 inline uint32_t smin(uint32_t a, uint32_t b, uint32_t c) { return (a < b) ? ((c < a) ? c : a) : ((c < b) ? c : b); }
-
 #undef constrain
 inline float constrain(float amt, float low, float high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline int32_t constrain(int32_t amt, int32_t low, int32_t high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline uint32_t constrain(uint32_t amt, uint32_t low, uint32_t high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline long constrain(long amt, long low, long high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 
-// Maybe go with templates for these
+// the above should be templated, i'm sure
 // template <typename T> inline T smax(T a, T b) { return (a > b) ? a : b; }
 // template <typename T> inline T smax(T a, T b, T c) { return (a > b) ? ((c > a) ? c : a) : ((c > b) ? c : b); }
 // template <typename T> inline T smin(T a, T b) { return (a < b) ? a : b; }
@@ -129,11 +126,10 @@ inline int32_t map(int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, i
     if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
     return out_max;  // Instead of dividing by zero, return the highest valid result
 }
-
 bool rounding = true;
 float dround(float val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
 
-/* Pin Operations */
+// pin operations
 void set_pin(int32_t pin, int32_t mode) { if (pin >= 0 && pin != 255) pinMode (pin, mode); }
 void write_pin(int32_t pin, int32_t val) {  if (pin >= 0 && pin != 255) digitalWrite (pin, val); }
 int32_t read_pin(int32_t pin) { return (pin >= 0 && pin != 255) ? digitalRead (pin) : -1; }
@@ -157,7 +153,7 @@ void ema_filt(RAW_T raw, FILT_T* filt, float alpha) {
     *filt = static_cast<FILT_T>(ema_filt(raw_f, filt_f, alpha));
 }
 
-class Timer {  // Beware, this 54 bit microsecond timer overflows after every 571 years
+class Timer {  // !!! beware, this 54-bit microsecond timer overflows after every 571 years !!!
   protected:
     volatile int64_t start_us, timeout_us;
   public:
