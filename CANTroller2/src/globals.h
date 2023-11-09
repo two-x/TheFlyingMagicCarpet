@@ -45,7 +45,6 @@ bool joy_centered = false;  // minor state variable for hold mode
 bool powering_up = false;  // minor state variable for asleep mode
 // Timer cruiseSwTimer;  // Was used to require a medium-length hold time pushing cruise button to switch modes
 Timer sleepInactivityTimer(180000000);           // After shutdown how long to wait before powering down to sleep
-Timer stopcarTimer(8000000);                    // Allows code to fail in a sensible way after a delay if nothing is happening
 uint32_t motor_park_timeout_us = 4000000;       // If we can't park the motors faster than this, then give up.
 uint32_t gesture_flytimeout_us = 1250000;        // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
 Timer gestureFlyTimer(gesture_flytimeout_us); // Used to keep track of time for gesturing for going in and out of fly/cruise modes
@@ -60,7 +59,7 @@ bool cal_pot_gasservo_mode = false;     // Allows direct control of gas servo us
 bool cal_pot_gasservo_ready = false;    // Whether pot is in valid range
 
 enum temp_categories { AMBIENT = 0, ENGINE = 1, WHEEL = 2, num_temp_categories };
-enum temp_lims { DISP_MIN, OP_MIN, OP_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
+enum temp_lims { DISP_opmin, OP_MIN, OP_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
 float temp_lims_f[3][6]{
     {0.0, 45.0, 115.0, 120.0, 130.0, 220.0},  // [AMBIENT][DISP_MIN/OP_MIN/OP_MAX/WARNING/ALARM]
     {0.0, 178.0, 198.0, 202.0, 205.0, 220.0}, // [ENGINE][DISP_MIN/OP_MIN/OP_MAX/WARNING/ALARM]
@@ -90,14 +89,8 @@ uint32_t steer_pid_period_us = 75000;    // (Not actually a pid) Needs to be lon
 Timer steerPidTimer(steer_pid_period_us); // not actually tunable, just needs value above
 
 // brake pressure related
-float pressure_hold_initial_psi = 45;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
-float pressure_hold_increment_psi = 3;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
-float pressure_panic_initial_psi = 80; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
-float pressure_panic_increment_psi = 5; // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
 
 // brake actuator motor related
-Timer brakeIntervalTimer(1000000);             // How much time between increasing brake force during auto-stop if car still moving?
-int32_t brake_increment_interval_us = 1000000; // How often to apply increment during auto-stopping (in us)
 float brake_duty_pc = 25.0;  // From motor datasheet
 float brake_extend_absmin_pc = -100.0; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
 float brake_stop_pc = 0.0;          // Brake pulsewidth corresponding to center point where motor movement stops (in us)
@@ -185,6 +178,11 @@ bool basicmodesw = LOW;
 enum sw_presses { NONE, SHORT, LONG }; // used by encoder sw and button algorithms
 int8_t sleep_request = req_na;
 
+joydirs joydir(int8_t axis = vert) {
+    if (axis == vert) return ((hotrc.pc[axis][filt] > hotrc.pc[axis][dbtop]) ? joy_up : ((hotrc.pc[axis][filt] < hotrc.pc[axis][dbbot]) ? joy_down : joy_cent));
+    return ((hotrc.pc[axis][filt] > hotrc.pc[axis][dbtop]) ? joy_rt : ((hotrc.pc[axis][filt] < hotrc.pc[axis][dbbot]) ? joy_lt : joy_cent));
+    // return (pc[axis][filt] > pc[axis][dbtop]) ? ((axis == vert) ? joy_up : joy_rt) : (pc[axis][filt] < pc[axis][dbbot]) ? ((axis == vert) ? joy_down : joy_lt) : joy_cent;
+}
 // Instantiate objects
 static Preferences config;  // Persistent config storage
 static I2C i2c(i2c_sda_pin, i2c_scl_pin);
@@ -195,7 +193,9 @@ static TemperatureSensorManager tempsens(onewire_pin);
 static Encoder encoder(encoder_a_pin, encoder_b_pin, button_pin);
 static CarBattery mulebatt(mulebatt_pin);
 static LiPOBatt lipobatt(lipobatt_pin);
-static Servo brakemotor, steermotor, gas_servo;
+// static servoPWM brakemotor(brake_pwm_pin);
+static Servo brakemotor;
+static Servo steermotor, gas_servo;
 static PressureSensor pressure(pressure_pin);
 static BrakePositionSensor brakepos(brake_pos_pin);
 static Speedometer speedo(speedo_pin);
@@ -216,31 +216,9 @@ static qpid cruise_pid(speedo.filt_ptr(), throttle.idlespeed(), tach_govern_rpm,
     qpid::pmod::onerr, qpid::dmod::onerr, qpid::awmod::round, qpid::cdir::direct, cruise_pid_period_us, qpid::ctrl::manual, qpid::centmod::off);
 
 static Brake brake;  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+static Gas gas;
 static neopixelstrip neo;
 
-joydirs joydir(int8_t axis = VERT) {
-    if (axis == VERT) return ((hotrc.pc[axis][FILT] > hotrc.pc[axis][DBTOP]) ? joy_up : ((hotrc.pc[axis][FILT] < hotrc.pc[axis][DBBOT]) ? joy_down : joy_cent));
-    return ((hotrc.pc[axis][FILT] > hotrc.pc[axis][DBTOP]) ? joy_rt : ((hotrc.pc[axis][FILT] < hotrc.pc[axis][DBBOT]) ? joy_lt : joy_cent));
-    // return (pc[axis][FILT] > pc[axis][DBTOP]) ? ((axis == VERT) ? joy_up : joy_rt) : (pc[axis][FILT] < pc[axis][DBBOT]) ? ((axis == VERT) ? joy_down : joy_lt) : joy_cent;
-}
-float gas_pc_to_deg(float _pc) {  // Eventually this should be linearized
-    return gas_closed_min_deg + _pc * (gas_open_max_deg - gas_closed_min_deg) / 100.0;
-}
-float gas_deg_to_pc(float _deg) {  // Eventually this should be linearized
-    return 100.0 * (_deg - gas_closed_min_deg) / (gas_open_max_deg - gas_closed_min_deg);
-}
-float gas_deg_to_us(float _deg) {
-    return map(_deg, 0.0, 180.0, gas_servo_reversed ? gas_absmax_us : gas_absmin_us, gas_servo_reversed ? gas_absmin_us : gas_absmax_us);
-}
-float gas_pc_to_us(float _pc) {
-    return gas_deg_to_us(gas_pc_to_deg(_pc));
-}
-void brake_calc_duty(float duty) {  // call from setup and whenever changing duty cycle
-    brake_extend_min_pc = brake_extend_absmin_pc * duty / 100.0;     // Brake pulsewidth corresponding to full-speed extension of brake actuator (in us). Default setting for jaguar is max 2330us
-    brake_retract_max_pc = brake_retract_absmax_pc * duty / 100.0;     // Brake pulsewidth corresponding to full-speed retraction of brake actuator (in us). Default setting for jaguar is max 670us
-    brake_extend_min_us = brake_stop_us - duty * (brake_stop_us - brake_extend_absmin_us) / 100.0;  // Brake pulsewidth corresponding to duty-constrained retraction of brake actuator (in us). Default setting for jaguar is max 670us
-    brake_retract_max_us = brake_stop_us - duty * (brake_stop_us - brake_retract_absmax_us) / 100.0;  // Brake pulsewidth corresponding to duty-constrained extension of brake actuator (in us). Default setting for jaguar is max 2330us
-}
 void calc_governor(void) {
     tach_govern_rpm = map(gas_governor_pc, 0.0, 100.0, 0.0, tach.redline_rpm()); // Create an artificially reduced maximum for the engine speed
     cruise_pid.set_outlimits(throttle.idlespeed(), tach_govern_rpm);
@@ -535,14 +513,14 @@ void diag_update() {
         err_sensor[RANGE][e_pressure] = (pressure.psi() < pressure.op_min_psi() || pressure.psi() > pressure.op_max_psi());
         err_sensor[LOST][e_pressure] = (pressure.raw() < err_margin_adc);
         err_sensor[RANGE][e_mulebatt] = (mulebatt.v() < mulebatt.op_min_v() || mulebatt.v() > mulebatt.op_max_v());
-        for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
-            err_sensor[RANGE][ch] = !hotrc.radiolost() && ((hotrc.us[ch][RAW] < hotrc.us[ch][MIN] - (hotrc.us[ch][MARGIN] >> 1)) 
-                                    || (hotrc.us[ch][RAW] > hotrc.us[ch][MAX] + (hotrc.us[ch][MARGIN] >> 1)));  // && ch != VERT
-            err_sensor[LOST][ch] = !hotrc.radiolost() && ((hotrc.us[ch][RAW] < (hotrc.absmin_us - hotrc.us[ch][MARGIN]))
-                                    || (hotrc.us[ch][RAW] > (hotrc.absmax_us + hotrc.us[ch][MARGIN])));
+        for (int32_t ch = horz; ch <= ch4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
+            err_sensor[RANGE][ch] = !hotrc.radiolost() && ((hotrc.us[ch][raw] < hotrc.us[ch][opmin] - (hotrc.us[ch][margin] >> 1)) 
+                                    || (hotrc.us[ch][raw] > hotrc.us[ch][opmax] + (hotrc.us[ch][margin] >> 1)));  // && ch != vert
+            err_sensor[LOST][ch] = !hotrc.radiolost() && ((hotrc.us[ch][raw] < (hotrc.absmin_us - hotrc.us[ch][margin]))
+                                    || (hotrc.us[ch][raw] > (hotrc.absmax_us + hotrc.us[ch][margin])));
         }
-        // err_sensor[RANGE][e_hrcvert] = (hotrc.us[VERT][RAW] < hotrc.failsafe_us - hotrc.us[ch][MARGIN])
-        //     || ((hotrc.us[VERT][RAW] < hotrc.us[VERT][MIN] - halfmargin) && (hotrc.us[VERT][RAW] > hotrc.failsafe_us + hotrc.us[ch][MARGIN]));
+        // err_sensor[RANGE][e_hrcvert] = (hotrc.us[vert][raw] < hotrc.failsafe_us - hotrc.us[ch][margin])
+        //     || ((hotrc.us[vert][raw] < hotrc.us[vert][opmin] - halfmargin) && (hotrc.us[vert][raw] > hotrc.failsafe_us + hotrc.us[ch][margin]));
         
         // Set sensor error idiot light flags
         // printf ("Sensors errors: ");
@@ -659,5 +637,5 @@ float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) 
 }
 float maf_gps;  // Manifold mass airflow in grams per second
 float maf_min_gps = 0.0;
-float maf_max_gps = massairflow(mapsens.max_psi(), airvelo.max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
+float maf_max_gps = massairflow(mapsens.max_psi(), airvelo.max_mph(), temp_lims_f[AMBIENT][DISP_opmin]);
 bool flashdemo = false;
