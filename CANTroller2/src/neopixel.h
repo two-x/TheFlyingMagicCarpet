@@ -1,5 +1,4 @@
 #pragma once
-#include "common.h"
 #include <NeoPixelBus.h>
 #define colortype RgbColor  // RgbwColor
 #define striplength 8
