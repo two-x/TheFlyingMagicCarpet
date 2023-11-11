@@ -1,8 +1,6 @@
 
 #pragma once
 #include <XPT2046_Touchscreen.h>
-#include "common.h"
-
 class TouchScreen {
 private:
     XPT2046_Touchscreen _ts;  // 3.5in resistive touch panel on tft lcd

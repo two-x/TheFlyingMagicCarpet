@@ -1,62 +1,19 @@
 #pragma once
 #include <ESP32Servo.h>        // Makes PWM output to control motors (for rudimentary control of our gas and steering)
-#include <Wire.h>
 #include <Preferences.h>
 #include <iostream>
 #include <iomanip>  // For formatting console cout strings
 #include <vector>
-#include "common.h"
-#include "qpid.h" // This is quickpid library except i have to edit some of it
-#include "uictrl.h"
-#include "neopixel.h"
-#include "devices.h"
-#include "control.h"
-#include "temperature.h"
-
-bool starter_signal_support = true;
-bool remote_start_support = true;
-bool autostop_disabled = false;       // Temporary measure to keep brake behaving until we get it debugged. Eventually should be false
-bool allow_rolling_start = false;    // May be a smart prerequisite, may be us putting obstacles in our way
-bool flip_the_screen = true;
-// Dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
-bool usb_jtag = true;  // If you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)
-bool dont_take_temperatures = false;  // In case debugging dallas sensors or causing problems
-bool gamma_correct_enabled = false;
-bool console_enabled = true;         // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
-bool keep_system_powered = false;    // Use true during development
-bool screensaver = false;  // Can enable experiment with animated screen draws
-bool looptime_print = false;         // Makes code write out timestamps throughout loop to serial port
-bool touch_reticles = false;
-uint32_t looptime_linefeed_threshold = 0;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
 
 // In case we ever talk to jaguars over asynchronous serial port, uncomment:
 // #include <HardwareSerial.h>
 // HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
 
-// run state machine related
-bool running_on_devboard = false;    // will overwrite with value read thru pull resistor on tx pin at boot
-bool shutdown_incomplete = true;     // minor state variable for shutdown mode - Shutdown mode has not completed its work and can't yet stop activity
-bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
-bool park_the_motors = false;        // Indicates we should release the brake & gas so the pedals can be used manually without interference
-bool autostopping = false, autostopping_last = false;           // true when in process of stopping the car (hold or shutdown modes)
-bool car_hasnt_moved = false;        // minor state variable for fly mode - Whether car has moved at all since entering fly mode
-bool calmode_request = false;
-bool joy_centered = false;  // minor state variable for hold mode
-bool powering_up = false;  // minor state variable for asleep mode
-// Timer cruiseSwTimer;  // Was used to require a medium-length hold time pushing cruise button to switch modes
 Timer sleepInactivityTimer(180000000);           // After shutdown how long to wait before powering down to sleep
 uint32_t motor_park_timeout_us = 4000000;       // If we can't park the motors faster than this, then give up.
 uint32_t gesture_flytimeout_us = 1250000;        // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
 Timer gestureFlyTimer(gesture_flytimeout_us); // Used to keep track of time for gesturing for going in and out of fly/cruise modes
 Timer motorParkTimer(motor_park_timeout_us);
-bool simulating_last = false;
-int32_t idelta = 0, idelta_touch = 0, idelta_encoder = 0;
-float fdelta = 0.0;
-
-// calibration related
-bool cal_joyvert_brkmotor_mode = false; // Allows direct control of brake motor using controller vert
-bool cal_pot_gasservo_mode = false;     // Allows direct control of gas servo using pot. First requires pot to be in valid position before mode is entered
-bool cal_pot_gasservo_ready = false;    // Whether pot is in valid range
 
 enum temp_categories { AMBIENT = 0, ENGINE = 1, WHEEL = 2, num_temp_categories };
 enum temp_lims { DISP_opmin, OP_MIN, OP_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
@@ -88,54 +45,11 @@ float steer_out_us = steer_stop_us;              // pid loop output to send to t
 uint32_t steer_pid_period_us = 75000;    // (Not actually a pid) Needs to be long enough for motor to cause change in measurement, but higher means less responsive
 Timer steerPidTimer(steer_pid_period_us); // not actually tunable, just needs value above
 
-// brake pressure related
-
-// brake actuator motor related
-float brake_duty_pc = 25.0;  // From motor datasheet
-float brake_extend_absmin_pc = -100.0; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
-float brake_stop_pc = 0.0;          // Brake pulsewidth corresponding to center point where motor movement stops (in us)
-float brake_retract_absmax_pc = 100.0; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
-float brake_margin_pc = 1.8;        // If pid pulse calculation exceeds pulse limit, how far beyond the limit is considered saturated
-float brake_extend_absmin_us = 670; // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
-float brake_stop_us = 1500;       // Brake pulsewidth corresponding to center point where motor movement stops (in us)
-float brake_retract_absmax_us = 2330; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
-float brake_out_pc = brake_stop_pc;
-float brake_out_us = brake_stop_us;
-float brake_retract_effective_max_us;   // 
-float brake_extend_min_pc = brake_extend_absmin_pc * brake_duty_pc / 100.0;
-float brake_retract_max_pc = brake_retract_absmax_pc * brake_duty_pc / 100.0;
-float brake_extend_min_us = brake_stop_us - brake_duty_pc * (brake_stop_us - brake_extend_absmin_us) / 100.0;  // Brake pulsewidth corresponding to duty-constrained retraction of brake actuator (in us). Default setting for jaguar is max 670us
-float brake_retract_max_us = brake_stop_us - brake_duty_pc * (brake_stop_us - brake_retract_absmax_us) / 100.0;  // Brake pulsewidth corresponding to duty-constrained extension of brake actuator (in us). Default setting for jaguar is max 2330us
-uint32_t brake_pid_period_us = 85000;    // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
-Timer brakePidTimer(brake_pid_period_us); // not actually tunable, just needs value above
-// float brake_perc_per_us = (100.0 - (-100.0)) / (brake_extend_min_us - brake_retractmx_us);  // (100 - 0) percent / (us-max - us-min) us = 1/8.3 = 0.12 percent/us
-float brake_spid_initial_kp = 0.323;                                                                         // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-float brake_spid_initial_ki_hz = 0.000;                                                                      // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-float brake_spid_initial_kd_s = 0.000;                                                                       // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-
-// throttle servo related
-float gas_governor_pc = 95;     // Software governor will only allow this percent of full-open throttle (percent 0-100)
-Timer gasServoTimer(500000);    // We expect the servo to find any new position within this time
-float gas_out_pc, gas_out_deg, gas_govern_deg;   // pid loop output to send to the actuator (gas)
-bool gas_servo_reversed = false;  // true if higher pulsewidth goes ccw
-float gas_absmax_us = 2500;       // Servo cw limit pulsewidth. Servo: full ccw = 2500us, center = 1500us , full cw = 500us
-float gas_absmin_us = 500;     // Servo ccw limit pulsewidth. Hotrc controller ch1/2 smin(lt/br) = 1000us, center = 1500us, smax(rt/th) = 2000us (with scaling knob at max).  ch4 off = 1000us, on = 2000us
-float gas_open_max_deg = 168.2;      // Gas pulsewidth corresponding to full open throttle with 180-degree servo (in us)
-float gas_closed_min_deg = 45.0;  // Gas pulsewidth corresponding to fully closed throttle with 180-degree servo (in us)
-float gas_parked_deg = 43.0;  // Gas pulsewidth beyond gas_ccw_closed_us where to park the servo out of the way so we can drive manually (in us)
-uint32_t gas_pid_period_us = 22500;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
-Timer gasPidTimer(gas_pid_period_us); // not actually tunable, just needs value above
-float gas_spid_initial_kp = 0.013;    // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
-float gas_spid_initial_ki_hz = 0.000; // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
-float gas_spid_initial_kd_s = 0.000;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
-bool gas_open_loop = true;
-
 // carspeed/speedo related
 float speedo_govern_mph;       // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
 float speedo_idle_mph = 4.50;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
 
 // tach related
-float tach_govern_rpm;        // Software engine governor creates an artificially reduced maximum for the engine speed. This is given a value in calc_governor()
 float tach_margin_rpm = 15.0; // Margin of error for checking engine rpm (in rpm)
 float tach_idle_abs_min_rpm = 450.0;  // Low limit of idle speed adjustability
 float tach_idle_hot_min_rpm = 550.0;  // Idle speed at op_max engine temp
@@ -144,86 +58,32 @@ float tach_idle_high_rpm = 950.0;     // Elevated rpm above idle guaranteed neve
 float tach_idle_abs_max_rpm = 1000.0; // High limit of idle speed adjustability
 Timer tachIdleTimer(5000000);         // How often to update tach idle value based on engine temperature
 
-// Cruise : is active on demand while driving.
-// Pick from 3 different styles of adjusting cruise setpoint. I prefer throttle_delta.
-// pid_suspend_fly : (PID) Moving trigger from center disables pid and lets you adjust the rpm target directly like Fly mode does. Whatever speed you're at when trigger releases is new pid target  
-// throttle_angle : Cruise locks throttle angle, instead of pid. Moving trigger from center adjusts setpoint proportional to how far you push it before releasing (and reduced by an attenuation factor)
-// throttle_delta : Cruise locks throttle angle, instead of pid. Any non-center trigger position continuously adjusts setpoint proportional to how far it's pulled over time (up to a specified maximum rate)
-enum cruise_modes { pid_suspend_fly, throttle_angle, throttle_delta };
-cruise_modes cruise_setpoint_mode = throttle_delta;
-bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
-bool cruise_adjusting = false;
-int32_t cruise_delta_max_pc_per_s = 16;  // (in throttle_delta mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
-// float cruise_angle_attenuator = 0.25;  // (in throttle_angle mode) Limits the change of each adjust trigger pull to this fraction of what's possible
-float cruise_angle_attenuator = 0.016;  // (in throttle_angle mode) Limits the change of each adjust trigger pull to this fraction of what's possible
-bool flycruise_toggle_request = false;
-float flycruise_vert_margin_pc = 0.3; // Margin of error for determining hard brake value for dropping out of cruise mode
-float gas_cruise_pc;  // Gas pulsewidth value fixed by cruise mode when in fixed throttle mode 
-uint32_t cruise_pid_period_us = 85000;                                                                      // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
-float cruise_spid_initial_kp = 5.57;                                                                         // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
-float cruise_spid_initial_ki_hz = 0.000;                                                                     // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
-float cruise_spid_initial_kd_s = 0.000;                                                                      // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
-
-bool starter = LOW;  // Set by handler only. Reflects current state of starter signal (does not indicate source)
-bool starter_drive = false;  // Set by handler only. High when we're driving starter, otherwise starter is an input
-req starter_request = req_na;
-Timer starterTimer(5000000);  // If remotely-started starting event is left on for this long, end it automatically  
-bool syspower = HIGH;  // Set by handler only. Reflects current state of the signal
-bool ignition = LOW;  // Set by handler only. Reflects current state of the signal
-req ignition_request = req_na;
-bool panicstop = false;
-req panicstop_request = req_on;  // On powerup we assume the code just crashed during a drive, because it could have
-Timer panicTimer(20000000);  // How long should a panic stop last?  We can't stay mad forever
-bool basicmodesw = LOW;
-enum sw_presses { NONE, SHORT, LONG }; // used by encoder sw and button algorithms
-int8_t sleep_request = req_na;
-
-joydirs joydir(int8_t axis = vert) {
-    if (axis == vert) return ((hotrc.pc[axis][filt] > hotrc.pc[axis][dbtop]) ? joy_up : ((hotrc.pc[axis][filt] < hotrc.pc[axis][dbbot]) ? joy_down : joy_cent));
-    return ((hotrc.pc[axis][filt] > hotrc.pc[axis][dbtop]) ? joy_rt : ((hotrc.pc[axis][filt] < hotrc.pc[axis][dbbot]) ? joy_lt : joy_cent));
-    // return (pc[axis][filt] > pc[axis][dbtop]) ? ((axis == vert) ? joy_up : joy_rt) : (pc[axis][filt] < pc[axis][dbbot]) ? ((axis == vert) ? joy_down : joy_lt) : joy_cent;
-}
 // Instantiate objects
 static Preferences config;  // Persistent config storage
-static I2C i2c(i2c_sda_pin, i2c_scl_pin);
 static Hotrc hotrc;
 static Potentiometer pot(pot_wipe_pin);
 static Simulator sim(pot);
 static TemperatureSensorManager tempsens(onewire_pin);
 static Encoder encoder(encoder_a_pin, encoder_b_pin, button_pin);
 static CarBattery mulebatt(mulebatt_pin);
-static LiPOBatt lipobatt(lipobatt_pin);
-// static servoPWM brakemotor(brake_pwm_pin);
-static Servo brakemotor;
-static Servo steermotor, gas_servo;
+static LiPoBatt lipobatt(lipobatt_pin);
 static PressureSensor pressure(pressure_pin);
 static BrakePositionSensor brakepos(brake_pos_pin);
 static Speedometer speedo(speedo_pin);
 static Tachometer tach(tach_pin);
+static I2C i2c(i2c_sda_pin, i2c_scl_pin);
 static AirVeloSensor airvelo(i2c);
 static MAPSensor mapsens(i2c);  // map sensor related
-
-static qpid brake_pid(pressure.filt_ptr(), brake_extend_min_pc, brake_retract_max_pc, brake_spid_initial_kp, brake_spid_initial_ki_hz, brake_spid_initial_kd_s,
-    qpid::pmod::onerr, qpid::dmod::onerr, qpid::awmod::cond, qpid::cdir::direct, brake_pid_period_us, qpid::ctrl::manual, qpid::centmod::on, brake_stop_pc);
-
-static qpid gas_pid(tach.filt_ptr(), 0.0, 100.0, gas_spid_initial_kp, gas_spid_initial_ki_hz, gas_spid_initial_kd_s, qpid::pmod::onerr, qpid::dmod::onerr, 
-    qpid::awmod::clamp, qpid::cdir::direct, gas_pid_period_us, (gas_open_loop) ? qpid::ctrl::manual : qpid::ctrl::manual, qpid::centmod::off);
-
-static Throttle throttle(gas_pid.target_ptr(), tach.human_ptr(), tach.filt_ptr(), tach_idle_high_rpm, tach_idle_hot_min_rpm, tach_idle_cold_max_rpm,
-    temp_lims_f[ENGINE][OP_MIN], temp_lims_f[ENGINE][WARNING], 50, Throttle::idlemodes::control);
-
-static qpid cruise_pid(speedo.filt_ptr(), throttle.idlespeed(), tach_govern_rpm, cruise_spid_initial_kp, cruise_spid_initial_ki_hz, cruise_spid_initial_kd_s,
-    qpid::pmod::onerr, qpid::dmod::onerr, qpid::awmod::round, qpid::cdir::direct, cruise_pid_period_us, qpid::ctrl::manual, qpid::centmod::off);
-
+static Throttle throttle;
+static Servo steermotor;
 static Brake brake;  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
 static Gas gas;
 static neopixelstrip neo;
 
 void calc_governor(void) {
-    tach_govern_rpm = map(gas_governor_pc, 0.0, 100.0, 0.0, tach.redline_rpm()); // Create an artificially reduced maximum for the engine speed
-    cruise_pid.set_outlimits(throttle.idlespeed(), tach_govern_rpm);
-    gas_govern_deg = gas_pc_to_deg(gas_governor_pc);
-    speedo_govern_mph = map(gas_governor_pc, 0.0, 100.0, 0.0, speedo.redline_mph());                                                                                     // Governor must scale the top vehicle speed proportionally
+    tach.govern_rpm = map(gas.governor, 0.0, 100.0, 0.0, tach.redline_rpm());  // Create an artificially reduced maximum for the engine speed
+    gas.derive();
+    speedo_govern_mph = map(gas.governor, 0.0, 100.0, 0.0, speedo.redline_mph());  // Governor must scale the top vehicle speed proportionally
 }
 float steer_safe(float endpoint) {
     return steer_stop_pc + (endpoint - steer_stop_pc) * (1.0 - steer_safe_pc * speedo.filt() / (100.0 * speedo.redline_mph()));
@@ -289,6 +149,10 @@ void set_board_defaults(bool devboard) {  // true for dev boards, false for prin
         touch_reticles = false;
     }
 }
+
+Timer starterTimer(5000000);  // If remotely-started starting event is left on for this long, end it automatically  
+Timer panicTimer(20000000);  // How long should a panic stop last?  We can't stay mad forever
+
 void starter_update () {  // Starter bidirectional handler logic.  Outside code interacts with handler by setting starter_request = req_off, req_on, or req_tog
     if (starter_signal_support) {
         if (starter_request == req_tog) starter_request = (req)(!starter_drive);  // translate toggle request to a drive request opposite to the current drive state
@@ -397,6 +261,7 @@ void bootbutton_update() {
 //     syspower_request = req_na;
 // }
 // Loop timing related
+uint32_t looptime_linefeed_threshold = 0;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
 Timer loopTimer(1000000); // how long the previous main loop took to run (in us)
 float loop_sum_s, loop_avg_us, loopfreq_hz;
 uint32_t looptimes_us[20];
@@ -471,7 +336,7 @@ uint32_t err_margin_adc = 5;
 enum err_type { LOST, RANGE, CALIB, WARN, CRIT, INFO, num_err_types };
 enum err_sens { e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, e_basicsw, e_mulebatt, e_lipobatt, e_airvelo, e_mapsens, e_num_sensors, e_none };  // these are in order of priority
 char err_type_card[num_err_types][5] = { "Lost", "Rang", "Cal", "Warn", "Crit", "Info" };
-char err_sensor_card[e_num_sensors+1][7] = { "HrcV", "HrcCh3", "BrPres", "BrkPos", "Speedo", "HrcH", "Tach", "Temps", "Startr", "HrcCh4", "Basic", "MulBat", "LiPO", "Airflw", "MAP", "None" };
+char err_sensor_card[e_num_sensors+1][7] = { "HrcV", "HrcCh3", "BrPres", "BrkPos", "Speedo", "HrcH", "Tach", "Temps", "Startr", "HrcCh4", "Basic", "MulBat", "LiPo", "Airflw", "MAP", "None" };
 // enum class sensor : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airvelo, mapsens, engtemp, mulebatt, ignition, basicsw, cruisesw, starter, syspower };  // , num_sensors, err_flag };
 bool err_sensor_alarm[num_err_types] = { false, false, false, false, false, false };
 int8_t err_sensor_fails[num_err_types] = { 0, 0, 0, 0, 0, 0 };

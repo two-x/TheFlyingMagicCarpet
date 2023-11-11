@@ -1,10 +1,12 @@
 // Contains utility functions, classes, and defines
 #pragma once
+#include <Wire.h>
 #include <cstdint> // for uint types
 #include <cstdio> // for printf
+#include "Arduino.h"
 // pin assignments  ESP32-S3-DevkitC series
 #define      button_pin  0 // button0/strap-1  // Input, Rotary encoder push switch, for the UI. active low (needs pullup). Also the esp "Boot" button does the same thing
-#define    lipobatt_pin  1 // adc1ch0          // Analog input, LiPO cell voltage, full scale is 4.8V
+#define    lipobatt_pin  1 // adc1ch0          // Analog input, LiPo cell voltage, full scale is 4.8V
 #define   encoder_b_pin  2 // adc1ch1          // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define      tft_dc_pin  3 // adc1ch2/strap-X  // Output, Assert when sending data to display chip to indicate commands vs. screen data - ! pin is also defined in tft_setup.h
 #define    mulebatt_pin  4 // adc1ch3          // Analog input, mule battery voltage sense, full scale is 16V
@@ -83,13 +85,71 @@
 enum hotrc_axis : int { horz=0, vert=1, ch3=2, ch4=3 };
 enum hotrc_val : int { opmin=0, cent=1, opmax=2, raw=3, filt=4, dbbot=5, dbtop=6, margin=7 };
 enum motor_val : int { parked=1, absmin=5, absmax=6, govern=8 };
-enum stop_val : int { stop=1, out=3, parked=4 };
+enum stop_val : int { stop=1, out=3 };
 enum size_enums : int { num_axes = 2, num_chans = 4, num_valus = 8, num_allvals = 9 };
 enum joydirs : int { joy_rt = -2, joy_down = -1, joy_cent = 0, joy_up = 1, joy_lt = 2 };
 enum runmode : int { BASIC, ASLEEP, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, num_runmodes };
 enum req : int { req_na = -1, req_off = 0, req_on = 1, req_tog = 2 };  // requesting handler actions of digital values with handler functions
 enum ctrlmode : int { manual, pid };
 enum ctrljob : int { na, halt, control, park, release, autostop, cal, autocal, num_job };
+enum cruise_modes { pid_suspend_fly, throttle_angle, throttle_delta };
+enum sw_presses { NONE, SHORT, LONG }; // used by encoder sw and button algorithms
+
+// global configuration settings
+bool starter_signal_support = true;
+bool remote_start_support = true;
+bool autostop_disabled = false;       // Temporary measure to keep brake behaving until we get it debugged. Eventually should be false
+bool allow_rolling_start = false;    // May be a smart prerequisite, may be us putting obstacles in our way
+bool flip_the_screen = true;
+bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
+// Dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
+bool usb_jtag = true;  // If you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)
+bool dont_take_temperatures = false;  // In case debugging dallas sensors or causing problems
+bool gamma_correct_enabled = false;
+bool console_enabled = true;         // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
+bool keep_system_powered = false;    // Use true during development
+bool screensaver = false;  // Can enable experiment with animated screen draws
+bool looptime_print = false;         // Makes code write out timestamps throughout loop to serial port
+bool touch_reticles = false;
+
+// global state variables.  maybe should belong to runmodemanager class
+bool shutdown_incomplete = true;     // minor state variable for shutdown mode - Shutdown mode has not completed its work and can't yet stop activity
+bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
+bool park_the_motors = false;        // Indicates we should release the brake & gas so the pedals can be used manually without interference
+bool autostopping = false, autostopping_last = false;           // true when in process of stopping the car (hold or shutdown modes)
+bool car_hasnt_moved = false;        // minor state variable for fly mode - Whether car has moved at all since entering fly mode
+bool joy_centered = false;  // minor state variable for hold mode
+bool powering_up = false;  // minor state variable for asleep mode
+float flycruise_vert_margin_pc = 0.3; // Margin of error for determining hard brake value for dropping out of cruise mode
+bool cal_joyvert_brkmotor_mode = false; // Allows direct control of brake motor using controller vert
+bool cal_pot_gasservo_mode = false;     // Allows direct control of gas servo using pot. First requires pot to be in valid position before mode is entered
+bool cal_pot_gasservo_ready = false;    // Whether pot is in valid range
+bool running_on_devboard = false;    // will overwrite with value read thru pull resistor on tx pin at boot
+int sleep_request = req_na;
+bool calmode_request = false;
+bool flycruise_toggle_request = false;
+int32_t idelta = 0, idelta_touch = 0, idelta_encoder = 0;
+
+// Cruise : is active on demand while driving.
+// Pick from 3 different styles of adjusting cruise setpoint. I prefer throttle_delta.
+// pid_suspend_fly : (PID) Moving trigger from center disables pid and lets you adjust the rpm target directly like Fly mode does. Whatever speed you're at when trigger releases is new pid target  
+// throttle_angle : Cruise locks throttle angle, instead of pid. Moving trigger from center adjusts setpoint proportional to how far you push it before releasing (and reduced by an attenuation factor)
+// throttle_delta : Cruise locks throttle angle, instead of pid. Any non-center trigger position continuously adjusts setpoint proportional to how far it's pulled over time (up to a specified maximum rate)
+int cruise_setpoint_mode = throttle_delta;
+bool cruise_adjusting = false;
+int32_t cruise_delta_max_pc_per_s = 16;  // (in throttle_delta mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
+// float cruise_angle_attenuator = 0.25;  // (in throttle_angle mode) Limits the change of each adjust trigger pull to this fraction of what's possible
+float cruise_angle_attenuator = 0.016;  // (in throttle_angle mode) Limits the change of each adjust trigger pull to this fraction of what's possible
+
+bool starter = LOW;  // Set by handler only. Reflects current state of starter signal (does not indicate source)
+bool starter_drive = false;  // Set by handler only. High when we're driving starter, otherwise starter is an input
+req starter_request = req_na;
+bool syspower = HIGH;  // Set by handler only. Reflects current state of the signal
+bool ignition = LOW;  // Set by handler only. Reflects current state of the signal
+req ignition_request = req_na;
+bool panicstop = false;
+req panicstop_request = req_on;  // On powerup we assume the code just crashed during a drive, because it could have
+bool basicmodesw = LOW;
 
 inline float smax(float a, float b) { return (a > b) ? a : b; }
 inline int32_t smax(int32_t a, int32_t b) { return (a > b) ? a : b; }
@@ -175,6 +235,20 @@ class Timer {  // !!! beware, this 54-bit microsecond timer overflows after ever
     int64_t IRAM_ATTR timeout() { return timeout_us; }
 };
 
+#define RUN_TESTS 0
+#if RUN_TESTS
+    #include "unittests.h"
+    void run_tests() {
+        printf("Running tests...\n");
+        delay(5000);
+        test_Param();
+        printf("Tests complete.\n");
+        for(;;) {} // loop forever
+    }
+#else
+    void run_tests() {}
+#endif
+
 class I2C {
     private:
         int32_t _devicecount = 0;
@@ -212,17 +286,3 @@ class I2C {
             return false;
         }
 };
-
-#define RUN_TESTS 0
-#if RUN_TESTS
-    #include "unittests.h"
-    void run_tests() {
-        printf("Running tests...\n");
-        delay(5000);
-        test_Param();
-        printf("Tests complete.\n");
-        for(;;) {} // loop forever
-    }
-#else
-    void run_tests() {}
-#endif

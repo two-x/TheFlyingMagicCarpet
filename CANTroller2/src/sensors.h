@@ -6,11 +6,8 @@
 #include <tuple>
 #include <memory> // for std::shared_ptr
 #include <SparkFun_FS3000_Arduino_Library.h>  // For air velocity sensor  http://librarymanager/All#SparkFun_FS3000
-#include "mapsens.h"
 #include "Arduino.h"
 #include "FunctionalInterrupt.h"
-#include "common.h"
-#include "uictrl.h"
 #include "driver/rmt.h"
 #include "RMT_Input.h"
 #include <ESP32Servo.h>        // Makes PWM output to control motors (for rudimentary control of our gas and steering)
@@ -612,8 +609,8 @@ class CarBattery : public AnalogSensor<int32_t, float> {
     float op_max_v() { return _op_max_v; }
 };
 
-// LiPOBatt reads the voltage level from a LiPO cell
-class LiPOBatt : public AnalogSensor<int32_t, float> {
+// LiPoBatt reads the voltage level from a LiPo cell
+class LiPoBatt : public AnalogSensor<int32_t, float> {
   protected:
     static constexpr float _initial_adc = adcmidscale_adc;
     static constexpr float _initial_v = 10.0;
@@ -624,7 +621,7 @@ class LiPOBatt : public AnalogSensor<int32_t, float> {
     static constexpr float _initial_v_per_adc = _abs_max_v / adcrange_adc;
     static constexpr float _initial_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
   public:
-    LiPOBatt(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
+    LiPoBatt(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
         _ema_alpha = _initial_ema_alpha;
         _m_factor = _initial_v_per_adc;
         _human.set_limits(_abs_min_v, _abs_max_v);
@@ -632,7 +629,7 @@ class LiPOBatt : public AnalogSensor<int32_t, float> {
         set_native(_initial_adc);
         set_can_source(src::PIN, true);
     }
-    LiPOBatt() = delete;
+    LiPoBatt() = delete;
     float v() { return _human.val(); }
     float min_v() { return _human.min(); }
     float max_v() { return _human.max(); }
@@ -808,6 +805,7 @@ class Tachometer : public PulseSensor<float> {
     static constexpr bool _initial_invert = true;
     static constexpr float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
   public:
+    float govern_rpm = _redline_rpm;    
     Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_rpm) {
         _ema_alpha = _initial_ema_alpha;
         _m_factor = _initial_rpm_per_rpus;
@@ -1209,7 +1207,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
     void toggles_reset() {  //
         for (int8_t ch = ch3; ch <= ch4; ch++) _sw_event[ch] = false;
     }
-    void update() {
+    int update() {
         for (int8_t axis = horz; axis <= vert; axis++) {
             us[axis][raw] = (int32_t)(rmt[axis].readPulseWidth(true));
             us[axis][raw] = spike_filter(axis, us[axis][raw]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
@@ -1224,6 +1222,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
                 pc[axis][filt] = pc[axis][cent];  // if within the deadband set joy_axis_filt to center value
         }
         radiolost_update();
+        return joydir();
     }
     bool radiolost() { return _radiolost; }
     bool* radiolost_ptr() { return &_radiolost; }
@@ -1231,6 +1230,10 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
     void set_pc(int8_t axis, int8_t param, float val) { pc[axis][param] = val; }
     void set_us(int8_t axis, int8_t param, int32_t val) { us[axis][param] = val; }
     int32_t next_unfilt_rawval (uint8_t axis) { return raw_history[axis][index[axis]]; }  // helps to debug the filter from outside the class
+    int joydir(int8_t axis = vert) {
+        if (axis == vert) return ((pc[axis][filt] > pc[axis][dbtop]) ? joy_up : ((pc[axis][filt] < pc[axis][dbbot]) ? joy_down : joy_cent));
+        return ((pc[axis][filt] > pc[axis][dbtop]) ? joy_rt : ((pc[axis][filt] < pc[axis][dbbot]) ? joy_lt : joy_cent));
+    }  // return (pc[axis][filt] > pc[axis][dbtop]) ? ((axis == vert) ? joy_up : joy_rt) : (pc[axis][filt] < pc[axis][dbbot]) ? ((axis == vert) ? joy_down : joy_lt) : joy_cent;
   private:
     bool radiolost_update() {
         if (ema_us[vert] > failsafe_us + failsafe_margin_us) {
