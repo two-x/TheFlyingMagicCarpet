@@ -13,12 +13,10 @@
 #include "RunModeManager.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-
 Display screen;
 TouchScreen touch(touch_cs_pin);
 RunModeManager run(&screen, &encoder);
 ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
-
 void get_touchpoint() { 
     touch_pt[0] = touch.touch_pt(0);
     touch_pt[1] = touch.touch_pt(1); 
@@ -83,7 +81,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     printf("Init rmt for hotrc..\n");
     hotrc.init();
     printf("Pot setup..\n");
-    pot.setup();             printf("Encoder setup..\n");
+    pot.setup();
+    printf("Encoder setup..\n");
     encoder.setup();
     printf("Brake pressure sensor.. ");
     pressure.setup();
@@ -114,10 +113,9 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     sim.register_device(sens::speedo, speedo, speedo.source());
     printf("Configure timers for PWM out..\n");
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);
-	steermotor.setPeriodHertz(50);
-    steermotor.attach (steer_pwm_pin, steer_left_min_us, steer_right_max_us);  // Jag input PWM range default is 670us (full reverse) to 2330us (full fwd). Max range configurable is 500-2500us
-    brake.init(brake_pwm_pin, 50, &hotrc, &pressure, &brakepos, &speedo);
-    gas.init(gas_pwm_pin, 60, &hotrc, &tach, &speedo, &pot, &throttle);
+    gas.init(gas_pwm_pin, 60, &hotrc, &speedo, &tach, &pot, &throttle);
+    brake.init(brake_pwm_pin, 50, &hotrc, &speedo, &pressure, &brakepos);
+    steer.init(steer_pwm_pin, 50, &hotrc, &speedo);
     printf("Init screen.. ");
     if (display_enabled) {
         config.begin("FlyByWire", false);
@@ -141,9 +139,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     panicTimer.reset();
     looptime_init();
 }
-
 void loop() {
-    // process sensor inputs
     ignition_panic_update();  // handler for ignition pin output and panicstop status.
     bootbutton_update();
     basicsw_update();
@@ -163,28 +159,18 @@ void loop() {
     if (touch_reticles) get_touchpoint();
     hotrc_events_update(run.mode());
     hotrc.update();
-    if (sim.potmapping(sens::joy)) hotrc.set_pc(horz, filt, pot.mapToRange(steer_left_us, steer_right_us));
-    // run state machine logic and process outputs
     run.run_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
-    brake.update(run.mode());
     gas.update(run.mode());
-    // Steering - Determine motor output and send to the motor
-    if (steerPidTimer.expireset()) {
-        if (run.mode() == SHUTDOWN && !shutdown_incomplete)
-            steer_out_pc = steer_stop_pc;  // Stop the steering motor if in shutdown mode and shutdown is complete
-        else {
-            int _joydir = hotrc.joydir(horz);
-            if (_joydir == joy_rt) steer_out_pc = map(hotrc.pc[horz][filt], hotrc.pc[horz][dbtop], hotrc.pc[horz][opmax], steer_stop_pc, steer_safe (steer_right_pc));  // if joy to the right of deadband
-            else if (_joydir == joy_lt) steer_out_pc = map(hotrc.pc[horz][filt], hotrc.pc[horz][dbbot], hotrc.pc[horz][opmin], steer_stop_pc, steer_safe (steer_left_pc));  // if joy to the left of deadband
-            else steer_out_pc = steer_stop_pc;  // Stop the steering motor if inside the deadband
-        }
-        steer_out_pc = constrain(steer_out_pc, steer_left_pc, steer_right_pc);  // Don't be out of range
-        if (steer_out_pc >= steer_stop_pc)
-            steer_out_us = map(steer_out_pc, steer_stop_pc, steer_right_pc, steer_stop_us, steer_right_us);
-        else steer_out_us = map(steer_out_pc, steer_stop_pc, steer_left_pc, steer_stop_us, steer_left_us);
-        steermotor.writeMicroseconds ((int32_t)steer_out_us);   // Write steering value to jaguar servo interface
-    }
-    // get user interface inputs from the touchscreen or rotary encoder
+    brake.update(run.mode());
+    steer.update(run.mode());
+    if (sim.potmapping(sens::joy)) hotrc.set_pc(horz, filt, pot.mapToRange(steer.pc_to_us(steer.pc[opmin]), steer.pc_to_us(steer.pc[opmax])));
+    
+    // debugging stupid gas stuck on full bug
+    float gas_last, brake_last, steer_last;
+    if (gas.us[out] != gas_last || brake.us[out] != brake_last || steer.us[out] != steer_last)
+        printf("gas %d brake %d steer %d\n", (int32_t)(gas.us[out]), (int32_t)(brake.us[out]), (int32_t)(steer.us[out]));
+    gas_last = gas.us[out]; brake_last = brake.us[out]; steer_last = steer.us[out];
+
     sel_val_last = sel_val;
     datapage_last = datapage;
     tunctrl_last = tunctrl; // Make sure this goes after the last comparison
@@ -195,14 +181,12 @@ void loop() {
         if (encoder_sw_action == Encoder::SHORT)  {  // if short press
             if (tunctrl == EDIT) tunctrl = SELECT;  // If we were editing a value drop back to select mode
             else if (tunctrl == SELECT) tunctrl = EDIT;  // If we were selecting a variable start editing its value
-            // else ... I envision pushing encoder switch while not tuning could switch desktops from our current analysis interface to a different runtime display 
         }
         else tunctrl = (tunctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
     }
     if (tunctrl == EDIT) idelta_encoder = encoder.rotation(true);  // true = include acceleration
     else if (tunctrl == SELECT) sel_val += encoder.rotation();  // If overflow constrain will fix in general handler below
     else if (tunctrl == OFF) datapage += encoder.rotation();  // If overflow tconstrain will fix in general below
-    // process ui navigation and tuning edits made
     idelta += idelta_encoder + idelta_touch;  // Allow edits using the encoder or touchscreen
     idelta_touch = idelta_encoder = 0;
     if (tunctrl != tunctrl_last || datapage != datapage_last || sel_val != sel_val_last || idelta) tuningCtrlTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
@@ -224,7 +208,7 @@ void loop() {
                 adj_val(&(gas.pc[govern]), idelta, 0, 100);
                 calc_governor();
             }
-            else if (sel_val == 10) adj_val(&steer_safe_pc, idelta, 0, 100);
+            else if (sel_val == 10) adj_val(&(steer.steer_safe_pc), idelta, 0, 100);
         }
         else if (datapage == PG_JOY) {
             if (sel_val == 9) adj_val(&hotrc.failsafe_us, idelta, hotrc.absmin_us, hotrc.us[vert][opmin] - hotrc.us[vert][margin]);
@@ -245,10 +229,7 @@ void loop() {
             else if (sel_val == 10) adj_val(brakepos.zeropoint_ptr(), 0.001 * fdelta, brakepos.op_min_in(), brakepos.op_max_in());
         }
         else if (datapage == PG_PWMS) {
-            if (sel_val == 4) adj_val(&steer_left_us, fdelta, steer_left_min_us, steer_stop_us - 1);
-            else if (sel_val == 5) adj_val(&steer_stop_us, fdelta, steer_left_us + 1, steer_right_us - 1);
-            else if (sel_val == 6) adj_val(&steer_right_us, fdelta, steer_stop_us + 1, steer_right_max_us);
-            else if (sel_val == 7) { adj_val(&(gas.nat[opmin]), fdelta, gas.nat[parked] + 1, gas.nat[opmax] - 1); gas.derive(); }
+            if (sel_val == 7) { adj_val(&(gas.nat[opmin]), fdelta, gas.nat[parked] + 1, gas.nat[opmax] - 1); gas.derive(); }
             else if (sel_val == 8) { adj_val(&(gas.nat[opmax]), fdelta, gas.nat[opmin] + 1, 180.0); gas.derive(); }
             else if (sel_val == 9) { adj_val(&(brake.us[stop]), fdelta, brake.us[opmin] + 1, brake.us[opmax] - 1); brake.derive(); }
             else if (sel_val == 10) { adj_val(&(brake.duty_pc), fdelta, 0.0, 100.0); brake.derive(); }
@@ -300,7 +281,6 @@ void loop() {
                 adj_bool(&flashdemo, idelta);
                 enable_flashdemo(flashdemo);
             }
-            // else if (sel_val == 7) { adj_val(&globalgamma, 0.01*fdelta, 0.1, 2.57); set_idiotcolors(); }
             else if (sel_val == 8) {
                 adj_val(&neobright, idelta, 1, 100);
                 neo.setbright(neobright);
@@ -313,7 +293,6 @@ void loop() {
         }
         idelta = 0;
     }
-    // check for errors, update idiot lights and refresh display
     diag_update();  // notice any screwy conditions or suspicious shenigans
     neo_idiots_update();
     neo.set_heartcolor(colorcard[run.mode()]);

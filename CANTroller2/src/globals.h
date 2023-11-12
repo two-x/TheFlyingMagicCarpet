@@ -27,24 +27,6 @@ float temp_sensor_min_f = -67.0; // Minimum reading of sensor is -25 C = -67 F
 float temp_sensor_max_f = 257.0; // Maximum reading of sensor is 125 C = 257 F
 bool temp_err[num_temp_categories];  // [AMBIENT/ENGINE/WHEEL]
 
-// steering related
-float steer_safe_pc = 72.0; // Steering is slower at high speed. How strong is this effect
-float steer_out_pc, steer_safe_adj_pc;
-float steer_right_max_pc = 100.0;
-float steer_right_pc = 100.0;
-float steer_stop_pc = 0.0;
-float steer_left_pc = -100.0;
-float steer_left_min_pc = -100.0;
-float steer_margin_pc = 2.4;
-float steer_left_min_us = 670;   // Smallest pulsewidth acceptable to jaguar (if recalibrated) is 500us
-float steer_left_us = 670;       // Steering pulsewidth corresponding to full-speed right steering (in us). Default setting for jaguar is max 670us
-float steer_stop_us = 1500;      // Steering pulsewidth corresponding to zero steering motor movement (in us)
-float steer_right_us = 2330;     // Steering pulsewidth corresponding to full-speed left steering (in us). Default setting for jaguar is max 2330us
-float steer_right_max_us = 2330; // Longest pulsewidth acceptable to jaguar (if recalibrated) is 2500us
-float steer_out_us = steer_stop_us;              // pid loop output to send to the actuator (steering)
-uint32_t steer_pid_period_us = 75000;    // (Not actually a pid) Needs to be long enough for motor to cause change in measurement, but higher means less responsive
-Timer steerPidTimer(steer_pid_period_us); // not actually tunable, just needs value above
-
 // carspeed/speedo related
 float speedo_govern_mph;       // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
 float speedo_idle_mph = 4.50;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
@@ -73,11 +55,11 @@ static Speedometer speedo(speedo_pin);
 static Tachometer tach(tach_pin);
 static I2C i2c(i2c_sda_pin, i2c_scl_pin);
 static AirVeloSensor airvelo(i2c);
-static MAPSensor mapsens(i2c);  // map sensor related
+static MAPSensor mapsens(i2c);
 static Throttle throttle;
-static Servo steermotor;
-static Brake brake;  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+static Brake brake;
 static Gas gas;
+static Steer steer;
 static neopixelstrip neo;
 
 void calc_governor(void) {
@@ -85,10 +67,6 @@ void calc_governor(void) {
     gas.derive();
     speedo_govern_mph = map(gas.governor, 0.0, 100.0, 0.0, speedo.redline_mph());  // Governor must scale the top vehicle speed proportionally
 }
-float steer_safe(float endpoint) {
-    return steer_stop_pc + (endpoint - steer_stop_pc) * (1.0 - steer_safe_pc * speedo.filt() / (100.0 * speedo.redline_mph()));
-}
-
 // int* x is c++ style, int *x is c style
 template <typename T>
 T adj_val(T variable, T modify, T low_limit, T high_limit) {
