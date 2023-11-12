@@ -394,7 +394,7 @@ class Gas : public ServoMotor {
             }
             // Step 2 : Determine servo pulse width value
             if (park_the_motors || (_runmode == SHUTDOWN && !shutdown_incomplete) || _runmode == ASLEEP)
-                pc[out] = nat_to_pc(deg[parked]);
+                pc[out] = pc[parked];
             else if (_runmode == CAL && cal_pot_gasservo_mode)
                 pc[out] = nat_to_pc(map(pot->val(), pot->min(), pot->max(), deg[absmin], deg[absmax]));  // gas_ccw_max_us, gas_cw_min_us
             else if (_runmode == CRUISE && (cruise_setpoint_mode != pid_suspend_fly))
@@ -416,8 +416,10 @@ class Gas : public ServoMotor {
             pc[out] = constrain(pc[out], pc[parked], pc[govern]);
             // Step 4 : Write to servo
             us[out] = nat_to_us(deg[out]);
-            if (!((_runmode == BASIC && !park_the_motors) || (_runmode == CAL && !cal_pot_gasservo_mode) || (_runmode == SHUTDOWN && !shutdown_incomplete) || (_runmode == ASLEEP)))
+            if (!((_runmode == BASIC && !park_the_motors) || (_runmode == CAL && !cal_pot_gasservo_mode) || (_runmode == SHUTDOWN && !shutdown_incomplete) || (_runmode == ASLEEP))) {
                 motor.writeMicroseconds((int32_t)us[out]);
+                // printf("wrote %d\n", (int32_t)us[out]);
+            }
         }
     }
   private:
