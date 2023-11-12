@@ -149,13 +149,13 @@ char units[disp_fixed_lines][5] = { "%   ", "mph ", "rpm ", "%   ", "psi ", "%  
 
 enum datapages { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, num_datapages };
 char pagecard[datapages::num_datapages][5] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-int32_t tuning_first_editable_line[datapages::num_datapages] = { 9, 9, 5, 4, 4, 8, 7, 7, 10, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[datapages::num_datapages] = { 9, 9, 5, 7, 4, 8, 7, 7, 10, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char datapage_names[datapages::num_datapages][disp_tuning_lines][9] = {
     { brAk"Posn", "MuleBatt", "LiPoBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
     { "PressRaw", "BkPosRaw", __________, __________, __________, "AirSpMax", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
-    { "BrakePWM", "SteerPWM", "Throttle", "Throttle", stEr"Left", stEr"Stop", stEr"Rigt", "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
+    { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
     { "PresTarg", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", brAk"Motr", brAk"Pres", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, "OpenLoop", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
@@ -168,7 +168,7 @@ char tuneunits[datapages::num_datapages][disp_tuning_lines][5] = {
     { "in  ", "V   ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, "%   ", "%   ", },  // PG_RUN
     { "us  ", "us  ", "us  ", "us  ", "%   ", "%   ", ______, ______, ______, "us  ", "us  ", },  // PG_JOY
     { "adc ", "adc ", ______, ______, ______, "mph ", "psi ", "psi ", "mph ", "mph ", "in  ", },  // PG_SENS
-    { "us  ", "us  ", degree, "us  ", "us  ", "us  ", "us  ", degree, degree, "us  ", "%   ", },  // PG_PWMS
+    { degree, "us  ", "V   ", "us  ", "V   ", "us  ", ______, degree, degree, "us  ", "%   ", },  // PG_PWMS
     { scroll, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", degreF, degreF, "rpms", scroll, },  // PG_IDLE
     { "psi ", "psi ", "%   ", "%   ", "%   ", "%   ", "us  ", "adc ", ______, "Hz  ", "s   ", },  // PG_BPID
     { "rpm ", "rpm ", "%   ", "%   ", "%   ", "%   ", ______, b1nary, ______, "Hz  ", "s   ", },  // PG_GPID
@@ -721,7 +721,7 @@ class Display {
                 draw_dynamic(5, pressure.filt(), pressure.min_human(), pressure.max_human(), brake.mypid.target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
                 draw_dynamic(6, brake.pc[out], brake.pc[opmin], brake.pc[opmax]);
                 draw_dynamic(7, hotrc.pc[horz][filt], hotrc.pc[horz][opmin], hotrc.pc[horz][opmax]);
-                draw_dynamic(8, steer_out_pc, steer_left_pc, steer_right_pc);
+                draw_dynamic(8, steer.pc[out], steer.pc[opmin], steer.pc[opmax]);
                 if (datapage == PG_RUN) {
                     draw_dynamic(9, brakepos.filt(), brakepos.op_min_in(), brakepos.op_max_in());
                     draw_dynamic(10, mulebatt.filt(), mulebatt.op_min_v(), mulebatt.op_max_v());
@@ -732,7 +732,7 @@ class Display {
                     draw_dynamic(15, maf_gps, maf_min_gps, maf_max_gps);
                     for (int line=16; line<=17; line++) draw_eraseval(line);
                     draw_dynamic(18, gas.governor, 0.0, 100.0);
-                    draw_dynamic(19, steer_safe_pc, 0.0, 100.0);
+                    draw_dynamic(19, steer.steer_safe_pc, 0.0, 100.0);
                 }
                 else if (datapage == PG_JOY) {
                     draw_dynamic(9, hotrc.us[horz][raw], hotrc.us[horz][opmin], hotrc.us[horz][opmax]);
@@ -757,13 +757,13 @@ class Display {
                     draw_dynamic(19, brakepos.zeropoint(), brakepos.min_human(), brakepos.max_human());  // BrakePositionSensor::abs_min_retract_in, BrakePositionSensor::abs_max_extend_in);
                 }
                 else if (datapage == PG_PWMS) {
-                    draw_dynamic(9, brake.us[out], brake.us[absmin], brake.us[absmax]);
-                    draw_dynamic(10, steer_out_us, steer_left_us, steer_right_us);
-                    draw_dynamic(11, gas.deg[out], gas.deg[opmin], gas.deg[opmax]);
-                    draw_dynamic(12, gas.us[out], gas.us[absmin], gas.us[absmax]);
-                    draw_dynamic(13, steer_left_us, steer_left_min_us, steer_stop_us);
-                    draw_dynamic(14, steer_stop_us, steer_left_us, steer_right_us);
-                    draw_dynamic(15, steer_right_us, steer_stop_us, steer_right_max_us);
+                    draw_dynamic(9, gas.deg[out], gas.deg[opmin], gas.deg[opmax]);
+                    draw_dynamic(10, gas.us[out], gas.us[absmin], gas.us[absmax]);
+                    draw_dynamic(11, brake.volt[out], brake.volt[opmin], brake.volt[opmax]);
+                    draw_dynamic(12, brake.us[out], brake.us[absmin], brake.us[absmax]);
+                    draw_dynamic(13, steer.volt[out], steer.volt[opmin], steer.volt[opmax]);
+                    draw_dynamic(14, steer.us[out], steer.us[absmin], steer.us[absmax]);
+                    draw_eraseval(15);
                     draw_dynamic(16, gas.deg[opmin], gas.deg[absmax], gas.deg[absmax]);
                     draw_dynamic(17, gas.deg[opmax], gas.deg[absmax], gas.deg[absmax]);
                     draw_dynamic(18, brake.us[stop], brake.us[absmin], brake.us[absmax]);

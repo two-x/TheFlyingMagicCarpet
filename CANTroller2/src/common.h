@@ -84,12 +84,13 @@
 // we need to be careful when changing anything - best to keep all of this here in one place!
 enum hotrc_axis : int { horz=0, vert=1, ch3=2, ch4=3 };
 enum hotrc_val : int { opmin=0, cent=1, opmax=2, raw=3, filt=4, dbbot=5, dbtop=6, margin=7 };
-enum motor_val : int { parked=1, absmin=5, absmax=6, govern=8 };
-enum stop_val : int { stop=1, out=3 };
-enum size_enums : int { num_axes = 2, num_chans = 4, num_valus = 8, num_allvals = 9 };
-enum joydirs : int { joy_rt = -2, joy_down = -1, joy_cent = 0, joy_up = 1, joy_lt = 2 };
+enum motor_val : int { parked=1, out=3, govern=4 , absmin=5, absmax=6};
+enum stop_val : int { stop=1 };
+enum steer_val : int { safe=1 };
+enum size_enums : int { num_axes=2, num_chans=4, num_motorvals=7, num_valus=8 };
+enum joydirs : int { joy_rt=-2, joy_down=-1, joy_cent=0, joy_up=1, joy_lt=2 };
 enum runmode : int { BASIC, ASLEEP, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, num_runmodes };
-enum req : int { req_na = -1, req_off = 0, req_on = 1, req_tog = 2 };  // requesting handler actions of digital values with handler functions
+enum req : int { req_na=-1, req_off=0, req_on=1, req_tog=2 };  // requesting handler actions of digital values with handler functions
 enum ctrlmode : int { manual, pid };
 enum ctrljob : int { na, halt, control, park, release, autostop, cal, autocal, num_job };
 enum cruise_modes { pid_suspend_fly, throttle_angle, throttle_delta };
