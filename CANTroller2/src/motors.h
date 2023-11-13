@@ -187,17 +187,21 @@ class ServoMotor {
   protected:
     Hotrc* hotrc;
     Speedometer* speedo;
+    CarBattery* mulebatt;
     Servo motor;  // ServoPWM* motor;
     int pin;
     Timer pid_timer;
   public:
     float duty_pc = 100;
+    static constexpr float car_batt_fake_v = 12.0;
     float pc[num_motorvals] = { NAN, 0, NAN, NAN, NAN, -100, 100 };  // percent values [opmin/stop/opmax/out/-/absmin/absmax]  values range from -100% to 100% are all derived or auto-assigned
-    float nat[num_motorvals] = { NAN, 0, NAN, NAN, NAN, -12.0, 12.0 };  // native-unit values [opmin/stop/opmax/out/-/absmin/absmax]
+    float nat[num_motorvals] = { NAN, 0, NAN, NAN, NAN, NAN, NAN };  // native-unit values [opmin/stop/opmax/out/-/absmin/absmax]
     float us[num_motorvals] = { NAN, 1500, NAN, NAN, NAN, 670, 2330 };  // us pulsewidth values [-/cent/-/out/-/absmin/absmax]
     float (&volt)[arraysize(nat)] = this->nat;  // our "native" value is volts
     bool motor_reversed = false;
     void derive() {  // calc pc and voltage op limits from volt and us abs limits 
+        this->nat[absmax] = running_on_devboard ? this->car_batt_fake_v : this->mulebatt->v();
+        this->nat[absmin] = -(this->nat[absmax]);
         this->pc[opmin] = this->pc[absmin] * this->duty_pc / 100.0;
         this->pc[opmax] = this->pc[absmax] * this->duty_pc / 100.0;
         this->volt[opmin] = map(pc[opmin], pc[stop], pc[absmin], volt[stop], volt[absmin]);
@@ -339,13 +343,14 @@ class BrakeMotor : public ServoMotor {
     uint32_t pid_period_us = 85000;    // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
     Timer interval_timer;  // Interval: How much time between increasing brake force during auto-stop if car still moving?
   public:
-    void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, PressureSensor* _pressure, BrakePositionSensor* _brakepos) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+    void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, PressureSensor* _pressure, BrakePositionSensor* _brakepos, CarBattery* _batt) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         duty_pc = 25.0;  // From motor datasheet
-        derive();
         hotrc = _hotrc;
         speedo = _speedo;
         pressure = _pressure;  // press_pin = _press_pin;
         brakepos = _brakepos;  // posn_pin = _posn_pin;
+        mulebatt = _batt;
+        derive();
         pin = _pin;
         motor.setPeriodHertz(_freq);
         motor.attach(pin, motor_reversed ? us[absmax] : us[absmin], motor_reversed ? us[absmin] : us[absmax]);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)    
@@ -383,6 +388,7 @@ class BrakeMotor : public ServoMotor {
             else pc[out] = constrain(pc[out], pc[opmin], pc[opmax]);  // Send to the actuator. Refuse to exceed range
             // Step 3 : Convert motor percent value to pulse width for motor, and to volts for display
             us[out] = pc_to_us(pc[out]);
+            derive();
             volt[out] = pc_to_nat(pc[out]);
             // Step 4 : Write to motor
             if (!(_runmode == BASIC && !park_the_motors) && !(_runmode == CAL && !cal_joyvert_brkmotor_mode) && !(_runmode == SHUTDOWN && !shutdown_incomplete) && !(_runmode == ASLEEP))
@@ -405,10 +411,11 @@ class SteerMotor : public ServoMotor {
   public:
     float steer_safe_pc = 72.0;
     SteerMotor() {}
-    void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
-        derive();
+    void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         hotrc = _hotrc;
         speedo = _speedo;
+        mulebatt = _batt;
+        derive();
         pin = _pin;
         motor.setPeriodHertz(_freq);
         motor.attach(pin, motor_reversed ? us[absmax] : us[absmin], motor_reversed ? us[absmin] : us[absmax]);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)    
@@ -424,6 +431,7 @@ class SteerMotor : public ServoMotor {
             }
             pc[out] = constrain(pc[out], pc[opmin], pc[opmax]);  // Don't be out of range
             us[out] = pc_to_us(pc[out]);
+            derive();
             volt[out] = pc_to_nat(pc[out]);
             motor.writeMicroseconds((int32_t)this->us[out]);  // write_motor();
         }
