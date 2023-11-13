@@ -190,11 +190,11 @@ class RunModeManager {
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) go_to(HOLD);  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
         else {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
             if (_joydir == joy_up)  // If we are trying to accelerate, scale joystick value to determine gas setpoint
-                gas.mypid.set_target(map (hotrc.pc[vert][filt], hotrc.pc[vert][dbtop], hotrc.pc[vert][opmax], throttle.idlespeed(), tach.govern_rpm));
+                gas.mypid.set_target(map(hotrc.pc[vert][filt], hotrc.pc[vert][dbtop], hotrc.pc[vert][opmax], throttle.idle_rpm, tach.govern_rpm()));
             else throttle.goto_idle();  // Else let off gas (if gas using PID mode)
             
             if (_joydir == joy_down)  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
-                brake.mypid.set_target(map (hotrc.pc[vert][filt], hotrc.pc[vert][dbbot], hotrc.pc[vert][opmin], pressure.min_human(), pressure.max_human()));
+                brake.mypid.set_target(map(hotrc.pc[vert][filt], hotrc.pc[vert][dbbot], hotrc.pc[vert][opmin], pressure.min_human(), pressure.max_human()));
             else brake.mypid.set_target(pressure.min_human());  // Else let off the brake   
         }
         if (flycruise_toggle_request) go_to(CRUISE);  // enter cruise mode by pressing hrc ch4 button
@@ -230,7 +230,7 @@ class RunModeManager {
                 }
                 else if (cruise_setpoint_mode == pid_suspend_fly) {
                     if (!cruise_adjusting) adjustpoint = tach.filt();
-                    gas.mypid.set_target(adjustpoint + ctrlratio * (((_joydir == joy_up) ? tach.govern_rpm : throttle.idlespeed()) - adjustpoint));
+                    gas.mypid.set_target(adjustpoint + ctrlratio * (((_joydir == joy_up) ? tach.govern_rpm() : throttle.idle_rpm) - adjustpoint));
                 }
                 cruise_ctrl_extent_pc = std::abs(hotrc.pc[vert][filt]);
             }

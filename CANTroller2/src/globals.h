@@ -62,11 +62,6 @@ static Gas gas;
 static Steer steer;
 static neopixelstrip neo;
 
-void calc_governor(void) {
-    tach.govern_rpm = map(gas.governor, 0.0, 100.0, 0.0, tach.redline_rpm());  // Create an artificially reduced maximum for the engine speed
-    gas.derive();
-    speedo_govern_mph = map(gas.governor, 0.0, 100.0, 0.0, speedo.redline_mph());  // Governor must scale the top vehicle speed proportionally
-}
 // int* x is c++ style, int *x is c style
 template <typename T>
 T adj_val(T variable, T modify, T low_limit, T high_limit) {

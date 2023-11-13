@@ -805,7 +805,7 @@ class Tachometer : public PulseSensor<float> {
     static constexpr bool _initial_invert = true;
     static constexpr float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
   public:
-    float govern_rpm = _redline_rpm;    
+    float _govern_rpm = _redline_rpm;    
     Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_rpm) {
         _ema_alpha = _initial_ema_alpha;
         _m_factor = _initial_rpm_per_rpus;
@@ -822,6 +822,8 @@ class Tachometer : public PulseSensor<float> {
     float rpm() { return _human.val(); }
     bool engine_stopped() { return stopped(); }
     float redline_rpm() { return _human.max(); }
+    float govern_rpm() { return _govern_rpm; }
+    void set_govern_rpm(float newgovern) { _govern_rpm = newgovern; }
     float abs_max_rpm() { return _abs_max_rpm; }
     float* redline_rpm_ptr() { return _human.max_ptr(); }
     std::shared_ptr<float> redline_rpm_shptr() { return _human.max_shptr(); }
@@ -840,6 +842,7 @@ class Speedometer : public PulseSensor<float> {
     static constexpr float _initial_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 pulrot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 whlrot/pulrot * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
     static constexpr bool _initial_invert = true;
     static constexpr float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+    float _govern_mph, _idle_mph;
   public:
     Speedometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_mph) {
         _ema_alpha = _initial_ema_alpha;
@@ -856,6 +859,9 @@ class Speedometer : public PulseSensor<float> {
     float mph() { return _human.val(); }
     bool car_stopped() { return stopped(); }
     float redline_mph() { return _human.max(); }
+    float govern_mph() { return _govern_mph; }
+    float idle_mph() { return _idle_mph; }
+    void set_govern_mph(float newgovern) { _govern_mph = newgovern; }
     float max_mph() { return _max_mph; }
     float* redline_mph_ptr() { return _human.max_ptr(); }
     std::shared_ptr<float> redline_mph_shptr() { return _human.max_shptr(); }
