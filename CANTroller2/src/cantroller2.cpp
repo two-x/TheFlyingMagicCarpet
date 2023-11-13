@@ -203,7 +203,7 @@ void loop() {
     float fdelta = (float)idelta;
     if (tunctrl == EDIT && idelta != 0) {  // Change tunable values when editing
         if (datapage == PG_RUN) {
-            if (sel_val == 9) { adj_val(&(gas.pc[govern]), idelta, 0, 100); gas.derive(); }
+            if (sel_val == 9) { adj_val(&(gas.governor), idelta, 0, 100); gas.derive(); }
             else if (sel_val == 10) adj_val(&(steer.steer_safe_pc), idelta, 0, 100);
         }
         else if (datapage == PG_JOY) {
@@ -217,8 +217,8 @@ void loop() {
             else if (sel_val == 5) adj_val(airvelo.max_mph_ptr(), 0.01 * fdelta, 0, airvelo.abs_max_mph());
             else if (sel_val == 6) adj_val(mapsens.min_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
             else if (sel_val == 6) adj_val(mapsens.max_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
-            else if (sel_val == 8) adj_val(&speedo_idle_mph, 0.01 * fdelta, 0, speedo.redline_mph() - 1);
-            else if (sel_val == 9) adj_val(speedo.redline_mph_ptr(), 0.01 * fdelta, speedo_idle_mph, 20);
+            else if (sel_val == 8) adj_val(speedo.idle_mph_ptr(), 0.01 * fdelta, 0, speedo.redline_mph() - 1);
+            else if (sel_val == 9) adj_val(speedo.redline_mph_ptr(), 0.01 * fdelta, speedo.idle_mph(), 20);
             else if (sel_val == 10) adj_val(brakepos.zeropoint_ptr(), 0.001 * fdelta, brakepos.op_min_in(), brakepos.op_max_in());
         }
         else if (datapage == PG_PWMS) {

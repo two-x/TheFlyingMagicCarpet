@@ -27,19 +27,6 @@ float temp_sensor_min_f = -67.0; // Minimum reading of sensor is -25 C = -67 F
 float temp_sensor_max_f = 257.0; // Maximum reading of sensor is 125 C = 257 F
 bool temp_err[num_temp_categories];  // [AMBIENT/ENGINE/WHEEL]
 
-// carspeed/speedo related
-float speedo_govern_mph;       // Governor must scale the top vehicle speed proportionally. This is given a value in the loop
-float speedo_idle_mph = 4.50;  // What is our steady state speed at engine idle? Pulley rotation frequency (in milli-mph)
-
-// tach related
-float tach_margin_rpm = 15.0; // Margin of error for checking engine rpm (in rpm)
-float tach_idle_abs_min_rpm = 450.0;  // Low limit of idle speed adjustability
-float tach_idle_hot_min_rpm = 550.0;  // Idle speed at op_max engine temp
-float tach_idle_cold_max_rpm = 775.0; // Idle speed at op_min engine temp
-float tach_idle_high_rpm = 950.0;     // Elevated rpm above idle guaranteed never to stall
-float tach_idle_abs_max_rpm = 1000.0; // High limit of idle speed adjustability
-Timer tachIdleTimer(5000000);         // How often to update tach idle value based on engine temperature
-
 // Instantiate objects
 static Preferences config;  // Persistent config storage
 static Hotrc hotrc;
@@ -476,4 +463,3 @@ float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) 
 float maf_gps;  // Manifold mass airflow in grams per second
 float maf_min_gps = 0.0;
 float maf_max_gps = massairflow(mapsens.max_psi(), airvelo.max_mph(), temp_lims_f[AMBIENT][DISP_opmin]);
-bool flashdemo = false;
