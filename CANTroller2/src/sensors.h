@@ -902,30 +902,6 @@ class ServoPWM : public Transducer<NATIVE_T, HUMAN_T> {
         _servo.writeMicroseconds((int32_t)this->_val_raw);  // Write result to servo interface
     }
 };
-
-class GasServo : public ServoPWM<float, float> {
-  private:
-  public:
-    GasServo(uint8_t pin, uint8_t freq) : ServoPWM(pin, freq) {
-    // GasServo(uint8_t pin, uint8_t freq) {
-        // set_native_limits(gas_opmin_deg, gas_opmax_deg)
-        // _servo.setPeriodHertz(freq);
-        // _servo.attach(this->_pin, this->_native.abs_min(), this->_native.abs_max());
-    }
-};
-
-class BrakeMotor : public ServoPWM<float, float> {
-  private:
-  public:
-    BrakeMotor();
-};
-
-class SteeringMotor : public ServoPWM<float, float> {
-  private:
-  public:
-    SteeringMotor();
-};
-
 // Device::Toggle is a base class for system signals or devices having a boolean value
 class Toggle : public Device {
   public:
@@ -936,7 +912,6 @@ class Toggle : public Device {
         can_sim = true;
     }
 };
-
 // Device::Toggle::InToggle is system signals or devices having a boolean value that serve as inputs (eg basicsw, cruisesw)
 class InToggle : public Toggle {
   public:

@@ -4,9 +4,10 @@ class RunModeManager {
     int _joydir;
     float cruise_ctrl_extent_pc, adjustpoint;       // During cruise adjustments, saves farthest trigger position read
     bool cruise_trigger_released = false;
-    static const uint32_t gesture_flytimeout_us = 2500000;        // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
-    static const uint32_t motor_park_timeout_us = 2500000;        // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
-    Timer gestureFlyTimer, cruiseDeltaTimer, pwrup_timer, motor_park_timer;
+    static const uint32_t gesture_flytimeout_us = 1250000;        // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
+    static const uint32_t motor_park_timeout_us = 4000000;        // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
+    static const uint32_t sleep_inactivity_timeout_us = 180000000;        // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
+    Timer gestureFlyTimer, cruiseDeltaTimer, pwrup_timer, motor_park_timer, sleep_inactivity_timer;
     runmode _currentMode = SHUTDOWN; // note these are more here in caseA we eventually don't use the globals
     runmode _oldMode;
     uint32_t pwrup_timeout = 500000;
@@ -158,11 +159,11 @@ class RunModeManager {
         else if (shutdown_incomplete) {  // first we need to stop the car and release brakes and gas before shutting down  
             if (park_the_motors) shutdown_incomplete = park_motors(); // update any in-progress motor parking. shutdown is complete once parked
             else if (!autostop()) park_motors(req_on);  // start parking motors directly after final autostop update
-            if (!shutdown_incomplete) sleepInactivityTimer.reset();  // upon shutdown completion, start the sleep timer
+            if (!shutdown_incomplete) sleep_inactivity_timer.reset();  // upon shutdown completion, start the sleep timer
         }
         else {  // if shutdown is complete
             if (calmode_request) go_to(CAL);  // if fully shut down and cal mode requested, go to cal mode
-            if (sleepInactivityTimer.expired() || sleep_request == req_on) go_to(ASLEEP);
+            if (sleep_inactivity_timer.expired() || sleep_request == req_on) go_to(ASLEEP);
         }
         sleep_request == req_na;
         if ((speedo.car_stopped() || allow_rolling_start) && ignition && !panicstop && !tach.engine_stopped()) go_to(HOLD);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically

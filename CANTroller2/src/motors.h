@@ -225,9 +225,9 @@ class ServoMotor {
         return this->us[stop];
     }
 };
-class Gas : public ServoMotor {
+class GasServo : public ServoMotor {
   public:
-    Gas() {};  // Brake(int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin); 
+    GasServo() {};  // Brake(int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin); 
     float (&deg)[arraysize(nat)] = nat;  // our "native" value is degrees of rotation "deg"
     qpid mypid, cruisepid;
     float cruise_target_pc;
@@ -322,9 +322,9 @@ class Gas : public ServoMotor {
     float gas_initial_ki = 0.000; // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
     float gas_initial_kd = 0.000;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
 };
-class Brake : public ServoMotor {
+class BrakeMotor : public ServoMotor {
   public:
-    Brake() {}  // Brake(int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin); 
+    BrakeMotor() {}  // Brake(int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin); 
     bool autostopping = false;
     static const uint32_t interval_timeout = 1000000;  // How often to apply increment during auto-stopping (in us)
     static const uint32_t stopcar_timeout = 8000000;  // How often to apply increment during auto-stopping (in us)
@@ -397,14 +397,14 @@ class Brake : public ServoMotor {
         // retract_effective_max_us = volt[stop] + duty_pc * (volt[opmax] - volt[stop]);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
     }
 };
-class Steer : public ServoMotor {
+class SteerMotor : public ServoMotor {
   private:
     float steer_safe(float endpoint) {
         return pc[stop] + (endpoint - pc[stop]) * (1.0 - steer_safe_pc * speedo->filt() / (100.0 * speedo->redline_mph()));
     }
   public:
     float steer_safe_pc = 72.0;
-    Steer() {}
+    SteerMotor() {}
     void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         derive();
         hotrc = _hotrc;
