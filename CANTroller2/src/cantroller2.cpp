@@ -77,7 +77,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     Serial.begin(115200);  // Open console serial port
     delay(800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     printf("Console started..\nUsing %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
-    calc_governor();  // set derived parameters
     printf("Init rmt for hotrc..\n");
     hotrc.init();
     printf("Pot setup..\n");
@@ -102,7 +101,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     mapsens.setup();
     tempsens.setup();  // Onewire bus and temp sensors
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Create a new task that runs the update_temperature_sensors function
-    throttle.init(gas.mypid.target_ptr(), tach.human_ptr(), tach.filt_ptr(), tach_idle_high_rpm, tach_idle_cold_max_rpm, tach_idle_hot_min_rpm,
+    throttle.init(gas.mypid.target_ptr(), tach.human_ptr(), tach.filt_ptr(),
         tempsens.get_sensor(loc::engine), temp_lims_f[ENGINE][OP_MIN], temp_lims_f[ENGINE][WARNING], 50, Throttle::idlemodes::control);
     printf("Simulator setup..\n");
     sim.register_device(sens::pressure, pressure, pressure.source());
@@ -204,23 +203,17 @@ void loop() {
     float fdelta = (float)idelta;
     if (tunctrl == EDIT && idelta != 0) {  // Change tunable values when editing
         if (datapage == PG_RUN) {
-            if (sel_val == 9) {
-                adj_val(&(gas.pc[govern]), idelta, 0, 100);
-                calc_governor();
-            }
+            if (sel_val == 9) { adj_val(&(gas.pc[govern]), idelta, 0, 100); gas.derive(); }
             else if (sel_val == 10) adj_val(&(steer.steer_safe_pc), idelta, 0, 100);
         }
         else if (datapage == PG_JOY) {
             if (sel_val == 9) adj_val(&hotrc.failsafe_us, idelta, hotrc.absmin_us, hotrc.us[vert][opmin] - hotrc.us[vert][margin]);
-            else if (sel_val == 10) {
-                adj_val(&hotrc.deadband_us, idelta, 0, 50);
-                hotrc.calc_params();
-            }
+            else if (sel_val == 10) { adj_val(&hotrc.deadband_us, idelta, 0, 50); hotrc.calc_params(); }
         }
         else if (datapage == PG_SENS) {
             if (sel_val == 2) throttle.add_idlehot(0.1 * fdelta);
             else if (sel_val == 3) throttle.add_idlecold(0.1 * fdelta);
-            else if (sel_val == 4) adj_val(tach.redline_rpm_ptr(), 0.1 * fdelta, throttle.idlehigh(), tach.abs_max_rpm());
+            else if (sel_val == 4) adj_val(tach.redline_rpm_ptr(), 0.1 * fdelta, throttle.idlehigh, tach.abs_max_rpm());
             else if (sel_val == 5) adj_val(airvelo.max_mph_ptr(), 0.01 * fdelta, 0, airvelo.abs_max_mph());
             else if (sel_val == 6) adj_val(mapsens.min_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
             else if (sel_val == 6) adj_val(mapsens.max_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
@@ -277,18 +270,9 @@ void loop() {
             else if (sel_val == 10 && run.mode() == CAL) adj_bool(&cal_pot_gasservo_mode, (idelta < 0 || cal_pot_gasservo_ready) ? idelta : -1);
         }
         else if (datapage == PG_UI) {
-            if (sel_val == 7) {
-                adj_bool(&flashdemo, idelta);
-                enable_flashdemo(flashdemo);
-            }
-            else if (sel_val == 8) {
-                adj_val(&neobright, idelta, 1, 100);
-                neo.setbright(neobright);
-            }
-            else if (sel_val == 9) {
-                adj_val(&neodesat, idelta, 0, 10);  // -10, 10);
-                neo.setdesaturation(neodesat);
-            }
+            if (sel_val == 7) { adj_bool(&flashdemo, idelta); enable_flashdemo(flashdemo); }
+            else if (sel_val == 8) { adj_val(&neobright, idelta, 1, 100); neo.setbright(neobright); }
+            else if (sel_val == 9) { adj_val(&neodesat, idelta, 0, 10); neo.setdesaturation(neodesat); }
             else if (sel_val == 10) adj_bool(&screensaver, idelta);
         }
         idelta = 0;
