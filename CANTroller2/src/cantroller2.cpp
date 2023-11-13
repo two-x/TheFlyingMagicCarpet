@@ -163,13 +163,6 @@ void loop() {
     brake.update(run.mode());
     steer.update(run.mode());
     if (sim.potmapping(sens::joy)) hotrc.set_pc(horz, filt, pot.mapToRange(steer.pc_to_us(steer.pc[opmin]), steer.pc_to_us(steer.pc[opmax])));
-    
-    // debugging stupid gas stuck on full bug
-    float gas_last, brake_last, steer_last;
-    if (gas.us[out] != gas_last || brake.us[out] != brake_last || steer.us[out] != steer_last)
-        printf("gas %d brake %d steer %d\n", (int32_t)(gas.us[out]), (int32_t)(brake.us[out]), (int32_t)(steer.us[out]));
-    gas_last = gas.us[out]; brake_last = brake.us[out]; steer_last = steer.us[out];
-
     sel_val_last = sel_val;
     datapage_last = datapage;
     tunctrl_last = tunctrl; // Make sure this goes after the last comparison
