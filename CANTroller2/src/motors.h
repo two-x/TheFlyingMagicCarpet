@@ -191,10 +191,6 @@ class ServoMotor {
     int pin;
     Timer pid_timer;
   public:
-    bool motor_reversed = true;
-};
-class JagMotor : public ServoMotor {
-  public:
     float duty_pc = 100;
     float pc[num_motorvals] = { NAN, 0, NAN, NAN, NAN, -100, 100 };  // percent values [opmin/stop/opmax/out/-/absmin/absmax]  values range from -100% to 100% are all derived or auto-assigned
     float nat[num_motorvals] = { NAN, 0, NAN, NAN, NAN, -12.0, 12.0 };  // native-unit values [opmin/stop/opmax/out/-/absmin/absmax]
@@ -229,7 +225,7 @@ class JagMotor : public ServoMotor {
         return this->us[stop];
     }
 };
-class Gas : public JagMotor {
+class Gas : public ServoMotor {
   public:
     Gas() {};  // Brake(int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin); 
     float (&deg)[arraysize(nat)] = nat;  // our "native" value is degrees of rotation "deg"
@@ -326,7 +322,7 @@ class Gas : public JagMotor {
     float gas_initial_ki = 0.000; // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
     float gas_initial_kd = 0.000;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
 };
-class Brake : public JagMotor {
+class Brake : public ServoMotor {
   public:
     Brake() {}  // Brake(int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin); 
     bool autostopping = false;
@@ -401,7 +397,7 @@ class Brake : public JagMotor {
         // retract_effective_max_us = volt[stop] + duty_pc * (volt[opmax] - volt[stop]);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
     }
 };
-class Steer : public JagMotor {
+class Steer : public ServoMotor {
   private:
     float steer_safe(float endpoint) {
         return pc[stop] + (endpoint - pc[stop]) * (1.0 - steer_safe_pc * speedo->filt() / (100.0 * speedo->redline_mph()));
