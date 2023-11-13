@@ -438,3 +438,17 @@ float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) 
 float maf_gps;  // Manifold mass airflow in grams per second
 float maf_min_gps = 0.0;
 float maf_max_gps = massairflow(mapsens.max_psi(), airvelo.max_mph(), temp_lims_f[AMBIENT][DISP_opmin]);
+
+#define RUN_TESTS 0
+#if RUN_TESTS
+    #include "unittests.h"
+    void run_tests() {
+        printf("Running tests...\n");
+        delay(5000);
+        test_Param();
+        printf("Tests complete.\n");
+        for(;;) {} // loop forever
+    }
+#else
+    void run_tests() {}
+#endif

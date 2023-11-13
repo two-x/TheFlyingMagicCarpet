@@ -2,8 +2,7 @@
 /* Contains unit tests */
 #pragma once
 #include <cassert>  // for assert
-#include "devices.h"
-#include "common.h"
+#include "sensors.h"
 #include <memory>
 
 void test_Param() {
