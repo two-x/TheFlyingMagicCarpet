@@ -113,8 +113,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     printf("Configure timers for PWM out..\n");
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);
     gas.init(gas_pwm_pin, 60, &hotrc, &speedo, &tach, &pot, &throttle);
-    brake.init(brake_pwm_pin, 50, &hotrc, &speedo, &pressure, &brakepos);
-    steer.init(steer_pwm_pin, 50, &hotrc, &speedo);
+    brake.init(brake_pwm_pin, 50, &hotrc, &speedo, &pressure, &brakepos, &mulebatt);
+    steer.init(steer_pwm_pin, 50, &hotrc, &speedo, &mulebatt);
     printf("Init screen.. ");
     if (display_enabled) {
         config.begin("FlyByWire", false);
