@@ -1,15 +1,11 @@
 #pragma once
-#include <stdio.h>
 #include <iostream>
-#include <cmath>
 #include <map>
-#include <tuple>
 #include <memory> // for std::shared_ptr
 #include <SparkFun_FS3000_Arduino_Library.h>  // For air velocity sensor  http://librarymanager/All#SparkFun_FS3000
 #include "Arduino.h"
 #include "FunctionalInterrupt.h"
 #include "driver/rmt.h"
-#include "RMT_Input.h"
 #include <ESP32Servo.h>        // Makes PWM output to control motors (for rudimentary control of our gas and steering)
 // #include "xtensa/core-macros.h"  // access to ccount register for esp32 timing ticks
 
@@ -365,6 +361,8 @@ class Transducer : public Device {
     NATIVE_T max_native() { return _native.max(); }
     HUMAN_T min_human() { return _human.min(); }
     HUMAN_T max_human() { return _human.max(); }
+    HUMAN_T* min_human_ptr() { return _human.min_ptr(); }
+    HUMAN_T* max_human_ptr() { return _human.max_ptr(); }
     NATIVE_T* native_ptr() { return _native.ptr(); }
     HUMAN_T* human_ptr() { return _human.ptr(); }
     std::shared_ptr<NATIVE_T> native_shptr() { return _native.shptr(); }
@@ -707,8 +705,8 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         _zeropoint = std::make_shared<float>(initial_zeropoint_in);
         // Soren: this line might be why we broke our brake motor at bm23:
         // set_human_limits(op_min_retract_in, op_max_extend_in);  // wouldn't this be safer?
-        set_human_limits(abs_min_retract_in, abs_max_extend_in);            
-        set_native_limits(abs_min_retract_adc, abs_max_extend_adc);
+        set_human_limits(op_min_retract_in, op_max_extend_in);            
+        set_native_limits(op_min_retract_adc, op_max_extend_adc);
         set_can_source(src::PIN, true);
         set_can_source(src::POT, true);
     }
@@ -805,7 +803,7 @@ class Tachometer : public PulseSensor<float> {
     static constexpr bool _initial_invert = true;
     static constexpr float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
   public:
-    float govern_rpm = _redline_rpm;    
+    float _govern_rpm = _redline_rpm;    
     Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_rpm) {
         _ema_alpha = _initial_ema_alpha;
         _m_factor = _initial_rpm_per_rpus;
@@ -822,6 +820,9 @@ class Tachometer : public PulseSensor<float> {
     float rpm() { return _human.val(); }
     bool engine_stopped() { return stopped(); }
     float redline_rpm() { return _human.max(); }
+    float govern_rpm() { return _govern_rpm; }
+    float* govern_rpm_ptr() { return &_govern_rpm; }
+    void set_govern_rpm(float newgovern) { _govern_rpm = newgovern; }
     float abs_max_rpm() { return _abs_max_rpm; }
     float* redline_rpm_ptr() { return _human.max_ptr(); }
     std::shared_ptr<float> redline_rpm_shptr() { return _human.max_shptr(); }
@@ -840,6 +841,7 @@ class Speedometer : public PulseSensor<float> {
     static constexpr float _initial_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 pulrot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 whlrot/pulrot * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
     static constexpr bool _initial_invert = true;
     static constexpr float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+    float _govern_mph, _idle_mph;
   public:
     Speedometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_mph) {
         _ema_alpha = _initial_ema_alpha;
@@ -856,6 +858,10 @@ class Speedometer : public PulseSensor<float> {
     float mph() { return _human.val(); }
     bool car_stopped() { return stopped(); }
     float redline_mph() { return _human.max(); }
+    float govern_mph() { return _govern_mph; }
+    float idle_mph() { return _idle_mph; }
+    float* idle_mph_ptr() { return &_idle_mph; }
+    void set_govern_mph(float newgovern) { _govern_mph = newgovern; }
     float max_mph() { return _max_mph; }
     float* redline_mph_ptr() { return _human.max_ptr(); }
     std::shared_ptr<float> redline_mph_shptr() { return _human.max_shptr(); }
@@ -895,30 +901,6 @@ class ServoPWM : public Transducer<NATIVE_T, HUMAN_T> {
         _servo.writeMicroseconds((int32_t)this->_val_raw);  // Write result to servo interface
     }
 };
-
-class GasServo : public ServoPWM<float, float> {
-  private:
-  public:
-    GasServo(uint8_t pin, uint8_t freq) : ServoPWM(pin, freq) {
-    // GasServo(uint8_t pin, uint8_t freq) {
-        // set_native_limits(gas_opmin_deg, gas_opmax_deg)
-        // _servo.setPeriodHertz(freq);
-        // _servo.attach(this->_pin, this->_native.abs_min(), this->_native.abs_max());
-    }
-};
-
-class BrakeMotor : public ServoPWM<float, float> {
-  private:
-  public:
-    BrakeMotor();
-};
-
-class SteeringMotor : public ServoPWM<float, float> {
-  private:
-  public:
-    SteeringMotor();
-};
-
 // Device::Toggle is a base class for system signals or devices having a boolean value
 class Toggle : public Device {
   public:
@@ -929,7 +911,6 @@ class Toggle : public Device {
         can_sim = true;
     }
 };
-
 // Device::Toggle::InToggle is system signals or devices having a boolean value that serve as inputs (eg basicsw, cruisesw)
 class InToggle : public Toggle {
   public:
@@ -1140,7 +1121,72 @@ class Simulator {
     bool enabled() { return _enabled; }
     bool* enabled_ptr() { return &_enabled; }
 };
+class RMTInput
+{
+  public:
+    RMTInput(rmt_channel_t channel, gpio_num_t gpio)
+    {
+        channel_ = channel;
+        gpio_ = gpio;
+    }
+    void init()
+    {
+        rmt_config_t _config;
+        _config.channel = channel_;
+        _config.gpio_num = gpio_;
+        _config.clk_div = 50; // slowed from 80 because the buffer was getting full
+        _config.mem_block_num = 1;
+        _config.rmt_mode = RMT_MODE_RX;
+        _config.flags = 0;
+        _config.rx_config.filter_en = true;          // Enable the filter
+        _config.rx_config.filter_ticks_thresh = 100; // Set the filter threshold
+        _config.rx_config.idle_threshold = 12000;    // Set the idle threshold
 
+        esp_err_t config_result = rmt_config(&_config);
+        if (config_result != ESP_OK)
+        {
+            Serial.printf("Failed to configure RMT: %d\n", config_result);
+            // while (1); // halt execution
+        }
+        esp_err_t install_result = rmt_driver_install(channel_, 2000, 0);
+        if (install_result != ESP_OK)
+        {
+            Serial.printf("Failed to install RMT driver: %d\n", install_result);
+            // while (1); // halt execution
+        }
+        rmt_get_ringbuf_handle(channel_, &rb_);
+        if (rb_ == NULL)
+        {
+            Serial.println("Failed to initialize ring buffer");
+            // while (1); // halt execution
+        }
+        esp_err_t start_result = rmt_rx_start(channel_, 1);
+        if (start_result != ESP_OK)
+        {
+            Serial.printf("Failed to start RMT receiver: %d\n", start_result);
+            // while (1); // halt execution
+        }
+    }
+    int32_t readPulseWidth(bool persistence)  // persistence means the last reading will be returned until a newer one is gathered. Otherwise 0 if no reading
+    {
+        size_t rx_size = 0;
+        rmt_item32_t *item = (rmt_item32_t *)xRingbufferReceive(rb_, &rx_size, 0);
+        if (item != NULL && rx_size == sizeof(rmt_item32_t))
+        {
+            pulse_width = item->duration0 + item->duration1;
+            vRingbufferReturnItem(rb_, (void *)item);
+            if (!persistence || pulse_width > 0) pulse_width_last = pulse_width * scale_factor;
+        }
+        else pulse_width = 0;
+        return (persistence) ? pulse_width_last : pulse_width; // No data
+    }
+  private:
+    rmt_channel_t channel_;
+    gpio_num_t gpio_;
+    int32_t pulse_width, pulse_width_last;
+    float scale_factor = 0.625;
+    RingbufHandle_t rb_;
+};
 class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format the kids will just love
   public:
     float ema_alpha = 0.075;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
@@ -1180,6 +1226,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
   public:
     Hotrc() { calc_params(); }
     void init() {
+        printf("Init rmt for hotrc..\n");
         for (int axis=horz; axis<=ch4; axis++) rmt[axis].init();  // Set up 4 RMT receivers, one per channel
         failsafe_timer.set(failsafe_timeout); 
     }

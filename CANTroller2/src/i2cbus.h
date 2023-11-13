@@ -1,10 +1,43 @@
+#pragma once
+#include <Wire.h>   // for i2c bus support
+class I2C {
+  private:
+    int32_t _devicecount = 0;
+    uint8_t _addrs[10];
+    uint8_t _sda_pin, _scl_pin;
+    Timer scanTimer;
+  public:
+    I2C(uint8_t sda_pin_arg, uint8_t scl_pin_arg) : _sda_pin(sda_pin_arg), _scl_pin(scl_pin_arg) {}
+    void init() {
+        printf("Init i2c bus and devices.."); delay(1);  // Attempt to force print to happen before init
+        scanTimer.reset();
+        Wire.begin(_sda_pin, _scl_pin);  // I2c bus needed for airflow sensor
+        byte error, address;
+        printf(" scanning ...");
+        _devicecount = 0;
+        for (address = 1; address < 127; address++ ) {
+            Wire.beginTransmission(address);
+            error = Wire.endTransmission();
+            if (error == 0) {
+                printf (" found addr: 0x%s%x", (address < 16) ? "0" : "", address);
+                _addrs[_devicecount++] = address;
+            }
+            else if (error==4) printf (" error addr: 0x%s%x", (address < 16) ? "0" : "", address);
+        }
+        if (scanTimer.elapsed() > 5000000) printf(" timeout & fail bus scan.");
+        if (_devicecount == 0) printf(" no devices found.");
+        printf(" done\n");
+    }
+    bool device_detected(uint8_t addr) {
+        for (int32_t i=0; i < _devicecount; i++) if (_addrs[i] == addr) return true;
+        return false;
+    }
+};
 // map.h - an i2c sensor to track the air pressure in our intake manifold. This, together with the air velocity
 // and temperature gives us the mass air flow which is proportional to how hard the engine is working.
 // I stole this library and modified it as such. to not block for 6-7ms on each read. - Soren
 // SparkFun_MicroPressure library by Alex Wende July 2020 (Beerware license)
 // This is a library for the Qwiic MicroPressure Sensor, which can read from 0 to 25 PSI.
-#pragma once
-#include <Wire.h>   // for i2c bus support
 #define DEFAULT_ADDRESS 0x18
 #define MAXIMUM_PSI     25
 #define MINIMUM_PSI     0
@@ -105,3 +138,51 @@ float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
     else if(units == BAR)  pressure *= 0.06895;   //bar
     return pressure;
 }
+// LightingBox - object to manage 12c communications link to our lighting box
+// Our protocol is: 1st nibble of 1st byte contains 4-bit command/request code. The 2nd nibble and any additional bytes contain data, as required by the code
+// codes: 0x0R = entered runmode given by R (no additional bytes)
+// code: 0x1H,0xLL = speedometer value update. 12-bit value contained in HLL is speed in hundredths-of-mph
+class LightingBox {  // represents the lighting controller i2c slave endpoint
+  private:
+    static constexpr uint32_t send_rate_us = 250000;
+    Timer send_timer;
+    int runmode_last;
+    uint16_t speed_last;
+  public:
+    enum lightbox_events : int { flying, notflying, tosleep, wakeup };
+    static constexpr uint8_t addr = 0x69;
+    LightingBox() {}
+    void init() {
+        printf("lighting box..\n");
+        send_timer.set(send_rate_us);
+    }
+    bool sendrunmode(int runmode) {
+        if (runmode == runmode_last) return false;
+        uint8_t byt = (uint8_t)(runmode & 0x0f);  // command template for runmode update
+        Wire.beginTransmission(addr);
+        Wire.write(byt);
+        Wire.beginTransmission(addr);
+        runmode_last = runmode;
+        return true;
+    }
+    bool sendspeed(float _speed) {
+        uint8_t byt = 0x10;  // command template for speed update
+        uint16_t speed = (uint16_t)(_speed * 100);
+        if (speed == speed_last) return false;
+        byt |= ((speed >> 8) & 0x0f);
+        Wire.beginTransmission(addr);
+        Wire.write(byt);
+        byt = (uint8_t)(speed & 0xff);
+        Wire.write(byt);
+        Wire.endTransmission();
+        speed_last = speed;
+        return true;
+    }
+    void update(int runmode, float speed) {
+        bool sent = false;
+        if (send_timer.expireset()) {
+            sent = sendrunmode(runmode);
+            if (!sent) sent = sendspeed(speed);
+        }
+    }
+};

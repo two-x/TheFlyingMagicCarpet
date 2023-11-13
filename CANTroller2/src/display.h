@@ -1,7 +1,5 @@
 #pragma once
 #include <TFT_eSPI.h>
-#include <iostream>  // for gamma correction
-#include <cmath>  // for gamma correction
 // LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
 // Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
 #define BLK  0x0000  // greyscale: full black (RGB elements off)
@@ -37,7 +35,6 @@
 #define DPNK 0xfa8a  // we need all shades of pink
 #define LPNK 0xfe18  // especially light pink, the champagne of pinks
 // 5-6-5 color picker site: http://www.barth-dev.de/online/rgb565  // named colors: https://wiki.tcl-lang.org/page/Colors+with+Names
-
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
 #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
 #define disp_lines 20  // Max lines of text displayable at line height = disp_line_height_pix
@@ -65,17 +62,16 @@
 #define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
+#define touch_reticle_offset 50  // Distance of center of each reticle to nearest screen edge
 #define disp_simbuttons_x 165
 #define disp_simbuttons_y 48
 #define disp_saver_width 155
 #define disp_saver_height 192
 
-float globalgamma = 2.2;  // Standard gamma is 2.2
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
 bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
-bool display_enabled = true;  // Should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
 bool disp_bool_values[6];
 bool disp_selected_val_dirty, disp_datapage_dirty, disp_data_dirty, disp_sidemenu_dirty, disp_runmode_dirty, disp_simbuttons_dirty, disp_idiots_dirty;
 int32_t disp_needles[disp_lines];
@@ -85,17 +81,6 @@ Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
 Timer dispRefreshTimer (100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
 uint32_t tft_watchdog_timeout_us = 100000;
 
-uint16_t gamma_x(uint16_t element565, float gamma = globalgamma) {  // (31.0 * (float)(bits * 2 - 10)
-    float gamma565 = static_cast<float>(element565) / 31.0;  // Convert the original 5-6-5 bit value to the range 0-1
-    gamma565 = std::pow(gamma565, gamma);  // Apply gamma correction
-    return static_cast<uint16_t>(gamma565 * 31.0);  // Convert the corrected value back to 5-6-5 bit range
-}
-uint16_t gamma16(uint16_t element565, float gamma = globalgamma) {
-    uint16_t r = (element565 >> 11) & 0x1f;
-    uint16_t g = (element565 >> 5) & 0x3f;
-    uint16_t b = element565 & 0x1f;
-    return (gamma_x(r, gamma) << 11) | (gamma_x(g, gamma) << 5) | gamma_x(b, gamma);
-}
 uint32_t color_16b_to_uint32(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to uint32 in format 0x00RRGGBB
     return (((uint32_t)color565 & 0xf800) << 8) | (((uint32_t)color565 & 0x7e0) << 5) | (((uint32_t)color565 & 0x1f) << 3);
 }
@@ -123,12 +108,12 @@ uint16_t hue_to_rgb16(uint8_t hue) {  // returns uint16 color
 }
 
 char modecard[8][7] = { "Basic", "Asleep", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
-int32_t colorcard[arraysize(modecard)] = { MGT, MBLU, RED, ORG, YEL, GRN, TEAL, LPNK };
+int32_t colorcard[arraysize(modecard)] = { MGT, MBLU, RED, ORG, YEL, GRN, TEAL, PUR };
 
 char sensorcard[14][7] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 
 char idlemodecard[3][7] = { "direct", "cntrol", "minimz" };
-char idlestatecard[Throttle::targetstates::num_states][7] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
+char idlestatecard[IdleControl::targetstates::num_states][7] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
 
 // These defines are just a convenience to keep the below datapage strings array initializations aligned in neat rows & cols for legibility
 #define stEr "St\x88r"
@@ -146,6 +131,7 @@ char idlestatecard[Throttle::targetstates::num_states][7] = { "todriv", "drving"
 
 char telemetry[disp_fixed_lines][9] = { "TriggerV", "   Speed", "    Tach", "Throttle", brAk"Pres", brAk"Motr", "JoysticH", stEr"Motr", };  // Fixed rows
 char units[disp_fixed_lines][5] = { "%   ", "mph ", "rpm ", "%   ", "psi ", "%   ", "%   ", "%   " };  // Fixed rows
+char brake_pid_card[2][7] = { "presur", "positn" };
 
 enum datapages { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, num_datapages };
 char pagecard[datapages::num_datapages][5] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
@@ -157,12 +143,12 @@ char datapage_names[datapages::num_datapages][disp_tuning_lines][9] = {
     { "PressRaw", "BkPosRaw", __________, __________, __________, "AirSpMax", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
-    { "PresTarg", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", brAk"Motr", brAk"Pres", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
+    { "Pn|PrTgt", "Pn|PrErr", "  P Term", "  I Term", "  D Term", brAk"Posn", "dPressur", " dPositn", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, "OpenLoop", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "LoopFreq", "Loop Avg", "LoopPeak", " Touch X", " Touch Y", " Touch X", " Touch Y", "BlnkDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI      // "   Gamma"
+    { "LoopFreq", "Loop Avg", "LoopPeak", " Touch X", " Touch Y", " Touch X", " Touch Y", "BlnkDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
 };
 char tuneunits[datapages::num_datapages][disp_tuning_lines][5] = {
     { "in  ", "V   ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, "%   ", "%   ", },  // PG_RUN
@@ -170,7 +156,7 @@ char tuneunits[datapages::num_datapages][disp_tuning_lines][5] = {
     { "adc ", "adc ", ______, ______, ______, "mph ", "psi ", "psi ", "mph ", "mph ", "in  ", },  // PG_SENS
     { degree, "us  ", "V   ", "us  ", "V   ", "us  ", ______, degree, degree, "us  ", "%   ", },  // PG_PWMS
     { scroll, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", degreF, degreF, "rpms", scroll, },  // PG_IDLE
-    { "psi ", "psi ", "%   ", "%   ", "%   ", "%   ", "us  ", "adc ", ______, "Hz  ", "s   ", },  // PG_BPID
+    { "psin", "psin", "%   ", "%   ", "%   ", "in  ", ______, ______, ______, "Hz  ", "s   ", },  // PG_BPID
     { "rpm ", "rpm ", "%   ", "%   ", "%   ", "%   ", ______, b1nary, ______, "Hz  ", "s   ", },  // PG_GPID
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%/s ", ______, "Hz  ", "s   ", },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, b1nary, },  // PG_TEMP
@@ -184,29 +170,30 @@ char simgrid[4][3][5] = {
     { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters is the right-side map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
-char unitmapnames[8][5] = { "usps", "us  ", "rpms", scroll, b1nary, "%   ", "ohm ", "eyes" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
-uint8_t unitmaps[8][17] = {  // 17x7-pixel bitmaps for where units use symbols not present in the font, are longer than 3 characters, or are just special
+char unitmapnames[9][5] = { "usps", "us  ", "rpms", scroll, b1nary, "%   ", "ohm ", "eyes", "psin", };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
+uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where units use symbols not present in the font, are longer than 3 characters, or are just special
     { 0x7e, 0x20, 0x20, 0x3c, 0x00, 0x24, 0x2a, 0x2a, 0x12, 0x00, 0x70, 0x0e, 0x00, 0x24, 0x2a, 0x2a, 0x12, },  // usps - microseconds per second
     { 0x40, 0x7e, 0x20, 0x20, 0x1c, 0x20, 0x00, 0x24, 0x2a, 0x2a, 0x2a, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, },  // us - b/c the font's "mu" character doesn't work
     { 0x1f, 0x01, 0x00, 0x3f, 0x09, 0x0e, 0x00, 0x0f, 0x01, 0x0e, 0x01, 0x0e, 0x60, 0x1c, 0x00, 0x58, 0x74, },  // rpm/s (or rot/m*s) - rate of change of engine rpm
     { 0x04, 0x02, 0x7f, 0x02, 0x04, 0x00, 0x10, 0x20, 0x7f, 0x20, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // scroll arrows - to indicate multiple choice
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3e, 0x00, 0x00, 0x1c, 0x22, 0x22, 0x1c, 0x00, 0x00, },  // 0/1 - to indicate binary value
     { 0x02, 0x45, 0x25, 0x12, 0x08, 0x24, 0x52, 0x51, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // % - just because the font one is feeble
-    { 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // Capital omega - for ohms
-    { 0x08, 0x1c, 0x2a, 0x08, 0x00, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x41, 0x3e, },  // Googly eyes, to point out new features
+    { 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // capital omega - for ohms
+    { 0x08, 0x1c, 0x2a, 0x08, 0x00, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x41, 0x3e, },  // googly eyes, to point out new features
+    { 0x3d, 0x00, 0x3c, 0x04, 0x38, 0x00, 0x7f, 0x00, 0x7c, 0x24, 0x18, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x3d, },  // inches or psi
 };  // These bitmaps are in the same format as the idiot light bitmaps, described below
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
-bool* idiotlights[16] = {
+bool* idiotlights[17] = {
     &(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &(temp_err[ENGINE]), &(temp_err[WHEEL]), &panicstop, 
     hotrc.radiolost_ptr(), &shutdown_incomplete, &park_the_motors, &autostopping, &cruise_adjusting,
-    &car_hasnt_moved, &starter, &boot_button, sim.enabled_ptr(), &running_on_devboard, 
-    &powering_up,
+    &car_hasnt_moved, &starter, &(encoder.sw), sim.enabled_ptr(), &running_on_devboard, 
+    &powering_up, &(brake.posn_pid_active),
 };
 char idiotchars[arraysize(idiotlights)][3] = {
     "SL", "SR", "\xf7""E", "\xf7""W", "P\x13", 
     "RC", "SI", "Pk", "AS", "Aj",
     "HM", "St", "BB", "Sm", "DB",
-    "PU",
+    "PU", "BP",
 };  // "c3", "c4" };
 uint16_t idiotcolors[arraysize(idiotlights)];
 uint8_t idiot_saturation = 225;  // 170-195 makes nice bright yet distinguishable colors
@@ -215,43 +202,41 @@ bool idiotlasts[arraysize(idiotlights)];
 // 11x7 pixel idiot light bitmaps.  Format: Each byte is one pixel column (left->right) with LSB->MSB within each byte being the top->bottom pixels in that column
 // The high bit (bottom pixel) of every byte is 0 due to 7-pixel height. Set high bit of first byte to 1 to skip bitmap and use letters instead
 uint8_t idiotmaps[arraysize(idiotlights)][11] = {
-    { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e, },     // 0 = "S" w/ crossout symbol
-    { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x78, 0x70, 0x58, 0x0d, 0x07, 0x0f, },     // 1 = "S" w/ double arrow
-    { 0x7f, 0x7f, 0x6b, 0x6b, 0x00, 0x70, 0x12, 0x17, 0x75, 0x67, 0x02, },     // 2 = "En" w/ degree symbol
-    { 0x7f, 0x30, 0x18, 0x30, 0x7f, 0x10, 0x12, 0x77, 0x65, 0x07, 0x02, },     // 3 = "Wh" w/ degree symbol
-    { 0x7f, 0x7f, 0x09, 0x0f, 0x76, 0x10, 0x70, 0x60, 0x00, 0x6f, 0x6f, },     // 4 = "Pn!"
-    { 0x63, 0x36, 0x1c, 0x36, 0x63, 0x14, 0x08, 0x22, 0x1c, 0x41, 0x3e, },     // 5 = wifi symbol w/ X
-    { 0x16, 0x15, 0x0d, 0x60, 0x6f, 0x04, 0x6f, 0x60, 0x0f, 0x69, 0x66, },     // 6 = "SHD..."
-    { 0x3e, 0x63, 0x41, 0x7d, 0x7d, 0x55, 0x55, 0x5d, 0x49, 0x63, 0x3e, },     // 7 = circle-"P"
-    { 0x50, 0x40, 0x40, 0x1c, 0x36, 0x7b, 0x4d, 0x47, 0x42, 0x66, 0x3c, },     // 8 = skid wheel w/ brake caliper
-    { 0x08, 0x1c, 0x36, 0x00, 0x3e, 0x63, 0x63, 0x00, 0x36, 0x1c, 0x08, },     // 9 = "<C>"
-    { 0x1d, 0x23, 0x47, 0x00, 0x3e, 0x63, 0x55, 0x49, 0x55, 0x63, 0x3e, },     // 10 = rotation arrow w/ X wheel
-    { 0x3e, 0x41, 0x7f, 0x79, 0x71, 0x73, 0x3e, 0x1c, 0x7f, 0x55, 0x7f, },     // 11 = motor w/ spur gear
-    { 0x01, 0x7f, 0x7f, 0x7f, 0x3f, 0x38, 0x74, 0x70, 0x70, 0x70, 0x60, },     // 12 = boot
-    { 0x6e, 0x6b, 0x3b, 0x00, 0x7f, 0x00, 0x7f, 0x06, 0x1c, 0x06, 0x7f, },     // 13 = "SIM"
-    { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, },     // 14 = "DEV"
-    { 0x00, 0x3e, 0x63, 0x41, 0x40, 0x4f, 0x40, 0x41, 0x63, 0x3e, 0x00, },     // 15 = power symbol
+    { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e, },  // 0 = "S" w/ crossout symbol
+    { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x78, 0x70, 0x58, 0x0d, 0x07, 0x0f, },  // 1 = "S" w/ double arrow
+    { 0x7f, 0x7f, 0x6b, 0x6b, 0x00, 0x70, 0x12, 0x17, 0x75, 0x67, 0x02, },  // 2 = "En" w/ degree symbol
+    { 0x7f, 0x30, 0x18, 0x30, 0x7f, 0x10, 0x12, 0x77, 0x65, 0x07, 0x02, },  // 3 = "Wh" w/ degree symbol
+    { 0x7f, 0x7f, 0x09, 0x0f, 0x76, 0x10, 0x70, 0x60, 0x00, 0x6f, 0x6f, },  // 4 = "Pn!"
+    { 0x63, 0x36, 0x1c, 0x36, 0x63, 0x14, 0x08, 0x22, 0x1c, 0x41, 0x3e, },  // 5 = wifi symbol w/ X
+    { 0x16, 0x15, 0x0d, 0x60, 0x6f, 0x04, 0x6f, 0x60, 0x0f, 0x69, 0x66, },  // 6 = "SHD..."
+    { 0x3e, 0x63, 0x41, 0x7d, 0x7d, 0x55, 0x55, 0x5d, 0x49, 0x63, 0x3e, },  // 7 = circle-"P"
+    { 0x50, 0x40, 0x40, 0x1c, 0x36, 0x7b, 0x4d, 0x47, 0x42, 0x66, 0x3c, },  // 8 = skid wheel w/ brake caliper
+    { 0x08, 0x1c, 0x36, 0x00, 0x3e, 0x63, 0x63, 0x00, 0x36, 0x1c, 0x08, },  // 9 = "<C>"
+    { 0x1d, 0x23, 0x47, 0x00, 0x3e, 0x63, 0x55, 0x49, 0x55, 0x63, 0x3e, },  // 10 = rotation arrow w/ X wheel
+    { 0x3e, 0x41, 0x7f, 0x79, 0x71, 0x73, 0x3e, 0x1c, 0x7f, 0x55, 0x7f, },  // 11 = motor w/ spur gear
+    { 0x01, 0x7f, 0x7f, 0x7f, 0x3f, 0x38, 0x74, 0x70, 0x70, 0x70, 0x60, },  // 12 = boot
+    { 0x6e, 0x6b, 0x3b, 0x00, 0x7f, 0x00, 0x7f, 0x06, 0x1c, 0x06, 0x7f, },  // 13 = "SIM"
+    { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, },  // 14 = "DEV"
+    { 0x00, 0x3e, 0x63, 0x41, 0x40, 0x4f, 0x40, 0x41, 0x63, 0x3e, 0x00, },  // 15 = power symbol
+    { 0x7e, 0x7f, 0x7f, 0x7f, 0x33, 0x12, 0x12, 0x12, 0x1e, 0x12, 0x0c, },  // 16 = linear actuator (or penis)
 };
-//  { 0x56, 0x5d, 0x42, 0x5f, 0x42, 0x4c, 0x52, 0x4c, 0x5e, 0x4a, 0x44, },     // 8 = underline "Stop"
-//  { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, }, };  // N/A (no idiot light bitmap)
+//  { 0x56, 0x5d, 0x42, 0x5f, 0x42, 0x4c, 0x52, 0x4c, 0x5e, 0x4a, 0x44, },  // 8 = underline "Stop"
+//  { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // N/A (no idiot light bitmap)
 void set_idiotcolors() {
     for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
         int division = disp_idiots_per_row;
         uint32_t color32 = hsv_to_rgb<uint32_t>((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 220);
         idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
-        if (gamma_correct_enabled) idiotcolors[idiot] = gamma16(idiotcolors[idiot]);
         disp_idiots_dirty = true;
     }
 }
-
 // tuning-ui related globals
 enum disp_draw { ERASE = -1 };
 enum tunctrls { OFF, SELECT, EDIT };
-int32_t tunctrl = OFF, tunctrl_last = OFF;
-int32_t datapage = PG_RUN, datapage_last = PG_TEMP;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
-int32_t sel_val = 0, sel_val_last = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
+int tunctrl = OFF, tunctrl_last = OFF;
+int datapage = PG_RUN, datapage_last = PG_TEMP;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
+int sel_val = 0, sel_val_last = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
 Timer tuningCtrlTimer (25000000);  // This times out edit mode after a a long period of inactivity
-
 class Display {
     private:
         TFT_eSPI _tft = TFT_eSPI();
@@ -261,8 +246,7 @@ class Display {
         int32_t _timing_tft_reset;
         bool _procrastinate = false, reset_finished = false, saver_lotto = false, simulating_last;        
         // For screensaver sprite
-        long sx0, sy0;
-        long touchpoint_x = -1, touchpoint_y = -1, eraser_rad = 14, eraser_rad_min = 9, eraser_rad_max = 27, eraser_velo_min = 4, eraser_velo_max = 10;
+        long sx0, sy0, touchpoint_x = -1, touchpoint_y = -1, eraser_rad = 14, eraser_rad_min = 9, eraser_rad_max = 27, eraser_velo_min = 4, eraser_velo_max = 10;
         long eraser_pos[2] = { 0, 0 };
         long eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) };
         long eraser_pos_max[2] = { disp_saver_width / 2 - eraser_rad, disp_saver_height / 2 - eraser_rad }; 
@@ -271,16 +255,15 @@ class Display {
         float pensat = 200.0;
         uint16_t pencolor = RED;
         uint32_t pentimeout = 700000;
-        int savernumcycles, savershape_last;
+        int savernumcycles, savershape_last, disp_oldmode = SHUTDOWN;   // So we can tell when the mode has just changed. start as different to trigger_mode start algo
         int savershapes = 5, savercycle = 1, savtouch_last_x = -1, savtouch_last_y = -1, savtouch_last_w = 2, savershape = random(savershapes);
         uint32_t saver_cycletime_us = 38000000, saver_refresh_us = 45000;
         Timer saverRefreshTimer, saverCycleTimer, pentimer;
-        uint32_t disp_oldmode = SHUTDOWN;   // So we can tell when the mode has just changed. start as different to trigger_mode start algo
     public:
         Display (int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
         Display () : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
         void init() {
-            yield();
+            printf("Init display.. ");
             _tft.begin();
             _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
             _tft.setTouch(touch_cal_data);
@@ -297,7 +280,6 @@ class Display {
             _tft.fillScreen (BLK);  // Black out the whole screen
             draw_touchgrid (false);
             draw_fixed (datapage, datapage_last, false);
-            yield();
             set_idiotcolors();
             draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, true);
             all_dirty();
@@ -342,7 +324,6 @@ class Display {
                 int division = num_runmodes;
                 uint32_t color32 = hsv_to_rgb<uint32_t>((int8_t)(255 * (rm % division) / division + hue_offset), saturat, 255, 0, 220);
                 colorcard[rm] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
-                if (gamma_correct_enabled) colorcard[rm] = gamma16(colorcard[rm]);
                 disp_runmode_dirty = true;
             }
         }
@@ -450,7 +431,7 @@ class Display {
                 if (color == -1) color = GRN;
                 int32_t y_pos = lineno*disp_line_height_pix+disp_vshift_pix;
                 if (polarity != disp_polarities[lineno]) draw_hyphen (x_base, y_pos, (!polarity) ? color : BLK);
-                draw_string (x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], color, BLK); // +6*(arraysize(modecard[run.mode()])+4-namelen)/2
+                draw_string (x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], color, BLK); // +6*(arraysize(modecard[run.mode])+4-namelen)/2
                 strcpy (disp_values[lineno], disp_string);
                 disp_polarities[lineno] = polarity;
                 dispAgeTimer[lineno].reset();
@@ -615,6 +596,7 @@ class Display {
                     }
                 }     
             }
+            draw_reticles();
         }
         void draw_touchgrid (bool side_only) {  // draws edge buttons with names in 'em. If replace_names, just updates names
             int32_t namelen = 0;
@@ -643,10 +625,12 @@ class Display {
             _tft.drawFastVLine (x, y - 2, 5, DGRY);
         }
         void draw_reticles() {
-            draw_reticle(260, 50);
-            draw_reticle(60, 50);
-            draw_reticle(60, 189);
-            draw_reticle(260, 189);
+            if (touch_reticles) {
+                draw_reticle(disp_width_pix-touch_reticle_offset, touch_reticle_offset);
+                draw_reticle(touch_reticle_offset, touch_reticle_offset);
+                draw_reticle(touch_reticle_offset, disp_height_pix-touch_reticle_offset);
+                draw_reticle(disp_width_pix-touch_reticle_offset, disp_height_pix-touch_reticle_offset);
+            }
         }
         uint16_t darken_color (uint16_t color, int32_t halvings = 1) {  // halves each of r, g, and b of a 5-6-5 formatted 16-bit color value either once or twice
             if (halvings == 1) return ((color & 0xf000) | (color & 0x7c0) | (color & 0x1e)) >> 1;
@@ -677,12 +661,12 @@ class Display {
         }
         void draw_temperature(loc location, int draw_index) {
             if (!tempsens.detected(location)) draw_eraseval(draw_index);
-            else draw_dynamic(draw_index, tempsens.val(location), temp_lims_f[tempsens.errclass(location)][DISP_opmin], temp_lims_f[tempsens.errclass(location)][DISP_MAX]);
+            else draw_dynamic(draw_index, tempsens.val(location), temp_lims_f[tempsens.errclass(location)][DISP_MIN], temp_lims_f[tempsens.errclass(location)][DISP_MAX]);
         }
         void update_idiots(bool force = false) {
             draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, force);
         }
-        void update(runmode _nowmode) {
+        void update(int _nowmode) {
             if (!display_enabled) return;
             update_idiots(disp_idiots_dirty);
             disp_idiots_dirty = false;
@@ -716,9 +700,9 @@ class Display {
                 float drange;
                 draw_dynamic(1, hotrc.pc[vert][filt], hotrc.pc[vert][opmin], hotrc.pc[vert][opmax]);
                 draw_dynamic(2, speedo.filt(), 0.0, speedo.redline_mph(), gas.cruisepid.target());
-                draw_dynamic(3, tach.filt(), 0.0, tach.redline_rpm(), gas.mypid.target());
+                draw_dynamic(3, tach.filt(), 0.0, tach.redline_rpm(), gas.pid.target());
                 draw_dynamic(4, gas.pc[out], gas.pc[opmin], gas.pc[opmax]);
-                draw_dynamic(5, pressure.filt(), pressure.min_human(), pressure.max_human(), brake.mypid.target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
+                draw_dynamic(5, pressure.filt(), pressure.min_human(), pressure.max_human(), brake.pid.target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
                 draw_dynamic(6, brake.pc[out], brake.pc[opmin], brake.pc[opmax]);
                 draw_dynamic(7, hotrc.pc[horz][filt], hotrc.pc[horz][opmin], hotrc.pc[horz][opmax]);
                 draw_dynamic(8, steer.pc[out], steer.pc[opmin], steer.pc[opmax]);
@@ -752,7 +736,7 @@ class Display {
                     draw_dynamic(14, airvelo.max_mph(), 0.0, airvelo.abs_max_mph());
                     draw_dynamic(15, mapsens.min_psi(), mapsens.abs_min_psi(), mapsens.abs_max_psi());
                     draw_dynamic(16, mapsens.max_psi(), mapsens.abs_min_psi(), mapsens.abs_max_psi());
-                    draw_dynamic(17, speedo_idle_mph, 0.0, speedo.redline_mph());
+                    draw_dynamic(17, speedo.idle_mph(), 0.0, speedo.redline_mph());
                     draw_dynamic(18, speedo.redline_mph(), 0.0, speedo.max_human());
                     draw_dynamic(19, brakepos.zeropoint(), brakepos.min_human(), brakepos.max_human());  // BrakePositionSensor::abs_min_retract_in, BrakePositionSensor::abs_max_extend_in);
                 }
@@ -770,49 +754,49 @@ class Display {
                     draw_dynamic(19, brake.duty_pc, 0.0, 100.0);
                 }
                 else if (datapage == PG_IDLE) {
-                    draw_asciiname(9, idlestatecard[throttle.targetstate()]);
-                    draw_dynamic(10, gas.mypid.target(), 0.0, tach.redline_rpm());
-                    draw_dynamic(11, throttle.stallpoint(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
-                    draw_dynamic(12, throttle.idlespeed(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);  // throttle.idlehot(), throttle.idlecold());
-                    draw_dynamic(13, throttle.idlehigh(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm);
-                    draw_dynamic(14, throttle.idlecold(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
-                    draw_dynamic(15, throttle.idlehot(), tach_idle_abs_min_rpm, tach_idle_abs_max_rpm, -1, 4);
-                    draw_dynamic(16, throttle.tempcold(), temp_lims_f[ENGINE][DISP_opmin], temp_lims_f[ENGINE][DISP_MAX]);
-                    draw_dynamic(17, throttle.temphot(), temp_lims_f[ENGINE][DISP_opmin], temp_lims_f[ENGINE][DISP_MAX]);
-                    draw_dynamic(18, (int32_t)throttle.settlerate(), 0, 500);
-                    draw_asciiname(19, idlemodecard[(int32_t)throttle.idlemode()]);
+                    draw_asciiname(9, idlestatecard[idlectrl.targetstate]);
+                    draw_dynamic(10, gas.pid.target(), 0.0, tach.redline_rpm());
+                    draw_dynamic(11, idlectrl.stallpoint, idlectrl.idle_absmin, idlectrl.idle_absmax);
+                    draw_dynamic(12, idlectrl.idle_rpm, idlectrl.idle_absmin, idlectrl.idle_absmax);  // idlectrl.idlehot(), idlectrl.idlecold());
+                    draw_dynamic(13, idlectrl.idlehigh, idlectrl.idle_absmin, idlectrl.idle_absmax);
+                    draw_dynamic(14, idlectrl.idlecold, idlectrl.idle_absmin, idlectrl.idle_absmax, -1, 4);
+                    draw_dynamic(15, idlectrl.idlehot, idlectrl.idle_absmin, idlectrl.idle_absmax, -1, 4);
+                    draw_dynamic(16, idlectrl.tempcold, temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
+                    draw_dynamic(17, idlectrl.temphot, temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
+                    draw_dynamic(18, (int32_t)idlectrl.settlerate_rpmps, 0, 500);
+                    draw_asciiname(19, idlemodecard[(int32_t)idlectrl.idlemode]);
                 }
                 else if (datapage == PG_BPID) {
                     drange = brake.us[absmin]-brake.us[absmax];
-                    draw_dynamic(9, brake.mypid.target(), pressure.min_human(), pressure.max_human());
-                    draw_dynamic(10, brake.mypid.err(), pressure.min_human()-pressure.max_human(), pressure.max_human()-pressure.min_human());
-                    draw_dynamic(11, brake.mypid.pterm(), -drange, drange);
-                    draw_dynamic(12, brake.mypid.iterm(), -drange, drange);
-                    draw_dynamic(13, brake.mypid.dterm(), -drange, drange);
-                    draw_dynamic(14, brake.mypid.outsum(), -brake.mypid.outrange(), brake.mypid.outrange());  // brake_spid_speedo_delta_adc, -range, range);
-                    draw_dynamic(15, brake.us[out], brake.us[absmin], brake.us[absmax]);
-                    draw_dynamic(16, pressure.native(), pressure.min_native(), pressure.max_native());
-                    draw_dynamic(17, brake.mypid.kp(), 0.0, 2.0);
-                    draw_dynamic(18, brake.mypid.ki(), 0.0, 2.0);
-                    draw_dynamic(19, brake.mypid.kd(), 0.0, 2.0);
+                    draw_dynamic(9, brake.pid_targ_pc, 0.0, 100.0);
+                    draw_dynamic(10, brake.pid_err_pc, -100.0, 100.0);
+                    draw_dynamic(11, brake.pid.pterm(), -drange, drange);
+                    draw_dynamic(12, brake.pid.iterm(), -drange, drange);
+                    draw_dynamic(13, brake.pid.dterm(), -drange, drange);
+                    draw_dynamic(14, brakepos.filt(), brakepos.op_min_in(), brakepos.op_max_in());
+                    draw_dynamic(15, brake.d_ratio[prespid]);  // brake_spid_speedo_delta_adc, -range, range);
+                    draw_dynamic(16, brake.d_ratio[posnpid]);  // draw_asciiname(16, brake_pid_card[brake.activepid]);                    
+                    draw_dynamic(17, brake.pid_kp(), 0.0, 8.0);
+                    draw_dynamic(18, brake.pid_ki(), 0.0, 8.0);
+                    draw_dynamic(19, brake.pid_kd(), 0.0, 8.0);
                 }
                 else if (datapage == PG_GPID) {
-                    draw_dynamic(9, gas.mypid.target(), 0.0, tach.redline_rpm());
-                    draw_dynamic(10, gas.mypid.err(), throttle.idlespeed() - tach.govern_rpm, tach.govern_rpm - throttle.idlespeed());
-                    draw_dynamic(11, gas.mypid.pterm(), -100.0, 100.0);
-                    draw_dynamic(12, gas.mypid.iterm(), -100.0, 100.0);
-                    draw_dynamic(13, gas.mypid.dterm(), -100.0, 100.0);
-                    draw_dynamic(14, gas.mypid.outsum(), -gas.mypid.outrange(), gas.mypid.outrange());
+                    draw_dynamic(9, gas.pid.target(), 0.0, tach.redline_rpm());
+                    draw_dynamic(10, gas.pid.err(), idlectrl.idle_rpm - tach.govern_rpm(), tach.govern_rpm() - idlectrl.idle_rpm);
+                    draw_dynamic(11, gas.pid.pterm(), -100.0, 100.0);
+                    draw_dynamic(12, gas.pid.iterm(), -100.0, 100.0);
+                    draw_dynamic(13, gas.pid.dterm(), -100.0, 100.0);
+                    draw_dynamic(14, gas.pid.outsum(), -gas.pid.outrange(), gas.pid.outrange());
                     draw_eraseval(15);
-                    draw_truth(16, gas.open_loop, 1);
-                    draw_dynamic(17, gas.mypid.kp(), 0.0, 1.0);
-                    draw_dynamic(18, gas.mypid.ki(), 0.0, 1.0);
-                    draw_dynamic(19, gas.mypid.kd(), 0.0, 1.0);
+                    draw_truth(16, gas.openloop, 1);
+                    draw_dynamic(17, gas.pid.kp(), 0.0, 1.0);
+                    draw_dynamic(18, gas.pid.ki(), 0.0, 1.0);
+                    draw_dynamic(19, gas.pid.kd(), 0.0, 1.0);
                 }
                 else if (datapage == PG_CPID) {
-                    drange = tach.govern_rpm - throttle.idlespeed();
-                    draw_dynamic(9, gas.cruisepid.target(), 0.0, speedo_govern_mph);
-                    draw_dynamic(10, gas.cruisepid.err(), speedo_idle_mph-speedo_govern_mph, speedo_govern_mph-speedo_idle_mph);
+                    drange = tach.govern_rpm() - idlectrl.idle_rpm;
+                    draw_dynamic(9, gas.cruisepid.target(), 0.0, speedo.govern_mph());
+                    draw_dynamic(10, gas.cruisepid.err(), speedo.idle_mph()-speedo.govern_mph(), speedo.govern_mph()-speedo.idle_mph());
                     draw_dynamic(11, gas.cruisepid.pterm(), -drange, drange);
                     draw_dynamic(12, gas.cruisepid.iterm(), -drange, drange);
                     draw_dynamic(13, gas.cruisepid.dterm(), -drange, drange);
@@ -854,7 +838,7 @@ class Display {
                     draw_dynamic(13, touch_pt[1], 0, disp_height_pix);
                     draw_dynamic(14, touch_pt[2], 340, 3980);
                     draw_dynamic(15, touch_pt[3], 180, 3980);
-                    draw_truth(16, flashdemo, 0);  // draw_dynamic(16, globalgamma, 0.1, 2.57, -1, 3);
+                    draw_truth(16, flashdemo, 0);
                     draw_dynamic(17, neobright, 1.0, 100.0, -1, 3);
                     draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
                     draw_truth(19, screensaver, 0);
@@ -869,7 +853,7 @@ class Display {
             if (screensaver && !sim.enabled() && !_procrastinate) saver_update();
             _procrastinate = false;
         }
-        void saver_touch(int16_t x, int16_t y) {
+        void saver_touch(int16_t x, int16_t y) {  // you can draw colorful lines on the screensaver
             if (x >= disp_simbuttons_x && y >= disp_simbuttons_y) {
                 x -= disp_simbuttons_x; y -= disp_simbuttons_y;
                 if (savtouch_last_x == -1) savtouch_last_x = x;
@@ -929,7 +913,7 @@ class Display {
                             _saver.print((String)letter);
                         }
                     }
-                    _saver.setTextColor(BLK);
+                    _saver.setTextColor(BLK);  // allows subliminal messaging
                 }
                 if (savercycle == 3 && saver_lotto) _saver.drawString("do drugs", disp_saver_width / 2, disp_saver_height / 2, 4);
                 else if (savercycle != 1) {
@@ -952,6 +936,115 @@ class Display {
             }
         }
 };
+// tuner
+int32_t idelta = 0, idelta_touch = 0, idelta_encoder = 0;
+void tuner_update(int rmode) {
+    sel_val_last = sel_val;
+    datapage_last = datapage;
+    tunctrl_last = tunctrl; // Make sure this goes after the last comparison
+    uint32_t encoder_sw_action = encoder.press_event();  // true = autoreset the event if there is one
+    if (encoder_sw_action != Encoder::NONE) {  // First deal with any unhandled switch press events
+        if (encoder_sw_action == Encoder::SHORT)  {  // if short press
+            if (tunctrl == EDIT) tunctrl = SELECT;  // If we were editing a value drop back to select mode
+            else if (tunctrl == SELECT) tunctrl = EDIT;  // If we were selecting a variable start editing its value
+        }
+        else tunctrl = (tunctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
+    }
+    if (tunctrl == EDIT) idelta_encoder = encoder.rotation(true);  // true = include acceleration
+    else if (tunctrl == SELECT) sel_val += encoder.rotation();  // If overflow constrain will fix in general handler below
+    else if (tunctrl == OFF) datapage += encoder.rotation();  // If overflow tconstrain will fix in general below
+    idelta += idelta_encoder + idelta_touch;  // Allow edits using the encoder or touchscreen
+    idelta_touch = idelta_encoder = 0;
+    if (tunctrl != tunctrl_last || datapage != datapage_last || sel_val != sel_val_last || idelta) tuningCtrlTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
+    else if (tunctrl != OFF && tuningCtrlTimer.expired()) tunctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
+    datapage = constrain(datapage, 0, arraysize(pagecard)-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
+    if (datapage != datapage_last) {
+        if (tunctrl == EDIT) tunctrl = SELECT;  // If page is flipped during edit, drop back to select mode
+        disp_datapage_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
+    }
+    if (tunctrl == SELECT) {
+        sel_val = constrain(sel_val, tuning_first_editable_line[datapage], disp_tuning_lines-1);  // Skip unchangeable values for all PID modes
+        if (sel_val != sel_val_last) disp_selected_val_dirty = true;
+    }
+    if (tunctrl != tunctrl_last || disp_datapage_dirty) disp_selected_val_dirty = true;
+    float fdelta = (float)idelta;
+    if (tunctrl == EDIT && idelta != 0) {  // Change tunable values when editing
+        if (datapage == PG_RUN) {
+            if (sel_val == 9) { adj_val(&(gas.governor), idelta, 0, 100); gas.derive(); }
+            else if (sel_val == 10) adj_val(&(steer.steer_safe_pc), idelta, 0, 100);
+        }
+        else if (datapage == PG_JOY) {
+            if (sel_val == 9) adj_val(&hotrc.failsafe_us, idelta, hotrc.absmin_us, hotrc.us[vert][opmin] - hotrc.us[vert][margin]);
+            else if (sel_val == 10) { adj_val(&hotrc.deadband_us, idelta, 0, 50); hotrc.calc_params(); }
+        }
+        else if (datapage == PG_SENS) {
+            if (sel_val == 2) idlectrl.add_idlehot(0.1 * fdelta);
+            else if (sel_val == 3) idlectrl.add_idlecold(0.1 * fdelta);
+            else if (sel_val == 4) adj_val(tach.redline_rpm_ptr(), 0.1 * fdelta, idlectrl.idlehigh, tach.abs_max_rpm());
+            else if (sel_val == 5) adj_val(airvelo.max_mph_ptr(), 0.01 * fdelta, 0, airvelo.abs_max_mph());
+            else if (sel_val == 6) adj_val(mapsens.min_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
+            else if (sel_val == 6) adj_val(mapsens.max_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
+            else if (sel_val == 8) adj_val(speedo.idle_mph_ptr(), 0.01 * fdelta, 0, speedo.redline_mph() - 1);
+            else if (sel_val == 9) adj_val(speedo.redline_mph_ptr(), 0.01 * fdelta, speedo.idle_mph(), 20);
+            else if (sel_val == 10) adj_val(brakepos.zeropoint_ptr(), 0.001 * fdelta, brakepos.op_min_in(), brakepos.op_max_in());
+        }
+        else if (datapage == PG_PWMS) {
+            if (sel_val == 7) { adj_val(&(gas.nat[opmin]), fdelta, gas.nat[parked] + 1, gas.nat[opmax] - 1); gas.derive(); }
+            else if (sel_val == 8) { adj_val(&(gas.nat[opmax]), fdelta, gas.nat[opmin] + 1, 180.0); gas.derive(); }
+            else if (sel_val == 9) { adj_val(&(brake.us[stop]), fdelta, brake.us[opmin] + 1, brake.us[opmax] - 1); brake.derive(); }
+            else if (sel_val == 10) { adj_val(&(brake.duty_pc), fdelta, 0.0, 100.0); brake.derive(); }
+        }
+        else if (datapage == PG_IDLE) {
+            if (sel_val == 4) idlectrl.add_idlehigh(fdelta);
+            else if (sel_val == 5) idlectrl.add_idlecold(fdelta);
+            else if (sel_val == 6) idlectrl.add_idlehot(fdelta);
+            else if (sel_val == 7) idlectrl.add_tempcold(fdelta);
+            else if (sel_val == 8) idlectrl.add_temphot(fdelta);
+            else if (sel_val == 9) idlectrl.add_settlerate(idelta);
+            else if (sel_val == 10) idlectrl.cycle_idlemode(idelta);
+        }
+        else if (datapage == PG_BPID) {
+            if (sel_val == 8) brake.add_kp(0.001 * fdelta);
+            else if (sel_val == 9) brake.add_ki(0.001 * fdelta);
+            else if (sel_val == 10) brake.add_kd(0.001 * fdelta);
+        }
+        else if (datapage == PG_GPID) {
+            if (sel_val == 7) { adj_bool(&(gas.openloop), idelta); }  // gas_pid.SetMode (gas_open_loop ? QPID::ctrl::manual : QPID::ctrl::automatic);
+            else if (sel_val == 8) gas.pid.add_kp(0.001 * fdelta);
+            else if (sel_val == 9) gas.pid.add_ki(0.001 * fdelta);
+            else if (sel_val == 10) gas.pid.add_kd(0.001 * fdelta);
+        }
+        else if (datapage == PG_CPID) {
+            if (sel_val == 7) adj_val(&cruise_delta_max_pc_per_s, idelta, 1, 35);
+            else if (sel_val == 8) gas.cruisepid.add_kp(0.001 * fdelta);
+            else if (sel_val == 9) gas.cruisepid.add_ki(0.001 * fdelta);
+            else if (sel_val == 10) gas.cruisepid.add_kd(0.001 * fdelta);
+        }
+        else if (datapage == PG_TEMP) {
+            if (sel_val == 10) adj_bool(&dont_take_temperatures, idelta);
+        }
+        else if (datapage == PG_SIM) {
+            if (sel_val == 0) sim.set_can_sim(sens::joy, idelta);
+            else if (sel_val == 1) sim.set_can_sim(sens::pressure, idelta);
+            else if (sel_val == 2) sim.set_can_sim(sens::brkpos, idelta);
+            else if (sel_val == 3) sim.set_can_sim(sens::speedo, idelta);
+            else if (sel_val == 4) sim.set_can_sim(sens::tach, idelta);
+            else if (sel_val == 5) sim.set_can_sim(sens::airvelo, idelta);
+            else if (sel_val == 6) sim.set_can_sim(sens::mapsens, idelta);  // else if (sel_val == 7) sim.set_can_sim(sens::starter, idelta);
+            else if (sel_val == 7) sim.set_can_sim(sens::basicsw, idelta);
+            else if (sel_val == 8) { sim.set_potmap((adj_val(sim.potmap(), idelta, 0, arraysize(sensorcard) - 4))); config.putUInt("potmap", sim.potmap()); }
+            else if (sel_val == 9 && rmode == CAL) adj_bool(&(cal_joyvert_brkmotor_mode), idelta);
+            else if (sel_val == 10 && rmode == CAL) adj_bool(&(cal_pot_gasservo_mode), (idelta < 0 || cal_pot_gasservo_ready) ? idelta : -1);
+        }
+        else if (datapage == PG_UI) {
+            if (sel_val == 7) { adj_bool(&flashdemo, idelta); enable_flashdemo(flashdemo); }
+            else if (sel_val == 8) { adj_val(&neobright, idelta, 1, 100); neo.setbright(neobright); }
+            else if (sel_val == 9) { adj_val(&neodesat, idelta, 0, 10); neo.setdesaturation(neodesat); }
+            else if (sel_val == 10) adj_bool(&screensaver, idelta);
+        }
+        idelta = 0;
+    }
+}
 // The following project draws a nice looking gauge cluster, very apropos to our needs and code is given.
 // See this video: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
 // Rinkydink home page: http://www.rinkydinkelectronics.com

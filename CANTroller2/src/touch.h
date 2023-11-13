@@ -34,6 +34,7 @@ public:
     TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts(csPin, irqPin) {}
     
     void init() {
+        printf("touchscreen..\n");
         _ts.begin();
         // _ts.setRotation(1); do we need to rotate?
     }
@@ -113,14 +114,10 @@ public:
         else if (tcol == 0 && trow == 2) {  // Pressed the increase value button, for real-time tuning of variables
             if (tunctrl == SELECT) tunctrl = EDIT;  // If just entering edit mode, don't change the value yet
             else if (tunctrl == EDIT) idelta_touch = tedit;  // If in edit mode, increase the value
-            // else adj_val(&idiot_hue_offset, idelta_touch, 0, 255);
-            // set_idiotcolors();
         }
         else if (tcol == 0 && trow == 3) {  // Pressed the decrease value button, for real-time tuning of variables
             if (tunctrl == SELECT) tunctrl = EDIT;  // If just entering edit mode, don't change the value yet
             else if (tunctrl == EDIT) idelta_touch = -tedit;  // If in edit mode, decrease the value
-            // else adj_val(&idiot_hue_offset -idelta_touch, 0, 255);
-            // set_idiotcolors();
         }
         else if (tcol == 0 && trow == 4) {  // Pressed the simulation mode toggle. Needs long-press
             if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout()) {
@@ -128,24 +125,12 @@ public:
                 touch_longpress_valid = false;
             }
         }
-        if (tcol == 2 && trow == 0) {
-            if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout()) {
-                calmode_request = true;
-                touch_longpress_valid = false;
-            }
-        }
         else if (sim.enabled()) {
-            if (tcol == 4 && trow == 0) {
-                if (touch_longpress_valid && touchHoldTimer.elapsed() > 2 * touchHoldTimer.timeout()) {  // Double hold time for some extra safety
-                    ignition_request = req_tog;
-                    touch_longpress_valid = false;
-                }
-            }
-            else if (tcol == 5 && trow == 0) {
-                if (touch_longpress_valid && touchHoldTimer.elapsed() > 2 * touchHoldTimer.timeout()) {  // Double hold time for some extra safety
-                    sleep_request = req_on;  // sleep requests are handled by shutdown mode, otherwise will be ignored
-                    touch_longpress_valid = false;
-                }
+            if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout()) {
+                if (tcol == 2 && trow == 0) calmode_request = true;
+                else if (tcol == 4 && trow == 0) ignition_request = req_tog;
+                else if (tcol == 5 && trow == 0) sleep_request = req_tog;  // sleep requests are handled by shutdown or asleep mode, otherwise will be ignored
+                touch_longpress_valid = false;
             }
             else if (tcol == 3 && trow == 0 && sim.can_sim(sens::basicsw) && !touch_now_touched) basicmodesw = !basicmodesw;
             else if (tcol == 3 && trow == 1 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human((float)tedit); // (+= 25) Pressed the increase brake pressure button
