@@ -126,6 +126,7 @@ bool cal_joyvert_brkmotor_mode = false; // Allows direct control of brake motor 
 bool cal_pot_gasservo_mode = false;     // Allows direct control of gas servo using pot. First requires pot to be in valid position before mode is entered
 bool cal_pot_gasservo_ready = false;    // Whether pot is in valid range
 bool running_on_devboard = false;    // will overwrite with value read thru pull resistor on tx pin at boot
+bool flashdemo = false;
 int sleep_request = req_na;
 bool calmode_request = false;
 bool flycruise_toggle_request = false;

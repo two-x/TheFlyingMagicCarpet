@@ -861,6 +861,7 @@ class Speedometer : public PulseSensor<float> {
     float redline_mph() { return _human.max(); }
     float govern_mph() { return _govern_mph; }
     float idle_mph() { return _idle_mph; }
+    float* idle_mph_ptr() { return &_idle_mph; }
     void set_govern_mph(float newgovern) { _govern_mph = newgovern; }
     float max_mph() { return _max_mph; }
     float* redline_mph_ptr() { return _human.max_ptr(); }
