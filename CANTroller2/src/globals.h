@@ -4,16 +4,8 @@
 #include <iostream>
 #include <iomanip>  // For formatting console cout strings
 #include <vector>
-
-// In case we ever talk to jaguars over asynchronous serial port, uncomment:
-// #include <HardwareSerial.h>
+// #include <HardwareSerial.h>  // In case we ever talk to jaguars over asynchronous serial port, uncomment:
 // HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
-
-Timer sleepInactivityTimer(180000000);           // After shutdown how long to wait before powering down to sleep
-uint32_t motor_park_timeout_us = 4000000;       // If we can't park the motors faster than this, then give up.
-uint32_t gesture_flytimeout_us = 1250000;        // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
-Timer gestureFlyTimer(gesture_flytimeout_us); // Used to keep track of time for gesturing for going in and out of fly/cruise modes
-Timer motorParkTimer(motor_park_timeout_us);
 
 enum temp_categories { AMBIENT = 0, ENGINE = 1, WHEEL = 2, num_temp_categories };
 enum temp_lims { DISP_opmin, OP_MIN, OP_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
@@ -44,10 +36,25 @@ static I2C i2c(i2c_sda_pin, i2c_scl_pin);
 static AirVeloSensor airvelo(i2c);
 static MAPSensor mapsens(i2c);
 static Throttle throttle;
-static Brake brake;
-static Gas gas;
-static Steer steer;
+static GasServo gas;
+static BrakeMotor brake;
+static SteerMotor steer;
 static neopixelstrip neo;
+
+// RTOS task that updates temp sensors in a separate task
+void update_temperature_sensors(void *parameter) {
+    while (true) {
+        if (!dont_take_temperatures)
+            tempsens.update_temperatures();
+        if (sim.potmapping(sens::engtemp)) {
+            TemperatureSensor *engine_sensor = tempsens.get_sensor(loc::engine);
+            if (engine_sensor != nullptr) {
+                engine_sensor->set_temperature(pot.mapToRange(temp_sensor_min_f, temp_sensor_max_f));
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently
+    }
+}
 
 // int* x is c++ style, int *x is c style
 template <typename T>
@@ -68,24 +75,6 @@ bool adj_val(float *variable, float modify, float low_limit, float high_limit) {
 }
 bool adj_bool(bool val, int32_t delta) { return delta != 0 ? delta > 0 : val; } // returns 1 on delta=1, 0 on delta=-1, or val on delta=0
 void adj_bool(bool *val, int32_t delta) { *val = adj_bool(*val, delta); }       // sets a bool reference to 1 on 1 delta or 0 on -1 delta
-
-// tasks for RTOS, this section is currently going to be where we keep sensor update loops.
-// TODO move these to more sensible places
-
-// This is the function that will be run in a separate task
-void update_temperature_sensors(void *parameter) {
-    while (true) {
-        if (!dont_take_temperatures)
-            tempsens.update_temperatures();
-        if (sim.potmapping(sens::engtemp)) {
-            TemperatureSensor *engine_sensor = tempsens.get_sensor(loc::engine);
-            if (engine_sensor != nullptr) {
-                engine_sensor->set_temperature(pot.mapToRange(temp_sensor_min_f, temp_sensor_max_f));
-            }
-        }
-        vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently
-    }
-}
 
 void set_board_defaults(bool devboard) {  // true for dev boards, false for printed board (on the car)
     if (devboard) {
@@ -172,7 +161,6 @@ void set_syspower(bool setting) {
     printf("syspower -> %d\n", syspower);
     write_pin(syspower_pin, syspower);
 }
-// pushbutton related
 bool boot_button_last = 0;
 bool boot_button = 0;
 bool boot_button_timer_active = false;
@@ -207,19 +195,6 @@ void bootbutton_update() {
         boot_button_suppress_click = false;  // End click suppression
     }
 }
-// int8_t syspower_request = req_na;
-// //
-// void syspower_update() {  // Soren: A lot of duplicate code with ignition/panicstop and syspower routines here ...
-//     if (syspower_request == req_tog) syspower_request = (int8_t)(!syspower);
-//     // else if (syspower_request == syspower) syspower_request = req_na;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
-//     if (syspower_request == req_off && !speedo.car_stopped()) syspower_request = req_na;
-//     if (!syspower && keep_system_powered) syspower_request = req_on;
-//     if (syspower_request != req_na) {
-//         syspower = syspower_request;
-//         write_pin(syspower_pin, syspower);
-//     }
-//     syspower_request = req_na;
-// }
 // Loop timing related
 uint32_t looptime_linefeed_threshold = 0;  // Leaves prints of loops taking > this for analysis. Set to 0 prints every loop
 Timer loopTimer(1000000); // how long the previous main loop took to run (in us)
