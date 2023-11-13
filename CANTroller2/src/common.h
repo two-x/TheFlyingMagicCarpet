@@ -236,21 +236,6 @@ class Timer {  // !!! beware, this 54-bit microsecond timer overflows after ever
     int64_t IRAM_ATTR elapsed() { return esp_timer_get_time() - start_us; }
     int64_t IRAM_ATTR timeout() { return timeout_us; }
 };
-
-#define RUN_TESTS 0
-#if RUN_TESTS
-    #include "unittests.h"
-    void run_tests() {
-        printf("Running tests...\n");
-        delay(5000);
-        test_Param();
-        printf("Tests complete.\n");
-        for(;;) {} // loop forever
-    }
-#else
-    void run_tests() {}
-#endif
-
 class I2C {
     private:
         int32_t _devicecount = 0;
