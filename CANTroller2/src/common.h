@@ -213,6 +213,25 @@ void ema_filt(RAW_T raw, FILT_T* filt, float alpha) {
     *filt = static_cast<FILT_T>(ema_filt(raw_f, filt_f, alpha));
 }
 
+template <typename T>
+T adj_val(T variable, T modify, T low_limit, T high_limit) {
+    T oldval = variable;
+    variable += modify;
+    return variable < low_limit ? low_limit : (variable > high_limit ? high_limit : variable);
+}
+bool adj_val(int32_t *variable, int32_t modify, int32_t low_limit, int32_t high_limit) { // sets an int reference to new val constrained to given range
+    int32_t oldval = *variable;
+    *variable = adj_val(*variable, modify, low_limit, high_limit);
+    return (*variable != oldval);
+}
+bool adj_val(float *variable, float modify, float low_limit, float high_limit) { // sets an int reference to new val constrained to given range
+    float oldval = *variable;
+    *variable = adj_val(*variable, modify, low_limit, high_limit);
+    return (*variable != oldval);
+}
+bool adj_bool(bool val, int32_t delta) { return delta != 0 ? delta > 0 : val; } // returns 1 on delta=1, 0 on delta=-1, or val on delta=0
+void adj_bool(bool *val, int32_t delta) { *val = adj_bool(*val, delta); }       // sets a bool reference to 1 on 1 delta or 0 on -1 delta
+
 class Timer {  // !!! beware, this 54-bit microsecond timer overflows after every 571 years !!!
   protected:
     volatile int64_t start_us, timeout_us;
