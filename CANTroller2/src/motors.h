@@ -342,6 +342,9 @@ class JagMotor : public ServoMotor {
         if (_pc < this->pc[stop]) return map(_pc, this->pc[stop], this->pc[absmin], this->us[stop], this->motor_reversed ? this->us[absmax] : this->us[absmin]);
         return this->us[stop];
     }
+    void write_motor() {
+        this->motor.writeMicroseconds((int32_t)(this->us[out]));
+    }
 };
 class BrakeMotor : public JagMotor {
   public:
