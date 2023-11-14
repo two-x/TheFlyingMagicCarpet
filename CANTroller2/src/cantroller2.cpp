@@ -101,7 +101,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     mapsens.setup();
     tempsens.setup();  // Onewire bus and temp sensors
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Create a new task that runs the update_temperature_sensors function
-    throttle.init(gas.mypid.target_ptr(), tach.human_ptr(), tach.filt_ptr(),
+    throttle.init(gas.pid.target_ptr(), tach.human_ptr(), tach.filt_ptr(),
         tempsens.get_sensor(loc::engine), temp_lims_f[ENGINE][OP_MIN], temp_lims_f[ENGINE][WARNING], 50, Throttle::idlemodes::control);
     printf("Simulator setup..\n");
     sim.register_device(sens::pressure, pressure, pressure.source());
@@ -113,7 +113,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     printf("Configure timers for PWM out..\n");
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);
     gas.init(gas_pwm_pin, 60, &hotrc, &speedo, &tach, &pot, &throttle);
-    brake.init(brake_pwm_pin, 50, &hotrc, &speedo, &pressure, &brakepos, &mulebatt);
+    brake.init(brake_pwm_pin, 50, &hotrc, &speedo, &mulebatt, &pressure, &brakepos);
     steer.init(steer_pwm_pin, 50, &hotrc, &speedo, &mulebatt);
     printf("Init screen.. ");
     if (display_enabled) {
@@ -230,15 +230,15 @@ void loop() {
             else if (sel_val == 10) throttle.cycle_idlemode(idelta);
         }
         else if (datapage == PG_BPID) {
-            if (sel_val == 8) brake.mypid.add_kp(0.001 * fdelta);
-            else if (sel_val == 9) brake.mypid.add_ki(0.001 * fdelta);
-            else if (sel_val == 10) brake.mypid.add_kd(0.001 * fdelta);
+            if (sel_val == 8) brake.pid.add_kp(0.001 * fdelta);
+            else if (sel_val == 9) brake.pid.add_ki(0.001 * fdelta);
+            else if (sel_val == 10) brake.pid.add_kd(0.001 * fdelta);
         }
         else if (datapage == PG_GPID) {
             if (sel_val == 7) { adj_bool(&(gas.open_loop), idelta); }  // gas_pid.SetMode (gas_open_loop ? qpid::ctrl::manual : qpid::ctrl::automatic);
-            else if (sel_val == 8) gas.mypid.add_kp(0.001 * fdelta);
-            else if (sel_val == 9) gas.mypid.add_ki(0.001 * fdelta);
-            else if (sel_val == 10) gas.mypid.add_kd(0.001 * fdelta);
+            else if (sel_val == 8) gas.pid.add_kp(0.001 * fdelta);
+            else if (sel_val == 9) gas.pid.add_ki(0.001 * fdelta);
+            else if (sel_val == 10) gas.pid.add_kd(0.001 * fdelta);
         }
         else if (datapage == PG_CPID) {
             if (sel_val == 7) adj_val(&cruise_delta_max_pc_per_s, idelta, 1, 35);
