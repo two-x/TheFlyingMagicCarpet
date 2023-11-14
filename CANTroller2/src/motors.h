@@ -255,7 +255,7 @@ class GasServo : public ServoMotor {
         pc[absmax] = map(nat[absmax], nat[opmin], nat[opmax], pc[opmin], pc[opmax]);
         pc[parked] = map(nat[parked], nat[opmin], nat[opmax], pc[opmin], pc[opmax]);
         pc[govern] = governor * pc[opmax] / 100.0;        
-        nat[govern] = governor * nat[opmax] / 100.0;
+        nat[govern] = map(pc[govern], pc[opmin], pc[opmax], nat[opmin], nat[opmax]);
     }
     void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, Throttle* _throttle) {
         ServoMotor::init(_pin, _freq, _hotrc, _speedo);
@@ -301,7 +301,8 @@ class GasServo : public ServoMotor {
             pc[out] = nat_to_pc(deg[out]);
             // Step 4 : Write to servo
             us[out] = nat_to_us(deg[out]);
-            if (!((_runmode == BASIC && !park_the_motors) || (_runmode == CAL && !cal_pot_gasservo_mode) || (_runmode == SHUTDOWN && !shutdown_incomplete) || (_runmode == ASLEEP)))
+            if (!((_runmode == BASIC && !park_the_motors) || (_runmode == CAL && !cal_pot_gasservo_mode) 
+               || (_runmode == SHUTDOWN && !shutdown_incomplete) || (_runmode == ASLEEP)))
                 write_motor();
         }
     }
@@ -324,9 +325,8 @@ class JagMotor : public ServoMotor {
         this->nat[absmin] = -(this->nat[absmax]);
         this->pc[opmin] = this->pc[absmin] * this->duty_pc / 100.0;
         this->pc[opmax] = this->pc[absmax] * this->duty_pc / 100.0;
-        this->volt[opmin] = map(pc[opmin], pc[stop], pc[absmin], volt[stop], volt[absmin]);
-        this->volt[opmax] = map(pc[opmax], pc[stop], pc[absmax], volt[stop], volt[absmax]);
-        this->volt[opmax] = this->volt[stop] - this->duty_pc * (this->volt[stop] - this->volt[absmax]) / 100.0;  // Brake pulsewidth corresponding to duty-constrained extension of brake actuator (in us). Default setting for jaguar is max 2330us
+        this->nat[opmin] = map(this->pc[opmin], this->pc[stop], this->pc[absmin], this->nat[stop], this->nat[absmin]);
+        this->nat[opmax] = map(this->pc[opmax], this->pc[stop], this->pc[absmax], this->nat[stop], this->nat[absmax]);
     }
     void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {
         ServoMotor::init(_pin, _freq, _hotrc, _speedo);
@@ -376,14 +376,16 @@ class BrakeMotor : public JagMotor {
             // Step 2 : Fix motor pc value if it's out of range or exceeding positional limits
             if (_runmode == CAL && cal_joyvert_brkmotor_mode)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
                 pc[out] = constrain(pc[out], pc[opmin], pc[opmax]);  // Constrain to full potential range when calibrating. Caution don't break anything!
-            else if ((pc[out] < pc[stop] && brakepos->filt() > brakepos->parkpos() - brakepos->margin()) || (pc[out] > pc[stop] && brakepos->filt() < brakepos->min_in() + brakepos->margin()))  // If brake is at position limits and we're tring to go further, stop the motor
+            else if ((pc[out] < pc[stop] && brakepos->filt() > brakepos->parkpos() - brakepos->margin()) 
+                  || (pc[out] > pc[stop] && brakepos->filt() < brakepos->min_in() + brakepos->margin()))  // If brake is at position limits and we're tring to go further, stop the motor
                 pc[out] = pc[stop];
             else pc[out] = constrain(pc[out], pc[opmin], pc[opmax]);  // Send to the actuator. Refuse to exceed range
             // Step 3 : Convert motor percent value to pulse width for motor, and to volts for display
             us[out] = pc_to_us(pc[out]);
             volt[out] = pc_to_nat(pc[out]);
             // Step 4 : Write to motor
-            if (!(_runmode == BASIC && !park_the_motors) && !(_runmode == CAL && !cal_joyvert_brkmotor_mode) && !(_runmode == SHUTDOWN && !shutdown_incomplete) && !(_runmode == ASLEEP))
+            if (!((_runmode == BASIC && !park_the_motors) || (_runmode == CAL && !cal_pot_gasservo_mode) 
+               || (_runmode == SHUTDOWN && !shutdown_incomplete) || (_runmode == ASLEEP)))
                 write_motor();
         }
     }

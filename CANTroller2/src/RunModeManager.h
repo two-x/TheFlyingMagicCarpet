@@ -136,7 +136,7 @@ class RunModeManager {
             sleep_request = req_na;
             powering_up = false;
         }
-        if ((*encoder).pressed() || sleep_request == req_off) {
+        if (encoder->pressed() || sleep_request == req_off) {
             set_syspower(HIGH);
             sleep_request = req_na;
             pwrup_timer.set(pwrup_timeout);

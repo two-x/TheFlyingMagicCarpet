@@ -8,7 +8,7 @@
 // HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
 
 enum temp_categories { AMBIENT = 0, ENGINE = 1, WHEEL = 2, num_temp_categories };
-enum temp_lims { DISP_opmin, OP_MIN, OP_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
+enum temp_lims { DISP_MIN, OP_MIN, OP_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
 float temp_lims_f[3][6]{
     {0.0, 45.0, 115.0, 120.0, 130.0, 220.0},  // [AMBIENT][DISP_MIN/OP_MIN/OP_MAX/WARNING/ALARM]
     {0.0, 178.0, 198.0, 202.0, 205.0, 220.0}, // [ENGINE][DISP_MIN/OP_MIN/OP_MAX/WARNING/ALARM]
@@ -55,26 +55,6 @@ void update_temperature_sensors(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently
     }
 }
-
-// int* x is c++ style, int *x is c style
-template <typename T>
-T adj_val(T variable, T modify, T low_limit, T high_limit) {
-    T oldval = variable;
-    variable += modify;
-    return variable < low_limit ? low_limit : (variable > high_limit ? high_limit : variable);
-}
-bool adj_val(int32_t *variable, int32_t modify, int32_t low_limit, int32_t high_limit) { // sets an int reference to new val constrained to given range
-    int32_t oldval = *variable;
-    *variable = adj_val(*variable, modify, low_limit, high_limit);
-    return (*variable != oldval);
-}
-bool adj_val(float *variable, float modify, float low_limit, float high_limit) { // sets an int reference to new val constrained to given range
-    float oldval = *variable;
-    *variable = adj_val(*variable, modify, low_limit, high_limit);
-    return (*variable != oldval);
-}
-bool adj_bool(bool val, int32_t delta) { return delta != 0 ? delta > 0 : val; } // returns 1 on delta=1, 0 on delta=-1, or val on delta=0
-void adj_bool(bool *val, int32_t delta) { *val = adj_bool(*val, delta); }       // sets a bool reference to 1 on 1 delta or 0 on -1 delta
 
 void set_board_defaults(bool devboard) {  // true for dev boards, false for printed board (on the car)
     if (devboard) {
@@ -437,7 +417,7 @@ float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) 
 }
 float maf_gps;  // Manifold mass airflow in grams per second
 float maf_min_gps = 0.0;
-float maf_max_gps = massairflow(mapsens.max_psi(), airvelo.max_mph(), temp_lims_f[AMBIENT][DISP_opmin]);
+float maf_max_gps = massairflow(mapsens.max_psi(), airvelo.max_mph(), temp_lims_f[AMBIENT][DISP_MIN]);
 
 #define RUN_TESTS 0
 #if RUN_TESTS

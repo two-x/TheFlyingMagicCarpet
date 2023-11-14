@@ -677,7 +677,7 @@ class Display {
         }
         void draw_temperature(loc location, int draw_index) {
             if (!tempsens.detected(location)) draw_eraseval(draw_index);
-            else draw_dynamic(draw_index, tempsens.val(location), temp_lims_f[tempsens.errclass(location)][DISP_opmin], temp_lims_f[tempsens.errclass(location)][DISP_MAX]);
+            else draw_dynamic(draw_index, tempsens.val(location), temp_lims_f[tempsens.errclass(location)][DISP_MIN], temp_lims_f[tempsens.errclass(location)][DISP_MAX]);
         }
         void update_idiots(bool force = false) {
             draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, force);
@@ -777,8 +777,8 @@ class Display {
                     draw_dynamic(13, throttle.idlehigh, throttle.idle_absmin, throttle.idle_absmax);
                     draw_dynamic(14, throttle.idlecold, throttle.idle_absmin, throttle.idle_absmax, -1, 4);
                     draw_dynamic(15, throttle.idlehot, throttle.idle_absmin, throttle.idle_absmax, -1, 4);
-                    draw_dynamic(16, throttle.tempcold, temp_lims_f[ENGINE][DISP_opmin], temp_lims_f[ENGINE][DISP_MAX]);
-                    draw_dynamic(17, throttle.temphot, temp_lims_f[ENGINE][DISP_opmin], temp_lims_f[ENGINE][DISP_MAX]);
+                    draw_dynamic(16, throttle.tempcold, temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
+                    draw_dynamic(17, throttle.temphot, temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
                     draw_dynamic(18, (int32_t)throttle.settlerate_rpmps, 0, 500);
                     draw_asciiname(19, idlemodecard[(int32_t)throttle.idlemode]);
                 }
@@ -957,3 +957,108 @@ class Display {
 // Rinkydink home page: http://www.rinkydinkelectronics.com
 // moving transparent arrow sprite over background: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
 // bar graphs: https://www.youtube.com/watch?v=g4jlj_T-nRw&ab_channel=VolosProjects
+
+void tuner_update(int rmode) {
+    uint32_t encoder_sw_action = encoder.press_event();  // true = autoreset the event if there is one
+    if (encoder_sw_action != Encoder::NONE) {  // First deal with any unhandled switch press events
+        if (encoder_sw_action == Encoder::SHORT)  {  // if short press
+            if (tunctrl == EDIT) tunctrl = SELECT;  // If we were editing a value drop back to select mode
+            else if (tunctrl == SELECT) tunctrl = EDIT;  // If we were selecting a variable start editing its value
+        }
+        else tunctrl = (tunctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
+    }
+    if (tunctrl == EDIT) idelta_encoder = encoder.rotation(true);  // true = include acceleration
+    else if (tunctrl == SELECT) sel_val += encoder.rotation();  // If overflow constrain will fix in general handler below
+    else if (tunctrl == OFF) datapage += encoder.rotation();  // If overflow tconstrain will fix in general below
+    idelta += idelta_encoder + idelta_touch;  // Allow edits using the encoder or touchscreen
+    idelta_touch = idelta_encoder = 0;
+    if (tunctrl != tunctrl_last || datapage != datapage_last || sel_val != sel_val_last || idelta) tuningCtrlTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
+    else if (tunctrl != OFF && tuningCtrlTimer.expired()) tunctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
+    datapage = constrain(datapage, 0, arraysize(pagecard)-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
+    if (datapage != datapage_last) {
+        if (tunctrl == EDIT) tunctrl = SELECT;  // If page is flipped during edit, drop back to select mode
+        disp_datapage_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
+    }
+    if (tunctrl == SELECT) {
+        sel_val = constrain(sel_val, tuning_first_editable_line[datapage], disp_tuning_lines-1);  // Skip unchangeable values for all PID modes
+        if (sel_val != sel_val_last) disp_selected_val_dirty = true;
+    }
+    if (tunctrl != tunctrl_last || disp_datapage_dirty) disp_selected_val_dirty = true;
+    float fdelta = (float)idelta;
+    if (tunctrl == EDIT && idelta != 0) {  // Change tunable values when editing
+        if (datapage == PG_RUN) {
+            if (sel_val == 9) { adj_val(&(gas.governor), idelta, 0, 100); gas.derive(); }
+            else if (sel_val == 10) adj_val(&(steer.steer_safe_pc), idelta, 0, 100);
+        }
+        else if (datapage == PG_JOY) {
+            if (sel_val == 9) adj_val(&hotrc.failsafe_us, idelta, hotrc.absmin_us, hotrc.us[vert][opmin] - hotrc.us[vert][margin]);
+            else if (sel_val == 10) { adj_val(&hotrc.deadband_us, idelta, 0, 50); hotrc.calc_params(); }
+        }
+        else if (datapage == PG_SENS) {
+            if (sel_val == 2) throttle.add_idlehot(0.1 * fdelta);
+            else if (sel_val == 3) throttle.add_idlecold(0.1 * fdelta);
+            else if (sel_val == 4) adj_val(tach.redline_rpm_ptr(), 0.1 * fdelta, throttle.idlehigh, tach.abs_max_rpm());
+            else if (sel_val == 5) adj_val(airvelo.max_mph_ptr(), 0.01 * fdelta, 0, airvelo.abs_max_mph());
+            else if (sel_val == 6) adj_val(mapsens.min_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
+            else if (sel_val == 6) adj_val(mapsens.max_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
+            else if (sel_val == 8) adj_val(speedo.idle_mph_ptr(), 0.01 * fdelta, 0, speedo.redline_mph() - 1);
+            else if (sel_val == 9) adj_val(speedo.redline_mph_ptr(), 0.01 * fdelta, speedo.idle_mph(), 20);
+            else if (sel_val == 10) adj_val(brakepos.zeropoint_ptr(), 0.001 * fdelta, brakepos.op_min_in(), brakepos.op_max_in());
+        }
+        else if (datapage == PG_PWMS) {
+            if (sel_val == 7) { adj_val(&(gas.nat[opmin]), fdelta, gas.nat[parked] + 1, gas.nat[opmax] - 1); gas.derive(); }
+            else if (sel_val == 8) { adj_val(&(gas.nat[opmax]), fdelta, gas.nat[opmin] + 1, 180.0); gas.derive(); }
+            else if (sel_val == 9) { adj_val(&(brake.us[stop]), fdelta, brake.us[opmin] + 1, brake.us[opmax] - 1); brake.derive(); }
+            else if (sel_val == 10) { adj_val(&(brake.duty_pc), fdelta, 0.0, 100.0); brake.derive(); }
+        }
+        else if (datapage == PG_IDLE) {
+            if (sel_val == 4) throttle.add_idlehigh(fdelta);
+            else if (sel_val == 5) throttle.add_idlecold(fdelta);
+            else if (sel_val == 6) throttle.add_idlehot(fdelta);
+            else if (sel_val == 7) throttle.add_tempcold(fdelta);
+            else if (sel_val == 8) throttle.add_temphot(fdelta);
+            else if (sel_val == 9) throttle.add_settlerate(idelta);
+            else if (sel_val == 10) throttle.cycle_idlemode(idelta);
+        }
+        else if (datapage == PG_BPID) {
+            if (sel_val == 8) brake.pid.add_kp(0.001 * fdelta);
+            else if (sel_val == 9) brake.pid.add_ki(0.001 * fdelta);
+            else if (sel_val == 10) brake.pid.add_kd(0.001 * fdelta);
+        }
+        else if (datapage == PG_GPID) {
+            if (sel_val == 7) { adj_bool(&(gas.open_loop), idelta); }  // gas_pid.SetMode (gas_open_loop ? qpid::ctrl::manual : qpid::ctrl::automatic);
+            else if (sel_val == 8) gas.pid.add_kp(0.001 * fdelta);
+            else if (sel_val == 9) gas.pid.add_ki(0.001 * fdelta);
+            else if (sel_val == 10) gas.pid.add_kd(0.001 * fdelta);
+        }
+        else if (datapage == PG_CPID) {
+            if (sel_val == 7) adj_val(&cruise_delta_max_pc_per_s, idelta, 1, 35);
+            else if (sel_val == 8) gas.cruisepid.add_kp(0.001 * fdelta);
+            else if (sel_val == 9) gas.cruisepid.add_ki(0.001 * fdelta);
+            else if (sel_val == 10) gas.cruisepid.add_kd(0.001 * fdelta);
+        }
+        else if (datapage == PG_TEMP) {
+            if (sel_val == 10) adj_bool(&dont_take_temperatures, idelta);
+        }
+        else if (datapage == PG_SIM) {
+            if (sel_val == 0) sim.set_can_sim(sens::joy, idelta);
+            else if (sel_val == 1) sim.set_can_sim(sens::pressure, idelta);
+            else if (sel_val == 2) sim.set_can_sim(sens::brkpos, idelta);
+            else if (sel_val == 3) sim.set_can_sim(sens::speedo, idelta);
+            else if (sel_val == 4) sim.set_can_sim(sens::tach, idelta);
+            else if (sel_val == 5) sim.set_can_sim(sens::airvelo, idelta);
+            else if (sel_val == 6) sim.set_can_sim(sens::mapsens, idelta);  // else if (sel_val == 7) sim.set_can_sim(sens::starter, idelta);
+            else if (sel_val == 7) sim.set_can_sim(sens::basicsw, idelta);
+            else if (sel_val == 8) sim.set_potmap((adj_val(sim.potmap(), idelta, 0, arraysize(sensorcard) - 4)));            
+            else if (sel_val == 9 && rmode == CAL) adj_bool(&cal_joyvert_brkmotor_mode, idelta);
+            else if (sel_val == 10 && rmode == CAL) adj_bool(&cal_pot_gasservo_mode, (idelta < 0 || cal_pot_gasservo_ready) ? idelta : -1);
+        }
+        else if (datapage == PG_UI) {
+            if (sel_val == 7) { adj_bool(&flashdemo, idelta); enable_flashdemo(flashdemo); }
+            else if (sel_val == 8) { adj_val(&neobright, idelta, 1, 100); neo.setbright(neobright); }
+            else if (sel_val == 9) { adj_val(&neodesat, idelta, 0, 10); neo.setdesaturation(neodesat); }
+            else if (sel_val == 10) adj_bool(&screensaver, idelta);
+        }
+        idelta = 0;
+    }
+}
