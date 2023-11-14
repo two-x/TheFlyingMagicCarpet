@@ -185,7 +185,7 @@ uint8_t unitmaps[8][17] = {  // 17x7-pixel bitmaps for where units use symbols n
 bool* idiotlights[16] = {
     &(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &(temp_err[ENGINE]), &(temp_err[WHEEL]), &panicstop, 
     hotrc.radiolost_ptr(), &shutdown_incomplete, &park_the_motors, &autostopping, &cruise_adjusting,
-    &car_hasnt_moved, &starter, &boot_button, sim.enabled_ptr(), &running_on_devboard, 
+    &car_hasnt_moved, &starter, &(encoder.sw), sim.enabled_ptr(), &running_on_devboard, 
     &powering_up,
 };
 char idiotchars[arraysize(idiotlights)][3] = {
@@ -232,9 +232,9 @@ void set_idiotcolors() {
 // tuning-ui related globals
 enum disp_draw { ERASE = -1 };
 enum tunctrls { OFF, SELECT, EDIT };
-int32_t tunctrl = OFF, tunctrl_last = OFF;
-int32_t datapage = PG_RUN, datapage_last = PG_TEMP;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
-int32_t sel_val = 0, sel_val_last = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
+int tunctrl = OFF, tunctrl_last = OFF;
+int datapage = PG_RUN, datapage_last = PG_TEMP;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
+int sel_val = 0, sel_val_last = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
 Timer tuningCtrlTimer (25000000);  // This times out edit mode after a a long period of inactivity
 
 class Display {
@@ -434,7 +434,7 @@ class Display {
                 if (color == -1) color = GRN;
                 int32_t y_pos = lineno*disp_line_height_pix+disp_vshift_pix;
                 if (polarity != disp_polarities[lineno]) draw_hyphen (x_base, y_pos, (!polarity) ? color : BLK);
-                draw_string (x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], color, BLK); // +6*(arraysize(modecard[run.mode()])+4-namelen)/2
+                draw_string (x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], color, BLK); // +6*(arraysize(modecard[run.mode])+4-namelen)/2
                 strcpy (disp_values[lineno], disp_string);
                 disp_polarities[lineno] = polarity;
                 dispAgeTimer[lineno].reset();
@@ -666,7 +666,7 @@ class Display {
         void update_idiots(bool force = false) {
             draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, force);
         }
-        void update(runmode _nowmode) {
+        void update(int _nowmode) {
             if (!display_enabled) return;
             update_idiots(disp_idiots_dirty);
             disp_idiots_dirty = false;
@@ -788,7 +788,7 @@ class Display {
                     draw_dynamic(13, gas.pid.dterm(), -100.0, 100.0);
                     draw_dynamic(14, gas.pid.outsum(), -gas.pid.outrange(), gas.pid.outrange());
                     draw_eraseval(15);
-                    draw_truth(16, gas.open_loop, 1);
+                    draw_truth(16, gas.openloop, 1);
                     draw_dynamic(17, gas.pid.kp(), 0.0, 1.0);
                     draw_dynamic(18, gas.pid.ki(), 0.0, 1.0);
                     draw_dynamic(19, gas.pid.kd(), 0.0, 1.0);
@@ -942,6 +942,7 @@ class Display {
 // moving transparent arrow sprite over background: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
 // bar graphs: https://www.youtube.com/watch?v=g4jlj_T-nRw&ab_channel=VolosProjects
 
+int32_t idelta = 0, idelta_touch = 0, idelta_encoder = 0;
 void tuner_update(int rmode) {
     sel_val_last = sel_val;
     datapage_last = datapage;
@@ -1013,7 +1014,7 @@ void tuner_update(int rmode) {
             else if (sel_val == 10) brake.pid.add_kd(0.001 * fdelta);
         }
         else if (datapage == PG_GPID) {
-            if (sel_val == 7) { adj_bool(&(gas.open_loop), idelta); }  // gas_pid.SetMode (gas_open_loop ? qpid::ctrl::manual : qpid::ctrl::automatic);
+            if (sel_val == 7) { adj_bool(&(gas.openloop), idelta); }  // gas_pid.SetMode (gas_open_loop ? QPID::ctrl::manual : QPID::ctrl::automatic);
             else if (sel_val == 8) gas.pid.add_kp(0.001 * fdelta);
             else if (sel_val == 9) gas.pid.add_ki(0.001 * fdelta);
             else if (sel_val == 10) gas.pid.add_kd(0.001 * fdelta);
@@ -1037,8 +1038,8 @@ void tuner_update(int rmode) {
             else if (sel_val == 6) sim.set_can_sim(sens::mapsens, idelta);  // else if (sel_val == 7) sim.set_can_sim(sens::starter, idelta);
             else if (sel_val == 7) sim.set_can_sim(sens::basicsw, idelta);
             else if (sel_val == 8) sim.set_potmap((adj_val(sim.potmap(), idelta, 0, arraysize(sensorcard) - 4)));            
-            else if (sel_val == 9 && rmode == CAL) adj_bool(&cal_joyvert_brkmotor_mode, idelta);
-            else if (sel_val == 10 && rmode == CAL) adj_bool(&cal_pot_gasservo_mode, (idelta < 0 || cal_pot_gasservo_ready) ? idelta : -1);
+            else if (sel_val == 9 && rmode == CAL) adj_bool(&(cal_joyvert_brkmotor_mode), idelta);
+            else if (sel_val == 10 && rmode == CAL) adj_bool(&(cal_pot_gasservo_mode), (idelta < 0 || cal_pot_gasservo_ready) ? idelta : -1);
         }
         else if (datapage == PG_UI) {
             if (sel_val == 7) { adj_bool(&flashdemo, idelta); enable_flashdemo(flashdemo); }
