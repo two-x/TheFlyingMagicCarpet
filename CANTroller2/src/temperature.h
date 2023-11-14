@@ -1,12 +1,6 @@
 #pragma once
 #include <vector>
-#include <map>
-#include <array>
-#include <algorithm>
-#include <string>
-#include <OneWire.h>
 #include <DallasTemperature.h>
-#include "common.h"
 
 enum class loc { ambient, engine, wheel_fl, wheel_fr, wheel_rl, wheel_rr, num_locations };  // , SOREN_DEV0, SOREN_DEV1, num_known_ };
 

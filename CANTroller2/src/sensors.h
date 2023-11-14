@@ -1,7 +1,6 @@
 #pragma once
 #include <iostream>
 #include <map>
-#include <tuple>
 #include <memory> // for std::shared_ptr
 #include <SparkFun_FS3000_Arduino_Library.h>  // For air velocity sensor  http://librarymanager/All#SparkFun_FS3000
 #include "Arduino.h"

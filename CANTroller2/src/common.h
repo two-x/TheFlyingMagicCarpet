@@ -1,9 +1,9 @@
 // Contains utility functions, classes, and defines
 #pragma once
 #include <Wire.h>
+#include "Arduino.h"
 // #include <cstdint> // for uint types
 // #include <cstdio> // for printf
-#include "Arduino.h"
 // pin assignments  ESP32-S3-DevkitC series
 #define      button_pin  0 // button0/strap-1  // Input, Rotary encoder push switch, for the UI. active low (needs pullup). Also the esp "Boot" button does the same thing
 #define    lipobatt_pin  1 // adc1ch0          // Analog input, LiPo cell voltage, full scale is 4.8V
