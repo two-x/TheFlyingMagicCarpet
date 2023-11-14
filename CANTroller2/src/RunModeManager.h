@@ -94,7 +94,6 @@ class RunModeManager {
     //     esp_deep_sleep_start();
     // }
     void updateMode() {
-        // if (!syspower) _currentMode = ASLEEP;
         if (basicmodesw) _currentMode = BASIC;  // if basicmode switch on --> Basic Mode
         else if ((_currentMode != CAL) && (_currentMode != ASLEEP)) {
             if (panicstop || !ignition) _currentMode = SHUTDOWN;
