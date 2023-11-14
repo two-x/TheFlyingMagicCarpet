@@ -1,7 +1,5 @@
 #pragma once
-#include <stdio.h>
 #include <iostream>
-#include <cmath>
 #include <map>
 #include <tuple>
 #include <memory> // for std::shared_ptr

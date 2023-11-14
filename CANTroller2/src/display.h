@@ -1,7 +1,5 @@
 #pragma once
 #include <TFT_eSPI.h>
-#include <iostream>  // for gamma correction
-#include <cmath>  // for gamma correction
 // LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
 // Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
 #define BLK  0x0000  // greyscale: full black (RGB elements off)
@@ -70,7 +68,6 @@
 #define disp_saver_width 155
 #define disp_saver_height 192
 
-float globalgamma = 2.2;  // Standard gamma is 2.2
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
@@ -85,17 +82,6 @@ Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
 Timer dispRefreshTimer (100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
 uint32_t tft_watchdog_timeout_us = 100000;
 
-uint16_t gamma_x(uint16_t element565, float gamma = globalgamma) {  // (31.0 * (float)(bits * 2 - 10)
-    float gamma565 = static_cast<float>(element565) / 31.0;  // Convert the original 5-6-5 bit value to the range 0-1
-    gamma565 = std::pow(gamma565, gamma);  // Apply gamma correction
-    return static_cast<uint16_t>(gamma565 * 31.0);  // Convert the corrected value back to 5-6-5 bit range
-}
-uint16_t gamma16(uint16_t element565, float gamma = globalgamma) {
-    uint16_t r = (element565 >> 11) & 0x1f;
-    uint16_t g = (element565 >> 5) & 0x3f;
-    uint16_t b = element565 & 0x1f;
-    return (gamma_x(r, gamma) << 11) | (gamma_x(g, gamma) << 5) | gamma_x(b, gamma);
-}
 uint32_t color_16b_to_uint32(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to uint32 in format 0x00RRGGBB
     return (((uint32_t)color565 & 0xf800) << 8) | (((uint32_t)color565 & 0x7e0) << 5) | (((uint32_t)color565 & 0x1f) << 3);
 }
@@ -162,7 +148,7 @@ char datapage_names[datapages::num_datapages][disp_tuning_lines][9] = {
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "LoopFreq", "Loop Avg", "LoopPeak", " Touch X", " Touch Y", " Touch X", " Touch Y", "BlnkDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI      // "   Gamma"
+    { "LoopFreq", "Loop Avg", "LoopPeak", " Touch X", " Touch Y", " Touch X", " Touch Y", "BlnkDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
 };
 char tuneunits[datapages::num_datapages][disp_tuning_lines][5] = {
     { "in  ", "V   ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, "%   ", "%   ", },  // PG_RUN
@@ -239,7 +225,6 @@ void set_idiotcolors() {
         int division = disp_idiots_per_row;
         uint32_t color32 = hsv_to_rgb<uint32_t>((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 220);
         idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
-        if (gamma_correct_enabled) idiotcolors[idiot] = gamma16(idiotcolors[idiot]);
         disp_idiots_dirty = true;
     }
 }
@@ -342,7 +327,6 @@ class Display {
                 int division = num_runmodes;
                 uint32_t color32 = hsv_to_rgb<uint32_t>((int8_t)(255 * (rm % division) / division + hue_offset), saturat, 255, 0, 220);
                 colorcard[rm] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
-                if (gamma_correct_enabled) colorcard[rm] = gamma16(colorcard[rm]);
                 disp_runmode_dirty = true;
             }
         }
@@ -854,7 +838,7 @@ class Display {
                     draw_dynamic(13, touch_pt[1], 0, disp_height_pix);
                     draw_dynamic(14, touch_pt[2], 340, 3980);
                     draw_dynamic(15, touch_pt[3], 180, 3980);
-                    draw_truth(16, flashdemo, 0);  // draw_dynamic(16, globalgamma, 0.1, 2.57, -1, 3);
+                    draw_truth(16, flashdemo, 0);
                     draw_dynamic(17, neobright, 1.0, 100.0, -1, 3);
                     draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
                     draw_truth(19, screensaver, 0);
@@ -959,6 +943,9 @@ class Display {
 // bar graphs: https://www.youtube.com/watch?v=g4jlj_T-nRw&ab_channel=VolosProjects
 
 void tuner_update(int rmode) {
+    sel_val_last = sel_val;
+    datapage_last = datapage;
+    tunctrl_last = tunctrl; // Make sure this goes after the last comparison
     uint32_t encoder_sw_action = encoder.press_event();  // true = autoreset the event if there is one
     if (encoder_sw_action != Encoder::NONE) {  // First deal with any unhandled switch press events
         if (encoder_sw_action == Encoder::SHORT)  {  // if short press

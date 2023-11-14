@@ -1,8 +1,8 @@
 // Contains utility functions, classes, and defines
 #pragma once
 #include <Wire.h>
-#include <cstdint> // for uint types
-#include <cstdio> // for printf
+// #include <cstdint> // for uint types
+// #include <cstdio> // for printf
 #include "Arduino.h"
 // pin assignments  ESP32-S3-DevkitC series
 #define      button_pin  0 // button0/strap-1  // Input, Rotary encoder push switch, for the UI. active low (needs pullup). Also the esp "Boot" button does the same thing
@@ -104,7 +104,6 @@ bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise s
 // Dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
 bool usb_jtag = true;  // If you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)
 bool dont_take_temperatures = false;  // In case debugging dallas sensors or causing problems
-bool gamma_correct_enabled = false;
 bool console_enabled = true;         // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
 bool keep_system_powered = false;    // Use true during development
 bool screensaver = false;  // Can enable experiment with animated screen draws

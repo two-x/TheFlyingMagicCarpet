@@ -1,5 +1,4 @@
 // Carpet CANTroller II  Source Code  - For ESP32-S3-DevKitC-1-N8
-#include <SPI.h>  // SPI serial bus
 #include "common.h"
 #include "uictrl.h"
 #include "mapsens.h"
@@ -163,9 +162,6 @@ void loop() {
     brake.update(run.mode());
     steer.update(run.mode());
     if (sim.potmapping(sens::joy)) hotrc.set_pc(horz, filt, pot.mapToRange(steer.pc_to_us(steer.pc[opmin]), steer.pc_to_us(steer.pc[opmax])));
-    sel_val_last = sel_val;
-    datapage_last = datapage;
-    tunctrl_last = tunctrl; // Make sure this goes after the last comparison
     touch.update(); // Handle touch events and actions
     if (screensaver && touch.touched()) screen.saver_touch(touch.touch_pt(0), touch.touch_pt(1));
     tuner_update(run.mode());

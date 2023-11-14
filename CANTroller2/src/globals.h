@@ -1,9 +1,7 @@
 #pragma once
-#include <ESP32Servo.h>        // Makes PWM output to control motors (for rudimentary control of our gas and steering)
-#include <Preferences.h>
-#include <iostream>
-#include <iomanip>  // For formatting console cout strings
-#include <vector>
+#include <Preferences.h>  // Functions for writing to flash, i think
+#include <iomanip>  // For formatting console loop timing string output
+#include <vector>  // used to group loop times with string labels
 // #include <HardwareSerial.h>  // In case we ever talk to jaguars over asynchronous serial port, uncomment:
 // HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
 
@@ -69,7 +67,6 @@ void set_board_defaults(bool devboard) {  // true for dev boards, false for prin
     }
     else {  // override settings if running on the real car
         usb_jtag = false;
-        gamma_correct_enabled = false;
         console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
         keep_system_powered = false; // Use true during development
         screensaver = false;         // Can enable experiment with animated screen draws

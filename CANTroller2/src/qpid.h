@@ -1,5 +1,5 @@
 #pragma once
-#include <stdint.h>
+// #include <stdint.h>
 // I stole this library and modified it heavily to our purpposes - Soren
 // QPID Library for Arduino - Version 3.1.9 by dlloydev https://github.com/Dlloydev/QPID
 // Based on the Arduino PID_v1 Library. Licensed under the MIT License.
