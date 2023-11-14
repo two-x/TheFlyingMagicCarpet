@@ -1,21 +1,20 @@
 // Carpet CANTroller II  Source Code  - For ESP32-S3-DevKitC-1-N8
-#include "common.h"
+#include "globals.h"
 #include "uictrl.h"
 #include "mapsens.h"
 #include "sensors.h"
 #include "temperature.h"
 #include "motors.h"
 #include "neopixel.h"
-#include "globals.h"
+#include "objects.h"
 #include "display.h"
 #include "touch.h"
 #include "RunModeManager.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-Display screen;
-TouchScreen touch(touch_cs_pin);
-RunModeManager run(&screen, &encoder);
-ESP32PWM pwm;  // Object for timer pwm resources (servo outputs)
+static Display screen;
+static TouchScreen touch(touch_cs_pin);
+static RunModeManager run(&screen, &encoder);
 void get_touchpoint() { 
     touch_pt[0] = touch.touch_pt(0);
     touch_pt[1] = touch.touch_pt(1); 
@@ -34,18 +33,6 @@ void neo_idiots_update() {
             highest_pri_failing_last[idiot] = highest_pri_failing_sensor[idiot];
         }
     }
-}
-void hotrc_events_update(int8_t _rm) {
-    hotrc.toggles_update();
-    if (hotrc.sw_event(ch3)) ignition_request = req_tog;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
-    if (hotrc.sw_event(ch4)) {
-        if (_rm == FLY || _rm == CRUISE) flycruise_toggle_request = true;
-        else if (_rm == STALL) starter_request = req_tog;
-        else if (_rm == HOLD) starter_request = req_off;
-        else if (_rm == SHUTDOWN && !shutdown_incomplete) sleep_request = req_on;
-        else if (_rm == ASLEEP) sleep_request = req_off; 
-    }
-    hotrc.toggles_reset();
 }
 void setup() {  // Setup just configures pins (and detects touchscreen type)
     if (RUN_TESTS) run_tests();
@@ -71,7 +58,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     write_pin(syspower_pin, syspower);
     set_pin(uart_tx_pin, INPUT);  // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
     running_on_devboard =(read_pin(uart_tx_pin));
-    set_board_defaults(running_on_devboard);
+    set_board_defaults();
     set_pin(uart_tx_pin, OUTPUT);  // 
     Serial.begin(115200);  // Open console serial port
     delay(800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
@@ -139,7 +126,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 }
 void loop() {
     ignition_panic_update();  // handler for ignition pin output and panicstop status.
-    bootbutton_update();
     basicsw_update();
     starter_update();  // Runs starter bidirectional handler
     encoder.update();  // Read encoder input signals
@@ -155,22 +141,22 @@ void loop() {
     mapsens.update();  // MAP sensor  // takes 6800 us (!!)
     maf_gps = massairflow();  // Recalculate intake mass airflow
     if (touch_reticles) get_touchpoint();
-    hotrc_events_update(run.mode());
+    hotrc_events_update(run.mode);
     hotrc.update();
     run.run_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
-    gas.update(run.mode());
-    brake.update(run.mode());
-    steer.update(run.mode());
+    gas.update(run.mode);
+    brake.update(run.mode);
+    steer.update(run.mode);
     if (sim.potmapping(sens::joy)) hotrc.set_pc(horz, filt, pot.mapToRange(steer.pc_to_us(steer.pc[opmin]), steer.pc_to_us(steer.pc[opmax])));
     touch.update(); // Handle touch events and actions
     if (screensaver && touch.touched()) screen.saver_touch(touch.touch_pt(0), touch.touch_pt(1));
-    tuner_update(run.mode());
+    tuner_update(run.mode);
     diag_update();  // notice any screwy conditions or suspicious shenigans
     neo_idiots_update();
-    neo.set_heartcolor(colorcard[run.mode()]);
+    neo.set_heartcolor(colorcard[run.mode]);
     neo.update(!syspower);
     looptime_mark("-");
-    screen.update(run.mode());  // Display updates
+    screen.update(run.mode);  // Display updates
     if (!display_enabled && datapage_last != datapage) config.putUInt("dpage", datapage);
     looptime_mark("dis");
     looptime_update();

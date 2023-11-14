@@ -56,7 +56,6 @@ class Encoder {
         int32_t _state = 0;
         int32_t _sw_action = NONE;  // Flag for encoder handler to know an encoder switch action needs to be handled
         uint32_t _spinrate_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
-        bool _sw = false;  // Remember whether switch is being pressed
         bool _timer_active = false;  // Flag to prevent re-handling long presses if the sw is just kept down
         bool _suppress_click = false;  // Flag to prevent a short click on switch release after successful long press
         Timer _spinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
@@ -83,7 +82,8 @@ class Encoder {
         }
 
     public:
-        enum sw_presses { NONE, SHORT, LONG };
+        enum sw_presses : int { NONE, SHORT, LONG };
+        bool sw = false;  // Remember whether switch is being pressed
 
         Encoder(uint8_t a, uint8_t b, uint8_t sw) : _a_pin(a), _b_pin(b), _sw_pin(sw), _longPressTimer(_longPressTime){}
         Encoder() = delete; // must be instantiated with pins
@@ -104,7 +104,7 @@ class Encoder {
             // Encoder handler routines should act whenever encoder_sw_action is SHORT or LONG, setting it back to
             // NONE once handled. When handling press, if encoder_long_clicked is nonzero then press is a long press
             if (!read_pin(_sw_pin)) {  // if encoder sw is being pressed (switch is active low)
-                if (!_sw) {  // if the press just occurred
+                if (!sw) {  // if the press just occurred
                     _longPressTimer.reset();  // start a press timer
                     _timer_active = true;  // flag to indicate timing for a possible long press
                 }
@@ -113,17 +113,17 @@ class Encoder {
                     _timer_active = false;  // Keeps us from entering this logic again until after next sw release (to prevent repeated long presses)
                     _suppress_click = true;  // Prevents the switch release after a long press from causing a short press
                 }
-                _sw = true;  // Remember a press is in effect
+                sw = true;  // Remember a press is in effect
             }
             else {  // if encoder sw is not being pressed
-                if (_sw && !_suppress_click) _sw_action = SHORT;  // if the switch was just released, a short press occurred, which must be handled
+                if (sw && !_suppress_click) _sw_action = SHORT;  // if the switch was just released, a short press occurred, which must be handled
                 _timer_active = false;  // Allows detection of next long press event
-                _sw = false;  // Remember press is not in effect
+                sw = false;  // Remember press is not in effect
                 _suppress_click = false;  // End click suppression
             }
         }
         bool pressed() {
-            return _sw;
+            return sw;
         }
         uint32_t press_event(bool autoreset = true) {
             uint32_t ret = _sw_action;
