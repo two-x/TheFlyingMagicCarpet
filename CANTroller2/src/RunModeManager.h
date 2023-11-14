@@ -50,20 +50,20 @@ class RunModeManager {
         if (autostop_disabled) autostopping = false;
         else {
             if (autostopping) {
-                if (speedo.car_stopped() || brake.stopcarTimer.expired()) cmd = req_off; 
-                else if (brake.brakeIntervalTimer.expireset())
-                    brake.mypid.set_target(smin(brake.mypid.target() + (panicstop ? pressure.panic_increment_psi : pressure.hold_increment_psi), pressure.max_human()));
+                if (speedo.car_stopped() || brake.stopcar_timer.expired()) cmd = req_off; 
+                else if (brake.interval_timer.expireset())
+                    brake.pid.set_target(smin(brake.pid.target() + (panicstop ? pressure.panic_increment_psi : pressure.hold_increment_psi), pressure.max_human()));
             }
             if (cmd == req_tog) cmd = (req)(!autostopping);
             if (autostopping && cmd == req_off) {
-                brake.mypid.set_target(pressure.min_psi());
+                brake.pid.set_target(pressure.min_psi());
                 autostopping = false;
             }
             else if (!autostopping && cmd == req_on && !speedo.car_stopped()) {
                 throttle.goto_idle();  // Keep target updated to possibly changing idle value
-                brake.mypid.set_target(smax(pressure.filt(), (panicstop ? pressure.panic_initial_psi : pressure.hold_initial_psi)));
-                brake.brakeIntervalTimer.reset();
-                brake.stopcarTimer.reset();
+                brake.pid.set_target(smax(pressure.filt(), (panicstop ? pressure.panic_initial_psi : pressure.hold_initial_psi)));
+                brake.interval_timer.reset();
+                brake.stopcar_timer.reset();
                 autostopping = true;
             }
         }
@@ -169,8 +169,8 @@ class RunModeManager {
         if ((speedo.car_stopped() || allow_rolling_start) && ignition && !panicstop && !tach.engine_stopped()) go_to(HOLD);  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
     }
     void run_stallMode() {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
-        if (hotrc.joydir(vert) != joy_down) brake.mypid.set_target(pressure.min_human());  // If in deadband or being pushed up, no pressure target
-        else brake.mypid.set_target(map (hotrc.pc[vert][filt], hotrc.pc[vert][dbbot], hotrc.pc[vert][opmin], pressure.min_human(), pressure.max_human()));  // Scale joystick value to pressure adc setpoint
+        if (hotrc.joydir(vert) != joy_down) brake.pid.set_target(pressure.min_human());  // If in deadband or being pushed up, no pressure target
+        else brake.pid.set_target(map (hotrc.pc[vert][filt], hotrc.pc[vert][dbbot], hotrc.pc[vert][opmin], pressure.min_human(), pressure.max_human()));  // Scale joystick value to pressure adc setpoint
         if (starter || !tach.engine_stopped()) go_to(HOLD);  // If we started the car, enter hold mode once starter is released
     }
     void run_holdMode() {
@@ -191,21 +191,21 @@ class RunModeManager {
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) go_to(HOLD);  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
         else {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
             if (_joydir == joy_up)  // If we are trying to accelerate, scale joystick value to determine gas setpoint
-                gas.mypid.set_target(map(hotrc.pc[vert][filt], hotrc.pc[vert][dbtop], hotrc.pc[vert][opmax], throttle.idle_rpm, tach.govern_rpm()));
+                gas.pid.set_target(map(hotrc.pc[vert][filt], hotrc.pc[vert][dbtop], hotrc.pc[vert][opmax], throttle.idle_rpm, tach.govern_rpm()));
             else throttle.goto_idle();  // Else let off gas (if gas using PID mode)
             
             if (_joydir == joy_down)  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
-                brake.mypid.set_target(map(hotrc.pc[vert][filt], hotrc.pc[vert][dbbot], hotrc.pc[vert][opmin], pressure.min_human(), pressure.max_human()));
-            else brake.mypid.set_target(pressure.min_human());  // Else let off the brake   
+                brake.pid.set_target(map(hotrc.pc[vert][filt], hotrc.pc[vert][dbbot], hotrc.pc[vert][opmin], pressure.min_human(), pressure.max_human()));
+            else brake.pid.set_target(pressure.min_human());  // Else let off the brake   
         }
         if (flycruise_toggle_request) go_to(CRUISE);  // enter cruise mode by pressing hrc ch4 button
         flycruise_toggle_request = false;
     }
     void run_cruiseMode() {
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
-            brake.mypid.set_target(pressure.min_human());  // Let off the brake and keep it there till out of Cruise mode
+            brake.pid.set_target(pressure.min_human());  // Let off the brake and keep it there till out of Cruise mode
             gas.cruisepid.set_target(speedo.filt());  // set pid loop speed target to current speed  (for pid_suspend_fly mode)
-            gas.mypid.set_target(tach.filt());  // initialize pid output (rpm target) to current rpm  (for pid_suspend_fly mode)
+            gas.pid.set_target(tach.filt());  // initialize pid output (rpm target) to current rpm  (for pid_suspend_fly mode)
             gas.cruise_target_pc = gas.pc[out];  //  set target throttle angle to current throttle angle  (for throttle_angle/throttle_delta modes)
             cruise_adjusting = cruise_trigger_released = false;  // in case trigger is being pulled as cruise mode is entered, the ability to adjust is only unlocked after the trigger is subsequently released to the center
             gestureFlyTimer.set(gesture_flytimeout_us);  // initialize brake-trigger timer
@@ -231,7 +231,7 @@ class RunModeManager {
                 }
                 else if (cruise_setpoint_mode == pid_suspend_fly) {
                     if (!cruise_adjusting) adjustpoint = tach.filt();
-                    gas.mypid.set_target(adjustpoint + ctrlratio * (((_joydir == joy_up) ? tach.govern_rpm() : throttle.idle_rpm) - adjustpoint));
+                    gas.pid.set_target(adjustpoint + ctrlratio * (((_joydir == joy_up) ? tach.govern_rpm() : throttle.idle_rpm) - adjustpoint));
                 }
                 cruise_ctrl_extent_pc = std::abs(hotrc.pc[vert][filt]);
             }
