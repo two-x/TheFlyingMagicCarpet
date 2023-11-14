@@ -132,10 +132,8 @@ void basicsw_update() {
     }
 }
 void set_syspower(bool setting) {
-    // if (!setting && runmode.mode() != ASLEEP) return;
     syspower = setting;
     if (keep_system_powered) syspower = HIGH;
-    printf("syspower -> %d\n", syspower);
     write_pin(syspower_pin, syspower);
 }
 bool boot_button_last = 0;

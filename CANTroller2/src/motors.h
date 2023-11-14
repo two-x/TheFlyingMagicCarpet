@@ -192,7 +192,7 @@ class ServoMotor {
     int pin;
     uint32_t pid_period_us = 85000;
   public:
-    bool open_loop = true, motor_reversed = false, center_stop = false;
+    bool open_loop = true, motor_reversed = false;
     float pc[num_motorvals] = { 0, NAN, 100, NAN, NAN, NAN, NAN };  // percent values [opmin/parked/opmax/out/govern/absmin/absmax]  values range from -100% to 100% are all derived or auto-assigned
     float nat[num_motorvals] = { 45.0, 43.0, 168.2, 45.0, NAN, 0, 180 };  // native-unit values [opmin/parked/opmax/out/govern/absmin/absmax]
     float us[num_motorvals] = { NAN, 1500, NAN, NAN, NAN, 500, 2500 };  // us pulsewidth values [-/cent/-/out/-/absmin/absmax]
@@ -205,28 +205,16 @@ class ServoMotor {
         this->pid_timer.set(this->pid_period_us);
     }
     float pc_to_nat(float _pc) {  // Eventually this should be linearized
-        if (!(this->center_stop)) return map(_pc, this->pc[absmin], this->pc[absmax], this->nat[absmin], this->nat[absmax]);
-        if (_pc > this->pc[stop]) return map(_pc, this->pc[stop], this->pc[absmax], this->nat[stop], this->nat[absmax]);
-        if (_pc < this->pc[stop]) return map(_pc, this->pc[stop], this->pc[absmin], this->nat[stop], this->nat[absmin]);
-        return this->nat[stop];
+        return map(_pc, this->pc[absmin], this->pc[absmax], this->nat[absmin], this->nat[absmax]); 
     }
     float nat_to_pc(float _nat) {  // Eventually this should be linearized
-        if (!(this->center_stop)) return map(_nat, this->nat[absmin], this->nat[absmax], this->pc[absmin], this->pc[absmax]);
-        if (_nat > this->nat[stop]) return map(_nat, this->nat[stop], this->nat[absmax], this->pc[stop], this->pc[absmax]);
-        if (_nat < this->nat[stop]) return map(_nat, this->nat[stop], this->nat[absmin], this->pc[stop], this->pc[absmin]);
-        return this->pc[stop];
+        return map(_nat, this->nat[absmin], this->nat[absmax], this->pc[absmin], this->pc[absmax]);
     }
     float nat_to_us(float _nat) {  // works for motor with or without stop value
-        if (!(this->center_stop)) return map(_nat, this->nat[absmin], this->nat[absmax], this->motor_reversed ? this->us[absmax] : this->us[absmin], this->motor_reversed ? this->us[absmin] : this->us[absmax]);
-        if (_nat > this->nat[stop]) return map(_nat, this->nat[stop], this->nat[absmax], this->us[stop], this->motor_reversed ? this->us[absmin] : this->us[absmax]);
-        if (_nat < this->nat[stop]) return map(_nat, this->nat[stop], this->nat[absmin], this->us[stop], this->motor_reversed ? this->us[absmax] : this->us[absmin]);
-        return this->us[stop];
+        return map(_nat, this->nat[absmin], this->nat[absmax], this->motor_reversed ? this->us[absmax] : this->us[absmin], this->motor_reversed ? this->us[absmin] : this->us[absmax]);
     }
     float pc_to_us(float _pc) {  // works for motor with or without stop value
-        if (!(this->center_stop)) return map(_pc, this->pc[absmin], this->pc[absmax], this->motor_reversed ? this->us[absmax] : this->us[absmin], this->motor_reversed ? this->us[absmin] : this->us[opmax]);
-        if (_pc > this->pc[stop]) return map(_pc, this->pc[stop], this->pc[absmax], this->us[stop], this->motor_reversed ? this->us[absmin] : this->us[absmax]);
-        if (_pc < this->pc[stop]) return map(_pc, this->pc[stop], this->pc[absmin], this->us[stop], this->motor_reversed ? this->us[absmax] : this->us[absmin]);
-        return this->us[stop];
+        return map(_pc, this->pc[absmin], this->pc[absmax], this->motor_reversed ? this->us[absmax] : this->us[absmin], this->motor_reversed ? this->us[absmin] : this->us[opmax]);
     }
     void write_motor() {
         this->motor.writeMicroseconds((int32_t)(this->us[out]));
@@ -319,7 +307,7 @@ class JagMotor : public ServoMotor {
     float nat[num_motorvals] = { NAN, 0, NAN, NAN, NAN, NAN, NAN };  // native-unit values [opmin/stop/opmax/out/-/absmin/absmax]
     float us[num_motorvals] = { NAN, 1500, NAN, NAN, NAN, 670, 2330 };  // us pulsewidth values [-/cent/-/out/-/absmin/absmax]
     float (&volt)[arraysize(nat)] = this->nat;  // our "native" value is volts
-    bool motor_reversed = false, center_stop = true;
+    bool motor_reversed = false;
     void derive() {  // calc pc and voltage op limits from volt and us abs limits 
         this->nat[absmax] = running_on_devboard ? this->car_batt_fake_v : this->mulebatt->v();
         this->nat[absmin] = -(this->nat[absmax]);
@@ -333,6 +321,26 @@ class JagMotor : public ServoMotor {
         this->mulebatt = _batt;
         this->volt_check_timer.set(this->volt_check_period_us);
         this->derive();
+    }
+    float pc_to_nat(float _pc) {  // Eventually this should be linearized
+        if (_pc > this->pc[stop]) return map(_pc, this->pc[stop], this->pc[absmax], this->nat[stop], this->nat[absmax]);
+        if (_pc < this->pc[stop]) return map(_pc, this->pc[stop], this->pc[absmin], this->nat[stop], this->nat[absmin]);
+        return this->nat[stop];
+    }
+    float nat_to_pc(float _nat) {  // Eventually this should be linearized
+        if (_nat > this->nat[stop]) return map(_nat, this->nat[stop], this->nat[absmax], this->pc[stop], this->pc[absmax]);
+        if (_nat < this->nat[stop]) return map(_nat, this->nat[stop], this->nat[absmin], this->pc[stop], this->pc[absmin]);
+        return this->pc[stop];
+    }
+    float nat_to_us(float _nat) {  // works for motor with or without stop value
+        if (_nat > this->nat[stop]) return map(_nat, this->nat[stop], this->nat[absmax], this->us[stop], this->motor_reversed ? this->us[absmin] : this->us[absmax]);
+        if (_nat < this->nat[stop]) return map(_nat, this->nat[stop], this->nat[absmin], this->us[stop], this->motor_reversed ? this->us[absmax] : this->us[absmin]);
+        return this->us[stop];
+    }
+    float pc_to_us(float _pc) {  // works for motor with or without stop value
+        if (_pc > this->pc[stop]) return map(_pc, this->pc[stop], this->pc[absmax], this->us[stop], this->motor_reversed ? this->us[absmin] : this->us[absmax]);
+        if (_pc < this->pc[stop]) return map(_pc, this->pc[stop], this->pc[absmin], this->us[stop], this->motor_reversed ? this->us[absmax] : this->us[absmin]);
+        return this->us[stop];
     }
 };
 class BrakeMotor : public JagMotor {
