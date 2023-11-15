@@ -8,10 +8,10 @@
 // Instantiate objects
 static Preferences config;  // Persistent config storage
 static Hotrc hotrc;
-static Potentiometer pot(pot_wipe_pin);
+static Potentiometer pot(pot_pin);
 static Simulator sim(pot);
 static TemperatureSensorManager tempsens(onewire_pin);
-static Encoder encoder(encoder_a_pin, encoder_b_pin, button_pin);
+static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 static CarBattery mulebatt(mulebatt_pin);
 static LiPoBatt lipobatt(lipobatt_pin);
 static PressureSensor pressure(pressure_pin);
@@ -92,7 +92,7 @@ void starter_update () {  // Starter bidirectional handler logic.  Outside code 
 }
 bool ignition = LOW;  // Set by handler only. Reflects current state of the signal
 int ignition_request = req_na;
-bool panicstop = false;
+bool panicstop = true;  // initialize in panic, because we could have just crashed and reset. If car is stopped, handler will clear it
 int panicstop_request = req_on;  // On powerup we assume the code just crashed during a drive, because it could have
 Timer panicTimer(panic_relax_timeout_us);  // How long should a panic stop last?  We can't stay mad forever
 void ignition_panic_update() {  // Run once each main loop, directly before panicstop_update()
@@ -109,12 +109,12 @@ void ignition_panic_update() {  // Run once each main loop, directly before pani
         panicstop = (bool)panicstop_request;
         if (panicstop && !paniclast) panicTimer.reset();
     }
-    panicstop_request = req_na;
     if (panicstop) ignition_request = req_off;  // panic stop causes ignition cut
     if (ignition_request != req_na) {
         ignition = (bool)ignition_request;
         write_pin (ignition_pin, ignition);  // Turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
     }
+    panicstop_request = req_na;
     ignition_request = req_na;  // Make sure this goes after the last comparison
 }
 bool basicmodesw = LOW;
@@ -127,8 +127,7 @@ void basicsw_update() {
 }
 bool syspower = HIGH;  // Set by handler only. Reflects current state of the signal
 void set_syspower(bool setting) {
-    syspower = setting;
-    if (keep_system_powered) syspower = HIGH;
+    syspower = setting | keep_system_powered;
     write_pin(syspower_pin, syspower);
 }
 void hotrc_events_update(int runmode) {
@@ -142,6 +141,41 @@ void hotrc_events_update(int runmode) {
         else if (runmode == ASLEEP) sleep_request = req_off; 
     }
     hotrc.toggles_reset();
+}
+void neo_setup() {
+    std::cout << "Init neopixels.. ";
+    neo.init((uint8_t)neopixel_pin, running_on_devboard, 1);
+    neo.setbright(neobright);
+    neo.setdesaturation(neodesat);
+    neo.heartbeat(neopixel_pin >= 0);
+}
+void enable_flashdemo(bool ena) {
+    if (ena) {
+        neo.setflash(4, 8, 8, 8, 20, -1);  // brightness toggle in a continuous squarewave
+        neo.setflash(5, 3, 1, 2, 85);      // three super-quick bright white flashes
+        neo.setflash(6, 2, 5, 5, 0, 0);    // two short black pulses
+    }
+    else {
+        neo.setflash(4, 0);
+        neo.setflash(5, 0);
+        neo.setflash(6, 0);
+    }
+}
+// Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
+float maf_gps;  // Manifold mass airflow in grams per second
+float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
+    float temp = _ambient;
+    if (std::isnan(_ambient)) {
+        temp = tempsens.val(loc::ambient);
+        if (std::isnan(temp) && running_on_devboard) temp = tempsens.val(loc::engine);
+        if (std::isnan(temp)) return -1;  // Avoid crashing due to trying to read absent sensor
+    }
+    float T = 0.556 * (temp - 32.0) + 273.15;  // in K.  This converts from degF to K
+    float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
+    float v = 0.447 * (std::isnan(_airvelo) ? airvelo.filt() : _airvelo); // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
+    float Ain2 = 3.1415926;  // in in2    1.0^2 in2 * pi  // will still need to divide by 1550 in2/m2
+    float P = 6894.76 * (std::isnan(_map) ? mapsens.filt() : _map);  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
+    return v * Ain2 * P * 1000.0 / (R * T * 1550);  // mass air flow in grams per second (ug/s)   (1k g/kg * m/s * in2 * J/m3) / (J/(kg*K) * K * 1550 in2/m2) = g/s
 }
 // Loop timing related
 Timer loopTimer(1000000); // how long the previous main loop took to run (in us)
@@ -337,41 +371,6 @@ void err_print_info() {
         }
         printf("\n");
     }
-}
-void neo_setup() {
-    std::cout << "Init neopixels.. ";
-    neo.init((uint8_t)neopixel_pin, running_on_devboard, 1);
-    neo.setbright(neobright);
-    neo.setdesaturation(neodesat);
-    neo.heartbeat(neopixel_pin >= 0);
-}
-void enable_flashdemo(bool ena) {
-    if (ena) {
-        neo.setflash(4, 8, 8, 8, 20, -1);  // brightness toggle in a continuous squarewave
-        neo.setflash(5, 3, 1, 2, 85);      // three super-quick bright white flashes
-        neo.setflash(6, 2, 5, 5, 0, 0);    // two short black pulses
-    }
-    else {
-        neo.setflash(4, 0);
-        neo.setflash(5, 0);
-        neo.setflash(6, 0);
-    }
-}
-// Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
-float maf_gps;  // Manifold mass airflow in grams per second
-float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
-    float temp = _ambient;
-    if (std::isnan(_ambient)) {
-        temp = tempsens.val(loc::ambient);
-        if (std::isnan(temp) && running_on_devboard) temp = tempsens.val(loc::engine);
-        if (std::isnan(temp)) return -1;  // Avoid crashing due to trying to read absent sensor
-    }
-    float T = 0.556 * (temp - 32.0) + 273.15;  // in K.  This converts from degF to K
-    float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
-    float v = 0.447 * (std::isnan(_airvelo) ? airvelo.filt() : _airvelo); // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
-    float Ain2 = 3.1415926;  // in in2    1.0^2 in2 * pi  // will still need to divide by 1550 in2/m2
-    float P = 6894.76 * (std::isnan(_map) ? mapsens.filt() : _map);  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
-    return v * Ain2 * P * 1000.0 / (R * T * 1550);  // mass air flow in grams per second (ug/s)   (1k g/kg * m/s * in2 * J/m3) / (J/(kg*K) * K * 1550 in2/m2) = g/s
 }
 #define RUN_TESTS 0
 #if RUN_TESTS
