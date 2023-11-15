@@ -39,6 +39,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         return mode;
     }
+    void kick() { sleep_inactivity_timer.reset(); }  // call when user activity is detected, to prevent shutdown mode timeout to asleep mode
   private:
     bool autostop(req _cmd = req_na) {
         req cmd = _cmd;
