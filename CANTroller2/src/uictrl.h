@@ -1,7 +1,5 @@
 #pragma once
 #include "FunctionalInterrupt.h"
-// #include "common.h"
-
 // Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class Potentiometer {
     protected:
@@ -31,7 +29,6 @@ class Potentiometer {
         float min() { return _pc_min; }
         float max() { return _pc_max; }
 };
-
 class Encoder {
     private:
         enum _inputs { ENC_A, ENC_B };

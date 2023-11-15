@@ -246,8 +246,7 @@ class Display {
         int32_t _timing_tft_reset;
         bool _procrastinate = false, reset_finished = false, saver_lotto = false, simulating_last;        
         // For screensaver sprite
-        long sx0, sy0;
-        long touchpoint_x = -1, touchpoint_y = -1, eraser_rad = 14, eraser_rad_min = 9, eraser_rad_max = 27, eraser_velo_min = 4, eraser_velo_max = 10;
+        long sx0, sy0, touchpoint_x = -1, touchpoint_y = -1, eraser_rad = 14, eraser_rad_min = 9, eraser_rad_max = 27, eraser_velo_min = 4, eraser_velo_max = 10;
         long eraser_pos[2] = { 0, 0 };
         long eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) };
         long eraser_pos_max[2] = { disp_saver_width / 2 - eraser_rad, disp_saver_height / 2 - eraser_rad }; 
@@ -256,16 +255,14 @@ class Display {
         float pensat = 200.0;
         uint16_t pencolor = RED;
         uint32_t pentimeout = 700000;
-        int savernumcycles, savershape_last;
+        int savernumcycles, savershape_last, disp_oldmode = SHUTDOWN;   // So we can tell when the mode has just changed. start as different to trigger_mode start algo
         int savershapes = 5, savercycle = 1, savtouch_last_x = -1, savtouch_last_y = -1, savtouch_last_w = 2, savershape = random(savershapes);
         uint32_t saver_cycletime_us = 38000000, saver_refresh_us = 45000;
         Timer saverRefreshTimer, saverCycleTimer, pentimer;
-        uint32_t disp_oldmode = SHUTDOWN;   // So we can tell when the mode has just changed. start as different to trigger_mode start algo
     public:
         Display (int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
         Display () : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
         void init() {
-            yield();
             _tft.begin();
             _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
             _tft.setTouch(touch_cal_data);
@@ -282,7 +279,6 @@ class Display {
             _tft.fillScreen (BLK);  // Black out the whole screen
             draw_touchgrid (false);
             draw_fixed (datapage, datapage_last, false);
-            yield();
             set_idiotcolors();
             draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, true);
             all_dirty();
@@ -853,7 +849,7 @@ class Display {
             if (screensaver && !sim.enabled() && !_procrastinate) saver_update();
             _procrastinate = false;
         }
-        void saver_touch(int16_t x, int16_t y) {
+        void saver_touch(int16_t x, int16_t y) {  // you can draw colorful lines on the screensaver
             if (x >= disp_simbuttons_x && y >= disp_simbuttons_y) {
                 x -= disp_simbuttons_x; y -= disp_simbuttons_y;
                 if (savtouch_last_x == -1) savtouch_last_x = x;
@@ -913,7 +909,7 @@ class Display {
                             _saver.print((String)letter);
                         }
                     }
-                    _saver.setTextColor(BLK);
+                    _saver.setTextColor(BLK);  // allows subliminal messaging
                 }
                 if (savercycle == 3 && saver_lotto) _saver.drawString("do drugs", disp_saver_width / 2, disp_saver_height / 2, 4);
                 else if (savercycle != 1) {
@@ -936,12 +932,7 @@ class Display {
             }
         }
 };
-// The following project draws a nice looking gauge cluster, very apropos to our needs and code is given.
-// See this video: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
-// Rinkydink home page: http://www.rinkydinkelectronics.com
-// moving transparent arrow sprite over background: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
-// bar graphs: https://www.youtube.com/watch?v=g4jlj_T-nRw&ab_channel=VolosProjects
-
+// tuner
 int32_t idelta = 0, idelta_touch = 0, idelta_encoder = 0;
 void tuner_update(int rmode) {
     sel_val_last = sel_val;
@@ -1050,3 +1041,8 @@ void tuner_update(int rmode) {
         idelta = 0;
     }
 }
+// The following project draws a nice looking gauge cluster, very apropos to our needs and code is given.
+// See this video: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
+// Rinkydink home page: http://www.rinkydinkelectronics.com
+// moving transparent arrow sprite over background: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
+// bar graphs: https://www.youtube.com/watch?v=g4jlj_T-nRw&ab_channel=VolosProjects

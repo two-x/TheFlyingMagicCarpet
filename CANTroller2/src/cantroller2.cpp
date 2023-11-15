@@ -36,7 +36,7 @@ void neo_idiots_update() {
 }
 void setup() {  // Setup just configures pins (and detects touchscreen type)
     if (RUN_TESTS) run_tests();
-    analogReadResolution(adcbits);  // Set ADC to 12-bit resolution
+    analogReadResolution(adcbits);  // Set ADC to 12-bit resolutqion
     set_pin(starter_pin, INPUT_PULLDOWN);
     set_pin(basicmodesw_pin, INPUT_PULLUP);
     if (!usb_jtag) set_pin(steer_enc_a_pin, INPUT_PULLUP);
@@ -112,11 +112,9 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         touch.init();
     }
     if (touch_reticles) screen.draw_reticles();
-    std::cout << "Init neopixels.. ";
     neo_setup();
     int32_t idiots = smin((uint32_t)arraysize(idiotlights), neo.neopixelsAvailable());
-    for (int32_t idiot = 0; idiot < idiots; idiot++)
-        neo.newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
+    for (int32_t idiot = 0; idiot < idiots; idiot++) neo.newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
     std::cout << "set up heartbeat led and " << idiots << " neopixel idiot lights" << std::endl;
     for (int32_t i=0; i<num_err_types; i++) for (int32_t j=0; j<e_num_sensors; j++) err_sensor[i][j] = false; // Initialize sensor error flags to false
     printf("Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");

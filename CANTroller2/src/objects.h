@@ -338,10 +338,9 @@ void err_print_info() {
         printf("\n");
     }
 }
-
 void neo_setup() {
+    std::cout << "Init neopixels.. ";
     neo.init((uint8_t)neopixel_pin, running_on_devboard, 1);
-    // neo.init((uint8_t)neopixel_pin, !running_on_devboard);
     neo.setbright(neobright);
     neo.setdesaturation(neodesat);
     neo.heartbeat(neopixel_pin >= 0);
@@ -382,7 +381,7 @@ float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) 
         delay(5000);
         test_Param();
         printf("Tests complete.\n");
-        for(;;) {} // loop forever
+        for(;;); // loop forever
     }
 #else
     void run_tests() {}
