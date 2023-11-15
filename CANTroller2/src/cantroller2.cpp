@@ -36,30 +36,16 @@ void neo_idiots_update() {
 }
 void setup() {  // Setup just configures pins (and detects touchscreen type)
     if (RUN_TESTS) run_tests();
-    analogReadResolution(adcbits);  // Set ADC to 12-bit resolutqion
     set_pin(starter_pin, INPUT_PULLDOWN);
     set_pin(basicmodesw_pin, INPUT_PULLUP);
     if (!usb_jtag) set_pin(steer_enc_a_pin, INPUT_PULLUP);
     if (!usb_jtag) set_pin(steer_enc_b_pin, INPUT_PULLUP);
-    set_pin(neopixel_pin, OUTPUT);
-    set_pin(sdcard_cs_pin, OUTPUT);
-    set_pin(touch_cs_pin, OUTPUT);
-    set_pin(tft_cs_pin, OUTPUT);
-    set_pin(tft_dc_pin, OUTPUT);
-    set_pin(ignition_pin, OUTPUT);
-    set_pin(syspower_pin, OUTPUT);  // Then set the put as an output as normal.
-    set_pin(brake_pwm_pin, OUTPUT);
-    set_pin(steer_pwm_pin, OUTPUT);
-    set_pin(gas_pwm_pin, OUTPUT);
-    write_pin(tft_cs_pin, HIGH);   // Prevent bus contention
-    write_pin(sdcard_cs_pin, HIGH);   // Prevent bus contention
-    write_pin(touch_cs_pin, HIGH);   // Prevent bus contention
-    write_pin(ignition_pin, LOW);
-    write_pin(syspower_pin, syspower);
+    set_pin(sdcard_cs_pin, OUTPUT, HIGH);  // Prevent bus contention
+    set_pin(ignition_pin, OUTPUT, LOW);
+    set_pin(syspower_pin, OUTPUT, syspower);  // Then set the put as an output as normal.
     set_pin(uart_tx_pin, INPUT);  // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
     running_on_devboard =(read_pin(uart_tx_pin));
     set_board_defaults();
-    set_pin(uart_tx_pin, OUTPUT);  // 
     Serial.begin(115200);  // Open console serial port
     delay(800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     printf("Console started..\nUsing %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
@@ -122,7 +108,6 @@ void loop() {
     pot.update();
     brakepos.update();  // Brake position
     tach.update();  // Tach
-    throttle.push_tach_reading(tach.human(), tach.last_read_time());    
     speedo.update();  // Speedo
     pressure.update();  // Brake pressure
     mulebatt.update();
@@ -133,11 +118,11 @@ void loop() {
     if (touch_reticles) get_touchpoint();
     hotrc_events_update(run.mode);
     hotrc.update();
+    if (sim.potmapping(sens::joy)) hotrc.set_pc(horz, filt, pot.mapToRange(steer.pc_to_us(steer.pc[opmin]), steer.pc_to_us(steer.pc[opmax])));
     run.mode_logic();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     gas.update(run.mode);
     brake.update(run.mode);
     steer.update(run.mode);
-    if (sim.potmapping(sens::joy)) hotrc.set_pc(horz, filt, pot.mapToRange(steer.pc_to_us(steer.pc[opmin]), steer.pc_to_us(steer.pc[opmax])));
     touch.update(); // Handle touch events and actions
     if (screensaver && touch.touched()) screen.saver_touch(touch.touch_pt(0), touch.touch_pt(1));
     tuner_update(run.mode);

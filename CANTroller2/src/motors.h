@@ -236,7 +236,7 @@ class GasServo : public ServoMotor {
     bool openloop = true, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
     float (&deg)[arraysize(nat)] = nat;  // our "native" value is degrees of rotation "deg". Create reference so nat and deg are interchangeable
     QPID pid, cruisepid;
-    float cruise_target_pc, governor = 95;     // Software governor will only allow this percent of full-open throttle (percent 0-100)
+    float tach_last, cruise_target_pc, governor = 95;     // Software governor will only allow this percent of full-open throttle (percent 0-100)
     Timer servo_delay_timer;    // We expect the servo to find any new position within this time
     GasServo() {};  // Brake(int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin); 
     void derive() {  // calc derived limit values for all units based on tuned values for each motor
@@ -259,6 +259,9 @@ class GasServo : public ServoMotor {
         derive();
     }
     void update(int runmode) {
+        float tach_now = tach->human();
+        if (tach_now != tach_last) throttle->push_tach_reading(tach_now, tach->last_read_time());    
+        tach_last = tach_now;
         if (pid_timer.expireset()) {
             // Step 1 : update throttle target from idle control or cruise mode pid, if applicable (on the same timer as gas pid)
             throttle->update();  // Allow idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
