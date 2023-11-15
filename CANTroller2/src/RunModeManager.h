@@ -23,7 +23,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         motor_park_timer.set(motor_park_timeout_us);
         sleep_inactivity_timer.set(sleep_inactivity_timeout_us);
     }
-    int run_runmode() {
+    int mode_logic() {
         updateMode(); // Update the current mode if needed, this also sets we_just_switched_modes
         if (mode == BASIC) run_basicMode(); // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         else if (mode == ASLEEP) run_asleepMode();

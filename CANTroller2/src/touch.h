@@ -34,6 +34,7 @@ public:
     TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts(csPin, irqPin) {}
     
     void init() {
+        printf("touchscreen..\n");
         _ts.begin();
         // _ts.setRotation(1); do we need to rotate?
     }

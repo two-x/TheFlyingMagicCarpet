@@ -4,7 +4,7 @@
 #include "mapsens.h"
 #include "sensors.h"
 #include "temperature.h"
-#include "motors.h"
+#include "motors.h"  // qpid.h is included from within motors.h
 #include "neopixel.h"
 #include "objects.h"
 #include "display.h"
@@ -63,25 +63,21 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     Serial.begin(115200);  // Open console serial port
     delay(800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     printf("Console started..\nUsing %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
-    printf("Init rmt for hotrc..\n");
     hotrc.init();
-    printf("Pot setup..\n");
     pot.setup();
-    printf("Encoder setup..\n");
     encoder.setup();
-    printf("Brake pressure sensor.. ");
+    printf("Brake pressure sensor..\n");
     pressure.setup();
-    printf("done\nBrake position sensor.. ");
+    printf("Brake position sensor..\n");
     brakepos.setup();
-    printf("done\nVehicle battery sense.. ");
+    printf("Vehicle battery sense..\n");
     mulebatt.setup();
-    printf("done\nLiPo cell sense.. ");
+    printf("LiPo cell sense..\n");
     lipobatt.setup();
-    printf("done\nTachometer.. ");
+    printf("Tachometer..\n");
     tach.setup();
-    printf("done\nSpeedometer.. ");
+    printf("Speedometer..\n");
     speedo.setup();
-    printf("done..\nInit i2c and i2c-enabled devices.."); delay(1);  // Attempt to force print to happen before init
     i2c.init();
     airvelo.setup(); // must be done after i2c is started
     mapsens.setup();
@@ -94,21 +90,17 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     sim.register_device(sens::mapsens, mapsens, mapsens.source());
     sim.register_device(sens::tach, tach, tach.source());
     sim.register_device(sens::speedo, speedo, speedo.source());
-    printf("Configure motors..\n");
     throttle.init(gas.pid.target_ptr(), tach.human_ptr(), tach.filt_ptr(),
         tempsens.get_sensor(loc::engine), temp_lims_f[ENGINE][OP_MIN], temp_lims_f[ENGINE][WARNING], 50, Throttle::idlemodes::control);
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);
     gas.init(gas_pwm_pin, 60, &hotrc, &speedo, &tach, &pot, &throttle);
     brake.init(brake_pwm_pin, 50, &hotrc, &speedo, &mulebatt, &pressure, &brakepos);
     steer.init(steer_pwm_pin, 50, &hotrc, &speedo, &mulebatt);
-    printf("Init display.. ");
     if (display_enabled) {
         config.begin("FlyByWire", false);
         datapage = config.getUInt("dpage", PG_RUN);
         datapage_last = config.getUInt("dpage", PG_TEMP);
-        printf("tft.. ");
         screen.init();
-        printf("touchscreen..\n");
         touch.init();
     }
     if (touch_reticles) screen.draw_reticles();
@@ -141,7 +133,7 @@ void loop() {
     if (touch_reticles) get_touchpoint();
     hotrc_events_update(run.mode);
     hotrc.update();
-    run.run_runmode();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
+    run.mode_logic();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     gas.update(run.mode);
     brake.update(run.mode);
     steer.update(run.mode);

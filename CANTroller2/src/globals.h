@@ -3,12 +3,12 @@
 #include <Wire.h>
 #include "Arduino.h"
 // pin assignments  ESP32-S3-DevkitC series
-#define      button_pin  0 // button0/strap-1  // Input, Rotary encoder push switch, for the UI. active low (needs pullup). Also the esp "Boot" button does the same thing
+#define  encoder_sw_pin  0 // button0/strap-1  // Input, Rotary encoder push switch, for the UI. active low (needs pullup). Also the esp "Boot" button does the same thing
 #define    lipobatt_pin  1 // adc1ch0          // Analog input, LiPo cell voltage, full scale is 4.8V
 #define   encoder_b_pin  2 // adc1ch1          // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define      tft_dc_pin  3 // adc1ch2/strap-X  // Output, Assert when sending data to display chip to indicate commands vs. screen data - ! pin is also defined in tft_setup.h
 #define    mulebatt_pin  4 // adc1ch3          // Analog input, mule battery voltage sense, full scale is 16V
-#define    pot_wipe_pin  5 // adc1ch4          // Analog in from 20k pot
+#define         pot_pin  5 // adc1ch4          // Analog in from 20k pot
 #define   brake_pos_pin  6 // adc1ch5          // Analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
 #define    pressure_pin  7 // adc1ch6          // Analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V.
 #define     i2c_sda_pin  8 // i2c0sda/adc1ch7  // i2c bus for airspeed/map sensors, lighting board, cap touchscreen
@@ -56,7 +56,7 @@
 // ESP32-S3 has 5 DMA channels in each direction. We would use them for SPI data out to TFT, Neopixel data out, and possibly out to the 3 motor outputs and in from the 4 hotrc channels.
 // DMA works with: RMT, I2S0, I2S1, SPI2, SPI3, ADC, internal RAM, external PSRAM, and a few others (see the TRM)
 // Official pin capabilities: https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/hw-reference/esp32s3/user-guide-devkitc-1.html?highlight=devkitc#user-guide-s3-devkitc-1-v1-1-header-blocks
-// ADC ch2 will not work if wifi is enabled
+// External flash uses pins 27-32. ADC ch2 will not work if wifi is enabled
 // Bootstrap pins: Pin 0 must be pulled high, and pins 45 and 46 pulled low during bootup
 // glitch: pins 36 and 39 will be pulled low for ~80ns when "certain RTC peripherals power up" (ESP32 errata 3.11)
 // SPI bus page including DMA information: https://docs.espressif.com/projects/esp-idf/en/v4.4/esp32s3/api-reference/peripherals/spi_master.html
@@ -284,7 +284,7 @@ class I2C {
   public:
     I2C(uint8_t sda_pin_arg, uint8_t scl_pin_arg) : _sda_pin(sda_pin_arg), _scl_pin(scl_pin_arg) {}
     void init() {
-        printf("I2C driver ");
+        printf("Init i2c bus and devices.."); delay(1);  // Attempt to force print to happen before init
         scanTimer.reset();
         Wire.begin(_sda_pin, _scl_pin);  // I2c bus needed for airflow sensor
         byte error, address;

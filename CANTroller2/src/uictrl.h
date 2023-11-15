@@ -14,6 +14,7 @@ class Potentiometer {
         Potentiometer(uint8_t arg_pin) : _pin(arg_pin) {}
         Potentiometer() = delete; // must have a pin defined
         void setup() {
+            printf("Pot setup..\n");
             set_pin(_pin, INPUT);
         }
         void update() {
@@ -90,6 +91,7 @@ class Encoder {
         }
     
         void setup() {
+            printf("Encoder setup..\n");
             set_pin(_a_pin, INPUT_PULLUP);
             set_pin(_b_pin, INPUT_PULLUP);
             set_pin(_sw_pin, INPUT_PULLUP);  // The esp32 pullup is too weak. Use resistor

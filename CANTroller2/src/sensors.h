@@ -1223,6 +1223,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
   public:
     Hotrc() { calc_params(); }
     void init() {
+        printf("Init rmt for hotrc..\n");
         for (int axis=horz; axis<=ch4; axis++) rmt[axis].init();  // Set up 4 RMT receivers, one per channel
         failsafe_timer.set(failsafe_timeout); 
     }

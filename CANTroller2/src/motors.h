@@ -4,14 +4,13 @@
 #include "qpid.h"
 class Throttle {  // Soren - To allow creative control of PID targets in case your engine idle problems need that.
   public:
-    enum class idlemodes : uint32_t { direct, control, minimize, num_idlemodes };  // direct: disable idle management.  control: soft landing to idle rpm.  minimize: attempt to minimize idle to edge of instability
-    enum targetstates : uint32_t { todrive, driving, droptohigh, droptolow, idling, minimizing, num_states };
+    enum idlemodes : int { direct, control, minimize, num_idlemodes };  // direct: disable idle management.  control: soft landing to idle rpm.  minimize: attempt to minimize idle to edge of instability
+    enum targetstates : int { todrive, driving, droptohigh, droptolow, idling, minimizing, num_states };
     float idlehot = 550.0, idlecold = 775.0, idlehigh = 950.0;  // Idle speed at op_max and op_min engine temps, and elevated rpm above idle guaranteed never to stall
     float margin = 10, idle_absmin = 450.0, idle_absmax = 1000.0;  // High limit of idle speed adjustability
     float idle_rpm, stallpoint, dynamic_rpm, temphot, tempcold, idle_slope_rpmps;
     uint32_t settlerate_rpmps, stallrate_rpmps = 400;  // Engine rpm drops exceeding this much per second are considered a stall in progress
-    idlemodes idlemode;
-    targetstates targetstate, nextstate;
+    int idlemode, targetstate, nextstate;
   protected:
     // String modenames[3] = { "direct", "cntrol", "minimz" };
     // String statenames[4] = { "drivng", "tohigh", "tolow", "tostal" };
@@ -31,7 +30,8 @@ class Throttle {  // Soren - To allow creative control of PID targets in case yo
     void init (float* target, float* measraw, float* measfilt,  // Variable references: idle target, rpm raw, rpm filt
       TemperatureSensor* engine_sensor_ptr,  // Rate to lower idle from high point to low point (in rpm per second)
       float tempcold, float temphot, int32_t settlerate = 100,  // Values for: engine operational temp cold (min) and temp hot (max) in degrees-f
-      idlemodes myidlemode = idlemodes::control) {  // Configure idle control to just soft land or also attempt to minimize idle
+      int myidlemode = control) {  // Configure idle control to just soft land or also attempt to minimize idle
+        printf("Configure motors..\n");
         target_rpm = target;
         measraw_rpm = measraw;
         measfilt_rpm = measfilt;
@@ -71,7 +71,7 @@ class Throttle {  // Soren - To allow creative control of PID targets in case yo
         else if (targetstate == minimizing) process_minimizing();  // if idlemode == minimize, we then further allow the idle to drop, until we begin to sense irregularity in our rpm sensor pulses
     }
     void goto_idle (void) {  // The gods request the engine should idle now
-        if (targetstate == driving) nextstate = (idlemode == idlemodes::direct) ? droptolow : droptohigh;
+        if (targetstate == driving) nextstate = (idlemode == direct) ? droptolow : droptohigh;
         // now_trying_to_idle = true;
     }
     void push_tach_reading (int32_t reading, int64_t readtime) {  // Add a new rpm reading to a small LIFO ring buffer. We will use this to detect arhythmic rpm
@@ -106,7 +106,7 @@ class Throttle {  // Soren - To allow creative control of PID targets in case yo
     void targetstate_changer (void) {  // If nextstate was changed during last update, or someone externally changed the target, change our targetstate
         if (target_externally_set) {  // If the target has been changed externally, then determine our appropriate targetstate based on target value
             if (*target_rpm > idle_rpm + margin) nextstate = (*measfilt_rpm > idlehigh) ? driving : todrive;
-            // else nextstate = (idlemode == idlemodes::minimize) ? minimizing : idling;
+            // else nextstate = (idlemode == minimize) ? minimizing : idling;
         }
         target_externally_set = false;
         we_just_changed_states = (nextstate != targetstate);
@@ -125,7 +125,7 @@ class Throttle {  // Soren - To allow creative control of PID targets in case yo
     }
     void process_droptolow (void) {
         if (we_just_changed_states) { settleTimer.reset(); }  // printf("droptolow "); }
-        if (*measfilt_rpm <= idle_rpm + margin) nextstate = (idlemode == idlemodes::minimize) ? minimizing : idling;  // Done dropping to low idle, next proceed to a steady state
+        if (*measfilt_rpm <= idle_rpm + margin) nextstate = (idlemode == minimize) ? minimizing : idling;  // Done dropping to low idle, next proceed to a steady state
         else {  // Drop from current rpm toward low idle speed at configured rate
             set_target_internal (*measfilt_rpm - settlerate_rpmps * (float)settleTimer.elapsed()/1000000);  // Need to review the dynamics of this considering update frequency and motor latency 
             settleTimer.reset();
@@ -133,12 +133,12 @@ class Throttle {  // Soren - To allow creative control of PID targets in case yo
     }
     void process_idling (void) {  // If we aren't set to attempt to minimize idle speed, then we end up here
         // if (we_just_changed_states) {       printf("idling "); }
-        if (idlemode == idlemodes::minimize) nextstate = minimizing;  // in case idlemode is changed while in idling state
+        if (idlemode == minimize) nextstate = minimizing;  // in case idlemode is changed while in idling state
         set_target_internal (idle_rpm);  // We're done dropping to the idle point, but keep tracking as idle speed may change
     }
     void process_minimizing (void) {
         if (we_just_changed_states) { stallpoint = idle_rpm; }  // printf("minimizing "); }
-        else if (idlemode != idlemodes::minimize) nextstate = idling;  // in case idlemode is changed while in stallpoint state
+        else if (idlemode != minimize) nextstate = idling;  // in case idlemode is changed while in stallpoint state
         // else if (*measfilt_rpm > )
         // Soren finish writing this
     }
@@ -151,7 +151,7 @@ class Throttle {  // Soren - To allow creative control of PID targets in case yo
     // String get_statename (void) { return statenames[targetstate].c_str(); }
   public:
     void cycle_idlemode (int32_t cycledir) {  // Cycldir positive or negative
-        if (cycledir) idlemode = (idlemodes)(constrain ((int32_t)idlemode + constrain (cycledir, -1, 1), 0, (int32_t)idlemodes::num_idlemodes - 1));
+        if (cycledir) idlemode = constrain (idlemode + constrain (cycledir, -1, 1), 0, num_idlemodes - 1);
     }
     void set_idlehigh (float newidlehigh) { idlehigh = constrain (newidlehigh, idlecold + 1, idle_absmax); }
     void add_idlehigh (float add) { idlehigh += add; }
