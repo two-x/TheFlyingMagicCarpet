@@ -131,7 +131,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             sleep_request = req_na;
             powering_up = false;
         }
-        if (encoder->pressed() || sleep_request == req_off) {
+        if (encoder->pressed() || sleep_request == req_off || sleep_request == req_tog) {
             set_syspower(HIGH);
             sleep_request = req_na;
             pwrup_timer.set(pwrup_timeout);
@@ -158,7 +158,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         else {  // if shutdown is complete
             if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode
-            if (sleep_inactivity_timer.expired() || sleep_request == req_on) mode = ASLEEP;
+            if (sleep_inactivity_timer.expired() || sleep_request == req_on || sleep_request == req_tog) mode = ASLEEP;
         }
         sleep_request == req_na;
         if ((speedo.car_stopped() || allow_rolling_start) && ignition && !panicstop && !tach.engine_stopped()) mode = HOLD;  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
