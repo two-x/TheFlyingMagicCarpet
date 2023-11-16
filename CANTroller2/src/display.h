@@ -63,6 +63,7 @@
 #define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
+#define touch_reticle_offset 50  // Distance of center of each reticle to nearest screen edge
 #define disp_simbuttons_x 165
 #define disp_simbuttons_y 48
 #define disp_saver_width 155
@@ -109,7 +110,7 @@ uint16_t hue_to_rgb16(uint8_t hue) {  // returns uint16 color
 }
 
 char modecard[8][7] = { "Basic", "Asleep", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
-int32_t colorcard[arraysize(modecard)] = { MGT, MBLU, RED, ORG, YEL, GRN, TEAL, LPNK };
+int32_t colorcard[arraysize(modecard)] = { MGT, MBLU, RED, ORG, YEL, GRN, TEAL, PUR };
 
 char sensorcard[14][7] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 
@@ -596,6 +597,7 @@ class Display {
                     }
                 }     
             }
+            draw_reticles();
         }
         void draw_touchgrid (bool side_only) {  // draws edge buttons with names in 'em. If replace_names, just updates names
             int32_t namelen = 0;
@@ -624,10 +626,12 @@ class Display {
             _tft.drawFastVLine (x, y - 2, 5, DGRY);
         }
         void draw_reticles() {
-            draw_reticle(260, 50);
-            draw_reticle(60, 50);
-            draw_reticle(60, 189);
-            draw_reticle(260, 189);
+            if (touch_reticles) {
+                draw_reticle(disp_width_pix-touch_reticle_offset, touch_reticle_offset);
+                draw_reticle(touch_reticle_offset, touch_reticle_offset);
+                draw_reticle(touch_reticle_offset, disp_height_pix-touch_reticle_offset);
+                draw_reticle(disp_width_pix-touch_reticle_offset, disp_height_pix-touch_reticle_offset);
+            }
         }
         uint16_t darken_color (uint16_t color, int32_t halvings = 1) {  // halves each of r, g, and b of a 5-6-5 formatted 16-bit color value either once or twice
             if (halvings == 1) return ((color & 0xf000) | (color & 0x7c0) | (color & 0x1e)) >> 1;

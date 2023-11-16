@@ -89,7 +89,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         screen.init();
         touch.init();
     }
-    if (touch_reticles) screen.draw_reticles();
     neo_setup();
     int32_t idiots = smin((uint32_t)arraysize(idiotlights), neo.neopixelsAvailable());
     for (int32_t idiot = 0; idiot < idiots; idiot++) neo.newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
@@ -132,7 +131,6 @@ void loop() {
     neo.update(!syspower);
     looptime_mark("-");
     screen.update(run.mode);  // Display updates
-    if (!display_enabled && datapage_last != datapage) config.putUInt("dpage", datapage);
     looptime_mark("dis");
     looptime_update();
 }

@@ -105,7 +105,7 @@ bool console_enabled = true;         // safer to disable because serial printing
 bool keep_system_powered = false;    // Use true during development
 bool screensaver = false;            // Can enable experiment with animated screen draws
 bool looptime_print = false;         // Makes code write out timestamps throughout loop to serial port
-bool touch_reticles = false;
+bool touch_reticles = true;
 
 // global tunable variables
 uint32_t looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. Set to 0 linefeeds all prints
