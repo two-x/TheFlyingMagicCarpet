@@ -95,6 +95,10 @@ void QPID::init(float* a_in, float* a_min, float* a_max, float a_kp, float a_ki,
   awmod a_awmode, cdir a_dir, uint32_t a_sampletime, ctrl a_mode, centmod a_centmode, float a_cent) {  // Soren edit
     myin = a_in;
     _mode = a_mode;
+    _outmin = a_min;
+    _outmax = a_max;
+    _output = constrain(_output, *_outmin, *_outmax);
+    _outsum = constrain(_outsum, *_outmin, *_outmax);
     QPID::set_centmode(a_centmode);  // Soren
     if (_centmode != centmod::off && !std::isnan(a_cent)) {  // Soren
         set_cent(a_cent);  // Soren

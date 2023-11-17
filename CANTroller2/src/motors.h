@@ -31,7 +31,7 @@ class Throttle {  // Soren - To allow creative control of PID targets in case yo
       TemperatureSensor* engine_sensor_ptr,  // Rate to lower idle from high point to low point (in rpm per second)
       float tempcold, float temphot, int32_t settlerate = 100,  // Values for: engine operational temp cold (min) and temp hot (max) in degrees-f
       int myidlemode = control) {  // Configure idle control to just soft land or also attempt to minimize idle
-        printf("Configure motors..\n");
+        printf("Configure idle control..\n");
         target_rpm = target;
         measraw_rpm = measraw;
         measfilt_rpm = measfilt;
@@ -198,27 +198,27 @@ class ServoMotor {
     float nat[num_motorvals] = { 45.0, 43.0, 168.2, 45.0, NAN, 0, 180 };  // native-unit values [opmin/parked/opmax/out/govern/absmin/absmax]
     float us[num_motorvals] = { NAN, 1500, NAN, NAN, NAN, 500, 2500 };  // us pulsewidth values [-/cent/-/out/-/absmin/absmax]
     void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo) {
-        this->hotrc = _hotrc;
-        this->speedo = _speedo;
-        this->pin = _pin;
-        this->motor.setPeriodHertz(_freq);
-        this->motor.attach(this->pin, this->us[absmin], this->us[absmax]);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
-        this->pid_timer.set(this->pid_period_us);
+        hotrc = _hotrc;
+        speedo = _speedo;
+        pin = _pin;
+        motor.setPeriodHertz(_freq);
+        motor.attach(pin, us[absmin], us[absmax]);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
+        pid_timer.set(pid_period_us);
     }
     float pc_to_nat(float _pc) {  // Eventually this should be linearized
-        return map(_pc, this->pc[absmin], this->pc[absmax], this->nat[absmin], this->nat[absmax]); 
+        return map(_pc, pc[absmin], pc[absmax], nat[absmin], nat[absmax]); 
     }
     float nat_to_pc(float _nat) {  // Eventually this should be linearized
-        return map(_nat, this->nat[absmin], this->nat[absmax], this->pc[absmin], this->pc[absmax]);
+        return map(_nat, nat[absmin], nat[absmax], pc[absmin], pc[absmax]);
     }
     float nat_to_us(float _nat) {  // works for motor with or without stop value
-        return map(_nat, this->nat[absmin], this->nat[absmax], this->reverse ? this->us[absmax] : this->us[absmin], this->reverse ? this->us[absmin] : this->us[absmax]);
+        return map(_nat, nat[absmin], nat[absmax], reverse ? us[absmax] : us[absmin], reverse ? us[absmin] : us[absmax]);
     }
     float pc_to_us(float _pc) {  // works for motor with or without stop value
-        return map(_pc, this->pc[absmin], this->pc[absmax], this->reverse ? this->us[absmax] : this->us[absmin], this->reverse ? this->us[absmin] : this->us[absmax]);
+        return map(_pc, pc[absmin], pc[absmax], reverse ? us[absmax] : us[absmin], reverse ? us[absmin] : us[absmax]);
     }
     void write_motor() {
-        this->motor.writeMicroseconds((int32_t)(this->us[out]));
+        motor.writeMicroseconds((int32_t)(us[out]));
     }
 };
 class GasServo : public ServoMotor {
@@ -248,6 +248,7 @@ class GasServo : public ServoMotor {
         nat[govern] = map(pc[govern], pc[opmin], pc[opmax], nat[opmin], nat[opmax]);
     }
     void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, Throttle* _throttle) {
+        printf("Gas servo..\n");
         ServoMotor::init(_pin, _freq, _hotrc, _speedo);
         tach = _tach;
         pot = _pot;
@@ -309,43 +310,43 @@ class JagMotor : public ServoMotor {
     float pc[num_motorvals] = { NAN, 0, NAN, NAN, NAN, -100, 100 };  // percent values [opmin/stop/opmax/out/-/absmin/absmax]  values range from -100% to 100% are all derived or auto-assigned
     float nat[num_motorvals] = { NAN, 0, NAN, NAN, NAN, NAN, NAN };  // native-unit values [opmin/stop/opmax/out/-/absmin/absmax]
     float us[num_motorvals] = { NAN, 1500, NAN, NAN, NAN, 670, 2330 };  // us pulsewidth values [-/cent/-/out/-/absmin/absmax]
-    float (&volt)[arraysize(nat)] = this->nat;  // our native value is volts. Create reference so nat and volt are interchangeable
+    float (&volt)[arraysize(nat)] = nat;  // our native value is volts. Create reference so nat and volt are interchangeable
     void derive() {  // calc pc and voltage op limits from volt and us abs limits 
-        this->nat[absmax] = running_on_devboard ? this->car_batt_fake_v : this->mulebatt->v();
-        this->nat[absmin] = -(this->nat[absmax]);
-        this->pc[opmin] = this->pc[absmin] * this->duty_pc / 100.0;
-        this->pc[opmax] = this->pc[absmax] * this->duty_pc / 100.0;
-        this->nat[opmin] = map(this->pc[opmin], this->pc[stop], this->pc[absmin], this->nat[stop], this->nat[absmin]);
-        this->nat[opmax] = map(this->pc[opmax], this->pc[stop], this->pc[absmax], this->nat[stop], this->nat[absmax]);
+        nat[absmax] = running_on_devboard ? car_batt_fake_v : mulebatt->v();
+        nat[absmin] = -(nat[absmax]);
+        pc[opmin] = pc[absmin] * duty_pc / 100.0;
+        pc[opmax] = pc[absmax] * duty_pc / 100.0;
+        nat[opmin] = map(pc[opmin], pc[stop], pc[absmin], nat[stop], nat[absmin]);
+        nat[opmax] = map(pc[opmax], pc[stop], pc[absmax], nat[stop], nat[absmax]);
     }
     void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {
         ServoMotor::init(_pin, _freq, _hotrc, _speedo);
-        this->mulebatt = _batt;
-        this->volt_check_timer.set(this->volt_check_period_us);
-        this->derive();
+        mulebatt = _batt;
+        volt_check_timer.set(volt_check_period_us);
+        derive();
     }
     float pc_to_nat(float _pc) {  // Eventually this should be linearized
-        if (_pc > this->pc[stop]) return map(_pc, this->pc[stop], this->pc[absmax], this->nat[stop], this->nat[absmax]);
-        if (_pc < this->pc[stop]) return map(_pc, this->pc[stop], this->pc[absmin], this->nat[stop], this->nat[absmin]);
-        return this->nat[stop];
+        if (_pc > pc[stop]) return map(_pc, pc[stop], pc[absmax], nat[stop], nat[absmax]);
+        if (_pc < pc[stop]) return map(_pc, pc[stop], pc[absmin], nat[stop], nat[absmin]);
+        return nat[stop];
     }
     float nat_to_pc(float _nat) {  // Eventually this should be linearized
-        if (_nat > this->nat[stop]) return map(_nat, this->nat[stop], this->nat[absmax], this->pc[stop], this->pc[absmax]);
-        if (_nat < this->nat[stop]) return map(_nat, this->nat[stop], this->nat[absmin], this->pc[stop], this->pc[absmin]);
-        return this->pc[stop];
+        if (_nat > nat[stop]) return map(_nat, nat[stop], nat[absmax], pc[stop], pc[absmax]);
+        if (_nat < nat[stop]) return map(_nat, nat[stop], nat[absmin], pc[stop], pc[absmin]);
+        return pc[stop];
     }
     float nat_to_us(float _nat) {  // works for motor with center stop value
-        if (_nat > this->nat[stop]) return map(_nat, this->nat[stop], this->nat[absmax], this->us[stop], this->reverse ? this->us[absmin] : this->us[absmax]);
-        if (_nat < this->nat[stop]) return map(_nat, this->nat[stop], this->nat[absmin], this->us[stop], this->reverse ? this->us[absmax] : this->us[absmin]);
-        return this->us[stop];
+        if (_nat > nat[stop]) return map(_nat, nat[stop], nat[absmax], us[stop], reverse ? us[absmin] : us[absmax]);
+        if (_nat < nat[stop]) return map(_nat, nat[stop], nat[absmin], us[stop], reverse ? us[absmax] : us[absmin]);
+        return us[stop];
     }
     float pc_to_us(float _pc) {  // works for motor with center stop value
-        if (_pc > this->pc[stop]) return map(_pc, this->pc[stop], this->pc[absmax], this->us[stop], this->reverse ? this->us[absmin] : this->us[absmax]);
-        if (_pc < this->pc[stop]) return map(_pc, this->pc[stop], this->pc[absmin], this->us[stop], this->reverse ? this->us[absmax] : this->us[absmin]);
-        return this->us[stop];
+        if (_pc > pc[stop]) return map(_pc, pc[stop], pc[absmax], us[stop], reverse ? us[absmin] : us[absmax]);
+        if (_pc < pc[stop]) return map(_pc, pc[stop], pc[absmin], us[stop], reverse ? us[absmax] : us[absmin]);
+        return us[stop];
     }
     void write_motor() {
-        this->motor.writeMicroseconds((int32_t)(this->us[out]));
+        motor.writeMicroseconds((int32_t)(us[out]));
     }
 };
 class BrakeMotor : public JagMotor {
@@ -360,6 +361,7 @@ class BrakeMotor : public JagMotor {
         posn_xover_slope_pcperin2 = 100 / (brakepos->min_human() * brakepos->min_human());  // this inversion point is where position control changes to pressure control
     }
     void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brakepos) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+        printf("Brake motor..\n");
         JagMotor::init(_pin, _freq, _hotrc, _speedo, _batt);
         pressure = _pressure;  // press_pin = _press_pin;
         brakepos = _brakepos;  // posn_pin = _posn_pin;
@@ -454,6 +456,7 @@ class SteerMotor : public JagMotor {
     bool reverse = false, openloop = true;
     SteerMotor() {}
     void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+        printf("Steering motor..\n");
         JagMotor::init(_pin, _freq, _hotrc, _speedo, _batt);
     }
     void update(int runmode) {
