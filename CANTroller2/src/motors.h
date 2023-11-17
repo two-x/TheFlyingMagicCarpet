@@ -350,6 +350,13 @@ class JagMotor : public ServoMotor {
     }
 };
 class BrakeMotor : public JagMotor {
+  private:
+    void activate_pid(int newpid) {
+        activepid = newpid;
+        pid = pids[activepid];
+        activepid_last = activepid;
+        pid.init(pids[!activepid].output());
+    }
   public:
     enum brake_pids : int { prespid, posnpid, num_brakepids };
     bool autostopping = false, reverse = false, openloop = false;
@@ -358,7 +365,7 @@ class BrakeMotor : public JagMotor {
     QPID pids[num_brakepids];  // brake changes from pressure target to position target as pressures decrease, and vice versa
     int activepid = posnpid, activepid_last = posnpid;
     QPID &pid = pids[activepid];
-    float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2;
+    float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2, d_pres_ratio, d_posn_ratio, pid_targ_pc, pid_err_pc;
     BrakeMotor() {}  // Brake(int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin); 
     void derive() {
         JagMotor::derive();
@@ -370,6 +377,7 @@ class BrakeMotor : public JagMotor {
         brakepos = _brakepos;  // posn_pin = _posn_pin;
         duty_pc = 25.0;
         // activepid = (d_pres_ratio >= d_posn_ratio) ? prespid : posnpid;
+        if (!brake_hybrid_pid) activate_pid(prespid);
         pres_last = pressure->human();
         posn_last = brakepos->human();
         derive();
@@ -392,23 +400,22 @@ class BrakeMotor : public JagMotor {
     uint32_t pid_period_us = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
     static const uint32_t interval_timeout = 1000000;  // How often to apply increment during auto-stopping (in us)
     static const uint32_t stopcar_timeout = 8000000;  // How often to apply increment during auto-stopping (in us)
-    float d_pres_ratio, d_posn_ratio, pres_out, posn_out, pc_out_last, posn_last, pres_last;
+    float pres_out, posn_out, pc_out_last, posn_last, pres_last;
     // float posn_inflect, pres_inflect, pc_inflect; 
     float pid_out() {  // when brake pressure is low enough, control output based more on position than pressure
         pc[out] = pid.compute();  // get output accordiing to pressure pid
+        if (!brake_hybrid_pid) return pc[out];
+        if (activepid == prespid) pid_err_pc = pid.err() * (pressure->max_human() - pressure->min_human()) / 100;
+        else pid_err_pc = -pid.err() * (brakepos->max_human() - brakepos->min_human()) / 100;
         float pres_now = pressure->human();
-        float posn_now = brakepos->human();
         d_pres_ratio = std::abs(pres_now - pres_last) / (pressure->max_human() - pressure->min_human());  // calc pressure derivative (change since last reading)
+        pres_last = pres_out;
+        if (!brake_hybrid_pid) return pc[out];
+        float posn_now = brakepos->human();
         d_posn_ratio = std::abs(posn_now - posn_last) / (brakepos->max_human() - brakepos->min_human());  // calc pressure derivative (change since last reading)
         activepid = (d_pres_ratio >= d_posn_ratio) ? prespid : posnpid;
-        if (activepid != activepid_last) {
-            pid = pids[activepid];
-            pid.init(pids[!activepid].output());
-            // posn_inflect = posn_now; pres_inflect = pres_now;
-        }
-        pres_last = pres_out;
+        if (activepid != activepid_last) activate_pid(activepid);
         posn_last = posn_out;
-        activepid_last = activepid;
         return pc[out];
     }
     void fault_filter() {
@@ -421,8 +428,9 @@ class BrakeMotor : public JagMotor {
     void autostop_initial(bool panic) { set_pidtarg(smax(panic ? panic_initial_pc : hold_initial_pc, pid.target())); }
     void autostop_increment(bool panic) { set_pidtarg(smin(pid.target() + panic ? panic_increment_pc : hold_increment_pc, 100.0)); }
     void set_pidtarg(float targ_pc) {
-        if (activepid == prespid) pid.set_target(pressure->min_human() + targ_pc * (pressure->max_human() - pressure->min_human()) / 100.0);
-        else pid.set_target(brakepos->max_human() - targ_pc * (brakepos->max_human() - brakepos->min_human()) / 100);
+        pid_targ_pc = targ_pc;
+        if (activepid == prespid) pid.set_target(pressure->min_human() + pid_targ_pc * (pressure->max_human() - pressure->min_human()) / 100.0);
+        else pid.set_target(brakepos->max_human() - pid_targ_pc * (brakepos->max_human() - brakepos->min_human()) / 100);
     }
     void update(int runmode) {
         // Brakes - Determine motor output and write it to motor

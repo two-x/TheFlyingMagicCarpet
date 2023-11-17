@@ -92,6 +92,7 @@ enum temp_categories : int { AMBIENT = 0, ENGINE = 1, WHEEL = 2, num_temp_catego
 enum temp_lims : int { DISP_MIN, OP_MIN, OP_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
 
 // global configuration settings
+bool brake_hybrid_pid = true;
 bool starter_signal_support = true;
 bool remote_start_support = true;
 bool autostop_disabled = false;      // Temporary measure to keep brake behaving until we get it debugged. Eventually should be false
