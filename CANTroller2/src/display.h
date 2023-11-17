@@ -133,6 +133,7 @@ char idlestatecard[Throttle::targetstates::num_states][7] = { "todriv", "drving"
 
 char telemetry[disp_fixed_lines][9] = { "TriggerV", "   Speed", "    Tach", "Throttle", brAk"Pres", brAk"Motr", "JoysticH", stEr"Motr", };  // Fixed rows
 char units[disp_fixed_lines][5] = { "%   ", "mph ", "rpm ", "%   ", "psi ", "%   ", "%   ", "%   " };  // Fixed rows
+char brake_pid_card[2][7] = { "presur", "positn" };
 
 enum datapages { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, num_datapages };
 char pagecard[datapages::num_datapages][5] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
@@ -144,7 +145,7 @@ char datapage_names[datapages::num_datapages][disp_tuning_lines][9] = {
     { "PressRaw", "BkPosRaw", __________, __________, __________, "AirSpMax", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
-    { "PresTarg", "Pres Err", "  P Term", "  I Term", "  D Term", "Integral", brAk"Motr", brAk"Pres", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
+    { "  Target", "   Error", "  P Term", "  I Term", "  D Term", "dPressur", " dPositn", "ActivPID", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, "OpenLoop", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
@@ -157,7 +158,7 @@ char tuneunits[datapages::num_datapages][disp_tuning_lines][5] = {
     { "adc ", "adc ", ______, ______, ______, "mph ", "psi ", "psi ", "mph ", "mph ", "in  ", },  // PG_SENS
     { degree, "us  ", "V   ", "us  ", "V   ", "us  ", ______, degree, degree, "us  ", "%   ", },  // PG_PWMS
     { scroll, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", degreF, degreF, "rpms", scroll, },  // PG_IDLE
-    { "psi ", "psi ", "%   ", "%   ", "%   ", "%   ", "us  ", "adc ", ______, "Hz  ", "s   ", },  // PG_BPID
+    { "psin", "psin", "%   ", "%   ", "%   ", "    ", "    ", scroll, ______, "Hz  ", "s   ", },  // PG_BPID
     { "rpm ", "rpm ", "%   ", "%   ", "%   ", "%   ", ______, b1nary, ______, "Hz  ", "s   ", },  // PG_GPID
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%/s ", ______, "Hz  ", "s   ", },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, b1nary, },  // PG_TEMP
@@ -769,14 +770,14 @@ class Display {
                 }
                 else if (datapage == PG_BPID) {
                     drange = brake.us[absmin]-brake.us[absmax];
-                    draw_dynamic(9, brake.pid.target(), pressure.min_human(), pressure.max_human());
-                    draw_dynamic(10, brake.pid.err(), pressure.min_human()-pressure.max_human(), pressure.max_human()-pressure.min_human());
+                    draw_dynamic(9, brake.pid_targ_pc, 0.0, 100.0);
+                    draw_dynamic(10, brake.pid_err_pc, -100.0, 100.0);
                     draw_dynamic(11, brake.pid.pterm(), -drange, drange);
                     draw_dynamic(12, brake.pid.iterm(), -drange, drange);
                     draw_dynamic(13, brake.pid.dterm(), -drange, drange);
-                    draw_dynamic(14, brake.pid.outsum(), -brake.pid.outrange(), brake.pid.outrange());  // brake_spid_speedo_delta_adc, -range, range);
-                    draw_dynamic(15, brake.us[out], brake.us[absmin], brake.us[absmax]);
-                    draw_dynamic(16, pressure.native(), pressure.min_native(), pressure.max_native());
+                    draw_dynamic(14, brake.d_pres_ratio);  // brake_spid_speedo_delta_adc, -range, range);
+                    draw_dynamic(15, brake.d_posn_ratio);
+                    draw_asciiname(16, brake_pid_card[brake.activepid]);
                     draw_dynamic(17, brake.pid.kp(), 0.0, 2.0);
                     draw_dynamic(18, brake.pid.ki(), 0.0, 2.0);
                     draw_dynamic(19, brake.pid.kd(), 0.0, 2.0);
