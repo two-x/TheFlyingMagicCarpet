@@ -40,7 +40,7 @@ class QPID {
     void set_tunings(float a_kp, float a_ki, float a_kd);
     void set_tunings(float a_kp, float a_ki, float a_kd, pmod a_pmode, dmod a_dmode, awmod a_awmode);
     void set_sampletime(uint32_t a_sampletime);  // in microseconds
-    void init();        // Ensure a bumpless transfer from manual to automatic mode
+    void init(float preload_output = NAN);        // Ensure a bumpless transfer from manual to automatic mode
     void reset();             // Clears _pterm, _iterm, _dterm and _outsum values
     void set_kp(float a_kp) { set_tunings(a_kp, dispki, dispkd, _pmode, _dmode, _awmode); }  // Soren
     void set_ki(float a_ki) { set_tunings(dispkp, a_ki, dispkd, _pmode, _dmode, _awmode); }  // Soren
@@ -200,7 +200,8 @@ void QPID::set_mode(ctrl a_mode) {
 }
 void QPID::set_mode(int a_mode) { set_mode((ctrl)a_mode); }
 // Does all the things that need to happen to ensure a bumpless transfer from manual to automatic mode.
-void QPID::init() {
+void QPID::init(float preload_output) {
+    if (!std::isnan(preload_output)) _output = preload_output;
     _outsum = _output;  // Soren
     lastin = *myin;
     _outsum = constrain(_outsum, *_outmin, *_outmax);
