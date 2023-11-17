@@ -703,7 +703,7 @@ class Display {
                 draw_dynamic(2, speedo.filt(), 0.0, speedo.redline_mph(), gas.cruisepid.target());
                 draw_dynamic(3, tach.filt(), 0.0, tach.redline_rpm(), gas.pid.target());
                 draw_dynamic(4, gas.pc[out], gas.pc[opmin], gas.pc[opmax]);
-                draw_dynamic(5, pressure.filt(), pressure.min_human(), pressure.max_human(), brake.pres_pid.target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
+                draw_dynamic(5, pressure.filt(), pressure.min_human(), pressure.max_human(), brake.pid.target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
                 draw_dynamic(6, brake.pc[out], brake.pc[opmin], brake.pc[opmax]);
                 draw_dynamic(7, hotrc.pc[horz][filt], hotrc.pc[horz][opmin], hotrc.pc[horz][opmax]);
                 draw_dynamic(8, steer.pc[out], steer.pc[opmin], steer.pc[opmax]);
@@ -769,17 +769,17 @@ class Display {
                 }
                 else if (datapage == PG_BPID) {
                     drange = brake.us[absmin]-brake.us[absmax];
-                    draw_dynamic(9, brake.pres_pid.target(), pressure.min_human(), pressure.max_human());
-                    draw_dynamic(10, brake.pres_pid.err(), pressure.min_human()-pressure.max_human(), pressure.max_human()-pressure.min_human());
-                    draw_dynamic(11, brake.pres_pid.pterm(), -drange, drange);
-                    draw_dynamic(12, brake.pres_pid.iterm(), -drange, drange);
-                    draw_dynamic(13, brake.pres_pid.dterm(), -drange, drange);
-                    draw_dynamic(14, brake.pres_pid.outsum(), -brake.pres_pid.outrange(), brake.pres_pid.outrange());  // brake_spid_speedo_delta_adc, -range, range);
+                    draw_dynamic(9, brake.pid.target(), pressure.min_human(), pressure.max_human());
+                    draw_dynamic(10, brake.pid.err(), pressure.min_human()-pressure.max_human(), pressure.max_human()-pressure.min_human());
+                    draw_dynamic(11, brake.pid.pterm(), -drange, drange);
+                    draw_dynamic(12, brake.pid.iterm(), -drange, drange);
+                    draw_dynamic(13, brake.pid.dterm(), -drange, drange);
+                    draw_dynamic(14, brake.pid.outsum(), -brake.pid.outrange(), brake.pid.outrange());  // brake_spid_speedo_delta_adc, -range, range);
                     draw_dynamic(15, brake.us[out], brake.us[absmin], brake.us[absmax]);
                     draw_dynamic(16, pressure.native(), pressure.min_native(), pressure.max_native());
-                    draw_dynamic(17, brake.pres_pid.kp(), 0.0, 2.0);
-                    draw_dynamic(18, brake.pres_pid.ki(), 0.0, 2.0);
-                    draw_dynamic(19, brake.pres_pid.kd(), 0.0, 2.0);
+                    draw_dynamic(17, brake.pid.kp(), 0.0, 2.0);
+                    draw_dynamic(18, brake.pid.ki(), 0.0, 2.0);
+                    draw_dynamic(19, brake.pid.kd(), 0.0, 2.0);
                 }
                 else if (datapage == PG_GPID) {
                     draw_dynamic(9, gas.pid.target(), 0.0, tach.redline_rpm());
@@ -1005,9 +1005,9 @@ void tuner_update(int rmode) {
             else if (sel_val == 10) throttle.cycle_idlemode(idelta);
         }
         else if (datapage == PG_BPID) {
-            if (sel_val == 8) brake.pres_pid.add_kp(0.001 * fdelta);
-            else if (sel_val == 9) brake.pres_pid.add_ki(0.001 * fdelta);
-            else if (sel_val == 10) brake.pres_pid.add_kd(0.001 * fdelta);
+            if (sel_val == 8) brake.pid.add_kp(0.001 * fdelta);
+            else if (sel_val == 9) brake.pid.add_ki(0.001 * fdelta);
+            else if (sel_val == 10) brake.pid.add_kd(0.001 * fdelta);
         }
         else if (datapage == PG_GPID) {
             if (sel_val == 7) { adj_bool(&(gas.openloop), idelta); }  // gas_pid.SetMode (gas_open_loop ? QPID::ctrl::manual : QPID::ctrl::automatic);

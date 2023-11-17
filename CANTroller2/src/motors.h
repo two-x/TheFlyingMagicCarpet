@@ -351,14 +351,17 @@ class JagMotor : public ServoMotor {
 };
 class BrakeMotor : public JagMotor {
   public:
+    enum brake_pids : int { prespid, posnpid, num_brakepids };
     bool autostopping = false, reverse = false, openloop = false;
     // float duty_pc = 25;
     Timer stopcar_timer, interval_timer;  // How much time between increasing brake force during auto-stop if car still moving?    // How long before giving up on trying to stop car?
-    QPID pres_pid, posn_pid;  // brake changes from pressure target to position target as pressures decrease, and vice versa
+    QPID pids[num_brakepids];  // brake changes from pressure target to position target as pressures decrease, and vice versa
+    int activepid = posnpid, activepid_last = posnpid;
+    QPID &pid = pids[activepid];
+    float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2;
     BrakeMotor() {}  // Brake(int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin); 
     void derive() {
         JagMotor::derive();
-        posn_xover_slope_pcperin2 = 100 / (brakepos->min_human() * brakepos->min_human());  // this inversion point is where position control changes to pressure control
     }
     void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brakepos) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         printf("Brake motor..\n");
@@ -366,13 +369,60 @@ class BrakeMotor : public JagMotor {
         pressure = _pressure;  // press_pin = _press_pin;
         brakepos = _brakepos;  // posn_pin = _posn_pin;
         duty_pc = 25.0;
+        // activepid = (d_pres_ratio >= d_posn_ratio) ? prespid : posnpid;
+        pres_last = pressure->human();
+        posn_last = brakepos->human();
         derive();
-        pres_pid.init(pressure->filt_ptr(), &(pc[opmin]), &(pc[opmax]), initial_kp, initial_ki, initial_kd, QPID::pmod::onerr,
+        pids[prespid].init(pressure->filt_ptr(), &(pc[opmin]), &(pc[opmax]), initial_kp, initial_ki, initial_kd, QPID::pmod::onerr,
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_period_us, QPID::ctrl::manual, QPID::centmod::on, pc[stop]);
-        posn_pid.init(brakepos->filt_ptr(), &(pc[opmin]), &(pc[opmax]), posn_initial_kp, posn_initial_ki, posn_initial_kd, QPID::pmod::onerr, 
+        pids[posnpid].init(brakepos->filt_ptr(), &(pc[opmin]), &(pc[opmax]), posn_initial_kp, posn_initial_ki, posn_initial_kd, QPID::pmod::onerr, 
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::reverse, pid_period_us, QPID::ctrl::manual, QPID::centmod::on, pc[stop]);
         interval_timer.set(interval_timeout);
         stopcar_timer.set(stopcar_timeout);
+    }
+  private:
+    BrakePositionSensor* brakepos;
+    PressureSensor* pressure;
+    float initial_kp = 0.323;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+    float initial_ki = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+    float initial_kd = 0.000;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+    float posn_initial_kp = 1.5;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+    float posn_initial_ki = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+    float posn_initial_kd = 0.000;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+    uint32_t pid_period_us = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+    static const uint32_t interval_timeout = 1000000;  // How often to apply increment during auto-stopping (in us)
+    static const uint32_t stopcar_timeout = 8000000;  // How often to apply increment during auto-stopping (in us)
+    float d_pres_ratio, d_posn_ratio, pres_out, posn_out, pc_out_last, posn_last, pres_last;
+    // float posn_inflect, pres_inflect, pc_inflect; 
+    float pid_out() {  // when brake pressure is low enough, control output based more on position than pressure
+        pc[out] = pid.compute();  // get output accordiing to pressure pid
+        float pres_now = pressure->human();
+        float posn_now = brakepos->human();
+        d_pres_ratio = std::abs(pres_now - pres_last) / (pressure->max_human() - pressure->min_human());  // calc pressure derivative (change since last reading)
+        d_posn_ratio = std::abs(posn_now - posn_last) / (brakepos->max_human() - brakepos->min_human());  // calc pressure derivative (change since last reading)
+        activepid = (d_pres_ratio >= d_posn_ratio) ? prespid : posnpid;
+        if (activepid != activepid_last) {
+            pid = pids[activepid];
+            pid.init(pids[!activepid].output());
+            // posn_inflect = posn_now; pres_inflect = pres_now;
+        }
+        pres_last = pres_out;
+        posn_last = posn_out;
+        activepid_last = activepid;
+        return pc[out];
+    }
+    void fault_filter() {
+        // 1. Detect  brake chain is not connected (evidenced by change in brake position without expected pressure changes)
+        // 2. Detect obstruction, motor failure, or inaccurate position. Evidenced by motor instructed to move but position not changing even when pressure is low.
+        // 3. Detet brake hydraulics failure or inaccurate pressure. Evidenced by normal positional change not causing expected increase in pressure.
+        // retract_effective_max_us = volt[stop] + duty_pc * (volt[opmax] - volt[stop]);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
+    }
+  public:
+    void autostop_initial(bool panic) { set_pidtarg(smax(panic ? panic_initial_pc : hold_initial_pc, pid.target())); }
+    void autostop_increment(bool panic) { set_pidtarg(smin(pid.target() + panic ? panic_increment_pc : hold_increment_pc, 100.0)); }
+    void set_pidtarg(float targ_pc) {
+        if (activepid == prespid) pid.set_target(pressure->min_human() + targ_pc * (pressure->max_human() - pressure->min_human()) / 100.0);
+        else pid.set_target(brakepos->max_human() - targ_pc * (brakepos->max_human() - brakepos->min_human()) / 100);
     }
     void update(int runmode) {
         // Brakes - Determine motor output and write it to motor
@@ -394,7 +444,7 @@ class BrakeMotor : public JagMotor {
             else if (runmode == CAL || runmode == BASIC || runmode == ASLEEP || (runmode == SHUTDOWN && !shutdown_incomplete))
                 pc[out] = pc[stop];
             else {  // First attenuate max power to avoid blowing out the motor like in bm2023, if retracting, as a proportion of position from zeropoint to fully retracted
-                pc[out] = pid_merged_out(); // Otherwise the pid control is active
+                pc[out] = pid_out(); // Otherwise the pid control is active
             }
             // Step 2 : Fix motor pc value if it's out of range or exceeding positional limits
             if (runmode == CAL && cal_joyvert_brkmotor_mode)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
@@ -411,43 +461,6 @@ class BrakeMotor : public JagMotor {
                || (runmode == SHUTDOWN && !shutdown_incomplete) || (runmode == ASLEEP)))
                 write_motor();
         }
-    }
-  private:
-    BrakePositionSensor* brakepos;
-    PressureSensor* pressure;
-    float initial_kp = 0.323;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-    float initial_ki = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-    float initial_kd = 0.000;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-    float posn_initial_kp = 1.5;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-    float posn_initial_ki = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-    float posn_initial_kd = 0.000;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-    uint32_t pid_period_us = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
-    static const uint32_t interval_timeout = 1000000;  // How often to apply increment during auto-stopping (in us)
-    static const uint32_t stopcar_timeout = 8000000;  // How often to apply increment during auto-stopping (in us)
-    float posn_xover_slope_pcperin2;
-    float d_posn_d_pres, d_pres_dt, pres_out, posn_out, pc_out_last, posn_out_last, pres_out_last, posn_xover_in = 2.2;
-    float pid_merged_out() {  // when brake pressure is low enough, control output based more on position than pressure
-        pres_out = pres_pid.compute();  // get output accordiing to pressure pid
-        posn_out = posn_pid.compute();  // get output accordiing to position pid
-        d_pres_dt = (pres_out - pres_out_last);  // calc pressure derivative (change since last reading)
-        float pres_ratio = 1;  // initially assume fully pressure-based result
-        // if (d_pres_out <= 0.02) {  // if p
-        //     d_posn_d_pc = (brakepos->human() - posn_out_last) / d_pc_dt;
-        //     if ((d_posn_d_pc > 1) ^ (d_posn_d_pc_last > 1)) posn_xover_in = (1 - smin(d_posn_d_pc, d_posn_d_pc_last)) + map(1, d_posn_d_pc, d_posn_d_pc_last,);
-
-
-        pres_out_last = pres_out;
-        posn_out_last = posn_out;
-        pc_out_last = pc[out];
-
-        pc[out] = pres_out;
-        return pc[out];
-    }
-    void fault_filter() {
-        // 1. Detect  brake chain is not connected (evidenced by change in brake position without expected pressure changes)
-        // 2. Detect obstruction, motor failure, or inaccurate position. Evidenced by motor instructed to move but position not changing even when pressure is low.
-        // 3. Detet brake hydraulics failure or inaccurate pressure. Evidenced by normal positional change not causing expected increase in pressure.
-        // retract_effective_max_us = volt[stop] + duty_pc * (volt[opmax] - volt[stop]);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
     }
 };
 class SteerMotor : public JagMotor {
