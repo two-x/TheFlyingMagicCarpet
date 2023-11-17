@@ -819,6 +819,7 @@ class Tachometer : public PulseSensor<float> {
     bool engine_stopped() { return stopped(); }
     float redline_rpm() { return _human.max(); }
     float govern_rpm() { return _govern_rpm; }
+    float* govern_rpm_ptr() { return &_govern_rpm; }
     void set_govern_rpm(float newgovern) { _govern_rpm = newgovern; }
     float abs_max_rpm() { return _abs_max_rpm; }
     float* redline_rpm_ptr() { return _human.max_ptr(); }

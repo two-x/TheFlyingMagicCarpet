@@ -48,16 +48,16 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (autostopping) {
                 if (speedo.car_stopped() || brake.stopcar_timer.expired()) cmd = req_off; 
                 else if (brake.interval_timer.expireset())
-                    brake.pid.set_target(smin(brake.pid.target() + (panicstop ? pressure.panic_increment_psi : pressure.hold_increment_psi), pressure.max_human()));
+                    brake.pres_pid.set_target(smin(brake.pres_pid.target() + (panicstop ? pressure.panic_increment_psi : pressure.hold_increment_psi), pressure.max_human()));
             }
             if (cmd == req_tog) cmd = (req)(!autostopping);
             if (autostopping && cmd == req_off) {
-                brake.pid.set_target(pressure.min_psi());
+                brake.pres_pid.set_target(pressure.min_psi());
                 autostopping = false;
             }
             else if (!autostopping && cmd == req_on && !speedo.car_stopped()) {
                 throttle.goto_idle();  // Keep target updated to possibly changing idle value
-                brake.pid.set_target(smax(pressure.filt(), (panicstop ? pressure.panic_initial_psi : pressure.hold_initial_psi)));
+                brake.pres_pid.set_target(smax(pressure.filt(), (panicstop ? pressure.panic_initial_psi : pressure.hold_initial_psi)));
                 brake.interval_timer.reset();
                 brake.stopcar_timer.reset();
                 autostopping = true;
@@ -164,8 +164,8 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if ((speedo.car_stopped() || allow_rolling_start) && ignition && !panicstop && !tach.engine_stopped()) mode = HOLD;  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
     }
     void run_stallMode() {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
-        if (hotrc.joydir(vert) != joy_down) brake.pid.set_target(pressure.min_human());  // If in deadband or being pushed up, no pressure target
-        else brake.pid.set_target(map (hotrc.pc[vert][filt], hotrc.pc[vert][dbbot], hotrc.pc[vert][opmin], pressure.min_human(), pressure.max_human()));  // Scale joystick value to pressure adc setpoint
+        if (hotrc.joydir(vert) != joy_down) brake.pres_pid.set_target(pressure.min_human());  // If in deadband or being pushed up, no pressure target
+        else brake.pres_pid.set_target(map (hotrc.pc[vert][filt], hotrc.pc[vert][dbbot], hotrc.pc[vert][opmin], pressure.min_human(), pressure.max_human()));  // Scale joystick value to pressure adc setpoint
         if (starter || !tach.engine_stopped()) mode = HOLD;  // If we started the car, enter hold mode once starter is released
     }
     void run_holdMode() {
@@ -190,15 +190,15 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             else throttle.goto_idle();  // Else let off gas (if gas using PID mode)
             
             if (_joydir == joy_down)  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
-                brake.pid.set_target(map(hotrc.pc[vert][filt], hotrc.pc[vert][dbbot], hotrc.pc[vert][opmin], pressure.min_human(), pressure.max_human()));
-            else brake.pid.set_target(pressure.min_human());  // Else let off the brake   
+                brake.pres_pid.set_target(map(hotrc.pc[vert][filt], hotrc.pc[vert][dbbot], hotrc.pc[vert][opmin], pressure.min_human(), pressure.max_human()));
+            else brake.pres_pid.set_target(pressure.min_human());  // Else let off the brake   
         }
         if (flycruise_toggle_request) mode = CRUISE;  // enter cruise mode by pressing hrc ch4 button
         flycruise_toggle_request = false;
     }
     void run_cruiseMode() {
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
-            brake.pid.set_target(pressure.min_human());  // Let off the brake and keep it there till out of Cruise mode
+            brake.pres_pid.set_target(pressure.min_human());  // Let off the brake and keep it there till out of Cruise mode
             gas.cruisepid.set_target(speedo.filt());  // set pid loop speed target to current speed  (for pid_suspend_fly mode)
             gas.pid.set_target(tach.filt());  // initialize pid output (rpm target) to current rpm  (for pid_suspend_fly mode)
             gas.cruise_target_pc = gas.pc[out];  //  set target throttle angle to current throttle angle  (for throttle_angle/throttle_delta modes)
