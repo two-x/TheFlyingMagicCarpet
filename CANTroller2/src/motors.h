@@ -354,6 +354,7 @@ class BrakeMotor : public JagMotor {
     void activate_pid(int newpid) {
         activepid = newpid;
         pid = pids[activepid];
+        posn_pid_active = (activepid == posnpid);
         activepid_last = activepid;
         pid.init(pids[!activepid].output());
     }
@@ -363,7 +364,8 @@ class BrakeMotor : public JagMotor {
     // float duty_pc = 25;
     Timer stopcar_timer, interval_timer;  // How much time between increasing brake force during auto-stop if car still moving?    // How long before giving up on trying to stop car?
     QPID pids[num_brakepids];  // brake changes from pressure target to position target as pressures decrease, and vice versa
-    int activepid = posnpid, activepid_last = posnpid;
+    int activepid = prespid, activepid_last = prespid;
+    bool posn_pid_active = (activepid == posnpid);
     QPID &pid = pids[activepid];
     float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2, d_pres_ratio, d_posn_ratio, pid_targ_pc, pid_err_pc;
     BrakeMotor() {}  // Brake(int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin); 
@@ -377,7 +379,7 @@ class BrakeMotor : public JagMotor {
         brakepos = _brakepos;  // posn_pin = _posn_pin;
         duty_pc = 25.0;
         // activepid = (d_pres_ratio >= d_posn_ratio) ? prespid : posnpid;
-        if (!brake_hybrid_pid) activate_pid(prespid);
+        // if (!brake_hybrid_pid) activate_pid(prespid);
         pres_last = pressure->human();
         posn_last = brakepos->human();
         derive();
