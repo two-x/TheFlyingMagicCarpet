@@ -35,7 +35,6 @@
 #define DPNK 0xfa8a  // we need all shades of pink
 #define LPNK 0xfe18  // especially light pink, the champagne of pinks
 // 5-6-5 color picker site: http://www.barth-dev.de/online/rgb565  // named colors: https://wiki.tcl-lang.org/page/Colors+with+Names
-
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
 #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
 #define disp_lines 20  // Max lines of text displayable at line height = disp_line_height_pix
@@ -115,7 +114,7 @@ int32_t colorcard[arraysize(modecard)] = { MGT, MBLU, RED, ORG, YEL, GRN, TEAL, 
 char sensorcard[14][7] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 
 char idlemodecard[3][7] = { "direct", "cntrol", "minimz" };
-char idlestatecard[Throttle::targetstates::num_states][7] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
+char idlestatecard[IdleControl::targetstates::num_states][7] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
 
 // These defines are just a convenience to keep the below datapage strings array initializations aligned in neat rows & cols for legibility
 #define stEr "St\x88r"
@@ -232,7 +231,6 @@ void set_idiotcolors() {
         disp_idiots_dirty = true;
     }
 }
-
 // tuning-ui related globals
 enum disp_draw { ERASE = -1 };
 enum tunctrls { OFF, SELECT, EDIT };
@@ -240,7 +238,6 @@ int tunctrl = OFF, tunctrl_last = OFF;
 int datapage = PG_RUN, datapage_last = PG_TEMP;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
 int sel_val = 0, sel_val_last = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
 Timer tuningCtrlTimer (25000000);  // This times out edit mode after a a long period of inactivity
-
 class Display {
     private:
         TFT_eSPI _tft = TFT_eSPI();
@@ -758,17 +755,17 @@ class Display {
                     draw_dynamic(19, brake.duty_pc, 0.0, 100.0);
                 }
                 else if (datapage == PG_IDLE) {
-                    draw_asciiname(9, idlestatecard[throttle.targetstate]);
+                    draw_asciiname(9, idlestatecard[idlectrl.targetstate]);
                     draw_dynamic(10, gas.pid.target(), 0.0, tach.redline_rpm());
-                    draw_dynamic(11, throttle.stallpoint, throttle.idle_absmin, throttle.idle_absmax);
-                    draw_dynamic(12, throttle.idle_rpm, throttle.idle_absmin, throttle.idle_absmax);  // throttle.idlehot(), throttle.idlecold());
-                    draw_dynamic(13, throttle.idlehigh, throttle.idle_absmin, throttle.idle_absmax);
-                    draw_dynamic(14, throttle.idlecold, throttle.idle_absmin, throttle.idle_absmax, -1, 4);
-                    draw_dynamic(15, throttle.idlehot, throttle.idle_absmin, throttle.idle_absmax, -1, 4);
-                    draw_dynamic(16, throttle.tempcold, temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
-                    draw_dynamic(17, throttle.temphot, temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
-                    draw_dynamic(18, (int32_t)throttle.settlerate_rpmps, 0, 500);
-                    draw_asciiname(19, idlemodecard[(int32_t)throttle.idlemode]);
+                    draw_dynamic(11, idlectrl.stallpoint, idlectrl.idle_absmin, idlectrl.idle_absmax);
+                    draw_dynamic(12, idlectrl.idle_rpm, idlectrl.idle_absmin, idlectrl.idle_absmax);  // idlectrl.idlehot(), idlectrl.idlecold());
+                    draw_dynamic(13, idlectrl.idlehigh, idlectrl.idle_absmin, idlectrl.idle_absmax);
+                    draw_dynamic(14, idlectrl.idlecold, idlectrl.idle_absmin, idlectrl.idle_absmax, -1, 4);
+                    draw_dynamic(15, idlectrl.idlehot, idlectrl.idle_absmin, idlectrl.idle_absmax, -1, 4);
+                    draw_dynamic(16, idlectrl.tempcold, temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
+                    draw_dynamic(17, idlectrl.temphot, temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
+                    draw_dynamic(18, (int32_t)idlectrl.settlerate_rpmps, 0, 500);
+                    draw_asciiname(19, idlemodecard[(int32_t)idlectrl.idlemode]);
                 }
                 else if (datapage == PG_BPID) {
                     drange = brake.us[absmin]-brake.us[absmax];
@@ -787,7 +784,7 @@ class Display {
                 }
                 else if (datapage == PG_GPID) {
                     draw_dynamic(9, gas.pid.target(), 0.0, tach.redline_rpm());
-                    draw_dynamic(10, gas.pid.err(), throttle.idle_rpm - tach.govern_rpm(), tach.govern_rpm() - throttle.idle_rpm);
+                    draw_dynamic(10, gas.pid.err(), idlectrl.idle_rpm - tach.govern_rpm(), tach.govern_rpm() - idlectrl.idle_rpm);
                     draw_dynamic(11, gas.pid.pterm(), -100.0, 100.0);
                     draw_dynamic(12, gas.pid.iterm(), -100.0, 100.0);
                     draw_dynamic(13, gas.pid.dterm(), -100.0, 100.0);
@@ -799,7 +796,7 @@ class Display {
                     draw_dynamic(19, gas.pid.kd(), 0.0, 1.0);
                 }
                 else if (datapage == PG_CPID) {
-                    drange = tach.govern_rpm() - throttle.idle_rpm;
+                    drange = tach.govern_rpm() - idlectrl.idle_rpm;
                     draw_dynamic(9, gas.cruisepid.target(), 0.0, speedo.govern_mph());
                     draw_dynamic(10, gas.cruisepid.err(), speedo.idle_mph()-speedo.govern_mph(), speedo.govern_mph()-speedo.idle_mph());
                     draw_dynamic(11, gas.cruisepid.pterm(), -drange, drange);
@@ -983,9 +980,9 @@ void tuner_update(int rmode) {
             else if (sel_val == 10) { adj_val(&hotrc.deadband_us, idelta, 0, 50); hotrc.calc_params(); }
         }
         else if (datapage == PG_SENS) {
-            if (sel_val == 2) throttle.add_idlehot(0.1 * fdelta);
-            else if (sel_val == 3) throttle.add_idlecold(0.1 * fdelta);
-            else if (sel_val == 4) adj_val(tach.redline_rpm_ptr(), 0.1 * fdelta, throttle.idlehigh, tach.abs_max_rpm());
+            if (sel_val == 2) idlectrl.add_idlehot(0.1 * fdelta);
+            else if (sel_val == 3) idlectrl.add_idlecold(0.1 * fdelta);
+            else if (sel_val == 4) adj_val(tach.redline_rpm_ptr(), 0.1 * fdelta, idlectrl.idlehigh, tach.abs_max_rpm());
             else if (sel_val == 5) adj_val(airvelo.max_mph_ptr(), 0.01 * fdelta, 0, airvelo.abs_max_mph());
             else if (sel_val == 6) adj_val(mapsens.min_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
             else if (sel_val == 6) adj_val(mapsens.max_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
@@ -1000,13 +997,13 @@ void tuner_update(int rmode) {
             else if (sel_val == 10) { adj_val(&(brake.duty_pc), fdelta, 0.0, 100.0); brake.derive(); }
         }
         else if (datapage == PG_IDLE) {
-            if (sel_val == 4) throttle.add_idlehigh(fdelta);
-            else if (sel_val == 5) throttle.add_idlecold(fdelta);
-            else if (sel_val == 6) throttle.add_idlehot(fdelta);
-            else if (sel_val == 7) throttle.add_tempcold(fdelta);
-            else if (sel_val == 8) throttle.add_temphot(fdelta);
-            else if (sel_val == 9) throttle.add_settlerate(idelta);
-            else if (sel_val == 10) throttle.cycle_idlemode(idelta);
+            if (sel_val == 4) idlectrl.add_idlehigh(fdelta);
+            else if (sel_val == 5) idlectrl.add_idlecold(fdelta);
+            else if (sel_val == 6) idlectrl.add_idlehot(fdelta);
+            else if (sel_val == 7) idlectrl.add_tempcold(fdelta);
+            else if (sel_val == 8) idlectrl.add_temphot(fdelta);
+            else if (sel_val == 9) idlectrl.add_settlerate(idelta);
+            else if (sel_val == 10) idlectrl.cycle_idlemode(idelta);
         }
         else if (datapage == PG_BPID) {
             if (sel_val == 8) brake.pid.add_kp(0.001 * fdelta);

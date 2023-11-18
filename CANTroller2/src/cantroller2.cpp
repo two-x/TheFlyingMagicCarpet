@@ -76,10 +76,10 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     sim.register_device(sens::mapsens, mapsens, mapsens.source());
     sim.register_device(sens::tach, tach, tach.source());
     sim.register_device(sens::speedo, speedo, speedo.source());
-    throttle.init(gas.pid.target_ptr(), tach.human_ptr(), tach.filt_ptr(),
-        tempsens.get_sensor(loc::engine), temp_lims_f[ENGINE][OP_MIN], temp_lims_f[ENGINE][WARNING], 50, Throttle::idlemodes::control);
+    idlectrl.init(gas.pid.target_ptr(), tach.human_ptr(), tach.filt_ptr(),
+        tempsens.get_sensor(loc::engine), temp_lims_f[ENGINE][OP_MIN], temp_lims_f[ENGINE][WARNING], 50, IdleControl::idlemodes::control);
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);
-    gas.init(gas_pwm_pin, 60, &hotrc, &speedo, &tach, &pot, &throttle);
+    gas.init(gas_pwm_pin, 60, &hotrc, &speedo, &tach, &pot, &idlectrl);
     brake.init(brake_pwm_pin, 50, &hotrc, &speedo, &mulebatt, &pressure, &brakepos);
     steer.init(steer_pwm_pin, 50, &hotrc, &speedo, &mulebatt);
     if (display_enabled) {
