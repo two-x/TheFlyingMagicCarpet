@@ -99,12 +99,12 @@ bool autostop_disabled = false;      // Temporary measure to keep brake behaving
 bool allow_rolling_start = false;    // May be a smart prerequisite, may be us putting obstacles in our way
 bool flip_the_screen = true;
 bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
+bool display_enabled = true;  // Should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
 // Dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
 bool usb_jtag = true;                // If you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)
 bool dont_take_temperatures = false; // In case debugging dallas sensors or causing problems
 bool console_enabled = true;         // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
 bool keep_system_powered = false;    // Use true during development
-bool screensaver = false;            // Can enable experiment with animated screen draws
 bool looptime_print = false;         // Makes code write out timestamps throughout loop to serial port
 bool touch_reticles = true;
 
@@ -149,6 +149,7 @@ bool powering_up = false;            // minor state variable for asleep mode
 bool calmode_request = false;
 bool flycruise_toggle_request = false;
 int sleep_request = req_na;
+bool screensaver = false;            // Can enable experiment with animated screen draws
 
 inline float smax(float a, float b) { return (a > b) ? a : b; }
 inline int32_t smax(int32_t a, int32_t b) { return (a > b) ? a : b; }
