@@ -109,7 +109,7 @@ void loop() {
     brakepos.update();  // Brake position
     tach.update();  // Tach
     speedo.update();  // Speedo
-    lightbox.update(run.mode, speedo.human());
+    // lightbox.update(run.mode, speedo.human());
     pressure.update();  // Brake pressure
     mulebatt.update();
     lipobatt.update();
