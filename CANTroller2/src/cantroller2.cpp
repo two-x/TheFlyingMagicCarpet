@@ -1,7 +1,7 @@
 // Carpet CANTroller II  Source Code  - For ESP32-S3-DevKitC-1-N8
 #include "globals.h"
 #include "uictrl.h"
-#include "mapsens.h"
+#include "i2cbus.h"
 #include "sensors.h"
 #include "temperature.h"
 #include "motors.h"  // qpid.h is included from within motors.h
@@ -67,6 +67,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     i2c.init();
     airvelo.setup(); // must be done after i2c is started
     mapsens.setup();
+    lightbox.init();
     tempsens.setup();  // Onewire bus and temp sensors
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Create a new task that runs the update_temperature_sensors function
     printf("Simulator setup..\n");
@@ -108,6 +109,7 @@ void loop() {
     brakepos.update();  // Brake position
     tach.update();  // Tach
     speedo.update();  // Speedo
+    lightbox.update(run.mode, speedo.human());
     pressure.update();  // Brake pressure
     mulebatt.update();
     lipobatt.update();

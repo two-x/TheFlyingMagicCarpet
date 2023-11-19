@@ -278,36 +278,3 @@ class Timer {  // !!! beware, this 54-bit microsecond timer overflows after ever
 //     int64_t IRAM_ATTR elapsed() { return esp_timer_get_time() + timeout - end; }
 //     int64_t timeout() { return timeout; }
 // }
-class I2C {
-  private:
-    int32_t _devicecount = 0;
-    uint8_t _addrs[10];
-    uint8_t _sda_pin, _scl_pin;
-    Timer scanTimer;
-  public:
-    I2C(uint8_t sda_pin_arg, uint8_t scl_pin_arg) : _sda_pin(sda_pin_arg), _scl_pin(scl_pin_arg) {}
-    void init() {
-        printf("Init i2c bus and devices.."); delay(1);  // Attempt to force print to happen before init
-        scanTimer.reset();
-        Wire.begin(_sda_pin, _scl_pin);  // I2c bus needed for airflow sensor
-        byte error, address;
-        printf(" scanning ...");
-        _devicecount = 0;
-        for (address = 1; address < 127; address++ ) {
-            Wire.beginTransmission(address);
-            error = Wire.endTransmission();
-            if (error == 0) {
-                printf (" found addr: 0x%s%x", (address < 16) ? "0" : "", address);
-                _addrs[_devicecount++] = address;
-            }
-            else if (error==4) printf (" error addr: 0x%s%x", (address < 16) ? "0" : "", address);
-        }
-        if (scanTimer.elapsed() > 5000000) printf(" timeout & fail bus scan.");
-        if (_devicecount == 0) printf(" no devices found.");
-        printf(" done\n");
-    }
-    bool device_detected(uint8_t addr) {
-        for (int32_t i=0; i < _devicecount; i++) if (_addrs[i] == addr) return true;
-        return false;
-    }
-};
