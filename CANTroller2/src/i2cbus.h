@@ -158,7 +158,7 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     }
     bool sendrunmode(int runmode) {
         if (runmode == runmode_last) return false;
-        uint8_t byt = (uint8_t)(runmode & 0x0f);  // command template for speed update
+        uint8_t byt = (uint8_t)(runmode & 0x0f);  // command template for runmode update
         Wire.beginTransmission(addr);
         Wire.write(byt);
         Wire.beginTransmission(addr);
@@ -167,7 +167,7 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     }
     bool sendspeed(float _speed) {
         uint8_t byt = 0x10;  // command template for speed update
-        uint16_t speed = (uint16_t)(_speed / 100);
+        uint16_t speed = (uint16_t)(_speed * 100);
         if (speed == speed_last) return false;
         byt |= ((speed >> 8) & 0x0f);
         Wire.beginTransmission(addr);
