@@ -90,9 +90,11 @@ enum cruise_modes : int { pid_suspend_fly, throttle_angle, throttle_delta };
 enum sw_presses : int { NONE, SHORT, LONG }; // used by encoder sw and button algorithms
 enum temp_categories : int { AMBIENT = 0, ENGINE = 1, WHEEL = 2, num_temp_categories };
 enum temp_lims : int { DISP_MIN, OP_MIN, OP_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
+enum brake_pids : int { prespid, posnpid, num_brakepids };
 
 // global configuration settings
-bool brake_hybrid_pid = true;
+bool brake_hybrid_pid = false;
+int brake_default_pid = prespid;
 bool starter_signal_support = true;
 bool remote_start_support = true;
 bool autostop_disabled = false;      // Temporary measure to keep brake behaving until we get it debugged. Eventually should be false

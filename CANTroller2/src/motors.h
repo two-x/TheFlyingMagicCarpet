@@ -200,6 +200,54 @@ class ServoMotor {
     }
     void write_motor() { motor.writeMicroseconds((int32_t)(us[out])); }
 };
+class JagMotor : public ServoMotor {
+  protected:
+    CarBattery* mulebatt;
+    static constexpr float car_batt_fake_v = 12.0;
+    uint32_t volt_check_period_us = 3500000;
+    Timer volt_check_timer;
+  public:
+    float duty_pc = 100;  // default. subclasses override as necessary
+    float pc[num_motorvals] = { NAN, 0, NAN, NAN, NAN, -100, 100 };  // percent values [opmin/stop/opmax/out/-/absmin/absmax]  values range from -100% to 100% are all derived or auto-assigned
+    float nat[num_motorvals] = { NAN, 0, NAN, NAN, NAN, NAN, NAN };  // native-unit values [opmin/stop/opmax/out/-/absmin/absmax]
+    float us[num_motorvals] = { NAN, 1500, NAN, NAN, NAN, 670, 2330 };  // us pulsewidth values [-/cent/-/out/-/absmin/absmax]
+    float (&volt)[arraysize(nat)] = nat;  // our native value is volts. Create reference so nat and volt are interchangeable
+    void derive() {  // calc pc and voltage op limits from volt and us abs limits 
+        nat[absmax] = running_on_devboard ? car_batt_fake_v : mulebatt->v();
+        nat[absmin] = -(nat[absmax]);
+        pc[opmin] = pc[absmin] * duty_pc / 100.0;
+        pc[opmax] = pc[absmax] * duty_pc / 100.0;
+        nat[opmin] = map(pc[opmin], pc[stop], pc[absmin], nat[stop], nat[absmin]);
+        nat[opmax] = map(pc[opmax], pc[stop], pc[absmax], nat[stop], nat[absmax]);
+    }
+    void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {
+        ServoMotor::init(_pin, _freq, _hotrc, _speedo);
+        mulebatt = _batt;
+        volt_check_timer.set(volt_check_period_us);
+        derive();
+    }
+    float pc_to_nat(float _pc) {  // Eventually this should be linearized
+        if (_pc > pc[stop]) return map(_pc, pc[stop], pc[absmax], nat[stop], nat[absmax]);
+        if (_pc < pc[stop]) return map(_pc, pc[stop], pc[absmin], nat[stop], nat[absmin]);
+        return nat[stop];
+    }
+    float nat_to_pc(float _nat) {  // Eventually this should be linearized
+        if (_nat > nat[stop]) return map(_nat, nat[stop], nat[absmax], pc[stop], pc[absmax]);
+        if (_nat < nat[stop]) return map(_nat, nat[stop], nat[absmin], pc[stop], pc[absmin]);
+        return pc[stop];
+    }
+    float nat_to_us(float _nat) {  // works for motor with center stop value
+        if (_nat > nat[stop]) return map(_nat, nat[stop], nat[absmax], us[stop], reverse ? us[absmin] : us[absmax]);
+        if (_nat < nat[stop]) return map(_nat, nat[stop], nat[absmin], us[stop], reverse ? us[absmax] : us[absmin]);
+        return us[stop];
+    }
+    float pc_to_us(float _pc) {  // works for motor with center stop value
+        if (_pc > pc[stop]) return map(_pc, pc[stop], pc[absmax], us[stop], reverse ? us[absmin] : us[absmax]);
+        if (_pc < pc[stop]) return map(_pc, pc[stop], pc[absmin], us[stop], reverse ? us[absmax] : us[absmin]);
+        return us[stop];
+    }
+    void write_motor() { motor.writeMicroseconds((int32_t)(us[out])); }
+};
 class GasServo : public ServoMotor {
   private:
     Tachometer* tach;
@@ -275,56 +323,21 @@ class GasServo : public ServoMotor {
         }
     }
 };
-class JagMotor : public ServoMotor {
-  protected:
-    CarBattery* mulebatt;
-    static constexpr float car_batt_fake_v = 12.0;
-    uint32_t volt_check_period_us = 3500000;
-    Timer volt_check_timer;
-  public:
-    float duty_pc = 100;  // default. subclasses override as necessary
-    float pc[num_motorvals] = { NAN, 0, NAN, NAN, NAN, -100, 100 };  // percent values [opmin/stop/opmax/out/-/absmin/absmax]  values range from -100% to 100% are all derived or auto-assigned
-    float nat[num_motorvals] = { NAN, 0, NAN, NAN, NAN, NAN, NAN };  // native-unit values [opmin/stop/opmax/out/-/absmin/absmax]
-    float us[num_motorvals] = { NAN, 1500, NAN, NAN, NAN, 670, 2330 };  // us pulsewidth values [-/cent/-/out/-/absmin/absmax]
-    float (&volt)[arraysize(nat)] = nat;  // our native value is volts. Create reference so nat and volt are interchangeable
-    void derive() {  // calc pc and voltage op limits from volt and us abs limits 
-        nat[absmax] = running_on_devboard ? car_batt_fake_v : mulebatt->v();
-        nat[absmin] = -(nat[absmax]);
-        pc[opmin] = pc[absmin] * duty_pc / 100.0;
-        pc[opmax] = pc[absmax] * duty_pc / 100.0;
-        nat[opmin] = map(pc[opmin], pc[stop], pc[absmin], nat[stop], nat[absmin]);
-        nat[opmax] = map(pc[opmax], pc[stop], pc[absmax], nat[stop], nat[absmax]);
-    }
-    void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {
-        ServoMotor::init(_pin, _freq, _hotrc, _speedo);
-        mulebatt = _batt;
-        volt_check_timer.set(volt_check_period_us);
-        derive();
-    }
-    float pc_to_nat(float _pc) {  // Eventually this should be linearized
-        if (_pc > pc[stop]) return map(_pc, pc[stop], pc[absmax], nat[stop], nat[absmax]);
-        if (_pc < pc[stop]) return map(_pc, pc[stop], pc[absmin], nat[stop], nat[absmin]);
-        return nat[stop];
-    }
-    float nat_to_pc(float _nat) {  // Eventually this should be linearized
-        if (_nat > nat[stop]) return map(_nat, nat[stop], nat[absmax], pc[stop], pc[absmax]);
-        if (_nat < nat[stop]) return map(_nat, nat[stop], nat[absmin], pc[stop], pc[absmin]);
-        return pc[stop];
-    }
-    float nat_to_us(float _nat) {  // works for motor with center stop value
-        if (_nat > nat[stop]) return map(_nat, nat[stop], nat[absmax], us[stop], reverse ? us[absmin] : us[absmax]);
-        if (_nat < nat[stop]) return map(_nat, nat[stop], nat[absmin], us[stop], reverse ? us[absmax] : us[absmin]);
-        return us[stop];
-    }
-    float pc_to_us(float _pc) {  // works for motor with center stop value
-        if (_pc > pc[stop]) return map(_pc, pc[stop], pc[absmax], us[stop], reverse ? us[absmin] : us[absmax]);
-        if (_pc < pc[stop]) return map(_pc, pc[stop], pc[absmin], us[stop], reverse ? us[absmax] : us[absmin]);
-        return us[stop];
-    }
-    void write_motor() { motor.writeMicroseconds((int32_t)(us[out])); }
-};
 class BrakeMotor : public JagMotor {
   private:
+    BrakePositionSensor* brakepos;
+    PressureSensor* pressure;
+    float initial_kp = 0.142;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+    float initial_ki = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+    float initial_kd = 0.000;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+    float posn_initial_kp = 6.5;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+    float posn_initial_ki = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+    float posn_initial_kd = 0.000;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+    uint32_t pid_period_us = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+    static const uint32_t interval_timeout = 1000000;  // How often to apply increment during auto-stopping (in us)
+    static const uint32_t stopcar_timeout = 8000000;  // How often to apply increment during auto-stopping (in us)
+    float pres_out, posn_out, pc_out_last, posn_last, pres_last;
+    // float posn_inflect, pres_inflect, pc_inflect; 
     void activate_pid(int newpid) {
         if (newpid == activepid_last) return;
         activepid = newpid;
@@ -334,15 +347,15 @@ class BrakeMotor : public JagMotor {
         pid.init(pids[!activepid].output());
     }
   public:
-    enum brake_pids : int { prespid, posnpid, num_brakepids };
     bool autostopping = false, reverse = false, openloop = false;
     // float duty_pc = 25;
     Timer stopcar_timer, interval_timer;  // How much time between increasing brake force during auto-stop if car still moving?    // How long before giving up on trying to stop car?
     QPID pids[num_brakepids];  // brake changes from pressure target to position target as pressures decrease, and vice versa
-    int activepid = prespid, activepid_last = prespid;
+    int activepid = brake_default_pid, activepid_last = brake_default_pid;
     bool posn_pid_active = (activepid == posnpid);
     QPID &pid = pids[activepid];
-    float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2, d_pres_ratio, d_posn_ratio, pid_targ_pc, pid_err_pc;
+    float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2, pid_targ_pc, pid_err_pc;
+    float d_ratio[num_brakepids], outnow[num_brakepids], outlast[num_brakepids];
     BrakeMotor() {}  // Brake(int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin); 
     void derive() {
         JagMotor::derive();
@@ -352,7 +365,7 @@ class BrakeMotor : public JagMotor {
         JagMotor::init(_pin, _freq, _hotrc, _speedo, _batt);
         pressure = _pressure;  // press_pin = _press_pin;
         brakepos = _brakepos;  // posn_pin = _posn_pin;
-        duty_pc = 25.0;
+        duty_pc = 40.0;
         pres_last = pressure->human();
         posn_last = brakepos->human();
         derive();
@@ -364,32 +377,20 @@ class BrakeMotor : public JagMotor {
         stopcar_timer.set(stopcar_timeout);
     }
   private:
-    BrakePositionSensor* brakepos;
-    PressureSensor* pressure;
-    float initial_kp = 0.323;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-    float initial_ki = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-    float initial_kd = 0.000;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-    float posn_initial_kp = 1.5;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-    float posn_initial_ki = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-    float posn_initial_kd = 0.000;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-    uint32_t pid_period_us = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
-    static const uint32_t interval_timeout = 1000000;  // How often to apply increment during auto-stopping (in us)
-    static const uint32_t stopcar_timeout = 8000000;  // How often to apply increment during auto-stopping (in us)
-    float pres_out, posn_out, pc_out_last, posn_last, pres_last;
-    // float posn_inflect, pres_inflect, pc_inflect; 
+    void calc_pid_stuff(int _pid) {
+        outnow[_pid] = (_pid == prespid) ? pressure->human() : brakepos->human();
+        d_ratio[_pid] = outnow[_pid] - outlast[_pid];
+        d_ratio[_pid] /= (_pid == prespid) ? (pressure->max_human() - pressure->min_human()) : (brakepos->max_human() - brakepos->min_human());
+        outlast[_pid] = outnow[_pid];
+    }
     float pid_out() {  // feedback brake pid with position or pressure, whichever is changing more quickly
         pc[out] = pid.compute();  // get output accordiing to pressure pid
-        if (!brake_hybrid_pid) return pc[out];  // if hybrid pid is disabled, return pressure-based result and bail
-        if (activepid == prespid) pid_err_pc = pid.err() * (pressure->max_human() - pressure->min_human()) / 100;  // pid_err_pc allows us to display error value regardless which pid is active
-        else pid_err_pc = -pid.err() * (brakepos->max_human() - brakepos->min_human()) / 100;
-        float pres_now = pressure->human();
-        d_pres_ratio = (pres_now - pres_last) / (pressure->max_human() - pressure->min_human());  // calc pressure derivative (change since last reading)
-        pres_last = pres_out;
+        if (activepid == prespid) pid_err_pc = pids[prespid].err() * (pressure->max_human() - pressure->min_human()) / 100;  // pid_err_pc allows us to display error value regardless which pid is active
+        else pid_err_pc = -(pids[posnpid].err()) * (brakepos->max_human() - brakepos->min_human()) / 100;
+        calc_pid_stuff(activepid);
         if (!brake_hybrid_pid) return pc[out];
-        float posn_now = brakepos->human();
-        d_posn_ratio = (posn_now - posn_last) / (brakepos->max_human() - brakepos->min_human());  // calc pressure derivative (change since last reading)
-        activate_pid((std::abs(d_pres_ratio) >= std::abs(d_posn_ratio)) ? prespid : posnpid);
-        posn_last = posn_out;
+        calc_pid_stuff(!activepid);
+        activate_pid((std::abs(d_ratio[prespid]) >= std::abs(d_ratio[posnpid])) ? prespid : posnpid);
         return pc[out];
     }
     void fault_filter() {
@@ -442,6 +443,12 @@ class BrakeMotor : public JagMotor {
             write_motor();
         }
     }
+    float pid_kp() { return pids[activepid].kp(); }
+    float pid_ki() { return pids[activepid].ki(); }
+    float pid_kd() { return pids[activepid].kd(); }
+    void add_kp(float add) { pids[activepid].add_kp(add); }
+    void add_ki(float add) { pids[activepid].add_ki(add); }
+    void add_kd(float add) { pids[activepid].add_kd(add); }
 };
 class SteerMotor : public JagMotor {
   public:
