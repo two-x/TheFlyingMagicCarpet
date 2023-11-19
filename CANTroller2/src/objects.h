@@ -21,6 +21,7 @@ static Tachometer tach(tach_pin);
 static I2C i2c(i2c_sda_pin, i2c_scl_pin);
 static AirVeloSensor airvelo(i2c);
 static MAPSensor mapsens(i2c);
+static LightingBox lightbox;
 static IdleControl idlectrl;
 static GasServo gas;
 static BrakeMotor brake;
