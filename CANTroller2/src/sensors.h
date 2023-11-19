@@ -361,6 +361,8 @@ class Transducer : public Device {
     NATIVE_T max_native() { return _native.max(); }
     HUMAN_T min_human() { return _human.min(); }
     HUMAN_T max_human() { return _human.max(); }
+    HUMAN_T* min_human_ptr() { return _human.min_ptr(); }
+    HUMAN_T* max_human_ptr() { return _human.max_ptr(); }
     NATIVE_T* native_ptr() { return _native.ptr(); }
     HUMAN_T* human_ptr() { return _human.ptr(); }
     std::shared_ptr<NATIVE_T> native_shptr() { return _native.shptr(); }
@@ -703,8 +705,8 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         _zeropoint = std::make_shared<float>(initial_zeropoint_in);
         // Soren: this line might be why we broke our brake motor at bm23:
         // set_human_limits(op_min_retract_in, op_max_extend_in);  // wouldn't this be safer?
-        set_human_limits(abs_min_retract_in, abs_max_extend_in);            
-        set_native_limits(abs_min_retract_adc, abs_max_extend_adc);
+        set_human_limits(op_min_retract_in, op_max_extend_in);            
+        set_native_limits(op_min_retract_adc, op_max_extend_adc);
         set_can_source(src::PIN, true);
         set_can_source(src::POT, true);
     }

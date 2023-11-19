@@ -44,8 +44,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     set_pin(ignition_pin, OUTPUT, LOW);
     set_pin(syspower_pin, OUTPUT, syspower);  // Then set the put as an output as normal.
     set_pin(uart_tx_pin, INPUT);  // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
-    running_on_devboard =(read_pin(uart_tx_pin));
-    set_board_defaults();
+    running_on_devboard = (read_pin(uart_tx_pin));
     Serial.begin(115200);  // Open console serial port
     delay(800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     printf("Console started..\nUsing %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
@@ -83,10 +82,12 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     gas.init(gas_pwm_pin, 60, &hotrc, &speedo, &tach, &pot, &idlectrl);
     brake.init(brake_pwm_pin, 50, &hotrc, &speedo, &mulebatt, &pressure, &brakepos);
     steer.init(steer_pwm_pin, 50, &hotrc, &speedo, &mulebatt);
+    config.begin("FlyByWire", false);
+    datapage = config.getUInt("dpage", PG_RUN);
+    datapage_last = config.getUInt("dpage", PG_TEMP);
+    sim.set_potmap(config.getUInt("potmap", 2));  // 2 = sens::pressure
+    set_board_defaults();
     if (display_enabled) {
-        config.begin("FlyByWire", false);
-        datapage = config.getUInt("dpage", PG_RUN);
-        datapage_last = config.getUInt("dpage", PG_TEMP);
         screen.init();
         touch.init();
     }

@@ -143,7 +143,7 @@ char datapage_names[datapages::num_datapages][disp_tuning_lines][9] = {
     { "PressRaw", "BkPosRaw", __________, __________, __________, "AirSpMax", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
-    { brAk"Posn", "Pn|PrErr", "  P Term", "  I Term", "  D Term", "dPressur", " dPositn", "ActivPID", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
+    { "Pn|PrTgt", "Pn|PrErr", "  P Term", "  I Term", "  D Term", brAk"Posn", "dPressur", " dPositn", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, "OpenLoop", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
@@ -156,7 +156,7 @@ char tuneunits[datapages::num_datapages][disp_tuning_lines][5] = {
     { "adc ", "adc ", ______, ______, ______, "mph ", "psi ", "psi ", "mph ", "mph ", "in  ", },  // PG_SENS
     { degree, "us  ", "V   ", "us  ", "V   ", "us  ", ______, degree, degree, "us  ", "%   ", },  // PG_PWMS
     { scroll, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", degreF, degreF, "rpms", scroll, },  // PG_IDLE
-    { "in  ", "psin", "%   ", "%   ", "%   ", "    ", "    ", scroll, ______, "Hz  ", "s   ", },  // PG_BPID
+    { "psin", "psin", "%   ", "%   ", "%   ", "in  ", ______, ______, ______, "Hz  ", "s   ", },  // PG_BPID
     { "rpm ", "rpm ", "%   ", "%   ", "%   ", "%   ", ______, b1nary, ______, "Hz  ", "s   ", },  // PG_GPID
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%/s ", ______, "Hz  ", "s   ", },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, b1nary, },  // PG_TEMP
@@ -180,7 +180,7 @@ uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where units use symbols n
     { 0x02, 0x45, 0x25, 0x12, 0x08, 0x24, 0x52, 0x51, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // % - just because the font one is feeble
     { 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // capital omega - for ohms
     { 0x08, 0x1c, 0x2a, 0x08, 0x00, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x41, 0x3e, },  // googly eyes, to point out new features
-    { 0x3d, 0x00, 0x3e, 0x02, 0x3c, 0x00, 0x7f, 0x00, 0x7e, 0x22, 0x1c, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x3d, },  // inches or psi
+    { 0x3d, 0x00, 0x3c, 0x04, 0x38, 0x00, 0x7f, 0x00, 0x7c, 0x24, 0x18, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x3d, },  // inches or psi
 };  // These bitmaps are in the same format as the idiot light bitmaps, described below
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
 bool* idiotlights[17] = {
@@ -768,18 +768,17 @@ class Display {
                 }
                 else if (datapage == PG_BPID) {
                     drange = brake.us[absmin]-brake.us[absmax];
-                    draw_dynamic(9, brakepos.filt(), brakepos.op_min_in(), brakepos.op_max_in());
-                    // draw_dynamic(9, brake.pid_targ_pc, 0.0, 100.0);
+                    draw_dynamic(9, brake.pid_targ_pc, 0.0, 100.0);
                     draw_dynamic(10, brake.pid_err_pc, -100.0, 100.0);
                     draw_dynamic(11, brake.pid.pterm(), -drange, drange);
                     draw_dynamic(12, brake.pid.iterm(), -drange, drange);
                     draw_dynamic(13, brake.pid.dterm(), -drange, drange);
-                    draw_dynamic(14, brake.d_pres_ratio);  // brake_spid_speedo_delta_adc, -range, range);
-                    draw_dynamic(15, brake.d_posn_ratio);
-                    draw_asciiname(16, brake_pid_card[brake.activepid]);
-                    draw_dynamic(17, brake.pid.kp(), 0.0, 2.0);
-                    draw_dynamic(18, brake.pid.ki(), 0.0, 2.0);
-                    draw_dynamic(19, brake.pid.kd(), 0.0, 2.0);
+                    draw_dynamic(14, brakepos.filt(), brakepos.op_min_in(), brakepos.op_max_in());
+                    draw_dynamic(15, brake.d_ratio[prespid]);  // brake_spid_speedo_delta_adc, -range, range);
+                    draw_dynamic(16, brake.d_ratio[posnpid]);  // draw_asciiname(16, brake_pid_card[brake.activepid]);                    
+                    draw_dynamic(17, brake.pid_kp(), 0.0, 8.0);
+                    draw_dynamic(18, brake.pid_ki(), 0.0, 8.0);
+                    draw_dynamic(19, brake.pid_kd(), 0.0, 8.0);
                 }
                 else if (datapage == PG_GPID) {
                     draw_dynamic(9, gas.pid.target(), 0.0, tach.redline_rpm());
@@ -1005,9 +1004,9 @@ void tuner_update(int rmode) {
             else if (sel_val == 10) idlectrl.cycle_idlemode(idelta);
         }
         else if (datapage == PG_BPID) {
-            if (sel_val == 8) brake.pid.add_kp(0.001 * fdelta);
-            else if (sel_val == 9) brake.pid.add_ki(0.001 * fdelta);
-            else if (sel_val == 10) brake.pid.add_kd(0.001 * fdelta);
+            if (sel_val == 8) brake.add_kp(0.001 * fdelta);
+            else if (sel_val == 9) brake.add_ki(0.001 * fdelta);
+            else if (sel_val == 10) brake.add_kd(0.001 * fdelta);
         }
         else if (datapage == PG_GPID) {
             if (sel_val == 7) { adj_bool(&(gas.openloop), idelta); }  // gas_pid.SetMode (gas_open_loop ? QPID::ctrl::manual : QPID::ctrl::automatic);
@@ -1033,7 +1032,7 @@ void tuner_update(int rmode) {
             else if (sel_val == 5) sim.set_can_sim(sens::airvelo, idelta);
             else if (sel_val == 6) sim.set_can_sim(sens::mapsens, idelta);  // else if (sel_val == 7) sim.set_can_sim(sens::starter, idelta);
             else if (sel_val == 7) sim.set_can_sim(sens::basicsw, idelta);
-            else if (sel_val == 8) sim.set_potmap((adj_val(sim.potmap(), idelta, 0, arraysize(sensorcard) - 4)));            
+            else if (sel_val == 8) { sim.set_potmap((adj_val(sim.potmap(), idelta, 0, arraysize(sensorcard) - 4))); config.putUInt("potmap", sim.potmap()); }
             else if (sel_val == 9 && rmode == CAL) adj_bool(&(cal_joyvert_brkmotor_mode), idelta);
             else if (sel_val == 10 && rmode == CAL) adj_bool(&(cal_pot_gasservo_mode), (idelta < 0 || cal_pot_gasservo_ready) ? idelta : -1);
         }

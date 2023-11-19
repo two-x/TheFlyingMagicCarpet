@@ -44,17 +44,15 @@ void update_temperature_sensors(void *parameter) {
     }
 }
 void set_board_defaults() {  // true for dev boards, false for printed board (on the car)
-    if (running_on_devboard) {
-        sim.set_can_sim(sens::pressure, true);
-        sim.set_can_sim(sens::brkpos, true);
-        sim.set_can_sim(sens::tach, true);
-        sim.set_can_sim(sens::speedo, true);
-        sim.set_can_sim(sens::mapsens, true);
-        sim.set_can_sim(sens::airvelo, true);
-        sim.set_can_sim(sens::basicsw, true);
-        sim.set_potmap(sens::pressure);
-    }
-    else {  // override settings if running on the real car
+    sim.set_can_sim(sens::pressure, running_on_devboard);
+    sim.set_can_sim(sens::brkpos, running_on_devboard);
+    sim.set_can_sim(sens::tach, running_on_devboard);
+    sim.set_can_sim(sens::speedo, running_on_devboard);
+    sim.set_can_sim(sens::mapsens, running_on_devboard);
+    sim.set_can_sim(sens::airvelo, running_on_devboard);
+    sim.set_can_sim(sens::basicsw, running_on_devboard);
+    if (!running_on_devboard) {  // override settings if running on the real car
+        sim.set_potmap(sens::none);        
         usb_jtag = false;
         console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
         keep_system_powered = false; // Use true during development
