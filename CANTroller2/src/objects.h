@@ -2,6 +2,7 @@
 #include <Preferences.h>  // Functions for writing to flash, i think
 #include <iomanip>  // For formatting console loop timing string output
 #include <vector>  // used to group loop times with string labels
+#include "web.h"
 // #include <HardwareSerial.h>  // In case we ever talk to jaguars over asynchronous serial port, uncomment:
 // HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
 
@@ -27,6 +28,7 @@ static GasServo gas;
 static BrakeMotor brake;
 static SteerMotor steer;
 static NeopixelStrip neo;
+static WebManager web;
 
 // RTOS task that updates temp sensors in a separate task
 bool temp_err[num_temp_categories];  // [AMBIENT/ENGINE/WHEEL]

@@ -153,7 +153,7 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     static constexpr uint8_t addr = 0x69;
     LightingBox() {}
     void init() {
-        printf("lighting box..\n");
+        printf("Open comm to lighting box..\n");
         send_timer.set(send_rate_us);
     }
     bool sendrunmode(int runmode) {
