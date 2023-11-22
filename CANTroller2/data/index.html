@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        .chessboard {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: 20vmin;
+            height: 20vmin;
+        }
+        .square {
+            width: 100%;
+            height: 100%;
+            transition: background-color 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+    <span style='color: #003366;'>
+
+        <h1>Lets generate a random number</h1>
+        <p>The random number is: <span id='rand'>-</span></p>
+        <p><button type='button' id='BTN_SEND_BACK'>
+        Send info to ESP32
+        </button></p>
+        
+    </span>
+        
+    <div>wacky chessboard</div><br><br>
+    <div class="chessboard">
+        <!-- <div class="square" style="background-color: {{CHESSBOARD_COLOR}};"></div> -->
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+    </div>
+    <script src="/chessboard.js"></script>
+    <script>
+        var Socket;
+        document.getElementById('BTN_SEND_BACK').addEventListener('click', button_send_back);
+        function init() {
+            Socket = new WebSocket('ws://' + window.location.hostname + ':81/');
+            Socket.onmessage = function(event) {
+                processCommand(event);
+            };
+        }
+        function button_send_back() {
+            Socket.send('Sending back some random stuff');
+        }
+        function processCommand(event) {
+            document.getElementById('rand').innerHTML = event.data;
+            console.log(event.data);
+        }
+        window.onload = function(event) {
+            init();
+        }
+    </script>
+</body>
+</html>
