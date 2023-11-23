@@ -26,6 +26,13 @@
         Send info to ESP32
         </button></p>
     </span>
+    <form name="color" action="#" onsubmit="return onSubmitColor(this)">
+        <select name="colorselect">
+            <option name="red" value="RED">Red</option>
+            <option name="yellow" value="LYEL">Yellow</option>
+        </select>
+        <button type="submit">Submit</button>
+    </form>
     <div>wacky chessboard</div><br><br>
     <div class="chessboard">
         <!-- <div class="square" style="background-color: {{CHESSBOARD_COLOR}};"></div> -->
@@ -56,13 +63,19 @@
                 processCommand(event);
             };
         }
+        const onSubmitColor = (e) => {
+            const formData = new FormData(document.querySelector('form'))
+            const color = formData.get("colorselect")
+            Socket.send(`color: ${color}`)
+        }
+
         function button_send_back() {
             Socket.send('Sending back some random stuff');
             // Socket.send(rand);
         }
         function processCommand(event) {
             document.getElementById('rand').innerHTML = event.data;
-            console.log(event.data);
+            // console.log(event.data);
         }
         window.onload = function(event) {
             init();
