@@ -20,6 +20,8 @@ void webSocketEvent(byte num, WStype_t type, uint8_t * payload, size_t length) {
       case WStype_TEXT:                                 // if a client has sent data, then type == WStype_TEXT
         for (int i=0; i<length; i++) {                  // print received data from client
             Serial.print((char)payload[i]);
+            if ((char)payload[i] == 'Y') heartbeat_override_color = 0xfff8;
+            else if ((char)payload[i] == 'N') heartbeat_override_color = 0x5cac;
         }
         Serial.println("");
         break;
