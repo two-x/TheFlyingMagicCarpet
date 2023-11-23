@@ -78,7 +78,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     sim.register_device(sens::tach, tach, tach.source());
     sim.register_device(sens::speedo, speedo, speedo.source());
     idlectrl.init(gas.pid.target_ptr(), tach.human_ptr(), tach.filt_ptr(),
-        tempsens.get_sensor(loc::engine), temp_lims_f[ENGINE][OP_MIN], temp_lims_f[ENGINE][WARNING], 50, IdleControl::idlemodes::control);
+        tempsens.get_sensor(loc::ENGINE), temp_lims_f[ENGINE][OP_MIN], temp_lims_f[ENGINE][WARNING], 50, IdleControl::idlemodes::CONTROL);
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);
     gas.init(gas_pwm_pin, 60, &hotrc, &speedo, &tach, &pot, &idlectrl);
     brake.init(brake_pwm_pin, 50, &hotrc, &speedo, &mulebatt, &pressure, &brakepos);
@@ -96,7 +96,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     int32_t idiots = smin((uint32_t)arraysize(idiotlights), neo.neopixelsAvailable());
     for (int32_t idiot = 0; idiot < idiots; idiot++) neo.newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
     std::cout << "set up heartbeat led and " << idiots << " neopixel idiot lights" << std::endl;
-    for (int32_t i=0; i<num_err_types; i++) for (int32_t j=0; j<e_num_sensors; j++) err_sensor[i][j] = false; // Initialize sensor error flags to false
+    for (int32_t i=0; i<NUM_ERR_TYPES; i++) for (int32_t j=0; j<E_NUM_SENSORS; j++) err_sensor[i][j] = false; // Initialize sensor error flags to false
     printf("Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     panicTimer.reset();
@@ -121,7 +121,7 @@ void loop() {
     if (touch_reticles) get_touchpoint();
     hotrc_events_update(run.mode);
     hotrc.update();
-    if (sim.potmapping(sens::joy)) hotrc.set_pc(horz, filt, pot.mapToRange(steer.pc_to_us(steer.pc[opmin]), steer.pc_to_us(steer.pc[opmax])));
+    if (sim.potmapping(sens::joy)) hotrc.set_pc(HORZ, FILT, pot.mapToRange(steer.pc_to_us(steer.pc[OPMIN]), steer.pc_to_us(steer.pc[OPMAX])));
     run.mode_logic();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     gas.update(run.mode);
     brake.update(run.mode);
