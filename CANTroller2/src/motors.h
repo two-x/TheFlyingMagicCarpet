@@ -271,7 +271,7 @@ class GasServo : public ServoMotor {
         pc[ABSMIN] = map(nat[ABSMIN], nat[OPMIN], nat[OPMAX], pc[OPMIN], pc[OPMAX]);
         pc[ABSMAX] = map(nat[ABSMAX], nat[OPMIN], nat[OPMAX], pc[OPMIN], pc[OPMAX]);
         pc[PARKED] = map(nat[PARKED], nat[OPMIN], nat[OPMAX], pc[OPMIN], pc[OPMAX]);
-        pc[GOVERN] = governor * pc[OPMAX] / 100.0;        
+        pc[GOVERN] = map(governor, 0.0, 100.0, pc[OPMIN], pc[OPMAX]);  // pc[GOVERN] = pc[OPMIN] + governor * (pc[OPMAX] - pc[OPMIN]) / 100.0;      
         nat[GOVERN] = map(pc[GOVERN], pc[OPMIN], pc[OPMAX], nat[OPMIN], nat[OPMAX]);
     }
     void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, IdleControl* _idlectrl) {
@@ -312,7 +312,7 @@ class GasServo : public ServoMotor {
             if (runmode == CAL && cal_pot_gasservo_mode)  // Constrain to operating limits. 
                 deg[OUT] = constrain(deg[OUT], deg[ABSMIN], deg[ABSMAX]);
             else if (runmode == BASIC || runmode == SHUTDOWN)
-                deg[OUT] = constrain(deg[OUT], deg[PARKED], nat[GOVERN]);
+                deg[OUT] = constrain(deg[OUT], deg[PARKED], deg[GOVERN]);
             else deg[OUT] = constrain(deg[OUT], deg[OPMIN], deg[GOVERN]);
             pc[OUT] = nat_to_pc(deg[OUT]);
             // Step 4 : Write to servo

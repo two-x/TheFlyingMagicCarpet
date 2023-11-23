@@ -6,6 +6,7 @@
 #include "temperature.h"
 #include "motors.h"  // qpid.h is included from within motors.h
 #include "neopixel.h"
+#include "web.h"
 #include "objects.h"
 #include "display.h"
 #include "touch.h"
@@ -48,7 +49,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     Serial.begin(115200);  // Open console serial port
     delay(800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     printf("Console started..\nUsing %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
-    web.setup();
     hotrc.init();
     pot.setup();
     encoder.setup();
@@ -131,8 +131,7 @@ void loop() {
     tuner_update(run.mode);
     diag_update();  // notice any screwy conditions or suspicious shenigans
     neo_idiots_update();
-    neo.set_heartcolor(colorcard[run.mode]);
-    neo.update(!syspower);
+    neo.update(colorcard[run.mode], !syspower);
     looptime_mark("-");
     screen.update(run.mode);  // Display updates
     looptime_mark("dis");

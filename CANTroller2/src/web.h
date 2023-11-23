@@ -2,12 +2,60 @@
 #include <Arduino.h>
 #include "FS.h"
 #include <LittleFS.h>
-#include "WiFi.h"  // <Wifi.h>
+#include <WiFi.h>  // "Wifi.h"
 #include <ESPAsyncWebServer.h>  // To run wifi in Soft Access Point (SAP) mode (standalone w/o router)
 #include <ESPmDNS.h>
 #include <WebSocketsServer.h>
-// #include <AsyncJson.h>  // "json.h"
+#include <ArduinoJson.h>  // <AsyncJson.h>  // "json.h"  needed for JSON encapsulation (send multiple variables with one string)
 #define FORMAT_LITTLEFS_IF_FAILED true
+// create a callback function, triggered by web socket events
+void webSocketEvent(byte num, WStype_t type, uint8_t * payload, size_t length) {  // the parameters of this callback function are always the same -> num: id of the client who send the event, type: type of message, payload: actual data sent and length: length of payload
+    switch (type) {                                     // switch on the type of information sent
+      case WStype_DISCONNECTED:                         // if a client is disconnected, then type == WStype_DISCONNECTED
+        Serial.println("Client " + String(num) + " disconnected");
+        break;
+      case WStype_CONNECTED:                            // if a client is connected, then type == WStype_CONNECTED
+        Serial.println("Client " + String(num) + " connected");
+        // optionally you can add code here what to do when connected
+        break;
+      case WStype_TEXT:                                 // if a client has sent data, then type == WStype_TEXT
+        // try to decipher the JSON string received
+        StaticJsonDocument<200> doc;                    // create a JSON container
+        DeserializationError error = deserializeJson(doc, payload);
+        if (error) {
+            Serial.print(F("deserializeJson() failed: "));
+            Serial.println(error.f_str());
+            return;
+        }
+        else {
+            // JSON string was received correctly, so information can be retrieved:
+            const char* g_brand = doc["brand"];
+            const char* g_type = doc["type"];
+            const int g_year = doc["year"];
+            const char* g_color = doc["color"];
+            Serial.println("Received guitar info from user: " + String(num));
+            Serial.println("Brand: " + String(g_brand));
+            Serial.println("Type: " + String(g_type));
+            Serial.println("Year: " + String(g_year));
+            Serial.println("Color: " + String(g_color));
+        }
+        Serial.println("");
+        break;
+        // for (int i=0; i<length; i++) {                  // print received data from client
+        //     Serial.print((char)payload[i]);
+        //     if ((char)payload[i] == 'Y') heartbeat_override_color = 0xfff8;
+        //     else if ((char)payload[i] == 'N') heartbeat_override_color = 0x5cac;
+        // }
+        // Serial.println("");
+        // break;
+    //   case WStype_BIN:
+    //     printf("[%u] get binary length: %u\n", num, length);
+    //     printf("incloming data: 0x");
+    //     for (int byt=0; byt<length; byt++) printf("%02x");
+    //     Serial.println("");
+    //     break;
+    }
+}
 class FileSystem {
   private:
     void cleanLittleFS() {
@@ -90,48 +138,42 @@ class WebServer {
         });
         webserver.begin();
     }
+    void update () {
+        // webserver.handleClient();
+    }
 };
 class WebSocket {
   private:
-    WebSocketsServer socket = WebSocketsServer(81);
+    WebSocketsServer socket;
     Timer socket_timer;
     uint32_t socket_refresh_us = 1000000, dumdum = 1;
-    void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
-        switch (type) {
-            case WStype_DISCONNECTED:
-                Serial.printf("[%u] Disconnected!\n", num);
-                break;
-            case WStype_CONNECTED:
-                {
-                    IPAddress ip = socket.remoteIP(num);
-                    Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
-                    String sendme = String(dumdum);
-                    socket.sendTXT(num, sendme.c_str());
-                }
-                break;
-            case WStype_TEXT:
-                Serial.printf("[%u] get Text: %s\n", num, payload);
-                break;
-        }
-    }
   public:
-    WebSocket() {}
+    WebSocket() : socket(81) {}
     void setup() {
         printf("Websocket start..\n");
         socket.begin();
-        // socket.onEvent(webSocketEvent);
+        socket.onEvent(webSocketEvent);
         socket_timer.set(socket_refresh_us);
     }
     void update() {
+        socket.loop();
         if (socket_timer.expireset()) {
-            String sendme = String(dumdum);
-            socket.broadcastTXT(sendme.c_str());
-            socket.loop();
+            // String sendme = String(random(100));
+            // socket.broadcastTXT(sendme.c_str());
+            String jsonString = "";                           // create a JSON string for sending data to the client
+            StaticJsonDocument<200> doc;                      // create a JSON container
+            JsonObject object = doc.to<JsonObject>();         // create a JSON Object
+            object["rand1"] = random(100);                    // write data into the JSON object -> I used "rand1" and "rand2" here, but you can use anything else
+            object["rand2"] = random(100);
+            serializeJson(doc, jsonString);                   // convert JSON object to string
+            Serial.println(jsonString);                       // print JSON string to console for debug purposes (you can comment this out)
+            socket.broadcastTXT(jsonString);               // send JSON string to clients
         }
     }
 };
 class WebManager {
   private:
+    bool web_started = false;
   public:
     FileSystem fs;
     AccessPoint wifi;
@@ -139,11 +181,11 @@ class WebManager {
     WebSocket socket; 
     WebManager() {}
     void setup() {
-        if (!web_enabled) return;
         wifi.setup();
         fs.setup();
         server.setup();
         socket.setup();
+        web_started = true;
     }
     String processor(const String &var) {
         if (var == "CHESSBOARD_COLOR") return getRandomColor();  // Replace placeholders in the HTML with dynamic content
@@ -154,6 +196,7 @@ class WebManager {
     }
     void update() {
         if (!web_enabled) return;
+        if (!web_started) setup();
         socket.update();
     }
 };
