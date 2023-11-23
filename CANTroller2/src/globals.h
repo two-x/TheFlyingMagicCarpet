@@ -1,6 +1,5 @@
 // globals.h - not dependent on anything, so include this first
 #pragma once
-#include <Wire.h>
 #include "Arduino.h"
 // pin assignments  ESP32-S3-DevkitC series
 #define  encoder_sw_pin  0 // button0/strap-1  // Input, Rotary encoder push switch, for the UI. active low (needs pullup). Also the esp "Boot" button does the same thing
@@ -69,32 +68,27 @@
 #define adcrange_adc 4095     // = 2^adcbits-1
 #define adcmidscale_adc 2047  // = 2^(adcbits-1)-1
 
-// fast macros
-#define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays
-#define floor(amt, lim) ((amt <= lim) ? lim : amt)
-#define ceiling(amt, lim) ((amt >= lim) ? lim : amt)
-#undef min
-#undef max
 // these global enums are super convenient, just take care when making changes
-// it's good to keep global enums in one place here
-enum hotrc_axis : int { horz=0, vert=1, ch3=2, ch4=3 };
-enum hotrc_val : int { opmin=0, cent=1, opmax=2, raw=3, filt=4, dbbot=5, dbtop=6, margin=7 };
-enum motor_val : int { parked=1, out=3, govern=4 , absmin=5, absmax=6};
-enum stop_val : int { stop=1 };
-enum steer_val : int { safe=1 };
-enum size_enums : int { num_axes=2, num_chans=4, num_motorvals=7, num_valus=8 };
-enum joydirs : int { joy_rt=-2, joy_down=-1, joy_cent=0, joy_up=1, joy_lt=2 };
-enum runmode : int { BASIC, ASLEEP, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, num_runmodes };
-enum req : int { req_na=-1, req_off=0, req_on=1, req_tog=2 };  // requesting handler actions of digital values with handler functions
-enum cruise_modes : int { pid_suspend_fly, throttle_angle, throttle_delta };
+enum hotrc_axis : int { HORZ=0, VERT=1, CH3=2, CH4=3 };
+enum hotrc_val : int { OPMIN=0, CENT=1, OPMAX=2, RAW=3, FILT=4, DBBOT=5, DBTOP=6, MARGIN=7 };
+enum motor_val : int { PARKED=1, OUT=3, GOVERN=4 , ABSMIN=5, ABSMAX=6 };
+enum stop_val : int { STOP=1 };
+enum steer_val : int { SAFE=1 };
+enum size_enums : int { NUM_AXES=2, NUM_CHANS=4, NUM_MOTORVALS=7, NUM_VALUS=8 };
+enum joydirs : int { JOY_RT=-2, JOY_DN=-1, JOY_CENT=0, JOY_UP=1, JOY_LT=2 };
+enum runmode : int { BASIC, ASLEEP, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, NUM_RUNMODES };
+enum req : int { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
+enum cruise_modes : int { PID_SUSPEND_FLY, THROTTLE_ANGLE, THROTTLE_DELTA };
 enum sw_presses : int { NONE, SHORT, LONG }; // used by encoder sw and button algorithms
-enum temp_categories : int { AMBIENT = 0, ENGINE = 1, WHEEL = 2, num_temp_categories };
-enum temp_lims : int { DISP_MIN, OP_MIN, OP_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
-enum brake_pids : int { prespid, posnpid, num_brakepids };
+enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
+enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 }; // Possible sources of gas, brake, steering commands
+enum brake_pids : int { PRESPID, POSNPID, NUM_BRAKEPIDS };
+enum tunerstuff : int { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
+enum datapages : int { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
 
 // global configuration settings
 bool brake_hybrid_pid = false;
-int brake_default_pid = prespid;
+int brake_default_pid = PRESPID;
 bool starter_signal_support = true;
 bool remote_start_support = true;
 bool autostop_disabled = false;      // Temporary measure to keep brake behaving until we get it debugged. Eventually should be false
@@ -116,17 +110,17 @@ uint32_t looptime_linefeed_threshold = 0;   // when looptime_print == 1, will li
 uint32_t starter_timeout_us = 5000000;      // How long to run starter before automatically stopping it
 uint32_t panic_relax_timeout_us = 20000000; // How long to panic before getting over it and moving on
 float flycruise_vert_margin_pc = 0.3;       // Margin of error for determining hard brake value for dropping out of cruise mode
-// Cruise modes : Pick from 3 different styles for adjustment of cruise setpoint. I prefer throttle_delta.
-// pid_suspend_fly : (PID) Moving trigger from center pauses the pid and lets you adjust the rpm target directly like Fly mode does. Whatever speed you're at when trigger releases is new pid target  
-// throttle_angle : Cruise locks throttle angle, instead of pid. Moving trigger from center adjusts setpoint proportional to how far you push it before releasing (and reduced by an attenuation factor)
-// throttle_delta : Cruise locks throttle angle, instead of pid. Any non-center trigger position continuously adjusts setpoint proportional to how far it's pulled over time (up to a specified maximum rate)
-int cruise_setpoint_mode = throttle_delta;
-int32_t cruise_delta_max_pc_per_s = 16;  // (in throttle_delta mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
-float cruise_angle_attenuator = 0.016;   // (in throttle_angle mode) Limits the change of each adjust trigger pull to this fraction of what's possible
+// Cruise modes : Pick from 3 different styles for adjustment of cruise setpoint. I prefer THROTTLE_DELTA.
+// PID_SUSPEND_FLY : (PID) Moving trigger from center pauses the pid and lets you adjust the rpm target directly like Fly mode does. Whatever speed you're at when trigger releases is new pid target  
+// THROTTLE_ANGLE : Cruise locks throttle angle, instead of pid. Moving trigger from center adjusts setpoint proportional to how far you push it before releasing (and reduced by an attenuation factor)
+// THROTTLE_DELTA : Cruise locks throttle angle, instead of pid. Any non-center trigger position continuously adjusts setpoint proportional to how far it's pulled over time (up to a specified maximum rate)
+int cruise_setpoint_mode = THROTTLE_DELTA;
+int32_t cruise_delta_max_pc_per_s = 16;  // (in THROTTLE_DELTA mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
+float cruise_angle_attenuator = 0.016;   // (in THROTTLE_ANGLE mode) Limits the change of each adjust trigger pull to this fraction of what's possible
 float temp_lims_f[3][6]{
-    {0.0, 45.0, 115.0, 120.0, 130.0, 220.0},  // [AMBIENT][DISP_MIN/OP_MIN/OP_MAX/WARNING/ALARM]
-    {0.0, 178.0, 198.0, 202.0, 205.0, 220.0}, // [ENGINE][DISP_MIN/OP_MIN/OP_MAX/WARNING/ALARM]
-    {0.0, 50.0, 120.0, 130.0, 140.0, 220.0},  // [WHEEL][DISP_MIN/OP_MIN/OP_MAX/WARNING/ALARM] (applies to all wheels)
+    {45.0, 0.0, 115.0, 120.0, 130.0, 220.0},  // [AMBIENT] [OPMIN/DISP_MIN/OPMAX/WARNING/ALARM]
+    {178.0, 0.0, 198.0, 202.0, 205.0, 220.0}, // [ENGINE] [OPMIN/DISP_MIN/OPMAX/WARNING/ALARM]
+    {50.0, 0.0, 120.0, 130.0, 140.0, 220.0},  // [WHEEL] [OPMIN/DISP_MIN/OPMAX/WARNING/ALARM] (applies to all wheels)
 };
 float temp_room = 77.0;          // "Room" temperature is 25 C = 77 F  Who cares?
 float temp_sensor_min_f = -67.0; // Minimum reading of sensor is -25 C = -67 F
@@ -139,21 +133,31 @@ int32_t neobright = 10;   // default for us dim/brighten the neopixels
 int32_t neodesat = 0;     // default for lets us de/saturate the neopixels
 
 // non-tunable vlaues. probably these belong with their related code
-bool running_on_devboard = false;    // will overwrite with value read thru pull resistor on tx pin at boot
-bool shutdown_incomplete = true;     // minor state variable for shutdown mode - Shutdown mode has not completed its work and can't yet stop activity
-bool park_the_motors = false;        // Indicates we should release the brake & gas so the pedals can be used manually without interference
+bool running_on_devboard = false;       // will overwrite with value read thru pull resistor on tx pin at boot
+bool shutdown_incomplete = true;        // minor state variable for shutdown mode - Shutdown mode has not completed its work and can't yet stop activity
+bool park_the_motors = false;           // Indicates we should release the brake & gas so the pedals can be used manually without interference
 bool cruise_adjusting = false;
 bool cal_joyvert_brkmotor_mode = false; // Allows direct control of brake motor using controller vert
-bool cal_pot_gasservo_ready = false; // Whether pot is in valid range
-bool cal_pot_gasservo_mode = false;  // Allows direct control of gas servo using pot. First requires pot to be in valid position before mode is entered
-bool autostopping = false;           // true when in process of stopping the car (hold or shutdown modes)
-bool car_hasnt_moved = false;        // minor state variable for fly mode - Whether car has moved at all since entering fly mode
-bool powering_up = false;            // minor state variable for asleep mode
+bool cal_pot_gasservo_ready = false;    // Whether pot is in valid range
+bool cal_pot_gasservo_mode = false;     // Allows direct control of gas servo using pot. First requires pot to be in valid position before mode is entered
+bool autostopping = false;              // true when in process of stopping the car (hold or shutdown modes)
+bool car_hasnt_moved = false;           // minor state variable for fly mode - Whether car has moved at all since entering fly mode
+bool powering_up = false;               // minor state variable for asleep mode
 bool calmode_request = false;
 bool flycruise_toggle_request = false;
-int sleep_request = req_na;
-bool screensaver = false;            // Can enable experiment with animated screen draws
+int sleep_request = REQ_NA;
+bool screensaver = false;               // Can enable experiment with animated screen draws
+uint16_t heartbeat_override_color = 0x0000;
+int tunctrl = OFF, tunctrl_last = OFF;
+int datapage = PG_RUN, datapage_last = PG_TEMP;  // Which of the dataset pages is currently displayed and available to edit?
+int sel_val = 0, sel_val_last = 0;               // In the real time tuning UI, which of the editable values is selected. -1 for none 
 
+// fast macros
+#define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays
+#define floor(amt, lim) ((amt <= lim) ? lim : amt)
+#define ceiling(amt, lim) ((amt >= lim) ? lim : amt)
+#undef min
+#undef max
 inline float smax(float a, float b) { return (a > b) ? a : b; }
 inline int32_t smax(int32_t a, int32_t b) { return (a > b) ? a : b; }
 inline uint32_t smax(uint32_t a, uint32_t b) { return (a > b) ? a : b; }
@@ -204,14 +208,14 @@ float convert_units(float from_units, float convert_factor, bool invert, float i
 }
 // Exponential Moving Average filter : Smooth out noise on inputs. 0 < alpha < 1 where lower = smoother and higher = more responsive
 // Pass in a fresh raw value, address of filtered value, and alpha factor, filtered value will get updated
-float ema_filt(float raw, float filt, float alpha) {
-    return (alpha * raw) + ((1 - alpha) * filt);
+float ema_filt(float _raw, float _filt, float _alpha) {
+    return (_alpha * _raw) + ((1 - _alpha) * _filt);
 }
 template<typename RAW_T, typename FILT_T>
-void ema_filt(RAW_T raw, FILT_T* filt, float alpha) {
-    float raw_f = static_cast<float>(raw);
-    float filt_f = static_cast<float>(*filt);
-    *filt = static_cast<FILT_T>(ema_filt(raw_f, filt_f, alpha));
+void ema_filt(RAW_T _raw, FILT_T* _filt, float _alpha) {
+    float _raw_f = static_cast<float>(_raw);
+    float _filt_f = static_cast<float>(*_filt);
+    *_filt = static_cast<FILT_T>(ema_filt(_raw_f, _filt_f, _alpha));
 }
 // functions for changing values while respecting min and max constraints. used in tuner ui
 template <typename T>
@@ -238,46 +242,49 @@ class Timer {  // !!! beware, this 54-bit microsecond timer overflows after ever
     volatile int64_t start_us, timeout_us;
   public:
     Timer() { reset(); }
-    Timer(int arg_timeout_us) { set ((int64_t)arg_timeout_us); }
+    Timer(uint32_t arg_timeout_us) { set ((int64_t)arg_timeout_us); }
     void IRAM_ATTR set (int64_t arg_timeout_us) {
         timeout_us = arg_timeout_us;
         start_us = esp_timer_get_time();
     }
     void IRAM_ATTR reset() { start_us = esp_timer_get_time(); }
     bool IRAM_ATTR expired() { return esp_timer_get_time() >= start_us + timeout_us; }
+    int64_t IRAM_ATTR elapsed() { return esp_timer_get_time() - start_us; }
+    int64_t timeout() { return timeout_us; }
     bool IRAM_ATTR expireset() {  // Like expired() but immediately resets if expired
         int64_t now_us = esp_timer_get_time();
         if (now_us < start_us + timeout_us) return false;
         start_us = now_us;
         return true;
     }    
-    int64_t IRAM_ATTR elapsed() { return esp_timer_get_time() - start_us; }
-    int64_t timeout() { return timeout_us; }
 };
-// class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regular intervals
-//   protected:
-//     volatile int64_t end, timeout;
-//   public:
-//     AbsTimer() { reset(); }
-//     AbsTimer(int arg_timeout_us) { set ((int64_t)arg_timeout); }
-//     void IRAM_ATTR set (int64_t arg_timeout) {
-//         timeout = arg_timeout;
-//         end = esp_timer_get_time() + timeout;
-//     }
-//     void IRAM_ATTR set() { end = esp_timer_get_time() + timeout; }  // use to rezero the timer phase
-//     void IRAM_ATTR reset() {  // move expiration to the next timeout multiple
-//         int64_t now = esp_timer_get_time();
-//         if (now >= end) end += timeout * (1 + (now - end) / timeout);
-//     }
-//     bool IRAM_ATTR expired() { return esp_timer_get_time() >= end; }
-//     // uint32_t IRAM_ATTR expireset() {  // Like expired() but immediately resets if expired
-//     //     int64_t now_us = esp_timer_get_time();
-//     //     if (now >= end) 
-//     //     end += timeout * (1 + (now - end) / timeout);
-//     //     if (now_us < start_us + timeout_us) return false;
-//     //     start_us = now_us;
-//     //     return true;
-//     // }
-//     int64_t IRAM_ATTR elapsed() { return esp_timer_get_time() + timeout - end; }
-//     int64_t timeout() { return timeout; }
-// }
+class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regular intervals
+  protected:
+    volatile int64_t end, timeout_us;
+  public:
+    AbsTimer() { reset(); }
+    AbsTimer(uint32_t arg_timeout) { set ((int64_t)arg_timeout); }
+    void IRAM_ATTR set (int64_t arg_timeout) {
+        timeout_us = arg_timeout;
+        end = esp_timer_get_time() + timeout_us;
+    }
+    void IRAM_ATTR set() { end = esp_timer_get_time() + timeout_us; }  // use to rezero the timer phase
+    void IRAM_ATTR reset() {  // move expiration to the next timeout multiple
+        int64_t now = esp_timer_get_time();
+        if (now >= end) end += timeout_us * (1 + (now - end) / timeout_us);
+    }
+    bool IRAM_ATTR expired() { return esp_timer_get_time() >= end; }
+    int64_t IRAM_ATTR elapsed() { return esp_timer_get_time() + timeout_us - end; }
+    int64_t timeout() { return timeout_us; }
+    
+    // never finished writing this ...
+    //
+    // uint32_t IRAM_ATTR expireset() {  // Like expired() but immediately resets if expired
+    //     int64_t now_us = esp_timer_get_time();
+    //     if (now >= end) 
+    //     end += timeout_us * (1 + (now - end) / timeout_us);
+    //     if (now_us < start_us + timeout_us) return false;
+    //     start_us = now_us;
+    //     return true;
+    // }
+};

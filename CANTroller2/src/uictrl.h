@@ -9,7 +9,7 @@ class Potentiometer {
         static constexpr float _pc_min = 0.0;
         static constexpr float _pc_max = 100.0;
         uint8_t _pin;
-        float _val;
+        float _val = 0.0;
     public:
         Potentiometer(uint8_t arg_pin) : _pin(arg_pin) {}
         Potentiometer() = delete; // must have a pin defined

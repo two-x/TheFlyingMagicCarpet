@@ -1,141 +1,90 @@
 // Carpet CANTroller II  Source Code  - For ESP32-S3-DevKitC-1-N8
 #include "globals.h"
-#include "uictrl.h"
-#include "i2cbus.h"
-#include "sensors.h"
-#include "temperature.h"
-#include "motors.h"  // qpid.h is included from within motors.h
-#include "neopixel.h"
-#include "objects.h"
-#include "display.h"
-#include "touch.h"
+#include "sensors.h"  // includes uictrl.h, i2cbus.h
+#include "motors.h"  // includes qpid.h, temperature.h
+#include "objects.h"  // includes web.h
+#include "display.h"  // includes touch.h, neopixel.h
 #include "RunModeManager.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-static Display screen;
+static NeopixelStrip neo(neopixel_pin);
 static TouchScreen touch(touch_cs_pin);
+static Display screen(&neo, &touch);
+static Tuner tuner(&neo, &touch);
 static RunModeManager run(&screen, &encoder);
-void get_touchpoint() { 
-    touch_pt[0] = touch.touch_pt(0);
-    touch_pt[1] = touch.touch_pt(1); 
-    touch_pt[2] = touch.getX();
-    touch_pt[3] = touch.getY(); 
-}
-void neo_idiots_update() {
-    for (int32_t idiot = 0; idiot < arraysize(idiotlights); idiot++) {
-        if (idiot <= neo.neopixelsAvailable())
-            if (*(idiotlights[idiot]) != idiotlasts[idiot]) neo.setBoolState(idiot, *idiotlights[idiot]);
-        if (idiot == LOST || idiot == RANGE) {
-            if (highest_pri_failing_last[idiot] != highest_pri_failing_sensor[idiot]) {
-                if (highest_pri_failing_sensor[idiot] == e_none) neo.setflash((int)idiot, 0);
-                else neo.setflash((int)idiot, highest_pri_failing_sensor[idiot] + 1, 2, 6, 1, 0);
-            }
-            highest_pri_failing_last[idiot] = highest_pri_failing_sensor[idiot];
-        }
-    }
-}
-void setup() {  // Setup just configures pins (and detects touchscreen type)
-    if (RUN_TESTS) run_tests();
+
+void setup() {
     set_pin(starter_pin, INPUT_PULLDOWN);
     set_pin(basicmodesw_pin, INPUT_PULLUP);
-    if (!usb_jtag) set_pin(steer_enc_a_pin, INPUT_PULLUP);
-    if (!usb_jtag) set_pin(steer_enc_b_pin, INPUT_PULLUP);
-    set_pin(sdcard_cs_pin, OUTPUT, HIGH);  // Prevent bus contention
+    set_pin(sdcard_cs_pin, OUTPUT, HIGH);  // deasserting unused cs line ensures available spi bus
     set_pin(ignition_pin, OUTPUT, LOW);
-    set_pin(syspower_pin, OUTPUT, syspower);  // Then set the put as an output as normal.
+    set_pin(syspower_pin, OUTPUT, syspower);
     set_pin(uart_tx_pin, INPUT);  // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
-    running_on_devboard = (read_pin(uart_tx_pin));
-    Serial.begin(115200);  // Open console serial port
-    delay(800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
-    printf("Console started..\nUsing %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
-    web.setup();
-    hotrc.init();
+    if (!usb_jtag) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // assign stable defined behavior to currently unused pin
+    if (!usb_jtag) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // assign stable defined behavior to currently unused pin
+    running_on_devboard = (read_pin(uart_tx_pin));  // detect breadboard vs. real car without use of an additional pin (add weak pullup resistor on your breadboard)
+    Serial.begin(115200);  // Open console serial port (will reassign tx pin as output)
+    delay(800);            // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
+    set_board_defaults();  // set variables as appropriate if on a breadboard
+    if (RUN_TESTS) run_tests();
+    hotrc.setup();
     pot.setup();
     encoder.setup();
-    printf("Brake pressure sensor..\n");
     pressure.setup();
-    printf("Brake position sensor..\n");
-    brakepos.setup();
-    printf("Vehicle battery sense..\n");
+    brkpos.setup();
     mulebatt.setup();
-    printf("LiPo cell sense..\n");
     lipobatt.setup();
-    printf("Tachometer..\n");
     tach.setup();
-    printf("Speedometer..\n");
     speedo.setup();
-    i2c.init();
+    i2c.setup();
     airvelo.setup(); // must be done after i2c is started
     mapsens.setup();
-    lightbox.init();
+    lightbox.setup();
     tempsens.setup();  // Onewire bus and temp sensors
-    xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Create a new task that runs the update_temperature_sensors function
-    printf("Simulator setup..\n");
-    sim.register_device(sens::pressure, pressure, pressure.source());
-    sim.register_device(sens::brkpos, brakepos, brakepos.source());
-    sim.register_device(sens::airvelo, airvelo, airvelo.source());
-    sim.register_device(sens::mapsens, mapsens, mapsens.source());
-    sim.register_device(sens::tach, tach, tach.source());
-    sim.register_device(sens::speedo, speedo, speedo.source());
-    idlectrl.init(gas.pid.target_ptr(), tach.human_ptr(), tach.filt_ptr(),
-        tempsens.get_sensor(loc::engine), temp_lims_f[ENGINE][OP_MIN], temp_lims_f[ENGINE][WARNING], 50, IdleControl::idlemodes::control);
+    xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Temperature sensors task
+    sim_setup();  // simulator initialize devices and pot map
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);
-    gas.init(gas_pwm_pin, 60, &hotrc, &speedo, &tach, &pot, &idlectrl);
-    brake.init(brake_pwm_pin, 50, &hotrc, &speedo, &mulebatt, &pressure, &brakepos);
-    steer.init(steer_pwm_pin, 50, &hotrc, &speedo, &mulebatt);
-    config.begin("FlyByWire", false);
-    datapage = config.getUInt("dpage", PG_RUN);
-    datapage_last = config.getUInt("dpage", PG_TEMP);
-    sim.set_potmap(config.getUInt("potmap", 2));  // 2 = sens::pressure
-    set_board_defaults();
-    if (display_enabled) {
-        screen.init();
-        touch.init();
-    }
-    neo_setup();
-    int32_t idiots = smin((uint32_t)arraysize(idiotlights), neo.neopixelsAvailable());
-    for (int32_t idiot = 0; idiot < idiots; idiot++) neo.newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
-    std::cout << "set up heartbeat led and " << idiots << " neopixel idiot lights" << std::endl;
-    for (int32_t i=0; i<num_err_types; i++) for (int32_t j=0; j<e_num_sensors; j++) err_sensor[i][j] = false; // Initialize sensor error flags to false
+    gas.setup(&hotrc, &speedo, &tach, &pot, &tempsens);
+    brake.setup(&hotrc, &speedo, &mulebatt, &pressure, &brkpos);
+    steer.setup(&hotrc, &speedo, &mulebatt);
+    prefs.begin("FlyByWire", false);
+    datapage = prefs.getUInt("dpage", PG_RUN);
+    datapage_last = prefs.getUInt("dpage", PG_TEMP);
+    if (display_enabled) screen.setup();
+    if (display_enabled) touch.setup(disp_width_pix, disp_height_pix);
+    neo.setup();              // set up external neopixel strip for idiot lights visible in daylight from top of carpet
+    idiotlights_setup(&neo);  // assign same idiot light variable associations and colors to neopixels as on screen  
+    web.setup();              // start up access point, web server, and json-enabled web socket for diagnostic phone interface
+    xTaskCreate(update_web, "Update Web Services", 4096, NULL, 6, NULL);  // wifi/web task. 2048 is too low, it crashes when client connects
     printf("Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
-    panicTimer.reset();
-    looptime_init();
+    looptime_setup();
 }
-void loop() {
-    ignition_panic_update();  // handler for ignition pin output and panicstop status.
-    basicsw_update();
-    starter_update();  // Runs starter bidirectional handler
-    encoder.update();  // Read encoder input signals
-    pot.update();
-    brakepos.update();  // Brake position
-    tach.update();  // Tach
-    speedo.update();  // Speedo
-    // lightbox.update(run.mode, speedo.human());
-    pressure.update();  // Brake pressure
-    mulebatt.update();
-    lipobatt.update();
-    airvelo.update();
-    mapsens.update();  // MAP sensor  // takes 6800 us (!!)
-    maf_gps = massairflow();  // Recalculate intake mass airflow
-    if (touch_reticles) get_touchpoint();
-    hotrc_events_update(run.mode);
-    hotrc.update();
-    if (sim.potmapping(sens::joy)) hotrc.set_pc(horz, filt, pot.mapToRange(steer.pc_to_us(steer.pc[opmin]), steer.pc_to_us(steer.pc[opmax])));
-    run.mode_logic();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
-    gas.update(run.mode);
-    brake.update(run.mode);
-    steer.update(run.mode);
-    touch.update(); // Handle touch events and actions
-    if (screensaver && touch.touched()) screen.saver_touch(touch.touch_pt(0), touch.touch_pt(1));
-    tuner_update(run.mode);
-    diag_update();  // notice any screwy conditions or suspicious shenigans
-    neo_idiots_update();
-    neo.set_heartcolor(colorcard[run.mode]);
-    neo.update(!syspower);
-    looptime_mark("-");
-    screen.update(run.mode);  // Display updates
-    looptime_mark("dis");
-    web.update();
-    looptime_update();
+void loop() {                 // code takes about 1 ms to loop on average
+    ignition_panic_update();  // manage panic stop condition and drive ignition signal as needed
+    basicsw_update();         // see if basic mode switch got hit
+    starter_update();         // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
+    encoder.update();         // read encoder input signals  // 20 us per loop
+    pot.update();             // consistent 400 us per loop for analog read operation. we only see this for the pot (!?) changing pins is no help 
+    brkpos.update();          // brake position (consistent 120 us)
+    pressure.update();        // brake pressure  // ~50 us
+    tach.update();            // get pulse timing from hall effect tachometer on flywheel
+    speedo.update();          // get pulse timing from hall effect speedometer on axle
+    mulebatt.update();        // vehicle battery voltage
+    lipobatt.update();        // sleep battery voltage // tach + speedo + mulebatt + lipobatt = 120 us
+    airvelo.update();         // manifold air velocity sensor  // 20us + 900us every 4 loops
+    mapsens.update();         // manifold air pressure sensor  // 70 us + 2ms every 9 loops
+    maf_gps = massairflow();  // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
+    hotrc.update();           // ~100us for all hotrc functions
+    hotrc_events(run.mode);   // turn hotrc button events into handler requests depending on the runmode
+    if (sim.potmapping(sens::joy)) hotrc.set_pc(HORZ, FILT, pot.mapToRange(steer.pc_to_us(steer.pc[OPMIN]), steer.pc_to_us(steer.pc[OPMAX])));
+    run.mode_logic();         // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
+    gas.update(run.mode);     // drive servo output based on controller inputs, idle controller, (possible) feedback, run mode, etc.
+    brake.update(run.mode);   // drive motor output based on controller inputs, feedback, run mode, etc.
+    steer.update(run.mode);   // drive motor output based on controller inputs, run mode, etc.
+    touch.update();           // read touchscreen input and do what it tells us to
+    tuner.update(run.mode);   // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
+    diag_update();            // notice any screwy conditions or suspicious shenanigans - consistent 200us
+    neo.update(colorcard[run.mode], !syspower);  // ~100us
+    screen.update(run.mode);  // Display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
+    // lightbox.update(run.mode, speedo.human());  // communicate any relevant data to the lighting controller
+    looptime_update();        // looptime_mark("F");
 }

@@ -20,26 +20,40 @@
 </head>
 <body>
     <span style='color: #003366;'>
-
         <h1>Lets generate a random number</h1>
-        <p>The random number is: <span id='rand'>-</span></p>
+        <p>The random number is: <span id='rand1'>-</span></p>
         <p><button type='button' id='BTN_SEND_BACK'>
         Send info to ESP32
         </button></p>
-        
     </span>
-        
+    <form name="color" action="#" onsubmit="return onSubmitColor(this)">
+        <select name="colorselect">
+            <!-- <option name="red" value="RED">Red</option>
+            <option name="yellow" value="LYEL">Yellow</option> -->
+            <option value="N">Green</option>
+            <option value="Y">Yellow</option>
+        </select>
+        <button type="submit">Submit</button>
+    </form>
     <div>wacky chessboard</div><br><br>
     <div class="chessboard">
         <!-- <div class="square" style="background-color: {{CHESSBOARD_COLOR}};"></div> -->
-        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
-        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
-        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
-        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
-        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
-        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
-        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
-        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
     </div>
     <script src="/chessboard.js"></script>
     <script>
@@ -51,12 +65,27 @@
                 processCommand(event);
             };
         }
+        const onSubmitColor = (e) => {
+            const formData = new FormData(document.querySelector('form'))
+            const color = formData.get("colorselect")
+            console.log('color', color)
+            Socket.send(color[0])
+        }
         function button_send_back() {
-            Socket.send('Sending back some random stuff');
+            var msg = {
+                brand: 'Gibson',
+                type: 'Les Paul Studio',
+                year:  2010,
+                color: 'white'
+            };
+            Socket.send(JSON.stringify(msg));
         }
         function processCommand(event) {
-            document.getElementById('rand').innerHTML = event.data;
-            console.log(event.data);
+            var obj = JSON.parse(event.data);
+            document.getElementById('rand1').innerHTML = obj.rand1;
+            document.getElementById('rand2').innerHTML = obj.rand2;
+            console.log(obj.rand1);
+            console.log(obj.rand2);
         }
         window.onload = function(event) {
             init();
