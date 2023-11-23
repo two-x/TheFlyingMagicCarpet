@@ -8,6 +8,29 @@
 #include <WebSocketsServer.h>
 // #include <AsyncJson.h>  // "json.h"
 #define FORMAT_LITTLEFS_IF_FAILED true
+void webSocketEvent(byte num, WStype_t type, uint8_t * payload, size_t length) {  // the parameters of this callback function are always the same -> num: id of the client who send the event, type: type of message, payload: actual data sent and length: length of payload
+    switch (type) {                                     // switch on the type of information sent
+      case WStype_DISCONNECTED:                         // if a client is disconnected, then type == WStype_DISCONNECTED
+        Serial.println("Client " + String(num) + " disconnected");
+        break;
+      case WStype_CONNECTED:                            // if a client is connected, then type == WStype_CONNECTED
+        Serial.println("Client " + String(num) + " connected");
+        // optionally you can add code here what to do when connected
+        break;
+      case WStype_TEXT:                                 // if a client has sent data, then type == WStype_TEXT
+        for (int i=0; i<length; i++) {                  // print received data from client
+            Serial.print((char)payload[i]);
+        }
+        Serial.println("");
+        break;
+      case WStype_BIN:
+        printf("[%u] get binary length: %u\n", num, length);
+        printf("incloming data: 0x");
+        for (int byt=0; byt<length; byt++) printf("%02x");
+        Serial.println("");
+        break;
+    }
+}
 class FileSystem {
   private:
     void cleanLittleFS() {
@@ -90,43 +113,28 @@ class WebServer {
         });
         webserver.begin();
     }
+    void update () {
+        // webserver.handleClient();
+    }
 };
 class WebSocket {
   private:
-    WebSocketsServer socket = WebSocketsServer(81);
+    WebSocketsServer socket;
     Timer socket_timer;
     uint32_t socket_refresh_us = 1000000, dumdum = 1;
-    void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
-        switch (type) {
-            case WStype_DISCONNECTED:
-                Serial.printf("[%u] Disconnected!\n", num);
-                break;
-            case WStype_CONNECTED:
-                {
-                    IPAddress ip = socket.remoteIP(num);
-                    Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
-                    String sendme = String(dumdum);
-                    socket.sendTXT(num, sendme.c_str());
-                }
-                break;
-            case WStype_TEXT:
-                Serial.printf("[%u] get Text: %s\n", num, payload);
-                break;
-        }
-    }
   public:
-    WebSocket() {}
+    WebSocket() : socket(81) {}
     void setup() {
         printf("Websocket start..\n");
         socket.begin();
-        // socket.onEvent(webSocketEvent);
+        socket.onEvent(webSocketEvent);
         socket_timer.set(socket_refresh_us);
     }
     void update() {
+        socket.loop();
         if (socket_timer.expireset()) {
-            String sendme = String(dumdum);
+            String sendme = String(random(100));
             socket.broadcastTXT(sendme.c_str());
-            socket.loop();
         }
     }
 };

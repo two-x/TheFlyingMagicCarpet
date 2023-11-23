@@ -20,26 +20,31 @@
 </head>
 <body>
     <span style='color: #003366;'>
-
         <h1>Lets generate a random number</h1>
         <p>The random number is: <span id='rand'>-</span></p>
         <p><button type='button' id='BTN_SEND_BACK'>
         Send info to ESP32
         </button></p>
-        
     </span>
-        
     <div>wacky chessboard</div><br><br>
     <div class="chessboard">
         <!-- <div class="square" style="background-color: {{CHESSBOARD_COLOR}};"></div> -->
-        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
-        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
-        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
-        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
-        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
-        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
-        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
-        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div>
+        <div class="square" ></div><div class="square" ></div><div class="square" ></div><div class="square" ></div><br>
     </div>
     <script src="/chessboard.js"></script>
     <script>
@@ -53,6 +58,7 @@
         }
         function button_send_back() {
             Socket.send('Sending back some random stuff');
+            // Socket.send(rand);
         }
         function processCommand(event) {
             document.getElementById('rand').innerHTML = event.data;
