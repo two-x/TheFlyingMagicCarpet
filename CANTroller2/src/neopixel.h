@@ -25,7 +25,7 @@ class NeopixelStrip {
     uint32_t neo_fade_timeout_us = 380000;
     Timer neoFadeTimer, neoHeartbeatTimer;
     bool neo_heartbeat = false;
-    bool heartcolor_change = true;
+    bool heartcolor_change = true;  // , heartcolor_overridden = false;
     uint8_t pin = -1;
     uint8_t heartbeat_brightness, heartbeat_brightness_last; // brightness during fadeouts
     uint32_t neobright_last;
@@ -74,6 +74,7 @@ class NeopixelStrip {
     void setdesaturation(float _desat_of_ten);  // a way to specify nite or daytime brightness levels
     void heartbeat(bool onoroff);
     void set_heartcolor(uint16_t newcolor);
+    void heartcolor_override(uint16_t color);
     void heartbeat_update();
     void colorfade_update();
     uint32_t neopixelsAvailable();
@@ -196,8 +197,14 @@ void NeopixelStrip::setdesaturation(float _desat_of_ten) {  // a way to specify 
 void NeopixelStrip::heartbeat(bool onoroff) {
     neo_heartbeat = onoroff;  // Start heart beating
 }
-void NeopixelStrip::set_heartcolor(uint16_t newcolor) {
-    if (heartcolor16 != newcolor) {
+// void NeopixelStrip::heartcolor_override(uint16_t _color) {
+//     heartcolor_overridden = true;
+//     heartbeat_override_color = _color;
+// }
+void NeopixelStrip::set_heartcolor(uint16_t _newcolor) {
+    uint16_t newcolor = _newcolor;
+    if (heartbeat_override_color != 0x0000) newcolor = heartbeat_override_color;
+    else if (heartcolor16 != newcolor) {
         heartbeatColor = color_to_Rgb(newcolor);
         heartcolor_change = true;
         heartcolor16 = newcolor;

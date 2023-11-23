@@ -153,6 +153,7 @@ bool calmode_request = false;
 bool flycruise_toggle_request = false;
 int sleep_request = REQ_NA;
 bool screensaver = false;            // Can enable experiment with animated screen draws
+uint16_t heartbeat_override_color = 0x0000;
 
 inline float smax(float a, float b) { return (a > b) ? a : b; }
 inline int32_t smax(int32_t a, int32_t b) { return (a > b) ? a : b; }
