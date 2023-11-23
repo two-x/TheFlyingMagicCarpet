@@ -6,8 +6,9 @@
 #include <ESPAsyncWebServer.h>  // To run wifi in Soft Access Point (SAP) mode (standalone w/o router)
 #include <ESPmDNS.h>
 #include <WebSocketsServer.h>
-// #include <AsyncJson.h>  // "json.h"
+#include <ArduinoJson.h>  // <AsyncJson.h>  // "json.h"  needed for JSON encapsulation (send multiple variables with one string)
 #define FORMAT_LITTLEFS_IF_FAILED true
+// create a callback function, triggered by web socket events
 void webSocketEvent(byte num, WStype_t type, uint8_t * payload, size_t length) {  // the parameters of this callback function are always the same -> num: id of the client who send the event, type: type of message, payload: actual data sent and length: length of payload
     switch (type) {                                     // switch on the type of information sent
       case WStype_DISCONNECTED:                         // if a client is disconnected, then type == WStype_DISCONNECTED
@@ -18,19 +19,41 @@ void webSocketEvent(byte num, WStype_t type, uint8_t * payload, size_t length) {
         // optionally you can add code here what to do when connected
         break;
       case WStype_TEXT:                                 // if a client has sent data, then type == WStype_TEXT
-        for (int i=0; i<length; i++) {                  // print received data from client
-            Serial.print((char)payload[i]);
-            if ((char)payload[i] == 'Y') heartbeat_override_color = 0xfff8;
-            else if ((char)payload[i] == 'N') heartbeat_override_color = 0x5cac;
+        // try to decipher the JSON string received
+        StaticJsonDocument<200> doc;                    // create a JSON container
+        DeserializationError error = deserializeJson(doc, payload);
+        if (error) {
+            Serial.print(F("deserializeJson() failed: "));
+            Serial.println(error.f_str());
+            return;
+        }
+        else {
+            // JSON string was received correctly, so information can be retrieved:
+            const char* g_brand = doc["brand"];
+            const char* g_type = doc["type"];
+            const int g_year = doc["year"];
+            const char* g_color = doc["color"];
+            Serial.println("Received guitar info from user: " + String(num));
+            Serial.println("Brand: " + String(g_brand));
+            Serial.println("Type: " + String(g_type));
+            Serial.println("Year: " + String(g_year));
+            Serial.println("Color: " + String(g_color));
         }
         Serial.println("");
         break;
-      case WStype_BIN:
-        printf("[%u] get binary length: %u\n", num, length);
-        printf("incloming data: 0x");
-        for (int byt=0; byt<length; byt++) printf("%02x");
-        Serial.println("");
-        break;
+        // for (int i=0; i<length; i++) {                  // print received data from client
+        //     Serial.print((char)payload[i]);
+        //     if ((char)payload[i] == 'Y') heartbeat_override_color = 0xfff8;
+        //     else if ((char)payload[i] == 'N') heartbeat_override_color = 0x5cac;
+        // }
+        // Serial.println("");
+        // break;
+    //   case WStype_BIN:
+    //     printf("[%u] get binary length: %u\n", num, length);
+    //     printf("incloming data: 0x");
+    //     for (int byt=0; byt<length; byt++) printf("%02x");
+    //     Serial.println("");
+    //     break;
     }
 }
 class FileSystem {
@@ -135,8 +158,16 @@ class WebSocket {
     void update() {
         socket.loop();
         if (socket_timer.expireset()) {
-            String sendme = String(random(100));
-            socket.broadcastTXT(sendme.c_str());
+            // String sendme = String(random(100));
+            // socket.broadcastTXT(sendme.c_str());
+            String jsonString = "";                           // create a JSON string for sending data to the client
+            StaticJsonDocument<200> doc;                      // create a JSON container
+            JsonObject object = doc.to<JsonObject>();         // create a JSON Object
+            object["rand1"] = random(100);                    // write data into the JSON object -> I used "rand1" and "rand2" here, but you can use anything else
+            object["rand2"] = random(100);
+            serializeJson(doc, jsonString);                   // convert JSON object to string
+            Serial.println(jsonString);                       // print JSON string to console for debug purposes (you can comment this out)
+            socket.broadcastTXT(jsonString);               // send JSON string to clients
         }
     }
 };
