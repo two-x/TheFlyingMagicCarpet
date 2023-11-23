@@ -149,7 +149,6 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     int runmode_last;
     uint16_t speed_last;
   public:
-    enum lightbox_events : int { flying, notflying, tosleep, wakeup };
     static constexpr uint8_t addr = 0x69;
     LightingBox() {}
     void init() {

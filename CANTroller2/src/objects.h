@@ -31,13 +31,13 @@ static NeopixelStrip neo;
 static WebManager web;
 
 // RTOS task that updates temp sensors in a separate task
-bool temp_err[num_temp_categories];  // [AMBIENT/ENGINE/WHEEL]
+bool temp_err[NUM_TEMP_CATEGORIES];  // [AMBIENT/ENGINE/WHEEL]
 void update_temperature_sensors(void *parameter) {
     while (true) {
         if (!dont_take_temperatures)
             tempsens.update_temperatures();
         if (sim.potmapping(sens::engtemp)) {
-            TemperatureSensor *engine_sensor = tempsens.get_sensor(loc::engine);
+            TemperatureSensor *engine_sensor = tempsens.get_sensor(loc::ENGINE);
             if (engine_sensor != nullptr) {
                 engine_sensor->set_temperature(pot.mapToRange(temp_sensor_min_f, temp_sensor_max_f));
             }
@@ -66,57 +66,57 @@ void set_board_defaults() {  // true for dev boards, false for printed board (on
 }
 bool starter = LOW;  // Set by handler only. Reflects current state of starter signal (does not indicate source)
 bool starter_drive = false;  // Set by handler only. High when we're driving starter, otherwise starter is an input
-int starter_request = req_na;
+int starter_request = REQ_NA;
 Timer starterTimer(starter_timeout_us);  // If remotely-started starting event is left on for this long, end it automatically  
-void starter_update () {  // Starter bidirectional handler logic.  Outside code interacts with handler by setting starter_request = req_off, req_on, or req_tog
+void starter_update () {  // Starter bidirectional handler logic.  Outside code interacts with handler by setting starter_request = REQ_OFF, REQ_ON, or REQ_TOG
     if (starter_signal_support) {
-        if (starter_request == req_tog) starter_request = !starter_drive;  // translate toggle request to a drive request opposite to the current drive state
-        if (starter_drive && ((starter_request == req_off) || starterTimer.expired())) {  // If we're driving the motor but need to stop
+        if (starter_request == REQ_TOG) starter_request = !starter_drive;  // translate toggle request to a drive request opposite to the current drive state
+        if (starter_drive && ((starter_request == REQ_OFF) || starterTimer.expired())) {  // If we're driving the motor but need to stop
             starter_drive = false;
             set_pin (starter_pin, INPUT_PULLDOWN);  // we never assert low on the pin, just set pin as input and let the pulldown bring it low
         }
-        if (!starter_drive && (starter_request != req_on) && !sim.simulating(sens::starter)) {  // If we haven't been and shouldn't be driving, and not simulating
+        if (!starter_drive && (starter_request != REQ_ON) && !sim.simulating(sens::starter)) {  // If we haven't been and shouldn't be driving, and not simulating
             do {
                 starter = digitalRead(starter_pin);  // then read the pin, starter variable will store if starter is turned on externally
             } while (starter != digitalRead(starter_pin)); // starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
         }
-        else if (!starter && (starter_request == req_on) && remote_start_support) {  // If we got a request to start the motor, and it's not already being driven externally
+        else if (!starter && (starter_request == REQ_ON) && remote_start_support) {  // If we got a request to start the motor, and it's not already being driven externally
             starter_drive = true;
             starter = HIGH;
             set_pin (starter_pin, OUTPUT);  // then set pin to an output
             write_pin (starter_pin, starter);  // and start the motor
             starterTimer.reset();  // if left on the starter will turn off automatically after X seconds
         }
-        starter_request = req_na;  // we have serviced whatever requests
+        starter_request = REQ_NA;  // we have serviced whatever requests
     }
     else starter = LOW;
 }
 bool ignition = LOW;  // Set by handler only. Reflects current state of the signal
-int ignition_request = req_na;
+int ignition_request = REQ_NA;
 bool panicstop = true;  // initialize in panic, because we could have just crashed and reset. If car is stopped, handler will clear it
-int panicstop_request = req_on;  // On powerup we assume the code just crashed during a drive, because it could have
+int panicstop_request = REQ_ON;  // On powerup we assume the code just crashed during a drive, because it could have
 Timer panicTimer(panic_relax_timeout_us);  // How long should a panic stop last?  We can't stay mad forever
 void ignition_panic_update() {  // Run once each main loop, directly before panicstop_update()
-    if (panicstop_request == req_tog) panicstop_request = (req)(!panicstop);
-    if (ignition_request == req_tog) ignition_request = (req)(!ignition);
-    // else if (ignition_request == ignition) ignition_request = req_na;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
-    if (speedo.car_stopped() || panicTimer.expired()) panicstop_request = req_off;  // Cancel panic stop if car is stopped
+    if (panicstop_request == REQ_TOG) panicstop_request = (req)(!panicstop);
+    if (ignition_request == REQ_TOG) ignition_request = (req)(!ignition);
+    // else if (ignition_request == ignition) ignition_request = REQ_NA;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
+    if (speedo.car_stopped() || panicTimer.expired()) panicstop_request = REQ_OFF;  // Cancel panic stop if car is stopped
     if (!speedo.car_stopped()) {
-        if (ignition && ignition_request == req_off) panicstop_request = req_on;  // ignition cut causes panic stop
-        if (!sim.simulating(sens::joy) && hotrc.radiolost()) panicstop_request = req_on;
+        if (ignition && ignition_request == REQ_OFF) panicstop_request = REQ_ON;  // ignition cut causes panic stop
+        if (!sim.simulating(sens::joy) && hotrc.radiolost()) panicstop_request = REQ_ON;
     }
     bool paniclast = panicstop;
-    if (panicstop_request != req_na) {
+    if (panicstop_request != REQ_NA) {
         panicstop = (bool)panicstop_request;
         if (panicstop && !paniclast) panicTimer.reset();
     }
-    if (panicstop) ignition_request = req_off;  // panic stop causes ignition cut
-    if (ignition_request != req_na) {
+    if (panicstop) ignition_request = REQ_OFF;  // panic stop causes ignition cut
+    if (ignition_request != REQ_NA) {
         ignition = (bool)ignition_request;
         write_pin (ignition_pin, ignition);  // Turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
     }
-    panicstop_request = req_na;
-    ignition_request = req_na;  // Make sure this goes after the last comparison
+    panicstop_request = REQ_NA;
+    ignition_request = REQ_NA;  // Make sure this goes after the last comparison
 }
 bool basicmodesw = LOW;
 void basicsw_update() {
@@ -133,13 +133,13 @@ void set_syspower(bool setting) {
 }
 void hotrc_events_update(int runmode) {
     hotrc.toggles_update();
-    if (hotrc.sw_event(ch3)) ignition_request = req_tog;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
-    if (hotrc.sw_event(ch4)) {
+    if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
+    if (hotrc.sw_event(CH4)) {
         if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
-        else if (runmode == STALL) starter_request = req_tog;
-        else if (runmode == HOLD) starter_request = req_off;
-        else if (runmode == SHUTDOWN && !shutdown_incomplete) sleep_request = req_on;
-        else if (runmode == ASLEEP) sleep_request = req_off; 
+        else if (runmode == STALL) starter_request = REQ_TOG;
+        else if (runmode == HOLD) starter_request = REQ_OFF;
+        else if (runmode == SHUTDOWN && !shutdown_incomplete) sleep_request = REQ_ON;
+        else if (runmode == ASLEEP) sleep_request = REQ_OFF; 
     }
     hotrc.toggles_reset();
 }
@@ -167,8 +167,8 @@ float maf_gps;  // Manifold mass airflow in grams per second
 float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
     float temp = _ambient;
     if (std::isnan(_ambient)) {
-        temp = tempsens.val(loc::ambient);
-        if (std::isnan(temp) && running_on_devboard) temp = tempsens.val(loc::engine);
+        temp = tempsens.val(loc::AMBIENT);
+        if (std::isnan(temp) && running_on_devboard) temp = tempsens.val(loc::ENGINE);
         if (std::isnan(temp)) return -1;  // Avoid crashing due to trying to read absent sensor
     }
     float T = 0.556 * (temp - 32.0) + 273.15;  // in K.  This converts from degF to K
@@ -245,21 +245,21 @@ void looptime_update() {  // Call once each loop at the very end
     loopno++;  // I like to count how many loops
 }
 // diag/error-checking routine. this should be turned into a class probably
-enum err_type : int { LOST, RANGE, CALIB, WARN, CRIT, INFO, num_err_types };
-enum err_sens : int { e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, e_basicsw, e_mulebatt, e_lipobatt, e_airvelo, e_mapsens, e_num_sensors, e_none };  // these are in order of priority
+enum err_type : int { LOST, RANGE, CALIB, WARN, CRIT, INFO, NUM_ERR_TYPES };
+enum err_sens : int { e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, e_basicsw, e_mulebatt, e_lipobatt, e_airvelo, e_mapsens, E_NUM_SENSORS, e_none };  // these are in order of priority
 // diag tunable values
 uint32_t err_timeout_us = 175000;
 uint32_t err_margin_adc = 5;
-char err_type_card[num_err_types][5] = { "Lost", "Rang", "Cal", "Warn", "Crit", "Info" };
-char err_sensor_card[e_num_sensors+1][7] = { "HrcV", "HrcCh3", "BrPres", "BrkPos", "Speedo", "HrcH", "Tach", "Temps", "Startr", "HrcCh4", "Basic", "MulBat", "LiPo", "Airflw", "MAP", "None" };
+char err_type_card[NUM_ERR_TYPES][5] = { "Lost", "Rang", "Cal", "Warn", "Crit", "Info" };
+char err_sensor_card[E_NUM_SENSORS+1][7] = { "HrcV", "HrcCh3", "BrPres", "BrkPos", "Speedo", "HrcH", "Tach", "Temps", "Startr", "HrcCh4", "Basic", "MulBat", "LiPo", "Airflw", "MAP", "None" };
 bool diag_ign_error_enabled = true;
 // diag non-tunable values
 Timer errTimer(err_timeout_us);
-bool err_sensor_alarm[num_err_types] = { false, false, false, false, false, false };
-int8_t err_sensor_fails[num_err_types] = { 0, 0, 0, 0, 0, 0 };
-bool err_sensor[num_err_types][e_num_sensors]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airvelo/e_mapsens/e_temps/e_mulebatt/e_lipobatt/e_basicsw/e_starter]   // sens::opt_t::num_sensors]
-uint8_t highest_pri_failing_sensor[num_err_types];
-uint8_t highest_pri_failing_last[num_err_types];
+bool err_sensor_alarm[NUM_ERR_TYPES] = { false, false, false, false, false, false };
+int8_t err_sensor_fails[NUM_ERR_TYPES] = { 0, 0, 0, 0, 0, 0 };
+bool err_sensor[NUM_ERR_TYPES][E_NUM_SENSORS]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airvelo/e_mapsens/e_temps/e_mulebatt/e_lipobatt/e_basicsw/e_starter]   // sens::opt_t::NUM_SENSORS]
+uint8_t highest_pri_failing_sensor[NUM_ERR_TYPES];
+uint8_t highest_pri_failing_last[NUM_ERR_TYPES];
 void diag_update() {
     if (errTimer.expireset()) {
         // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
@@ -277,8 +277,8 @@ void diag_update() {
         // different approach
         bool not_detected;
         not_detected = false;  // first reset
-        for (int cat = 0; cat < num_temp_categories; cat++) temp_err[cat] = false;  // first reset
-        for (int loc = 0; loc < tempsens.locint(loc::num_locations); loc++) {
+        for (int cat = 0; cat < NUM_TEMP_CATEGORIES; cat++) temp_err[cat] = false;  // first reset
+        for (int loc = 0; loc < tempsens.locint(loc::NUM_LOCATIONS); loc++) {
             if (!tempsens.detected(loc)) not_detected = true;
             else if (tempsens.val(loc) >= temp_lims_f[tempsens.errclass(loc)][WARNING]) temp_err[tempsens.errclass(loc)] = true;
         }
@@ -291,14 +291,14 @@ void diag_update() {
         err_sensor[RANGE][e_pressure] = (pressure.psi() < pressure.op_min_psi() || pressure.psi() > pressure.op_max_psi());
         err_sensor[LOST][e_pressure] = (pressure.raw() < err_margin_adc);
         err_sensor[RANGE][e_mulebatt] = (mulebatt.v() < mulebatt.op_min_v() || mulebatt.v() > mulebatt.op_max_v());
-        for (int32_t ch = horz; ch <= ch4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
-            err_sensor[RANGE][ch] = !hotrc.radiolost() && ((hotrc.us[ch][raw] < hotrc.us[ch][opmin] - (hotrc.us[ch][margin] >> 1)) 
-                                    || (hotrc.us[ch][raw] > hotrc.us[ch][opmax] + (hotrc.us[ch][margin] >> 1)));  // && ch != vert
-            err_sensor[LOST][ch] = !hotrc.radiolost() && ((hotrc.us[ch][raw] < (hotrc.absmin_us - hotrc.us[ch][margin]))
-                                    || (hotrc.us[ch][raw] > (hotrc.absmax_us + hotrc.us[ch][margin])));
+        for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
+            err_sensor[RANGE][ch] = !hotrc.radiolost() && ((hotrc.us[ch][RAW] < hotrc.us[ch][OPMIN] - (hotrc.us[ch][MARGIN] >> 1)) 
+                                    || (hotrc.us[ch][RAW] > hotrc.us[ch][OPMAX] + (hotrc.us[ch][MARGIN] >> 1)));  // && ch != VERT
+            err_sensor[LOST][ch] = !hotrc.radiolost() && ((hotrc.us[ch][RAW] < (hotrc.absmin_us - hotrc.us[ch][MARGIN]))
+                                    || (hotrc.us[ch][RAW] > (hotrc.absmax_us + hotrc.us[ch][MARGIN])));
         }
-        // err_sensor[RANGE][e_hrcvert] = (hotrc.us[vert][raw] < hotrc.failsafe_us - hotrc.us[ch][margin])
-        //     || ((hotrc.us[vert][raw] < hotrc.us[vert][opmin] - halfmargin) && (hotrc.us[vert][raw] > hotrc.failsafe_us + hotrc.us[ch][margin]));
+        // err_sensor[RANGE][e_hrcvert] = (hotrc.us[VERT][RAW] < hotrc.failsafe_us - hotrc.us[ch][MARGIN])
+        //     || ((hotrc.us[VERT][RAW] < hotrc.us[VERT][OPMIN] - halfMARGIN) && (hotrc.us[VERT][RAW] > hotrc.failsafe_us + hotrc.us[ch][MARGIN]));
         
         // Set sensor error idiot light flags
         // printf ("Sensors errors: ");
@@ -308,7 +308,7 @@ void diag_update() {
             highest_pri_failing_sensor[t] = e_none;
             err_sensor_alarm[t] = false;
             err_sensor_fails[t] = 0;
-            for (int32_t s=0; s<e_num_sensors; s++)
+            for (int32_t s=0; s<E_NUM_SENSORS; s++)
                 if (err_sensor[t][s]) {
                     if (highest_pri_failing_sensor[t] = e_none) highest_pri_failing_sensor[t] = s;
                     err_sensor_alarm[t] = true;
@@ -366,8 +366,8 @@ void diag_update() {
 void err_print_info() {
     for (int32_t t=LOST; t<=INFO; t++) {
         printf ("diag err: %s (%d): ", err_type_card[t], err_sensor_fails[t]);
-        for (int32_t s=0; s<=e_num_sensors; s++) {
-            if (s == e_num_sensors) s++;
+        for (int32_t s=0; s<=E_NUM_SENSORS; s++) {
+            if (s == E_NUM_SENSORS) s++;
             if (err_sensor[t][s]) printf ("%s, ", err_sensor_card[s]);
         }
         printf("\n");

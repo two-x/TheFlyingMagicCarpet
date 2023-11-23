@@ -2,7 +2,7 @@
 #include <vector>
 #include <DallasTemperature.h>
 
-enum class loc { ambient, engine, wheel_fl, wheel_fr, wheel_rl, wheel_rr, num_locations };  // , SOREN_DEV0, SOREN_DEV1, num_known_ };
+enum class loc { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR, NUM_LOCATIONS };  // , SOREN_DEV0, SOREN_DEV1, };
 
 class TemperatureSensor {
 public:
@@ -73,12 +73,12 @@ public:
 
     static std::string location_to_string(loc location) {
         switch(location) {
-            case loc::ambient: return "ambient";
-            case loc::engine: return "engine";
-            case loc::wheel_fl: return "wheel_fl";
-            case loc::wheel_fr: return "wheel_fr";
-            case loc::wheel_rl: return "wheel_rl";
-            case loc::wheel_rr: return "wheel_rr";
+            case loc::AMBIENT: return "ambient";
+            case loc::ENGINE: return "engine";
+            case loc::WHEEL_FL: return "wheel_fl";
+            case loc::WHEEL_FR: return "wheel_fr";
+            case loc::WHEEL_RL: return "wheel_rl";
+            case loc::WHEEL_RR: return "wheel_rr";
             default: return "unknown";
         }
     }
@@ -107,20 +107,20 @@ private:
 
     std::vector<DeviceAddress> detected_addresses;
     std::vector<loc> all_locations = {
-        loc::engine,
-        loc::ambient,
-        loc::wheel_fl,
-        loc::wheel_fr,
-        loc::wheel_rl,
-        loc::wheel_rr
+        loc::ENGINE,
+        loc::AMBIENT,
+        loc::WHEEL_FL,
+        loc::WHEEL_FR,
+        loc::WHEEL_RL,
+        loc::WHEEL_RR,
         };
     std::map<loc, DeviceAddress> known_addresses = {
-        {loc::engine, {0x28, 0x1a, 0x27, 0x90, 0x5c, 0x21, 0x01, 0x59}},
-        {loc::ambient, {0x28, 0x3c, 0xf3, 0xa7, 0xc1, 0x21, 0x06, 0x69}},
-        {loc::wheel_fl, {0x28, 0x55, 0x42, 0x8f, 0x5c, 0x21, 0x01, 0x69}},
-        {loc::wheel_fr, {0x28, 0x70, 0x73, 0xb3, 0x5c, 0x21, 0x01, 0x27}},
-        {loc::wheel_rl, {0x28, 0x54, 0xfb, 0x88, 0x5c, 0x21, 0x01, 0x64}},
-        {loc::wheel_rr, {0x28, 0x6f, 0xcd, 0xba, 0x5c, 0x21, 0x01, 0x26}}
+        {loc::ENGINE, {0x28, 0x1a, 0x27, 0x90, 0x5c, 0x21, 0x01, 0x59}},
+        {loc::AMBIENT, {0x28, 0x3c, 0xf3, 0xa7, 0xc1, 0x21, 0x06, 0x69}},
+        {loc::WHEEL_FL, {0x28, 0x55, 0x42, 0x8f, 0x5c, 0x21, 0x01, 0x69}},
+        {loc::WHEEL_FR, {0x28, 0x70, 0x73, 0xb3, 0x5c, 0x21, 0x01, 0x27}},
+        {loc::WHEEL_RL, {0x28, 0x54, 0xfb, 0x88, 0x5c, 0x21, 0x01, 0x64}},
+        {loc::WHEEL_RR, {0x28, 0x6f, 0xcd, 0xba, 0x5c, 0x21, 0x01, 0x26}}
     };
 
     std::map<loc, TemperatureSensor> sensors;
@@ -301,8 +301,8 @@ public:
         return static_cast<int>(locat);
     }
     int errclass(loc locat) {
-        if (locat == loc::ambient || locat == loc::engine) return static_cast<int>(locat);
-        return static_cast<int>(loc::wheel_fl);  // All wheels use this error class
+        if (locat == loc::AMBIENT || locat == loc::ENGINE) return static_cast<int>(locat);
+        return static_cast<int>(loc::WHEEL_FL);  // All wheels use this error class
     }
     int errclass(int locat) { return errclass(static_cast<loc>(locat)); }
     float val(int locat) { return val(static_cast<loc>(locat)); }
