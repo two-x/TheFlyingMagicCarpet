@@ -6,6 +6,7 @@
 #include "temperature.h"
 #include "motors.h"  // qpid.h is included from within motors.h
 #include "neopixel.h"
+#include "web.h"
 #include "objects.h"
 #include "display.h"
 #include "touch.h"
@@ -131,8 +132,7 @@ void loop() {
     tuner_update(run.mode);
     diag_update();  // notice any screwy conditions or suspicious shenigans
     neo_idiots_update();
-    neo.set_heartcolor(colorcard[run.mode]);
-    neo.update(!syspower);
+    neo.update(colorcard[run.mode], !syspower);
     looptime_mark("-");
     screen.update(run.mode);  // Display updates
     looptime_mark("dis");
