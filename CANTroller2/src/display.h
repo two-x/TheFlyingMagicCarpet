@@ -135,7 +135,7 @@ char brake_pid_card[2][7] = { "presur", "positn" };
 
 enum datapages { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
 char pagecard[datapages::NUM_DATAPAGES][5] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 4, 8, 7, 7, 10, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
+int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 4, 8, 7, 7, 10, 0, 6 };  // first value in each dataset page that's editable. All values after this must also be editable
 
 char datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines][9] = {
     { brAk"Posn", "MuleBatt", "LiPoBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", __________, __________, "Governor", stEr"Safe", },  // PG_RUN
@@ -146,9 +146,9 @@ char datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines][9] = {
     { "Pn|PrTgt", "Pn|PrErr", "  P Term", "  I Term", "  D Term", brAk"Posn", "dPressur", " dPositn", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, "OpenLoop", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
-    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
+    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", " Touch X", " Touch Y", " Touch X", " Touch Y", "No Temps", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "LoopFreq", "Loop Avg", "LoopPeak", " Touch X", " Touch Y", " Touch X", " Touch Y", "BlnkDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
+    { "LoopFreq", "Loop Avg", "LoopPeak", __________,  __________, __________, "Webservr", "BlnkDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
 };
 char tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines][5] = {
     { "in  ", "V   ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, "%   ", "%   ", },  // PG_RUN
@@ -159,9 +159,9 @@ char tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines][5] = {
     { "psin", "psin", "%   ", "%   ", "%   ", "in  ", ______, ______, ______, "Hz  ", "s   ", },  // PG_BPID
     { "rpm ", "rpm ", "%   ", "%   ", "%   ", "%   ", ______, b1nary, ______, "Hz  ", "s   ", },  // PG_GPID
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%/s ", ______, "Hz  ", "s   ", },  // PG_CPID
-    { degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, b1nary, },  // PG_TEMP
+    { degreF, degreF, degreF, degreF, degreF, degreF, "pix ", "pix ", "ohm ", "ohm ", b1nary, },  // PG_TEMP
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "Hz  ", "us  ", "us  ", "pix ", "pix ", "ohm ", "ohm ", b1nary, "%   ", "/10 ", b1nary, },  // PG_UI
+    { "Hz  ", "us  ", "us  ", ______, ______, ______, b1nary, b1nary, "%   ", "/10 ", b1nary, },  // PG_UI
 };
 char simgrid[4][3][5] = {
     { "psi\x18", "rpm\x18", "mph\x18" },
@@ -814,7 +814,10 @@ class Display {
                     draw_temperature(loc::WHEEL_FR, 12);
                     draw_temperature(loc::WHEEL_RL, 13);
                     draw_temperature(loc::WHEEL_RR, 14);
-                    for (int line=15; line<=18; line++) draw_eraseval(line);
+                    draw_dynamic(15, touch_pt[0], 0, disp_width_pix);
+                    draw_dynamic(16, touch_pt[1], 0, disp_height_pix);
+                    draw_dynamic(17, touch_pt[2], 340, 3980);
+                    draw_dynamic(18, touch_pt[3], 180, 3980);
                     draw_truth(19, dont_take_temperatures, 2);
                 }
                 else if (datapage == PG_SIM) {
@@ -834,10 +837,8 @@ class Display {
                     draw_dynamic(9, loopfreq_hz);
                     draw_dynamic(10, (int32_t)loop_avg_us, loop_scale_min_us, loop_scale_avg_max_us);
                     draw_dynamic(11, loop_peak_us, loop_scale_min_us, loop_scale_peak_max_us);
-                    draw_dynamic(12, touch_pt[0], 0, disp_width_pix);
-                    draw_dynamic(13, touch_pt[1], 0, disp_height_pix);
-                    draw_dynamic(14, touch_pt[2], 340, 3980);
-                    draw_dynamic(15, touch_pt[3], 180, 3980);
+                    for (int line=12; line<=14; line++) draw_eraseval(line);
+                    draw_truth(15, web_enabled, 0);
                     draw_truth(16, flashdemo, 0);
                     draw_dynamic(17, neobright, 1.0, 100.0, -1, 3);
                     draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
@@ -1037,7 +1038,8 @@ void tuner_update(int rmode) {
             else if (sel_val == 10 && rmode == CAL) adj_bool(&(cal_pot_gasservo_mode), (idelta < 0 || cal_pot_gasservo_ready) ? idelta : -1);
         }
         else if (datapage == PG_UI) {
-            if (sel_val == 7) { adj_bool(&flashdemo, idelta); enable_flashdemo(flashdemo); }
+            if (sel_val == 6) { adj_bool(&web_enabled, idelta); }
+            else if (sel_val == 7) { adj_bool(&flashdemo, idelta); enable_flashdemo(flashdemo); }
             else if (sel_val == 8) { adj_val(&neobright, idelta, 1, 100); neo.setbright(neobright); }
             else if (sel_val == 9) { adj_val(&neodesat, idelta, 0, 10); neo.setdesaturation(neodesat); }
             else if (sel_val == 10) adj_bool(&screensaver, idelta);

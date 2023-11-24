@@ -49,7 +49,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     Serial.begin(115200);  // Open console serial port
     delay(800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     printf("Console started..\nUsing %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
-    web.setup();
     hotrc.init();
     pot.setup();
     encoder.setup();

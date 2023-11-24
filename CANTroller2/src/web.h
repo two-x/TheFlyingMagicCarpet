@@ -173,6 +173,7 @@ class WebSocket {
 };
 class WebManager {
   private:
+    bool web_enabled_last = false;
   public:
     FileSystem fs;
     AccessPoint wifi;
@@ -194,6 +195,8 @@ class WebManager {
         return String("rgb(") + String(random(256)) + "," + String(random(256)) + "," + String(random(256)) + ")";  // Generate a random RGB color
     }
     void update() {
+        if (web_enabled && !web_enabled_last) setup();
+        web_enabled_last = web_enabled;
         if (!web_enabled) return;
         socket.update();
     }
