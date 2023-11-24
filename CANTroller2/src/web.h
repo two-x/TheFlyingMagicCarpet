@@ -173,7 +173,7 @@ class WebSocket {
 };
 class WebManager {
   private:
-    bool web_enabled_last = false;
+    bool web_started = false;
   public:
     FileSystem fs;
     AccessPoint wifi;
@@ -181,11 +181,11 @@ class WebManager {
     WebSocket socket; 
     WebManager() {}
     void setup() {
-        if (!web_enabled) return;
         wifi.setup();
         fs.setup();
         server.setup();
         socket.setup();
+        web_started = true;
     }
     String processor(const String &var) {
         if (var == "CHESSBOARD_COLOR") return getRandomColor();  // Replace placeholders in the HTML with dynamic content
@@ -195,9 +195,8 @@ class WebManager {
         return String("rgb(") + String(random(256)) + "," + String(random(256)) + "," + String(random(256)) + ")";  // Generate a random RGB color
     }
     void update() {
-        if (web_enabled && !web_enabled_last) setup();
-        web_enabled_last = web_enabled;
         if (!web_enabled) return;
+        if (!web_started) setup();
         socket.update();
     }
 };
