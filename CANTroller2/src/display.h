@@ -948,6 +948,12 @@ void tuner_update(int rmode) {
         if (encoder_sw_action == Encoder::SHORT)  {  // if short press
             if (tunctrl == EDIT) tunctrl = SELECT;  // If we were editing a value drop back to select mode
             else if (tunctrl == SELECT) tunctrl = EDIT;  // If we were selecting a variable start editing its value
+            else {
+                uint16_t newcolor = random(0x10000);
+                heartbeat_override_color = newcolor;
+                printf("after change heartbeat color: %04x\n", heartbeat_override_color);
+
+            }
         }
         else tunctrl = (tunctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
     }

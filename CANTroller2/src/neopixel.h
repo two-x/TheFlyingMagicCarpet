@@ -204,7 +204,9 @@ void NeopixelStrip::heartbeat(bool onoroff) {
 void NeopixelStrip::set_heartcolor(uint16_t _newcolor) {
     uint16_t newcolor = _newcolor;
     if (heartbeat_override_color != 0x0000) newcolor = heartbeat_override_color;
-    else if (heartcolor16 != newcolor) {
+    if (heartcolor16 != newcolor) {
+        printf("! heartbeat color change: %04x\n", newcolor);
+
         heartbeatColor = color_to_Rgb(newcolor);
         heartcolor_change = true;
         heartcolor16 = newcolor;
