@@ -1,5 +1,7 @@
 #pragma once
 #include <TFT_eSPI.h>
+#include "neopixel.h"
+#include "touch.h"
 #define display ILI9488  // ILI9341
 // LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
 // Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
@@ -44,7 +46,6 @@
 
 #define disp_lines 20  // Max lines of text displayable at line height = disp_line_height_pix
 #define disp_fixed_lines 8  // Lines of static variables/values always displayed
-#define disp_tuning_lines 11  // Lines of dynamic variables/values in dataset pages 
 #define disp_line_height_pix 12  // Pixel height of each text line. Screen can fit 16x 15-pixel or 20x 12-pixel lines
 #define disp_vshift_pix 2  // Unknown.  Note: At smallest text size, characters are 5x7 pix + pad on rt and bot for 6x8 pix.
 #define disp_font_height 8
@@ -63,10 +64,6 @@
 #define disp_idiot_corner_y 13
 #define disp_idiots_per_row 11
 #define disp_idiot_row_height 10
-#define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
-#define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
-#define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
-#define touch_reticle_offset 50  // Distance of center of each reticle to nearest screen edge
 #define touch_simbutton 38
 #define disp_simbuttons_x 165
 #define disp_simbuttons_y 48
@@ -138,7 +135,6 @@ char telemetry[disp_fixed_lines][9] = { "TriggerV", "   Speed", "    Tach", "Thr
 char units[disp_fixed_lines][5] = { "%   ", "mph ", "rpm ", "%   ", "psi ", "%   ", "%   ", "%   " };  // Fixed rows
 char brake_pid_card[2][7] = { "presur", "positn" };
 
-enum datapages { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
 char pagecard[datapages::NUM_DATAPAGES][5] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
 int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 4, 8, 7, 7, 10, 0, 6 };  // first value in each dataset page that's editable. All values after this must also be editable
 
@@ -241,17 +237,12 @@ void set_idiotcolors() {
         disp_idiots_dirty = true;
     }
 }
-// tuning-ui related globals
-enum disp_draw { ERASE = -1 };
-enum tunctrls { OFF, SELECT, EDIT };
-int tunctrl = OFF, tunctrl_last = OFF;
-int datapage = PG_RUN, datapage_last = PG_TEMP;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
-int sel_val = 0, sel_val_last = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
-Timer tuningCtrlTimer (25000000);  // This times out edit mode after a a long period of inactivity
 class Display {
   private:
     TFT_eSPI _tft = TFT_eSPI();
     TFT_eSprite _saver = TFT_eSprite(&_tft);  // Declare screensaver sprite object with pointer to tft object
+    NeopixelStrip* neo;
+    TouchScreen* touch;
     uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     Timer _tftResetTimer, _tftDelayTimer;
     int32_t _timing_tft_reset;
@@ -271,9 +262,14 @@ class Display {
     uint32_t saver_cycletime_us = 38000000, saver_refresh_us = 45000;
     Timer saverRefreshTimer, saverCycleTimer, pentimer;
   public:
-    Display (int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
-    Display () : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
-    void init() {
+    // Display (int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
+    // Display () : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
+    Display (NeopixelStrip* _neo, TouchScreen* _touch) : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {
+        neo = _neo;
+        touch = _touch;
+    }
+    Display (int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, TouchScreen* _touch) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) { Display(_neo, _touch); }
+    void setup() {
         printf("Init display.. ");
         _tft.begin();
         _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
@@ -307,7 +303,7 @@ class Display {
         }
         else if (_timing_tft_reset == 2 && _tftResetTimer.expired()) {
             write_pin (tft_rst_pin, HIGH);
-            init();
+            setup();
             _timing_tft_reset = 0;
             reset_finished = true;
         }
@@ -778,13 +774,25 @@ class Display {
         else draw_dynamic(draw_index, tempsens.val(location), temp_lims_f[tempsens.errclass(location)][DISP_MIN], temp_lims_f[tempsens.errclass(location)][DISP_MAX]);
     }
     void update_idiots(bool force = false) {
-        draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, force);
+        for (int32_t idiot = 0; idiot < arraysize(idiotlights); idiot++) {
+            if (idiot <= neo->neopixelsAvailable())
+                if (*(idiotlights[idiot]) != idiotlasts[idiot]) neo->setBoolState(idiot, *idiotlights[idiot]);
+            if (idiot == LOST || idiot == RANGE) {
+                if (highest_pri_failing_last[idiot] != highest_pri_failing_sensor[idiot]) {
+                    if (highest_pri_failing_sensor[idiot] == e_none) neo->setflash((int)idiot, 0);
+                    else neo->setflash((int)idiot, highest_pri_failing_sensor[idiot] + 1, 2, 6, 1, 0);
+                }
+                highest_pri_failing_last[idiot] = highest_pri_failing_sensor[idiot];
+            }
+        }
+        if (!display_enabled) draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, force);
     }
   public:
     void update(int _nowmode) {
-        if (!display_enabled) return;
         update_idiots(disp_idiots_dirty);
+
         disp_idiots_dirty = false;
+        if (!display_enabled) return;
         if (disp_simbuttons_dirty || (sim.enabled() != simulating_last)) {
             draw_simbuttons(sim.enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
             disp_simbuttons_dirty = false;
@@ -966,121 +974,136 @@ class Display {
             disp_data_dirty = false;
             _procrastinate = true;  // don't do anything else in this same loop
         }
-        if (screensaver && !sim.enabled() && !_procrastinate) saver_update();
+        if (screensaver) {
+            if (touch->touched()) saver_touch(touch->touch_pt(0), touch->touch_pt(1));
+            if (!sim.enabled() && !_procrastinate) saver_update();
+        }
         _procrastinate = false;
     }
 };
-// tuner
-int32_t idelta = 0, idelta_touch = 0, idelta_encoder = 0;
-void tuner_update(int rmode) {
-    sel_val_last = sel_val;
-    datapage_last = datapage;
-    tunctrl_last = tunctrl; // Make sure this goes after the last comparison
-    uint32_t encoder_sw_action = encoder.press_event();  // true = autoreset the event if there is one
-    if (encoder_sw_action != Encoder::NONE) {  // First deal with any unhandled switch press events
-        if (encoder_sw_action == Encoder::SHORT)  {  // if short press
-            if (tunctrl == EDIT) tunctrl = SELECT;  // If we were editing a value drop back to select mode
-            else if (tunctrl == SELECT) tunctrl = EDIT;  // If we were selecting a variable start editing its value
-            else heartbeat_override_color = random(0x10000);  // temporary!! to test heartbeat color override feature
-        }
-        else tunctrl = (tunctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
+class Tuner {
+  private:
+    NeopixelStrip* neo;
+    TouchScreen* touch;
+    uint32_t tuner_timeout = 25000000;  // This times out edit mode after a a long period of inactivity
+    Timer tuningCtrlTimer;
+  public:
+    Tuner(NeopixelStrip* _neo, TouchScreen* _touch) {
+        neo = _neo;
+        touch = _touch;
+        tuningCtrlTimer.set(tuner_timeout);
     }
-    if (tunctrl == EDIT) idelta_encoder = encoder.rotation(true);  // true = include acceleration
-    else if (tunctrl == SELECT) sel_val += encoder.rotation();  // If overflow constrain will fix in general handler below
-    else if (tunctrl == OFF) datapage += encoder.rotation();  // If overflow tconstrain will fix in general below
-    idelta += idelta_encoder + idelta_touch;  // Allow edits using the encoder or touchscreen
-    idelta_touch = idelta_encoder = 0;
-    if (tunctrl != tunctrl_last || datapage != datapage_last || sel_val != sel_val_last || idelta) tuningCtrlTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
-    else if (tunctrl != OFF && tuningCtrlTimer.expired()) tunctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
-    datapage = constrain(datapage, 0, arraysize(pagecard)-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
-    if (datapage != datapage_last) {
-        if (tunctrl == EDIT) tunctrl = SELECT;  // If page is flipped during edit, drop back to select mode
-        disp_datapage_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
+    int32_t idelta = 0, idelta_encoder = 0;
+    void update(int rmode) {
+        sel_val_last = sel_val;
+        datapage_last = datapage;
+        tunctrl_last = tunctrl; // Make sure this goes after the last comparison
+        uint32_t encoder_sw_action = encoder.press_event();  // true = autoreset the event if there is one
+        if (encoder_sw_action != Encoder::NONE) {  // First deal with any unhandled switch press events
+            if (encoder_sw_action == Encoder::SHORT)  {  // if short press
+                if (tunctrl == EDIT) tunctrl = SELECT;  // If we were editing a value drop back to select mode
+                else if (tunctrl == SELECT) tunctrl = EDIT;  // If we were selecting a variable start editing its value
+                else heartbeat_override_color = random(0x10000);  // temporary!! to test heartbeat color override feature
+            }
+            else tunctrl = (tunctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
+        }
+        if (tunctrl == EDIT) idelta_encoder = encoder.rotation(true);  // true = include acceleration
+        else if (tunctrl == SELECT) sel_val += encoder.rotation();  // If overflow constrain will fix in general handler below
+        else if (tunctrl == OFF) datapage += encoder.rotation();  // If overflow tconstrain will fix in general below
+        idelta += idelta_encoder + touch->idelta;  // Allow edits using the encoder or touchscreen
+        touch->idelta = idelta_encoder = 0;
+        if (tunctrl != tunctrl_last || datapage != datapage_last || sel_val != sel_val_last || idelta) tuningCtrlTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
+        else if (tunctrl != OFF && tuningCtrlTimer.expired()) tunctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
+        datapage = constrain(datapage, 0, arraysize(pagecard)-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
+        if (datapage != datapage_last) {
+            if (tunctrl == EDIT) tunctrl = SELECT;  // If page is flipped during edit, drop back to select mode
+            disp_datapage_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
+        }
+        if (tunctrl == SELECT) {
+            sel_val = constrain(sel_val, tuning_first_editable_line[datapage], disp_tuning_lines-1);  // Skip unchangeable values for all PID modes
+            if (sel_val != sel_val_last) disp_selected_val_dirty = true;
+        }
+        if (tunctrl != tunctrl_last || disp_datapage_dirty) disp_selected_val_dirty = true;
+        float fdelta = (float)idelta;
+        if (tunctrl == EDIT && idelta != 0) {  // Change tunable values when editing
+            if (datapage == PG_RUN) {
+                if (sel_val == 9) { adj_val(&(gas.governor), idelta, 0, 100); gas.derive(); }
+                else if (sel_val == 10) adj_val(&(steer.steer_safe_pc), idelta, 0, 100);
+            }
+            else if (datapage == PG_JOY) {
+                if (sel_val == 9) adj_val(&hotrc.failsafe_us, idelta, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
+                else if (sel_val == 10) { adj_val(&hotrc.deadband_us, idelta, 0, 50); hotrc.calc_params(); }
+            }
+            else if (datapage == PG_SENS) {
+                if (sel_val == 2) idlectrl.add_idlehot(0.1 * fdelta);
+                else if (sel_val == 3) idlectrl.add_idlecold(0.1 * fdelta);
+                else if (sel_val == 4) adj_val(tach.redline_rpm_ptr(), 0.1 * fdelta, idlectrl.idlehigh, tach.abs_max_rpm());
+                else if (sel_val == 5) adj_val(airvelo.max_mph_ptr(), 0.01 * fdelta, 0, airvelo.abs_max_mph());
+                else if (sel_val == 6) adj_val(mapsens.min_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
+                else if (sel_val == 6) adj_val(mapsens.max_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
+                else if (sel_val == 8) adj_val(speedo.idle_mph_ptr(), 0.01 * fdelta, 0, speedo.redline_mph() - 1);
+                else if (sel_val == 9) adj_val(speedo.redline_mph_ptr(), 0.01 * fdelta, speedo.idle_mph(), 20);
+                else if (sel_val == 10) adj_val(brkpos.zeropoint_ptr(), 0.001 * fdelta, brkpos.op_min_in(), brkpos.op_max_in());
+            }
+            else if (datapage == PG_PWMS) {
+                if (sel_val == 7) { adj_val(&(gas.nat[OPMIN]), fdelta, gas.nat[PARKED] + 1, gas.nat[OPMAX] - 1); gas.derive(); }
+                else if (sel_val == 8) { adj_val(&(gas.nat[OPMAX]), fdelta, gas.nat[OPMIN] + 1, 180.0); gas.derive(); }
+                else if (sel_val == 9) { adj_val(&(brake.us[STOP]), fdelta, brake.us[OPMIN] + 1, brake.us[OPMAX] - 1); brake.derive(); }
+                else if (sel_val == 10) { adj_val(&(brake.duty_pc), fdelta, 0.0, 100.0); brake.derive(); }
+            }
+            else if (datapage == PG_IDLE) {
+                if (sel_val == 4) idlectrl.add_idlehigh(fdelta);
+                else if (sel_val == 5) idlectrl.add_idlecold(fdelta);
+                else if (sel_val == 6) idlectrl.add_idlehot(fdelta);
+                else if (sel_val == 7) idlectrl.add_tempcold(fdelta);
+                else if (sel_val == 8) idlectrl.add_temphot(fdelta);
+                else if (sel_val == 9) idlectrl.add_settlerate(idelta);
+                else if (sel_val == 10) idlectrl.cycle_idlemode(idelta);
+            }
+            else if (datapage == PG_BPID) {
+                if (sel_val == 8) brake.add_kp(0.001 * fdelta);
+                else if (sel_val == 9) brake.add_ki(0.001 * fdelta);
+                else if (sel_val == 10) brake.add_kd(0.001 * fdelta);
+            }
+            else if (datapage == PG_GPID) {
+                if (sel_val == 7) { adj_bool(&(gas.openloop), idelta); }  // gas_pid.SetMode (gas_open_loop ? QPID::ctrl::manual : QPID::ctrl::automatic);
+                else if (sel_val == 8) gas.pid.add_kp(0.001 * fdelta);
+                else if (sel_val == 9) gas.pid.add_ki(0.001 * fdelta);
+                else if (sel_val == 10) gas.pid.add_kd(0.001 * fdelta);
+            }
+            else if (datapage == PG_CPID) {
+                if (sel_val == 7) adj_val(&cruise_delta_max_pc_per_s, idelta, 1, 35);
+                else if (sel_val == 8) gas.cruisepid.add_kp(0.001 * fdelta);
+                else if (sel_val == 9) gas.cruisepid.add_ki(0.001 * fdelta);
+                else if (sel_val == 10) gas.cruisepid.add_kd(0.001 * fdelta);
+            }
+            else if (datapage == PG_TEMP) {
+                if (sel_val == 10) adj_bool(&dont_take_temperatures, idelta);
+            }
+            else if (datapage == PG_SIM) {
+                if (sel_val == 0) sim.set_can_sim(sens::joy, idelta);
+                else if (sel_val == 1) sim.set_can_sim(sens::pressure, idelta);
+                else if (sel_val == 2) sim.set_can_sim(sens::brkpos, idelta);
+                else if (sel_val == 3) sim.set_can_sim(sens::speedo, idelta);
+                else if (sel_val == 4) sim.set_can_sim(sens::tach, idelta);
+                else if (sel_val == 5) sim.set_can_sim(sens::airvelo, idelta);
+                else if (sel_val == 6) sim.set_can_sim(sens::mapsens, idelta);  // else if (sel_val == 7) sim.set_can_sim(sens::starter, idelta);
+                else if (sel_val == 7) sim.set_can_sim(sens::basicsw, idelta);
+                else if (sel_val == 8) { sim.set_potmap((adj_val(sim.potmap(), idelta, 0, arraysize(sensorcard) - 4))); prefs.putUInt("potmap", sim.potmap()); }
+                else if (sel_val == 9 && rmode == CAL) adj_bool(&(cal_joyvert_brkmotor_mode), idelta);
+                else if (sel_val == 10 && rmode == CAL) adj_bool(&(cal_pot_gasservo_mode), (idelta < 0 || cal_pot_gasservo_ready) ? idelta : -1);
+            }
+            else if (datapage == PG_UI) {
+                if (sel_val == 6) { adj_bool(&web_enabled, idelta); }
+                else if (sel_val == 7) { adj_bool(&flashdemo, idelta); neo->enable_flashdemo(flashdemo); }
+                else if (sel_val == 8) { adj_val(&neobright, idelta, 1, 100); neo->setbright(neobright); }
+                else if (sel_val == 9) { adj_val(&neodesat, idelta, 0, 10); neo->setdesaturation(neodesat); }
+                else if (sel_val == 10) adj_bool(&screensaver, idelta);
+            }
+            idelta = 0;
+        }
     }
-    if (tunctrl == SELECT) {
-        sel_val = constrain(sel_val, tuning_first_editable_line[datapage], disp_tuning_lines-1);  // Skip unchangeable values for all PID modes
-        if (sel_val != sel_val_last) disp_selected_val_dirty = true;
-    }
-    if (tunctrl != tunctrl_last || disp_datapage_dirty) disp_selected_val_dirty = true;
-    float fdelta = (float)idelta;
-    if (tunctrl == EDIT && idelta != 0) {  // Change tunable values when editing
-        if (datapage == PG_RUN) {
-            if (sel_val == 9) { adj_val(&(gas.governor), idelta, 0, 100); gas.derive(); }
-            else if (sel_val == 10) adj_val(&(steer.steer_safe_pc), idelta, 0, 100);
-        }
-        else if (datapage == PG_JOY) {
-            if (sel_val == 9) adj_val(&hotrc.failsafe_us, idelta, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
-            else if (sel_val == 10) { adj_val(&hotrc.deadband_us, idelta, 0, 50); hotrc.calc_params(); }
-        }
-        else if (datapage == PG_SENS) {
-            if (sel_val == 2) idlectrl.add_idlehot(0.1 * fdelta);
-            else if (sel_val == 3) idlectrl.add_idlecold(0.1 * fdelta);
-            else if (sel_val == 4) adj_val(tach.redline_rpm_ptr(), 0.1 * fdelta, idlectrl.idlehigh, tach.abs_max_rpm());
-            else if (sel_val == 5) adj_val(airvelo.max_mph_ptr(), 0.01 * fdelta, 0, airvelo.abs_max_mph());
-            else if (sel_val == 6) adj_val(mapsens.min_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
-            else if (sel_val == 6) adj_val(mapsens.max_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
-            else if (sel_val == 8) adj_val(speedo.idle_mph_ptr(), 0.01 * fdelta, 0, speedo.redline_mph() - 1);
-            else if (sel_val == 9) adj_val(speedo.redline_mph_ptr(), 0.01 * fdelta, speedo.idle_mph(), 20);
-            else if (sel_val == 10) adj_val(brkpos.zeropoint_ptr(), 0.001 * fdelta, brkpos.op_min_in(), brkpos.op_max_in());
-        }
-        else if (datapage == PG_PWMS) {
-            if (sel_val == 7) { adj_val(&(gas.nat[OPMIN]), fdelta, gas.nat[PARKED] + 1, gas.nat[OPMAX] - 1); gas.derive(); }
-            else if (sel_val == 8) { adj_val(&(gas.nat[OPMAX]), fdelta, gas.nat[OPMIN] + 1, 180.0); gas.derive(); }
-            else if (sel_val == 9) { adj_val(&(brake.us[STOP]), fdelta, brake.us[OPMIN] + 1, brake.us[OPMAX] - 1); brake.derive(); }
-            else if (sel_val == 10) { adj_val(&(brake.duty_pc), fdelta, 0.0, 100.0); brake.derive(); }
-        }
-        else if (datapage == PG_IDLE) {
-            if (sel_val == 4) idlectrl.add_idlehigh(fdelta);
-            else if (sel_val == 5) idlectrl.add_idlecold(fdelta);
-            else if (sel_val == 6) idlectrl.add_idlehot(fdelta);
-            else if (sel_val == 7) idlectrl.add_tempcold(fdelta);
-            else if (sel_val == 8) idlectrl.add_temphot(fdelta);
-            else if (sel_val == 9) idlectrl.add_settlerate(idelta);
-            else if (sel_val == 10) idlectrl.cycle_idlemode(idelta);
-        }
-        else if (datapage == PG_BPID) {
-            if (sel_val == 8) brake.add_kp(0.001 * fdelta);
-            else if (sel_val == 9) brake.add_ki(0.001 * fdelta);
-            else if (sel_val == 10) brake.add_kd(0.001 * fdelta);
-        }
-        else if (datapage == PG_GPID) {
-            if (sel_val == 7) { adj_bool(&(gas.openloop), idelta); }  // gas_pid.SetMode (gas_open_loop ? QPID::ctrl::manual : QPID::ctrl::automatic);
-            else if (sel_val == 8) gas.pid.add_kp(0.001 * fdelta);
-            else if (sel_val == 9) gas.pid.add_ki(0.001 * fdelta);
-            else if (sel_val == 10) gas.pid.add_kd(0.001 * fdelta);
-        }
-        else if (datapage == PG_CPID) {
-            if (sel_val == 7) adj_val(&cruise_delta_max_pc_per_s, idelta, 1, 35);
-            else if (sel_val == 8) gas.cruisepid.add_kp(0.001 * fdelta);
-            else if (sel_val == 9) gas.cruisepid.add_ki(0.001 * fdelta);
-            else if (sel_val == 10) gas.cruisepid.add_kd(0.001 * fdelta);
-        }
-        else if (datapage == PG_TEMP) {
-            if (sel_val == 10) adj_bool(&dont_take_temperatures, idelta);
-        }
-        else if (datapage == PG_SIM) {
-            if (sel_val == 0) sim.set_can_sim(sens::joy, idelta);
-            else if (sel_val == 1) sim.set_can_sim(sens::pressure, idelta);
-            else if (sel_val == 2) sim.set_can_sim(sens::brkpos, idelta);
-            else if (sel_val == 3) sim.set_can_sim(sens::speedo, idelta);
-            else if (sel_val == 4) sim.set_can_sim(sens::tach, idelta);
-            else if (sel_val == 5) sim.set_can_sim(sens::airvelo, idelta);
-            else if (sel_val == 6) sim.set_can_sim(sens::mapsens, idelta);  // else if (sel_val == 7) sim.set_can_sim(sens::starter, idelta);
-            else if (sel_val == 7) sim.set_can_sim(sens::basicsw, idelta);
-            else if (sel_val == 8) { sim.set_potmap((adj_val(sim.potmap(), idelta, 0, arraysize(sensorcard) - 4))); prefs.putUInt("potmap", sim.potmap()); }
-            else if (sel_val == 9 && rmode == CAL) adj_bool(&(cal_joyvert_brkmotor_mode), idelta);
-            else if (sel_val == 10 && rmode == CAL) adj_bool(&(cal_pot_gasservo_mode), (idelta < 0 || cal_pot_gasservo_ready) ? idelta : -1);
-        }
-        else if (datapage == PG_UI) {
-            if (sel_val == 6) { adj_bool(&web_enabled, idelta); }
-            else if (sel_val == 7) { adj_bool(&flashdemo, idelta); enable_flashdemo(flashdemo); }
-            else if (sel_val == 8) { adj_val(&neobright, idelta, 1, 100); neo.setbright(neobright); }
-            else if (sel_val == 9) { adj_val(&neodesat, idelta, 0, 10); neo.setdesaturation(neodesat); }
-            else if (sel_val == 10) adj_bool(&screensaver, idelta);
-        }
-        idelta = 0;
-    }
-}
+};
 // The following project draws a nice looking gauge cluster, very apropos to our needs and code is given.
 // See this video: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
 // Rinkydink home page: http://www.rinkydinkelectronics.com

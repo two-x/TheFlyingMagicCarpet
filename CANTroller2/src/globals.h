@@ -1,6 +1,5 @@
 // globals.h - not dependent on anything, so include this first
 #pragma once
-#include <Wire.h>
 #include "Arduino.h"
 // pin assignments  ESP32-S3-DevkitC series
 #define  encoder_sw_pin  0 // button0/strap-1  // Input, Rotary encoder push switch, for the UI. active low (needs pullup). Also the esp "Boot" button does the same thing
@@ -69,14 +68,7 @@
 #define adcrange_adc 4095     // = 2^adcbits-1
 #define adcmidscale_adc 2047  // = 2^(adcbits-1)-1
 
-// fast macros
-#define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays
-#define floor(amt, lim) ((amt <= lim) ? lim : amt)
-#define ceiling(amt, lim) ((amt >= lim) ? lim : amt)
-#undef min
-#undef max
 // these global enums are super convenient, just take care when making changes
-// it's good to keep global enums in one place here
 enum hotrc_axis : int { HORZ=0, VERT=1, CH3=2, CH4=3 };
 enum hotrc_val : int { OPMIN=0, CENT=1, OPMAX=2, RAW=3, FILT=4, DBBOT=5, DBTOP=6, MARGIN=7 };
 enum motor_val : int { PARKED=1, OUT=3, GOVERN=4 , ABSMIN=5, ABSMAX=6 };
@@ -91,11 +83,11 @@ enum sw_presses : int { NONE, SHORT, LONG }; // used by encoder sw and button al
 enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
 enum temp_lims : int { DISP_MIN, OP_MIN, OP_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
 enum brake_pids : int { PRESPID, POSNPID, NUM_BRAKEPIDS };
-// enum displays : int { ILI9341, ILI9488 };
+enum disp_draw : int { ERASE = -1 };
+enum tunctrls : int { OFF, SELECT, EDIT };
+enum datapages { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
 
 // global configuration settings
-
-// int display = ILI9488;
 bool brake_hybrid_pid = false;
 int brake_default_pid = PRESPID;
 bool starter_signal_support = true;
@@ -157,7 +149,18 @@ bool flycruise_toggle_request = false;
 int sleep_request = REQ_NA;
 bool screensaver = false;            // Can enable experiment with animated screen draws
 uint16_t heartbeat_override_color = 0x0000;
+int tunctrl = OFF, tunctrl_last = OFF;
+int datapage = PG_RUN;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
+int datapage_last = PG_TEMP;
+int sel_val = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
+int sel_val_last = 0;
 
+// fast macros
+#define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays
+#define floor(amt, lim) ((amt <= lim) ? lim : amt)
+#define ceiling(amt, lim) ((amt >= lim) ? lim : amt)
+#undef min
+#undef max
 inline float smax(float a, float b) { return (a > b) ? a : b; }
 inline int32_t smax(int32_t a, int32_t b) { return (a > b) ? a : b; }
 inline uint32_t smax(uint32_t a, uint32_t b) { return (a > b) ? a : b; }

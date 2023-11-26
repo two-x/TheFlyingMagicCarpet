@@ -1,32 +1,20 @@
 // Carpet CANTroller II  Source Code  - For ESP32-S3-DevKitC-1-N8
 #include "globals.h"
-#include "sensors.h"  // uictrl.h, i2cbus.h included from within
-#include "motors.h"  // qpid.h, temperature.h included from within
-#include "objects.h"  // neopixel.h, web.h included from within
-#include "display.h"
-#include "touch.h"
+#include "sensors.h"  // includes uictrl.h, i2cbus.h
+#include "motors.h"  // includes qpid.h, temperature.h
+#include "objects.h"  // includes web.h
+#include "display.h"  // includes touch.h, neopixel.h
 #include "RunModeManager.h"
-static Display screen;
+static NeopixelStrip neo(neopixel_pin);
 static TouchScreen touch(touch_cs_pin);
+static Display screen(&neo, &touch);
+static Tuner tuner(&neo, &touch);
 static RunModeManager run(&screen, &encoder);
 void get_touchpoint() { 
     touch_pt[0] = touch.touch_pt(0);
     touch_pt[1] = touch.touch_pt(1); 
     touch_pt[2] = touch.getX();
     touch_pt[3] = touch.getY(); 
-}
-void neo_idiots_update() {
-    for (int32_t idiot = 0; idiot < arraysize(idiotlights); idiot++) {
-        if (idiot <= neo.neopixelsAvailable())
-            if (*(idiotlights[idiot]) != idiotlasts[idiot]) neo.setBoolState(idiot, *idiotlights[idiot]);
-        if (idiot == LOST || idiot == RANGE) {
-            if (highest_pri_failing_last[idiot] != highest_pri_failing_sensor[idiot]) {
-                if (highest_pri_failing_sensor[idiot] == e_none) neo.setflash((int)idiot, 0);
-                else neo.setflash((int)idiot, highest_pri_failing_sensor[idiot] + 1, 2, 6, 1, 0);
-            }
-            highest_pri_failing_last[idiot] = highest_pri_failing_sensor[idiot];
-        }
-    }
 }
 void setup() {  // Setup just configures pins (and detects touchscreen type)
     if (RUN_TESTS) run_tests();
@@ -42,7 +30,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     Serial.begin(115200);  // Open console serial port
     delay(800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     set_board_defaults();
-    hotrc.init();
+    hotrc.setup();
     pot.setup();
     encoder.setup();
     pressure.setup();
@@ -51,41 +39,33 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     lipobatt.setup();
     tach.setup();
     speedo.setup();
-    i2c.init();
+    i2c.setup();
     airvelo.setup(); // must be done after i2c is started
     mapsens.setup();
-    lightbox.init();
+    lightbox.setup();
     tempsens.setup();  // Onewire bus and temp sensors
-    xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Create a new task that runs the update_temperature_sensors function
-    printf("Simulator setup..\n");
-    sim.register_device(sens::pressure, pressure, pressure.source());
-    sim.register_device(sens::brkpos, brkpos, brkpos.source());
-    sim.register_device(sens::airvelo, airvelo, airvelo.source());
-    sim.register_device(sens::mapsens, mapsens, mapsens.source());
-    sim.register_device(sens::tach, tach, tach.source());
-    sim.register_device(sens::speedo, speedo, speedo.source());
-    idlectrl.init(gas.pid.target_ptr(), tach.human_ptr(), tach.filt_ptr(),
-        tempsens.get_sensor(loc::ENGINE), temp_lims_f[ENGINE][OP_MIN], temp_lims_f[ENGINE][WARNING], 50, IdleControl::idlemodes::CONTROL);
+    xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Temperature sensors task
+    sim_setup();  // simulator initialize devices and pot map
+    idlectrl.setup(gas.pid.target_ptr(), tach.human_ptr(), tach.filt_ptr(), tempsens.get_sensor(loc::ENGINE), temp_lims_f[ENGINE][OP_MIN], temp_lims_f[ENGINE][WARNING], 50, IdleControl::idlemodes::CONTROL);
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);
-    gas.init(gas_pwm_pin, 60, &hotrc, &speedo, &tach, &pot, &idlectrl);
-    brake.init(brake_pwm_pin, 50, &hotrc, &speedo, &mulebatt, &pressure, &brkpos);
-    steer.init(steer_pwm_pin, 50, &hotrc, &speedo, &mulebatt);
+    gas.setup(gas_pwm_pin, 60, &hotrc, &speedo, &tach, &pot, &idlectrl);
+    brake.setup(brake_pwm_pin, 50, &hotrc, &speedo, &mulebatt, &pressure, &brkpos);
+    steer.setup(steer_pwm_pin, 50, &hotrc, &speedo, &mulebatt);
     prefs.begin("FlyByWire", false);
     datapage = prefs.getUInt("dpage", PG_RUN);
     datapage_last = prefs.getUInt("dpage", PG_TEMP);
-    sim.set_potmap(prefs.getUInt("potmap", 2));  // 2 = sens::pressure
-    if (display_enabled) screen.init();
-    if (display_enabled) touch.init();
-    neo_setup();
+    if (display_enabled) screen.setup();
+    if (display_enabled) touch.setup(disp_width_pix, disp_height_pix);
+    neo.setup();
     int32_t idiots = smin((uint32_t)arraysize(idiotlights), neo.neopixelsAvailable());
     for (int32_t idiot = 0; idiot < idiots; idiot++) neo.newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
     std::cout << "set up heartbeat led and " << idiots << " neopixel idiot lights" << std::endl;
     for (int32_t i=0; i<NUM_ERR_TYPES; i++) for (int32_t j=0; j<E_NUM_SENSORS; j++) err_sensor[i][j] = false; // Initialize sensor error flags to false
-    web.setup();  // delay(10);  // xTaskCreate(update_web, "Update Web Services", 2048, NULL, 6, NULL);  // Create a new task that runs the update_temperature_sensors function
+    xTaskCreate(update_web, "Update Web Services", 4096, NULL, 6, NULL);  // wifi/web task. 2048 is too low, it crashes when client connects
     printf("Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     panicTimer.reset();
-    looptime_init();
+    looptime_setup();
 }
 void loop() {
     ignition_panic_update();  // handler for ignition pin output and panicstop status.
@@ -112,14 +92,11 @@ void loop() {
     brake.update(run.mode);
     steer.update(run.mode);
     touch.update(); // Handle touch events and actions
-    if (screensaver && touch.touched()) screen.saver_touch(touch.touch_pt(0), touch.touch_pt(1));
-    tuner_update(run.mode);
+    tuner.update(run.mode);
     diag_update();  // notice any screwy conditions or suspicious shenigans
-    neo_idiots_update();
     neo.update(colorcard[run.mode], !syspower);
     looptime_mark("-");
     screen.update(run.mode);  // Display updates
     looptime_mark("dis");
-    web.update();
     looptime_update();
 }

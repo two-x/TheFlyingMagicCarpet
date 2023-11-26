@@ -28,7 +28,7 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
     int64_t readtime_last;
   public:
     IdleControl() {}
-    void init(float* target, float* measraw, float* measfilt,  // Variable references: idle target, rpm raw, rpm filt
+    void setup(float* target, float* measraw, float* measfilt,  // Variable references: idle target, rpm raw, rpm filt
       TemperatureSensor* engine_sensor_ptr,  // Rate to lower idle from high point to low point (in rpm per second)
       float tempcold, float temphot, int32_t settlerate = 100,  // Values for: engine operational temp cold (min) and temp hot (max) in degrees-f
       int myidlemode = CONTROL) {  // Configure idle control to just soft land or also attempt to minimize idle
@@ -179,7 +179,7 @@ class ServoMotor {
     float pc[NUM_MOTORVALS] = { 0, NAN, 100, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX]  values range from -100% to 100% are all derived or auto-assigned
     float nat[NUM_MOTORVALS] = { 45.0, 43.0, 168.2, 45.0, NAN, 0, 180 };  // native-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX]
     float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 500, 2500 };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX]
-    void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo) {
+    void setup(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo) {
         hotrc = _hotrc;
         speedo = _speedo;
         pin = _pin;
@@ -221,8 +221,8 @@ class JagMotor : public ServoMotor {
         nat[OPMIN] = map(pc[OPMIN], pc[STOP], pc[ABSMIN], nat[STOP], nat[ABSMIN]);
         nat[OPMAX] = map(pc[OPMAX], pc[STOP], pc[ABSMAX], nat[STOP], nat[ABSMAX]);
     }
-    void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {
-        ServoMotor::init(_pin, _freq, _hotrc, _speedo);
+    void setup(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {
+        ServoMotor::setup(_pin, _freq, _hotrc, _speedo);
         mulebatt = _batt;
         volt_check_timer.set(volt_check_period_us);
         derive();
@@ -275,9 +275,9 @@ class GasServo : public ServoMotor {
         pc[GOVERN] = map(governor, 0.0, 100.0, pc[OPMIN], pc[OPMAX]);  // pc[GOVERN] = pc[OPMIN] + governor * (pc[OPMAX] - pc[OPMIN]) / 100.0;      
         nat[GOVERN] = map(pc[GOVERN], pc[OPMIN], pc[OPMAX], nat[OPMIN], nat[OPMAX]);
     }
-    void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, IdleControl* _idlectrl) {
+    void setup(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, IdleControl* _idlectrl) {
         printf("Gas servo..\n");
-        ServoMotor::init(_pin, _freq, _hotrc, _speedo);
+        ServoMotor::setup(_pin, _freq, _hotrc, _speedo);
         tach = _tach;
         pot = _pot;
         idlectrl = _idlectrl;
@@ -361,9 +361,9 @@ class BrakeMotor : public JagMotor {
     void derive() {
         JagMotor::derive();
     }
-    void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+    void setup(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         printf("Brake motor..\n");
-        JagMotor::init(_pin, _freq, _hotrc, _speedo, _batt);
+        JagMotor::setup(_pin, _freq, _hotrc, _speedo, _batt);
         pressure = _pressure;  // press_pin = _press_pin;
         brkpos = _brkpos;  // posn_pin = _posn_pin;
         duty_pc = 40.0;
@@ -456,9 +456,9 @@ class SteerMotor : public JagMotor {
     float steer_safe_pc = 72.0;  // this percent otaken off full steering power when driving full speed (linearly applied)
     bool reverse = false, openloop = true;
     SteerMotor() {}
-    void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+    void setup(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         printf("Steering motor..\n");
-        JagMotor::init(_pin, _freq, _hotrc, _speedo, _batt);
+        JagMotor::setup(_pin, _freq, _hotrc, _speedo, _batt);
     }
     void update(int runmode) {
         if (volt_check_timer.expireset()) derive();

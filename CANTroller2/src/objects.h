@@ -2,7 +2,7 @@
 #include <Preferences.h>  // Functions for writing to flash, i think
 #include <iomanip>  // For formatting console loop timing string output
 #include <vector>  // used to group loop times with string labels
-#include "neopixel.h"
+// #include "neopixel.h"
 #include "web.h"
 // #include <HardwareSerial.h>  // In case we ever talk to jaguars over asynchronous serial port, uncomment:
 // HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
@@ -28,7 +28,6 @@ static IdleControl idlectrl;
 static GasServo gas;
 static BrakeMotor brake;
 static SteerMotor steer;
-static NeopixelStrip neo;
 static WebManager web;
 
 void update_web(void *parameter) {
@@ -72,6 +71,16 @@ void set_board_defaults() {  // true for dev boards, false for printed board (on
         touch_reticles = false;
     }
     printf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
+}
+void sim_setup() {
+    printf("Simulator setup..\n");
+    sim.register_device(sens::pressure, pressure, pressure.source());
+    sim.register_device(sens::brkpos, brkpos, brkpos.source());
+    sim.register_device(sens::airvelo, airvelo, airvelo.source());
+    sim.register_device(sens::mapsens, mapsens, mapsens.source());
+    sim.register_device(sens::tach, tach, tach.source());
+    sim.register_device(sens::speedo, speedo, speedo.source());
+    sim.set_potmap(prefs.getUInt("potmap", 2));  // 2 = sens::pressure
 }
 bool starter = LOW;  // Set by handler only. Reflects current state of starter signal (does not indicate source)
 bool starter_drive = false;  // Set by handler only. High when we're driving starter, otherwise starter is an input
@@ -151,25 +160,6 @@ void hotrc_events_update(int runmode) {
     }
     hotrc.toggles_reset();
 }
-void neo_setup() {
-    std::cout << "Init neopixels.. ";
-    neo.init((uint8_t)neopixel_pin, running_on_devboard, 1);
-    neo.setbright(neobright);
-    neo.setdesaturation(neodesat);
-    neo.heartbeat(neopixel_pin >= 0);
-}
-void enable_flashdemo(bool ena) {
-    if (ena) {
-        neo.setflash(4, 8, 8, 8, 20, -1);  // brightness toggle in a continuous squarewave
-        neo.setflash(5, 3, 1, 2, 85);      // three super-quick bright white flashes
-        neo.setflash(6, 2, 5, 5, 0, 0);    // two short black pulses
-    }
-    else {
-        neo.setflash(4, 0);
-        neo.setflash(5, 0);
-        neo.setflash(6, 0);
-    }
-}
 // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
 float maf_gps;  // Manifold mass airflow in grams per second
 float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
@@ -197,7 +187,7 @@ uint32_t loop_cout_us = 0, loop_peak_us = 0, loop_now = 0;;
 const uint32_t loop_history = 100;
 uint32_t loop_periods_us[loop_history];
 std::vector<std::string> loop_names(20);
-void looptime_init() {  // Run once at end of setup()
+void looptime_setup() {  // Run once at end of setup()
     if (looptime_print) {
         for (int32_t x=1; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
         loop_names[0] = std::string("top");

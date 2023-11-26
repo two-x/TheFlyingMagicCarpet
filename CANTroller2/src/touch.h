@@ -1,6 +1,11 @@
 
 #pragma once
 #include <XPT2046_Touchscreen.h>
+#define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
+#define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
+#define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
+#define touch_reticle_offset 50  // Distance of center of each reticle to nearest screen edge
+#define disp_tuning_lines 11  // Lines of dynamic variables/values in dataset pages 
 class TouchScreen {
 private:
     XPT2046_Touchscreen _ts;  // 3.5in resistive touch panel on tft lcd
@@ -23,6 +28,7 @@ private:
     enum touch_axis { xx, yy, zz };
     enum touch_lim { tsmin, tsmax };
     int32_t trow, tcol;
+    int disp_width, disp_height;
     int32_t tft_touch[2];
 
     // These values need to be calibrated to each individual display panel for best accuracy
@@ -32,8 +38,10 @@ private:
     TS_Point touchpoint;
 public:
     TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts(csPin, irqPin) {}
-    
-    void init() {
+    int idelta = 0;
+    void setup(int width, int height) {
+        disp_width = width;
+        disp_height = height;
         printf("touchscreen..\n");
         _ts.begin();
         // _ts.setRotation(1); do we need to rotate?
@@ -62,20 +70,20 @@ public:
             ret = true;
             tedit = 1 << tedit_exponent;
             touchpoint = getPoint();
-            tft_touch[xx] = map(touchpoint.x, corners[xx][tsmin], corners[xx][tsmax], 0, disp_width_pix);
-            tft_touch[yy] = map(touchpoint.y, corners[yy][tsmin], corners[yy][tsmax], 0, disp_height_pix);
-            tft_touch[xx] = constrain(tft_touch[xx], 0, disp_width_pix);
-            tft_touch[yy] = constrain(tft_touch[yy], 0, disp_height_pix);
+            tft_touch[xx] = map(touchpoint.x, corners[xx][tsmin], corners[xx][tsmax], 0, disp_width);
+            tft_touch[yy] = map(touchpoint.y, corners[yy][tsmin], corners[yy][tsmax], 0, disp_height);
+            tft_touch[xx] = constrain(tft_touch[xx], 0, disp_width);
+            tft_touch[yy] = constrain(tft_touch[yy], 0, disp_height);
             if (!flip_the_screen) { 
-                tft_touch[xx] = disp_width_pix - tft_touch[xx];
-                tft_touch[yy] = disp_height_pix - tft_touch[yy];
+                tft_touch[xx] = disp_width - tft_touch[xx];
+                tft_touch[yy] = disp_height - tft_touch[yy];
             }
         }
         return ret;
     }
     void update() {
         if (!get_touchpoint()) { // If not being touched, put momentarily-set simulated button values back to default values
-            idelta_touch = 0;  // Stop changing the value
+            idelta = 0;  // Stop changing the value
             if (touch_now_touched) touchDoublePressTimer.reset();  // Upon end of a touch, begin timer to reject any accidental double touches
             touch_now_touched = false;  // Remember the last touch state
             tedit_exponent = 0;
@@ -89,7 +97,7 @@ public:
         tcol = (tft_touch[xx] - touch_margin_h_pix) / touch_cell_h_pix;
         // Take appropriate touchscreen actions depending on how we're being touched
         if (tcol == 0 && trow == 0 && !touch_now_touched) {
-            if (++datapage >= arraysize(pagecard)) datapage -= arraysize(pagecard);  // Displayed dataset page can also be changed outside of simulator
+            if (++datapage >= NUM_DATAPAGES) datapage -= NUM_DATAPAGES;  // Displayed dataset page can also be changed outside of simulator
         }
         else if (tcol == 0 && trow == 1) {  // Long touch to enter/exit editing mode, if in editing mode, press to change the selection of the item to edit
             if (tunctrl == OFF) {
@@ -104,7 +112,7 @@ public:
                 sel_val++;  // Move to the next selection
             }
             else if (tunctrl == SELECT) {
-                if (!touch_now_touched) sel_val = (sel_val + 1) % arraysize(datapage_names[datapage]);
+                if (!touch_now_touched) sel_val = (sel_val + 1) % disp_tuning_lines;
                 else if (touch_longpress_valid && touchHoldTimer.expired()) {
                     tunctrl = OFF;
                     touch_longpress_valid = false;
@@ -113,11 +121,11 @@ public:
         }
         else if (tcol == 0 && trow == 2) {  // Pressed the increase value button, for real-time tuning of variables
             if (tunctrl == SELECT) tunctrl = EDIT;  // If just entering edit mode, don't change the value yet
-            else if (tunctrl == EDIT) idelta_touch = tedit;  // If in edit mode, increase the value
+            else if (tunctrl == EDIT) idelta = tedit;  // If in edit mode, increase the value
         }
         else if (tcol == 0 && trow == 3) {  // Pressed the decrease value button, for real-time tuning of variables
             if (tunctrl == SELECT) tunctrl = EDIT;  // If just entering edit mode, don't change the value yet
-            else if (tunctrl == EDIT) idelta_touch = -tedit;  // If in edit mode, decrease the value
+            else if (tunctrl == EDIT) idelta = -tedit;  // If in edit mode, decrease the value
         }
         else if (tcol == 0 && trow == 4) {  // Pressed the simulation mode toggle. Needs long-press
             if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout()) {

@@ -8,7 +8,7 @@ class I2C {
     Timer scanTimer;
   public:
     I2C(uint8_t sda_pin_arg, uint8_t scl_pin_arg) : _sda_pin(sda_pin_arg), _scl_pin(scl_pin_arg) {}
-    void init() {
+    void setup() {
         printf("Init i2c bus and devices.."); delay(1);  // Attempt to force print to happen before init
         scanTimer.reset();
         Wire.begin(_sda_pin, _scl_pin);  // I2c bus needed for airflow sensor
@@ -146,12 +146,12 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
   private:
     static constexpr uint32_t send_rate_us = 250000;
     Timer send_timer;
-    int runmode_last;
+    int runmode_last = SHUTDOWN;
     uint16_t speed_last;
   public:
     static constexpr uint8_t addr = 0x69;
     LightingBox() {}
-    void init() {
+    void setup() {
         printf("Open comm to lighting box..\n");
         send_timer.set(send_rate_us);
     }

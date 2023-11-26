@@ -471,7 +471,7 @@ class AirVeloSensor : public I2CSensor {
     static constexpr float _initial_airvelo_mph = 0.0;
     static constexpr float _initial_ema_alpha = 0.2;
     FS3000 _sensor;
-    float goodreading;
+    float goodreading = NAN;
     int64_t airvelo_read_period_us = 35000;
     Timer airveloTimer;
     virtual float read_sensor() {
@@ -1289,8 +1289,8 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
     int32_t raw_history[NUM_AXES][depth], filt_history[NUM_AXES][depth];  // Values before and after filtering.
   public:
     Hotrc() { calc_params(); }
-    void init() {
-        printf("Init rmt for hotrc..\n");
+    void setup() {
+        printf("Init hotrc .. starting rmt..\n");
         for (int axis=HORZ; axis<=CH4; axis++) rmt[axis].init();  // Set up 4 RMT receivers, one per channel
         failsafe_timer.set(failsafe_timeout); 
     }
