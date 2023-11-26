@@ -10,12 +10,6 @@ static TouchScreen touch(touch_cs_pin);
 static Display screen(&neo, &touch);
 static Tuner tuner(&neo, &touch);
 static RunModeManager run(&screen, &encoder);
-void get_touchpoint() { 
-    touch_pt[0] = touch.touch_pt(0);
-    touch_pt[1] = touch.touch_pt(1); 
-    touch_pt[2] = touch.getX();
-    touch_pt[3] = touch.getY(); 
-}
 void setup() {  // Setup just configures pins (and detects touchscreen type)
     if (RUN_TESTS) run_tests();
     set_pin(starter_pin, INPUT_PULLDOWN);
@@ -83,7 +77,6 @@ void loop() {
     airvelo.update();
     mapsens.update();  // MAP sensor  // takes 6800 us (!!)
     maf_gps = massairflow();  // Recalculate intake mass airflow
-    if (touch_reticles) get_touchpoint();
     hotrc.update();
     hotrc_events_update(run.mode);
     if (sim.potmapping(sens::joy)) hotrc.set_pc(HORZ, FILT, pot.mapToRange(steer.pc_to_us(steer.pc[OPMIN]), steer.pc_to_us(steer.pc[OPMAX])));  // Also need to similarly override joyh value if simulating it

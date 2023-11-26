@@ -721,7 +721,7 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
   protected:
     // TODO: add description
     std::shared_ptr<float> _zeropoint;
-    void set_val_from_touch() { _val_filt.set((op_min_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
+    // void set_val_from_touch() { _val_filt.set((op_min_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
   public:
     static constexpr int32_t abs_min_retract_adc = 0;
     static constexpr int32_t abs_max_extend_adc = adcrange_adc;
