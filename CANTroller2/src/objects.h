@@ -31,6 +31,13 @@ static SteerMotor steer;
 static NeopixelStrip neo;
 static WebManager web;
 
+void update_web(void *parameter) {
+    while (true) {
+        web.update();
+        vTaskDelay(pdMS_TO_TICKS(20)); // Delay for 20ms, hopefully that's fast enough
+    }
+}
+
 // RTOS task that updates temp sensors in a separate task
 bool temp_err[NUM_TEMP_CATEGORIES];  // [AMBIENT/ENGINE/WHEEL]
 void update_temperature_sensors(void *parameter) {
@@ -64,6 +71,7 @@ void set_board_defaults() {  // true for dev boards, false for printed board (on
         dont_take_temperatures = false;
         touch_reticles = false;
     }
+    printf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
 }
 bool starter = LOW;  // Set by handler only. Reflects current state of starter signal (does not indicate source)
 bool starter_drive = false;  // Set by handler only. High when we're driving starter, otherwise starter is an input

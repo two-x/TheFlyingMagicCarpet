@@ -127,6 +127,7 @@ private:
 
     // Assigns known addresses to Sensors. The sensors will have locations like engine or ambient
     void assign_known_addresses() {
+        int lost_sensors = 0;
         for (auto& known_address : known_addresses) {
             // check to see if we have a known address that wasn't detected, print a warning if yes
             auto detected_address_it = std::find_if(detected_addresses.begin(), detected_addresses.end(), [&](const DeviceAddress& detected_address) {
@@ -142,20 +143,20 @@ private:
                     // Print the sensor address for debugging purposes
                     Serial.printf("  assigned known sensor %s at addr: ", TemperatureSensor::location_to_string(known_address.first).c_str());
                     sensors.at(known_address.first).print_address();
-                    
                 } else {
                     // The sensor already exists, so just update its address
                     sensor_it->second.set_address(*detected_address_it);
                     // Print the updated sensor address for debugging purposes
                     printf("  updated sensor addr: ");
                     sensor_it->second.print_address();
-                    
                 }
             } else {
+                lost_sensors++;
                 // The known address was not detected, so log a warning message
-                Serial.printf("  known sensor %s not detected\n", TemperatureSensor::location_to_string(known_address.first).c_str());
+                // Serial.printf("  known sensor %s not detected\n", TemperatureSensor::location_to_string(known_address.first).c_str());
             }
         }
+        if (lost_sensors) Serial.printf("  did not detect %d known sensor(s)\n", lost_sensors);
     }
 
     // Assign remaining addresses to any unassigned locations, in order of the locations enum
@@ -189,7 +190,7 @@ public:
         tempsensebus.begin();
         detected_devices_ct = tempsensebus.getDeviceCount();
         detected_addresses.resize(detected_devices_ct);
-        printf(" parasitic power %s. found %d devices:\n", (tempsensebus.isParasitePowerMode()) ? "on" : "off", detected_devices_ct);  // , DEC);
+        printf(" parasitic power %s. found %d device(s):\n", (tempsensebus.isParasitePowerMode()) ? "on" : "off", detected_devices_ct);  // , DEC);
         if (detected_devices_ct == 0) {
             // printf("  no devices detected\n");
             return;

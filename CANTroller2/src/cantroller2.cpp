@@ -41,21 +41,15 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     running_on_devboard = (read_pin(uart_tx_pin));
     Serial.begin(115200);  // Open console serial port
     delay(800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
-    printf("Console started..\nUsing %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
+    set_board_defaults();
     hotrc.init();
     pot.setup();
     encoder.setup();
-    printf("Brake pressure sensor..\n");
     pressure.setup();
-    printf("Brake position sensor..\n");
     brkpos.setup();
-    printf("Vehicle battery sense..\n");
     mulebatt.setup();
-    printf("LiPo cell sense..\n");
     lipobatt.setup();
-    printf("Tachometer..\n");
     tach.setup();
-    printf("Speedometer..\n");
     speedo.setup();
     i2c.init();
     airvelo.setup(); // must be done after i2c is started
@@ -80,16 +74,14 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     datapage = prefs.getUInt("dpage", PG_RUN);
     datapage_last = prefs.getUInt("dpage", PG_TEMP);
     sim.set_potmap(prefs.getUInt("potmap", 2));  // 2 = sens::pressure
-    set_board_defaults();
-    if (display_enabled) {
-        screen.init();
-        touch.init();
-    }
+    if (display_enabled) screen.init();
+    if (display_enabled) touch.init();
     neo_setup();
     int32_t idiots = smin((uint32_t)arraysize(idiotlights), neo.neopixelsAvailable());
     for (int32_t idiot = 0; idiot < idiots; idiot++) neo.newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
     std::cout << "set up heartbeat led and " << idiots << " neopixel idiot lights" << std::endl;
     for (int32_t i=0; i<NUM_ERR_TYPES; i++) for (int32_t j=0; j<E_NUM_SENSORS; j++) err_sensor[i][j] = false; // Initialize sensor error flags to false
+    web.setup();  // delay(10);  // xTaskCreate(update_web, "Update Web Services", 2048, NULL, 6, NULL);  // Create a new task that runs the update_temperature_sensors function
     printf("Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     panicTimer.reset();

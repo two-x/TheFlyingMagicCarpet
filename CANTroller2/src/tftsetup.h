@@ -56,7 +56,7 @@
 // Define the SPI clock frequency, this affects the graphics rendering speed. Too fast and the TFT driver will not keep
 // up and display corruption appears. With an ILI9341 display 40MHz works OK, 80MHz sometimes fails
 // Soren: default was 27MHz (27000000). I tested up to 75MHz successfully, but 80MHz failed.  40MHz is used by ESP32-S3 example
-#define SPI_FREQUENCY  40000000  // Soren: Library examples comments claim limit of ILI9541 is 40MHz. others imply can sometimes work up to 80MHz
+#define SPI_FREQUENCY  60000000  // Soren: Library examples comments claim limit of ILI9541 is 40MHz. others imply can sometimes work up to 80MHz
 
 // Optional reduced SPI frequency for reading TFT
 // Soren: Default was 2MHz (6000000)

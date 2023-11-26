@@ -66,11 +66,11 @@ class FileSystem {
   public:
     FileSystem() {}
     void setup() {
-        printf("Littlefs start%s\n", LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED) ? ".." : " failed");
+        printf("Littlefs mount %s", LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED) ? "point " : "failed ");
         listDir(LittleFS, "/", 3);
     }
     void listDir(fs::FS &fs, const char * dirname, uint8_t levels) {
-        printf("listing %s :", dirname);
+        printf("%s :", dirname);
         File root = fs.open(dirname);
         if(!root) {
             printf("\n  failed to open directory");
@@ -110,12 +110,15 @@ class AccessPoint {
   public:
     AccessPoint() : localip(192,168,1,69), gateway(192,168,1,5), subnet(255,255,255,0) {}
     void setup() {
+        Serial.print("Wifi access point.. ip = ");
         WiFi.mode(WIFI_STA);
         WiFi.disconnect();
-        printf("Wifi access point..\n");
         WiFi.softAPConfig(localip, gateway, subnet);
         WiFi.softAP(ssid, password);
-        printf(" ip = %s\n", WiFi.softAPIP());
+        Serial.println(WiFi.softAPIP());
+
+        // std::cout << "ip = " << WiFi.softAPIP() << std::endl;
+        // printf(" ip = %s\n", my_ip.c_str());
     }
 };
 class WebServer {
@@ -166,7 +169,7 @@ class WebSocket {
             object["rand1"] = random(100);                    // write data into the JSON object -> I used "rand1" and "rand2" here, but you can use anything else
             object["rand2"] = random(100);
             serializeJson(doc, jsonString);                   // convert JSON object to string
-            Serial.println(jsonString);                       // print JSON string to console for debug purposes (you can comment this out)
+            // Serial.println(jsonString);                       // print JSON string to console for debug purposes (you can comment this out)
             socket.broadcastTXT(jsonString);               // send JSON string to clients
         }
     }
