@@ -8,29 +8,15 @@
 // #include <User_Setup.h>                // <- Replace this line 
 // #include <../../../../src/tftsetup.h>  // <- with this one
 
-// User defined information reported by "Read_User_Setup" test & diagnostics example
 #define USER_SETUP_INFO "FlyingCarpet"
-
-// Define to disable all #warnings in library (can be put in User_Setup_Select.h)
-//#define DISABLE_ALL_LIBRARY_WARNINGS
-
-// Section 1. Call up the right driver file - only one - and any options for it
 #define ILI9341_DRIVER       // Generic driver for common displays
-
-// Some displays support SPI reads via the MISO pin, other displays have a single SDA
-// #define TFT_SDA_READ      // This option is for ESP32 ONLY, tested with ST7789 and GC9A01 display only
+// #define ILI9488_DRIVER       // Generic driver for common displays
 
 // Section 2. Define the pins that are used to interface with the display here
-// If a backlight control signal is available then define the TFT_BL pin in Section 2
-// below. The backlight will be turned ON when tft.begin() is called, but the library
-// needs to know if the LEDs are ON with the pin HIGH or LOW. If the LEDs are to be
-// driven with a PWM signal or turned OFF/ON then this must be handled by user code
-// #define TFT_BL   32            // LED back-light control pin
-#define TFT_BACKLIGHT_ON HIGH  // Level to turn ON back-light (HIGH or LOW)
-
 // ###### EDIT THE PIN NUMBERS IN THE LINES FOLLOWING TO SUIT YOUR ESP32 SETUP   ######
 // For ESP32 Dev board (only tested with ILI9341 display). The hardware SPI can map to any pins
 #define TFT_MISO 13
+// #define TFT_MISO -1
 #define TFT_MOSI 11
 #define TFT_SCLK 12
 #define TFT_CS   10  // Chip select control pin
@@ -38,6 +24,20 @@
 // #define TFT_RST   4  // Reset pin (could connect to RST pin)
 #define TFT_RST  -1  // Set TFT_RST to -1 if display RESET is connected to ESP32 board RST
 #define TOUCH_CS 47     // Chip select pin (T_CS) of touch screen  - Soren:  was 39 before I changed that
+
+// If a backlight control signal is available then define the TFT_BL pin in Section 2
+// below. The backlight will be turned ON when tft.begin() is called, but the library
+// needs to know if the LEDs are ON with the pin HIGH or LOW. If the LEDs are to be
+// driven with a PWM signal or turned OFF/ON then this must be handled by user code
+// #define TFT_BL   32            // LED back-light control pin
+#define TFT_BACKLIGHT_ON HIGH  // Level to turn ON back-light (HIGH or LOW)
+
+// Some displays support SPI reads via the MISO pin, other displays have a single SDA
+// #define TFT_SDA_READ      // This option is for ESP32 ONLY, tested with ST7789 and GC9A01 display only
+
+// User defined information reported by "Read_User_Setup" test & diagnostics example
+// Define to disable all #warnings in library (can be put in User_Setup_Select.h)
+//#define DISABLE_ALL_LIBRARY_WARNINGS
 
 // Section 3. Define the fonts that are to be used here
 // Comment out the #defines below with // to stop that font being loaded
@@ -81,3 +81,5 @@
 // Transactions are automatically enabled by the library for an ESP32 (to use HAL mutex)
 // so changing it here has no effect
 // #define SUPPORT_TRANSACTIONS
+
+#define TFT_INVERSION_OFF  // #define TFT_INVERSION_ON

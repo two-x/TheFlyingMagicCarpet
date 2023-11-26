@@ -8,7 +8,7 @@ class I2C {
     Timer scanTimer;
   public:
     I2C(uint8_t sda_pin_arg, uint8_t scl_pin_arg) : _sda_pin(sda_pin_arg), _scl_pin(scl_pin_arg) {}
-    void init() {
+    void setup() {
         printf("Init i2c bus and devices.."); delay(1);  // Attempt to force print to happen before init
         scanTimer.reset();
         Wire.begin(_sda_pin, _scl_pin);  // I2c bus needed for airflow sensor
@@ -33,6 +33,7 @@ class I2C {
         return false;
     }
 };
+
 // map.h - an i2c sensor to track the air pressure in our intake manifold. This, together with the air velocity
 // and temperature gives us the mass air flow which is proportional to how hard the engine is working.
 // I stole this library and modified it as such. to not block for 6-7ms on each read. - Soren
@@ -138,6 +139,7 @@ float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
     else if(units == BAR)  pressure *= 0.06895;   //bar
     return pressure;
 }
+
 // LightingBox - object to manage 12c communications link to our lighting box
 // Our protocol is: 1st nibble of 1st byte contains 4-bit command/request code. The 2nd nibble and any additional bytes contain data, as required by the code
 // codes: 0x0R = entered runmode given by R (no additional bytes)
@@ -146,12 +148,12 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
   private:
     static constexpr uint32_t send_rate_us = 250000;
     Timer send_timer;
-    int runmode_last;
+    int runmode_last = SHUTDOWN;
     uint16_t speed_last;
   public:
     static constexpr uint8_t addr = 0x69;
     LightingBox() {}
-    void init() {
+    void setup() {
         printf("Open comm to lighting box..\n");
         send_timer.set(send_rate_us);
     }

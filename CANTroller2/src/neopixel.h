@@ -28,7 +28,7 @@ class NeopixelStrip {
     Timer neoFadeTimer, neoHeartbeatTimer;
     bool neo_heartbeat = false;
     bool heartcolor_change = true;  // , heartcolor_overridden = false;
-    uint8_t pin = -1;
+    int pin = -1;
     uint8_t heartbeat_brightness, heartbeat_brightness_last; // brightness during fadeouts
     uint32_t neobright_last;
     int32_t heartbeat_state = 0;
@@ -67,9 +67,9 @@ class NeopixelStrip {
     void update_idiot(uint32_t idiot);
     void calc_lobright();
   public:
-    NeopixelStrip() {}
+    NeopixelStrip(int argpin) { pin = argpin; }
     void refresh();
-    void init(uint8_t argpin, bool argbreadboard=false, bool viewcontext=NITE);
+    void setup(bool viewcontext=NITE);
     void setbright(uint8_t bright_pc);
     void setdesaturation(float _desat_of_ten);  // a way to specify nite or daytime brightness levels
     void heartbeat(bool onoroff);
@@ -82,6 +82,7 @@ class NeopixelStrip {
     void setBoolState(uint8_t idiot, bool state);
     void setflash(uint8_t idiot, uint8_t count, uint8_t pulseh=1, uint8_t pulsel=1, int32_t onbrit=-1, int32_t color=0xffffff);
     void update(int16_t heart_color, bool blackout = false);
+    void enable_flashdemo(bool ena);
     uint32_t idiot_neo_color(uint8_t idiot);
 };
 
@@ -163,17 +164,19 @@ void NeopixelStrip::refresh() {
     }
     if (numledstowrite) neoobj.Show(numledstowrite);  // This ability to exclude pixels at the end of the strip that haven't changed from the data write is an advantage of neopixelbus over adafruit
 }
-void NeopixelStrip::init(uint8_t argpin, bool argbreadboard, bool viewcontext) {
-    pin = argpin;
-    breadboard = argbreadboard;
+void NeopixelStrip::setup(bool viewcontext) {
+    std::cout << "Init neopixels.. ";
+    breadboard = running_on_devboard;
     context = viewcontext;
     calc_lobright();
-    std::cout << "Neo init: add LEDs.. ";
     neoobj.Begin();
     heartbeat_brightness = brightlev[context][B_LO];
     neoHeartbeatTimer.set(heartbeat_ekg_us[3]);
     neoFadeTimer.set((int64_t)neo_fade_timeout_us);
-    std::cout << "refresh strip.. ";
+    setbright(neobright);
+    setdesaturation(neodesat);
+    heartbeat(true);
+    std::cout << "refresh.. ";
     flashtimer.set(fquantum_us * fevresolution);
     refresh();
     std::cout << std::endl;
@@ -197,16 +200,10 @@ void NeopixelStrip::setdesaturation(float _desat_of_ten) {  // a way to specify 
 void NeopixelStrip::heartbeat(bool onoroff) {
     neo_heartbeat = onoroff;  // Start heart beating
 }
-// void NeopixelStrip::heartcolor_override(uint16_t _color) {
-//     heartcolor_overridden = true;
-//     heartbeat_override_color = _color;
-// }
 void NeopixelStrip::set_heartcolor(uint16_t _newcolor) {
     uint16_t newcolor = _newcolor;
     if (heartbeat_override_color != 0x0000) newcolor = heartbeat_override_color;
     if (heartcolor16 != newcolor) {
-        printf("! heartbeat color change: %04x\n", newcolor);
-
         heartbeatColor = color_to_Rgb(newcolor);
         heartcolor_change = true;
         heartcolor16 = newcolor;
@@ -289,6 +286,18 @@ void NeopixelStrip::setflash(uint8_t idiot, uint8_t count, uint8_t pulseh, uint8
 }
 uint32_t NeopixelStrip::idiot_neo_color(uint8_t idiot) { 
     return color_to_32b(cidiot[idiot][cnow]);
+}
+void NeopixelStrip::enable_flashdemo(bool ena) {
+    if (ena) {
+        setflash(4, 8, 8, 8, 20, -1);  // brightness toggle in a continuous squarewave
+        setflash(5, 3, 1, 2, 85);      // three super-quick bright white flashes
+        setflash(6, 2, 5, 5, 0, 0);    // two short black pulses
+    }
+    else {
+        setflash(4, 0);
+        setflash(5, 0);
+        setflash(6, 0);
+    }
 }
 void NeopixelStrip::update_idiot(uint32_t idiot) {
     cidiot[idiot][clast] = cidiot[idiot][cnow];

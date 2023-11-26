@@ -1,26 +1,40 @@
-# Hardware
+## CPU Board
 1. Our board is ESP32-S3-DevKitC-1-N8 which can be got from here: https://www.amazon.com/gp/product/B0BSCXHB5S/ref=ppx_yo_dt_b_search_asin_title?ie=UTF8&psc=1
-2. To set up a breadboard for development, make sure to connect pins as specified in the comments in .../Cantroller2/src/globals.h , as well as external cpacitors and resistors also detailed in the comments.
-3. The board has two micro-USB ports labeled "UART" and "USB". Code can be uploaded to the board using either one of these. However, to see serial console output from the board you need to connect to the "UART" port.
-4. Sometimes uploading files or code will fail using one or the other of the two ports, so if that happens switch the port and try again.  Note also the upload data goes at 1MBps so crappy-ass microusb cords can result in failures too.
+1. To set up a breadboard for development, make sure to connect pins as specified in the comments in .../Cantroller2/src/globals.h , as well as external cpacitors and resistors also detailed in the comments.
+1. The board has two micro-USB ports labeled "UART" and "USB". Code can be uploaded to the board using either one of these. However, to see serial console output from the board you need to connect to the "UART" port.
+1. Sometimes uploading files or code will fail using one or the other of the two ports, so if that happens switch the port and try again.  Note also the upload data goes at 1MBps so crappy-ass microusb cords can result in failures too.
 
 # Environment
 1. Download Visual Studio Code (VSCode) [here](https://code.visualstudio.com/)
-2. Open VSCode and install the extension "PlatformIO IDE" (Ctrl+Shift+X to add an extension on Mac)
-3. Clone the https://github.com/two-x/TheFlyingMagicCarpet github repo into your filesystem. You can do this from the command line or figure out how to do it from within vscode. Whatever you're into.
-4. Click the platformio alien head in VScode, and pick "Projects...", "Add Existing", and find the TheFlyingMagicCarpet/Cantroller2 directory. Once platformio reads the platformio.ini file, a bunch of libraries should automatically install themselves.
-5. Edit the display library setup file. See directions in the .../Cantroller2/src/tftsetup.h file.
+1. Open VSCode and install the extension "PlatformIO IDE" (Ctrl+Shift+X to add an extension on Mac)
+1. Clone the https://github.com/two-x/TheFlyingMagicCarpet github repo into your filesystem. You can do this from the command line or figure out how to do it from within vscode. Whatever you're into.
+1. Click the platformio alien head in VScode, and pick "Projects...", "Add Existing", and find the TheFlyingMagicCarpet/Cantroller2 directory. Once platformio reads the platformio.ini file, a bunch of libraries should automatically install themselves.
+1. Edit the display library setup file. See directions in the .../Cantroller2/src/tftsetup.h file.
 
 # Uploading
 1. The code base contains C++ source files in <project>/src and also runtime files in <project>/data.
-2. Each board needs a one-time filesystem format. Connect the board, click the alien head and then "Build filesystem". If it fails see notes in hardware section above.
-3. Upload files in data directory: click the alien head and then "Upload Filesystem". Redo this whenever files have been changed.
-4. Compile and upload code: click the alien head and then "Upload". Redo this whenever code has been modified.
+1. Each board needs a one-time filesystem format. Connect the board, click the alien head and then "Build filesystem". If it fails see notes in hardware section above.
+1. Upload files in data directory: click the alien head and then "Upload Filesystem". Redo this whenever files have been changed.
+1. Compile and upload code: click the alien head and then "Upload". Redo this whenever code has been modified.
 
 # Wifi
-1. Once code is running, if web server is enabled then the board will act as an access point and web server. This can be accessed from your computer or another computer or phone or whatever, by doing this:
-2. Scan for wifi networks, look for "magiccarpet". Use password "checkmate".
-3. Open a browser, navigate to 192.168.1.69/ . That should do it.
+1. Once code is running, if web server is enabled then the board will act as an access point and web server. To access, scan for wifi networks on any nearby computer or phone, ssid = magiccarpet, passwd = checkmate. Then browse to 192.168.1.69/ .
+
+## Connected Hardware
+1. ** Display **
+1. ** Touchscreen **
+1. ** SD Card **
+    1.1. SD interface (not yet implemented) is integrated with touchscreen module. We hope to use this storage area for logging runtime data.
+    1.1. The 16GB SD card is pre-formatted in windows with FAT32 file system, 32kB allocation unit size. MacOS recognizes this as "MS-DOS (FAT32)".
+1. ** Digital IO **
+1. ** Analog Inputs **
+1. ** Hotrc Radio Receiver **
+1. ** Rotary encoder **
+1. ** Neopixels **
+1. ** Servos/Jaguars **
+1. ** Hall Effect Sensors **
+1. ** Temperature Sensors **
+1. ** Manifold Mass Air Flow Sensors **
 
 --
 Notes from before:

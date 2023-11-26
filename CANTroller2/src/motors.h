@@ -2,6 +2,7 @@
 #pragma once
 #include <ESP32Servo.h>  // Eventually move Servos into new ServoPWM objects then remove this
 #include "qpid.h"
+#include "temperature.h"
 class IdleControl {  // Soren - To allow creative control of PID targets in case your engine idle problems need that.
   public:
     enum idlemodes : int { DIRECT, CONTROL, MINIMIZE, NUM_IDLEMODES };  // DIRECT: disable idle management.  CONTROL: soft landing to idle rpm.  MINIMIZE: attempt to minimize idle to edge of instability
@@ -27,7 +28,7 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
     int64_t readtime_last;
   public:
     IdleControl() {}
-    void init(float* target, float* measraw, float* measfilt,  // Variable references: idle target, rpm raw, rpm filt
+    void setup(float* target, float* measraw, float* measfilt,  // Variable references: idle target, rpm raw, rpm filt
       TemperatureSensor* engine_sensor_ptr,  // Rate to lower idle from high point to low point (in rpm per second)
       float tempcold, float temphot, int32_t settlerate = 100,  // Values for: engine operational temp cold (min) and temp hot (max) in degrees-f
       int myidlemode = CONTROL) {  // Configure idle control to just soft land or also attempt to minimize idle
@@ -171,18 +172,18 @@ class ServoMotor {
     Speedometer* speedo;
     Servo motor;
     Timer pid_timer;
-    int pin;
+    int pin, freq;
     uint32_t pid_period_us = 85000;
   public:
     bool openloop = false, reverse = false;  // defaults. subclasses override as necessary
     float pc[NUM_MOTORVALS] = { 0, NAN, 100, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX]  values range from -100% to 100% are all derived or auto-assigned
     float nat[NUM_MOTORVALS] = { 45.0, 43.0, 168.2, 45.0, NAN, 0, 180 };  // native-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX]
     float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 500, 2500 };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX]
-    void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo) {
+    ServoMotor(int _pin, int _freq) { pin = _pin; freq = _freq; }
+    void setup(Hotrc* _hotrc, Speedometer* _speedo) {
         hotrc = _hotrc;
         speedo = _speedo;
-        pin = _pin;
-        motor.setPeriodHertz(_freq);
+        motor.setPeriodHertz(freq);
         motor.attach(pin, us[ABSMIN], us[ABSMAX]);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
         pid_timer.set(pid_period_us);
     }
@@ -203,15 +204,17 @@ class ServoMotor {
 class JagMotor : public ServoMotor {
   protected:
     CarBattery* mulebatt;
-    static constexpr float car_batt_fake_v = 12.0;
+    float car_batt_fake_v = 12.0;
     uint32_t volt_check_period_us = 3500000;
     Timer volt_check_timer;
   public:
+    using ServoMotor::ServoMotor;
     float duty_pc = 100;  // default. subclasses override as necessary
     float pc[NUM_MOTORVALS] = { NAN, 0, NAN, NAN, NAN, -100, 100 };  // percent values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX]  values range from -100% to 100% are all derived or auto-assigned
     float nat[NUM_MOTORVALS] = { NAN, 0, NAN, NAN, NAN, NAN, NAN };  // native-unit values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX]
     float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 670, 2330 };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX]
     float (&volt)[arraysize(nat)] = nat;  // our native value is volts. Create reference so nat and volt are interchangeable
+    // JagMotor(int _pin, int _freq) : ServoMotor(_pin, _freq) {}
     void derive() {  // calc pc and voltage op limits from volt and us abs limits 
         nat[ABSMAX] = running_on_devboard ? car_batt_fake_v : mulebatt->v();
         nat[ABSMIN] = -(nat[ABSMAX]);
@@ -220,8 +223,8 @@ class JagMotor : public ServoMotor {
         nat[OPMIN] = map(pc[OPMIN], pc[STOP], pc[ABSMIN], nat[STOP], nat[ABSMIN]);
         nat[OPMAX] = map(pc[OPMAX], pc[STOP], pc[ABSMAX], nat[STOP], nat[ABSMAX]);
     }
-    void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {
-        ServoMotor::init(_pin, _freq, _hotrc, _speedo);
+    void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {
+        ServoMotor::setup(_hotrc, _speedo);
         mulebatt = _batt;
         volt_check_timer.set(volt_check_period_us);
         derive();
@@ -252,7 +255,7 @@ class GasServo : public ServoMotor {
   private:
     Tachometer* tach;
     Potentiometer* pot;
-    IdleControl* idlectrl;
+    TemperatureSensorManager* tempsens;
     uint32_t servo_delay_us = 500000; // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
     float cruise_initial_kp = 5.57;   // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
     float cruise_initial_ki = 0.000;  // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
@@ -261,12 +264,13 @@ class GasServo : public ServoMotor {
     float initial_ki = 0.000;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
     float initial_kd = 0.000;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
   public:
+    using ServoMotor::ServoMotor;
+    IdleControl idlectrl;
+    QPID pid, cruisepid;
     bool openloop = true, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
     float (&deg)[arraysize(nat)] = nat;  // our "native" value is degrees of rotation "deg". Create reference so nat and deg are interchangeable
-    QPID pid, cruisepid;
     float tach_last, cruise_target_pc, governor = 95;     // Software governor will only allow this percent of full-open throttle (percent 0-100)
     Timer servo_delay_timer;    // We expect the servo to find any new position within this time
-    GasServo() {};  // Brake(int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin); 
     void derive() {  // calc derived limit values for all units based on tuned values for each motor
         pc[ABSMIN] = map(nat[ABSMIN], nat[OPMIN], nat[OPMAX], pc[OPMIN], pc[OPMAX]);
         pc[ABSMAX] = map(nat[ABSMAX], nat[OPMIN], nat[OPMAX], pc[OPMIN], pc[OPMAX]);
@@ -274,26 +278,28 @@ class GasServo : public ServoMotor {
         pc[GOVERN] = map(governor, 0.0, 100.0, pc[OPMIN], pc[OPMAX]);  // pc[GOVERN] = pc[OPMIN] + governor * (pc[OPMAX] - pc[OPMIN]) / 100.0;      
         nat[GOVERN] = map(pc[GOVERN], pc[OPMIN], pc[OPMAX], nat[OPMIN], nat[OPMAX]);
     }
-    void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, IdleControl* _idlectrl) {
+    void setup(Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, TemperatureSensorManager* _temp) {
         printf("Gas servo..\n");
-        ServoMotor::init(_pin, _freq, _hotrc, _speedo);
+        ServoMotor::setup(_hotrc, _speedo);
         tach = _tach;
         pot = _pot;
-        idlectrl = _idlectrl;
+        tempsens = _temp;
         derive();
-        pid.init(tach->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), initial_kp, initial_ki, initial_kd, QPID::pmod::onerr, QPID::dmod::onerr, 
-            QPID::awmod::clamp, QPID::cdir::direct, pid_period_us);
-        cruisepid.init(speedo->filt_ptr(), idlectrl->idle_rpm_ptr(), tach->govern_rpm_ptr(), cruise_initial_kp, cruise_initial_ki, cruise_initial_kd,
-            QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::round, QPID::cdir::direct, pid_period_us);
+        idlectrl.setup(pid.target_ptr(), tach->human_ptr(), tach->filt_ptr(), tempsens->get_sensor(loc::ENGINE), 
+            temp_lims_f[ENGINE][OPMIN], temp_lims_f[ENGINE][WARNING], 50, IdleControl::idlemodes::CONTROL);
+        pid.init(tach->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), initial_kp, initial_ki, initial_kd, QPID::pmod::onerr, 
+            QPID::dmod::onerr, QPID::awmod::clamp, QPID::cdir::direct, pid_period_us);
+        cruisepid.init(speedo->filt_ptr(), idlectrl.idle_rpm_ptr(), tach->govern_rpm_ptr(), cruise_initial_kp, cruise_initial_ki,
+            cruise_initial_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::round, QPID::cdir::direct, pid_period_us);
         servo_delay_timer.set(servo_delay_us);
     }
     void update(int runmode) {
         float tach_now = tach->human();
-        if (tach_now != tach_last) idlectrl->push_tach_reading(tach_now, tach->last_read_time());    
+        if (tach_now != tach_last) idlectrl.push_tach_reading(tach_now, tach->last_read_time());    
         tach_last = tach_now;
         if (pid_timer.expireset()) {
             // Step 1 : update throttle target from idle control or cruise mode pid, if applicable (on the same timer as gas pid)
-            idlectrl->update();  // Allow idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
+            idlectrl.update();  // Allow idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
             if (runmode == CRUISE && (cruise_setpoint_mode == PID_SUSPEND_FLY) && !cruise_adjusting) pid.set_target(cruisepid.compute());  // cruise pid calculates new output (tach_target_rpm) based on input (speedmeter::human) and target (speedo_target_mph)
             // Step 2 : Determine servo pulse width value
             if (park_the_motors || (runmode == SHUTDOWN && !shutdown_incomplete) || runmode == ASLEEP)
@@ -325,7 +331,7 @@ class GasServo : public ServoMotor {
 };
 class BrakeMotor : public JagMotor {
   private:
-    BrakePositionSensor* brakepos;
+    BrakePositionSensor* brkpos;
     PressureSensor* pressure;
     float initial_kp = 0.142;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float initial_ki = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
@@ -334,8 +340,8 @@ class BrakeMotor : public JagMotor {
     float posn_initial_ki = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float posn_initial_kd = 0.000;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     uint32_t pid_period_us = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
-    static const uint32_t interval_timeout = 1000000;  // How often to apply increment during auto-stopping (in us)
-    static const uint32_t stopcar_timeout = 8000000;  // How often to apply increment during auto-stopping (in us)
+    static constexpr uint32_t interval_timeout = 1000000;  // How often to apply increment during auto-stopping (in us)
+    static constexpr uint32_t stopcar_timeout = 8000000;  // How often to apply increment during auto-stopping (in us)
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
     // float posn_inflect, pres_inflect, pc_inflect; 
     void activate_pid(int newpid) {
@@ -347,46 +353,44 @@ class BrakeMotor : public JagMotor {
         pid.init(pids[!activepid].output());
     }
   public:
+    using JagMotor::JagMotor;
+    QPID pids[NUM_BRAKEPIDS];  // brake changes from pressure target to position target as pressures decrease, and vice versa
     bool autostopping = false, reverse = false, openloop = false;
     // float duty_pc = 25;
     Timer stopcar_timer, interval_timer;  // How much time between increasing brake force during auto-stop if car still moving?    // How long before giving up on trying to stop car?
-    QPID pids[NUM_BRAKEPIDS];  // brake changes from pressure target to position target as pressures decrease, and vice versa
     int activepid = brake_default_pid, activepid_last = brake_default_pid;
     bool posn_pid_active = (activepid == POSNPID);
     QPID &pid = pids[activepid];
     float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2, pid_targ_pc, pid_err_pc;
     float d_ratio[NUM_BRAKEPIDS], outnow[NUM_BRAKEPIDS], outlast[NUM_BRAKEPIDS];
-    BrakeMotor() {}  // Brake(int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin); 
-    void derive() {
-        JagMotor::derive();
-    }
-    void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brakepos) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+    void derive() { JagMotor::derive(); }
+    void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         printf("Brake motor..\n");
-        JagMotor::init(_pin, _freq, _hotrc, _speedo, _batt);
+        JagMotor::setup(_hotrc, _speedo, _batt);
         pressure = _pressure;  // press_pin = _press_pin;
-        brakepos = _brakepos;  // posn_pin = _posn_pin;
+        brkpos = _brkpos;  // posn_pin = _posn_pin;
         duty_pc = 40.0;
         pres_last = pressure->human();
-        posn_last = brakepos->human();
+        posn_last = brkpos->human();
         derive();
         pids[PRESPID].init(pressure->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), initial_kp, initial_ki, initial_kd, QPID::pmod::onerr,
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_period_us, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
-        pids[POSNPID].init(brakepos->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), posn_initial_kp, posn_initial_ki, posn_initial_kd, QPID::pmod::onerr, 
+        pids[POSNPID].init(brkpos->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), posn_initial_kp, posn_initial_ki, posn_initial_kd, QPID::pmod::onerr, 
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::reverse, pid_period_us, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
         interval_timer.set(interval_timeout);
         stopcar_timer.set(stopcar_timeout);
     }
   private:
     void calc_pid_stuff(int _pid) {
-        outnow[_pid] = (_pid == PRESPID) ? pressure->human() : brakepos->human();
+        outnow[_pid] = (_pid == PRESPID) ? pressure->human() : brkpos->human();
         d_ratio[_pid] = outnow[_pid] - outlast[_pid];
-        d_ratio[_pid] /= (_pid == PRESPID) ? (pressure->max_human() - pressure->min_human()) : (brakepos->max_human() - brakepos->min_human());
+        d_ratio[_pid] /= (_pid == PRESPID) ? (pressure->max_human() - pressure->min_human()) : (brkpos->max_human() - brkpos->min_human());
         outlast[_pid] = outnow[_pid];
     }
     float pid_out() {  // feedback brake pid with position or pressure, whichever is changing more quickly
         pc[OUT] = pid.compute();  // get output accordiing to pressure pid
         if (activepid == PRESPID) pid_err_pc = pids[PRESPID].err() * (pressure->max_human() - pressure->min_human()) / 100;  // pid_err_pc allows us to display error value regardless which pid is active
-        else pid_err_pc = -(pids[POSNPID].err()) * (brakepos->max_human() - brakepos->min_human()) / 100;
+        else pid_err_pc = -(pids[POSNPID].err()) * (brkpos->max_human() - brkpos->min_human()) / 100;
         calc_pid_stuff(activepid);
         if (!brake_hybrid_pid) return pc[OUT];
         calc_pid_stuff(!activepid);
@@ -405,7 +409,7 @@ class BrakeMotor : public JagMotor {
     void set_pidtarg(float targ_pc) {
         pid_targ_pc = targ_pc;
         if (activepid == PRESPID) pid.set_target(pressure->min_human() + pid_targ_pc * (pressure->max_human() - pressure->min_human()) / 100.0);
-        else pid.set_target(brakepos->max_human() - pid_targ_pc * (brakepos->max_human() - brakepos->min_human()) / 100);
+        else pid.set_target(brkpos->max_human() - pid_targ_pc * (brkpos->max_human() - brkpos->min_human()) / 100);
     }
     void update(int runmode) {
         // Brakes - Determine motor output and write it to motor
@@ -413,10 +417,10 @@ class BrakeMotor : public JagMotor {
         if (pid_timer.expireset()) {
             // Step 1 : Determine motor percent value
             if (park_the_motors) {
-                if (brakepos->filt() + brakepos->margin() <= brakepos->parkpos())  // If brake is retracted from park point, extend toward park point, slowing as we approach
-                    pc[OUT] = map(brakepos->filt(), brakepos->parkpos(), brakepos->min_in(), pc[STOP], pc[OPMIN]);
-                else if (brakepos->filt() - brakepos->margin() >= brakepos->parkpos())  // If brake is extended from park point, retract toward park point, slowing as we approach
-                    pc[OUT] = map(brakepos->filt(), brakepos->parkpos(), brakepos->max_in(), pc[STOP], pc[OPMAX]);
+                if (brkpos->filt() + brkpos->margin() <= brkpos->parkpos())  // If brake is retracted from park point, extend toward park point, slowing as we approach
+                    pc[OUT] = map(brkpos->filt(), brkpos->parkpos(), brkpos->min_in(), pc[STOP], pc[OPMIN]);
+                else if (brkpos->filt() - brkpos->margin() >= brkpos->parkpos())  // If brake is extended from park point, retract toward park point, slowing as we approach
+                    pc[OUT] = map(brkpos->filt(), brkpos->parkpos(), brkpos->max_in(), pc[STOP], pc[OPMAX]);
             }
             else if (runmode == CAL && cal_joyvert_brkmotor_mode) {
                 int _joydir = hotrc->joydir();
@@ -430,8 +434,8 @@ class BrakeMotor : public JagMotor {
             // Step 2 : Fix motor pc value if it's out of range or exceeding positional limits
             if (runmode == CAL && cal_joyvert_brkmotor_mode)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
                 pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);  // Constrain to full potential range when calibrating. Caution don't break anything!
-            else if ((pc[OUT] < pc[STOP] && brakepos->filt() > brakepos->parkpos() - brakepos->margin()) 
-                  || (pc[OUT] > pc[STOP] && brakepos->filt() < brakepos->min_in() + brakepos->margin()))  // If brake is at position limits and we're tring to go further, stop the motor
+            else if ((pc[OUT] < pc[STOP] && brkpos->filt() > brkpos->parkpos() - brkpos->margin()) 
+                  || (pc[OUT] > pc[STOP] && brkpos->filt() < brkpos->min_in() + brkpos->margin()))  // If brake is at position limits and we're tring to go further, stop the motor
                 pc[OUT] = pc[STOP];
             else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);  // Send to the actuator. Refuse to exceed range
             // Step 3 : Convert motor percent value to pulse width for motor, and to volts for display
@@ -452,12 +456,12 @@ class BrakeMotor : public JagMotor {
 };
 class SteerMotor : public JagMotor {
   public:
+    using JagMotor::JagMotor;
     float steer_safe_pc = 72.0;  // this percent otaken off full steering power when driving full speed (linearly applied)
     bool reverse = false, openloop = true;
-    SteerMotor() {}
-    void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+    void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         printf("Steering motor..\n");
-        JagMotor::init(_pin, _freq, _hotrc, _speedo, _batt);
+        JagMotor::setup(_hotrc, _speedo, _batt);
     }
     void update(int runmode) {
         if (volt_check_timer.expireset()) derive();
