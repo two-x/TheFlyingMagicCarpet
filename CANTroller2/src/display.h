@@ -59,7 +59,6 @@
 #define disp_bargraphs_x 123
 #define disp_runmode_text_x 8
 #define disp_datapage_title_x 83
-#define disp_simbutton_radius_pix 19
 #define disp_idiot_corner_x 165
 #define disp_idiot_corner_y 13
 #define disp_idiots_per_row 11
@@ -68,7 +67,7 @@
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
 #define touch_reticle_offset 50  // Distance of center of each reticle to nearest screen edge
-#define touch_sim_arrow 35
+#define touch_simbutton 38
 #define disp_simbuttons_x 165
 #define disp_simbuttons_y 48
 #define disp_saver_width 155
@@ -591,20 +590,24 @@ class Display {
                 disp_bool_values[col-2] = value;
             }
         }
-        void draw_simarrow(int cntr_x, int cntr_y, int dir, bool create) {
-            if (std::abs(dir) == 1) {
-                _tft.fillTriangle(cntr_x - touch_sim_arrow/2, cntr_y, cntr_x + touch_sim_arrow/2, cntr_y, cntr_x, cntr_y - ((dir == JOY_UP) ? 1 : -1) * touch_sim_arrow/2, create ? DGRY : BLK);
-                _tft.drawTriangle(cntr_x - touch_sim_arrow/2, cntr_y, cntr_x + touch_sim_arrow/2, cntr_y, cntr_x, cntr_y - ((dir == JOY_UP) ? 1 : -1) * touch_sim_arrow/2, create ? LYEL : BLK);
-                _tft.fillRect(cntr_x - 3*touch_sim_arrow/8, cntr_y - ((dir == JOY_UP) ? 0 : touch_sim_arrow/2), 3*touch_sim_arrow/4, touch_sim_arrow/2, create ? DGRY : BLK);
-                _tft.drawRect(cntr_x - 3*touch_sim_arrow/8, cntr_y - ((dir == JOY_UP) ? 0 : touch_sim_arrow/2), 3*touch_sim_arrow/4, touch_sim_arrow/2, create ? LYEL : BLK);
-                _tft.fillRect(cntr_x - 3*touch_sim_arrow/8 + 1, cntr_y - 1, 3*touch_sim_arrow/4 - 2, 2, create ? DGRY : BLK);
+        void draw_simbutton(int cntr_x, int cntr_y, int dir, uint16_t color, bool create) {
+            if (dir == JOY_CENT) {
+                _tft.fillCircle(cntr_x, cntr_y, touch_simbutton / 2, create ? color : BLK);
+                _tft.drawCircle(cntr_x, cntr_y, touch_simbutton / 2, create ? LYEL : BLK);
             }
-            else if (std::abs(dir) == 2) {
-                _tft.fillTriangle(cntr_x, cntr_y - touch_sim_arrow/2, cntr_x, cntr_y + touch_sim_arrow/2, cntr_x + ((dir == JOY_RT) ? 1 : -1) * touch_sim_arrow/2, cntr_y, create ? DGRY : BLK);
-                _tft.drawTriangle(cntr_x, cntr_y - touch_sim_arrow/2, cntr_x, cntr_y + touch_sim_arrow/2, cntr_x + ((dir == JOY_RT) ? 1 : -1) * touch_sim_arrow/2, cntr_y, create ? LYEL : BLK);
-                _tft.fillRect(cntr_x - ((dir == JOY_RT) ? touch_sim_arrow/2 : 0), cntr_y - 3*touch_sim_arrow/8, touch_sim_arrow/2, 3*touch_sim_arrow/4, create ? DGRY : BLK);
-                _tft.drawRect(cntr_x - ((dir == JOY_RT) ? touch_sim_arrow/2 : 0), cntr_y - 3*touch_sim_arrow/8, touch_sim_arrow/2, 3*touch_sim_arrow/4, create ? LYEL : BLK);
-                _tft.fillRect(cntr_x - 1, cntr_y - 3*touch_sim_arrow/8 + 1, 2, 3*touch_sim_arrow/4 - 2, create ? DGRY : BLK);
+            else if (dir == JOY_DN || dir == JOY_UP) {
+                _tft.fillTriangle(cntr_x - touch_simbutton/2, cntr_y, cntr_x + touch_simbutton/2, cntr_y, cntr_x, cntr_y - ((dir == JOY_UP) ? 1 : -1) * touch_simbutton/2, create ? color : BLK);
+                _tft.drawTriangle(cntr_x - touch_simbutton/2, cntr_y, cntr_x + touch_simbutton/2, cntr_y, cntr_x, cntr_y - ((dir == JOY_UP) ? 1 : -1) * touch_simbutton/2, create ? LYEL : BLK);
+                _tft.fillRect(cntr_x - 3*touch_simbutton/8, cntr_y - ((dir == JOY_UP) ? 0 : touch_simbutton/2), 3*touch_simbutton/4, touch_simbutton/2, create ? color : BLK);
+                _tft.drawRect(cntr_x - 3*touch_simbutton/8, cntr_y - ((dir == JOY_UP) ? 0 : touch_simbutton/2), 3*touch_simbutton/4, touch_simbutton/2, create ? LYEL : BLK);
+                _tft.fillRect(cntr_x - 3*touch_simbutton/8 + 1, cntr_y - 1, 3*touch_simbutton/4 - 2, 2, create ? color : BLK);
+            }
+            else if (dir == JOY_LT || dir == JOY_RT) {
+                _tft.fillTriangle(cntr_x, cntr_y - touch_simbutton/2, cntr_x, cntr_y + touch_simbutton/2, cntr_x + ((dir == JOY_RT) ? 1 : -1) * touch_simbutton/2, cntr_y, create ? color : BLK);
+                _tft.drawTriangle(cntr_x, cntr_y - touch_simbutton/2, cntr_x, cntr_y + touch_simbutton/2, cntr_x + ((dir == JOY_RT) ? 1 : -1) * touch_simbutton/2, cntr_y, create ? LYEL : BLK);
+                _tft.fillRect(cntr_x - ((dir == JOY_RT) ? touch_simbutton/2 : 0), cntr_y - 3*touch_simbutton/8, touch_simbutton/2, 3*touch_simbutton/4, create ? color : BLK);
+                _tft.drawRect(cntr_x - ((dir == JOY_RT) ? touch_simbutton/2 : 0), cntr_y - 3*touch_simbutton/8, touch_simbutton/2, 3*touch_simbutton/4, create ? LYEL : BLK);
+                _tft.fillRect(cntr_x - 1, cntr_y - 3*touch_simbutton/8 + 1, 2, 3*touch_simbutton/4 - 2, create ? color : BLK);
             }
         }
         void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
@@ -615,14 +618,8 @@ class Display {
                     int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
                     int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
                     if (strcmp (simgrid[row][col], ______ )) {
-                        if (simgriddir[row][col] == JOY_CENT) {
-                            _tft.fillCircle(cntr_x, cntr_y, disp_simbutton_radius_pix, create ? DGRY : BLK);
-                            _tft.drawCircle(cntr_x, cntr_y, 19, create ? LYEL : BLK);
-                        }
-                        else {
-                            draw_simarrow(cntr_x + 2, cntr_y - 1, simgriddir[row][col], create);
-                            draw_simarrow(cntr_x, cntr_y, simgriddir[row][col], create);
-                        }
+                        draw_simbutton(cntr_x + 2, cntr_y - 1, simgriddir[row][col], LYEL, create);  // for 3d look
+                        draw_simbutton(cntr_x, cntr_y, simgriddir[row][col], DGRY, create);
                         if (create) {
                             int32_t x_mod = cntr_x-(arraysize(simgrid[row][col])-1)*(disp_font_width>>1);
                             draw_string(x_mod, x_mod, cntr_y-(disp_font_height>>1), simgrid[row][col], "", LYEL, DGRY);
