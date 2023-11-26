@@ -7,6 +7,8 @@
 #include "FunctionalInterrupt.h"
 #include "driver/rmt.h"
 #include <ESP32Servo.h>        // Makes PWM output to control motors (for rudimentary control of our gas and steering)
+#include "uictrl.h"
+#include "i2cbus.h"
 // #include "xtensa/core-macros.h"  // access to ccount register for esp32 timing ticks
 
 // NOTE: the following classes all contain their own initial config values (for simplicity). We could instead use Config objects and pass them in at construction time, which might be
@@ -37,6 +39,9 @@ class Param {
     }
     
   public:
+    String _long_name = "Unnamed value";
+    String _short_name = "noname";
+
     // Creates a constant Param with the default value for VALUE_T
     // NOTE: this is really only needed for initalization cases where we don't have a valid starting value when we first make the Param
     Param(){
@@ -145,6 +150,8 @@ class Device {
     Device() = delete; // should always be created with a pin
     // NOTE: should we start in PIN mode?
     Device(uint8_t arg_pin) : _pin(arg_pin) {}
+    String _long_name = "Unknown device";
+    String _short_name = "device";
 
     bool can_source(src arg_source) { return _can_source[static_cast<uint8_t>(arg_source)]; }
     bool set_source(src arg_source) {
@@ -261,6 +268,8 @@ class Transducer : public Device {
   public:
     Transducer(uint8_t arg_pin) : Device(arg_pin) {}
     Transducer() = delete;
+    String _long_name = "Unknown transducer";
+    String _short_name = "device";
 
     void set_native_limits(Param<NATIVE_T> &arg_min, Param<NATIVE_T> &arg_max) {
         if (arg_min.val() > arg_max.val()) {
@@ -605,6 +614,11 @@ class CarBattery : public AnalogSensor<int32_t, float> {
     float max_v() { return _human.max(); }
     float op_min_v() { return _op_min_v; }
     float op_max_v() { return _op_max_v; }
+    // void setup() {
+    //     printf("%s..\n", _long_description);
+    //     AnalogSensor::setup();
+    // }
+
 };
 
 // LiPoBatt reads the voltage level from a LiPo cell
@@ -665,6 +679,10 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
         set_can_source(src::POT, true);            
     }
     PressureSensor() = delete;
+    void setup() {
+        printf("Brake pressure sensor..\n");
+        AnalogSensor::setup();
+    }
     float psi() { return _human.val(); }
     float min_psi() { return _human.min(); }
     float max_psi() { return _human.max(); }
@@ -711,6 +729,10 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         set_can_source(src::POT, true);
     }
     BrakePositionSensor() = delete;
+    void setup() {
+        printf("Brake position sensor..\n");
+        AnalogSensor::setup();
+    }
 
     // is tha brake motor parked?
     bool parked() { return std::abs(_val_filt.val() - park_in) <= margin_in; }
@@ -1243,33 +1265,14 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             pc[axis][MARGIN] = us_to_pc(axis, margin_us);  // us_to_pc(axis, margin_us);
         }
     }
-    void toggles_update() {  //
-        for (int8_t chan = CH3; chan <= CH4; chan++) {
-            us[chan][RAW] = (int32_t)(rmt[chan].readPulseWidth(true));
-            sw[chan] = (us[chan][RAW] <= us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  us[CH3][CENT]
-            if ((sw[chan] != sw[chan-2]) && !_radiolost) _sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false. Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
-            sw[chan-2] = sw[chan];  // chan-2 index being used to store previous values of index chan
-        }
-    }
-    void toggles_reset() {  //
-        for (int8_t ch = CH3; ch <= CH4; ch++) _sw_event[ch] = false;
-    }
     int update() {
-        for (int8_t axis = HORZ; axis <= VERT; axis++) {
-            us[axis][RAW] = (int32_t)(rmt[axis].readPulseWidth(true));
-            us[axis][RAW] = spike_filter(axis, us[axis][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
-            ema_filt(us[axis][RAW], &ema_us[axis], ema_alpha);  // Need unconstrained ema-filtered vertical for radio lost detection 
-            // if (!sim.simulating(sens::joy)) {  // Handle HotRC button generated events and detect potential loss of radio signal
-            if (us[axis][RAW] >= us[axis][CENT])  // pc[axis][RAW] = us_to_pc(axis, us[axis][RAW]);
-                pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
-            else pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
-            ema_filt(pc[axis][RAW], &(pc[axis][FILT]), ema_alpha);  // do ema filter to determine joy_vert_filt
-            pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
-            if (_radiolost || (ema_us[axis] > us[axis][DBBOT] && ema_us[axis] < us[axis][DBTOP]))
-                pc[axis][FILT] = pc[axis][CENT];  // if within the deadband set joy_axis_filt to CENTer value
-        }
+        toggles_update();
+        direction_update();
         radiolost_update();
         return joydir();
+    }
+    void toggles_reset() {  // Any handler code acting upon hotrc events must call this afterward to clear them
+        for (int8_t ch = CH3; ch <= CH4; ch++) _sw_event[ch] = false;
     }
     bool radiolost() { return _radiolost; }
     bool* radiolost_ptr() { return &_radiolost; }
@@ -1282,6 +1285,28 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         return ((pc[axis][FILT] > pc[axis][DBTOP]) ? JOY_RT : ((pc[axis][FILT] < pc[axis][DBBOT]) ? JOY_LT : JOY_CENT));
     }  // return (pc[axis][FILT] > pc[axis][DBTOP]) ? ((axis == VERT) ? JOY_UP : JOY_RT) : (pc[axis][FILT] < pc[axis][DBBOT]) ? ((axis == VERT) ? JOY_DN : JOY_LT) : JOY_CENT;
   private:
+    void toggles_update() {  //
+        for (int8_t chan = CH3; chan <= CH4; chan++) {
+            us[chan][RAW] = (int32_t)(rmt[chan].readPulseWidth(true));
+            sw[chan] = (us[chan][RAW] <= us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  us[CH3][CENT]
+            if ((sw[chan] != sw[chan-2]) && !_radiolost) _sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false. Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
+            sw[chan-2] = sw[chan];  // chan-2 index being used to store previous values of index chan
+        }
+    }
+    void direction_update() {
+        for (int8_t axis = HORZ; axis <= VERT; axis++) {
+            us[axis][RAW] = (int32_t)(rmt[axis].readPulseWidth(true));
+            us[axis][RAW] = spike_filter(axis, us[axis][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
+            ema_filt(us[axis][RAW], &ema_us[axis], ema_alpha);  // Need unconstrained ema-filtered vertical for radio lost detection 
+            if (us[axis][RAW] >= us[axis][CENT])  // pc[axis][RAW] = us_to_pc(axis, us[axis][RAW]);
+                pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
+            else pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
+            ema_filt(pc[axis][RAW], &(pc[axis][FILT]), ema_alpha);  // do ema filter to determine joy_vert_filt
+            pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
+            if (_radiolost || (ema_us[axis] > us[axis][DBBOT] && ema_us[axis] < us[axis][DBTOP]))
+                pc[axis][FILT] = pc[axis][CENT];  // if within the deadband set joy_axis_filt to CENTer value
+        }
+    }
     bool radiolost_update() {
         if (ema_us[VERT] > failsafe_us + failsafe_margin_us) {
             failsafe_timer.reset();

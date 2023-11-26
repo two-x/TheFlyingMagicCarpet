@@ -67,7 +67,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     bool park_motors(int _cmd = REQ_NA) {
         int cmd = _cmd;
         if (park_the_motors) {
-            bool brake_parked = brakepos.parked();
+            bool brake_parked = brkpos.parked();
             bool gas_parked = ((std::abs(gas.pc_to_nat(gas.pc[OUT]) - gas.nat[PARKED]) < 1) && gas.servo_delay_timer.expired());
             if ((brake_parked && gas_parked) || motor_park_timer.expired()) cmd = REQ_OFF;
         }

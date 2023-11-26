@@ -1,18 +1,11 @@
 // Carpet CANTroller II  Source Code  - For ESP32-S3-DevKitC-1-N8
 #include "globals.h"
-#include "uictrl.h"
-#include "i2cbus.h"
-#include "sensors.h"
-#include "temperature.h"
-#include "motors.h"  // qpid.h is included from within motors.h
-#include "neopixel.h"
-#include "web.h"
-#include "objects.h"
+#include "sensors.h"  // uictrl.h, i2cbus.h included from within
+#include "motors.h"  // qpid.h, temperature.h included from within
+#include "objects.h"  // neopixel.h, web.h included from within
 #include "display.h"
 #include "touch.h"
 #include "RunModeManager.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 static Display screen;
 static TouchScreen touch(touch_cs_pin);
 static RunModeManager run(&screen, &encoder);
@@ -55,7 +48,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     printf("Brake pressure sensor..\n");
     pressure.setup();
     printf("Brake position sensor..\n");
-    brakepos.setup();
+    brkpos.setup();
     printf("Vehicle battery sense..\n");
     mulebatt.setup();
     printf("LiPo cell sense..\n");
@@ -72,7 +65,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Create a new task that runs the update_temperature_sensors function
     printf("Simulator setup..\n");
     sim.register_device(sens::pressure, pressure, pressure.source());
-    sim.register_device(sens::brkpos, brakepos, brakepos.source());
+    sim.register_device(sens::brkpos, brkpos, brkpos.source());
     sim.register_device(sens::airvelo, airvelo, airvelo.source());
     sim.register_device(sens::mapsens, mapsens, mapsens.source());
     sim.register_device(sens::tach, tach, tach.source());
@@ -81,12 +74,12 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
         tempsens.get_sensor(loc::ENGINE), temp_lims_f[ENGINE][OP_MIN], temp_lims_f[ENGINE][WARNING], 50, IdleControl::idlemodes::CONTROL);
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);
     gas.init(gas_pwm_pin, 60, &hotrc, &speedo, &tach, &pot, &idlectrl);
-    brake.init(brake_pwm_pin, 50, &hotrc, &speedo, &mulebatt, &pressure, &brakepos);
+    brake.init(brake_pwm_pin, 50, &hotrc, &speedo, &mulebatt, &pressure, &brkpos);
     steer.init(steer_pwm_pin, 50, &hotrc, &speedo, &mulebatt);
-    config.begin("FlyByWire", false);
-    datapage = config.getUInt("dpage", PG_RUN);
-    datapage_last = config.getUInt("dpage", PG_TEMP);
-    sim.set_potmap(config.getUInt("potmap", 2));  // 2 = sens::pressure
+    prefs.begin("FlyByWire", false);
+    datapage = prefs.getUInt("dpage", PG_RUN);
+    datapage_last = prefs.getUInt("dpage", PG_TEMP);
+    sim.set_potmap(prefs.getUInt("potmap", 2));  // 2 = sens::pressure
     set_board_defaults();
     if (display_enabled) {
         screen.init();
@@ -108,7 +101,7 @@ void loop() {
     starter_update();  // Runs starter bidirectional handler
     encoder.update();  // Read encoder input signals
     pot.update();
-    brakepos.update();  // Brake position
+    brkpos.update();  // Brake position
     tach.update();  // Tach
     speedo.update();  // Speedo
     // lightbox.update(run.mode, speedo.human());
@@ -119,9 +112,9 @@ void loop() {
     mapsens.update();  // MAP sensor  // takes 6800 us (!!)
     maf_gps = massairflow();  // Recalculate intake mass airflow
     if (touch_reticles) get_touchpoint();
-    hotrc_events_update(run.mode);
     hotrc.update();
-    if (sim.potmapping(sens::joy)) hotrc.set_pc(HORZ, FILT, pot.mapToRange(steer.pc_to_us(steer.pc[OPMIN]), steer.pc_to_us(steer.pc[OPMAX])));
+    hotrc_events_update(run.mode);
+    if (sim.potmapping(sens::joy)) hotrc.set_pc(HORZ, FILT, pot.mapToRange(steer.pc_to_us(steer.pc[OPMIN]), steer.pc_to_us(steer.pc[OPMAX])));  // Also need to similarly override joyh value if simulating it
     run.mode_logic();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     gas.update(run.mode);
     brake.update(run.mode);

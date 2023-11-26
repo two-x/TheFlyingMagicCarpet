@@ -2,11 +2,13 @@
 #include <Preferences.h>  // Functions for writing to flash, i think
 #include <iomanip>  // For formatting console loop timing string output
 #include <vector>  // used to group loop times with string labels
+#include "neopixel.h"
+#include "web.h"
 // #include <HardwareSerial.h>  // In case we ever talk to jaguars over asynchronous serial port, uncomment:
 // HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
 
 // Instantiate objects
-static Preferences config;  // Persistent config storage
+static Preferences prefs;  // Persistent config storage
 static Hotrc hotrc;
 static Potentiometer pot(pot_pin);
 static Simulator sim(pot);
@@ -15,7 +17,7 @@ static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 static CarBattery mulebatt(mulebatt_pin);
 static LiPoBatt lipobatt(lipobatt_pin);
 static PressureSensor pressure(pressure_pin);
-static BrakePositionSensor brakepos(brake_pos_pin);
+static BrakePositionSensor brkpos(brake_pos_pin);
 static Speedometer speedo(speedo_pin);
 static Tachometer tach(tach_pin);
 static I2C i2c(i2c_sda_pin, i2c_scl_pin);
@@ -131,7 +133,6 @@ void set_syspower(bool setting) {
     write_pin(syspower_pin, syspower);
 }
 void hotrc_events_update(int runmode) {
-    hotrc.toggles_update();
     if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
     if (hotrc.sw_event(CH4)) {
         if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
@@ -285,8 +286,8 @@ void diag_update() {
 
         // Detect sensors disconnected or giving out-of-range readings.
         // TODO : The logic of this for each sensor should be moved to devices.h objects
-        err_sensor[RANGE][e_brkpos] = (brakepos.in() < brakepos.op_min_in() || brakepos.in() > brakepos.op_max_in());
-        err_sensor[LOST][e_brkpos] = (brakepos.raw() < err_margin_adc);
+        err_sensor[RANGE][e_brkpos] = (brkpos.in() < brkpos.op_min_in() || brkpos.in() > brkpos.op_max_in());
+        err_sensor[LOST][e_brkpos] = (brkpos.raw() < err_margin_adc);
         err_sensor[RANGE][e_pressure] = (pressure.psi() < pressure.op_min_psi() || pressure.psi() > pressure.op_max_psi());
         err_sensor[LOST][e_pressure] = (pressure.raw() < err_margin_adc);
         err_sensor[RANGE][e_mulebatt] = (mulebatt.v() < mulebatt.op_min_v() || mulebatt.v() > mulebatt.op_max_v());

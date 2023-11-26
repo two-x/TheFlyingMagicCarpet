@@ -91,8 +91,11 @@ enum sw_presses : int { NONE, SHORT, LONG }; // used by encoder sw and button al
 enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
 enum temp_lims : int { DISP_MIN, OP_MIN, OP_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
 enum brake_pids : int { PRESPID, POSNPID, NUM_BRAKEPIDS };
+// enum displays : int { ILI9341, ILI9488 };
 
 // global configuration settings
+
+// int display = ILI9488;
 bool brake_hybrid_pid = false;
 int brake_default_pid = PRESPID;
 bool starter_signal_support = true;

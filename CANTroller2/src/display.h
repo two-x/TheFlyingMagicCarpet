@@ -1,5 +1,6 @@
 #pragma once
 #include <TFT_eSPI.h>
+#define display ILI9488  // ILI9341
 // LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
 // Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
 #define BLK  0x0000  // greyscale: full black (RGB elements off)
@@ -35,8 +36,12 @@
 #define DPNK 0xfa8a  // we need all shades of pink
 #define LPNK 0xfe18  // especially light pink, the champagne of pinks
 // 5-6-5 color picker site: http://www.barth-dev.de/online/rgb565  // named colors: https://wiki.tcl-lang.org/page/Colors+with+Names
+
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
 #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
+// #define disp_width_pix 480  // Horizontal resolution in pixels (held landscape)
+// #define disp_height_pix 320  // Vertical resolution in pixels (held landscape)
+
 #define disp_lines 20  // Max lines of text displayable at line height = disp_line_height_pix
 #define disp_fixed_lines 8  // Lines of static variables/values always displayed
 #define disp_tuning_lines 11  // Lines of dynamic variables/values in dataset pages 
@@ -63,6 +68,7 @@
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
 #define touch_reticle_offset 50  // Distance of center of each reticle to nearest screen edge
+#define touch_sim_arrow 35
 #define disp_simbuttons_x 165
 #define disp_simbuttons_y 48
 #define disp_saver_width 155
@@ -163,11 +169,17 @@ char tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines][5] = {
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
     { "Hz  ", "us  ", "us  ", ______, ______, ______, b1nary, b1nary, "%   ", "/10 ", b1nary, },  // PG_UI
 };
-char simgrid[4][3][5] = {
-    { "psi\x18", "rpm\x18", "mph\x18" },
-    { "psi\x19", "rpm\x19", "mph\x19" },
-    { ______, " \x1e  ", ______ },
-    { " \x11  ", " \x1f  ", "  \x10 " },  // Font special characters is the right-side map:  https://learn.adafruit.com/assets/103682
+int simgriddir[4][3] = {
+    { JOY_UP, JOY_UP, JOY_UP, },
+    { JOY_DN, JOY_DN, JOY_DN, },
+    { JOY_UP, JOY_UP, JOY_RT, },
+    { JOY_DN, JOY_DN, JOY_LT, },
+};
+char simgrid[4][3][4] = {
+    { "psi", "rpm", "mph" },
+    { "psi", "rpm", "mph" },
+    { "pos", "joy", "joy" },
+    { "pos", "joy", "joy" }, // Font special characters is the right-side map:  https://learn.adafruit.com/assets/103682
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
 char unitmapnames[9][5] = { "usps", "us  ", "rpms", scroll, b1nary, "%   ", "ohm ", "eyes", "psin", };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
@@ -579,6 +591,22 @@ class Display {
                 disp_bool_values[col-2] = value;
             }
         }
+        void draw_simarrow(int cntr_x, int cntr_y, int dir, bool create) {
+            if (std::abs(dir) == 1) {
+                _tft.fillTriangle(cntr_x - touch_sim_arrow/2, cntr_y, cntr_x + touch_sim_arrow/2, cntr_y, cntr_x, cntr_y - ((dir == JOY_UP) ? 1 : -1) * touch_sim_arrow/2, create ? DGRY : BLK);
+                _tft.drawTriangle(cntr_x - touch_sim_arrow/2, cntr_y, cntr_x + touch_sim_arrow/2, cntr_y, cntr_x, cntr_y - ((dir == JOY_UP) ? 1 : -1) * touch_sim_arrow/2, create ? LYEL : BLK);
+                _tft.fillRect(cntr_x - 3*touch_sim_arrow/8, cntr_y - ((dir == JOY_UP) ? 0 : touch_sim_arrow/2), 3*touch_sim_arrow/4, touch_sim_arrow/2, create ? DGRY : BLK);
+                _tft.drawRect(cntr_x - 3*touch_sim_arrow/8, cntr_y - ((dir == JOY_UP) ? 0 : touch_sim_arrow/2), 3*touch_sim_arrow/4, touch_sim_arrow/2, create ? LYEL : BLK);
+                _tft.fillRect(cntr_x - 3*touch_sim_arrow/8 + 1, cntr_y - 1, 3*touch_sim_arrow/4 - 2, 2, create ? DGRY : BLK);
+            }
+            else if (std::abs(dir) == 2) {
+                _tft.fillTriangle(cntr_x, cntr_y - touch_sim_arrow/2, cntr_x, cntr_y + touch_sim_arrow/2, cntr_x + ((dir == JOY_RT) ? 1 : -1) * touch_sim_arrow/2, cntr_y, create ? DGRY : BLK);
+                _tft.drawTriangle(cntr_x, cntr_y - touch_sim_arrow/2, cntr_x, cntr_y + touch_sim_arrow/2, cntr_x + ((dir == JOY_RT) ? 1 : -1) * touch_sim_arrow/2, cntr_y, create ? LYEL : BLK);
+                _tft.fillRect(cntr_x - ((dir == JOY_RT) ? touch_sim_arrow/2 : 0), cntr_y - 3*touch_sim_arrow/8, touch_sim_arrow/2, 3*touch_sim_arrow/4, create ? DGRY : BLK);
+                _tft.drawRect(cntr_x - ((dir == JOY_RT) ? touch_sim_arrow/2 : 0), cntr_y - 3*touch_sim_arrow/8, touch_sim_arrow/2, 3*touch_sim_arrow/4, create ? LYEL : BLK);
+                _tft.fillRect(cntr_x - 1, cntr_y - 3*touch_sim_arrow/8 + 1, 2, 3*touch_sim_arrow/4 - 2, create ? DGRY : BLK);
+            }
+        }
         void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
             _tft.fillRect(disp_simbuttons_x, disp_simbuttons_y, disp_saver_width, disp_saver_height, BLK);
             _tft.setTextColor (LYEL);
@@ -587,11 +615,17 @@ class Display {
                     int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
                     int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
                     if (strcmp (simgrid[row][col], ______ )) {
-                        _tft.fillCircle (cntr_x, cntr_y, disp_simbutton_radius_pix, create ? DGRY : BLK);
-                        _tft.drawCircle (cntr_x, cntr_y, 19, create ? LYEL : BLK);
+                        if (simgriddir[row][col] == JOY_CENT) {
+                            _tft.fillCircle(cntr_x, cntr_y, disp_simbutton_radius_pix, create ? DGRY : BLK);
+                            _tft.drawCircle(cntr_x, cntr_y, 19, create ? LYEL : BLK);
+                        }
+                        else {
+                            draw_simarrow(cntr_x + 2, cntr_y - 1, simgriddir[row][col], create);
+                            draw_simarrow(cntr_x, cntr_y, simgriddir[row][col], create);
+                        }
                         if (create) {
-                            int32_t x_mod = cntr_x-(arraysize (simgrid[row][col])-1)*(disp_font_width>>1);
-                            draw_string (x_mod, x_mod, cntr_y-(disp_font_height>>1), simgrid[row][col], "", LYEL, DGRY);
+                            int32_t x_mod = cntr_x-(arraysize(simgrid[row][col])-1)*(disp_font_width>>1);
+                            draw_string(x_mod, x_mod, cntr_y-(disp_font_height>>1), simgrid[row][col], "", LYEL, DGRY);
                         }
                     }
                 }     
@@ -680,7 +714,7 @@ class Display {
                 draw_datapage(datapage, datapage_last, first);
                 first = false;
                 disp_datapage_dirty = false;
-                if (datapage_last != datapage) config.putUInt("dpage", datapage);
+                if (datapage_last != datapage) prefs.putUInt("dpage", datapage);
             }
             if ((disp_sidemenu_dirty)) {
                 draw_touchgrid(true);
@@ -707,7 +741,7 @@ class Display {
                 draw_dynamic(7, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
                 draw_dynamic(8, steer.pc[OUT], steer.pc[OPMIN], steer.pc[OPMAX]);
                 if (datapage == PG_RUN) {
-                    draw_dynamic(9, brakepos.filt(), brakepos.op_min_in(), brakepos.op_max_in());
+                    draw_dynamic(9, brkpos.filt(), brkpos.op_min_in(), brkpos.op_max_in());
                     draw_dynamic(10, mulebatt.filt(), mulebatt.op_min_v(), mulebatt.op_max_v());
                     draw_dynamic(11, lipobatt.filt(), lipobatt.op_min_v(), lipobatt.op_max_v());
                     draw_dynamic(12, pot.val(), pot.min(), pot.max());
@@ -731,14 +765,14 @@ class Display {
                 }
                 else if (datapage == PG_SENS) {
                     draw_dynamic(9, pressure.raw(), pressure.min_native(), pressure.max_native());                    
-                    draw_dynamic(10, brakepos.raw(), brakepos.min_native(), brakepos.max_native());                    
+                    draw_dynamic(10, brkpos.raw(), brkpos.min_native(), brkpos.max_native());                    
                     for (int line=11; line<=13; line++) draw_eraseval(13);
                     draw_dynamic(14, airvelo.max_mph(), 0.0, airvelo.abs_max_mph());
                     draw_dynamic(15, mapsens.min_psi(), mapsens.abs_min_psi(), mapsens.abs_max_psi());
                     draw_dynamic(16, mapsens.max_psi(), mapsens.abs_min_psi(), mapsens.abs_max_psi());
                     draw_dynamic(17, speedo.idle_mph(), 0.0, speedo.redline_mph());
                     draw_dynamic(18, speedo.redline_mph(), 0.0, speedo.max_human());
-                    draw_dynamic(19, brakepos.zeropoint(), brakepos.min_human(), brakepos.max_human());  // BrakePositionSensor::abs_min_retract_in, BrakePositionSensor::abs_max_extend_in);
+                    draw_dynamic(19, brkpos.zeropoint(), brkpos.min_human(), brkpos.max_human());  // BrakePositionSensor::abs_min_retract_in, BrakePositionSensor::abs_max_extend_in);
                 }
                 else if (datapage == PG_PWMS) {
                     draw_dynamic(9, gas.deg[OUT], gas.deg[OPMIN], gas.deg[OPMAX]);
@@ -773,7 +807,7 @@ class Display {
                     draw_dynamic(11, brake.pid.pterm(), -drange, drange);
                     draw_dynamic(12, brake.pid.iterm(), -drange, drange);
                     draw_dynamic(13, brake.pid.dterm(), -drange, drange);
-                    draw_dynamic(14, brakepos.filt(), brakepos.op_min_in(), brakepos.op_max_in());
+                    draw_dynamic(14, brkpos.filt(), brkpos.op_min_in(), brkpos.op_max_in());
                     draw_dynamic(15, brake.d_ratio[PRESPID]);  // brake_spid_speedo_delta_adc, -range, range);
                     draw_dynamic(16, brake.d_ratio[POSNPID]);  // draw_asciiname(16, brake_pid_card[brake.activepid]);                    
                     draw_dynamic(17, brake.pid_kp(), 0.0, 8.0);
@@ -948,12 +982,7 @@ void tuner_update(int rmode) {
         if (encoder_sw_action == Encoder::SHORT)  {  // if short press
             if (tunctrl == EDIT) tunctrl = SELECT;  // If we were editing a value drop back to select mode
             else if (tunctrl == SELECT) tunctrl = EDIT;  // If we were selecting a variable start editing its value
-            else {
-                uint16_t newcolor = random(0x10000);
-                heartbeat_override_color = newcolor;
-                printf("after change heartbeat color: %04x\n", heartbeat_override_color);
-
-            }
+            else heartbeat_override_color = random(0x10000);  // temporary!! to test heartbeat color override feature
         }
         else tunctrl = (tunctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
     }
@@ -993,7 +1022,7 @@ void tuner_update(int rmode) {
             else if (sel_val == 6) adj_val(mapsens.max_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
             else if (sel_val == 8) adj_val(speedo.idle_mph_ptr(), 0.01 * fdelta, 0, speedo.redline_mph() - 1);
             else if (sel_val == 9) adj_val(speedo.redline_mph_ptr(), 0.01 * fdelta, speedo.idle_mph(), 20);
-            else if (sel_val == 10) adj_val(brakepos.zeropoint_ptr(), 0.001 * fdelta, brakepos.op_min_in(), brakepos.op_max_in());
+            else if (sel_val == 10) adj_val(brkpos.zeropoint_ptr(), 0.001 * fdelta, brkpos.op_min_in(), brkpos.op_max_in());
         }
         else if (datapage == PG_PWMS) {
             if (sel_val == 7) { adj_val(&(gas.nat[OPMIN]), fdelta, gas.nat[PARKED] + 1, gas.nat[OPMAX] - 1); gas.derive(); }
@@ -1039,7 +1068,7 @@ void tuner_update(int rmode) {
             else if (sel_val == 5) sim.set_can_sim(sens::airvelo, idelta);
             else if (sel_val == 6) sim.set_can_sim(sens::mapsens, idelta);  // else if (sel_val == 7) sim.set_can_sim(sens::starter, idelta);
             else if (sel_val == 7) sim.set_can_sim(sens::basicsw, idelta);
-            else if (sel_val == 8) { sim.set_potmap((adj_val(sim.potmap(), idelta, 0, arraysize(sensorcard) - 4))); config.putUInt("potmap", sim.potmap()); }
+            else if (sel_val == 8) { sim.set_potmap((adj_val(sim.potmap(), idelta, 0, arraysize(sensorcard) - 4))); prefs.putUInt("potmap", sim.potmap()); }
             else if (sel_val == 9 && rmode == CAL) adj_bool(&(cal_joyvert_brkmotor_mode), idelta);
             else if (sel_val == 10 && rmode == CAL) adj_bool(&(cal_pot_gasservo_mode), (idelta < 0 || cal_pot_gasservo_ready) ? idelta : -1);
         }

@@ -8,18 +8,15 @@
 // #include <User_Setup.h>                // <- Replace this line 
 // #include <../../../../src/tftsetup.h>  // <- with this one
 
-// User defined information reported by "Read_User_Setup" test & diagnostics example
 #define USER_SETUP_INFO "FlyingCarpet"
+#define ILI9341_DRIVER       // Generic driver for common displays
+// #define ILI9488_DRIVER       // Generic driver for common displays
 
+// User defined information reported by "Read_User_Setup" test & diagnostics example
 // Define to disable all #warnings in library (can be put in User_Setup_Select.h)
 //#define DISABLE_ALL_LIBRARY_WARNINGS
-
-// Section 1. Call up the right driver file - only one - and any options for it
-#define ILI9341_DRIVER       // Generic driver for common displays
-
 // Some displays support SPI reads via the MISO pin, other displays have a single SDA
 // #define TFT_SDA_READ      // This option is for ESP32 ONLY, tested with ST7789 and GC9A01 display only
-
 // Section 2. Define the pins that are used to interface with the display here
 // If a backlight control signal is available then define the TFT_BL pin in Section 2
 // below. The backlight will be turned ON when tft.begin() is called, but the library
@@ -59,7 +56,7 @@
 // Define the SPI clock frequency, this affects the graphics rendering speed. Too fast and the TFT driver will not keep
 // up and display corruption appears. With an ILI9341 display 40MHz works OK, 80MHz sometimes fails
 // Soren: default was 27MHz (27000000). I tested up to 75MHz successfully, but 80MHz failed.  40MHz is used by ESP32-S3 example
-#define SPI_FREQUENCY  60000000  // Soren: Library examples comments claim limit of ILI9541 is 40MHz. others imply can sometimes work up to 80MHz
+#define SPI_FREQUENCY  40000000  // Soren: Library examples comments claim limit of ILI9541 is 40MHz. others imply can sometimes work up to 80MHz
 
 // Optional reduced SPI frequency for reading TFT
 // Soren: Default was 2MHz (6000000)
@@ -81,3 +78,5 @@
 // Transactions are automatically enabled by the library for an ESP32 (to use HAL mutex)
 // so changing it here has no effect
 // #define SUPPORT_TRANSACTIONS
+
+#define TFT_INVERSION_OFF  // #define TFT_INVERSION_ON

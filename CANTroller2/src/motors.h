@@ -2,6 +2,7 @@
 #pragma once
 #include <ESP32Servo.h>  // Eventually move Servos into new ServoPWM objects then remove this
 #include "qpid.h"
+#include "temperature.h"
 class IdleControl {  // Soren - To allow creative control of PID targets in case your engine idle problems need that.
   public:
     enum idlemodes : int { DIRECT, CONTROL, MINIMIZE, NUM_IDLEMODES };  // DIRECT: disable idle management.  CONTROL: soft landing to idle rpm.  MINIMIZE: attempt to minimize idle to edge of instability
@@ -325,7 +326,7 @@ class GasServo : public ServoMotor {
 };
 class BrakeMotor : public JagMotor {
   private:
-    BrakePositionSensor* brakepos;
+    BrakePositionSensor* brkpos;
     PressureSensor* pressure;
     float initial_kp = 0.142;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float initial_ki = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
@@ -360,33 +361,33 @@ class BrakeMotor : public JagMotor {
     void derive() {
         JagMotor::derive();
     }
-    void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brakepos) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+    void init(int _pin, int _freq, Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         printf("Brake motor..\n");
         JagMotor::init(_pin, _freq, _hotrc, _speedo, _batt);
         pressure = _pressure;  // press_pin = _press_pin;
-        brakepos = _brakepos;  // posn_pin = _posn_pin;
+        brkpos = _brkpos;  // posn_pin = _posn_pin;
         duty_pc = 40.0;
         pres_last = pressure->human();
-        posn_last = brakepos->human();
+        posn_last = brkpos->human();
         derive();
         pids[PRESPID].init(pressure->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), initial_kp, initial_ki, initial_kd, QPID::pmod::onerr,
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_period_us, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
-        pids[POSNPID].init(brakepos->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), posn_initial_kp, posn_initial_ki, posn_initial_kd, QPID::pmod::onerr, 
+        pids[POSNPID].init(brkpos->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), posn_initial_kp, posn_initial_ki, posn_initial_kd, QPID::pmod::onerr, 
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::reverse, pid_period_us, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
         interval_timer.set(interval_timeout);
         stopcar_timer.set(stopcar_timeout);
     }
   private:
     void calc_pid_stuff(int _pid) {
-        outnow[_pid] = (_pid == PRESPID) ? pressure->human() : brakepos->human();
+        outnow[_pid] = (_pid == PRESPID) ? pressure->human() : brkpos->human();
         d_ratio[_pid] = outnow[_pid] - outlast[_pid];
-        d_ratio[_pid] /= (_pid == PRESPID) ? (pressure->max_human() - pressure->min_human()) : (brakepos->max_human() - brakepos->min_human());
+        d_ratio[_pid] /= (_pid == PRESPID) ? (pressure->max_human() - pressure->min_human()) : (brkpos->max_human() - brkpos->min_human());
         outlast[_pid] = outnow[_pid];
     }
     float pid_out() {  // feedback brake pid with position or pressure, whichever is changing more quickly
         pc[OUT] = pid.compute();  // get output accordiing to pressure pid
         if (activepid == PRESPID) pid_err_pc = pids[PRESPID].err() * (pressure->max_human() - pressure->min_human()) / 100;  // pid_err_pc allows us to display error value regardless which pid is active
-        else pid_err_pc = -(pids[POSNPID].err()) * (brakepos->max_human() - brakepos->min_human()) / 100;
+        else pid_err_pc = -(pids[POSNPID].err()) * (brkpos->max_human() - brkpos->min_human()) / 100;
         calc_pid_stuff(activepid);
         if (!brake_hybrid_pid) return pc[OUT];
         calc_pid_stuff(!activepid);
@@ -405,7 +406,7 @@ class BrakeMotor : public JagMotor {
     void set_pidtarg(float targ_pc) {
         pid_targ_pc = targ_pc;
         if (activepid == PRESPID) pid.set_target(pressure->min_human() + pid_targ_pc * (pressure->max_human() - pressure->min_human()) / 100.0);
-        else pid.set_target(brakepos->max_human() - pid_targ_pc * (brakepos->max_human() - brakepos->min_human()) / 100);
+        else pid.set_target(brkpos->max_human() - pid_targ_pc * (brkpos->max_human() - brkpos->min_human()) / 100);
     }
     void update(int runmode) {
         // Brakes - Determine motor output and write it to motor
@@ -413,10 +414,10 @@ class BrakeMotor : public JagMotor {
         if (pid_timer.expireset()) {
             // Step 1 : Determine motor percent value
             if (park_the_motors) {
-                if (brakepos->filt() + brakepos->margin() <= brakepos->parkpos())  // If brake is retracted from park point, extend toward park point, slowing as we approach
-                    pc[OUT] = map(brakepos->filt(), brakepos->parkpos(), brakepos->min_in(), pc[STOP], pc[OPMIN]);
-                else if (brakepos->filt() - brakepos->margin() >= brakepos->parkpos())  // If brake is extended from park point, retract toward park point, slowing as we approach
-                    pc[OUT] = map(brakepos->filt(), brakepos->parkpos(), brakepos->max_in(), pc[STOP], pc[OPMAX]);
+                if (brkpos->filt() + brkpos->margin() <= brkpos->parkpos())  // If brake is retracted from park point, extend toward park point, slowing as we approach
+                    pc[OUT] = map(brkpos->filt(), brkpos->parkpos(), brkpos->min_in(), pc[STOP], pc[OPMIN]);
+                else if (brkpos->filt() - brkpos->margin() >= brkpos->parkpos())  // If brake is extended from park point, retract toward park point, slowing as we approach
+                    pc[OUT] = map(brkpos->filt(), brkpos->parkpos(), brkpos->max_in(), pc[STOP], pc[OPMAX]);
             }
             else if (runmode == CAL && cal_joyvert_brkmotor_mode) {
                 int _joydir = hotrc->joydir();
@@ -430,8 +431,8 @@ class BrakeMotor : public JagMotor {
             // Step 2 : Fix motor pc value if it's out of range or exceeding positional limits
             if (runmode == CAL && cal_joyvert_brkmotor_mode)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
                 pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);  // Constrain to full potential range when calibrating. Caution don't break anything!
-            else if ((pc[OUT] < pc[STOP] && brakepos->filt() > brakepos->parkpos() - brakepos->margin()) 
-                  || (pc[OUT] > pc[STOP] && brakepos->filt() < brakepos->min_in() + brakepos->margin()))  // If brake is at position limits and we're tring to go further, stop the motor
+            else if ((pc[OUT] < pc[STOP] && brkpos->filt() > brkpos->parkpos() - brkpos->margin()) 
+                  || (pc[OUT] > pc[STOP] && brkpos->filt() < brkpos->min_in() + brkpos->margin()))  // If brake is at position limits and we're tring to go further, stop the motor
                 pc[OUT] = pc[STOP];
             else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);  // Send to the actuator. Refuse to exceed range
             // Step 3 : Convert motor percent value to pulse width for motor, and to volts for display
