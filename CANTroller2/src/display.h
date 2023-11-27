@@ -883,17 +883,17 @@ class Display {
                 draw_dynamic(19, brake.duty_pc, 0.0, 100.0);
             }
             else if (datapage == PG_IDLE) {
-                draw_asciiname(9, idlestatecard[idlectrl.targetstate]);
+                draw_asciiname(9, idlestatecard[gas.idlectrl.targetstate]);
                 draw_dynamic(10, gas.pid.target(), 0.0, tach.redline_rpm());
-                draw_dynamic(11, idlectrl.stallpoint, idlectrl.idle_absmin, idlectrl.idle_absmax);
-                draw_dynamic(12, idlectrl.idle_rpm, idlectrl.idle_absmin, idlectrl.idle_absmax);  // idlectrl.idlehot(), idlectrl.idlecold());
-                draw_dynamic(13, idlectrl.idlehigh, idlectrl.idle_absmin, idlectrl.idle_absmax);
-                draw_dynamic(14, idlectrl.idlecold, idlectrl.idle_absmin, idlectrl.idle_absmax, -1, 4);
-                draw_dynamic(15, idlectrl.idlehot, idlectrl.idle_absmin, idlectrl.idle_absmax, -1, 4);
-                draw_dynamic(16, idlectrl.tempcold, temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
-                draw_dynamic(17, idlectrl.temphot, temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
-                draw_dynamic(18, (int32_t)idlectrl.settlerate_rpmps, 0, 500);
-                draw_asciiname(19, idlemodecard[(int32_t)idlectrl.idlemode]);
+                draw_dynamic(11, gas.idlectrl.stallpoint, gas.idlectrl.idle_absmin, gas.idlectrl.idle_absmax);
+                draw_dynamic(12, gas.idlectrl.idle_rpm, gas.idlectrl.idle_absmin, gas.idlectrl.idle_absmax);  // gas.idlectrl.idlehot(), gas.idlectrl.idlecold());
+                draw_dynamic(13, gas.idlectrl.idlehigh, gas.idlectrl.idle_absmin, gas.idlectrl.idle_absmax);
+                draw_dynamic(14, gas.idlectrl.idlecold, gas.idlectrl.idle_absmin, gas.idlectrl.idle_absmax, -1, 4);
+                draw_dynamic(15, gas.idlectrl.idlehot, gas.idlectrl.idle_absmin, gas.idlectrl.idle_absmax, -1, 4);
+                draw_dynamic(16, gas.idlectrl.tempcold, temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
+                draw_dynamic(17, gas.idlectrl.temphot, temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
+                draw_dynamic(18, (int32_t)gas.idlectrl.settlerate_rpmps, 0, 500);
+                draw_asciiname(19, idlemodecard[(int32_t)gas.idlectrl.idlemode]);
             }
             else if (datapage == PG_BPID) {
                 drange = brake.us[ABSMIN]-brake.us[ABSMAX];
@@ -911,7 +911,7 @@ class Display {
             }
             else if (datapage == PG_GPID) {
                 draw_dynamic(9, gas.pid.target(), 0.0, tach.redline_rpm());
-                draw_dynamic(10, gas.pid.err(), idlectrl.idle_rpm - tach.govern_rpm(), tach.govern_rpm() - idlectrl.idle_rpm);
+                draw_dynamic(10, gas.pid.err(), gas.idlectrl.idle_rpm - tach.govern_rpm(), tach.govern_rpm() - gas.idlectrl.idle_rpm);
                 draw_dynamic(11, gas.pid.pterm(), -100.0, 100.0);
                 draw_dynamic(12, gas.pid.iterm(), -100.0, 100.0);
                 draw_dynamic(13, gas.pid.dterm(), -100.0, 100.0);
@@ -923,7 +923,7 @@ class Display {
                 draw_dynamic(19, gas.pid.kd(), 0.0, 1.0);
             }
             else if (datapage == PG_CPID) {
-                drange = tach.govern_rpm() - idlectrl.idle_rpm;
+                drange = tach.govern_rpm() - gas.idlectrl.idle_rpm;
                 draw_dynamic(9, gas.cruisepid.target(), 0.0, speedo.govern_mph());
                 draw_dynamic(10, gas.cruisepid.err(), speedo.idle_mph()-speedo.govern_mph(), speedo.govern_mph()-speedo.idle_mph());
                 draw_dynamic(11, gas.cruisepid.pterm(), -drange, drange);
@@ -1041,9 +1041,9 @@ class Tuner {
                 else if (sel_val == 10) { adj_val(&hotrc.deadband_us, idelta, 0, 50); hotrc.calc_params(); }
             }
             else if (datapage == PG_SENS) {
-                if (sel_val == 2) idlectrl.add_idlehot(0.1 * fdelta);
-                else if (sel_val == 3) idlectrl.add_idlecold(0.1 * fdelta);
-                else if (sel_val == 4) adj_val(tach.redline_rpm_ptr(), 0.1 * fdelta, idlectrl.idlehigh, tach.abs_max_rpm());
+                if (sel_val == 2) gas.idlectrl.add_idlehot(0.1 * fdelta);
+                else if (sel_val == 3) gas.idlectrl.add_idlecold(0.1 * fdelta);
+                else if (sel_val == 4) adj_val(tach.redline_rpm_ptr(), 0.1 * fdelta, gas.idlectrl.idlehigh, tach.abs_max_rpm());
                 else if (sel_val == 5) adj_val(airvelo.max_mph_ptr(), 0.01 * fdelta, 0, airvelo.abs_max_mph());
                 else if (sel_val == 6) adj_val(mapsens.min_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
                 else if (sel_val == 6) adj_val(mapsens.max_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
@@ -1058,13 +1058,13 @@ class Tuner {
                 else if (sel_val == 10) { adj_val(&(brake.duty_pc), fdelta, 0.0, 100.0); brake.derive(); }
             }
             else if (datapage == PG_IDLE) {
-                if (sel_val == 4) idlectrl.add_idlehigh(fdelta);
-                else if (sel_val == 5) idlectrl.add_idlecold(fdelta);
-                else if (sel_val == 6) idlectrl.add_idlehot(fdelta);
-                else if (sel_val == 7) idlectrl.add_tempcold(fdelta);
-                else if (sel_val == 8) idlectrl.add_temphot(fdelta);
-                else if (sel_val == 9) idlectrl.add_settlerate(idelta);
-                else if (sel_val == 10) idlectrl.cycle_idlemode(idelta);
+                if (sel_val == 4) gas.idlectrl.add_idlehigh(fdelta);
+                else if (sel_val == 5) gas.idlectrl.add_idlecold(fdelta);
+                else if (sel_val == 6) gas.idlectrl.add_idlehot(fdelta);
+                else if (sel_val == 7) gas.idlectrl.add_tempcold(fdelta);
+                else if (sel_val == 8) gas.idlectrl.add_temphot(fdelta);
+                else if (sel_val == 9) gas.idlectrl.add_settlerate(idelta);
+                else if (sel_val == 10) gas.idlectrl.cycle_idlemode(idelta);
             }
             else if (datapage == PG_BPID) {
                 if (sel_val == 8) brake.add_kp(0.001 * fdelta);

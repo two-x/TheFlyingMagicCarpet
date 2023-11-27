@@ -41,9 +41,8 @@ void setup() {
     tempsens.setup();  // Onewire bus and temp sensors
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Temperature sensors task
     sim_setup();  // simulator initialize devices and pot map
-    idlectrl.setup(gas.pid.target_ptr(), tach.human_ptr(), tach.filt_ptr(), tempsens.get_sensor(loc::ENGINE), temp_lims_f[ENGINE][OPMIN], temp_lims_f[ENGINE][WARNING], 50, IdleControl::idlemodes::CONTROL);
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);
-    gas.setup(gas_pwm_pin, 60, &hotrc, &speedo, &tach, &pot, &idlectrl);
+    gas.setup(gas_pwm_pin, 60, &hotrc, &speedo, &tach, &pot, &tempsens);
     brake.setup(brake_pwm_pin, 50, &hotrc, &speedo, &mulebatt, &pressure, &brkpos);
     steer.setup(steer_pwm_pin, 50, &hotrc, &speedo, &mulebatt);
     prefs.begin("FlyByWire", false);

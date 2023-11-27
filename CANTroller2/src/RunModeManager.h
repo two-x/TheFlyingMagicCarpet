@@ -55,7 +55,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
                 autostopping = false;
             }
             else if (!autostopping && cmd == REQ_ON && !speedo.car_stopped()) {
-                idlectrl.goto_idle();  // Keep target updated to possibly changing idle value
+                gas.idlectrl.goto_idle();  // Keep target updated to possibly changing idle value
                 brake.autostop_initial(panicstop);
                 brake.interval_timer.reset();
                 brake.stopcar_timer.reset();
@@ -139,7 +139,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
     void run_shutdownMode() { // In shutdown mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.
         if (we_just_switched_modes) {              
-            idlectrl.goto_idle();  //  Release the throttle 
+            gas.idlectrl.goto_idle();  //  Release the throttle 
             shutdown_incomplete = true;
             calmode_request = false;
             sleep_request = REQ_NA;
@@ -166,7 +166,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_holdMode() {
         if (we_just_switched_modes) joy_centered = false;  // Fly mode will be locked until the joystick first is put at or below center
         if (!speedo.car_stopped()) autostop(REQ_ON);
-        idlectrl.goto_idle();  // Let off gas (if gas using PID mode) and keep target updated to possibly changing idle value
+        gas.idlectrl.goto_idle();  // Let off gas (if gas using PID mode) and keep target updated to possibly changing idle value
         if (hotrc.joydir(VERT) != JOY_UP) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
         else if (joy_centered && !starter && !hotrc.radiolost()) mode = FLY; // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
     }
@@ -181,8 +181,8 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) mode = HOLD;  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
         else {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
             if (_joydir == JOY_UP)  // If we are trying to accelerate, scale joystick value to determine gas setpoint
-                gas.pid.set_target(map(hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBTOP], hotrc.pc[VERT][OPMAX], idlectrl.idle_rpm, tach.govern_rpm()));
-            else idlectrl.goto_idle();  // Else let off gas (if gas using PID mode)
+                gas.pid.set_target(map(hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBTOP], hotrc.pc[VERT][OPMAX], gas.idlectrl.idle_rpm, tach.govern_rpm()));
+            else gas.idlectrl.goto_idle();  // Else let off gas (if gas using PID mode)
             
             if (_joydir == JOY_DN)  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
                 brake.set_pidtarg(map(hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBBOT], hotrc.pc[VERT][OPMIN], 0.0, 100.0));
@@ -221,7 +221,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
                 }
                 else if (cruise_setpoint_mode == PID_SUSPEND_FLY) {
                     if (!cruise_adjusting) adjustpoint = tach.filt();
-                    gas.pid.set_target(adjustpoint + ctrlratio * (((_joydir == JOY_UP) ? tach.govern_rpm() : idlectrl.idle_rpm) - adjustpoint));
+                    gas.pid.set_target(adjustpoint + ctrlratio * (((_joydir == JOY_UP) ? tach.govern_rpm() : gas.idlectrl.idle_rpm) - adjustpoint));
                 }
                 cruise_ctrl_extent_pc = std::abs(hotrc.pc[VERT][FILT]);
             }
