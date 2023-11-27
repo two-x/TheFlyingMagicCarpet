@@ -11,20 +11,20 @@ static Display screen(&neo, &touch);
 static Tuner tuner(&neo, &touch);
 static RunModeManager run(&screen, &encoder);
 
-void setup() {  // Setup just configures pins (and detects touchscreen type)
-    if (RUN_TESTS) run_tests();
+void setup() {
     set_pin(starter_pin, INPUT_PULLDOWN);
     set_pin(basicmodesw_pin, INPUT_PULLUP);
-    if (!usb_jtag) set_pin(steer_enc_a_pin, INPUT_PULLUP);
-    if (!usb_jtag) set_pin(steer_enc_b_pin, INPUT_PULLUP);
-    set_pin(sdcard_cs_pin, OUTPUT, HIGH);  // Prevent bus contention
+    set_pin(sdcard_cs_pin, OUTPUT, HIGH);  // deasserting unused cs line ensures available spi bus
     set_pin(ignition_pin, OUTPUT, LOW);
     set_pin(syspower_pin, OUTPUT, syspower);
     set_pin(uart_tx_pin, INPUT);  // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
-    running_on_devboard = (read_pin(uart_tx_pin));
-    Serial.begin(115200);  // Open console serial port
-    delay(800);  // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
-    set_board_defaults();
+    if (!usb_jtag) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // assign stable defined behavior to currently unused pin
+    if (!usb_jtag) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // assign stable defined behavior to currently unused pin
+    running_on_devboard = (read_pin(uart_tx_pin));  // detect breadboard vs. real car without use of an additional pin (add weak pullup resistor on your breadboard)
+    Serial.begin(115200);  // Open console serial port (will reassign tx pin as output)
+    delay(800);            // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
+    set_board_defaults();  // set variables as appropriate if on a breadboard
+    if (RUN_TESTS) run_tests();
     hotrc.setup();
     pot.setup();
     encoder.setup();
@@ -51,41 +51,41 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     datapage_last = prefs.getUInt("dpage", PG_TEMP);
     if (display_enabled) screen.setup();
     if (display_enabled) touch.setup(disp_width_pix, disp_height_pix);
-    neo.setup();
-    idiotlights_setup(&neo);
-    web.setup();
+    neo.setup();              // set up external neopixel strip for idiot lights visible in daylight from top of carpet
+    idiotlights_setup(&neo);  // assign same idiot light variable associations and colors to neopixels as on screen  
+    web.setup();              // start up access point, web server, and json-enabled web socket for diagnostic phone interface
     xTaskCreate(update_web, "Update Web Services", 4096, NULL, 6, NULL);  // wifi/web task. 2048 is too low, it crashes when client connects
     printf("Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     looptime_setup();
 }
 void loop() {
-    ignition_panic_update();  // handler for ignition pin output and panicstop status.
-    basicsw_update();  // handler for basic mode switch
-    starter_update();  // Runs starter bidirectional handler  // time for 3x handler functions up to here = 110 us
-    encoder.update();  // Read encoder input signals  // 20 us per loop
-    pot.update();  // consistent 400 us per loop for analog read operation. we only see this for the pot (!?) changing pins is no help 
-    brkpos.update();  // Brake position (consistent 120 us)
-    pressure.update();  // Brake pressure  // ~50 us
-    tach.update();  // Tach
-    speedo.update();  // Speedo
+    ignition_panic_update();  // manage panic stop condition and drive ignition signal as needed
+    basicsw_update();         // see if basic mode switch got hit
+    starter_update();         // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
+    encoder.update();         // read encoder input signals  // 20 us per loop
+    pot.update();             // consistent 400 us per loop for analog read operation. we only see this for the pot (!?) changing pins is no help 
+    brkpos.update();          // brake position (consistent 120 us)
+    pressure.update();        // brake pressure  // ~50 us
+    tach.update();            // tach
+    speedo.update();          // speedo
     mulebatt.update();
-    lipobatt.update();  // tach + speedo + mulebatt + lipobatt = 120 us
-    airvelo.update();  // Air velocity sensor  // 20us + 900us every 4 loops
-    mapsens.update();  // Manifold air pressure sensor  // 70 us + 2ms every 9 loops
-    maf_gps = massairflow();  // Recalculate intake mass airflow
-    hotrc.update();  // ~100us for all hotrc functions
+    lipobatt.update();        // tach + speedo + mulebatt + lipobatt = 120 us
+    airvelo.update();         // manifold air velocity sensor  // 20us + 900us every 4 loops
+    mapsens.update();         // manifold air pressure sensor  // 70 us + 2ms every 9 loops
+    maf_gps = massairflow();  // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
+    hotrc.update();           // ~100us for all hotrc functions
     hotrc_events_update(run.mode);
     if (sim.potmapping(sens::joy)) hotrc.set_pc(HORZ, FILT, pot.mapToRange(steer.pc_to_us(steer.pc[OPMIN]), steer.pc_to_us(steer.pc[OPMAX])));
-    run.mode_logic();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
-    gas.update(run.mode);
-    brake.update(run.mode);
-    steer.update(run.mode);
-    touch.update(); // Handle touch events and actions
-    tuner.update(run.mode);
-    diag_update();  // notice any screwy conditions or suspicious shenigans - consistent 200us
+    run.mode_logic();         // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
+    gas.update(run.mode);     // drive servo output based on controller inputs, idle controller, (possible) feedback, run mode, etc.
+    brake.update(run.mode);   // drive motor output based on controller inputs, feedback, run mode, etc.
+    steer.update(run.mode);   // drive motor output based on controller inputs, run mode, etc.
+    touch.update();           // read touchscreen input and do what it tells us to
+    tuner.update(run.mode);   // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
+    diag_update();            // notice any screwy conditions or suspicious shenanigans - consistent 200us
     neo.update(colorcard[run.mode], !syspower);  // ~100us
     screen.update(run.mode);  // Display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
-    // lightbox.update(run.mode, speedo.human());
-    looptime_update();  // looptime_mark("F");
+    // lightbox.update(run.mode, speedo.human());  // communicate any relevant data to the lighting controller
+    looptime_update();        // looptime_mark("F");
 }
