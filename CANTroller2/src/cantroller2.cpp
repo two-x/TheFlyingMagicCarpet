@@ -41,7 +41,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     tempsens.setup();  // Onewire bus and temp sensors
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Temperature sensors task
     sim_setup();  // simulator initialize devices and pot map
-    idlectrl.setup(gas.pid.target_ptr(), tach.human_ptr(), tach.filt_ptr(), tempsens.get_sensor(loc::ENGINE), temp_lims_f[ENGINE][OP_MIN], temp_lims_f[ENGINE][WARNING], 50, IdleControl::idlemodes::CONTROL);
+    idlectrl.setup(gas.pid.target_ptr(), tach.human_ptr(), tach.filt_ptr(), tempsens.get_sensor(loc::ENGINE), temp_lims_f[ENGINE][OPMIN], temp_lims_f[ENGINE][WARNING], 50, IdleControl::idlemodes::CONTROL);
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);
     gas.setup(gas_pwm_pin, 60, &hotrc, &speedo, &tach, &pot, &idlectrl);
     brake.setup(brake_pwm_pin, 50, &hotrc, &speedo, &mulebatt, &pressure, &brkpos);
@@ -57,7 +57,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     xTaskCreate(update_web, "Update Web Services", 4096, NULL, 6, NULL);  // wifi/web task. 2048 is too low, it crashes when client connects
     printf("Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
-    panicTimer.reset();
+    panicTimer.set(panic_relax_timeout_us);
     looptime_setup();
 }
 void loop() {
@@ -77,7 +77,7 @@ void loop() {
     maf_gps = massairflow();  // Recalculate intake mass airflow
     hotrc.update();  // ~100us for all hotrc functions
     hotrc_events_update(run.mode);
-    if (sim.potmapping(sens::joy)) hotrc.set_pc(HORZ, FILT, pot.mapToRange(steer.pc_to_us(steer.pc[OPMIN]), steer.pc_to_us(steer.pc[OPMAX])));  // Also need to similarly override joyh value if simulating it
+    if (sim.potmapping(sens::joy)) hotrc.set_pc(HORZ, FILT, pot.mapToRange(steer.pc_to_us(steer.pc[OPMIN]), steer.pc_to_us(steer.pc[OPMAX])));
     run.mode_logic();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     gas.update(run.mode);
     brake.update(run.mode);

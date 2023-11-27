@@ -81,11 +81,10 @@ enum req : int { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting han
 enum cruise_modes : int { PID_SUSPEND_FLY, THROTTLE_ANGLE, THROTTLE_DELTA };
 enum sw_presses : int { NONE, SHORT, LONG }; // used by encoder sw and button algorithms
 enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
-enum temp_lims : int { DISP_MIN, OP_MIN, OP_MAX, WARNING, ALARM, DISP_MAX }; // Possible sources of gas, brake, steering commands
+enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 }; // Possible sources of gas, brake, steering commands
 enum brake_pids : int { PRESPID, POSNPID, NUM_BRAKEPIDS };
-enum disp_draw : int { ERASE = -1 };
-enum tunctrls : int { OFF, SELECT, EDIT };
-enum datapages { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
+enum tunerstuff : int { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
+enum datapages : int { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
 
 // global configuration settings
 bool brake_hybrid_pid = false;
@@ -119,9 +118,9 @@ int cruise_setpoint_mode = THROTTLE_DELTA;
 int32_t cruise_delta_max_pc_per_s = 16;  // (in THROTTLE_DELTA mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
 float cruise_angle_attenuator = 0.016;   // (in THROTTLE_ANGLE mode) Limits the change of each adjust trigger pull to this fraction of what's possible
 float temp_lims_f[3][6]{
-    {0.0, 45.0, 115.0, 120.0, 130.0, 220.0},  // [AMBIENT][DISP_MIN/OP_MIN/OP_MAX/WARNING/ALARM]
-    {0.0, 178.0, 198.0, 202.0, 205.0, 220.0}, // [ENGINE][DISP_MIN/OP_MIN/OP_MAX/WARNING/ALARM]
-    {0.0, 50.0, 120.0, 130.0, 140.0, 220.0},  // [WHEEL][DISP_MIN/OP_MIN/OP_MAX/WARNING/ALARM] (applies to all wheels)
+    {45.0, 0.0, 115.0, 120.0, 130.0, 220.0},  // [AMBIENT][OPMIN/DISP_MIN/OPMAX/WARNING/ALARM]
+    {178.0, 0.0, 198.0, 202.0, 205.0, 220.0}, // [ENGINE][OPMIN/DISP_MIN/OPMAX/WARNING/ALARM]
+    {50.0, 0.0, 120.0, 130.0, 140.0, 220.0},  // [WHEEL][OPMIN/DISP_MIN/OPMAX/WARNING/ALARM] (applies to all wheels)
 };
 float temp_room = 77.0;          // "Room" temperature is 25 C = 77 F  Who cares?
 float temp_sensor_min_f = -67.0; // Minimum reading of sensor is -25 C = -67 F
@@ -150,10 +149,8 @@ int sleep_request = REQ_NA;
 bool screensaver = false;            // Can enable experiment with animated screen draws
 uint16_t heartbeat_override_color = 0x0000;
 int tunctrl = OFF, tunctrl_last = OFF;
-int datapage = PG_RUN;  // Which of the six 8-value dataset pages is currently displayed, and available to edit
-int datapage_last = PG_TEMP;
-int sel_val = 0;  // In the real time tuning UI, which of the editable values (0-7) is selected. -1 for none 
-int sel_val_last = 0;
+int datapage = PG_RUN, datapage_last = PG_TEMP;  // Which of the dataset pages is currently displayed and available to edit?
+int sel_val = 0, sel_val_last = 0;               // In the real time tuning UI, which of the editable values is selected. -1 for none 
 
 // fast macros
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays

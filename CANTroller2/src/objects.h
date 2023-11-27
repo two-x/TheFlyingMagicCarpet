@@ -93,12 +93,12 @@ void starter_update () {  // Starter bidirectional handler logic.  Outside code 
         }
         if (!starter_drive && (starter_request != REQ_ON) && !sim.simulating(sens::starter)) {  // If we haven't been and shouldn't be driving, and not simulating
             do {
-                starter = digitalRead(starter_pin);  // then read the pin, starter variable will store if starter is turned on externally
-            } while (starter != digitalRead(starter_pin)); // starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+                starter = digitalRead(starter_pin);  // then read the pin, and starter variable will reflect whether starter has been turned on externally
+            } while (starter != digitalRead(starter_pin)); // due to a chip glitch, starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
         }
         else if (!starter && (starter_request == REQ_ON) && remote_start_support) {  // If we got a request to start the motor, and it's not already being driven externally
             starter_drive = true;
-            starter = HIGH;
+            starter = HIGH;  // ensure starter variable always reflects the starter status regardless who is driving it
             set_pin (starter_pin, OUTPUT);  // then set pin to an output
             write_pin (starter_pin, starter);  // and start the motor
             starterTimer.reset();  // if left on the starter will turn off automatically after X seconds
@@ -110,9 +110,9 @@ void starter_update () {  // Starter bidirectional handler logic.  Outside code 
 bool ignition = LOW;  // Set by handler only. Reflects current state of the signal
 int ignition_request = REQ_NA;
 bool panicstop = true;  // initialize in panic, because we could have just crashed and reset. If car is stopped, handler will clear it
-int panicstop_request = REQ_ON;  // On powerup we assume the code just crashed during a drive, because it could have
-Timer panicTimer(panic_relax_timeout_us);  // How long should a panic stop last?  We can't stay mad forever
-void ignition_panic_update() {  // Run once each main loop, directly before panicstop_update()
+int panicstop_request = REQ_ON;  // On powerup we assume the code just rebooted during a drive, because for all we know it could have 
+Timer panicTimer;  // How long should a panic stop last?  we can't stay mad forever
+void ignition_panic_update() {  // Run once each main loop
     if (panicstop_request == REQ_TOG) panicstop_request = (req)(!panicstop);
     if (ignition_request == REQ_TOG) ignition_request = (req)(!ignition);
     // else if (ignition_request == ignition) ignition_request = REQ_NA;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
