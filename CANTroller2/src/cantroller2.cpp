@@ -19,7 +19,7 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     if (!usb_jtag) set_pin(steer_enc_b_pin, INPUT_PULLUP);
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);  // Prevent bus contention
     set_pin(ignition_pin, OUTPUT, LOW);
-    set_pin(syspower_pin, OUTPUT, syspower);  // Then set the put as an output as normal.
+    set_pin(syspower_pin, OUTPUT, syspower);
     set_pin(uart_tx_pin, INPUT);  // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
     running_on_devboard = (read_pin(uart_tx_pin));
     Serial.begin(115200);  // Open console serial port
@@ -57,7 +57,6 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     xTaskCreate(update_web, "Update Web Services", 4096, NULL, 6, NULL);  // wifi/web task. 2048 is too low, it crashes when client connects
     printf("Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
-    panicTimer.set(panic_relax_timeout_us);
     looptime_setup();
 }
 void loop() {
@@ -88,6 +87,5 @@ void loop() {
     neo.update(colorcard[run.mode], !syspower);  // ~100us
     screen.update(run.mode);  // Display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
     // lightbox.update(run.mode, speedo.human());
-    looptime_mark("F");
-    looptime_update();
+    looptime_update();  // looptime_mark("F");
 }
