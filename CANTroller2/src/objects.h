@@ -2,7 +2,6 @@
 #include <Preferences.h>  // Functions for writing to flash, i think
 #include <iomanip>  // For formatting console loop timing string output
 #include <vector>  // used to group loop times with string labels
-// #include "neopixel.h"
 #include "web.h"
 // #include <HardwareSerial.h>  // In case we ever talk to jaguars over asynchronous serial port, uncomment:
 // HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
@@ -38,7 +37,6 @@ void update_web(void *parameter) {
 }
 
 // RTOS task that updates temp sensors in a separate task
-bool temp_err[NUM_TEMP_CATEGORIES];  // [AMBIENT/ENGINE/WHEEL]
 void update_temperature_sensors(void *parameter) {
     while (true) {
         if (!dont_take_temperatures)
@@ -257,6 +255,7 @@ char err_type_card[NUM_ERR_TYPES][5] = { "Lost", "Rang", "Cal", "Warn", "Crit", 
 char err_sensor_card[E_NUM_SENSORS+1][7] = { "HrcV", "HrcCh3", "BrPres", "BrkPos", "Speedo", "HrcH", "Tach", "Temps", "Startr", "HrcCh4", "Basic", "MulBat", "LiPo", "Airflw", "MAP", "None" };
 bool diag_ign_error_enabled = true;
 // diag non-tunable values
+bool temp_err[NUM_TEMP_CATEGORIES];  // [AMBIENT/ENGINE/WHEEL]
 Timer errTimer(err_timeout_us);
 bool err_sensor_alarm[NUM_ERR_TYPES] = { false, false, false, false, false, false };
 int8_t err_sensor_fails[NUM_ERR_TYPES] = { 0, 0, 0, 0, 0, 0 };
