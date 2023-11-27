@@ -33,6 +33,7 @@ class I2C {
         return false;
     }
 };
+
 // map.h - an i2c sensor to track the air pressure in our intake manifold. This, together with the air velocity
 // and temperature gives us the mass air flow which is proportional to how hard the engine is working.
 // I stole this library and modified it as such. to not block for 6-7ms on each read. - Soren
@@ -138,6 +139,7 @@ float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
     else if(units == BAR)  pressure *= 0.06895;   //bar
     return pressure;
 }
+
 // LightingBox - object to manage 12c communications link to our lighting box
 // Our protocol is: 1st nibble of 1st byte contains 4-bit command/request code. The 2nd nibble and any additional bytes contain data, as required by the code
 // codes: 0x0R = entered runmode given by R (no additional bytes)

@@ -237,6 +237,13 @@ void set_idiotcolors() {
         disp_idiots_dirty = true;
     }
 }
+int idiotlights_setup(NeopixelStrip* neo) {
+    int32_t idiots = smin((uint32_t)arraysize(idiotlights), neo->neopixelsAvailable());
+    for (int32_t idiot = 0; idiot < idiots; idiot++) neo->newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
+    std::cout << "set up heartbeat led and " << idiots << " neopixel idiot lights" << std::endl;
+    for (int32_t i=0; i<NUM_ERR_TYPES; i++) for (int32_t j=0; j<E_NUM_SENSORS; j++) err_sensor[i][j] = false; // Initialize sensor error flags to false
+    return idiots;
+}
 class Display {
   private:
     TFT_eSPI _tft = TFT_eSPI();

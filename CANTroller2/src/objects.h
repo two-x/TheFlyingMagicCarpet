@@ -161,19 +161,24 @@ void hotrc_events_update(int runmode) {
     hotrc.toggles_reset();
 }
 // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
-float maf_gps;  // Manifold mass airflow in grams per second
+float maf_gps = 0, maf_map_last = 0, maf_velo_last = 0;  // Manifold mass airflow in grams per second
 float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
     float temp = _ambient;
+    float new_velo = airvelo.filt();
+    float new_map = mapsens.filt();
     if (std::isnan(_ambient)) {
+        if (new_velo == maf_velo_last && new_map == maf_map_last) return maf_gps;  // if no new sensor readings, don't recalculate the same value
         temp = tempsens.val(loc::AMBIENT);
         if (std::isnan(temp) && running_on_devboard) temp = tempsens.val(loc::ENGINE);
         if (std::isnan(temp)) return -1;  // Avoid crashing due to trying to read absent sensor
     }
+    maf_velo_last = new_velo;
+    maf_map_last = new_map;
     float T = 0.556 * (temp - 32.0) + 273.15;  // in K.  This converts from degF to K
     float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
-    float v = 0.447 * (std::isnan(_airvelo) ? airvelo.filt() : _airvelo); // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
+    float v = 0.447 * (std::isnan(_airvelo) ? new_velo : _airvelo); // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
     float Ain2 = 3.1415926;  // in in2    1.0^2 in2 * pi  // will still need to divide by 1550 in2/m2
-    float P = 6894.76 * (std::isnan(_map) ? mapsens.filt() : _map);  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
+    float P = 6894.76 * (std::isnan(_map) ? new_map : _map);  // in Pa   6894.76 Pa/PSI  1 Pa = 1 J/m3
     return v * Ain2 * P * 1000.0 / (R * T * 1550);  // mass air flow in grams per second (ug/s)   (1k g/kg * m/s * in2 * J/m3) / (J/(kg*K) * K * 1550 in2/m2) = g/s
 }
 // Loop timing related
@@ -230,7 +235,7 @@ void looptime_update() {  // Call once each loop at the very end
         loop_cout_mark_us = esp_timer_get_time();
         std::cout << std::fixed << std::setprecision(0);
         std::cout << "\r" << (uint32_t)loop_sum_s << "s #" << loopno;  //  << " av:" << std::setw(5) << (int32_t)(loop_avg_us);  //  << " av:" << std::setw(3) << loop_avg_ms 
-        std::cout << " : " << std::setw(5) << loop_periods_us[loop_now] << " (" << loop_periods_us[loop_now]-loop_cout_us << ")us ";  // << " avg:" << loop_avg_us;  //  " us:" << esp_timer_get_time() << 
+        std::cout << " : " << std::setw(5) << loop_periods_us[loop_now] << " (" << std::setw(5) << loop_periods_us[loop_now]-loop_cout_us << ")us ";  // << " avg:" << loop_avg_us;  //  " us:" << esp_timer_get_time() << 
         for (int32_t x=1; x<loopindex; x++)
             std::cout << std::setw(3) << loop_names[x] << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1] << " ";
         std::cout << " cout:" << std::setw(5) << loop_cout_us;

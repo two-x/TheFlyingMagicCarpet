@@ -10,6 +10,7 @@ static TouchScreen touch(touch_cs_pin);
 static Display screen(&neo, &touch);
 static Tuner tuner(&neo, &touch);
 static RunModeManager run(&screen, &encoder);
+
 void setup() {  // Setup just configures pins (and detects touchscreen type)
     if (RUN_TESTS) run_tests();
     set_pin(starter_pin, INPUT_PULLDOWN);
@@ -51,10 +52,8 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
     if (display_enabled) screen.setup();
     if (display_enabled) touch.setup(disp_width_pix, disp_height_pix);
     neo.setup();
-    int32_t idiots = smin((uint32_t)arraysize(idiotlights), neo.neopixelsAvailable());
-    for (int32_t idiot = 0; idiot < idiots; idiot++) neo.newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
-    std::cout << "set up heartbeat led and " << idiots << " neopixel idiot lights" << std::endl;
-    for (int32_t i=0; i<NUM_ERR_TYPES; i++) for (int32_t j=0; j<E_NUM_SENSORS; j++) err_sensor[i][j] = false; // Initialize sensor error flags to false
+    idiotlights_setup(&neo);
+    web.setup();
     xTaskCreate(update_web, "Update Web Services", 4096, NULL, 6, NULL);  // wifi/web task. 2048 is too low, it crashes when client connects
     printf("Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
@@ -63,21 +62,20 @@ void setup() {  // Setup just configures pins (and detects touchscreen type)
 }
 void loop() {
     ignition_panic_update();  // handler for ignition pin output and panicstop status.
-    basicsw_update();
-    starter_update();  // Runs starter bidirectional handler
-    encoder.update();  // Read encoder input signals
-    pot.update();
-    brkpos.update();  // Brake position
+    basicsw_update();  // handler for basic mode switch
+    starter_update();  // Runs starter bidirectional handler  // time for 3x handler functions up to here = 110 us
+    encoder.update();  // Read encoder input signals  // 20 us per loop
+    pot.update();  // consistent 400 us per loop for analog read operation. we only see this for the pot (!?) changing pins is no help 
+    brkpos.update();  // Brake position (consistent 120 us)
+    pressure.update();  // Brake pressure  // ~50 us
     tach.update();  // Tach
     speedo.update();  // Speedo
-    // lightbox.update(run.mode, speedo.human());
-    pressure.update();  // Brake pressure
     mulebatt.update();
-    lipobatt.update();
-    airvelo.update();
-    mapsens.update();  // MAP sensor  // takes 6800 us (!!)
+    lipobatt.update();  // tach + speedo + mulebatt + lipobatt = 120 us
+    airvelo.update();  // Air velocity sensor  // 20us + 900us every 4 loops
+    mapsens.update();  // Manifold air pressure sensor  // 70 us + 2ms every 9 loops
     maf_gps = massairflow();  // Recalculate intake mass airflow
-    hotrc.update();
+    hotrc.update();  // ~100us for all hotrc functions
     hotrc_events_update(run.mode);
     if (sim.potmapping(sens::joy)) hotrc.set_pc(HORZ, FILT, pot.mapToRange(steer.pc_to_us(steer.pc[OPMIN]), steer.pc_to_us(steer.pc[OPMAX])));  // Also need to similarly override joyh value if simulating it
     run.mode_logic();  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
@@ -86,10 +84,10 @@ void loop() {
     steer.update(run.mode);
     touch.update(); // Handle touch events and actions
     tuner.update(run.mode);
-    diag_update();  // notice any screwy conditions or suspicious shenigans
-    neo.update(colorcard[run.mode], !syspower);
-    looptime_mark("-");
-    screen.update(run.mode);  // Display updates
-    looptime_mark("dis");
+    diag_update();  // notice any screwy conditions or suspicious shenigans - consistent 200us
+    neo.update(colorcard[run.mode], !syspower);  // ~100us
+    screen.update(run.mode);  // Display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
+    // lightbox.update(run.mode, speedo.human());
+    looptime_mark("F");
     looptime_update();
 }
