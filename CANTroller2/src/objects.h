@@ -9,9 +9,9 @@
 
 // Instantiate objects
 static Preferences prefs;  // Persistent config storage
-static Hotrc hotrc;
 static Potentiometer pot(pot_pin);
 static Simulator sim(pot);
+static Hotrc hotrc(&sim);
 static TemperatureSensorManager tempsens(onewire_pin);
 static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 static CarBattery mulebatt(mulebatt_pin);

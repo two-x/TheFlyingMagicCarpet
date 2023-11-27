@@ -1269,6 +1269,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
     int32_t failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
     int32_t failsafe_pad_us = 10;
   private:
+    Simulator* sim;
     static const uint32_t failsafe_timeout = 15000;
     Timer failsafe_timer;  // How long to receive failsafe pulse value continuously before recognizing radio is lost. To prevent false positives
     bool _radiolost = true;
@@ -1288,7 +1289,10 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
     static const int32_t depth = 9;  // more depth will reject longer spikes at the expense of controller delay
     int32_t raw_history[NUM_AXES][depth], filt_history[NUM_AXES][depth];  // Values before and after filtering.
   public:
-    Hotrc() { calc_params(); }
+    Hotrc(Simulator* _sim) {
+        sim = _sim;
+        calc_params();
+    }
     void setup() {
         printf("Init hotrc .. starting rmt..\n");
         for (int axis=HORZ; axis<=CH4; axis++) rmt[axis].init();  // Set up 4 RMT receivers, one per channel
@@ -1309,7 +1313,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
     }
     int update() {
         toggles_update();
-        direction_update();
+        if (!(sim->can_sim(sens::joy) && sim->enabled())) direction_update();
         radiolost_update();
         return joydir();
     }

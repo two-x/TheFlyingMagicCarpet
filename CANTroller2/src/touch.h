@@ -11,10 +11,10 @@ private:
     XPT2046_Touchscreen _ts;  // 3.5in resistive touch panel on tft lcd
     bool touch_longpress_valid = true;
     bool touch_now_touched = false;
-    int32_t tedit_exponent = 0;
-    int32_t tedit = 1 << tedit_exponent;
-    int32_t touch_fudge = 0;
-    int32_t tedit_exponent_max = 8;
+    int tedit_exponent = 0;
+    float tedit = (float)(1 << tedit_exponent);
+    int touch_fudge = 0;
+    int tedit_exponent_max = 8;
 
     Timer touchHoldTimer{550000};  // Hold this long to count as a long press
     Timer touchAccelTimer{850000};
@@ -68,7 +68,7 @@ public:
         bool ret = false;
         if (touched() && touchDoublePressTimer.expired()) {
             ret = true;
-            tedit = 1 << tedit_exponent;
+            tedit = (float)(1 << tedit_exponent);
             touchpoint = getPoint();
             tft_touch[xx] = map(touchpoint.x, corners[xx][tsmin], corners[xx][tsmax], 0, disp_width);
             tft_touch[yy] = map(touchpoint.y, corners[yy][tsmin], corners[yy][tsmax], 0, disp_height);
@@ -87,12 +87,12 @@ public:
             if (touch_now_touched) touchDoublePressTimer.reset();  // Upon end of a touch, begin timer to reject any accidental double touches
             touch_now_touched = false;  // Remember the last touch state
             tedit_exponent = 0;
-            tedit = 1 << tedit_exponent; // Reset touch acceleration value to 1
+            tedit = (float)(1 << tedit_exponent); // Reset touch acceleration value to 1
             touchHoldTimer.reset();
             touch_longpress_valid = true;
             return;
         }
-        tedit = 1 << tedit_exponent;  // Determine value editing rate
+        tedit = (float)(1 << tedit_exponent);  // Determine value editing rate
         trow = constrain((tft_touch[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
         tcol = (tft_touch[xx] - touch_margin_h_pix) / touch_cell_h_pix;
         // Take appropriate touchscreen actions depending on how we're being touched
@@ -121,11 +121,11 @@ public:
         }
         else if (tcol == 0 && trow == 2) {  // Pressed the increase value button, for real-time tuning of variables
             if (tunctrl == SELECT) tunctrl = EDIT;  // If just entering edit mode, don't change the value yet
-            else if (tunctrl == EDIT) idelta = tedit;  // If in edit mode, increase the value
+            else if (tunctrl == EDIT) idelta = (int)tedit;  // If in edit mode, increase the value
         }
         else if (tcol == 0 && trow == 3) {  // Pressed the decrease value button, for real-time tuning of variables
             if (tunctrl == SELECT) tunctrl = EDIT;  // If just entering edit mode, don't change the value yet
-            else if (tunctrl == EDIT) idelta = -tedit;  // If in edit mode, decrease the value
+            else if (tunctrl == EDIT) idelta = (int)(-tedit);  // If in edit mode, decrease the value
         }
         else if (tcol == 0 && trow == 4) {  // Pressed the simulation mode toggle. Needs long-press
             if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout()) {
@@ -141,23 +141,23 @@ public:
                 touch_longpress_valid = false;
             }
             else if (tcol == 3 && trow == 0 && sim.can_sim(sens::basicsw) && !touch_now_touched) basicmodesw = !basicmodesw;
-            else if (tcol == 3 && trow == 1 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human((float)tedit); // (+= 25) Pressed the increase brake pressure button
-            else if (tcol == 3 && trow == 2 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human((float)(-tedit)); // (-= 25) Pressed the decrease brake pressure button
-            else if (tcol == 3 && trow == 3 && sim.can_sim(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_human((float)(tedit * 0.0005)); // (-= 25) Pressed the decrease brake pressure button
-            else if (tcol == 3 && trow == 4 && sim.can_sim(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_human((float)(-tedit * 0.0005)); // (-= 25) Pressed the decrease brake pressure button
-            else if (tcol == 4 && trow == 1 && sim.can_sim(sens::tach) && tach.source() == src::TOUCH) tach.add_human((float)tedit * 0.1);
-            else if (tcol == 4 && trow == 2 && sim.can_sim(sens::tach) && tach.source() == src::TOUCH) tach.add_human((float)-tedit * 0.1);
-            else if (tcol == 4 && trow == 3 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-            else if (tcol == 4 && trow == 4 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], -tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-            else if (tcol == 5 && trow == 1 && sim.can_sim(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human((float)tedit * 0.005);
-            else if (tcol == 5 && trow == 2 && sim.can_sim(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human((float)-tedit * 0.005);
-            else if (tcol == 5 && trow == 3 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
-            else if (tcol == 5 && trow == 4 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], -tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+            else if (tcol == 3 && trow == 1 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(tedit * 0.02); // (+= 25) Pressed the increase brake pressure button
+            else if (tcol == 3 && trow == 2 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(-tedit * 0.02); // (-= 25) Pressed the decrease brake pressure button
+            else if (tcol == 3 && trow == 3 && sim.can_sim(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_human(tedit * 0.0008); // (-= 25) Pressed the decrease brake pressure button
+            else if (tcol == 3 && trow == 4 && sim.can_sim(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_human(-tedit * 0.0008); // (-= 25) Pressed the decrease brake pressure button
+            else if (tcol == 4 && trow == 1 && sim.can_sim(sens::tach) && tach.source() == src::TOUCH) tach.add_human(tedit * 0.2);
+            else if (tcol == 4 && trow == 2 && sim.can_sim(sens::tach) && tach.source() == src::TOUCH) tach.add_human(-tedit * 0.2);
+            else if (tcol == 4 && trow == 3 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], tedit * 0.025, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+            else if (tcol == 4 && trow == 4 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], -tedit * 0.025, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+            else if (tcol == 5 && trow == 1 && sim.can_sim(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human(tedit * 0.003);
+            else if (tcol == 5 && trow == 2 && sim.can_sim(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human(-tedit * 0.003);
+            else if (tcol == 5 && trow == 3 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], tedit * 0.025, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+            else if (tcol == 5 && trow == 4 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], -tedit * 0.025, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
         }
         // Update the tedit_exponent if needed
         if (tedit_exponent < tedit_exponent_max && (touchHoldTimer.elapsed() > (tedit_exponent + 1) * touchAccelTimer.timeout())) {
             tedit_exponent++;
-            tedit = 1 << tedit_exponent; // Update the touch acceleration value
+            tedit = (float)(1 << tedit_exponent); // Update the touch acceleration value
         }
         touch_now_touched = true;
     }
