@@ -237,24 +237,17 @@ void set_idiotcolors() {
         disp_idiots_dirty = true;
     }
 }
-int idiotlights_setup(NeopixelStrip* neo) {
-    int32_t idiots = smin((uint32_t)arraysize(idiotlights), neo->neopixelsAvailable());
-    for (int32_t idiot = 0; idiot < idiots; idiot++) neo->newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
+int idiotlights_setup(NeopixelStrip* myneo) {
+    int32_t idiots = smin((uint32_t)arraysize(idiotlights), myneo->neopixelsAvailable());
+    for (int32_t idiot = 0; idiot < idiots; idiot++) myneo->newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
     std::cout << "set up heartbeat led and " << idiots << " neopixel idiot lights" << std::endl;
     for (int32_t i=0; i<NUM_ERR_TYPES; i++) for (int32_t j=0; j<E_NUM_SENSORS; j++) err_sensor[i][j] = false; // Initialize sensor error flags to false
     return idiots;
 }
-class Display {
+class ScreenSaver {
   private:
-    TFT_eSPI _tft = TFT_eSPI();
-    TFT_eSprite _saver = TFT_eSprite(&_tft);  // Declare screensaver sprite object with pointer to tft object
-    NeopixelStrip* neo;
+    TFT_eSprite* _sprite;
     TouchScreen* touch;
-    uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
-    Timer _tftResetTimer, _tftDelayTimer;
-    int32_t _timing_tft_reset;
-    bool _procrastinate = false, reset_finished = false, saver_lotto = false, screensaver_last = false, simulating_last;        
-    // For screensaver sprite
     long sx0, sy0, touchpoint_x = -1, touchpoint_y = -1, eraser_rad = 14, eraser_rad_min = 9, eraser_rad_max = 27, eraser_velo_min = 4, eraser_velo_max = 10;
     long eraser_pos[2] = { 0, 0 };
     long eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) };
@@ -264,10 +257,121 @@ class Display {
     float pensat = 200.0;
     uint16_t pencolor = RED;
     uint32_t pentimeout = 700000;
-    int savernumcycles, savershape_last, disp_oldmode = SHUTDOWN;   // So we can tell when the mode has just changed. start as different to trigger_mode start algo
+    int savernumcycles, savershape_last;
     int savershapes = 5, savercycle = 1, savtouch_last_x = -1, savtouch_last_y = -1, savtouch_last_w = 2, savershape = random(savershapes);
     uint32_t saver_cycletime_us = 38000000, saver_refresh_us = 45000;
     Timer saverRefreshTimer, saverCycleTimer, pentimer;
+    bool saver_lotto = false, screensaver_last = false;
+  public:
+    ScreenSaver() {}
+    void setup(TFT_eSprite* arg_sprite, TouchScreen* arg_touch) {
+        _sprite = arg_sprite;
+        touch = arg_touch;
+        // _sprite->setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
+        _sprite->createSprite(disp_saver_width, disp_saver_height);  // Create a sprite of defined size
+        _sprite->fillSprite(TFT_BLACK);
+        sx0 = random(disp_saver_width);        // Random x coordinate
+        sy0 = random(disp_saver_height);       // Random y coordinate
+        for (int16_t axis=0; axis<=1; axis++) eraser_velo_sign[axis] = (random(1)) ? 1 : -1;
+        _sprite->setTextDatum(MC_DATUM);
+        _sprite->setTextColor(BLK); 
+        _sprite->setTextSize(1); 
+        saverRefreshTimer.set(saver_refresh_us);
+        saverCycleTimer.set((int64_t)saver_cycletime_us);
+        pentimer.set(pentimeout);
+    }
+    void saver_touch(int16_t x, int16_t y) {  // you can draw colorful lines on the screensaver
+        if (x >= disp_simbuttons_x && y >= disp_simbuttons_y) {
+            x -= disp_simbuttons_x; y -= disp_simbuttons_y;
+            if (savtouch_last_x == -1) savtouch_last_x = x;
+            if (savtouch_last_y == -1) savtouch_last_y = y;
+            if (pentimer.expireset()) {
+                pensat += 1.5;
+                if (pensat > 255.0) pensat = 100.0;
+                pencolor = (savercycle == 1) ? random(0x10000) : hsv_to_rgb<uint16_t>(++penhue, (uint8_t)pensat, 200+random(56));
+            }
+            _sprite->drawWedgeLine(savtouch_last_x, savtouch_last_y, x, y, 4, 4, pencolor, pencolor);  // savtouch_last_w, w, pencolor, pencolor);
+            savtouch_last_x = x; savtouch_last_y = y;  // savtouch_last_w = w;
+        }
+    }
+    void update() {
+        if (touch->touched()) saver_touch(touch->touch_pt(0), touch->touch_pt(1));
+        if (screensaver && !screensaver_last) saver_pattern(-2);  // randomize new pattern whenever turned off and on
+        screensaver_last = screensaver;
+        if (!screensaver) return;
+        if (saverRefreshTimer.expireset()) {
+            if (saverCycleTimer.expired()) {
+                savernumcycles++;
+                if (--savercycle < 1) savercycle = 3;
+                if (savercycle == 1) saver_pattern(-1);
+                saverCycleTimer.set(saver_cycletime_us / ((savercycle == 2) ? 3 : 1));
+            }
+            long sx1 = random(disp_saver_width);        // Random x coordinate
+            long sy1 = random(disp_saver_height);       // Random y coordinate
+            if (savercycle != 2) {
+                spothue--;
+                if (!savershape) _sprite->drawWedgeLine(sx0, sy0, sx1, sy1, 1+random(3), 1, hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2), 150+random(106)), BLK);
+                else if (savershape == 1) {
+                    uint8_t d1 = 10+random(30);
+                    uint8_t d2 = 10+random(30);
+                    uint8_t hue = random(255);
+                    uint8_t sat = (spothue < 128) ? 2*(255-spothue) : 2*spothue;
+                    uint8_t brt = 200+random(56);
+                    for (int i=0; i<(3 * 3+random(10)); i+=3) _sprite->drawEllipse(sx1, sy1, d1 - i, d2 + i, hsv_to_rgb<uint16_t>(hue+2*i, sat, brt));
+                }
+                else if (savershape == 4) _sprite->drawSmoothCircle(sx1, sy1, random(25), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106)), BLK);
+                else for (int star=0; star<(savershape*5); star++) {
+                    if (savershape == 2) _sprite->drawSpot(random(disp_saver_width), random(disp_saver_height), 2+random(1), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(46)), BLK);  // hue_to_rgb16(random(255)), BLK);
+                    else if (savershape == 3) {
+                        _sprite->setTextColor(hsv_to_rgb<uint16_t>(sx0 + sy0 + (spothue>>2), 63+(spothue>>1), 200+random(56)), BLK);
+                        char letter = (char)(1 + random(0xbe));
+                        _sprite->setCursor(sx1, sy1);
+                        _sprite->print((String)letter);
+                    }
+                }
+                _sprite->setTextColor(BLK);  // allows subliminal messaging
+            }
+            if (savercycle == 3 && saver_lotto) _sprite->drawString("do drugs", disp_saver_width / 2, disp_saver_height / 2, 4);
+            else if (savercycle != 1) {
+                for (int axis=0; axis<=1; axis++) {
+                    eraser_pos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
+                    if (eraser_pos[axis] * eraser_velo_sign[axis] >= eraser_pos_max[axis]) {
+                        eraser_pos[axis] = eraser_velo_sign[axis] * eraser_pos_max[axis];
+                        eraser_velo[axis] = (eraser_velo_min + random(eraser_velo_max - eraser_velo_min)) >> (savershape == 3);
+                        eraser_velo[!axis] = (eraser_velo_min + random(eraser_velo_max - eraser_velo_min)) >> (savershape == 3);
+                        eraser_velo_sign[axis] *= -1;
+                        eraser_rad = constrain(eraser_rad + random(5) - 2, eraser_rad_min, eraser_rad_max);
+                    }
+                }
+                _sprite->fillCircle((disp_saver_width / 2) + eraser_pos[0], (disp_saver_height / 2) + eraser_pos[1], eraser_rad, BLK);
+            } 
+            sx0 = sx1;
+            sy0 = sy1;
+            yield();
+            _sprite->pushSprite(disp_simbuttons_x, disp_simbuttons_y);
+        }
+    }
+  private:
+    void saver_pattern(int newpat=-1) {  // pass non-negative value for a specific pattern, or -1 for cycle, -2 for random
+        int last_pat = savershape;
+        saver_lotto = !random(saver_illicit_prob);
+        if (0 <= newpat && newpat < savershapes) savershape = newpat;  // 
+        else if (newpat == -1) ++savershape %= savershapes;
+        else if (newpat == -2) while (last_pat == savershape) savershape = random(savershapes);
+    }
+};
+class Display {
+  private:
+    TFT_eSPI _tft = TFT_eSPI();
+    TFT_eSprite _saversprite = TFT_eSprite(&_tft);
+    NeopixelStrip* neo;
+    TouchScreen* touch;
+    ScreenSaver saverobj;
+    uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
+    Timer _tftResetTimer, _tftDelayTimer;
+    int32_t _timing_tft_reset;
+    bool _procrastinate = false, reset_finished = false, simulating_last;
+    int disp_oldmode = SHUTDOWN;   // So we can tell when the mode has just changed. start as different to trigger_mode start algo
   public:
     // Display(int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
     // Display() : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
@@ -297,7 +401,7 @@ class Display {
         set_idiotcolors();
         draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, true);
         all_dirty();
-        saver_setup();
+        saverobj.setup(&_saversprite, touch);
     }
     bool tft_reset() {  // call to begin a tft reset, and continue to call every loop until returns true (or get_reset_finished() returns true), then stop
         if (reset_finished) {
@@ -345,99 +449,7 @@ class Display {
         if (halvings == 1) return ((color & 0xf000) | (color & 0x7c0) | (color & 0x1e)) >> 1;
         else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
     }
-    void saver_touch(int16_t x, int16_t y) {  // you can draw colorful lines on the screensaver
-        if (x >= disp_simbuttons_x && y >= disp_simbuttons_y) {
-            x -= disp_simbuttons_x; y -= disp_simbuttons_y;
-            if (savtouch_last_x == -1) savtouch_last_x = x;
-            if (savtouch_last_y == -1) savtouch_last_y = y;
-            if (pentimer.expireset()) {
-                pensat += 1.5;
-                if (pensat > 255.0) pensat = 100.0;
-                pencolor = (savercycle == 1) ? random(0x10000) : hsv_to_rgb<uint16_t>(++penhue, (uint8_t)pensat, 200+random(56));
-            }
-            _saver.drawWedgeLine(savtouch_last_x, savtouch_last_y, x, y, 4, 4, pencolor, pencolor);  // savtouch_last_w, w, pencolor, pencolor);
-            savtouch_last_x = x; savtouch_last_y = y;  // savtouch_last_w = w;
-        }
-    }
   private:
-    void saver_setup() {
-        // _saver.setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
-        _saver.createSprite(disp_saver_width, disp_saver_height);  // Create a sprite of defined size
-        _saver.fillSprite(TFT_BLACK);
-        sx0 = random(disp_saver_width);        // Random x coordinate
-        sy0 = random(disp_saver_height);       // Random y coordinate
-        for (int16_t axis=0; axis<=1; axis++) eraser_velo_sign[axis] = (random(1)) ? 1 : -1;
-        _saver.setTextDatum(MC_DATUM);
-        _saver.setTextColor(BLK); 
-        _saver.setTextSize(1); 
-        saverRefreshTimer.set(saver_refresh_us);
-        saverCycleTimer.set((int64_t)saver_cycletime_us);
-        pentimer.set(pentimeout);
-    }
-    void saver_pattern(int newpat=-1) {  // pass non-negative value for a specific pattern, or -1 for cycle, -2 for random
-        int last_pat = savershape;
-        saver_lotto = !random(saver_illicit_prob);
-        if (0 <= newpat && newpat < savershapes) savershape = newpat;  // 
-        else if (newpat == -1) ++savershape %= savershapes;
-        else if (newpat == -2) while (last_pat == savershape) savershape = random(savershapes);
-    }
-    void saver_update() {
-        if (screensaver && !screensaver_last) saver_pattern(-2);  // randomize new pattern whenever turned off and on
-        screensaver_last = screensaver;
-        if (!screensaver) return;
-        if (saverRefreshTimer.expireset()) {
-            if (saverCycleTimer.expired()) {
-                savernumcycles++;
-                if (--savercycle < 1) savercycle = 3;
-                if (savercycle == 1) saver_pattern(-1);
-                saverCycleTimer.set(saver_cycletime_us / ((savercycle == 2) ? 3 : 1));
-            }
-            if (touch->touched()) saver_touch(touch->touch_pt(0), touch->touch_pt(1));
-            long sx1 = random(disp_saver_width);        // Random x coordinate
-            long sy1 = random(disp_saver_height);       // Random y coordinate
-            if (savercycle != 2) {
-                spothue--;
-                if (!savershape) _saver.drawWedgeLine(sx0, sy0, sx1, sy1, 1+random(3), 1, hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2), 150+random(106)), BLK);
-                else if (savershape == 1) {
-                    uint8_t d1 = 10+random(30);
-                    uint8_t d2 = 10+random(30);
-                    uint8_t hue = random(255);
-                    uint8_t sat = (spothue < 128) ? 2*(255-spothue) : 2*spothue;
-                    uint8_t brt = 200+random(56);
-                    for (int i=0; i<(3 * 3+random(10)); i+=3) _saver.drawEllipse(sx1, sy1, d1 - i, d2 + i, hsv_to_rgb<uint16_t>(hue+2*i, sat, brt));
-                }
-                else if (savershape == 4) _saver.drawSmoothCircle(sx1, sy1, random(25), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106)), BLK);
-                else for (int star=0; star<(savershape*5); star++) {
-                    if (savershape == 2) _saver.drawSpot(random(disp_saver_width), random(disp_saver_height), 2+random(1), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(46)), BLK);  // hue_to_rgb16(random(255)), BLK);
-                    else if (savershape == 3) {
-                        _saver.setTextColor(hsv_to_rgb<uint16_t>(sx0 + sy0 + (spothue>>2), 63+(spothue>>1), 200+random(56)), BLK);
-                        char letter = (char)(1 + random(0xbe));
-                        _saver.setCursor(sx1, sy1);
-                        _saver.print((String)letter);
-                    }
-                }
-                _saver.setTextColor(BLK);  // allows subliminal messaging
-            }
-            if (savercycle == 3 && saver_lotto) _saver.drawString("do drugs", disp_saver_width / 2, disp_saver_height / 2, 4);
-            else if (savercycle != 1) {
-                for (int axis=0; axis<=1; axis++) {
-                    eraser_pos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
-                    if (eraser_pos[axis] * eraser_velo_sign[axis] >= eraser_pos_max[axis]) {
-                        eraser_pos[axis] = eraser_velo_sign[axis] * eraser_pos_max[axis];
-                        eraser_velo[axis] = (eraser_velo_min + random(eraser_velo_max - eraser_velo_min)) >> (savershape == 3);
-                        eraser_velo[!axis] = (eraser_velo_min + random(eraser_velo_max - eraser_velo_min)) >> (savershape == 3);
-                        eraser_velo_sign[axis] *= -1;
-                        eraser_rad = constrain(eraser_rad + random(5) - 2, eraser_rad_min, eraser_rad_max);
-                    }
-                }
-                _saver.fillCircle((disp_saver_width / 2) + eraser_pos[0], (disp_saver_height / 2) + eraser_pos[1], eraser_rad, BLK);
-            } 
-            sx0 = sx1;
-            sy0 = sy1;
-            yield();
-            _saver.pushSprite(disp_simbuttons_x, disp_simbuttons_y);
-        }
-    }
     void draw_bargraph_base(int32_t corner_x, int32_t corner_y, int32_t width) {  // draws a horizontal bargraph scale.  124, y, 40
         _tft.drawFastHLine(corner_x+disp_bargraph_squeeze, corner_y, width-disp_bargraph_squeeze*2, GRY1);
         for (int32_t offset=0; offset<=2; offset++) _tft.drawFastVLine((corner_x+disp_bargraph_squeeze)+offset*(width/2 - disp_bargraph_squeeze), corner_y-1, 3, WHT);
@@ -990,7 +1002,7 @@ class Display {
             disp_data_dirty = false;
             _procrastinate = true;  // don't do anything else in this same loop
         }
-        if (!sim.enabled() && !_procrastinate) saver_update();
+        if (!sim.enabled() && !_procrastinate) saverobj.update();
         _procrastinate = false;
     }
 };
