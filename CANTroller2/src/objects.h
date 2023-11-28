@@ -116,7 +116,6 @@ Timer panicTimer(panic_relax_timeout_us);  // How long should a panic stop last?
 int32_t loopno = 1, loopindex = 0, loop_recentsum = 0, loop_scale_min_us = 0, loop_scale_avg_max_us = 2500, loop_scale_peak_max_us = 25000;
 
 void ignition_panic_update() {  // Run once each main loop
-    // if(loopno < 10) printf("in, %d %d %ld\n", panicstop, panicstop_request, (uint32_t)panicTimer.elapsed());
     if (panicstop_request == REQ_TOG) panicstop_request = !panicstop;
     if (ignition_request == REQ_TOG) ignition_request = !ignition;
     // else if (ignition_request == ignition) ignition_request = REQ_NA;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
@@ -135,7 +134,6 @@ void ignition_panic_update() {  // Run once each main loop
         ignition = (bool)ignition_request;
         write_pin (ignition_pin, ignition);  // Turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
     }
-    // if(loopno < 10) printf("out %d %d %ld\n", panicstop, panicstop_request, (uint32_t)panicTimer.elapsed());
     panicstop_request = REQ_NA;
     ignition_request = REQ_NA;  // Make sure this goes after the last comparison
 }

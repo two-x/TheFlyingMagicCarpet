@@ -814,7 +814,7 @@ class Display {
                 highest_pri_failing_last[idiot] = highest_pri_failing_sensor[idiot];
             }
         }
-        if (!display_enabled) draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, force);
+        if (display_enabled) draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, force);
     }
   public:
     void update(int _nowmode) {
