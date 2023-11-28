@@ -7,6 +7,7 @@
 // HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
 
 // Instantiate objects
+// using static as a way to help enforce some control over dependencies (to ease transition to increased compartmentalization)
 static Preferences prefs;  // Persistent config storage
 static Potentiometer pot(pot_pin);
 static Simulator sim(pot);
@@ -23,7 +24,6 @@ static I2C i2c(i2c_sda_pin, i2c_scl_pin);
 static AirVeloSensor airvelo(i2c);
 static MAPSensor mapsens(i2c);
 static LightingBox lightbox;
-static IdleControl idlectrl;
 static GasServo gas;
 static BrakeMotor brake;
 static SteerMotor steer;
@@ -109,12 +109,16 @@ void starter_update () {  // Starter bidirectional handler logic.  Outside code 
 }
 bool ignition = LOW;  // Set by handler only. Reflects current state of the signal
 int ignition_request = REQ_NA;
-bool panicstop = true;  // initialize in panic, because we could have just crashed and reset. If car is stopped, handler will clear it
+bool panicstop = false;  // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
 int panicstop_request = REQ_ON;  // On powerup we assume the code just rebooted during a drive, because for all we know it could have 
-Timer panicTimer;  // How long should a panic stop last?  we can't stay mad forever
+Timer panicTimer(panic_relax_timeout_us);  // How long should a panic stop last?  we can't stay mad forever
+
+int32_t loopno = 1, loopindex = 0, loop_recentsum = 0, loop_scale_min_us = 0, loop_scale_avg_max_us = 2500, loop_scale_peak_max_us = 25000;
+
 void ignition_panic_update() {  // Run once each main loop
-    if (panicstop_request == REQ_TOG) panicstop_request = (req)(!panicstop);
-    if (ignition_request == REQ_TOG) ignition_request = (req)(!ignition);
+    if(loopno < 10) printf("in, %d %d %ld\n", panicstop, panicstop_request, (uint32_t)panicTimer.elapsed());
+    if (panicstop_request == REQ_TOG) panicstop_request = !panicstop;
+    if (ignition_request == REQ_TOG) ignition_request = !ignition;
     // else if (ignition_request == ignition) ignition_request = REQ_NA;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
     if (speedo.car_stopped() || panicTimer.expired()) panicstop_request = REQ_OFF;  // Cancel panic stop if car is stopped
     if (!speedo.car_stopped()) {
@@ -124,6 +128,7 @@ void ignition_panic_update() {  // Run once each main loop
     bool paniclast = panicstop;
     if (panicstop_request != REQ_NA) {
         panicstop = (bool)panicstop_request;
+        printf("panic=%d\n", panicstop);
         if (panicstop && !paniclast) panicTimer.reset();
     }
     if (panicstop) ignition_request = REQ_OFF;  // panic stop causes ignition cut
@@ -131,6 +136,7 @@ void ignition_panic_update() {  // Run once each main loop
         ignition = (bool)ignition_request;
         write_pin (ignition_pin, ignition);  // Turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
     }
+    if(loopno < 10) printf("out %d %d %ld\n", panicstop, panicstop_request, (uint32_t)panicTimer.elapsed());
     panicstop_request = REQ_NA;
     ignition_request = REQ_NA;  // Make sure this goes after the last comparison
 }
@@ -184,7 +190,6 @@ Timer loopTimer(1000000); // how long the previous main loop took to run (in us)
 float loop_sum_s, loop_avg_us, loopfreq_hz;
 uint32_t looptimes_us[20];
 bool loop_dirty[20];
-int32_t loopno = 1, loopindex = 0, loop_recentsum = 0, loop_scale_min_us = 0, loop_scale_avg_max_us = 2500, loop_scale_peak_max_us = 25000;
 int64_t loop_cout_mark_us;
 uint32_t loop_cout_us = 0, loop_peak_us = 0, loop_now = 0;;
 const uint32_t loop_history = 100;

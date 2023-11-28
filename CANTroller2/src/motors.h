@@ -204,7 +204,7 @@ class ServoMotor {
 class JagMotor : public ServoMotor {
   protected:
     CarBattery* mulebatt;
-    static constexpr float car_batt_fake_v = 12.0;
+    float car_batt_fake_v = 12.0;
     uint32_t volt_check_period_us = 3500000;
     Timer volt_check_timer;
   public:
@@ -263,9 +263,9 @@ class GasServo : public ServoMotor {
     float initial_kd = 0.000;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
   public:
     IdleControl idlectrl;
+    QPID pid, cruisepid;
     bool openloop = true, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
     float (&deg)[arraysize(nat)] = nat;  // our "native" value is degrees of rotation "deg". Create reference so nat and deg are interchangeable
-    QPID pid, cruisepid;
     float tach_last, cruise_target_pc, governor = 95;     // Software governor will only allow this percent of full-open throttle (percent 0-100)
     Timer servo_delay_timer;    // We expect the servo to find any new position within this time
     GasServo() {};  // Brake(int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin); 
@@ -338,8 +338,8 @@ class BrakeMotor : public JagMotor {
     float posn_initial_ki = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float posn_initial_kd = 0.000;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     uint32_t pid_period_us = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
-    static const uint32_t interval_timeout = 1000000;  // How often to apply increment during auto-stopping (in us)
-    static const uint32_t stopcar_timeout = 8000000;  // How often to apply increment during auto-stopping (in us)
+    static constexpr uint32_t interval_timeout = 1000000;  // How often to apply increment during auto-stopping (in us)
+    static constexpr uint32_t stopcar_timeout = 8000000;  // How often to apply increment during auto-stopping (in us)
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
     // float posn_inflect, pres_inflect, pc_inflect; 
     void activate_pid(int newpid) {
@@ -351,10 +351,10 @@ class BrakeMotor : public JagMotor {
         pid.init(pids[!activepid].output());
     }
   public:
+    QPID pids[NUM_BRAKEPIDS];  // brake changes from pressure target to position target as pressures decrease, and vice versa
     bool autostopping = false, reverse = false, openloop = false;
     // float duty_pc = 25;
     Timer stopcar_timer, interval_timer;  // How much time between increasing brake force during auto-stop if car still moving?    // How long before giving up on trying to stop car?
-    QPID pids[NUM_BRAKEPIDS];  // brake changes from pressure target to position target as pressures decrease, and vice versa
     int activepid = brake_default_pid, activepid_last = brake_default_pid;
     bool posn_pid_active = (activepid == POSNPID);
     QPID &pid = pids[activepid];

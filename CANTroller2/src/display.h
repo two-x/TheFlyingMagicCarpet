@@ -253,7 +253,7 @@ class Display {
     uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     Timer _tftResetTimer, _tftDelayTimer;
     int32_t _timing_tft_reset;
-    bool _procrastinate = false, reset_finished = false, saver_lotto = false, simulating_last;        
+    bool _procrastinate = false, reset_finished = false, saver_lotto = false, screensaver_last = false, simulating_last;        
     // For screensaver sprite
     long sx0, sy0, touchpoint_x = -1, touchpoint_y = -1, eraser_rad = 14, eraser_rad_min = 9, eraser_rad_max = 27, eraser_velo_min = 4, eraser_velo_max = 10;
     long eraser_pos[2] = { 0, 0 };
@@ -374,15 +374,25 @@ class Display {
         saverCycleTimer.set((int64_t)saver_cycletime_us);
         pentimer.set(pentimeout);
     }
+    void saver_pattern(int newpat=-1) {  // pass non-negative value for a specific pattern, or -1 for cycle, -2 for random
+        int last_pat = savershape;
+        saver_lotto = !random(saver_illicit_prob);
+        if (0 <= newpat && newpat < savershapes) savershape = newpat;  // 
+        else if (newpat == -1) ++savershape %= savershapes;
+        else if (newpat == -2) while (last_pat == savershape) savershape = random(savershapes);
+    }
     void saver_update() {
+        if (screensaver && !screensaver_last) saver_pattern(-2);  // randomize new pattern whenever turned off and on
+        screensaver_last = screensaver;
+        if (!screensaver) return;
         if (saverRefreshTimer.expireset()) {
             if (saverCycleTimer.expired()) {
                 savernumcycles++;
                 if (--savercycle < 1) savercycle = 3;
-                if (savercycle == 1) ++savershape %= savershapes;
-                saver_lotto = !random(saver_illicit_prob);
+                if (savercycle == 1) saver_pattern(-1);
                 saverCycleTimer.set(saver_cycletime_us / ((savercycle == 2) ? 3 : 1));
             }
+            if (touch->touched()) saver_touch(touch->touch_pt(0), touch->touch_pt(1));
             long sx1 = random(disp_saver_width);        // Random x coordinate
             long sy1 = random(disp_saver_height);       // Random y coordinate
             if (savercycle != 2) {
@@ -393,11 +403,11 @@ class Display {
                     uint8_t d2 = 10+random(30);
                     uint8_t hue = random(255);
                     uint8_t sat = (spothue < 128) ? 2*(255-spothue) : 2*spothue;
-                    uint8_t brt = 180+random(76);
+                    uint8_t brt = 200+random(56);
                     for (int i=0; i<(3 * 3+random(10)); i+=3) _saver.drawEllipse(sx1, sy1, d1 - i, d2 + i, hsv_to_rgb<uint16_t>(hue+2*i, sat, brt));
                 }
                 else if (savershape == 4) _saver.drawSmoothCircle(sx1, sy1, random(25), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106)), BLK);
-                else for (int star=0; star<10; star++) {
+                else for (int star=0; star<(savershape*5); star++) {
                     if (savershape == 2) _saver.drawSpot(random(disp_saver_width), random(disp_saver_height), 2+random(1), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(46)), BLK);  // hue_to_rgb16(random(255)), BLK);
                     else if (savershape == 3) {
                         _saver.setTextColor(hsv_to_rgb<uint16_t>(sx0 + sy0 + (spothue>>2), 63+(spothue>>1), 200+random(56)), BLK);
@@ -980,10 +990,7 @@ class Display {
             disp_data_dirty = false;
             _procrastinate = true;  // don't do anything else in this same loop
         }
-        if (screensaver) {
-            if (touch->touched()) saver_touch(touch->touch_pt(0), touch->touch_pt(1));
-            if (!sim.enabled() && !_procrastinate) saver_update();
-        }
+        if (!sim.enabled() && !_procrastinate) saver_update();
         _procrastinate = false;
     }
 };
