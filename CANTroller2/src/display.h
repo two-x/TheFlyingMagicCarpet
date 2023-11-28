@@ -596,23 +596,6 @@ class Display {
             disp_needles[lineno] = -1;  // Flag for no needle
         }
     }
-    // int32_t significant_place(float value) {  // Returns the decimal place of the most significant digit of a positive float value, without relying on logarithm math
-    //     int32_t place = 0;
-    //     if (value >= 1) { // int32_t vallog = std::log10(value);  // Can be sped up
-    //         place = 1;
-    //         while (value >= 10) {
-    //             value /= 10;
-    //             place++;
-    //         }
-    //     }
-    //     else if (value) {  // checking (value) rather than (value != 0.0) can help avoid precision errors caused by digital representation of floating numbers
-    //         while (value < 1) {
-    //             value *= 10;
-    //             place--;
-    //         }
-    //     }
-    //     return place;
-    // }
     int32_t significant_place(float value) {  // Returns the decimal place of the most significant digit of a positive float value, without relying on logarithm math
         int32_t place = 1;
         if (value >= 1) { // int32_t vallog = std::log10(value);  // Can be sped up
