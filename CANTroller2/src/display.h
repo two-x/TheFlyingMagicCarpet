@@ -628,8 +628,7 @@ class Display {
         char buffer[maxlength+1];  // Allocate buffer with the maximum required size
         snprintf(buffer, sizeof(buffer), "%.*e", maxlength - 4 - (int)(place >= 10), (float)value);
         std::string result(buffer);  // copy buffer to result
-        result = result.substr(0, result.find('e') + 1) + std::to_string(place);
-        return result;
+        return result.substr(0, result.find('e') + 1) + std::to_string(place);
     }
     std::string abs_ftoa(float value, int32_t maxlength, int32_t sigdig, bool chop_zeros = true) {  // returns an ascii string representation of a given float value, formatted efficiently. It will not exceed maxlength. fractional digits will be removed respecting given number of significant digits
         value = abs(value);  // This function disregards sign
@@ -645,7 +644,7 @@ class Display {
             std::string result(buffer);  // copy buffer to result
             return result;
         }
-        if (place < 0 && sigdig-place <= maxlength) {  // Then we want decimal w/o initial '0' limited to given significant digits (eg .123, .0123, .00123)
+        if (place < 0 && sigdig - place <= maxlength) {  // Then we want decimal w/o initial '0' limited to given significant digits (eg .123, .0123, .00123)
             std::string result (std::to_string(value));  // sd=3,  0.1234  d=1 l=6    0.00123
             size_t decimalPos = result.find('.');  // decimalPos will always be 1 (?)
             if (decimalPos != std::string::npos) result = result.substr(decimalPos, smin(sigdig-place, maxlength));  // Remove any digits to the left of the decimal point

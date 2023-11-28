@@ -24,9 +24,9 @@ static I2C i2c(i2c_sda_pin, i2c_scl_pin);
 static AirVeloSensor airvelo(i2c);
 static MAPSensor mapsens(i2c);
 static LightingBox lightbox;
-static GasServo gas;
-static BrakeMotor brake;
-static SteerMotor steer;
+static GasServo gas(gas_pwm_pin, 60);
+static BrakeMotor brake(brake_pwm_pin, 50);
+static SteerMotor steer(steer_pwm_pin, 50);
 static WebManager web;
 
 void update_web(void *parameter) {
@@ -112,9 +112,6 @@ int ignition_request = REQ_NA;
 bool panicstop = false;  // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
 int panicstop_request = REQ_ON;  // On powerup we assume the code just rebooted during a drive, because for all we know it could have 
 Timer panicTimer(panic_relax_timeout_us);  // How long should a panic stop last?  we can't stay mad forever
-
-int32_t loopno = 1, loopindex = 0, loop_recentsum = 0, loop_scale_min_us = 0, loop_scale_avg_max_us = 2500, loop_scale_peak_max_us = 25000;
-
 void ignition_panic_update() {  // Run once each main loop
     if (panicstop_request == REQ_TOG) panicstop_request = !panicstop;
     if (ignition_request == REQ_TOG) ignition_request = !ignition;
@@ -150,7 +147,7 @@ void set_syspower(bool setting) {
     syspower = setting | keep_system_powered;
     write_pin(syspower_pin, syspower);
 }
-void hotrc_events_update(int runmode) {
+void hotrc_events(int runmode) {
     if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
     if (hotrc.sw_event(CH4)) {
         if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
@@ -184,6 +181,7 @@ float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) 
 }
 // Loop timing related
 Timer loopTimer(1000000); // how long the previous main loop took to run (in us)
+int32_t loopno = 1, loopindex = 0, loop_recentsum = 0, loop_scale_min_us = 0, loop_scale_avg_max_us = 2500, loop_scale_peak_max_us = 25000;
 float loop_sum_s, loop_avg_us, loopfreq_hz;
 uint32_t looptimes_us[20];
 bool loop_dirty[20];

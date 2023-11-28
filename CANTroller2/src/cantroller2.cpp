@@ -42,9 +42,9 @@ void setup() {
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Temperature sensors task
     sim_setup();  // simulator initialize devices and pot map
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);
-    gas.setup(gas_pwm_pin, 60, &hotrc, &speedo, &tach, &pot, &tempsens);
-    brake.setup(brake_pwm_pin, 50, &hotrc, &speedo, &mulebatt, &pressure, &brkpos);
-    steer.setup(steer_pwm_pin, 50, &hotrc, &speedo, &mulebatt);
+    gas.setup(&hotrc, &speedo, &tach, &pot, &tempsens);
+    brake.setup(&hotrc, &speedo, &mulebatt, &pressure, &brkpos);
+    steer.setup(&hotrc, &speedo, &mulebatt);
     prefs.begin("FlyByWire", false);
     datapage = prefs.getUInt("dpage", PG_RUN);
     datapage_last = prefs.getUInt("dpage", PG_TEMP);
@@ -58,7 +58,7 @@ void setup() {
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     looptime_setup();
 }
-void loop() {
+void loop() {                 // code takes about 1 ms to loop on average
     ignition_panic_update();  // manage panic stop condition and drive ignition signal as needed
     basicsw_update();         // see if basic mode switch got hit
     starter_update();         // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
@@ -66,15 +66,15 @@ void loop() {
     pot.update();             // consistent 400 us per loop for analog read operation. we only see this for the pot (!?) changing pins is no help 
     brkpos.update();          // brake position (consistent 120 us)
     pressure.update();        // brake pressure  // ~50 us
-    tach.update();            // tach
-    speedo.update();          // speedo
-    mulebatt.update();
-    lipobatt.update();        // tach + speedo + mulebatt + lipobatt = 120 us
+    tach.update();            // get pulse timing from hall effect tachometer on flywheel
+    speedo.update();          // get pulse timing from hall effect speedometer on axle
+    mulebatt.update();        // vehicle battery voltage
+    lipobatt.update();        // sleep battery voltage // tach + speedo + mulebatt + lipobatt = 120 us
     airvelo.update();         // manifold air velocity sensor  // 20us + 900us every 4 loops
     mapsens.update();         // manifold air pressure sensor  // 70 us + 2ms every 9 loops
     maf_gps = massairflow();  // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
     hotrc.update();           // ~100us for all hotrc functions
-    hotrc_events_update(run.mode);
+    hotrc_events(run.mode);   // turn hotrc button events into handler requests depending on the runmode
     if (sim.potmapping(sens::joy)) hotrc.set_pc(HORZ, FILT, pot.mapToRange(steer.pc_to_us(steer.pc[OPMIN]), steer.pc_to_us(steer.pc[OPMAX])));
     run.mode_logic();         // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     gas.update(run.mode);     // drive servo output based on controller inputs, idle controller, (possible) feedback, run mode, etc.

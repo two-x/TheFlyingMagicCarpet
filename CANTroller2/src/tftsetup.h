@@ -18,7 +18,6 @@
 #define TFT_MISO 13
 // #define TFT_MISO -1
 #define TFT_MOSI 11
-#define TFT_MOSI 11
 #define TFT_SCLK 12
 #define TFT_CS   10  // Chip select control pin
 #define TFT_DC    3  // Data Command control pin

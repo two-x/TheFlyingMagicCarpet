@@ -1313,7 +1313,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
     }
     int update() {
         toggles_update();
-        if (!(sim->can_sim(sens::joy) && sim->enabled())) direction_update();
+        if (!(sim->simulating(sens::joy))) direction_update();
         radiolost_update();
         return joydir();
     }
