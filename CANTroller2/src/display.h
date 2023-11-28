@@ -596,24 +596,41 @@ class Display {
             disp_needles[lineno] = -1;  // Flag for no needle
         }
     }
-    int32_t significant_place(float value) {  // Returns the decimal place of the most significant digit of a given float value, without relying on logarithm math
-        int32_t place = 0;
+    // int32_t significant_place(float value) {  // Returns the decimal place of the most significant digit of a positive float value, without relying on logarithm math
+    //     int32_t place = 0;
+    //     if (value >= 1) { // int32_t vallog = std::log10(value);  // Can be sped up
+    //         place = 1;
+    //         while (value >= 10) {
+    //             value /= 10;
+    //             place++;
+    //         }
+    //     }
+    //     else if (value) {  // checking (value) rather than (value != 0.0) can help avoid precision errors caused by digital representation of floating numbers
+    //         while (value < 1) {
+    //             value *= 10;
+    //             place--;
+    //         }
+    //     }
+    //     return place;
+    // }
+    int32_t significant_place(float value) {  // Returns the decimal place of the most significant digit of a positive float value, without relying on logarithm math
+        int32_t place = 1;
         if (value >= 1) { // int32_t vallog = std::log10(value);  // Can be sped up
-            place = 1;
             while (value >= 10) {
                 value /= 10;
-                place++;
+                place++;  // ex. 100.34 -> 3
             }
         }
         else if (value) {  // checking (value) rather than (value != 0.0) can help avoid precision errors caused by digital representation of floating numbers
+            place = 0;
             while (value < 1) {
                 value *= 10;
-                place--;
+                place--;  // ex. 0.00334 -> -3
             }
         }
         return place;
     }
-    int32_t significant_place(int32_t value) {  // Returns the decimal place of the most significant digit of a given float value, without relying on logarithm math
+    int32_t significant_place(int32_t value) {  // Returns the length in digits of a positive integer value
         int32_t place = 1;
         while (value >= 10) {
             value /= 10;
@@ -623,39 +640,42 @@ class Display {
     }
     std::string abs_itoa(int32_t value, int32_t maxlength) {  // returns an ascii string representation of a given integer value, using scientific notation if necessary to fit within given width constraint
         value = abs(value);  // This function disregards sign
-        int32_t magnitude = significant_place(value);  // check how slow is log() function? Compare performance vs. multiple divides ( see abs_ftoa() )
-        if (magnitude <= maxlength) return std::to_string(value);  // If value is short enough, return it
-        else return std::to_string((float)value / (float)magnitude) + "e" + std::to_string(magnitude);
+        int32_t place = significant_place(value);  // check how slow is log() function? Compare performance vs. multiple divides ( see abs_ftoa() )
+        if (place <= maxlength) return std::to_string(value);  // If value is short enough, return it
+        char buffer[maxlength+1];  // Allocate buffer with the maximum required size
+        snprintf(buffer, sizeof(buffer), "%.*e", maxlength - 4 - (int)(place >= 10), (float)value);
+        std::string result(buffer);  // copy buffer to result
+        result = result.substr(0, result.find('e') + 1) + std::to_string(place);
+        return result;
     }
-    std::string abs_ftoa(float value, int32_t maxlength, int32_t sigdig) {  // returns an ascii string representation of a given float value, formatted to efficiently fit withinthe given width constraint
+    std::string abs_ftoa(float value, int32_t maxlength, int32_t sigdig, bool chop_zeros = true) {  // returns an ascii string representation of a given float value, formatted efficiently. It will not exceed maxlength. fractional digits will be removed respecting given number of significant digits
         value = abs(value);  // This function disregards sign
         int32_t place = significant_place(value);  // Learn decimal place of the most significant digit in value
         if (place >= sigdig && place <= maxlength) {  // Then we want simple cast to an integer w/o decimal point (eg 123456, 12345, 1234)
-            std::string result (std::to_string((int32_t)value));
+            std::string result(std::to_string((int32_t)value));
             return result;
         }
-        if (place >= 0 && place < maxlength) {  // Then we want float formatted with enough nonzero digits after the decimal point for 4 significant digits (eg 123.4, 12.34, 1.234, 0.000)
+        if (place >= 0 && place < maxlength) {  // Then we want float formatted with enough nonzero digits after the decimal point for given significant digits (eg 123.4, 12.34, 1.234, 0.000)
             int32_t length = smin(sigdig+1, maxlength);
             char buffer[length+1];
-            std::snprintf(buffer, length + 1, "%.*g", length - 1, value);  // (buf, chars incl. end, %.*g = floats formatted in shortest form, length-1 digits after decimal, val)
-            std::string result (buffer);  // copy buffer to result
+            std::snprintf(buffer, length + 1, (chop_zeros) ? "%.*g" : "%.*f", length - 1, value);  // (buf, chars incl. end, %.*g = floats formatted in shortest form, length-1 digits after decimal, val)
+            std::string result(buffer);  // copy buffer to result
             return result;
         }
-        if (place >= 3-maxlength && place < maxlength) {  // Then we want decimal w/o initial '0' limited to 3 significant digits (eg .123, .0123, .00123)
-            std::string result (std::to_string(value));
-            size_t decimalPos = result.find('.');  // Remove any digits to the left of the decimal point
-            if (decimalPos != std::string::npos) result = result.substr(decimalPos);
-            if (result.length() > sigdig) result.resize(sigdig+1);  // Limit the string length to the desired number of significant digits
+        if (place < 0 && sigdig-place <= maxlength) {  // Then we want decimal w/o initial '0' limited to given significant digits (eg .123, .0123, .00123)
+            std::string result (std::to_string(value));  // sd=3,  0.1234  d=1 l=6    0.00123
+            size_t decimalPos = result.find('.');  // decimalPos will always be 1 (?)
+            if (decimalPos != std::string::npos) result = result.substr(decimalPos, smin(sigdig-place, maxlength));  // Remove any digits to the left of the decimal point
             return result;
         }  // Otherwise we want scientific notation with precision removed as needed to respect maxlength (eg 1.23e4, 1.23e5, but using long e character not e for negative exponents
         char buffer[maxlength+1];  // Allocate buffer with the maximum required size
-        int32_t sigdigless = sigdig - 1 - (place <= -10);  // was: if (place <= -10) return std::string("~0");  // Ridiculously small values just indicate basically zero
-        snprintf(buffer, sizeof (buffer), "%*.*f%*d", maxlength-sigdigless, sigdigless, value, maxlength-1, 0);
+        int32_t truncit = smin(sigdig - 1, maxlength - 4 - (int)(place <= -10 || place >= 10));
+        snprintf(buffer, sizeof(buffer), "%.*e", truncit, value);
         std::string result(buffer);  // copy buffer to result
         if (result.find("e+0") != std::string::npos) result.replace(result.find("e+0"), 3, "e");  // Remove useless "+0" from exponent
         else if (result.find("e-0") != std::string::npos) result.replace(result.find("e-0"), 3, "\x88");  // For very small scientific notation values, replace the "e-0" with a phoenetic long e character, to indicate negative power  // if (result.find("e-0") != std::string::npos) 
-        else if (result.find("e+") != std::string::npos) result.replace(result.find("e+"), 3, "e");  // For ridiculously large values
-        else if (result.find("e-") != std::string::npos) result.replace(result.find("e-"), 3, "\x88");  // For ridiculously small values
+        else if (result.find("e+") != std::string::npos) result.replace(result.find("e+"), 2, "e");  // For ridiculously large values
+        else if (result.find("e-") != std::string::npos) result.replace(result.find("e-"), 2, "\x88");  // For ridiculously small values
         return result;    
     }
     void draw_dynamic(int32_t lineno, int32_t value, int32_t lowlim=-1, int32_t hilim=-1, int32_t target=-1) {
