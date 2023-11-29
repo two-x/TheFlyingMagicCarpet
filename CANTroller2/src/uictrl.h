@@ -44,7 +44,6 @@ class Encoder {
 
         // instance vars
         volatile uint32_t _spinrate_isr_us = 100000;  // Time elapsed between last two detents
-        volatile bool _a_stable = true;  //  Stores the value of encoder A pin as read during B pin transition (where A is stable)
         volatile int32_t _bounce_danger = ENC_B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
         volatile int32_t _delta = 0;  // Keeps track of un-handled rotary clicks of the encoder.  Positive for CW clicks, Negative for CCW. 
 
@@ -62,11 +61,12 @@ class Encoder {
 
         void IRAM_ATTR _a_isr() {
             if (_bounce_danger != Encoder::ENC_A) {
-                if (!_a_stable) {
+                if (!enc_a) {
                     _spinrate_isr_us = _spinspeedTimer.elapsed();
                     _spinspeedTimer.reset();
                     // _spinrate_isr_us = _spinspeedTimer.elapset();
-                    _delta += digitalRead(_b_pin) ? -1 : 1;
+                    enc_b = digitalRead(_b_pin);
+                    _delta += enc_b ? -1 : 1;
                 }
                 _bounce_danger = Encoder::ENC_A;
             }
@@ -74,7 +74,7 @@ class Encoder {
 
         void IRAM_ATTR _b_isr() {
             if (_bounce_danger != Encoder::ENC_B) {
-                _a_stable = digitalRead(_a_pin);
+                enc_a = digitalRead(_a_pin);
                 _bounce_danger = Encoder::ENC_B;
             }
         }
@@ -82,7 +82,8 @@ class Encoder {
     public:
         enum sw_presses : int { NONE, SHORT, LONG };
         bool sw = false;  // Remember whether switch is being pressed
-
+        bool enc_a;
+        bool enc_b;
         Encoder(uint8_t a, uint8_t b, uint8_t sw) : _a_pin(a), _b_pin(b), _sw_pin(sw), _longPressTimer(_longPressTime){}
         Encoder() = delete; // must be instantiated with pins
         

@@ -6,8 +6,9 @@
 #include "display.h"  // includes touch.h, neopixel.h
 #include "RunModeManager.h"
 static NeopixelStrip neo(neopixel_pin);
+static IdiotLights idiots;
 static TouchScreen touch(touch_cs_pin);
-static Display screen(&neo, &touch);
+static Display screen(&neo, &touch, &idiots);
 static Tuner tuner(&neo, &touch);
 static RunModeManager run(&screen, &encoder);
 
@@ -51,7 +52,8 @@ void setup() {
     if (display_enabled) screen.setup();
     if (display_enabled) touch.setup(disp_width_pix, disp_height_pix);
     neo.setup();              // set up external neopixel strip for idiot lights visible in daylight from top of carpet
-    idiotlights_setup(&neo);  // assign same idiot light variable associations and colors to neopixels as on screen  
+    idiots.setup(&neo);       // assign same idiot light variable associations and colors to neopixels as on screen  
+    diag_init();              // initialize diagnostic codes
     web.setup();              // start up access point, web server, and json-enabled web socket for diagnostic phone interface
     xTaskCreate(update_web, "Update Web Services", 4096, NULL, 6, NULL);  // wifi/web task. 2048 is too low, it crashes when client connects
     printf("Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
