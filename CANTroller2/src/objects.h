@@ -51,22 +51,20 @@ void update_temperature_sensors(void *parameter) {
     }
 }
 void set_board_defaults() {  // true for dev boards, false for printed board (on the car)
-    sim.set_can_sim(sens::pressure, running_on_devboard);
-    sim.set_can_sim(sens::brkpos, running_on_devboard);
-    sim.set_can_sim(sens::tach, running_on_devboard);
-    sim.set_can_sim(sens::speedo, running_on_devboard);
-    sim.set_can_sim(sens::mapsens, running_on_devboard);
-    sim.set_can_sim(sens::airvelo, running_on_devboard);
+    sim.set_can_sim(sens::joy, false);
+    for (sens sen=sens::pressure; sen<=sens::mapsens; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, running_on_devboard);
+    for (sens sen=sens::engtemp; sen<sens::basicsw; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, false);
     sim.set_can_sim(sens::basicsw, running_on_devboard);
     if (!running_on_devboard) {  // override settings if running on the real car
         sim.set_potmap(sens::none);        
         usb_jtag = false;
         console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
         keep_system_powered = false; // Use true during development
-        screensaver = false;         // Can enable experiment with animated screen draws
         looptime_print = false;      // Makes code write out timestamps throughout loop to serial port
         dont_take_temperatures = false;
         touch_reticles = false;
+        button_test_heartbeat_color = false;
+        wifi_client_mode = false;       // Should wifi be in client or access point mode?
     }
     printf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
 }
@@ -142,7 +140,6 @@ void basicsw_update() {
         } while (basicmodesw != !digitalRead(basicmodesw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
     }
 }
-bool syspower = HIGH;  // Set by handler only. Reflects current state of the signal
 void set_syspower(bool setting) {
     syspower = setting | keep_system_powered;
     write_pin(syspower_pin, syspower);
@@ -158,6 +155,9 @@ void hotrc_events(int runmode) {
     }
     hotrc.toggles_reset();
 }
+// void events_update(RunModeManager* runmode) {
+    
+// }
 // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
 float maf_gps = 0, maf_map_last = 0, maf_velo_last = 0;  // Manifold mass airflow in grams per second
 float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
@@ -252,14 +252,14 @@ enum err_sens : int { e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrc
 uint32_t err_timeout_us = 175000;
 uint32_t err_margin_adc = 5;
 char err_type_card[NUM_ERR_TYPES][5] = { "Lost", "Rang", "Cal", "Warn", "Crit", "Info" };
-char err_sensor_card[E_NUM_SENSORS+1][7] = { "HrcV", "HrcCh3", "BrPres", "BrkPos", "Speedo", "HrcH", "Tach", "Temps", "Startr", "HrcCh4", "Basic", "MulBat", "LiPo", "Airflw", "MAP", "None" };
+char err_sens_card[E_NUM_SENSORS+1][7] = { "HrcV", "HrcCh3", "BrPres", "BrkPos", "Speedo", "HrcH", "Tach", "Temps", "Startr", "HrcCh4", "Basic", "MulBat", "LiPo", "Airflw", "MAP", "None" };
 bool diag_ign_error_enabled = true;
 // diag non-tunable values
 bool temp_err[NUM_TEMP_CATEGORIES];  // [AMBIENT/ENGINE/WHEEL]
 Timer errTimer(err_timeout_us);
-bool err_sensor_alarm[NUM_ERR_TYPES] = { false, false, false, false, false, false };
-int8_t err_sensor_fails[NUM_ERR_TYPES] = { 0, 0, 0, 0, 0, 0 };
-bool err_sensor[NUM_ERR_TYPES][E_NUM_SENSORS]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airvelo/e_mapsens/e_temps/e_mulebatt/e_lipobatt/e_basicsw/e_starter]   // sens::opt_t::NUM_SENSORS]
+bool err_sens_alarm[NUM_ERR_TYPES] = { false, false, false, false, false, false };
+int8_t err_sens_fails[NUM_ERR_TYPES] = { 0, 0, 0, 0, 0, 0 };
+bool err_sens[NUM_ERR_TYPES][E_NUM_SENSORS]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airvelo/e_mapsens/e_temps/e_mulebatt/e_lipobatt/e_basicsw/e_starter]   // sens::opt_t::NUM_SENSORS]
 uint8_t highest_pri_failing_sensor[NUM_ERR_TYPES];
 uint8_t highest_pri_failing_last[NUM_ERR_TYPES];
 void diag_update() {
@@ -284,22 +284,22 @@ void diag_update() {
             if (!tempsens.detected(loc)) not_detected = true;
             else if (tempsens.val(loc) >= temp_lims_f[tempsens.errclass(loc)][WARNING]) temp_err[tempsens.errclass(loc)] = true;
         }
-        err_sensor[LOST][e_temps] = not_detected;
+        err_sens[LOST][e_temps] = not_detected;
 
         // Detect sensors disconnected or giving out-of-range readings.
         // TODO : The logic of this for each sensor should be moved to devices.h objects
-        err_sensor[RANGE][e_brkpos] = (brkpos.in() < brkpos.op_min_in() || brkpos.in() > brkpos.op_max_in());
-        err_sensor[LOST][e_brkpos] = (brkpos.raw() < err_margin_adc);
-        err_sensor[RANGE][e_pressure] = (pressure.psi() < pressure.op_min_psi() || pressure.psi() > pressure.op_max_psi());
-        err_sensor[LOST][e_pressure] = (pressure.raw() < err_margin_adc);
-        err_sensor[RANGE][e_mulebatt] = (mulebatt.v() < mulebatt.op_min_v() || mulebatt.v() > mulebatt.op_max_v());
+        err_sens[RANGE][e_brkpos] = (brkpos.in() < brkpos.op_min_in() || brkpos.in() > brkpos.op_max_in());
+        err_sens[LOST][e_brkpos] = (brkpos.raw() < err_margin_adc);
+        err_sens[RANGE][e_pressure] = (pressure.psi() < pressure.op_min_psi() || pressure.psi() > pressure.op_max_psi());
+        err_sens[LOST][e_pressure] = (pressure.raw() < err_margin_adc);
+        err_sens[RANGE][e_mulebatt] = (mulebatt.v() < mulebatt.op_min_v() || mulebatt.v() > mulebatt.op_max_v());
         for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
-            err_sensor[RANGE][ch] = !hotrc.radiolost() && ((hotrc.us[ch][RAW] < hotrc.us[ch][OPMIN] - (hotrc.us[ch][MARGIN] >> 1)) 
+            err_sens[RANGE][ch] = !hotrc.radiolost() && ((hotrc.us[ch][RAW] < hotrc.us[ch][OPMIN] - (hotrc.us[ch][MARGIN] >> 1)) 
                                     || (hotrc.us[ch][RAW] > hotrc.us[ch][OPMAX] + (hotrc.us[ch][MARGIN] >> 1)));  // && ch != VERT
-            err_sensor[LOST][ch] = !hotrc.radiolost() && ((hotrc.us[ch][RAW] < (hotrc.absmin_us - hotrc.us[ch][MARGIN]))
+            err_sens[LOST][ch] = !hotrc.radiolost() && ((hotrc.us[ch][RAW] < (hotrc.absmin_us - hotrc.us[ch][MARGIN]))
                                     || (hotrc.us[ch][RAW] > (hotrc.absmax_us + hotrc.us[ch][MARGIN])));
         }
-        // err_sensor[RANGE][e_hrcvert] = (hotrc.us[VERT][RAW] < hotrc.failsafe_us - hotrc.us[ch][MARGIN])
+        // err_sens[RANGE][e_hrcvert] = (hotrc.us[VERT][RAW] < hotrc.failsafe_us - hotrc.us[ch][MARGIN])
         //     || ((hotrc.us[VERT][RAW] < hotrc.us[VERT][OPMIN] - halfMARGIN) && (hotrc.us[VERT][RAW] > hotrc.failsafe_us + hotrc.us[ch][MARGIN]));
         
         // Set sensor error idiot light flags
@@ -308,13 +308,13 @@ void diag_update() {
         // printf ("Sensor check: ");
         for (int32_t t=LOST; t<=RANGE; t++) {
             highest_pri_failing_sensor[t] = e_none;
-            err_sensor_alarm[t] = false;
-            err_sensor_fails[t] = 0;
+            err_sens_alarm[t] = false;
+            err_sens_fails[t] = 0;
             for (int32_t s=0; s<E_NUM_SENSORS; s++)
-                if (err_sensor[t][s]) {
+                if (err_sens[t][s]) {
                     if (highest_pri_failing_sensor[t] = e_none) highest_pri_failing_sensor[t] = s;
-                    err_sensor_alarm[t] = true;
-                    err_sensor_fails[t]++;
+                    err_sens_alarm[t] = true;
+                    err_sens_fails[t]++;
                 }
         }
         // printf ("\n");
@@ -365,12 +365,17 @@ void diag_update() {
         // * The control system has nonsensical values in its variables.
     }
 }
+void diag_init() {
+    for (int32_t i=0; i<NUM_ERR_TYPES; i++)
+        for (int32_t j=0; j<E_NUM_SENSORS; j++)
+            err_sens[i][j] = false; // Initialize sensor error flags to false
+}
 void err_print_info() {
     for (int32_t t=LOST; t<=INFO; t++) {
-        printf ("diag err: %s (%d): ", err_type_card[t], err_sensor_fails[t]);
+        printf ("diag err: %s (%d): ", err_type_card[t], err_sens_fails[t]);
         for (int32_t s=0; s<=E_NUM_SENSORS; s++) {
             if (s == E_NUM_SENSORS) s++;
-            if (err_sensor[t][s]) printf ("%s, ", err_sensor_card[s]);
+            if (err_sens[t][s]) printf ("%s, ", err_sens_card[s]);
         }
         printf("\n");
     }

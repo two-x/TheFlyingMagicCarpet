@@ -104,16 +104,14 @@ bool console_enabled = true;         // safer to disable because serial printing
 bool keep_system_powered = false;    // Use true during development
 bool looptime_print = false;         // Makes code write out timestamps throughout loop to serial port
 bool touch_reticles = true;
+bool button_test_heartbeat_color = false; // Encoder short press when not tuning makes heartbeat a random color (for testing)
+bool wifi_client_mode = false;       // Should wifi be in client or access point mode?
 
 // global tunable variables
 uint32_t looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. Set to 0 linefeeds all prints
 uint32_t starter_timeout_us = 5000000;      // How long to run starter before automatically stopping it
 uint32_t panic_relax_timeout_us = 20000000; // How long to panic before getting over it and moving on
 float flycruise_vert_margin_pc = 0.3;       // Margin of error for determining hard brake value for dropping out of cruise mode
-// Cruise modes : Pick from 3 different styles for adjustment of cruise setpoint. I prefer THROTTLE_DELTA.
-// PID_SUSPEND_FLY : (PID) Moving trigger from center pauses the pid and lets you adjust the rpm target directly like Fly mode does. Whatever speed you're at when trigger releases is new pid target  
-// THROTTLE_ANGLE : Cruise locks throttle angle, instead of pid. Moving trigger from center adjusts setpoint proportional to how far you push it before releasing (and reduced by an attenuation factor)
-// THROTTLE_DELTA : Cruise locks throttle angle, instead of pid. Any non-center trigger position continuously adjusts setpoint proportional to how far it's pulled over time (up to a specified maximum rate)
 int cruise_setpoint_mode = THROTTLE_DELTA;
 int32_t cruise_delta_max_pc_per_s = 16;  // (in THROTTLE_DELTA mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
 float cruise_angle_attenuator = 0.016;   // (in THROTTLE_ANGLE mode) Limits the change of each adjust trigger pull to this fraction of what's possible
@@ -151,6 +149,7 @@ uint16_t heartbeat_override_color = 0x0000;
 int tunctrl = OFF, tunctrl_last = OFF;
 int datapage = PG_RUN, datapage_last = PG_TEMP;  // Which of the dataset pages is currently displayed and available to edit?
 int sel_val = 0, sel_val_last = 0;               // In the real time tuning UI, which of the editable values is selected. -1 for none 
+bool syspower = HIGH;  // Set by handler only. Reflects current state of the signal
 
 // fast macros
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays

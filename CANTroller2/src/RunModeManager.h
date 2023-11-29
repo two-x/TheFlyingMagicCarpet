@@ -291,6 +291,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
 // THROTTLE_DELTA mode holds a fixed throttle servo position as long as the trigger is centered, and if not,
 // it adjusts the setpoint up or down proportional to how far and how long you hold the trigger away from center.
 // If you panic and push full brake for over 500ms, it will drop to fly mode and then push brakes.
+// Cruise modes : Pick from 3 different styles for adjustment of cruise setpoint. I prefer THROTTLE_DELTA.
+//    PID_SUSPEND_FLY : (PID) Moving trigger from center pauses the pid and lets you adjust the rpm target directly like Fly mode does. Whatever speed you're at when trigger releases is new pid target  
+//    THROTTLE_ANGLE : Cruise locks throttle angle, instead of pid. Moving trigger from center adjusts setpoint proportional to how far you push it before releasing (and reduced by an attenuation factor)
+//    THROTTLE_DELTA : Cruise locks throttle angle, instead of pid. Any non-center trigger position continuously adjusts setpoint proportional to how far it's pulled over time (up to a specified maximum rate)
 //
 // ** Cal Mode **
 // This mode allows direct control of some actuators without respecting limits of motion, for purpose of

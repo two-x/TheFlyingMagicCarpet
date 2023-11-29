@@ -16,7 +16,7 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
     // String modenames[3] = { "direct", "cntrol", "minimz" };
     // String statenames[4] = { "drivng", "tohigh", "tolow", "tostal" };
     float* target_rpm; float* measraw_rpm; float* measfilt_rpm; float engine_temp_f;
-    TemperatureSensor* engine_sensor = nullptr;
+    TemperatureSensor* engine_sensor = nullptr;   // Rate to lower idle from high point to low point (in rpm per second)
     bool we_just_changed_states = true, target_externally_set = false; // bool now_trying_to_idle = false;
     uint32_t index_now, index_last;  // Engine rpm drops exceeding this much per second are considered a stall in progress
     float targetlast_rpm, recovery_boost_rpm = 5;  // How much to increase rpm target in response to detection of stall slope
@@ -29,9 +29,9 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
   public:
     IdleControl() {}
     void setup(float* target, float* measraw, float* measfilt,  // Variable references: idle target, rpm raw, rpm filt
-      TemperatureSensor* engine_sensor_ptr,  // Rate to lower idle from high point to low point (in rpm per second)
-      float tempcold, float temphot, int32_t settlerate = 100,  // Values for: engine operational temp cold (min) and temp hot (max) in degrees-f
-      int myidlemode = CONTROL) {  // Configure idle control to just soft land or also attempt to minimize idle
+        TemperatureSensor* engine_sensor_ptr,
+        float tempcold, float temphot, int32_t settlerate = 100,  // Values for: engine operational temp cold (min) and temp hot (max) in degrees-f
+        int myidlemode = CONTROL) {  // Configure idle control to just soft land or also attempt to minimize idle
         printf("Configure idle control..\n");
         target_rpm = target;
         measraw_rpm = measraw;
@@ -147,18 +147,19 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
     void cycle_idlemode(int32_t cycledir) {  // Cycldir positive or negative
         if(cycledir) idlemode = constrain(idlemode + constrain(cycledir, -1, 1), 0, NUM_IDLEMODES - 1);
     }
-    void set_idlehigh(float newidlehigh) { idlehigh = constrain(newidlehigh, idlecold + 1, idle_absmax); }
-    void add_idlehigh(float add) { idlehigh += add; }
-    void add_idlehot(float add) { idlehot += add; }
-    void add_idlecold(float add) { idlecold += add; }
-    void add_temphot(float add) { temphot += add; }
-    void add_tempcold(float add) { tempcold += add; }
-    void add_settlerate(int32_t add) { settlerate_rpmps += add; }
     void set_target_ptr(float* __ptr) { target_rpm = __ptr; }
     void set_idlehot(float newidlehot) { idlehot = constrain(newidlehot, stallpoint, idlecold - 1); calc_idlespeed(); }
     void set_idlecold(float newidlecold) { idlecold = constrain(newidlecold, idlehot + 1, idlehigh - 1); calc_idlespeed(); }
     void set_temphot(float newtemphot) { if (newtemphot > tempcold) temphot = newtemphot; calc_idlespeed(); }
     void set_tempcold(float newtempcold) { if (newtempcold < temphot) tempcold = newtempcold; calc_idlespeed(); }
+    void set_idlehigh(float newidlehigh) { idlehigh = constrain(newidlehigh, idlecold + 1, idle_absmax); }
+    void set_settlerate(int32_t newrate) { settlerate_rpmps = newrate; }
+    void add_idlehigh(float add) { set_idlehigh(idlehigh + add); }
+    void add_idlehot(float add) { set_idlehot(idlehot + add); }
+    void add_idlecold(float add) { set_idlecold(idlecold + add); }
+    void add_temphot(float add) { set_temphot(temphot + add); }
+    void add_tempcold(float add) { set_tempcold(tempcold + add); }
+    void add_settlerate(int32_t add) { set_settlerate(settlerate_rpmps + add); }
     // Getter functions
     float target(void) { return *target_rpm; }
     float* target_ptr(void) { return target_rpm; }

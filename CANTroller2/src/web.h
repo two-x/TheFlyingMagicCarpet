@@ -95,7 +95,7 @@ class FileSystem {
 class AccessPoint {
   private:
     IPAddress localip, gateway, subnet;
-    const char* ssid = "magiccarpet";
+    const char* ssid = "artcarpet";
     const char* password = "checkmate";
     void connect_existing_wifi() {
         printf("connecting to %s", ssid);
@@ -116,10 +116,10 @@ class AccessPoint {
         WiFi.softAPConfig(localip, gateway, subnet);
         WiFi.softAP(ssid, password);
         Serial.println(WiFi.softAPIP());
-
         // std::cout << "ip = " << WiFi.softAPIP() << std::endl;
         // printf(" ip = %s\n", my_ip.c_str());
     }
+    void enable(bool sw) { WiFi.setSleep(!sw); }
 };
 class WebServer {
   private:
@@ -138,6 +138,9 @@ class WebServer {
         webserver.on("/chessboard.js", HTTP_GET, [](AsyncWebServerRequest *request) {
             AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/chessboard.js", "application/javascript");  // Serve the JavaScript file
             request->send(response);
+        });
+        webserver.onNotFound([](AsyncWebServerRequest *request) {  // Send back a plain text message (can be made html if required)
+            request->send(404, "text/plain", "404 - Page Not Found.  Try '/' or '/update'");
         });
         webserver.begin();
     }
@@ -200,6 +203,7 @@ class WebManager {
     void update() {
         if (!web_enabled) return;
         if (!web_started) setup();
-        socket.update();
+        wifi.enable(syspower);
+        if (syspower) socket.update();
     }
 };
