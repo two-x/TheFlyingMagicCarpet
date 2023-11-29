@@ -32,6 +32,8 @@
 // #define TFT_BL   32            // LED back-light control pin
 #define TFT_BACKLIGHT_ON HIGH  // Level to turn ON back-light (HIGH or LOW)
 
+#define CONFIG_SPIRAM_SUPPORT
+
 // Some displays support SPI reads via the MISO pin, other displays have a single SDA
 // #define TFT_SDA_READ      // This option is for ESP32 ONLY, tested with ST7789 and GC9A01 display only
 

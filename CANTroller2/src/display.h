@@ -2,7 +2,6 @@
 #include <TFT_eSPI.h>
 #include "neopixel.h"
 #include "touch.h"
-#define display ILI9488  // ILI9341
 // LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
 // Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
 #define BLK  0x0000  // greyscale: full black (RGB elements off)
@@ -16,7 +15,7 @@
 #define YEL  0xffe0  // Secondary yellow (RG elements full on)
 #define GRN  0x07e0  // primary green (G element full on)
 #define CYN  0x07ff  // secondary cyan (GB elements full on)  (00000)(111 111)(11111) = 07 ff
-#define BLU  0x001f  // primary red (B element full on)
+#define BLU  0x001f  // primary blue (B element full on)
 #define MGT  0xf81f  // secondary magenta (RB elements full on)
 #define DRED 0xb000  // dark red
 #define BORG 0xfa00  // blood orange (very reddish orange)
@@ -41,47 +40,17 @@
 
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
 #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
-// #define disp_width_pix 480  // Horizontal resolution in pixels (held landscape)
-// #define disp_height_pix 320  // Vertical resolution in pixels (held landscape)
-
-#define disp_lines 20  // Max lines of text displayable at line height = disp_line_height_pix
-#define disp_fixed_lines 8  // Lines of static variables/values always displayed
-#define disp_line_height_pix 12  // Pixel height of each text line. Screen can fit 16x 15-pixel or 20x 12-pixel lines
 #define disp_vshift_pix 2  // Unknown.  Note: At smallest text size, characters are 5x7 pix + pad on rt and bot for 6x8 pix.
-#define disp_font_height 8
-#define disp_font_width 6
-#define disp_bargraph_width 40
-#define disp_bargraph_squeeze 1
-#define disp_maxlength 6  // How many characters fit between the ":" and the units string
-#define disp_default_float_precision 3  // Significant digits displayed for float values. Higher causes more screen draws
-#define disp_datapage_names_x 12
-#define disp_datapage_values_x 59
-#define disp_datapage_units_x 104        
-#define disp_bargraphs_x 123
 #define disp_runmode_text_x 8
-#define disp_datapage_title_x 83
-#define disp_idiot_corner_x 165
-#define disp_idiot_corner_y 13
-#define disp_idiots_per_row 11
-#define disp_idiot_row_height 10
-#define touch_simbutton 38
-#define disp_simbuttons_x 165
-#define disp_simbuttons_y 48
-#define disp_saver_width 155
-#define disp_saver_height 192
-
-char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
-char top_menu_buttons[4][6] = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
-char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
-bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
-bool disp_bool_values[6];
-bool disp_selected_val_dirty, disp_datapage_dirty, disp_data_dirty, disp_sidemenu_dirty, disp_runmode_dirty, disp_simbuttons_dirty, disp_idiots_dirty;
-int32_t disp_needles[disp_lines];
-int32_t disp_targets[disp_lines];
-int32_t disp_age_quanta[disp_lines];
-Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
 Timer dispRefreshTimer (100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
 uint32_t tft_watchdog_timeout_us = 100000;
+int32_t colorcard[NUM_RUNMODES] = { MGT, MBLU, RED, ORG, YEL, GRN, TEAL, PUR };
+char modecard[NUM_RUNMODES][7] = { "Basic", "Asleep", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
+char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
+char top_menu_buttons[4][6]  = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
+char idlemodecard[IdleControl::idlemodes::NUM_IDLEMODES][7] = { "direct", "cntrol", "minimz" };
+char idlestatecard[IdleControl::targetstates::NUM_STATES][7] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
+char sensorcard[14][7] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 
 uint32_t color_16b_to_uint32(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to uint32 in format 0x00RRGGBB
     return (((uint32_t)color565 & 0xf800) << 8) | (((uint32_t)color565 & 0x7e0) << 5) | (((uint32_t)color565 & 0x1f) << 3);
@@ -103,19 +72,107 @@ T hsv_to_rgb(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool bright_f
     if (std::is_same<T, uint16_t>::value) return (T)((rgb[0] & 0xf8) << 8) | ((rgb[1] & 0xfc) << 5) | (rgb[2] >> 3);
     else if (std::is_same<T, uint32_t>::value) return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
 }
-uint16_t hue_to_rgb16(uint8_t hue) {  // returns uint16 color
-    if (hue <= 85) return (((3 * ((255 - hue) % 85)) & 0xf8) << 8) | (((255 - 3 * ((255 - hue) % 85)) & 0xfc) << 3);
-    if (hue <= 170) return (((3 * ((255 - hue) % 85)) & 0xfc) << 3) | ((255 - 3 * ((255 - hue) % 85)) >> 3);
-    return (((255 - 3 * ((255 - hue) % 85)) & 0xf8) << 8) | ((3 * ((255 - hue) % 85)) >> 3);
-}
-
-char modecard[8][7] = { "Basic", "Asleep", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
-int32_t colorcard[arraysize(modecard)] = { MGT, MBLU, RED, ORG, YEL, GRN, TEAL, PUR };
-
-char sensorcard[15][7] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airvel", "mapsns", "engtmp", "batery", "lipo", "startr", "basic", "ign", "syspwr" };
-
-char idlemodecard[3][7] = { "direct", "cntrol", "minimz" };
-char idlestatecard[IdleControl::targetstates::NUM_STATES][7] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
+class IdiotLight {  // defunct: currently not using individual instances for each idiot light. i couldn't get it to work
+    public:
+    bool* val = nullptr;
+    char letters[3] = "--";
+    uint8_t bitmap[11] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+    int16_t color = DGRY;
+    bool last;  // = 0;
+    IdiotLight(bool* _val, uint8_t* _map) : val(_val) {
+        for (int i=0; i<11; i++) bitmap[i] = _map[i];
+        last = *val;
+    } 
+};
+class IdiotLights {
+  public:
+    static constexpr int row_count = 11;
+    static constexpr int row_height = 10;
+    static constexpr int iconcount = 19;  // number of boolean values included on the screen panel (not the neopixels) 
+    bool* vals[iconcount] = {
+        &(err_sens_alarm[LOST]), &(err_sens_alarm[RANGE]), &(temp_err[ENGINE]), &(temp_err[WHEEL]), &panicstop, 
+        hotrc.radiolost_ptr(), &shutdown_incomplete, &park_the_motors, &autostopping, &cruise_adjusting, &car_hasnt_moved, 
+        &starter, &(encoder.sw), sim.enabled_ptr(), &running_on_devboard, &powering_up, &(brake.posn_pid_active),
+        &(encoder.enc_a), &(encoder.enc_b),
+    };
+    uint8_t icon[iconcount][11] = {
+        { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e, },  // 0 = "S" w/ crossout symbol
+        { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x78, 0x70, 0x58, 0x0d, 0x07, 0x0f, },  // 1 = "S" w/ double arrow
+        { 0x7f, 0x7f, 0x6b, 0x6b, 0x00, 0x70, 0x12, 0x17, 0x75, 0x67, 0x02, },  // 2 = "En" w/ degree symbol
+        { 0x7f, 0x30, 0x18, 0x30, 0x7f, 0x10, 0x12, 0x77, 0x65, 0x07, 0x02, },  // 3 = "Wh" w/ degree symbol
+        { 0x7f, 0x7f, 0x09, 0x0f, 0x76, 0x10, 0x70, 0x60, 0x00, 0x6f, 0x6f, },  // 4 = "Pn!"
+        { 0x63, 0x36, 0x1c, 0x36, 0x63, 0x14, 0x08, 0x22, 0x1c, 0x41, 0x3e, },  // 5 = wifi symbol w/ X
+        { 0x16, 0x15, 0x0d, 0x60, 0x6f, 0x04, 0x6f, 0x60, 0x0f, 0x69, 0x66, },  // 6 = "SHD..."
+        { 0x3e, 0x63, 0x41, 0x7d, 0x7d, 0x55, 0x55, 0x5d, 0x49, 0x63, 0x3e, },  // 7 = circle-"P"
+        { 0x3e, 0x49, 0x08, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x08, 0x49, 0x3e, },  // 8 = tie fighter brake assembly
+        { 0x08, 0x1c, 0x36, 0x00, 0x3e, 0x63, 0x63, 0x00, 0x36, 0x1c, 0x08, },  // 9 = "<C>"
+        { 0x1d, 0x23, 0x47, 0x00, 0x3e, 0x63, 0x55, 0x49, 0x55, 0x63, 0x3e, },  // 10 = rotation arrow w/ X wheel
+        { 0x3e, 0x41, 0x7f, 0x7b, 0x7b, 0x7b, 0x3e, 0x1c, 0x7f, 0x55, 0x7f, },  // 11 = motor w/ spur gear
+        { 0x01, 0x7f, 0x7f, 0x7f, 0x3f, 0x38, 0x74, 0x70, 0x70, 0x70, 0x60, },  // 12 = boot
+        { 0x6e, 0x6b, 0x3b, 0x00, 0x7f, 0x00, 0x7f, 0x06, 0x1c, 0x06, 0x7f, },  // 13 = "SIM"
+        { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, },  // 14 = "DEV"
+        { 0x00, 0x3e, 0x63, 0x41, 0x40, 0x4f, 0x40, 0x41, 0x63, 0x3e, 0x00, },  // 15 = power symbol
+        { 0x7c, 0x46, 0x7f, 0x7f, 0x33, 0x12, 0x12, 0x12, 0x1e, 0x12, 0x0c, },  // 16 = linear actuator (or penis)
+        { 0x00, 0x40, 0x70, 0x7c, 0x5e, 0x13, 0x5e, 0x7c, 0x70, 0x40, 0x00, },  // 17 = "A"
+        { 0x00, 0x00, 0x41, 0x7f, 0x7f, 0x49, 0x49, 0x7f, 0x36, 0x00, 0x00, },  // 18 = "B"
+    };
+    char letters[iconcount][3] = {
+        "SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk",
+        "AS", "Aj", "HM", "St", "BB", "Sm", "DB", "PU", "BP", "eA", "eB"
+    };
+    uint16_t color[iconcount];
+    bool last[iconcount];
+    uint8_t idiot_saturation = 225;  // 170-195 makes nice bright yet distinguishable colors
+    uint8_t idiot_hue_offset = 240;
+    IdiotLights() {
+        for (int i=0; i<iconcount; i++) last[i] = *(vals[i]);
+        set_colors();
+    }
+    void setup(NeopixelStrip* _neo) {
+        myneo = _neo;
+        // int n = new_idiot(&(err_sens_alarm[LOST]), "SL", { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e })
+        for (int32_t i=0; i<iconcount; i++) myneo->newIdiotLight(i, color[i], val(i));
+        std::cout << "set up " << iconcount << " toggle icons and " << myneo->idiotcount << " neopixel hazard lights" << std::endl;
+    }
+    bool val(int index) { return *(vals[index]); }
+    bool* ptr(int index) { return vals[index]; }
+  private:
+    NeopixelStrip* myneo;
+    void set_colors() {
+        for (int32_t i=0; i<iconcount; i++) {
+            int division = row_count;
+            uint32_t color32 = hsv_to_rgb<uint32_t>((int8_t)(255 * (i % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 220);
+            color[i] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
+        }
+    }
+};
+#define disp_simbuttons_x 165
+#define disp_simbuttons_y 48
+#define touch_simbutton 38
+// class SimPanel {};
+// class DataPage {};
+#define disp_lines 20  // Max lines of text displayable at line height = disp_line_height_pix
+#define disp_fixed_lines 8  // Lines of static variables/values always displayed
+#define disp_line_height_pix 12  // Pixel height of each text line. Screen can fit 16x 15-pixel or 20x 12-pixel lines
+#define disp_font_height 8
+#define disp_font_width 6
+#define disp_bargraph_width 40
+#define disp_bargraph_squeeze 1
+#define disp_maxlength 6  // How many characters fit between the ":" and the units string
+#define disp_default_float_precision 3  // Significant digits displayed for float values. Higher causes more screen draws
+#define disp_datapage_names_x 12
+#define disp_datapage_values_x 59
+#define disp_datapage_units_x 104        
+#define disp_bargraphs_x 123
+#define disp_datapage_title_x 83
+char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
+bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
+bool disp_bool_values[6];
+bool disp_selected_val_dirty, disp_datapage_dirty, disp_data_dirty, disp_sidemenu_dirty, disp_runmode_dirty, disp_simbuttons_dirty, disp_idiots_dirty;
+int32_t disp_needles[disp_lines];
+int32_t disp_targets[disp_lines];
+int32_t disp_age_quanta[disp_lines];
+Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
 
 // These defines are just a convenience to keep the below datapage strings array initializations aligned in neat rows & cols for legibility
 #define stEr "St\x88r"
@@ -130,15 +187,12 @@ char idlestatecard[IdleControl::targetstates::NUM_STATES][7] = { "todriv", "drvi
 #define neo_bright "NeoBr\x8dgt"
 #define maxadjrate "MaxAjR\x83t"
 #define horfailsaf "HFails\x83""f"
-
-char telemetry[disp_fixed_lines][9] = { "TriggerV", "   Speed", "    Tach", "Throttle", brAk"Pres", brAk"Motr", "JoysticH", stEr"Motr", };  // Fixed rows
-char units[disp_fixed_lines][5] = { "%   ", "mph ", "rpm ", "%   ", "psi ", "%   ", "%   ", "%   " };  // Fixed rows
-char brake_pid_card[2][7] = { "presur", "positn" };
-
-char pagecard[datapages::NUM_DATAPAGES][5] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 4, 8, 7, 7, 10, 0, 6 };  // first value in each dataset page that's editable. All values after this must also be editable
-
-char datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines][9] = {
+static constexpr char telemetry[disp_fixed_lines][9] = { "TriggerV", "   Speed", "    Tach", "Throttle", brAk"Pres", brAk"Motr", "JoysticH", stEr"Motr", };  // Fixed rows
+static constexpr char units[disp_fixed_lines][5] = { "%   ", "mph ", "rpm ", "%   ", "psi ", "%   ", "%   ", "%   " };  // Fixed rows
+static constexpr char brake_pid_card[2][7] = { "presur", "positn" };
+static constexpr char pagecard[datapages::NUM_DATAPAGES][5] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
+static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 4, 8, 7, 7, 10, 0, 6 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr char datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines][9] = {
     { brAk"Posn", "MuleBatt", "LiPoBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
     { "PressRaw", "BkPosRaw", __________, __________, __________, "AirSpMax", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
@@ -151,7 +205,7 @@ char datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines][9] = {
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
     { "LoopFreq", "Loop Avg", "LoopPeak", __________, __________, __________, "Webservr", "BlnkDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
 };
-char tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines][5] = {
+static constexpr char tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines][5] = {
     { "in  ", "V   ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, "%   ", "%   ", },  // PG_RUN
     { "us  ", "us  ", "us  ", "us  ", "%   ", "%   ", ______, ______, ______, "us  ", "us  ", },  // PG_JOY
     { "adc ", "adc ", ______, ______, ______, "mph ", "psi ", "psi ", "mph ", "mph ", "in  ", },  // PG_SENS
@@ -164,21 +218,8 @@ char tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines][5] = {
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
     { "Hz  ", "us  ", "us  ", ______, ______, ______, b1nary, b1nary, "%   ", "/10 ", b1nary, },  // PG_UI
 };
-int simgriddir[4][3] = {
-    { JOY_UP, JOY_UP, JOY_UP, },
-    { JOY_DN, JOY_DN, JOY_DN, },
-    { JOY_UP, JOY_UP, JOY_RT, },
-    { JOY_DN, JOY_DN, JOY_LT, },
-};
-char simgrid[4][3][4] = {
-    { "PSI", "RPM", "MPH" },
-    { "PSI", "RPM", "MPH" },
-    { "POS", "JOY", "JOY" },
-    { "POS", "JOY", "JOY" }, // Font special characters is the right-side map:  https://learn.adafruit.com/assets/103682
-};  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
-
-char unitmapnames[9][5] = { "usps", "us  ", "rpms", scroll, b1nary, "%   ", "ohm ", "eyes", "psin", };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
-uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where units use symbols not present in the font, are longer than 3 characters, or are just special
+static constexpr char unitmapnames[9][5] = { "usps", "us  ", "rpms", scroll, b1nary, "%   ", "ohm ", "eyes", "psin", };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
+static constexpr uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where units use symbols not present in the font, are longer than 3 characters, or are just special
     { 0x7e, 0x20, 0x20, 0x3c, 0x00, 0x24, 0x2a, 0x2a, 0x12, 0x00, 0x70, 0x0e, 0x00, 0x24, 0x2a, 0x2a, 0x12, },  // usps - microseconds per second
     { 0x40, 0x7e, 0x20, 0x20, 0x1c, 0x20, 0x00, 0x24, 0x2a, 0x2a, 0x2a, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, },  // us - b/c the font's "mu" character doesn't work
     { 0x1f, 0x01, 0x00, 0x3f, 0x09, 0x0e, 0x00, 0x0f, 0x01, 0x0e, 0x01, 0x0e, 0x60, 0x1c, 0x00, 0x58, 0x74, },  // rpm/s (or rot/m*s) - rate of change of engine rpm
@@ -190,89 +231,56 @@ uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where units use symbols n
     { 0x3d, 0x00, 0x3c, 0x04, 0x38, 0x00, 0x7f, 0x00, 0x7c, 0x24, 0x18, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x3d, },  // inches or psi
 };  // These bitmaps are in the same format as the idiot light bitmaps, described below
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
-bool* idiotlights[17] = {
-    &(err_sensor_alarm[LOST]), &(err_sensor_alarm[RANGE]), &(temp_err[ENGINE]), &(temp_err[WHEEL]), &panicstop, 
-    hotrc.radiolost_ptr(), &shutdown_incomplete, &park_the_motors, &autostopping, &cruise_adjusting,
-    &car_hasnt_moved, &starter, &(encoder.sw), sim.enabled_ptr(), &running_on_devboard, 
-    &powering_up, &(brake.posn_pid_active),
+static constexpr int simgriddir[4][3] = {
+    { JOY_UP, JOY_UP, JOY_UP, },
+    { JOY_DN, JOY_DN, JOY_DN, },
+    { JOY_UP, JOY_UP, JOY_RT, },
+    { JOY_DN, JOY_DN, JOY_LT, },
 };
-char idiotchars[arraysize(idiotlights)][3] = {
-    "SL", "SR", "\xf7""E", "\xf7""W", "P\x13", 
-    "RC", "SI", "Pk", "AS", "Aj",
-    "HM", "St", "BB", "Sm", "DB",
-    "PU", "BP",
-};  // "c3", "c4" };
-uint16_t idiotcolors[arraysize(idiotlights)];
-uint8_t idiot_saturation = 225;  // 170-195 makes nice bright yet distinguishable colors
-uint8_t idiot_hue_offset = 240;
-bool idiotlasts[arraysize(idiotlights)];
-// 11x7 pixel idiot light bitmaps.  Format: Each byte is one pixel column (left->right) with LSB->MSB within each byte being the top->bottom pixels in that column
-// The high bit (bottom pixel) of every byte is 0 due to 7-pixel height. Set high bit of first byte to 1 to skip bitmap and use letters instead
-uint8_t idiotmaps[arraysize(idiotlights)][11] = {
-    { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e, },  // 0 = "S" w/ crossout symbol
-    { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x78, 0x70, 0x58, 0x0d, 0x07, 0x0f, },  // 1 = "S" w/ double arrow
-    { 0x7f, 0x7f, 0x6b, 0x6b, 0x00, 0x70, 0x12, 0x17, 0x75, 0x67, 0x02, },  // 2 = "En" w/ degree symbol
-    { 0x7f, 0x30, 0x18, 0x30, 0x7f, 0x10, 0x12, 0x77, 0x65, 0x07, 0x02, },  // 3 = "Wh" w/ degree symbol
-    { 0x7f, 0x7f, 0x09, 0x0f, 0x76, 0x10, 0x70, 0x60, 0x00, 0x6f, 0x6f, },  // 4 = "Pn!"
-    { 0x63, 0x36, 0x1c, 0x36, 0x63, 0x14, 0x08, 0x22, 0x1c, 0x41, 0x3e, },  // 5 = wifi symbol w/ X
-    { 0x16, 0x15, 0x0d, 0x60, 0x6f, 0x04, 0x6f, 0x60, 0x0f, 0x69, 0x66, },  // 6 = "SHD..."
-    { 0x3e, 0x63, 0x41, 0x7d, 0x7d, 0x55, 0x55, 0x5d, 0x49, 0x63, 0x3e, },  // 7 = circle-"P"
-    { 0x50, 0x40, 0x40, 0x1c, 0x36, 0x7b, 0x4d, 0x47, 0x42, 0x66, 0x3c, },  // 8 = skid wheel w/ brake caliper
-    { 0x08, 0x1c, 0x36, 0x00, 0x3e, 0x63, 0x63, 0x00, 0x36, 0x1c, 0x08, },  // 9 = "<C>"
-    { 0x1d, 0x23, 0x47, 0x00, 0x3e, 0x63, 0x55, 0x49, 0x55, 0x63, 0x3e, },  // 10 = rotation arrow w/ X wheel
-    { 0x3e, 0x41, 0x7f, 0x79, 0x71, 0x73, 0x3e, 0x1c, 0x7f, 0x55, 0x7f, },  // 11 = motor w/ spur gear
-    { 0x01, 0x7f, 0x7f, 0x7f, 0x3f, 0x38, 0x74, 0x70, 0x70, 0x70, 0x60, },  // 12 = boot
-    { 0x6e, 0x6b, 0x3b, 0x00, 0x7f, 0x00, 0x7f, 0x06, 0x1c, 0x06, 0x7f, },  // 13 = "SIM"
-    { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, },  // 14 = "DEV"
-    { 0x00, 0x3e, 0x63, 0x41, 0x40, 0x4f, 0x40, 0x41, 0x63, 0x3e, 0x00, },  // 15 = power symbol
-    { 0x7e, 0x7f, 0x7f, 0x7f, 0x33, 0x12, 0x12, 0x12, 0x1e, 0x12, 0x0c, },  // 16 = linear actuator (or penis)
+static constexpr char simgrid[4][3][4] = {
+    { "PSI", "RPM", "MPH" },
+    { "PSI", "RPM", "MPH" },
+    { "POS", "JOY", "JOY" },
+    { "POS", "JOY", "JOY" }, // Font special characters is the right-side map:  https://learn.adafruit.com/assets/103682
+};  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
+class TunerPanel {
+  public:
+    TunerPanel() {};
+    void setup() {};
+  private:
+    // DataPage[NUM_DATAPAGES];
 };
-//  { 0x56, 0x5d, 0x42, 0x5f, 0x42, 0x4c, 0x52, 0x4c, 0x5e, 0x4a, 0x44, },  // 8 = underline "Stop"
-//  { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // N/A (no idiot light bitmap)
-void set_idiotcolors() {
-    for (int32_t idiot=0; idiot<arraysize(idiotlights); idiot++) {
-        int division = disp_idiots_per_row;
-        uint32_t color32 = hsv_to_rgb<uint32_t>((int8_t)(255 * (idiot % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 220);
-        idiotcolors[idiot] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
-        disp_idiots_dirty = true;
-    }
-}
-int idiotlights_setup(NeopixelStrip* myneo) {
-    int32_t idiots = smin((uint32_t)arraysize(idiotlights), myneo->neopixelsAvailable());
-    for (int32_t idiot = 0; idiot < idiots; idiot++) myneo->newIdiotLight(idiot, idiotcolors[idiot], *(idiotlights[idiot]));
-    std::cout << "set up heartbeat led and " << idiots << " neopixel idiot lights" << std::endl;
-    for (int32_t i=0; i<NUM_ERR_TYPES; i++) for (int32_t j=0; j<E_NUM_SENSORS; j++) err_sensor[i][j] = false; // Initialize sensor error flags to false
-    return idiots;
-}
-class ScreenSaver {
+class ElectricSheeit {  // draws colorful patterns to exercise screen draw capabilities
+  public:
+    static constexpr int res[2] = { 155, 192 };
+    enum savershapes : int { EraserWedges, EraserDots, EraserRings, EraserLipses, NumSaverShapes, FocusRing, EraserFont };
   private:
     TFT_eSprite* _sprite;
     TouchScreen* touch;
-    long sx0, sy0, touchpoint_x = -1, touchpoint_y = -1, eraser_rad = 14, eraser_rad_min = 9, eraser_rad_max = 27, eraser_velo_min = 4, eraser_velo_max = 10;
-    long eraser_pos[2] = { 0, 0 };
-    long eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) };
-    long eraser_pos_max[2] = { disp_saver_width / 2 - eraser_rad, disp_saver_height / 2 - eraser_rad }; 
-    long eraser_velo_sign[2] = { 1, 1 };
-    uint8_t saver_illicit_prob = 15, penhue = 0, spothue = 255;
+    int point[2], plast[2], er[2], touchlast[2] = { -1, -1 }, touchpoint[2] = { -1, -1 };
+    int eraser_rad = 14, eraser_rad_min = 9, eraser_rad_max = 26, eraser_velo_min = 4, eraser_velo_max = 10, touch_w_last = 2;
+    int erpos[2] = { 0, 0 }, eraser_velo_sign[2] = { 1, 1 };
+    int eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) };
+    int erpos_max[2] = { res[HORZ] / 2 - eraser_rad, res[VERT] / 2 - eraser_rad }; 
+    uint8_t saver_illicit_prob = 12, penhue = 0, spothue = 255;
     float pensat = 200.0;
     uint16_t pencolor = RED;
-    uint32_t pentimeout = 700000;
-    int savernumcycles, savershape_last;
-    int savershapes = 5, savercycle = 1, savtouch_last_x = -1, savtouch_last_y = -1, savtouch_last_w = 2, savershape = random(savershapes);
-    uint32_t saver_cycletime_us = 38000000, saver_refresh_us = 45000;
+    uint32_t pentimeout = 700000, saver_cycletime_us = 38000000, saver_refresh_us = 45000;
+    int num_cycles = 3, cycle = 1, shape = random(NumSaverShapes);
     Timer saverRefreshTimer, saverCycleTimer, pentimer;
     bool saver_lotto = false, screensaver_last = false;
   public:
-    ScreenSaver() {}
+    ElectricSheeit() {}
     void setup(TFT_eSprite* arg_sprite, TouchScreen* arg_touch) {
         _sprite = arg_sprite;
         touch = arg_touch;
-        // _sprite->setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
-        _sprite->createSprite(disp_saver_width, disp_saver_height);  // Create a sprite of defined size
+        _sprite->setColorDepth(16);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
+        _sprite->createSprite(res[HORZ], res[VERT]);  // Create a sprite of defined size
         _sprite->fillSprite(TFT_BLACK);
-        sx0 = random(disp_saver_width);        // Random x coordinate
-        sy0 = random(disp_saver_height);       // Random y coordinate
-        for (int16_t axis=0; axis<=1; axis++) eraser_velo_sign[axis] = (random(1)) ? 1 : -1;
+        for (int axis=HORZ; axis<=VERT; axis++) {
+            point[axis] = random(res[axis]);
+            eraser_velo_sign[axis] = (random(1)) ? 1 : -1;
+        }
         _sprite->setTextDatum(MC_DATUM);
         _sprite->setTextColor(BLK); 
         _sprite->setTextSize(1); 
@@ -280,84 +288,89 @@ class ScreenSaver {
         saverCycleTimer.set((int64_t)saver_cycletime_us);
         pentimer.set(pentimeout);
     }
+    void saver_reset() {
+        _sprite->fillSprite(TFT_BLACK);
+        saver_pattern(-2);  // randomize new pattern whenever turned off and on
+        cycle = 1;
+        saverCycleTimer.reset();
+    }
     void saver_touch(int16_t x, int16_t y) {  // you can draw colorful lines on the screensaver
-        if (x >= disp_simbuttons_x && y >= disp_simbuttons_y) {
-            x -= disp_simbuttons_x; y -= disp_simbuttons_y;
-            if (savtouch_last_x == -1) savtouch_last_x = x;
-            if (savtouch_last_y == -1) savtouch_last_y = y;
-            if (pentimer.expireset()) {
-                pensat += 1.5;
-                if (pensat > 255.0) pensat = 100.0;
-                pencolor = (savercycle == 1) ? random(0x10000) : hsv_to_rgb<uint16_t>(++penhue, (uint8_t)pensat, 200+random(56));
-            }
-            _sprite->drawWedgeLine(savtouch_last_x, savtouch_last_y, x, y, 4, 4, pencolor, pencolor);  // savtouch_last_w, w, pencolor, pencolor);
-            savtouch_last_x = x; savtouch_last_y = y;  // savtouch_last_w = w;
+        int tp[2] = { x - disp_simbuttons_x, y - disp_simbuttons_y };
+        if (tp[HORZ] < 0 || tp[VERT] < 0) return;
+        for (int axis=HORZ; axis<=VERT; axis++) if (touchlast[axis] == -1) touchlast[axis] = tp[axis];
+        if (pentimer.expireset()) {
+            pensat += 1.5;
+            if (pensat > 255.0) pensat = 100.0;
+            pencolor = (cycle == 1) ? random(0x10000) : hsv_to_rgb<uint16_t>(++penhue, (uint8_t)pensat, 200+random(56));
         }
+        _sprite->drawWedgeLine(touchlast[HORZ], touchlast[VERT], tp[HORZ], tp[VERT], 4, 4, pencolor, pencolor);  // savtouch_last_w, w, pencolor, pencolor);
+        for (int axis=HORZ; axis<=VERT; axis++) touchlast[axis] = tp[axis];
     }
     void update() {
         if (touch->touched()) saver_touch(touch->touch_pt(0), touch->touch_pt(1));
-        if (screensaver && !screensaver_last) saver_pattern(-2);  // randomize new pattern whenever turned off and on
+        if (!screensaver_last && screensaver) saver_reset();
         screensaver_last = screensaver;
         if (!screensaver) return;
         if (saverRefreshTimer.expireset()) {
             if (saverCycleTimer.expired()) {
-                savernumcycles++;
-                if (--savercycle < 1) savercycle = 3;
-                if (savercycle == 1) saver_pattern(-1);
-                saverCycleTimer.set(saver_cycletime_us / ((savercycle == 2) ? 3 : 1));
+                ++cycle %= num_cycles;
+                if (cycle == 1) saver_pattern(-1);
+                saverCycleTimer.set(saver_cycletime_us / ((cycle == 3) ? 5 : 1));
             }
-            long sx1 = random(disp_saver_width);        // Random x coordinate
-            long sy1 = random(disp_saver_height);       // Random y coordinate
-            if (savercycle != 2) {
+            for (int axis=HORZ; axis<=VERT; axis++) point[axis] = random(res[axis]);
+            if (cycle != 3) {
                 spothue--;
-                if (!savershape) _sprite->drawWedgeLine(sx0, sy0, sx1, sy1, 1+random(3), 1, hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2), 150+random(106)), BLK);
-                else if (savershape == 1) {
-                    uint8_t d1 = 10+random(30);
-                    uint8_t d2 = 10+random(30);
+                if (shape == EraserWedges) _sprite->drawWedgeLine(plast[HORZ], plast[VERT], point[HORZ], point[VERT], 1+random(4), 1, hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2), 150+random(106)), BLK);
+                else if (shape == EraserLipses) {
+                    int d[2] = { 10+random(30), 10+random(30) };
                     uint8_t hue = random(255);
-                    uint8_t sat = (spothue < 128) ? 2*(255-spothue) : 2*spothue;
-                    uint8_t brt = 200+random(56);
-                    for (int i=0; i<(3 * 3+random(10)); i+=3) _sprite->drawEllipse(sx1, sy1, d1 - i, d2 + i, hsv_to_rgb<uint16_t>(hue+2*i, sat, brt));
+                    uint8_t sat = (spothue < 128) ? 2*spothue : 2*(255-spothue);
+                    uint8_t brt = 100+random(156);
+                    for (int i=0; i<(3+random(10)); i++) _sprite->drawEllipse(point[HORZ], point[VERT], d[0] - 2*i, d[1] + 2*i, hsv_to_rgb<uint16_t>(hue+6*i, sat, brt));
                 }
-                else if (savershape == 4) _sprite->drawSmoothCircle(sx1, sy1, random(25), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106)), BLK);
-                else for (int star=0; star<(savershape*5); star++) {
-                    if (savershape == 2) _sprite->drawSpot(random(disp_saver_width), random(disp_saver_height), 2+random(1), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(46)), BLK);  // hue_to_rgb16(random(255)), BLK);
-                    else if (savershape == 3) {
-                        _sprite->setTextColor(hsv_to_rgb<uint16_t>(sx0 + sy0 + (spothue>>2), 63+(spothue>>1), 200+random(56)), BLK);
+                else if (shape == EraserRings) _sprite->drawSmoothCircle(point[HORZ], point[VERT], random(25), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106)), BLK);
+                else for (int star=0; star<(shape*5); star++) {
+                    if (shape == EraserDots) _sprite->drawSpot(random(res[HORZ]), random(res[VERT]), 2+random(1), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(46)), BLK);  // hue_to_rgb16(random(255)), BLK);
+                    else if (shape == EraserFont) {
+                        _sprite->setTextColor(hsv_to_rgb<uint16_t>(plast[HORZ] + plast[VERT] + (spothue>>2), 63+(spothue>>1), 200+random(56)), BLK);
                         char letter = (char)(1 + random(0xbe));
-                        _sprite->setCursor(sx1, sy1);
+                        _sprite->setCursor(point[HORZ], point[VERT]);
                         _sprite->print((String)letter);
                     }
                 }
+                // else if (shape == FocusRing) {
+                    // hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2), 150+random(106)), BLK)
+                // }
                 _sprite->setTextColor(BLK);  // allows subliminal messaging
             }
-            if (savercycle == 3 && saver_lotto) _sprite->drawString("do drugs", disp_saver_width / 2, disp_saver_height / 2, 4);
-            else if (savercycle != 1) {
-                for (int axis=0; axis<=1; axis++) {
-                    eraser_pos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
-                    if (eraser_pos[axis] * eraser_velo_sign[axis] >= eraser_pos_max[axis]) {
-                        eraser_pos[axis] = eraser_velo_sign[axis] * eraser_pos_max[axis];
-                        eraser_velo[axis] = (eraser_velo_min + random(eraser_velo_max - eraser_velo_min)) >> (savershape == 3);
-                        eraser_velo[!axis] = (eraser_velo_min + random(eraser_velo_max - eraser_velo_min)) >> (savershape == 3);
+            if (cycle != 3 && saver_lotto) _sprite->drawString("do drugs", res[HORZ] / 2, res[VERT] / 2, 4);
+            if (cycle != 1) {
+                for (int axis=HORZ; axis<=VERT; axis++) {
+                    erpos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
+                    if (erpos[axis] * eraser_velo_sign[axis] >= erpos_max[axis]) {
+                        erpos[axis] = eraser_velo_sign[axis] * erpos_max[axis];
+                        eraser_velo[axis] = (eraser_velo_min + random(eraser_velo_max - eraser_velo_min)) >> (shape == 3);
+                        eraser_velo[!axis] = (eraser_velo_min + random(eraser_velo_max - eraser_velo_min)) >> (shape == 3);
                         eraser_velo_sign[axis] *= -1;
-                        eraser_rad = constrain(eraser_rad + random(5) - 2, eraser_rad_min, eraser_rad_max);
+                        eraser_rad = constrain((int)(eraser_rad + random(5) - 2), eraser_rad_min, eraser_rad_max);
                     }
                 }
-                _sprite->fillCircle((disp_saver_width / 2) + eraser_pos[0], (disp_saver_height / 2) + eraser_pos[1], eraser_rad, BLK);
-            } 
-            sx0 = sx1;
-            sy0 = sy1;
+                // for (int axis=HORZ; axis<=VERT; axis++) if (erlast[axis] == -1) erlast[axis] = erpos[axis];
+                // _sprite->drawWedgeLine((res[HORZ]/2)+erlast[HORZ], (res[VERT]/2)+erlast[VERT], res[HORZ]/2+erpos[HORZ], (res[VERT]/2)+erpos[VERT], eraser_rad, BLK, BLK);  // savtouch_last_w, w, pencolor, pencolor);
+                _sprite->fillCircle((res[HORZ]/2) + erpos[HORZ], (res[VERT]/2) + erpos[VERT], eraser_rad, BLK);
+            }
+            for (int axis=HORZ; axis<=VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
             yield();
             _sprite->pushSprite(disp_simbuttons_x, disp_simbuttons_y);
         }
     }
   private:
     void saver_pattern(int newpat=-1) {  // pass non-negative value for a specific pattern, or -1 for cycle, -2 for random
-        int last_pat = savershape;
+        int last_pat = shape;
         saver_lotto = !random(saver_illicit_prob);
-        if (0 <= newpat && newpat < savershapes) savershape = newpat;  // 
-        else if (newpat == -1) ++savershape %= savershapes;
-        else if (newpat == -2) while (last_pat == savershape) savershape = random(savershapes);
+        if (0 <= newpat && newpat < NumSaverShapes) shape = newpat;  // 
+        else if (newpat == -1) ++shape %= NumSaverShapes;
+        else if (newpat == -2) while (last_pat == shape) shape = random(NumSaverShapes);
     }
 };
 class Display {
@@ -366,22 +379,27 @@ class Display {
     TFT_eSprite _saversprite = TFT_eSprite(&_tft);
     NeopixelStrip* neo;
     TouchScreen* touch;
-    ScreenSaver saverobj;
+    TunerPanel tuner;
+    ElectricSheeit saver;
+    IdiotLights* idiots;
     uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     Timer _tftResetTimer, _tftDelayTimer;
     int32_t _timing_tft_reset;
     bool _procrastinate = false, reset_finished = false, simulating_last;
-    int disp_oldmode = SHUTDOWN;   // So we can tell when the mode has just changed. start as different to trigger_mode start algo
+    int disp_oldmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
   public:
+    static constexpr int idiots_corner_x = 165;
+    static constexpr int idiots_corner_y = 13;
     // Display(int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
     // Display() : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
-    Display(NeopixelStrip* _neo, TouchScreen* _touch) : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {
+    Display(NeopixelStrip* _neo, TouchScreen* _touch, IdiotLights* _idiots) : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {
         neo = _neo;
         touch = _touch;
+        idiots = _idiots;
     }
-    Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, TouchScreen* _touch) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) { Display(_neo, _touch); }
+    Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, TouchScreen* _touch, IdiotLights* _idiots) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) { Display(_neo, _touch, _idiots); }
     void setup() {
-        printf("Init display.. ");
+        printf("Init display.. ");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
         _tft.begin();
         _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
         _tft.setTouch(touch_cal_data);
@@ -398,10 +416,10 @@ class Display {
         _tft.fillScreen(BLK);  // Black out the whole screen
         draw_touchgrid(false);
         draw_fixed(datapage, datapage_last, false);
-        set_idiotcolors();
-        draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, true);
+        idiots->setup(neo);
+        draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
         all_dirty();
-        saverobj.setup(&_saversprite, touch);
+        saver.setup(&_saversprite, touch);
     }
     bool tft_reset() {  // call to begin a tft reset, and continue to call every loop until returns true (or get_reset_finished() returns true), then stop
         if (reset_finished) {
@@ -438,7 +456,7 @@ class Display {
     bool get_reset_finished() { return reset_finished; }
     void set_runmodecolors() {
         uint8_t saturat = 255;  uint8_t hue_offset = 0;
-        for (int32_t rm=0; rm<arraysize(colorcard); rm++) {
+        for (int32_t rm=0; rm<NUM_RUNMODES; rm++) {
             int division = NUM_RUNMODES;
             uint32_t color32 = hsv_to_rgb<uint32_t>((int8_t)(255 * (rm % division) / division + hue_offset), saturat, 255, 0, 220);
             colorcard[rm] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
@@ -621,16 +639,16 @@ class Display {
         }
         return place;
     }
-    std::string abs_itoa(int32_t value, int32_t maxlength) {  // returns an ascii string representation of a given integer value, using scientific notation if necessary to fit within given width constraint
+    std::string num2string(int32_t value, int32_t maxlength) {  // returns an ascii string representation of a given integer value, using scientific notation if necessary to fit within given width constraint
         value = abs(value);  // This function disregards sign
-        int32_t place = significant_place(value);  // check how slow is log() function? Compare performance vs. multiple divides ( see abs_ftoa() )
+        int32_t place = significant_place(value);  // check how slow is log() function? Compare performance vs. multiple divides ( see num2string() )
         if (place <= maxlength) return std::to_string(value);  // If value is short enough, return it
         char buffer[maxlength+1];  // Allocate buffer with the maximum required size
-        snprintf(buffer, sizeof(buffer), "%.*e", maxlength - 4 - (int)(place >= 10), (float)value);
+        std::snprintf(buffer, sizeof(buffer), "%.*e", maxlength - 4 - (int)(place >= 10), (float)value);
         std::string result(buffer);  // copy buffer to result
         return result.substr(0, result.find('e') + 1) + std::to_string(place);
     }
-    std::string abs_ftoa(float value, int32_t maxlength, int32_t sigdig, bool chop_zeros = true) {  // returns an ascii string representation of a given float value, formatted efficiently. It will not exceed maxlength. fractional digits will be removed respecting given number of significant digits
+    std::string num2string(float value, int32_t maxlength, int32_t sigdig, bool chop_zeroes = true) {  // returns an ascii string representation of a given float value, formatted efficiently. It will not exceed maxlength. fractional digits will be removed respecting given number of significant digits
         value = abs(value);  // This function disregards sign
         int32_t place = significant_place(value);  // Learn decimal place of the most significant digit in value
         if (place >= sigdig && place <= maxlength) {  // Then we want simple cast to an integer w/o decimal point (eg 123456, 12345, 1234)
@@ -640,7 +658,7 @@ class Display {
         if (place >= 0 && place < maxlength) {  // Then we want float formatted with enough nonzero digits after the decimal point for given significant digits (eg 123.4, 12.34, 1.234, 0.000)
             int32_t length = smin(sigdig+1, maxlength);
             char buffer[length+1];
-            std::snprintf(buffer, length + 1, (chop_zeros) ? "%.*g" : "%.*f", length - 1, value);  // (buf, chars incl. end, %.*g = floats formatted in shortest form, length-1 digits after decimal, val)
+            std::snprintf(buffer, length + 1, (chop_zeroes) ? "%.*g" : "%.*f", length - 1, value);  // (buf, letters incl. end, %.*g = floats formatted in shortest form, length-1 digits after decimal, val)
             std::string result(buffer);  // copy buffer to result
             return result;
         }
@@ -652,7 +670,7 @@ class Display {
         }  // Otherwise we want scientific notation with precision removed as needed to respect maxlength (eg 1.23e4, 1.23e5, but using long e character not e for negative exponents
         char buffer[maxlength+1];  // Allocate buffer with the maximum required size
         int32_t truncit = smin(sigdig - 1, maxlength - 4 - (int)(place <= -10 || place >= 10));
-        snprintf(buffer, sizeof(buffer), "%.*e", truncit, value);
+        std::snprintf(buffer, sizeof(buffer), "%.*e", truncit, value);
         std::string result(buffer);  // copy buffer to result
         if (result.find("e+0") != std::string::npos) result.replace(result.find("e+0"), 3, "e");  // Remove useless "+0" from exponent
         else if (result.find("e-0") != std::string::npos) result.replace(result.find("e-0"), 3, "\x88");  // For very small scientific notation values, replace the "e-0" with a phoenetic long e character, to indicate negative power  // if (result.find("e-0") != std::string::npos) 
@@ -661,11 +679,11 @@ class Display {
         return result;    
     }
     void draw_dynamic(int32_t lineno, int32_t value, int32_t lowlim=-1, int32_t hilim=-1, int32_t target=-1) {
-        std::string val_string = abs_itoa(value, (int32_t)disp_maxlength);
+        std::string val_string = num2string(value, (int32_t)disp_maxlength);
         draw_dynamic(lineno, val_string.c_str(), value, lowlim, hilim, (int32_t)target);
     }
     void draw_dynamic(int32_t lineno, float value, float lowlim=-1, float hilim=-1, int32_t target=-1, int32_t precision = disp_default_float_precision) {
-        std::string val_string = abs_ftoa(value, (int32_t)disp_maxlength, precision);
+        std::string val_string = num2string(value, (int32_t)disp_maxlength, precision);
         draw_dynamic(lineno, val_string.c_str(), (int32_t)value, (int32_t)lowlim, (int32_t)hilim, target);
     }
     void draw_dynamic(int32_t lineno, float value, float lowlim, float hilim, float target, int32_t precision = disp_default_float_precision) {
@@ -712,6 +730,7 @@ class Display {
         else if (dir == JOY_DN || dir == JOY_UP) {
             _tft.fillTriangle(cntr_x - touch_simbutton/2, cntr_y, cntr_x + touch_simbutton/2, cntr_y, cntr_x, cntr_y - ((dir == JOY_UP) ? 1 : -1) * touch_simbutton/2, create ? color : BLK);
             _tft.drawTriangle(cntr_x - touch_simbutton/2, cntr_y, cntr_x + touch_simbutton/2, cntr_y, cntr_x, cntr_y - ((dir == JOY_UP) ? 1 : -1) * touch_simbutton/2, create ? LYEL : BLK);
+
             _tft.fillRect(cntr_x - 3*touch_simbutton/8, cntr_y - ((dir == JOY_UP) ? 0 : touch_simbutton/2), 3*touch_simbutton/4, touch_simbutton/2, create ? color : BLK);
             _tft.drawRect(cntr_x - 3*touch_simbutton/8, cntr_y - ((dir == JOY_UP) ? 0 : touch_simbutton/2), 3*touch_simbutton/4, touch_simbutton/2, create ? LYEL : BLK);
             _tft.fillRect(cntr_x - 3*touch_simbutton/8 + 1, cntr_y - 1, 3*touch_simbutton/4 - 2, 2, create ? color : BLK);
@@ -725,13 +744,13 @@ class Display {
         }
     }
     void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
-        _tft.fillRect(disp_simbuttons_x, disp_simbuttons_y, disp_saver_width, disp_saver_height, BLK);
+        _tft.fillRect(disp_simbuttons_x, disp_simbuttons_y, saver.res[HORZ], saver.res[VERT], BLK);
         _tft.setTextColor (LYEL);
         for (int32_t row = 0; row < arraysize(simgrid); row++) {
             for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
                 int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
                 int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
-                if (strcmp (simgrid[row][col], ______ )) {
+                if (strcmp (simgrid[row][col], ______)) {
                     draw_simbutton(cntr_x + 2, cntr_y - 1, simgriddir[row][col], LYEL, create);  // for 3d look
                     draw_simbutton(cntr_x, cntr_y, simgriddir[row][col], DGRY, create);
                     if (create) {
@@ -777,46 +796,46 @@ class Display {
             draw_reticle(disp_width_pix-touch_reticle_offset, disp_height_pix-touch_reticle_offset);
         }
     }
-    void draw_idiotbitmap(int32_t idiot, int32_t x, int32_t y) {
-        uint16_t bg = (*idiotlights[idiot]) ? idiotcolors[idiot] : BLK;
-        uint16_t color = (*idiotlights[idiot]) ? BLK : darken_color(idiotcolors[idiot]);
+    void draw_idiotbitmap(int32_t i, int32_t x, int32_t y) {
+        uint16_t bg = idiots->val(i) ? idiots->color[i] : BLK;
+        uint16_t color = idiots->val(i) ? BLK : darken_color(idiots->color[i]);
         _tft.drawRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, bg);
         for (int32_t xo = 0; xo < (2 * disp_font_width - 1); xo++)
             for (int32_t yo = 0; yo < disp_font_height - 1; yo++)
-                _tft.drawPixel(x + xo + 1, y + yo + 1, ((idiotmaps[idiot][xo] >> yo) & 1) ? color : bg);
+                _tft.drawPixel(x + xo + 1, y + yo + 1, ((idiots->icon[i][xo] >> yo) & 1) ? color : bg);
     }
-    void draw_idiotlight(int32_t idiot, int32_t x, int32_t y) {
-        if (idiotmaps[idiot][0] >= 0x80) {
-            _tft.fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (*(idiotlights[idiot])) ? idiotcolors[idiot] : BLK);  // GRY1);
-            _tft.setTextColor((*(idiotlights[idiot])) ? BLK : darken_color(idiotcolors[idiot]));  // darken_color((*(idiotlights[index])) ? BLK : DGRY)
+    void draw_idiotlight(int32_t i, int32_t x, int32_t y) {
+        if (idiots->icon[i][0] >= 0x80) {
+            _tft.fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (idiots->val(i) ? idiots->color[i] : BLK));  // GRY1);
+            _tft.setTextColor(idiots->val(i) ? BLK : darken_color(idiots->color[i]));  // darken_color((*(idiots->lights[index])) ? BLK : DGRY)
             _tft.setCursor(x+1, y+1);
-            _tft.print(idiotchars[idiot]);
+            _tft.print(idiots->letters[i]);
         }
-        else draw_idiotbitmap(idiot, x, y);
-        idiotlasts[idiot] = *(idiotlights[idiot]);
+        else draw_idiotbitmap(i, x, y);
+        idiots->last[i] = idiots->val(i);
     }
     void draw_idiotlights(int32_t x, int32_t y, bool force = false) {
-        for (int32_t ilite=0; ilite < arraysize(idiotlights); ilite++)
-            if (force || (*(idiotlights[ilite]) ^ idiotlasts[ilite]))
-                draw_idiotlight(ilite, x + (2 * disp_font_width + 2) * ((ilite % disp_idiots_per_row) % disp_idiots_per_row), y + disp_idiot_row_height * (int32_t)(ilite / disp_idiots_per_row));
+        for (int32_t i=0; i < idiots->iconcount; i++)
+            if (force || (idiots->val(i) ^ idiots->last[i]))
+                draw_idiotlight(i, x + (2 * disp_font_width + 2) * (i % idiots->row_count), y + idiots->row_height * (int32_t)(i / idiots->row_count));
     }
     void draw_temperature(loc location, int draw_index) {
         if (!tempsens.detected(location)) draw_eraseval(draw_index);
         else draw_dynamic(draw_index, tempsens.val(location), temp_lims_f[tempsens.errclass(location)][DISP_MIN], temp_lims_f[tempsens.errclass(location)][DISP_MAX]);
     }
     void update_idiots(bool force = false) {
-        for (int32_t idiot = 0; idiot < arraysize(idiotlights); idiot++) {
-            if (idiot <= neo->neopixelsAvailable())
-                if (*(idiotlights[idiot]) != idiotlasts[idiot]) neo->setBoolState(idiot, *idiotlights[idiot]);
-            if (idiot == LOST || idiot == RANGE) {
-                if (highest_pri_failing_last[idiot] != highest_pri_failing_sensor[idiot]) {
-                    if (highest_pri_failing_sensor[idiot] == e_none) neo->setflash((int)idiot, 0);
-                    else neo->setflash((int)idiot, highest_pri_failing_sensor[idiot] + 1, 2, 6, 1, 0);
+        for (int32_t i = 0; i < idiots->iconcount; i++) {
+            if (i <= neo->neopixelsAvailable())
+                if (idiots->val(i) != idiots->last[i]) neo->setBoolState(i, idiots->val(i));
+            if (i == LOST || i == RANGE) {
+                if (highest_pri_failing_last[i] != highest_pri_failing_sensor[i]) {
+                    if (highest_pri_failing_sensor[i] == e_none) neo->setflash((int)i, 0);
+                    else neo->setflash((int)i, highest_pri_failing_sensor[i] + 1, 2, 6, 1, 0);
                 }
-                highest_pri_failing_last[idiot] = highest_pri_failing_sensor[idiot];
+                highest_pri_failing_last[i] = highest_pri_failing_sensor[i];
             }
         }
-        if (display_enabled) draw_idiotlights(disp_idiot_corner_x, disp_idiot_corner_y, force);
+        if (display_enabled) draw_idiotlights(idiots_corner_x, idiots_corner_y, force);
     }
   public:
     void update(int _nowmode) {
@@ -955,7 +974,7 @@ class Display {
                 draw_dynamic(13, gas.cruisepid.dterm(), -drange, drange);
                 draw_dynamic(14, gas.cruisepid.outsum(), -gas.cruisepid.outrange(), gas.cruisepid.outrange());  // cruise_spid_speedo_delta_adc, -drange, drange);
                 draw_dynamic(15, gas.cruise_target_pc, 0.0, 100.0);
-                draw_dynamic(16, cruise_delta_max_pc_per_s, 1, 1000);
+                draw_dynamic(16, cruise_delta_max_pc_per_s, 1, 35);
                 draw_dynamic(17, gas.cruisepid.kp(), 0.0, 10.0);
                 draw_dynamic(18, gas.cruisepid.ki(), 0.0, 10.0);
                 draw_dynamic(19, gas.cruisepid.kd(), 0.0, 10.0);
@@ -1004,7 +1023,7 @@ class Display {
             disp_data_dirty = false;
             _procrastinate = true;  // don't do anything else in this same loop
         }
-        if (!sim.enabled() && !_procrastinate) saverobj.update();
+        if (!sim.enabled() && !_procrastinate) saver.update();
         _procrastinate = false;
     }
 };
@@ -1030,7 +1049,7 @@ class Tuner {
             if (encoder_sw_action == Encoder::SHORT)  {  // if short press
                 if (tunctrl == EDIT) tunctrl = SELECT;  // If we were editing a value drop back to select mode
                 else if (tunctrl == SELECT) tunctrl = EDIT;  // If we were selecting a variable start editing its value
-                else heartbeat_override_color = random(0x10000);  // temporary!! to test heartbeat color override feature
+                else if (button_test_heartbeat_color) heartbeat_override_color = random(0x10000);  // temporary!! to test heartbeat color override feature
             }
             else tunctrl = (tunctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
         }
@@ -1041,7 +1060,7 @@ class Tuner {
         touch->idelta = idelta_encoder = 0;
         if (tunctrl != tunctrl_last || datapage != datapage_last || sel_val != sel_val_last || idelta) tuningCtrlTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
         else if (tunctrl != OFF && tuningCtrlTimer.expired()) tunctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
-        datapage = constrain(datapage, 0, arraysize(pagecard)-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
+        datapage = constrain(datapage, 0, datapages::NUM_DATAPAGES-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
         if (datapage != datapage_last) {
             if (tunctrl == EDIT) tunctrl = SELECT;  // If page is flipped during edit, drop back to select mode
             disp_datapage_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
