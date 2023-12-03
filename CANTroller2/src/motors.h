@@ -330,6 +330,10 @@ class GasServo : public ServoMotor {
         }
     }
 };
+// Brake uses two PID loops: one based on pressure (accurate for high brake pressures), and one based on position (accurate when pedal is more released)
+// PID output is percent motor power.  Which PID is dominant is determined by which has the greatest rate of change of sensed value as a ratio of that value's range
+// Both PIDs are calculated, and a combined output is calculated by weighted average of their two outputs, using the sensed value of the dominant PID as weighting factor 
+// In this way, control smoothly transitions from position-based to pressure-based as brakes are applied, and vise versa
 class BrakeMotor : public JagMotor {
   private:
     BrakePositionSensor* brkpos;
@@ -345,34 +349,33 @@ class BrakeMotor : public JagMotor {
     static constexpr uint32_t stopcar_timeout = 8000000;  // How often to apply increment during auto-stopping (in us)
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
     // float posn_inflect, pres_inflect, pc_inflect; 
-    void activate_pid(int newpid) {
-        if (newpid == activepid_last) return;
-        activepid = newpid;
-        pid = pids[activepid];
-        posn_pid_active = (activepid == POSNPID);  // just so our idiot light is accurate
-        activepid_last = activepid;
-        pid.init(pids[!activepid].output());
+    void activate_pid(int _pid) {
+        dominantpid = _pid;
+        pid_dom = &(pids[dominantpid]);
+        posn_pid_active = (dominantpid == POSNPID);
     }
   public:
     using JagMotor::JagMotor;
     QPID pids[NUM_BRAKEPIDS];  // brake changes from pressure target to position target as pressures decrease, and vice versa
+    QPID* pid_dom = &(pids[PRESPID]);  // AnalogSensor sensed[NUM_BRAKEPIDS];
     bool autostopping = false, reverse = false, openloop = false;
     // float duty_pc = 25;
     Timer stopcar_timer, interval_timer;  // How much time between increasing brake force during auto-stop if car still moving?    // How long before giving up on trying to stop car?
-    int activepid = brake_default_pid, activepid_last = brake_default_pid;
-    bool posn_pid_active = (activepid == POSNPID);
-    QPID &pid = pids[activepid];
-    float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2, pid_targ_pc, pid_err_pc;
-    float d_ratio[NUM_BRAKEPIDS], outnow[NUM_BRAKEPIDS], outlast[NUM_BRAKEPIDS];
+    int dominantpid = brake_default_pid, dominantpid_last = brake_default_pid;
+    bool posn_pid_active = (dominantpid == POSNPID);
+    float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2, pid_targ_pc, pid_err_pc, pres_pid_pc;
+    float sens_ratio[NUM_BRAKEPIDS], sensnow[NUM_BRAKEPIDS], outnow[NUM_BRAKEPIDS];  // , senslast[NUM_BRAKEPIDS], d_ratio[NUM_BRAKEPIDS], 
     void derive() { JagMotor::derive(); }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         printf("Brake motor..\n");
         JagMotor::setup(_hotrc, _speedo, _batt);
-        pressure = _pressure;  // press_pin = _press_pin;
-        brkpos = _brkpos;  // posn_pin = _posn_pin;
+        pressure = _pressure;  // press_pin = _press_pin;  // sensed[PRESPID] = _pressure;
+        brkpos = _brkpos;  // posn_pin = _posn_pin;  // sensed[POSNPID] = _brkpos;
         duty_pc = 40.0;
         pres_last = pressure->human();
         posn_last = brkpos->human();
+        activate_pid(brake_default_pid);
+        pres_pid_pc = 100.0 * (float)dominantpid;
         derive();
         pids[PRESPID].init(pressure->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), initial_kp, initial_ki, initial_kd, QPID::pmod::onerr,
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_period_us, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
@@ -381,22 +384,24 @@ class BrakeMotor : public JagMotor {
         interval_timer.set(interval_timeout);
         stopcar_timer.set(stopcar_timeout);
     }
-  private:
-    void calc_pid_stuff(int _pid) {
-        outnow[_pid] = (_pid == PRESPID) ? pressure->human() : brkpos->human();
-        d_ratio[_pid] = outnow[_pid] - outlast[_pid];
-        d_ratio[_pid] /= (_pid == PRESPID) ? (pressure->max_human() - pressure->min_human()) : (brkpos->max_human() - brkpos->min_human());
-        outlast[_pid] = outnow[_pid];
+    void set_pidtarg(float targ_pc) {
+        pid_targ_pc = targ_pc;
+        pids[PRESPID].set_target(pressure->min_human() + pid_targ_pc * (pressure->max_human() - pressure->min_human()) / 100.0);
+        pids[POSNPID].set_target(brkpos->min_human() + (100.0 - pid_targ_pc) * (brkpos->max_human() - brkpos->min_human()) / 100.0);
     }
+  private:
     float pid_out() {  // feedback brake pid with position or pressure, whichever is changing more quickly
-        pc[OUT] = pid.compute();  // get output accordiing to pressure pid
-        if (activepid == PRESPID) pid_err_pc = pids[PRESPID].err() * (pressure->max_human() - pressure->min_human()) / 100;  // pid_err_pc allows us to display error value regardless which pid is active
-        else pid_err_pc = -(pids[POSNPID].err()) * (brkpos->max_human() - brkpos->min_human()) / 100;
-        calc_pid_stuff(activepid);
-        if (!brake_hybrid_pid) return pc[OUT];
-        calc_pid_stuff(!activepid);
-        activate_pid((std::abs(d_ratio[PRESPID]) >= std::abs(d_ratio[POSNPID])) ? PRESPID : POSNPID);
-        return pc[OUT];
+        float range;
+        for (int p = POSNPID; p < NUM_BRAKEPIDS; p++) {
+            range = (p == PRESPID) ? (pressure->max_human() - pressure->min_human()) : (brkpos->max_human() - brkpos->min_human());
+            sensnow[p] = (p == PRESPID) ? pressure->human() : brkpos->human();
+            sens_ratio[p] = (sensnow[p] - ((p == PRESPID) ? pressure->min_human() : brkpos->min_human())) / range;
+            outnow[p] = pids[p].compute();
+        }
+        if (!brake_hybrid_pid) return outnow[dominantpid];
+        activate_pid((int)(sens_ratio[PRESPID] > 0.50 || sens_ratio[POSNPID] < 0.50));  // pressure pid (==1) is dominant if pressure >50% or position <50%
+        pres_pid_pc = 100.0 * sens_ratio[dominantpid];  // (dominantpid == PRESPID) ? sens_ratio[PRESPID] : sens_ratio[POSNPID];  // for displaying current ratio
+        return sens_ratio[dominantpid] * outnow[dominantpid] + (1.0 - sens_ratio[dominantpid]) * outnow[!dominantpid];
     }
     void fault_filter() {
         // 1. Detect  brake chain is not connected (evidenced by change in brake position without expected pressure changes)
@@ -405,13 +410,8 @@ class BrakeMotor : public JagMotor {
         // retract_effective_max_us = volt[STOP] + duty_pc * (volt[OPMAX] - volt[STOP]);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
     }
   public:
-    void autostop_initial(bool panic) { set_pidtarg(smax(panic ? panic_initial_pc : hold_initial_pc, pid.target())); }
-    void autostop_increment(bool panic) { set_pidtarg(smin(pid.target() + panic ? panic_increment_pc : hold_increment_pc, 100.0)); }
-    void set_pidtarg(float targ_pc) {
-        pid_targ_pc = targ_pc;
-        if (activepid == PRESPID) pid.set_target(pressure->min_human() + pid_targ_pc * (pressure->max_human() - pressure->min_human()) / 100.0);
-        else pid.set_target(brkpos->max_human() - pid_targ_pc * (brkpos->max_human() - brkpos->min_human()) / 100);
-    }
+    void autostop_initial(bool panic) { set_pidtarg(smax(panic ? panic_initial_pc : hold_initial_pc, pid_dom->target())); }
+    void autostop_increment(bool panic) { set_pidtarg(smin(pid_dom->target() + panic ? panic_increment_pc : hold_increment_pc, 100.0)); }
     void update(int runmode) {
         // Brakes - Determine motor output and write it to motor
         if (volt_check_timer.expireset()) derive();
@@ -434,7 +434,7 @@ class BrakeMotor : public JagMotor {
             else pc[OUT] = pid_out(); // Otherwise the pid control is active  // First attenuate max power to avoid blowing out the motor like in bm2023, if retracting, as a proportion of position from zeropoint to fully retracted
             // Step 2 : Fix motor pc value if it's out of range or exceeding positional limits
             if (runmode == CAL && cal_joyvert_brkmotor_mode)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
-                pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);  // Constrain to full potential range when calibrating. Caution don't break anything!
+                pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);  // Constrain to full potential range when calibrating. Caution don't break anything!
             else if ((pc[OUT] < pc[STOP] && brkpos->filt() > brkpos->parkpos() - brkpos->margin()) 
                   || (pc[OUT] > pc[STOP] && brkpos->filt() < brkpos->min_in() + brkpos->margin()))  // If brake is at position limits and we're tring to go further, stop the motor
                 pc[OUT] = pc[STOP];
@@ -448,12 +448,6 @@ class BrakeMotor : public JagMotor {
             write_motor();
         }
     }
-    float pid_kp() { return pids[activepid].kp(); }
-    float pid_ki() { return pids[activepid].ki(); }
-    float pid_kd() { return pids[activepid].kd(); }
-    void add_kp(float add) { pids[activepid].add_kp(add); }
-    void add_ki(float add) { pids[activepid].add_ki(add); }
-    void add_kd(float add) { pids[activepid].add_kd(add); }
 };
 class SteerMotor : public JagMotor {
   public:

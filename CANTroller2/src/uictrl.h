@@ -5,22 +5,28 @@ class Potentiometer {
     protected:
         static constexpr float adc_min = 300; // TUNED 230603 - Used only in determining theconversion factor
         static constexpr float adc_max = 4095; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
-        static constexpr float _ema_alpha = 0.1;
+        static constexpr float _ema_alpha = 0.35;
         static constexpr float _pc_min = 0.0;
         static constexpr float _pc_max = 100.0;
+        static constexpr float _pc_activity_margin = 1.0;
         uint8_t _pin;
-        float _val = 0.0;
+        float _val = 0.0, _activity_ref;
     public:
         Potentiometer(uint8_t arg_pin) : _pin(arg_pin) {}
         Potentiometer() = delete; // must have a pin defined
         void setup() {
             printf("Pot setup..\n");
             set_pin(_pin, INPUT);
+            _activity_ref = _val;
         }
         void update() {
             float new_val = map(static_cast<float>(analogRead(_pin)), adc_min, adc_max, _pc_min, _pc_max);
             new_val = constrain(new_val, _pc_min, _pc_max); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
             _val = ema_filt(new_val, _val, _ema_alpha);
+            if (std::abs(_val - _activity_ref) > _pc_activity_margin) {
+                sleep_inactivity_timer.reset();  // evidence of user activity
+                _activity_ref = _val;
+            }
         }
         template<typename VAL_T>
         VAL_T mapToRange(VAL_T min, VAL_T max) {
@@ -105,6 +111,7 @@ class Encoder {
             // NONE once handled. When handling press, if encoder_long_clicked is nonzero then press is a long press
             if (!read_pin(_sw_pin)) {  // if encoder sw is being pressed (switch is active low)
                 if (!sw) {  // if the press just occurred
+                    sleep_inactivity_timer.reset();  // evidence of user activity
                     _longPressTimer.reset();  // start a press timer
                     _timer_active = true;  // flag to indicate timing for a possible long press
                 }
@@ -116,7 +123,10 @@ class Encoder {
                 sw = true;  // Remember a press is in effect
             }
             else {  // if encoder sw is not being pressed
-                if (sw && !_suppress_click) _sw_action = SHORT;  // if the switch was just released, a short press occurred, which must be handled
+                if (sw) {
+                    sleep_inactivity_timer.reset();  // evidence of user activity
+                    if(!_suppress_click) _sw_action = SHORT;  // if the switch was just released, a short press occurred, which must be handled
+                }
                 _timer_active = false;  // Allows detection of next long press event
                 sw = false;  // Remember press is not in effect
                 _suppress_click = false;  // End click suppression
@@ -146,6 +156,7 @@ class Encoder {
         int32_t rotation(bool accel = false) {  // Returns detents spun since last call, accelerated by spin rate or not
             int32_t d = 0;
             if (_delta) {  // Now handle any new rotations
+                sleep_inactivity_timer.reset();  // evidence of user activity
                 if (_spinrate_isr_us >= _spinrate_min_us) {  // Reject clicks coming in too fast as bounces
                     if (accel) {
                         _spinrate_us = constrain (_spinrate_isr_us, _spinrate_min_us, _accel_thresh_us);

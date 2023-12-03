@@ -681,7 +681,7 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     static constexpr int32_t op_max_adc = 2080; // ~208psi by this math - "Maximum" braking
     // static constexpr int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
     static constexpr float initial_psi_per_adc = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - op_min_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
-    static constexpr float initial_ema_alpha = 0.1;
+    static constexpr float initial_ema_alpha = 0.15;
     static constexpr float initial_offset = 0.0;
     static constexpr bool initial_invert = false;
     static constexpr float hold_initial_psi = 45;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
@@ -735,7 +735,7 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     static constexpr float margin_in = .01;  // TODO: add description
     static constexpr float initial_in_per_adc = 3.3 * 10000.0 / (3.3 * adcrange_adc * 557); // 3.3 v * 10k ohm * 1/5 1/v * 1/4095 1/adc * 1/557 in/ohm = 0.0029 in/adc
     static constexpr float initial_zeropoint_in = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
-    static constexpr float initial_ema_alpha = 0.25;
+    static constexpr float initial_ema_alpha = 0.35;
     static constexpr bool initial_invert = false;
     static constexpr float initial_offset = 0.0;
     String _long_name = "Brake position sensor";
@@ -1335,7 +1335,10 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         for (int8_t chan = CH3; chan <= CH4; chan++) {
             us[chan][RAW] = (int32_t)(rmt[chan].readPulseWidth(true));
             sw[chan] = (us[chan][RAW] <= us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  us[CH3][CENT]
-            if ((sw[chan] != sw[chan-2]) && !_radiolost) _sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false. Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
+            if ((sw[chan] != sw[chan-2]) && !_radiolost) {
+                _sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false. Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
+                sleep_inactivity_timer.reset();  // evidence of user activity
+            }
             sw[chan-2] = sw[chan];  // chan-2 index being used to store previous values of index chan
         }
     }
@@ -1351,6 +1354,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
             if (_radiolost || (ema_us[axis] > us[axis][DBBOT] && ema_us[axis] < us[axis][DBTOP]))
                 pc[axis][FILT] = pc[axis][CENT];  // if within the deadband set joy_axis_filt to CENTer value
+            else sleep_inactivity_timer.reset();  // evidence of user activity
         }
     }
     bool radiolost_update() {
