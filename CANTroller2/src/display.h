@@ -2,8 +2,14 @@
 #include <TFT_eSPI.h>
 #include "neopixel.h"
 #include "touch.h"
+#include "images.h"
 // LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
 // Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
+// Relevant links for UI development:
+// free images: http://iconarchive.com/  // 1. resize to pixels needed, jpg w/ black backgd  2. convert to rgb565 color 
+// image to rgb565 color converter: https://www.youtube.com/redirect?event=video_description&redir_token=QUFFLUhqbkYtMGJvMS1VVWV0ZUpIb1Y4U2U2QzRLM3BKZ3xBQ3Jtc0tudG5MS1hVdmlLajdrNHFMWWtWUkFGTFNadUhaWkVob2ExNV8ya29kLXFmcDh1SEVINDFEeWtSX3A0SW40UlNTcy1CYVlSTTV5cXJKM25VcGxoWjdxSk9kZVFadURVWHhJcU9hMVRUWENyVGVjRkw4aw&q=http%3A%2F%2Fwww.rinkydinkelectronics.com%2Ft_imageconverter565.php&v=U4jOFLFNZBI
+// rgb565 color picker site: http://www.barth-dev.de/online/rgb565  // named colors: https://wiki.tcl-lang.org/page/Colors+with+Names
+// Font1 character map (use right side):  https://learn.adafruit.com/assets/103682
 #define BLK  0x0000  // greyscale: full black (RGB elements off)
 #define HGRY 0x2104  // greyscale: hella dark grey
 #define DGRY 0x39c7  // greyscale: very dark grey
@@ -36,14 +42,11 @@
 #define PNK  0xfcf3  // pink is the best color
 #define DPNK 0xfa8a  // we need all shades of pink
 #define LPNK 0xfe18  // especially light pink, the champagne of pinks
-// 5-6-5 color picker site: http://www.barth-dev.de/online/rgb565  // named colors: https://wiki.tcl-lang.org/page/Colors+with+Names
 
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
 #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
 #define disp_vshift_pix 2  // Unknown.  Note: At smallest text size, characters are 5x7 pix + pad on rt and bot for 6x8 pix.
 #define disp_runmode_text_x 8
-Timer dispRefreshTimer (100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
-uint32_t tft_watchdog_timeout_us = 100000;
 int32_t colorcard[NUM_RUNMODES] = { MGT, MBLU, RED, ORG, YEL, GRN, TEAL, PUR };
 char modecard[NUM_RUNMODES][7] = { "Basic", "Asleep", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
@@ -90,7 +93,7 @@ class IdiotLights {
     static constexpr int row_height = 10;
     static constexpr int iconcount = 19;  // number of boolean values included on the screen panel (not the neopixels) 
     bool* vals[iconcount] = {
-        &(err_sens_alarm[LOST]), &(err_sens_alarm[RANGE]), &(temp_err[ENGINE]), &(temp_err[WHEEL]), &panicstop, 
+        &(diag.err_sens_alarm[LOST]), &(diag.err_sens_alarm[RANGE]), &(diag.temp_err[ENGINE]), &(diag.temp_err[WHEEL]), &panicstop, 
         hotrc.radiolost_ptr(), &shutdown_incomplete, &park_the_motors, &autostopping, &cruise_adjusting, &car_hasnt_moved, 
         &starter, &(encoder.sw), sim.enabled_ptr(), &running_on_devboard, &powering_up, &(brake.posn_pid_active),
         &(encoder.enc_a), &(encoder.enc_b),
@@ -104,7 +107,7 @@ class IdiotLights {
         { 0x63, 0x36, 0x1c, 0x36, 0x63, 0x14, 0x08, 0x22, 0x1c, 0x41, 0x3e, },  // 5 = wifi symbol w/ X
         { 0x16, 0x15, 0x0d, 0x60, 0x6f, 0x04, 0x6f, 0x60, 0x0f, 0x69, 0x66, },  // 6 = "SHD..."
         { 0x3e, 0x63, 0x41, 0x7d, 0x7d, 0x55, 0x55, 0x5d, 0x49, 0x63, 0x3e, },  // 7 = circle-"P"
-        { 0x3e, 0x49, 0x08, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x08, 0x49, 0x3e, },  // 8 = tie fighter brake assembly
+        { 0x3e, 0x49, 0x08, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x08, 0x49, 0x3e, },  // 8 = brake assembly or tie fighter
         { 0x08, 0x1c, 0x36, 0x00, 0x3e, 0x63, 0x63, 0x00, 0x36, 0x1c, 0x08, },  // 9 = "<C>"
         { 0x1d, 0x23, 0x47, 0x00, 0x3e, 0x63, 0x55, 0x49, 0x55, 0x63, 0x3e, },  // 10 = rotation arrow w/ X wheel
         { 0x3e, 0x41, 0x7f, 0x7b, 0x7b, 0x7b, 0x3e, 0x1c, 0x7f, 0x55, 0x7f, },  // 11 = motor w/ spur gear
@@ -112,9 +115,11 @@ class IdiotLights {
         { 0x6e, 0x6b, 0x3b, 0x00, 0x7f, 0x00, 0x7f, 0x06, 0x1c, 0x06, 0x7f, },  // 13 = "SIM"
         { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, },  // 14 = "DEV"
         { 0x00, 0x3e, 0x63, 0x41, 0x40, 0x4f, 0x40, 0x41, 0x63, 0x3e, 0x00, },  // 15 = power symbol
-        { 0x7c, 0x46, 0x7f, 0x7f, 0x33, 0x12, 0x12, 0x12, 0x1e, 0x12, 0x0c, },  // 16 = linear actuator (or penis)
-        { 0x00, 0x40, 0x70, 0x7c, 0x5e, 0x13, 0x5e, 0x7c, 0x70, 0x40, 0x00, },  // 17 = "A"
-        { 0x00, 0x00, 0x41, 0x7f, 0x7f, 0x49, 0x49, 0x7f, 0x36, 0x00, 0x00, },  // 18 = "B"
+        { 0x7c, 0x46, 0x7f, 0x7f, 0x33, 0x12, 0x12, 0x12, 0x1e, 0x12, 0x0c, },  // 16 = linear actuator or schlong
+        { 0x0e, 0x1d, 0x7d, 0x1d, 0x0e, 0x00, 0x7e, 0x0b, 0x09, 0x0b, 0x7e, },  // 17 = encoder "A"
+        { 0x0e, 0x1d, 0x7d, 0x1d, 0x0e, 0x00, 0x7f, 0x49, 0x49, 0x7f, 0x36, },  // 18 = encoder "B"
+     // { 0x00, 0x40, 0x70, 0x7c, 0x5e, 0x13, 0x5e, 0x7c, 0x70, 0x40, 0x00, },  // 17 = "A"
+     // { 0x00, 0x00, 0x41, 0x7f, 0x7f, 0x49, 0x49, 0x7f, 0x36, 0x00, 0x00, },  // 18 = "B"
     };
     char letters[iconcount][3] = {
         "SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk",
@@ -132,7 +137,7 @@ class IdiotLights {
         myneo = _neo;
         // int n = new_idiot(&(err_sens_alarm[LOST]), "SL", { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e })
         for (int32_t i=0; i<iconcount; i++) myneo->newIdiotLight(i, color[i], val(i));
-        std::cout << "set up " << iconcount << " toggle icons and " << myneo->idiotcount << " neopixel hazard lights" << std::endl;
+        std::cout << "Idiot lights.. set up " << iconcount << " toggle icons & " << myneo->idiotcount << " neopixel hazard lights" << std::endl;
     }
     bool val(int index) { return *(vals[index]); }
     bool* ptr(int index) { return vals[index]; }
@@ -193,30 +198,30 @@ static constexpr char brake_pid_card[2][7] = { "presur", "positn" };
 static constexpr char pagecard[datapages::NUM_DATAPAGES][5] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
 static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 4, 8, 7, 7, 10, 0, 6 };  // first value in each dataset page that's editable. All values after this must also be editable
 static constexpr char datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines][9] = {
-    { brAk"Posn", "MuleBatt", "LiPoBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", __________, __________, "Governor", stEr"Safe", },  // PG_RUN
+    { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
     { "PressRaw", "BkPosRaw", __________, __________, __________, "AirSpMax", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
-    { "Pn|PrTgt", "Pn|PrErr", "  P Term", "  I Term", "  D Term", brAk"Posn", "dPressur", " dPositn", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
+    { brAk"Targ", "Pn|PrErr", "  P Term", "  I Term", "  D Term", brAk"Posn", "PsiVsPos", __________, "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, "OpenLoop", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
-    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", " Touch X", " Touch Y", " Touch X", " Touch Y", "No Temps", },  // PG_TEMP
+    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "LoopFreq", "Loop Avg", "LoopPeak", __________, __________, __________, "Webservr", "BlnkDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
+    { "LoopFreq", "Loop Avg", "LoopPeak", " Touch X", " Touch Y", __________, "Webservr", "BlnkDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
 };
 static constexpr char tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines][5] = {
-    { "in  ", "V   ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, "%   ", "%   ", },  // PG_RUN
+    { "in  ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
     { "us  ", "us  ", "us  ", "us  ", "%   ", "%   ", ______, ______, ______, "us  ", "us  ", },  // PG_JOY
     { "adc ", "adc ", ______, ______, ______, "mph ", "psi ", "psi ", "mph ", "mph ", "in  ", },  // PG_SENS
     { degree, "us  ", "V   ", "us  ", "V   ", "us  ", ______, degree, degree, "us  ", "%   ", },  // PG_PWMS
     { scroll, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", degreF, degreF, "rpms", scroll, },  // PG_IDLE
-    { "psin", "psin", "%   ", "%   ", "%   ", "in  ", ______, ______, ______, "Hz  ", "s   ", },  // PG_BPID
+    { "%   ", "psin", "%   ", "%   ", "%   ", "in  ", "%   ", ______, ______, "Hz  ", "s   ", },  // PG_BPID
     { "rpm ", "rpm ", "%   ", "%   ", "%   ", "%   ", ______, b1nary, ______, "Hz  ", "s   ", },  // PG_GPID
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%/s ", ______, "Hz  ", "s   ", },  // PG_CPID
-    { degreF, degreF, degreF, degreF, degreF, degreF, "pix ", "pix ", "ohm ", "ohm ", b1nary, },  // PG_TEMP
+    { degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, b1nary, },  // PG_TEMP
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "Hz  ", "us  ", "us  ", ______, ______, ______, b1nary, b1nary, "%   ", "/10 ", b1nary, },  // PG_UI
+    { "Hz  ", "us  ", "us  ", "pix ", "pix ", ______, b1nary, b1nary, "%   ", "/10 ", "eyes", },  // PG_UI
 };
 static constexpr char unitmapnames[9][5] = { "usps", "us  ", "rpms", scroll, b1nary, "%   ", "ohm ", "eyes", "psin", };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where units use symbols not present in the font, are longer than 3 characters, or are just special
@@ -227,21 +232,21 @@ static constexpr uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where un
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3e, 0x00, 0x00, 0x1c, 0x22, 0x22, 0x1c, 0x00, 0x00, },  // 0/1 - to indicate binary value
     { 0x02, 0x45, 0x25, 0x12, 0x08, 0x24, 0x52, 0x51, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // % - just because the font one is feeble
     { 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // capital omega - for ohms
-    { 0x08, 0x1c, 0x2a, 0x08, 0x00, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x41, 0x3e, },  // googly eyes, to point out new features
+    { 0x08, 0x1c, 0x2a, 0x08, 0x00, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x41, 0x3e, },  // googly eyes, are as goofy as they are stupid
     { 0x3d, 0x00, 0x3c, 0x04, 0x38, 0x00, 0x7f, 0x00, 0x7c, 0x24, 0x18, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x3d, },  // inches or psi
 };  // These bitmaps are in the same format as the idiot light bitmaps, described below
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
 static constexpr int simgriddir[4][3] = {
-    { JOY_UP, JOY_UP, JOY_UP, },
-    { JOY_DN, JOY_DN, JOY_DN, },
-    { JOY_UP, JOY_UP, JOY_RT, },
-    { JOY_DN, JOY_DN, JOY_LT, },
+    { JOY_PLUS,  JOY_PLUS,  JOY_PLUS,  },
+    { JOY_MINUS, JOY_MINUS, JOY_MINUS, },
+    { JOY_PLUS,  JOY_UP,    JOY_RT,    },
+    { JOY_MINUS, JOY_DN,    JOY_LT,    },
 };
 static constexpr char simgrid[4][3][4] = {
-    { "PSI", "RPM", "MPH" },
-    { "PSI", "RPM", "MPH" },
-    { "POS", "JOY", "JOY" },
-    { "POS", "JOY", "JOY" }, // Font special characters is the right-side map:  https://learn.adafruit.com/assets/103682
+    { "psi", "rpm", "mph" },
+    { "psi", "rpm", "mph" },
+    { "pos", "   ", "   " },
+    { "pos", "   ", "   " },
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 class TunerPanel {
   public:
@@ -250,27 +255,27 @@ class TunerPanel {
   private:
     // DataPage[NUM_DATAPAGES];
 };
-class ElectricSheeit {  // draws colorful patterns to exercise screen draw capabilities
+class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabilities
   public:
     static constexpr int res[2] = { 155, 192 };
-    enum savershapes : int { EraserWedges, EraserDots, EraserRings, EraserLipses, NumSaverShapes, FocusRing, EraserFont };
+    enum savershapes : int { Wedges, Dots, Rings, Ellipses, Boxes, NumSaverShapes, FocusRing, Ascii };
   private:
     TFT_eSprite* _sprite;
     TouchScreen* touch;
     int point[2], plast[2], er[2], touchlast[2] = { -1, -1 }, touchpoint[2] = { -1, -1 };
     int eraser_rad = 14, eraser_rad_min = 9, eraser_rad_max = 26, eraser_velo_min = 4, eraser_velo_max = 10, touch_w_last = 2;
-    int erpos[2] = { 0, 0 }, eraser_velo_sign[2] = { 1, 1 };
+    int erpos[2] = { 0, 0 }, eraser_velo_sign[2] = { 1, 1 }, boxsize[2];
     int eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) };
     int erpos_max[2] = { res[HORZ] / 2 - eraser_rad, res[VERT] / 2 - eraser_rad }; 
     uint8_t saver_illicit_prob = 12, penhue = 0, spothue = 255;
     float pensat = 200.0;
     uint16_t pencolor = RED;
-    uint32_t pentimeout = 700000, saver_cycletime_us = 38000000, saver_refresh_us = 45000;
-    int num_cycles = 3, cycle = 1, shape = random(NumSaverShapes);
-    Timer saverRefreshTimer, saverCycleTimer, pentimer;
+    int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 1500, shape = random(NumSaverShapes);
+    static constexpr uint32_t saver_cycletime_us = 34000000;
+    Timer saverRefreshTimer = Timer(45000), saverCycleTimer, pentimer = Timer(700000);
     bool saver_lotto = false, screensaver_last = false;
   public:
-    ElectricSheeit() {}
+    LibDrawDemo() {}
     void setup(TFT_eSprite* arg_sprite, TouchScreen* arg_touch) {
         _sprite = arg_sprite;
         touch = arg_touch;
@@ -284,14 +289,12 @@ class ElectricSheeit {  // draws colorful patterns to exercise screen draw capab
         _sprite->setTextDatum(MC_DATUM);
         _sprite->setTextColor(BLK); 
         _sprite->setTextSize(1); 
-        saverRefreshTimer.set(saver_refresh_us);
-        saverCycleTimer.set((int64_t)saver_cycletime_us);
-        pentimer.set(pentimeout);
+        saverCycleTimer.set(saver_cycletime_us);
     }
     void saver_reset() {
         _sprite->fillSprite(TFT_BLACK);
         saver_pattern(-2);  // randomize new pattern whenever turned off and on
-        cycle = 1;
+        cycle = 0;
         saverCycleTimer.reset();
     }
     void saver_touch(int16_t x, int16_t y) {  // you can draw colorful lines on the screensaver
@@ -314,43 +317,52 @@ class ElectricSheeit {  // draws colorful patterns to exercise screen draw capab
         if (saverRefreshTimer.expireset()) {
             if (saverCycleTimer.expired()) {
                 ++cycle %= num_cycles;
-                if (cycle == 1) saver_pattern(-1);
-                saverCycleTimer.set(saver_cycletime_us / ((cycle == 3) ? 5 : 1));
+                if (cycle == 2) saver_pattern(-1);
+                saverCycleTimer.set(saver_cycletime_us / ((cycle == 2) ? 5 : 1));
             }
-            for (int axis=HORZ; axis<=VERT; axis++) point[axis] = random(res[axis]);
-            if (cycle != 3) {
+            for (int axis=0; axis<=1; axis++) point[axis] = random(res[axis]);
+            if (cycle != 2) {
                 spothue--;
-                if (shape == EraserWedges) _sprite->drawWedgeLine(plast[HORZ], plast[VERT], point[HORZ], point[VERT], 1+random(4), 1, hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2), 150+random(106)), BLK);
-                else if (shape == EraserLipses) {
+                if (shape == Wedges) _sprite->drawWedgeLine(plast[HORZ], plast[VERT], point[HORZ], point[VERT], 1+random(4), 1, hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2), 150+random(106)), BLK);
+                else if (shape == Ellipses) {
                     int d[2] = { 10+random(30), 10+random(30) };
-                    uint8_t hue = random(255);
-                    uint8_t sat = (spothue < 128) ? 2*spothue : 2*(255-spothue);
-                    uint8_t brt = 100+random(156);
-                    for (int i=0; i<(3+random(10)); i++) _sprite->drawEllipse(point[HORZ], point[VERT], d[0] - 2*i, d[1] + 2*i, hsv_to_rgb<uint16_t>(hue+6*i, sat, brt));
+                    uint8_t sat = random(255);
+                    uint8_t hue = (spothue < 128) ? 2*spothue : 2*(255-spothue);
+                    uint8_t brt = 50+random(206);
+                    for (int i=0; i<(3+random(10)); i++) _sprite->drawEllipse(point[HORZ], point[VERT], d[0] - 2*i, d[1] + 2*i, hsv_to_rgb<uint16_t>(hue+4*i, sat, brt));
                 }
-                else if (shape == EraserRings) _sprite->drawSmoothCircle(point[HORZ], point[VERT], random(25), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106)), BLK);
-                else for (int star=0; star<(shape*5); star++) {
-                    if (shape == EraserDots) _sprite->drawSpot(random(res[HORZ]), random(res[VERT]), 2+random(1), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(46)), BLK);  // hue_to_rgb16(random(255)), BLK);
-                    else if (shape == EraserFont) {
+                else if (shape == Rings) _sprite->drawSmoothCircle(point[HORZ], point[VERT], random(25), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106)), BLK);
+                else if (shape == Dots) 
+                    for (int star=0; star<(shape*5); star++) 
+                        _sprite->drawSpot(random(res[HORZ]), random(res[VERT]), 2+random(3), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(46)), BLK);  // hue_to_rgb16(random(255)), BLK);
+                else if (shape == Ascii)
+                    for (int star=0; star<(shape*5); star++) {                
                         _sprite->setTextColor(hsv_to_rgb<uint16_t>(plast[HORZ] + plast[VERT] + (spothue>>2), 63+(spothue>>1), 200+random(56)), BLK);
                         char letter = (char)(1 + random(0xbe));
                         _sprite->setCursor(point[HORZ], point[VERT]);
                         _sprite->print((String)letter);
                     }
+                else if (shape == Boxes) {
+                    boxrad = 5 + random(5);
+                    boxminsize = 2 * boxrad + 10;
+                    int longer = random(2);
+                    boxsize[longer] = boxminsize + random(res[0] - boxminsize);
+                    boxsize[!longer] = boxminsize + random(smax(0, boxmaxarea / boxsize[longer] - boxminsize));
+                    for (int dim=0; dim<=1; dim++) point[dim] = -boxsize[dim] / 2 + random(res[dim]);
+                    _sprite->fillSmoothRoundRect(point[0], point[1], boxsize[0], boxsize[1], boxrad, random(0x10000), BLK); // Change colors as needed                    
                 }
                 // else if (shape == FocusRing) {
                     // hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2), 150+random(106)), BLK)
                 // }
                 _sprite->setTextColor(BLK);  // allows subliminal messaging
             }
-            if (cycle != 3 && saver_lotto) _sprite->drawString("do drugs", res[HORZ] / 2, res[VERT] / 2, 4);
-            if (cycle != 1) {
+            if (cycle != 0) {
                 for (int axis=HORZ; axis<=VERT; axis++) {
                     erpos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
                     if (erpos[axis] * eraser_velo_sign[axis] >= erpos_max[axis]) {
                         erpos[axis] = eraser_velo_sign[axis] * erpos_max[axis];
-                        eraser_velo[axis] = (eraser_velo_min + random(eraser_velo_max - eraser_velo_min)) >> (shape == 3);
-                        eraser_velo[!axis] = (eraser_velo_min + random(eraser_velo_max - eraser_velo_min)) >> (shape == 3);
+                        eraser_velo[axis] = eraser_velo_min + random(eraser_velo_max - eraser_velo_min);
+                        eraser_velo[!axis] = eraser_velo_min + random(eraser_velo_max - eraser_velo_min);
                         eraser_velo_sign[axis] *= -1;
                         eraser_rad = constrain((int)(eraser_rad + random(5) - 2), eraser_rad_min, eraser_rad_max);
                     }
@@ -359,10 +371,14 @@ class ElectricSheeit {  // draws colorful patterns to exercise screen draw capab
                 // _sprite->drawWedgeLine((res[HORZ]/2)+erlast[HORZ], (res[VERT]/2)+erlast[VERT], res[HORZ]/2+erpos[HORZ], (res[VERT]/2)+erpos[VERT], eraser_rad, BLK, BLK);  // savtouch_last_w, w, pencolor, pencolor);
                 _sprite->fillCircle((res[HORZ]/2) + erpos[HORZ], (res[VERT]/2) + erpos[VERT], eraser_rad, BLK);
             }
+            if (saver_lotto) _sprite->drawString("do drugs", res[HORZ] / 2, res[VERT] / 2, 4);
             for (int axis=HORZ; axis<=VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
-            yield();
-            _sprite->pushSprite(disp_simbuttons_x, disp_simbuttons_y);
+            push();
         }
+    }
+    void push() {
+        yield();
+        _sprite->pushSprite(disp_simbuttons_x, disp_simbuttons_y);
     }
   private:
     void saver_pattern(int newpat=-1) {  // pass non-negative value for a specific pattern, or -1 for cycle, -2 for random
@@ -380,63 +396,41 @@ class Display {
     NeopixelStrip* neo;
     TouchScreen* touch;
     TunerPanel tuner;
-    ElectricSheeit saver;
+    LibDrawDemo saver;
     IdiotLights* idiots;
+    Timer dispRefreshTimer = Timer(100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
     uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
-    Timer _tftResetTimer, _tftDelayTimer;
-    int32_t _timing_tft_reset;
     bool _procrastinate = false, reset_finished = false, simulating_last;
     int disp_oldmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
   public:
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
-    // Display(int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
-    // Display() : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
-    Display(NeopixelStrip* _neo, TouchScreen* _touch, IdiotLights* _idiots) : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {
-        neo = _neo;
-        touch = _touch;
-        idiots = _idiots;
-    }
-    Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, TouchScreen* _touch, IdiotLights* _idiots) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) { Display(_neo, _touch, _idiots); }
+    Display(NeopixelStrip* _neo, TouchScreen* _touch, IdiotLights* _idiots) : _tft(), neo(_neo), touch(_touch), idiots(_idiots) {}
+    Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, TouchScreen* _touch, IdiotLights* _idiots) 
+        : _tft(cs_pin, dc_pin) { Display(_neo, _touch, _idiots); }
     void setup() {
-        printf("Init display.. ");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
+        printf("Display..\n");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
         _tft.begin();
         _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
         _tft.setTouch(touch_cal_data);
+        _tft.setSwapBytes(true);  // rearranges color ordering of 16bit colors when displaying image files
         for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
             disp_age_quanta[lineno] = -1;
             memset(disp_values[lineno], 0, strlen(disp_values[lineno]));
             disp_polarities[lineno] = 1;
         }
-        for(int32_t row=0; row<arraysize(disp_bool_values); row++) disp_bool_values[row] = 1;
-        for(int32_t row=0; row<arraysize(disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
-        for(int32_t row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
+        for (int32_t row=0; row<arraysize(disp_bool_values); row++) disp_bool_values[row] = 1;
+        for (int32_t row=0; row<arraysize(disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
+        for (int32_t row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
         yield();
         // set_runmodecolors();
         _tft.fillScreen(BLK);  // Black out the whole screen
         draw_touchgrid(false);
         draw_fixed(datapage, datapage_last, false);
-        idiots->setup(neo);
+        // idiots->setup(neo);
         draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
         all_dirty();
         saver.setup(&_saversprite, touch);
-    }
-    bool tft_reset() {  // call to begin a tft reset, and continue to call every loop until returns true (or get_reset_finished() returns true), then stop
-        if (reset_finished) {
-            reset_finished = false;
-            _timing_tft_reset = 1;
-            }
-        if (_timing_tft_reset == 1) {
-            write_pin(tft_rst_pin, LOW);
-            _timing_tft_reset = 2;
-        }
-        else if (_timing_tft_reset == 2 && _tftResetTimer.expired()) {
-            write_pin(tft_rst_pin, HIGH);
-            setup();
-            _timing_tft_reset = 0;
-            reset_finished = true;
-        }
-        return reset_finished;
     }
     void all_dirty() {
         disp_idiots_dirty = true;
@@ -448,12 +442,6 @@ class Display {
         disp_simbuttons_dirty = true;
         screensaver = false;
     }
-    void watchdog() {  // Call in every loop to perform a reset upon detection of blocked loops and 
-        if (loop_periods_us[loop_now] > tft_watchdog_timeout_us && _timing_tft_reset == 0) _timing_tft_reset = 1;
-        if (_timing_tft_reset == 0 || !_tftDelayTimer.expired()) _tftDelayTimer.reset();
-        else tft_reset();
-    }
-    bool get_reset_finished() { return reset_finished; }
     void set_runmodecolors() {
         uint8_t saturat = 255;  uint8_t hue_offset = 0;
         for (int32_t rm=0; rm<NUM_RUNMODES; rm++) {
@@ -722,41 +710,29 @@ class Display {
             disp_bool_values[col-2] = value;
         }
     }
-    void draw_simbutton(int cntr_x, int cntr_y, int dir, uint16_t color, bool create) {
-        if (dir == JOY_CENT) {
-            _tft.fillCircle(cntr_x, cntr_y, touch_simbutton / 2, create ? color : BLK);
-            _tft.drawCircle(cntr_x, cntr_y, touch_simbutton / 2, create ? LYEL : BLK);
-        }
-        else if (dir == JOY_DN || dir == JOY_UP) {
-            _tft.fillTriangle(cntr_x - touch_simbutton/2, cntr_y, cntr_x + touch_simbutton/2, cntr_y, cntr_x, cntr_y - ((dir == JOY_UP) ? 1 : -1) * touch_simbutton/2, create ? color : BLK);
-            _tft.drawTriangle(cntr_x - touch_simbutton/2, cntr_y, cntr_x + touch_simbutton/2, cntr_y, cntr_x, cntr_y - ((dir == JOY_UP) ? 1 : -1) * touch_simbutton/2, create ? LYEL : BLK);
-
-            _tft.fillRect(cntr_x - 3*touch_simbutton/8, cntr_y - ((dir == JOY_UP) ? 0 : touch_simbutton/2), 3*touch_simbutton/4, touch_simbutton/2, create ? color : BLK);
-            _tft.drawRect(cntr_x - 3*touch_simbutton/8, cntr_y - ((dir == JOY_UP) ? 0 : touch_simbutton/2), 3*touch_simbutton/4, touch_simbutton/2, create ? LYEL : BLK);
-            _tft.fillRect(cntr_x - 3*touch_simbutton/8 + 1, cntr_y - 1, 3*touch_simbutton/4 - 2, 2, create ? color : BLK);
-        }
-        else if (dir == JOY_LT || dir == JOY_RT) {
-            _tft.fillTriangle(cntr_x, cntr_y - touch_simbutton/2, cntr_x, cntr_y + touch_simbutton/2, cntr_x + ((dir == JOY_RT) ? 1 : -1) * touch_simbutton/2, cntr_y, create ? color : BLK);
-            _tft.drawTriangle(cntr_x, cntr_y - touch_simbutton/2, cntr_x, cntr_y + touch_simbutton/2, cntr_x + ((dir == JOY_RT) ? 1 : -1) * touch_simbutton/2, cntr_y, create ? LYEL : BLK);
-            _tft.fillRect(cntr_x - ((dir == JOY_RT) ? touch_simbutton/2 : 0), cntr_y - 3*touch_simbutton/8, touch_simbutton/2, 3*touch_simbutton/4, create ? color : BLK);
-            _tft.drawRect(cntr_x - ((dir == JOY_RT) ? touch_simbutton/2 : 0), cntr_y - 3*touch_simbutton/8, touch_simbutton/2, 3*touch_simbutton/4, create ? LYEL : BLK);
-            _tft.fillRect(cntr_x - 1, cntr_y - 3*touch_simbutton/8 + 1, 2, 3*touch_simbutton/4 - 2, create ? color : BLK);
-        }
+    void draw_simbutton(int cntr_x, int cntr_y, int dir, uint16_t color) {
+        if      (dir == JOY_PLUS)  _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_plus_40, TFT_BLACK);
+        else if (dir == JOY_MINUS) _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_minus_40, TFT_BLACK);
+        else if (dir == JOY_UP)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_up_40, TFT_BLACK);
+        else if (dir == JOY_DN)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_down_40, TFT_BLACK);
+        else if (dir == JOY_LT)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_left_40, TFT_BLACK);
+        else if (dir == JOY_RT)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_right_40, TFT_BLACK);
     }
     void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
-        _tft.fillRect(disp_simbuttons_x, disp_simbuttons_y, saver.res[HORZ], saver.res[VERT], BLK);
-        _tft.setTextColor (LYEL);
+        if (!create) {
+            saver.push();
+            return;
+        }
+        _tft.setTextDatum(MC_DATUM);
+        _tft.setTextColor(LYEL);
         for (int32_t row = 0; row < arraysize(simgrid); row++) {
             for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
                 int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
                 int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
-                if (strcmp (simgrid[row][col], ______)) {
-                    draw_simbutton(cntr_x + 2, cntr_y - 1, simgriddir[row][col], LYEL, create);  // for 3d look
-                    draw_simbutton(cntr_x, cntr_y, simgriddir[row][col], DGRY, create);
-                    if (create) {
-                        int32_t x_mod = cntr_x-(arraysize(simgrid[row][col])-1)*(disp_font_width>>1);
-                        draw_string(x_mod, x_mod, cntr_y-(disp_font_height>>1), simgrid[row][col], "", LYEL, DGRY);
-                    }
+                if (strcmp(simgrid[row][col], ______)) {
+                    draw_simbutton(cntr_x + 2, cntr_y - 1, simgriddir[row][col], LYEL);  // for 3d look
+                    draw_simbutton(cntr_x, cntr_y, simgriddir[row][col], DGRY);
+                    if (row % 2) _tft.drawString(simgrid[row][col], cntr_x, cntr_y - touch_cell_v_pix/2, 1);
                 }
             }     
         }
@@ -828,11 +804,11 @@ class Display {
             if (i <= neo->neopixelsAvailable())
                 if (idiots->val(i) != idiots->last[i]) neo->setBoolState(i, idiots->val(i));
             if (i == LOST || i == RANGE) {
-                if (highest_pri_failing_last[i] != highest_pri_failing_sensor[i]) {
-                    if (highest_pri_failing_sensor[i] == e_none) neo->setflash((int)i, 0);
-                    else neo->setflash((int)i, highest_pri_failing_sensor[i] + 1, 2, 6, 1, 0);
+                if (diag.most_critical_last[i] != diag.most_critical_sensor[i]) {
+                    if (diag.most_critical_sensor[i] == _None) neo->setflash((int)i, 0);
+                    else neo->setflash((int)i, diag.most_critical_sensor[i] + 1, 2, 6, 1, 0);
                 }
-                highest_pri_failing_last[i] = highest_pri_failing_sensor[i];
+                diag.most_critical_last[i] = diag.most_critical_sensor[i];
             }
         }
         if (display_enabled) draw_idiotlights(idiots_corner_x, idiots_corner_y, force);
@@ -842,19 +818,14 @@ class Display {
         update_idiots(disp_idiots_dirty);
         disp_idiots_dirty = false;
         if (!display_enabled) return;
-        if (disp_simbuttons_dirty || (sim.enabled() != simulating_last)) {
-            draw_simbuttons(sim.enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
-            disp_simbuttons_dirty = false;
-            simulating_last = sim.enabled();
-        }
-        if ((disp_datapage_dirty)) {
+        if (disp_datapage_dirty) {
             static bool first = true;
             draw_datapage(datapage, datapage_last, first);
             first = false;
             disp_datapage_dirty = false;
             if (datapage_last != datapage) prefs.putUInt("dpage", datapage);
         }
-        if ((disp_sidemenu_dirty)) {
+        if (disp_sidemenu_dirty) {
             draw_touchgrid(true);
             disp_sidemenu_dirty = false;
         }
@@ -867,26 +838,30 @@ class Display {
             disp_oldmode = _nowmode;
             disp_runmode_dirty = false;
         }
-        if (dispRefreshTimer.expired()) {
-            dispRefreshTimer.reset();
+        if (disp_simbuttons_dirty || (sim.enabled() != simulating_last)) {
+            draw_simbuttons(sim.enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
+            disp_simbuttons_dirty = false;
+            simulating_last = sim.enabled();
+            _procrastinate = true;
+        }
+        if (dispRefreshTimer.expireset()) {
             float drange;
             draw_dynamic(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
             draw_dynamic(2, speedo.filt(), 0.0, speedo.redline_mph(), gas.cruisepid.target());
             draw_dynamic(3, tach.filt(), 0.0, tach.redline_rpm(), gas.pid.target());
             draw_dynamic(4, gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX]);
-            draw_dynamic(5, pressure.filt(), pressure.min_human(), pressure.max_human(), brake.pid.target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
+            draw_dynamic(5, pressure.filt(), pressure.min_human(), pressure.max_human(), brake.pids[PRESPID].target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
             draw_dynamic(6, brake.pc[OUT], brake.pc[OPMIN], brake.pc[OPMAX]);
             draw_dynamic(7, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
             draw_dynamic(8, steer.pc[OUT], steer.pc[OPMIN], steer.pc[OPMAX]);
             if (datapage == PG_RUN) {
                 draw_dynamic(9, brkpos.filt(), brkpos.op_min_in(), brkpos.op_max_in());
                 draw_dynamic(10, mulebatt.filt(), mulebatt.op_min_v(), mulebatt.op_max_v());
-                draw_dynamic(11, lipobatt.filt(), lipobatt.op_min_v(), lipobatt.op_max_v());
-                draw_dynamic(12, pot.val(), pot.min(), pot.max());
-                draw_dynamic(13, airvelo.filt(), airvelo.min_mph(), airvelo.max_mph());
-                draw_dynamic(14, mapsens.filt(), mapsens.min_psi(), mapsens.max_psi());
-                draw_dynamic(15, maf_gps, maf_min_gps, maf_max_gps);
-                for (int line=16; line<=17; line++) draw_eraseval(line);
+                draw_dynamic(11, pot.val(), pot.min(), pot.max());
+                draw_dynamic(12, airvelo.filt(), airvelo.min_mph(), airvelo.max_mph());
+                draw_dynamic(13, mapsens.filt(), mapsens.min_psi(), mapsens.max_psi());
+                draw_dynamic(14, maf_gps, maf_min_gps, maf_max_gps);
+                for (int line=15; line<=17; line++) draw_eraseval(line);
                 draw_dynamic(18, gas.governor, 0.0, 100.0);
                 draw_dynamic(19, steer.steer_safe_pc, 0.0, 100.0);
             }
@@ -940,17 +915,17 @@ class Display {
             }
             else if (datapage == PG_BPID) {
                 drange = brake.us[ABSMIN]-brake.us[ABSMAX];
-                draw_dynamic(9, brake.pid_targ_pc, 0.0, 100.0);
-                draw_dynamic(10, brake.pid_err_pc, -100.0, 100.0);
-                draw_dynamic(11, brake.pid.pterm(), -drange, drange);
-                draw_dynamic(12, brake.pid.iterm(), -drange, drange);
-                draw_dynamic(13, brake.pid.dterm(), -drange, drange);
-                draw_dynamic(14, brkpos.filt(), brkpos.op_min_in(), brkpos.op_max_in());
-                draw_dynamic(15, brake.d_ratio[PRESPID]);  // brake_spid_speedo_delta_adc, -range, range);
-                draw_dynamic(16, brake.d_ratio[POSNPID]);  // draw_asciiname(16, brake_pid_card[brake.activepid]);                    
-                draw_dynamic(17, brake.pid_kp(), 0.0, 8.0);
-                draw_dynamic(18, brake.pid_ki(), 0.0, 8.0);
-                draw_dynamic(19, brake.pid_kd(), 0.0, 8.0);
+                draw_dynamic(9, brake.pid_dom->target(), 0.0, 100.0);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
+                draw_dynamic(10, brake.pid_dom->err(), brake.pid_dom->outmin(), brake.pid_dom->outmax());
+                draw_dynamic(11, brake.pid_dom->pterm(), -drange, drange);
+                draw_dynamic(12, brake.pid_dom->iterm(), -drange, drange);
+                draw_dynamic(13, brake.pid_dom->dterm(), -drange, drange);
+                draw_dynamic(14, brkpos.filt(), brkpos.op_min_in(), brkpos.op_max_in(), brake.pids[POSNPID].target());
+                draw_dynamic(15, brake.pres_pid_pc, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
+                draw_eraseval(16);
+                draw_dynamic(17, brake.pid_dom->kp(), 0.0, 8.0);
+                draw_dynamic(18, brake.pid_dom->ki(), 0.0, 8.0);
+                draw_dynamic(19, brake.pid_dom->kd(), 0.0, 8.0);
             }
             else if (datapage == PG_GPID) {
                 draw_dynamic(9, gas.pid.target(), 0.0, tach.redline_rpm());
@@ -986,10 +961,7 @@ class Display {
                 draw_temperature(loc::WHEEL_FR, 12);
                 draw_temperature(loc::WHEEL_RL, 13);
                 draw_temperature(loc::WHEEL_RR, 14);
-                draw_dynamic(15, touch->touch_pt(0), 0, disp_width_pix);
-                draw_dynamic(16, touch->touch_pt(1), 0, disp_height_pix);
-                draw_dynamic(17, touch->getX(), 340, 3980);
-                draw_dynamic(18, touch->getY(), 180, 3980);
+                for (int line=15; line<=18; line++) draw_eraseval(line);
                 draw_truth(19, dont_take_temperatures, 2);
             }
             else if (datapage == PG_SIM) {
@@ -1002,14 +974,16 @@ class Display {
                 draw_truth(15, sim.can_sim(sens::mapsens), 0);
                 draw_truth(16, sim.can_sim(sens::basicsw), 0);                    
                 draw_asciiname(17, sensorcard[sim.potmap()]);
-                draw_truth(18, cal_joyvert_brkmotor_mode, 0);
-                draw_truth(19, cal_pot_gasservo_mode, 0);
+                draw_truth(18, cal_brakemode, 0);
+                draw_truth(19, cal_gasmode, 0);
             }
             else if (datapage == PG_UI) {
-                draw_dynamic(9, loopfreq_hz);
-                draw_dynamic(10, (int32_t)loop_avg_us, loop_scale_min_us, loop_scale_avg_max_us);
-                draw_dynamic(11, loop_peak_us, loop_scale_min_us, loop_scale_peak_max_us);
-                for (int line=12; line<=14; line++) draw_eraseval(line);
+                draw_dynamic(9, looptimer.loopfreq_hz);
+                draw_dynamic(10, (int32_t)looptimer.loop_avg_us, looptimer.loop_scale_min_us, looptimer.loop_scale_avg_max_us);
+                draw_dynamic(11, looptimer.loop_peak_us, looptimer.loop_scale_min_us, looptimer.loop_scale_peak_max_us);
+                draw_dynamic(12, touch->touch_pt(0), 0, disp_width_pix);
+                draw_dynamic(13, touch->touch_pt(1), 0, disp_height_pix);
+                draw_eraseval(14);
                 draw_truth(15, web_enabled, 0);
                 draw_truth(16, flashdemo, 0);
                 draw_dynamic(17, neobright, 1.0, 100.0, -1, 3);
@@ -1031,16 +1005,19 @@ class Tuner {
   private:
     NeopixelStrip* neo;
     TouchScreen* touch;
-    uint32_t tuner_timeout = 25000000;  // This times out edit mode after a a long period of inactivity
-    Timer tuningCtrlTimer;
+    Timer tuningCtrlTimer = Timer(25000000);  // This times out edit mode after a a long period of inactivity
   public:
     Tuner(NeopixelStrip* _neo, TouchScreen* _touch) {
         neo = _neo;
         touch = _touch;
-        tuningCtrlTimer.set(tuner_timeout);
     }
     int32_t idelta = 0, idelta_encoder = 0;
     void update(int rmode) {
+        process_inputs();
+        edit_values(rmode);
+    }
+  private:
+    void process_inputs() {
         sel_val_last = sel_val;
         datapage_last = datapage;
         tunctrl_last = tunctrl; // Make sure this goes after the last comparison
@@ -1070,6 +1047,8 @@ class Tuner {
             if (sel_val != sel_val_last) disp_selected_val_dirty = true;
         }
         if (tunctrl != tunctrl_last || disp_datapage_dirty) disp_selected_val_dirty = true;
+    }
+    void edit_values(int rmode) {
         float fdelta = (float)idelta;
         if (tunctrl == EDIT && idelta != 0) {  // Change tunable values when editing
             if (datapage == PG_RUN) {
@@ -1081,19 +1060,19 @@ class Tuner {
                 else if (sel_val == 10) { adj_val(&hotrc.deadband_us, idelta, 0, 50); hotrc.calc_params(); }
             }
             else if (datapage == PG_SENS) {
-                if (sel_val == 2) gas.idlectrl.add_idlehot(0.1 * fdelta);
-                else if (sel_val == 3) gas.idlectrl.add_idlecold(0.1 * fdelta);
-                else if (sel_val == 4) adj_val(tach.redline_rpm_ptr(), 0.1 * fdelta, gas.idlectrl.idlehigh, tach.abs_max_rpm());
-                else if (sel_val == 5) adj_val(airvelo.max_mph_ptr(), 0.01 * fdelta, 0, airvelo.abs_max_mph());
-                else if (sel_val == 6) adj_val(mapsens.min_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
-                else if (sel_val == 6) adj_val(mapsens.max_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
-                else if (sel_val == 8) adj_val(speedo.idle_mph_ptr(), 0.01 * fdelta, 0, speedo.redline_mph() - 1);
-                else if (sel_val == 9) adj_val(speedo.redline_mph_ptr(), 0.01 * fdelta, speedo.idle_mph(), 20);
-                else if (sel_val == 10) adj_val(brkpos.zeropoint_ptr(), 0.001 * fdelta, brkpos.op_min_in(), brkpos.op_max_in());
+                if (sel_val == 2) gas.idlectrl.add_idlehot(fdelta);
+                else if (sel_val == 3) gas.idlectrl.add_idlecold(fdelta);
+                else if (sel_val == 4) adj_val(tach.redline_rpm_ptr(), fdelta, gas.idlectrl.idlehigh, tach.abs_max_rpm());
+                else if (sel_val == 5) adj_val(airvelo.max_mph_ptr(), fdelta, 0, airvelo.abs_max_mph());
+                else if (sel_val == 6) adj_val(mapsens.min_psi_ptr(), fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
+                else if (sel_val == 6) adj_val(mapsens.max_psi_ptr(), fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
+                else if (sel_val == 8) adj_val(speedo.idle_mph_ptr(), fdelta, 0, speedo.redline_mph() - 1);
+                else if (sel_val == 9) adj_val(speedo.redline_mph_ptr(), fdelta, speedo.idle_mph(), 20);
+                else if (sel_val == 10) adj_val(brkpos.zeropoint_ptr(), fdelta, brkpos.op_min_in(), brkpos.op_max_in());
             }
             else if (datapage == PG_PWMS) {
-                if (sel_val == 7) { adj_val(&(gas.nat[OPMIN]), fdelta, gas.nat[PARKED] + 1, gas.nat[OPMAX] - 1); gas.derive(); }
-                else if (sel_val == 8) { adj_val(&(gas.nat[OPMAX]), fdelta, gas.nat[OPMIN] + 1, 180.0); gas.derive(); }
+                if (sel_val == 7) { adj_val(&(gas.si[OPMIN]), fdelta, gas.si[PARKED] + 1, gas.si[OPMAX] - 1); gas.derive(); }
+                else if (sel_val == 8) { adj_val(&(gas.si[OPMAX]), fdelta, gas.si[OPMIN] + 1, 180.0); gas.derive(); }
                 else if (sel_val == 9) { adj_val(&(brake.us[STOP]), fdelta, brake.us[OPMIN] + 1, brake.us[OPMAX] - 1); brake.derive(); }
                 else if (sel_val == 10) { adj_val(&(brake.duty_pc), fdelta, 0.0, 100.0); brake.derive(); }
             }
@@ -1107,9 +1086,9 @@ class Tuner {
                 else if (sel_val == 10) gas.idlectrl.cycle_idlemode(idelta);
             }
             else if (datapage == PG_BPID) {
-                if (sel_val == 8) brake.add_kp(0.001 * fdelta);
-                else if (sel_val == 9) brake.add_ki(0.001 * fdelta);
-                else if (sel_val == 10) brake.add_kd(0.001 * fdelta);
+                if (sel_val == 8) brake.pid_dom->add_kp(0.001 * fdelta);
+                else if (sel_val == 9) brake.pid_dom->add_ki(0.001 * fdelta);
+                else if (sel_val == 10) brake.pid_dom->add_kd(0.001 * fdelta);
             }
             else if (datapage == PG_GPID) {
                 if (sel_val == 7) { adj_bool(&(gas.openloop), idelta); }  // gas_pid.SetMode(gas_open_loop ? QPID::ctrl::manual : QPID::ctrl::automatic);
@@ -1136,8 +1115,8 @@ class Tuner {
                 else if (sel_val == 6) sim.set_can_sim(sens::mapsens, idelta);  // else if (sel_val == 7) sim.set_can_sim(sens::starter, idelta);
                 else if (sel_val == 7) sim.set_can_sim(sens::basicsw, idelta);
                 else if (sel_val == 8) { sim.set_potmap((adj_val(sim.potmap(), idelta, 0, (int)(sens::starter) - 1))); prefs.putUInt("potmap", sim.potmap()); }
-                else if (sel_val == 9 && rmode == CAL) adj_bool(&(cal_joyvert_brkmotor_mode), idelta);
-                else if (sel_val == 10 && rmode == CAL) adj_bool(&(cal_pot_gasservo_mode), (idelta < 0 || cal_pot_gasservo_ready) ? idelta : -1);
+                else if (sel_val == 9 && rmode == CAL) adj_bool(&(cal_brakemode), idelta);
+                else if (sel_val == 10 && rmode == CAL) adj_bool(&(cal_gasmode_request), idelta);
             }
             else if (datapage == PG_UI) {
                 if (sel_val == 6) { adj_bool(&web_enabled, idelta); }

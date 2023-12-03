@@ -1,9 +1,9 @@
 
-/* Contains unit tests */
+// Contains unit tests for class structures etc.
 #pragma once
 #include <cassert>  // for assert
-#include "sensors.h"
 #include <memory>
+// #include "sensors.h"
 
 void test_Param() {
     // default constructor

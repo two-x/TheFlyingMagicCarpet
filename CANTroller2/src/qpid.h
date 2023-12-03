@@ -6,7 +6,7 @@
 class QPID {
   public:
     enum class ctrl : int {manual, automatic, toggle};            // controller mode
-    enum class cdir : int {direct, reverse};                      // controller direction
+    enum class cdir : int {reverse=-1, direct=1};                      // controller direction
     enum class pmod : int {onerr, onmeas, onerrmeas};             // proportional mode
     enum class dmod : int {onerr, onmeas};                        // derivative mode
     enum class awmod : int {cond, clamp, off, round, roundcond};  // integral anti-windup mode  // Soren edit
@@ -14,7 +14,7 @@ class QPID {
   private:
     float dispkp = 0; float dispki = 0; float dispkd = 0;
     float _pterm, _iterm, _dterm, _kp, _ki, _kd, _err, lasterr, lastin, _cent, _outsum, _target, _output;
-    float *myin;     // Pointers to the input, output, and target variables. This creates a
+    float *myin;     // Pointers to the input, output, and target variables. This  creates a
     float *_outmin;
     float *_outmax;
     ctrl _mode = ctrl::manual;

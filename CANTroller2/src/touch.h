@@ -1,6 +1,12 @@
 
 #pragma once
-#include <XPT2046_Touchscreen.h>
+#undef CAPTOUCH  // #define CAPTOUCH if using IPS screen (black PCB), or #undef CAPTOUCH if using the red-PCB screen 
+#ifdef CAPTOUCH
+  #include <Adafruit_FT6206.h>
+  #define SENSITIVITY 40
+#else
+  #include <XPT2046_Touchscreen.h>
+#endif
 #define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
@@ -8,8 +14,15 @@
 #define disp_tuning_lines 11  // Lines of dynamic variables/values in dataset pages 
 class TouchScreen {
 private:
-    XPT2046_Touchscreen _ts;  // 3.5in resistive touch panel on tft lcd
-    bool touch_longpress_valid = true;
+    #ifdef CAPTOUCH
+      Adafruit_FT6206 _ts;
+    #else
+      XPT2046_Touchscreen _ts;  // 3.5in resistive touch panel on tft lcd
+      // These values need to be calibrated to each individual display panel for best accuracy
+      int32_t corners[2][2] = { { 351, 3928 }, { 189, 3950 } };  // [xx/yy][min/max]
+      // Soren's breadboard "" { { 351, 3933 }, { 189, 3950 } };  // [xx/yy][min/max]
+    #endif
+    bool touch_longpress_valid = true, landed_coordinates_valid = true;
     bool touch_now_touched = false;
     int tedit_exponent = 0;
     float tedit = (float)(1 << tedit_exponent);
@@ -29,22 +42,27 @@ private:
     enum touch_lim { tsmin, tsmax };
     int32_t trow, tcol;
     int disp_width, disp_height;
-    int32_t tft_touch[2];
-
-    // These values need to be calibrated to each individual display panel for best accuracy
-    int32_t corners[2][2] = { { 351, 3928 }, { 189, 3950 } };  // [xx/yy][min/max]
-    // Soren's breadboard "" { { 351, 3933 }, { 189, 3950 } };  // [xx/yy][min/max]
+    int32_t tft_touch[2], landed[2];  // landed are the initial coordinates of a touch event, unaffected by dragging
 
     TS_Point touchpoint;
 public:
-    TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts(csPin, irqPin) {}
+    #ifdef CAPTOUCH
+      TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts() {}
+    #else
+      TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts(csPin, irqPin) {}
+    #endif
     int idelta = 0;
     void setup(int width, int height) {
         disp_width = width;
         disp_height = height;
-        printf("touchscreen..\n");
-        _ts.begin();
-        // _ts.setRotation(1); do we need to rotate?
+        printf("Touchscreen..\n");
+        #ifdef CAPTOUCH
+          _ts.begin(SENSITIVITY, &Wire);
+          _ts.setRotation(3);  // rotate -90 degrees to match IPS tft
+        #else
+          _ts.begin();
+          _ts.setRotation(1);  // rotate 90 degrees to match tft
+        #endif
     }
 
     bool touched() {
@@ -70,15 +88,26 @@ public:
             ret = true;
             tedit = (float)(1 << tedit_exponent);
             touchpoint = getPoint();
-            tft_touch[xx] = map(touchpoint.x, corners[xx][tsmin], corners[xx][tsmax], 0, disp_width);
-            tft_touch[yy] = map(touchpoint.y, corners[yy][tsmin], corners[yy][tsmax], 0, disp_height);
+            #ifdef CAPTOUCH
+              tft_touch[xx] = disp_width - touchpoint.x;  // may need to rotate differently 
+              tft_touch[yy] = disp_height - touchpoint.y;  // may need to rotate differently
+            #else
+              tft_touch[xx] = map(touchpoint.x, corners[xx][tsmin], corners[xx][tsmax], 0, disp_width);  // translate resistance to pixels
+              tft_touch[yy] = map(touchpoint.y, corners[yy][tsmin], corners[yy][tsmax], 0, disp_height);  // translate resistance to pixels
+            #endif
             tft_touch[xx] = constrain(tft_touch[xx], 0, disp_width);
             tft_touch[yy] = constrain(tft_touch[yy], 0, disp_height);
             if (!flip_the_screen) { 
                 tft_touch[xx] = disp_width - tft_touch[xx];
                 tft_touch[yy] = disp_height - tft_touch[yy];
             }
+            if (!landed_coordinates_valid) {
+                landed[xx] = tft_touch[xx];
+                landed[yy] = tft_touch[yy];
+                landed_coordinates_valid = true;
+            }               
         }
+        else landed_coordinates_valid = false;
         return ret;
     }
     void update() {
@@ -92,10 +121,10 @@ public:
             touch_longpress_valid = true;
             return;
         }
-        
+        sleep_inactivity_timer.reset();  // evidence of user activity
         tedit = (float)(1 << tedit_exponent);  // Determine value editing rate
-        trow = constrain((tft_touch[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
-        tcol = (tft_touch[xx] - touch_margin_h_pix) / touch_cell_h_pix;
+        trow = constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
+        tcol = (landed[xx] - touch_margin_h_pix) / touch_cell_h_pix;
         // Take appropriate touchscreen actions depending on how we're being touched
         if (tcol == 0 && trow == 0 && !touch_now_touched) {
             if (++datapage >= NUM_DATAPAGES) datapage -= NUM_DATAPAGES;  // Displayed dataset page can also be changed outside of simulator
@@ -142,18 +171,18 @@ public:
                 touch_longpress_valid = false;
             }
             else if (tcol == 3 && trow == 0 && sim.can_sim(sens::basicsw) && !touch_now_touched) basicmodesw = !basicmodesw;
-            else if (tcol == 3 && trow == 1 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(tedit * 0.02); // (+= 25) Pressed the increase brake pressure button
-            else if (tcol == 3 && trow == 2 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(-tedit * 0.02); // (-= 25) Pressed the decrease brake pressure button
-            else if (tcol == 3 && trow == 3 && sim.can_sim(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_human(tedit * 0.0008); // (-= 25) Pressed the decrease brake pressure button
-            else if (tcol == 3 && trow == 4 && sim.can_sim(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_human(-tedit * 0.0008); // (-= 25) Pressed the decrease brake pressure button
-            else if (tcol == 4 && trow == 1 && sim.can_sim(sens::tach) && tach.source() == src::TOUCH) tach.add_human(tedit * 0.2);
-            else if (tcol == 4 && trow == 2 && sim.can_sim(sens::tach) && tach.source() == src::TOUCH) tach.add_human(-tedit * 0.2);
-            else if (tcol == 4 && trow == 3 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], tedit * 0.025, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-            else if (tcol == 4 && trow == 4 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], -tedit * 0.025, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-            else if (tcol == 5 && trow == 1 && sim.can_sim(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human(tedit * 0.003);
-            else if (tcol == 5 && trow == 2 && sim.can_sim(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human(-tedit * 0.003);
-            else if (tcol == 5 && trow == 3 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], tedit * 0.025, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
-            else if (tcol == 5 && trow == 4 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], -tedit * 0.025, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+            else if (tcol == 3 && trow == 1 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(tedit); // (+= 25) Pressed the increase brake pressure button
+            else if (tcol == 3 && trow == 2 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(-tedit); // (-= 25) Pressed the decrease brake pressure button
+            else if (tcol == 3 && trow == 3 && sim.can_sim(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_human(tedit); // (-= 25) Pressed the decrease brake pressure button
+            else if (tcol == 3 && trow == 4 && sim.can_sim(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_human(-tedit); // (-= 25) Pressed the decrease brake pressure button
+            else if (tcol == 4 && trow == 1 && sim.can_sim(sens::tach) && tach.source() == src::TOUCH) tach.add_human(tedit);
+            else if (tcol == 4 && trow == 2 && sim.can_sim(sens::tach) && tach.source() == src::TOUCH) tach.add_human(-tedit);
+            else if (tcol == 4 && trow == 3 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+            else if (tcol == 4 && trow == 4 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], -tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+            else if (tcol == 5 && trow == 1 && sim.can_sim(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human(tedit);
+            else if (tcol == 5 && trow == 2 && sim.can_sim(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human(-tedit);
+            else if (tcol == 5 && trow == 3 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+            else if (tcol == 5 && trow == 4 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], -tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
         }
         // Update the tedit_exponent if needed
         if (tedit_exponent < tedit_exponent_max && (touchHoldTimer.elapsed() > (tedit_exponent + 1) * touchAccelTimer.timeout())) {

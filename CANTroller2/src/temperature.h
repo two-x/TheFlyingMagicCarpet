@@ -183,7 +183,7 @@ private:
 public:
     TemperatureSensorManager(uint8_t _onewire_pin) : one_wire_bus(_onewire_pin), tempsensebus(&one_wire_bus),  last_read_request_time(0), sensor_index(0), _state(State::CONVERTING) {}
     void setup() {
-        printf("Setting up Temperature Sensors.. ");
+        printf("Temperature sensors..");
         
         tempsensebus.setWaitForConversion(false);
         tempsensebus.setCheckForConversion(true);
@@ -298,7 +298,7 @@ public:
         TemperatureSensor* sens = get_sensor(locat);  // ambient
         return (bool)sens; 
     }
-    int locint(loc locat) {
+    int locint(loc locat = loc::NUM_LOCATIONS) {
         return static_cast<int>(locat);
     }
     int errclass(loc locat) {

@@ -9,11 +9,11 @@ class I2C {
   public:
     I2C(uint8_t sda_pin_arg, uint8_t scl_pin_arg) : _sda_pin(sda_pin_arg), _scl_pin(scl_pin_arg) {}
     void setup() {
-        printf("Init i2c bus and devices.."); delay(1);  // Attempt to force print to happen before init
+        printf("I2C bus"); delay(1);  // Attempt to force print to happen before init
         scanTimer.reset();
         Wire.begin(_sda_pin, _scl_pin);  // I2c bus needed for airflow sensor
         byte error, address;
-        printf(" scanning ...");
+        printf(" scan..");
         _devicecount = 0;
         for (address = 1; address < 127; address++ ) {
             Wire.beginTransmission(address);
@@ -26,7 +26,7 @@ class I2C {
         }
         if (scanTimer.elapsed() > 5000000) printf(" timeout & fail bus scan.");
         if (_devicecount == 0) printf(" no devices found.");
-        printf(" done\n");
+        printf(" ..done\n");
     }
     bool device_detected(uint8_t addr) {
         for (int32_t i=0; i < _devicecount; i++) if (_addrs[i] == addr) return true;
@@ -142,32 +142,46 @@ float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
 
 // LightingBox - object to manage 12c communications link to our lighting box
 // Our protocol is: 1st nibble of 1st byte contains 4-bit command/request code. The 2nd nibble and any additional bytes contain data, as required by the code
-// codes: 0x0R = entered runmode given by R (no additional bytes)
-// code: 0x1H,0xLL = speedometer value update. 12-bit value contained in HLL is speed in hundredths-of-mph
+// code: 0x0F = status flags. F bits: 0=syspower, 1=panicstop, 2=warning, 3=alarm
+// code: 0x1R = entered runmode given by R (no additional bytes)
+// code: 0x2H,0xLL = speedometer value update. 12-bit value contained in HLL is speed in hundredths-of-mph
 class LightingBox {  // represents the lighting controller i2c slave endpoint
   private:
-    static constexpr uint32_t send_rate_us = 250000;
-    Timer send_timer;
+    Timer send_timer = Timer(250000);
     int runmode_last = SHUTDOWN;
     uint16_t speed_last;
+    uint8_t status_nibble_last;
+    // DiagRuntime* diag;
   public:
     static constexpr uint8_t addr = 0x69;
-    LightingBox() {}
+    LightingBox() {}  // LightingBox(DiagRuntime* _diag) : diag(_diag) {}
     void setup() {
-        printf("Open comm to lighting box..\n");
-        send_timer.set(send_rate_us);
+        printf("Lighting box serial comm..\n");
     }
-    bool sendrunmode(int runmode) {
-        if (runmode == runmode_last) return false;
-        uint8_t byt = (uint8_t)(runmode & 0x0f);  // command template for runmode update
+    bool sendstatus() {
+        uint8_t byt = 0x00;  // command template for runmode update
+        uint8_t warning = 0;  // (diag->worst_sensor(3) != _None);
+        uint8_t alarm = 0;  // (diag->worst_sensor(4) != _None);
+        byt |= (uint8_t)syspower | (uint8_t)(panicstop << 1) | (uint8_t)(warning << 2) | (alarm << 3);  // insert status bits nibble
+        if (byt == status_nibble_last) return false;
         Wire.beginTransmission(addr);
         Wire.write(byt);
+        Wire.endTransmission(addr);
+        status_nibble_last = byt;
+        return true;
+    }
+    bool sendrunmode(int runmode) {
+        uint8_t byt = 0x10;  // command template for runmode update
+        if (runmode == runmode_last) return false;
+        byt |= (uint8_t)(runmode & 0x0f);  // insert runmode in 2nd nibble
         Wire.beginTransmission(addr);
+        Wire.write(byt);
+        Wire.endTransmission(addr);
         runmode_last = runmode;
         return true;
     }
     bool sendspeed(float _speed) {
-        uint8_t byt = 0x10;  // command template for speed update
+        uint8_t byt = 0x20;  // command template for speed update
         uint16_t speed = (uint16_t)(_speed * 100);
         if (speed == speed_last) return false;
         byt |= ((speed >> 8) & 0x0f);
@@ -182,7 +196,8 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     void update(int runmode, float speed) {
         bool sent = false;
         if (send_timer.expireset()) {
-            sent = sendrunmode(runmode);
+            sent = sendstatus();
+            sent |= sendrunmode(runmode);
             if (!sent) sent = sendspeed(speed);
         }
     }

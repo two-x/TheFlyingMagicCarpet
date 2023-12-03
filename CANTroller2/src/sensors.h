@@ -213,7 +213,8 @@ class Transducer : public Device {
     // Multiplier and adder values to plug in for unit conversion math
     NATIVE_T _val_raw;  // Keep track of the most recent unfiltered and unconstrained native value, for monitoring and diag purposes
     float _m_factor = 1.0;
-    float _b_offset = 0.0;  
+    float _b_offset = 0.0;
+    float _zerovalue = NAN;  // value to return from to_native conversion when val is zero (needed for speedometer)
     bool _invert = false;  // Flag to indicated if unit conversion math should multiply or divide
     TransducerDirection dir = TransducerDirection::FWD; // NOTE: what is this for, exactly?
     
@@ -228,13 +229,13 @@ class Transducer : public Device {
                 ret = min_f + max_f - _b_offset - _m_factor * arg_val_f;
             }
             else ret = _b_offset + _m_factor * arg_val_f;
-        } else if (arg_val_f) { // NOTE: isn't 0.0 a valid value tho?  Soren: Only if the pulley can rotate all the way around in under 1 planck time
+        } else if (std::abs(arg_val_f) > 0.000001) { // NOTE: isn't 0.0 a valid value tho?  Soren: Only if the pulley can rotate all the way around in under 1 planck time
             if (dir == TransducerDirection::REV) {
                 ret = min_f + max_f - _b_offset - _m_factor / arg_val_f;
             }
             else ret = _b_offset + _m_factor / arg_val_f;
         } else {
-            printf ("err: from_native unit conversion divide by zero attempt. max = %f\n", max_f);
+            printf ("err: from_native conversion div/zero attempt. max=%5.2f, d=%d, i=%d, v=%5.2f, m=%5.2f, b=%5.2f\n", max_f, dir, _invert, arg_val_f, _m_factor, _b_offset);
             ret = max_f;  // Best return given division would be infinite
         }
         return static_cast<HUMAN_T>(ret);
@@ -248,12 +249,14 @@ class Transducer : public Device {
         if (dir == TransducerDirection::REV) {
             arg_val_f = min_f + max_f - arg_val_f;
         }
-        if (_invert && (arg_val_f - _b_offset)) {  // risk here of floating point error comparing near-zero values
+        if (_invert && std::abs(arg_val_f - _b_offset) > 0.000001) {  // trying to dodge risk of floating point error comparing near-zero values
             ret = _m_factor / (arg_val_f - _b_offset);
-        } else if (!_invert && _m_factor) {  // risk here of floating point error comparing near-zero values
+        } else if (!_invert && std::abs(_m_factor) > 0.000001) {  // risk here of floating point error comparing near-zero values
             ret = (arg_val_f - _b_offset) / _m_factor;
+        } else if (!std::isnan(_zerovalue)) {
+            ret = _zerovalue;
         } else {
-            printf ("err: to_native unit conversion divide by zero attempt. max = %f\n", max_f);
+            printf ("err: to_native conversion div/zero attempt. max=%5.2f, d=%d, i=%d, v=%5.2f, m=%5.2f, b=%5.2f\n", max_f, dir, _invert, arg_val_f, _m_factor, _b_offset);
             ret = max_f;  // Best return given division would be infinite
         }
         return static_cast<NATIVE_T>(ret);
@@ -348,8 +351,9 @@ class Transducer : public Device {
         return false;
     }
     bool add_human(HUMAN_T arg_add_human) {
-        _val_raw += to_native(arg_add_human);
-        if (_human.add(arg_add_human)) {
+        HUMAN_T delta = (HUMAN_T)(arg_add_human * tuning_scalar * (max_human() - min_human()));
+        _val_raw += to_native(delta);
+        if (_human.add(delta)) {
             _native.set(to_native(_human.val()));
             return true;
         }
@@ -493,16 +497,16 @@ class AirVeloSensor : public I2CSensor {
     String _short_name = "airvel";
 
     void setup() {
-        printf("%s..\n", this->_long_name.c_str());
+        printf("%s..", this->_long_name.c_str());
         I2CSensor::setup();
-        printf("  Sensor %sdetected.. ", _detected ? "" : "not ");
+        printf(" %sdetected", _detected ? "" : "not ");
         if (_detected) {
             if (_sensor.begin() == false) {
-                printf("but not responding\n");  // Begin communication with air flow sensor) over I2C 
+                printf(", not responding\n");  // Begin communication with air flow sensor) over I2C 
                 set_source(src::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
             } else {
                 _sensor.setRange(AIRFLOW_RANGE_15_MPS);
-                printf ("and responding properly\n");
+                printf (" and responding properly\n");
             }
         } else {
             printf("\n");
@@ -556,15 +560,15 @@ class MAPSensor : public I2CSensor {
     String _short_name = "map";
 
     void setup() {
-        printf("%s..\n", this->_long_name.c_str());
+        printf("%s..", this->_long_name.c_str());
         I2CSensor::setup();
-        printf("  sensor %sdetected.. ", _detected ? "" : "not ");
+        printf(" %sdetected", _detected ? "" : "not ");
         if (_detected) {
             if (_sensor.begin() == false) {
-                printf("but not responding\n");  // Begin communication with air flow sensor) over I2C 
+                printf(", not responding\n");  // Begin communication with air flow sensor) over I2C 
                 set_source(src::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
             } else {
-                printf("and reading %f atm manifold pressure\n", _sensor.readPressure(ATM));
+                printf(" and reading %f atm\n", _sensor.readPressure(ATM));
                 // printf("  Sensor responding properly\n");
             }
         } else {
@@ -670,7 +674,6 @@ class LiPoBatt : public AnalogSensor<int32_t, float> {
     float op_min_v() { return _op_min_v; }
     float op_max_v() { return _op_max_v; }
 };
-
 // PressureSensor represents a brake fluid pressure sensor.
 // It extends AnalogSensor to handle reading an analog pin
 // and converting the ADC value to a pressure value in PSI.
@@ -681,7 +684,7 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     static constexpr int32_t op_max_adc = 2080; // ~208psi by this math - "Maximum" braking
     // static constexpr int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
     static constexpr float initial_psi_per_adc = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - op_min_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
-    static constexpr float initial_ema_alpha = 0.1;
+    static constexpr float initial_ema_alpha = 0.15;
     static constexpr float initial_offset = 0.0;
     static constexpr bool initial_invert = false;
     static constexpr float hold_initial_psi = 45;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
@@ -735,7 +738,7 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     static constexpr float margin_in = .01;  // TODO: add description
     static constexpr float initial_in_per_adc = 3.3 * 10000.0 / (3.3 * adcrange_adc * 557); // 3.3 v * 10k ohm * 1/5 1/v * 1/4095 1/adc * 1/557 in/ohm = 0.0029 in/adc
     static constexpr float initial_zeropoint_in = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
-    static constexpr float initial_ema_alpha = 0.25;
+    static constexpr float initial_ema_alpha = 0.35;
     static constexpr bool initial_invert = false;
     static constexpr float initial_offset = 0.0;
     String _long_name = "Brake position sensor";
@@ -850,6 +853,7 @@ class Tachometer : public PulseSensor<float> {
     static constexpr float _initial_rpm = 50.0; // Current engine speed, raw value converted to rpm (in rpm)
     static constexpr float _initial_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
     static constexpr bool _initial_invert = true;
+    static constexpr int64_t _initial_zerovalue = 999999;
     static constexpr float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
   public:
     float _govern_rpm = _redline_rpm;    
@@ -858,6 +862,7 @@ class Tachometer : public PulseSensor<float> {
         _m_factor = _initial_rpm_per_rpus;
         _invert = _initial_invert;
         _negative = true;
+        _zerovalue = _initial_zerovalue;
         set_human_limits(0.0, _redline_rpm);
         set_native_limits(0.0, _stop_timeout_us);
         set_human(_initial_rpm);
@@ -895,6 +900,7 @@ class Speedometer : public PulseSensor<float> {
     static constexpr float _initial_redline_mph = 15.0; // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
     static constexpr float _initial_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 pulrot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 whlrot/pulrot * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
     static constexpr bool _initial_invert = true;
+    static constexpr int64_t _initial_zerovalue = 999999;
     static constexpr float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
     float _govern_mph, _idle_mph;
   public:
@@ -902,6 +908,7 @@ class Speedometer : public PulseSensor<float> {
         _ema_alpha = _initial_ema_alpha;
         _m_factor = _initial_mph_per_rpus;
         _invert = _initial_invert;
+        _zerovalue = _initial_zerovalue;
         set_human_limits(_min_mph, _initial_redline_mph);
         set_native_limits(0.0, _stop_timeout_us);
         set_human(_initial_mph);
@@ -1013,8 +1020,8 @@ class OutToggle : public Toggle {
 // NOTE: if devices.h gets to be too long, we can (and maybe just should) move this to a separate file, it's not really a device...
 
 // This enum class represent the components which can be simulated (sensor). It's a uint8_t type under the covers, so it can be used as an index
-typedef uint8_t opt_t;
-enum class sens : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airvelo, mapsens, engtemp, mulebatt, lipobatt, starter, basicsw, NUM_SENSORS };  //, ignition, syspower };  // , NUM_SENSORS, err_flag };
+// typedef uint8_t opt_t;
+enum class sens : int { none=0, joy, pressure, brkpos, speedo, tach, airvelo, mapsens, engtemp, mulebatt, starter, basicsw, NUM_SENSORS };  //, ignition, syspower };  // , NUM_SENSORS, err_flag };
 
 // Simulator manages the source handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
 // NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use sources,
@@ -1294,7 +1301,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         calc_params();
     }
     void setup() {
-        printf("Init hotrc .. starting rmt..\n");
+        printf("Hotrc init.. Starting rmt..\n");
         for (int axis=HORZ; axis<=CH4; axis++) rmt[axis].init();  // Set up 4 RMT receivers, one per channel
         failsafe_timer.set(failsafe_timeout); 
     }
@@ -1335,7 +1342,10 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         for (int8_t chan = CH3; chan <= CH4; chan++) {
             us[chan][RAW] = (int32_t)(rmt[chan].readPulseWidth(true));
             sw[chan] = (us[chan][RAW] <= us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  us[CH3][CENT]
-            if ((sw[chan] != sw[chan-2]) && !_radiolost) _sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false. Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
+            if ((sw[chan] != sw[chan-2]) && !_radiolost) {
+                _sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false. Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
+                sleep_inactivity_timer.reset();  // evidence of user activity
+            }
             sw[chan-2] = sw[chan];  // chan-2 index being used to store previous values of index chan
         }
     }
@@ -1351,6 +1361,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
             if (_radiolost || (ema_us[axis] > us[axis][DBBOT] && ema_us[axis] < us[axis][DBTOP]))
                 pc[axis][FILT] = pc[axis][CENT];  // if within the deadband set joy_axis_filt to CENTer value
+            else sleep_inactivity_timer.reset();  // evidence of user activity
         }
     }
     bool radiolost_update() {

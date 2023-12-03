@@ -26,8 +26,8 @@ class NeopixelStrip {
     float desat_of_ten = 0.0;  // out of 10.0
     uint8_t neo_master_brightness = 0xff;
     float correction[3] = { 1.0, 0.9, 1.0 };  // Applied to brightness of rgb elements
-    uint32_t neo_fade_timeout_us = 380000;
-    Timer neoFadeTimer, neoHeartbeatTimer;
+    static constexpr uint32_t neo_fade_timeout_us = 380000;
+    Timer neoFadeTimer = Timer(neo_fade_timeout_us), neoHeartbeatTimer;
     bool neo_heartbeat = false;
     bool heartcolor_change = true;  // , heartcolor_overridden = false;
     int pin = -1;
@@ -82,7 +82,7 @@ class NeopixelStrip {
     bool newIdiotLight(uint _idiot, uint16_t color565, bool startboolstate = 0);
     void setBoolState(uint _idiot, bool state);
     void setflash(uint _idiot, uint8_t count, uint8_t pulseh=1, uint8_t pulsel=1, int32_t onbrit=-1, int32_t color=0xffffff);
-    void update(int16_t heart_color, bool blackout = false);
+    void update(int16_t heart_color);
     void enable_flashdemo(bool ena);
     uint32_t idiot_neo_color(uint _idiot);
 };
@@ -173,7 +173,7 @@ void NeopixelStrip::setup(bool viewcontext) {
     neoobj.Begin();
     heartbeat_brightness = brightlev[context][B_LO];
     neoHeartbeatTimer.set(heartbeat_ekg_us[3]);
-    neoFadeTimer.set((int64_t)neo_fade_timeout_us);
+    neoFadeTimer.reset();
     setbright(neobright);
     setdesaturation(neodesat);
     heartbeat_ena(true);
@@ -306,13 +306,13 @@ void NeopixelStrip::update_idiot(uint32_t _idiot) {
     if (!fset[_idiot][fcount]) cidiot[_idiot][cnow] = newnow;
     else cidiot[_idiot][cnow] = fevpop(_idiot, nowepoch) ? cidiot[_idiot][cflash] : newnow;
 }
-void NeopixelStrip::update(int16_t heart_color, bool blackout) {
+void NeopixelStrip::update(int16_t heart_color) {
     set_heartcolor(heart_color);
     heartbeat_update();  // Update our beating heart
     nowtime_us = (uint32_t)flashtimer.elapsed();
     nowepoch = nowtime_us / fquantum_us;
     for (int32_t i=0; i<idiotcount; i++) {
-        if (blackout) cidiot[i][cnow] = colortype(0);
+        if (!syspower) cidiot[i][cnow] = colortype(0);
         else update_idiot(i);
     }
     refresh();

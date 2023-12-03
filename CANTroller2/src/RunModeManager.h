@@ -4,10 +4,8 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     int _joydir;
     float cruise_ctrl_extent_pc, adjustpoint;       // During cruise adjustments, saves farthest trigger position read
     bool cruise_trigger_released = false;
-    static const uint32_t gesture_flytimeout_us = 1250000;         // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
-    static const uint32_t motor_park_timeout_us = 4000000;         // Timeout when parking motors if they don't park for whatever reason (in us)
-    static const uint32_t sleep_inactivity_timeout_us = 180000000; // How long to wait around in shutdown mode before going to asleep mode (in us)
-    Timer gestureFlyTimer, cruiseDeltaTimer, pwrup_timer, motor_park_timer, sleep_inactivity_timer;
+    Timer gestureFlyTimer = Timer(1250000);  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
+    Timer cruiseDeltaTimer, pwrup_timer = Timer(500000), motor_park_timer = Timer(4000000);  // Timeout when parking motors if they don't park for whatever reason (in us)
     uint32_t pwrup_timeout = 500000;
     Encoder* encoder;
     Display* display;
@@ -20,8 +18,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     RunModeManager(Display* _display, Encoder* _encoder) {
         display = _display;
         encoder = _encoder;
-        motor_park_timer.set(motor_park_timeout_us);
-        sleep_inactivity_timer.set(sleep_inactivity_timeout_us);
     }
     int mode_logic() {
         updateMode(); // Update the current mode if needed, this also sets we_just_switched_modes
@@ -68,7 +64,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         int cmd = _cmd;
         if (park_the_motors) {
             bool brake_parked = brkpos.parked();
-            bool gas_parked = ((std::abs(gas.pc_to_nat(gas.pc[OUT]) - gas.nat[PARKED]) < 1) && gas.servo_delay_timer.expired());
+            bool gas_parked = ((std::abs(gas.pc_to_si(gas.pc[OUT]) - gas.si[PARKED]) < 1) && gas.servo_delay_timer.expired());
             if ((brake_parked && gas_parked) || motor_park_timer.expired()) cmd = REQ_OFF;
         }
         if (cmd == REQ_TOG) cmd = !park_the_motors;
@@ -99,7 +95,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
     void cleanup_state_variables() {
         if (oldmode == BASIC) park_motors(REQ_OFF);
-        else if (oldmode == ASLEEP) powering_up = false;
+        else if (oldmode == ASLEEP);
         else if (oldmode == SHUTDOWN) {
             autostop(REQ_OFF);
             park_motors(REQ_OFF);
@@ -113,10 +109,13 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         else if (oldmode == FLY) car_hasnt_moved = false;
         else if (oldmode == CRUISE) cruise_adjusting = false;
-        else if (oldmode == CAL) cal_pot_gasservo_ready = cal_pot_gasservo_mode = cal_joyvert_brkmotor_mode = false;
+        else if (oldmode == CAL) cal_gasmode = cal_gasmode_ready = cal_gasmode_request = cal_brakemode = false;
     }
     void run_basicMode() { // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
-        if (we_just_switched_modes) park_motors(REQ_ON);  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
+        if (we_just_switched_modes) {
+            park_motors(REQ_ON);  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
+            powering_up = false;  // to cover unlikely edge case where basic mode switch is enabled during wakeup from asleep mode
+        }
         else if (park_the_motors) park_motors();  // Update motor parking until finished
         if (!basicmodesw && !tach.engine_stopped()) mode = speedo.car_stopped() ? HOLD : FLY;  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
     }
@@ -140,8 +139,8 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_shutdownMode() { // In shutdown mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.
         if (we_just_switched_modes) {              
             gas.idlectrl.goto_idle();  //  Release the throttle 
-            shutdown_incomplete = true;
-            calmode_request = false;
+            shutdown_incomplete = !(powering_up);
+            powering_up = calmode_request = false;
             sleep_request = REQ_NA;
             park_motors(REQ_OFF);  // stop any in-progress parking
             if (!speedo.car_stopped()) autostop(REQ_ON);  // if car is moving begin autostopping
@@ -198,11 +197,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             gas.pid.set_target(tach.filt());  // initialize pid output (rpm target) to current rpm  (for PID_SUSPEND_FLY mode)
             gas.cruise_target_pc = gas.pc[OUT];  //  set target throttle angle to current throttle angle  (for THROTTLE_ANGLE/THROTTLE_DELTA modes)
             cruise_adjusting = cruise_trigger_released = false;  // in case trigger is being pulled as cruise mode is entered, the ability to adjust is only unlocked after the trigger is subsequently released to the center
-            gestureFlyTimer.set(gesture_flytimeout_us);  // initialize brake-trigger timer
+            gestureFlyTimer.reset();  // initialize brake-trigger timer
         }
         _joydir = hotrc.joydir(VERT);
         if (_joydir == JOY_CENT) {
-            if (cruise_adjusting) gas.cruisepid.set_target(speedo.filt());
             cruise_adjusting = false;
             cruise_trigger_released = true;
             cruise_ctrl_extent_pc = hotrc.pc[VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
@@ -214,15 +212,14 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
                 if (cruise_adjusting) gas.cruise_target_pc += _joydir * ctrlratio * cruise_delta_max_pc_per_s * cruiseDeltaTimer.elapsed() / 1000000.0;
                 cruiseDeltaTimer.reset(); 
             }
-            else if (std::abs(hotrc.pc[VERT][FILT]) >= cruise_ctrl_extent_pc) {  // to avoid the adjustments following the trigger back to center when released
-                if (cruise_setpoint_mode == THROTTLE_ANGLE) {
-                    if (!cruise_adjusting) adjustpoint = gas.cruise_target_pc;  // When beginning adjustment, save current throttle pulse value to use as adjustment endpoint
-                    gas.cruise_target_pc = adjustpoint + ctrlratio * cruise_angle_attenuator * (((_joydir == JOY_UP) ? 100.0 : 0.0) - adjustpoint);
-                }
-                else if (cruise_setpoint_mode == PID_SUSPEND_FLY) {
-                    if (!cruise_adjusting) adjustpoint = tach.filt();
-                    gas.pid.set_target(adjustpoint + ctrlratio * (((_joydir == JOY_UP) ? tach.govern_rpm() : gas.idlectrl.idle_rpm) - adjustpoint));
-                }
+            else if (cruise_setpoint_mode == PID_SUSPEND_FLY) {
+                if (!cruise_adjusting) adjustpoint = tach.filt();
+                gas.pid.set_target(adjustpoint + ctrlratio * (((_joydir == JOY_UP) ? tach.govern_rpm() : gas.idlectrl.idle_rpm) - adjustpoint));
+                gas.cruisepid.set_target(speedo.filt());
+            }
+            else if (cruise_setpoint_mode == THROTTLE_ANGLE && std::abs(hotrc.pc[VERT][FILT]) >= cruise_ctrl_extent_pc) {  // to avoid the adjustments following the trigger back to center when released
+                if (!cruise_adjusting) adjustpoint = gas.cruise_target_pc;  // When beginning adjustment, save current throttle pulse value to use as adjustment endpoint
+                gas.cruise_target_pc = adjustpoint + ctrlratio * cruise_angle_attenuator * (((_joydir == JOY_UP) ? 100.0 : 0.0) - adjustpoint);
                 cruise_ctrl_extent_pc = std::abs(hotrc.pc[VERT][FILT]);
             }
             gas.cruise_target_pc = constrain(gas.cruise_target_pc, 0.0, 100.0);
@@ -236,10 +233,12 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (speedo.car_stopped()) mode = (_joydir == JOY_UP) ? FLY : HOLD;  // In case we slam into camp Q woofer stack, get out of cruise mode.
     }
     void run_calMode() {  // Calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration. Don't use it unless you know how.
-        if (we_just_switched_modes) calmode_request = cal_pot_gasservo_mode = cal_pot_gasservo_ready = cal_joyvert_brkmotor_mode = false;
+        if (we_just_switched_modes) calmode_request = cal_gasmode = cal_gasmode_ready = cal_brakemode = cal_gasmode_request = false;
         else if (calmode_request) mode = SHUTDOWN;
         float temp = pot.mapToRange(0.0, 180.0);
-        cal_pot_gasservo_ready = (temp >= gas.nat[PARKED] && temp <= gas.nat[OPMAX]);
+        cal_gasmode_ready = (temp >= gas.si[PARKED] && temp <= gas.si[OPMAX]);
+        if (!cal_gasmode_request) cal_gasmode = false;
+        else if (cal_gasmode_ready) cal_gasmode = true;
     }
 };
 // Here are the different runmodes documented

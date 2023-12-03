@@ -3,7 +3,7 @@
 #include "Arduino.h"
 // pin assignments  ESP32-S3-DevkitC series
 #define  encoder_sw_pin  0 // button0/strap-1  // Input, Rotary encoder push switch, for the UI. active low (needs pullup). Also the esp "Boot" button does the same thing
-#define    lipobatt_pin  1 // adc1ch0          // Analog input, LiPo cell voltage, full scale is 4.8V
+#define        free_pin  1 // adc1ch0          // Available
 #define   encoder_b_pin  2 // adc1ch1          // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define      tft_dc_pin  3 // adc1ch2/strap-X  // Output, Assert when sending data to display chip to indicate commands vs. screen data - ! pin is also defined in tft_setup.h
 #define    mulebatt_pin  4 // adc1ch3          // Analog input, mule battery voltage sense, full scale is 16V
@@ -75,19 +75,28 @@ enum motor_val : int { PARKED=1, OUT=3, GOVERN=4 , ABSMIN=5, ABSMAX=6 };
 enum stop_val : int { STOP=1 };
 enum steer_val : int { SAFE=1 };
 enum size_enums : int { NUM_AXES=2, NUM_CHANS=4, NUM_MOTORVALS=7, NUM_VALUS=8 };
-enum joydirs : int { JOY_RT=-2, JOY_DN=-1, JOY_CENT=0, JOY_UP=1, JOY_LT=2 };
+enum joydirs : int { JOY_RT=-2, JOY_DN=-1, JOY_CENT=0, JOY_UP=1, JOY_LT=2, JOY_PLUS=3, JOY_MINUS=4 };
 enum runmode : int { BASIC, ASLEEP, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, NUM_RUNMODES };
 enum req : int { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
 enum cruise_modes : int { PID_SUSPEND_FLY, THROTTLE_ANGLE, THROTTLE_DELTA };
 enum sw_presses : int { NONE, SHORT, LONG }; // used by encoder sw and button algorithms
-enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
-enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 }; // Possible sources of gas, brake, steering commands
-enum brake_pids : int { PRESPID, POSNPID, NUM_BRAKEPIDS };
+enum brake_pids : int { POSNPID=0, PRESPID=1, NUM_BRAKEPIDS=2 };
 enum tunerstuff : int { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum datapages : int { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
+enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
+enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 }; // Possible sources of gas, brake, steering commands
+enum telemetry_float : int { 
+    _HotRCHorz, _HotRCVert, _Pressure, _BrakePos, _Speedo, _Tach,  _MuleBatt, _GasServo, _BrakeMotor, _SteerMotor,  // 10 per line
+    _TempEng, _TempWhFL, _TempWhFR, _TempWhRL, _TempWhRR, _TempAmb, _AirVelo, _MAP, _MAF, _Pot,
+    NumTelemetryFloats, _None
+};
+enum telemetry_bool : int {
+    _Ignition, _PanicStop, _SysPower, _HotRCCh3, _StarterDr, _StarterExt, _HotRCCh4, _BasicSw, NumTelemetryBools
+};
+enum err_type : int { LOST=0, RANGE=1, CALIB=2, WARN=3, CRIT=4, INFO=5, NUM_ERR_TYPES=6 };
 
 // global configuration settings
-bool brake_hybrid_pid = false;
+bool brake_hybrid_pid = true;
 int brake_default_pid = PRESPID;
 bool starter_signal_support = true;
 bool remote_start_support = true;
@@ -109,8 +118,6 @@ bool wifi_client_mode = false;       // Should wifi be in client or access point
 
 // global tunable variables
 uint32_t looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. Set to 0 linefeeds all prints
-uint32_t starter_timeout_us = 5000000;      // How long to run starter before automatically stopping it
-uint32_t panic_relax_timeout_us = 20000000; // How long to panic before getting over it and moving on
 float flycruise_vert_margin_pc = 0.3;       // Margin of error for determining hard brake value for dropping out of cruise mode
 int cruise_setpoint_mode = THROTTLE_DELTA;
 int32_t cruise_delta_max_pc_per_s = 16;  // (in THROTTLE_DELTA mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
@@ -129,27 +136,38 @@ int16_t touch_pt[4] = { 160, 120, 2230, 2130 };
 bool flashdemo = false;
 int32_t neobright = 10;   // default for us dim/brighten the neopixels
 int32_t neodesat = 0;     // default for lets us de/saturate the neopixels
+float tuning_scalar = 0.00025;  // during editing, each edit changes value by this fraction of the range
 
-// non-tunable vlaues. probably these belong with their related code
+// non-tunable values. probably these belong with their related code
 bool running_on_devboard = false;       // will overwrite with value read thru pull resistor on tx pin at boot
 bool shutdown_incomplete = true;        // minor state variable for shutdown mode - Shutdown mode has not completed its work and can't yet stop activity
 bool park_the_motors = false;           // Indicates we should release the brake & gas so the pedals can be used manually without interference
 bool cruise_adjusting = false;
-bool cal_joyvert_brkmotor_mode = false; // Allows direct control of brake motor using controller vert
-bool cal_pot_gasservo_ready = false;    // Whether pot is in valid range
-bool cal_pot_gasservo_mode = false;     // Allows direct control of gas servo using pot. First requires pot to be in valid position before mode is entered
+bool cal_brakemode = false;             // Allows direct control of brake motor using controller vert
+bool cal_gasmode_ready = false;         // Whether pot is in valid range
+bool cal_gasmode = false;               // Allows direct control of gas servo using pot. First requires pot to be in valid position before mode is entered
+bool cal_gasmode_request = false;
 bool autostopping = false;              // true when in process of stopping the car (hold or shutdown modes)
 bool car_hasnt_moved = false;           // minor state variable for fly mode - Whether car has moved at all since entering fly mode
 bool powering_up = false;               // minor state variable for asleep mode
 bool calmode_request = false;
 bool flycruise_toggle_request = false;
-int sleep_request = REQ_NA;
 bool screensaver = false;               // Can enable experiment with animated screen draws
-uint16_t heartbeat_override_color = 0x0000;
 int tunctrl = OFF, tunctrl_last = OFF;
 int datapage = PG_RUN, datapage_last = PG_TEMP;  // Which of the dataset pages is currently displayed and available to edit?
 int sel_val = 0, sel_val_last = 0;               // In the real time tuning UI, which of the editable values is selected. -1 for none 
-bool syspower = HIGH;  // Set by handler only. Reflects current state of the signal
+bool syspower = HIGH;                   // Set by handler only. Reflects current state of the signal
+bool starter = LOW;                     // Set by handler only. Reflects current state of starter signal (does not indicate source)
+bool starter_drive = false;             // Set by handler only. High when we're driving starter, otherwise starter is an input
+bool ignition = LOW;                    // Set by handler only. Reflects current state of the signal
+bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
+bool basicmodesw = LOW;
+int starter_request = REQ_NA;
+int ignition_request = REQ_NA;
+int panicstop_request = REQ_ON;         // On powerup we assume the code just rebooted during a drive, because for all we know it could have 
+int sleep_request = REQ_NA;
+float maf_gps = 0;                      // Manifold mass airflow in grams per second
+uint16_t heartbeat_override_color = 0x0000;
 
 // fast macros
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays
@@ -220,17 +238,17 @@ void ema_filt(RAW_T _raw, FILT_T* _filt, float _alpha) {
 template <typename T>
 T adj_val(T variable, T modify, T low_limit, T high_limit) {
     T oldval = variable;
-    variable += modify;
+    variable += (T)(modify * tuning_scalar * (high_limit-low_limit));
     return variable < low_limit ? low_limit : (variable > high_limit ? high_limit : variable);
 }
 bool adj_val(int32_t *variable, int32_t modify, int32_t low_limit, int32_t high_limit) { // sets an int reference to new val constrained to given range
     int32_t oldval = *variable;
-    *variable = adj_val(*variable, modify, low_limit, high_limit);
+    *variable = adj_val(*variable, (int32_t)(modify * tuning_scalar * (high_limit-low_limit)), low_limit, high_limit);
     return (*variable != oldval);
 }
 bool adj_val(float *variable, float modify, float low_limit, float high_limit) { // sets an int reference to new val constrained to given range
     float oldval = *variable;
-    *variable = adj_val(*variable, modify, low_limit, high_limit);
+    *variable = adj_val(*variable, modify * tuning_scalar * (high_limit-low_limit), low_limit, high_limit);
     return (*variable != oldval);
 }
 bool adj_bool(bool val, int32_t delta) { return delta != 0 ? delta > 0 : val; } // returns 1 on delta=1, 0 on delta=-1, or val on delta=0
@@ -274,8 +292,7 @@ class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regul
     }
     bool IRAM_ATTR expired() { return esp_timer_get_time() >= end; }
     int64_t IRAM_ATTR elapsed() { return esp_timer_get_time() + timeout_us - end; }
-    int64_t timeout() { return timeout_us; }
-    
+    int64_t timeout() { return timeout_us; }    
     // never finished writing this ...
     //
     // uint32_t IRAM_ATTR expireset() {  // Like expired() but immediately resets if expired
@@ -287,3 +304,6 @@ class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regul
     //     return true;
     // }
 };
+Timer sleep_inactivity_timer(180000000);
+Timer starterTimer(5000000);  // If remotely-started starting event is left on for this long, end it automatically  
+Timer panicTimer(15000000);  // How long should a panic stop last?  we can't stay mad forever
