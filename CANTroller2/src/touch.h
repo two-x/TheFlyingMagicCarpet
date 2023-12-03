@@ -92,7 +92,7 @@ public:
             touch_longpress_valid = true;
             return;
         }
-        
+        sleep_inactivity_timer.reset();  // evidence of user activity
         tedit = (float)(1 << tedit_exponent);  // Determine value editing rate
         trow = constrain((tft_touch[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
         tcol = (tft_touch[xx] - touch_margin_h_pix) / touch_cell_h_pix;

@@ -82,12 +82,12 @@ enum cruise_modes : int { PID_SUSPEND_FLY, THROTTLE_ANGLE, THROTTLE_DELTA };
 enum sw_presses : int { NONE, SHORT, LONG }; // used by encoder sw and button algorithms
 enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
 enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 }; // Possible sources of gas, brake, steering commands
-enum brake_pids : int { PRESPID, POSNPID, NUM_BRAKEPIDS };
+enum brake_pids : int { POSNPID=0, PRESPID=1, NUM_BRAKEPIDS=2 };
 enum tunerstuff : int { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum datapages : int { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
 
 // global configuration settings
-bool brake_hybrid_pid = false;
+bool brake_hybrid_pid = true;
 int brake_default_pid = PRESPID;
 bool starter_signal_support = true;
 bool remote_start_support = true;
@@ -274,8 +274,7 @@ class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regul
     }
     bool IRAM_ATTR expired() { return esp_timer_get_time() >= end; }
     int64_t IRAM_ATTR elapsed() { return esp_timer_get_time() + timeout_us - end; }
-    int64_t timeout() { return timeout_us; }
-    
+    int64_t timeout() { return timeout_us; }    
     // never finished writing this ...
     //
     // uint32_t IRAM_ATTR expireset() {  // Like expired() but immediately resets if expired
@@ -287,3 +286,4 @@ class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regul
     //     return true;
     // }
 };
+Timer sleep_inactivity_timer;

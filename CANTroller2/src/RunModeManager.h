@@ -7,7 +7,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     static const uint32_t gesture_flytimeout_us = 1250000;         // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
     static const uint32_t motor_park_timeout_us = 4000000;         // Timeout when parking motors if they don't park for whatever reason (in us)
     static const uint32_t sleep_inactivity_timeout_us = 180000000; // How long to wait around in shutdown mode before going to asleep mode (in us)
-    Timer gestureFlyTimer, cruiseDeltaTimer, pwrup_timer, motor_park_timer, sleep_inactivity_timer;
+    Timer gestureFlyTimer, cruiseDeltaTimer, pwrup_timer, motor_park_timer; 
     uint32_t pwrup_timeout = 500000;
     Encoder* encoder;
     Display* display;

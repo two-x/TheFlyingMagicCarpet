@@ -198,7 +198,7 @@ static constexpr char datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines
     { "PressRaw", "BkPosRaw", __________, __________, __________, "AirSpMax", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
-    { "Pn|PrTgt", "Pn|PrErr", "  P Term", "  I Term", "  D Term", brAk"Posn", "dPressur", " dPositn", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
+    { brAk"Targ", "Pn|PrErr", "  P Term", "  I Term", "  D Term", brAk"Posn", "PsiVsPos", __________, "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, "OpenLoop", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", " Touch X", " Touch Y", " Touch X", " Touch Y", "No Temps", },  // PG_TEMP
@@ -211,7 +211,7 @@ static constexpr char tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines][5] 
     { "adc ", "adc ", ______, ______, ______, "mph ", "psi ", "psi ", "mph ", "mph ", "in  ", },  // PG_SENS
     { degree, "us  ", "V   ", "us  ", "V   ", "us  ", ______, degree, degree, "us  ", "%   ", },  // PG_PWMS
     { scroll, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", degreF, degreF, "rpms", scroll, },  // PG_IDLE
-    { "psin", "psin", "%   ", "%   ", "%   ", "in  ", ______, ______, ______, "Hz  ", "s   ", },  // PG_BPID
+    { "%   ", "psin", "%   ", "%   ", "%   ", "in  ", "%   ", ______, ______, "Hz  ", "s   ", },  // PG_BPID
     { "rpm ", "rpm ", "%   ", "%   ", "%   ", "%   ", ______, b1nary, ______, "Hz  ", "s   ", },  // PG_GPID
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%/s ", ______, "Hz  ", "s   ", },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, "pix ", "pix ", "ohm ", "ohm ", b1nary, },  // PG_TEMP
@@ -266,7 +266,7 @@ class ElectricSheeit {  // draws colorful patterns to exercise screen draw capab
     float pensat = 200.0;
     uint16_t pencolor = RED;
     uint32_t pentimeout = 700000, saver_cycletime_us = 38000000, saver_refresh_us = 45000;
-    int num_cycles = 3, cycle = 1, shape = random(NumSaverShapes);
+    int num_cycles = 3, cycle = 0, shape = random(NumSaverShapes);
     Timer saverRefreshTimer, saverCycleTimer, pentimer;
     bool saver_lotto = false, screensaver_last = false;
   public:
@@ -291,7 +291,7 @@ class ElectricSheeit {  // draws colorful patterns to exercise screen draw capab
     void saver_reset() {
         _sprite->fillSprite(TFT_BLACK);
         saver_pattern(-2);  // randomize new pattern whenever turned off and on
-        cycle = 1;
+        cycle = 0;
         saverCycleTimer.reset();
     }
     void saver_touch(int16_t x, int16_t y) {  // you can draw colorful lines on the screensaver
@@ -314,18 +314,18 @@ class ElectricSheeit {  // draws colorful patterns to exercise screen draw capab
         if (saverRefreshTimer.expireset()) {
             if (saverCycleTimer.expired()) {
                 ++cycle %= num_cycles;
-                if (cycle == 1) saver_pattern(-1);
-                saverCycleTimer.set(saver_cycletime_us / ((cycle == 3) ? 5 : 1));
+                if (cycle == 2) saver_pattern(-1);
+                saverCycleTimer.set(saver_cycletime_us / ((cycle == 2) ? 5 : 1));
             }
             for (int axis=HORZ; axis<=VERT; axis++) point[axis] = random(res[axis]);
-            if (cycle != 3) {
+            if (cycle != 2) {
                 spothue--;
                 if (shape == EraserWedges) _sprite->drawWedgeLine(plast[HORZ], plast[VERT], point[HORZ], point[VERT], 1+random(4), 1, hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2), 150+random(106)), BLK);
                 else if (shape == EraserLipses) {
                     int d[2] = { 10+random(30), 10+random(30) };
                     uint8_t hue = random(255);
                     uint8_t sat = (spothue < 128) ? 2*spothue : 2*(255-spothue);
-                    uint8_t brt = 100+random(156);
+                    uint8_t brt = 50+random(206);
                     for (int i=0; i<(3+random(10)); i++) _sprite->drawEllipse(point[HORZ], point[VERT], d[0] - 2*i, d[1] + 2*i, hsv_to_rgb<uint16_t>(hue+6*i, sat, brt));
                 }
                 else if (shape == EraserRings) _sprite->drawSmoothCircle(point[HORZ], point[VERT], random(25), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106)), BLK);
@@ -343,14 +343,14 @@ class ElectricSheeit {  // draws colorful patterns to exercise screen draw capab
                 // }
                 _sprite->setTextColor(BLK);  // allows subliminal messaging
             }
-            if (cycle != 3 && saver_lotto) _sprite->drawString("do drugs", res[HORZ] / 2, res[VERT] / 2, 4);
-            if (cycle != 1) {
+            if (saver_lotto) _sprite->drawString("do drugs", res[HORZ] / 2, res[VERT] / 2, 4);
+            if (cycle != 0) {
                 for (int axis=HORZ; axis<=VERT; axis++) {
                     erpos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
                     if (erpos[axis] * eraser_velo_sign[axis] >= erpos_max[axis]) {
                         erpos[axis] = eraser_velo_sign[axis] * erpos_max[axis];
-                        eraser_velo[axis] = (eraser_velo_min + random(eraser_velo_max - eraser_velo_min)) >> (shape == 3);
-                        eraser_velo[!axis] = (eraser_velo_min + random(eraser_velo_max - eraser_velo_min)) >> (shape == 3);
+                        eraser_velo[axis] = eraser_velo_min + random(eraser_velo_max - eraser_velo_min);
+                        eraser_velo[!axis] = eraser_velo_min + random(eraser_velo_max - eraser_velo_min);
                         eraser_velo_sign[axis] *= -1;
                         eraser_rad = constrain((int)(eraser_rad + random(5) - 2), eraser_rad_min, eraser_rad_max);
                     }
@@ -874,7 +874,7 @@ class Display {
             draw_dynamic(2, speedo.filt(), 0.0, speedo.redline_mph(), gas.cruisepid.target());
             draw_dynamic(3, tach.filt(), 0.0, tach.redline_rpm(), gas.pid.target());
             draw_dynamic(4, gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX]);
-            draw_dynamic(5, pressure.filt(), pressure.min_human(), pressure.max_human(), brake.pid.target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
+            draw_dynamic(5, pressure.filt(), pressure.min_human(), pressure.max_human(), brake.pids[PRESPID].target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
             draw_dynamic(6, brake.pc[OUT], brake.pc[OPMIN], brake.pc[OPMAX]);
             draw_dynamic(7, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
             draw_dynamic(8, steer.pc[OUT], steer.pc[OPMIN], steer.pc[OPMAX]);
@@ -940,17 +940,17 @@ class Display {
             }
             else if (datapage == PG_BPID) {
                 drange = brake.us[ABSMIN]-brake.us[ABSMAX];
-                draw_dynamic(9, brake.pid_targ_pc, 0.0, 100.0);
-                draw_dynamic(10, brake.pid_err_pc, -100.0, 100.0);
-                draw_dynamic(11, brake.pid.pterm(), -drange, drange);
-                draw_dynamic(12, brake.pid.iterm(), -drange, drange);
-                draw_dynamic(13, brake.pid.dterm(), -drange, drange);
-                draw_dynamic(14, brkpos.filt(), brkpos.op_min_in(), brkpos.op_max_in());
-                draw_dynamic(15, brake.d_ratio[PRESPID]);  // brake_spid_speedo_delta_adc, -range, range);
-                draw_dynamic(16, brake.d_ratio[POSNPID]);  // draw_asciiname(16, brake_pid_card[brake.activepid]);                    
-                draw_dynamic(17, brake.pid_kp(), 0.0, 8.0);
-                draw_dynamic(18, brake.pid_ki(), 0.0, 8.0);
-                draw_dynamic(19, brake.pid_kd(), 0.0, 8.0);
+                draw_dynamic(9, brake.pid_dom->target(), 0.0, 100.0);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
+                draw_dynamic(10, brake.pid_dom->err(), brake.pid_dom->outmin(), brake.pid_dom->outmax());
+                draw_dynamic(11, brake.pid_dom->pterm(), -drange, drange);
+                draw_dynamic(12, brake.pid_dom->iterm(), -drange, drange);
+                draw_dynamic(13, brake.pid_dom->dterm(), -drange, drange);
+                draw_dynamic(14, brkpos.filt(), brkpos.op_min_in(), brkpos.op_max_in(), brake.pids[POSNPID].target());
+                draw_dynamic(15, brake.pres_pid_pc, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
+                draw_eraseval(16);
+                draw_dynamic(17, brake.pid_dom->kp(), 0.0, 8.0);
+                draw_dynamic(18, brake.pid_dom->ki(), 0.0, 8.0);
+                draw_dynamic(19, brake.pid_dom->kd(), 0.0, 8.0);
             }
             else if (datapage == PG_GPID) {
                 draw_dynamic(9, gas.pid.target(), 0.0, tach.redline_rpm());
@@ -1107,9 +1107,9 @@ class Tuner {
                 else if (sel_val == 10) gas.idlectrl.cycle_idlemode(idelta);
             }
             else if (datapage == PG_BPID) {
-                if (sel_val == 8) brake.add_kp(0.001 * fdelta);
-                else if (sel_val == 9) brake.add_ki(0.001 * fdelta);
-                else if (sel_val == 10) brake.add_kd(0.001 * fdelta);
+                if (sel_val == 8) brake.pid_dom->add_kp(0.001 * fdelta);
+                else if (sel_val == 9) brake.pid_dom->add_ki(0.001 * fdelta);
+                else if (sel_val == 10) brake.pid_dom->add_kd(0.001 * fdelta);
             }
             else if (datapage == PG_GPID) {
                 if (sel_val == 7) { adj_bool(&(gas.openloop), idelta); }  // gas_pid.SetMode(gas_open_loop ? QPID::ctrl::manual : QPID::ctrl::automatic);

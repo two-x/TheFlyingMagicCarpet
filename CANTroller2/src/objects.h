@@ -145,7 +145,7 @@ void set_syspower(bool setting) {
     write_pin(syspower_pin, syspower);
 }
 void hotrc_events(int runmode) {
-    if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
+    if (hotrc.sw_event(CH3) && runmode != ASLEEP) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
     if (hotrc.sw_event(CH4)) {
         if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
         else if (runmode == STALL) starter_request = REQ_TOG;
