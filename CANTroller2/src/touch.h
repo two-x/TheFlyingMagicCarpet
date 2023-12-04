@@ -1,6 +1,12 @@
 
 #pragma once
-#include <XPT2046_Touchscreen.h>
+#undef CAPTOUCH
+#ifdef CAPTOUCH
+  #include <Adafruit_FT6206.h>
+  #define SENSITIVITY 40
+#else
+  #include <XPT2046_Touchscreen.h>
+#endif
 #define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
@@ -8,7 +14,11 @@
 #define disp_tuning_lines 11  // Lines of dynamic variables/values in dataset pages 
 class TouchScreen {
 private:
-    XPT2046_Touchscreen _ts;  // 3.5in resistive touch panel on tft lcd
+    #ifdef CAPTOUCH
+      Adafruit_FT6206 _ts;
+    #else
+      XPT2046_Touchscreen _ts;  // 3.5in resistive touch panel on tft lcd
+    #endif
     bool touch_longpress_valid = true;
     bool touch_now_touched = false;
     int tedit_exponent = 0;
@@ -37,14 +47,22 @@ private:
 
     TS_Point touchpoint;
 public:
+    #ifdef CAPTOUCH
+    TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts() {}
+    #else
     TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts(csPin, irqPin) {}
+    #endif
     int idelta = 0;
     void setup(int width, int height) {
         disp_width = width;
         disp_height = height;
         printf("touchscreen..\n");
-        _ts.begin();
-        // _ts.setRotation(1); do we need to rotate?
+        #ifdef CAPTOUCH
+          _ts.begin(SENSITIVITY, &Wire);
+        #else
+          _ts.begin();
+        #endif
+        _ts.setRotation(1);  // do we need to rotate?
     }
 
     bool touched() {
