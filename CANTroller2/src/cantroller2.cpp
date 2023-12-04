@@ -16,6 +16,7 @@ void setup() {
     set_pin(starter_pin, INPUT_PULLDOWN);
     set_pin(basicmodesw_pin, INPUT_PULLUP);
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);  // deasserting unused cs line ensures available spi bus
+    set_pin(touch_cs_pin, OUTPUT, HIGH);  // deasserting unused cs line ensures available spi bus
     set_pin(ignition_pin, OUTPUT, LOW);
     set_pin(syspower_pin, OUTPUT, syspower);
     set_pin(uart_tx_pin, INPUT);  // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
@@ -85,7 +86,7 @@ void loop() {                 // code takes about 1 ms to loop on average
     touch.update();           // read touchscreen input and do what it tells us to
     tuner.update(run.mode);   // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
     diag_update();            // notice any screwy conditions or suspicious shenanigans - consistent 200us
-    neo.update(colorcard[run.mode], !syspower);  // ~100us
+    neo.update(colorcard[run.mode]);  // ~100us
     screen.update(run.mode);  // Display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
     // lightbox.update(run.mode, speedo.human());  // communicate any relevant data to the lighting controller
     looptime_update();        // looptime_mark("F");
