@@ -16,6 +16,7 @@ void setup() {
     set_pin(starter_pin, INPUT_PULLDOWN);
     set_pin(basicmodesw_pin, INPUT_PULLUP);
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);  // deasserting unused cs line ensures available spi bus
+    set_pin(touch_cs_pin, OUTPUT, HIGH);  // deasserting unused cs line ensures available spi bus
     set_pin(ignition_pin, OUTPUT, LOW);
     set_pin(syspower_pin, OUTPUT, syspower);
     set_pin(uart_tx_pin, INPUT);  // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 

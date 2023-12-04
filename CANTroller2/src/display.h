@@ -323,14 +323,14 @@ class ElectricSheeit {  // draws colorful patterns to exercise screen draw capab
                 if (shape == EraserWedges) _sprite->drawWedgeLine(plast[HORZ], plast[VERT], point[HORZ], point[VERT], 1+random(4), 1, hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2), 150+random(106)), BLK);
                 else if (shape == EraserLipses) {
                     int d[2] = { 10+random(30), 10+random(30) };
-                    uint8_t hue = random(255);
-                    uint8_t sat = (spothue < 128) ? 2*spothue : 2*(255-spothue);
+                    uint8_t sat = random(255);
+                    uint8_t hue = (spothue < 128) ? 2*spothue : 2*(255-spothue);
                     uint8_t brt = 50+random(206);
-                    for (int i=0; i<(3+random(10)); i++) _sprite->drawEllipse(point[HORZ], point[VERT], d[0] - 2*i, d[1] + 2*i, hsv_to_rgb<uint16_t>(hue+6*i, sat, brt));
+                    for (int i=0; i<(3+random(10)); i++) _sprite->drawEllipse(point[HORZ], point[VERT], d[0] - 2*i, d[1] + 2*i, hsv_to_rgb<uint16_t>(hue+4*i, sat, brt));
                 }
                 else if (shape == EraserRings) _sprite->drawSmoothCircle(point[HORZ], point[VERT], random(25), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106)), BLK);
                 else for (int star=0; star<(shape*5); star++) {
-                    if (shape == EraserDots) _sprite->drawSpot(random(res[HORZ]), random(res[VERT]), 2+random(1), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(46)), BLK);  // hue_to_rgb16(random(255)), BLK);
+                    if (shape == EraserDots) _sprite->drawSpot(random(res[HORZ]), random(res[VERT]), 2+random(3), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(46)), BLK);  // hue_to_rgb16(random(255)), BLK);
                     else if (shape == EraserFont) {
                         _sprite->setTextColor(hsv_to_rgb<uint16_t>(plast[HORZ] + plast[VERT] + (spothue>>2), 63+(spothue>>1), 200+random(56)), BLK);
                         char letter = (char)(1 + random(0xbe));

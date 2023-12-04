@@ -1,14 +1,17 @@
 
 #pragma once
-#include <XPT2046_Touchscreen.h>
+// #include <XPT2046_Touchscreen.h>
+#include <Adafruit_FT6206.h>
 #define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
 #define touch_reticle_offset 50  // Distance of center of each reticle to nearest screen edge
 #define disp_tuning_lines 11  // Lines of dynamic variables/values in dataset pages 
+#define SENSITIVITY 40
 class TouchScreen {
 private:
-    XPT2046_Touchscreen _ts;  // 3.5in resistive touch panel on tft lcd
+    // XPT2046_Touchscreen _ts;  // 3.5in resistive touch panel on tft lcd
+    Adafruit_FT6206 _ts;
     bool touch_longpress_valid = true;
     bool touch_now_touched = false;
     int tedit_exponent = 0;
@@ -37,13 +40,14 @@ private:
 
     TS_Point touchpoint;
 public:
-    TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts(csPin, irqPin) {}
+    // TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts(csPin, irqPin) {}
+    TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts() {}
     int idelta = 0;
     void setup(int width, int height) {
         disp_width = width;
         disp_height = height;
         printf("touchscreen..\n");
-        _ts.begin();
+        _ts.begin(SENSITIVITY, &Wire);
         // _ts.setRotation(1); do we need to rotate?
     }
 
