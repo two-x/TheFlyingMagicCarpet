@@ -15,7 +15,6 @@ static Hotrc hotrc(&sim);
 static TemperatureSensorManager tempsens(onewire_pin);
 static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 static CarBattery mulebatt(mulebatt_pin);
-static LiPoBatt lipobatt(lipobatt_pin);
 static PressureSensor pressure(pressure_pin);
 static BrakePositionSensor brkpos(brake_pos_pin);
 static Speedometer speedo(speedo_pin);
@@ -247,19 +246,19 @@ void looptime_update() {  // Call once each loop at the very end
 }
 // diag/error-checking routine. this should be turned into a class probably
 enum err_type : int { LOST, RANGE, CALIB, WARN, CRIT, INFO, NUM_ERR_TYPES };
-enum err_sens : int { e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, e_basicsw, e_mulebatt, e_lipobatt, e_airvelo, e_mapsens, E_NUM_SENSORS, e_none };  // these are in order of priority
+enum err_sens : int { e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, e_basicsw, e_mulebatt, e_airvelo, e_mapsens, E_NUM_SENSORS, e_none };  // these are in order of priority
 // diag tunable values
 uint32_t err_timeout_us = 175000;
 uint32_t err_margin_adc = 5;
 char err_type_card[NUM_ERR_TYPES][5] = { "Lost", "Rang", "Cal", "Warn", "Crit", "Info" };
-char err_sens_card[E_NUM_SENSORS+1][7] = { "HrcV", "HrcCh3", "BrPres", "BrkPos", "Speedo", "HrcH", "Tach", "Temps", "Startr", "HrcCh4", "Basic", "MulBat", "LiPo", "Airflw", "MAP", "None" };
+char err_sens_card[E_NUM_SENSORS+1][7] = { "HrcV", "HrcCh3", "BrPres", "BrkPos", "Speedo", "HrcH", "Tach", "Temps", "Startr", "HrcCh4", "Basic", "MulBat", "Airflw", "MAP", "None" };
 bool diag_ign_error_enabled = true;
 // diag non-tunable values
 bool temp_err[NUM_TEMP_CATEGORIES];  // [AMBIENT/ENGINE/WHEEL]
 Timer errTimer(err_timeout_us);
 bool err_sens_alarm[NUM_ERR_TYPES] = { false, false, false, false, false, false };
 int8_t err_sens_fails[NUM_ERR_TYPES] = { 0, 0, 0, 0, 0, 0 };
-bool err_sens[NUM_ERR_TYPES][E_NUM_SENSORS]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airvelo/e_mapsens/e_temps/e_mulebatt/e_lipobatt/e_basicsw/e_starter]   // sens::opt_t::NUM_SENSORS]
+bool err_sens[NUM_ERR_TYPES][E_NUM_SENSORS]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airvelo/e_mapsens/e_temps/e_mulebatt/e_basicsw/e_starter]   // sens::opt_t::NUM_SENSORS]
 uint8_t highest_pri_failing_sensor[NUM_ERR_TYPES];
 uint8_t highest_pri_failing_last[NUM_ERR_TYPES];
 void diag_update() {

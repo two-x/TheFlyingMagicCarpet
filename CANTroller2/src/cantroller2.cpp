@@ -33,7 +33,6 @@ void setup() {
     pressure.setup();
     brkpos.setup();
     mulebatt.setup();
-    lipobatt.setup();
     tach.setup();
     speedo.setup();
     i2c.setup();
@@ -72,7 +71,6 @@ void loop() {                 // code takes about 1 ms to loop on average
     tach.update();            // get pulse timing from hall effect tachometer on flywheel
     speedo.update();          // get pulse timing from hall effect speedometer on axle
     mulebatt.update();        // vehicle battery voltage
-    lipobatt.update();        // sleep battery voltage // tach + speedo + mulebatt + lipobatt = 120 us
     airvelo.update();         // manifold air velocity sensor  // 20us + 900us every 4 loops
     mapsens.update();         // manifold air pressure sensor  // 70 us + 2ms every 9 loops
     maf_gps = massairflow();  // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
