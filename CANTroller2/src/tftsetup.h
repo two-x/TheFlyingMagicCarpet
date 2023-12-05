@@ -84,4 +84,4 @@
 // so changing it here has no effect
 // #define SUPPORT_TRANSACTIONS
 
-#define TFT_INVERSION_ON  // #define TFT_INVERSION_ON
+#define TFT_INVERSION_OFF  // #define TFT_INVERSION_ON
