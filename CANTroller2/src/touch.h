@@ -12,7 +12,6 @@
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
 #define touch_reticle_offset 50  // Distance of center of each reticle to nearest screen edge
 #define disp_tuning_lines 11  // Lines of dynamic variables/values in dataset pages 
-#define SENSITIVITY 40
 class TouchScreen {
 private:
     #ifdef CAPTOUCH
