@@ -13,12 +13,13 @@ static Tuner tuner(&neo, &touch);
 static RunModeManager run(&screen, &encoder);
 
 void setup() {
-    set_pin(starter_pin, INPUT_PULLDOWN);
-    set_pin(basicmodesw_pin, INPUT_PULLUP);
-    set_pin(sdcard_cs_pin, OUTPUT, HIGH);  // deasserting unused cs line ensures available spi bus
-    set_pin(touch_cs_pin, OUTPUT, HIGH);  // deasserting unused cs line ensures available spi bus
     set_pin(ignition_pin, OUTPUT, LOW);
+    set_pin(sdcard_cs_pin, OUTPUT, HIGH);  // deasserting unused cs line ensures available spi bus
+    set_pin(touch_cs_pin, OUTPUT, HIGH);  // deasserting touch cs line in case i2c captouch screen is used
     set_pin(syspower_pin, OUTPUT, syspower);
+    set_pin(basicmodesw_pin, INPUT_PULLUP);
+    set_pin(starter_pin, INPUT_PULLDOWN);
+    set_pin(free_pin, INPUT_PULLUP);  // ensure defined voltage level is present for unused pin
     set_pin(uart_tx_pin, INPUT);  // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
     if (!usb_jtag) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // assign stable defined behavior to currently unused pin
     if (!usb_jtag) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // assign stable defined behavior to currently unused pin
