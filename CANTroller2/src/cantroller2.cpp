@@ -86,7 +86,7 @@ void loop() {                 // code takes about 1 ms to loop on average
     touch.update();           // read touchscreen input and do what it tells us to
     tuner.update(run.mode);   // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
     diag_update();            // notice any screwy conditions or suspicious shenanigans - consistent 200us
-    neo.update(colorcard[run.mode], !syspower);  // ~100us
+    neo.update(colorcard[run.mode]);  // ~100us
     screen.update(run.mode);  // Display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
     // lightbox.update(run.mode, speedo.human());  // communicate any relevant data to the lighting controller
     looptime_update();        // looptime_mark("F");
