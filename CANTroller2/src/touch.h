@@ -1,6 +1,6 @@
 
 #pragma once
-#undef CAPTOUCH
+#undef CAPTOUCH  // #define CAPTOUCH if using IPS screen (black PCB), or #undef CAPTOUCH if using the red-PCB screen 
 #ifdef CAPTOUCH
   #include <Adafruit_FT6206.h>
   #define SENSITIVITY 40
@@ -18,6 +18,9 @@ private:
       Adafruit_FT6206 _ts;
     #else
       XPT2046_Touchscreen _ts;  // 3.5in resistive touch panel on tft lcd
+      // These values need to be calibrated to each individual display panel for best accuracy
+      int32_t corners[2][2] = { { 351, 3928 }, { 189, 3950 } };  // [xx/yy][min/max]
+      // Soren's breadboard "" { { 351, 3933 }, { 189, 3950 } };  // [xx/yy][min/max]
     #endif
     bool touch_longpress_valid = true;
     bool touch_now_touched = false;
@@ -41,16 +44,12 @@ private:
     int disp_width, disp_height;
     int32_t tft_touch[2];
 
-    // These values need to be calibrated to each individual display panel for best accuracy
-    int32_t corners[2][2] = { { 351, 3928 }, { 189, 3950 } };  // [xx/yy][min/max]
-    // Soren's breadboard "" { { 351, 3933 }, { 189, 3950 } };  // [xx/yy][min/max]
-
     TS_Point touchpoint;
 public:
     #ifdef CAPTOUCH
-    TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts() {}
+      TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts() {}
     #else
-    TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts(csPin, irqPin) {}
+      TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts(csPin, irqPin) {}
     #endif
     int idelta = 0;
     void setup(int width, int height) {
@@ -59,10 +58,11 @@ public:
         printf("touchscreen..\n");
         #ifdef CAPTOUCH
           _ts.begin(SENSITIVITY, &Wire);
+          _ts.setRotation(3);  // rotate -90 degrees to match IPS tft
         #else
           _ts.begin();
+          _ts.setRotation(1);  // rotate 90 degrees to match tft
         #endif
-        _ts.setRotation(1);  // do we need to rotate?
     }
 
     bool touched() {
@@ -88,8 +88,13 @@ public:
             ret = true;
             tedit = (float)(1 << tedit_exponent);
             touchpoint = getPoint();
-            tft_touch[xx] = map(touchpoint.x, corners[xx][tsmin], corners[xx][tsmax], 0, disp_width);
-            tft_touch[yy] = map(touchpoint.y, corners[yy][tsmin], corners[yy][tsmax], 0, disp_height);
+            #ifdef CAPTOUCH
+              tft_touch[xx] = disp_width - touchpoint.x;  // may need to rotate differently 
+              tft_touch[yy] = disp_height - touchpoint.y;  // may need to rotate differently
+            #else
+              tft_touch[xx] = map(touchpoint.x, corners[xx][tsmin], corners[xx][tsmax], 0, disp_width);  // translate resistance to pixels
+              tft_touch[yy] = map(touchpoint.y, corners[yy][tsmin], corners[yy][tsmax], 0, disp_height);  // translate resistance to pixels
+            #endif
             tft_touch[xx] = constrain(tft_touch[xx], 0, disp_width);
             tft_touch[yy] = constrain(tft_touch[yy], 0, disp_height);
             if (!flip_the_screen) { 

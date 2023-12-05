@@ -670,7 +670,6 @@ class LiPoBatt : public AnalogSensor<int32_t, float> {
     float op_min_v() { return _op_min_v; }
     float op_max_v() { return _op_max_v; }
 };
-
 // PressureSensor represents a brake fluid pressure sensor.
 // It extends AnalogSensor to handle reading an analog pin
 // and converting the ADC value to a pressure value in PSI.
@@ -1014,7 +1013,7 @@ class OutToggle : public Toggle {
 
 // This enum class represent the components which can be simulated (sensor). It's a uint8_t type under the covers, so it can be used as an index
 typedef uint8_t opt_t;
-enum class sens : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airvelo, mapsens, engtemp, mulebatt, lipobatt, starter, basicsw, NUM_SENSORS };  //, ignition, syspower };  // , NUM_SENSORS, err_flag };
+enum class sens : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airvelo, mapsens, engtemp, mulebatt, starter, basicsw, NUM_SENSORS };  //, ignition, syspower };  // , NUM_SENSORS, err_flag };
 
 // Simulator manages the source handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
 // NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use sources,

@@ -3,7 +3,7 @@
 #include "Arduino.h"
 // pin assignments  ESP32-S3-DevkitC series
 #define  encoder_sw_pin  0 // button0/strap-1  // Input, Rotary encoder push switch, for the UI. active low (needs pullup). Also the esp "Boot" button does the same thing
-#define    lipobatt_pin  1 // adc1ch0          // Analog input, LiPo cell voltage, full scale is 4.8V
+#define        free_pin  1 // adc1ch0          // Available
 #define   encoder_b_pin  2 // adc1ch1          // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define      tft_dc_pin  3 // adc1ch2/strap-X  // Output, Assert when sending data to display chip to indicate commands vs. screen data - ! pin is also defined in tft_setup.h
 #define    mulebatt_pin  4 // adc1ch3          // Analog input, mule battery voltage sense, full scale is 16V

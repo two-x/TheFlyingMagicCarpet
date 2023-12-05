@@ -193,7 +193,7 @@ static constexpr char brake_pid_card[2][7] = { "presur", "positn" };
 static constexpr char pagecard[datapages::NUM_DATAPAGES][5] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
 static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 4, 8, 7, 7, 10, 0, 6 };  // first value in each dataset page that's editable. All values after this must also be editable
 static constexpr char datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines][9] = {
-    { brAk"Posn", "MuleBatt", "LiPoBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", __________, __________, "Governor", stEr"Safe", },  // PG_RUN
+    { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
     { "PressRaw", "BkPosRaw", __________, __________, __________, "AirSpMax", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
@@ -201,12 +201,12 @@ static constexpr char datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines
     { brAk"Targ", "Pn|PrErr", "  P Term", "  I Term", "  D Term", brAk"Posn", "PsiVsPos", __________, "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, "OpenLoop", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
-    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", " Touch X", " Touch Y", " Touch X", " Touch Y", "No Temps", },  // PG_TEMP
+    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "LoopFreq", "Loop Avg", "LoopPeak", __________, __________, __________, "Webservr", "BlnkDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
+    { "LoopFreq", "Loop Avg", "LoopPeak", " Touch X", " Touch Y", __________, "Webservr", "BlnkDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
 };
 static constexpr char tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines][5] = {
-    { "in  ", "V   ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, "%   ", "%   ", },  // PG_RUN
+    { "in  ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
     { "us  ", "us  ", "us  ", "us  ", "%   ", "%   ", ______, ______, ______, "us  ", "us  ", },  // PG_JOY
     { "adc ", "adc ", ______, ______, ______, "mph ", "psi ", "psi ", "mph ", "mph ", "in  ", },  // PG_SENS
     { degree, "us  ", "V   ", "us  ", "V   ", "us  ", ______, degree, degree, "us  ", "%   ", },  // PG_PWMS
@@ -214,9 +214,9 @@ static constexpr char tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines][5] 
     { "%   ", "psin", "%   ", "%   ", "%   ", "in  ", "%   ", ______, ______, "Hz  ", "s   ", },  // PG_BPID
     { "rpm ", "rpm ", "%   ", "%   ", "%   ", "%   ", ______, b1nary, ______, "Hz  ", "s   ", },  // PG_GPID
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%/s ", ______, "Hz  ", "s   ", },  // PG_CPID
-    { degreF, degreF, degreF, degreF, degreF, degreF, "pix ", "pix ", "ohm ", "ohm ", b1nary, },  // PG_TEMP
+    { degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, b1nary, },  // PG_TEMP
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "Hz  ", "us  ", "us  ", ______, ______, ______, b1nary, b1nary, "%   ", "/10 ", b1nary, },  // PG_UI
+    { "Hz  ", "us  ", "us  ", "pix ", "pix ", ______, b1nary, b1nary, "%   ", "/10 ", b1nary, },  // PG_UI
 };
 static constexpr char unitmapnames[9][5] = { "usps", "us  ", "rpms", scroll, b1nary, "%   ", "ohm ", "eyes", "psin", };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where units use symbols not present in the font, are longer than 3 characters, or are just special
@@ -881,12 +881,11 @@ class Display {
             if (datapage == PG_RUN) {
                 draw_dynamic(9, brkpos.filt(), brkpos.op_min_in(), brkpos.op_max_in());
                 draw_dynamic(10, mulebatt.filt(), mulebatt.op_min_v(), mulebatt.op_max_v());
-                draw_dynamic(11, lipobatt.filt(), lipobatt.op_min_v(), lipobatt.op_max_v());
-                draw_dynamic(12, pot.val(), pot.min(), pot.max());
-                draw_dynamic(13, airvelo.filt(), airvelo.min_mph(), airvelo.max_mph());
-                draw_dynamic(14, mapsens.filt(), mapsens.min_psi(), mapsens.max_psi());
-                draw_dynamic(15, maf_gps, maf_min_gps, maf_max_gps);
-                for (int line=16; line<=17; line++) draw_eraseval(line);
+                draw_dynamic(11, pot.val(), pot.min(), pot.max());
+                draw_dynamic(12, airvelo.filt(), airvelo.min_mph(), airvelo.max_mph());
+                draw_dynamic(13, mapsens.filt(), mapsens.min_psi(), mapsens.max_psi());
+                draw_dynamic(14, maf_gps, maf_min_gps, maf_max_gps);
+                for (int line=15; line<=17; line++) draw_eraseval(line);
                 draw_dynamic(18, gas.governor, 0.0, 100.0);
                 draw_dynamic(19, steer.steer_safe_pc, 0.0, 100.0);
             }
@@ -986,10 +985,7 @@ class Display {
                 draw_temperature(loc::WHEEL_FR, 12);
                 draw_temperature(loc::WHEEL_RL, 13);
                 draw_temperature(loc::WHEEL_RR, 14);
-                draw_dynamic(15, touch->touch_pt(0), 0, disp_width_pix);
-                draw_dynamic(16, touch->touch_pt(1), 0, disp_height_pix);
-                draw_dynamic(17, touch->getX(), 340, 3980);
-                draw_dynamic(18, touch->getY(), 180, 3980);
+                for (int line=15; line<=18; line++) draw_eraseval(line);
                 draw_truth(19, dont_take_temperatures, 2);
             }
             else if (datapage == PG_SIM) {
@@ -1009,7 +1005,9 @@ class Display {
                 draw_dynamic(9, loopfreq_hz);
                 draw_dynamic(10, (int32_t)loop_avg_us, loop_scale_min_us, loop_scale_avg_max_us);
                 draw_dynamic(11, loop_peak_us, loop_scale_min_us, loop_scale_peak_max_us);
-                for (int line=12; line<=14; line++) draw_eraseval(line);
+                draw_dynamic(12, touch->touch_pt(0), 0, disp_width_pix);
+                draw_dynamic(13, touch->touch_pt(1), 0, disp_height_pix);
+                draw_eraseval(14);
                 draw_truth(15, web_enabled, 0);
                 draw_truth(16, flashdemo, 0);
                 draw_dynamic(17, neobright, 1.0, 100.0, -1, 3);
