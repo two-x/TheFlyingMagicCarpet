@@ -169,6 +169,7 @@ char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value
 bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
 bool disp_bool_values[6];
 bool disp_selected_val_dirty, disp_datapage_dirty, disp_data_dirty, disp_sidemenu_dirty, disp_runmode_dirty, disp_simbuttons_dirty, disp_idiots_dirty;
+volatile bool disp_screensaver_dirty = false;
 int32_t disp_needles[disp_lines];
 int32_t disp_targets[disp_lines];
 int32_t disp_age_quanta[disp_lines];
@@ -307,10 +308,10 @@ class ElectricSheeit {  // draws colorful patterns to exercise screen draw capab
         for (int axis=HORZ; axis<=VERT; axis++) touchlast[axis] = tp[axis];
     }
     void update() {
-        if (touch->touched()) saver_touch(touch->touch_pt(0), touch->touch_pt(1));
         if (!screensaver_last && screensaver) saver_reset();
         screensaver_last = screensaver;
         if (!screensaver) return;
+        if (touch->touched()) saver_touch(touch->touch_pt(0), touch->touch_pt(1));
         if (saverRefreshTimer.expireset()) {
             if (saverCycleTimer.expired()) {
                 ++cycle %= num_cycles;
@@ -360,8 +361,14 @@ class ElectricSheeit {  // draws colorful patterns to exercise screen draw capab
                 _sprite->fillCircle((res[HORZ]/2) + erpos[HORZ], (res[VERT]/2) + erpos[VERT], eraser_rad, BLK);
             }
             for (int axis=HORZ; axis<=VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
+            disp_screensaver_dirty = true;
+        }
+    }
+    void draw() {
+        if (screensaver && disp_screensaver_dirty) {
             yield();
             _sprite->pushSprite(disp_simbuttons_x, disp_simbuttons_y);
+            disp_screensaver_dirty = false;
         }
     }
   private:
@@ -380,7 +387,6 @@ class Display {
     NeopixelStrip* neo;
     TouchScreen* touch;
     TunerPanel tuner;
-    ElectricSheeit saver;
     IdiotLights* idiots;
     uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     Timer _tftResetTimer, _tftDelayTimer;
@@ -388,6 +394,7 @@ class Display {
     bool _procrastinate = false, reset_finished = false, simulating_last;
     int disp_oldmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
   public:
+    ElectricSheeit saver;
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
     // Display(int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}

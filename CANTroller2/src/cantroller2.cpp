@@ -11,7 +11,12 @@ static TouchScreen touch(touch_cs_pin);
 static Display screen(&neo, &touch, &idiots);
 static Tuner tuner(&neo, &touch);
 static RunModeManager run(&screen, &encoder);
-
+void update_screensaver(void *parameter) {
+    while (true) {
+        screen.saver.draw();
+        vTaskDelay(pdMS_TO_TICKS(2));
+    }
+}
 void setup() {
     set_pin(ignition_pin, OUTPUT, LOW);
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);  // deasserting unused cs line ensures available spi bus
@@ -50,8 +55,9 @@ void setup() {
     prefs.begin("FlyByWire", false);
     datapage = prefs.getUInt("dpage", PG_RUN);
     datapage_last = prefs.getUInt("dpage", PG_TEMP);
-    if (display_enabled) screen.setup();
-    if (display_enabled) touch.setup(disp_width_pix, disp_height_pix);
+    screen.setup();
+    touch.setup(disp_width_pix, disp_height_pix);
+    xTaskCreate(update_screensaver, "Update Screensaver", 16384, NULL, 3, NULL);  // Screensaver update in the background
     neo.setup();              // set up external neopixel strip for idiot lights visible in daylight from top of carpet
     idiots.setup(&neo);       // assign same idiot light variable associations and colors to neopixels as on screen  
     diag_init();              // initialize diagnostic codes
@@ -85,8 +91,8 @@ void loop() {                 // code takes about 1 ms to loop on average
     touch.update();           // read touchscreen input and do what it tells us to
     tuner.update(run.mode);   // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
     diag_update();            // notice any screwy conditions or suspicious shenanigans - consistent 200us
-    neo.update(colorcard[run.mode]);  // ~100us
-    screen.update(run.mode);  // Display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
+    neo.update(run.mode);     // ~100us
+    screen.update(colorcard[run.mode]);  // Display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
     // lightbox.update(run.mode, speedo.human());  // communicate any relevant data to the lighting controller
     looptime_update();        // looptime_mark("F");
 }

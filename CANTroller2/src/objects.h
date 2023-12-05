@@ -34,7 +34,6 @@ void update_web(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(20)); // Delay for 20ms, hopefully that's fast enough
     }
 }
-
 // RTOS task that updates temp sensors in a separate task
 void update_temperature_sensors(void *parameter) {
     while (true) {
