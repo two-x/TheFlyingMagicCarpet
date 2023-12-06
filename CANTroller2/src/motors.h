@@ -301,31 +301,32 @@ class GasServo : public ServoMotor {
         if (pid_timer.expireset()) {
             // Step 1 : update throttle target from idle control or cruise mode pid, if applicable (on the same timer as gas pid)
             idlectrl.update();  // Allow idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
-            if (runmode == CRUISE && (cruise_setpoint_mode == PID_SUSPEND_FLY) && !cruise_adjusting) pid.set_target(cruisepid.compute());  // cruise pid calculates new output (tach_target_rpm) based on input (speedmeter::human) and target (speedo_target_mph)
+            if (runmode == CRUISE && (cruise_setpoint_mode == PID_SUSPEND_FLY) && !cruise_adjusting)
+                pid.set_target(cruisepid.compute());  // cruise pid calculates new output (tach_target_rpm) based on input (speedmeter::human) and target (speedo_target_mph)
             // Step 2 : Determine servo pulse width value
-            if (park_the_motors || (runmode == SHUTDOWN && !shutdown_incomplete) || runmode == ASLEEP)
+            if (park_the_motors)
                 pc[OUT] = pc[PARKED];
-            else if (runmode == CAL && cal_pot_gasservo_mode)
+            else if (runmode == CAL && cal_gasmode)
                 pc[OUT] = nat_to_pc(map(pot->val(), pot->min(), pot->max(), deg[ABSMIN], deg[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
             else if (runmode == CRUISE && (cruise_setpoint_mode != PID_SUSPEND_FLY))
                 pc[OUT] = cruise_target_pc;
-            else if (runmode == STALL || (openloop && runmode != BASIC)) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
-                if (hotrc->joydir() != JOY_UP) pc[OUT] = pc[OPMIN];  // If in deadband or being pushed down, we want idle
-                else pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[OPMIN], pc[GOVERN]);  // actuators still respond even w/ engine turned off
+            else if (runmode != BASIC && runmode != CAL && runmode != ASLEEP && (runmode != SHUTDOWN || shutdown_incomplete)) {
+                if (runmode == STALL || openloop) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
+                    if (hotrc->joydir() != JOY_UP) pc[OUT] = pc[OPMIN];  // If in deadband or being pushed down, we want idle
+                    else pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[OPMIN], pc[GOVERN]);  // actuators still respond even w/ engine turned off
+                }
+                else pc[OUT] = pid.compute();  // Do proper pid math to determine gas_out_us from engine rpm error
             }
-            else if (runmode != BASIC) pc[OUT] = pid.compute();  // Do proper pid math to determine gas_out_us from engine rpm error
             // Step 3 : Convert to degrees and constrain if out of range
             deg[OUT] = pc_to_nat(pc[OUT]);  // convert to degrees
-            if (runmode == CAL && cal_pot_gasservo_mode)  // Constrain to operating limits. 
+            if (runmode == CAL && cal_gasmode)  // Constrain to operating limits. 
                 deg[OUT] = constrain(deg[OUT], deg[ABSMIN], deg[ABSMAX]);
-            else if (runmode == BASIC || runmode == SHUTDOWN)
+            else if (runmode == BASIC || runmode == SHUTDOWN || runmode == ASLEEP)
                 deg[OUT] = constrain(deg[OUT], deg[PARKED], deg[GOVERN]);
             else deg[OUT] = constrain(deg[OUT], deg[OPMIN], deg[GOVERN]);
             pc[OUT] = nat_to_pc(deg[OUT]);
             // Step 4 : Write to servo
             us[OUT] = nat_to_us(deg[OUT]);
-            if ((runmode == BASIC && !park_the_motors) || (runmode == CAL && !cal_pot_gasservo_mode)) return;
-            if ((runmode == SHUTDOWN && !shutdown_incomplete) || (runmode == ASLEEP)) return;
             write_motor();
         }
     }
@@ -423,7 +424,7 @@ class BrakeMotor : public JagMotor {
                 else if (brkpos->filt() - brkpos->margin() >= brkpos->parkpos())  // If brake is extended from park point, retract toward park point, slowing as we approach
                     pc[OUT] = map(brkpos->filt(), brkpos->parkpos(), brkpos->max_in(), pc[STOP], pc[OPMAX]);
             }
-            else if (runmode == CAL && cal_joyvert_brkmotor_mode) {
+            else if (runmode == CAL && cal_brakemode) {
                 int _joydir = hotrc->joydir();
                 if (_joydir == JOY_UP) pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[STOP], pc[OPMAX]);
                 else if (_joydir == JOY_DN) pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][OPMIN], hotrc->pc[VERT][DBBOT], pc[OPMIN], pc[STOP]);
@@ -433,7 +434,7 @@ class BrakeMotor : public JagMotor {
                 pc[OUT] = pc[STOP];
             else pc[OUT] = pid_out(); // Otherwise the pid control is active  // First attenuate max power to avoid blowing out the motor like in bm2023, if retracting, as a proportion of position from zeropoint to fully retracted
             // Step 2 : Fix motor pc value if it's out of range or exceeding positional limits
-            if (runmode == CAL && cal_joyvert_brkmotor_mode)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
+            if (runmode == CAL && cal_brakemode)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
                 pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);  // Constrain to full potential range when calibrating. Caution don't break anything!
             else if ((pc[OUT] < pc[STOP] && brkpos->filt() > brkpos->parkpos() - brkpos->margin()) 
                   || (pc[OUT] > pc[STOP] && brkpos->filt() < brkpos->min_in() + brkpos->margin()))  // If brake is at position limits and we're tring to go further, stop the motor
@@ -443,8 +444,6 @@ class BrakeMotor : public JagMotor {
             us[OUT] = pc_to_us(pc[OUT]);
             volt[OUT] = pc_to_nat(pc[OUT]);
             // Step 4 : Write to motor
-            if ((runmode == BASIC && !park_the_motors) || (runmode == CAL && !cal_pot_gasservo_mode)) return;
-            if ((runmode == SHUTDOWN && !shutdown_incomplete) || (runmode == ASLEEP)) return;
             write_motor();
         }
     }

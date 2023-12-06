@@ -1010,8 +1010,8 @@ class Display {
                 draw_truth(15, sim.can_sim(sens::mapsens), 0);
                 draw_truth(16, sim.can_sim(sens::basicsw), 0);                    
                 draw_asciiname(17, sensorcard[sim.potmap()]);
-                draw_truth(18, cal_joyvert_brkmotor_mode, 0);
-                draw_truth(19, cal_pot_gasservo_mode, 0);
+                draw_truth(18, cal_brakemode, 0);
+                draw_truth(19, cal_gasmode, 0);
             }
             else if (datapage == PG_UI) {
                 draw_dynamic(9, loopfreq_hz);
@@ -1146,8 +1146,8 @@ class Tuner {
                 else if (sel_val == 6) sim.set_can_sim(sens::mapsens, idelta);  // else if (sel_val == 7) sim.set_can_sim(sens::starter, idelta);
                 else if (sel_val == 7) sim.set_can_sim(sens::basicsw, idelta);
                 else if (sel_val == 8) { sim.set_potmap((adj_val(sim.potmap(), idelta, 0, (int)(sens::starter) - 1))); prefs.putUInt("potmap", sim.potmap()); }
-                else if (sel_val == 9 && rmode == CAL) adj_bool(&(cal_joyvert_brkmotor_mode), idelta);
-                else if (sel_val == 10 && rmode == CAL) adj_bool(&(cal_pot_gasservo_mode), (idelta < 0 || cal_pot_gasservo_ready) ? idelta : -1);
+                else if (sel_val == 9 && rmode == CAL) adj_bool(&(cal_brakemode), idelta);
+                else if (sel_val == 10 && rmode == CAL) adj_bool(&(cal_gasmode_request), idelta);
             }
             else if (datapage == PG_UI) {
                 if (sel_val == 6) { adj_bool(&web_enabled, idelta); }
