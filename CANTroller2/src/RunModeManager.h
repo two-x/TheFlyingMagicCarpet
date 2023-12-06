@@ -144,8 +144,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (we_just_switched_modes) {              
             gas.idlectrl.goto_idle();  //  Release the throttle 
             shutdown_incomplete = !(powering_up);
-            powering_up = false;
-            calmode_request = false;
+            powering_up = calmode_request = false;
             sleep_request = REQ_NA;
             park_motors(REQ_OFF);  // stop any in-progress parking
             if (!speedo.car_stopped()) autostop(REQ_ON);  // if car is moving begin autostopping
