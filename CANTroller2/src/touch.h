@@ -22,7 +22,7 @@ private:
       int32_t corners[2][2] = { { 351, 3928 }, { 189, 3950 } };  // [xx/yy][min/max]
       // Soren's breadboard "" { { 351, 3933 }, { 189, 3950 } };  // [xx/yy][min/max]
     #endif
-    bool touch_longpress_valid = true;
+    bool touch_longpress_valid = true, landed_coordinates_valid = true;
     bool touch_now_touched = false;
     int tedit_exponent = 0;
     float tedit = (float)(1 << tedit_exponent);
@@ -42,7 +42,7 @@ private:
     enum touch_lim { tsmin, tsmax };
     int32_t trow, tcol;
     int disp_width, disp_height;
-    int32_t tft_touch[2];
+    int32_t tft_touch[2], landed[2];  // landed are the initial coordinates of a touch event, unaffected by dragging
 
     TS_Point touchpoint;
 public:
@@ -101,7 +101,13 @@ public:
                 tft_touch[xx] = disp_width - tft_touch[xx];
                 tft_touch[yy] = disp_height - tft_touch[yy];
             }
+            if (!landed_coordinates_valid) {
+                landed[xx] = tft_touch[xx];
+                landed[yy] = tft_touch[yy];
+                landed_coordinates_valid = true;
+            }               
         }
+        else landed_coordinates_valid = false;
         return ret;
     }
     void update() {
@@ -117,8 +123,8 @@ public:
         }
         sleep_inactivity_timer.reset();  // evidence of user activity
         tedit = (float)(1 << tedit_exponent);  // Determine value editing rate
-        trow = constrain((tft_touch[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
-        tcol = (tft_touch[xx] - touch_margin_h_pix) / touch_cell_h_pix;
+        trow = constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
+        tcol = (landed[xx] - touch_margin_h_pix) / touch_cell_h_pix;
         // Take appropriate touchscreen actions depending on how we're being touched
         if (tcol == 0 && trow == 0 && !touch_now_touched) {
             if (++datapage >= NUM_DATAPAGES) datapage -= NUM_DATAPAGES;  // Displayed dataset page can also be changed outside of simulator
