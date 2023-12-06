@@ -80,8 +80,6 @@ enum runmode : int { BASIC, ASLEEP, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, NUM
 enum req : int { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
 enum cruise_modes : int { PID_SUSPEND_FLY, THROTTLE_ANGLE, THROTTLE_DELTA };
 enum sw_presses : int { NONE, SHORT, LONG }; // used by encoder sw and button algorithms
-enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
-enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 }; // Possible sources of gas, brake, steering commands
 enum brake_pids : int { POSNPID=0, PRESPID=1, NUM_BRAKEPIDS=2 };
 enum tunerstuff : int { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum datapages : int { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
@@ -146,11 +144,20 @@ bool calmode_request = false;
 bool flycruise_toggle_request = false;
 int sleep_request = REQ_NA;
 bool screensaver = false;               // Can enable experiment with animated screen draws
-uint16_t heartbeat_override_color = 0x0000;
 int tunctrl = OFF, tunctrl_last = OFF;
 int datapage = PG_RUN, datapage_last = PG_TEMP;  // Which of the dataset pages is currently displayed and available to edit?
 int sel_val = 0, sel_val_last = 0;               // In the real time tuning UI, which of the editable values is selected. -1 for none 
-bool syspower = HIGH;  // Set by handler only. Reflects current state of the signal
+bool syspower = HIGH;                   // Set by handler only. Reflects current state of the signal
+bool starter = LOW;                     // Set by handler only. Reflects current state of starter signal (does not indicate source)
+bool starter_drive = false;             // Set by handler only. High when we're driving starter, otherwise starter is an input
+int starter_request = REQ_NA;
+bool ignition = LOW;                    // Set by handler only. Reflects current state of the signal
+int ignition_request = REQ_NA;
+bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
+int panicstop_request = REQ_ON;         // On powerup we assume the code just rebooted during a drive, because for all we know it could have 
+bool basicmodesw = LOW;
+float maf_gps = 0;                      // Manifold mass airflow in grams per second
+uint16_t heartbeat_override_color = 0x0000;
 
 // fast macros
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays
@@ -288,3 +295,5 @@ class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regul
     // }
 };
 Timer sleep_inactivity_timer;
+Timer starterTimer(starter_timeout_us);  // If remotely-started starting event is left on for this long, end it automatically  
+Timer panicTimer(panic_relax_timeout_us);  // How long should a panic stop last?  we can't stay mad forever

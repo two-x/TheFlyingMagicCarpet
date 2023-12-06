@@ -13,16 +13,7 @@ static Tuner tuner(&neo, &touch);
 static RunModeManager run(&screen, &encoder);
 
 void setup() {
-    set_pin(ignition_pin, OUTPUT, LOW);
-    set_pin(sdcard_cs_pin, OUTPUT, HIGH);  // deasserting unused cs line ensures available spi bus
-    set_pin(touch_cs_pin, OUTPUT, HIGH);  // deasserting touch cs line in case i2c captouch screen is used
-    set_pin(syspower_pin, OUTPUT, syspower);
-    set_pin(basicmodesw_pin, INPUT_PULLUP);
-    set_pin(starter_pin, INPUT_PULLDOWN);
-    set_pin(free_pin, INPUT_PULLUP);  // ensure defined voltage level is present for unused pin
-    set_pin(uart_tx_pin, INPUT);  // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
-    if (!usb_jtag) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // assign stable defined behavior to currently unused pin
-    if (!usb_jtag) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // assign stable defined behavior to currently unused pin
+    initialize_pins();
     running_on_devboard = (read_pin(uart_tx_pin));  // detect breadboard vs. real car without use of an additional pin (add weak pullup resistor on your breadboard)
     Serial.begin(115200);  // Open console serial port (will reassign tx pin as output)
     delay(800);            // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
@@ -54,12 +45,12 @@ void setup() {
     if (display_enabled) touch.setup(disp_width_pix, disp_height_pix);
     neo.setup();              // set up external neopixel strip for idiot lights visible in daylight from top of carpet
     idiots.setup(&neo);       // assign same idiot light variable associations and colors to neopixels as on screen  
-    diag_init();              // initialize diagnostic codes
+    diag.setup();              // initialize diagnostic codes
     web.setup();              // start up access point, web server, and json-enabled web socket for diagnostic phone interface
     xTaskCreate(update_web, "Update Web Services", 4096, NULL, 6, NULL);  // wifi/web task. 2048 is too low, it crashes when client connects
     printf("Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
-    looptime_setup();
+    looptimer.setup();
 }
 void loop() {                 // code takes about 1 ms to loop on average
     ignition_panic_update();  // manage panic stop condition and drive ignition signal as needed
@@ -84,9 +75,9 @@ void loop() {                 // code takes about 1 ms to loop on average
     steer.update(run.mode);   // drive motor output based on controller inputs, run mode, etc.
     touch.update();           // read touchscreen input and do what it tells us to
     tuner.update(run.mode);   // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
-    diag_update();            // notice any screwy conditions or suspicious shenanigans - consistent 200us
+    //diag.update();            // notice any screwy conditions or suspicious shenanigans - consistent 200us
     neo.update(colorcard[run.mode]);  // ~100us
     screen.update(run.mode);  // Display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
     // lightbox.update(run.mode, speedo.human());  // communicate any relevant data to the lighting controller
-    looptime_update();        // looptime_mark("F");
+    //looptimer.update();        // looptimer.mark("F");
 }

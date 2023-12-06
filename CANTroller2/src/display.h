@@ -90,7 +90,7 @@ class IdiotLights {
     static constexpr int row_height = 10;
     static constexpr int iconcount = 19;  // number of boolean values included on the screen panel (not the neopixels) 
     bool* vals[iconcount] = {
-        &(err_sens_alarm[LOST]), &(err_sens_alarm[RANGE]), &(temp_err[ENGINE]), &(temp_err[WHEEL]), &panicstop, 
+        &(diag.err_sens_alarm[LOST]), &(diag.err_sens_alarm[RANGE]), &(diag.temp_err[ENGINE]), &(diag.temp_err[WHEEL]), &panicstop, 
         hotrc.radiolost_ptr(), &shutdown_incomplete, &park_the_motors, &autostopping, &cruise_adjusting, &car_hasnt_moved, 
         &starter, &(encoder.sw), sim.enabled_ptr(), &running_on_devboard, &powering_up, &(brake.posn_pid_active),
         &(encoder.enc_a), &(encoder.enc_b),
@@ -461,7 +461,7 @@ class Display {
         screensaver = false;
     }
     void watchdog() {  // Call in every loop to perform a reset upon detection of blocked loops and 
-        if (loop_periods_us[loop_now] > tft_watchdog_timeout_us && _timing_tft_reset == 0) _timing_tft_reset = 1;
+        if (looptimer.loop_periods_us[looptimer.loop_now] > tft_watchdog_timeout_us && _timing_tft_reset == 0) _timing_tft_reset = 1;
         if (_timing_tft_reset == 0 || !_tftDelayTimer.expired()) _tftDelayTimer.reset();
         else tft_reset();
     }
@@ -840,11 +840,11 @@ class Display {
             if (i <= neo->neopixelsAvailable())
                 if (idiots->val(i) != idiots->last[i]) neo->setBoolState(i, idiots->val(i));
             if (i == LOST || i == RANGE) {
-                if (highest_pri_failing_last[i] != highest_pri_failing_sensor[i]) {
-                    if (highest_pri_failing_sensor[i] == e_none) neo->setflash((int)i, 0);
-                    else neo->setflash((int)i, highest_pri_failing_sensor[i] + 1, 2, 6, 1, 0);
+                if (diag.highest_pri_failing_last[i] != diag.highest_pri_failing_sensor[i]) {
+                    if (diag.highest_pri_failing_sensor[i] == e_none) neo->setflash((int)i, 0);
+                    else neo->setflash((int)i, diag.highest_pri_failing_sensor[i] + 1, 2, 6, 1, 0);
                 }
-                highest_pri_failing_last[i] = highest_pri_failing_sensor[i];
+                diag.highest_pri_failing_last[i] = diag.highest_pri_failing_sensor[i];
             }
         }
         if (display_enabled) draw_idiotlights(idiots_corner_x, idiots_corner_y, force);
@@ -1014,9 +1014,9 @@ class Display {
                 draw_truth(19, cal_gasmode, 0);
             }
             else if (datapage == PG_UI) {
-                draw_dynamic(9, loopfreq_hz);
-                draw_dynamic(10, (int32_t)loop_avg_us, loop_scale_min_us, loop_scale_avg_max_us);
-                draw_dynamic(11, loop_peak_us, loop_scale_min_us, loop_scale_peak_max_us);
+                draw_dynamic(9, looptimer.loopfreq_hz);
+                draw_dynamic(10, (int32_t)looptimer.loop_avg_us, looptimer.loop_scale_min_us, looptimer.loop_scale_avg_max_us);
+                draw_dynamic(11, looptimer.loop_peak_us, looptimer.loop_scale_min_us, looptimer.loop_scale_peak_max_us);
                 draw_dynamic(12, touch->touch_pt(0), 0, disp_width_pix);
                 draw_dynamic(13, touch->touch_pt(1), 0, disp_height_pix);
                 draw_eraseval(14);

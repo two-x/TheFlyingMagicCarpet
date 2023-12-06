@@ -1012,8 +1012,8 @@ class OutToggle : public Toggle {
 // NOTE: if devices.h gets to be too long, we can (and maybe just should) move this to a separate file, it's not really a device...
 
 // This enum class represent the components which can be simulated (sensor). It's a uint8_t type under the covers, so it can be used as an index
-typedef uint8_t opt_t;
-enum class sens : opt_t { none=0, joy, pressure, brkpos, speedo, tach, airvelo, mapsens, engtemp, mulebatt, starter, basicsw, NUM_SENSORS };  //, ignition, syspower };  // , NUM_SENSORS, err_flag };
+// typedef uint8_t opt_t;
+enum class sens : int { none=0, joy, pressure, brkpos, speedo, tach, airvelo, mapsens, engtemp, mulebatt, starter, basicsw, NUM_SENSORS };  //, ignition, syspower };  // , NUM_SENSORS, err_flag };
 
 // Simulator manages the source handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
 // NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use sources,
