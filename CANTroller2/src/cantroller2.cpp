@@ -75,9 +75,9 @@ void loop() {                 // code takes about 1 ms to loop on average
     steer.update(run.mode);   // drive motor output based on controller inputs, run mode, etc.
     touch.update();           // read touchscreen input and do what it tells us to
     tuner.update(run.mode);   // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
-    //diag.update();            // notice any screwy conditions or suspicious shenanigans - consistent 200us
+    diag.update();            // notice any screwy conditions or suspicious shenanigans - consistent 200us
     neo.update(colorcard[run.mode]);  // ~100us
     screen.update(run.mode);  // Display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
     // lightbox.update(run.mode, speedo.human());  // communicate any relevant data to the lighting controller
-    //looptimer.update();        // looptimer.mark("F");
+    looptimer.update();        // looptimer.mark("F");
 }

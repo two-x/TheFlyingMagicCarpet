@@ -83,6 +83,8 @@ enum sw_presses : int { NONE, SHORT, LONG }; // used by encoder sw and button al
 enum brake_pids : int { POSNPID=0, PRESPID=1, NUM_BRAKEPIDS=2 };
 enum tunerstuff : int { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum datapages : int { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
+enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
+enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 }; // Possible sources of gas, brake, steering commands
 
 // global configuration settings
 bool brake_hybrid_pid = true;

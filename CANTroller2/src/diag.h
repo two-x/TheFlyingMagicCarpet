@@ -1,10 +1,9 @@
 #pragma once
 #include "Arduino.h"
+#include <iostream>
 #include <iomanip>  // For formatting console loop timing string output
 #include <vector>  // used to group loop times with string labels
 #include "globals.h"
-enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
-enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 }; // Possible sources of gas, brake, steering commands
 enum err_type : int { LOST, RANGE, CALIB, WARN, CRIT, INFO, NUM_ERR_TYPES };
 enum err_sens : int { e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, e_basicsw, e_mulebatt, e_airvelo, e_mapsens, E_NUM_SENSORS, e_none };  // these are in order of priority
 enum telemetry_dictionary_float : int { _GasServo, _BrakeMotor, _SteerMotor, _HotRCHorz, _HotRCVert, _Pressure, _BrakePos, _Speedo, _Tach, _TempEng, _TempWhFL, _TempWhFR, _TempWhRL, _TempWhRR, _TempAmb, _MuleBatt, _AirVelo, _MAP, _MAF, NumTelemetryFloats };  // these are in order of priority
