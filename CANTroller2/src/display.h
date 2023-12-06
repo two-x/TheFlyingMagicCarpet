@@ -104,7 +104,7 @@ class IdiotLights {
         { 0x63, 0x36, 0x1c, 0x36, 0x63, 0x14, 0x08, 0x22, 0x1c, 0x41, 0x3e, },  // 5 = wifi symbol w/ X
         { 0x16, 0x15, 0x0d, 0x60, 0x6f, 0x04, 0x6f, 0x60, 0x0f, 0x69, 0x66, },  // 6 = "SHD..."
         { 0x3e, 0x63, 0x41, 0x7d, 0x7d, 0x55, 0x55, 0x5d, 0x49, 0x63, 0x3e, },  // 7 = circle-"P"
-        { 0x3e, 0x49, 0x08, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x08, 0x49, 0x3e, },  // 8 = tie fighter brake assembly
+        { 0x3e, 0x49, 0x08, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x08, 0x49, 0x3e, },  // 8 = brake assembly or tie fighter
         { 0x08, 0x1c, 0x36, 0x00, 0x3e, 0x63, 0x63, 0x00, 0x36, 0x1c, 0x08, },  // 9 = "<C>"
         { 0x1d, 0x23, 0x47, 0x00, 0x3e, 0x63, 0x55, 0x49, 0x55, 0x63, 0x3e, },  // 10 = rotation arrow w/ X wheel
         { 0x3e, 0x41, 0x7f, 0x7b, 0x7b, 0x7b, 0x3e, 0x1c, 0x7f, 0x55, 0x7f, },  // 11 = motor w/ spur gear
@@ -112,9 +112,11 @@ class IdiotLights {
         { 0x6e, 0x6b, 0x3b, 0x00, 0x7f, 0x00, 0x7f, 0x06, 0x1c, 0x06, 0x7f, },  // 13 = "SIM"
         { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, },  // 14 = "DEV"
         { 0x00, 0x3e, 0x63, 0x41, 0x40, 0x4f, 0x40, 0x41, 0x63, 0x3e, 0x00, },  // 15 = power symbol
-        { 0x7c, 0x46, 0x7f, 0x7f, 0x33, 0x12, 0x12, 0x12, 0x1e, 0x12, 0x0c, },  // 16 = linear actuator (or penis)
-        { 0x00, 0x40, 0x70, 0x7c, 0x5e, 0x13, 0x5e, 0x7c, 0x70, 0x40, 0x00, },  // 17 = "A"
-        { 0x00, 0x00, 0x41, 0x7f, 0x7f, 0x49, 0x49, 0x7f, 0x36, 0x00, 0x00, },  // 18 = "B"
+        { 0x7c, 0x46, 0x7f, 0x7f, 0x33, 0x12, 0x12, 0x12, 0x1e, 0x12, 0x0c, },  // 16 = linear actuator or schlong
+        { 0x0e, 0x1d, 0x7d, 0x1d, 0x0e, 0x00, 0x7e, 0x0b, 0x09, 0x0b, 0x7e, },  // 17 = encoder "A"
+        { 0x0e, 0x1d, 0x7d, 0x1d, 0x0e, 0x00, 0x7f, 0x49, 0x49, 0x7f, 0x36, },  // 18 = encoder "B"
+        // { 0x00, 0x40, 0x70, 0x7c, 0x5e, 0x13, 0x5e, 0x7c, 0x70, 0x40, 0x00, },  // 17 = "A"
+        // { 0x00, 0x00, 0x41, 0x7f, 0x7f, 0x49, 0x49, 0x7f, 0x36, 0x00, 0x00, },  // 18 = "B"
     };
     char letters[iconcount][3] = {
         "SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk",
@@ -216,7 +218,7 @@ static constexpr char tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines][5] 
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%/s ", ______, "Hz  ", "s   ", },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, b1nary, },  // PG_TEMP
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "Hz  ", "us  ", "us  ", "pix ", "pix ", ______, b1nary, b1nary, "%   ", "/10 ", b1nary, },  // PG_UI
+    { "Hz  ", "us  ", "us  ", "pix ", "pix ", ______, b1nary, b1nary, "%   ", "/10 ", "eyes", },  // PG_UI
 };
 static constexpr char unitmapnames[9][5] = { "usps", "us  ", "rpms", scroll, b1nary, "%   ", "ohm ", "eyes", "psin", };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where units use symbols not present in the font, are longer than 3 characters, or are just special
@@ -227,7 +229,7 @@ static constexpr uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where un
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3e, 0x00, 0x00, 0x1c, 0x22, 0x22, 0x1c, 0x00, 0x00, },  // 0/1 - to indicate binary value
     { 0x02, 0x45, 0x25, 0x12, 0x08, 0x24, 0x52, 0x51, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // % - just because the font one is feeble
     { 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // capital omega - for ohms
-    { 0x08, 0x1c, 0x2a, 0x08, 0x00, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x41, 0x3e, },  // googly eyes, to point out new features
+    { 0x08, 0x1c, 0x2a, 0x08, 0x00, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x41, 0x3e, },  // googly eyes, are as goofy as they are stupid
     { 0x3d, 0x00, 0x3c, 0x04, 0x38, 0x00, 0x7f, 0x00, 0x7c, 0x24, 0x18, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x3d, },  // inches or psi
 };  // These bitmaps are in the same format as the idiot light bitmaps, described below
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
@@ -250,27 +252,27 @@ class TunerPanel {
   private:
     // DataPage[NUM_DATAPAGES];
 };
-class ElectricSheeit {  // draws colorful patterns to exercise screen draw capabilities
+class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabilities
   public:
     static constexpr int res[2] = { 155, 192 };
-    enum savershapes : int { EraserWedges, EraserDots, EraserRings, EraserLipses, NumSaverShapes, FocusRing, EraserFont };
+    enum savershapes : int { Wedges, Dots, Rings, Ellipses, Boxes, NumSaverShapes, FocusRing, Ascii };
   private:
     TFT_eSprite* _sprite;
     TouchScreen* touch;
     int point[2], plast[2], er[2], touchlast[2] = { -1, -1 }, touchpoint[2] = { -1, -1 };
     int eraser_rad = 14, eraser_rad_min = 9, eraser_rad_max = 26, eraser_velo_min = 4, eraser_velo_max = 10, touch_w_last = 2;
-    int erpos[2] = { 0, 0 }, eraser_velo_sign[2] = { 1, 1 };
+    int erpos[2] = { 0, 0 }, eraser_velo_sign[2] = { 1, 1 }, boxsize[2];
     int eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) };
     int erpos_max[2] = { res[HORZ] / 2 - eraser_rad, res[VERT] / 2 - eraser_rad }; 
     uint8_t saver_illicit_prob = 12, penhue = 0, spothue = 255;
     float pensat = 200.0;
     uint16_t pencolor = RED;
     uint32_t pentimeout = 700000, saver_cycletime_us = 38000000, saver_refresh_us = 45000;
-    int num_cycles = 3, cycle = 0, shape = random(NumSaverShapes);
+    int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 1500, shape = random(NumSaverShapes);
     Timer saverRefreshTimer, saverCycleTimer, pentimer;
     bool saver_lotto = false, screensaver_last = false;
   public:
-    ElectricSheeit() {}
+    LibDrawDemo() {}
     void setup(TFT_eSprite* arg_sprite, TouchScreen* arg_touch) {
         _sprite = arg_sprite;
         touch = arg_touch;
@@ -317,33 +319,42 @@ class ElectricSheeit {  // draws colorful patterns to exercise screen draw capab
                 if (cycle == 2) saver_pattern(-1);
                 saverCycleTimer.set(saver_cycletime_us / ((cycle == 2) ? 5 : 1));
             }
-            for (int axis=HORZ; axis<=VERT; axis++) point[axis] = random(res[axis]);
+            for (int axis=0; axis<=1; axis++) point[axis] = random(res[axis]);
             if (cycle != 2) {
                 spothue--;
-                if (shape == EraserWedges) _sprite->drawWedgeLine(plast[HORZ], plast[VERT], point[HORZ], point[VERT], 1+random(4), 1, hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2), 150+random(106)), BLK);
-                else if (shape == EraserLipses) {
+                if (shape == Wedges) _sprite->drawWedgeLine(plast[HORZ], plast[VERT], point[HORZ], point[VERT], 1+random(4), 1, hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2), 150+random(106)), BLK);
+                else if (shape == Ellipses) {
                     int d[2] = { 10+random(30), 10+random(30) };
                     uint8_t sat = random(255);
                     uint8_t hue = (spothue < 128) ? 2*spothue : 2*(255-spothue);
                     uint8_t brt = 50+random(206);
                     for (int i=0; i<(3+random(10)); i++) _sprite->drawEllipse(point[HORZ], point[VERT], d[0] - 2*i, d[1] + 2*i, hsv_to_rgb<uint16_t>(hue+4*i, sat, brt));
                 }
-                else if (shape == EraserRings) _sprite->drawSmoothCircle(point[HORZ], point[VERT], random(25), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106)), BLK);
-                else for (int star=0; star<(shape*5); star++) {
-                    if (shape == EraserDots) _sprite->drawSpot(random(res[HORZ]), random(res[VERT]), 2+random(3), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(46)), BLK);  // hue_to_rgb16(random(255)), BLK);
-                    else if (shape == EraserFont) {
+                else if (shape == Rings) _sprite->drawSmoothCircle(point[HORZ], point[VERT], random(25), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106)), BLK);
+                else if (shape == Dots) 
+                    for (int star=0; star<(shape*5); star++) 
+                        _sprite->drawSpot(random(res[HORZ]), random(res[VERT]), 2+random(3), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(46)), BLK);  // hue_to_rgb16(random(255)), BLK);
+                else if (shape == Ascii)
+                    for (int star=0; star<(shape*5); star++) {                
                         _sprite->setTextColor(hsv_to_rgb<uint16_t>(plast[HORZ] + plast[VERT] + (spothue>>2), 63+(spothue>>1), 200+random(56)), BLK);
                         char letter = (char)(1 + random(0xbe));
                         _sprite->setCursor(point[HORZ], point[VERT]);
                         _sprite->print((String)letter);
                     }
+                else if (shape == Boxes) {
+                    boxrad = 5 + random(5);
+                    boxminsize = 2 * boxrad + 10;
+                    int longer = random(2);
+                    boxsize[longer] = boxminsize + random(res[0] - boxminsize);
+                    boxsize[!longer] = boxminsize + random(smax(0, boxmaxarea / boxsize[longer] - boxminsize));
+                    for (int dim=0; dim<=1; dim++) point[dim] = -boxsize[dim] / 2 + random(res[dim]);
+                    _sprite->fillSmoothRoundRect(point[0], point[1], boxsize[0], boxsize[1], boxrad, random(0x10000), BLK); // Change colors as needed                    
                 }
                 // else if (shape == FocusRing) {
                     // hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2), 150+random(106)), BLK)
                 // }
                 _sprite->setTextColor(BLK);  // allows subliminal messaging
             }
-            if (saver_lotto) _sprite->drawString("do drugs", res[HORZ] / 2, res[VERT] / 2, 4);
             if (cycle != 0) {
                 for (int axis=HORZ; axis<=VERT; axis++) {
                     erpos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
@@ -359,6 +370,7 @@ class ElectricSheeit {  // draws colorful patterns to exercise screen draw capab
                 // _sprite->drawWedgeLine((res[HORZ]/2)+erlast[HORZ], (res[VERT]/2)+erlast[VERT], res[HORZ]/2+erpos[HORZ], (res[VERT]/2)+erpos[VERT], eraser_rad, BLK, BLK);  // savtouch_last_w, w, pencolor, pencolor);
                 _sprite->fillCircle((res[HORZ]/2) + erpos[HORZ], (res[VERT]/2) + erpos[VERT], eraser_rad, BLK);
             }
+            if (saver_lotto) _sprite->drawString("do drugs", res[HORZ] / 2, res[VERT] / 2, 4);
             for (int axis=HORZ; axis<=VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
             yield();
             _sprite->pushSprite(disp_simbuttons_x, disp_simbuttons_y);
@@ -380,7 +392,7 @@ class Display {
     NeopixelStrip* neo;
     TouchScreen* touch;
     TunerPanel tuner;
-    ElectricSheeit saver;
+    LibDrawDemo saver;
     IdiotLights* idiots;
     uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     Timer _tftResetTimer, _tftDelayTimer;
