@@ -26,8 +26,8 @@ class NeopixelStrip {
     float desat_of_ten = 0.0;  // out of 10.0
     uint8_t neo_master_brightness = 0xff;
     float correction[3] = { 1.0, 0.9, 1.0 };  // Applied to brightness of rgb elements
-    uint32_t neo_fade_timeout_us = 380000;
-    Timer neoFadeTimer, neoHeartbeatTimer;
+    static constexpr uint32_t neo_fade_timeout_us = 380000;
+    Timer neoFadeTimer = Timer(neo_fade_timeout_us), neoHeartbeatTimer;
     bool neo_heartbeat = false;
     bool heartcolor_change = true;  // , heartcolor_overridden = false;
     int pin = -1;
@@ -173,7 +173,7 @@ void NeopixelStrip::setup(bool viewcontext) {
     neoobj.Begin();
     heartbeat_brightness = brightlev[context][B_LO];
     neoHeartbeatTimer.set(heartbeat_ekg_us[3]);
-    neoFadeTimer.set((int64_t)neo_fade_timeout_us);
+    neoFadeTimer.reset();
     setbright(neobright);
     setdesaturation(neodesat);
     heartbeat_ena(true);

@@ -46,7 +46,6 @@ class Encoder {
         static const uint32_t _spinrate_min_us = 2500;  // Will reject spins faster than this as an attempt to debounce behavior
         static const uint32_t _accel_thresh_us = 60000;  // Spins faster than this will be accelerated
         static const int32_t _accel_max = 15;  // Maximum acceleration factor
-        static const uint32_t _longPressTime = 350000;
 
         // instance vars
         volatile uint32_t _spinrate_isr_us = 100000;  // Time elapsed between last two detents
@@ -63,7 +62,7 @@ class Encoder {
         bool _suppress_click = false;  // Flag to prevent a short click on switch release after successful long press
         Timer _spinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
         //  ---- tunable ----
-        Timer _longPressTimer;  // Used to time long button presses
+        Timer _longPressTimer = Timer(350000);  // Used to time long button presses
 
         void IRAM_ATTR _a_isr() {
             if (_bounce_danger != Encoder::ENC_A) {
@@ -90,7 +89,7 @@ class Encoder {
         bool sw = false;  // Remember whether switch is being pressed
         bool enc_a;
         bool enc_b;
-        Encoder(uint8_t a, uint8_t b, uint8_t sw) : _a_pin(a), _b_pin(b), _sw_pin(sw), _longPressTimer(_longPressTime){}
+        Encoder(uint8_t a, uint8_t b, uint8_t sw) : _a_pin(a), _b_pin(b), _sw_pin(sw) {}
         Encoder() = delete; // must be instantiated with pins
         
         void setLongPressTimer(uint32_t t){

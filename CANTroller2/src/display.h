@@ -42,8 +42,6 @@
 #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
 #define disp_vshift_pix 2  // Unknown.  Note: At smallest text size, characters are 5x7 pix + pad on rt and bot for 6x8 pix.
 #define disp_runmode_text_x 8
-Timer dispRefreshTimer (100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
-uint32_t tft_watchdog_timeout_us = 100000;
 int32_t colorcard[NUM_RUNMODES] = { MGT, MBLU, RED, ORG, YEL, GRN, TEAL, PUR };
 char modecard[NUM_RUNMODES][7] = { "Basic", "Asleep", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
@@ -267,9 +265,9 @@ class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabili
     uint8_t saver_illicit_prob = 12, penhue = 0, spothue = 255;
     float pensat = 200.0;
     uint16_t pencolor = RED;
-    uint32_t pentimeout = 700000, saver_cycletime_us = 38000000, saver_refresh_us = 45000;
     int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 1500, shape = random(NumSaverShapes);
-    Timer saverRefreshTimer, saverCycleTimer, pentimer;
+    static constexpr uint32_t saver_cycletime_us = 34000000;
+    Timer saverRefreshTimer = Timer(45000), saverCycleTimer, pentimer = Timer(700000);
     bool saver_lotto = false, screensaver_last = false;
   public:
     LibDrawDemo() {}
@@ -286,9 +284,7 @@ class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabili
         _sprite->setTextDatum(MC_DATUM);
         _sprite->setTextColor(BLK); 
         _sprite->setTextSize(1); 
-        saverRefreshTimer.set(saver_refresh_us);
-        saverCycleTimer.set((int64_t)saver_cycletime_us);
-        pentimer.set(pentimeout);
+        saverCycleTimer.set(saver_cycletime_us);
     }
     void saver_reset() {
         _sprite->fillSprite(TFT_BLACK);
@@ -394,22 +390,16 @@ class Display {
     TunerPanel tuner;
     LibDrawDemo saver;
     IdiotLights* idiots;
+    Timer dispRefreshTimer = Timer(100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
     uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
-    Timer _tftResetTimer, _tftDelayTimer;
-    int32_t _timing_tft_reset;
     bool _procrastinate = false, reset_finished = false, simulating_last;
     int disp_oldmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
   public:
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
-    // Display(int8_t cs_pin, int8_t dc_pin) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
-    // Display() : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {}
-    Display(NeopixelStrip* _neo, TouchScreen* _touch, IdiotLights* _idiots) : _tft(), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) {
-        neo = _neo;
-        touch = _touch;
-        idiots = _idiots;
-    }
-    Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, TouchScreen* _touch, IdiotLights* _idiots) : _tft(cs_pin, dc_pin), _tftResetTimer(100000), _tftDelayTimer(3000000), _timing_tft_reset(0) { Display(_neo, _touch, _idiots); }
+    Display(NeopixelStrip* _neo, TouchScreen* _touch, IdiotLights* _idiots) : _tft(), neo(_neo), touch(_touch), idiots(_idiots) {}
+    Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, TouchScreen* _touch, IdiotLights* _idiots) 
+        : _tft(cs_pin, dc_pin) { Display(_neo, _touch, _idiots); }
     void setup() {
         printf("Init display.. ");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
         _tft.begin();
@@ -433,23 +423,6 @@ class Display {
         all_dirty();
         saver.setup(&_saversprite, touch);
     }
-    bool tft_reset() {  // call to begin a tft reset, and continue to call every loop until returns true (or get_reset_finished() returns true), then stop
-        if (reset_finished) {
-            reset_finished = false;
-            _timing_tft_reset = 1;
-            }
-        if (_timing_tft_reset == 1) {
-            write_pin(tft_rst_pin, LOW);
-            _timing_tft_reset = 2;
-        }
-        else if (_timing_tft_reset == 2 && _tftResetTimer.expired()) {
-            write_pin(tft_rst_pin, HIGH);
-            setup();
-            _timing_tft_reset = 0;
-            reset_finished = true;
-        }
-        return reset_finished;
-    }
     void all_dirty() {
         disp_idiots_dirty = true;
         disp_data_dirty = true;
@@ -460,12 +433,6 @@ class Display {
         disp_simbuttons_dirty = true;
         screensaver = false;
     }
-    void watchdog() {  // Call in every loop to perform a reset upon detection of blocked loops and 
-        if (looptimer.loop_periods_us[looptimer.loop_now] > tft_watchdog_timeout_us && _timing_tft_reset == 0) _timing_tft_reset = 1;
-        if (_timing_tft_reset == 0 || !_tftDelayTimer.expired()) _tftDelayTimer.reset();
-        else tft_reset();
-    }
-    bool get_reset_finished() { return reset_finished; }
     void set_runmodecolors() {
         uint8_t saturat = 255;  uint8_t hue_offset = 0;
         for (int32_t rm=0; rm<NUM_RUNMODES; rm++) {
@@ -879,8 +846,7 @@ class Display {
             disp_oldmode = _nowmode;
             disp_runmode_dirty = false;
         }
-        if (dispRefreshTimer.expired()) {
-            dispRefreshTimer.reset();
+        if (dispRefreshTimer.expireset()) {
             float drange;
             draw_dynamic(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
             draw_dynamic(2, speedo.filt(), 0.0, speedo.redline_mph(), gas.cruisepid.target());
@@ -1041,13 +1007,11 @@ class Tuner {
   private:
     NeopixelStrip* neo;
     TouchScreen* touch;
-    uint32_t tuner_timeout = 25000000;  // This times out edit mode after a a long period of inactivity
-    Timer tuningCtrlTimer;
+    Timer tuningCtrlTimer = Timer(25000000);  // This times out edit mode after a a long period of inactivity
   public:
     Tuner(NeopixelStrip* _neo, TouchScreen* _touch) {
         neo = _neo;
         touch = _touch;
-        tuningCtrlTimer.set(tuner_timeout);
     }
     int32_t idelta = 0, idelta_encoder = 0;
     void update(int rmode) {

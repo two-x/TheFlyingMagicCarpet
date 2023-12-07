@@ -2,7 +2,6 @@
 #include "Arduino.h"
 #include <iostream>
 #include <iomanip>  // For formatting console loop timing string output
-// #include <vector>  // used to group loop times with string labels
 enum err_type : int { LOST, RANGE, CALIB, WARN, CRIT, INFO, NUM_ERR_TYPES };
 enum err_sens : int {  // these are in order of priority 
     e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, 
@@ -37,13 +36,13 @@ class DiagRuntime {
     float* maf;
     bool* ignition;
     static constexpr int entries = 100;  // size of log buffers
-    static constexpr uint32_t logperiod = 100000;  // microseconds per logged reading
     int64_t times[2][entries];
     // two sets of large arrays for storage of log data. when one fills up it jumps to the other, so the first might be written to an sd card
     float tel[2][NumTelemetryFloats][entries];  // array for telemetry of all sensors for given timestamp
     bool bools[2][NumTelemetryBools][entries];  // boolean control values
     int index = 0, dic = 0;  // start with dictionary 0
-    Timer logTimer;
+    Timer logTimer = Timer(100000);  // microseconds per logged reading
+    Timer errTimer = Timer(175000);
   public:
     DiagRuntime (Hotrc* a_hotrc, TemperatureSensorManager* a_temp, PressureSensor* a_pressure, BrakePositionSensor* a_brkpos,
         Tachometer* a_tach, Speedometer* a_speedo, GasServo* a_gas, BrakeMotor* a_brake, SteerMotor* a_steer, 
@@ -51,14 +50,12 @@ class DiagRuntime {
         : hotrc(a_hotrc), tempsens(a_temp), pressure(a_pressure), brkpos(a_brkpos), tach(a_tach), speedo(a_speedo), gas(a_gas), brake(a_brake), 
           steer(a_steer), mulebatt(a_mulebatt), airvelo(a_airvelo), mapsens(a_mapsens), pot(a_pot), maf(a_maf), ignition(a_ignition) {}
     // diag tunable values
-    uint32_t err_timeout_us = 175000;
     uint32_t err_margin_adc = 5;
     char err_type_card[NUM_ERR_TYPES][5] = { "Lost", "Rang", "Cal", "Warn", "Crit", "Info" };
     char err_sens_card[E_NUM_SENSORS+1][7] = { "HrcV", "HrcCh3", "BrPres", "BrkPos", "Speedo", "HrcH", "Tach", "Temps", "Startr", "HrcCh4", "Basic", "MulBat", "Airflw", "MAP", "None" };
     bool diag_ign_error_enabled = true;
     // diag non-tunable values
     bool temp_err[NUM_TEMP_CATEGORIES];  // [AMBIENT/ENGINE/WHEEL]
-    Timer errTimer;
     bool err_sens_alarm[NUM_ERR_TYPES] = { false, false, false, false, false, false };
     int8_t err_sens_fails[NUM_ERR_TYPES] = { 0, 0, 0, 0, 0, 0 };
     bool err_sens[NUM_ERR_TYPES][E_NUM_SENSORS]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airvelo/e_mapsens/e_temps/e_mulebatt/e_basicsw/e_starter]   // sens::opt_t::NUM_SENSORS]
@@ -69,8 +66,6 @@ class DiagRuntime {
         for (int32_t i=0; i<NUM_ERR_TYPES; i++)
             for (int32_t j=0; j<E_NUM_SENSORS; j++)
                 err_sens[i][j] = false; // Initialize sensor error flags to false
-        errTimer.set(err_timeout_us);
-        logTimer.set(logperiod);
     }
     void make_log_entry() {
         if (logTimer.expireset()) {
@@ -104,7 +99,6 @@ class DiagRuntime {
             }
         }
     }
-
     void update() {
         if (errTimer.expireset()) {
             // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
@@ -179,8 +173,7 @@ class LoopTimer {
   public:
     LoopTimer() {}
     // Loop timing related
-    Timer loop_timer;
-    static constexpr uint32_t looptimeout = 1000000; // how long the previous main loop took to run (in us)
+    Timer loop_timer = Timer(1000000);  // how long the previous main loop took to run (in us)
     int32_t loopno = 1, loopindex = 0, loop_recentsum = 0, loop_scale_min_us = 0, loop_scale_avg_max_us = 2500, loop_scale_peak_max_us = 25000;
     float loop_sum_s, loop_avg_us, loopfreq_hz;
     uint32_t looptimes_us[20];
@@ -199,7 +192,7 @@ class LoopTimer {
             loopindex = 1;
             looptimes_us[0] = esp_timer_get_time();
         }
-        loop_timer.set(looptimeout);  // start timer to measure the first loop
+        loop_timer.reset();  // start timer to measure the first loop
     }
     void mark(std::string loopname = std::string("")) {  // Add marks wherever you want in the main loop, set looptime_print true, will report times between all adjacent marks
         if (looptime_print) {

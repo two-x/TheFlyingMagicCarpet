@@ -109,8 +109,6 @@ bool wifi_client_mode = false;       // Should wifi be in client or access point
 
 // global tunable variables
 uint32_t looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. Set to 0 linefeeds all prints
-uint32_t starter_timeout_us = 5000000;      // How long to run starter before automatically stopping it
-uint32_t panic_relax_timeout_us = 20000000; // How long to panic before getting over it and moving on
 float flycruise_vert_margin_pc = 0.3;       // Margin of error for determining hard brake value for dropping out of cruise mode
 int cruise_setpoint_mode = THROTTLE_DELTA;
 int32_t cruise_delta_max_pc_per_s = 16;  // (in THROTTLE_DELTA mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
@@ -296,6 +294,6 @@ class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regul
     //     return true;
     // }
 };
-Timer sleep_inactivity_timer;
-Timer starterTimer(starter_timeout_us);  // If remotely-started starting event is left on for this long, end it automatically  
-Timer panicTimer(panic_relax_timeout_us);  // How long should a panic stop last?  we can't stay mad forever
+Timer sleep_inactivity_timer(180000000);
+Timer starterTimer(5000000);  // If remotely-started starting event is left on for this long, end it automatically  
+Timer panicTimer(15000000);  // How long should a panic stop last?  we can't stay mad forever

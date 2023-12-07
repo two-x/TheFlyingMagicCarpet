@@ -4,10 +4,8 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     int _joydir;
     float cruise_ctrl_extent_pc, adjustpoint;       // During cruise adjustments, saves farthest trigger position read
     bool cruise_trigger_released = false;
-    uint32_t gesture_flytimeout_us = 1250000;         // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
-    uint32_t motor_park_timeout_us = 4000000;         // Timeout when parking motors if they don't park for whatever reason (in us)
-    uint32_t sleep_inactivity_timeout_us = 180000000; // How long to wait around in shutdown mode before going to asleep mode (in us)
-    Timer gestureFlyTimer, cruiseDeltaTimer, pwrup_timer, motor_park_timer; 
+    Timer gestureFlyTimer = Timer(1250000);  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
+    Timer cruiseDeltaTimer, pwrup_timer = Timer(500000), motor_park_timer = Timer(4000000);  // Timeout when parking motors if they don't park for whatever reason (in us)
     uint32_t pwrup_timeout = 500000;
     Encoder* encoder;
     Display* display;
@@ -20,8 +18,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     RunModeManager(Display* _display, Encoder* _encoder) {
         display = _display;
         encoder = _encoder;
-        motor_park_timer.set(motor_park_timeout_us);
-        sleep_inactivity_timer.set(sleep_inactivity_timeout_us);
     }
     int mode_logic() {
         updateMode(); // Update the current mode if needed, this also sets we_just_switched_modes
@@ -201,11 +197,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             gas.pid.set_target(tach.filt());  // initialize pid output (rpm target) to current rpm  (for PID_SUSPEND_FLY mode)
             gas.cruise_target_pc = gas.pc[OUT];  //  set target throttle angle to current throttle angle  (for THROTTLE_ANGLE/THROTTLE_DELTA modes)
             cruise_adjusting = cruise_trigger_released = false;  // in case trigger is being pulled as cruise mode is entered, the ability to adjust is only unlocked after the trigger is subsequently released to the center
-            gestureFlyTimer.set(gesture_flytimeout_us);  // initialize brake-trigger timer
+            gestureFlyTimer.reset();  // initialize brake-trigger timer
         }
         _joydir = hotrc.joydir(VERT);
         if (_joydir == JOY_CENT) {
-            if (cruise_adjusting) gas.cruisepid.set_target(speedo.filt());
             cruise_adjusting = false;
             cruise_trigger_released = true;
             cruise_ctrl_extent_pc = hotrc.pc[VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
@@ -217,15 +212,14 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
                 if (cruise_adjusting) gas.cruise_target_pc += _joydir * ctrlratio * cruise_delta_max_pc_per_s * cruiseDeltaTimer.elapsed() / 1000000.0;
                 cruiseDeltaTimer.reset(); 
             }
-            else if (std::abs(hotrc.pc[VERT][FILT]) >= cruise_ctrl_extent_pc) {  // to avoid the adjustments following the trigger back to center when released
-                if (cruise_setpoint_mode == THROTTLE_ANGLE) {
-                    if (!cruise_adjusting) adjustpoint = gas.cruise_target_pc;  // When beginning adjustment, save current throttle pulse value to use as adjustment endpoint
-                    gas.cruise_target_pc = adjustpoint + ctrlratio * cruise_angle_attenuator * (((_joydir == JOY_UP) ? 100.0 : 0.0) - adjustpoint);
-                }
-                else if (cruise_setpoint_mode == PID_SUSPEND_FLY) {
-                    if (!cruise_adjusting) adjustpoint = tach.filt();
-                    gas.pid.set_target(adjustpoint + ctrlratio * (((_joydir == JOY_UP) ? tach.govern_rpm() : gas.idlectrl.idle_rpm) - adjustpoint));
-                }
+            else if (cruise_setpoint_mode == PID_SUSPEND_FLY) {
+                if (!cruise_adjusting) adjustpoint = tach.filt();
+                gas.pid.set_target(adjustpoint + ctrlratio * (((_joydir == JOY_UP) ? tach.govern_rpm() : gas.idlectrl.idle_rpm) - adjustpoint));
+                gas.cruisepid.set_target(speedo.filt());
+            }
+            else if (cruise_setpoint_mode == THROTTLE_ANGLE && std::abs(hotrc.pc[VERT][FILT]) >= cruise_ctrl_extent_pc) {  // to avoid the adjustments following the trigger back to center when released
+                if (!cruise_adjusting) adjustpoint = gas.cruise_target_pc;  // When beginning adjustment, save current throttle pulse value to use as adjustment endpoint
+                gas.cruise_target_pc = adjustpoint + ctrlratio * cruise_angle_attenuator * (((_joydir == JOY_UP) ? 100.0 : 0.0) - adjustpoint);
                 cruise_ctrl_extent_pc = std::abs(hotrc.pc[VERT][FILT]);
             }
             gas.cruise_target_pc = constrain(gas.cruise_target_pc, 0.0, 100.0);
