@@ -12,9 +12,9 @@ static RunModeManager run(&screen, &encoder);
 void setup() {
     initialize_pins();
     running_on_devboard = (read_pin(uart_tx_pin));  // detect breadboard vs. real car without use of an additional pin (add weak pullup resistor on your breadboard)
-    Serial.begin(115200);  // Open console serial port (will reassign tx pin as output)
-    delay(800);            // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
-    set_board_defaults();  // set variables as appropriate if on a breadboard
+    Serial.begin(115200);     // Open console serial port (will reassign tx pin as output)
+    delay(800);               // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
+    set_board_defaults();     // set variables as appropriate if on a breadboard
     if (RUN_TESTS) run_tests();
     hotrc.setup();
     pot.setup();
@@ -25,19 +25,19 @@ void setup() {
     tach.setup();
     speedo.setup();
     i2c.setup();
-    airvelo.setup(); // must be done after i2c is started
+    airvelo.setup();          // must be done after i2c is started
     mapsens.setup();
     lightbox.setup();
-    tempsens.setup();  // Onewire bus and temp sensors
+    tempsens.setup();         // Onewire bus and temp sensors
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Temperature sensors task
-    sim_setup();  // simulator initialize devices and pot map
-    for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);
+    for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);  // added for servos I think
     gas.setup(&hotrc, &speedo, &tach, &pot, &tempsens);
     brake.setup(&hotrc, &speedo, &mulebatt, &pressure, &brkpos);
     steer.setup(&hotrc, &speedo, &mulebatt);
     prefs.begin("FlyByWire", false);
     datapage = prefs.getUInt("dpage", PG_RUN);
     datapage_last = prefs.getUInt("dpage", PG_TEMP);
+    sim_setup();              // simulator initialize devices and pot map
     if (display_enabled) screen.setup();
     if (display_enabled) touch.setup(disp_width_pix, disp_height_pix);
     neo.setup();              // set up external neopixel strip for idiot lights visible in daylight from top of carpet

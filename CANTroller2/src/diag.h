@@ -2,7 +2,7 @@
 #include "Arduino.h"
 #include <iostream>
 #include <iomanip>  // For formatting console loop timing string output
-#include <vector>  // used to group loop times with string labels
+// #include <vector>  // used to group loop times with string labels
 enum err_type : int { LOST, RANGE, CALIB, WARN, CRIT, INFO, NUM_ERR_TYPES };
 enum err_sens : int {  // these are in order of priority 
     e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, 
