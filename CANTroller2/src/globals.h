@@ -144,7 +144,6 @@ bool car_hasnt_moved = false;           // minor state variable for fly mode - W
 bool powering_up = false;               // minor state variable for asleep mode
 bool calmode_request = false;
 bool flycruise_toggle_request = false;
-int sleep_request = REQ_NA;
 bool screensaver = false;               // Can enable experiment with animated screen draws
 int tunctrl = OFF, tunctrl_last = OFF;
 int datapage = PG_RUN, datapage_last = PG_TEMP;  // Which of the dataset pages is currently displayed and available to edit?
@@ -152,12 +151,13 @@ int sel_val = 0, sel_val_last = 0;               // In the real time tuning UI, 
 bool syspower = HIGH;                   // Set by handler only. Reflects current state of the signal
 bool starter = LOW;                     // Set by handler only. Reflects current state of starter signal (does not indicate source)
 bool starter_drive = false;             // Set by handler only. High when we're driving starter, otherwise starter is an input
-int starter_request = REQ_NA;
 bool ignition = LOW;                    // Set by handler only. Reflects current state of the signal
-int ignition_request = REQ_NA;
 bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
-int panicstop_request = REQ_ON;         // On powerup we assume the code just rebooted during a drive, because for all we know it could have 
 bool basicmodesw = LOW;
+int starter_request = REQ_NA;
+int ignition_request = REQ_NA;
+int panicstop_request = REQ_ON;         // On powerup we assume the code just rebooted during a drive, because for all we know it could have 
+int sleep_request = REQ_NA;
 float maf_gps = 0;                      // Manifold mass airflow in grams per second
 uint16_t heartbeat_override_color = 0x0000;
 

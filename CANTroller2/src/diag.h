@@ -5,11 +5,20 @@
 #include <vector>  // used to group loop times with string labels
 enum err_type : int { LOST, RANGE, CALIB, WARN, CRIT, INFO, NUM_ERR_TYPES };
 enum err_sens : int {  // these are in order of priority 
-    e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, 
-    e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, 
-    e_basicsw, e_mulebatt, e_airvelo, e_mapsens, E_NUM_SENSORS,
-    e_none 
+    e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, 
+    e_basicsw, e_mulebatt, e_airvelo, e_mapsens, E_NUM_SENSORS, e_none 
 };
+enum telemetry_dictionary_float : int { 
+    _GasServo, _BrakeMotor, _SteerMotor, _HotRCHorz, _HotRCVert, _Pressure, _BrakePos, _Speedo, _Tach,  _MuleBatt,
+    _TempEng, _TempWhFL, _TempWhFR, _TempWhRL, _TempWhRR, _TempAmb, _AirVelo, _MAP, _MAF, _Pot, NumTelemetryFloats
+};
+enum telemetry_dictionary_bool : int {
+    _Ignition, _PanicStop, _SysPower, _HotRCCh3, _StarterDr, _StarterExt, _HotRCCh4, _BasicSw, NumTelemetryBools
+};
+// class TelemetryEntry {
+//   public:
+
+// };
 class DiagRuntime {
   private:
     Hotrc* hotrc;
@@ -22,24 +31,25 @@ class DiagRuntime {
     BrakeMotor* brake;
     SteerMotor* steer;
     CarBattery* mulebatt;
+    AirVeloSensor* airvelo;
+    MAPSensor* mapsens;
+    Potentiometer* pot;
     float* maf;
     bool* ignition;
+    static constexpr int entries = 100;  // size of log buffers
+    static constexpr uint32_t logperiod = 100000;  // microseconds per logged reading
+    int64_t times[2][entries];
+    // two sets of large arrays for storage of log data. when one fills up it jumps to the other, so the first might be written to an sd card
+    float tel[2][NumTelemetryFloats][entries];  // array for telemetry of all sensors for given timestamp
+    bool bools[2][NumTelemetryBools][entries];  // boolean control values
+    int index = 0, dic = 0;  // start with dictionary 0
+    Timer logTimer;
   public:
-    enum telemetry_dictionary_float : int { 
-        _GasServo, _BrakeMotor, _SteerMotor, _HotRCHorz, _HotRCVert,
-        _Pressure, _BrakePos, _Speedo, _Tach,  _MuleBatt,
-        _TempEng, _TempWhFL, _TempWhFR, _TempWhRL, _TempWhRR,
-        _TempAmb, _AirVelo, _MAP, _MAF, NumTelemetryFloats
-    };
-    enum telemetry_dictionary_bool : int { 
-        _Ignition, _PanicStop, _SysPower, _HotRCCh3, _StarterDr, 
-        _StarterExt, _HotRCCh4, _BasicSw, NumTelemetryBools
-    };
     DiagRuntime (Hotrc* a_hotrc, TemperatureSensorManager* a_temp, PressureSensor* a_pressure, BrakePositionSensor* a_brkpos,
         Tachometer* a_tach, Speedometer* a_speedo, GasServo* a_gas, BrakeMotor* a_brake, SteerMotor* a_steer, 
-        CarBattery* a_mulebatt, float* a_maf, bool* a_ignition)
-        : hotrc(a_hotrc), tempsens(a_temp), pressure(a_pressure), brkpos(a_brkpos), tach(a_tach), speedo(a_speedo), gas(a_gas),
-          brake(a_brake), steer(a_steer), mulebatt(a_mulebatt), maf(a_maf), ignition(a_ignition) {}
+        CarBattery* a_mulebatt, AirVeloSensor* a_airvelo, MAPSensor* a_mapsens, Potentiometer* a_pot, float* a_maf, bool* a_ignition)
+        : hotrc(a_hotrc), tempsens(a_temp), pressure(a_pressure), brkpos(a_brkpos), tach(a_tach), speedo(a_speedo), gas(a_gas), brake(a_brake), 
+          steer(a_steer), mulebatt(a_mulebatt), airvelo(a_airvelo), mapsens(a_mapsens), pot(a_pot), maf(a_maf), ignition(a_ignition) {}
     // diag tunable values
     uint32_t err_timeout_us = 175000;
     uint32_t err_margin_adc = 5;
@@ -60,7 +70,41 @@ class DiagRuntime {
             for (int32_t j=0; j<E_NUM_SENSORS; j++)
                 err_sens[i][j] = false; // Initialize sensor error flags to false
         errTimer.set(err_timeout_us);
+        logTimer.set(logperiod);
     }
+    void make_log_entry() {
+        if (logTimer.expireset()) {
+            times[dic][index] = esp_timer_get_time();
+            tel[dic][_GasServo][index] = gas->pc[OUT];
+            tel[dic][_BrakeMotor][index] = brake->pc[OUT];
+            tel[dic][_SteerMotor][index] = steer->pc[OUT];
+            tel[dic][_HotRCHorz][index] = hotrc->pc[HORZ][FILT];
+            tel[dic][_HotRCVert][index] = hotrc->pc[VERT][FILT];
+            tel[dic][_Pressure][index] = pressure->filt();
+            tel[dic][_BrakePos][index] = brkpos->filt();
+            tel[dic][_Speedo][index] = speedo->filt();
+            tel[dic][_Tach][index] = tach->filt();
+            tel[dic][_MuleBatt][index] = mulebatt->filt();
+            tel[dic][_AirVelo][index] = airvelo->filt(); 
+            tel[dic][_MAP][index] = mapsens->filt();
+            tel[dic][_MAF][index] = *maf;
+            tel[dic][_Pot][index] = pot->val();
+            bools[dic][_Ignition][index] = *ignition;
+            // tel[dic][_TempEng][index] = 
+            // tel[dic][_TempWhFL][index] = 
+            // tel[dic][_TempWhFR][index] = 
+            // tel[dic][_TempWhRL][index] = 
+            // tel[dic][_TempWhRR][index] = 
+            // tel[dic][_TempAmb][index] = 
+            ++index %= entries;
+            printf(".");
+            if (!index) {
+                dic = !dic;
+                printf("Filled dic %d\n", dic);
+            }
+        }
+    }
+
     void update() {
         if (errTimer.expireset()) {
             // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
@@ -117,51 +161,7 @@ class DiagRuntime {
                     }
             }
             // printf ("\n");
-
-            // Detectable transducer-related failures :: How we can detect them
-            // Brakes:
-            // * Pressure sensor, chain linkage, or vehicle brakes problem :: Motor retracted with position below zeropoint, but pressure did not increase.
-            // * Pressure sensor zero point miscalibration (no force on pedal) :: Minimum pressure reading since startup has never reached 0 PSI or less (cal is too high), or, is more than a given margin below 0. * Note this can also be an auto-calibration approach
-            // * Pressure sensor max point miscalibration (full force on pedal) :: When target set to max pressure, after motor moves to the point position isn't changing, the pressure reading deviates from max setting by more than a given margin. * Note this can also be an auto-calibration approach
-            // * Position sensor problem :: When pressure is not near max, motor is driven more than X volt-seconds without position change (of the expected polarity).
-            // * Brake motor problem :: When motor is driven more than X volt-seconds without any change (of the expected polarity) to either position or pressure.
-            // * Brake calibration, idle high, or speedo sensor problem :: Motor retracted to near limit, with position decreased and pressure increased as expected, but speed doesn't settle toward 0.
-            // * Pressure sensor problem :: If pressure reading is out of range, or ever changes in the unexpected direction during motor movement.
-            // * Position sensor or limit switch problem :: If position reading is outside the range of the motor limit switches.
-            // Steering:
-            // * Chain derailment or motor or limit switch problem :: Motor told to drive for beyond X volt-seconds in one direction for > Y seconds.
-            // Throttle/Engine:
-            // * AirVelo/MAP/tach sensor failure :: If any of these three sensor readings are out of range to the other two.
-            // Tach/Speedo:
-            // * Sensor read problem :: Derivative of consecutive readings (rate of change) spikes higher than it's possible for the physical rotation to change - (indicates missing pulses)
-            // * Disconnected/problematic speed sensor :: ignition is on, tach is nonzero, and runmode = hold/fly/cruise, yet speed is zero. Or, throttle is at idle and brake pressure high for enough time, yet speed readings are nonzero
-            // * Disconnected/problematic tach sensor :: runmode is hold/fly/cruise, ignition is on and speed increases, but tach is below idle speed 
-            // Temperature:
-            // * Engine temperature sensor problem :: Over X min elapsed with Ignition on and tach >= low_idle, but engine temp is below nominal warmup temp.
-            // * Cooling system, coolant, fan, thermostat, or coolant sensor problem :: Engine temp stays over ~204 for >= X min without coolant temp dropping due to fan.
-            // * Axle, brake, etc. wheel issue or wheel sensor problem :: The hottest wheel temp is >= X degF hotter than the 2nd hottest wheel.
-            // * Axle, brake, etc. wheel issue or wheel/ambient sensor problem :: A wheel temp >= X degF higher than ambient temp.
-            // * Ignition problem, fire alarm, or temp sensor problem :: Ignition is off but a non-ambient temp reading increases to above ambient temp.
-            // AirVelo:
-            // * Air filter clogged, or carburetor problem :: Track ratio of massairflow/throttle angle whenever throttle is constant. Then, if that ratio lowers over time by X below that level, indicates restricted air. 
-            // Battery:
-            // * Battery low :: Mulebatt readings average is below a given threshold
-            // * Inadequate charging :: Mulebatt readings average has decreased over long time period
-            // 
-            // More ideas to define better and implement:
-            // * Check if the pressure response is characteristic of air being in the brake line.
-            // * Axle/brake drum may be going bad (increased engine RPM needed to achieve certain speedo)  (beware going up hill may look the same).
-            // * E-brake has been left on (much the same symptoms as above? (beware going up hill may look the same) 
-            // * Carburetor not behaving (or air filter is clogged). (See above about engine deiseling - we can detect this!)
-            // * After increasing braking, the actuator position changes in the opposite direction, or vise versa.
-            // * Changing an actuator is not having the expected effect.
-            // * A tunable value suspected to be out of tune.
-            // * Check regularly for ridiculous shit. Compare our variable values against a predetermined list of conditions which shouldn't be possible or are at least very suspect. For example:
-            //   A) Sensor reading is out of range, or has changed faster than it ever should.
-            //   B) Stopping the car on entering hold/shutdown mode is taking longer than it ever should.
-            //   C) Mule seems to be accelerating like a Tesla.
-            //   D) Car is accelerating yet engine is at idle.
-            // * The control system has nonsensical values in its variables.
+            make_log_entry();
         }
     }
     void print() {
@@ -260,3 +260,49 @@ class LoopTimer {
 #else
     void run_tests() {}
 #endif
+
+
+// Detectable transducer-related failures :: How we can detect them
+// Brakes:
+// * Pressure sensor, chain linkage, or vehicle brakes problem :: Motor retracted with position below zeropoint, but pressure did not increase.
+// * Pressure sensor zero point miscalibration (no force on pedal) :: Minimum pressure reading since startup has never reached 0 PSI or less (cal is too high), or, is more than a given margin below 0. * Note this can also be an auto-calibration approach
+// * Pressure sensor max point miscalibration (full force on pedal) :: When target set to max pressure, after motor moves to the point position isn't changing, the pressure reading deviates from max setting by more than a given margin. * Note this can also be an auto-calibration approach
+// * Position sensor problem :: When pressure is not near max, motor is driven more than X volt-seconds without position change (of the expected polarity).
+// * Brake motor problem :: When motor is driven more than X volt-seconds without any change (of the expected polarity) to either position or pressure.
+// * Brake calibration, idle high, or speedo sensor problem :: Motor retracted to near limit, with position decreased and pressure increased as expected, but speed doesn't settle toward 0.
+// * Pressure sensor problem :: If pressure reading is out of range, or ever changes in the unexpected direction during motor movement.
+// * Position sensor or limit switch problem :: If position reading is outside the range of the motor limit switches.
+// Steering:
+// * Chain derailment or motor or limit switch problem :: Motor told to drive for beyond X volt-seconds in one direction for > Y seconds.
+// Throttle/Engine:
+// * AirVelo/MAP/tach sensor failure :: If any of these three sensor readings are out of range to the other two.
+// Tach/Speedo:
+// * Sensor read problem :: Derivative of consecutive readings (rate of change) spikes higher than it's possible for the physical rotation to change - (indicates missing pulses)
+// * Disconnected/problematic speed sensor :: ignition is on, tach is nonzero, and runmode = hold/fly/cruise, yet speed is zero. Or, throttle is at idle and brake pressure high for enough time, yet speed readings are nonzero
+// * Disconnected/problematic tach sensor :: runmode is hold/fly/cruise, ignition is on and speed increases, but tach is below idle speed 
+// Temperature:
+// * Engine temperature sensor problem :: Over X min elapsed with Ignition on and tach >= low_idle, but engine temp is below nominal warmup temp.
+// * Cooling system, coolant, fan, thermostat, or coolant sensor problem :: Engine temp stays over ~204 for >= X min without coolant temp dropping due to fan.
+// * Axle, brake, etc. wheel issue or wheel sensor problem :: The hottest wheel temp is >= X degF hotter than the 2nd hottest wheel.
+// * Axle, brake, etc. wheel issue or wheel/ambient sensor problem :: A wheel temp >= X degF higher than ambient temp.
+// * Ignition problem, fire alarm, or temp sensor problem :: Ignition is off but a non-ambient temp reading increases to above ambient temp.
+// AirVelo:
+// * Air filter clogged, or carburetor problem :: Track ratio of massairflow/throttle angle whenever throttle is constant. Then, if that ratio lowers over time by X below that level, indicates restricted air. 
+// Battery:
+// * Battery low :: Mulebatt readings average is below a given threshold
+// * Inadequate charging :: Mulebatt readings average has decreased over long time period
+// 
+// More ideas to define better and implement:
+// * Check if the pressure response is characteristic of air being in the brake line.
+// * Axle/brake drum may be going bad (increased engine RPM needed to achieve certain speedo)  (beware going up hill may look the same).
+// * E-brake has been left on (much the same symptoms as above? (beware going up hill may look the same) 
+// * Carburetor not behaving (or air filter is clogged). (See above about engine deiseling - we can detect this!)
+// * After increasing braking, the actuator position changes in the opposite direction, or vise versa.
+// * Changing an actuator is not having the expected effect.
+// * A tunable value suspected to be out of tune.
+// * Check regularly for ridiculous shit. Compare our variable values against a predetermined list of conditions which shouldn't be possible or are at least very suspect. For example:
+//   A) Sensor reading is out of range, or has changed faster than it ever should.
+//   B) Stopping the car on entering hold/shutdown mode is taking longer than it ever should.
+//   C) Mule seems to be accelerating like a Tesla.
+//   D) Car is accelerating yet engine is at idle.
+// * The control system has nonsensical values in its variables.

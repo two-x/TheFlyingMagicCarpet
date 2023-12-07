@@ -29,8 +29,8 @@ static GasServo gas(gas_pwm_pin, 60);
 static BrakeMotor brake(brake_pwm_pin, 50);
 static SteerMotor steer(steer_pwm_pin, 50);
 static WebManager web;
-static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &maf_gps, &ignition);
 static LoopTimer looptimer;
+static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &maf_gps, &ignition);
 
 void initialize_pins() {
     set_pin(ignition_pin, OUTPUT, LOW);
