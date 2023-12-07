@@ -1,12 +1,15 @@
+// objects.h : contains instantiations of major system components, and global functions
 #pragma once
 #include <Preferences.h>  // Functions for writing to flash, i think
-#include "web.h"
+#include "globals.h"
+#include "sensors.h"  // includes uictrl.h, i2cbus.h
+#include "motors.h"  // includes qpid.h, temperature.h
 #include "diag.h"
+#include "web.h"
 // #include <HardwareSerial.h>  // In case we ever talk to jaguars over asynchronous serial port, uncomment:
 // HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
 
 // Instantiate objects
-// using static as a way to help enforce some control over dependencies (to ease transition to increased compartmentalization)
 static Preferences prefs;  // Persistent config storage
 static Potentiometer pot(pot_pin);
 static Simulator sim(pot);
@@ -26,7 +29,7 @@ static GasServo gas(gas_pwm_pin, 60);
 static BrakeMotor brake(brake_pwm_pin, 50);
 static SteerMotor steer(steer_pwm_pin, 50);
 static WebManager web;
-static DiagRuntime diag;
+static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &maf_gps, &ignition);
 static LoopTimer looptimer;
 
 void initialize_pins() {

@@ -298,7 +298,7 @@ public:
         TemperatureSensor* sens = get_sensor(locat);  // ambient
         return (bool)sens; 
     }
-    int locint(loc locat) {
+    int locint(loc locat = loc::NUM_LOCATIONS) {
         return static_cast<int>(locat);
     }
     int errclass(loc locat) {

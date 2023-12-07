@@ -1,9 +1,6 @@
 // Carpet CANTroller II  Source Code  - For ESP32-S3-DevKitC-1-N8
-#include "globals.h"
-#include "sensors.h"  // includes uictrl.h, i2cbus.h
-#include "motors.h"  // includes qpid.h, temperature.h
-#include "objects.h"  // includes web.h
-#include "display.h"  // includes touch.h, neopixel.h
+#include "objects.h"
+#include "display.h"  // includes neopixel.h, touch.h
 #include "RunModeManager.h"
 static NeopixelStrip neo(neopixel_pin);
 static IdiotLights idiots;
@@ -45,7 +42,7 @@ void setup() {
     if (display_enabled) touch.setup(disp_width_pix, disp_height_pix);
     neo.setup();              // set up external neopixel strip for idiot lights visible in daylight from top of carpet
     idiots.setup(&neo);       // assign same idiot light variable associations and colors to neopixels as on screen  
-    diag.setup();              // initialize diagnostic codes
+    diag.setup();             // initialize diagnostic codes
     web.setup();              // start up access point, web server, and json-enabled web socket for diagnostic phone interface
     xTaskCreate(update_web, "Update Web Services", 4096, NULL, 6, NULL);  // wifi/web task. 2048 is too low, it crashes when client connects
     printf("Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
@@ -79,5 +76,5 @@ void loop() {                 // code takes about 1 ms to loop on average
     neo.update(colorcard[run.mode]);  // ~100us
     screen.update(run.mode);  // Display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
     // lightbox.update(run.mode, speedo.human());  // communicate any relevant data to the lighting controller
-    looptimer.update();        // looptimer.mark("F");
+    looptimer.update();       // looptimer.mark("F");
 }

@@ -3,14 +3,43 @@
 #include <iostream>
 #include <iomanip>  // For formatting console loop timing string output
 #include <vector>  // used to group loop times with string labels
-#include "globals.h"
 enum err_type : int { LOST, RANGE, CALIB, WARN, CRIT, INFO, NUM_ERR_TYPES };
-enum err_sens : int { e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, e_basicsw, e_mulebatt, e_airvelo, e_mapsens, E_NUM_SENSORS, e_none };  // these are in order of priority
-enum telemetry_dictionary_float : int { _GasServo, _BrakeMotor, _SteerMotor, _HotRCHorz, _HotRCVert, _Pressure, _BrakePos, _Speedo, _Tach, _TempEng, _TempWhFL, _TempWhFR, _TempWhRL, _TempWhRR, _TempAmb, _MuleBatt, _AirVelo, _MAP, _MAF, NumTelemetryFloats };  // these are in order of priority
-enum telemetry_dictionary_bool : int { _Ignition, _PanicStop, _SysPower, _HotRCCh3, _StarterDr, _StarterExt, _HotRCCh4, _BasicSw, NumTelemetryBools };  // these are in order of priority
-
+enum err_sens : int {  // these are in order of priority 
+    e_hrcvert, e_hrcch3, e_pressure, e_brkpos, e_speedo, 
+    e_hrchorz, e_tach, e_temps, e_starter, e_hrcch4, 
+    e_basicsw, e_mulebatt, e_airvelo, e_mapsens, E_NUM_SENSORS,
+    e_none 
+};
 class DiagRuntime {
+  private:
+    Hotrc* hotrc;
+    TemperatureSensorManager* tempsens;
+    PressureSensor* pressure;
+    BrakePositionSensor* brkpos;
+    Tachometer* tach;
+    Speedometer* speedo;
+    GasServo* gas;
+    BrakeMotor* brake;
+    SteerMotor* steer;
+    CarBattery* mulebatt;
+    float* maf;
+    bool* ignition;
   public:
+    enum telemetry_dictionary_float : int { 
+        _GasServo, _BrakeMotor, _SteerMotor, _HotRCHorz, _HotRCVert,
+        _Pressure, _BrakePos, _Speedo, _Tach,  _MuleBatt,
+        _TempEng, _TempWhFL, _TempWhFR, _TempWhRL, _TempWhRR,
+        _TempAmb, _AirVelo, _MAP, _MAF, NumTelemetryFloats
+    };
+    enum telemetry_dictionary_bool : int { 
+        _Ignition, _PanicStop, _SysPower, _HotRCCh3, _StarterDr, 
+        _StarterExt, _HotRCCh4, _BasicSw, NumTelemetryBools
+    };
+    DiagRuntime (Hotrc* a_hotrc, TemperatureSensorManager* a_temp, PressureSensor* a_pressure, BrakePositionSensor* a_brkpos,
+        Tachometer* a_tach, Speedometer* a_speedo, GasServo* a_gas, BrakeMotor* a_brake, SteerMotor* a_steer, 
+        CarBattery* a_mulebatt, float* a_maf, bool* a_ignition)
+        : hotrc(a_hotrc), tempsens(a_temp), pressure(a_pressure), brkpos(a_brkpos), tach(a_tach), speedo(a_speedo), gas(a_gas),
+          brake(a_brake), steer(a_steer), mulebatt(a_mulebatt), maf(a_maf), ignition(a_ignition) {}
     // diag tunable values
     uint32_t err_timeout_us = 175000;
     uint32_t err_margin_adc = 5;
@@ -25,7 +54,13 @@ class DiagRuntime {
     bool err_sens[NUM_ERR_TYPES][E_NUM_SENSORS]; //  [LOST/RANGE] [e_hrchorz/e_hrcvert/e_hrcch3/e_hrcch4/e_pressure/e_brkpos/e_tach/e_speedo/e_airvelo/e_mapsens/e_temps/e_mulebatt/e_basicsw/e_starter]   // sens::opt_t::NUM_SENSORS]
     uint8_t highest_pri_failing_sensor[NUM_ERR_TYPES];
     uint8_t highest_pri_failing_last[NUM_ERR_TYPES];
-    DiagRuntime() {}
+    
+    void setup() {
+        for (int32_t i=0; i<NUM_ERR_TYPES; i++)
+            for (int32_t j=0; j<E_NUM_SENSORS; j++)
+                err_sens[i][j] = false; // Initialize sensor error flags to false
+        errTimer.set(err_timeout_us);
+    }
     void update() {
         if (errTimer.expireset()) {
             // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
@@ -33,7 +68,7 @@ class DiagRuntime {
             // This section should become a real time self-diagnostic system, to look for anything that doesn't seem right and display an
             // informed trouble code. Much like the engine computer in cars nowadays, which keep track of any detectable failures for you to
             // retreive with an OBD tool. Some checks are below, along with other possible things to check for:
-            if (!ignition && !tach.engine_stopped()) {  // Check: if engine is turning when ignition signal is off
+            if (!ignition && !tach->engine_stopped()) {  // Check: if engine is turning when ignition signal is off
                 if (diag_ign_error_enabled) { // See if the engine is turning despite the ignition being off
                     Serial.println (F("Detected engine rotation in the absense of ignition signal"));  // , tach_filt_rpm, ignition
                     diag_ign_error_enabled = false;  // Prevents endless error reporting the same error
@@ -44,27 +79,27 @@ class DiagRuntime {
             bool not_detected;
             not_detected = false;  // first reset
             for (int cat = 0; cat < NUM_TEMP_CATEGORIES; cat++) temp_err[cat] = false;  // first reset
-            for (int l = 0; l < tempsens.locint(loc::NUM_LOCATIONS); l++) {
-                if (!tempsens.detected(l)) not_detected = true;
-                else if (tempsens.val(l) >= temp_lims_f[tempsens.errclass(l)][WARNING]) temp_err[tempsens.errclass(l)] = true;
+            for (int l = 0; l < tempsens->locint(); l++) {
+                if (!tempsens->detected(l)) not_detected = true;
+                else if (tempsens->val(l) >= temp_lims_f[tempsens->errclass(l)][WARNING]) temp_err[tempsens->errclass(l)] = true;
             }
             err_sens[LOST][e_temps] = not_detected;
 
             // Detect sensors disconnected or giving out-of-range readings.
             // TODO : The logic of this for each sensor should be moved to devices.h objects
-            err_sens[RANGE][e_brkpos] = (brkpos.in() < brkpos.op_min_in() || brkpos.in() > brkpos.op_max_in());
-            err_sens[LOST][e_brkpos] = (brkpos.raw() < err_margin_adc);
-            err_sens[RANGE][e_pressure] = (pressure.psi() < pressure.op_min_psi() || pressure.psi() > pressure.op_max_psi());
-            err_sens[LOST][e_pressure] = (pressure.raw() < err_margin_adc);
-            err_sens[RANGE][e_mulebatt] = (mulebatt.v() < mulebatt.op_min_v() || mulebatt.v() > mulebatt.op_max_v());
+            err_sens[RANGE][e_brkpos] = (brkpos->in() < brkpos->op_min_in() || brkpos->in() > brkpos->op_max_in());
+            err_sens[LOST][e_brkpos] = (brkpos->raw() < err_margin_adc);
+            err_sens[RANGE][e_pressure] = (pressure->psi() < pressure->op_min_psi() || pressure->psi() > pressure->op_max_psi());
+            err_sens[LOST][e_pressure] = (pressure->raw() < err_margin_adc);
+            err_sens[RANGE][e_mulebatt] = (mulebatt->v() < mulebatt->op_min_v() || mulebatt->v() > mulebatt->op_max_v());
             for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
-                err_sens[RANGE][ch] = !hotrc.radiolost() && ((hotrc.us[ch][RAW] < hotrc.us[ch][OPMIN] - (hotrc.us[ch][MARGIN] >> 1)) 
-                                        || (hotrc.us[ch][RAW] > hotrc.us[ch][OPMAX] + (hotrc.us[ch][MARGIN] >> 1)));  // && ch != VERT
-                err_sens[LOST][ch] = !hotrc.radiolost() && ((hotrc.us[ch][RAW] < (hotrc.absmin_us - hotrc.us[ch][MARGIN]))
-                                        || (hotrc.us[ch][RAW] > (hotrc.absmax_us + hotrc.us[ch][MARGIN])));
+                err_sens[RANGE][ch] = !hotrc->radiolost() && ((hotrc->us[ch][RAW] < hotrc->us[ch][OPMIN] - (hotrc->us[ch][MARGIN] >> 1)) 
+                                        || (hotrc->us[ch][RAW] > hotrc->us[ch][OPMAX] + (hotrc->us[ch][MARGIN] >> 1)));  // && ch != VERT
+                err_sens[LOST][ch] = !hotrc->radiolost() && ((hotrc->us[ch][RAW] < (hotrc->absmin_us - hotrc->us[ch][MARGIN]))
+                                        || (hotrc->us[ch][RAW] > (hotrc->absmax_us + hotrc->us[ch][MARGIN])));
             }
-            // err_sens[RANGE][e_hrcvert] = (hotrc.us[VERT][RAW] < hotrc.failsafe_us - hotrc.us[ch][MARGIN])
-            //     || ((hotrc.us[VERT][RAW] < hotrc.us[VERT][OPMIN] - halfMARGIN) && (hotrc.us[VERT][RAW] > hotrc.failsafe_us + hotrc.us[ch][MARGIN]));
+            // err_sens[RANGE][e_hrcvert] = (hotrc->us[VERT][RAW] < hotrc->failsafe_us - hotrc->us[ch][MARGIN])
+            //     || ((hotrc->us[VERT][RAW] < hotrc->us[VERT][OPMIN] - halfMARGIN) && (hotrc->us[VERT][RAW] > hotrc->failsafe_us + hotrc->us[ch][MARGIN]));
             
             // Set sensor error idiot light flags
             // printf ("Sensors errors: ");
@@ -128,12 +163,6 @@ class DiagRuntime {
             //   D) Car is accelerating yet engine is at idle.
             // * The control system has nonsensical values in its variables.
         }
-    }
-    void setup() {
-        for (int32_t i=0; i<NUM_ERR_TYPES; i++)
-            for (int32_t j=0; j<E_NUM_SENSORS; j++)
-                err_sens[i][j] = false; // Initialize sensor error flags to false
-        errTimer.set(err_timeout_us);
     }
     void print() {
         for (int32_t t=LOST; t<=INFO; t++) {
