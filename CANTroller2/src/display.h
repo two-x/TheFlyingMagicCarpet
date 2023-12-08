@@ -711,36 +711,12 @@ class Display {
         }
     }
     void draw_simbutton(int cntr_x, int cntr_y, int dir, uint16_t color) {
-        if (pretty_buttons) {
-            if      (dir == JOY_PLUS)  _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_plus_40);
-            else if (dir == JOY_MINUS) _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_minus_40);
-            else if (dir == JOY_UP)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_up_40);
-            else if (dir == JOY_DN)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_down_40);
-            else if (dir == JOY_LT)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_left_40);
-            else if (dir == JOY_RT)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_right_40);
-            return;
-        }
-        if (dir == JOY_PLUS) dir = JOY_UP;
-        else if (dir == JOY_MINUS) dir = JOY_DN;
-        if (dir == JOY_CENT) {
-            _tft.fillCircle(cntr_x, cntr_y, touch_simbutton / 2, color);
-            _tft.drawCircle(cntr_x, cntr_y, touch_simbutton / 2, LYEL);
-        }
-        else if (dir == JOY_DN || dir == JOY_UP) {
-            _tft.fillTriangle(cntr_x - touch_simbutton/2, cntr_y, cntr_x + touch_simbutton/2, cntr_y, cntr_x, cntr_y - ((dir == JOY_UP) ? 1 : -1) * touch_simbutton/2, color);
-            _tft.drawTriangle(cntr_x - touch_simbutton/2, cntr_y, cntr_x + touch_simbutton/2, cntr_y, cntr_x, cntr_y - ((dir == JOY_UP) ? 1 : -1) * touch_simbutton/2, LYEL);
-
-            _tft.fillRect(cntr_x - 3*touch_simbutton/8, cntr_y - ((dir == JOY_UP) ? 0 : touch_simbutton/2), 3*touch_simbutton/4, touch_simbutton/2, color);
-            _tft.drawRect(cntr_x - 3*touch_simbutton/8, cntr_y - ((dir == JOY_UP) ? 0 : touch_simbutton/2), 3*touch_simbutton/4, touch_simbutton/2, LYEL);
-            _tft.fillRect(cntr_x - 3*touch_simbutton/8 + 1, cntr_y - 1, 3*touch_simbutton/4 - 2, 2, color);
-        }
-        else if (dir == JOY_LT || dir == JOY_RT) {
-            _tft.fillTriangle(cntr_x, cntr_y - touch_simbutton/2, cntr_x, cntr_y + touch_simbutton/2, cntr_x + ((dir == JOY_RT) ? 1 : -1) * touch_simbutton/2, cntr_y, color);
-            _tft.drawTriangle(cntr_x, cntr_y - touch_simbutton/2, cntr_x, cntr_y + touch_simbutton/2, cntr_x + ((dir == JOY_RT) ? 1 : -1) * touch_simbutton/2, cntr_y, LYEL);
-            _tft.fillRect(cntr_x - ((dir == JOY_RT) ? touch_simbutton/2 : 0), cntr_y - 3*touch_simbutton/8, touch_simbutton/2, 3*touch_simbutton/4, color);
-            _tft.drawRect(cntr_x - ((dir == JOY_RT) ? touch_simbutton/2 : 0), cntr_y - 3*touch_simbutton/8, touch_simbutton/2, 3*touch_simbutton/4, LYEL);
-            _tft.fillRect(cntr_x - 1, cntr_y - 3*touch_simbutton/8 + 1, 2, 3*touch_simbutton/4 - 2, color);
-        }
+        if      (dir == JOY_PLUS)  _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_plus_40);
+        else if (dir == JOY_MINUS) _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_minus_40);
+        else if (dir == JOY_UP)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_up_40);
+        else if (dir == JOY_DN)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_down_40);
+        else if (dir == JOY_LT)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_left_40);
+        else if (dir == JOY_RT)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_right_40);
     }
     void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
         if (!create) {
@@ -755,11 +731,7 @@ class Display {
                     draw_simbutton(cntr_x + 2, cntr_y - 1, simgriddir[row][col], LYEL);  // for 3d look
                     draw_simbutton(cntr_x, cntr_y, simgriddir[row][col], DGRY);
                     _tft.setTextColor(LYEL);
-                    if (!pretty_buttons) {
-                        int32_t x_mod = cntr_x-(arraysize(simgrid[row][col])-1)*(disp_font_width>>1);
-                        draw_string(x_mod, x_mod, cntr_y-(disp_font_height>>1), simgrid[row][col], "", LYEL, DGRY);
-                    }
-                    else if (row % 2) {
+                    if (row % 2) {
                         _tft.setTextDatum(MC_DATUM);
                         _tft.drawString(simgrid[row][col], cntr_x, cntr_y - touch_cell_v_pix/2, 1);
                     }
