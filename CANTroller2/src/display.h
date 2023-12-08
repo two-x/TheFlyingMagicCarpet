@@ -2,8 +2,14 @@
 #include <TFT_eSPI.h>
 #include "neopixel.h"
 #include "touch.h"
+#include "images.h"
 // LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
 // Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
+// Relevant links for UI development:
+// free images: http://iconarchive.com/  // 1. resize to pixels needed, jpg w/ black backgd  2. convert to rgb565 color 
+// image to rgb565 color converter: https://www.youtube.com/redirect?event=video_description&redir_token=QUFFLUhqbkYtMGJvMS1VVWV0ZUpIb1Y4U2U2QzRLM3BKZ3xBQ3Jtc0tudG5MS1hVdmlLajdrNHFMWWtWUkFGTFNadUhaWkVob2ExNV8ya29kLXFmcDh1SEVINDFEeWtSX3A0SW40UlNTcy1CYVlSTTV5cXJKM25VcGxoWjdxSk9kZVFadURVWHhJcU9hMVRUWENyVGVjRkw4aw&q=http%3A%2F%2Fwww.rinkydinkelectronics.com%2Ft_imageconverter565.php&v=U4jOFLFNZBI
+// rgb565 color picker site: http://www.barth-dev.de/online/rgb565  // named colors: https://wiki.tcl-lang.org/page/Colors+with+Names
+// Font1 character map (use right side):  https://learn.adafruit.com/assets/103682
 #define BLK  0x0000  // greyscale: full black (RGB elements off)
 #define HGRY 0x2104  // greyscale: hella dark grey
 #define DGRY 0x39c7  // greyscale: very dark grey
@@ -36,7 +42,6 @@
 #define PNK  0xfcf3  // pink is the best color
 #define DPNK 0xfa8a  // we need all shades of pink
 #define LPNK 0xfe18  // especially light pink, the champagne of pinks
-// 5-6-5 color picker site: http://www.barth-dev.de/online/rgb565  // named colors: https://wiki.tcl-lang.org/page/Colors+with+Names
 
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
 #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
@@ -232,16 +237,16 @@ static constexpr uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where un
 };  // These bitmaps are in the same format as the idiot light bitmaps, described below
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
 static constexpr int simgriddir[4][3] = {
-    { JOY_UP, JOY_UP, JOY_UP, },
-    { JOY_DN, JOY_DN, JOY_DN, },
-    { JOY_UP, JOY_UP, JOY_RT, },
-    { JOY_DN, JOY_DN, JOY_LT, },
+    { JOY_PLUS,  JOY_PLUS,  JOY_PLUS,  },
+    { JOY_MINUS, JOY_MINUS, JOY_MINUS, },
+    { JOY_PLUS,  JOY_UP,    JOY_RT,    },
+    { JOY_MINUS, JOY_DN,    JOY_LT,    },
 };
 static constexpr char simgrid[4][3][4] = {
     { "PSI", "RPM", "MPH" },
     { "PSI", "RPM", "MPH" },
-    { "POS", "JOY", "JOY" },
-    { "POS", "JOY", "JOY" }, // Font special characters is the right-side map:  https://learn.adafruit.com/assets/103682
+    { "POS", "   ", "   " },
+    { "POS", "   ", "   " },
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 class TunerPanel {
   public:
@@ -405,6 +410,7 @@ class Display {
         _tft.begin();
         _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
         _tft.setTouch(touch_cal_data);
+        _tft.setSwapBytes(true);  // rearranges color ordering of 16bit colors when displaying image files
         for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
             disp_age_quanta[lineno] = -1;
             memset(disp_values[lineno], 0, strlen(disp_values[lineno]));
@@ -702,6 +708,17 @@ class Display {
         }
     }
     void draw_simbutton(int cntr_x, int cntr_y, int dir, uint16_t color, bool create) {
+        if (pretty_buttons) {
+            if      (dir == JOY_PLUS)  _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_plus_40);
+            else if (dir == JOY_MINUS) _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_minus_40);
+            else if (dir == JOY_UP)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_up_40);
+            else if (dir == JOY_DN)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_down_40);
+            else if (dir == JOY_LT)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_left_40);
+            else if (dir == JOY_RT)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_right_40);
+            return;
+        }
+        if (dir == JOY_PLUS) dir = JOY_UP;
+        else if (dir == JOY_MINUS) dir = JOY_DN;
         if (dir == JOY_CENT) {
             _tft.fillCircle(cntr_x, cntr_y, touch_simbutton / 2, create ? color : BLK);
             _tft.drawCircle(cntr_x, cntr_y, touch_simbutton / 2, create ? LYEL : BLK);
@@ -724,12 +741,13 @@ class Display {
     }
     void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
         _tft.fillRect(disp_simbuttons_x, disp_simbuttons_y, saver.res[HORZ], saver.res[VERT], BLK);
-        _tft.setTextColor (LYEL);
+        _tft.setTextColor(LYEL);
+        _tft.setTextSize(2);
         for (int32_t row = 0; row < arraysize(simgrid); row++) {
             for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
                 int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
                 int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
-                if (strcmp (simgrid[row][col], ______)) {
+                if (strcmp(simgrid[row][col], ______)) {
                     draw_simbutton(cntr_x + 2, cntr_y - 1, simgriddir[row][col], LYEL, create);  // for 3d look
                     draw_simbutton(cntr_x, cntr_y, simgriddir[row][col], DGRY, create);
                     if (create) {
