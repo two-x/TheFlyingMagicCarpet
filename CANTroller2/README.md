@@ -12,29 +12,29 @@
 1. Edit the display library setup file. See directions in the .../Cantroller2/src/tftsetup.h file.
 
 # Uploading
-1. The code base contains C++ source files in <project>/src and also runtime files in <project>/data.
-1. Each board needs a one-time filesystem format. Connect the board, click the alien head and then "Build filesystem". If it fails see notes in hardware section above.
-1. Upload files in data directory: click the alien head and then "Upload Filesystem". Redo this whenever files have been changed.
-1. Compile and upload code: click the alien head and then "Upload". Redo this whenever code has been modified.
+1. The code base contains C++ source files in CANTroller2/src and also runtime files in Cantroller2/data.
+1. To compile the filesystem based on /data contents, under alien head click "Platform/Build filesystem". The result will be a file CANTroller/.pio/build/littlefs.bin . If it fails see notes in hardware section above.
+1. To compile the code in /src, click the alien head and then "Build". The result will be a file CANTroller/.pio/build/firmware.bin .
+1. USB upload: You can write these to the board flash over usb using "Platform/Upload Filesystem Image", or "Upload", respectively.
+1. OTA upload: Alternately, load using the over the air updater. Power the board, log in to the "artcarpet" wifi ssid, and browse to 192.168.1.69/update . First select the intended OTA Mode for each file, then browse to the above files one at a time, to load and flash them.
 
 # Wifi
-1. Once code is running, if web server is enabled then the board will act as an access point and web server. To access, scan for wifi networks on any nearby computer or phone, ssid = magiccarpet, passwd = checkmate. Then browse to 192.168.1.69/ .
+1. Once code is running, if web server is enabled then the board will act as an access point and web server. To access, scan for wifi networks on any nearby computer or phone, ssid = artcarpet, passwd = checkmate. Then browse to 192.168.1.69/ .
 
 ## Connected Hardware
-1. ** Display **
-1. ** Touchscreen **
-1. ** SD Card **
-    1.1. SD interface (not yet implemented) is integrated with touchscreen module. We hope to use this storage area for logging runtime data.
-    1.1. The 16GB SD card is pre-formatted in windows with FAT32 file system, 32kB allocation unit size. MacOS recognizes this as "MS-DOS (FAT32)".
-1. ** Digital IO **
-1. ** Analog Inputs **
-1. ** Hotrc Radio Receiver **
-1. ** Rotary encoder **
-1. ** Neopixels **
-1. ** Servos/Jaguars **
-1. ** Hall Effect Sensors **
-1. ** Temperature Sensors **
-1. ** Manifold Mass Air Flow Sensors **
+1. Display
+1. Touchscreen
+1. SD Card
+SD interface (not yet implemented) is integrated with touchscreen module. We hope to use this storage area for logging runtime data.  The 16GB SD card is pre-formatted in windows with FAT32 file system, 32kB allocation unit size. MacOS recognizes this as "MS-DOS (FAT32)".
+1. Digital IO
+1. Analog Inputs
+1. Hotrc Radio Receiver
+1. Rotary encoder
+1. Neopixels
+1. Servos/Jaguars
+1. Hall Effect Sensors
+1. Temperature Sensors
+1. Manifold Mass Air Flow Sensors
 
 --
 Notes from before:
