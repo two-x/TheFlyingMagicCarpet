@@ -243,10 +243,10 @@ static constexpr int simgriddir[4][3] = {
     { JOY_MINUS, JOY_DN,    JOY_LT,    },
 };
 static constexpr char simgrid[4][3][4] = {
-    { "PSI", "RPM", "MPH" },
-    { "PSI", "RPM", "MPH" },
-    { "POS", "   ", "   " },
-    { "POS", "   ", "   " },
+    { "psi", "rpm", "mph" },
+    { "psi", "rpm", "mph" },
+    { "pos", "   ", "   " },
+    { "pos", "   ", "   " },
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 class TunerPanel {
   public:
@@ -373,9 +373,12 @@ class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabili
             }
             if (saver_lotto) _sprite->drawString("do drugs", res[HORZ] / 2, res[VERT] / 2, 4);
             for (int axis=HORZ; axis<=VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
-            yield();
-            _sprite->pushSprite(disp_simbuttons_x, disp_simbuttons_y);
+            push();
         }
+    }
+    void push() {
+        yield();
+        _sprite->pushSprite(disp_simbuttons_x, disp_simbuttons_y);
     }
   private:
     void saver_pattern(int newpat=-1) {  // pass non-negative value for a specific pattern, or -1 for cycle, -2 for random
@@ -416,9 +419,9 @@ class Display {
             memset(disp_values[lineno], 0, strlen(disp_values[lineno]));
             disp_polarities[lineno] = 1;
         }
-        for(int32_t row=0; row<arraysize(disp_bool_values); row++) disp_bool_values[row] = 1;
-        for(int32_t row=0; row<arraysize(disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
-        for(int32_t row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
+        for (int32_t row=0; row<arraysize(disp_bool_values); row++) disp_bool_values[row] = 1;
+        for (int32_t row=0; row<arraysize(disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
+        for (int32_t row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
         yield();
         // set_runmodecolors();
         _tft.fillScreen(BLK);  // Black out the whole screen
@@ -707,7 +710,7 @@ class Display {
             disp_bool_values[col-2] = value;
         }
     }
-    void draw_simbutton(int cntr_x, int cntr_y, int dir, uint16_t color, bool create) {
+    void draw_simbutton(int cntr_x, int cntr_y, int dir, uint16_t color) {
         if (pretty_buttons) {
             if      (dir == JOY_PLUS)  _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_plus_40);
             else if (dir == JOY_MINUS) _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_minus_40);
@@ -720,39 +723,45 @@ class Display {
         if (dir == JOY_PLUS) dir = JOY_UP;
         else if (dir == JOY_MINUS) dir = JOY_DN;
         if (dir == JOY_CENT) {
-            _tft.fillCircle(cntr_x, cntr_y, touch_simbutton / 2, create ? color : BLK);
-            _tft.drawCircle(cntr_x, cntr_y, touch_simbutton / 2, create ? LYEL : BLK);
+            _tft.fillCircle(cntr_x, cntr_y, touch_simbutton / 2, color);
+            _tft.drawCircle(cntr_x, cntr_y, touch_simbutton / 2, LYEL);
         }
         else if (dir == JOY_DN || dir == JOY_UP) {
-            _tft.fillTriangle(cntr_x - touch_simbutton/2, cntr_y, cntr_x + touch_simbutton/2, cntr_y, cntr_x, cntr_y - ((dir == JOY_UP) ? 1 : -1) * touch_simbutton/2, create ? color : BLK);
-            _tft.drawTriangle(cntr_x - touch_simbutton/2, cntr_y, cntr_x + touch_simbutton/2, cntr_y, cntr_x, cntr_y - ((dir == JOY_UP) ? 1 : -1) * touch_simbutton/2, create ? LYEL : BLK);
+            _tft.fillTriangle(cntr_x - touch_simbutton/2, cntr_y, cntr_x + touch_simbutton/2, cntr_y, cntr_x, cntr_y - ((dir == JOY_UP) ? 1 : -1) * touch_simbutton/2, color);
+            _tft.drawTriangle(cntr_x - touch_simbutton/2, cntr_y, cntr_x + touch_simbutton/2, cntr_y, cntr_x, cntr_y - ((dir == JOY_UP) ? 1 : -1) * touch_simbutton/2, LYEL);
 
-            _tft.fillRect(cntr_x - 3*touch_simbutton/8, cntr_y - ((dir == JOY_UP) ? 0 : touch_simbutton/2), 3*touch_simbutton/4, touch_simbutton/2, create ? color : BLK);
-            _tft.drawRect(cntr_x - 3*touch_simbutton/8, cntr_y - ((dir == JOY_UP) ? 0 : touch_simbutton/2), 3*touch_simbutton/4, touch_simbutton/2, create ? LYEL : BLK);
-            _tft.fillRect(cntr_x - 3*touch_simbutton/8 + 1, cntr_y - 1, 3*touch_simbutton/4 - 2, 2, create ? color : BLK);
+            _tft.fillRect(cntr_x - 3*touch_simbutton/8, cntr_y - ((dir == JOY_UP) ? 0 : touch_simbutton/2), 3*touch_simbutton/4, touch_simbutton/2, color);
+            _tft.drawRect(cntr_x - 3*touch_simbutton/8, cntr_y - ((dir == JOY_UP) ? 0 : touch_simbutton/2), 3*touch_simbutton/4, touch_simbutton/2, LYEL);
+            _tft.fillRect(cntr_x - 3*touch_simbutton/8 + 1, cntr_y - 1, 3*touch_simbutton/4 - 2, 2, color);
         }
         else if (dir == JOY_LT || dir == JOY_RT) {
-            _tft.fillTriangle(cntr_x, cntr_y - touch_simbutton/2, cntr_x, cntr_y + touch_simbutton/2, cntr_x + ((dir == JOY_RT) ? 1 : -1) * touch_simbutton/2, cntr_y, create ? color : BLK);
-            _tft.drawTriangle(cntr_x, cntr_y - touch_simbutton/2, cntr_x, cntr_y + touch_simbutton/2, cntr_x + ((dir == JOY_RT) ? 1 : -1) * touch_simbutton/2, cntr_y, create ? LYEL : BLK);
-            _tft.fillRect(cntr_x - ((dir == JOY_RT) ? touch_simbutton/2 : 0), cntr_y - 3*touch_simbutton/8, touch_simbutton/2, 3*touch_simbutton/4, create ? color : BLK);
-            _tft.drawRect(cntr_x - ((dir == JOY_RT) ? touch_simbutton/2 : 0), cntr_y - 3*touch_simbutton/8, touch_simbutton/2, 3*touch_simbutton/4, create ? LYEL : BLK);
-            _tft.fillRect(cntr_x - 1, cntr_y - 3*touch_simbutton/8 + 1, 2, 3*touch_simbutton/4 - 2, create ? color : BLK);
+            _tft.fillTriangle(cntr_x, cntr_y - touch_simbutton/2, cntr_x, cntr_y + touch_simbutton/2, cntr_x + ((dir == JOY_RT) ? 1 : -1) * touch_simbutton/2, cntr_y, color);
+            _tft.drawTriangle(cntr_x, cntr_y - touch_simbutton/2, cntr_x, cntr_y + touch_simbutton/2, cntr_x + ((dir == JOY_RT) ? 1 : -1) * touch_simbutton/2, cntr_y, LYEL);
+            _tft.fillRect(cntr_x - ((dir == JOY_RT) ? touch_simbutton/2 : 0), cntr_y - 3*touch_simbutton/8, touch_simbutton/2, 3*touch_simbutton/4, color);
+            _tft.drawRect(cntr_x - ((dir == JOY_RT) ? touch_simbutton/2 : 0), cntr_y - 3*touch_simbutton/8, touch_simbutton/2, 3*touch_simbutton/4, LYEL);
+            _tft.fillRect(cntr_x - 1, cntr_y - 3*touch_simbutton/8 + 1, 2, 3*touch_simbutton/4 - 2, color);
         }
     }
     void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
-        _tft.fillRect(disp_simbuttons_x, disp_simbuttons_y, saver.res[HORZ], saver.res[VERT], BLK);
-        _tft.setTextColor(LYEL);
-        _tft.setTextSize(2);
+        if (!create) {
+            saver.push();
+            return;
+        }
         for (int32_t row = 0; row < arraysize(simgrid); row++) {
             for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
                 int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
                 int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
                 if (strcmp(simgrid[row][col], ______)) {
-                    draw_simbutton(cntr_x + 2, cntr_y - 1, simgriddir[row][col], LYEL, create);  // for 3d look
-                    draw_simbutton(cntr_x, cntr_y, simgriddir[row][col], DGRY, create);
-                    if (create) {
+                    draw_simbutton(cntr_x + 2, cntr_y - 1, simgriddir[row][col], LYEL);  // for 3d look
+                    draw_simbutton(cntr_x, cntr_y, simgriddir[row][col], DGRY);
+                    _tft.setTextColor(LYEL);
+                    if (!pretty_buttons) {
                         int32_t x_mod = cntr_x-(arraysize(simgrid[row][col])-1)*(disp_font_width>>1);
                         draw_string(x_mod, x_mod, cntr_y-(disp_font_height>>1), simgrid[row][col], "", LYEL, DGRY);
+                    }
+                    else if (row % 2) {
+                        _tft.setTextDatum(MC_DATUM);
+                        _tft.drawString(simgrid[row][col], cntr_x, cntr_y - touch_cell_v_pix/2, 1);
                     }
                 }
             }     
@@ -839,19 +848,14 @@ class Display {
         update_idiots(disp_idiots_dirty);
         disp_idiots_dirty = false;
         if (!display_enabled) return;
-        if (disp_simbuttons_dirty || (sim.enabled() != simulating_last)) {
-            draw_simbuttons(sim.enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
-            disp_simbuttons_dirty = false;
-            simulating_last = sim.enabled();
-        }
-        if ((disp_datapage_dirty)) {
+        if (disp_datapage_dirty) {
             static bool first = true;
             draw_datapage(datapage, datapage_last, first);
             first = false;
             disp_datapage_dirty = false;
             if (datapage_last != datapage) prefs.putUInt("dpage", datapage);
         }
-        if ((disp_sidemenu_dirty)) {
+        if (disp_sidemenu_dirty) {
             draw_touchgrid(true);
             disp_sidemenu_dirty = false;
         }
@@ -863,6 +867,12 @@ class Display {
             draw_runmode(_nowmode, disp_oldmode, -1);
             disp_oldmode = _nowmode;
             disp_runmode_dirty = false;
+        }
+        if (disp_simbuttons_dirty || (sim.enabled() != simulating_last)) {
+            draw_simbuttons(sim.enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
+            disp_simbuttons_dirty = false;
+            simulating_last = sim.enabled();
+            _procrastinate = true;
         }
         if (dispRefreshTimer.expireset()) {
             float drange;
@@ -1033,6 +1043,11 @@ class Tuner {
     }
     int32_t idelta = 0, idelta_encoder = 0;
     void update(int rmode) {
+        process_inputs();
+        edit_values(rmode);
+    }
+  private:
+    void process_inputs() {
         sel_val_last = sel_val;
         datapage_last = datapage;
         tunctrl_last = tunctrl; // Make sure this goes after the last comparison
@@ -1062,6 +1077,8 @@ class Tuner {
             if (sel_val != sel_val_last) disp_selected_val_dirty = true;
         }
         if (tunctrl != tunctrl_last || disp_datapage_dirty) disp_selected_val_dirty = true;
+    }
+    void edit_values(int rmode) {
         float fdelta = (float)idelta;
         if (tunctrl == EDIT && idelta != 0) {  // Change tunable values when editing
             if (datapage == PG_RUN) {
