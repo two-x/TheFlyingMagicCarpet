@@ -44,7 +44,7 @@ void setup() {
     idiots.setup(&neo);       // assign same idiot light variable associations and colors to neopixels as on screen  
     diag.setup();             // initialize diagnostic codes
     web.setup();              // start up access point, web server, and json-enabled web socket for diagnostic phone interface
-    xTaskCreate(update_web, "Update Web Services", 4096, NULL, 6, NULL);  // wifi/web task. 2048 is too low, it crashes when client connects
+    xTaskCreate(update_web, "Update Web Services", 8192, NULL, 6, NULL);  // wifi/web task. 2048 is too low, it crashes when client connects
     printf("Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     looptimer.setup();

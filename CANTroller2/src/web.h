@@ -7,6 +7,8 @@
 #include <ESPmDNS.h>
 #include <WebSocketsServer.h>
 #include <ArduinoJson.h>  // <AsyncJson.h>  // "json.h"  needed for JSON encapsulation (send multiple variables with one string)
+#include <AsyncTCP.h>   // needed for OTA
+#include <ElegantOTA.h>
 #define FORMAT_LITTLEFS_IF_FAILED true
 // create a callback function, triggered by web socket events
 void webSocketEvent(byte num, WStype_t type, uint8_t * payload, size_t length) {  // the parameters of this callback function are always the same -> num: id of the client who send the event, type: type of message, payload: actual data sent and length: length of payload
@@ -94,11 +96,15 @@ class FileSystem {
 };
 class AccessPoint {
   private:
-    IPAddress localip, gateway, subnet;
+    IPAddress localip, gateway, subnet, primarydns, secondarydns;
     const char* ssid = "artcarpet";
     const char* password = "checkmate";
     void connect_existing_wifi() {
         printf("connecting to %s", ssid);
+        primarydns = IPAddress(8, 8, 8, 8);
+        secondarydns = IPAddress(8, 8, 4, 4);
+        WiFi.setAutoReconnect(true);
+        WiFi.config(localip, gateway, subnet, primarydns, secondarydns);
         WiFi.begin(ssid, password);
         while (WiFi.status() != WL_CONNECTED) {
             delay(500);
@@ -111,8 +117,10 @@ class AccessPoint {
     AccessPoint() : localip(192,168,1,69), gateway(192,168,1,5), subnet(255,255,255,0) {}
     void setup() {
         Serial.print("Wifi access point.. ip = ");
+        WiFi.disconnect();  // in case already connected to another wifi as client or something
         WiFi.mode(WIFI_STA);
-        WiFi.disconnect();
+        WiFi.persistent(false);  // Don't store wifi config in eeprom, b/c it can get stuck there
+        WiFi.setSleep(false);  // ensure server is awake for accessibility
         WiFi.softAPConfig(localip, gateway, subnet);
         WiFi.softAP(ssid, password);
         Serial.println(WiFi.softAPIP());
@@ -121,11 +129,15 @@ class AccessPoint {
     }
     void enable(bool sw) { WiFi.setSleep(!sw); }
 };
-class WebServer {
+class Web {
   private:
     AsyncWebServer webserver;
+    WebSocketsServer socket;
+    Timer socket_timer;
+    uint32_t socket_refresh_us = 1000000, dumdum = 1;
+
   public:
-    WebServer() : webserver(80) {}
+    Web() : webserver(80), socket(81) {}
     void setup() {
         printf("Webserver start..\n");
         webserver.on("/tester", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -142,26 +154,15 @@ class WebServer {
         webserver.onNotFound([](AsyncWebServerRequest *request) {  // Send back a plain text message (can be made html if required)
             request->send(404, "text/plain", "404 - Page Not Found.  Try '/' or '/update'");
         });
+        ElegantOTA.begin(&webserver);  // start OTA after all server.on requests, before starting web server
         webserver.begin();
-    }
-    void update () {
-        // webserver.handleClient();
-    }
-};
-class WebSocket {
-  private:
-    WebSocketsServer socket;
-    Timer socket_timer;
-    uint32_t socket_refresh_us = 1000000, dumdum = 1;
-  public:
-    WebSocket() : socket(81) {}
-    void setup() {
         printf("Websocket start..\n");
         socket.begin();
         socket.onEvent(webSocketEvent);
         socket_timer.set(socket_refresh_us);
     }
-    void update() {
+    void update () {
+        // webserver.handleClient();
         socket.loop();
         if (socket_timer.expireset()) {
             // String sendme = String(random(100));
@@ -175,6 +176,7 @@ class WebSocket {
             // Serial.println(jsonString);                       // print JSON string to console for debug purposes (you can comment this out)
             socket.broadcastTXT(jsonString);               // send JSON string to clients
         }
+
     }
 };
 class WebManager {
@@ -183,14 +185,12 @@ class WebManager {
   public:
     FileSystem fs;
     AccessPoint wifi;
-    WebServer server;
-    WebSocket socket; 
+    Web server;
     WebManager() {}
     void setup() {
         wifi.setup();
         fs.setup();
         server.setup();
-        socket.setup();
         web_started = true;
     }
     String processor(const String &var) {
@@ -204,7 +204,7 @@ class WebManager {
         if (!web_enabled) return;
         if (!web_started) setup();
         wifi.enable(syspower);
-        if (syspower) socket.update();
+        if (syspower) server.update();
         // if (<activity in web page is detected>) sleep_inactivity_timer.reset();  // evidence of user activity
     }
 };
