@@ -127,8 +127,9 @@ int16_t touch_pt[4] = { 160, 120, 2230, 2130 };
 bool flashdemo = false;
 int32_t neobright = 10;   // default for us dim/brighten the neopixels
 int32_t neodesat = 0;     // default for lets us de/saturate the neopixels
+float tuning_scalar = 0.00025;  // during editing, each edit changes value by this fraction of the range
 
-// non-tunable vlaues. probably these belong with their related code
+// non-tunable values. probably these belong with their related code
 bool running_on_devboard = false;       // will overwrite with value read thru pull resistor on tx pin at boot
 bool shutdown_incomplete = true;        // minor state variable for shutdown mode - Shutdown mode has not completed its work and can't yet stop activity
 bool park_the_motors = false;           // Indicates we should release the brake & gas so the pedals can be used manually without interference
@@ -228,17 +229,17 @@ void ema_filt(RAW_T _raw, FILT_T* _filt, float _alpha) {
 template <typename T>
 T adj_val(T variable, T modify, T low_limit, T high_limit) {
     T oldval = variable;
-    variable += modify;
+    variable += (T)(modify * tuning_scalar * (high_limit-low_limit));
     return variable < low_limit ? low_limit : (variable > high_limit ? high_limit : variable);
 }
 bool adj_val(int32_t *variable, int32_t modify, int32_t low_limit, int32_t high_limit) { // sets an int reference to new val constrained to given range
     int32_t oldval = *variable;
-    *variable = adj_val(*variable, modify, low_limit, high_limit);
+    *variable = adj_val(*variable, (int32_t)(modify * tuning_scalar * (high_limit-low_limit)), low_limit, high_limit);
     return (*variable != oldval);
 }
 bool adj_val(float *variable, float modify, float low_limit, float high_limit) { // sets an int reference to new val constrained to given range
     float oldval = *variable;
-    *variable = adj_val(*variable, modify, low_limit, high_limit);
+    *variable = adj_val(*variable, modify * tuning_scalar * (high_limit-low_limit), low_limit, high_limit);
     return (*variable != oldval);
 }
 bool adj_bool(bool val, int32_t delta) { return delta != 0 ? delta > 0 : val; } // returns 1 on delta=1, 0 on delta=-1, or val on delta=0

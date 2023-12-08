@@ -711,12 +711,12 @@ class Display {
         }
     }
     void draw_simbutton(int cntr_x, int cntr_y, int dir, uint16_t color) {
-        if      (dir == JOY_PLUS)  _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_plus_40);
-        else if (dir == JOY_MINUS) _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_minus_40);
-        else if (dir == JOY_UP)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_up_40);
-        else if (dir == JOY_DN)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_down_40);
-        else if (dir == JOY_LT)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_left_40);
-        else if (dir == JOY_RT)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_right_40);
+        if      (dir == JOY_PLUS)  _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_plus_40, TFT_BLACK);
+        else if (dir == JOY_MINUS) _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_minus_40, TFT_BLACK);
+        else if (dir == JOY_UP)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_up_40, TFT_BLACK);
+        else if (dir == JOY_DN)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_down_40, TFT_BLACK);
+        else if (dir == JOY_LT)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_left_40, TFT_BLACK);
+        else if (dir == JOY_RT)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_right_40, TFT_BLACK);
     }
     void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
         if (!create) {
@@ -1062,15 +1062,15 @@ class Tuner {
                 else if (sel_val == 10) { adj_val(&hotrc.deadband_us, idelta, 0, 50); hotrc.calc_params(); }
             }
             else if (datapage == PG_SENS) {
-                if (sel_val == 2) gas.idlectrl.add_idlehot(0.1 * fdelta);
-                else if (sel_val == 3) gas.idlectrl.add_idlecold(0.1 * fdelta);
-                else if (sel_val == 4) adj_val(tach.redline_rpm_ptr(), 0.1 * fdelta, gas.idlectrl.idlehigh, tach.abs_max_rpm());
-                else if (sel_val == 5) adj_val(airvelo.max_mph_ptr(), 0.01 * fdelta, 0, airvelo.abs_max_mph());
-                else if (sel_val == 6) adj_val(mapsens.min_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
-                else if (sel_val == 6) adj_val(mapsens.max_psi_ptr(), 0.1 * fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
-                else if (sel_val == 8) adj_val(speedo.idle_mph_ptr(), 0.01 * fdelta, 0, speedo.redline_mph() - 1);
-                else if (sel_val == 9) adj_val(speedo.redline_mph_ptr(), 0.01 * fdelta, speedo.idle_mph(), 20);
-                else if (sel_val == 10) adj_val(brkpos.zeropoint_ptr(), 0.001 * fdelta, brkpos.op_min_in(), brkpos.op_max_in());
+                if (sel_val == 2) gas.idlectrl.add_idlehot(fdelta);
+                else if (sel_val == 3) gas.idlectrl.add_idlecold(fdelta);
+                else if (sel_val == 4) adj_val(tach.redline_rpm_ptr(), fdelta, gas.idlectrl.idlehigh, tach.abs_max_rpm());
+                else if (sel_val == 5) adj_val(airvelo.max_mph_ptr(), fdelta, 0, airvelo.abs_max_mph());
+                else if (sel_val == 6) adj_val(mapsens.min_psi_ptr(), fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
+                else if (sel_val == 6) adj_val(mapsens.max_psi_ptr(), fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
+                else if (sel_val == 8) adj_val(speedo.idle_mph_ptr(), fdelta, 0, speedo.redline_mph() - 1);
+                else if (sel_val == 9) adj_val(speedo.redline_mph_ptr(), fdelta, speedo.idle_mph(), 20);
+                else if (sel_val == 10) adj_val(brkpos.zeropoint_ptr(), fdelta, brkpos.op_min_in(), brkpos.op_max_in());
             }
             else if (datapage == PG_PWMS) {
                 if (sel_val == 7) { adj_val(&(gas.nat[OPMIN]), fdelta, gas.nat[PARKED] + 1, gas.nat[OPMAX] - 1); gas.derive(); }
