@@ -178,7 +178,7 @@ class ServoMotor {
   public:
     bool openloop = false, reverse = false;  // defaults. subclasses override as necessary
     float pc[NUM_MOTORVALS] = { 0, NAN, 100, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX]  values range from -100% to 100% are all derived or auto-assigned
-    float nat[NUM_MOTORVALS] = { 45.0, 43.0, 168.2, 45.0, NAN, 0, 180 };  // native-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX]
+    float si[NUM_MOTORVALS] = { 45.0, 43.0, 168.2, 45.0, NAN, 0, 180 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX]
     float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 500, 2500 };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX]
     ServoMotor(int _pin, int _freq) { pin = _pin; freq = _freq; }
     void setup(Hotrc* _hotrc, Speedometer* _speedo) {
@@ -187,14 +187,14 @@ class ServoMotor {
         motor.setPeriodHertz(freq);
         motor.attach(pin, us[ABSMIN], us[ABSMAX]);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     }
-    float pc_to_nat(float _pc) {  // Eventually this should be linearized
-        return map(_pc, pc[ABSMIN], pc[ABSMAX], nat[ABSMIN], nat[ABSMAX]); 
+    float pc_to_si(float _pc) {  // Eventually this should be linearized
+        return map(_pc, pc[ABSMIN], pc[ABSMAX], si[ABSMIN], si[ABSMAX]); 
     }
-    float nat_to_pc(float _nat) {  // Eventually this should be linearized
-        return map(_nat, nat[ABSMIN], nat[ABSMAX], pc[ABSMIN], pc[ABSMAX]);
+    float si_to_pc(float _si) {  // Eventually this should be linearized
+        return map(_si, si[ABSMIN], si[ABSMAX], pc[ABSMIN], pc[ABSMAX]);
     }
-    float nat_to_us(float _nat) {  // works for motor with or without stop value
-        return map(_nat, nat[ABSMIN], nat[ABSMAX], reverse ? us[ABSMAX] : us[ABSMIN], reverse ? us[ABSMIN] : us[ABSMAX]);
+    float si_to_us(float _si) {  // works for motor with or without stop value
+        return map(_si, si[ABSMIN], si[ABSMAX], reverse ? us[ABSMAX] : us[ABSMIN], reverse ? us[ABSMIN] : us[ABSMAX]);
     }
     float pc_to_us(float _pc) {  // works for motor with or without stop value
         return map(_pc, pc[ABSMIN], pc[ABSMAX], reverse ? us[ABSMAX] : us[ABSMIN], reverse ? us[ABSMIN] : us[ABSMAX]);
@@ -210,36 +210,36 @@ class JagMotor : public ServoMotor {
     using ServoMotor::ServoMotor;
     float duty_pc = 100;  // default. subclasses override as necessary
     float pc[NUM_MOTORVALS] = { NAN, 0, NAN, NAN, NAN, -100, 100 };  // percent values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX]  values range from -100% to 100% are all derived or auto-assigned
-    float nat[NUM_MOTORVALS] = { NAN, 0, NAN, NAN, NAN, NAN, NAN };  // native-unit values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX]
+    float si[NUM_MOTORVALS] = { NAN, 0, NAN, NAN, NAN, NAN, NAN };  // standard si-unit values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX]
     float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 670, 2330 };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX]
-    float (&volt)[arraysize(nat)] = nat;  // our native value is volts. Create reference so nat and volt are interchangeable
+    float (&volt)[arraysize(si)] = si;  // our standard si value is volts. Create reference so si and volt are interchangeable
     // JagMotor(int _pin, int _freq) : ServoMotor(_pin, _freq) {}
     void derive() {  // calc pc and voltage op limits from volt and us abs limits 
-        nat[ABSMAX] = running_on_devboard ? car_batt_fake_v : mulebatt->v();
-        nat[ABSMIN] = -(nat[ABSMAX]);
+        si[ABSMAX] = running_on_devboard ? car_batt_fake_v : mulebatt->v();
+        si[ABSMIN] = -(si[ABSMAX]);
         pc[OPMIN] = pc[ABSMIN] * duty_pc / 100.0;
         pc[OPMAX] = pc[ABSMAX] * duty_pc / 100.0;
-        nat[OPMIN] = map(pc[OPMIN], pc[STOP], pc[ABSMIN], nat[STOP], nat[ABSMIN]);
-        nat[OPMAX] = map(pc[OPMAX], pc[STOP], pc[ABSMAX], nat[STOP], nat[ABSMAX]);
+        si[OPMIN] = map(pc[OPMIN], pc[STOP], pc[ABSMIN], si[STOP], si[ABSMIN]);
+        si[OPMAX] = map(pc[OPMAX], pc[STOP], pc[ABSMAX], si[STOP], si[ABSMAX]);
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {
         ServoMotor::setup(_hotrc, _speedo);
         mulebatt = _batt;
         derive();
     }
-    float pc_to_nat(float _pc) {  // Eventually this should be linearized
-        if (_pc > pc[STOP]) return map(_pc, pc[STOP], pc[ABSMAX], nat[STOP], nat[ABSMAX]);
-        if (_pc < pc[STOP]) return map(_pc, pc[STOP], pc[ABSMIN], nat[STOP], nat[ABSMIN]);
-        return nat[STOP];
+    float pc_to_si(float _pc) {  // Eventually this should be linearized
+        if (_pc > pc[STOP]) return map(_pc, pc[STOP], pc[ABSMAX], si[STOP], si[ABSMAX]);
+        if (_pc < pc[STOP]) return map(_pc, pc[STOP], pc[ABSMIN], si[STOP], si[ABSMIN]);
+        return si[STOP];
     }
-    float nat_to_pc(float _nat) {  // Eventually this should be linearized
-        if (_nat > nat[STOP]) return map(_nat, nat[STOP], nat[ABSMAX], pc[STOP], pc[ABSMAX]);
-        if (_nat < nat[STOP]) return map(_nat, nat[STOP], nat[ABSMIN], pc[STOP], pc[ABSMIN]);
+    float si_to_pc(float _si) {  // Eventually this should be linearized
+        if (_si > si[STOP]) return map(_si, si[STOP], si[ABSMAX], pc[STOP], pc[ABSMAX]);
+        if (_si < si[STOP]) return map(_si, si[STOP], si[ABSMIN], pc[STOP], pc[ABSMIN]);
         return pc[STOP];
     }
-    float nat_to_us(float _nat) {  // works for motor with center stop value
-        if (_nat > nat[STOP]) return map(_nat, nat[STOP], nat[ABSMAX], us[STOP], reverse ? us[ABSMIN] : us[ABSMAX]);
-        if (_nat < nat[STOP]) return map(_nat, nat[STOP], nat[ABSMIN], us[STOP], reverse ? us[ABSMAX] : us[ABSMIN]);
+    float si_to_us(float _si) {  // works for motor with center stop value
+        if (_si > si[STOP]) return map(_si, si[STOP], si[ABSMAX], us[STOP], reverse ? us[ABSMIN] : us[ABSMAX]);
+        if (_si < si[STOP]) return map(_si, si[STOP], si[ABSMIN], us[STOP], reverse ? us[ABSMAX] : us[ABSMIN]);
         return us[STOP];
     }
     float pc_to_us(float _pc) {  // works for motor with center stop value
@@ -265,15 +265,15 @@ class GasServo : public ServoMotor {
     IdleControl idlectrl;
     QPID pid, cruisepid;
     bool openloop = true, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
-    float (&deg)[arraysize(nat)] = nat;  // our "native" value is degrees of rotation "deg". Create reference so nat and deg are interchangeable
+    float (&deg)[arraysize(si)] = si;  // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
     float tach_last, cruise_target_pc, governor = 95;     // Software governor will only allow this percent of full-open throttle (percent 0-100)
     Timer servo_delay_timer = Timer(500000);    // We expect the servo to find any new position within this time
     void derive() {  // calc derived limit values for all units based on tuned values for each motor
-        pc[ABSMIN] = map(nat[ABSMIN], nat[OPMIN], nat[OPMAX], pc[OPMIN], pc[OPMAX]);
-        pc[ABSMAX] = map(nat[ABSMAX], nat[OPMIN], nat[OPMAX], pc[OPMIN], pc[OPMAX]);
-        pc[PARKED] = map(nat[PARKED], nat[OPMIN], nat[OPMAX], pc[OPMIN], pc[OPMAX]);
+        pc[ABSMIN] = map(si[ABSMIN], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);
+        pc[ABSMAX] = map(si[ABSMAX], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);
+        pc[PARKED] = map(si[PARKED], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);
         pc[GOVERN] = map(governor, 0.0, 100.0, pc[OPMIN], pc[OPMAX]);  // pc[GOVERN] = pc[OPMIN] + governor * (pc[OPMAX] - pc[OPMIN]) / 100.0;      
-        nat[GOVERN] = map(pc[GOVERN], pc[OPMIN], pc[OPMAX], nat[OPMIN], nat[OPMAX]);
+        si[GOVERN] = map(pc[GOVERN], pc[OPMIN], pc[OPMAX], si[OPMIN], si[OPMAX]);
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, TemperatureSensorManager* _temp) {
         printf("Gas servo..\n");
@@ -302,7 +302,7 @@ class GasServo : public ServoMotor {
             if (park_the_motors)
                 pc[OUT] = pc[PARKED];
             else if (runmode == CAL && cal_gasmode)
-                pc[OUT] = nat_to_pc(map(pot->val(), pot->min(), pot->max(), deg[ABSMIN], deg[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
+                pc[OUT] = si_to_pc(map(pot->val(), pot->min(), pot->max(), deg[ABSMIN], deg[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
             else if (runmode == CRUISE && (cruise_setpoint_mode != PID_SUSPEND_FLY))
                 pc[OUT] = cruise_target_pc;
             else if (runmode != BASIC && runmode != CAL && runmode != ASLEEP && (runmode != SHUTDOWN || shutdown_incomplete)) {
@@ -313,15 +313,15 @@ class GasServo : public ServoMotor {
                 else pc[OUT] = pid.compute();  // Do proper pid math to determine gas_out_us from engine rpm error
             }
             // Step 3 : Convert to degrees and constrain if out of range
-            deg[OUT] = pc_to_nat(pc[OUT]);  // convert to degrees
+            deg[OUT] = pc_to_si(pc[OUT]);  // convert to degrees
             if (runmode == CAL && cal_gasmode)  // Constrain to operating limits. 
                 deg[OUT] = constrain(deg[OUT], deg[ABSMIN], deg[ABSMAX]);
             else if (runmode == BASIC || runmode == SHUTDOWN || runmode == ASLEEP)
                 deg[OUT] = constrain(deg[OUT], deg[PARKED], deg[GOVERN]);
             else deg[OUT] = constrain(deg[OUT], deg[OPMIN], deg[GOVERN]);
-            pc[OUT] = nat_to_pc(deg[OUT]);
+            pc[OUT] = si_to_pc(deg[OUT]);
             // Step 4 : Write to servo
-            us[OUT] = nat_to_us(deg[OUT]);
+            us[OUT] = si_to_us(deg[OUT]);
             write_motor();
         }
     }
@@ -436,7 +436,7 @@ class BrakeMotor : public JagMotor {
             else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);  // Send to the actuator. Refuse to exceed range
             // Step 3 : Convert motor percent value to pulse width for motor, and to volts for display
             us[OUT] = pc_to_us(pc[OUT]);
-            volt[OUT] = pc_to_nat(pc[OUT]);
+            volt[OUT] = pc_to_si(pc[OUT]);
             // Step 4 : Write to motor
             write_motor();
         }
@@ -463,7 +463,7 @@ class SteerMotor : public JagMotor {
             }
             pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);  // Don't be out of range
             us[OUT] = pc_to_us(pc[OUT]);
-            volt[OUT] = pc_to_nat(pc[OUT]);
+            volt[OUT] = pc_to_si(pc[OUT]);
             write_motor();
         }
     }

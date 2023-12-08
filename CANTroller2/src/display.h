@@ -807,7 +807,7 @@ class Display {
                 if (idiots->val(i) != idiots->last[i]) neo->setBoolState(i, idiots->val(i));
             if (i == LOST || i == RANGE) {
                 if (diag.highest_pri_failing_last[i] != diag.highest_pri_failing_sensor[i]) {
-                    if (diag.highest_pri_failing_sensor[i] == e_none) neo->setflash((int)i, 0);
+                    if (diag.highest_pri_failing_sensor[i] == _None) neo->setflash((int)i, 0);
                     else neo->setflash((int)i, diag.highest_pri_failing_sensor[i] + 1, 2, 6, 1, 0);
                 }
                 diag.highest_pri_failing_last[i] = diag.highest_pri_failing_sensor[i];
@@ -1073,8 +1073,8 @@ class Tuner {
                 else if (sel_val == 10) adj_val(brkpos.zeropoint_ptr(), fdelta, brkpos.op_min_in(), brkpos.op_max_in());
             }
             else if (datapage == PG_PWMS) {
-                if (sel_val == 7) { adj_val(&(gas.nat[OPMIN]), fdelta, gas.nat[PARKED] + 1, gas.nat[OPMAX] - 1); gas.derive(); }
-                else if (sel_val == 8) { adj_val(&(gas.nat[OPMAX]), fdelta, gas.nat[OPMIN] + 1, 180.0); gas.derive(); }
+                if (sel_val == 7) { adj_val(&(gas.si[OPMIN]), fdelta, gas.si[PARKED] + 1, gas.si[OPMAX] - 1); gas.derive(); }
+                else if (sel_val == 8) { adj_val(&(gas.si[OPMAX]), fdelta, gas.si[OPMIN] + 1, 180.0); gas.derive(); }
                 else if (sel_val == 9) { adj_val(&(brake.us[STOP]), fdelta, brake.us[OPMIN] + 1, brake.us[OPMAX] - 1); brake.derive(); }
                 else if (sel_val == 10) { adj_val(&(brake.duty_pc), fdelta, 0.0, 100.0); brake.derive(); }
             }

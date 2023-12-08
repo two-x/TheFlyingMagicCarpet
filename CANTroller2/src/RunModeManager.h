@@ -64,7 +64,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         int cmd = _cmd;
         if (park_the_motors) {
             bool brake_parked = brkpos.parked();
-            bool gas_parked = ((std::abs(gas.pc_to_nat(gas.pc[OUT]) - gas.nat[PARKED]) < 1) && gas.servo_delay_timer.expired());
+            bool gas_parked = ((std::abs(gas.pc_to_si(gas.pc[OUT]) - gas.si[PARKED]) < 1) && gas.servo_delay_timer.expired());
             if ((brake_parked && gas_parked) || motor_park_timer.expired()) cmd = REQ_OFF;
         }
         if (cmd == REQ_TOG) cmd = !park_the_motors;
@@ -236,7 +236,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (we_just_switched_modes) calmode_request = cal_gasmode = cal_gasmode_ready = cal_brakemode = cal_gasmode_request = false;
         else if (calmode_request) mode = SHUTDOWN;
         float temp = pot.mapToRange(0.0, 180.0);
-        cal_gasmode_ready = (temp >= gas.nat[PARKED] && temp <= gas.nat[OPMAX]);
+        cal_gasmode_ready = (temp >= gas.si[PARKED] && temp <= gas.si[OPMAX]);
         if (!cal_gasmode_request) cal_gasmode = false;
         else if (cal_gasmode_ready) cal_gasmode = true;
     }
