@@ -57,7 +57,7 @@
 // Official pin capabilities: https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/hw-reference/esp32s3/user-guide-devkitc-1.html?highlight=devkitc#user-guide-s3-devkitc-1-v1-1-header-blocks
 // External flash uses pins 27-32. ADC ch2 will not work if wifi is enabled
 // Bootstrap pins: Pin 0 must be pulled high, and pins 45 and 46 pulled low during bootup
-// glitch: pins 36 and 39 will be pulled low for ~80ns when "certain RTC peripherals power up" (ESP32 errata 3.11)
+// glitch: pins 36 and 39 will be pulled low for ~80ns when "certain RTC peripherals power up" (ESP32 errata 3.11). Can run adc_power_acquire() to work around glitch but draw ~1mA more power. Avoid interrupts on these pins
 // SPI bus page including DMA information: https://docs.espressif.com/projects/esp-idf/en/v4.4/esp32s3/api-reference/peripherals/spi_master.html
 // BM2023 pins: onewire 19, hotrc_ch3_pin 20, hotrc_ch4_pin 21, tach_pin 36, ignition_pin 37, encoder_b_pin 40, encoder_a_pin 41, encoder_sw_pin 42
 #define tft_rst_pin -1    // TFT Reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
@@ -94,6 +94,7 @@ enum telemetry_bool : int {
     _Ignition, _PanicStop, _SysPower, _HotRCCh3, _StarterDr, _StarterExt, _HotRCCh4, _BasicSw, NumTelemetryBools
 };
 enum err_type : int { LOST=0, RANGE=1, CALIB=2, WARN=3, CRIT=4, INFO=5, NUM_ERR_TYPES=6 };
+enum i2c_nodes : int { i2c_airvelo, i2c_map, i2c_lightbox, num_i2c_slaves };  // i2c_touch, 
 
 // global configuration settings
 bool brake_hybrid_pid = true;
@@ -106,6 +107,7 @@ bool flip_the_screen = true;
 bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool display_enabled = true;  // Should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
 bool web_enabled = true;
+bool use_i2c_baton = true;
 // Dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
 bool usb_jtag = true;                // If you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)
 bool dont_take_temperatures = false; // In case debugging dallas sensors or causing problems
@@ -155,6 +157,7 @@ bool flycruise_toggle_request = false;
 bool screensaver = false;               // Can enable experiment with animated screen draws
 int tunctrl = OFF, tunctrl_last = OFF;
 int datapage = PG_RUN, datapage_last = PG_TEMP;  // Which of the dataset pages is currently displayed and available to edit?
+bool touch_increment_datapage = false;
 int sel_val = 0, sel_val_last = 0;               // In the real time tuning UI, which of the editable values is selected. -1 for none 
 bool syspower = HIGH;                   // Set by handler only. Reflects current state of the signal
 bool starter = LOW;                     // Set by handler only. Reflects current state of starter signal (does not indicate source)
@@ -168,6 +171,7 @@ int panicstop_request = REQ_ON;         // On powerup we assume the code just re
 int sleep_request = REQ_NA;
 float maf_gps = 0;                      // Manifold mass airflow in grams per second
 uint16_t heartbeat_override_color = 0x0000;
+int i2cbaton = i2c_airvelo;             // A semaphore mechanism to prevent bus conflict on i2c bus
 
 // fast macros
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays

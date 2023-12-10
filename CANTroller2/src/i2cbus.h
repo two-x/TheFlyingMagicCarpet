@@ -195,10 +195,12 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     }
     void update(int runmode, float speed) {
         bool sent = false;
+        if (use_i2c_baton && i2cbaton != i2c_lightbox) return;
         if (send_timer.expireset()) {
             sent = sendstatus();
             sent |= sendrunmode(runmode);
             if (!sent) sent = sendspeed(speed);
+            ++i2cbaton %= num_i2c_slaves;
         }
     }
 };

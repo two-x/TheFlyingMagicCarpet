@@ -314,12 +314,12 @@ class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabili
         if (!screensaver_last && screensaver) saver_reset();
         screensaver_last = screensaver;
         if (!screensaver) return;
-        if (saverRefreshTimer.expireset()) {
-            if (saverCycleTimer.expired()) {
-                ++cycle %= num_cycles;
-                if (cycle == 2) saver_pattern(-1);
-                saverCycleTimer.set(saver_cycletime_us / ((cycle == 2) ? 5 : 1));
-            }
+        if (saverCycleTimer.expired()) {
+            ++cycle %= num_cycles;
+            if (cycle == 2) saver_pattern(-1);
+            saverCycleTimer.set(saver_cycletime_us / ((cycle == 2) ? 5 : 1));
+        }
+        else if (saverRefreshTimer.expireset()) {
             for (int axis=0; axis<=1; axis++) point[axis] = random(res[axis]);
             if (cycle != 2) {
                 spothue--;
@@ -367,8 +367,6 @@ class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabili
                         eraser_rad = constrain((int)(eraser_rad + random(5) - 2), eraser_rad_min, eraser_rad_max);
                     }
                 }
-                // for (int axis=HORZ; axis<=VERT; axis++) if (erlast[axis] == -1) erlast[axis] = erpos[axis];
-                // _sprite->drawWedgeLine((res[HORZ]/2)+erlast[HORZ], (res[VERT]/2)+erlast[VERT], res[HORZ]/2+erpos[HORZ], (res[VERT]/2)+erpos[VERT], eraser_rad, BLK, BLK);  // savtouch_last_w, w, pencolor, pencolor);
                 _sprite->fillCircle((res[HORZ]/2) + erpos[HORZ], (res[VERT]/2) + erpos[VERT], eraser_rad, BLK);
             }
             if (saver_lotto) _sprite->drawString("do drugs", res[HORZ] / 2, res[VERT] / 2, 4);
@@ -1033,6 +1031,8 @@ class Tuner {
         if (tunctrl == EDIT) idelta_encoder = encoder.rotation(true);  // true = include acceleration
         else if (tunctrl == SELECT) sel_val += encoder.rotation();  // If overflow constrain will fix in general handler below
         else if (tunctrl == OFF) datapage += encoder.rotation();  // If overflow tconstrain will fix in general below
+        if (touch_increment_datapage) ++datapage %= NUM_DATAPAGES;
+        touch_increment_datapage = false;
         idelta += idelta_encoder + touch->idelta;  // Allow edits using the encoder or touchscreen
         touch->idelta = idelta_encoder = 0;
         if (tunctrl != tunctrl_last || datapage != datapage_last || sel_val != sel_val_last || idelta) tuningCtrlTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer

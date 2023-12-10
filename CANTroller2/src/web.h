@@ -1,6 +1,6 @@
 #pragma once
 #include <Arduino.h>
-#include "FS.h"
+#include <FS.h>
 #include <LittleFS.h>
 #include <WiFi.h>  // "Wifi.h"
 #include <ESPAsyncWebServer.h>  // To run wifi in Soft Access Point (SAP) mode (standalone w/o router)
@@ -96,8 +96,10 @@ class FileSystem {
 class AccessPoint {
   private:
     IPAddress localip, gateway, subnet, primarydns, secondarydns;
-    const char* ssid = "artcarpet";
-    const char* password = "checkmate";
+    const char* apssid = "artcarpet";
+    const char* appassword = "checkmate";
+    const char* ssid = "";  // non-ap mode need real credentials here, but we don't want this in github
+    const char* password = "";  // non-ap mode need real credentials here, but we don't want this in github
     void connect_existing_wifi() {
         printf("connecting to %s", ssid);
         primarydns = IPAddress(8, 8, 8, 8);
@@ -135,10 +137,11 @@ class Web {
     WebSocketsServer socket;
     Timer socket_timer;
     uint32_t socket_refresh_us = 1000000, dumdum = 1;
-
+    LoopTimer* looptimer;
   public:
     Web() : webserver(80), socket(81) {}
-    void setup() {
+    void setup(LoopTimer* _lt) {
+        looptimer = _lt;
         printf("Webserver..\n");
         webserver.on("/tester", HTTP_GET, [](AsyncWebServerRequest *request){
             request->send(200, "text/plain", "Hello, tester");
@@ -173,25 +176,27 @@ class Web {
             JsonObject object = doc.to<JsonObject>();         // create a JSON Object
             object["rand1"] = random(100);                    // write data into the JSON object -> I used "rand1" and "rand2" here, but you can use anything else
             object["rand2"] = random(100);
+            object["loopavg"] = (int32_t)(looptimer->loop_avg_us);                    // write data into the JSON object -> I used "rand1" and "rand2" here, but you can use anything else
+            object["looppeak"] = looptimer->loop_peak_us;
             serializeJson(doc, jsonString);                   // convert JSON object to string
             // Serial.println(jsonString);                       // print JSON string to console for debug purposes (you can comment this out)
             socket.broadcastTXT(jsonString);               // send JSON string to clients
         }
-
     }
 };
 class WebManager {
   private:
     bool web_started = false;
+    LoopTimer* looptimer;
   public:
     FileSystem fs;
     AccessPoint wifi;
     Web server;
-    WebManager() {}
+    WebManager(LoopTimer* _lt) : looptimer(_lt) {}
     void setup() {
         wifi.setup();
         fs.setup();
-        server.setup();
+        server.setup(looptimer);
         web_started = true;
     }
     String processor(const String &var) {

@@ -166,7 +166,7 @@ void NeopixelStrip::refresh() {
     if (numledstowrite) neoobj.Show(numledstowrite);  // This ability to exclude pixels at the end of the strip that haven't changed from the data write is an advantage of neopixelbus over adafruit
 }
 void NeopixelStrip::setup(bool viewcontext) {
-    std::cout << "Init neopixels.. ";
+    std::cout << "Neopixels.. ";
     breadboard = running_on_devboard;
     context = viewcontext;
     calc_lobright();

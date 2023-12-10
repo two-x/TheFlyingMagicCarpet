@@ -127,7 +127,7 @@ public:
         tcol = (landed[xx] - touch_margin_h_pix) / touch_cell_h_pix;
         // Take appropriate touchscreen actions depending on how we're being touched
         if (tcol == 0 && trow == 0 && !touch_now_touched) {
-            if (++datapage >= NUM_DATAPAGES) datapage -= NUM_DATAPAGES;  // Displayed dataset page can also be changed outside of simulator
+            if (!(landed[xx] == 0 && landed[yy] == 0)) touch_increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
         }
         else if (tcol == 0 && trow == 1) {  // Long touch to enter/exit editing mode, if in editing mode, press to change the selection of the item to edit
             if (tunctrl == OFF) {

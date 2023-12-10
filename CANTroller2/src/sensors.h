@@ -3,8 +3,8 @@
 #include <map>
 #include <memory> // for std::shared_ptr
 #include <SparkFun_FS3000_Arduino_Library.h>  // For air velocity sensor  http://librarymanager/All#SparkFun_FS3000
-#include "Arduino.h"
-#include "FunctionalInterrupt.h"
+#include <Arduino.h>
+#include <FunctionalInterrupt.h>
 #include "driver/rmt.h"
 #include <ESP32Servo.h>        // Makes PWM output to control motors (for rudimentary control of our gas and steering)
 #include "uictrl.h"
@@ -479,9 +479,11 @@ class AirVeloSensor : public I2CSensor {
     int64_t airvelo_read_period_us = 35000;
     Timer airveloTimer;
     virtual float read_sensor() {
+        if (use_i2c_baton && i2cbaton != i2c_airvelo) return goodreading;
         if (airveloTimer.expireset()) {
             goodreading = _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
             // this->_val_raw = this->human_val();  // (NATIVE_T)goodreading; // note, this returns a float from 0-33.55 for the FS3000-1015             
+            ++i2cbaton %= num_i2c_slaves;
         }
         return goodreading;
     }
@@ -537,11 +539,13 @@ class MAPSensor : public I2CSensor {
     float good_reading = -1;
     SparkFun_MicroPressure _sensor;
     virtual float read_sensor() {
+        if (use_i2c_baton && i2cbaton != i2c_map) return good_reading;
         if (map_read_timer.expired()) {
             float temp = _sensor.readPressure(PSI, true);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
             if (!std::isnan(temp)) {
                 good_reading = temp;
                 map_read_timer.set(map_read_timeout);
+                ++i2cbaton %= num_i2c_slaves;
             }
             else map_read_timer.set(map_retry_timeout);
         }
