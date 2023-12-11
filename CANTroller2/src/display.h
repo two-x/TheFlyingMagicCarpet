@@ -267,7 +267,7 @@ class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabili
     int erpos[2] = { 0, 0 }, eraser_velo_sign[2] = { 1, 1 }, boxsize[2];
     int eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) };
     int erpos_max[2] = { res[HORZ] / 2 - eraser_rad, res[VERT] / 2 - eraser_rad }; 
-    uint8_t saver_illicit_prob = 12, penhue = 0, spothue = 255;
+    uint8_t saver_illicit_prob = 12, penhue = 0, spothue = 255, slowhue = 0;
     float pensat = 200.0;
     uint16_t pencolor = RED;
     int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 1500, shape = random(NumSaverShapes);
@@ -280,6 +280,7 @@ class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabili
         _sprite = arg_sprite;
         touch = arg_touch;
         _sprite->setColorDepth(16);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
+        _sprite->setPsram(true);
         _sprite->createSprite(res[HORZ], res[VERT]);  // Create a sprite of defined size
         _sprite->fillSprite(TFT_BLACK);
         for (int axis=HORZ; axis<=VERT; axis++) {
@@ -324,15 +325,29 @@ class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabili
             for (int axis=0; axis<=1; axis++) point[axis] = random(res[axis]);
             if (cycle != 2) {
                 spothue--;
-                if (shape == Wedges) _sprite->drawGradientLine(plast[HORZ], plast[VERT], point[HORZ], point[VERT], hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2)), hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2)));
+                if (!(spothue % 4)) slowhue++;
+                if (shape == Wedges) {
+                    uint16_t c[2] = { hsv_to_rgb<uint16_t>(random(256), 127+(spothue>>1)), hsv_to_rgb<uint16_t>(random(256), 127+(spothue>>1)) };
+                    float im = 0;
+                    if (plast[VERT] != point[VERT]) im = (float)(plast[HORZ]-point[HORZ]) / (float)(plast[VERT]-point[VERT]);
+                    for (int g=-4; g<=4; g++) {
+                        _sprite->fillCircle(plast[HORZ], plast[VERT], 2, c[0]);
+                        if (std::abs(im) > 1.0) _sprite->drawGradientLine(plast[HORZ]+(int)(g/im), plast[VERT]+g, point[HORZ], point[VERT], c[0], c[1]);
+                        else _sprite->drawGradientLine(plast[HORZ]+g, plast[VERT]+(int)(g*im), point[HORZ], point[VERT], c[0], c[1]);
+                    }                                        
+                }
                 else if (shape == Ellipses) {
                     int d[2] = { 10+random(30), 10+random(30) };
                     uint8_t sat = random(255);
-                    uint8_t hue = (spothue < 128) ? 2*spothue : 2*(255-spothue);
+                    uint8_t hue = slowhue;
                     uint8_t brt = 50+random(206);
-                    for (int i=0; i<(3+random(10)); i++) _sprite->drawEllipse(point[HORZ], point[VERT], d[0] - 2*i, d[1] + 2*i, hsv_to_rgb<uint16_t>(hue+4*i, sat, brt));
+                    for (int i=0; i<(3+random(10)); i++) _sprite->drawEllipse(point[HORZ], point[VERT], d[0] - 2*i, d[1] + 2*i, hsv_to_rgb<uint16_t>(hue+2*i, sat, brt));
                 }
-                else if (shape == Rings) _sprite->fillSmoothCircle(point[HORZ], point[VERT], random(25), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106)));
+                else if (shape == Rings) {
+                    int d = 8 + random(25);
+                    uint16_t c = hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106));
+                    for (int r=d; r>=(d-4); r--) _sprite->drawCircle(point[HORZ], point[VERT], r, c);
+                }
                 else if (shape == Dots) 
                     for (int star=0; star<(shape*5); star++) 
                         _sprite->fillCircle(random(res[HORZ]), random(res[VERT]), 2+random(3), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(46)));  // hue_to_rgb16(random(255)), BLK);
