@@ -1,5 +1,8 @@
 
 #pragma once
+// #define CAPTOUCH
+#undef CAPTOUCH
+// #define CHIP ILI9488  // ILI9341
 
 #define LGFX_USE_V1
 #include <LovyanGFX.hpp>
@@ -19,6 +22,7 @@ class LGFX : public lgfx::LGFX_Device
  例えばESP32 DevKit-CでSPI接続のILI9341の設定を行った場合、
   LGFX_DevKitC_SPI_ILI9341
  のような名前にし、ファイル名とクラス名を一致させておくことで、利用時に迷いにくくなります。
+ By using a name like this and matching the file name and class name, it will be difficult to get confused when using it.
 //*/
 
 
@@ -28,11 +32,15 @@ class LGFX : public lgfx::LGFX_Device
 //lgfx::Panel_HX8357B     _panel_instance;
 //lgfx::Panel_HX8357D     _panel_instance;
 //lgfx::Panel_ILI9163     _panel_instance;
-  lgfx::Panel_ILI9341     _panel_instance;
+// #if CHIP==ILI9341
+lgfx::Panel_ILI9341     _panel_instance;
+// #else
+// lgfx::Panel_ILI9486     _panel_instance;
+
+// lgfx::Panel_ILI9488     _panel_instance;
+// #endif
 //lgfx::Panel_ILI9342     _panel_instance;
 //lgfx::Panel_ILI9481     _panel_instance;
-//lgfx::Panel_ILI9486     _panel_instance;
-//lgfx::Panel_ILI9488     _panel_instance;
 //lgfx::Panel_IT8951      _panel_instance;
 //lgfx::Panel_RA8875      _panel_instance;
 //lgfx::Panel_SH110x      _panel_instance; // SH1106, SH1107
@@ -56,7 +64,11 @@ class LGFX : public lgfx::LGFX_Device
 //   lgfx::Light_PWM     _light_instance;
 
 // タッチスクリーンの型にあったインスタンスを用意します。(必要なければ削除)
-//   lgfx::Touch_FT5x06           _touch_instance; // FT5206, FT5306, FT5406, FT6206, FT6236, FT6336, FT6436
+#ifdef CAPTOUCH
+lgfx::Touch_FT5x06           _touch_instance; // FT5206, FT5306, FT5406, FT6206, FT6236, FT6336, FT6436
+#else
+lgfx::Touch_XPT2046          _touch_instance;
+#endif
 //lgfx::Touch_GSL1680E_800x480 _touch_instance; // GSL_1680E, 1688E, 2681B, 2682B
 //lgfx::Touch_GSL1680F_800x480 _touch_instance;
 //lgfx::Touch_GSL1680F_480x272 _touch_instance;
@@ -64,7 +76,6 @@ class LGFX : public lgfx::LGFX_Device
 //lgfx::Touch_GT911            _touch_instance;
 //lgfx::Touch_STMPE610         _touch_instance;
 //lgfx::Touch_TT21xxx          _touch_instance; // TT21100
-lgfx::Touch_XPT2046          _touch_instance;
 
 public:
 
@@ -96,9 +107,9 @@ public:
       cfg.i2c_port    = 0;          // 使用するI2Cポートを選択 (0 or 1)
       cfg.freq_write  = 400000;     // 送信時のクロック
       cfg.freq_read   = 400000;     // 受信時のクロック
-      cfg.pin_sda     = 21;         // SDAを接続しているピン番号
-      cfg.pin_scl     = 22;         // SCLを接続しているピン番号
-      cfg.i2c_addr    = 0x3C;       // I2Cデバイスのアドレス
+      cfg.pin_sda     = 8;         // SDAを接続しているピン番号
+      cfg.pin_scl     = 9;         // SCLを接続しているピン番号
+      cfg.i2c_addr    = 0x38;       // I2Cデバイスのアドレス
 //*/
 /*
 // 8ビットパラレルバスの設定
@@ -129,17 +140,23 @@ public:
       cfg.pin_busy         =    -1;  // BUSYが接続されているピン番号 (-1 = disable)
 
       // ※ 以下の設定値はパネル毎に一般的な初期値が設定されていますので、不明な項目はコメントアウトして試してみてください。
-
+// #if CHIP==ILI9341
+//       cfg.panel_width      =   240;  // 実際に表示可能な幅
+//       cfg.panel_height     =   320;  // 実際に表示可能な高さ
+//       cfg.offset_rotation  =     1;  // 回転方向の値のオフセット 0~7 (4~7は上下反転)
+//       cfg.rgb_order        = false;  // パネルの赤と青が入れ替わってしまう場合 trueに設定
+// #else
       cfg.panel_width      =   240;  // 実際に表示可能な幅
       cfg.panel_height     =   320;  // 実際に表示可能な高さ
+      cfg.offset_rotation  =     8;  // 回転方向の値のオフセット 0~7 (4~7は上下反転)
+      cfg.rgb_order        = false;  // パネルの赤と青が入れ替わってしまう場合 trueに設定
+// #endif
       cfg.offset_x         =     0;  // パネルのX方向オフセット量
       cfg.offset_y         =     0;  // パネルのY方向オフセット量
-      cfg.offset_rotation  =     0;  // 回転方向の値のオフセット 0~7 (4~7は上下反転)
       cfg.dummy_read_pixel =     8;  // ピクセル読出し前のダミーリードのビット数
       cfg.dummy_read_bits  =     1;  // ピクセル以外のデータ読出し前のダミーリードのビット数
       cfg.readable         =  true;  // データ読出しが可能な場合 trueに設定
       cfg.invert           = false;  // パネルの明暗が反転してしまう場合 trueに設定
-      cfg.rgb_order        = false;  // パネルの赤と青が入れ替わってしまう場合 trueに設定
       cfg.dlen_16bit       = false;  // 16bitパラレルやSPIでデータ長を16bit単位で送信するパネルの場合 trueに設定
       cfg.bus_shared       =  true;  // SDカードとバスを共有している場合 trueに設定(drawJpgFile等でバス制御を行います)
 
@@ -168,28 +185,36 @@ public:
     { // タッチスクリーン制御の設定を行います。（必要なければ削除）
       auto cfg = _touch_instance.config();
 
+// #if CHIP==ILI9341
+//       cfg.x_max      = 239;  // タッチスクリーンから得られる最大のX値(生の値)
+//       cfg.y_max      = 319;  // タッチスクリーンから得られる最大のY値(生の値)
+// #else
+      cfg.x_max      = 319;  // タッチスクリーンから得られる最大のX値(生の値)
+      cfg.y_max      = 479;  // タッチスクリーンから得られる最大のY値(生の値)
+// #endif
       cfg.x_min      = 0;    // タッチスクリーンから得られる最小のX値(生の値)
-      cfg.x_max      = 239;  // タッチスクリーンから得られる最大のX値(生の値)
       cfg.y_min      = 0;    // タッチスクリーンから得られる最小のY値(生の値)
-      cfg.y_max      = 319;  // タッチスクリーンから得られる最大のY値(生の値)
       cfg.pin_int    = -1;   // INTが接続されているピン番号
       cfg.bus_shared = true; // 画面と共通のバスを使用している場合 trueを設定
       cfg.offset_rotation = 0;// 表示とタッチの向きのが一致しない場合の調整 0~7の値で設定
 
+#ifdef CAPTOUCH
+    // I2C接続の場合
+      cfg.i2c_port = 1;      // 使用するI2Cを選択 (0 or 1)
+      cfg.i2c_addr = 0x38;   // I2Cデバイスアドレス番号
+      cfg.pin_sda  = 8;     // SDAが接続されているピン番号
+      cfg.pin_scl  = 9;     // SCLが接続されているピン番号
+      cfg.freq = 400000;     // I2Cクロックを設定
+#else
 // SPI接続の場合
-    //   cfg.spi_host = VSPI_HOST;// 使用するSPIを選択 (HSPI_HOST or VSPI_HOST)
+    //  cfg.spi_host = VSPI_HOST;// 使用するSPIを選択 (HSPI_HOST or VSPI_HOST)
       cfg.freq = 1000000;     // SPIクロックを設定
       cfg.pin_sclk = 12;     // SCLKが接続されているピン番号
       cfg.pin_mosi = 11;     // MOSIが接続されているピン番号
       cfg.pin_miso = 13;     // MISOが接続されているピン番号
       cfg.pin_cs   = 47;     //   CSが接続されているピン番号
+#endif
 
-// I2C接続の場合
-    //   cfg.i2c_port = 1;      // 使用するI2Cを選択 (0 or 1)
-    //   cfg.i2c_addr = 0x38;   // I2Cデバイスアドレス番号
-    //   cfg.pin_sda  = 8;     // SDAが接続されているピン番号
-    //   cfg.pin_scl  = 9;     // SCLが接続されているピン番号
-    //   cfg.freq = 400000;     // I2Cクロックを設定
 
       _touch_instance.config(cfg);
       _panel_instance.setTouch(&_touch_instance);  // タッチスクリーンをパネルにセットします。
