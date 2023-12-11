@@ -287,9 +287,10 @@ class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabili
             point[axis] = random(res[axis]);
             eraser_velo_sign[axis] = (random(1)) ? 1 : -1;
         }
-        _sprite->setTextDatum(MC_DATUM);
+        _sprite->setTextDatum(textdatum_t::middle_center);
         _sprite->setTextColor(BLK); 
-        _sprite->setTextSize(1); 
+        _sprite->setFont(&fonts::Font4);
+        _sprite->setCursor(res[HORZ]/2, res[VERT]/2);
         saverCycleTimer.set(saver_cycletime_us);
     }
     void saver_reset() {
@@ -385,7 +386,7 @@ class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabili
                 }
                 _sprite->fillCircle((res[HORZ]/2) + erpos[HORZ], (res[VERT]/2) + erpos[VERT], eraser_rad, BLK);
             }
-            if (saver_lotto) _sprite->drawString("do drugs", res[HORZ] / 2, res[VERT] / 2, 4);
+            if (saver_lotto) _sprite->drawString("do drugs", res[HORZ]/2, res[VERT]/2);
             for (int axis=HORZ; axis<=VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
             push();
         }
@@ -464,6 +465,10 @@ class Display {
             colorcard[rm] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
             disp_runmode_dirty = true;
         }
+    }
+    void tiny_text() {
+        _tft.setTextDatum(textdatum_t::top_left);
+        _tft.setFont(&fonts::Font0);
     }
     uint16_t darken_color(uint16_t color, int32_t halvings = 1) {  // halves each of r, g, and b of a 5-6-5 formatted 16-bit color value either once or twice
         if (halvings == 1) return ((color & 0xf000) | (color & 0x7c0) | (color & 0x1e)) >> 1;
@@ -737,8 +742,9 @@ class Display {
             saver.push();
             return;
         }
-        _tft.setTextDatum(MC_DATUM);
+        _tft.setTextDatum(textdatum_t::middle_center);
         _tft.setTextColor(LYEL);
+        _tft.setFont(&fonts::Font2);
         for (int32_t row = 0; row < arraysize(simgrid); row++) {
             for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
                 int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
@@ -746,11 +752,13 @@ class Display {
                 if (strcmp(simgrid[row][col], ______)) {
                     draw_simbutton(cntr_x + 2, cntr_y - 1, simgriddir[row][col], LYEL);  // for 3d look
                     draw_simbutton(cntr_x, cntr_y, simgriddir[row][col], DGRY);
-                    if (row % 2) _tft.drawString(simgrid[row][col], cntr_x, cntr_y - touch_cell_v_pix/2, 1);
+                    if (row % 2) _tft.drawString(simgrid[row][col], cntr_x, cntr_y - touch_cell_v_pix/2);
                 }
             }     
         }
         draw_reticles();
+        _tft.setTextDatum(textdatum_t::top_left);
+        _tft.setFont(&fonts::Font0);
     }
     void draw_touchgrid(bool side_only) {  // draws edge buttons with names in 'em. If replace_names, just updates names
         int32_t namelen = 0;
@@ -829,6 +837,7 @@ class Display {
     }
   public:
     void update(int _nowmode) {
+        tiny_text();
         update_idiots(disp_idiots_dirty);
         disp_idiots_dirty = false;
         if (!display_enabled) return;
