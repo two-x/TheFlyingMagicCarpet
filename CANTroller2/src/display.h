@@ -1,5 +1,5 @@
 #pragma once
-#include <TFT_eSPI.h>
+#include "lgfxsetup.h"
 #include "neopixel.h"
 #include "touch.h"
 #include "images.h"
@@ -260,7 +260,7 @@ class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabili
     static constexpr int res[2] = { 155, 192 };
     enum savershapes : int { Wedges, Dots, Rings, Ellipses, Boxes, NumSaverShapes, FocusRing, Ascii };
   private:
-    TFT_eSprite* _sprite;
+    LGFX_Sprite* _sprite;
     TouchScreen* touch;
     int point[2], plast[2], er[2], touchlast[2] = { -1, -1 }, touchpoint[2] = { -1, -1 };
     int eraser_rad = 14, eraser_rad_min = 9, eraser_rad_max = 26, eraser_velo_min = 4, eraser_velo_max = 10, touch_w_last = 2;
@@ -276,7 +276,7 @@ class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabili
     bool saver_lotto = false, screensaver_last = false;
   public:
     LibDrawDemo() {}
-    void setup(TFT_eSprite* arg_sprite, TouchScreen* arg_touch) {
+    void setup(LGFX_Sprite* arg_sprite, TouchScreen* arg_touch) {
         _sprite = arg_sprite;
         touch = arg_touch;
         _sprite->setColorDepth(16);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
@@ -306,7 +306,8 @@ class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabili
             if (pensat > 255.0) pensat = 100.0;
             pencolor = (cycle == 1) ? random(0x10000) : hsv_to_rgb<uint16_t>(++penhue, (uint8_t)pensat, 200+random(56));
         }
-        _sprite->drawWedgeLine(touchlast[HORZ], touchlast[VERT], tp[HORZ], tp[VERT], 4, 4, pencolor, pencolor);  // savtouch_last_w, w, pencolor, pencolor);
+        // _sprite->drawWedgeLine(touchlast[HORZ], touchlast[VERT], tp[HORZ], tp[VERT], 4, 4, pencolor, pencolor);  // savtouch_last_w, w, pencolor, pencolor);
+        _sprite->drawLine(touchlast[HORZ], touchlast[VERT], tp[HORZ], tp[VERT], pencolor);  // savtouch_last_w, w, pencolor, pencolor);
         for (int axis=HORZ; axis<=VERT; axis++) touchlast[axis] = tp[axis];
     }
     void update() {
@@ -323,7 +324,7 @@ class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabili
             for (int axis=0; axis<=1; axis++) point[axis] = random(res[axis]);
             if (cycle != 2) {
                 spothue--;
-                if (shape == Wedges) _sprite->drawWedgeLine(plast[HORZ], plast[VERT], point[HORZ], point[VERT], 1+random(4), 1, hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2), 150+random(106)), BLK);
+                if (shape == Wedges) _sprite->drawGradientLine(plast[HORZ], plast[VERT], point[HORZ], point[VERT], hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2)), hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2)));
                 else if (shape == Ellipses) {
                     int d[2] = { 10+random(30), 10+random(30) };
                     uint8_t sat = random(255);
@@ -331,10 +332,10 @@ class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabili
                     uint8_t brt = 50+random(206);
                     for (int i=0; i<(3+random(10)); i++) _sprite->drawEllipse(point[HORZ], point[VERT], d[0] - 2*i, d[1] + 2*i, hsv_to_rgb<uint16_t>(hue+4*i, sat, brt));
                 }
-                else if (shape == Rings) _sprite->drawSmoothCircle(point[HORZ], point[VERT], random(25), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106)), BLK);
+                else if (shape == Rings) _sprite->fillSmoothCircle(point[HORZ], point[VERT], random(25), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106)));
                 else if (shape == Dots) 
                     for (int star=0; star<(shape*5); star++) 
-                        _sprite->drawSpot(random(res[HORZ]), random(res[VERT]), 2+random(3), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(46)), BLK);  // hue_to_rgb16(random(255)), BLK);
+                        _sprite->fillCircle(random(res[HORZ]), random(res[VERT]), 2+random(3), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(46)));  // hue_to_rgb16(random(255)), BLK);
                 else if (shape == Ascii)
                     for (int star=0; star<(shape*5); star++) {                
                         _sprite->setTextColor(hsv_to_rgb<uint16_t>(plast[HORZ] + plast[VERT] + (spothue>>2), 63+(spothue>>1), 200+random(56)), BLK);
@@ -349,7 +350,7 @@ class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabili
                     boxsize[longer] = boxminsize + random(res[0] - boxminsize);
                     boxsize[!longer] = boxminsize + random(smax(0, boxmaxarea / boxsize[longer] - boxminsize));
                     for (int dim=0; dim<=1; dim++) point[dim] = -boxsize[dim] / 2 + random(res[dim]);
-                    _sprite->fillSmoothRoundRect(point[0], point[1], boxsize[0], boxsize[1], boxrad, random(0x10000), BLK); // Change colors as needed                    
+                    _sprite->fillSmoothRoundRect(point[0], point[1], boxsize[0], boxsize[1], boxrad, random(0x10000)); // Change colors as needed                    
                 }
                 // else if (shape == FocusRing) {
                     // hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2), 150+random(106)), BLK)
@@ -389,8 +390,8 @@ class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabili
 };
 class Display {
   private:
-    TFT_eSPI _tft = TFT_eSPI();
-    TFT_eSprite _saversprite = TFT_eSprite(&_tft);
+    LGFX _tft = LGFX();
+    LGFX_Sprite _saversprite = LGFX_Sprite(&_tft);
     NeopixelStrip* neo;
     TouchScreen* touch;
     TunerPanel tuner;
@@ -405,12 +406,12 @@ class Display {
     static constexpr int idiots_corner_y = 13;
     Display(NeopixelStrip* _neo, TouchScreen* _touch, IdiotLights* _idiots) : _tft(), neo(_neo), touch(_touch), idiots(_idiots) {}
     Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, TouchScreen* _touch, IdiotLights* _idiots) 
-        : _tft(cs_pin, dc_pin) { Display(_neo, _touch, _idiots); }
+        : _tft() { Display(_neo, _touch, _idiots); }
     void setup() {
         printf("Display..\n");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
         _tft.begin();
         _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
-        _tft.setTouch(touch_cal_data);
+        // _tft.setTouch(touch_cal_data);
         _tft.setSwapBytes(true);  // rearranges color ordering of 16bit colors when displaying image files
         for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
             disp_age_quanta[lineno] = -1;

@@ -61,7 +61,7 @@ public:
           _ts.setRotation(3);  // rotate -90 degrees to match IPS tft
         #else
           _ts.begin();
-          _ts.setRotation(1);  // rotate 90 degrees to match tft
+          _ts.setRotation(3);  // rotate 90 degrees to match tft
         #endif
     }
 
