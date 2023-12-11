@@ -20,11 +20,12 @@
 </head>
 <body>
     <span style='color: #003366;'>
-        <h1>Current run loop times:</h1>
+        <h3>Current run loop times:</h3>
         <p>Average: <span id='loopavg'>-</span> us</p>
         <p>   Peak: <span id='looppeak'>-</span> us</p>
-        <h1>Lets generate a random number</h1>
-        <p>The random number is: <span id='rand1'>-</span></p>
+        <!-- <h1>Lets generate a random number</h1> -->
+        <!-- <p>The random number is: <span id='rand1'>-</span></p> -->
+        <!-- <p>The random number 2 is: <span id='rand2'>-</span></p> -->
         <p><button type='button' id='BTN_SEND_BACK'>
         Send info to ESP32
         </button></p>
@@ -88,8 +89,8 @@
         }
         function processCommand(event) {
             var obj = JSON.parse(event.data);
-            document.getElementById('rand1').innerHTML = obj.rand1;
-            document.getElementById('rand2').innerHTML = obj.rand2;
+            // document.getElementById('rand1').innerHTML = obj.rand1;
+            // document.getElementById('rand2').innerHTML = obj.rand2;
             document.getElementById('loopavg').innerHTML = obj.loopavg;
             document.getElementById('looppeak').innerHTML = obj.looppeak;
             console.log(obj.rand1);

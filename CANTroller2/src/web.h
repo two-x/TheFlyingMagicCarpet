@@ -123,8 +123,8 @@ class AccessPoint {
         WiFi.persistent(false);  // Don't store wifi config in eeprom, b/c it can get stuck there
         WiFi.setSleep(false);  // ensure server is awake for accessibility
         WiFi.softAPConfig(localip, gateway, subnet);
-        WiFi.softAP(ssid, password);
-        Serial.printf("active. ssid:%s, pwd:%s, ip:", ssid, password);
+        WiFi.softAP(apssid, appassword);
+        Serial.printf("active. ssid:%s, pwd:%s, ip:", apssid, appassword);
         Serial.println(WiFi.softAPIP());
         // std::cout << "ip = " << WiFi.softAPIP() << std::endl;
         // printf(" ip = %s\n", my_ip.c_str());
