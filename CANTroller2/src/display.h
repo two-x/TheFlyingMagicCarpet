@@ -121,8 +121,6 @@ class IdiotLights {
         { 0x7c, 0x46, 0x7f, 0x7f, 0x33, 0x12, 0x12, 0x12, 0x1e, 0x12, 0x0c, },  // 16 = linear actuator or schlong
         { 0x0e, 0x1d, 0x7d, 0x1d, 0x0e, 0x00, 0x7e, 0x0b, 0x09, 0x0b, 0x7e, },  // 17 = encoder "A"
         { 0x0e, 0x1d, 0x7d, 0x1d, 0x0e, 0x00, 0x7f, 0x49, 0x49, 0x7f, 0x36, },  // 18 = encoder "B"
-     // { 0x00, 0x40, 0x70, 0x7c, 0x5e, 0x13, 0x5e, 0x7c, 0x70, 0x40, 0x00, },  // 17 = "A"
-     // { 0x00, 0x00, 0x41, 0x7f, 0x7f, 0x49, 0x49, 0x7f, 0x36, 0x00, 0x00, },  // 18 = "B"
     };
     char letters[iconcount][3] = {
         "SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk",
@@ -154,7 +152,7 @@ class IdiotLights {
         }
     }
 };
-#define disp_simbuttons_x 165
+#define disp_simbuttons_x 164
 #define disp_simbuttons_y 48
 #define touch_simbutton 38
 // class SimPanel {};
@@ -170,8 +168,8 @@ class IdiotLights {
 #define disp_default_float_precision 3  // Significant digits displayed for float values. Higher causes more screen draws
 #define disp_datapage_names_x 12
 #define disp_datapage_values_x 59
-#define disp_datapage_units_x 104        
-#define disp_bargraphs_x 123
+#define disp_datapage_units_x 103        
+#define disp_bargraphs_x 122
 #define disp_datapage_title_x 83
 char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
 bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
@@ -258,194 +256,6 @@ class TunerPanel {
   private:
     // DataPage[NUM_DATAPAGES];
 };
-class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabilities
-  public:
-    static constexpr int res[2] = { 155, 192 };
-    enum savermenu : int { Eraser, Collisions, NumSaverMenu };
-    enum savershapes : int { Wedges, Dots, Rings, Ellipses, Boxes, NumSaverShapes, FocusRing, Ascii };
-  private:
-    LGFX_Sprite* _sprites[2];
-    LGFX* lcd;
-    CollisionsSaver collisions;
-    TouchScreen* touch;
-    int point[2], plast[2], er[2], touchlast[2] = { -1, -1 }, touchpoint[2] = { -1, -1 };
-    int eraser_rad = 14, eraser_rad_min = 9, eraser_rad_max = 26, eraser_velo_min = 4, eraser_velo_max = 10, touch_w_last = 2;
-    int erpos[2] = { 0, 0 }, eraser_velo_sign[2] = { 1, 1 }, boxsize[2], now = 0, savermenu = random(NumSaverMenu);
-    int eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) }, shapes_per_run = 5, shapes_done = 0;
-    int erpos_max[2] = { res[HORZ] / 2 - eraser_rad, res[VERT] / 2 - eraser_rad }; 
-    uint8_t saver_illicit_prob = 12, penhue = 0, spothue = 255, slowhue = 0;
-    float pensat = 200.0;
-    uint16_t pencolor = RED;
-    int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 1500, shape = random(NumSaverShapes);
-    static constexpr uint32_t saver_cycletime_us = 34000000;
-    Timer saverRefreshTimer = Timer(45000), saverCycleTimer, pentimer = Timer(700000);
-    bool saver_lotto = false, screensaver_last = false, drawn = false, doneyet = false;
-  public:
-    LibDrawDemo() {}
-    void setup(LGFX_Sprite* arg_sprite0, LGFX_Sprite* arg_sprite1, LGFX* ptr_lcd, TouchScreen* arg_touch) {
-        _sprites[0] = arg_sprite0;
-        _sprites[1] = arg_sprite1;
-        lcd = ptr_lcd;
-        touch = arg_touch;
-        collisions.setup(_sprites[0], _sprites[1], lcd, disp_simbuttons_x, disp_simbuttons_y);
-
-        for (int axis=HORZ; axis<=VERT; axis++) {
-            point[axis] = random(res[axis]);
-            eraser_velo_sign[axis] = (random(1)) ? 1 : -1;
-        }
-        for (int i=0; i<=1; i++) {
-            _sprites[i]->setColorDepth(16);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
-            _sprites[i]->setPsram(true);
-            _sprites[i]->createSprite(res[HORZ], res[VERT]);  // Create a sprite of defined size
-            _sprites[i]->fillSprite(TFT_BLACK);
-            _sprites[i]->setTextDatum(textdatum_t::middle_center);
-            _sprites[i]->setTextColor(BLK); 
-            _sprites[i]->setFont(&fonts::Font4);
-            _sprites[i]->setCursor(res[HORZ]/2, res[VERT]/2);
-        }
-        saverCycleTimer.set(saver_cycletime_us);
-    }
-    void saver_reset() {
-        _sprites[now]->fillSprite(TFT_BLACK);
-        saver_pattern(-2);  // randomize new pattern whenever turned off and on
-        cycle = 0;
-        saverCycleTimer.reset();
-    }
-    void saver_touch(int16_t x, int16_t y) {  // you can draw colorful lines on the screensaver
-        int tp[2] = { x - disp_simbuttons_x, y - disp_simbuttons_y };
-        if (tp[HORZ] < 0 || tp[VERT] < 0) return;
-        for (int axis=HORZ; axis<=VERT; axis++) if (touchlast[axis] == -1) touchlast[axis] = tp[axis];
-        if (pentimer.expireset()) {
-            pensat += 1.5;
-            if (pensat > 255.0) pensat = 100.0;
-            pencolor = (cycle == 1) ? random(0x10000) : hsv_to_rgb<uint16_t>(++penhue, (uint8_t)pensat, 200+random(56));
-        }
-        // _sprites[now]->drawWedgeLine(touchlast[HORZ], touchlast[VERT], tp[HORZ], tp[VERT], 4, 4, pencolor, pencolor);  // savtouch_last_w, w, pencolor, pencolor);
-        _sprites[now]->drawLine(touchlast[HORZ], touchlast[VERT], tp[HORZ], tp[VERT], pencolor);  // savtouch_last_w, w, pencolor, pencolor);
-        for (int axis=HORZ; axis<=VERT; axis++) touchlast[axis] = tp[axis];
-    }
-    void update() {
-        if (savermenu == Eraser && touch->touched()) saver_touch(touch->touch_pt(0), touch->touch_pt(1));
-        if (!screensaver_last && screensaver) saver_reset();
-        screensaver_last = screensaver;
-        if (!screensaver) return;
-        if (savermenu == Collisions) run_collisions();
-        else if (savermenu == Eraser) {
-            if (drawn) push();
-            else run_eraser();
-        }
-    }
-    void run_collisions() {
-        doneyet = collisions.update();
-        if (doneyet) saver_pattern();
-    }
-    void run_eraser() {
-        if (drawn) {
-            push();
-            return;
-        }
-        if (saverCycleTimer.expired()) {
-            ++cycle %= num_cycles;
-            if (cycle == 2) saver_pattern(-1);
-            saverCycleTimer.set(saver_cycletime_us / ((cycle == 2) ? 5 : 1));
-        }
-        else if (saverRefreshTimer.expireset()) {
-            for (int axis=0; axis<=1; axis++) point[axis] = random(res[axis]);
-            if (cycle != 2) {
-                spothue--;
-                if (!(spothue % 4)) slowhue++;
-                if (shape == Wedges) {
-                    uint16_t c[2] = { hsv_to_rgb<uint16_t>(random(256), 127+(spothue>>1)), hsv_to_rgb<uint16_t>(random(256), 127+(spothue>>1)) };
-                    float im = 0;
-                    if (plast[VERT] != point[VERT]) im = (float)(plast[HORZ]-point[HORZ]) / (float)(plast[VERT]-point[VERT]);
-                    for (int g=-4; g<=4; g++) {
-                        _sprites[now]->fillCircle(plast[HORZ], plast[VERT], 2, c[0]);
-                        if (std::abs(im) > 1.0) _sprites[now]->drawGradientLine(plast[HORZ]+(int)(g/im), plast[VERT]+g, point[HORZ], point[VERT], c[0], c[1]);
-                        else _sprites[now]->drawGradientLine(plast[HORZ]+g, plast[VERT]+(int)(g*im), point[HORZ], point[VERT], c[0], c[1]);
-                    }                                        
-                }
-                else if (shape == Ellipses) {
-                    int d[2] = { 10+random(30), 10+random(30) };
-                    uint8_t sat = 100+random(155);
-                    uint8_t hue = slowhue;
-                    uint8_t brt = 50+random(206);
-                    if (hue > 50 && hue < 150) slowhue++;
-                    for (int i=0; i<(3+random(10)); i++) _sprites[now]->drawEllipse(point[HORZ], point[VERT], d[0] - 2*i, d[1] + 2*i, hsv_to_rgb<uint16_t>(hue+2*i, sat, brt));
-                }
-                else if (shape == Rings) {
-                    int d = 8 + random(25);
-                    uint16_t c = hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106));
-                    for (int r=d; r>=(d-4); r--) _sprites[now]->drawCircle(point[HORZ], point[VERT], r, c);
-                }
-                else if (shape == Dots) 
-                    for (int star=0; star<(shape*5); star++) 
-                        _sprites[now]->fillCircle(random(res[HORZ]), random(res[VERT]), 2+random(3), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(46)));  // hue_to_rgb16(random(255)), BLK);
-                else if (shape == Ascii)
-                    for (int star=0; star<(shape*5); star++) {                
-                        _sprites[now]->setTextColor(hsv_to_rgb<uint16_t>(plast[HORZ] + plast[VERT] + (spothue>>2), 63+(spothue>>1), 200+random(56)), BLK);
-                        char letter = (char)(1 + random(0xbe));
-                        _sprites[now]->setCursor(point[HORZ], point[VERT]);
-                        _sprites[now]->print((String)letter);
-                    }
-                else if (shape == Boxes) {
-                    boxrad = 5 + random(5);
-                    boxminsize = 2 * boxrad + 10;
-                    int longer = random(2);
-                    boxsize[longer] = boxminsize + random(res[0] - boxminsize);
-                    boxsize[!longer] = boxminsize + random(smax(0, boxmaxarea / boxsize[longer] - boxminsize));
-                    for (int dim=0; dim<=1; dim++) point[dim] = -boxsize[dim] / 2 + random(res[dim]);
-                    _sprites[now]->fillSmoothRoundRect(point[0], point[1], boxsize[0], boxsize[1], boxrad, random(0x10000)); // Change colors as needed                    
-                }
-                // else if (shape == FocusRing) {
-                    // hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2), 150+random(106)), BLK)
-                // }
-                _sprites[now]->setTextColor(BLK);  // allows subliminal messaging
-            }
-            if (cycle != 0) {
-                for (int axis=HORZ; axis<=VERT; axis++) {
-                    erpos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
-                    if (erpos[axis] * eraser_velo_sign[axis] >= erpos_max[axis]) {
-                        erpos[axis] = eraser_velo_sign[axis] * erpos_max[axis];
-                        eraser_velo[axis] = eraser_velo_min + random(eraser_velo_max - eraser_velo_min);
-                        eraser_velo[!axis] = eraser_velo_min + random(eraser_velo_max - eraser_velo_min);
-                        eraser_velo_sign[axis] *= -1;
-                        eraser_rad = constrain((int)(eraser_rad + random(5) - 2), eraser_rad_min, eraser_rad_max);
-                    }
-                }
-                _sprites[now]->fillCircle((res[HORZ]/2) + erpos[HORZ], (res[VERT]/2) + erpos[VERT], eraser_rad, BLK);
-            }
-            if (saver_lotto) _sprites[now]->drawString("do drugs", res[HORZ]/2, res[VERT]/2);
-            for (int axis=HORZ; axis<=VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
-            drawn = true;
-            now = !now;
-        }
-    }
-    void push() {
-        yield();
-        _sprites[!now]->pushSprite(disp_simbuttons_x, disp_simbuttons_y);
-        drawn = false;
-    }
-  private:
-    void saver_pattern(int newpat=-1) {  // pass non-negative value for a specific pattern, or -1 for cycle, -2 for random
-        if (savermenu == Eraser) {
-            if (shapes_done > 5) {
-                shapes_done = 0;
-                doneyet = false;
-                savermenu = Collisions;
-                collisions.reset();
-            }
-            else {
-                int last_pat = shape;
-                saver_lotto = !random(saver_illicit_prob);
-                if (0 <= newpat && newpat < NumSaverShapes) shape = newpat;  // 
-                else if (newpat == -1) ++shape %= NumSaverShapes;
-                else if (newpat == -2) while (last_pat == shape) shape = random(NumSaverShapes);
-                shapes_done++;
-            }
-        }
-        else savermenu = Eraser;
-    }
-};
 class Display {
   private:
     LGFX _tft = LGFX();
@@ -468,7 +278,8 @@ class Display {
     void setup() {
         printf("Display..\n");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
         _tft.begin();
-        _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
+        // _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
+        if (_tft.width() < _tft.height()) _tft.setRotation(_tft.getRotation() ^ 1);
         // _tft.setTouch(touch_cal_data);
         _tft.setSwapBytes(true);  // rearranges color ordering of 16bit colors when displaying image files
         for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
@@ -487,7 +298,7 @@ class Display {
         // idiots->setup(neo);
         draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
         all_dirty();
-        saver.setup(&(_saversprite[0]), &(_saversprite[1]), &_tft, touch);
+        saver.setup(&(_saversprite[0]), &(_saversprite[1]), &_tft, touch, disp_simbuttons_x, disp_simbuttons_y);
     }
     void all_dirty() {
         disp_idiots_dirty = true;
@@ -1103,7 +914,7 @@ class Tuner {
         idelta += idelta_encoder + touch->idelta;  // Allow edits using the encoder or touchscreen
         touch->idelta = idelta_encoder = 0;
         if (tunctrl != tunctrl_last || datapage != datapage_last || sel_val != sel_val_last || idelta) tuningCtrlTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
-        else if (tunctrl != OFF && tuningCtrlTimer.expired()) tunctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
+        else if (tuningCtrlTimer.expired()) tunctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
         datapage = constrain(datapage, 0, datapages::NUM_DATAPAGES-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
         if (datapage != datapage_last) {
             if (tunctrl == EDIT) tunctrl = SELECT;  // If page is flipped during edit, drop back to select mode
@@ -1117,7 +928,7 @@ class Tuner {
     }
     void edit_values(int rmode) {
         float fdelta = (float)idelta;
-        if (tunctrl == EDIT && idelta != 0) {  // Change tunable values when editing
+        if (tunctrl == EDIT && idelta) {  // Change tunable values when editing
             if (datapage == PG_RUN) {
                 if (sel_val == 9) { adj_val(&(gas.governor), idelta, 0, 100); gas.derive(); }
                 else if (sel_val == 10) adj_val(&(steer.steer_safe_pc), idelta, 0, 100);
