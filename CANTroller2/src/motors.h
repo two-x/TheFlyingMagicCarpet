@@ -28,11 +28,11 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
     int64_t readtime_last;
   public:
     IdleControl() {}
-    void setup(float* target, float* measraw, float* measfilt,  // Variable references: idle target, rpm raw, rpm filt
+void setup(float* target, float* measraw, float* measfilt,  // Variable references: idle target, rpm raw, rpm filt
         TemperatureSensor* engine_sensor_ptr,
         float tempcold, float temphot, int32_t settlerate = 100,  // Values for: engine operational temp cold (min) and temp hot (max) in degrees-f
         int myidlemode = CONTROL) {  // Configure idle control to just soft land or also attempt to minimize idle
-        printf("Idle control..\n");
+        Serial.printf("Idle control..");
         target_rpm = target;
         measraw_rpm = measraw;
         measfilt_rpm = measfilt;
@@ -49,12 +49,10 @@ class IdleControl {  // Soren - To allow creative control of PID targets in case
         settleTimer.reset();
         idlemode = myidlemode;
         targetstate = DRIVING;
-        if (engine_sensor_ptr == nullptr) {
-            Serial.println("engine_sensor_ptr is nullptr");
-            return;
-        }
-        engine_sensor = engine_sensor_ptr;
+        if (engine_sensor_ptr == nullptr) Serial.printf(" err: no temp sensor");
+        else engine_sensor = engine_sensor_ptr;
         tachIdleTimer.reset();
+        Serial.printf("\n");
     }
     void update(void) {  // this should be called to update idle and throttle target values before throttle-related control loop outputs are calculated
         // update engine temp if it's ready

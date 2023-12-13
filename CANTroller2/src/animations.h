@@ -467,7 +467,7 @@ class LibDrawDemo {  // draws colorful patterns to exercise screen draw capabili
     }
     void push() {
         yield();
-        _sprites[now]->pushSprite(disp_simbuttons_x, disp_simbuttons_y);
+        _sprites[now]->pushSprite(corner[HORZ], corner[VERT]);
     }
   private:
     void eraser_init() {

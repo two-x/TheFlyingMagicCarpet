@@ -1,6 +1,7 @@
 // objects.h : contains instantiations of major system components, and global functions
 #pragma once
 #include <Preferences.h>  // Functions for writing to flash, i think
+#include <esp_partition.h>
 #include "globals.h"
 #include "sensors.h"  // includes uictrl.h, i2cbus.h
 #include "motors.h"  // includes qpid.h, temperature.h
@@ -62,6 +63,17 @@ void set_board_defaults() {          // true for dev boards, false for printed b
         button_test_heartbeat_color = false;
     }
     printf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
+}
+void partition_table() {
+    printf("Setup begin\nPartition Typ SubT  Address SizeByte   kB\n");
+    esp_partition_iterator_t iterator = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, NULL);
+    const esp_partition_t *partition;
+    while ((partition = esp_partition_get(iterator)) != NULL) {
+        printf(" %8s %3d 0x%02x 0x%06x 0x%06x %4d\n", partition->label, partition->type, partition->subtype, partition->address, partition->size, (partition->size)/1024);
+        if (!strcmp(partition->label, "coredump")) break;
+        iterator = esp_partition_next(iterator);
+    }
+    esp_partition_iterator_release(iterator);
 }
 void sim_setup() {
     sim.register_device(sens::pressure, pressure, pressure.source());
@@ -157,7 +169,7 @@ void hotrc_events(int runmode) {
         else if (runmode == SHUTDOWN && !shutdown_incomplete) sleep_request = REQ_ON;
         else if (runmode == ASLEEP) sleep_request = REQ_OFF; 
     }
-    hotrc.toggles_reset();
+    // hotrc.toggles_reset();
 }
 // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
 float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s

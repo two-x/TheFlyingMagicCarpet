@@ -1328,12 +1328,16 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         radiolost_update();
         return joydir();
     }
-    void toggles_reset() {  // Any handler code acting upon hotrc events must call this afterward to clear them
+    void toggles_reset() {  // Shouldn't be necessary to reset events due to sw_event(ch) auto-resets when read
         for (int8_t ch = CH3; ch <= CH4; ch++) _sw_event[ch] = false;
     }
     bool radiolost() { return _radiolost; }
     bool* radiolost_ptr() { return &_radiolost; }
-    bool sw_event(uint8_t ch) { return _sw_event[ch]; }
+    bool sw_event(uint8_t ch) {  // returns if there's an event on the given channel then resets that channel
+        bool retval = _sw_event[ch];
+        _sw_event[ch] = false;
+        return retval;        
+    }
     void set_pc(int8_t axis, int8_t param, float val) { pc[axis][param] = val; }
     void set_us(int8_t axis, int8_t param, int32_t val) { us[axis][param] = val; }
     int32_t next_unfilt_rawval (uint8_t axis) { return raw_history[axis][index[axis]]; }  // helps to debug the filter from outside the class
