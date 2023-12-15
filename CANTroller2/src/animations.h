@@ -109,6 +109,9 @@ class Animation {
 
 class CollisionsSaver : public Animation {
   public:
+    auto resx = framesize[HORZ];
+    auto resy = framesize[VERT];
+
     struct ball_info_t {
         int32_t x, y, dx, dy, r, m;
         uint32_t color;
@@ -139,8 +142,8 @@ class CollisionsSaver : public Animation {
         sprite = &(sp[flip]);
         sprite->clear();
 
-        for (int32_t i = 8; i < width; i += 16) sprite->drawFastVLine(i, 0, resy, 0x1F);
-        for (int32_t i = 8; i < resy; i += 16) sprite->drawFastHLine(0, i, width, 0x1F);
+        for (int32_t i = 8; i < resx; i += 16) sprite->drawFastVLine(i, 0, resy, 0x1F);
+        for (int32_t i = 8; i < resy; i += 16) sprite->drawFastHLine(0, i, resx, 0x1F);
         for (std::uint32_t i = 0; i < _ball_count; i++) {
             a = &balls[i];
             sprite->fillCircle( a->x >> SHIFTSIZE, a->y >> SHIFTSIZE, a->r >> SHIFTSIZE, a->color);
@@ -213,7 +216,7 @@ class CollisionsSaver : public Animation {
                 if (a->dy < 0) a->dy = - a->dy*e;
             }
             else if (a->y >= _resy - a->r) {
-                a->y = _height - a->r -1;
+                a->y = resy - a->r -1;
                 if (a->dy > 0) a->dy = - a->dy*e;
             }
             for (int j = i + 1; j != ball_count; j++) {
@@ -294,6 +297,10 @@ class CollisionsSaver : public Animation {
         auto lcdsize[HORZ] = sp[0].width();  // lcd->width();
         auto height = sp[0].height();  // lcd->height();
 
+        auto full_width << SHIFTSIZE;
+        auto full_height << SHIFTSIZE;
+
+
         for (std::uint32_t i = 0; i < 2; ++i) {
             sp[i].setTextSize(1);
             sp[i].setColorDepth(8);
@@ -366,7 +373,7 @@ class LibDrawDemo : public Animation {  // draws colorful patterns to exercise s
     }
     void saver_reset() {
         sp[now].fillSprite(TFT_BLACK);
-        saver_pattern(-2);  // randomize new pattern whenever turned off and on
+        change_pattern(-2);  // randomize new pattern whenever turned off and on
         cycle = 0;
         saverCycleTimer.reset();
     }
@@ -390,10 +397,6 @@ class LibDrawDemo : public Animation {  // draws colorful patterns to exercise s
         if (!screensaver) return;
         if (savermenu == Collisions) run_collisions();
         else run_eraser();
-    }
-    void run_collisions() {
-        done_yet = collisions.update();
-        if (done_yet) saver_pattern();
     }
     void run_eraser() {
         if (saverCycleTimer.expired()) {
@@ -499,6 +502,55 @@ class LibDrawDemo : public Animation {  // draws colorful patterns to exercise s
                 else if (newpat == -1) ++shape %= NumSaverShapes;
                 else if (newpat == -2) while (last_pat == shape) shape = random(NumSaverShapes);
                 shapes_done++;
+            }
+        }
+        else {
+            savermenu = Eraser;
+            eraser_init();
+        }
+    }
+    bool change_pattern(int newpat=-1) {  // pass non-negative value for a specific pattern, or -1 for cycle, -2 for random
+        shapes_done++;
+        if (shapes_done > 4) {
+            shapes_done = 0;
+            return true;
+        }
+    bool finished = false;
+        int last_pat = shape;
+        saver_lotto = !random(saver_illicit_prob);
+        if (0 <= newpat && newpat < NumSaverShapes) shape = newpat;  // 
+        else if (newpat == -1) ++shape %= NumSaverShapes;
+        else if (newpat == -2) while (last_pat == shape) shape = random(NumSaverShapes);
+            }
+};
+class AnimationManager {
+  public:
+    bool finished = false;
+    enum saverchoices : int { Eraser, Collisions, NumSaverMenu };
+    int nowsaver = Collisions;
+    Animation savers[2] = { LibDrawDemo(), Collisions() };
+    Animation* nowsaver = &(savers[nowsaver]);
+    void setup() {
+        
+    }
+    void run_collisions() {
+        done_yet = collisions.update();
+        if (done_yet) saver_pattern();
+    }
+    void run_eraser() {
+        
+            done_yet = false;
+            savermenu = Collisions;
+            collisions.reset();
+
+    }
+    void change_saver() {  // pass non-negative value for a specific pattern, or -1 for cycle, -2 for random
+        if (savermenu == Eraser) {
+            if (shapes_done > 5) {
+                shapes_done = 0;
+                done_yet = false;
+                savermenu = Collisions;
+                collisions.reset();
             }
         }
         else {
