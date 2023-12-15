@@ -1,4 +1,6 @@
 #pragma once
+#define disp_simbuttons_x 164
+#define disp_simbuttons_y 48
 #include "lgfx.h"
 #include "neopixel.h"
 #include "touch.h"
@@ -138,8 +140,6 @@ class IdiotLights {
         }
     }
 };
-#define disp_simbuttons_x 164
-#define disp_simbuttons_y 48
 #define touch_simbutton 38
 // class SimPanel {};
 // class DataPage {};
@@ -245,11 +245,11 @@ class TunerPanel {
 class Display {
   private:
     LGFX _tft = LGFX();
-    LGFX_Sprite _saversprite[2] = { LGFX_Sprite(&_tft), LGFX_Sprite(&_tft) };
+    // LGFX_Sprite _saversprite[2] = { LGFX_Sprite(&_tft), LGFX_Sprite(&_tft) };
+    AnimationManager animations(&_tft, &_touch, _cornerx, _cornery, sizex, sizey);
     NeopixelStrip* neo;
     TouchScreen* touch;
     TunerPanel tuner;
-    LibDrawDemo saver;
     IdiotLights* idiots;
     Timer dispRefreshTimer = Timer(100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
     uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
