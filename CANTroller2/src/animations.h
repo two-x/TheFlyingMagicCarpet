@@ -6,9 +6,8 @@
 static LGFX_Sprite sp[2];
 LGFX_Sprite* nowspr;
 LGFX* lcd;
-TouchScreen* touch;
+TouchScreen* _touch;
 uint32_t corner[2], sprwidth, sprheight;
-static constexpr uint32_t lcdsize[2] = { disp_simbuttons_x, disp_simbuttons_y };
 std::size_t flip = 0;
 static constexpr std::uint32_t SHIFTSIZE = 8;
 static std::uint32_t sec, psec, _width, _height, _fps = 0, fps = 0, frame_count = 0;
@@ -17,9 +16,9 @@ volatile std::uint32_t _draw_count;
 volatile std::uint32_t _loop_;
 class Animation {
   public:
-    void setup(LGFX* _lcd, Touchscreen* _touch, uint32_t _cornerx, uint32_t _cornery, uint32_t _sprwidth, uint32_t _sprheight) {
+    static void init(LGFX* _lcd, TouchScreen* touch, uint32_t _cornerx, uint32_t _cornery, uint32_t _sprwidth, uint32_t _sprheight) {
         lcd = _lcd;
-        touch = _touch;
+        _touch = touch;
         corner[HORZ] = _cornerx;
         corner[VERT] = _cornery;
         sprwidth = _sprwidth;
@@ -29,8 +28,8 @@ class Animation {
         lcd->setColorDepth(8);
         if (lcd->width() < lcd->height()) lcd->setRotation(lcd->getRotation() ^ 1);
         for (int i=0; i<=1; i++) sp[i].setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
-        auto framewidth = lcdsize[HORZ];
-        auto frameheight = lcdsize[VERT];
+        auto framewidth = lcd->width();
+        auto frameheight = lcd->height();
         bool fail = false;
         for (std::uint32_t i = 0; !fail && i < 2; ++i)
             fail = !sp[i].createSprite(framewidth, frameheight);
@@ -57,6 +56,10 @@ class Animation {
         _width = framewidth << SHIFTSIZE;
         _height = frameheight << SHIFTSIZE;    
     }
+    virtual void setup() {};
+    virtual void reset() {};
+    virtual void saver_touch(int16_t, int16_t) {};
+    virtual int update() { return 0; };
     //     setflip();
     // }
     // void create_sprites() {  // make a sprite to draw on, and another to draw on next. only data that differs will be drawn to screen
@@ -374,14 +377,14 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise s
     int eraser_rad = 14, eraser_rad_min = 9, eraser_rad_max = 26, eraser_velo_min = 4, eraser_velo_max = 10, touch_w_last = 2;
     int erpos[2] = { 0, 0 }, eraser_velo_sign[2] = { 1, 1 }, boxsize[2], now = 0, savermenu = random(NumSaverMenu);
     int eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) }, shapes_per_run = 5, shapes_done = 0;
-    int erpos_max[2] = { sprwidth / 2 - eraser_rad, sprheight / 2 - eraser_rad }; 
+    int erpos_max[2] = { (int)sprwidth / 2 - eraser_rad, (int)sprheight / 2 - eraser_rad }; 
     uint8_t saver_illicit_prob = 12, penhue = 0, spothue = 255, slowhue = 0;
     float pensat = 200.0;
     uint16_t pencolor = TFT_RED;
     int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 1500, shape = random(NumSaverShapes);
     static constexpr uint32_t saver_cycletime_us = 34000000;
-    Timer saverRefreshTimer = Timer(45000), saverCycleTimer, pentimer = Timer(700000);
-    bool saver_lotto = false, screensaver_last = false, done_yet = false;
+    Timer saverCycleTimer, pentimer = Timer(700000);
+    bool saver_lotto = false;
   public:
     EraserSaver() {}
     void setup() {
@@ -407,7 +410,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise s
         saverCycleTimer.set(saver_cycletime_us);
     }
     void saver_touch(int16_t x, int16_t y) {  // you can draw colorful lines on the screensaver
-        int tp[2] = { x - corner[HORZ], y - corner[VERT] };
+        int tp[2] = { (int32_t)x - (int32_t)corner[HORZ], (int32_t)y - (int32_t)corner[VERT] };
         if (tp[HORZ] < 0 || tp[VERT] < 0) return;
         for (int axis=HORZ; axis<=VERT; axis++) if (touchlast[axis] == -1) touchlast[axis] = tp[axis];
         if (pentimer.expireset()) {
@@ -425,6 +428,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise s
             if (cycle == 2) change_pattern(-1);
             saverCycleTimer.set(saver_cycletime_us / ((cycle == 2) ? 5 : 1));
         }
+        return shapes_done;
     }
     void drawsprite() {
         for (int axis=0; axis<=1; axis++) point[axis] = random(sprsize[axis]);
@@ -495,7 +499,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise s
         for (int axis=HORZ; axis<=VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
     }
   private:
-    bool change_pattern(int newpat=-1) {  // pass non-negative value for a specific pattern, or -1 for cycle, -2 for random
+    void change_pattern(int newpat=-1) {  // pass non-negative value for a specific pattern, or -1 for cycle, -2 for random
         if (++shapes_done > 4) shapes_done = 0;
         else {
             int last_pat = shape;
@@ -503,7 +507,6 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise s
             if (0 <= newpat && newpat < NumSaverShapes) shape = newpat;  // 
             else if (newpat == -1) ++shape %= NumSaverShapes;
             else if (newpat == -2) while (last_pat == shape) shape = random(NumSaverShapes);
-            return shapes_done;
         }
     }
 };
@@ -516,19 +519,21 @@ class AnimationManager {
     Animation savers[2] = { EraserSaver(), CollisionsSaver() };
     Animation* ptrsaver = &(savers[nowsaver]);
     TouchScreen* mytouch;
+    Timer saverRefreshTimer = Timer(45000);
+    bool screensaver_last = false;
   public:
-    AnimationManager(LGFX* _lcd, TouchScreen* _touch, uint32_t _cornerx, uint32_t _cornery, uint32_t _sizex, uint32_t _sizey) 
-        : mylcd(_lcd), mytouch(_touch), cornerx(_cornerx), cornery(_cornery), sizex(_sizex), sizey(_sizey) {
+    AnimationManager(LGFX* _lcd, TouchScreen* touch, uint32_t _cornerx, uint32_t _cornery, uint32_t _sizex, uint32_t _sizey) 
+        : mylcd(_lcd), mytouch(touch), cornerx(_cornerx), cornery(_cornery), sizex(_sizex), sizey(_sizey) {
     }
     void setup() {
-        Animation::setup(mylcd, mytouch, cornerx, cornery, sizex, sizey);
+        Animation::init(mylcd, mytouch, cornerx, cornery, sizex, sizey);
         for (int i=0; i<NumSaverMenu; i++) savers[i].setup();
     }
     void reset() {
         ptrsaver->reset();
     }
     void update() {
-        if (nowsaver == Eraser && touch->touched()) ptrsaver->saver_touch(touch->touch_pt(HORZ), touch->touch_pt(VERT));
+        if (nowsaver == Eraser && _touch->touched()) ptrsaver->saver_touch(_touch->touch_pt(HORZ), _touch->touch_pt(VERT));
         if (!screensaver_last && screensaver) ptrsaver->reset();
         screensaver_last = screensaver;
         if (!screensaver) return;        
@@ -538,6 +543,9 @@ class AnimationManager {
             if (still_running) ptrsaver->diffDraw();
             else change_saver();
         }
+    }
+    void diffDraw() {
+        ptrsaver->diffDraw();
     }
     // void push() {
     //     yield();

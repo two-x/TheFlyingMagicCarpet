@@ -1,6 +1,4 @@
 #pragma once
-#define disp_simbuttons_x 164
-#define disp_simbuttons_y 48
 #include "lgfx.h"
 #include "neopixel.h"
 #include "touch.h"
@@ -141,6 +139,10 @@ class IdiotLights {
     }
 };
 #define touch_simbutton 38
+#define disp_simbuttons_x 164
+#define disp_simbuttons_y 48
+#define disp_simbuttons_w (disp_width_pix - disp_simbuttons_x)
+#define disp_simbuttons_h (disp_height_pix - disp_simbuttons_y)
 // class SimPanel {};
 // class DataPage {};
 #define disp_lines 20  // Max lines of text displayable at line height = disp_line_height_pix
@@ -246,7 +248,7 @@ class Display {
   private:
     LGFX _tft = LGFX();
     // LGFX_Sprite _saversprite[2] = { LGFX_Sprite(&_tft), LGFX_Sprite(&_tft) };
-    AnimationManager animations(&_tft, &_touch, _cornerx, _cornery, sizex, sizey);
+    AnimationManager animations;
     NeopixelStrip* neo;
     TouchScreen* touch;
     TunerPanel tuner;
@@ -258,9 +260,11 @@ class Display {
   public:
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
-    Display(NeopixelStrip* _neo, TouchScreen* _touch, IdiotLights* _idiots) : _tft(), neo(_neo), touch(_touch), idiots(_idiots) {}
+    Display(NeopixelStrip* _neo, TouchScreen* _touch, IdiotLights* _idiots) : _tft(), neo(_neo), touch(_touch), idiots(_idiots),
+        animations(&_tft, _touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h) {};
     Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, TouchScreen* _touch, IdiotLights* _idiots) 
-        : _tft() { Display(_neo, _touch, _idiots); }
+            : _tft(), neo(_neo), touch(_touch), idiots(_idiots), animations(&_tft, _touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h)
+        { Display(_neo, _touch, _idiots); }
     void setup() {
         printf("Display..\n");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
         _tft.begin();
@@ -284,7 +288,7 @@ class Display {
         // idiots->setup(neo);
         draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
         all_dirty();
-        saver.setup(&(_saversprite[0]), &(_saversprite[1]), &_tft, touch, disp_simbuttons_x, disp_simbuttons_y);
+        animations.setup();
     }
     void all_dirty() {
         disp_idiots_dirty = true;
@@ -578,7 +582,7 @@ class Display {
     }
     void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
         if (!create) {
-            saver.push();
+            animations.diffDraw();
             return;
         }
         _tft.setTextDatum(textdatum_t::middle_center);
@@ -859,7 +863,7 @@ class Display {
             disp_data_dirty = false;
             _procrastinate = true;  // don't do anything else in this same loop
         }
-        if (!sim.enabled() && !_procrastinate) saver.update();
+        if (!sim.enabled() && !_procrastinate) animations.update();
         _procrastinate = false;
     }
 };
