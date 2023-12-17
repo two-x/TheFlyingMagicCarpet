@@ -1,8 +1,8 @@
 
 #pragma once
-#undef CAPTOUCH  // #define CAPTOUCH if using IPS screen (black PCB), or #undef CAPTOUCH if using the red-PCB screen 
+#define CAPTOUCH  // #define CAPTOUCH if using IPS screen (black PCB), or #undef CAPTOUCH if using the red-PCB screen 
 #ifdef CAPTOUCH
-  #include <Adafruit_FT6206.h>
+  //#include <Adafruit_FT6206.h>
   #define SENSITIVITY 40
 #else
   #include <XPT2046_Touchscreen.h>
@@ -15,15 +15,22 @@
 class TouchScreen {
 private:
     #ifdef CAPTOUCH
-      Adafruit_FT6206 _ts;
+        LGFX* _tft;
+        struct TS_Point {
+            uint16_t x;
+            uint16_t y;
+        } touchpoint;
+        // Adafruit_FT6206 _ts;
     #else
-      XPT2046_Touchscreen _ts;  // 3.5in resistive touch panel on tft lcd
-      // These values need to be calibrated to each individual display panel for best accuracy
-      int32_t corners[2][2] = { { 351, 3928 }, { 189, 3950 } };  // [xx/yy][min/max]
-      // Soren's breadboard "" { { 351, 3933 }, { 189, 3950 } };  // [xx/yy][min/max]
+        XPT2046_Touchscreen _ts;  // 3.5in resistive touch panel on tft lcd
+        // These values need to be calibrated to each individual display panel for best accuracy
+        int32_t corners[2][2] = { { 351, 3928 }, { 189, 3950 } };  // [xx/yy][min/max]
+        // Soren's breadboard "" { { 351, 3933 }, { 189, 3950 } };  // [xx/yy][min/max]
+        TS_Point touchpoint;
     #endif
+    // TS_Point touchpoint;
     bool touch_longpress_valid = true, landed_coordinates_valid = true;
-    bool touch_now_touched = false;
+    bool touch_now_touched = false, nowtouch = false;
     int tedit_exponent = 0;
     float tedit = (float)(1 << tedit_exponent);
     int touch_fudge = 0;
@@ -44,12 +51,11 @@ private:
     int disp_width, disp_height;
     int32_t tft_touch[2], landed[2];  // landed are the initial coordinates of a touch event, unaffected by dragging
 
-    TS_Point touchpoint;
 public:
     #ifdef CAPTOUCH
-      TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts() {}
+        TouchScreen(uint8_t csPin = 255, uint8_t irqPin = 255) {}
     #else
-      TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts(csPin, irqPin) {}
+        TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts(csPin, irqPin) {}
     #endif
     int idelta = 0;
     void setup(int width, int height) {
@@ -57,29 +63,29 @@ public:
         disp_height = height;
         printf("Touchscreen..\n");
         #ifdef CAPTOUCH
-          _ts.begin(SENSITIVITY, &Wire);
-          _ts.setRotation(3);  // rotate -90 degrees to match IPS tft
+            // _ts.begin(SENSITIVITY, &Wire);
+            // _ts.setRotation(3);  // rotate -90 degrees to match IPS tft
         #else
-          _ts.begin();
-          _ts.setRotation(3);  // rotate 90 degrees to match tft
+            _ts.begin();
+            _ts.setRotation(3);  // rotate 90 degrees to match tft
         #endif
     }
 
     bool touched() {
-        return _ts.touched(); 
+        #ifdef CAPTOUCH
+            nowtouch = _tft->getTouch(&(tft_touch[xx]), &(tft_touch[yy]));
+            touchpoint.x = tft_touch[xx];
+            touchpoint.y = tft_touch[yy];
+        #else
+            nowtouch = _ts.touched();
+            touchpoint = _ts.getPoint();
+        #endif
+        return nowtouch;
     }
+    int touch_x() { return tft_touch[xx]; }
+    int touch_y() { return tft_touch[yy]; }
 
-    TS_Point getPoint() {
-        return _ts.getPoint();
-    }
-    int16_t getX() {
-        return getPoint().x;
-    }
-
-    int16_t getY() {
-        return getPoint().y; 
-    }
-    
+    TS_Point getPoint() { return touchpoint; }
     int16_t touch_pt(uint8_t axis) { return tft_touch[axis]; }
 
     bool get_touchpoint() { 

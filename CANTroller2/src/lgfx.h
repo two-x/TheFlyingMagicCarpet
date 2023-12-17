@@ -1,7 +1,7 @@
 
 #pragma once
-// #define CAPTOUCH
-#undef CAPTOUCH
+#define CAPTOUCH
+// #undef CAPTOUCH
 
 #define LGFX_USE_V1
 #include <LovyanGFX.hpp>
