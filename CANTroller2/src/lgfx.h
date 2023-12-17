@@ -153,34 +153,34 @@ class LGFX : public lgfx::LGFX_Device {
         //     _panel_instance.setLight(&_light_instance);  // Set the backlight on the panel.
         // }
 
-        // {  // Configure touch screen control settings. (Delete if unnecessary)
-        //     auto cfg = _touch_instance.config();
-        //     cfg.x_max      = 239;  // Maximum X value obtained from touch screen (raw value)
-        //     cfg.y_max      = 319;  // Maximum Y value obtained from touch screen (raw value)
-        //     cfg.x_min      = 0;    // Minimum X value obtained from touch screen (raw value)
-        //     cfg.y_min      = 0;    // Minimum Y value obtained from touch screen (raw value)
-        //     cfg.pin_int    = -1;   // INT pin number
-        //     cfg.bus_shared = true; // Set true if using the same bus as the screen
-        //     cfg.offset_rotation = 0;// Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
-        //     #ifdef CAPTOUCH
-        //         // For I2C connection
-        //         cfg.i2c_port = 1;      // Select I2C to use (0 or 1)
-        //         cfg.i2c_addr = 0x38;   // I2C device address number
-        //         cfg.pin_sda  = 8;     // SDA pin number
-        //         cfg.pin_scl  = 9;     // SCL pin number
-        //         cfg.freq = 400000;     // Set I2C clock
-        //     #else
-        //         // SPI接続の場合
-        //         //  cfg.spi_host = VSPI_HOST;// Select the SPI to use (HSPI_HOST or VSPI_HOST)
-        //         cfg.freq = 1000000;     // Set SPI clock
-        //         cfg.pin_sclk = 12;     // SCLK pin number
-        //         cfg.pin_mosi = 11;     // MOSI pin number
-        //         cfg.pin_miso = 13;     // MISO pin number
-        //         cfg.pin_cs   = 47;     //   CS pin number
-        //     #endif
-        //     _touch_instance.config(cfg);
-        //     _panel_instance.setTouch(&_touch_instance);  // Place the touch screen on the panel.
-        // }
+        {  // Configure touch screen control settings. (Delete if unnecessary)
+            auto cfg = _touch_instance.config();
+            cfg.x_max      = 239;  // Maximum X value obtained from touch screen (raw value)
+            cfg.y_max      = 319;  // Maximum Y value obtained from touch screen (raw value)
+            cfg.x_min      = 0;    // Minimum X value obtained from touch screen (raw value)
+            cfg.y_min      = 0;    // Minimum Y value obtained from touch screen (raw value)
+            cfg.pin_int    = -1;   // INT pin number
+            cfg.bus_shared = true; // Set true if using the same bus as the screen
+            cfg.offset_rotation = 0;// Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
+            #ifdef CAPTOUCH
+                // For I2C connection
+                cfg.i2c_port = 1;      // Select I2C to use (0 or 1)
+                cfg.i2c_addr = 0x38;   // I2C device address number
+                cfg.pin_sda  = 8;     // SDA pin number
+                cfg.pin_scl  = 9;     // SCL pin number
+                cfg.freq = 400000;     // Set I2C clock
+            #else
+                // For SPI connection
+                //  cfg.spi_host = VSPI_HOST;// Select the SPI to use (HSPI_HOST or VSPI_HOST)
+                cfg.freq = 1000000;     // Set SPI clock
+                cfg.pin_sclk = 12;     // SCLK pin number
+                cfg.pin_mosi = 11;     // MOSI pin number
+                cfg.pin_miso = 13;     // MISO pin number
+                cfg.pin_cs   = 47;     //   CS pin number
+            #endif
+            _touch_instance.config(cfg);
+            _panel_instance.setTouch(&_touch_instance);  // Place the touch screen on the panel.
+        }
         setPanel(&_panel_instance); // Set the panel to be used.
     }
 };

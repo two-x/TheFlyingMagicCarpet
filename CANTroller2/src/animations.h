@@ -3,19 +3,22 @@
 // #define LGFX_USE_V1
 // #include "lgfxsetup.h"
 // // #define CONFIG_IDF_TARGET_ESP32
-static LGFX_Sprite sp[2];
-LGFX_Sprite* nowspr;
-LGFX* lcd;
-TouchScreen* _touch;
-uint32_t corner[2], sprwidth, sprheight;
-std::size_t flip = 0;
-static constexpr std::uint32_t SHIFTSIZE = 8;
-static std::uint32_t sec, psec, _width, _height, _fps = 0, fps = 0, frame_count = 0;
-volatile bool _is_running;
-volatile std::uint32_t _draw_count;
-volatile std::uint32_t _loop_;
 class Animation {
   public:
+    // static LGFX_Sprite sp[2];
+    static LGFX_Sprite sp[2];
+    LGFX* lcd;
+    TouchScreen* _touch;
+
+    LGFX_Sprite* nowspr;
+    uint32_t corner[2], sprwidth, sprheight;
+    std::size_t flip = 0;
+    static constexpr std::uint32_t SHIFTSIZE = 8;
+    std::uint32_t sec, psec, _width, _height, _fps = 0, fps = 0, frame_count = 0;
+    volatile bool _is_running;
+    volatile std::uint32_t _draw_count;
+    volatile std::uint32_t _loop_;
+
     static void init(LGFX* _lcd, TouchScreen* touch, uint32_t _cornerx, uint32_t _cornery, uint32_t _sprwidth, uint32_t _sprheight) {
         lcd = _lcd;
         _touch = touch;
@@ -99,40 +102,21 @@ class Animation {
         lcd->display();
     }
 };
-struct ball_info_t {
-  int32_t x;
-  int32_t y;
-  int32_t dx;
-  int32_t dy;
-  int32_t r;
-  int32_t m;
-  uint32_t color;
-};
-static constexpr std::uint32_t BALL_MAX = 256;
-static ball_info_t _balls[2][BALL_MAX];
-static std::uint32_t _ball_count = 0, ball_count = 0;
 class CollisionsSaver : public Animation {
   public:
-    // int sprwidth = framewidth;
-    // int sprheight = frameheight;
-    // static constexpr std::uint32_t BALL_MAX = 256;
-    // static ball_info_t _balls[2][BALL_MAX];
-    // static std::uint32_t _ball_count = 0;
-    // static std::uint32_t ball_count = 0;
-    // struct ball_info_t {
-    //     int32_t x;
-    //     int32_t y,;
-    //     int32_t dx;
-    //     int32_t dy;
-    //     int32_t r;
-    //     int32_t m;
-    //     uint32_t color;
-    // };
+    struct ball_info_t {
+        int32_t x;
+        int32_t y;
+        int32_t dx;
+        int32_t dy;
+        int32_t r;
+        int32_t m;
+        uint32_t color;
+    };
     static constexpr std::uint32_t SHIFTSIZE = 8;  // 8
     static constexpr std::uint32_t BALL_MAX = 128;  // 256
     ball_info_t _balls[2][BALL_MAX];
-    std::uint32_t _ball_count = 0, _fps = 0;
-    std::uint32_t ball_count = 0;
+    std::uint32_t _ball_count = 0, ball_count = 0;
     std::uint32_t sec, psec;
     std::uint32_t fps = 0, frame_count = 0;
     volatile bool _is_running;
@@ -273,20 +257,13 @@ class CollisionsSaver : public Animation {
     }
   #endif
     virtual void setup() override {
+        for (int i=0; i<=1; i++) {
+            sp[i].setTextSize(1);
+            sp[i].fillSprite(TFT_BLACK);
+            sp[i].setTextDatum(textdatum_t::top_left);
+        }
         reset();
     }
-    // auto framewidth = sp[0].width();  // lcd->width();
-    // auto height = sp[0].height();  // lcd->height();
-    // auto full_width << SHIFTSIZE;
-    // auto full_height << SHIFTSIZE;
-    // for (std::uint32_t i = 0; i < 2; ++i) {
-    //     sp[i].setTextSize(1);
-    //     sp[i].setColorDepth(8);
-    // }
-    // // <create_sprites();>
-    // framewidth = _wid << SHIFTSIZE;
-    // _height = _height << SHIFTSIZE;
-    // reset();
     virtual void reset() override {
         for (int i=0; i<=1; i++) sp[i].setTextSize(1);
         for (std::uint32_t i = 0; i < ball_count; ++i) {
@@ -331,8 +308,8 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise s
     float pensat = 200.0;
     uint16_t pencolor = TFT_RED;
     int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 1500, shape = random(NumSaverShapes);
-    static constexpr uint32_t saver_cycletime_us = 34000000;
-    Timer saverCycleTimer, pentimer = Timer(700000);
+    static constexpr uint32_t saver_cycletime_us = 15000000;
+    Timer colorTimer = Timer(50000), saverCycleTimer, pentimer = Timer(700000);
     bool saver_lotto = false;
   public:
     EraserSaver() {}
@@ -383,7 +360,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise s
     void drawsprite() {
         for (int axis=0; axis<=1; axis++) point[axis] = random(sprsize[axis]);
         if (cycle != 2) {
-            spothue--;
+            if (colorTimer.expireset()) spothue--;
             if (!(spothue % 4)) slowhue++;
             if (shape == Wedges) {
                 uint16_t c[2] = { hsv_to_rgb<uint16_t>(random(256), 127+(spothue>>1)), hsv_to_rgb<uint16_t>(random(256), 127+(spothue>>1)) };
@@ -401,12 +378,12 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise s
                 uint8_t hue = slowhue;
                 uint8_t brt = 50+random(206);
                 if (hue > 50 && hue < 150) slowhue++;
-                for (int i=0; i<(3+random(10)); i++) sp[now].drawEllipse(point[HORZ], point[VERT], d[0] - 2*i, d[1] + 2*i, hsv_to_rgb<uint16_t>(hue+2*i, sat, brt));
+                for (int i=0; i<(3+random(10)); i++) sp[now].drawEllipse(point[HORZ], point[VERT], d[0] - 2*i, d[1] + 2*i, hsv_to_rgb<uint16_t>(hue+3*i, sat, brt));
             }
             else if (shape == Rings) {
                 int d = 8 + random(25);
-                uint16_t c = hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106));
-                for (int r=d; r>=(d-4); r--) sp[now].drawCircle(point[HORZ], point[VERT], r, c);
+                uint16_t c[2] = { (uint16_t)random(0x10000), hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106)) };
+                for (int r=d; r>=(d-4); r--) sp[now].drawCircle(point[HORZ], point[VERT], r, c[r % 2]);
             }
             else if (shape == Dots) 
                 for (int star=0; star<(shape*5); star++) 
@@ -477,7 +454,7 @@ class AnimationManager {
         : mylcd(_lcd), mytouch(touch), cornerx(_cornerx), cornery(_cornery), sizex(_sizex), sizey(_sizey) {
     }
     void setup() {
-        Animation::init(mylcd, mytouch, cornerx, cornery, sizex, sizey);
+        eSaver.init(mylcd, mytouch, cornerx, cornery, sizex, sizey);
         eSaver.setup();
         cSaver.setup();
         // for (int i=0; i<NumSaverMenu; i++) savers[i].setup();
