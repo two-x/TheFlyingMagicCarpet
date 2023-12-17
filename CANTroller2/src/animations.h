@@ -23,7 +23,6 @@ class Animation {
         corner[VERT] = _cornery;
         sprwidth = _sprwidth;
         sprheight = _sprheight;
-        // lcd->begin();
         lcd->startWrite();
         lcd->setColorDepth(8);
         if (lcd->width() < lcd->height()) lcd->setRotation(lcd->getRotation() ^ 1);
@@ -60,16 +59,12 @@ class Animation {
     virtual void reset() = 0;
     virtual void saver_touch(int16_t, int16_t) = 0;
     virtual int update() = 0; //{ return 0; };
-    //     setflip();
-    // }
-    // void create_sprites() {  // make a sprite to draw on, and another to draw on next. only data that differs will be drawn to screen
     void setflip() {
         flip = _draw_count & 1;
         nowspr = &(sp[flip]);
         nowspr->clear();
     }
     void diffDraw() {
-
         union {
             std::uint32_t* s32;
             std::uint8_t* s;
@@ -80,13 +75,8 @@ class Animation {
         };
         s32 = (std::uint32_t*)sp[flip].getBuffer();
         p32 = (std::uint32_t*)sp[!flip].getBuffer();
-
         auto sprwidth = sp[flip].width();
         auto sprheight = sp[flip].height();
-
-        // auto width = view_w;
-        // auto height = view_h;
-
         auto w32 = (sprwidth+3) >> 2;
         std::int32_t y = 0;
         do {
@@ -94,27 +84,20 @@ class Animation {
             do {
                 while (s32[x32] == p32[x32] && ++x32 < w32);
                 if (x32 == w32) break;
-
                 std::int32_t xs = x32 << 2;
                 while (s[xs] == p[xs]) ++xs;
-
                 while (++x32 < w32 && s32[x32] != p32[x32]);
-
                 std::int32_t xe = (x32 << 2) - 1;
                 if (xe >= sprwidth) xe = sprwidth - 1;
                 while (s[xe] == p[xe]) --xe;
-
                 lcd->pushImage(xs + corner[HORZ], y + corner[VERT], xe - xs + 1, 1, &s[xs]);
                 // lcd->pushImage(xs + corner[HORZ], y + corner[VERT], xe - xs + 1, 1, &s[xs]);
             } while (x32 < w32);
-            
             s32 += w32;
             p32 += w32;
         } while (++y < sprheight);
-        
         lcd->display();
     }
-
 };
 struct ball_info_t {
   int32_t x;
@@ -128,7 +111,6 @@ struct ball_info_t {
 static constexpr std::uint32_t BALL_MAX = 256;
 static ball_info_t _balls[2][BALL_MAX];
 static std::uint32_t _ball_count = 0, ball_count = 0;
-
 class CollisionsSaver : public Animation {
   public:
     // int sprwidth = framewidth;
@@ -137,7 +119,6 @@ class CollisionsSaver : public Animation {
     // static ball_info_t _balls[2][BALL_MAX];
     // static std::uint32_t _ball_count = 0;
     // static std::uint32_t ball_count = 0;
-
     // struct ball_info_t {
     //     int32_t x;
     //     int32_t y,;
@@ -147,42 +128,32 @@ class CollisionsSaver : public Animation {
     //     int32_t m;
     //     uint32_t color;
     // };
-
     static constexpr std::uint32_t SHIFTSIZE = 8;  // 8
     static constexpr std::uint32_t BALL_MAX = 128;  // 256
-
     ball_info_t _balls[2][BALL_MAX];
     std::uint32_t _ball_count = 0, _fps = 0;
     std::uint32_t ball_count = 0;
     std::uint32_t sec, psec;
     std::uint32_t fps = 0, frame_count = 0;
-
     volatile bool _is_running;
     volatile std::uint32_t _loop_count;
-
     CollisionsSaver() {}
-
     void drawfunc(void) {
         ball_info_t* balls;
         ball_info_t* a;
         LGFX_Sprite* sprite;
-
         auto sprwidth = sp[0].width();
         auto sprheight = sp[0].height();
-
         flip = _draw_count & 1;
         balls = &_balls[flip][0];
-
         sprite = &(sp[flip]);
         sprite->clear();
-
         for (int32_t i = 8; i < sprwidth; i += 16) sprite->drawFastVLine(i, 0, sprheight, 0x1F);
         for (int32_t i = 8; i < sprheight; i += 16) sprite->drawFastHLine(0, i, sprwidth, 0x1F);
         for (std::uint32_t i = 0; i < _ball_count; i++) {
             a = &balls[i];
             sprite->fillCircle( a->x >> SHIFTSIZE, a->y >> SHIFTSIZE, a->r >> SHIFTSIZE, a->color);
         }
-
         sprite->setCursor(1,1);
         sprite->setTextColor(TFT_BLACK);
         sprite->printf("obj:%d fps:%d", _ball_count, _fps);
@@ -192,17 +163,14 @@ class CollisionsSaver : public Animation {
         // diffDraw();
         ++_draw_count;
     }
-
     bool mainfunc(void) {
         bool new_round = false;
         static constexpr float e = 0.999; // Coefficient of friction
-
         sec = lgfx::millis() / 1000;
         if (psec != sec) {
             psec = sec;
             fps = frame_count;
             frame_count = 0;
-
             if (++ball_count >= BALL_MAX) {
                 new_round = true;
                 ball_count = 1;
@@ -221,20 +189,16 @@ class CollisionsSaver : public Animation {
         }
         frame_count++;
         _loop_count++;
-
         ball_info_t *a, *b, *balls;
         int32_t rr, len, vx2vy2;
         float vx, vy, distance, t;
-
         size_t f = _loop_count & 1;
         balls = a = &_balls[f][0];
         b = &_balls[!f][0];
         memcpy(a, b, sizeof(ball_info_t) * ball_count);
-
         for (int i = 0; i != ball_count; i++) {
             a = &balls[i];
             //  a->dy += 4; // gravity
-
             a->x += a->dx;
             if (a->x < a->r) {
                 a->x = a->r;
@@ -255,51 +219,40 @@ class CollisionsSaver : public Animation {
             }
             for (int j = i + 1; j != ball_count; j++) {
                 b = &balls[j];
-
                 rr = a->r + b->r;
                 vx = a->x - b->x;
                 if (abs(vx) > rr) continue;
                 vy = a->y - b->y;
                 if (abs(vy) > rr) continue;
-
                 len = sqrt(vx * vx + vy * vy);
                 if (len >= rr) continue;
                 if (len == 0.0) continue;
                 distance = (rr - len) >> 1;
                 vx *= distance / len;
                 vy *= distance / len;
-
                 a->x += vx;
                 b->x -= vx;
                 vx = b->x - a->x;
-
                 a->y += vy;
                 b->y -= vy;
                 vy = b->y - a->y;
-
                 vx2vy2 = vx * vx + vy * vy;
-
                 t = -(vx * a->dx + vy * a->dy) / vx2vy2;
                 float arx = a->dx + vx * t;
                 float ary = a->dy + vy * t;
-
                 t = -(-vy * a->dx + vx * a->dy) / vx2vy2;
                 float amx = a->dx - vy * t;
                 float amy = a->dy + vx * t;
-
                 t = -(vx * b->dx + vy * b->dy) / vx2vy2;
                 float brx = b->dx + vx * t;
                 float bry = b->dy + vy * t;
-
                 t = -(-vy * b->dx + vx * b->dy) / vx2vy2;
                 float bmx = b->dx - vy * t;
                 float bmy = b->dy + vx * t;
-
                 float adx = (a->m * amx + b->m * bmx + bmx * e * b->m - amx * e * b->m) / (a->m + b->m);
                 float bdx = - e * (bmx - amx) + adx;
                 float ady = (a->m * amy + b->m * bmy + bmy * e * b->m - amy * e * b->m) / (a->m + b->m);
                 float bdy = - e * (bmy - amy) + ady;
-
                 a->dx = roundf(adx + arx);
                 a->dy = roundf(ady + ary);
                 b->dx = roundf(bdx + brx);
@@ -310,32 +263,30 @@ class CollisionsSaver : public Animation {
         _ball_count = ball_count;
         return new_round;
     }
-
-    #if defined (ESP32) || defined (CONFIG_IDF_TARGET_ESP32) || defined (ESP_PLATFORM)
-        void taskDraw(void*) {
-            while ( _is_running ) {
-                while (_loop_count == _draw_count) { taskYIELD(); }
-                drawfunc();
-            }
-            vTaskDelete(NULL);
+  #if defined (ESP32) || defined (CONFIG_IDF_TARGET_ESP32) || defined (ESP_PLATFORM)
+    void taskDraw(void*) {
+        while ( _is_running ) {
+            while (_loop_count == _draw_count) { taskYIELD(); }
+            drawfunc();
         }
-    #endif
-
+        vTaskDelete(NULL);
+    }
+  #endif
     virtual void setup() override {
         reset();
     }
-        // auto framewidth = sp[0].width();  // lcd->width();
-        // auto height = sp[0].height();  // lcd->height();
-        // auto full_width << SHIFTSIZE;
-        // auto full_height << SHIFTSIZE;
-        // for (std::uint32_t i = 0; i < 2; ++i) {
-        //     sp[i].setTextSize(1);
-        //     sp[i].setColorDepth(8);
-        // }
-        // // <create_sprites();>
-        // framewidth = _wid << SHIFTSIZE;
-        // _height = _height << SHIFTSIZE;
-        // reset();
+    // auto framewidth = sp[0].width();  // lcd->width();
+    // auto height = sp[0].height();  // lcd->height();
+    // auto full_width << SHIFTSIZE;
+    // auto full_height << SHIFTSIZE;
+    // for (std::uint32_t i = 0; i < 2; ++i) {
+    //     sp[i].setTextSize(1);
+    //     sp[i].setColorDepth(8);
+    // }
+    // // <create_sprites();>
+    // framewidth = _wid << SHIFTSIZE;
+    // _height = _height << SHIFTSIZE;
+    // reset();
     virtual void reset() override {
         for (int i=0; i<=1; i++) sp[i].setTextSize(1);
         for (std::uint32_t i = 0; i < ball_count; ++i) {
@@ -351,14 +302,11 @@ class CollisionsSaver : public Animation {
         _is_running = true;
         _draw_count = 0;
         _loop_count = 0;
-
         #if defined (CONFIG_IDF_TARGET_ESP32)
             xTaskCreate(taskDraw, "taskDraw", 2048, NULL, 0, NULL);
         #endif
     }
-
     virtual void saver_touch(int16_t, int16_t) override {}; // unused
-
     virtual int update() override {
         bool round_over = mainfunc();
         #if defined (CONFIG_IDF_TARGET_ESP32)
@@ -371,13 +319,12 @@ class CollisionsSaver : public Animation {
 };
 class EraserSaver : public Animation {  // draws colorful patterns to exercise screen draw capabilities
   public:
-    enum savermenu : int { Eraser, Collisions, NumSaverMenu };
     enum savershapes : int { Wedges, Dots, Rings, Ellipses, Boxes, NumSaverShapes, FocusRing, Ascii };
   private:
     uint32_t sprsize[2];
     int point[2], plast[2], er[2], touchlast[2] = { -1, -1 }, touchpoint[2] = { -1, -1 };
     int eraser_rad = 14, eraser_rad_min = 9, eraser_rad_max = 26, eraser_velo_min = 4, eraser_velo_max = 10, touch_w_last = 2;
-    int erpos[2] = { 0, 0 }, eraser_velo_sign[2] = { 1, 1 }, boxsize[2], now = 0, savermenu = random(NumSaverMenu);
+    int erpos[2] = { 0, 0 }, eraser_velo_sign[2] = { 1, 1 }, boxsize[2], now = 0;
     int eraser_velo[2] = { random(eraser_velo_max), random(eraser_velo_max) }, shapes_per_run = 5, shapes_done = 0;
     int erpos_max[2] = { (int)sprwidth / 2 - eraser_rad, (int)sprheight / 2 - eraser_rad }; 
     uint8_t saver_illicit_prob = 12, penhue = 0, spothue = 255, slowhue = 0;
@@ -553,10 +500,6 @@ class AnimationManager {
     void diffDraw() {
         ptrsaver->diffDraw();
     }
-    // void push() {
-    //     yield();
-    //     sp[now].pushSprite(corner[HORZ], corner[VERT]);
-    // }
     void change_saver() {  // pass non-negative value for a specific pattern, or -1 for cycle, -2 for random
         ++nowsaver %= NumSaverMenu;
         if (nowsaver == Eraser) ptrsaver = &eSaver;
