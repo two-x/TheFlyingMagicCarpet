@@ -133,7 +133,13 @@ class LGFX : public lgfx::LGFX_Device {
             cfg.dummy_read_pixel =     8;  // Number of dummy read bits before pixel readout
             cfg.dummy_read_bits  =     1;  // Number of bits for dummy read before reading data other than pixels
             cfg.readable         =  true;  // Set to true if data reading is possible
+            
+            #ifdef CAPTOUCH
+            cfg.invert           = true;  // Set to true if the brightness and darkness of the panel is reversed.
+            #else
             cfg.invert           = false;  // Set to true if the brightness and darkness of the panel is reversed.
+            #endif
+
             cfg.dlen_16bit       = false;  // Set to true for panels that transmit data length in 16-bit units using 16-bit parallel or SPI.
             cfg.bus_shared       =  true;  // Set to true when sharing the bus with the SD card (control the bus using drawJpgFile, etc.)
 

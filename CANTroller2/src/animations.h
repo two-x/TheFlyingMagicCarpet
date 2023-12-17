@@ -27,8 +27,10 @@ class Animation {
         lcd->setColorDepth(8);
         if (lcd->width() < lcd->height()) lcd->setRotation(lcd->getRotation() ^ 1);
         for (int i=0; i<=1; i++) sp[i].setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
-        auto framewidth = lcd->width();
-        auto frameheight = lcd->height();
+        // auto framewidth = lcd->width();
+        // auto frameheight = lcd->height();
+        auto framewidth = sprwidth;
+        auto frameheight = sprheight;
         bool fail = false;
         for (std::uint32_t i = 0; !fail && i < 2; ++i)
             fail = !sp[i].createSprite(framewidth, frameheight);
@@ -288,7 +290,10 @@ class CollisionsSaver : public Animation {
     // _height = _height << SHIFTSIZE;
     // reset();
     virtual void reset() override {
-        for (int i=0; i<=1; i++) sp[i].setTextSize(1);
+        for (int i=0; i<=1; i++) {
+            sp[i].setTextSize(1);
+            sp[i].setTextDatum(textdatum_t::top_left);
+        }
         for (std::uint32_t i = 0; i < ball_count; ++i) {
             auto a = &_balls[_loop_count & 1][i];
             a->color = lgfx::color888(100+(rand()%155), 100+(rand()%155), 100+(rand()%155));
