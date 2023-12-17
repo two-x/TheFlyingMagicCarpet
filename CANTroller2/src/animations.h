@@ -56,10 +56,10 @@ class Animation {
         _width = framewidth << SHIFTSIZE;
         _height = frameheight << SHIFTSIZE;    
     }
-    virtual void setup() {};
-    virtual void reset() {};
-    virtual void saver_touch(int16_t, int16_t) {};
-    virtual int update() { return 0; };
+    virtual void setup() = 0;
+    virtual void reset() = 0;
+    virtual void saver_touch(int16_t, int16_t) = 0;
+    virtual int update() = 0; //{ return 0; };
     //     setflip();
     // }
     // void create_sprites() {  // make a sprite to draw on, and another to draw on next. only data that differs will be drawn to screen
@@ -189,7 +189,7 @@ class CollisionsSaver : public Animation {
         sprite->setCursor(0,0);
         sprite->setTextColor(TFT_WHITE);
         sprite->printf("obj:%d fps:%d", _ball_count, _fps);
-        diffDraw();
+        // diffDraw();
         ++_draw_count;
     }
 
@@ -321,7 +321,7 @@ class CollisionsSaver : public Animation {
         }
     #endif
 
-    void setup() {
+    virtual void setup() override {
         reset();
     }
         // auto framewidth = sp[0].width();  // lcd->width();
@@ -336,7 +336,7 @@ class CollisionsSaver : public Animation {
         // framewidth = _wid << SHIFTSIZE;
         // _height = _height << SHIFTSIZE;
         // reset();
-    void reset() {
+    virtual void reset() override {
         for (int i=0; i<=1; i++) sp[i].setTextSize(1);
         for (std::uint32_t i = 0; i < ball_count; ++i) {
             auto a = &_balls[_loop_count & 1][i];
@@ -357,14 +357,16 @@ class CollisionsSaver : public Animation {
         #endif
     }
 
-    int update(void) {
+    virtual void saver_touch(int16_t, int16_t) override {}; // unused
+
+    virtual int update() override {
         bool round_over = mainfunc();
         #if defined (CONFIG_IDF_TARGET_ESP32)
         while (_loop_count != _draw_count) { taskYIELD(); }
         #else
         drawfunc();
         #endif
-        return round_over;  // not done yet
+        return !round_over;  // not done yet
     }
 };
 class EraserSaver : public Animation {  // draws colorful patterns to exercise screen draw capabilities
@@ -387,7 +389,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise s
     bool saver_lotto = false;
   public:
     EraserSaver() {}
-    void setup() {
+    virtual void setup() override {
         sprsize[HORZ] = sprwidth;
         sprsize[VERT] = sprheight;
         for (int axis=0; axis<=1; axis++) {
@@ -396,7 +398,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise s
         }
         reset();
     }
-    void reset() {
+    virtual void reset() override {
         shapes_done = cycle = 0;
         for (int i=0; i<=1; i++) {
             sp[i].setTextSize(1);
@@ -409,7 +411,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise s
         change_pattern(-2);  // randomize new pattern whenever turned off and on
         saverCycleTimer.set(saver_cycletime_us);
     }
-    void saver_touch(int16_t x, int16_t y) {  // you can draw colorful lines on the screensaver
+    virtual void saver_touch(int16_t x, int16_t y) override {  // you can draw colorful lines on the screensaver
         int tp[2] = { (int32_t)x - (int32_t)corner[HORZ], (int32_t)y - (int32_t)corner[VERT] };
         if (tp[HORZ] < 0 || tp[VERT] < 0) return;
         for (int axis=HORZ; axis<=VERT; axis++) if (touchlast[axis] == -1) touchlast[axis] = tp[axis];
@@ -422,12 +424,13 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise s
         sp[now].drawLine(touchlast[HORZ], touchlast[VERT], tp[HORZ], tp[VERT], pencolor);  // savtouch_last_w, w, pencolor, pencolor);
         for (int axis=HORZ; axis<=VERT; axis++) touchlast[axis] = tp[axis];
     }
-    int update() {
+    virtual int update() override {
         if (saverCycleTimer.expired()) {
             ++cycle %= num_cycles;
             if (cycle == 2) change_pattern(-1);
             saverCycleTimer.set(saver_cycletime_us / ((cycle == 2) ? 5 : 1));
         }
+        drawsprite();
         return shapes_done;
     }
     void drawsprite() {
@@ -516,8 +519,9 @@ class AnimationManager {
     uint32_t cornerx, cornery, sizex, sizey;
     int nowsaver = Collisions, still_running = 0;
     LGFX* mylcd;
-    Animation savers[2] = { EraserSaver(), CollisionsSaver() };
-    Animation* ptrsaver = &(savers[nowsaver]);
+    EraserSaver eSaver;
+    CollisionsSaver cSaver;
+    Animation* ptrsaver = &cSaver;
     TouchScreen* mytouch;
     Timer saverRefreshTimer = Timer(45000);
     bool screensaver_last = false;
@@ -527,17 +531,19 @@ class AnimationManager {
     }
     void setup() {
         Animation::init(mylcd, mytouch, cornerx, cornery, sizex, sizey);
-        for (int i=0; i<NumSaverMenu; i++) savers[i].setup();
+        eSaver.setup();
+        cSaver.setup();
+        // for (int i=0; i<NumSaverMenu; i++) savers[i].setup();
     }
     void reset() {
         ptrsaver->reset();
     }
     void update() {
-        if (nowsaver == Eraser && _touch->touched()) ptrsaver->saver_touch(_touch->touch_pt(HORZ), _touch->touch_pt(VERT));
-        if (!screensaver_last && screensaver) ptrsaver->reset();
+        // if (nowsaver == Eraser && _touch->touched()) ptrsaver->saver_touch(_touch->touch_pt(HORZ), _touch->touch_pt(VERT));
+        if (!screensaver_last && screensaver) change_saver(); // ptrsaver->reset();
         screensaver_last = screensaver;
         if (!screensaver) return;        
-        if (saverRefreshTimer.expireset()) {
+        if (true || saverRefreshTimer.expireset()) {
             ptrsaver->setflip();
             still_running = ptrsaver->update();
             if (still_running) ptrsaver->diffDraw();
@@ -553,7 +559,9 @@ class AnimationManager {
     // }
     void change_saver() {  // pass non-negative value for a specific pattern, or -1 for cycle, -2 for random
         ++nowsaver %= NumSaverMenu;
-        ptrsaver = &(savers[nowsaver]);
+        if (nowsaver == Eraser) ptrsaver = &eSaver;
+        else ptrsaver = &cSaver;
+        // ptrsaver = &(savers[nowsaver]);
         ptrsaver->reset();
     }
 };

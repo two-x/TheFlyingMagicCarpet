@@ -154,7 +154,7 @@ bool car_hasnt_moved = false;           // minor state variable for fly mode - W
 bool powering_up = false;               // minor state variable for asleep mode
 bool calmode_request = false;
 bool flycruise_toggle_request = false;
-bool screensaver = false;               // Can enable experiment with animated screen draws
+bool screensaver = true;               // Can enable experiment with animated screen draws
 int tunctrl = OFF, tunctrl_last = OFF;
 int datapage = PG_RUN, datapage_last = PG_TEMP;  // Which of the dataset pages is currently displayed and available to edit?
 bool touch_increment_datapage = false;
