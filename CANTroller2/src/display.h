@@ -50,7 +50,7 @@
 #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
 #define disp_vshift_pix 2  // Unknown.  Note: At smallest text size, characters are 5x7 pix + pad on rt and bot for 6x8 pix.
 #define disp_runmode_text_x 8
-int32_t colorcard[NUM_RUNMODES] = { MGT, MBLU, RED, ORG, YEL, GRN, TEAL, PUR };
+int32_t colorcard[NUM_RUNMODES] = { MGT, WHT, RED, ORG, YEL, GRN, TEAL, PUR };
 char modecard[NUM_RUNMODES][7] = { "Basic", "Asleep", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 char top_menu_buttons[4][6]  = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
@@ -221,7 +221,7 @@ static constexpr uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where un
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3e, 0x00, 0x00, 0x1c, 0x22, 0x22, 0x1c, 0x00, 0x00, },  // 0/1 - to indicate binary value
     { 0x02, 0x45, 0x25, 0x12, 0x08, 0x24, 0x52, 0x51, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // % - just because the font one is feeble
     { 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // capital omega - for ohms
-    { 0x08, 0x1c, 0x2a, 0x08, 0x00, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x3e, 0x49, 0x5d, 0x49, 0x41, 0x41, 0x3e, },  // googly eyes, are as goofy as they are stupid
+    { 0x08, 0x1c, 0x2a, 0x08, 0x00, 0x3e, 0x63, 0x33, 0x77, 0x7f, 0x41, 0x3f, 0x63, 0x33, 0x77, 0x7f, 0x3e, },  // googly eyes, are as goofy as they are stupid
     { 0x3d, 0x00, 0x3c, 0x04, 0x38, 0x00, 0x7f, 0x00, 0x7c, 0x24, 0x18, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x3d, },  // inches or psi
 };  // These bitmaps are in the same format as the idiot light bitmaps, described below
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
@@ -265,6 +265,9 @@ class Display {
     Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, TouchScreen* _touch, IdiotLights* _idiots) 
             : _tft(), neo(_neo), touch(_touch), idiots(_idiots), animations(&_tft, _touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h)
         { Display(_neo, _touch, _idiots); }
+    LGFX* get_tft() {
+        return &_tft;
+    }
     void setup() {
         printf("Display..\n");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
         _tft.begin();

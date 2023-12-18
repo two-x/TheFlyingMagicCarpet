@@ -13,24 +13,25 @@
 #define touch_reticle_offset 50  // Distance of center of each reticle to nearest screen edge
 #define disp_tuning_lines 11  // Lines of dynamic variables/values in dataset pages 
 class TouchScreen {
-private:
-    #ifdef CAPTOUCH
-        LGFX* _tft;
-        struct TS_Point {
-            uint16_t x;
-            uint16_t y;
-        } touchpoint;
-        // Adafruit_FT6206 _ts;
-    #else
-        XPT2046_Touchscreen _ts;  // 3.5in resistive touch panel on tft lcd
-        // These values need to be calibrated to each individual display panel for best accuracy
-        int32_t corners[2][2] = { { 351, 3928 }, { 189, 3950 } };  // [xx/yy][min/max]
-        // Soren's breadboard "" { { 351, 3933 }, { 189, 3950 } };  // [xx/yy][min/max]
-        TS_Point touchpoint;
-    #endif
-    // TS_Point touchpoint;
-    bool touch_longpress_valid = true, landed_coordinates_valid = true;
-    bool touch_now_touched = false, nowtouch = false;
+  private:
+ #ifdef CAPTOUCH
+    LGFX* _tft;
+     struct TS_Point {
+         uint16_t x;
+         uint16_t y;
+     } touchpoint;
+     // Adafruit_FT6206 _ts;
+#else
+    XPT2046_Touchscreen _ts;  // 3.5in resistive touch panel on tft lcd
+    // These values need to be calibrated to each individual display panel for best accuracy
+    int32_t corners[2][2] = { { 351, 3928 }, { 189, 3950 } };  // [xx/yy][min/max]
+    // Soren's breadboard "" { { 351, 3933 }, { 189, 3950 } };  // [xx/yy][min/max]
+    TS_Point touchpoint;
+#endif
+    bool touch_longpress_valid = true;
+    bool landed_coordinates_valid = false;
+    bool touch_now_touched = false;
+    bool nowtouch = false;
     int tedit_exponent = 0;
     float tedit = (float)(1 << tedit_exponent);
     int touch_fudge = 0;
@@ -49,16 +50,19 @@ private:
     enum touch_lim { tsmin, tsmax };
     int32_t trow, tcol;
     int disp_width, disp_height;
-    int32_t tft_touch[2], landed[2];  // landed are the initial coordinates of a touch event, unaffected by dragging
-
-public:
-    #ifdef CAPTOUCH
-        TouchScreen(uint8_t csPin = 255, uint8_t irqPin = 255) {}
-    #else
-        TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts(csPin, irqPin) {}
-    #endif
+    int32_t tft_touch[2];
+    int32_t landed[2];  // landed are the initial coordinates of a touch event, unaffected by dragging
+  public:
     int idelta = 0;
-    void setup(int width, int height) {
+
+#ifdef CAPTOUCH
+    TouchScreen(uint8_t csPin = 255, uint8_t irqPin = 255) {}
+#else
+    TouchScreen(uint8_t csPin, uint8_t irqPin = 255) : _ts(csPin, irqPin) {}
+#endif
+
+    void setup(LGFX* tft, int width, int height) {
+        _tft = tft;
         disp_width = width;
         disp_height = height;
         printf("Touchscreen..\n");
@@ -71,53 +75,50 @@ public:
         #endif
     }
 
-    bool touched() {
-        #ifdef CAPTOUCH
-            nowtouch = _tft->getTouch(&(tft_touch[xx]), &(tft_touch[yy]));
-            touchpoint.x = tft_touch[xx];
-            touchpoint.y = tft_touch[yy];
-        #else
-            nowtouch = _ts.touched();
-            touchpoint = _ts.getPoint();
-        #endif
-        return nowtouch;
-    }
+    bool touched() { return nowtouch; }
     int touch_x() { return tft_touch[xx]; }
     int touch_y() { return tft_touch[yy]; }
 
     TS_Point getPoint() { return touchpoint; }
     int16_t touch_pt(uint8_t axis) { return tft_touch[axis]; }
 
-    bool get_touchpoint() { 
-        bool ret = false;
-        if (touched() && touchDoublePressTimer.expired()) {
-            ret = true;
+    void update() {
+        // update touchpoint
+#ifdef CAPTOUCH
+        uint8_t count = _tft->getTouch(&(tft_touch[xx]), &(tft_touch[yy]));
+        nowtouch = count;
+        touchpoint.x = tft_touch[xx];
+        touchpoint.y = tft_touch[yy];
+#else
+        nowtouch = _ts.touched();
+        touchpoint = _ts.getPoint();
+#endif
+
+        if (nowtouch) {
+            // if (touchDoublePressTimer.expired()) {
             tedit = (float)(1 << tedit_exponent);
-            touchpoint = getPoint();
-            #ifdef CAPTOUCH
-              tft_touch[xx] = disp_width - touchpoint.x;  // may need to rotate differently 
-              tft_touch[yy] = disp_height - touchpoint.y;  // may need to rotate differently
-            #else
-              tft_touch[xx] = map(touchpoint.x, corners[xx][tsmin], corners[xx][tsmax], 0, disp_width);  // translate resistance to pixels
-              tft_touch[yy] = map(touchpoint.y, corners[yy][tsmin], corners[yy][tsmax], 0, disp_height);  // translate resistance to pixels
-            #endif
+#ifdef CAPTOUCH
+            tft_touch[xx] = touchpoint.x; // disp_width - touchpoint.x;  // may need to rotate differently 
+            tft_touch[yy] = touchpoint.y; // disp_height - touchpoint.y;  // may need to rotate differently
+#else
+            tft_touch[xx] = map(touchpoint.x, corners[xx][tsmin], corners[xx][tsmax], 0, disp_width);  // translate resistance to pixels
+            tft_touch[yy] = map(touchpoint.y, corners[yy][tsmin], corners[yy][tsmax], 0, disp_height);  // translate resistance to pixels
+#endif
             tft_touch[xx] = constrain(tft_touch[xx], 0, disp_width);
             tft_touch[yy] = constrain(tft_touch[yy], 0, disp_height);
             if (!flip_the_screen) { 
                 tft_touch[xx] = disp_width - tft_touch[xx];
                 tft_touch[yy] = disp_height - tft_touch[yy];
             }
-            if (!landed_coordinates_valid) {
-                landed[xx] = tft_touch[xx];
-                landed[yy] = tft_touch[yy];
-                landed_coordinates_valid = true;
-            }               
-        }
-        else landed_coordinates_valid = false;
-        return ret;
-    }
-    void update() {
-        if (!get_touchpoint()) { // If not being touched, put momentarily-set simulated button values back to default values
+            // if (!landed_coordinates_valid) {
+            //     landed[xx] = tft_touch[xx];
+            //     landed[yy] = tft_touch[yy];
+            //     landed_coordinates_valid = true;
+            // }               
+            //Serial.printf("(%d,%d), landed(%d,%d)\n",tft_touch[xx],tft_touch[yy],landed[xx],landed[yy]);
+        } else {
+        // else landed_coordinates_valid = false;
+            // If not being touched, put momentarily-set simulated button values back to default values
             idelta = 0;  // Stop changing the value
             if (touch_now_touched) touchDoublePressTimer.reset();  // Upon end of a touch, begin timer to reject any accidental double touches
             touch_now_touched = false;  // Remember the last touch state
@@ -129,11 +130,15 @@ public:
         }
         sleep_inactivity_timer.reset();  // evidence of user activity
         tedit = (float)(1 << tedit_exponent);  // Determine value editing rate
-        trow = constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
-        tcol = (landed[xx] - touch_margin_h_pix) / touch_cell_h_pix;
+        trow = constrain((tft_touch[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
+        tcol = constrain((tft_touch[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, 5);
+        // trow = constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
+        // tcol = (landed[xx] - touch_margin_h_pix) / touch_cell_h_pix;
+        // Serial.printf("touched trow: %d, tcol: %d, count: %d\n", trow, tcol, count); delay(1);
         // Take appropriate touchscreen actions depending on how we're being touched
         if (tcol == 0 && trow == 0 && !touch_now_touched) {
-            if (!(landed[xx] == 0 && landed[yy] == 0)) touch_increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
+            // if (!(landed[xx] == 0 && landed[yy] == 0)) touch_increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
+            touch_increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
         }
         else if (tcol == 0 && trow == 1) {  // Long touch to enter/exit editing mode, if in editing mode, press to change the selection of the item to edit
             if (tunctrl == OFF) {
