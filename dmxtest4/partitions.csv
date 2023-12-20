@@ -1,0 +1,22 @@
+#   Name, Type,     SubT, StartAdr, SizeByte, Flags
+     nvs, data,      nvs,   0x9000,   0x5000,
+ otadata, data,      ota,   0xe000,   0x2000,
+    app0,  app,    ota_0,  0x10000, 0x200000,
+    app1,  app,    ota_1, 0x210000, 0x200000,
+  spiffs, data,   spiffs, 0x410000, 0x3e0000,
+coredump, data, coredump, 0x7f0000, 0x010000,
+
+# minimum nvs = 0x3000
+# 1M = 0x100000
+# type: 0=app, 1=data
+# subt: 0x02=nvs, 0x00=ota, 0x10=ota_1, 0x11=ota_2, 0x82=spiffs
+
+# https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/partition-tables.html
+# coredump: https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/core_dump.html
+
+# to effect partition map on a board:
+# X. Clean (?)
+# X. Disconnect and reconnect cable (?)
+# 1. Erase Flash
+# 2. Upload Filesystem Image
+# 3. Upload
