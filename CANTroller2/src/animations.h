@@ -112,7 +112,7 @@ struct ball_info_t {
 };
 static constexpr std::uint32_t BALL_MAX = 256;
 static ball_info_t _balls[2][BALL_MAX];
-static std::uint32_t _ball_count = 0, ball_count = 0;
+static std::uint32_t _ball_count = 0;
 class CollisionsSaver : public Animation {
   public:
     // int sprwidth = framewidth;
@@ -290,6 +290,7 @@ class CollisionsSaver : public Animation {
     // _height = _height << SHIFTSIZE;
     // reset();
     virtual void reset() override {
+        ball_count = 0;
         for (int i=0; i<=1; i++) {
             sp[i].setTextSize(1);
             sp[i].setTextDatum(textdatum_t::top_left);
@@ -495,7 +496,7 @@ class AnimationManager {
         if (!screensaver_last && screensaver) change_saver(); // ptrsaver->reset();
         screensaver_last = screensaver;
         if (!screensaver) return;        
-        if (saverRefreshTimer.expireset()) {
+        if (true) {  // if (saverRefreshTimer.expireset()) {
             ptrsaver->setflip();
             still_running = ptrsaver->update();
             if (still_running) ptrsaver->diffDraw();
