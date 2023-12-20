@@ -495,7 +495,7 @@ class AnimationManager {
         if (!screensaver_last && screensaver) change_saver(); // ptrsaver->reset();
         screensaver_last = screensaver;
         if (!screensaver) return;        
-        if (saverRefreshTimer.expireset()) {
+        if (true) {  // if (saverRefreshTimer.expireset()) {
             ptrsaver->setflip();
             still_running = ptrsaver->update();
             if (still_running) ptrsaver->diffDraw();
