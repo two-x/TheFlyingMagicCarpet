@@ -80,12 +80,12 @@ class IdiotLights {
   public:
     static constexpr int row_count = 11;
     static constexpr int row_height = 10;
-    static constexpr int iconcount = 19;  // number of boolean values included on the screen panel (not the neopixels) 
+    static constexpr int iconcount = 20;  // number of boolean values included on the screen panel (not the neopixels) 
     bool* vals[iconcount] = {
         &(diag.err_sens_alarm[LOST]), &(diag.err_sens_alarm[RANGE]), &(diag.temp_err[ENGINE]), &(diag.temp_err[WHEEL]), &panicstop, 
         hotrc.radiolost_ptr(), &shutdown_incomplete, &park_the_motors, &autostopping, &cruise_adjusting, &car_hasnt_moved, 
-        &starter, &(encoder.sw), sim.enabled_ptr(), &running_on_devboard, &powering_up, &(brake.posn_pid_active),
-        &(encoder.enc_a), &(encoder.enc_b),
+        &starter, &bootbutton, sim.enabled_ptr(), &running_on_devboard, &powering_up, &(brake.posn_pid_active),
+        &(encoder.enc_a), &(encoder.enc_b), &nowtouch,
     };
     uint8_t icon[iconcount][11] = {
         { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e, },  // 0 = "S" w/ crossout symbol
@@ -107,10 +107,11 @@ class IdiotLights {
         { 0x7c, 0x46, 0x7f, 0x7f, 0x33, 0x12, 0x12, 0x12, 0x1e, 0x12, 0x0c, },  // 16 = linear actuator or schlong
         { 0x0e, 0x1d, 0x7d, 0x1d, 0x0e, 0x00, 0x7e, 0x0b, 0x09, 0x0b, 0x7e, },  // 17 = encoder "A"
         { 0x0e, 0x1d, 0x7d, 0x1d, 0x0e, 0x00, 0x7f, 0x49, 0x49, 0x7f, 0x36, },  // 18 = encoder "B"
+        { 0x78, 0x7c, 0x7f, 0x7f, 0x7c, 0x7c, 0x1c, 0x0c, 0x0c, 0x0c, 0x0c, },  // 19 = finger
     };
     char letters[iconcount][3] = {
-        "SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk",
-        "AS", "Aj", "HM", "St", "BB", "Sm", "DB", "PU", "BP", "eA", "eB"
+        "SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "AS", "Aj",
+        "HM", "St", "BB", "Sm", "DB", "PU", "BP", "eA", "eB", "NT"
     };
     uint16_t color[iconcount];
     bool last[iconcount];
@@ -588,7 +589,7 @@ class Display {
     }
     void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
         if (!create) {
-            animations.diffDraw();
+            animations.redraw();
             return;
         }
         _tft.setTextDatum(textdatum_t::middle_center);

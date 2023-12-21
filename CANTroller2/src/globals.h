@@ -2,8 +2,8 @@
 #pragma once
 #include "Arduino.h"
 // pin assignments  ESP32-S3-DevkitC series
-#define        free_pin  0 // button0/strap1   // Input, Rotary encoder push switch, for the UI. active low (needs pullup). Also the esp "Boot" button does the same thing
-#define  encoder_sw_pin  1 // adc1.0           // Available
+#define     boot_sw_pin  0 // button0/strap1   // The esp "Boot" button
+#define  encoder_sw_pin  1 // adc1.0           // Input, Rotary encoder push switch, for the UI. active low (needs pullup).
 #define   encoder_b_pin  2 // adc1.1           // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define      tft_dc_pin  3 // adc1.2/strapX    // Output, Assert when sending data to display chip to indicate commands vs. screen data - ! pin is also defined in tft_setup.h
 #define    mulebatt_pin  4 // adc1.3           // Analog input, mule battery voltage sense, full scale is 16V
@@ -165,6 +165,7 @@ bool starter_drive = false;             // Set by handler only. High when we're 
 bool ignition = LOW;                    // Set by handler only. Reflects current state of the signal
 bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
 bool basicmodesw = LOW;
+bool bootbutton = false;
 int starter_request = REQ_NA;
 int ignition_request = REQ_NA;
 int panicstop_request = REQ_ON;         // On powerup we assume the code just rebooted during a drive, because for all we know it could have 
@@ -172,6 +173,7 @@ int sleep_request = REQ_NA;
 float maf_gps = 0;                      // Manifold mass airflow in grams per second
 uint16_t heartbeat_override_color = 0x0000;
 int i2cbaton = i2c_airvelo;             // A semaphore mechanism to prevent bus conflict on i2c bus
+bool nowtouch = false;
 
 // fast macros
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays

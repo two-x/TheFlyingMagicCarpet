@@ -40,7 +40,7 @@ void initialize_pins() {
     set_pin(syspower_pin, OUTPUT, syspower);
     set_pin(basicmodesw_pin, INPUT_PULLUP);
     set_pin(starter_pin, INPUT_PULLDOWN);
-    set_pin(free_pin, INPUT_PULLUP);         // ensure defined voltage level is present for unused pin
+    // set_pin(free_pin, INPUT_PULLUP);         // ensure defined voltage level is present for unused pin
     set_pin(uart_tx_pin, INPUT);             // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
     if (!usb_jtag) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // assign stable defined behavior to currently unused pin
     if (!usb_jtag) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // assign stable defined behavior to currently unused pin
@@ -148,6 +148,11 @@ void ignition_panic_update() {  // Run once each main loop
     }
     panicstop_request = REQ_NA;
     ignition_request = REQ_NA;  // Make sure this goes after the last comparison
+}
+void bootbutton_update() {
+    do {
+        bootbutton = !digitalRead(boot_sw_pin);   // !value because electrical signal is active low
+    } while (bootbutton != !digitalRead(boot_sw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
 }
 void basicsw_update() {
     if (!sim.simulating(sens::basicsw)) {  // Basic Mode switch

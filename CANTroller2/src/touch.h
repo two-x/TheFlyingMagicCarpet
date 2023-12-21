@@ -31,7 +31,6 @@ class TouchScreen {
     bool touch_longpress_valid = true;
     bool landed_coordinates_valid = false;
     bool touch_now_touched = false;
-    bool nowtouch = false;
     int tedit_exponent = 0;
     float tedit = (float)(1 << tedit_exponent);
     int touch_fudge = 0;
@@ -87,29 +86,39 @@ class TouchScreen {
         #ifdef CAPTOUCH
             uint8_t count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]));
             nowtouch = count;
-            tft_touch[xx] = disp_width - touch_read[yy];
-            tft_touch[yy] = disp_width - touch_read[xx];
+            if (nowtouch) {
+                tft_touch[xx] = disp_width - touch_read[yy];
+                tft_touch[yy] = disp_height - touch_read[xx];
+            }
         #else
             nowtouch = _ts.touched();
             touchpoint = _ts.getPoint();
-            tft_touch[xx] = map(touchpoint.x, corners[xx][tsmin], corners[xx][tsmax], 0, disp_width);  // translate resistance to pixels
-            tft_touch[yy] = map(touchpoint.y, corners[yy][tsmin], corners[yy][tsmax], 0, disp_height);  // translate resistance to pixels
+            if (nowtouch) {
+                tft_touch[xx] = map(touchpoint.x, corners[xx][tsmin], corners[xx][tsmax], 0, disp_width);  // translate resistance to pixels
+                tft_touch[yy] = map(touchpoint.y, corners[yy][tsmin], corners[yy][tsmax], 0, disp_height);  // translate resistance to pixels            
+            }
         #endif
-        if (tft_touch[xx] != tlast_x || tft_touch[yy] != tlast_y) printf("x:%d y:%d\n", tft_touch[xx], tft_touch[yy]);
-        tlast_x = tft_touch[xx];
-        tlast_y = tft_touch[yy];
-        tft_touch[xx] = constrain(tft_touch[xx], 0, disp_width);
-        tft_touch[yy] = constrain(tft_touch[yy], 0, disp_height);
-        if (flip_the_screen) { 
-            tft_touch[xx] = disp_width - tft_touch[xx];
-            tft_touch[yy] = disp_height - tft_touch[yy];
+        if (nowtouch) {
+            if (tft_touch[xx] != tlast_x || tft_touch[yy] != tlast_y) printf("x:%d y:%d\n", tft_touch[xx], tft_touch[yy]);
+            tlast_x = tft_touch[xx];
+            tlast_y = tft_touch[yy];
+            tft_touch[xx] = constrain(tft_touch[xx], 0, disp_width);
+            tft_touch[yy] = constrain(tft_touch[yy], 0, disp_height);
+            // if (flip_the_screen) { 
+            //     tft_touch[xx] = disp_width - tft_touch[xx];
+            //     tft_touch[yy] = disp_height - tft_touch[yy];
+            // }
+            if (!landed_coordinates_valid) {
+                landed[xx] = tft_touch[xx];
+                landed[yy] = tft_touch[yy];
+                landed_coordinates_valid = true;
+            }
         }
+        else landed_coordinates_valid = false;
     }
     void update() {
         read_touch();
         if (!nowtouch) {  // if not being touched
-            landed_coordinates_valid = false;
-            // If not being touched, put momentarily-set simulated button values back to default values
             idelta = 0;  // Stop changing the value
             if (touch_now_touched) touchDoublePressTimer.reset();  // Upon end of a touch, begin timer to reject any accidental double touches
             touch_now_touched = false;  // Remember the last touch state
@@ -121,11 +130,6 @@ class TouchScreen {
         }
         // if (touchDoublePressTimer.expired()) {
         tedit = (float)(1 << tedit_exponent);
-        if (!landed_coordinates_valid) {
-            landed[xx] = tft_touch[xx];
-            landed[yy] = tft_touch[yy];
-            landed_coordinates_valid = true;
-        }               
         //Serial.printf("(%d,%d), landed(%d,%d)\n",tft_touch[xx],tft_touch[yy],landed[xx],landed[yy]);
         sleep_inactivity_timer.reset();  // evidence of user activity
         tedit = (float)(1 << tedit_exponent);  // Determine value editing rate

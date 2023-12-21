@@ -26,7 +26,7 @@ class LGFX : public lgfx::LGFX_Device {
     // lgfx::Bus_Parallel8  _bus_instance;    // 8-bit parallel bus instance
     // lgfx::Light_PWM     _light_instance;   // Prepare an instance if backlight control is possible. (Delete if unnecessary)
     #ifdef CAPTOUCH  // Prepare an instance that matches the type of touch screen. (Delete if unnecessary)
-        lgfx::Touch_FT5x06           _touch_instance; // FT5206, FT5306, FT5406, FT6206, FT6236, FT6336, FT6436
+        lgfx::Touch_FT5x06   _touch_instance; // FT5206, FT5306, FT5406, FT6206, FT6236, FT6336, FT6436
     #else
         lgfx::Touch_XPT2046          _touch_instance;
     #endif
@@ -81,7 +81,7 @@ class LGFX : public lgfx::LGFX_Device {
                 cfg.invert       = false;  // Set to true if the brightness and darkness of the panel is reversed.
             #endif
             cfg.dlen_16bit       = false;  // Set to true for panels that transmit data length in 16-bit units using 16-bit parallel or SPI.
-            cfg.bus_shared       =  true;  // Set to true when sharing the bus with the SD card (control the bus using drawJpgFile, etc.)
+            cfg.bus_shared       = false;  // Set to true when sharing the bus with the SD card (control the bus using drawJpgFile, etc.)
             // Please set the following only if the display is misaligned with a variable pixel number driver such as ST7735 or ILI9163.
             // cfg.memory_width  =   240;  // Maximum width supported by driver IC
             // cfg.memory_height =   320;  // Maximum height supported by driver IC
@@ -105,7 +105,7 @@ class LGFX : public lgfx::LGFX_Device {
             cfg.pin_int    = -1;           // INT pin number
             #ifdef CAPTOUCH                // For touch I2C connection
                 cfg.offset_rotation = 5;       // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
-                cfg.bus_shared = true;    // Set true if using the same bus as the screen
+                cfg.bus_shared = false;    // Set true if using the same bus as the screen
                 cfg.i2c_port = 0;          // Select I2C to use (0 or 1)
                 cfg.i2c_addr = 0x38;       // I2C device address number
                 cfg.pin_sda  = 8;          // SDA pin number
