@@ -198,7 +198,7 @@ static constexpr char datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "Loop Avg", "LoopPeak", "FramRate", " Touch X", " Touch Y", __________, "Webservr", "BlnkDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
+    { "Loop Avg", "LoopPeak", "LoopFreq", "AnimRate", " Touch X", " Touch Y", "Webservr", "BlnkDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
 };
 static constexpr char tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines][5] = {
     { "in  ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
@@ -211,7 +211,7 @@ static constexpr char tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines][5] 
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%/s ", ______, "Hz  ", "s   ", },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, b1nary, },  // PG_TEMP
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "us  ", "us  ", "fps ", "pix ", "pix ", ______, b1nary, b1nary, "%   ", "/10 ", "eyes", },  // PG_UI
+    { "us  ", "us  ", "Hz  ", "fps ", "pix ", "pix ", b1nary, b1nary, "%   ", "/10 ", "eyes", },  // PG_UI
 };
 static constexpr char unitmapnames[9][5] = { "usps", "us  ", "rpms", scroll, b1nary, "%   ", "ohm ", "eyes", "psin", };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where units use symbols not present in the font, are longer than 3 characters, or are just special
@@ -251,22 +251,20 @@ class Display {
     // LGFX_Sprite _saversprite[2] = { LGFX_Sprite(&_tft), LGFX_Sprite(&_tft) };
     AnimationManager animations;
     NeopixelStrip* neo;
-    TouchScreen* touch;
+    Touchscreen* touch;
     TunerPanel tuner;
     IdiotLights* idiots;
-    Timer dispRefreshTimer = Timer(100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
-    Timer fps_timer;
+    Timer dispRefreshTimer = Timer(4000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
     uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     bool _procrastinate = false, reset_finished = false, simulating_last;
     int disp_oldmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
-    float fps;
-    int64_t fps_mark;
+    float fps = 0.0;
   public:
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
-    Display(NeopixelStrip* _neo, TouchScreen* _touch, IdiotLights* _idiots) : _tft(), neo(_neo), touch(_touch), idiots(_idiots),
+    Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots) : _tft(), neo(_neo), touch(_touch), idiots(_idiots),
         animations(&_tft, _touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h) {};
-    Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, TouchScreen* _touch, IdiotLights* _idiots) 
+    Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots) 
             : _tft(), neo(_neo), touch(_touch), idiots(_idiots), animations(&_tft, _touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h)
         { Display(_neo, _touch, _idiots); }
     LGFX* get_tft() {
@@ -685,12 +683,6 @@ class Display {
         }
         if (display_enabled) draw_idiotlights(idiots_corner_x, idiots_corner_y, force);
     }
-    void calc_fps() {
-        int64_t now = fps_timer.elapsed();
-        fps = (float)(now - fps_mark);
-        if (fps > 0.001) fps = 1000000 / fps;
-        fps_mark = now;
-    }
   public:
     void update(int _nowmode) {
         tiny_text();
@@ -859,10 +851,10 @@ class Display {
             else if (datapage == PG_UI) {
                 draw_dynamic(9, (int32_t)looptimer.loop_avg_us, looptimer.loop_scale_min_us, looptimer.loop_scale_avg_max_us);
                 draw_dynamic(10, looptimer.loop_peak_us, looptimer.loop_scale_min_us, looptimer.loop_scale_peak_max_us);
-                draw_dynamic(11, fps, 0.0, 600.0);
-                draw_dynamic(12, touch->touch_pt(0), 0, disp_width_pix);
-                draw_dynamic(13, touch->touch_pt(1), 0, disp_height_pix);
-                draw_eraseval(14);
+                draw_dynamic(11, (int32_t)looptimer.loopfreq_hz, 0.0, 600.0);
+                draw_dynamic(12, fps, 0.0, 600.0);
+                draw_dynamic(13, touch->touch_pt(0), 0, disp_width_pix);
+                draw_dynamic(14, touch->touch_pt(1), 0, disp_height_pix);
                 draw_truth(15, web_enabled, 0);
                 draw_truth(16, flashdemo, 0);
                 draw_dynamic(17, neobright, 1.0, 100.0, -1, 3);
@@ -876,18 +868,17 @@ class Display {
             disp_data_dirty = false;
             _procrastinate = true;  // don't do anything else in this same loop
         }
-        if (!sim.enabled() && !_procrastinate) animations.update();
+        if (!sim.enabled() && !_procrastinate) fps = animations.update();
         _procrastinate = false;
-        calc_fps();
     }
 };
 class Tuner {
   private:
     NeopixelStrip* neo;
-    TouchScreen* touch;
+    Touchscreen* touch;
     Timer tuningCtrlTimer = Timer(25000000);  // This times out edit mode after a a long period of inactivity
   public:
-    Tuner(NeopixelStrip* _neo, TouchScreen* _touch) {
+    Tuner(NeopixelStrip* _neo, Touchscreen* _touch) {
         neo = _neo;
         touch = _touch;
     }

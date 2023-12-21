@@ -4,7 +4,7 @@
 static LGFX_Sprite sp[2];
 LGFX_Sprite* nowspr;
 LGFX* lcd;
-TouchScreen* _touch;
+Touchscreen* _touch;
 uint32_t corner[2], sprwidth, sprheight;
 std::size_t flip = 0;
 static constexpr std::uint32_t SHIFTSIZE = 8;
@@ -14,7 +14,7 @@ volatile std::uint32_t _draw_count;
 volatile std::uint32_t _loop_;
 class Animation {
  public:
-    static void init(LGFX* _lcd, TouchScreen* touch, uint32_t _cornerx, uint32_t _cornery, uint32_t _sprwidth, uint32_t _sprheight) {
+    static void init(LGFX* _lcd, Touchscreen* touch, uint32_t _cornerx, uint32_t _cornery, uint32_t _sprwidth, uint32_t _sprheight) {
         lcd = _lcd;
         _touch = touch;
         corner[HORZ] = _cornerx;
@@ -22,7 +22,7 @@ class Animation {
         sprwidth = _sprwidth;
         sprheight = _sprheight;
         lcd->startWrite();
-        lcd->setColorDepth(8);
+        lcd->setColorDepth(16);
         if (lcd->width() < lcd->height()) lcd->setRotation(lcd->getRotation() ^ 1);
         for (int i = 0; i <= 1; i++) sp[i].setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
         auto framewidth = sprwidth;
@@ -100,21 +100,18 @@ class Animation {
         lcd->endWrite();
     }
 };
-struct ball_info_t {
-    int32_t x;
-    int32_t y;
-    int32_t dx;
-    int32_t dy;
-    int32_t r;
-    int32_t m;
-    uint32_t color;
-};
-// static constexpr std::uint32_t BALL_MAX = 96;
-// static ball_info_t _balls[2][BALL_MAX];
-// static std::uint32_t _ball_count = 0, ball_count = 0;
 class CollisionsSaver : public Animation {
   public:
-    static constexpr std::uint32_t BALL_MAX = 196;  // 256
+    struct ball_info_t {
+        int32_t x;
+        int32_t y;
+        int32_t dx;
+        int32_t dy;
+        int32_t r;
+        int32_t m;
+        uint32_t color;
+    };
+    static constexpr std::uint32_t BALL_MAX = 96;  // 256
     ball_info_t _balls[2][BALL_MAX];
     std::uint32_t _ball_count = 0, _fps = 0;
     std::uint32_t ball_count = 0;
@@ -296,7 +293,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
     int eraser_rad = 14, eraser_rad_min = 9, eraser_rad_max = 26, eraser_velo_min = 4, eraser_velo_max = 10, touch_w_last = 2;
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, boxsize[2], now = 0;
     int eraser_velo[2] = {random(eraser_velo_max), random(eraser_velo_max)}, shapes_per_run = 5, shapes_done = 0;
-    int erpos_max[2] = {(int)sprwidth / 2 - eraser_rad, (int)sprheight / 2 - eraser_rad};
+    int32_t erpos_max[2];
     uint8_t saver_illicit_prob = 12, penhue = 0, spothue = 255, slowhue = 0;
     float pensat = 200.0;
     uint16_t pencolor = TFT_RED;
@@ -310,6 +307,8 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
     virtual void setup() override {
         sprsize[HORZ] = sprwidth;
         sprsize[VERT] = sprheight;
+        erpos_max[HORZ] = (int32_t)sprwidth / 2 - eraser_rad;
+        erpos_max[VERT] = (int32_t)sprheight / 2 - eraser_rad;
         for (int axis = 0; axis <= 1; axis++) {
             point[axis] = random(sprsize[axis]);
             eraser_velo_sign[axis] = (random(1)) ? 1 : -1;
@@ -415,10 +414,11 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
             // }
             sp[now].setTextColor(TFT_BLACK);  // allows subliminal messaging
         }
-        if (cycle) {
+        // if (cycle != 0) {
             for (int axis = HORZ; axis <= VERT; axis++) {
                 erpos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
                 if (erpos[axis] * eraser_velo_sign[axis] >= erpos_max[axis]) {
+                    // Serial.printf(" w:%3ld h:%3ld l:%3ld m:%3ld ", sprwidth, sprheight, erpos[axis] * eraser_velo_sign[axis], erpos_max[axis]);
                     erpos[axis] = eraser_velo_sign[axis] * erpos_max[axis];
                     eraser_velo[axis] = eraser_velo_min + random(eraser_velo_max - eraser_velo_min);
                     eraser_velo[!axis] = eraser_velo_min + random(eraser_velo_max - eraser_velo_min);
@@ -426,9 +426,9 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
                     eraser_rad = constrain((int)(eraser_rad + random(5) - 2), eraser_rad_min, eraser_rad_max);
                 }
             }
-            Serial.printf(" e %d,%d,%d", (sprwidth / 2) + erpos[HORZ], (sprheight / 2) + erpos[VERT], eraser_rad);
-            sp[now].fillCircle((sprwidth / 2) + erpos[HORZ], (sprheight / 2) + erpos[VERT], eraser_rad, 0x0020);
-        }
+            // Serial.printf(" e %3d,%3d,%3d,%3d,%3d\n", (sprwidth / 2) + erpos[HORZ], (sprheight / 2) + erpos[VERT], eraser_rad, eraser_velo[HORZ], eraser_velo[VERT]);
+            sp[now].fillCircle((sprwidth / 2) + erpos[HORZ], (sprheight / 2) + erpos[VERT], eraser_rad, TFT_BLACK);
+        // }
         if (saver_lotto) sp[now].drawString("do drugs", sprwidth / 2, sprheight / 2);
         for (int axis = HORZ; axis <= VERT; axis++)
             plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
@@ -464,8 +464,11 @@ class AnimationManager {
     EraserSaver eSaver;
     CollisionsSaver cSaver;
     Animation* ptrsaver = &cSaver;
-    TouchScreen* mytouch;
+    Touchscreen* mytouch;
     Timer saverRefreshTimer = Timer(45000);
+    Timer fps_timer;
+    float fps = 0.0;
+    int64_t fps_mark;
     bool screensaver_last = false;
     void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
         ++nowsaver %= NumSaverMenu;
@@ -476,7 +479,7 @@ class AnimationManager {
         ptrsaver->reset();
     }
   public:
-    AnimationManager(LGFX* _lcd, TouchScreen* touch, uint32_t _cornerx, uint32_t _cornery, uint32_t _sizex, uint32_t _sizey)
+    AnimationManager(LGFX* _lcd, Touchscreen* touch, uint32_t _cornerx, uint32_t _cornery, uint32_t _sizex, uint32_t _sizey)
         : mylcd(_lcd), mytouch(touch), cornerx(_cornerx), cornery(_cornery), sizex(_sizex), sizey(_sizey) {}
     void setup() {
         Animation::init(mylcd, mytouch, cornerx, cornery, sizex, sizey);
@@ -485,19 +488,27 @@ class AnimationManager {
     }
     void reset() { ptrsaver->reset(); }
     void redraw() { ptrsaver->diffDraw(); }
-    void update() {
+    void calc_fps() {
+        int64_t now = fps_timer.elapsed();
+        fps = (float)(now - fps_mark);
+        if (fps > 0.001) fps = 1000000 / fps;
+        fps_mark = now;
+    }
+    float update() {
         if (!screensaver_last && screensaver) {
             // if (nowsaver == Eraser) ptrsaver->reset();  else
             change_saver();  // ptrsaver->reset();
         }
         screensaver_last = screensaver;
-        if (!screensaver) return;
+        if (!screensaver) return NAN;
         if (_touch->touched()) ptrsaver->saver_touch(_touch->touch_pt(HORZ), _touch->touch_pt(VERT));
-        if (true) {  // if (saverRefreshTimer.expireset()) {
+        if (true) {  // saverRefreshTimer.expireset() || screensaver_max_refresh) {
+            calc_fps();
             ptrsaver->setflip();
             still_running = ptrsaver->update();
             if (still_running) ptrsaver->diffDraw();
             else change_saver();
         }
+        return fps;
     }
 };
