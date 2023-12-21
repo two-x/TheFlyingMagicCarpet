@@ -58,10 +58,10 @@ class Animation {
     virtual void reset() = 0;
     virtual void saver_touch(int16_t, int16_t) = 0;
     virtual int update() = 0;  //{ return 0; };
-    void setflip() {
+    void setflip(bool clear) {  // clear=true blacks out the sprite before drawing on it
         flip = _draw_count & 1;
         nowspr = &(sp[flip]);
-        nowspr->clear();
+        if (clear) nowspr->clear();
     }
     void diffDraw() {
         union {
@@ -129,7 +129,7 @@ class CollisionsSaver : public Animation {
         flip = _draw_count & 1;
         balls = &_balls[flip][0];
         sprite = &(sp[flip]);
-        sprite->clear();
+        sprite->clear(TFT_BLACK);
         for (int32_t i = 8; i < sprwidth; i += 16) sprite->drawFastVLine(i, 0, sprheight, 0x1F);
         for (int32_t i = 8; i < sprheight; i += 16) sprite->drawFastHLine(0, i, sprwidth, 0x1F);
         for (std::uint32_t i = 0; i < _ball_count; i++) {
@@ -355,7 +355,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
     }
   private:
     void drawsprite() {
-        Serial.printf("\r%d,%d,%d ", shape, shapes_done, cycle);
+        // Serial.printf("\r%d,%d,%d ", shape, shapes_done, cycle);
         for (int axis = 0; axis <= 1; axis++) point[axis] = random(sprsize[axis]);
         if (cycle != 2) {
             spothue--;
@@ -427,7 +427,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
                 }
             }
             // Serial.printf(" e %3d,%3d,%3d,%3d,%3d\n", (sprwidth / 2) + erpos[HORZ], (sprheight / 2) + erpos[VERT], eraser_rad, eraser_velo[HORZ], eraser_velo[VERT]);
-            sp[now].fillCircle((sprwidth / 2) + erpos[HORZ], (sprheight / 2) + erpos[VERT], eraser_rad, TFT_BLACK);
+            sp[now].fillCircle((sprwidth / 2) + erpos[HORZ], (sprheight / 2) + erpos[VERT], eraser_rad, 0x0000);
         // }
         if (saver_lotto) sp[now].drawString("do drugs", sprwidth / 2, sprheight / 2);
         for (int axis = HORZ; axis <= VERT; axis++)
@@ -504,7 +504,7 @@ class AnimationManager {
         if (_touch->touched()) ptrsaver->saver_touch(_touch->touch_pt(HORZ), _touch->touch_pt(VERT));
         if (true) {  // saverRefreshTimer.expireset() || screensaver_max_refresh) {
             calc_fps();
-            ptrsaver->setflip();
+            ptrsaver->setflip((nowsaver == Collisions));
             still_running = ptrsaver->update();
             if (still_running) ptrsaver->diffDraw();
             else change_saver();
