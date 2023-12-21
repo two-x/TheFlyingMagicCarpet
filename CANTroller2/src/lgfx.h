@@ -98,13 +98,13 @@ class LGFX : public lgfx::LGFX_Device {
         // }
         {  // Configure touch screen control settings. (Delete if unnecessary)
             auto cfg = _touch_instance.config();
-            cfg.x_max      = 319;          // Maximum X value obtained from touch screen (raw value)
-            cfg.y_max      = 239;          // Maximum Y value obtained from touch screen (raw value)
             cfg.x_min      = 0;            // Minimum X value obtained from touch screen (raw value)
+            cfg.x_max      = 319;          // Maximum X value obtained from touch screen (raw value)
             cfg.y_min      = 0;            // Minimum Y value obtained from touch screen (raw value)
+            cfg.y_max      = 239;          // Maximum Y value obtained from touch screen (raw value)
             cfg.pin_int    = -1;           // INT pin number
-            cfg.offset_rotation = 0;       // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
             #ifdef CAPTOUCH                // For touch I2C connection
+                cfg.offset_rotation = 5;       // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
                 cfg.bus_shared = true;    // Set true if using the same bus as the screen
                 cfg.i2c_port = 0;          // Select I2C to use (0 or 1)
                 cfg.i2c_addr = 0x38;       // I2C device address number
@@ -112,6 +112,7 @@ class LGFX : public lgfx::LGFX_Device {
                 cfg.pin_scl  = 9;          // SCL pin number
                 cfg.freq = 400000;         // Set I2C clock
             #else  // For touch SPI connection
+                cfg.offset_rotation = 0;       // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
                 cfg.bus_shared = true;    // Set true if using the same bus as the screen
                 cfg.spi_host = SPI3_HOST;  // VSPI_HOST (doesn't recognize?) Select the SPI to use (HSPI_HOST or VSPI_HOST)
                 cfg.freq = 1000000;        // Set SPI clock

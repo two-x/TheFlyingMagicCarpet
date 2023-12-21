@@ -197,7 +197,7 @@ static constexpr char datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "LoopFreq", "Loop Avg", "LoopPeak", " Touch X", " Touch Y", __________, "Webservr", "BlnkDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
+    { "Loop Avg", "LoopPeak", "FramRate", " Touch X", " Touch Y", __________, "Webservr", "BlnkDemo", neo_bright, "NeoDesat", "ScrSaver", },  // PG_UI
 };
 static constexpr char tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines][5] = {
     { "in  ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
@@ -210,7 +210,7 @@ static constexpr char tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines][5] 
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%/s ", ______, "Hz  ", "s   ", },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, b1nary, },  // PG_TEMP
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "Hz  ", "us  ", "us  ", "pix ", "pix ", ______, b1nary, b1nary, "%   ", "/10 ", "eyes", },  // PG_UI
+    { "us  ", "us  ", "fps ", "pix ", "pix ", ______, b1nary, b1nary, "%   ", "/10 ", "eyes", },  // PG_UI
 };
 static constexpr char unitmapnames[9][5] = { "usps", "us  ", "rpms", scroll, b1nary, "%   ", "ohm ", "eyes", "psin", };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where units use symbols not present in the font, are longer than 3 characters, or are just special
@@ -221,7 +221,7 @@ static constexpr uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where un
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3e, 0x00, 0x00, 0x1c, 0x22, 0x22, 0x1c, 0x00, 0x00, },  // 0/1 - to indicate binary value
     { 0x02, 0x45, 0x25, 0x12, 0x08, 0x24, 0x52, 0x51, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // % - just because the font one is feeble
     { 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // capital omega - for ohms
-    { 0x08, 0x1c, 0x2a, 0x08, 0x00, 0x3e, 0x63, 0x33, 0x77, 0x7f, 0x41, 0x3f, 0x63, 0x33, 0x77, 0x7f, 0x3e, },  // googly eyes, are as goofy as they are stupid
+    { 0x08, 0x1c, 0x2a, 0x08, 0x00, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x41, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x3e, },  // googly eyes, are as goofy as they are stupid
     { 0x3d, 0x00, 0x3c, 0x04, 0x38, 0x00, 0x7f, 0x00, 0x7c, 0x24, 0x18, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x3d, },  // inches or psi
 };  // These bitmaps are in the same format as the idiot light bitmaps, described below
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
@@ -254,9 +254,12 @@ class Display {
     TunerPanel tuner;
     IdiotLights* idiots;
     Timer dispRefreshTimer = Timer(100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
+    Timer fps_timer;
     uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     bool _procrastinate = false, reset_finished = false, simulating_last;
     int disp_oldmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
+    float fps;
+    int64_t fps_mark;
   public:
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
@@ -681,6 +684,12 @@ class Display {
         }
         if (display_enabled) draw_idiotlights(idiots_corner_x, idiots_corner_y, force);
     }
+    void calc_fps() {
+        int64_t now = fps_timer.elapsed();
+        fps = (float)(now - fps_mark);
+        if (fps > 0.001) fps = 1000000 / fps;
+        fps_mark = now;
+    }
   public:
     void update(int _nowmode) {
         tiny_text();
@@ -847,9 +856,9 @@ class Display {
                 draw_truth(19, cal_gasmode, 0);
             }
             else if (datapage == PG_UI) {
-                draw_dynamic(9, looptimer.loopfreq_hz);
-                draw_dynamic(10, (int32_t)looptimer.loop_avg_us, looptimer.loop_scale_min_us, looptimer.loop_scale_avg_max_us);
-                draw_dynamic(11, looptimer.loop_peak_us, looptimer.loop_scale_min_us, looptimer.loop_scale_peak_max_us);
+                draw_dynamic(9, (int32_t)looptimer.loop_avg_us, looptimer.loop_scale_min_us, looptimer.loop_scale_avg_max_us);
+                draw_dynamic(10, looptimer.loop_peak_us, looptimer.loop_scale_min_us, looptimer.loop_scale_peak_max_us);
+                draw_dynamic(11, fps, 0.0, 600.0);
                 draw_dynamic(12, touch->touch_pt(0), 0, disp_width_pix);
                 draw_dynamic(13, touch->touch_pt(1), 0, disp_height_pix);
                 draw_eraseval(14);
@@ -868,6 +877,7 @@ class Display {
         }
         if (!sim.enabled() && !_procrastinate) animations.update();
         _procrastinate = false;
+        calc_fps();
     }
 };
 class Tuner {

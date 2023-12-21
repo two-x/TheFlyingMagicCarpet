@@ -36,6 +36,7 @@ class TouchScreen {
     float tedit = (float)(1 << tedit_exponent);
     int touch_fudge = 0;
     int tedit_exponent_max = 8;
+    int tlast_x, tlast_y;
 
     Timer touchHoldTimer{550000};  // Hold this long to count as a long press
     Timer touchAccelTimer{850000};
@@ -50,8 +51,7 @@ class TouchScreen {
     enum touch_lim { tsmin, tsmax };
     int32_t trow, tcol;
     int disp_width, disp_height;
-    int32_t tft_touch[2];
-    int32_t landed[2];  // landed are the initial coordinates of a touch event, unaffected by dragging
+    int touch_read[2], tft_touch[2], landed[2];  // landed are the initial coordinates of a touch event, unaffected by dragging
   public:
     int idelta = 0;
 
@@ -82,42 +82,33 @@ class TouchScreen {
     TS_Point getPoint() { return touchpoint; }
     int16_t touch_pt(uint8_t axis) { return tft_touch[axis]; }
 
-    void update() {
+    void read_touch() {
         // update touchpoint
-#ifdef CAPTOUCH
-        uint8_t count = _tft->getTouch(&(tft_touch[xx]), &(tft_touch[yy]));
-        nowtouch = count;
-        touchpoint.x = tft_touch[xx];
-        touchpoint.y = tft_touch[yy];
-#else
-        nowtouch = _ts.touched();
-        touchpoint = _ts.getPoint();
-#endif
-
-        if (nowtouch) {
-            // if (touchDoublePressTimer.expired()) {
-            tedit = (float)(1 << tedit_exponent);
-#ifdef CAPTOUCH
-            tft_touch[xx] = touchpoint.x; // disp_width - touchpoint.x;  // may need to rotate differently 
-            tft_touch[yy] = touchpoint.y; // disp_height - touchpoint.y;  // may need to rotate differently
-#else
+        #ifdef CAPTOUCH
+            uint8_t count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]));
+            nowtouch = count;
+            tft_touch[xx] = disp_width - touch_read[yy];
+            tft_touch[yy] = disp_width - touch_read[xx];
+        #else
+            nowtouch = _ts.touched();
+            touchpoint = _ts.getPoint();
             tft_touch[xx] = map(touchpoint.x, corners[xx][tsmin], corners[xx][tsmax], 0, disp_width);  // translate resistance to pixels
             tft_touch[yy] = map(touchpoint.y, corners[yy][tsmin], corners[yy][tsmax], 0, disp_height);  // translate resistance to pixels
-#endif
-            tft_touch[xx] = constrain(tft_touch[xx], 0, disp_width);
-            tft_touch[yy] = constrain(tft_touch[yy], 0, disp_height);
-            if (!flip_the_screen) { 
-                tft_touch[xx] = disp_width - tft_touch[xx];
-                tft_touch[yy] = disp_height - tft_touch[yy];
-            }
-            // if (!landed_coordinates_valid) {
-            //     landed[xx] = tft_touch[xx];
-            //     landed[yy] = tft_touch[yy];
-            //     landed_coordinates_valid = true;
-            // }               
-            //Serial.printf("(%d,%d), landed(%d,%d)\n",tft_touch[xx],tft_touch[yy],landed[xx],landed[yy]);
-        } else {
-        // else landed_coordinates_valid = false;
+        #endif
+        if (tft_touch[xx] != tlast_x || tft_touch[yy] != tlast_y) printf("x:%d y:%d\n", tft_touch[xx], tft_touch[yy]);
+        tlast_x = tft_touch[xx];
+        tlast_y = tft_touch[yy];
+        tft_touch[xx] = constrain(tft_touch[xx], 0, disp_width);
+        tft_touch[yy] = constrain(tft_touch[yy], 0, disp_height);
+        if (flip_the_screen) { 
+            tft_touch[xx] = disp_width - tft_touch[xx];
+            tft_touch[yy] = disp_height - tft_touch[yy];
+        }
+    }
+    void update() {
+        read_touch();
+        if (!nowtouch) {  // if not being touched
+            landed_coordinates_valid = false;
             // If not being touched, put momentarily-set simulated button values back to default values
             idelta = 0;  // Stop changing the value
             if (touch_now_touched) touchDoublePressTimer.reset();  // Upon end of a touch, begin timer to reject any accidental double touches
@@ -128,10 +119,18 @@ class TouchScreen {
             touch_longpress_valid = true;
             return;
         }
+        // if (touchDoublePressTimer.expired()) {
+        tedit = (float)(1 << tedit_exponent);
+        if (!landed_coordinates_valid) {
+            landed[xx] = tft_touch[xx];
+            landed[yy] = tft_touch[yy];
+            landed_coordinates_valid = true;
+        }               
+        //Serial.printf("(%d,%d), landed(%d,%d)\n",tft_touch[xx],tft_touch[yy],landed[xx],landed[yy]);
         sleep_inactivity_timer.reset();  // evidence of user activity
         tedit = (float)(1 << tedit_exponent);  // Determine value editing rate
-        trow = constrain((tft_touch[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
-        tcol = constrain((tft_touch[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, 5);
+        trow = constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
+        tcol = constrain((landed[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, 5);
         // trow = constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
         // tcol = (landed[xx] - touch_margin_h_pix) / touch_cell_h_pix;
         // Serial.printf("touched trow: %d, tcol: %d, count: %d\n", trow, tcol, count); delay(1);

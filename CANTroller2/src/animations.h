@@ -110,7 +110,7 @@ struct ball_info_t {
   int32_t m;
   uint32_t color;
 };
-static constexpr std::uint32_t BALL_MAX = 256;
+static constexpr std::uint32_t BALL_MAX = 128;
 static ball_info_t _balls[2][BALL_MAX];
 static std::uint32_t _ball_count = 0, ball_count = 0;
 class CollisionsSaver : public Animation {
@@ -156,12 +156,12 @@ class CollisionsSaver : public Animation {
             a = &balls[i];
             sprite->fillCircle( a->x >> SHIFTSIZE, a->y >> SHIFTSIZE, a->r >> SHIFTSIZE, a->color);
         }
-        sprite->setCursor(1,1);
-        sprite->setTextColor(TFT_BLACK);
-        sprite->printf("obj:%d fps:%d", _ball_count, _fps);
-        sprite->setCursor(0,0);
-        sprite->setTextColor(TFT_WHITE);
-        sprite->printf("obj:%d fps:%d", _ball_count, _fps);
+        // sprite->setCursor(1,1);
+        // sprite->setTextColor(TFT_BLACK);
+        // sprite->printf("obj:%d fps:%d", _ball_count, _fps);
+        // sprite->setCursor(0,0);
+        // sprite->setTextColor(TFT_WHITE);
+        // sprite->printf("obj:%d fps:%d", _ball_count, _fps);
         // diffDraw();
         ++_draw_count;
     }
@@ -386,10 +386,11 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise s
         return shapes_done;
     }
     void drawsprite() {
+        Serial.printf("\r%d,%d,%d ", shape, shapes_done, cycle);
         for (int axis=0; axis<=1; axis++) point[axis] = random(sprsize[axis]);
         if (cycle != 2) {
             spothue--;
-            if (!(spothue % 4)) slowhue++;
+            if (!(spothue % 4)) slowhue += random(4);
             if (shape == Wedges) {
                 uint16_t c[2] = { hsv_to_rgb<uint16_t>(random(256), 127+(spothue>>1)), hsv_to_rgb<uint16_t>(random(256), 127+(spothue>>1)) };
                 float im = 0;
@@ -410,12 +411,12 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise s
             }
             else if (shape == Rings) {
                 int d = 8 + random(25);
-                uint16_t c = hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106));
-                for (int r=d; r>=(d-4); r--) sp[now].drawCircle(point[HORZ], point[VERT], r, c);
+                uint16_t c[2] = { hsv_to_rgb<uint16_t>(spothue+127*random(1), random(128)+(spothue>>1), 150+random(106)), (uint16_t)random(0x10000) };
+                for (int r=d; r>=(d-4); r--) sp[now].drawCircle(point[HORZ], point[VERT], r, c[r % 2]);
             }
             else if (shape == Dots) 
                 for (int star=0; star<(shape*5); star++) 
-                    sp[now].fillCircle(random(sprwidth), random(sprheight), 2+random(3), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 255, 210+random(46)));  // hue_to_rgb16(random(255)), TFT_BLACK);
+                    sp[now].fillCircle(random(sprwidth), random(sprheight), 2+random(3), hsv_to_rgb<uint16_t>((spothue>>1)*(1+random(2)), 128 + (slowhue >> 1), 110+random(146)));  // hue_to_rgb16(random(255)), TFT_BLACK);
             else if (shape == Ascii)
                 for (int star=0; star<(shape*5); star++) {                
                     sp[now].setTextColor(hsv_to_rgb<uint16_t>(plast[HORZ] + plast[VERT] + (spothue>>2), 63+(spothue>>1), 200+random(56)), TFT_BLACK);
@@ -448,7 +449,8 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise s
                     eraser_rad = constrain((int)(eraser_rad + random(5) - 2), eraser_rad_min, eraser_rad_max);
                 }
             }
-            sp[now].fillCircle((sprwidth/2) + erpos[HORZ], (sprheight/2) + erpos[VERT], eraser_rad, TFT_BLACK);
+            Serial.printf(" e %d,%d,%d", (sprwidth/2) + erpos[HORZ], (sprheight/2) + erpos[VERT], eraser_rad);
+            sp[now].fillCircle((sprwidth/2) + erpos[HORZ], (sprheight/2) + erpos[VERT], eraser_rad, 0x0020);
         }
         if (saver_lotto) sp[now].drawString("do drugs", sprwidth/2, sprheight/2);
         for (int axis=HORZ; axis<=VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
