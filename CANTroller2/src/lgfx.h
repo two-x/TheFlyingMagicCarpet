@@ -105,7 +105,7 @@ class LGFX : public lgfx::LGFX_Device {
             cfg.pin_int    = -1;           // INT pin number
             #ifdef CAPTOUCH                // For touch I2C connection
                 cfg.offset_rotation = 5;       // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
-                cfg.bus_shared = false;    // Set true if using the same bus as the screen
+                cfg.bus_shared = true;    // Set true if using the same bus as the screen
                 cfg.i2c_port = 0;          // Select I2C to use (0 or 1)
                 cfg.i2c_addr = 0x38;       // I2C device address number
                 cfg.pin_sda  = 8;          // SDA pin number
@@ -113,7 +113,7 @@ class LGFX : public lgfx::LGFX_Device {
                 cfg.freq = 400000;         // Set I2C clock
             #else  // For touch SPI connection
                 cfg.offset_rotation = 0;       // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
-                cfg.bus_shared = false;    // Set true if using the same bus as the screen
+                cfg.bus_shared = true;    // Set true if using the same bus as the screen
                 cfg.spi_host = SPI3_HOST;  // VSPI_HOST (doesn't recognize?) Select the SPI to use (HSPI_HOST or VSPI_HOST)
                 cfg.freq = 1000000;        // Set SPI clock
                 cfg.pin_sclk = 12;         // SCLK pin number

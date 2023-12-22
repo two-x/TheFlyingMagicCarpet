@@ -22,7 +22,7 @@ class Animation {
         sprwidth = _sprwidth;
         sprheight = _sprheight;
         lcd->startWrite();
-        lcd->setColorDepth(8);
+        lcd->setColorDepth(16);
         if (lcd->width() < lcd->height()) lcd->setRotation(lcd->getRotation() ^ 1);
         for (int i = 0; i <= 1; i++) sp[i].setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
         auto framewidth = sprwidth;
