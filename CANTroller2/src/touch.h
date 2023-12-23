@@ -90,6 +90,7 @@ class Touchscreen {
     int read_touch() {
         // update touchpoint
         // #ifdef CAPTOUCH
+        if (_i2c->not_my_turn(i2c_touch)) return nowtouch;
         uint8_t count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]));
         nowtouch = count;
         if (nowtouch) {
@@ -126,6 +127,7 @@ class Touchscreen {
             }
         }
         else landed_coordinates_valid = false;
+        _i2c->pass_i2c_baton();
         return nowtouch;
     }
     int read_touch_simple() {

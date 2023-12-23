@@ -94,7 +94,6 @@ enum telemetry_bool : int {
     _Ignition, _PanicStop, _SysPower, _HotRCCh3, _StarterDr, _StarterExt, _HotRCCh4, _BasicSw, NumTelemetryBools
 };
 enum err_type : int { LOST=0, RANGE=1, CALIB=2, WARN=3, CRIT=4, INFO=5, NUM_ERR_TYPES=6 };
-enum i2c_nodes : int { i2c_airvelo, i2c_map, i2c_lightbox, num_i2c_slaves };  // i2c_touch, 
 
 // global configuration settings
 bool brake_hybrid_pid = true;
@@ -173,7 +172,6 @@ int panicstop_request = REQ_ON;         // On powerup we assume the code just re
 int sleep_request = REQ_NA;
 float maf_gps = 0;                      // Manifold mass airflow in grams per second
 uint16_t heartbeat_override_color = 0x0000;
-int i2cbaton = i2c_airvelo;             // A semaphore mechanism to prevent bus conflict on i2c bus
 bool nowtouch = false;
 
 // fast macros

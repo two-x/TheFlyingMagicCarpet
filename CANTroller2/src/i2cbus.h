@@ -1,12 +1,16 @@
 #pragma once
 #include <Wire.h>   // for i2c bus support
+enum i2c_nodes : int { i2c_touch, i2c_lightbox, i2c_airvelo, i2c_map, num_i2c_slaves };  // i2c_touch, 
+
 class I2C {
   private:
     int32_t _devicecount = 0;
     uint8_t _addrs[10];
     uint8_t _sda_pin, _scl_pin;
     Timer scanTimer;
+    int lastsens = (int)sens::mapsens;
   public:
+    int i2cbaton = i2c_touch;             // A semaphore mechanism to prevent bus conflict on i2c bus
     I2C(uint8_t sda_pin_arg, uint8_t scl_pin_arg) : _sda_pin(sda_pin_arg), _scl_pin(scl_pin_arg) {}
     void setup() {
         printf("I2C bus"); delay(1);  // Attempt to force print to happen before init
@@ -31,6 +35,14 @@ class I2C {
     bool device_detected(uint8_t addr) {
         for (int32_t i=0; i < _devicecount; i++) if (_addrs[i] == addr) return true;
         return false;
+    }
+    void pass_i2c_baton() {
+        ++i2cbaton %= num_i2c_slaves;
+        if (i2cbaton == i2c_airvelo && lastsens == i2c_airvelo) i2cbaton = i2c_map;
+        if (i2cbaton == i2c_airvelo || i2cbaton == i2c_map) lastsens = i2cbaton;
+    }
+    bool not_my_turn(int checkdev) {
+        return (use_i2c_baton && (checkdev != i2cbaton));
     }
 };
 
@@ -151,10 +163,11 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     int runmode_last = SHUTDOWN;
     uint16_t speed_last;
     uint8_t status_nibble_last;
+    I2C* i2c;
     // DiagRuntime* diag;
   public:
     static constexpr uint8_t addr = 0x69;
-    LightingBox() {}  // LightingBox(DiagRuntime* _diag) : diag(_diag) {}
+    LightingBox(I2C* _i2c) : i2c{_i2c} {}  // LightingBox(DiagRuntime* _diag) : diag(_diag) {}
     void setup() {
         printf("Lighting box serial comm..\n");
     }
@@ -195,12 +208,12 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     }
     void update(int runmode, float speed) {
         bool sent = false;
-        if (use_i2c_baton && i2cbaton != i2c_lightbox) return;
+        if (i2c->not_my_turn(i2c_lightbox)) return;
         if (send_timer.expireset()) {
             sent = sendstatus();
             sent |= sendrunmode(runmode);
             if (!sent) sent = sendspeed(speed);
-            ++i2cbaton %= num_i2c_slaves;
         }
+        i2c->pass_i2c_baton();
     }
 };

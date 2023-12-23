@@ -8,6 +8,11 @@
 #include "driver/rmt.h"
 #include <ESP32Servo.h>        // Makes PWM output to control motors (for rudimentary control of our gas and steering)
 #include "uictrl.h"
+
+// This enum class represent the components which can be simulated (sensor). It's a uint8_t type under the covers, so it can be used as an index
+// typedef uint8_t opt_t;
+enum class sens : int { none=0, joy, pressure, brkpos, speedo, tach, airvelo, mapsens, engtemp, mulebatt, starter, basicsw, NUM_SENSORS };  //, ignition, syspower };  // , NUM_SENSORS, err_flag };
+
 #include "i2cbus.h"
 // #include "xtensa/core-macros.h"  // access to ccount register for esp32 timing ticks
 
@@ -143,6 +148,7 @@ class Device {
     virtual void set_val_from_touch() {}
     virtual void set_val_from_pot() {}
     virtual void set_val_from_calc() {}
+    virtual void set_val_common() {}  // Runs when setting val from any source, after one of the above
     virtual void update_source() {}
   public:
     Timer timer;  // Can be used for external purposes
@@ -187,8 +193,8 @@ class Device {
                 // should never get here
                 printf("invalid Device source: %d\n", _source);
         }
+        set_val_common();
     }
-
     void attach_pot(Potentiometer &pot_arg) {
         _pot = &pot_arg;
     }
@@ -433,11 +439,14 @@ class I2CSensor : public Sensor<float,float> {
   protected:
     uint8_t _i2c_address;
     bool _detected = false;
-    I2C &_i2c;
+    I2C* _i2c;
 
     // implement in child classes using the appropriate i2c sensor
     virtual float read_sensor() = 0;
 
+    virtual void set_val_common() {
+        _i2c->pass_i2c_baton();
+    }
     virtual void set_val_from_pin() {
         this->set_native(read_sensor());
         calculate_ema();  // Sensor EMA filter
@@ -454,12 +463,12 @@ class I2CSensor : public Sensor<float,float> {
         _val_filt.set_limits(_human.min_shptr(), _human.max_shptr());
     }
   public:
-    I2CSensor(I2C &i2c_arg, uint8_t i2c_address_arg) : Sensor<float,float>(-1), _i2c(i2c_arg), _i2c_address(i2c_address_arg) { set_can_source(src::PIN, true); }
+    I2CSensor(I2C* i2c_arg, uint8_t i2c_address_arg) : Sensor<float,float>(-1), _i2c(i2c_arg), _i2c_address(i2c_address_arg) { set_can_source(src::PIN, true); }
     I2CSensor() = delete;
     String _long_name = "Unknown I2C device";
     String _short_name = "i2cdev";
     virtual void setup() {
-        _detected = _i2c.device_detected(_i2c_address);
+        _detected = _i2c->device_detected(_i2c_address);
         set_source(src::PIN); // we aren't actually reading from a pin but the point is the same...
     }
 };
@@ -479,16 +488,15 @@ class AirVeloSensor : public I2CSensor {
     int64_t airvelo_read_period_us = 35000;
     Timer airveloTimer;
     virtual float read_sensor() {
-        if (use_i2c_baton && i2cbaton != i2c_airvelo) return goodreading;
+        if (_i2c->not_my_turn(i2c_airvelo)) return goodreading;
         if (airveloTimer.expireset()) {
             goodreading = _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
             // this->_val_raw = this->human_val();  // (NATIVE_T)goodreading; // note, this returns a float from 0-33.55 for the FS3000-1015             
-            ++i2cbaton %= num_i2c_slaves;
         }
         return goodreading;
     }
   public:
-    AirVeloSensor(I2C &i2c_arg) : I2CSensor(i2c_arg, _i2c_address) {
+    AirVeloSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, _i2c_address) {
         _ema_alpha = _initial_ema_alpha;
         set_human_limits(_min_mph, _initial_max_mph);
         set_can_source(src::POT, true);
@@ -536,24 +544,23 @@ class MAPSensor : public I2CSensor {
     static constexpr float _initial_ema_alpha = 0.2;
     Timer map_read_timer;
     uint32_t map_read_timeout = 100000, map_retry_timeout = 10000;
-    float good_reading = -1;
+    float goodreading = -1;
     SparkFun_MicroPressure _sensor;
     virtual float read_sensor() {
-        if (use_i2c_baton && i2cbaton != i2c_map) return good_reading;
+        if (_i2c->not_my_turn(i2c_map)) return goodreading;
         if (map_read_timer.expired()) {
             float temp = _sensor.readPressure(PSI, true);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
             if (!std::isnan(temp)) {
-                good_reading = temp;
+                goodreading = temp;
                 map_read_timer.set(map_read_timeout);
-                ++i2cbaton %= num_i2c_slaves;
             }
             else map_read_timer.set(map_retry_timeout);
         }
         // this->_val_raw = (NATIVE_T)good_reading;  // note, this returns a float from 0-33.55 for the FS3000-1015 
-        return good_reading;
+        return goodreading;
     }
   public:
-    MAPSensor(I2C &i2c_arg) : I2CSensor(i2c_arg, _i2c_address) {
+    MAPSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, _i2c_address) {
         _ema_alpha = _initial_ema_alpha;
         set_human_limits(_initial_min_psi, _initial_max_psi);
         set_can_source(src::POT, true);
@@ -1022,10 +1029,6 @@ class OutToggle : public Toggle {
     }
 };
 // NOTE: if devices.h gets to be too long, we can (and maybe just should) move this to a separate file, it's not really a device...
-
-// This enum class represent the components which can be simulated (sensor). It's a uint8_t type under the covers, so it can be used as an index
-// typedef uint8_t opt_t;
-enum class sens : int { none=0, joy, pressure, brkpos, speedo, tach, airvelo, mapsens, engtemp, mulebatt, starter, basicsw, NUM_SENSORS };  //, ignition, syspower };  // , NUM_SENSORS, err_flag };
 
 // Simulator manages the source handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
 // NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use sources,

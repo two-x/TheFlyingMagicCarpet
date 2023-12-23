@@ -23,15 +23,15 @@ static BrakePositionSensor brkpos(brake_pos_pin);
 static Speedometer speedo(speedo_pin);
 static Tachometer tach(tach_pin);
 static I2C i2c(i2c_sda_pin, i2c_scl_pin);
-static AirVeloSensor airvelo(i2c);
-static MAPSensor mapsens(i2c);
+static AirVeloSensor airvelo(&i2c);
+static MAPSensor mapsens(&i2c);
 static GasServo gas(gas_pwm_pin, 60);
 static BrakeMotor brake(brake_pwm_pin, 50);
 static SteerMotor steer(steer_pwm_pin, 50);
 static LoopTimer looptimer;
 static WebManager web(&looptimer);
 static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &maf_gps, &ignition);
-static LightingBox lightbox;  // lightbox(&diag);
+static LightingBox lightbox(&i2c);  // lightbox(&diag);
 
 void initialize_pins() {
     set_pin(ignition_pin, OUTPUT, LOW);
