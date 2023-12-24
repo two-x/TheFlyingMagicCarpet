@@ -173,6 +173,7 @@ int sleep_request = REQ_NA;
 float maf_gps = 0;                      // Manifold mass airflow in grams per second
 uint16_t heartbeat_override_color = 0x0000;
 bool nowtouch = false;
+bool captouch = true;
 
 // fast macros
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays

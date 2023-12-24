@@ -26,11 +26,11 @@ class Touchscreen {
     // #else
     // XPT2046_Touchscreen _ts;  // 3.5in resistive touch panel on tft lcd
     // These values need to be calibrated to each individual display panel for best accuracy
-    // int32_t corners[2][2] = { { 351, 3928 }, { 189, 3950 } };  // [xx/yy][min/max]
+    int32_t corners[2][2] = { { -25, -3549 }, { 185, 3839 } };  // [xx/yy][min/max]
     // Soren's breadboard "" { { 351, 3933 }, { 189, 3950 } };  // [xx/yy][min/max]
     // TS_Point touchpoint;
     // #endif
-    bool touch_longpress_valid = true, captouch;
+    bool touch_longpress_valid = true;
     bool landed_coordinates_valid = false;
     bool touch_now_touched = false;
     int tedit_exponent = 0;
@@ -89,7 +89,7 @@ class Touchscreen {
     int read_touch() {
         // update touchpoint
         // #ifdef CAPTOUCH
-        if (_i2c->not_my_turn(i2c_touch)) return nowtouch;
+        if (captouch && _i2c->not_my_turn(i2c_touch)) return nowtouch;
         if (touchSenseTimer.expireset()) {
             uint8_t count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]));
             nowtouch = count;
@@ -99,27 +99,15 @@ class Touchscreen {
                     tft_touch[yy] = touch_read[yy];
                 }
                 else {
-                    tft_touch[xx] = touch_read[xx];  // disp_width - 1 - touch_read[xx];
-                    tft_touch[yy] = touch_read[yy];
+                    tft_touch[xx] = map(touch_read[xx], corners[xx][tsmin], corners[xx][tsmax], 0, disp_width);  // translate resistance to pixels
+                    tft_touch[yy] = map(touch_read[yy], corners[yy][tsmin], corners[yy][tsmax], 0, disp_height);  // translate resistance to pixels                    
                 }
-                // #else
-                // else {
-                //     nowtouch = _ts.touched();
-                //     touchpoint = _ts.getPoint();
-                //     tft_touch[xx] = map(touchpoint.x, corners[xx][tsmin], corners[xx][tsmax], 0, disp_width);  // translate resistance to pixels
-                //     tft_touch[yy] = map(touchpoint.y, corners[yy][tsmin], corners[yy][tsmax], 0, disp_height);  // translate resistance to pixels                    
-                // }
-                // #endif
-                // if (nowtouch) {
-                // if (tft_touch[xx] != tlast_x || tft_touch[yy] != tlast_y) printf("x:%d y:%d\n", tft_touch[xx], tft_touch[yy]);
-                // tlast_x = tft_touch[xx];
-                // tlast_y = tft_touch[yy];
                 tft_touch[xx] = constrain(tft_touch[xx], 0, disp_width - 1);
                 tft_touch[yy] = constrain(tft_touch[yy], 0, disp_height - 1);
-                // if (flip_the_screen) { 
-                //     tft_touch[xx] = disp_width - tft_touch[xx];
-                //     tft_touch[yy] = disp_height - tft_touch[yy];
-                // }
+                if (flip_the_screen) { 
+                    tft_touch[xx] = disp_width - tft_touch[xx];
+                    tft_touch[yy] = disp_height - tft_touch[yy];
+                }
                 if (!landed_coordinates_valid) {
                     landed[xx] = tft_touch[xx];
                     landed[yy] = tft_touch[yy];
@@ -127,7 +115,7 @@ class Touchscreen {
                 }
             }
             else landed_coordinates_valid = false;
-            // Serial.printf("n:%d rx:%d ry:%d tx:%d ty:%d\n", nowtouch, touch_read[0], touch_read[1], tft_touch[0], tft_touch[1]);
+            // Serial.printf("n:%d c:%d rx:%d ry:%d tx:%d ty:%d\n", nowtouch, captouch, touch_read[0], touch_read[1], tft_touch[0], tft_touch[1]);
         }
         _i2c->pass_i2c_baton();
         return nowtouch;

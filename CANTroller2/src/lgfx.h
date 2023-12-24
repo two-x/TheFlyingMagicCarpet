@@ -1,5 +1,5 @@
 #pragma once
-#define CAPTOUCH  // #undef CAPTOUCH
+// #define CAPTOUCH  // #undef CAPTOUCH  this is defined in platformio.ini file now
 #define LGFX_USE_V1
 #include <LovyanGFX.hpp>
 // Custom settings example for ESP32 LovyanGFX library
@@ -112,9 +112,9 @@ class LGFX : public lgfx::LGFX_Device {
                 cfg.pin_scl  = 9;          // SCL pin number
                 cfg.freq = 400000;         // Set I2C clock
             #else  // For touch SPI connection
-                cfg.offset_rotation = 1;       // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
+                cfg.offset_rotation = 2;       // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
                 cfg.bus_shared = true;    // Set true if using the same bus as the screen
-                cfg.spi_host = SPI3_HOST;  // VSPI_HOST (doesn't recognize?) Select the SPI to use (HSPI_HOST or VSPI_HOST)
+                cfg.spi_host = SPI2_HOST;  // VSPI_HOST (doesn't recognize?) Select the SPI to use (HSPI_HOST or VSPI_HOST)
                 cfg.freq = 1000000;        // Set SPI clock
                 cfg.pin_sclk = 12;         // SCLK pin number
                 cfg.pin_mosi = 11;         // MOSI pin number

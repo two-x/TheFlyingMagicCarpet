@@ -587,7 +587,7 @@ class Display {
     }
     void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
         if (!create) {
-            animations.redraw();
+            _tft.fillRect(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h, TFT_BLACK);
             return;
         }
         _tft.setTextDatum(textdatum_t::middle_center);

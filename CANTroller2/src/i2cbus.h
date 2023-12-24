@@ -38,7 +38,7 @@ class I2C {
     }
     void pass_i2c_baton() {
         // printf("p b:%d", i2cbaton);
-        if (i2cbaton == i2c_airvelo || i2cbaton == i2c_map) i2cbaton = i2c_touch; 
+        if (i2cbaton == i2c_airvelo || i2cbaton == i2c_map) i2cbaton = (captouch) ? i2c_touch : i2c_lightbox; 
         else if (i2cbaton == i2c_touch) i2cbaton = i2c_lightbox;
         else if (i2cbaton == i2c_lightbox) {
             i2cbaton = (lastsens == i2c_airvelo) ? i2c_map : i2c_airvelo;
