@@ -485,8 +485,11 @@ class AirVeloSensor : public I2CSensor {
     Timer airveloTimer;
     virtual float read_sensor() {
         if (_i2c->not_my_turn(i2c_airvelo)) return goodreading;
+        // Serial.printf("el:%ld\n", airveloTimer.elapsed());
+
         if (airveloTimer.expireset()) {
             goodreading = _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
+            Serial.printf("av:%f\n", goodreading);
             // this->_val_raw = this->human_val();  // (NATIVE_T)goodreading; // note, this returns a float from 0-33.55 for the FS3000-1015             
         }
         return goodreading;
@@ -507,6 +510,8 @@ class AirVeloSensor : public I2CSensor {
     }
 
     void setup() {
+        _m_factor = 1.0;
+        _b_offset = 0.0;
         printf("%s..", this->_long_name.c_str());
         I2CSensor::setup();
         printf(" %sdetected", _detected ? "" : "not ");
@@ -544,7 +549,7 @@ class MAPSensor : public I2CSensor {
     static constexpr float _initial_ema_alpha = 0.2;
     Timer map_read_timer;
     uint32_t map_read_timeout = 100000, map_retry_timeout = 10000;
-    float goodreading = -1;
+    float goodreading = NAN;
     SparkFun_MicroPressure _sensor;
     virtual float read_sensor() {
         if (_i2c->not_my_turn(i2c_map)) return goodreading;
@@ -556,7 +561,7 @@ class MAPSensor : public I2CSensor {
             }
             else map_read_timer.set(map_retry_timeout);
         }
-        // this->_val_raw = (NATIVE_T)good_reading;  // note, this returns a float from 0-33.55 for the FS3000-1015 
+        // this->_val_raw = (NATIVE_T)goodreading;  // note, this returns a float from 0-33.55 for the FS3000-1015 
         return goodreading;
     }
   public:
@@ -575,6 +580,8 @@ class MAPSensor : public I2CSensor {
     }
 
     void setup() {
+        _m_factor = 1.0;
+        _b_offset = 0.0;
         printf("%s..", this->_long_name.c_str());
         I2CSensor::setup();
         printf(" %sdetected", _detected ? "" : "not ");
