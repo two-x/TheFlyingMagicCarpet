@@ -489,7 +489,7 @@ class AirVeloSensor : public I2CSensor {
 
         if (airveloTimer.expireset()) {
             goodreading = _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
-            Serial.printf("av:%f\n", goodreading);
+            // Serial.printf("av:%f\n", goodreading);
             // this->_val_raw = this->human_val();  // (NATIVE_T)goodreading; // note, this returns a float from 0-33.55 for the FS3000-1015             
         }
         return goodreading;

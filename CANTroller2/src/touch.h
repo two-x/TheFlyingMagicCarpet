@@ -14,22 +14,12 @@
 #define disp_tuning_lines 11  // Lines of dynamic variables/values in dataset pages 
 class Touchscreen {
   private:
-    //  #ifdef CAPTOUCH
     LGFX* _tft;
     I2C* _i2c;
     static constexpr uint8_t captouch_i2c_addr = 0x38;
-    //  struct TS_Point {
-    //      uint16_t x;
-    //      uint16_t y;
-    //  } touchpoint;
-     // Adafruit_FT6206 _ts;
-    // #else
-    // XPT2046_Touchscreen _ts;  // 3.5in resistive touch panel on tft lcd
     // These values need to be calibrated to each individual display panel for best accuracy
     int32_t corners[2][2] = { { -25, -3549 }, { 185, 3839 } };  // [xx/yy][min/max]
     // Soren's breadboard "" { { 351, 3933 }, { 189, 3950 } };  // [xx/yy][min/max]
-    // TS_Point touchpoint;
-    // #endif
     bool touch_longpress_valid = true;
     bool landed_coordinates_valid = false;
     bool touch_now_touched = false;
@@ -57,12 +47,6 @@ class Touchscreen {
     int idelta = 0;
 
     Touchscreen() {}
-    // #ifdef CAPTOUCH
-    // Touchscreen(uint8_t csPin = 255, uint8_t irqPin = 255) {}
-    // #else
-    // Touchscreen(uint8_t csPin, uint8_t irqPin = 255) : _ts(csPin, irqPin) {}
-    // #endif
-
     void setup(LGFX* tft, I2C* i2c, int width, int height) {
         _tft = tft;
         _i2c = i2c;
@@ -70,25 +54,15 @@ class Touchscreen {
         disp_height = height;
         captouch = (_i2c->device_detected(captouch_i2c_addr));
         Serial.printf("Touchscreen.. %s panel\n", (captouch) ? "detected captouch" : "using resistive");
-        // #ifdef CAPTOUCH
-            // _ts.begin(SENSITIVITY, &Wire);
-            // _ts.setRotation(3);  // rotate -90 degrees to match IPS tft
-        // #else
-        //     _ts.begin();
-        //     _ts.setRotation(3);  // rotate 90 degrees to match tft
-        // #endif
     }
 
     bool touched() { return nowtouch; }
     int touch_x() { return tft_touch[xx]; }
     int touch_y() { return tft_touch[yy]; }
 
-    // TS_Point getPoint() { return touchpoint; }
     int16_t touch_pt(uint8_t axis) { return tft_touch[axis]; }
 
     int read_touch() {
-        // update touchpoint
-        // #ifdef CAPTOUCH
         if (captouch && _i2c->not_my_turn(i2c_touch)) return nowtouch;
         if (touchSenseTimer.expireset()) {
             uint8_t count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]));

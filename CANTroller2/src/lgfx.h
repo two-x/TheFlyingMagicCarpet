@@ -23,19 +23,13 @@ class LGFX : public lgfx::LGFX_Device {
     lgfx::Panel_ILI9341     _panel_instance;  // Prepare an instance that matches the type of panel you want to connect.
     lgfx::Bus_SPI           _bus_instance;    // SPI bus instance // Prepare an instance that matches the type of bus that connects the panel.
     // lgfx::Bus_I2C        _bus_instance;    // I2C bus instance
-    // lgfx::Bus_Parallel8  _bus_instance;    // 8-bit parallel bus instance
     // lgfx::Light_PWM     _light_instance;   // Prepare an instance if backlight control is possible. (Delete if unnecessary)
-    #ifdef CAPTOUCH  // Prepare an instance that matches the type of touch screen. (Delete if unnecessary)
-        lgfx::Touch_FT5x06   _touch_instance; // FT5206, FT5306, FT5406, FT6206, FT6236, FT6336, FT6436
-    #else
-        lgfx::Touch_XPT2046          _touch_instance;
-    #endif
+    lgfx::Touch_FT5x06     _cap_touch_instance; // FT5206, FT5306, FT5406, FT6206, FT6236, FT6336, FT6436
+    lgfx::Touch_XPT2046    _res_touch_instance;
   public:
-    // Create a constructor and configure various settings here.  If you change the class name, please specify the same name for the constructor.
-    LGFX(void) {
+    LGFX(void) {  // Create a constructor and configure various settings here.  If you change the class name, please specify the same name for the constructor.
         {  // Configure bus control settings.
             auto cfg = _bus_instance.config();    // Get the structure for bus settings.
-            // Configuring the SPI bus
             // cfg.spi_host = VSPI_HOST;  // Select the SPI to use ESP32-S2,C3 : SPI2_HOST or SPI3_HOST / ESP32 : VSPI_HOST or HSPI_HOST
             // With the ESP-IDF version upgrade, the description of VSPI_HOST and HSPI_HOST will be deprecated, so if an error occurs, please use SPI2_HOST and SPI3_HOST instead.
             cfg.spi_mode = 0;             // Set SPI communication mode (0 ~ 3)
@@ -75,13 +69,9 @@ class LGFX : public lgfx::LGFX_Device {
             cfg.dummy_read_pixel =     8;  // Number of dummy read bits before pixel readout
             cfg.dummy_read_bits  =     1;  // Number of bits for dummy read before reading data other than pixels
             cfg.readable         =  true;  // Set to true if data reading is possible            
-            #ifdef CAPTOUCH
-                cfg.invert       = true;  // Set to true if the brightness and darkness of the panel is reversed.
-            #else
-                cfg.invert       = false;  // Set to true if the brightness and darkness of the panel is reversed.
-            #endif
+            cfg.invert      = (captouch);  // Set to true if the brightness and darkness of the panel is reversed.
             cfg.dlen_16bit       = false;  // Set to true for panels that transmit data length in 16-bit units using 16-bit parallel or SPI.
-            cfg.bus_shared       = true;  // Set to true when sharing the bus with the SD card (control the bus using drawJpgFile, etc.)
+            cfg.bus_shared       =  true;  // Set to true when sharing the bus with the SD card (control the bus using drawJpgFile, etc.)
             // Please set the following only if the display is misaligned with a variable pixel number driver such as ST7735 or ILI9163.
             // cfg.memory_width  =   240;  // Maximum width supported by driver IC
             // cfg.memory_height =   320;  // Maximum height supported by driver IC
@@ -97,33 +87,42 @@ class LGFX : public lgfx::LGFX_Device {
         //     _panel_instance.setLight(&_light_instance);  // Set the backlight on the panel.
         // }
         {  // Configure touch screen control settings. (Delete if unnecessary)
-            auto cfg = _touch_instance.config();
+            auto cfg = _res_touch_instance.config();
             cfg.x_min      = 0;            // Minimum X value obtained from touch screen (raw value)
             cfg.x_max      = 239;          // Maximum X value obtained from touch screen (raw value)
             cfg.y_min      = 0;            // Minimum Y value obtained from touch screen (raw value)
             cfg.y_max      = 319;          // Maximum Y value obtained from touch screen (raw value)
             cfg.pin_int    = -1;           // INT pin number
-            #ifdef CAPTOUCH                // For touch I2C connection
-                cfg.offset_rotation = 2;       // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
-                cfg.bus_shared = false;    // Set true if using the same bus as the screen
-                cfg.i2c_port = 0;          // Select I2C to use (0 or 1)
-                cfg.i2c_addr = 0x38;       // I2C device address number
-                cfg.pin_sda  = 8;          // SDA pin number
-                cfg.pin_scl  = 9;          // SCL pin number
-                cfg.freq = 400000;         // Set I2C clock
-            #else  // For touch SPI connection
-                cfg.offset_rotation = 2;       // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
-                cfg.bus_shared = true;    // Set true if using the same bus as the screen
-                cfg.spi_host = SPI2_HOST;  // VSPI_HOST (doesn't recognize?) Select the SPI to use (HSPI_HOST or VSPI_HOST)
-                cfg.freq = 1000000;        // Set SPI clock
-                cfg.pin_sclk = 12;         // SCLK pin number
-                cfg.pin_mosi = 11;         // MOSI pin number
-                cfg.pin_miso = 13;         // MISO pin number
-                cfg.pin_cs   = 47;         //   CS pin number
-            #endif
-            _touch_instance.config(cfg);
-            _panel_instance.setTouch(&_touch_instance);  // Place the touch screen on the panel.
+            cfg.offset_rotation = 2;       // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
+            cfg.bus_shared = true;    // Set true if using the same bus as the screen
+            cfg.spi_host = SPI2_HOST;  // VSPI_HOST (doesn't recognize?) Select the SPI to use (HSPI_HOST or VSPI_HOST)
+            cfg.freq = 1000000;        // Set SPI clock
+            cfg.pin_sclk = 12;         // SCLK pin number
+            cfg.pin_mosi = 11;         // MOSI pin number
+            cfg.pin_miso = 13;         // MISO pin number
+            cfg.pin_cs   = 47;         //   CS pin number
+            _res_touch_instance.config(cfg);
         }
+        {  // Configure touch screen control settings. (Delete if unnecessary)
+            auto cfg = _cap_touch_instance.config();
+            cfg.x_min      = 0;            // Minimum X value obtained from touch screen (raw value)
+            cfg.x_max      = 239;          // Maximum X value obtained from touch screen (raw value)
+            cfg.y_min      = 0;            // Minimum Y value obtained from touch screen (raw value)
+            cfg.y_max      = 319;          // Maximum Y value obtained from touch screen (raw value)
+            cfg.pin_int    = -1;           // INT pin number
+            cfg.offset_rotation = 2;       // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
+            cfg.bus_shared = false;    // Set true if using the same bus as the screen
+            cfg.i2c_port = 0;          // Select I2C to use (0 or 1)
+            cfg.i2c_addr = 0x38;       // I2C device address number
+            cfg.pin_sda  = 8;          // SDA pin number
+            cfg.pin_scl  = 9;          // SCL pin number
+            cfg.freq = 400000;         // Set I2C clock
+            _cap_touch_instance.config(cfg);
+        }
+    }
+    void touch_init() {  // This must be run first thing after instantiation, but after we have detected captouch 
+        if (captouch) _panel_instance.setTouch(&_cap_touch_instance);  // Place the touch screen on the panel.
+        else _panel_instance.setTouch(&_res_touch_instance);  // Place the touch screen on the panel.
         setPanel(&_panel_instance);        // Set the panel to be used.
     }
 };

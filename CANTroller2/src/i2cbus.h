@@ -33,7 +33,7 @@ class I2C {
         printf(" ..done\n");
     }
     bool device_detected(uint8_t addr) {
-        for (int32_t i=0; i < _devicecount; i++) if (_addrs[i] == addr) return true;
+        for (int i=0; i < _devicecount; i++) if (_addrs[i] == addr) return true;
         return false;
     }
     void pass_i2c_baton() {

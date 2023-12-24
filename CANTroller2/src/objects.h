@@ -46,7 +46,6 @@ void initialize_pins() {
     if (!usb_jtag) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // assign stable defined behavior to currently unused pin
 }
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
-    printf("Setup begin\n");
     sim.set_can_sim(sens::joy, false);
     for (sens sen=sens::pressure; sen<=sens::mapsens; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, running_on_devboard);
     for (sens sen=sens::engtemp; sen<sens::basicsw; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, false);
