@@ -729,8 +729,8 @@ class Display {
                 draw_dynamic(9, brkpos.filt(), brkpos.op_min_in(), brkpos.op_max_in());
                 draw_dynamic(10, mulebatt.filt(), mulebatt.op_min_v(), mulebatt.op_max_v());
                 draw_dynamic(11, pot.val(), pot.min(), pot.max());
-                draw_dynamic(12, airvelo.filt(), airvelo.min_mph(), airvelo.max_mph());
-                draw_dynamic(13, mapsens.filt(), mapsens.min_psi(), mapsens.max_psi());
+                draw_dynamic(12, airvelo.human(), airvelo.min_mph(), airvelo.max_mph());
+                draw_dynamic(13, mapsens.human(), mapsens.min_psi(), mapsens.max_psi());
                 draw_dynamic(14, maf_gps, maf_min_gps, maf_max_gps);
                 for (int line=15; line<=17; line++) draw_eraseval(line);
                 draw_dynamic(18, gas.governor, 0.0, 100.0);

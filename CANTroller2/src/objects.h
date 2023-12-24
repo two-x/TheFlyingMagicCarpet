@@ -181,8 +181,8 @@ float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) 
     static float maf_map_last;
     static float maf_velo_last;
     float temp = _ambient;
-    float new_velo = airvelo.filt();
-    float new_map = mapsens.filt();
+    float new_velo = airvelo.human();
+    float new_map = mapsens.human();
     if (std::isnan(_ambient)) {
         if (new_velo == maf_velo_last && new_map == maf_map_last) return maf_gps;  // if no new sensor readings, don't recalculate the same value
         temp = tempsens.val(loc::AMBIENT);
