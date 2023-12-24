@@ -254,7 +254,7 @@ class Display {
     Touchscreen* touch;
     TunerPanel tuner;
     IdiotLights* idiots;
-    Timer dispRefreshTimer = Timer(100000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
+    Timer valuesRefreshTimer = Timer(200000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
     uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     bool _procrastinate = false, reset_finished = false, simulating_last;
     int disp_oldmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
@@ -715,7 +715,7 @@ class Display {
             simulating_last = sim.enabled();
             _procrastinate = true;
         }
-        if (dispRefreshTimer.expireset()) {
+        if (valuesRefreshTimer.expireset()) {
             float drange;
             draw_dynamic(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
             draw_dynamic(2, speedo.filt(), 0.0, speedo.redline_mph(), gas.cruisepid.target());

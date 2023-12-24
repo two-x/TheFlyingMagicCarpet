@@ -4,7 +4,6 @@
 // #ifdef CAPTOUCH
   //#include <Adafruit_FT6206.h>
 #define SENSITIVITY 40  // probably not needed for LGFX library
-#define SIMPLETOUCH
 // #else
 //   #include <XPT2046_Touchscreen.h>
 // #endif
@@ -43,7 +42,7 @@ class Touchscreen {
     Timer touchHoldTimer{550000};  // Hold this long to count as a long press
     Timer touchAccelTimer{850000};
     Timer touchDoublePressTimer{40000};  // Won't allow a new press within this long after an old press (prevent accidental double clicks)
-
+    Timer touchSenseTimer{15000};  // touch chip can't respond faster than some time period
     // debug printing
     bool touchPrintEnabled = true;
     unsigned long lastTouchPrintTime = 0;
@@ -91,67 +90,50 @@ class Touchscreen {
         // update touchpoint
         // #ifdef CAPTOUCH
         if (_i2c->not_my_turn(i2c_touch)) return nowtouch;
-        uint8_t count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]));
-        nowtouch = count;
-        if (nowtouch) {
-            if (captouch) {
-                tft_touch[xx] = disp_width - touch_read[yy];
-                tft_touch[yy] = disp_height - touch_read[xx];
+        if (touchSenseTimer.expireset()) {
+            uint8_t count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]));
+            nowtouch = count;
+            if (nowtouch) {
+                if (captouch) {
+                    tft_touch[xx] = touch_read[xx];  // disp_width - 1 - touch_read[xx];
+                    tft_touch[yy] = touch_read[yy];
+                }
+                else {
+                    tft_touch[xx] = touch_read[xx];  // disp_width - 1 - touch_read[xx];
+                    tft_touch[yy] = touch_read[yy];
+                }
+                // #else
+                // else {
+                //     nowtouch = _ts.touched();
+                //     touchpoint = _ts.getPoint();
+                //     tft_touch[xx] = map(touchpoint.x, corners[xx][tsmin], corners[xx][tsmax], 0, disp_width);  // translate resistance to pixels
+                //     tft_touch[yy] = map(touchpoint.y, corners[yy][tsmin], corners[yy][tsmax], 0, disp_height);  // translate resistance to pixels                    
+                // }
+                // #endif
+                // if (nowtouch) {
+                // if (tft_touch[xx] != tlast_x || tft_touch[yy] != tlast_y) printf("x:%d y:%d\n", tft_touch[xx], tft_touch[yy]);
+                // tlast_x = tft_touch[xx];
+                // tlast_y = tft_touch[yy];
+                tft_touch[xx] = constrain(tft_touch[xx], 0, disp_width - 1);
+                tft_touch[yy] = constrain(tft_touch[yy], 0, disp_height - 1);
+                // if (flip_the_screen) { 
+                //     tft_touch[xx] = disp_width - tft_touch[xx];
+                //     tft_touch[yy] = disp_height - tft_touch[yy];
+                // }
+                if (!landed_coordinates_valid) {
+                    landed[xx] = tft_touch[xx];
+                    landed[yy] = tft_touch[yy];
+                    landed_coordinates_valid = true;
+                }
             }
-            else {
-                tft_touch[xx] = disp_width;  // translate resistance to pixels
-                tft_touch[yy] = disp_height;  // translate resistance to pixels            
-            }
-            // #else
-            // else {
-            //     nowtouch = _ts.touched();
-            //     touchpoint = _ts.getPoint();
-            //     tft_touch[xx] = map(touchpoint.x, corners[xx][tsmin], corners[xx][tsmax], 0, disp_width);  // translate resistance to pixels
-            //     tft_touch[yy] = map(touchpoint.y, corners[yy][tsmin], corners[yy][tsmax], 0, disp_height);  // translate resistance to pixels                    
-            // }
-            // #endif
-            // if (nowtouch) {
-            // if (tft_touch[xx] != tlast_x || tft_touch[yy] != tlast_y) printf("x:%d y:%d\n", tft_touch[xx], tft_touch[yy]);
-            // tlast_x = tft_touch[xx];
-            // tlast_y = tft_touch[yy];
-            tft_touch[xx] = constrain(tft_touch[xx], 0, disp_width);
-            tft_touch[yy] = constrain(tft_touch[yy], 0, disp_height);
-            // if (flip_the_screen) { 
-            //     tft_touch[xx] = disp_width - tft_touch[xx];
-            //     tft_touch[yy] = disp_height - tft_touch[yy];
-            // }
-            if (!landed_coordinates_valid) {
-                landed[xx] = tft_touch[xx];
-                landed[yy] = tft_touch[yy];
-                landed_coordinates_valid = true;
-            }
+            else landed_coordinates_valid = false;
+            // Serial.printf("n:%d rx:%d ry:%d tx:%d ty:%d\n", nowtouch, touch_read[0], touch_read[1], tft_touch[0], tft_touch[1]);
         }
-        else landed_coordinates_valid = false;
         _i2c->pass_i2c_baton();
         return nowtouch;
     }
-    int read_touch_simple() {
-        // update touchpoint
-        // #ifdef CAPTOUCH
-        nowtouch = (bool)(_tft->getTouch(&(touch_read[xx]), &(touch_read[yy])));
-        if (nowtouch) {
-            if (captouch) {
-                tft_touch[xx] = disp_width - touch_read[yy];
-                tft_touch[yy] = disp_height - touch_read[xx];
-            }
-            else {
-                tft_touch[xx] = disp_width;  // translate resistance to pixels
-                tft_touch[yy] = disp_height;  // translate resistance to pixels            
-            }
-        }
-        return nowtouch;
-    }
     void update() {
-        #ifdef SIMPLETOUCH
-            read_touch_simple();
-        #else
-            read_touch();
-        #endif
+        read_touch();
         if (!nowtouch) {  // if not being touched
             idelta = 0;  // Stop changing the value
             if (touch_now_touched) touchDoublePressTimer.reset();  // Upon end of a touch, begin timer to reject any accidental double touches

@@ -62,9 +62,9 @@ void loop() {                 // code takes about 1 ms to loop on average
     tach.update();            // get pulse timing from hall effect tachometer on flywheel
     speedo.update();          // get pulse timing from hall effect speedometer on axle
     mulebatt.update();        // vehicle battery voltage
-    // airvelo.update();         // manifold air velocity sensor  // 20us + 900us every 4 loops
-    // mapsens.update();         // manifold air pressure sensor  // 70 us + 2ms every 9 loops
-    // maf_gps = massairflow();  // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
+    airvelo.update();         // manifold air velocity sensor  // 20us + 900us every 4 loops
+    mapsens.update();         // manifold air pressure sensor  // 70 us + 2ms every 9 loops
+    maf_gps = massairflow();  // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
     hotrc.update();           // ~100us for all hotrc functions
     hotrc_events(run.mode);   // turn hotrc button events into handler requests depending on the runmode
     if (sim.potmapping(sens::joy)) hotrc.set_pc(HORZ, FILT, pot.mapToRange(steer.pc_to_us(steer.pc[OPMIN]), steer.pc_to_us(steer.pc[OPMAX])));
@@ -77,6 +77,6 @@ void loop() {                 // code takes about 1 ms to loop on average
     diag.update();            // notice any screwy conditions or suspicious shenanigans - consistent 200us
     neo.update(colorcard[run.mode]);  // ~100us
     screen.update(run.mode);  // Display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
-    // lightbox.update(run.mode, speedo.human());  // communicate any relevant data to the lighting controller
+    lightbox.update(run.mode, speedo.human());  // communicate any relevant data to the lighting controller
     looptimer.update();       // looptimer.mark("F");
 }

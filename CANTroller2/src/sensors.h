@@ -443,10 +443,6 @@ class I2CSensor : public Sensor<float,float> {
 
     // implement in child classes using the appropriate i2c sensor
     virtual float read_sensor() = 0;
-
-    virtual void set_val_common() {
-        _i2c->pass_i2c_baton();
-    }
     virtual void set_val_from_pin() {
         this->set_native(read_sensor());
         calculate_ema();  // Sensor EMA filter
@@ -505,6 +501,10 @@ class AirVeloSensor : public I2CSensor {
     AirVeloSensor() = delete;
     String _long_name = "Air velocity sensor";
     String _short_name = "airvel";
+
+    virtual void set_val_common() {
+        if (_i2c->i2cbaton == i2c_airvelo) _i2c->pass_i2c_baton();
+    }
 
     void setup() {
         printf("%s..", this->_long_name.c_str());
@@ -569,6 +569,10 @@ class MAPSensor : public I2CSensor {
     MAPSensor() = delete;
     String _long_name = "Manifold Air Pressure sensor";
     String _short_name = "map";
+
+    virtual void set_val_common() {
+        if (_i2c->i2cbaton == i2c_map) _i2c->pass_i2c_baton();
+    }
 
     void setup() {
         printf("%s..", this->_long_name.c_str());

@@ -50,6 +50,9 @@ class Animation {
                 }
             }
         }
+        for (int i=0; i<=1; i++) sp[i].clear(TFT_BLACK);
+        // sp[0].pushImage() draw(corner[HORZ], corner[VERT]);
+        // lcd->display();
         lcd->endWrite();
         _width = framewidth << SHIFTSIZE;
         _height = frameheight << SHIFTSIZE;
@@ -154,8 +157,8 @@ class CollisionsSaver : public Animation {
             a->color = lgfx::color888(100 + (rand() % 155), 100 + (rand() % 155), 100 + (rand() % 155));
             a->x = 0;
             a->y = 0;
-            a->dx = (rand() & (3 << SHIFTSIZE)) + 1;
-            a->dy = (rand() & (3 << SHIFTSIZE)) + 1;
+            a->dx = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
+            a->dy = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
             a->r = (4 + (ball_count & 0x07)) << SHIFTSIZE;
             a->m = 4 + (ball_count & 0x07);
             #if defined(ESP32) || defined(CONFIG_IDF_TARGET_ESP32) || defined(ESP_PLATFORM)
@@ -341,7 +344,8 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
         // sp[now].drawWedgeLine(touchlast[HORZ], touchlast[VERT], tp[HORZ],
         // tp[VERT], 4, 4, pencolor, pencolor);  // savtouch_last_w, w, pencolor,
         // pencolor);
-        sp[now].drawLine(touchlast[HORZ], touchlast[VERT], tp[HORZ], tp[VERT], pencolor);  // savtouch_last_w, w, pencolor, pencolor);
+        for (int i=-7; i<=8; i++)
+            sp[now].drawLine(touchlast[HORZ]+i, touchlast[VERT]+i, tp[HORZ]+i, tp[VERT]+i, pencolor);  // savtouch_last_w, w, pencolor, pencolor);
         for (int axis = HORZ; axis <= VERT; axis++) touchlast[axis] = tp[axis];
     }
     virtual int update() override {
@@ -390,8 +394,8 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
                 for (int r = d; r >= (d - 4); r--) sp[now].drawCircle(point[HORZ], point[VERT], r, c[r % 2]);
             }
             else if (shape == Dots)
-                for (int star = 0; star < (shape * 5); star++)
-                    sp[now].fillCircle(random(sprwidth), random(sprheight), 2 + random(3), hsv_to_rgb<uint16_t>((spothue >> 1) * (1 + random(2)), 128 + (slowhue >> 1), 110 + random(146)));  // hue_to_rgb16(random(255)), TFT_BLACK);
+                for (int star = 0; star < 4; star++)
+                    sp[now].fillCircle(random(sprwidth), random(sprheight), 2 + random(2), hsv_to_rgb<uint16_t>((spothue >> 1) * (1 + random(2)), 128 + (slowhue >> 1), 110 + random(146)));  // hue_to_rgb16(random(255)), TFT_BLACK);
             else if (shape == Ascii)
                 for (int star = 0; star < (shape * 5); star++) {
                     sp[now].setTextColor(hsv_to_rgb<uint16_t>(plast[HORZ] + plast[VERT] + (spothue >> 2), 63 + (spothue >> 1), 200 + random(56)), TFT_BLACK);
@@ -465,7 +469,7 @@ class AnimationManager {
     CollisionsSaver cSaver;
     Animation* ptrsaver = &cSaver;
     Touchscreen* mytouch;
-    Timer saverRefreshTimer = Timer(45000);
+    Timer saverRefreshTimer = Timer(16666);
     Timer fps_timer;
     float fps = 0.0;
     int64_t fps_mark;
@@ -502,7 +506,9 @@ class AnimationManager {
         screensaver_last = screensaver;
         if (!screensaver) return NAN;
         if (_touch->touched()) ptrsaver->saver_touch(_touch->touch_pt(HORZ), _touch->touch_pt(VERT));
-        if (true) {  // saverRefreshTimer.expireset() || screensaver_max_refresh) {
+        // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
+        // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
+        if (saverRefreshTimer.expireset() || screensaver_max_refresh) {
             calc_fps();
             ptrsaver->setflip((nowsaver == Collisions));
             still_running = ptrsaver->update();

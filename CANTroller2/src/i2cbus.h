@@ -37,12 +37,19 @@ class I2C {
         return false;
     }
     void pass_i2c_baton() {
-        ++i2cbaton %= num_i2c_slaves;
-        if (i2cbaton == i2c_airvelo && lastsens == i2c_airvelo) i2cbaton = i2c_map;
-        if (i2cbaton == i2c_airvelo || i2cbaton == i2c_map) lastsens = i2cbaton;
+        // printf("p b:%d", i2cbaton);
+        if (i2cbaton == i2c_airvelo || i2cbaton == i2c_map) i2cbaton = i2c_touch; 
+        else if (i2cbaton == i2c_touch) i2cbaton = i2c_lightbox;
+        else if (i2cbaton == i2c_lightbox) {
+            i2cbaton = (lastsens == i2c_airvelo) ? i2c_map : i2c_airvelo;
+            lastsens = i2cbaton;
+        }
+        // printf(" -> b:%d\n", i2cbaton);
     }
     bool not_my_turn(int checkdev) {
-        return (use_i2c_baton && (checkdev != i2cbaton));
+        bool retval = (use_i2c_baton && (checkdev != i2cbaton));
+        // printf("b:%d c:%d nmt:%d\n", i2cbaton, checkdev, retval);
+        return retval;       
     }
 };
 
