@@ -1,12 +1,14 @@
 // Carpet CANTroller II  Source Code  - For ESP32-S3-DevKitC-1-N8
 #include "objects.h"
 #include "display.h"  // includes neopixel.h, touch.h
+#include "sdcard.h"
 #include "RunModeManager.h"
 static NeopixelStrip neo(neopixel_pin);
 static IdiotLights idiots;
 static Touchscreen touch;
 static Display screen(&neo, &touch, &idiots);
 static Tuner tuner(&neo, &touch);
+static SdCard sdcard(screen.get_tft());
 static RunModeManager run(&screen, &encoder);
 
 void setup() {
@@ -77,6 +79,7 @@ void loop() {                 // code takes about 1 ms to loop on average
     diag.update();            // notice any screwy conditions or suspicious shenanigans - consistent 200us
     neo.update(colorcard[run.mode]);  // ~100us
     screen.update(run.mode);  // Display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
+    sdcard.update();
     lightbox.update(run.mode, speedo.human());  // communicate any relevant data to the lighting controller
     looptimer.update();       // looptimer.mark("F");
 }
