@@ -21,10 +21,10 @@
 class LGFX : public lgfx::LGFX_Device {
     lgfx::Panel_ILI9341     _panel_instance;     // Prepare an instance that matches the type of panel you want to connect.
     lgfx::Bus_SPI           _bus_instance;       // SPI bus instance // Prepare an instance that matches the type of bus that connects the panel.
-    lgfx::Touch_FT5x06      _cap_touch_instance; // FT5206, FT5306, FT5406, FT6206, FT6236, FT6336, FT6436
-    lgfx::Touch_XPT2046     _res_touch_instance;
     // lgfx::Bus_I2C        _bus_instance;       // I2C bus instance
     // lgfx::Light_PWM      _light_instance;     // Prepare an instance if backlight control is possible. (Delete if unnecessary)
+    lgfx::Touch_FT5x06      _cap_touch_instance; // FT5206, FT5306, FT5406, FT6206, FT6236, FT6336, FT6436
+    lgfx::Touch_XPT2046     _res_touch_instance;
   public:
     LGFX(void) {  // Create a constructor and configure various settings here.  If you change the class name, please specify the same name for the constructor.
         {  // Configure bus control settings.
@@ -40,6 +40,13 @@ class LGFX : public lgfx::LGFX_Device {
             cfg.pin_mosi = 11;                 // Set SPI MOSI pin number
             cfg.pin_miso = 13;                 // Set SPI MISO pin number (-1 = disable)  // If you use the same SPI bus as the SD card, be sure to set MISO without omitting it.
             cfg.pin_dc   = 3;                  // Set SPI D/C pin number (-1 = disable)
+            // // I2C bus settings
+            // cfg.i2c_port    = 0;       // Select I2C port to use (0 or 1)
+            // cfg.freq_write  = 400000;  // Clock when transmitting
+            // cfg.freq_read   = 400000;  // Clock when receiving
+            // cfg.pin_sda     = 8;       // SDA pin number
+            // cfg.pin_scl     = 9;       // SCL pin number
+            // cfg.i2c_addr    = 0x38;    // I2C device address
             _bus_instance.config(cfg);         // Reflects the setting value on the bus.
             _panel_instance.setBus(&_bus_instance); // Place the bus on the panel.
         }

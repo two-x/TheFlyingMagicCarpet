@@ -8,9 +8,9 @@ class I2C {
     uint8_t _addrs[10];
     uint8_t _sda_pin, _scl_pin;
     Timer scanTimer;
-    int lastsens = (int)sens::mapsens;
+    int lastsens = i2c_map;
   public:
-    int i2cbaton = i2c_touch;             // A semaphore mechanism to prevent bus conflict on i2c bus
+    int i2cbaton = i2c_lightbox;             // A semaphore mechanism to prevent bus conflict on i2c bus
     I2C(uint8_t sda_pin_arg, uint8_t scl_pin_arg) : _sda_pin(sda_pin_arg), _scl_pin(scl_pin_arg) {}
     void setup() {
         printf("I2C bus"); delay(1);  // Attempt to force print to happen before init
