@@ -43,6 +43,7 @@ void setup() {
     sim_setup();              // simulator initialize devices and pot map
     if (display_enabled) screen.setup();
     if (display_enabled) touch.setup(screen.get_tft(), &i2c, disp_width_pix, disp_height_pix);
+    sdcard.setup();
     neo.setup();              // set up external neopixel strip for idiot lights visible in daylight from top of carpet
     idiots.setup(&neo);       // assign same idiot light variable associations and colors to neopixels as on screen  
     diag.setup();             // initialize diagnostic codes
@@ -79,7 +80,7 @@ void loop() {                 // code takes about 1 ms to loop on average
     diag.update();            // notice any screwy conditions or suspicious shenanigans - consistent 200us
     neo.update(colorcard[run.mode]);  // ~100us
     screen.update(run.mode);  // Display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
-    sdcard.update();
+    // sdcard.update();
     lightbox.update(run.mode, speedo.human());  // communicate any relevant data to the lighting controller
     looptimer.update();       // looptimer.mark("F");
 }

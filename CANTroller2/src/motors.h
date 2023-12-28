@@ -358,8 +358,8 @@ class BrakeMotor : public JagMotor {
     // float duty_pc = 25;
     int dominantpid = brake_default_pid, dominantpid_last = brake_default_pid;
     bool posn_pid_active = (dominantpid == POSNPID);
-    float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2, pid_targ_pc, pid_err_pc, pres_pid_pc;
-    float sens_ratio[NUM_BRAKEPIDS], sensnow[NUM_BRAKEPIDS], outnow[NUM_BRAKEPIDS];  // , senslast[NUM_BRAKEPIDS], d_ratio[NUM_BRAKEPIDS], 
+    float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2, pid_targ_pc, pid_err_pc;
+    float sens_ratio[NUM_BRAKEPIDS], sensnow[NUM_BRAKEPIDS], outnow[NUM_BRAKEPIDS], hybrid_ratio, hybrid_ratio_pc;  // , senslast[NUM_BRAKEPIDS], d_ratio[NUM_BRAKEPIDS], 
     void derive() { JagMotor::derive(); }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         printf("Brake motor..\n");
@@ -370,7 +370,7 @@ class BrakeMotor : public JagMotor {
         pres_last = pressure->human();
         posn_last = brkpos->human();
         activate_pid(brake_default_pid);
-        pres_pid_pc = 100.0 * (float)dominantpid;
+        calc_hybrid_ratio();
         derive();
         pids[PRESPID].init(pressure->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), initial_kp, initial_ki, initial_kd, QPID::pmod::onerr,
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
@@ -383,6 +383,11 @@ class BrakeMotor : public JagMotor {
         pids[POSNPID].set_target(brkpos->min_human() + (100.0 - pid_targ_pc) * (brkpos->max_human() - brkpos->min_human()) / 100.0);
     }
   private:
+    void calc_hybrid_ratio() {
+        // hybrid_ratio = (dominantpid == PRESPID) ? sens_ratio[PRESPID] : (1.0 - sens_ratio[POSNPID]);
+        hybrid_ratio = (sens_ratio[PRESPID] + 1.0 - sens_ratio[POSNPID]) / 2;
+        hybrid_ratio_pc = 100.0 * hybrid_ratio;        
+    }
     float pid_out() {  // feedback brake pid with position or pressure, whichever is changing more quickly
         float range;
         for (int p = POSNPID; p < NUM_BRAKEPIDS; p++) {
@@ -392,9 +397,12 @@ class BrakeMotor : public JagMotor {
             outnow[p] = pids[p].compute();
         }
         if (!brake_hybrid_pid) return outnow[dominantpid];
-        activate_pid((int)(sens_ratio[PRESPID] > 0.50 || sens_ratio[POSNPID] < 0.50));  // pressure pid (==1) is dominant if pressure >50% or position <50%
-        pres_pid_pc = 100.0 * sens_ratio[dominantpid];  // (dominantpid == PRESPID) ? sens_ratio[PRESPID] : sens_ratio[POSNPID];  // for displaying current ratio
-        return sens_ratio[dominantpid] * outnow[dominantpid] + (1.0 - sens_ratio[dominantpid]) * outnow[!dominantpid];
+        activate_pid((int)(sens_ratio[PRESPID] > sens_ratio[POSNPID]));  // pressure pid (==1) is dominant if pressure >50% or position <50%
+        // activate_pid((int)(sens_ratio[PRESPID] > 0.50 || sens_ratio[POSNPID] < 0.50));  // pressure pid (==1) is dominant if pressure >50% or position <50%
+        // pres_pid_pc = 100.0 * sens_ratio[dominantpid];  // (dominantpid == PRESPID) ? sens_ratio[PRESPID] : sens_ratio[POSNPID];  // for displaying current ratio
+        // return sens_ratio[dominantpid] * outnow[dominantpid] + (1.0 - sens_ratio[dominantpid]) * outnow[!dominantpid];
+        calc_hybrid_ratio();
+        return hybrid_ratio * outnow[PRESPID] + (1.0 - hybrid_ratio) * outnow[POSNPID];
     }
     void fault_filter() {
         // 1. Detect  brake chain is not connected (evidenced by change in brake position without expected pressure changes)

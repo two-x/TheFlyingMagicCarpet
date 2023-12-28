@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <FS.h>
 #include <LittleFS.h>
+#include <FFat.h>
 #include <WiFi.h>  // "Wifi.h"
 #include <ESPAsyncWebServer.h>  // To run wifi in Soft Access Point (SAP) mode (standalone w/o router)
 #include <ESPmDNS.h>
@@ -68,6 +69,9 @@ class FileSystem {
     FileSystem() {}
     void setup() {
         printf("Littlefs mount %s", LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED) ? "point " : "failed ");
+        
+        // esp_vfs_fat_sdmmc_mount("/", );  // esp_vfs_fat_sdmmc_mount(const char *base_path, const sdmmc_host_t *host_config, const void *slot_config, const esp_vfs_fat_mount_config_t *mount_config, sdmmc_card_t **out_card)
+
         listDir(LittleFS, "/", 3);
     }
     void listDir(fs::FS &fs, const char * dirname, uint8_t levels) {

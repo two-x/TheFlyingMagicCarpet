@@ -793,7 +793,7 @@ class Display {
                 draw_dynamic(12, brake.pid_dom->iterm(), -drange, drange);
                 draw_dynamic(13, brake.pid_dom->dterm(), -drange, drange);
                 draw_dynamic(14, brkpos.filt(), brkpos.op_min_in(), brkpos.op_max_in(), brake.pids[POSNPID].target());
-                draw_dynamic(15, brake.pres_pid_pc, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
+                draw_dynamic(15, brake.hybrid_ratio_pc, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
                 draw_eraseval(16);
                 draw_dynamic(17, brake.pid_dom->kp(), 0.0, 8.0);
                 draw_dynamic(18, brake.pid_dom->ki(), 0.0, 8.0);
