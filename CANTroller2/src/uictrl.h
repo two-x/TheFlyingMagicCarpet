@@ -62,7 +62,7 @@ class Encoder {
         bool _suppress_click = false;  // Flag to prevent a short click on switch release after successful long press
         Timer _spinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
         //  ---- tunable ----
-        Timer _longPressTimer = Timer(350000);  // Used to time long button presses
+        Timer _longPressTimer = Timer(375000);  // Used to time long button presses
 
         void IRAM_ATTR _a_isr() {
             if (_bounce_danger != Encoder::ENC_A) {

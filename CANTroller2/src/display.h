@@ -4,13 +4,6 @@
 #include "touch.h"
 #include "images.h"
 #include "animations.h"
-// LCD supports 18-bit color, but GFX library uses 16-bit color, organized (MSB) 5b-red, 6b-green, 5b-blue (LSB)
-// Since the RGB don't line up with the nibble boundaries, it's tricky to quantify a color, here are some colors:
-// Relevant links for UI development:
-// free images: http://iconarchive.com/  // 1. resize to pixels needed, jpg w/ black backgd  2. convert to rgb565 color 
-// image to rgb565 color converter: https://www.youtube.com/redirect?event=video_description&redir_token=QUFFLUhqbkYtMGJvMS1VVWV0ZUpIb1Y4U2U2QzRLM3BKZ3xBQ3Jtc0tudG5MS1hVdmlLajdrNHFMWWtWUkFGTFNadUhaWkVob2ExNV8ya29kLXFmcDh1SEVINDFEeWtSX3A0SW40UlNTcy1CYVlSTTV5cXJKM25VcGxoWjdxSk9kZVFadURVWHhJcU9hMVRUWENyVGVjRkw4aw&q=http%3A%2F%2Fwww.rinkydinkelectronics.com%2Ft_imageconverter565.php&v=U4jOFLFNZBI
-// rgb565 color picker site: http://www.barth-dev.de/online/rgb565  // named colors: https://wiki.tcl-lang.org/page/Colors+with+Names
-// Font1 character map (use right side):  https://learn.adafruit.com/assets/103682
 #define BLK  0x0000  // greyscale: full black (RGB elements off)
 #define HGRY 0x2104  // greyscale: hella dark grey
 #define DGRY 0x39c7  // greyscale: very dark grey
@@ -223,7 +216,7 @@ static constexpr uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where un
     { 0x02, 0x45, 0x25, 0x12, 0x08, 0x24, 0x52, 0x51, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // % - just because the font one is feeble
     { 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // capital omega - for ohms
     { 0x08, 0x1c, 0x2a, 0x08, 0x00, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x41, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x3e, },  // googly eyes, are as goofy as they are stupid
-    { 0x3d, 0x00, 0x3c, 0x04, 0x38, 0x00, 0x7f, 0x00, 0x7c, 0x24, 0x18, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x3d, },  // inches or psi
+    { 0x3d, 0x00, 0x3e, 0x02, 0x3c, 0x00, 0x7f, 0x00, 0x7e, 0x22, 0x1c, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x3d, },  // inches or psi "in|psi"
 };  // These bitmaps are in the same format as the idiot light bitmaps, described below
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
 static constexpr int simgriddir[4][3] = {
@@ -254,7 +247,7 @@ class Display {
     Touchscreen* touch;
     TunerPanel tuner;
     IdiotLights* idiots;
-    Timer valuesRefreshTimer = Timer(200000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
+    Timer valuesRefreshTimer = Timer(160000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
     uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     bool _procrastinate = false, reset_finished = false, simulating_last;
     int disp_oldmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
@@ -770,7 +763,7 @@ class Display {
                 draw_dynamic(16, gas.deg[OPMIN], gas.deg[ABSMAX], gas.deg[ABSMAX]);
                 draw_dynamic(17, gas.deg[OPMAX], gas.deg[ABSMAX], gas.deg[ABSMAX]);
                 draw_dynamic(18, brake.us[STOP], brake.us[ABSMIN], brake.us[ABSMAX]);
-                draw_dynamic(19, brake.duty_pc, 0.0, 100.0);
+                draw_dynamic(19, brake.duty_fwd_pc, 0.0, 100.0);
             }
             else if (datapage == PG_IDLE) {
                 draw_asciiname(9, idlestatecard[gas.idlectrl.targetstate]);
@@ -880,10 +873,7 @@ class Tuner {
     Touchscreen* touch;
     Timer tuningCtrlTimer = Timer(25000000);  // This times out edit mode after a a long period of inactivity
   public:
-    Tuner(NeopixelStrip* _neo, Touchscreen* _touch) {
-        neo = _neo;
-        touch = _touch;
-    }
+    Tuner(NeopixelStrip* _neo, Touchscreen* _touch) : neo(_neo), touch(_touch) {}
     int32_t idelta = 0, idelta_encoder = 0;
     void update(int rmode) {
         process_inputs();
@@ -949,7 +939,7 @@ class Tuner {
                 if (sel_val == 7) { adj_val(&(gas.si[OPMIN]), fdelta, gas.si[PARKED] + 1, gas.si[OPMAX] - 1); gas.derive(); }
                 else if (sel_val == 8) { adj_val(&(gas.si[OPMAX]), fdelta, gas.si[OPMIN] + 1, 180.0); gas.derive(); }
                 else if (sel_val == 9) { adj_val(&(brake.us[STOP]), fdelta, brake.us[OPMIN] + 1, brake.us[OPMAX] - 1); brake.derive(); }
-                else if (sel_val == 10) { adj_val(&(brake.duty_pc), fdelta, 0.0, 100.0); brake.derive(); }
+                else if (sel_val == 10) { adj_val(&(brake.duty_fwd_pc), fdelta, 0.0, 100.0); brake.derive(); }
             }
             else if (datapage == PG_IDLE) {
                 if (sel_val == 4) gas.idlectrl.add_idlehigh(fdelta);
@@ -1004,7 +994,7 @@ class Tuner {
         }
     }
 };
-// The following project draws a nice looking gauge cluster, very apropos to our needs and code is given.
+// The following project draws a nice looking gauge cluster, very apropos to our needs and the code is given.
 // See this video: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
 // Rinkydink home page: http://www.rinkydinkelectronics.com
 // moving transparent arrow sprite over background: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects

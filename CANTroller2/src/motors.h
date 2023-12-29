@@ -207,7 +207,8 @@ class JagMotor : public ServoMotor {
     Timer volt_check_timer = Timer(3500000);
   public:
     using ServoMotor::ServoMotor;
-    float duty_pc = 100;  // default. subclasses override as necessary
+    float duty_fwd_pc = 100;  // default. subclasses override as necessary
+    float duty_rev_pc = 100;  // default. subclasses override as necessary
     float pc[NUM_MOTORVALS] = { NAN, 0, NAN, NAN, NAN, -100, 100 };  // percent values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX]  values range from -100% to 100% are all derived or auto-assigned
     float si[NUM_MOTORVALS] = { NAN, 0, NAN, NAN, NAN, NAN, NAN };  // standard si-unit values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX]
     float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 670, 2330 };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX]
@@ -216,8 +217,8 @@ class JagMotor : public ServoMotor {
     void derive() {  // calc pc and voltage op limits from volt and us abs limits 
         si[ABSMAX] = running_on_devboard ? car_batt_fake_v : mulebatt->v();
         si[ABSMIN] = -(si[ABSMAX]);
-        pc[OPMIN] = pc[ABSMIN] * duty_pc / 100.0;
-        pc[OPMAX] = pc[ABSMAX] * duty_pc / 100.0;
+        pc[OPMIN] = pc[ABSMIN] * duty_rev_pc / 100.0;
+        pc[OPMAX] = pc[ABSMAX] * duty_fwd_pc / 100.0;
         si[OPMIN] = map(pc[OPMIN], pc[STOP], pc[ABSMIN], si[STOP], si[ABSMIN]);
         si[OPMAX] = map(pc[OPMAX], pc[STOP], pc[ABSMAX], si[STOP], si[ABSMAX]);
     }
@@ -331,6 +332,7 @@ class BrakeMotor : public JagMotor {
   private:
     BrakePositionSensor* brkpos;
     PressureSensor* pressure;
+    float brakemotor_max_duty_pc = 40.0;  // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
     float initial_kp = 0.142;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float initial_ki = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float initial_kd = 0.000;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
@@ -360,18 +362,18 @@ class BrakeMotor : public JagMotor {
     bool posn_pid_active = (dominantpid == POSNPID);
     float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2, pid_targ_pc, pid_err_pc, pid_final_out;
     float sens_ratio[NUM_BRAKEPIDS], sensnow[NUM_BRAKEPIDS], outnow[NUM_BRAKEPIDS];  // , senslast[NUM_BRAKEPIDS], d_ratio[NUM_BRAKEPIDS], 
-    float hybrid_sens_ratio, hybrid_sens_ratio_pc, hybrid_out_ratio, hybrid_out_ratio_pc;
+    float hybrid_sens_ratio, hybrid_sens_ratio_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0;
     void derive() { JagMotor::derive(); }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         printf("Brake motor..\n");
         JagMotor::setup(_hotrc, _speedo, _batt);
         pressure = _pressure;  // press_pin = _press_pin;  // sensed[PRESPID] = _pressure;
         brkpos = _brkpos;  // posn_pin = _posn_pin;  // sensed[POSNPID] = _brkpos;
-        duty_pc = 40.0;
+        duty_fwd_pc = brakemotor_max_duty_pc;  
         pres_last = pressure->human();
         posn_last = brkpos->human();
         activate_pid(brake_default_pid);
-        calc_hybrid_ratio();
+        if (brake_hybrid_pid) calc_hybrid_ratio();
         derive();
         pids[PRESPID].init(pressure->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), initial_kp, initial_ki, initial_kd, QPID::pmod::onerr,
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
@@ -404,7 +406,7 @@ class BrakeMotor : public JagMotor {
     }
     float pid_out() {  // feedback brake pid with position or pressure, whichever is changing more quickly
         float range;
-        for (int p = POSNPID; p < NUM_BRAKEPIDS; p++) {
+        for (int p = POSNPID; p <= PRESPID; p++) {
             range = (p == PRESPID) ? (pressure->max_human() - pressure->min_human()) : (brkpos->max_human() - brkpos->min_human());
             sensnow[p] = (p == PRESPID) ? pressure->human() : brkpos->human();  // latest sensed value
             sens_ratio[p] = (sensnow[p] - ((p == PRESPID) ? pressure->min_human() : brkpos->min_human())) / range;  // calculate ratio of output to range
@@ -415,7 +417,7 @@ class BrakeMotor : public JagMotor {
             activate_pid((int)(sens_ratio[PRESPID] > sens_ratio[POSNPID]));  // pressure pid == 1
 
             pid_final_out = hybrid_out_ratio * outnow[PRESPID] + (1.0 - hybrid_out_ratio) * outnow[POSNPID];  // combine pid outputs weighted by the multiplier
-            for (int p = POSNPID; p < NUM_BRAKEPIDS; p++) pids[p].set_output(pid_final_out);  // Feed the final value back into the pids
+            for (int p = POSNPID; p <= PRESPID; p++) pids[p].set_output(pid_final_out);  // Feed the final value back into the pids
         }
         else pid_final_out = outnow[dominantpid];
         return pid_final_out;
