@@ -87,7 +87,7 @@ class Encoder {
     public:
         enum sw_presses : int { NONE, SHORT, LONG };
         bool sw = false;  // Remember whether switch is being pressed
-        bool enc_a;
+        bool enc_a = 1;  // if initializing to 0 sets us up right after a reboot with a bit of a hair trigger which turns left at the slightest touch
         bool enc_b;
         Encoder(uint8_t a, uint8_t b, uint8_t sw) : _a_pin(a), _b_pin(b), _sw_pin(sw) {}
         Encoder() = delete; // must be instantiated with pins

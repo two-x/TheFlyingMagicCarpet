@@ -353,11 +353,12 @@ class BrakeMotor : public JagMotor {
     QPID* pid_dom = &(pids[PRESPID]);  // AnalogSensor sensed[NUM_BRAKEPIDS];
     Timer stopcar_timer = Timer(stopcar_timeout);
     Timer interval_timer = Timer(interval_timeout);
+    float brake_pid_transition_threshold = 0.25;  // tunable. How near the ends of brake action will the motor control begin to transition from one sensor pid to the other. 0.1 = 10% from the end 
     bool autostopping = false, reverse = false, openloop = false;
     // float duty_pc = 25;
     int dominantpid = brake_default_pid, dominantpid_last = brake_default_pid;
     bool posn_pid_active = (dominantpid == POSNPID);
-    float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2, pid_targ_pc, pid_err_pc;
+    float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2, pid_targ_pc, pid_err_pc, pid_final_out;
     float sens_ratio[NUM_BRAKEPIDS], sensnow[NUM_BRAKEPIDS], outnow[NUM_BRAKEPIDS];  // , senslast[NUM_BRAKEPIDS], d_ratio[NUM_BRAKEPIDS], 
     float hybrid_sens_ratio, hybrid_sens_ratio_pc, hybrid_out_ratio, hybrid_out_ratio_pc;
     void derive() { JagMotor::derive(); }
@@ -384,23 +385,19 @@ class BrakeMotor : public JagMotor {
     }
   private:
     // Which PID is dominant is determined by which has the greatest "sens_ratio" = sensor reading as a proportion of the sensor range.
-    // PID outputs are weighted based on where in the pedal press we are. Near the bottom is almost 100% pressure control, and near the top is nearly 100% position control.
-    // This is nonlinear, in fact, we use this function for pressure influence: press_out_ratio = 0.5 * sin(2 * pi * (press_sens_ratio - 0.5)) + 0.5 . This gives a smooth but steep transition in the middle.
-    // The full pedal range is split into 3 zones: 1. mostly-released, 2. in the middle, and 3. mostly-pressed.
-    // When pressure is > 3/4 range (pedal mostly down), we're in zone 3, else if posn is > 3/4 range (pedal extended) we're zone 1, otherwise zone 2.
-    // In zones 1 and 3, the dominant sensor reading determines zone math, and in zone 2 the two are averaged to determine it.
+    // PID outputs are weighted based on where in the pedal press we are. Near the bottom is pressure control, and near the top is position control.
     void calc_hybrid_ratio() {
-        if (sens_ratio[PRESPID] > 0.75) {
-            hybrid_sens_ratio = sens_ratio[PRESPID];
-            hybrid_out_ratio = 1.0;
+        if (sens_ratio[PRESPID] > 1.0 - brake_pid_transition_threshold) {  // if in the highest pressure quadrant of pedal travel/brake action
+            hybrid_sens_ratio = sens_ratio[PRESPID];  // rely only on pressure sensor
+            hybrid_out_ratio = 1.0;  // use only pressure pid output to motor
         }
-        else if (sens_ratio[POSNPID] > 0.75) {
-            hybrid_sens_ratio = 1.0 - sens_ratio[POSNPID];
-            hybrid_out_ratio = 0.0;
+        else if (sens_ratio[POSNPID] > 1.0 - brake_pid_transition_threshold) {  // if in the highest position (lowest pressure) quadrant
+            hybrid_sens_ratio = 1.0 - sens_ratio[POSNPID];  // rely only on position sensor
+            hybrid_out_ratio = 0.0;  // use no pressure pid (only position pid) output to motor
         }
-        else {
-            hybrid_sens_ratio = (sens_ratio[PRESPID] + 1.0 - sens_ratio[POSNPID]) / 2;
-            hybrid_out_ratio = 0.5 * sin(2 * M_PI * (hybrid_sens_ratio - 0.5)) + 0.5;  // for a steep nonlinear, but yet smooth transition
+        else {  // if somewhere in the middle half of pedal/brake action
+            hybrid_sens_ratio = (sens_ratio[PRESPID] + 1.0 - sens_ratio[POSNPID]) / 2;  // for sens ratio average pressure with inverse of position ratios
+            hybrid_out_ratio = 0.5 * sin(2 * M_PI * (hybrid_sens_ratio - 0.5)) + 0.5;  // calculate multiplier value to ensure smooth control transition between sensors, with a steep crossover
         }
         hybrid_sens_ratio_pc = 100.0 * hybrid_sens_ratio;  // for display
         hybrid_out_ratio_pc = 100.0 * hybrid_out_ratio;  // for display
@@ -409,14 +406,19 @@ class BrakeMotor : public JagMotor {
         float range;
         for (int p = POSNPID; p < NUM_BRAKEPIDS; p++) {
             range = (p == PRESPID) ? (pressure->max_human() - pressure->min_human()) : (brkpos->max_human() - brkpos->min_human());
-            sensnow[p] = (p == PRESPID) ? pressure->human() : brkpos->human();
-            sens_ratio[p] = (sensnow[p] - ((p == PRESPID) ? pressure->min_human() : brkpos->min_human())) / range;
-            outnow[p] = pids[p].compute();
+            sensnow[p] = (p == PRESPID) ? pressure->human() : brkpos->human();  // latest sensed value
+            sens_ratio[p] = (sensnow[p] - ((p == PRESPID) ? pressure->min_human() : brkpos->min_human())) / range;  // calculate ratio of output to range
+            outnow[p] = pids[p].compute();  // get each pid calculated output
         }
-        if (!brake_hybrid_pid) return outnow[dominantpid];
-        calc_hybrid_ratio();
-        activate_pid((int)(sens_ratio[PRESPID] > sens_ratio[POSNPID]));  // pressure pid == 1
-        return hybrid_out_ratio * outnow[PRESPID] + (1.0 - hybrid_out_ratio) * outnow[POSNPID];
+        if (brake_hybrid_pid) {
+            calc_hybrid_ratio();  // calculate pressure vs. position multiplier based on the sensed values
+            activate_pid((int)(sens_ratio[PRESPID] > sens_ratio[POSNPID]));  // pressure pid == 1
+
+            pid_final_out = hybrid_out_ratio * outnow[PRESPID] + (1.0 - hybrid_out_ratio) * outnow[POSNPID];  // combine pid outputs weighted by the multiplier
+            for (int p = POSNPID; p < NUM_BRAKEPIDS; p++) pids[p].set_output(pid_final_out);  // Feed the final value back into the pids
+        }
+        else pid_final_out = outnow[dominantpid];
+        return pid_final_out;
     }
     void fault_filter() {
         // 1. Detect  brake chain is not connected (evidenced by change in brake position without expected pressure changes)
