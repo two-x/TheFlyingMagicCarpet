@@ -72,7 +72,7 @@ class IdiotLight {  // defunct: currently not using individual instances for eac
 class IdiotLights {
   public:
     static constexpr int row_count = 11;
-    static constexpr int row_height = 10;
+    static constexpr int row_height = 11;
     static constexpr int iconcount = 20;  // number of boolean values included on the screen panel (not the neopixels) 
     bool* vals[iconcount] = {
         &(diag.err_sens_alarm[LOST]), &(diag.err_sens_alarm[RANGE]), &(diag.temp_err[ENGINE]), &(diag.temp_err[WHEEL]), &panicstop, 
@@ -264,7 +264,7 @@ class Display {
         return &_tft;
     }
     void setup() {
-        printf("Display..\n");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
+        Serial.printf("Display..");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
         _tft.touch_init();
         _tft.begin();
         // _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
@@ -288,6 +288,7 @@ class Display {
         draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
         all_dirty();
         animations.setup();
+        Serial.printf(" initialized\n");
     }
     void all_dirty() {
         disp_idiots_dirty = true;
@@ -636,12 +637,12 @@ class Display {
             draw_reticle(disp_width_pix-touch_reticle_offset, disp_height_pix-touch_reticle_offset);
         }
     }
-    void draw_idiotbitmap(int32_t i, int32_t x, int32_t y) {
+    void draw_idiotbitmap(int i, int32_t x, int32_t y) {
         uint16_t bg = idiots->val(i) ? idiots->color[i] : BLK;
         uint16_t color = idiots->val(i) ? BLK : darken_color(idiots->color[i]);
         _tft.drawRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, bg);
-        for (int32_t xo = 0; xo < (2 * disp_font_width - 1); xo++)
-            for (int32_t yo = 0; yo < disp_font_height - 1; yo++)
+        for (int xo = 0; xo < (2 * disp_font_width - 1); xo++)
+            for (int yo = 0; yo < disp_font_height - 1; yo++)
                 _tft.drawPixel(x + xo + 1, y + yo + 1, ((idiots->icon[i][xo] >> yo) & 1) ? color : bg);
     }
     void draw_idiotlight(int32_t i, int32_t x, int32_t y) {
@@ -655,7 +656,7 @@ class Display {
         idiots->last[i] = idiots->val(i);
     }
     void draw_idiotlights(int32_t x, int32_t y, bool force = false) {
-        for (int32_t i=0; i < idiots->iconcount; i++)
+        for (int i=0; i < idiots->iconcount; i++)
             if (force || (idiots->val(i) ^ idiots->last[i]))
                 draw_idiotlight(i, x + (2 * disp_font_width + 2) * (i % idiots->row_count), y + idiots->row_height * (int32_t)(i / idiots->row_count));
     }
@@ -664,7 +665,7 @@ class Display {
         else draw_dynamic(draw_index, tempsens.val(location), temp_lims_f[tempsens.errclass(location)][DISP_MIN], temp_lims_f[tempsens.errclass(location)][DISP_MAX]);
     }
     void update_idiots(bool force = false) {
-        for (int32_t i = 0; i < idiots->iconcount; i++) {
+        for (int i = 0; i < idiots->iconcount; i++) {
             if (i <= neo->neopixelsAvailable())
                 if (idiots->val(i) != idiots->last[i]) neo->setBoolState(i, idiots->val(i));
             if (i == LOST || i == RANGE) {
@@ -873,7 +874,11 @@ class Tuner {
     Touchscreen* touch;
     Timer tuningCtrlTimer = Timer(25000000);  // This times out edit mode after a a long period of inactivity
   public:
-    Tuner(NeopixelStrip* _neo, Touchscreen* _touch) : neo(_neo), touch(_touch) {}
+    // Tuner(NeopixelStrip* _neo, Touchscreen* _touch) : neo(_neo), touch(_touch) {}
+    Tuner(NeopixelStrip* _neo, Touchscreen* _touch) {
+        neo = _neo;
+        touch = _touch;
+    }
     int32_t idelta = 0, idelta_encoder = 0;
     void update(int rmode) {
         process_inputs();

@@ -43,7 +43,7 @@ void setup() {
     sim_setup();              // simulator initialize devices and pot map
     if (display_enabled) screen.setup();
     if (display_enabled) touch.setup(screen.get_tft(), &i2c, disp_width_pix, disp_height_pix);
-    sdcard.setup();
+    // sdcard.setup();
     neo.setup();              // set up external neopixel strip for idiot lights visible in daylight from top of carpet
     idiots.setup(&neo);       // assign same idiot light variable associations and colors to neopixels as on screen  
     diag.setup();             // initialize diagnostic codes

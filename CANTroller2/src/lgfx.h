@@ -36,10 +36,10 @@ class LGFX : public lgfx::LGFX_Device {
             cfg.spi_3wire  = true;             // Set true if receiving is done using the MOSI pin.
             cfg.use_lock   = true;             // Set true to use transaction locking
             cfg.dma_channel = SPI_DMA_CH_AUTO; // Set the DMA channel (0=No DMA / 1=1ch / 2=ch / SPI_DMA_CH_AUTO=automatic setting)  // Due to the ESP-IDF version upgrade, SPI_DMA_CH_AUTO is recommended for the DMA channel. 1ch or 2ch is not recommended.
-            cfg.pin_sclk = 12;                 // SPI SPI SCLK pin number
-            cfg.pin_mosi = 11;                 // Set SPI MOSI pin number
-            cfg.pin_miso = 13;                 // Set SPI MISO pin number (-1 = disable)  // If you use the same SPI bus as the SD card, be sure to set MISO without omitting it.
-            cfg.pin_dc   = 3;                  // Set SPI D/C pin number (-1 = disable)
+            cfg.pin_sclk = spi_sclk_pin;        // SCLK pin number
+            cfg.pin_mosi = spi_mosi_pin;        // MOSI pin number
+            cfg.pin_miso = spi_miso_pin;        // MISO pin number
+            cfg.pin_dc   = tft_dc_pin;                  // Set SPI D/C pin number (-1 = disable)
             // // I2C bus settings
             // cfg.i2c_port    = 0;       // Select I2C port to use (0 or 1)
             // cfg.freq_write  = 400000;  // Clock when transmitting
@@ -52,8 +52,9 @@ class LGFX : public lgfx::LGFX_Device {
         }
         {  // Configure display panel control settings.
             auto cfg = _panel_instance.config();    // Gets the structure for display panel settings.
-            cfg.pin_cs           =    10;  // CS pin number   (-1 = disable)
-            cfg.pin_rst          =    -1;  // RST pin number  (-1 = disable)
+            cfg.pin_cs   = tft_cs_pin;        //   CS pin number
+            // cfg.pin_cs           =    10;  // CS pin number   (-1 = disable)
+            cfg.pin_rst      = tft_rst_pin;  // RST pin number  (-1 = disable)
             cfg.pin_busy         =    -1;  // BUSY pin number (-1 = disable)
             cfg.panel_width      =   240;  // Actual displayable width, default = 240
             cfg.panel_height     =   320;  // Actual display height, default = 320
@@ -78,15 +79,19 @@ class LGFX : public lgfx::LGFX_Device {
             cfg.x_max      = 239;     // Maximum X value obtained from touch screen (raw value)
             cfg.y_min      = 0;       // Minimum Y value obtained from touch screen (raw value)
             cfg.y_max      = 319;     // Maximum Y value obtained from touch screen (raw value)
-            cfg.pin_int    = -1;      // INT pin number
+            cfg.pin_int  = touch_irq_pin;      // INT pin number
             cfg.offset_rotation = 2;  // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
             cfg.bus_shared = true;    // Set true if using the same bus as the screen
             cfg.spi_host = SPI2_HOST; // VSPI_HOST (doesn't recognize?) Select the SPI to use (HSPI_HOST or VSPI_HOST)
             cfg.freq = 1000000;       // Set SPI clock
-            cfg.pin_sclk = 12;        // SCLK pin number
-            cfg.pin_mosi = 11;        // MOSI pin number
-            cfg.pin_miso = 13;        // MISO pin number
-            cfg.pin_cs   = 47;        //   CS pin number
+            cfg.pin_sclk = spi_sclk_pin;        // SCLK pin number
+            cfg.pin_mosi = spi_mosi_pin;        // MOSI pin number
+            cfg.pin_miso = spi_miso_pin;        // MISO pin number
+            cfg.pin_cs   = touch_cs_pin;        //   CS pin number
+            // cfg.pin_sclk = 12;        // SCLK pin number
+            // cfg.pin_mosi = 11;        // MOSI pin number
+            // cfg.pin_miso = 13;        // MISO pin number
+            // cfg.pin_cs   = 47;        //   CS pin number
             _res_touch_instance.config(cfg);
         }
         {  // Configure touch screen control settings. (Delete if unnecessary)
@@ -95,13 +100,13 @@ class LGFX : public lgfx::LGFX_Device {
             cfg.x_max      = 239;     // Maximum X value obtained from touch screen (raw value)
             cfg.y_min      = 0;       // Minimum Y value obtained from touch screen (raw value)
             cfg.y_max      = 319;     // Maximum Y value obtained from touch screen (raw value)
-            cfg.pin_int    = -1;      // INT pin number
+            cfg.pin_int    = touch_irq_pin;      // INT pin number
             cfg.offset_rotation = 2;  // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
             cfg.bus_shared = false;   // Set true if using the same bus as the screen
             cfg.i2c_port   = 0;       // Select I2C to use (0 or 1)
             cfg.i2c_addr   = 0x38;    // I2C device address number
-            cfg.pin_sda    = 8;       // SDA pin number
-            cfg.pin_scl    = 9;       // SCL pin number
+            cfg.pin_sda    = i2c_sda_pin;       // SDA pin number
+            cfg.pin_scl    = i2c_scl_pin;       // SCL pin number
             cfg.freq       = 400000;  // Set I2C clock
             _cap_touch_instance.config(cfg);
         }
