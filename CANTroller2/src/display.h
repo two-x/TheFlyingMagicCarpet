@@ -256,7 +256,8 @@ class Display {
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
     Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots) : _tft(), neo(_neo), touch(_touch), idiots(_idiots),
-        animations(&_tft, _touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h) {};
+        animations(&_tft, _touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h) {
+    };
     Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots) 
             : _tft(), neo(_neo), touch(_touch), idiots(_idiots), animations(&_tft, _touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h)
         { Display(_neo, _touch, _idiots); }
@@ -265,8 +266,14 @@ class Display {
     }
     void setup() {
         Serial.printf("Display..");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
-        _tft.touch_init();
-        _tft.begin();
+        _tft.begin();  // _tft.begin();    
+        // Serial.printf(" .1.");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
+        // _tft.touch_init();
+        // Serial.printf(" .2.");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
+        // delay(2000);
+        // Serial.printf(" .3.");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
+        // _tft.init_without_reset();  // _tft.begin();
+        // Serial.printf(" .4.");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
         // _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
         if (_tft.width() < _tft.height()) _tft.setRotation(_tft.getRotation() ^ 1);
         // _tft.setTouch(touch_cal_data);

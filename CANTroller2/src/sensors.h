@@ -437,7 +437,6 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
 //       I2CSensor a child of -> Device, ExponentialMovingAverage and not a Sensor at all.
 class I2CSensor : public Sensor<float,float> {
   protected:
-    uint8_t _i2c_address;
     bool _detected = false;
     I2C* _i2c;
 
@@ -459,12 +458,13 @@ class I2CSensor : public Sensor<float,float> {
         _val_filt.set_limits(_human.min_shptr(), _human.max_shptr());
     }
   public:
-    I2CSensor(I2C* i2c_arg, uint8_t i2c_address_arg) : Sensor<float,float>(-1), _i2c(i2c_arg), _i2c_address(i2c_address_arg) { set_can_source(src::PIN, true); }
+    uint8_t addr;
+    I2CSensor(I2C* i2c_arg, uint8_t i2c_address_arg) : Sensor<float,float>(-1), _i2c(i2c_arg), addr(i2c_address_arg) { set_can_source(src::PIN, true); }
     I2CSensor() = delete;
     String _long_name = "Unknown I2C device";
     String _short_name = "i2cdev";
     virtual void setup() {
-        _detected = _i2c->device_detected(_i2c_address);
+        _detected = _i2c->detected_by_addr(addr);
         set_source(src::PIN); // we aren't actually reading from a pin but the point is the same...
     }
 };
@@ -473,7 +473,6 @@ class I2CSensor : public Sensor<float,float> {
 class AirVeloSensor : public I2CSensor {
   protected:
     // NOTE: would all AirVeloSensors have the same address? how does this get determined?
-    static constexpr uint8_t _i2c_address = 0x28;
     static constexpr float _min_mph = 0.0;
     static constexpr float _abs_max_mph = 33.55; // Sensor maximum mph reading.  Our sensor mounted in 2-in ID intake tube
     static constexpr float _initial_max_mph = 28.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
@@ -484,18 +483,15 @@ class AirVeloSensor : public I2CSensor {
     int64_t airvelo_read_period_us = 35000;
     Timer airveloTimer;
     virtual float read_sensor() {
-        if (_i2c->not_my_turn(i2c_airvelo)) return goodreading;
-        // Serial.printf("el:%ld\n", airveloTimer.elapsed());
-
-        if (airveloTimer.expireset()) {
-            goodreading = _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
-            // Serial.printf("av:%f\n", goodreading);
-            // this->_val_raw = this->human_val();  // (NATIVE_T)goodreading; // note, this returns a float from 0-33.55 for the FS3000-1015             
-        }
+        if (!_i2c->detected(i2c_airvelo)) return NAN;
+        else if (_i2c->not_my_turn(i2c_airvelo)) return goodreading;
+        else if (airveloTimer.expireset()) goodreading = _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
         return goodreading;
     }
   public:
-    AirVeloSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, _i2c_address) {
+    static constexpr uint8_t addr = 0x28;
+
+    AirVeloSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
         _ema_alpha = _initial_ema_alpha;
         set_human_limits(_min_mph, _initial_max_mph);
         set_can_source(src::POT, true);
@@ -508,7 +504,6 @@ class AirVeloSensor : public I2CSensor {
     virtual void set_val_common() {
         if (_i2c->i2cbaton == i2c_airvelo) _i2c->pass_i2c_baton();
     }
-
     void setup() {
         _m_factor = 1.0;
         _b_offset = 0.0;
@@ -540,7 +535,6 @@ class AirVeloSensor : public I2CSensor {
 class MAPSensor : public I2CSensor {
   protected:
     // NOTE: would all MAPSensors have the same address? how does this get determined?
-    static constexpr uint8_t _i2c_address = 0x18;
     static constexpr float _abs_min_psi = 0.88;  // Sensor min
     static constexpr float _abs_max_psi = 36.25;  // Sensor max
     static constexpr float _initial_min_psi = 10.0;  // Typical low map for a car is 10.8 psi = 22 inHg
@@ -552,20 +546,23 @@ class MAPSensor : public I2CSensor {
     float goodreading = NAN;
     SparkFun_MicroPressure _sensor;
     virtual float read_sensor() {
-        if (_i2c->not_my_turn(i2c_map)) return goodreading;
-        if (map_read_timer.expired()) {
+        if (!_i2c->detected(i2c_map)) return NAN;
+        else if (_i2c->not_my_turn(i2c_map)) return goodreading;
+        else if (map_read_timer.expired()) {
             float temp = _sensor.readPressure(PSI, true);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
             if (!std::isnan(temp)) {
                 goodreading = temp;
                 map_read_timer.set(map_read_timeout);
             }
             else map_read_timer.set(map_retry_timeout);
+            // Serial.printf("av:%f\n", goodreading);
+            // this->_val_raw = this->human_val();  // (NATIVE_T)goodreading; // note, this returns a float from 0-33.55 for the FS3000-1015             
         }
-        // this->_val_raw = (NATIVE_T)goodreading;  // note, this returns a float from 0-33.55 for the FS3000-1015 
         return goodreading;
     }
   public:
-    MAPSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, _i2c_address) {
+    static constexpr uint8_t addr = 0x18;
+    MAPSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
         _ema_alpha = _initial_ema_alpha;
         set_human_limits(_initial_min_psi, _initial_max_psi);
         set_can_source(src::POT, true);

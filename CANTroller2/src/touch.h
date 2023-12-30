@@ -9,7 +9,6 @@ class Touchscreen {
   private:
     LGFX* _tft;
     I2C* _i2c;
-    static constexpr uint8_t captouch_i2c_addr = 0x38;
     int32_t corners[2][2] = { { -25, -3549 }, { 185, 3839 } };  // [xx/yy][min/max]  // Read resistance values from upper-left and lower-right corners of screen, for calibration
     bool touch_longpress_valid = true;
     bool landed_coordinates_valid = false;
@@ -31,6 +30,7 @@ class Touchscreen {
     enum touch_lim : int { tsmin, tsmax };
     int trow, tcol, disp_size[2], touch_read[2], tft_touch[2], landed[2];  // landed are the initial coordinates of a touch event, unaffected by dragging
   public:
+    static constexpr uint8_t addr = 0x38;  // i2c addr for captouch panel
     int idelta = 0;
     Touchscreen() {}
     void setup(LGFX* tft, I2C* i2c, int width, int height) {
@@ -38,7 +38,8 @@ class Touchscreen {
         _i2c = i2c;
         disp_size[HORZ] = width;
         disp_size[VERT] = height;
-        captouch = (_i2c->device_detected(captouch_i2c_addr));
+        captouch = (_i2c->detected(i2c_touch));
+        _tft->touch_init();  // this points touch object to resistive or capacitive driver instance based on captouch
         Serial.printf("Touchscreen.. %s panel\n", (captouch) ? "detected captouch" : "using resistive");
     }
     bool touched() { return nowtouch; }

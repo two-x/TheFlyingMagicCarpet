@@ -4,15 +4,29 @@ enum i2c_nodes : int { i2c_touch, i2c_lightbox, i2c_airvelo, i2c_map, num_i2c_sl
 
 class I2C {
   private:
+    
     int32_t _devicecount = 0;
-    uint8_t _addrs[10];
+    uint8_t _detaddrs[10];  // addresses detected, unordered
+    uint8_t _devaddrs[num_i2c_slaves];  // addresses of known devices, ordered per enum
+    bool _detected[num_i2c_slaves];  // detection status of known devices, ordered per enum
     uint8_t _sda_pin, _scl_pin;
     Timer scanTimer;
     int lastsens = i2c_map;
+    void fill_det_array() {
+        for (int sl = 0; sl<num_i2c_slaves; sl++) {
+            _detected[sl] = false;
+            for (int i = 0; i<_devicecount; i++)
+                if (_detaddrs[i] == _devaddrs[sl]) _detected[sl] = true;
+        }
+    }
   public:
     int i2cbaton = i2c_lightbox;             // A semaphore mechanism to prevent bus conflict on i2c bus
     I2C(uint8_t sda_pin_arg, uint8_t scl_pin_arg) : _sda_pin(sda_pin_arg), _scl_pin(scl_pin_arg) {}
-    void setup() {
+    void setup(uint8_t touch_addr, uint8_t lightbox_addr, uint8_t airvelo_addr, uint8_t map_addr) {
+        _devaddrs[i2c_touch] = touch_addr;
+        _devaddrs[i2c_lightbox] = lightbox_addr;
+        _devaddrs[i2c_airvelo] = airvelo_addr;
+        _devaddrs[i2c_map] = map_addr;
         printf("I2C bus"); delay(1);  // Attempt to force print to happen before init
         scanTimer.reset();
         Wire.begin(_sda_pin, _scl_pin);  // I2c bus needed for airflow sensor
@@ -24,17 +38,21 @@ class I2C {
             error = Wire.endTransmission();
             if (error == 0) {
                 printf (" found addr: 0x%s%x", (address < 16) ? "0" : "", address);
-                _addrs[_devicecount++] = address;
+                _detaddrs[_devicecount++] = address;
             }
             else if (error==4) printf (" error addr: 0x%s%x", (address < 16) ? "0" : "", address);
         }
         if (scanTimer.elapsed() > 5000000) printf(" timeout & fail bus scan.");
         if (_devicecount == 0) printf(" no devices found.");
         printf(" ..done\n");
+        fill_det_array();
     }
-    bool device_detected(uint8_t addr) {
-        for (int i=0; i < _devicecount; i++) if (_addrs[i] == addr) return true;
+    bool detected_by_addr(uint8_t addr) {  // argument is an i2c address
+        for (int i=0; i < _devicecount; i++) if (_detaddrs[i] == addr) return true;
         return false;
+    }
+    bool detected(int device) {  // argument is one of the enums
+        return _detected[device];
     }
     void pass_i2c_baton() {
         // printf("p b:%d", i2cbaton);
@@ -58,23 +76,24 @@ class I2C {
 // I stole this library and modified it as such. to not block for 6-7ms on each read. - Soren
 // SparkFun_MicroPressure library by Alex Wende July 2020 (Beerware license)
 // This is a library for the Qwiic MicroPressure Sensor, which can read from 0 to 25 PSI.
-#define DEFAULT_ADDRESS 0x18
-#define MAXIMUM_PSI     25
-#define MINIMUM_PSI     0
-#define BUSY_FLAG       0x20
-#define INTEGRITY_FLAG  0x04
-#define MATH_SAT_FLAG   0x01
-#define OUTPUT_MAX      0xE66666
-#define OUTPUT_MIN      0x19999A
 enum Pressure_Units {PSI, PA, KPA, TORR, INHG, ATM, BAR};  // {PSI, Pa, kPa, torr, inHg, atm, bar};
 
 class SparkFun_MicroPressure {
   public:
+    static constexpr uint8_t addr = 0x18;
     SparkFun_MicroPressure(int8_t eoc_pin=-1, int8_t rst_pin=-1, uint8_t minimumPSI=MINIMUM_PSI, uint8_t maximumPSI=MAXIMUM_PSI);
-    bool begin(uint8_t deviceAddress = DEFAULT_ADDRESS, TwoWire &wirePort = Wire);
+    bool begin(uint8_t deviceAddress = addr, TwoWire &wirePort = Wire);
     uint8_t readStatus(void);
     float readPressure(Pressure_Units units=PSI, bool noblock=false);
+    uint8_t get_addr();
   private:
+    static constexpr int MAXIMUM_PSI = 25;
+    static constexpr int MINIMUM_PSI = 0;
+    static constexpr uint8_t BUSY_FLAG = 0x20;
+    static constexpr uint8_t INTEGRITY_FLAG = 0x04;
+    static constexpr uint8_t MATH_SAT_FLAG = 0x01;
+    static constexpr uint32_t OUTPUT_MAX = 0xE66666;
+    static constexpr uint32_t OUTPUT_MIN = 0x19999A;
     bool run_preamble = true;
     float pressure = NAN;
     int8_t _address, _eoc, _rst;
@@ -213,10 +232,11 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
         speed_last = speed;
         return true;
     }
+    uint8_t get_addr() { return addr; }
     void update(int runmode, float speed) {
         bool sent = false;
         if (i2c->not_my_turn(i2c_lightbox)) return;
-        if (send_timer.expireset()) {
+        if (i2c->detected(i2c_lightbox) && send_timer.expireset()) {
             sent = sendstatus();
             sent |= sendrunmode(runmode);
             if (!sent) sent = sendspeed(speed);

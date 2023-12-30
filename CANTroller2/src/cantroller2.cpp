@@ -27,7 +27,7 @@ void setup() {
     mulebatt.setup();
     tach.setup();
     speedo.setup();
-    i2c.setup();
+    i2c.setup(touch.addr, lightbox.addr, airvelo.addr, mapsens.addr);
     airvelo.setup();          // must be done after i2c is started
     mapsens.setup();
     lightbox.setup();
@@ -41,15 +41,15 @@ void setup() {
     datapage = prefs.getUInt("dpage", PG_RUN);
     datapage_last = prefs.getUInt("dpage", PG_TEMP);
     sim_setup();              // simulator initialize devices and pot map
-    if (display_enabled) screen.setup();
     if (display_enabled) touch.setup(screen.get_tft(), &i2c, disp_width_pix, disp_height_pix);
+    if (display_enabled) screen.setup();
     // sdcard.setup();
     neo.setup();              // set up external neopixel strip for idiot lights visible in daylight from top of carpet
     idiots.setup(&neo);       // assign same idiot light variable associations and colors to neopixels as on screen  
     diag.setup();             // initialize diagnostic codes
     web.setup();              // start up access point, web server, and json-enabled web socket for diagnostic phone interface
     xTaskCreate(update_web, "Update Web Services", 4096, NULL, 6, NULL);  // wifi/web task. 2048 is too low, it crashes when client connects
-    printf("Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
+    printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     looptimer.setup();
 }

@@ -64,7 +64,7 @@ void set_board_defaults() {          // true for dev boards, false for printed b
     printf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
 }
 void partition_table() {
-    printf("Setup begin\nPartition Typ SubT  Address SizeByte   kB\n");
+    printf("\n** Setup begin\nPartition Typ SubT  Address SizeByte   kB\n");
     esp_partition_iterator_t iterator = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, NULL);
     const esp_partition_t *partition;
     while ((partition = esp_partition_get(iterator)) != NULL) {
