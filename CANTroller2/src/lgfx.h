@@ -102,7 +102,7 @@ class LGFX : public lgfx::LGFX_Device {
             cfg.y_max      = 319;     // Maximum Y value obtained from touch screen (raw value)
             // cfg.pin_int    = touch_irq_pin;      // INT pin number
             cfg.offset_rotation = 2;  // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
-            cfg.bus_shared = false;   // Set true if using the same bus as the screen
+            cfg.bus_shared = true;   // Set true if using the same bus as the screen
             cfg.i2c_port   = 0;       // Select I2C to use (0 or 1)
             cfg.i2c_addr   = 0x38;    // I2C device address number
             cfg.pin_sda    = i2c_sda_pin;       // SDA pin number

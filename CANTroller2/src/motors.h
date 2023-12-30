@@ -391,31 +391,16 @@ class BrakeMotor : public JagMotor {
         pids[POSNPID].set_target(brkpos->min_human() + (100.0 - pid_targ_pc) * (brkpos->max_human() - brkpos->min_human()) / 100.0);
     }
   private:
-    // Which PID is dominant is determined by which has the greatest "sens_ratio" = sensor reading as a proportion of the sensor range.
+    // The influence on the final output from the pressure and position pids is weighted based on the pressure reading
+    // Which PID is dominant is the pid having more than 50% influence
     // PID outputs are weighted based on where in the pedal press we are. Near the bottom is pressure control, and near the top is position control.
-
-        // activate_pid((int)(sens_ratio[PRESPID] > sens_ratio[POSNPID]));  // pressure pid == 1
-        // hybrid_sens_ratio = sens_ratio[dominantpid];  // rely only on pressure sensor
-        // if (dominantpid == POSNPID) hybrid_sens_ratio = 1.0 - hybrid_sens_ratio;
-        // if (sens_ratio[dominantpid] > 1.0 - brake_pid_transition_threshold) hybrid_out_ratio = dominantpid;  // use only pressure pid output to motor
-        // else hybrid_out_ratio = 0.5 * sin(2 * M_PI * (hybrid_sens_ratio - 0.5)) + 0.5;  // calculate multiplier value to ensure smooth control transition between sensors, with a steep crossover
-        // hybrid_sens_ratio_pc = 100.0 * hybrid_sens_ratio;  // for display
-        // hybrid_out_ratio_pc = 100.0 * hybrid_out_ratio;  // for display
     void calc_hybrid_ratio() {
-        if (sens_ratio[PRESPID] >= brake_pid_trans_threshold_hi) hybrid_out_ratio = 1.0;
-        else if (sens_ratio[PRESPID] <= brake_pid_trans_threshold_lo) hybrid_out_ratio = 0.0;
-        else hybrid_out_ratio = 0.5 + 0.5 * sin(hybrid_math_coeff * (sens_ratio[PRESPID] - hybrid_math_offset));  // calculate multiplier value to ensure smooth control transition between sensors, with a steep crossover
+        if (sens_ratio[PRESPID] >= brake_pid_trans_threshold_hi) hybrid_out_ratio = 1.0;  // at pressure above hi threshold, pressure has 100% influence
+        else if (sens_ratio[PRESPID] <= brake_pid_trans_threshold_lo) hybrid_out_ratio = 0.0;  // at pressure below lo threshold, position has 100% influence
+        else hybrid_out_ratio = 0.5 + 0.5 * sin(hybrid_math_coeff * (sens_ratio[PRESPID] - hybrid_math_offset));  // in between we make a steep but smooth transition during which both have some influence
         hybrid_out_ratio_pc = 100.0 * hybrid_out_ratio;  // for display
-        activate_pid((int)(sens_ratio[PRESPID] > 0.5 * (brake_pid_trans_threshold_lo + brake_pid_trans_threshold_hi)));  // pressure pid == 1
-
-// -       hybrid_out_ratio = 0.5 + 0.5 * sin(M_PI * (sens_ratio[PRESPID] - 0.5 * (brake_pid_trans_threshold_lo + brake_pid_trans_threshold_hi)) / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo));  // calculate multiplier value to ensure smooth control transition between sensors, with a steep crossover
+        activate_pid((int)(sens_ratio[PRESPID] > 0.5 * (brake_pid_trans_threshold_lo + brake_pid_trans_threshold_hi)));  // pressure pid == 1. sets the "dominant" pid
     }
-        // hybrid_out_ratio = 0.5 * sin(2 * M_PI * (hybrid_sens_ratio - 0.5)) + 0.5;  // calculate multiplier value to ensure smooth control transition between sensors, with a steep crossover
-        // hybrid_sens_ratio_pc = 100.0 * hybrid_sens_ratio;  // for display
-        // hybrid_sens_ratio = sens_ratio[dominantpid];  // rely only on pressure sensor
-        // if (dominantpid == POSNPID) hybrid_sens_ratio = 1.0 - hybrid_sens_ratio;
-        // if (sens_ratio[dominantpid] > 1.0 - brake_pid_transition_threshold) hybrid_out_ratio = dominantpid;  // use only pressure pid output to motor
-        // else 
     float pid_out() {  // feedback brake pid with position or pressure, whichever is changing more quickly
         float range;
         for (int p = POSNPID; p <= PRESPID; p++) {
@@ -426,7 +411,6 @@ class BrakeMotor : public JagMotor {
         }
         if (brake_hybrid_pid) {
             calc_hybrid_ratio();  // calculate pressure vs. position multiplier based on the sensed values
-
             pid_final_out = hybrid_out_ratio * outnow[PRESPID] + (1.0 - hybrid_out_ratio) * outnow[POSNPID];  // combine pid outputs weighted by the multiplier
             for (int p = POSNPID; p <= PRESPID; p++) pids[p].set_output(pid_final_out);  // Feed the final value back into the pids
         }
