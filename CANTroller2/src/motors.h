@@ -362,9 +362,13 @@ class BrakeMotor : public JagMotor {
     int dominantpid = brake_default_pid, dominantpid_last = brake_default_pid;
     bool posn_pid_active = (dominantpid == POSNPID);
     float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2, pid_targ_pc, pid_err_pc, pid_final_out;
-    float sens_ratio[NUM_BRAKEPIDS], sensnow[NUM_BRAKEPIDS], outnow[NUM_BRAKEPIDS];  // , senslast[NUM_BRAKEPIDS], d_ratio[NUM_BRAKEPIDS], 
+    float sens_ratio[NUM_BRAKEPIDS], sensnow[NUM_BRAKEPIDS], outnow[NUM_BRAKEPIDS], hybrid_math_offset, hybrid_math_coeff;  // , senslast[NUM_BRAKEPIDS], d_ratio[NUM_BRAKEPIDS], 
     float hybrid_sens_ratio, hybrid_sens_ratio_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0;
-    void derive() { JagMotor::derive(); }
+    void derive() { 
+        JagMotor::derive();
+        hybrid_math_offset = 0.5 * (brake_pid_trans_threshold_lo + brake_pid_trans_threshold_hi);
+        hybrid_math_coeff = M_PI / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo);
+    }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         printf("Brake motor..\n");
         JagMotor::setup(_hotrc, _speedo, _batt);
@@ -374,8 +378,8 @@ class BrakeMotor : public JagMotor {
         pres_last = pressure->human();
         posn_last = brkpos->human();
         activate_pid(brake_default_pid);
-        if (brake_hybrid_pid) calc_hybrid_ratio();
         derive();
+        if (brake_hybrid_pid) calc_hybrid_ratio();
         pids[PRESPID].init(pressure->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), initial_kp, initial_ki, initial_kd, QPID::pmod::onerr,
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
         pids[POSNPID].init(brkpos->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), posn_initial_kp, posn_initial_ki, posn_initial_kd, QPID::pmod::onerr, 
@@ -397,25 +401,17 @@ class BrakeMotor : public JagMotor {
         // else hybrid_out_ratio = 0.5 * sin(2 * M_PI * (hybrid_sens_ratio - 0.5)) + 0.5;  // calculate multiplier value to ensure smooth control transition between sensors, with a steep crossover
         // hybrid_sens_ratio_pc = 100.0 * hybrid_sens_ratio;  // for display
         // hybrid_out_ratio_pc = 100.0 * hybrid_out_ratio;  // for display
-
     void calc_hybrid_ratio() {
-        if (sens_ratio[PRESPID] >= brake_pid_trans_threshold_hi) {
-            hybrid_out_ratio = 1.0;
-            // hybrid_sens_ratio = sens_ratio[PRESPID];
-        }
-        else if (sens_ratio[PRESPID] <= brake_pid_trans_threshold_lo) {
-            hybrid_out_ratio = 0.0;
-            // hybrid_sens_ratio = sens_ratio[POSNPID];
-        }
-        else {
-            hybrid_out_ratio = 0.5 + 0.5 * sin(M_PI * (sens_ratio[PRESPID] - 0.5 * (brake_pid_trans_threshold_lo + brake_pid_trans_threshold_hi)) / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo));  // calculate multiplier value to ensure smooth control transition between sensors, with a steep crossover
-            // hybrid_sens_ratio = brake;
-        }
+        if (sens_ratio[PRESPID] >= brake_pid_trans_threshold_hi) hybrid_out_ratio = 1.0;
+        else if (sens_ratio[PRESPID] <= brake_pid_trans_threshold_lo) hybrid_out_ratio = 0.0;
+        else hybrid_out_ratio = 0.5 + 0.5 * sin(hybrid_math_coeff * (sens_ratio[PRESPID] - hybrid_math_offset));  // calculate multiplier value to ensure smooth control transition between sensors, with a steep crossover
         hybrid_out_ratio_pc = 100.0 * hybrid_out_ratio;  // for display
+        activate_pid((int)(sens_ratio[PRESPID] > 0.5 * (brake_pid_trans_threshold_lo + brake_pid_trans_threshold_hi)));  // pressure pid == 1
+
+// -       hybrid_out_ratio = 0.5 + 0.5 * sin(M_PI * (sens_ratio[PRESPID] - 0.5 * (brake_pid_trans_threshold_lo + brake_pid_trans_threshold_hi)) / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo));  // calculate multiplier value to ensure smooth control transition between sensors, with a steep crossover
+    }
         // hybrid_out_ratio = 0.5 * sin(2 * M_PI * (hybrid_sens_ratio - 0.5)) + 0.5;  // calculate multiplier value to ensure smooth control transition between sensors, with a steep crossover
         // hybrid_sens_ratio_pc = 100.0 * hybrid_sens_ratio;  // for display
-    }
-        // activate_pid((int)(sens_ratio[PRESPID] > 0.5 * (brake_pid_trans_threshold_lo + brake_pid_trans_threshold_hi)));  // pressure pid == 1
         // hybrid_sens_ratio = sens_ratio[dominantpid];  // rely only on pressure sensor
         // if (dominantpid == POSNPID) hybrid_sens_ratio = 1.0 - hybrid_sens_ratio;
         // if (sens_ratio[dominantpid] > 1.0 - brake_pid_transition_threshold) hybrid_out_ratio = dominantpid;  // use only pressure pid output to motor
