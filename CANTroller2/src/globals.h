@@ -138,7 +138,7 @@ int16_t touch_pt[4] = { 160, 120, 2230, 2130 };
 bool flashdemo = false;
 int32_t neobright = 10;   // default for us dim/brighten the neopixels
 int32_t neodesat = 0;     // default for lets us de/saturate the neopixels
-float tuning_scalar = 0.00075;  // during editing, each edit changes value by this fraction of the range
+float tuning_scalar = 0.0015;  // during editing, each edit changes value by this fraction of the range
 
 // non-tunable values. probably these belong with their related code
 bool running_on_devboard = false;       // will overwrite with value read thru pull resistor on tx pin at boot
@@ -245,7 +245,7 @@ template <typename T>
 T adj_val(T variable, T modify, T low_limit, T high_limit) {
     T oldval = variable;
     if (std::is_same<T, int32_t>::value) variable += (T)modify;
-    else if (std::is_same<T, uint32_t>::value) variable += (T)(modify * tuning_scalar * (high_limit-low_limit));
+    else if (std::is_same<T, float>::value) variable += (T)(modify * tuning_scalar * (high_limit-low_limit));
     return variable < low_limit ? low_limit : (variable > high_limit ? high_limit : variable);
 }
 bool adj_val(int32_t *variable, int32_t modify, int32_t low_limit, int32_t high_limit) { // sets an int reference to new val constrained to given range

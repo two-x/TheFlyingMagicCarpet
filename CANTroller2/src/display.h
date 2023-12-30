@@ -183,7 +183,7 @@ static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = 
 static constexpr char datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines][9] = {
     { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
-    { "PressRaw", "BkPosRaw", __________, __________, __________, "AirSpMax", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
+    { "PressRaw", "BkPosRaw", __________, __________, __________, "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
     { brAk"Targ", "Pn|PrErr", "  P Term", "  I Term", "  D Term", brAk"Posn", "SnsRatio", "OutRatio", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
@@ -516,7 +516,8 @@ class Display {
             int32_t length = smin(sigdig+1, maxlength);
             char buffer[length+1];
             std::snprintf(buffer, length + 1, (chop_zeroes) ? "%.*g" : "%.*f", length - 1, value);  // (buf, letters incl. end, %.*g = floats formatted in shortest form, length-1 digits after decimal, val)
-            std::string result(buffer);  // copy buffer to result
+            std::string result(buffer);  // copy buffer to result            
+            if (chop_zeroes) result = result.substr(0, result.find_last_not_of('0') + 1);
             return result;
         }
         if (place < 0 && sigdig - place <= maxlength) {  // Then we want decimal w/o initial '0' limited to given significant digits (eg .123, .0123, .00123)
@@ -752,7 +753,7 @@ class Display {
             else if (datapage == PG_SENS) {
                 draw_dynamic(9, pressure.raw(), pressure.min_native(), pressure.max_native());                    
                 draw_dynamic(10, brkpos.raw(), brkpos.min_native(), brkpos.max_native());                    
-                for (int line=11; line<=13; line++) draw_eraseval(13);
+                for (int line=11; line<=13; line++) draw_eraseval(line);
                 draw_dynamic(14, airvelo.max_mph(), 0.0, airvelo.abs_max_mph());
                 draw_dynamic(15, mapsens.min_psi(), mapsens.abs_min_psi(), mapsens.abs_max_psi());
                 draw_dynamic(16, mapsens.max_psi(), mapsens.abs_min_psi(), mapsens.abs_max_psi());
@@ -937,10 +938,7 @@ class Tuner {
                 else if (sel_val == 10) { adj_val(&hotrc.deadband_us, idelta, 0, 50); hotrc.calc_params(); }
             }
             else if (datapage == PG_SENS) {
-                if (sel_val == 2) gas.idlectrl.add_idlehot(fdelta);
-                else if (sel_val == 3) gas.idlectrl.add_idlecold(fdelta);
-                else if (sel_val == 4) adj_val(tach.redline_rpm_ptr(), fdelta, gas.idlectrl.idlehigh, tach.abs_max_rpm());
-                else if (sel_val == 5) adj_val(airvelo.max_mph_ptr(), fdelta, 0, airvelo.abs_max_mph());
+                if (sel_val == 5) adj_val(airvelo.max_mph_ptr(), fdelta, 0, airvelo.abs_max_mph());
                 else if (sel_val == 6) adj_val(mapsens.min_psi_ptr(), fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
                 else if (sel_val == 6) adj_val(mapsens.max_psi_ptr(), fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
                 else if (sel_val == 8) adj_val(speedo.idle_mph_ptr(), fdelta, 0, speedo.redline_mph() - 1);
