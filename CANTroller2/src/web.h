@@ -9,6 +9,7 @@
 #include <WebSocketsServer.h>
 #include <ArduinoJson.h>  // <AsyncJson.h>  // "json.h"  needed for JSON encapsulation (send multiple variables with one string)
 #include <ElegantOTA.h>  // includes <AsyncTCP.h>
+#include "gpioview.h"
 #define FORMAT_LITTLEFS_IF_FAILED true
 // create a callback function, triggered by web socket events
 void webSocketEvent(byte num, WStype_t type, uint8_t * payload, size_t length) {  // the parameters of this callback function are always the same -> num: id of the client who send the event, type: type of message, payload: actual data sent and length: length of payload
@@ -139,6 +140,7 @@ class Web {
   private:
     AsyncWebServer webserver;
     WebSocketsServer socket;
+    GPIOViewer gpioviewer{&webserver};
     Timer socket_timer;
     uint32_t socket_refresh_us = 1000000, dumdum = 1;
     LoopTimer* looptimer;
@@ -163,6 +165,7 @@ class Web {
         });
         printf("Over-The-Air update support..\n");
         ElegantOTA.begin(&webserver);  // start OTA after all server.on requests, before starting web server
+        gpioviewer.begin();
         webserver.begin();
         printf("Websockets start..\n");
         socket.begin();
