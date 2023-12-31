@@ -4,8 +4,8 @@
 // pin assignments  ESP32-S3-DevkitC series
 #define     boot_sw_pin  0 // button0/strap1   // The esp "Boot" button
 #define  encoder_sw_pin  1 // adc1.0           // Input, Rotary encoder push switch, for the UI. active low (needs pullup).
-#define   encoder_b_pin  2 // adc1.1           // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
-#define      tft_dc_pin  3 // adc1.2/strapX    // Output, Assert when sending data to display chip to indicate commands vs. screen data - ! pin is also defined in tft_setup.h
+#define    touch_cs_pin  2 // adc1.1           // Output, chip select for resistive touchscreen, active low - ! pin is also defined in tft_setup.h
+#define   sdcard_cs_pin  3 // adc1.2/strapX    // Output, chip select for SD card controller on SPI bus
 #define    mulebatt_pin  4 // adc1.3           // Analog input, mule battery voltage sense, full scale is 16V
 #define         pot_pin  5 // adc1.4           // Analog in from 20k pot
 #define   brake_pos_pin  6 // adc1.5           // Analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
@@ -27,7 +27,7 @@
 #define      speedo_pin 35 // spiram/octspi    // Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
 #define     starter_pin 36 // sram/ospi/glitch // Input/Output (both active high), output when starter is being driven, otherwise input senses external starter activation
 #define        tach_pin 37 // spiram/octspi    // Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup) - Note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on
-#define   sdcard_cs_pin 38 // spiram/octspi    // Output, chip select for SD card controller on SPI bus
+#define      tft_dc_pin 38 // spiram/octspi    // Output, Assert when sending data to display chip to indicate commands vs. screen data - ! pin is also defined in tft_setup.h
 #define basicmodesw_pin 39 // jtck/glitch      // Input, asserted to tell us to run in basic mode, active low (has ext pullup) - Note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define   hotrc_ch4_pin 40 // jtdo             // Syspower, starter, and cruise mode toggle control. Hotrc Ch4 PWM toggle signal
 #define   hotrc_ch3_pin 41 // jtdi             // Ignition control, Hotrc Ch3 PWM toggle signal
@@ -36,7 +36,7 @@
 #define     uart_rx_pin 44 // "RX"/rx0         // Serial monitor data in. Maybe could repurpose during runtime since we only need outgoing console data?
 #define    ignition_pin 45 // strap0           // Output to an nfet/pfet pair to control the car ignition
 #define    syspower_pin 46 // strap0           // Output to an nfet/pfet pair to power all the tranducers.
-#define    touch_cs_pin 47 // NA               // Output, chip select for resistive touchscreen, active low - ! pin is also defined in tft_setup.h
+#define   encoder_b_pin 47 // NA               // Int input, The B (aka DT) pin of the encoder. Both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
 #define    neopixel_pin 48 // neopix           // Data line to onboard Neopixel WS281x (on all v1 devkit boards - pin 38 is used on v1.1 boards). Also used for onboard and external neopoxels - ! pin is also defined in neopixel.h
 // External components needed (pullup/pulldown resistors, capacitors, etc.): (Note: "BB" = On dev breadboards only, "PCB" = On vehicle PCB only)
 // 1. onewire_pin, tach_pin, speedo_pin: Add 4.7k-ohm to 3.3V, needed for open collector sensor output to define logic-high voltage level.
