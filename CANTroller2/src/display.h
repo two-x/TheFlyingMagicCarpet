@@ -160,6 +160,7 @@ bool disp_selected_val_dirty, disp_datapage_dirty, disp_data_dirty, disp_sidemen
 int32_t disp_needles[disp_lines];
 int32_t disp_targets[disp_lines];
 int32_t disp_age_quanta[disp_lines];
+uint16_t disp_val_colors[disp_lines];
 Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
 
 // These defines are just a convenience to keep the below datapage strings array initializations aligned in neat rows & cols for legibility
@@ -419,9 +420,10 @@ class Display {
             if (color == -1) color = GRN;
             int32_t y_pos = lineno*disp_line_height_pix+disp_vshift_pix;
             if (polarity != disp_polarities[lineno]) draw_hyphen(x_base, y_pos, (!polarity) ? color : BLK);
-            draw_string(x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], color, BLK); // +6*(arraysize(modecard[run.mode])+4-namelen)/2
+            draw_string(x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], color, BLK, (color != disp_val_colors[lineno])); // +6*(arraysize(modecard[run.mode])+4-namelen)/2
             strcpy(disp_values[lineno], disp_string);
             disp_polarities[lineno] = polarity;
+            disp_val_colors[lineno] = color;
             dispAgeTimer[lineno].reset();
             disp_age_quanta[lineno] = 0;
         }  // to-do: Fix failure to freshen aged coloration of unchanged characters of changed values
@@ -432,6 +434,7 @@ class Display {
             if (!polarity) draw_hyphen(x_base, y_pos, color);
             draw_string(x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_values[lineno], "", color, BLK);
             disp_age_quanta[lineno] = age_us;
+            disp_val_colors[lineno] = color;
         }
         if (lowlim < hilim) {  // Any value having a given range deserves a bargraph gauge with a needle
             int32_t corner_x = disp_bargraphs_x;    
@@ -544,7 +547,7 @@ class Display {
         draw_dynamic(lineno, name.c_str(), 1, -1, -1, -1, CYN);
     }
     void draw_truth(int32_t lineno, bool truthy, int32_t styl=2) {  // 0:on/off, 1:yes/no, 2:true/false .
-        draw_dynamic(lineno, (truthy) ? ((styl==0) ? " on" : ((styl==1) ? "yes" : "true")) : ((styl==0) ? "off" : ((styl==1) ? "no" : "false")), 1, -1, -1, -1, (truthy) ? LPUR : GPUR);
+        draw_dynamic(lineno, (truthy) ? ((styl==0) ? "on" : ((styl==1) ? "yes" : "true")) : ((styl==0) ? "off" : ((styl==1) ? "no" : "false")), 1, -1, -1, -1, (truthy) ? LPUR : GPUR);
     }
     void draw_runmode(int32_t _nowmode, int32_t _oldmode, int32_t color_override=-1) {  // color_override = -1 uses default color
         int32_t color = (color_override == -1) ? colorcard[_nowmode] : color_override;
