@@ -114,7 +114,7 @@ class GPIOViewer {
         server->on("/gpio", [this](AsyncWebServerRequest *request)
                    { request->send_P(200, "text/html", generateIndexHTML().c_str()); });
 
-        server->begin();
+        // server->begin();
 
         // Create a task for monitoring GPIOs
         xTaskCreate(&GPIOViewer::monitorTaskStatic, "GPIO Monitor Task", 2048, this, 1, NULL);
