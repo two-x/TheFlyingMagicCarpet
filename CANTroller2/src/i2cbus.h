@@ -236,7 +236,8 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     void update(int runmode, float speed) {
         bool sent = false;
         if (i2c->not_my_turn(i2c_lightbox)) return;
-        if (i2c->detected(i2c_lightbox) && send_timer.expireset()) {
+        // if (i2c->detected(i2c_lightbox) && send_timer.expireset()) {
+        if (send_timer.expireset()) {  // enable for now to test
             sent = sendstatus();
             sent |= sendrunmode(runmode);
             if (!sent) sent = sendspeed(speed);

@@ -1378,9 +1378,9 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             else pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
             ema_filt(pc[axis][RAW], &(pc[axis][FILT]), ema_alpha);  // do ema filter to determine joy_vert_filt
             pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
-            if (_radiolost || (ema_us[axis] > us[axis][DBBOT] && ema_us[axis] < us[axis][DBTOP]))
-                pc[axis][FILT] = pc[axis][CENT];  // if within the deadband set joy_axis_filt to CENTer value
-            else sleep_inactivity_timer.reset();  // evidence of user activity
+            if (ema_us[axis] > us[axis][DBBOT] && ema_us[axis] < us[axis][DBTOP]) pc[axis][FILT] = pc[axis][CENT];  // if within the deadband set joy_axis_filt to CENTer value
+            else sleep_inactivity_timer.reset();  // otherwise indicate evidence of user activity
+            if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set joy_axis_filt to CENTer value
         }
     }
     bool radiolost_update() {

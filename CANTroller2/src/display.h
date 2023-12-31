@@ -186,7 +186,7 @@ static constexpr char datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines
     { "PressRaw", "BkPosRaw", __________, __________, __________, "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
-    { brAk"Targ", "Pn|PrErr", "  P Term", "  I Term", "  D Term", brAk"Posn", "SnsRatio", "OutRatio", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
+    { brAk"Targ", "Pn|PrErr", "  P Term", "  I Term", "  D Term", brAk"Posn", "OutRatio", "MotrDuty", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, "OpenLoop", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
@@ -241,7 +241,6 @@ class TunerPanel {
 class Display {
   private:
     LGFX _tft = LGFX();
-    // LGFX_Sprite _saversprite[2] = { LGFX_Sprite(&_tft), LGFX_Sprite(&_tft) };
     AnimationManager animations;
     NeopixelStrip* neo;
     Touchscreen* touch;
@@ -267,13 +266,6 @@ class Display {
     void setup() {
         Serial.printf("Display..");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
         _tft.begin();  // _tft.begin();    
-        // Serial.printf(" .1.");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
-        // _tft.touch_init();
-        // Serial.printf(" .2.");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
-        // delay(2000);
-        // Serial.printf(" .3.");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
-        // _tft.init_without_reset();  // _tft.begin();
-        // Serial.printf(" .4.");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
         // _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
         if (_tft.width() < _tft.height()) _tft.setRotation(_tft.getRotation() ^ 1);
         // _tft.setTouch(touch_cal_data);
@@ -287,11 +279,9 @@ class Display {
         for (int32_t row=0; row<arraysize(disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
         for (int32_t row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
         yield();
-        // set_runmodecolors();
         _tft.fillScreen(BLK);  // Black out the whole screen
         draw_touchgrid(false);
         draw_fixed(datapage, datapage_last, false);
-        // idiots->setup(neo);
         draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
         all_dirty();
         animations.setup();
@@ -795,8 +785,8 @@ class Display {
                 draw_dynamic(12, brake.pid_dom->iterm(), -drange, drange);
                 draw_dynamic(13, brake.pid_dom->dterm(), -drange, drange);
                 draw_dynamic(14, brkpos.filt(), brkpos.op_min_in(), brkpos.op_max_in(), brake.pids[POSNPID].target());
-                draw_dynamic(15, brake.hybrid_sens_ratio_pc, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
-                draw_dynamic(16, brake.hybrid_out_ratio_pc, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
+                draw_dynamic(15, brake.hybrid_out_ratio_pc, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
+                draw_dynamic(16, brake.duty_continuous, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
                 // draw_eraseval(16);
                 draw_dynamic(17, brake.pid_dom->kp(), 0.0, 8.0);
                 draw_dynamic(18, brake.pid_dom->ki(), 0.0, 8.0);

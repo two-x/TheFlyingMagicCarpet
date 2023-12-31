@@ -1,4 +1,4 @@
-// Carpet CANTroller II  Source Code  - For ESP32-S3-DevKitC-1-N8
+// Carpet CANTroller II  Source Code  - For ESP32-S3-DevKitC-1-N8R8
 #include "objects.h"
 #include "display.h"  // includes neopixel.h, touch.h
 #include "sdcard.h"

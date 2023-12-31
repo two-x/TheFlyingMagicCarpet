@@ -343,7 +343,12 @@ class BrakeMotor : public JagMotor {
     static constexpr uint32_t interval_timeout = 1000000;  // How often to apply increment during auto-stopping (in us)
     static constexpr uint32_t stopcar_timeout = 8000000;  // How often to apply increment during auto-stopping (in us)
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
-    // float posn_inflect, pres_inflect, pc_inflect; 
+    static constexpr uint32_t duty_integration_period = 300000000;  // in us. note every 5 minutes uses 1% of our RAM for history buffer
+    static constexpr int history_depth = duty_integration_period / pid_timeout;
+    uint8_t history[history_depth];  // stores past motor work done. cast to uint8_t to save ram
+    float duty_integral = sens_ratio[PRESPID] * hybrid_out_ratio;
+    int duty_index = 0, duty_index_last; 
+    // float posn_inflect, pres_inflect, pc_inflect;
     void activate_pid(int _pid) {
         dominantpid = _pid;
         pid_dom = &(pids[dominantpid]);
@@ -357,14 +362,15 @@ class BrakeMotor : public JagMotor {
     Timer interval_timer = Timer(interval_timeout);
     float brake_pid_trans_threshold_lo = 0.25;  // tunable. At what fraction of full brake pressure will motor control begin to transition from posn control to pressure control
     float brake_pid_trans_threshold_hi = 0.50;  // tunable. At what fraction of full brake pressure will motor control be fully transitioned to pressure control
-    bool autostopping = false, reverse = false, openloop = false;
+    bool autostopping = false, reverse = false, openloop = false, duty_tracker_load_sensitive = true;
     // float duty_pc = 25;
     int dominantpid = brake_default_pid, dominantpid_last = brake_default_pid;
     bool posn_pid_active = (dominantpid == POSNPID);
     float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2, pid_targ_pc, pid_err_pc, pid_final_out;
     float sens_ratio[NUM_BRAKEPIDS], sensnow[NUM_BRAKEPIDS], outnow[NUM_BRAKEPIDS], hybrid_math_offset, hybrid_math_coeff;  // , senslast[NUM_BRAKEPIDS], d_ratio[NUM_BRAKEPIDS], 
     float hybrid_sens_ratio, hybrid_sens_ratio_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0;
-    void derive() { 
+    float duty_integral_sum, duty_instant, duty_continuous;
+    void derive() {
         JagMotor::derive();
         hybrid_math_offset = 0.5 * (brake_pid_trans_threshold_lo + brake_pid_trans_threshold_hi);
         hybrid_math_coeff = M_PI / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo);
@@ -423,6 +429,21 @@ class BrakeMotor : public JagMotor {
         // 3. Detet brake hydraulics failure or inaccurate pressure. Evidenced by normal positional change not causing expected increase in pressure.
         // retract_effective_max_us = volt[STOP] + duty_pc * (volt[OPMAX] - volt[STOP]);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
     }
+    // Duty tracking: we keep a buffer of motor work done
+    void calc_motor_duty() {
+        ++duty_index %= history_depth;  // advance ring buffer index, this is the oldest value in the buffer
+        duty_integral_sum -= (float)history[duty_index] / 2.5;  // subtract oldest value from our running sum.
+        int duty_instant = std::abs(pc[OUT]);  // what is current motor drive percent
+        if (duty_tracker_load_sensitive) {  // if we are being fancy
+            if (pc[OUT] < 0) duty_instant = 0.0;  // ignore motion in the extend direction due to low load
+            else duty_instant *= sens_ratio[PRESPID];  // scale load with brake pressure
+        }        
+        history[duty_index] = (uint8_t)(duty_instant * 2.5);  // write over current indexed value in the history ring buffer. scale to optimize for uint8
+        duty_integral_sum += duty_instant;  // add value to our running sum
+        duty_continuous = duty_integral_sum / history_depth;  // divide ring buffer total by its size to get average value
+        if (duty_continuous < 0.001) duty_continuous = 0.0;  // otherwise displays "5.67e-" (?)
+        // now we know our continuous duty, need to limit motor output based on this
+    }
   public:
     void autostop_initial(bool panic) { set_pidtarg(smax(panic ? panic_initial_pc : hold_initial_pc, pid_dom->target())); }
     void autostop_increment(bool panic) { set_pidtarg(smin(pid_dom->target() + panic ? panic_increment_pc : hold_increment_pc, 100.0)); }
@@ -430,6 +451,7 @@ class BrakeMotor : public JagMotor {
         // Brakes - Determine motor output and write it to motor
         if (volt_check_timer.expireset()) derive();
         if (pid_timer.expireset()) {
+            calc_motor_duty();
             // Step 1 : Determine motor percent value
             if (park_the_motors) {
                 if (brkpos->filt() + brkpos->margin() <= brkpos->parkpos())  // If brake is retracted from park point, extend toward park point, slowing as we approach
