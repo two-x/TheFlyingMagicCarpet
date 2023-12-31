@@ -507,7 +507,7 @@ class Display {
             char buffer[length+1];
             std::snprintf(buffer, length + 1, (chop_zeroes) ? "%.*g" : "%.*f", length - 1, value);  // (buf, letters incl. end, %.*g = floats formatted in shortest form, length-1 digits after decimal, val)
             std::string result(buffer);  // copy buffer to result            
-            if (chop_zeroes) result = result.substr(0, result.find_last_not_of('0') + 1);
+            if (value != 0.0 && chop_zeroes) result = result.substr(0, result.find_last_not_of('0') + 1);
             return result;
         }
         if (place < 0 && sigdig - place <= maxlength) {  // Then we want decimal w/o initial '0' limited to given significant digits (eg .123, .0123, .00123)
