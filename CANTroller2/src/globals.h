@@ -1,11 +1,11 @@
 // globals.h - not dependent on anything, so include this first
 #pragma once
 #include "Arduino.h"
-// pin assignments  ESP32-S3-DevkitC series
-#define     boot_sw_pin  0 // button0/strap1   // The esp "Boot" button
-#define  encoder_sw_pin  1 // adc1.0           // Input, Rotary encoder push switch, for the UI. active low (needs pullup).
-#define    touch_cs_pin  2 // adc1.1           // Output, chip select for resistive touchscreen, active low - ! pin is also defined in tft_setup.h
-#define   sdcard_cs_pin  3 // adc1.2/strapX    // Output, chip select for SD card controller on SPI bus
+// pin assignments  ESP32-S3-DevkitC series   (Note: "*" are pins we can reclaim if needed)
+#define     boot_sw_pin  0 // button0/strap1   // The esp "Boot" button.  If more pins are needed, move encoder_sw_pin to this pin, no other signal of ours can work on this pin due to high-at-boot requirement
+#define      tft_dc_pin  1 // adc1.0           // Output, Assert when sending data to display chip to indicate commands vs. screen data - ! pin is also defined in tft_setup.h
+#define    touch_cs_pin  2 // adc1.1         * // Output, chip select for resistive touchscreen, active low. Not used on car, so can assign pin to something else if needed
+#define   sdcard_cs_pin  3 // adc1.2/strapX  * // Output, chip select for SD card controller on SPI bus. sdcard functionality is not implemented, we may not even need it
 #define    mulebatt_pin  4 // adc1.3           // Analog input, mule battery voltage sense, full scale is 16V
 #define         pot_pin  5 // adc1.4           // Analog in from 20k pot
 #define   brake_pos_pin  6 // adc1.5           // Analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
@@ -21,13 +21,13 @@
 #define     gas_pwm_pin 16 // pwm1/adc2.5      // Output, PWM signal duty cycle controls throttle target. On Due this is the pin labeled DAC1 (where A13 is on Mega)
 #define   brake_pwm_pin 17 // pwm0/adc2.6/tx1  // Output, PWM signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% is stopped)
 #define   steer_pwm_pin 18 // pwm0/adc2.7/rx1  // Output, PWM signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
-#define steer_enc_a_pin 19 // usb-d-/adc2.8    // Reserved for a steering quadrature encoder. Encoder "A" signal
-#define steer_enc_b_pin 20 // usb-d+/adc2.9    // Reserved for a steering quadrature encoder. Encoder "B" signal
+#define steer_enc_a_pin 19 // usb-d-/adc2.8  * // Reserved for usb or a steering quadrature encoder. Encoder "A" signal
+#define steer_enc_b_pin 20 // usb-d+/adc2.9  * // Reserved for usb or a steering quadrature encoder. Encoder "B" signal
 #define     onewire_pin 21 // pwm0             // Onewire bus for temperature sensor data. note: tested this does not work on higher-numbered pins (~35+)
 #define      speedo_pin 35 // spiram/octspi    // Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
 #define     starter_pin 36 // sram/ospi/glitch // Input/Output (both active high), output when starter is being driven, otherwise input senses external starter activation
 #define        tach_pin 37 // spiram/octspi    // Int Input, active high, asserted when magnet South is in range of sensor. 1 pulse per engine rotation. (no pullup) - Note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on
-#define      tft_dc_pin 38 // spiram/octspi    // Output, Assert when sending data to display chip to indicate commands vs. screen data - ! pin is also defined in tft_setup.h
+#define  encoder_sw_pin 38 // spiram/octspi  * // Input, Rotary encoder push switch, for the UI. active low (needs pullup). Signal can be moved to pin 0 to free up this pin. Pin 38 is the neopixel pin on v1.1 boards
 #define basicmodesw_pin 39 // jtck/glitch      // Input, asserted to tell us to run in basic mode, active low (has ext pullup) - Note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define   hotrc_ch4_pin 40 // jtdo             // Syspower, starter, and cruise mode toggle control. Hotrc Ch4 PWM toggle signal
 #define   hotrc_ch3_pin 41 // jtdi             // Ignition control, Hotrc Ch3 PWM toggle signal
