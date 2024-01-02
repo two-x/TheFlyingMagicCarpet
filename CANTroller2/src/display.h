@@ -285,6 +285,7 @@ class Display {
         draw_fixed(datapage, datapage_last, false);
         draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
         all_dirty();
+        anim_mgr = &animations;
         animations.setup();
         Serial.printf(" initialized\n");
     }

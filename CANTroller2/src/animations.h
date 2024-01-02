@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 // #define CONFIG_IDF_TARGET_ESP32
+enum saverchoices : int { Eraser, Collisions, NumSaverMenu, Blank };
 static LGFX_Sprite sp[2];
 LGFX_Sprite* nowspr;
 LGFX* lcd;
@@ -11,7 +12,83 @@ static constexpr std::uint32_t SHIFTSIZE = 8;
 static std::uint32_t sec, psec, _width, _height, _fps = 0, fps = 0, frame_count = 0;
 volatile bool _is_running;
 volatile std::uint32_t _draw_count;
-volatile std::uint32_t _loop_;
+volatile std::uint32_t _draw_count_last;
+volatile std::uint32_t _loop_count;
+volatile bool now_drawing = false;
+bool round_over = false;
+struct ball_info_t {
+    int32_t x;
+    int32_t y;
+    int32_t dx;
+    int32_t dy;
+    int32_t r;
+    int32_t m;
+    uint32_t color;
+};
+static constexpr std::uint32_t BALL_MAX = 96;  // 256
+std::uint32_t ball_count = 0;
+ball_info_t _balls[2][BALL_MAX];
+std::uint32_t _ball_count = 0;
+
+void diffDraw() {
+    union {
+        std::uint32_t* s32;
+        std::uint8_t* s;
+    };
+    union {
+        std::uint32_t* p32;
+        std::uint8_t* p;
+    };
+    s32 = (std::uint32_t*)sp[flip].getBuffer();
+    p32 = (std::uint32_t*)sp[!flip].getBuffer();
+    auto sprwidth = sp[flip].width();
+    auto sprheight = sp[flip].height();
+    auto w32 = (sprwidth + 3) >> 2;
+    std::int32_t y = 0;
+    // lcd->startWrite();
+    do {
+        std::int32_t x32 = 0;
+        do {
+            while (s32[x32] == p32[x32] && ++x32 < w32);
+            if (x32 == w32) break;
+            std::int32_t xs = x32 << 2;
+            while (s[xs] == p[xs]) ++xs;
+            while (++x32 < w32 && s32[x32] != p32[x32]);
+            std::int32_t xe = (x32 << 2) - 1;
+            if (xe >= sprwidth) xe = sprwidth - 1;
+            while (s[xe] == p[xe]) --xe;
+            lcd->pushImage(xs + corner[HORZ], y + corner[VERT], xe - xs + 1, 1, &s[xs]);
+            // lcd->pushImage(xs + corner[HORZ], y + corner[VERT], xe - xs + 1, 1, &s[xs]);
+        } while (x32 < w32);
+        s32 += w32;
+        p32 += w32;
+    } while (++y < sprheight);
+    lcd->display();
+    // lcd->endWrite();
+}
+
+void drawfunc(void) {
+    now_drawing = true;
+    ball_info_t* balls;
+    ball_info_t* a;
+    LGFX_Sprite* sprite;
+    auto sprwidth = sp[0].width();
+    auto sprheight = sp[0].height();
+    flip = _draw_count & 1;
+    balls = &_balls[flip][0];
+    sprite = &(sp[flip]);
+    sprite->clear(TFT_BLACK);
+    for (int32_t i = 8; i < sprwidth; i += 16) sprite->drawFastVLine(i, 0, sprheight, 0x1F);
+    for (int32_t i = 8; i < sprheight; i += 16) sprite->drawFastHLine(0, i, sprwidth, 0x1F);
+    for (std::uint32_t i = 0; i < _ball_count; i++) {
+        a = &balls[i];
+        sprite->fillCircle(a->x >> SHIFTSIZE, a->y >> SHIFTSIZE, a->r >> SHIFTSIZE, a->color);
+    }
+    diffDraw();
+    ++_draw_count;
+    now_drawing = false;
+}
+
 class Animation {
  public:
     static void init(LGFX* _lcd, Touchscreen* touch, uint32_t _cornerx, uint32_t _cornery, uint32_t _sprwidth, uint32_t _sprheight) {
@@ -66,81 +143,12 @@ class Animation {
         nowspr = &(sp[flip]);
         if (clear) nowspr->clear();
     }
-    void diffDraw() {
-        union {
-            std::uint32_t* s32;
-            std::uint8_t* s;
-        };
-        union {
-            std::uint32_t* p32;
-            std::uint8_t* p;
-        };
-        s32 = (std::uint32_t*)sp[flip].getBuffer();
-        p32 = (std::uint32_t*)sp[!flip].getBuffer();
-        auto sprwidth = sp[flip].width();
-        auto sprheight = sp[flip].height();
-        auto w32 = (sprwidth + 3) >> 2;
-        std::int32_t y = 0;
-        lcd->startWrite();
-        do {
-            std::int32_t x32 = 0;
-            do {
-                while (s32[x32] == p32[x32] && ++x32 < w32);
-                if (x32 == w32) break;
-                std::int32_t xs = x32 << 2;
-                while (s[xs] == p[xs]) ++xs;
-                while (++x32 < w32 && s32[x32] != p32[x32]);
-                std::int32_t xe = (x32 << 2) - 1;
-                if (xe >= sprwidth) xe = sprwidth - 1;
-                while (s[xe] == p[xe]) --xe;
-                lcd->pushImage(xs + corner[HORZ], y + corner[VERT], xe - xs + 1, 1, &s[xs]);
-                // lcd->pushImage(xs + corner[HORZ], y + corner[VERT], xe - xs + 1, 1, &s[xs]);
-            } while (x32 < w32);
-            s32 += w32;
-            p32 += w32;
-        } while (++y < sprheight);
-        // lcd->display();
-        lcd->endWrite();
-    }
 };
+
 class CollisionsSaver : public Animation {
   public:
-    struct ball_info_t {
-        int32_t x;
-        int32_t y;
-        int32_t dx;
-        int32_t dy;
-        int32_t r;
-        int32_t m;
-        uint32_t color;
-    };
-    static constexpr std::uint32_t BALL_MAX = 96;  // 256
-    ball_info_t _balls[2][BALL_MAX];
-    std::uint32_t _ball_count = 0, _fps = 0;
-    std::uint32_t ball_count = 0;
-    std::uint32_t sec, psec;
-    std::uint32_t fps = 0, frame_count = 0;
-    volatile bool _is_running;
-    volatile std::uint32_t _loop_count;
+    // volatile bool _is_running;
     CollisionsSaver() {}
-    void drawfunc(void) {
-        ball_info_t* balls;
-        ball_info_t* a;
-        LGFX_Sprite* sprite;
-        auto sprwidth = sp[0].width();
-        auto sprheight = sp[0].height();
-        flip = _draw_count & 1;
-        balls = &_balls[flip][0];
-        sprite = &(sp[flip]);
-        sprite->clear(TFT_BLACK);
-        for (int32_t i = 8; i < sprwidth; i += 16) sprite->drawFastVLine(i, 0, sprheight, 0x1F);
-        for (int32_t i = 8; i < sprheight; i += 16) sprite->drawFastHLine(0, i, sprwidth, 0x1F);
-        for (std::uint32_t i = 0; i < _ball_count; i++) {
-            a = &balls[i];
-            sprite->fillCircle(a->x >> SHIFTSIZE, a->y >> SHIFTSIZE, a->r >> SHIFTSIZE, a->color);
-        }
-        ++_draw_count;
-    }
     bool mainfunc(void) {
         bool new_round = false;
         static constexpr float e = 0.999;  // Coefficient of friction
@@ -161,9 +169,9 @@ class CollisionsSaver : public Animation {
             a->dy = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
             a->r = (4 + (ball_count & 0x07)) << SHIFTSIZE;
             a->m = 4 + (ball_count & 0x07);
-            #if defined(ESP32) || defined(CONFIG_IDF_TARGET_ESP32) || defined(ESP_PLATFORM)
-                vTaskDelay(1);
-            #endif
+            // #if defined(ESP32) || defined(CONFIG_IDF_TARGET_ESP32) || defined(ESP_PLATFORM)
+            vTaskDelay(1);
+            // #endif
         }
         frame_count++;
         _loop_count++;
@@ -241,17 +249,6 @@ class CollisionsSaver : public Animation {
         _ball_count = ball_count;
         return new_round;
     }
-    #if defined(ESP32) || defined(CONFIG_IDF_TARGET_ESP32) || defined(ESP_PLATFORM)
-        void taskDraw(void*) {
-            while (_is_running) {
-            while (_loop_count == _draw_count) {
-                taskYIELD();
-            }
-            drawfunc();
-            }
-            vTaskDelete(NULL);
-        }
-    #endif
     virtual void setup() override { reset(); }
     virtual void reset() override {
         for (int i = 0; i <= 1; i++) {
@@ -269,20 +266,22 @@ class CollisionsSaver : public Animation {
             a->r = (4 + (i & 0x07)) << SHIFTSIZE;
             a->m = 4 + (i & 0x07);
         }
-        _is_running = true;
+        _is_running = screensaver;
         _draw_count = 0;
         _loop_count = 0;
-        #if defined(CONFIG_IDF_TARGET_ESP32)
-            xTaskCreate(taskDraw, "taskDraw", 2048, NULL, 0, NULL);
-        #endif
     }
     virtual int update() override {
-        bool round_over = mainfunc();
-        #if defined(CONFIG_IDF_TARGET_ESP32)
-            while (_loop_count != _draw_count) { taskYIELD(); }
-        #else
-            drawfunc();
-        #endif
+        // Serial.printf("n%d l%d d%d dl%d\n", now_drawing, _loop_count, _draw_count, _draw_count_last);
+
+        if ((_loop_count == _draw_count) && !now_drawing) round_over = mainfunc();
+        // if ((_loop_count == _draw_count) && (_draw_count != _draw_count_last)) round_over = mainfunc();
+        // _draw_count_last = _draw_count;
+        // #if defined(CONFIG_IDF_TARGET_ESP32)
+        // else taskYIELD();
+             while (_loop_count != _draw_count) { taskYIELD(); }
+        // #else
+        //     drawfunc();
+        // #endif
         return !round_over;  // not done yet
     }
     virtual void saver_touch(int16_t, int16_t) override{};  // unused
@@ -458,11 +457,10 @@ class BlankSaver : public Animation {
     int update() { return true; }
     virtual void saver_touch(int16_t, int16_t) override{};  // unused
 };
+
 class AnimationManager {
   private:
-    enum saverchoices : int { Eraser, Collisions, NumSaverMenu, Blank };
     uint32_t cornerx, cornery, sizex, sizey;
-    int nowsaver = Collisions, still_running = 0;
     LGFX* mylcd;
     BlankSaver bSaver;
     EraserSaver eSaver;
@@ -483,15 +481,13 @@ class AnimationManager {
         ptrsaver->reset();
     }
   public:
+    bool updated;
+    int nowsaver = Eraser, still_running = 0;
     AnimationManager(LGFX* _lcd, Touchscreen* touch, uint32_t _cornerx, uint32_t _cornery, uint32_t _sizex, uint32_t _sizey)
         : mylcd(_lcd), mytouch(touch), cornerx(_cornerx), cornery(_cornery), sizex(_sizex), sizey(_sizey) {}
-    void setup() {
-        Animation::init(mylcd, mytouch, cornerx, cornery, sizex, sizey);
-        eSaver.setup();
-        cSaver.setup();
-    }
+    void setup();
     void reset() { ptrsaver->reset(); }
-    void redraw() { ptrsaver->diffDraw(); }
+    void redraw() { diffDraw(); }
     void calc_fps() {
         int64_t now = fps_timer.elapsed();
         fps = (float)(now - fps_mark);
@@ -509,12 +505,58 @@ class AnimationManager {
         // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
         // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
         if (saverRefreshTimer.expireset() || screensaver_max_refresh) {
+            // Serial.printf("s%d n%d i%d ", screensaver, (nowsaver == Collisions), _is_running);
+
             calc_fps();
             ptrsaver->setflip((nowsaver == Collisions));
             still_running = ptrsaver->update();
-            if (still_running) ptrsaver->diffDraw();
+            // if (still_running) updated = true;
+            if (still_running) {
+                if (nowsaver == Eraser) diffDraw();
+                // else if (nowsaver == Collisions) cSaver.mainfunc();
+            }
             else change_saver();
+            // Serial.printf("u%d\n ", updated);
         }
         return fps;
     }
+    // void draw() {
+    //     cSaver.drawfunc();
+    // }
 };
+AnimationManager* anim_mgr;
+static void taskDraw(void*) {
+    while (true) {
+        // Serial.printf("s%d n%d i%d ", screensaver, (anim_mgr->nowsaver == Collisions), _is_running);
+        // while (screensaver && (anim_mgr->nowsaver == Collisions) && _is_running) {
+
+        
+        while (_is_running) {
+            // Serial.printf("n%d l%d d%d ", now_drawing, _loop_count, _draw_count);
+        
+            // while (!anim_mgr->updated) taskYIELD();
+            while (_loop_count == _draw_count) {
+                taskYIELD();
+            }
+
+            // vTaskDelay(1);
+            // anim_mgr->draw(); // 
+            drawfunc();
+            // vTaskDelay(1);
+            // anim_mgr->updated = false;
+            // Serial.printf("n%d l%d d%d\n", now_drawing, _loop_count, _draw_count);
+
+        
+        }
+        vTaskDelay(1);
+
+    }
+    vTaskDelete(NULL);
+}
+
+void AnimationManager::setup() {
+    Animation::init(mylcd, mytouch, cornerx, cornery, sizex, sizey);
+    eSaver.setup();
+    cSaver.setup();
+    xTaskCreate(taskDraw, "taskDraw", 4096, NULL, 0, NULL);
+}
