@@ -162,7 +162,6 @@ int32_t disp_targets[disp_lines];
 int32_t disp_age_quanta[disp_lines];
 uint16_t disp_val_colors[disp_lines];
 Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
-
 // These defines are just a convenience to keep the below datapage strings array initializations aligned in neat rows & cols for legibility
 #define stEr "St\x88r"
 #define brAk "Br\x83k"
@@ -683,9 +682,10 @@ class Display {
   public:
     void update(int _nowmode) {
         tiny_text();
+        if (!display_enabled || bus_busy) return;
+        bus_busy = true;
         update_idiots(disp_idiots_dirty);
         disp_idiots_dirty = false;
-        if (!display_enabled) return;
         if (disp_datapage_dirty) {
             static bool first = true;
             draw_datapage(datapage, datapage_last, first);
@@ -868,6 +868,7 @@ class Display {
         }
         if (!sim.enabled() && !_procrastinate) fps = animations.update();
         _procrastinate = false;
+        bus_busy = false;
     }
 };
 class Tuner {

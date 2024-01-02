@@ -3,11 +3,11 @@
 // #define CONFIG_IDF_TARGET_ESP32
 enum saverchoices : int { Eraser, Collisions, NumSaverMenu, Blank };
 static LGFX_Sprite sp[2];
-LGFX_Sprite* nowspr;
-LGFX* lcd;
-Touchscreen* _touch;
-uint32_t corner[2], sprwidth, sprheight;
-std::size_t flip = 0;
+static LGFX_Sprite* nowspr;
+static LGFX* lcd;
+static Touchscreen* _touch;
+static uint32_t corner[2], sprwidth, sprheight;
+static std::size_t flip = 0;
 static constexpr std::uint32_t SHIFTSIZE = 8;
 static std::uint32_t sec, psec, _width, _height, _fps = 0, fps = 0, frame_count = 0;
 volatile bool _is_running;
@@ -15,7 +15,7 @@ volatile std::uint32_t _draw_count;
 volatile std::uint32_t _draw_count_last;
 volatile std::uint32_t _loop_count;
 volatile bool now_drawing = false;
-bool round_over = false;
+static bool round_over = false;
 struct ball_info_t {
     int32_t x;
     int32_t y;
@@ -25,10 +25,10 @@ struct ball_info_t {
     int32_t m;
     uint32_t color;
 };
-static constexpr std::uint32_t BALL_MAX = 96;  // 256
-std::uint32_t ball_count = 0;
-ball_info_t _balls[2][BALL_MAX];
-std::uint32_t _ball_count = 0;
+static constexpr std::uint32_t BALL_MAX = 64;  // 256
+static std::uint32_t ball_count = 0;
+static ball_info_t _balls[2][BALL_MAX];
+static std::uint32_t _ball_count = 0;
 
 void diffDraw() {
     union {
@@ -66,27 +66,128 @@ void diffDraw() {
     lcd->display();
     // lcd->endWrite();
 }
-
+void setflip(bool clear=true) {  // clear=true blacks out the sprite before drawing on it
+    flip = _draw_count & 1;
+    nowspr = &(sp[flip]);
+    if (clear) nowspr->clear();
+}
 void drawfunc(void) {
     now_drawing = true;
     ball_info_t* balls;
     ball_info_t* a;
-    LGFX_Sprite* sprite;
     auto sprwidth = sp[0].width();
     auto sprheight = sp[0].height();
-    flip = _draw_count & 1;
+    setflip();
     balls = &_balls[flip][0];
-    sprite = &(sp[flip]);
-    sprite->clear(TFT_BLACK);
-    for (int32_t i = 8; i < sprwidth; i += 16) sprite->drawFastVLine(i, 0, sprheight, 0x1F);
-    for (int32_t i = 8; i < sprheight; i += 16) sprite->drawFastHLine(0, i, sprwidth, 0x1F);
+    for (int32_t i = 8; i < sprwidth; i += 16) nowspr->drawFastVLine(i, 0, sprheight, 0x1F);
+    for (int32_t i = 8; i < sprheight; i += 16) nowspr->drawFastHLine(0, i, sprwidth, 0x1F);
     for (std::uint32_t i = 0; i < _ball_count; i++) {
         a = &balls[i];
-        sprite->fillCircle(a->x >> SHIFTSIZE, a->y >> SHIFTSIZE, a->r >> SHIFTSIZE, a->color);
+        nowspr->fillCircle(a->x >> SHIFTSIZE, a->y >> SHIFTSIZE, a->r >> SHIFTSIZE, a->color);
     }
     diffDraw();
     ++_draw_count;
     now_drawing = false;
+}
+bool mainfunc(void) {
+    bool new_round = false;
+    static constexpr float e = 0.999;  // Coefficient of friction
+    sec = lgfx::millis() / 1000;
+    if (psec != sec) {
+        psec = sec;
+        fps = frame_count;
+        frame_count = 0;
+        if (++ball_count >= BALL_MAX) {
+            new_round = true;
+            ball_count = 1;
+        }
+        auto a = &_balls[_loop_count & 1][ball_count - 1];
+        a->color = lgfx::color888(100 + (rand() % 155), 100 + (rand() % 155), 100 + (rand() % 155));
+        a->x = 0;
+        a->y = 0;
+        a->dx = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
+        a->dy = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
+        a->r = (4 + (ball_count & 0x07)) << SHIFTSIZE;
+        a->m = 4 + (ball_count & 0x07);
+        #if defined(ESP32) || defined(CONFIG_IDF_TARGET_ESP32) || defined(ESP_PLATFORM)
+            vTaskDelay(1);
+        #endif
+    }
+    frame_count++;
+    _loop_count++;
+    ball_info_t *a, *b, *balls;
+    int32_t rr, len, vx2vy2;
+    float vx, vy, distance, t;
+    size_t f = _loop_count & 1;
+    balls = a = &_balls[f][0];
+    b = &_balls[!f][0];
+    memcpy(a, b, sizeof(ball_info_t) * ball_count);
+    for (int i = 0; i != ball_count; i++) {
+        a = &balls[i];
+        //  a->dy += 4; // gravity
+        a->x += a->dx;
+        if (a->x < a->r) {
+            a->x = a->r;
+            if (a->dx < 0) a->dx = -a->dx * e;
+        }
+        else if (a->x >= _width - a->r) {
+            a->x = _width - a->r - 1;
+            if (a->dx > 0) a->dx = -a->dx * e;
+        }
+        a->y += a->dy;
+        if (a->y < a->r) {
+            a->y = a->r;
+            if (a->dy < 0) a->dy = -a->dy * e;
+        }
+        else if (a->y >= _height - a->r) {
+            a->y = _height - a->r - 1;
+            if (a->dy > 0) a->dy = -a->dy * e;
+        }
+        for (int j = i + 1; j != ball_count; j++) {
+            b = &balls[j];
+            rr = a->r + b->r;
+            vx = a->x - b->x;
+            if (abs(vx) > rr) continue;
+            vy = a->y - b->y;
+            if (abs(vy) > rr) continue;
+            len = sqrt(vx * vx + vy * vy);
+            if (len >= rr) continue;
+            if (len == 0.0) continue;
+            distance = (rr - len) >> 1;
+            vx *= distance / len;
+            vy *= distance / len;
+            a->x += vx;
+            b->x -= vx;
+            vx = b->x - a->x;
+            a->y += vy;
+            b->y -= vy;
+            vy = b->y - a->y;
+            vx2vy2 = vx * vx + vy * vy;
+            t = -(vx * a->dx + vy * a->dy) / vx2vy2;
+            float arx = a->dx + vx * t;
+            float ary = a->dy + vy * t;
+            t = -(-vy * a->dx + vx * a->dy) / vx2vy2;
+            float amx = a->dx - vy * t;
+            float amy = a->dy + vx * t;
+            t = -(vx * b->dx + vy * b->dy) / vx2vy2;
+            float brx = b->dx + vx * t;
+            float bry = b->dy + vy * t;
+            t = -(-vy * b->dx + vx * b->dy) / vx2vy2;
+            float bmx = b->dx - vy * t;
+            float bmy = b->dy + vx * t;
+            float adx = (a->m * amx + b->m * bmx + bmx * e * b->m - amx * e * b->m) / (a->m + b->m);
+            float bdx = -e * (bmx - amx) + adx;
+            float ady = (a->m * amy + b->m * bmy + bmy * e * b->m - amy * e * b->m) / (a->m + b->m);
+            float bdy = -e * (bmy - amy) + ady;
+            a->dx = roundf(adx + arx);
+            a->dy = roundf(ady + ary);
+            b->dx = roundf(bdx + brx);
+            b->dy = roundf(bdy + bry);
+        }
+    }
+    _fps = fps;
+    _ball_count = ball_count;
+    return new_round;
 }
 
 class Animation {
@@ -138,121 +239,48 @@ class Animation {
     virtual void reset() = 0;
     virtual void saver_touch(int16_t, int16_t) = 0;
     virtual int update() = 0;  //{ return 0; };
-    void setflip(bool clear) {  // clear=true blacks out the sprite before drawing on it
-        flip = _draw_count & 1;
-        nowspr = &(sp[flip]);
-        if (clear) nowspr->clear();
-    }
 };
+#if defined (ESP32) || defined (CONFIG_IDF_TARGET_ESP32) || defined (ESP_PLATFORM)
+static void taskDraw(void*) {
+    // while (true) {
+        // Serial.printf("s%d n%d i%d ", screensaver, (anim_mgr->nowsaver == Collisions), _is_running);
+        // while (screensaver && (anim_mgr->nowsaver == Collisions) && _is_running) {
+
+        
+        while (_is_running) {
+            // Serial.printf("n%d l%d d%d ", now_drawing, _loop_count, _draw_count);
+        
+            // while (!anim_mgr->updated) taskYIELD();
+            while ((_loop_count == _draw_count)){  // } || bus_busy) {
+                taskYIELD();
+            }
+            bus_busy = true;
+            // vTaskDelay(1);
+            // anim_mgr->draw(); // 
+            drawfunc();
+            bus_busy = false;
+
+            // vTaskDelay(1);
+            // anim_mgr->updated = false;
+            // Serial.printf("n%d l%d d%d\n", now_drawing, _loop_count, _draw_count);
+
+        
+        }
+        // vTaskDelay(1);
+
+    // }
+    vTaskDelete(NULL);
+}
+#endif
 
 class CollisionsSaver : public Animation {
   public:
     // volatile bool _is_running;
     CollisionsSaver() {}
-    bool mainfunc(void) {
-        bool new_round = false;
-        static constexpr float e = 0.999;  // Coefficient of friction
-        sec = lgfx::millis() / 1000;
-        if (psec != sec) {
-            psec = sec;
-            fps = frame_count;
-            frame_count = 0;
-            if (++ball_count >= BALL_MAX) {
-                new_round = true;
-                ball_count = 1;
-            }
-            auto a = &_balls[_loop_count & 1][ball_count - 1];
-            a->color = lgfx::color888(100 + (rand() % 155), 100 + (rand() % 155), 100 + (rand() % 155));
-            a->x = 0;
-            a->y = 0;
-            a->dx = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
-            a->dy = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
-            a->r = (4 + (ball_count & 0x07)) << SHIFTSIZE;
-            a->m = 4 + (ball_count & 0x07);
-            // #if defined(ESP32) || defined(CONFIG_IDF_TARGET_ESP32) || defined(ESP_PLATFORM)
-            vTaskDelay(1);
-            // #endif
-        }
-        frame_count++;
-        _loop_count++;
-        ball_info_t *a, *b, *balls;
-        int32_t rr, len, vx2vy2;
-        float vx, vy, distance, t;
-        size_t f = _loop_count & 1;
-        balls = a = &_balls[f][0];
-        b = &_balls[!f][0];
-        memcpy(a, b, sizeof(ball_info_t) * ball_count);
-        for (int i = 0; i != ball_count; i++) {
-            a = &balls[i];
-            //  a->dy += 4; // gravity
-            a->x += a->dx;
-            if (a->x < a->r) {
-                a->x = a->r;
-                if (a->dx < 0) a->dx = -a->dx * e;
-            }
-            else if (a->x >= _width - a->r) {
-                a->x = _width - a->r - 1;
-                if (a->dx > 0) a->dx = -a->dx * e;
-            }
-            a->y += a->dy;
-            if (a->y < a->r) {
-                a->y = a->r;
-                if (a->dy < 0) a->dy = -a->dy * e;
-            }
-            else if (a->y >= _height - a->r) {
-                a->y = _height - a->r - 1;
-                if (a->dy > 0) a->dy = -a->dy * e;
-            }
-            for (int j = i + 1; j != ball_count; j++) {
-                b = &balls[j];
-                rr = a->r + b->r;
-                vx = a->x - b->x;
-                if (abs(vx) > rr) continue;
-                vy = a->y - b->y;
-                if (abs(vy) > rr) continue;
-                len = sqrt(vx * vx + vy * vy);
-                if (len >= rr) continue;
-                if (len == 0.0) continue;
-                distance = (rr - len) >> 1;
-                vx *= distance / len;
-                vy *= distance / len;
-                a->x += vx;
-                b->x -= vx;
-                vx = b->x - a->x;
-                a->y += vy;
-                b->y -= vy;
-                vy = b->y - a->y;
-                vx2vy2 = vx * vx + vy * vy;
-                t = -(vx * a->dx + vy * a->dy) / vx2vy2;
-                float arx = a->dx + vx * t;
-                float ary = a->dy + vy * t;
-                t = -(-vy * a->dx + vx * a->dy) / vx2vy2;
-                float amx = a->dx - vy * t;
-                float amy = a->dy + vx * t;
-                t = -(vx * b->dx + vy * b->dy) / vx2vy2;
-                float brx = b->dx + vx * t;
-                float bry = b->dy + vy * t;
-                t = -(-vy * b->dx + vx * b->dy) / vx2vy2;
-                float bmx = b->dx - vy * t;
-                float bmy = b->dy + vx * t;
-                float adx = (a->m * amx + b->m * bmx + bmx * e * b->m - amx * e * b->m) / (a->m + b->m);
-                float bdx = -e * (bmx - amx) + adx;
-                float ady = (a->m * amy + b->m * bmy + bmy * e * b->m - amy * e * b->m) / (a->m + b->m);
-                float bdy = -e * (bmy - amy) + ady;
-                a->dx = roundf(adx + arx);
-                a->dy = roundf(ady + ary);
-                b->dx = roundf(bdx + brx);
-                b->dy = roundf(bdy + bry);
-            }
-        }
-        _fps = fps;
-        _ball_count = ball_count;
-        return new_round;
-    }
     virtual void setup() override { reset(); }
     virtual void reset() override {
         for (int i = 0; i <= 1; i++) {
-            sp[i].clear(TFT_BLACK);
+            sp[i].fillScreen(TFT_BLACK);
             sp[i].setTextSize(1);
             sp[i].setTextDatum(textdatum_t::top_left);
         }
@@ -269,6 +297,9 @@ class CollisionsSaver : public Animation {
         _is_running = screensaver;
         _draw_count = 0;
         _loop_count = 0;
+        #if defined (CONFIG_IDF_TARGET_ESP32)
+            xTaskCreate(taskDraw, "taskDraw", 2048, NULL, 0, NULL);
+        #endif
     }
     virtual int update() override {
         // Serial.printf("n%d l%d d%d dl%d\n", now_drawing, _loop_count, _draw_count, _draw_count_last);
@@ -501,23 +532,30 @@ class AnimationManager {
         }
         screensaver_last = screensaver;
         if (!screensaver) return NAN;
-        if (_touch->touched()) ptrsaver->saver_touch(_touch->touch_pt(HORZ), _touch->touch_pt(VERT));
-        // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
-        // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
+        // if (_touch->touched()) ptrsaver->saver_touch(_touch->touch_pt(HORZ), _touch->touch_pt(VERT));
+        // // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
+        // // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
         if (saverRefreshTimer.expireset() || screensaver_max_refresh) {
-            // Serial.printf("s%d n%d i%d ", screensaver, (nowsaver == Collisions), _is_running);
+        //     // Serial.printf("s%d n%d i%d ", screensaver, (nowsaver == Collisions), _is_running);
+            mainfunc();
+            #if defined (CONFIG_IDF_TARGET_ESP32)
+                while (_loop_count != _draw_count) { taskYIELD(); }
+            #else
+                drawfunc();
+            #endif
 
-            calc_fps();
-            ptrsaver->setflip((nowsaver == Collisions));
-            still_running = ptrsaver->update();
-            // if (still_running) updated = true;
-            if (still_running) {
-                if (nowsaver == Eraser) diffDraw();
-                // else if (nowsaver == Collisions) cSaver.mainfunc();
-            }
-            else change_saver();
-            // Serial.printf("u%d\n ", updated);
+             calc_fps();
         }
+        //     ptrsaver->setflip((nowsaver == Collisions));
+        //     still_running = ptrsaver->update();
+        //     // if (still_running) updated = true;
+        //     if (still_running) {
+        //         if (nowsaver == Eraser) diffDraw();
+        //         // else if (nowsaver == Collisions) cSaver.mainfunc();
+        //     }
+        //     else change_saver();
+        //     // Serial.printf("u%d\n ", updated);
+        // }
         return fps;
     }
     // void draw() {
@@ -525,38 +563,10 @@ class AnimationManager {
     // }
 };
 AnimationManager* anim_mgr;
-static void taskDraw(void*) {
-    while (true) {
-        // Serial.printf("s%d n%d i%d ", screensaver, (anim_mgr->nowsaver == Collisions), _is_running);
-        // while (screensaver && (anim_mgr->nowsaver == Collisions) && _is_running) {
-
-        
-        while (_is_running) {
-            // Serial.printf("n%d l%d d%d ", now_drawing, _loop_count, _draw_count);
-        
-            // while (!anim_mgr->updated) taskYIELD();
-            while (_loop_count == _draw_count) {
-                taskYIELD();
-            }
-
-            // vTaskDelay(1);
-            // anim_mgr->draw(); // 
-            drawfunc();
-            // vTaskDelay(1);
-            // anim_mgr->updated = false;
-            // Serial.printf("n%d l%d d%d\n", now_drawing, _loop_count, _draw_count);
-
-        
-        }
-        vTaskDelay(1);
-
-    }
-    vTaskDelete(NULL);
-}
 
 void AnimationManager::setup() {
     Animation::init(mylcd, mytouch, cornerx, cornery, sizex, sizey);
     eSaver.setup();
     cSaver.setup();
-    xTaskCreate(taskDraw, "taskDraw", 4096, NULL, 0, NULL);
+    // xTaskCreate(taskDraw, "taskDraw", 4096, NULL, 0, NULL);
 }
