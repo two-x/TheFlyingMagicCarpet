@@ -6,11 +6,23 @@
 #define USE_DIFFDRAW 1
 #define USE_DMA 1
 #define FULLSCREEN_SPRITES 1
+#define disp_width_pix 320
+#define disp_height_pix 240
+
 // enum displaysprites : int { DrawSp, RefSp, PushSp, NumSp };
 enum dirs : int { HORZ, VERT };
+
+#if USE_DIFFDRAW
+    volatile int PushSp = 2;
+    static constexpr int NumSp = 3;
+#else
+    volatile int PushSp = 1;
+    static constexpr int NumSp = 2;
+#endif
+
 #if USE_SECOND_CORE
     #include <atomic>
-    std::atomic<bool> sprite_locked[3];
+    std::atomic<bool> sprite_locked[NumSp];
     #define LOCK_SPRITE(n) while(sprite_locked[n]) delay(1); \
         sprite_locked[n] = true;
     #define UNLOCK_SPRITE(n) sprite_locked[n] = false;
@@ -18,6 +30,12 @@ enum dirs : int { HORZ, VERT };
     #define   LOCK_SPRITE(n)
     #define UNLOCK_SPRITE(n)
 #endif
+
+// #if FULLSCREEN_SPRITES
+//     uint16_t spr[disp_width_pix][NumSp];
+// #else
+//     uint16_t spr[disp_width_pix][NumSp];
+// #endif
 
 void drawcube();
 void push_task();
@@ -49,30 +67,26 @@ volatile bool ready_to_push = false;
 volatile int draw_count;
 volatile int push_count;
 static int push_wait_us, draw_wait_us;
-volatile int DrawSp = 0, RefSp = 1, PushSp = 2;
-// volatile int flip[NumSp] == { 0, 1, 2 };  // which sprite index is being used by Draw, Ref, and Push phase operations
-volatile bool pushed[3] = { true, true, false };
-volatile bool drawn[3] = { false, true, true };
+volatile int DrawSp = 0, RefSp = 1;
+volatile bool pushed[NumSp];
+volatile bool drawn[NumSp];
 int corner[2] = { 0, 0 };
 int tft_w, tft_h;
-// volatile bool sprite_pushed[3] = { true, false };
+static constexpr uint32_t color_depth = 16;
 static constexpr int iwidth = 128;  // 128x128 for a 16-bit colour Sprite (32Kbytes RAM)
 static constexpr int iheight = 128;  // Maximum is 181x181 (64Kbytes) for DMA -  restricted by processor design
 TFT_eSPI tft = TFT_eSPI();  // Library instance Declare object "tft"
-TFT_eSprite spr[3] = { TFT_eSprite(&tft), TFT_eSprite(&tft), TFT_eSprite(&tft) };  // Create two sprites for a DMA toggle buffer
-// int flip[NumSp] = { DrawSp, RefSp, PushSp }; // Toggle buffer selection
-uint16_t* sprPtr[3];  // Pointers to start of Sprites in RAM
+#if USE_DIFFDRAW
+    TFT_eSprite spr[NumSp] = { TFT_eSprite(&tft), TFT_eSprite(&tft), TFT_eSprite(&tft) };
+#else
+    TFT_eSprite spr[NumSp] = { TFT_eSprite(&tft), TFT_eSprite(&tft) };
+#endif
+uint16_t* sprPtr[NumSp];  // Pointers to start of Sprites in RAM
 uint16_t counter = 0;  // Used for fps measuring
 long startMillis = millis();
 uint16_t interval = 100;
 String fps = "0fps";  // Frames per second
 int16_t xpos = 0, ypos = 0;  // Sprite draw position
-        // drawUpdate(0); // Update top half
-        // drawUpdate(1); // Update bottom half
-        // moveCircles(); // Update circle positions after bottom half has been drawn
-  // Set window area to pour pixels into
-//   tft.setAddrWindow(minx, miny, width, height);
-// #endif // USE_SECOND_CORE
 
 // related to bouncy cube
 static constexpr int cubesize = 358;  // Size of cube image. 358 is max for 128x128 sprite, too big and pixel trails are drawn...
@@ -223,7 +237,7 @@ void drawcube() {  // should not
         // tft.endWrite();  // Release exclusive use of SPI bus ( here as a reminder... forever loop prevents execution)
         drawn[DrawSp] = true;
         pushed[DrawSp] = false;
-        ++DrawSp %= 3;
+        ++DrawSp %= NumSp;
         draw_count++;
     }
 }
@@ -241,7 +255,9 @@ void pushsprites() {  // uint_fast8_t flip
         // if (tft.dmaBusy() && prime_number_processor_load) prime_max++; // Increase processing load until just not busy
         // while (tft.dmaBusy() || (draw_count <= push_count)) delayMicroseconds(200);  // Hang out till dma can be used
         tft.startWrite();  // Start SPI transaction and drop TFT_CS - avoids transaction overhead in loop
+        
         tft.pushImageDMA(xpos, ypos, iwidth, iheight, sprPtr[PushSp]);
+        
         tft.endWrite();
     #else
         if (prime_number_processor_load) prime_max = prime_number_processor_load;
@@ -251,9 +267,8 @@ void pushsprites() {  // uint_fast8_t flip
     UNLOCK_SPRITE(PushSp);
     // UNLOCK_SPRITE(RefSp);
     pushed[PushSp] = true;
-    drawn[RefSp] = false;
-    ++PushSp %= 3;
-    ++RefSp %= 3;
+    drawn[PushSp] = false;
+    ++PushSp %= NumSp;
     push_count++;
     // // Method 2 (BouncyCircles example) : draws screen in alternating halves. Modified with option to use 2nd core
     // #if USE_DMA
@@ -273,41 +288,64 @@ void pushdiffs() {
     // LOCK_SPRITE(RefSp);
     union {
         std::uint32_t* s32;
-        std::uint16_t* s;
+        std::uint16_t* s16;
+        // std::uint8_t* s8;
     };
     union {
         std::uint32_t* p32;
-        std::uint16_t* p;
+        std::uint16_t* p16;
+        // std::uint8_t* p8;
     };
     s32 = (std::uint32_t*)spr[PushSp].getPointer();  // In lgfx library was    getBuffer();
     p32 = (std::uint32_t*)spr[RefSp].getPointer();
     auto sprwidth = spr[PushSp].width();
     auto sprheight = spr[PushSp].height();
-    auto w32 = (sprwidth + 1) >> 1;
+    auto w32 = (sprwidth + 1) >> 1;  // (color_depth == 8) ? 3 : 1) >> ((color_depth == 8) ? 2 : 1);
     std::int32_t y = 0;
     tft.startWrite();  // Start SPI transaction and drop TFT_CS - avoids transaction overhead in loop
     do {
         std::int32_t x32 = 0;
+        std::int32_t xs, xe;
         do {
             while (s32[x32] == p32[x32] && ++x32 < w32);
             if (x32 == w32) break;
-            std::int32_t xs = x32 << 1;
-            while (s[xs] == p[xs]) ++xs;
-            while (++x32 < w32 && s32[x32] != p32[x32]);
-            std::int32_t xe = (x32 << 1) - 1;
-            if (xe >= sprwidth) xe = sprwidth - 1;
-            while (s[xe] == p[xe]) --xe;
+            // if (color_depth == 8) {
+            //     xs = x32 << 2;
+            //     while (s8[xs] == p8[xs]) ++xs;
+            //     while (++x32 < w32 && s32[x32] != p32[x32]);
+            //     xe = (x32 << 2) - 1;
+            //     if (xe >= sprwidth) xe = sprwidth - 1;
+            //     while (s8[xe] == p8[xe]) --xe;
+            // }
+            // else if (color_depth == 16) {
+                xs = x32 << 1;
+                while (s16[xs] == p16[xs]) ++xs;
+                while (++x32 < w32 && s32[x32] != p32[x32]);
+                xe = (x32 << 1) - 1;
+                if (xe >= sprwidth) xe = sprwidth - 1;
+                while (s16[xe] == p16[xe]) --xe;
+            // }
+            
             #if USE_DMA
+                // tft.pushPixelsDMA(&(s[xs]), xe - xs + 1);
                 #if FULLSCREEN_SPRITES
-                    tft.pushImageDMA(xs, y, xe - xs + 1, 1, &s[xs]);
+                    // if (color_depth == 8) tft.pushImageDMA(xs, y, xe - xs + 1, 1, &s8[xs]);
+                    // else if (color_depth == 16) 
+                    // tft.setAddrWindow(xs, y, xe - xs + 1, 1);   // Set window area to pour pixels into
+                    // tft.pushPixelsDMA(&renderbuf[bufIdx][0], xe - xs + 1); // Push line to screen        
+                    tft.pushImageDMA(xs, y, xe - xs + 1, 1, &s16[xs]);
                 #else
-                    tft.pushImageDMA(xs + xpos, y + ypos, xe - xs + 1, 1, &s[xs]);
+                    // if (color_depth == 8) tft.pushImageDMA(xs + xpos, y + ypos, xe - xs + 1, 1, &s8[xs]);
+                    // else if (color_depth == 16) 
+                    tft.pushImageDMA(xs + xpos, y + ypos, xe - xs + 1, 1, &s16[xs]);
                 #endif
             #else
                 #if FULLSCREEN_SPRITES
-                    tft.pushImage(xs, y, xe - xs + 1, 1, &s[xs]);
+                    if (color_depth == 8) tft.pushImage(xs, y, xe - xs + 1, 1, &s8[xs]);
+                    else if (color_depth == 16) tft.pushImage(xs, y, xe - xs + 1, 1, &s16[xs]);
                 #else
-                    tft.pushImage(xs + xpos, y + ypos, xe - xs + 1, 1, &s[xs]);
+                    if (color_depth == 8) tft.pushImage(xs + xpos, y + ypos, xe - xs + 1, 1, &s8[xs]);
+                    else if (color_depth == 16) tft.pushImage(xs + xpos, y + ypos, xe - xs + 1, 1, &s16[xs]);
                 #endif
             #endif
             // lcd->pushImage(xs + corner[HORZ], y + corner[VERT], xe - xs + 1, 1, &s[xs]);
@@ -322,8 +360,8 @@ void pushdiffs() {
     UNLOCK_SPRITE(PushSp);
     pushed[PushSp] = true;
     drawn[RefSp] = false;
-    ++PushSp %= 3;
-    ++RefSp %= 3;
+    ++PushSp %= NumSp;
+    ++RefSp %= NumSp;
     push_count++;
 }
 
@@ -349,18 +387,37 @@ void gfx_setup() {
     tft.setRotation(2);
     xpos = 0;
     ypos = (tft.height() - iheight) / 2;
-    // #if USE_DIFFDRAW
-        tft_w = tft.width();
-        tft_h = tft.height();
-    // #endif
-    for (int i=0; i<3; i++) {
+    tft_w = tft.width();
+    tft_h = tft.height();
+    drawn[DrawSp] = pushed[PushSp] = false;
+    pushed[DrawSp] = drawn[PushSp] = true;
+    #if USE_DIFFDRAW
+        pushed[RefSp] = drawn[RefSp] = true;
+    #endif
+    for (int i=0; i<NumSp; i++) {
         // #if USE_DIFFDRAW
         //     spr[i].setColorDepth(8);  // Color depth has to be 16 bits if DMA is used to render image
         // #else
-            spr[i].setColorDepth(8);  // Color depth has to be 16 bits if DMA is used to render image
+
+            spr[i].setColorDepth(color_depth);  // Color depth has to be 16 bits if DMA is used to render image
         // #endif
         #if FULLSCREEN_SPRITES
-            sprPtr[i] = (uint16_t*)spr[i].createSprite(tft_w, tft_h);
+            // spr[i].createSprite(tft_w, tft_h);
+            spr[i].createSprite(tft_w, tft_h/2);
+            sprPtr[i] = (uint16_t*)(spr[i].getPointer());
+
+            // for (int h=0; h<=1; h++) {
+            //     halfPtr[i][h] = (uint16_t*)spr[i].createSprite(spr[i].width(), spr[i].height() / 2);
+            //     // Move the sprite 1 coordinate datum upwards half the screen height so from coordinate point of view it occupies the bottom of screen
+                
+            //     spr[1].setViewport(0, -DHEIGHT / 2, DWIDTH, DHEIGHT);
+
+
+            //     if (color_depth == 8)
+            //         halfPtr[i][h] = originalSprite; // Copy the original sprite properties
+            //         halfPtr[i][h].setSpriteSize(160, 120);
+            //         halfPtr[i][h] = (uint8_t*)(sprPtr[i] + h * sprPtr[i]->width() * sprPtr[i]->height() * color_depth / (2 * 32));
+            // }
             // sprPtr[i] = (uint16_t*)spr[i].createSprite(120, 320);
             // sprPtr[i] = (uint16_t*)spr[i].createSprite(160, 120);
             
