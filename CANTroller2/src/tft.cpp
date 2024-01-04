@@ -3,9 +3,9 @@
 #include <TFT_eSPI.h>
 #include <esp_task_wdt.h>
 #define USE_SECOND_CORE 1
-#define USE_DIFFDRAW 1
+#define USE_DIFFDRAW 0
 #define USE_DMA 1
-#define FULLSCREEN_SPRITES 1
+#define FULLSCREEN_SPRITES 0
 #define disp_width_pix 320
 #define disp_height_pix 240
 
@@ -31,15 +31,6 @@ enum dirs : int { HORZ, VERT };
     #define UNLOCK_SPRITE(n)
 #endif
 
-// #if FULLSCREEN_SPRITES
-//     uint16_t spr[disp_width_pix][NumSp];
-// #else
-//     uint16_t spr[disp_width_pix][NumSp];
-// #endif
-
-void drawcube();
-void push_task();
-void pushsprites();
 // https://en.wikipedia.org/wiki/Direct_memory_access
 // The rotating cube is drawn into a 128 x 128 Sprite and then this is
 // rendered to screen. The Sprite need 32Kbytes of RAM and DMA buffer the same
@@ -66,7 +57,7 @@ uint32_t computePrimeNumbers(int32_t n) {  // This is to provide a processing lo
 volatile bool ready_to_push = false;
 volatile int draw_count;
 volatile int push_count;
-static int push_wait_us, draw_wait_us;
+int push_wait_us, draw_wait_us;
 volatile int DrawSp = 0, RefSp = 1;
 volatile bool pushed[NumSp];
 volatile bool drawn[NumSp];
@@ -88,159 +79,166 @@ uint16_t interval = 100;
 String fps = "0fps";  // Frames per second
 int16_t xpos = 0, ypos = 0;  // Sprite draw position
 
-// related to bouncy cube
-static constexpr int cubesize = 358;  // Size of cube image. 358 is max for 128x128 sprite, too big and pixel trails are drawn...
-uint16_t palette[] = { TFT_WHITE, TFT_GREENYELLOW, TFT_YELLOW, TFT_PINK, TFT_MAGENTA, TFT_CYAN }; // Define the cube face colors
-float d = 15;  // size / 2 of cube edge
-bool spinX = true, spinY = true, spinZ = true;  // 3 axis spin control
-int xmin, ymin, xmax, ymax;  // Min and max of cube edges, "int" type used for compatibility with original sketch min() function
-float px[] = { -d,  d,  d, -d, -d,  d,  d, -d };
-float py[] = { -d, -d,  d,  d, -d, -d,  d,  d };
-float pz[] = { -d, -d, -d, -d,  d,  d,  d,  d };
-float p2x[] = { 0, 0, 0, 0, 0, 0, 0, 0 };  // mapped coordinates on screen
-float p2y[] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-float r[] = { 0, 0, 0 };  // rotation angle in radians
-int faces[12][3] = {  // Define the triangles. The order of the vertices MUST be CCW or the shoelace method won't work to detect visible edges
-    {0, 1, 4}, {1, 5, 4}, {1, 2, 5}, {2, 6, 5}, {5, 7, 4}, {6, 7, 5},
-    {3, 4, 7}, {4, 3, 0}, {0, 3, 1}, {1, 3, 2}, {2, 3, 6}, {6, 3, 7},
-};
-static uint32_t updateTime = 0;  // time for next update
-static int wait = 0;  //random (20);
-static bool bounce = false;
-static int dx = 1, dy = 1;
-
-// Detected visible triangles. If calculated area > 0 the triangle is rendered facing towards the viewer, 
-// since the vertices are CCW. If the area is negative the triangle is CW and thus facing away from us.
-int shoelace(int x1, int y1, int x2, int y2, int x3, int y3) {  // (x1y2 - y1x2) + (x2y3 - y2x3)
-    return x1 * y2 - y1 * x2 + x2 * y3 - y2 * x3 + x3 * y1 - y3 * x1;
-}
-void rendercube() { // Rotates and renders the cube.
-    double speed = 90;
-    if (spinX) r[0] = r[0] + PI / speed; // Add a degree
-    if (spinY) r[1] = r[1] + PI / speed; // Add a degree
-    if (spinZ) r[2] = r[2] + PI / speed; // Add a degree
-    if (r[0] >= 360.0 * PI / 90.0) r[0] = 0;
-    if (r[1] >= 360.0 * PI / 90.0) r[1] = 0;
-    if (r[2] >= 360.0 * PI / 90.0) r[2] = 0;
-    float ax[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-    float ay[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-    float az[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-    for (int i = 0; i < 8; i++) {  // Calculate all vertices of the cube
-        float px2 = px[i];
-        float py2 = cos(r[0]) * py[i] - sin(r[0]) * pz[i];
-        float pz2 = sin(r[0]) * py[i] + cos(r[0]) * pz[i];
-        float px3 = cos(r[1]) * px2 + sin(r[1]) * pz2;
-        float py3 = py2;
-        float pz3 = -sin(r[1]) * px2 + cos(r[1]) * pz2;
-        ax[i] = cos(r[2]) * px3 - sin(r[2]) * py3;
-        ay[i] = sin(r[2]) * px3 + cos(r[2]) * py3;
-        az[i] = pz3 - 150;
-        p2x[i] = iwidth / 2 + ax[i] * cubesize / az[i];
-        p2y[i] = iheight / 2 + ay[i] * cubesize / az[i];
+class SpinnyCube {
+  public:
+    SpinnyCube() { 
+        cube_setup();
     }
-    spr[DrawSp].fillSprite(TFT_BLACK);  // Fill the buffer with colour 0 (Black)
-    for (int i = 0; i < 12; i++) {
-        if (shoelace(p2x[faces[i][0]], p2y[faces[i][0]], p2x[faces[i][1]], p2y[faces[i][1]], p2x[faces[i][2]], p2y[faces[i][2]]) > 0) {
-            int x0 = p2x[faces[i][0]];
-            int y0 = p2y[faces[i][0]];
-            int x1 = p2x[faces[i][1]];
-            int y1 = p2y[faces[i][1]];
-            int x2 = p2x[faces[i][2]];
-            int y2 = p2y[faces[i][2]];
-            xmin = min(xmin, x0);
-            ymin = min(ymin, y0);
-            xmin = min(xmin, x1);
-            ymin = min(ymin, y1);
-            xmin = min(xmin, x2);
-            ymin = min(ymin, y2);
-            xmax = max(xmax, x0);
-            ymax = max(ymax, y0);
-            xmax = max(xmax, x1);
-            ymax = max(ymax, y1);
-            xmax = max(xmax, x2);
-            ymax = max(ymax, y2);
-            #if FULLSCREEN_SPRITES
-                spr[DrawSp].fillTriangle(x0 + xpos, y0 + ypos, x1 + xpos, y1 + ypos, x2 + xpos, y2 + ypos, palette[i / 2]);
-            #else
-                spr[DrawSp].fillTriangle(x0, y0, x1, y1, x2, y2, palette[i / 2]);
-            #endif
-            if (i % 2) {
-                int avX = 0;
-                int avY = 0;
-                for (int v = 0; v < 3; v++) {
-                    avX += p2x[faces[i][v]];
-                    avY += p2y[faces[i][v]];
+    static constexpr int cubesize = 358;  // Size of cube image. 358 is max for 128x128 sprite, too big and pixel trails are drawn...
+    uint16_t palette[6] = { TFT_WHITE, TFT_GREENYELLOW, TFT_YELLOW, TFT_PINK, TFT_MAGENTA, TFT_CYAN }; // Define the cube face colors
+    float d = 15;  // size / 2 of cube edge
+    bool spinX = true, spinY = true, spinZ = true;  // 3 axis spin control
+    int xmin, ymin, xmax, ymax;  // Min and max of cube edges, "int" type used for compatibility with original sketch min() function
+    float px[8] = { -d,  d,  d, -d, -d,  d,  d, -d };
+    float py[8] = { -d, -d,  d,  d, -d, -d,  d,  d };
+    float pz[8] = { -d, -d, -d, -d,  d,  d,  d,  d };
+    float p2x[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };  // mapped coordinates on screen
+    float p2y[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    float r[3] = { 0, 0, 0 };  // rotation angle in radians
+    int faces[12][3] = {  // Define the triangles. The order of the vertices MUST be CCW or the shoelace method won't work to detect visible edges
+        {0, 1, 4}, {1, 5, 4}, {1, 2, 5}, {2, 6, 5}, {5, 7, 4}, {6, 7, 5},
+        {3, 4, 7}, {4, 3, 0}, {0, 3, 1}, {1, 3, 2}, {2, 3, 6}, {6, 3, 7},
+    };
+    uint32_t updateTime = 0;  // time for next update
+    int wait = 0;  //random (20);
+    bool bounce = false;
+    int dx = 1, dy = 1;
+
+    // Detected visible triangles. If calculated area > 0 the triangle is rendered facing towards the viewer, 
+    // since the vertices are CCW. If the area is negative the triangle is CW and thus facing away from us.
+    int shoelace(int x1, int y1, int x2, int y2, int x3, int y3) {  // (x1y2 - y1x2) + (x2y3 - y2x3)
+        return x1 * y2 - y1 * x2 + x2 * y3 - y2 * x3 + x3 * y1 - y3 * x1;
+    }
+    void rendercube() { // Rotates and renders the cube.
+        double speed = 90;
+        if (spinX) r[0] = r[0] + PI / speed; // Add a degree
+        if (spinY) r[1] = r[1] + PI / speed; // Add a degree
+        if (spinZ) r[2] = r[2] + PI / speed; // Add a degree
+        if (r[0] >= 360.0 * PI / 90.0) r[0] = 0;
+        if (r[1] >= 360.0 * PI / 90.0) r[1] = 0;
+        if (r[2] >= 360.0 * PI / 90.0) r[2] = 0;
+        float ax[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+        float ay[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+        float az[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+        for (int i = 0; i < 8; i++) {  // Calculate all vertices of the cube
+            float px2 = px[i];
+            float py2 = cos(r[0]) * py[i] - sin(r[0]) * pz[i];
+            float pz2 = sin(r[0]) * py[i] + cos(r[0]) * pz[i];
+            float px3 = cos(r[1]) * px2 + sin(r[1]) * pz2;
+            float py3 = py2;
+            float pz3 = -sin(r[1]) * px2 + cos(r[1]) * pz2;
+            ax[i] = cos(r[2]) * px3 - sin(r[2]) * py3;
+            ay[i] = sin(r[2]) * px3 + cos(r[2]) * py3;
+            az[i] = pz3 - 150;
+            p2x[i] = iwidth / 2 + ax[i] * cubesize / az[i];
+            p2y[i] = iheight / 2 + ay[i] * cubesize / az[i];
+        }
+        spr[DrawSp].fillSprite(TFT_BLACK);  // Fill the buffer with colour 0 (Black)
+        for (int i = 0; i < 12; i++) {
+            if (shoelace(p2x[faces[i][0]], p2y[faces[i][0]], p2x[faces[i][1]], p2y[faces[i][1]], p2x[faces[i][2]], p2y[faces[i][2]]) > 0) {
+                int x0 = p2x[faces[i][0]];
+                int y0 = p2y[faces[i][0]];
+                int x1 = p2x[faces[i][1]];
+                int y1 = p2y[faces[i][1]];
+                int x2 = p2x[faces[i][2]];
+                int y2 = p2y[faces[i][2]];
+                xmin = min(xmin, x0);
+                ymin = min(ymin, y0);
+                xmin = min(xmin, x1);
+                ymin = min(ymin, y1);
+                xmin = min(xmin, x2);
+                ymin = min(ymin, y2);
+                xmax = max(xmax, x0);
+                ymax = max(ymax, y0);
+                xmax = max(xmax, x1);
+                ymax = max(ymax, y1);
+                xmax = max(xmax, x2);
+                ymax = max(ymax, y2);
+                #if FULLSCREEN_SPRITES
+                    spr[DrawSp].fillTriangle(x0 + xpos, y0 + ypos, x1 + xpos, y1 + ypos, x2 + xpos, y2 + ypos, palette[i / 2]);
+                #else
+                    spr[DrawSp].fillTriangle(x0, y0, x1, y1, x2, y2, palette[i / 2]);
+                #endif
+                if (i % 2) {
+                    int avX = 0;
+                    int avY = 0;
+                    for (int v = 0; v < 3; v++) {
+                        avX += p2x[faces[i][v]];
+                        avY += p2y[faces[i][v]];
+                    }
+                    avX = avX / 3;
+                    avY = avY / 3;
                 }
-                avX = avX / 3;
-                avY = avY / 3;
             }
+            spr[DrawSp].drawString(fps, 0, 0, 0);
         }
-        spr[DrawSp].drawString(fps, 0, 0, 0);
+        //spr[flip].drawString(fps, iwidth / 2, iheight / 2, 4);
+        //delay(100);
     }
-    //spr[flip].drawString(fps, iwidth / 2, iheight / 2, 4);
-    //delay(100);
-}
 
-void cube_setup() {
-    if (random(2)) dx = -1;  // Random movement direction
-    if (random(2)) dy = -1;  // Random movement direction
-}
-
-void drawcube() {  // should not 
-    while (true) {  // Loop forever
-        draw_wait_us = 0;
-        while (drawn[DrawSp] || !pushed[DrawSp]) {
-            delayMicroseconds(10);
-            draw_wait_us += 10;
-        }
-        // Serial.printf("d%d s:%d,%d,%d dp:%d%d,%d%d,%d%d\n", draw_wait_us, DrawSp, RefSp, PushSp, drawn[0], pushed[0], drawn[1], pushed[1], drawn[2], pushed[2]);
-        drawn[DrawSp] = false;
-        // Serial.printf("draw f%d\n", flip);
-        LOCK_SPRITE(DrawSp);
-        if (xpos >= tft.width() - xmax) { bounce = true; dx = -1; }  // Pull it back onto screen if it wanders off
-        else if (xpos < -xmin) { bounce = true; dx = 1; }
-        if (ypos >= tft.height() - ymax) { bounce = true; dy = -1; }
-        else if (ypos < -ymin) { bounce = true; dy = 1; }
-        if (bounce) {  // Randomise spin
-            if (random(2)) spinX = true;
-            else spinX = false;
-            if (random(2)) spinY = true;
-            else spinY = false;
-            if (random(2)) spinZ = true;
-            else spinZ = false;
-            bounce = false;
-            //wait = random (20);
-        }
-        // if (updateTime <= millis()) {  // Use time delay so sprtie does not move fast when not all on screen
-        updateTime = millis() + wait;
-        xmin = iwidth / 2; xmax = iwidth / 2; ymin = iheight / 2; ymax = iheight / 2;
-        rendercube();  // draws newest image onto sprite
-        UNLOCK_SPRITE(DrawSp);
-        #if USE_SECOND_CORE
-        #else    
-            push_task();
-        #endif
-        if (counter % interval == 0) {  // only calculate the fps every <interval> iterations.
-            long millisSinceUpdate = millis() - startMillis;
-            fps = String((int)(interval * 1000.0 / (millisSinceUpdate))) + " fps";
-            Serial.printf("\n%s\n", fps);
-            startMillis = millis();
-        }
-        if (prime_number_processor_load) {  // Add a processor task
-            uint32_t pr = computePrimeNumbers(prime_max);
-            Serial.printf("\rbig=%d    ", pr);
-        }
-        xpos += dx;  // Change coord for next loop
-        ypos += dy;
-
-        // }
-        // tft.endWrite();  // Release exclusive use of SPI bus ( here as a reminder... forever loop prevents execution)
-        drawn[DrawSp] = true;
-        pushed[DrawSp] = false;
-        ++DrawSp %= NumSp;
-        draw_count++;
+    void cube_setup() {
+        if (random(2)) dx = -1;  // Random movement direction
+        if (random(2)) dy = -1;  // Random movement direction
     }
-}
+
+    void drawcube() {  // should not 
+        while (true) {  // Loop forever
+            draw_wait_us = 0;
+            while (drawn[DrawSp] || !pushed[DrawSp]) {
+                delayMicroseconds(10);
+                draw_wait_us += 10;
+            }
+            // Serial.printf("d%d s:%d,%d,%d dp:%d%d,%d%d,%d%d\n", draw_wait_us, DrawSp, RefSp, PushSp, drawn[0], pushed[0], drawn[1], pushed[1], drawn[2], pushed[2]);
+            drawn[DrawSp] = false;
+            // Serial.printf("draw f%d\n", flip);
+            LOCK_SPRITE(DrawSp);
+            if (xpos >= tft.width() - xmax) { bounce = true; dx = -1; }  // Pull it back onto screen if it wanders off
+            else if (xpos < -xmin) { bounce = true; dx = 1; }
+            if (ypos >= tft.height() - ymax) { bounce = true; dy = -1; }
+            else if (ypos < -ymin) { bounce = true; dy = 1; }
+            if (bounce) {  // Randomise spin
+                if (random(2)) spinX = true;
+                else spinX = false;
+                if (random(2)) spinY = true;
+                else spinY = false;
+                if (random(2)) spinZ = true;
+                else spinZ = false;
+                bounce = false;
+                //wait = random (20);
+            }
+            // if (updateTime <= millis()) {  // Use time delay so sprtie does not move fast when not all on screen
+            updateTime = millis() + wait;
+            xmin = iwidth / 2; xmax = iwidth / 2; ymin = iheight / 2; ymax = iheight / 2;
+            rendercube();  // draws newest image onto sprite
+            UNLOCK_SPRITE(DrawSp);
+            #if USE_SECOND_CORE
+            #else    
+                push_task();
+            #endif
+            if (counter % interval == 0) {  // only calculate the fps every <interval> iterations.
+                long millisSinceUpdate = millis() - startMillis;
+                fps = String((int)(interval * 1000.0 / (millisSinceUpdate))) + " fps";
+                Serial.printf("\n%s\n", fps);
+                startMillis = millis();
+            }
+            if (prime_number_processor_load) {  // Add a processor task
+                uint32_t pr = computePrimeNumbers(prime_max);
+                Serial.printf("\rbig=%d    ", pr);
+            }
+            xpos += dx;  // Change coord for next loop
+            ypos += dy;
+
+            // }
+            // tft.endWrite();  // Release exclusive use of SPI bus ( here as a reminder... forever loop prevents execution)
+            drawn[DrawSp] = true;
+            pushed[DrawSp] = false;
+            ++DrawSp %= NumSp;
+            draw_count++;
+        }
+    }
+};
+SpinnyCube spinnycube;
+
 void pushsprites() {  // uint_fast8_t flip
     // Method 1 (BouncyBoxSprite example) : draws the next frame on one sprite while pushing the last, swapping back and forth
     push_wait_us = 0;
@@ -265,7 +263,6 @@ void pushsprites() {  // uint_fast8_t flip
     #endif
     counter++;
     UNLOCK_SPRITE(PushSp);
-    // UNLOCK_SPRITE(RefSp);
     pushed[PushSp] = true;
     drawn[PushSp] = false;
     ++PushSp %= NumSp;
@@ -364,12 +361,6 @@ void pushdiffs() {
     ++RefSp %= NumSp;
     push_count++;
 }
-
-void render_task() {  // aka drawUpdate()
-    // Serial.printf("rend f%d\n", flip);
-    drawcube();
-    esp_task_wdt_reset();
-}
 void push_task() {
     // Serial.printf("push f%d\n", pushflip);
     #if USE_DIFFDRAW
@@ -395,34 +386,12 @@ void gfx_setup() {
         pushed[RefSp] = drawn[RefSp] = true;
     #endif
     for (int i=0; i<NumSp; i++) {
-        // #if USE_DIFFDRAW
-        //     spr[i].setColorDepth(8);  // Color depth has to be 16 bits if DMA is used to render image
-        // #else
-
             spr[i].setColorDepth(color_depth);  // Color depth has to be 16 bits if DMA is used to render image
-        // #endif
         #if FULLSCREEN_SPRITES
-            // spr[i].createSprite(tft_w, tft_h);
             spr[i].createSprite(tft_w, tft_h/2);
             sprPtr[i] = (uint16_t*)(spr[i].getPointer());
-
-            // for (int h=0; h<=1; h++) {
-            //     halfPtr[i][h] = (uint16_t*)spr[i].createSprite(spr[i].width(), spr[i].height() / 2);
-            //     // Move the sprite 1 coordinate datum upwards half the screen height so from coordinate point of view it occupies the bottom of screen
-                
-            //     spr[1].setViewport(0, -DHEIGHT / 2, DWIDTH, DHEIGHT);
-
-
-            //     if (color_depth == 8)
-            //         halfPtr[i][h] = originalSprite; // Copy the original sprite properties
-            //         halfPtr[i][h].setSpriteSize(160, 120);
-            //         halfPtr[i][h] = (uint8_t*)(sprPtr[i] + h * sprPtr[i]->width() * sprPtr[i]->height() * color_depth / (2 * 32));
-            // }
-            // sprPtr[i] = (uint16_t*)spr[i].createSprite(120, 320);
-            // sprPtr[i] = (uint16_t*)spr[i].createSprite(160, 120);
-            
         #else
-            sprPtr[i] = (uint16_t*)spr[i].createSprite(iwidth, iheight);
+            sprPtr[i] = (uint16_t*)(spr[i].createSprite(iwidth, iheight));
         #endif
         spr[i].setTextColor(TFT_WHITE);
         spr[i].setTextDatum(MC_DATUM);
@@ -431,15 +400,6 @@ void gfx_setup() {
         tft.initDMA(); // Initialise the DMA engine (tested with STM32F446 and STM32F767)- should work with ESP32, STM32F2xx/F4xx/F7xx processors  >>>>>> DMA IS FOR SPI DISPLAYS ONLY <<<<<<
     #endif
     startMillis = millis();  // Animation control timer
-
-    // TaskHandle_t renderTaskHandle = nullptr;
-    //     xTaskCreateUniversal([](void*) {
-    //         while(true) {
-    //             render_task();
-    //             delay(1); // allow for wifi etc
-    //         }
-    // }, "renderTask", 8192, NULL, 1, &renderTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);
-
     #if USE_SECOND_CORE    
         constexpr int runOnCore = CONFIG_ARDUINO_RUNNING_CORE == 0 ? 1 : 0;
         TaskHandle_t pushTaskHandle = nullptr;
@@ -450,14 +410,13 @@ void gfx_setup() {
             }
         }, "pushTask", 16384 , NULL, 1, &pushTaskHandle, runOnCore);  //  8192
     #endif
-    // #endif // USE_SECOND_CORE
 }
 // void update_framebuffer(bool flip) {}
 
 
 void setup() {
     gfx_setup();
-    cube_setup();
+    spinnycube.cube_setup();
 } 
 
-void loop() { drawcube(); } 
+void loop() { spinnycube.drawcube(); } 
