@@ -3,11 +3,14 @@
 #include <TFT_eSPI.h>
 #include <esp_task_wdt.h>
 #define USE_SECOND_CORE 1
+#define USE_DIFFDRAW 1
 #define USE_DMA 1
-
+#define FULLSCREEN_SPRITES 1
+// enum displaysprites : int { DrawSp, RefSp, PushSp, NumSp };
+enum dirs : int { HORZ, VERT };
 #if USE_SECOND_CORE
     #include <atomic>
-    std::atomic<bool> sprite_locked[2];
+    std::atomic<bool> sprite_locked[3];
     #define LOCK_SPRITE(n) while(sprite_locked[n]) delay(1); \
         sprite_locked[n] = true;
     #define UNLOCK_SPRITE(n) sprite_locked[n] = false;
@@ -16,7 +19,7 @@
     #define UNLOCK_SPRITE(n)
 #endif
 
-void drawCube();
+void drawcube();
 void push_task();
 void pushsprites();
 // https://en.wikipedia.org/wiki/Direct_memory_access
@@ -42,19 +45,23 @@ uint32_t computePrimeNumbers(int32_t n) {  // This is to provide a processing lo
     }
     return p; // Biggest   //Serial.println();
 }
-
 volatile bool ready_to_push = false;
 volatile int draw_count;
 volatile int push_count;
 static int push_wait_us, draw_wait_us;
-volatile bool sprite_drawn[2] = { false, true };
-volatile bool sprite_pushed[2] = { true, false };
+volatile int DrawSp = 0, RefSp = 1, PushSp = 2;
+// volatile int flip[NumSp] == { 0, 1, 2 };  // which sprite index is being used by Draw, Ref, and Push phase operations
+volatile bool pushed[3] = { true, true, false };
+volatile bool drawn[3] = { false, true, true };
+int corner[2] = { 0, 0 };
+int tft_w, tft_h;
+// volatile bool sprite_pushed[3] = { true, false };
 static constexpr int iwidth = 128;  // 128x128 for a 16-bit colour Sprite (32Kbytes RAM)
 static constexpr int iheight = 128;  // Maximum is 181x181 (64Kbytes) for DMA -  restricted by processor design
 TFT_eSPI tft = TFT_eSPI();  // Library instance Declare object "tft"
-TFT_eSprite spr[2] = { TFT_eSprite(&tft), TFT_eSprite(&tft) };  // Create two sprites for a DMA toggle buffer
-bool pushflip = 1, flip = 0;  // Toggle buffer selection
-uint16_t* sprPtr[2];  // Pointers to start of Sprites in RAM
+TFT_eSprite spr[3] = { TFT_eSprite(&tft), TFT_eSprite(&tft), TFT_eSprite(&tft) };  // Create two sprites for a DMA toggle buffer
+// int flip[NumSp] = { DrawSp, RefSp, PushSp }; // Toggle buffer selection
+uint16_t* sprPtr[3];  // Pointers to start of Sprites in RAM
 uint16_t counter = 0;  // Used for fps measuring
 long startMillis = millis();
 uint16_t interval = 100;
@@ -117,7 +124,7 @@ void rendercube() { // Rotates and renders the cube.
         p2x[i] = iwidth / 2 + ax[i] * cubesize / az[i];
         p2y[i] = iheight / 2 + ay[i] * cubesize / az[i];
     }
-    spr[flip].fillSprite(TFT_BLACK);  // Fill the buffer with colour 0 (Black)
+    spr[DrawSp].fillSprite(TFT_BLACK);  // Fill the buffer with colour 0 (Black)
     for (int i = 0; i < 12; i++) {
         if (shoelace(p2x[faces[i][0]], p2y[faces[i][0]], p2x[faces[i][1]], p2y[faces[i][1]], p2x[faces[i][2]], p2y[faces[i][2]]) > 0) {
             int x0 = p2x[faces[i][0]];
@@ -138,7 +145,11 @@ void rendercube() { // Rotates and renders the cube.
             ymax = max(ymax, y1);
             xmax = max(xmax, x2);
             ymax = max(ymax, y2);
-            spr[flip].fillTriangle(x0, y0, x1, y1, x2, y2, palette[i / 2]);
+            #if FULLSCREEN_SPRITES
+                spr[DrawSp].fillTriangle(x0 + xpos, y0 + ypos, x1 + xpos, y1 + ypos, x2 + xpos, y2 + ypos, palette[i / 2]);
+            #else
+                spr[DrawSp].fillTriangle(x0, y0, x1, y1, x2, y2, palette[i / 2]);
+            #endif
             if (i % 2) {
                 int avX = 0;
                 int avY = 0;
@@ -150,6 +161,7 @@ void rendercube() { // Rotates and renders the cube.
                 avY = avY / 3;
             }
         }
+        spr[DrawSp].drawString(fps, 0, 0, 0);
     }
     //spr[flip].drawString(fps, iwidth / 2, iheight / 2, 4);
     //delay(100);
@@ -163,14 +175,14 @@ void cube_setup() {
 void drawcube() {  // should not 
     while (true) {  // Loop forever
         draw_wait_us = 0;
-        while (!sprite_pushed[flip]) {
-            delayMicroseconds(100);
-            draw_wait_us += 100;
+        while (drawn[DrawSp] || !pushed[DrawSp]) {
+            delayMicroseconds(10);
+            draw_wait_us += 10;
         }
-        Serial.printf("d%d ", draw_wait_us);
-        sprite_drawn[flip] = false;
+        // Serial.printf("d%d s:%d,%d,%d dp:%d%d,%d%d,%d%d\n", draw_wait_us, DrawSp, RefSp, PushSp, drawn[0], pushed[0], drawn[1], pushed[1], drawn[2], pushed[2]);
+        drawn[DrawSp] = false;
         // Serial.printf("draw f%d\n", flip);
-        LOCK_SPRITE(flip);
+        LOCK_SPRITE(DrawSp);
         if (xpos >= tft.width() - xmax) { bounce = true; dx = -1; }  // Pull it back onto screen if it wanders off
         else if (xpos < -xmin) { bounce = true; dx = 1; }
         if (ypos >= tft.height() - ymax) { bounce = true; dy = -1; }
@@ -189,7 +201,7 @@ void drawcube() {  // should not
         updateTime = millis() + wait;
         xmin = iwidth / 2; xmax = iwidth / 2; ymin = iheight / 2; ymax = iheight / 2;
         rendercube();  // draws newest image onto sprite
-        UNLOCK_SPRITE(flip);
+        UNLOCK_SPRITE(DrawSp);
         #if USE_SECOND_CORE
         #else    
             push_task();
@@ -206,39 +218,42 @@ void drawcube() {  // should not
         }
         xpos += dx;  // Change coord for next loop
         ypos += dy;
+
         // }
         // tft.endWrite();  // Release exclusive use of SPI bus ( here as a reminder... forever loop prevents execution)
-        sprite_drawn[flip] = true;
-        sprite_pushed[flip] = false;
-        flip = !flip;
+        drawn[DrawSp] = true;
+        pushed[DrawSp] = false;
+        ++DrawSp %= 3;
         draw_count++;
     }
 }
 void pushsprites() {  // uint_fast8_t flip
     // Method 1 (BouncyBoxSprite example) : draws the next frame on one sprite while pushing the last, swapping back and forth
     push_wait_us = 0;
-    while (!sprite_drawn[pushflip]) {
-        delayMicroseconds(100);
-        push_wait_us += 100;
+    while (!drawn[PushSp] || pushed[PushSp]) {
+        delayMicroseconds(10);
+        push_wait_us += 10;
     }
-    Serial.printf("p%d ", push_wait_us);
-    LOCK_SPRITE(pushflip);
-    sprite_pushed[pushflip] = false;
+    // Serial.printf("p%d s:%d,%d,%d dp:%d%d,%d%d,%d%d\n", push_wait_us, DrawSp, RefSp, PushSp, drawn[0], pushed[0], drawn[1], pushed[1], drawn[2], pushed[2]);
+    LOCK_SPRITE(PushSp);
+    // LOCK_SPRITE(RefSp);
     #if USE_DMA
         // if (tft.dmaBusy() && prime_number_processor_load) prime_max++; // Increase processing load until just not busy
         // while (tft.dmaBusy() || (draw_count <= push_count)) delayMicroseconds(200);  // Hang out till dma can be used
         tft.startWrite();  // Start SPI transaction and drop TFT_CS - avoids transaction overhead in loop
-        tft.pushImageDMA(xpos, ypos, iwidth, iheight, sprPtr[pushflip]);
+        tft.pushImageDMA(xpos, ypos, iwidth, iheight, sprPtr[PushSp]);
         tft.endWrite();
     #else
         if (prime_number_processor_load) prime_max = prime_number_processor_load;
-        spr[pushflip].pushSprite(xpos, ypos); // Blocking write (no DMA) 115fps
+        spr[PushSp].pushSprite(xpos, ypos); // Blocking write (no DMA) 115fps
     #endif
     counter++;
-    UNLOCK_SPRITE(pushflip);
-    sprite_pushed[pushflip] = true;
-    sprite_drawn[pushflip] = false;
-    pushflip = !pushflip;
+    UNLOCK_SPRITE(PushSp);
+    // UNLOCK_SPRITE(RefSp);
+    pushed[PushSp] = true;
+    drawn[RefSp] = false;
+    ++PushSp %= 3;
+    ++RefSp %= 3;
     push_count++;
     // // Method 2 (BouncyCircles example) : draws screen in alternating halves. Modified with option to use 2nd core
     // #if USE_DMA
@@ -246,6 +261,70 @@ void pushsprites() {  // uint_fast8_t flip
     // #else
     //     tft.pushImage(0, flip * disp_height_pix / 2, disp_width_pix, disp_height_pix / 2, sprPtr[flip]);
     // #endif
+}
+void pushdiffs() {
+    push_wait_us = 0;
+    while (!drawn[PushSp] || pushed[PushSp]) {
+        delayMicroseconds(10);
+        push_wait_us += 10;
+    }
+    // Serial.printf("p%d s:%d,%d,%d dp:%d%d,%d%d,%d%d\n", push_wait_us, DrawSp, RefSp, PushSp, drawn[0], pushed[0], drawn[1], pushed[1], drawn[2], pushed[2]);
+    LOCK_SPRITE(PushSp);
+    // LOCK_SPRITE(RefSp);
+    union {
+        std::uint32_t* s32;
+        std::uint16_t* s;
+    };
+    union {
+        std::uint32_t* p32;
+        std::uint16_t* p;
+    };
+    s32 = (std::uint32_t*)spr[PushSp].getPointer();  // In lgfx library was    getBuffer();
+    p32 = (std::uint32_t*)spr[RefSp].getPointer();
+    auto sprwidth = spr[PushSp].width();
+    auto sprheight = spr[PushSp].height();
+    auto w32 = (sprwidth + 1) >> 1;
+    std::int32_t y = 0;
+    tft.startWrite();  // Start SPI transaction and drop TFT_CS - avoids transaction overhead in loop
+    do {
+        std::int32_t x32 = 0;
+        do {
+            while (s32[x32] == p32[x32] && ++x32 < w32);
+            if (x32 == w32) break;
+            std::int32_t xs = x32 << 1;
+            while (s[xs] == p[xs]) ++xs;
+            while (++x32 < w32 && s32[x32] != p32[x32]);
+            std::int32_t xe = (x32 << 1) - 1;
+            if (xe >= sprwidth) xe = sprwidth - 1;
+            while (s[xe] == p[xe]) --xe;
+            #if USE_DMA
+                #if FULLSCREEN_SPRITES
+                    tft.pushImageDMA(xs, y, xe - xs + 1, 1, &s[xs]);
+                #else
+                    tft.pushImageDMA(xs + xpos, y + ypos, xe - xs + 1, 1, &s[xs]);
+                #endif
+            #else
+                #if FULLSCREEN_SPRITES
+                    tft.pushImage(xs, y, xe - xs + 1, 1, &s[xs]);
+                #else
+                    tft.pushImage(xs + xpos, y + ypos, xe - xs + 1, 1, &s[xs]);
+                #endif
+            #endif
+            // lcd->pushImage(xs + corner[HORZ], y + corner[VERT], xe - xs + 1, 1, &s[xs]);
+        } while (x32 < w32);
+        s32 += w32;
+        p32 += w32;
+    } while (++y < sprheight);
+    // tft.display();
+    tft.endWrite();
+    counter++;
+    // UNLOCK_SPRITE(RefSp);
+    UNLOCK_SPRITE(PushSp);
+    pushed[PushSp] = true;
+    drawn[RefSp] = false;
+    ++PushSp %= 3;
+    ++RefSp %= 3;
+    push_count++;
 }
 
 void render_task() {  // aka drawUpdate()
@@ -255,7 +334,11 @@ void render_task() {  // aka drawUpdate()
 }
 void push_task() {
     // Serial.printf("push f%d\n", pushflip);
-    pushsprites();
+    #if USE_DIFFDRAW
+        pushdiffs();
+    #else
+        pushsprites();
+    #endif
     esp_task_wdt_reset();
 }
 void gfx_setup() {
@@ -263,12 +346,28 @@ void gfx_setup() {
     delay(1000);
     tft.init();
     tft.fillScreen(TFT_BLACK);
+    tft.setRotation(2);
     xpos = 0;
     ypos = (tft.height() - iheight) / 2;
-    for (int i=0; i<=1; i++) {
-        spr[i].setColorDepth(16);  // Color depth has to be 16 bits if DMA is used to render image
-        sprPtr[i] = (uint16_t*)spr[i].createSprite(iwidth, iheight);
-        spr[i].setTextColor(TFT_BLACK);
+    // #if USE_DIFFDRAW
+        tft_w = tft.width();
+        tft_h = tft.height();
+    // #endif
+    for (int i=0; i<3; i++) {
+        // #if USE_DIFFDRAW
+        //     spr[i].setColorDepth(8);  // Color depth has to be 16 bits if DMA is used to render image
+        // #else
+            spr[i].setColorDepth(8);  // Color depth has to be 16 bits if DMA is used to render image
+        // #endif
+        #if FULLSCREEN_SPRITES
+            sprPtr[i] = (uint16_t*)spr[i].createSprite(tft_w, tft_h);
+            // sprPtr[i] = (uint16_t*)spr[i].createSprite(120, 320);
+            // sprPtr[i] = (uint16_t*)spr[i].createSprite(160, 120);
+            
+        #else
+            sprPtr[i] = (uint16_t*)spr[i].createSprite(iwidth, iheight);
+        #endif
+        spr[i].setTextColor(TFT_WHITE);
         spr[i].setTextDatum(MC_DATUM);
     }
     #if USE_DMA
@@ -292,7 +391,7 @@ void gfx_setup() {
                 push_task();
                 delayMicroseconds(200); // allow for wifi etc
             }
-        }, "pushTask", 8192, NULL, 1, &pushTaskHandle, runOnCore);
+        }, "pushTask", 16384 , NULL, 1, &pushTaskHandle, runOnCore);  //  8192
     #endif
     // #endif // USE_SECOND_CORE
 }

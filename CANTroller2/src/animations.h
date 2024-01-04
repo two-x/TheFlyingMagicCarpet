@@ -11,7 +11,6 @@ static constexpr std::uint32_t SHIFTSIZE = 8;
 static std::uint32_t sec, psec, _width, _height, _fps = 0, fps = 0, frame_count = 0;
 volatile bool _is_running;
 volatile std::uint32_t _draw_count;
-volatile std::uint32_t _loop_;
 class Animation {
  public:
     static void init(LGFX* _lcd, Touchscreen* touch, uint32_t _cornerx, uint32_t _cornery, uint32_t _sprwidth, uint32_t _sprheight) {
