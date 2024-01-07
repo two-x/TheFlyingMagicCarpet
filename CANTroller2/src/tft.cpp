@@ -2,13 +2,17 @@
 // tft.h - started life as some examples in the tft_espi library, including one called SpriteRotatingCube.ino
 #include <TFT_eSPI.h>
 #include <esp_task_wdt.h>
+#include <esp_heap_caps.h>
+#include <esp32-hal-psram.h>
+
+
 #define USE_SECOND_CORE 1
 #define USE_DIFFDRAW 0
 #define USE_DMA 1
 #define FULLSCREEN_SPRITES 0
 #define disp_width_pix 320
 #define disp_height_pix 240
-
+void pushsprites();
 // enum displaysprites : int { DrawSp, RefSp, PushSp, NumSp };
 enum dirs : int { HORZ, VERT };
 
@@ -72,7 +76,9 @@ TFT_eSPI tft = TFT_eSPI();  // Library instance Declare object "tft"
 #else
     TFT_eSprite spr[NumSp] = { TFT_eSprite(&tft), TFT_eSprite(&tft) };
 #endif
+TFT_eSprite CubeSp{&tft};
 uint16_t* sprPtr[NumSp];  // Pointers to start of Sprites in RAM
+uint16_t* CubeSpPtr;
 uint16_t counter = 0;  // Used for fps measuring
 long startMillis = millis();
 uint16_t interval = 100;
@@ -133,7 +139,11 @@ class SpinnyCube {
             p2x[i] = iwidth / 2 + ax[i] * cubesize / az[i];
             p2y[i] = iheight / 2 + ay[i] * cubesize / az[i];
         }
-        spr[DrawSp].fillSprite(TFT_BLACK);  // Fill the buffer with colour 0 (Black)
+        #if FULLSCREEN_SPRITES
+            spr[DrawSp].fillSprite(TFT_BLACK);  // Fill the buffer with colour 0 (Black)
+        #else
+            CubeSp.fillSprite(TFT_BLACK);  // Fill the buffer with colour 0 (Black)
+        #endif
         for (int i = 0; i < 12; i++) {
             if (shoelace(p2x[faces[i][0]], p2y[faces[i][0]], p2x[faces[i][1]], p2y[faces[i][1]], p2x[faces[i][2]], p2y[faces[i][2]]) > 0) {
                 int x0 = p2x[faces[i][0]];
@@ -157,7 +167,7 @@ class SpinnyCube {
                 #if FULLSCREEN_SPRITES
                     spr[DrawSp].fillTriangle(x0 + xpos, y0 + ypos, x1 + xpos, y1 + ypos, x2 + xpos, y2 + ypos, palette[i / 2]);
                 #else
-                    spr[DrawSp].fillTriangle(x0, y0, x1, y1, x2, y2, palette[i / 2]);
+                    CubeSp.fillTriangle(x0, y0, x1, y1, x2, y2, palette[i / 2]);
                 #endif
                 if (i % 2) {
                     int avX = 0;
@@ -181,86 +191,100 @@ class SpinnyCube {
         if (random(2)) dy = -1;  // Random movement direction
     }
 
-    void drawcube() {  // should not 
+    void drawcubeloop() {
         while (true) {  // Loop forever
-            draw_wait_us = 0;
-            while (drawn[DrawSp] || !pushed[DrawSp]) {
-                delayMicroseconds(10);
-                draw_wait_us += 10;
-            }
-            // Serial.printf("d%d s:%d,%d,%d dp:%d%d,%d%d,%d%d\n", draw_wait_us, DrawSp, RefSp, PushSp, drawn[0], pushed[0], drawn[1], pushed[1], drawn[2], pushed[2]);
-            drawn[DrawSp] = false;
-            // Serial.printf("draw f%d\n", flip);
-            LOCK_SPRITE(DrawSp);
-            if (xpos >= tft.width() - xmax) { bounce = true; dx = -1; }  // Pull it back onto screen if it wanders off
-            else if (xpos < -xmin) { bounce = true; dx = 1; }
-            if (ypos >= tft.height() - ymax) { bounce = true; dy = -1; }
-            else if (ypos < -ymin) { bounce = true; dy = 1; }
-            if (bounce) {  // Randomise spin
-                if (random(2)) spinX = true;
-                else spinX = false;
-                if (random(2)) spinY = true;
-                else spinY = false;
-                if (random(2)) spinZ = true;
-                else spinZ = false;
-                bounce = false;
-                //wait = random (20);
-            }
-            // if (updateTime <= millis()) {  // Use time delay so sprtie does not move fast when not all on screen
-            updateTime = millis() + wait;
-            xmin = iwidth / 2; xmax = iwidth / 2; ymin = iheight / 2; ymax = iheight / 2;
-            rendercube();  // draws newest image onto sprite
-            UNLOCK_SPRITE(DrawSp);
-            #if USE_SECOND_CORE
-            #else    
-                push_task();
-            #endif
-            if (counter % interval == 0) {  // only calculate the fps every <interval> iterations.
-                long millisSinceUpdate = millis() - startMillis;
-                fps = String((int)(interval * 1000.0 / (millisSinceUpdate))) + " fps";
-                Serial.printf("\n%s\n", fps);
-                startMillis = millis();
-            }
-            if (prime_number_processor_load) {  // Add a processor task
-                uint32_t pr = computePrimeNumbers(prime_max);
-                Serial.printf("\rbig=%d    ", pr);
-            }
-            xpos += dx;  // Change coord for next loop
-            ypos += dy;
-
-            // }
-            // tft.endWrite();  // Release exclusive use of SPI bus ( here as a reminder... forever loop prevents execution)
-            drawn[DrawSp] = true;
-            pushed[DrawSp] = false;
-            ++DrawSp %= NumSp;
-            draw_count++;
         }
+    }
+    void printmem() {
+        size_t freeHeapSize = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+        size_t freeHeapSizePS = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+        size_t freeHeapSizePSRAM = ESP.getFreePsram();
+        size_t largestFreeBlockSize = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+        size_t largestFreeBlockSizePSRAM = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
+        Serial.printf("Free Heap: %uB, %uB (%u)\n", freeHeapSize, freeHeapSizePS, freeHeapSizePSRAM);
+        Serial.printf("Largest Block: %uB, %uB\n", largestFreeBlockSize, largestFreeBlockSizePSRAM);
+    }
+    void drawcube() {  // should not 
+        draw_wait_us = 0;
+        while (drawn[DrawSp] || !pushed[DrawSp]) {
+            delayMicroseconds(10);
+            draw_wait_us += 10;
+        }
+        // Serial.printf("d%d %d s:%d,%d,%d dp:%d%d,%d%d,%d%d\n", draw_wait_us, counter, DrawSp, RefSp, PushSp, drawn[0], pushed[0], drawn[1], pushed[1], drawn[2], pushed[2]);
+        drawn[DrawSp] = false;
+        // Serial.printf("draw f%d\n", flip);
+        LOCK_SPRITE(DrawSp);
+        if (xpos >= tft.width() - xmax) { bounce = true; dx = -1; }  // Pull it back onto screen if it wanders off
+        else if (xpos < -xmin) { bounce = true; dx = 1; }
+        if (ypos >= tft.height() - ymax) { bounce = true; dy = -1; }
+        else if (ypos < -ymin) { bounce = true; dy = 1; }
+        if (bounce) {  // Randomise spin
+            if (random(2)) spinX = true;
+            else spinX = false;
+            if (random(2)) spinY = true;
+            else spinY = false;
+            if (random(2)) spinZ = true;
+            else spinZ = false;
+            bounce = false;
+            //wait = random (20);
+        }
+        // if (updateTime <= millis()) {  // Use time delay so sprtie does not move fast when not all on screen
+        updateTime = millis() + wait;
+        xmin = iwidth / 2; xmax = iwidth / 2; ymin = iheight / 2; ymax = iheight / 2;
+        rendercube();  // draws newest image onto sprite
+        UNLOCK_SPRITE(DrawSp);
+        #if USE_SECOND_CORE
+        #else    
+            #if FULLSCREEN_SPRITES
+                pushsprites(sprPtr[PushSp], 0, 0, disp_width_pix, disp_height_pix);
+            #else
+                pushsprites(&CubeSp, xpos, ypos, iwidth, iheight);
+            #endif
+        #endif
+        if (counter % interval == 0) {  // only calculate the fps every <interval> iterations.
+            long millisSinceUpdate = millis() - startMillis;
+            fps = String((int)(interval * 1000.0 / (millisSinceUpdate))) + " fps";
+            Serial.printf("\n%s\n", fps);
+            startMillis = millis();
+            printmem();
+        }
+        if (prime_number_processor_load) {  // Add a processor task
+            uint32_t pr = computePrimeNumbers(prime_max);
+            Serial.printf("\rbig=%d    ", pr);
+        }
+        xpos += dx;  // Change coord for next loop
+        ypos += dy;
+
+        // }
+        // tft.endWrite();  // Release exclusive use of SPI bus ( here as a reminder... forever loop prevents execution)
+        drawn[DrawSp] = true;
+        pushed[DrawSp] = false;
+        ++DrawSp %= NumSp;
+        draw_count++;
     }
 };
 SpinnyCube spinnycube;
 
-void pushsprites() {  // uint_fast8_t flip
+void pushsprites(TFT_eSprite* source, int spx, int spy, int spw, int sph) {  // uint_fast8_t flip
     // Method 1 (BouncyBoxSprite example) : draws the next frame on one sprite while pushing the last, swapping back and forth
     push_wait_us = 0;
     while (!drawn[PushSp] || pushed[PushSp]) {
-        delayMicroseconds(10);
-        push_wait_us += 10;
+        delayMicroseconds(25);
+        push_wait_us += 25;
     }
-    // Serial.printf("p%d s:%d,%d,%d dp:%d%d,%d%d,%d%d\n", push_wait_us, DrawSp, RefSp, PushSp, drawn[0], pushed[0], drawn[1], pushed[1], drawn[2], pushed[2]);
+    // Serial.printf("p%d %d s:%d,%d,%d dp:%d%d,%d%d,%d%d\n", push_wait_us, counter, DrawSp, RefSp, PushSp, drawn[0], pushed[0], drawn[1], pushed[1], drawn[2], pushed[2]);
     LOCK_SPRITE(PushSp);
     // LOCK_SPRITE(RefSp);
+    tft.startWrite();  // Start SPI transaction and drop TFT_CS - avoids transaction overhead in loop
     #if USE_DMA
         // if (tft.dmaBusy() && prime_number_processor_load) prime_max++; // Increase processing load until just not busy
         // while (tft.dmaBusy() || (draw_count <= push_count)) delayMicroseconds(200);  // Hang out till dma can be used
-        tft.startWrite();  // Start SPI transaction and drop TFT_CS - avoids transaction overhead in loop
-        
-        tft.pushImageDMA(xpos, ypos, iwidth, iheight, sprPtr[PushSp]);
-        
-        tft.endWrite();
+        tft.pushImageDMA(spx, spy, spw, sph, (uint16_t*)source->getPointer());
     #else
         if (prime_number_processor_load) prime_max = prime_number_processor_load;
         spr[PushSp].pushSprite(xpos, ypos); // Blocking write (no DMA) 115fps
     #endif
+    tft.endWrite();
     counter++;
     UNLOCK_SPRITE(PushSp);
     pushed[PushSp] = true;
@@ -274,11 +298,11 @@ void pushsprites() {  // uint_fast8_t flip
     //     tft.pushImage(0, flip * disp_height_pix / 2, disp_width_pix, disp_height_pix / 2, sprPtr[flip]);
     // #endif
 }
-void pushdiffs() {
+void pushdiffs(TFT_eSprite* source, int spx, int spy, int spw, int sph) {
     push_wait_us = 0;
     while (!drawn[PushSp] || pushed[PushSp]) {
-        delayMicroseconds(10);
-        push_wait_us += 10;
+        delayMicroseconds(25);
+        push_wait_us += 25;
     }
     // Serial.printf("p%d s:%d,%d,%d dp:%d%d,%d%d,%d%d\n", push_wait_us, DrawSp, RefSp, PushSp, drawn[0], pushed[0], drawn[1], pushed[1], drawn[2], pushed[2]);
     LOCK_SPRITE(PushSp);
@@ -294,17 +318,19 @@ void pushdiffs() {
         // std::uint8_t* p8;
     };
     s32 = (std::uint32_t*)spr[PushSp].getPointer();  // In lgfx library was    getBuffer();
-    p32 = (std::uint32_t*)spr[RefSp].getPointer();
-    auto sprwidth = spr[PushSp].width();
-    auto sprheight = spr[PushSp].height();
+    p32 = (std::uint32_t*)source->getPointer();
+    auto sprwidth = source->width();
+    auto sprheight = source->height();
+    auto destwidth = spr[PushSp].width();
     auto w32 = (sprwidth + 1) >> 1;  // (color_depth == 8) ? 3 : 1) >> ((color_depth == 8) ? 2 : 1);
-    std::int32_t y = 0;
+    std::int32_t si, y = 0;
     tft.startWrite();  // Start SPI transaction and drop TFT_CS - avoids transaction overhead in loop
     do {
         std::int32_t x32 = 0;
-        std::int32_t xs, xe;
+        std::int32_t xs, xsi, xe, xei;
+        si = spx + (spy + y) * destwidth;
         do {
-            while (s32[x32] == p32[x32] && ++x32 < w32);
+            while (s32[si++] == p32[x32] && ++x32 < w32);
             if (x32 == w32) break;
             // if (color_depth == 8) {
             //     xs = x32 << 2;
@@ -316,26 +342,35 @@ void pushdiffs() {
             // }
             // else if (color_depth == 16) {
                 xs = x32 << 1;
-                while (s16[xs] == p16[xs]) ++xs;
-                while (++x32 < w32 && s32[x32] != p32[x32]);
+                xsi = si << 1;
+                while (s16[xsi] == p16[xs]) {
+                    ++xs;
+                    ++xsi;
+                }
+                while (++x32 < w32 && s32[++si] != p32[x32]);
                 xe = (x32 << 1) - 1;
+                xei = (si << 1) - 1;
                 if (xe >= sprwidth) xe = sprwidth - 1;
-                while (s16[xe] == p16[xe]) --xe;
+                if (xei >= destwidth) xei = destwidth - 1;
+                while (s16[xe] == p16[xei]) {
+                    --xe;
+                    --xei;
+                }
             // }
             
             #if USE_DMA
                 // tft.pushPixelsDMA(&(s[xs]), xe - xs + 1);
-                #if FULLSCREEN_SPRITES
+                // #if FULLSCREEN_SPRITES
                     // if (color_depth == 8) tft.pushImageDMA(xs, y, xe - xs + 1, 1, &s8[xs]);
                     // else if (color_depth == 16) 
                     // tft.setAddrWindow(xs, y, xe - xs + 1, 1);   // Set window area to pour pixels into
                     // tft.pushPixelsDMA(&renderbuf[bufIdx][0], xe - xs + 1); // Push line to screen        
-                    tft.pushImageDMA(xs, y, xe - xs + 1, 1, &s16[xs]);
-                #else
+                //     tft.pushImageDMA(xs, y, xe - xs + 1, 1, &s16[xs]);
+                // #else
                     // if (color_depth == 8) tft.pushImageDMA(xs + xpos, y + ypos, xe - xs + 1, 1, &s8[xs]);
                     // else if (color_depth == 16) 
                     tft.pushImageDMA(xs + xpos, y + ypos, xe - xs + 1, 1, &s16[xs]);
-                #endif
+                // #endif
             #else
                 #if FULLSCREEN_SPRITES
                     if (color_depth == 8) tft.pushImage(xs, y, xe - xs + 1, 1, &s8[xs]);
@@ -364,11 +399,22 @@ void pushdiffs() {
 void push_task() {
     // Serial.printf("push f%d\n", pushflip);
     #if USE_DIFFDRAW
-        pushdiffs();
+        #if FULLSCREEN_SPRITES
+            pushdiffs(&(spr[PushSp]), 0, 0, disp_width_pix, disp_height_pix);
+        #else
+            pushdiffs(&CubeSp, xpos, ypos, iwidth, iheight);
+        #endif
     #else
-        pushsprites();
+        #if FULLSCREEN_SPRITES
+            pushsprites(&(spr[PushSp]), 0, 0, disp_width_pix, disp_height_pix);
+        #else
+            pushsprites(&CubeSp, xpos, ypos, iwidth, iheight);
+        #endif
     #endif
     esp_task_wdt_reset();
+}
+void draw_task() {
+    spinnycube.drawcube();
 }
 void gfx_setup() {
     Serial.begin(115200);
@@ -385,31 +431,53 @@ void gfx_setup() {
     #if USE_DIFFDRAW
         pushed[RefSp] = drawn[RefSp] = true;
     #endif
-    for (int i=0; i<NumSp; i++) {
+    #if FULLSCREEN_SPRITES
+        for (int i=0; i<NumSp; i++) {
             spr[i].setColorDepth(color_depth);  // Color depth has to be 16 bits if DMA is used to render image
-        #if FULLSCREEN_SPRITES
-            spr[i].createSprite(tft_w, tft_h/2);
-            sprPtr[i] = (uint16_t*)(spr[i].getPointer());
-        #else
-            sprPtr[i] = (uint16_t*)(spr[i].createSprite(iwidth, iheight));
-        #endif
-        spr[i].setTextColor(TFT_WHITE);
-        spr[i].setTextDatum(MC_DATUM);
-    }
+            #if FULLSCREEN_SPRITES
+                spr[i].createSprite(tft_w, tft_h/2);
+                sprPtr[i] = (uint16_t*)(spr[i].getPointer());
+            // #else
+            //     sprPtr[i] = (uint16_t*)(spr[i].createSprite(iwidth, iheight));
+            #endif
+            spr[i].setTextColor(TFT_WHITE);
+            spr[i].setTextDatum(MC_DATUM);
+        }
+    #else
+        CubeSpPtr = (uint16_t*)(CubeSp.createSprite(iwidth, iheight));
+    #endif
     #if USE_DMA
         tft.initDMA(); // Initialise the DMA engine (tested with STM32F446 and STM32F767)- should work with ESP32, STM32F2xx/F4xx/F7xx processors  >>>>>> DMA IS FOR SPI DISPLAYS ONLY <<<<<<
     #endif
     startMillis = millis();  // Animation control timer
-    #if USE_SECOND_CORE    
-        constexpr int runOnCore = CONFIG_ARDUINO_RUNNING_CORE == 0 ? 1 : 0;
-        TaskHandle_t pushTaskHandle = nullptr;
-        xTaskCreateUniversal([](void*) {
-            while(true) {
-                push_task();
-                delayMicroseconds(200); // allow for wifi etc
-            }
-        }, "pushTask", 16384 , NULL, 1, &pushTaskHandle, runOnCore);  //  8192
-    #endif
+    
+    constexpr int runOnCore = CONFIG_ARDUINO_RUNNING_CORE == 0 ? 1 : 0;
+    TaskHandle_t drawTaskHandle = nullptr;
+    xTaskCreateUniversal([](void*) {
+        while(true) {
+            draw_task();
+            delayMicroseconds(25); // allow for wifi etc
+        }
+    }, "drawTask", 4096 , NULL, 1, &drawTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  //  8192
+        
+    TaskHandle_t pushTaskHandle = nullptr;
+    xTaskCreateUniversal([](void*) {
+        while(true) {
+            push_task();
+            delayMicroseconds(125); // allow for wifi etc
+        }
+    }, "pushTask", 8192 , NULL, 1, &pushTaskHandle, runOnCore);  //  8192
+        
+
+    // #if USE_SECOND_CORE    
+    //     TaskHandle_t pushTaskHandle = nullptr;
+    //     xTaskCreateUniversal([](void*) {
+    //         while(true) {
+    //             push_task();
+    //             delayMicroseconds(100); // allow for wifi etc
+    //         }
+    //     }, "pushTask", 8192 , NULL, 1, &pushTaskHandle, runOnCore);  //  8192
+    // #endif
 }
 // void update_framebuffer(bool flip) {}
 
@@ -418,5 +486,21 @@ void setup() {
     gfx_setup();
     spinnycube.cube_setup();
 } 
-
-void loop() { spinnycube.drawcube(); } 
+void testes() {
+    Serial.printf("Testes ...\n");
+    delay(10);
+    uint16_t a[4000];
+    int x = 0;
+    for (int i=0; i<4000; i++) a[i] = i;
+    uint16_t* aptr0;
+    uint16_t* aptr1;
+    aptr0 = &a[0];
+    aptr1 = &a[2000];
+    Serial.printf("0:%d 1:%d\n", *aptr0, *aptr1);
+    while (true) delay(10);
+}
+void loop() {
+    // testes();
+    spinnycube.printmem();
+    while (true);
+} 
