@@ -7,8 +7,8 @@
 
 
 #define USE_SECOND_CORE 1
-#define USE_DIFFDRAW 0
-#define FULLSCREEN_SPRITES 0
+#define USE_DIFFDRAW 1
+#define FULLSCREEN_SPRITES 1
 #define disp_width_pix 240
 #define disp_height_pix 320
 void pushsprites(TFT_eSprite* source, int spx, int spy, int spw, int sph);  // uint_fast8_t flip
@@ -67,6 +67,7 @@ volatile bool pushed[NumSp];
 volatile bool drawn[NumSp];
 int corner[2] = { 0, 0 };
 int tft_w, tft_h;
+uint32_t drawtime, pushtime;
 static constexpr uint32_t color_depth = 16;
 static constexpr int iwidth = 128;  // 128x128 for a 16-bit colour Sprite (32Kbytes RAM)
 static constexpr int iheight = 128;  // Maximum is 181x181 (64Kbytes) for DMA -  restricted by processor design
@@ -212,7 +213,8 @@ class SpinnyCube {
             draw_wait_us += 10;
         }
         
-        Serial.printf("d%d %d s:%d,%d dp:%d%d,%d%d\n", draw_wait_us, counter, DrawSp, RefSp, drawn[0], pushed[0], drawn[1], pushed[1]);
+        Serial.printf("d%d %d s:%d,%d dp:%d%d,%d%d t:%ld\n", draw_wait_us, counter, DrawSp, RefSp, drawn[0], pushed[0], drawn[1], pushed[1], drawtime);
+        int64_t begin = esp_timer_get_time();
         // Serial.printf("d%d %d s:%d,%d,%d dp:%d%d,%d%d,%d%d\n", draw_wait_us, counter, DrawSp, RefSp, PushSp, drawn[0], pushed[0], drawn[1], pushed[1], drawn[2], pushed[2]);
         // drawn[DrawSp] = false;
         // Serial.printf("draw f%d\n", flip);
@@ -273,6 +275,7 @@ class SpinnyCube {
             ++DrawSp %= NumSp;
         #endif
         draw_count++;
+        drawtime = esp_timer_get_time()-begin;
     }
 };
 SpinnyCube spinnycube;
@@ -284,8 +287,8 @@ void pushsprites(TFT_eSprite* source, int spx, int spy, int spw, int sph) {  // 
         delayMicroseconds(25);
         push_wait_us += 25;
     }
-    Serial.printf("p%d %d s:%d,%d dp:%d%d,%d%d\n", push_wait_us, counter, DrawSp, RefSp, drawn[0], pushed[0], drawn[1], pushed[1]);
-
+    Serial.printf("p%d %d s:%d,%d dp:%d%d,%d%d t:%ld\n", push_wait_us, counter, DrawSp, RefSp, drawn[0], pushed[0], drawn[1], pushed[1], pushtime);
+    int64_t begin = esp_timer_get_time();
     // Serial.printf("p%d %d s:%d,%d,%d dp:%d%d,%d%d,%d%d\n", push_wait_us, counter, DrawSp, RefSp, PushSp, drawn[0], pushed[0], drawn[1], pushed[1], drawn[2], pushed[2]);
     // LOCK_SPRITE(PushSp);
     // LOCK_SPRITE(RefSp);
@@ -300,6 +303,7 @@ void pushsprites(TFT_eSprite* source, int spx, int spy, int spw, int sph) {  // 
     drawn[PushSp] = false;
     ++PushSp %= NumSp;
     push_count++;
+    pushtime = esp_timer_get_time()-begin;
     // // Method 2 (BouncyCircles example) : draws screen in alternating halves. Modified with option to use 2nd core
     // tft.pushImageDMA(0, flip * disp_height_pix / 2, disp_width_pix, disp_height_pix / 2, sprPtr[flip]);
 }
@@ -310,7 +314,8 @@ void pushdiffs(TFT_eSprite* source, int spx, int spy, int spw, int sph) {
         delayMicroseconds(25);
         push_wait_us += 25;
     }
-    Serial.printf("p%d %d s:%d,%d dp:%d%d,%d%d\n", push_wait_us, counter, DrawSp, RefSp, drawn[0], pushed[0], drawn[1], pushed[1]);
+    Serial.printf("p%d %d s:%d,%d dp:%d%d,%d%d t:%ld\n", push_wait_us, counter, DrawSp, RefSp, drawn[0], pushed[0], drawn[1], pushed[1], pushtime);
+    int64_t begin = esp_timer_get_time();
     // Serial.printf("p%d s:%d,%d,%d dp:%d%d,%d%d,%d%d\n", push_wait_us, DrawSp, RefSp, PushSp, drawn[0], pushed[0], drawn[1], pushed[1], drawn[2], pushed[2]);
     // LOCK_SPRITE(PushSp);
     // LOCK_SPRITE(RefSp);
@@ -394,12 +399,13 @@ void pushdiffs(TFT_eSprite* source, int spx, int spy, int spw, int sph) {
     ++DrawSp %= NumSp;
     ++RefSp %= NumSp;
     push_count++;
+    pushtime = esp_timer_get_time()-begin;
 }
 void push_task() {
     // Serial.printf("push f%d\n", pushflip);
     #if USE_DIFFDRAW
         #if FULLSCREEN_SPRITES
-            pushdiffs(&(spr[RefSp]), 0, 0, disp_width_pix, disp_height_pix);
+            pushdiffs(&spr[RefSp], 0, 0, disp_width_pix, disp_height_pix);
         #else
             pushdiffs(&CubeSp, xpos, ypos, iwidth, iheight);
         #endif
@@ -463,7 +469,6 @@ void gfx_setup() {
                 draw_task();
                 // vTaskDelay(pdMS_TO_TICKS(2)); // Delay for 20ms, hopefully that's fast enough
                 // taskYIELD();
-                delayMicroseconds(25); // allow for wifi etc
                 // push_task();
                 // taskYIELD();
                 // // vTaskDelay(pdMS_TO_TICKS(2)); // Delay for 20ms, hopefully that's fast enough
@@ -477,9 +482,10 @@ void gfx_setup() {
         while(true) {
             #if USE_SECOND_CORE
             #else
-                draw_task();
                 // delayMicroseconds(25); // allow for wifi etc
+                draw_task();
             #endif
+            delayMicroseconds(25); // allow for wifi etc
             push_task();
             // delayMicroseconds(25); // allow for wifi etc
         }
@@ -519,7 +525,7 @@ void testes() {
 void loop() {
     // testes();
     spinnycube.printmem();
-    Serial.printf("t:%dx%d d:%dx%d r:%dx%d f:%dx%d\n", tft.width(), tft.height(), spr[DrawSp].width(), spr[DrawSp].height(), spr[DrawSp].width(), spr[DrawSp].height(), disp_width_pix, disp_height_pix);
+    Serial.printf("t:%dx%d d:%dx%d r:%dx%d f:%dx%d\n", tft.width(), tft.height(), spr[DrawSp].width(), spr[DrawSp].height(), spr[RefSp].width(), spr[RefSp].height(), disp_width_pix, disp_height_pix);
     while (true) {
             // draw_task();
             // yield();
