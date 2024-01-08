@@ -5,9 +5,9 @@
 #include <esp_heap_caps.h>
 #include <esp32-hal-psram.h>
 
-#define USE_SECOND_CORE 0
-#define USE_DIFFDRAW 1
-#define FULLSCREEN_SPRITES 1
+#define USE_SECOND_CORE 1
+#define USE_DIFFDRAW 0
+#define FULLSCREEN_SPRITES 0
 #define disp_width_pix 240
 #define disp_height_pix 320
 // enum dirs : int { HORZ, VERT };
@@ -59,6 +59,8 @@ volatile int DrawSp = 0, RefSp = 1;
     String fps = "0fps";  // Frames per second
     static constexpr int prime_number_processor_load = 0;  // 491;  // 241 = 50% CPU load for 128 * 128 and STM32F466 Nucleo 64, 491 = 50% CPU load for 128 * 128 and STM32F767 Nucleo 144
     int prime_max = 2;  // Prime number initial value
+    TFT_eSprite CubeSp{&tft};
+    Timer refreshtimer{25000};
 
 class DisplayDriver {
   public:
@@ -96,10 +98,10 @@ class DisplayDriver {
             delayMicroseconds(25);
             push_wait_us += 25;
         }
-        Serial.printf("p%d %d s:%d,%d dp:%d%d,%d%d t:%ld\n", push_wait_us, counter, DrawSp, RefSp, drawn[0], pushed[0], drawn[1], pushed[1], pushtime);
+        // Serial.printf("p%d %d s:%d,%d dp:%d%d,%d%d t:%ld\n", push_wait_us, counter, DrawSp, RefSp, drawn[0], pushed[0], drawn[1], pushed[1], pushtime);
         int64_t begin = esp_timer_get_time();
         // Serial.printf("p%d %d s:%d,%d,%d dp:%d%d,%d%d,%d%d\n", push_wait_us, counter, DrawSp, RefSp, PushSp, drawn[0], pushed[0], drawn[1], pushed[1], drawn[2], pushed[2]);
-        // LOCK_SPRITE(PushSp);
+        LOCK_SPRITE(PushSp);
         // LOCK_SPRITE(RefSp);
         tft.startWrite();  // Start SPI transaction and drop TFT_CS - avoids transaction overhead in loop
         // if (tft.dmaBusy() && prime_number_processor_load) prime_max++; // Increase processing load until just not busy
@@ -107,7 +109,8 @@ class DisplayDriver {
         tft.pushImageDMA(spx, spy, spw, sph, (uint16_t*)source->getPointer());
         tft.endWrite();
         counter++;
-        // UNLOCK_SPRITE(PushSp);
+        // UNLOCK_SPRITE(RefSp);
+        UNLOCK_SPRITE(PushSp);
         pushed[PushSp] = true;
         drawn[PushSp] = false;
         ++PushSp %= NumSp;
@@ -123,11 +126,13 @@ class DisplayDriver {
             delayMicroseconds(25);
             push_wait_us += 25;
         }
-        Serial.printf("p%d %d s:%d,%d dp:%d%d,%d%d t:%ld\n", push_wait_us, counter, DrawSp, RefSp, drawn[0], pushed[0], drawn[1], pushed[1], pushtime);
+        pushed[DrawSp] = false;
+
+        // Serial.printf("p%d %d s:%d,%d dp:%d%d,%d%d t:%ld\n", push_wait_us, counter, DrawSp, RefSp, drawn[0], pushed[0], drawn[1], pushed[1], pushtime);
         int64_t begin = esp_timer_get_time();
         // Serial.printf("p%d s:%d,%d,%d dp:%d%d,%d%d,%d%d\n", push_wait_us, DrawSp, RefSp, PushSp, drawn[0], pushed[0], drawn[1], pushed[1], drawn[2], pushed[2]);
-        // LOCK_SPRITE(PushSp);
-        // LOCK_SPRITE(RefSp);
+        LOCK_SPRITE(PushSp);
+        LOCK_SPRITE(RefSp);
         union {
             std::uint32_t* s32;
             std::uint16_t* s16;
@@ -198,8 +203,8 @@ class DisplayDriver {
         // tft.display();
         tft.endWrite();
         counter++;
-        // UNLOCK_SPRITE(RefSp);
-        // UNLOCK_SPRITE(PushSp);
+        UNLOCK_SPRITE(RefSp);
+        UNLOCK_SPRITE(PushSp);
         // pushed[PushSp] = true;
         // drawn[RefSp] = false;
         pushed[PushSp] = true;
@@ -244,7 +249,6 @@ class DisplayDriver {
                 spr[i].setTextDatum(MC_DATUM);
             }
         #else
-            CubeSpPtr = (uint16_t*)(CubeSp.createSprite(iwidth, iheight));
         #endif
         tft.initDMA(); // Initialise the DMA engine (tested with STM32F446 and STM32F767)- should work with ESP32, STM32F2xx/F4xx/F7xx processors  >>>>>> DMA IS FOR SPI DISPLAYS ONLY <<<<<<
         startMillis = millis();  // Animation control timer
@@ -256,16 +260,19 @@ DisplayDriver disp;
 class SpinnyCube {
   public:
     TFT_eSPI* mytft;
+    // TFT_eSprite CubeSp;
+    // uint16_t* CubeSpPtr;
     void cube_setup(TFT_eSPI* _tft) {
         mytft = _tft;
         if (random(2)) dx = -1;  // Random movement direction
         if (random(2)) dy = -1;  // Random movement direction
+        CubeSpPtr = (uint16_t*)(CubeSp.createSprite(iwidth, iheight));
+
     }
     SpinnyCube() { 
         cube_setup(&tft);
     }
     // TFT_eSPI* tft;
-    TFT_eSprite CubeSp{mytft};
     static constexpr int cubesize = 358;  // Size of cube image. 358 is max for 128x128 sprite, too big and pixel trails are drawn...
     uint16_t palette[6] = { TFT_WHITE, TFT_GREENYELLOW, TFT_YELLOW, TFT_PINK, TFT_MAGENTA, TFT_CYAN }; // Define the cube face colors
     float d = 15;  // size / 2 of cube edge
@@ -377,18 +384,18 @@ class SpinnyCube {
     }
     void drawcube() {  // should not 
         draw_wait_us = 0;
-        while (drawn[DrawSp] || !pushed[DrawSp]) {
+        while ((drawn[DrawSp] || !pushed[DrawSp]) && !refreshtimer.expired()) {
         // while (drawn[DrawSp] || !pushed[DrawSp]) {
             delayMicroseconds(10);
             draw_wait_us += 10;
         }
-        
-        Serial.printf("d%d %d s:%d,%d dp:%d%d,%d%d t:%ld\n", draw_wait_us, counter, DrawSp, RefSp, drawn[0], pushed[0], drawn[1], pushed[1], drawtime);
+        refreshtimer.reset();
+        drawn[DrawSp] = pushed[DrawSp] = false;
+        // Serial.printf("d%d %d s:%d,%d dp:%d%d,%d%d t:%ld\n", draw_wait_us, counter, DrawSp, RefSp, drawn[0], pushed[0], drawn[1], pushed[1], drawtime);
         int64_t begin = esp_timer_get_time();
         // Serial.printf("d%d %d s:%d,%d,%d dp:%d%d,%d%d,%d%d\n", draw_wait_us, counter, DrawSp, RefSp, PushSp, drawn[0], pushed[0], drawn[1], pushed[1], drawn[2], pushed[2]);
-        // drawn[DrawSp] = false;
         // Serial.printf("draw f%d\n", flip);
-        // LOCK_SPRITE(DrawSp);
+        LOCK_SPRITE(DrawSp);
         if (xpos >= mytft->width() - xmax) { bounce = true; dx = -1; }  // Pull it back onto screen if it wanders off
         else if (xpos < -xmin) { bounce = true; dx = 1; }
         if (ypos >= mytft->height() - ymax) { bounce = true; dy = -1; }
@@ -407,7 +414,7 @@ class SpinnyCube {
         updateTime = millis() + wait;
         xmin = iwidth / 2; xmax = iwidth / 2; ymin = iheight / 2; ymax = iheight / 2;
         rendercube();  // draws newest image onto sprite
-        // UNLOCK_SPRITE(DrawSp);
+        UNLOCK_SPRITE(DrawSp);
         // #if USE_SECOND_CORE
         // #else    
         //     #if FULLSCREEN_SPRITES
