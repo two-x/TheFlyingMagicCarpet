@@ -8,7 +8,7 @@ Touchscreen* _touch;
 uint32_t corner[2], sprwidth, sprheight;
 std::size_t flip = 0;
 static constexpr std::uint32_t SHIFTSIZE = 8;
-static std::uint32_t sec, psec, _width, _height, _fps = 0, fps = 0, frame_count = 0;
+static std::uint32_t sec, psec, _width, _height, _myfps = 0, myfps = 0, frame_count = 0;
 volatile bool _is_running;
 volatile std::uint32_t _draw_count;
 volatile std::uint32_t _loop_;
@@ -116,10 +116,10 @@ class CollisionsSaver : public Animation {
     };
     static constexpr std::uint32_t BALL_MAX = 96;  // 256
     ball_info_t _balls[2][BALL_MAX];
-    std::uint32_t _ball_count = 0, _fps = 0;
+    std::uint32_t _ball_count = 0, _myfps = 0;
     std::uint32_t ball_count = 0;
     std::uint32_t sec, psec;
-    std::uint32_t fps = 0, frame_count = 0;
+    std::uint32_t myfps = 0, frame_count = 0;
     volatile bool _is_running;
     volatile std::uint32_t _loop_count;
     CollisionsSaver() {}
@@ -147,7 +147,7 @@ class CollisionsSaver : public Animation {
         sec = lgfx::millis() / 1000;
         if (psec != sec) {
             psec = sec;
-            fps = frame_count;
+            myfps = frame_count;
             frame_count = 0;
             if (++ball_count >= BALL_MAX) {
                 new_round = true;
@@ -237,7 +237,7 @@ class CollisionsSaver : public Animation {
                 b->dy = roundf(bdy + bry);
             }
         }
-        _fps = fps;
+        _myfps = myfps;
         _ball_count = ball_count;
         return new_round;
     }
@@ -471,7 +471,7 @@ class AnimationManager {
     Touchscreen* mytouch;
     Timer saverRefreshTimer = Timer(16666);
     Timer fps_timer;
-    float fps = 0.0;
+    float myfps = 0.0;
     int64_t fps_mark;
     bool screensaver_last = false;
     void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
@@ -494,8 +494,8 @@ class AnimationManager {
     void redraw() { ptrsaver->diffDraw(); }
     void calc_fps() {
         int64_t now = fps_timer.elapsed();
-        fps = (float)(now - fps_mark);
-        if (fps > 0.001) fps = 1000000 / fps;
+        myfps = (float)(now - fps_mark);
+        if (myfps > 0.001) myfps = 1000000 / myfps;
         fps_mark = now;
     }
     float update() {
@@ -515,6 +515,6 @@ class AnimationManager {
             if (still_running) ptrsaver->diffDraw();
             else change_saver();
         }
-        return fps;
+        return myfps;
     }
 };
