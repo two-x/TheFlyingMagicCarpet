@@ -267,7 +267,8 @@ class Display {
     }
     void setup() {
         Serial.printf("Display..");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
-        _tft.begin();  // _tft.begin();    
+        _tft.begin();  // _tft.begin();
+        _tft.initDMA();
         // _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
         if (_tft.width() < _tft.height()) _tft.setRotation(_tft.getRotation() ^ 1);
         // _tft.setTouch(touch_cal_data);
