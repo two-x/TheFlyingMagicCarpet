@@ -106,6 +106,10 @@ class DisplayDriver {
         tft.startWrite();  // Start SPI transaction and drop TFT_CS - avoids transaction overhead in loop
         // if (tft.dmaBusy() && prime_number_processor_load) prime_max++; // Increase processing load until just not busy
         // while (tft.dmaBusy() || (draw_count <= push_count)) delayMicroseconds(200);  // Hang out till dma can be used
+        // #if FULLSCREEN_SPRITES
+        // #else
+        // tft.fillScreen(TFT_BLACK);
+        // #endif
         tft.pushImageDMA(spx, spy, spw, sph, (uint16_t*)source->getPointer());
         tft.endWrite();
         counter++;
@@ -216,6 +220,9 @@ class DisplayDriver {
         pushtime = esp_timer_get_time()-begin;
     }
    void setup() {
+        #if USE_LGFX_TFT
+            return;
+        #endif
         // Serial.begin(115200);
         // delay(1000);
         tft.init();
@@ -270,7 +277,10 @@ class SpinnyCube {
 
     }
     SpinnyCube() { 
+        #if USE_LGFX_TFT
+        #else
         cube_setup(&tft);
+        #endif
     }
     // TFT_eSPI* tft;
     static constexpr int cubesize = 358;  // Size of cube image. 358 is max for 128x128 sprite, too big and pixel trails are drawn...
@@ -324,6 +334,8 @@ class SpinnyCube {
         }
         #if FULLSCREEN_SPRITES
             spr[DrawSp].fillSprite(TFT_BLACK);  // Fill the buffer with colour 0 (Black)
+            // spr[DrawSp].fillRect(xpos, ypos, iwidth, iheight, TFT_BLACK);  // Fill the buffer with colour 0 (Black)
+        
         #else
             CubeSp.fillSprite(TFT_BLACK);  // Fill the buffer with colour 0 (Black)
         #endif
@@ -455,7 +467,6 @@ class SpinnyCube {
         drawtime = esp_timer_get_time()-begin;
     }
 };
-
 SpinnyCube spinnycube;
 void draw_task() {
     spinnycube.drawcube();
