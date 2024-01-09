@@ -30,20 +30,20 @@ class Animation {
         auto frameheight = sprheight;
         bool fail = false;
         bool using_psram = false;
-        for (std::uint32_t i = 0; !fail && i < 2; ++i)
+        for (std::uint32_t i = 0; !fail && i < 2; ++i) {
+            sp[i].setPsram(true);
             fail = !sp[i].createSprite(framewidth, frameheight);
         if (fail) {
             fail = false;
             for (std::uint32_t i = 0; !fail && i < 2; ++i) {
-                sp[i].setPsram(true);
+                sp[i].setPsram(false);
                 fail = !sp[i].createSprite(framewidth, frameheight);
             }
             if (fail) {
                 fail = false;
-                if (framewidth > 320) framewidth = 320;
-                if (frameheight > 240) frameheight = 240;
+                if (framewidth >= 320) framewidth = 180;
+                if (frameheight >= 240) frameheight = 180;
                 for (std::uint32_t i = 0; !fail && i < 2; ++i) {
-                    sp[i].setPsram(true);
                     fail = !sp[i].createSprite(framewidth, frameheight);
                 }
                 if (fail) {
