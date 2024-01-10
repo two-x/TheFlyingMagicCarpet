@@ -33,6 +33,7 @@ class Animation {
         for (std::uint32_t i = 0; !fail && i < 2; ++i) {
             sp[i].setPsram(true);
             fail = !sp[i].createSprite(framewidth, frameheight);
+        }
         if (fail) {
             fail = false;
             for (std::uint32_t i = 0; !fail && i < 2; ++i) {
@@ -369,27 +370,15 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
             spothue--;
             if (!(spothue % 4)) slowhue += random(4);
             if (shape == Wedges) {
-                uint16_t c[2] = {
-                    hsv_to_rgb<uint16_t>(random(256), 127 + (spothue >> 1)),
-                    hsv_to_rgb<uint16_t>(random(256), 127 + (spothue >> 1))
-                };
+                uint16_t c[2] = { hsv_to_rgb<uint16_t>(random(256), 127 + (spothue >> 1)), hsv_to_rgb<uint16_t>(random(256), 127 + (spothue >> 1)) };
                 float im = 0;
-                if (plast[VERT] != point[VERT])
-                    im = (float)(plast[HORZ] - point[HORZ]) / (float)(plast[VERT] - point[VERT]);
-                sp[now].drawCircle(plast[HORZ], plast[VERT], 3, TFT_BLACK);
-                for (int g = -5; g <= 5; g++) {
-                    if (std::abs(g) >= 5) {
-                        if (std::abs(im) > 1.0)
-                            sp[now].drawLine(plast[HORZ] + (int)(g / im), plast[VERT] + g, point[HORZ], point[VERT], TFT_BLACK);
-                        else sp[now].drawLine(plast[HORZ] + g, plast[VERT] + (int)(g * im), point[HORZ], point[VERT], TFT_BLACK);
-                    }
-                    else {
-                        if (std::abs(im) > 1.0)
-                            sp[now].drawGradientLine(plast[HORZ] + (int)(g / im), plast[VERT] + g, point[HORZ], point[VERT], c[0], c[1]);
-                        else sp[now].drawGradientLine(plast[HORZ] + g, plast[VERT] + (int)(g * im), point[HORZ], point[VERT], c[0], c[1]);
-                    }
-                }
-                sp[now].fillCircle(plast[HORZ], plast[VERT], 2, c[0]);
+                if (plast[VERT] != point[VERT]) im = (float)(plast[HORZ] - point[HORZ]) / (float)(plast[VERT] - point[VERT]);
+                sp[now].fillCircle(plast[HORZ], plast[VERT], 4, c[0]);
+                sp[now].drawCircle(plast[HORZ], plast[VERT], 4, TFT_BLACK);
+                for (int h=-4; h<=4; h++)
+                    sp[now].drawGradientLine(plast[HORZ] + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), point[HORZ], point[VERT], c[0], c[1]);
+                for (int g=-5; g<=5; g+=10)
+                    sp[now].drawLine(plast[HORZ] + (int)(g / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + (int)(g * ((std::abs(im) > 1.0) ? 1 : im)), point[HORZ], point[VERT], TFT_BLACK);
             }
             else if (shape == Ellipses) {
                 int d[2] = {10 + random(30), 10 + random(30)};
@@ -402,9 +391,9 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
             }
             else if (shape == Rings) {
                 int d = 8 + random(25);
-                uint16_t c[2] = {hsv_to_rgb<uint16_t>(spothue + 127 * random(1), random(128) + (spothue >> 1), 150 + random(106)), rando_color()};
+                uint16_t c = hsv_to_rgb<uint16_t>(spothue + 127 * random(1), random(128) + (spothue >> 1), 150 + random(106));
                 for (int r = d; r >= (d - 4); r-=1)
-                    sp[now].drawCircle(point[HORZ], point[VERT], r, c[r % 2]);
+                    sp[now].drawCircle(point[HORZ], point[VERT], r, c);
                 sp[now].drawCircle(point[HORZ], point[VERT], d - 4, TFT_BLACK);
                 sp[now].drawCircle(point[HORZ], point[VERT], d + 1, TFT_BLACK);
             }
