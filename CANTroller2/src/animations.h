@@ -393,12 +393,14 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
                 int d = 8 + random(25);
                 uint16_t hue = spothue + 32768 * random(1);
                 uint8_t sat = random(128) + (spothue >> 9);
-                uint8_t brt = 120 + random(111);
+                uint8_t brt = 180 + random(76);
                 uint16_t c = hsv_to_rgb<uint16_t>(hue, sat, brt);
-                uint16_t c2 = hsv_to_rgb<uint16_t>(hue, sat, brt+25);
-                Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/2.56), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
-                for (int r = d; r >= (d - 4); r-=1)
+                uint16_t c2 = hsv_to_rgb<uint16_t>(hue, sat, brt-20);
+                // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/2.56), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
+                for (int r = d; r >= (d - 4); r-=1) {
                     sp[now].drawCircle(point[HORZ], point[VERT], r, c);
+                    if (r % 2) sp[now].drawCircle(point[HORZ]+1, point[VERT]+1, r, c);
+                }
                 sp[now].drawCircle(point[HORZ], point[VERT], d - 4, c2);
                 sp[now].drawCircle(point[HORZ], point[VERT], d + 1, c2);
             }
@@ -427,7 +429,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
             // }
             sp[now].setTextColor(TFT_BLACK);  // allows subliminal messaging
         }
-        // if (cycle != 0) {
+        if (cycle != 0) {
             for (int axis = HORZ; axis <= VERT; axis++) {
                 erpos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
                 if (erpos[axis] * eraser_velo_sign[axis] >= erpos_max[axis]) {
@@ -440,8 +442,8 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
                 }
             }
             // Serial.printf(" e %3d,%3d,%3d,%3d,%3d\n", (sprwidth / 2) + erpos[HORZ], (sprheight / 2) + erpos[VERT], eraser_rad, eraser_velo[HORZ], eraser_velo[VERT]);
-            sp[now].fillCircle((sprwidth / 2) + erpos[HORZ], (sprheight / 2) + erpos[VERT], eraser_rad, 0x0000);
-        // }
+            sp[now].fillCircle((sprwidth / 2) + erpos[HORZ], (sprheight / 2) + erpos[VERT], eraser_rad, TFT_BLACK);
+        }
         if (saver_lotto) sp[now].drawString("do drugs", sprwidth / 2, sprheight / 2);
         for (int axis = HORZ; axis <= VERT; axis++)
             plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
