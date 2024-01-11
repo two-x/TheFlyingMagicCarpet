@@ -128,7 +128,7 @@ class IdiotLights {
     void set_colors() {
         for (int32_t i=0; i<iconcount; i++) {
             int division = row_count;
-            uint32_t color32 = hsv_to_rgb<uint32_t>((255 * (uint16_t)(i % division) / division + idiot_hue_offset), idiot_saturation, 255);  // , 0, 220);
+            uint32_t color32 = hsv_to_rgb<uint32_t>((65535 * (uint16_t)(i % division) / division + idiot_hue_offset), idiot_saturation, 255);  // , 0, 220);
             color[i] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
         }
     }
