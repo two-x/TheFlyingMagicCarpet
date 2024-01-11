@@ -130,7 +130,7 @@ class DisplayDriver {
             delayMicroseconds(25);
             push_wait_us += 25;
         }
-        pushed[DrawSp] = false;
+        pushed[PushSp] = false;
 
         // Serial.printf("p%d %d s:%d,%d dp:%d%d,%d%d t:%ld\n", push_wait_us, counter, DrawSp, RefSp, drawn[0], pushed[0], drawn[1], pushed[1], pushtime);
         int64_t begin = esp_timer_get_time();

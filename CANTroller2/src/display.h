@@ -128,7 +128,7 @@ class IdiotLights {
     void set_colors() {
         for (int32_t i=0; i<iconcount; i++) {
             int division = row_count;
-            uint32_t color32 = hsv_to_rgb<uint32_t>((int8_t)(255 * (i % division) / division + idiot_hue_offset), idiot_saturation, 255, 0, 220);
+            uint32_t color32 = hsv_to_rgb<uint32_t>((255 * (uint16_t)(i % division) / division + idiot_hue_offset), idiot_saturation, 255);  // , 0, 220);
             color[i] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
         }
     }
@@ -304,7 +304,7 @@ class Display {
         uint8_t saturat = 255;  uint8_t hue_offset = 0;
         for (int32_t rm=0; rm<NUM_RUNMODES; rm++) {
             int division = NUM_RUNMODES;
-            uint32_t color32 = hsv_to_rgb<uint32_t>((int8_t)(255 * (rm % division) / division + hue_offset), saturat, 255, 0, 220);
+            uint32_t color32 = hsv_to_rgb<uint32_t>((65536 * (uint16_t)(rm % division) / division + hue_offset), saturat, 255);  // , 0, 220);
             colorcard[rm] = color_uint32_to_16b(color32);  // 5957 = 2^16/11
             disp_runmode_dirty = true;
         }

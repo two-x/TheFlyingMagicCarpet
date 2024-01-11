@@ -263,7 +263,7 @@ void adj_bool(bool *val, int32_t delta) { *val = adj_bool(*val, delta); }       
 
 // hue: 0,255 = red, 85 = grn, 170 = blu | sat: 0 = saturated up to greyscale, 255 = pure color | bright: 0 = blk, 255 = "full" | bright_flat: if =1, "full" brightness varies w/ hue for consistent luminance, otherwise "full" always ranges to 255 (mixed-element colors are brighter) | blu_boost: adds blu_boost/255 desaturation as a ratio of blu dominance
 template <typename T>
-T hsv_to_rgb(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool bright_flat = 1, uint8_t blu_boost = 0) {  // returns uint32 color in format 0x00RRGGBB
+T hsv_to_rgb_old(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool bright_flat = 1, uint8_t blu_boost = 0) {  // returns uint32 color in format 0x00RRGGBB
     uint32_t rgb[3] = { 255 - 3 * (uint32_t)((255 - hue) % 85), 0, 3 * (uint32_t)((255 - hue) % 85) };
     float maxc = (float)((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]);
     if (hue <= 85) { rgb[1] = rgb[0]; rgb[0] = rgb[2]; rgb[2] = 0; }
@@ -275,6 +275,39 @@ T hsv_to_rgb(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool bright_f
     if (std::is_same<T, uint16_t>::value) return (T)((rgb[0] & 0xf8) << 8) | ((rgb[1] & 0xfc) << 5) | (rgb[2] >> 3);
     else if (std::is_same<T, uint32_t>::value) return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
 }
+template <typename T>
+T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {
+    uint8_t rgb[3];  // [r,g,b];
+    hue = (hue * 1530L + 32768) / 65536;
+    if (hue < 510) { // Red to Green-1
+        rgb[2] = 0;
+        if (hue < 255) { rgb[0] = 255; rgb[1] = hue; }  //   Red to Yellow-1, g = 0 to 254
+        else { rgb[0] = 510 - hue; rgb[1] = 255; }  //  Yellow to Green-1, r = 255 to 1
+    }
+    else if (hue < 1020) { // Green to Blue-1
+        rgb[0] = 0;
+        if (hue < 765) { rgb[1] = 255; rgb[2] = hue - 510; }  //  Green to Cyan-1, b = 0 to 254
+        else { rgb[1] = 1020 - hue; rgb[2] = 255; }  // Cyan to Blue-1, g = 255 to 1
+    }
+    else if (hue < 1530) {  // Blue to Red-1
+        rgb[1] = 0;
+        if (hue < 1275) { rgb[0] = hue - 1020; rgb[2] = 255; }  // Blue to Magenta-1, r = 0 to 254
+        else { rgb[0] = 255; rgb[2] = 1530 - hue; }  //   Magenta to Red-1, b = 255 to 1
+    }
+    else { rgb[0] = 255; rgb[1] = rgb[2] = 0; }  // Last 0.5 Red (quicker than % operator)
+    uint32_t v1 = 1 + val;  // 1 to 256; allows >>8 instead of /255
+    uint16_t s1 = 1 + sat;  // 1 to 256; same reason
+    uint8_t s2 = 255 - sat; // 255 to 0
+    uint16_t out[3];
+    for (int led=0; led<3; led++) out[led] = ((((rgb[led] * s1) >> 8) + s2) * v1) >> 8;
+    if (std::is_same<T, uint16_t>::value) return (T)((out[0] & 0xf8) << 8) | ((out[1] & 0xfc) << 5) | (out[2] >> 3);
+    else if (std::is_same<T, uint32_t>::value) return (out[0] << 16) | (out[1] << 8) | out[2];
+}
+// template <typename T>
+// T hsv_to_rgb(uint8_t hue, uint8_t sat, uint8_t val) {
+//     return hsv_to_rgb((uint16_t)hue << 8, sat, val);
+// }
+
 uint16_t rando_color() {
     return ((uint16_t)random(0x1f) << 11) | ((uint16_t)random(0x3f) << 5) | (uint16_t)random(0x1f); 
 }

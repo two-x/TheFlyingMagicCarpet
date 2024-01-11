@@ -303,9 +303,9 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, boxsize[2], now = 0;
     int eraser_velo[2] = {random(eraser_velo_max), random(eraser_velo_max)}, shapes_per_run = 5, shapes_done = 0;
     int32_t erpos_max[2];
-    uint8_t saver_illicit_prob = 12, penhue = 0, spothue = 255, slowhue = 0;
+    uint8_t saver_illicit_prob = 12;
     float pensat = 200.0;
-    uint16_t pencolor = TFT_RED;
+    uint16_t pencolor = TFT_RED, wclast, spothue = 65535, slowhue = 0, penhue;
     int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 1500, shape = random(NumSaverShapes);
     static constexpr uint32_t saver_cycletime_us = 24000000;
     Timer saverCycleTimer, pentimer = Timer(700000);
@@ -367,42 +367,47 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
         // Serial.printf("\r%d,%d,%d ", shape, shapes_done, cycle);
         for (int axis = 0; axis <= 1; axis++) point[axis] = random(sprsize[axis]);
         if (cycle != 2) {
-            spothue--;
-            if (!(spothue % 4)) slowhue += random(4);
+            spothue-=101;
+            if (!(spothue % 4)) slowhue += random(400);
             if (shape == Wedges) {
-                uint16_t c[2] = { hsv_to_rgb<uint16_t>(random(256), 127 + (spothue >> 1)), hsv_to_rgb<uint16_t>(random(256), 127 + (spothue >> 1)) };
+                uint16_t wc = hsv_to_rgb<uint16_t>(random(65536), 127 + (spothue >> 9));
                 float im = 0;
                 if (plast[VERT] != point[VERT]) im = (float)(plast[HORZ] - point[HORZ]) / (float)(plast[VERT] - point[VERT]);
-                sp[now].fillCircle(plast[HORZ], plast[VERT], 4, c[0]);
-                sp[now].drawCircle(plast[HORZ], plast[VERT], 4, TFT_BLACK);
+                sp[now].fillCircle(point[HORZ], point[VERT], 4, wc);
+                sp[now].drawCircle(point[HORZ], point[VERT], 4, TFT_BLACK);
                 for (int h=-4; h<=4; h++)
-                    sp[now].drawGradientLine(plast[HORZ] + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), point[HORZ], point[VERT], c[0], c[1]);
-                for (int g=-5; g<=5; g+=10)
-                    sp[now].drawLine(plast[HORZ] + (int)(g / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + (int)(g * ((std::abs(im) > 1.0) ? 1 : im)), point[HORZ], point[VERT], TFT_BLACK);
+                    sp[now].drawGradientLine(point[HORZ], point[VERT], plast[HORZ] + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wc, wclast);
+                // for (int g=-5; g<=5; g+=10)
+                //     sp[now].drawLine(point[HORZ], point[VERT], plast[HORZ] + (int)(g / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + (int)(g * ((std::abs(im) > 1.0) ? 1 : im)), TFT_BLACK);
+                wclast = wc;
             }
             else if (shape == Ellipses) {
                 int d[2] = {10 + random(30), 10 + random(30)};
-                uint8_t sat = 100 + random(155);
                 uint8_t hue = slowhue;
+                uint16_t sat = 100 + random(156);
                 uint8_t brt = 50 + random(206);
-                if (hue > 50 && hue < 150) slowhue++;
                 for (int i = 0; i < (3 + random(10)); i++)
                     sp[now].drawEllipse(point[HORZ], point[VERT], d[0] - 2 * i, d[1] + 2 * i, hsv_to_rgb<uint16_t>(hue + 2 * i, sat, brt));
             }
             else if (shape == Rings) {
                 int d = 8 + random(25);
-                uint16_t c = hsv_to_rgb<uint16_t>(spothue + 127 * random(1), random(128) + (spothue >> 1), 150 + random(106));
+                uint16_t hue = spothue + 32768 * random(1);
+                uint8_t sat = random(128) + (spothue >> 9);
+                uint8_t brt = 120 + random(111);
+                uint16_t c = hsv_to_rgb<uint16_t>(hue, sat, brt);
+                uint16_t c2 = hsv_to_rgb<uint16_t>(hue, sat, brt+25);
+                Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/2.56), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
                 for (int r = d; r >= (d - 4); r-=1)
                     sp[now].drawCircle(point[HORZ], point[VERT], r, c);
-                sp[now].drawCircle(point[HORZ], point[VERT], d - 4, TFT_BLACK);
-                sp[now].drawCircle(point[HORZ], point[VERT], d + 1, TFT_BLACK);
+                sp[now].drawCircle(point[HORZ], point[VERT], d - 4, c2);
+                sp[now].drawCircle(point[HORZ], point[VERT], d + 1, c2);
             }
             else if (shape == Dots)
-                for (int star = 0; star < 4; star++)
-                    sp[now].fillCircle(random(sprwidth), random(sprheight), 2 + random(2), hsv_to_rgb<uint16_t>((spothue >> 1) * (1 + random(2)), 128 + (slowhue >> 1), 110 + random(146)));  // hue_to_rgb16(random(255)), TFT_BLACK);
+                for (int star = 0; star < 12; star++)
+                    sp[now].fillCircle(random(sprwidth), random(sprheight), 2 + random(2), hsv_to_rgb<uint16_t>((uint16_t)((spothue >> 1) * (1 + random(2))), 128 + random(128), 160 + random(96)));  // hue_to_rgb16(random(255)), TFT_BLACK);
             else if (shape == Ascii)
                 for (int star = 0; star < (shape * 5); star++) {
-                    sp[now].setTextColor(hsv_to_rgb<uint16_t>(plast[HORZ] + plast[VERT] + (spothue >> 2), 63 + (spothue >> 1), 200 + random(56)), TFT_BLACK);
+                    sp[now].setTextColor(hsv_to_rgb<uint16_t>((uint16_t)(plast[HORZ] + plast[VERT] + (spothue >> 2)), 63 + (spothue >> 1), 200 + random(56)), TFT_BLACK);
                     char letter = (char)(1 + random(0xbe));
                     sp[now].setCursor(point[HORZ], point[VERT]);
                     sp[now].print((String)letter);
