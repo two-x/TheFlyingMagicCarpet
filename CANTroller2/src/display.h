@@ -5,7 +5,7 @@
 #include "touch.h"
 #include "images.h"
 #include "animations.h"
-#define BLK  0x0000  // greyscale: full black (RGB elements off)
+// #define BLK  0x0000  // greyscale: full black (RGB elements off)
 #define HGRY 0x2104  // greyscale: hella dark grey
 #define DGRY 0x39c7  // greyscale: very dark grey
 #define GRY1 0x8410  // greyscale: dark grey  (10000)(100 000)(10000) = 84 10
@@ -253,6 +253,7 @@ class Display {
     bool _procrastinate = false, reset_finished = false, simulating_last;
     int disp_oldmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
     float fps = 0.0;
+    uint8_t palettesize = 0;
   public:
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
@@ -267,6 +268,7 @@ class Display {
     }
     void setup() {
         Serial.printf("Display..");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
+        _tft.setColorDepth(8);
         _tft.begin();  // _tft.begin();
         _tft.initDMA();
         // _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
@@ -282,7 +284,7 @@ class Display {
         for (int32_t row=0; row<arraysize(disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
         for (int32_t row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
         yield();
-        _tft.fillScreen(BLK);  // Black out the whole screen
+        _tft.fillScreen(TFT_BLACK);  // Black out the whole screen
         draw_touchgrid(false);
         draw_fixed(datapage, datapage_last, false);
         draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
@@ -290,6 +292,11 @@ class Display {
         animations.setup();
         Serial.printf(" initialized\n");
     }
+    // uint8_t add_palette(uint16_t color) {
+    //     for (uint8_t i=0; i<palettesize; i++) if (_tft.getPaletteColor(i) == color) return i;
+    //     _tft.setPaletteColor(palettesize++, color);
+    //     return palettesize;
+    // }
     void all_dirty() {
         disp_idiots_dirty = true;
         disp_data_dirty = true;
@@ -333,7 +340,7 @@ class Display {
         _tft.drawFastVLine(pos_x+1, pos_y+7, 2, t_color);
     }
     void draw_bargraph_needle(int32_t n_pos_x, int32_t old_n_pos_x, int32_t pos_y, int32_t n_color) {  // draws a cute little pointy needle
-        draw_needle_shape(old_n_pos_x, pos_y, BLK);
+        draw_needle_shape(old_n_pos_x, pos_y, TFT_BLACK);
         draw_needle_shape(n_pos_x, pos_y, n_color);
     }
     void draw_string(int32_t x_new, int32_t x_old, int32_t y, const char* text, const char* oldtext, int32_t color, int32_t bgcolor, bool forced=false) {  // Send in "" for oldtext if erase isn't needed
@@ -396,18 +403,18 @@ class Display {
         if (!redraw_tuning_corner) {
             for (int32_t lineno = 0; lineno < disp_fixed_lines; lineno++)  {  // Step thru lines of fixed telemetry data
                 y_pos = (lineno + 1) * disp_line_height_pix + disp_vshift_pix;
-                draw_string(disp_datapage_names_x, disp_datapage_names_x, y_pos, telemetry[lineno], "", GRY2, BLK, forced);
-                draw_string_units(disp_datapage_units_x, y_pos, units[lineno], "", GRY2, BLK);
+                draw_string(disp_datapage_names_x, disp_datapage_names_x, y_pos, telemetry[lineno], "", GRY2, TFT_BLACK, forced);
+                draw_string_units(disp_datapage_units_x, y_pos, units[lineno], "", GRY2, TFT_BLACK);
                 draw_bargraph_base(disp_bargraphs_x, y_pos + 7, disp_bargraph_width);
             }
         }
         for (int32_t lineno=0; lineno < disp_tuning_lines; lineno++)  {  // Step thru lines of dataset page data
-            draw_string(disp_datapage_names_x, disp_datapage_names_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, datapage_names[page][lineno], datapage_names[page_last][lineno], GRY2, BLK, forced);
-            draw_string_units(disp_datapage_units_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], GRY2, BLK);
+            draw_string(disp_datapage_names_x, disp_datapage_names_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, datapage_names[page][lineno], datapage_names[page_last][lineno], GRY2, TFT_BLACK, forced);
+            draw_string_units(disp_datapage_units_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], GRY2, TFT_BLACK);
             if (redraw_tuning_corner) {
                 int32_t corner_y = (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix + 7;  // lineno*disp_line_height_pix+disp_vshift_pix-1;
                 draw_bargraph_base(disp_bargraphs_x, corner_y, disp_bargraph_width);
-                if (disp_needles[lineno] >= 0) draw_bargraph_needle(-1, disp_needles[lineno], corner_y - 6, BLK);  // Let's draw a needle
+                if (disp_needles[lineno] >= 0) draw_bargraph_needle(-1, disp_needles[lineno], corner_y - 6, TFT_BLACK);  // Let's draw a needle
             }
         }
     }
@@ -421,8 +428,8 @@ class Display {
         if (strcmp(disp_values[lineno], disp_string) || value == 1234567 || disp_data_dirty) {  // If value differs, Erase old value and write new
             if (color == -1) color = GRN;
             int32_t y_pos = lineno*disp_line_height_pix+disp_vshift_pix;
-            if (polarity != disp_polarities[lineno]) draw_hyphen(x_base, y_pos, (!polarity) ? color : BLK);
-            draw_string(x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], color, BLK, (color != disp_val_colors[lineno])); // +6*(arraysize(modecard[run.mode])+4-namelen)/2
+            if (polarity != disp_polarities[lineno]) draw_hyphen(x_base, y_pos, (!polarity) ? color : TFT_BLACK);
+            draw_string(x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], color, TFT_BLACK, (color != disp_val_colors[lineno])); // +6*(arraysize(modecard[run.mode])+4-namelen)/2
             strcpy(disp_values[lineno], disp_string);
             disp_polarities[lineno] = polarity;
             disp_val_colors[lineno] = color;
@@ -434,7 +441,7 @@ class Display {
             else color = 0xffe0 - (age_us-8) * 0x100;  // Then lose green as you age further
             int32_t y_pos = (lineno)*disp_line_height_pix+disp_vshift_pix;
             if (!polarity) draw_hyphen(x_base, y_pos, color);
-            draw_string(x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_values[lineno], "", color, BLK);
+            draw_string(x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_values[lineno], "", color, TFT_BLACK);
             disp_age_quanta[lineno] = age_us;
             disp_val_colors[lineno] = color;
         }
@@ -449,7 +456,7 @@ class Display {
                 int32_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || t_pos < disp_bargraph_squeeze) ? BRN : ( (t_pos != n_pos) ? YEL : GRN );
                 t_pos = corner_x + constrain(t_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
                 if (t_pos != disp_targets[lineno] || (t_pos == n_pos)^(disp_needles[lineno] != disp_targets[lineno]) || disp_data_dirty) {
-                    draw_target_shape(disp_targets[lineno], corner_y, BLK, -1);  // Erase old target
+                    draw_target_shape(disp_targets[lineno], corner_y, TFT_BLACK, -1);  // Erase old target
                     _tft.drawFastHLine(disp_targets[lineno]-(disp_targets[lineno] != corner_x+disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+7, 2+(disp_targets[lineno] != corner_x+disp_bargraph_width-disp_bargraph_squeeze), GRY1);  // Patch bargraph line where old target got erased
                     for (int32_t offset=0; offset<=2; offset++) _tft.drawFastVLine((corner_x+disp_bargraph_squeeze)+offset*(disp_bargraph_width/2 - disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+6, 3, WHT);  // Redraw bargraph graduations in case one got corrupted by target erasure
                     draw_target_shape(t_pos, corner_y, tcolor, -1);  // Draw the new target
@@ -462,7 +469,7 @@ class Display {
             }
         }
         else if (disp_needles[lineno] >= 0) {  // If value having no range is drawn over one that did ...
-            draw_bargraph_needle(-1, disp_needles[lineno], lineno*disp_line_height_pix+disp_vshift_pix-1, BLK);  // Erase the old needle
+            draw_bargraph_needle(-1, disp_needles[lineno], lineno*disp_line_height_pix+disp_vshift_pix-1, TFT_BLACK);  // Erase the old needle
             disp_needles[lineno] = -1;  // Flag for no needle
         }
     }
@@ -555,18 +562,18 @@ class Display {
         int32_t color = (color_override == -1) ? colorcard[_nowmode] : color_override;
         int32_t x_new = disp_runmode_text_x + disp_font_width * (2 + strlen(modecard[_nowmode])) - 3;
         int32_t x_old = disp_runmode_text_x + disp_font_width * (2 + strlen(modecard[_oldmode])) - 3;
-        draw_string(disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[_oldmode], "", BLK, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
-        draw_string(x_old, x_old, disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
-        draw_string(disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[_nowmode], "", color, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
-        draw_string(x_new, x_new, disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
+        draw_string(disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[_oldmode], "", TFT_BLACK, TFT_BLACK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
+        draw_string(x_old, x_old, disp_vshift_pix, "Mode", "", TFT_BLACK, TFT_BLACK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
+        draw_string(disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[_nowmode], "", color, TFT_BLACK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
+        draw_string(x_new, x_new, disp_vshift_pix, "Mode", "", color, TFT_BLACK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
     }
     void draw_datapage(int32_t page, int32_t page_last, bool forced=false) {
         draw_fixed(page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
-        draw_string(disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
+        draw_string(disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], STBL, TFT_BLACK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
     }
     void draw_selected_name(int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
-        if (selected_val != selected_last) draw_string(12, 12, 12+(selected_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_last], "", GRY2, BLK);
-        draw_string(12, 12, 12+(selected_val+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_val], "", (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : GRY2), BLK);
+        if (selected_val != selected_last) draw_string(12, 12, 12+(selected_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_last], "", GRY2, TFT_BLACK);
+        draw_string(12, 12, 12+(selected_val+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_val], "", (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : GRY2), TFT_BLACK);
     }
     void draw_bool(bool value, int32_t col) {  // Draws values of boolean data
         if ((disp_bool_values[col-2] != value) || disp_data_dirty) {  // If value differs, Erase old value and write new
@@ -641,8 +648,8 @@ class Display {
         }
     }
     void draw_idiotbitmap(int i, int32_t x, int32_t y) {
-        uint16_t bg = idiots->val(i) ? idiots->color[i] : BLK;
-        uint16_t color = idiots->val(i) ? BLK : darken_color(idiots->color[i]);
+        uint16_t bg = idiots->val(i) ? idiots->color[i] : TFT_BLACK;
+        uint16_t color = idiots->val(i) ? TFT_BLACK : darken_color(idiots->color[i]);
         _tft.drawRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, bg);
         for (int xo = 0; xo < (2 * disp_font_width - 1); xo++)
             for (int yo = 0; yo < disp_font_height - 1; yo++)
@@ -650,8 +657,8 @@ class Display {
     }
     void draw_idiotlight(int32_t i, int32_t x, int32_t y) {
         if (idiots->icon[i][0] >= 0x80) {
-            _tft.fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (idiots->val(i) ? idiots->color[i] : BLK));  // GRY1);
-            _tft.setTextColor(idiots->val(i) ? BLK : darken_color(idiots->color[i]));  // darken_color((*(idiots->lights[index])) ? BLK : DGRY)
+            _tft.fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (idiots->val(i) ? idiots->color[i] : TFT_BLACK));  // GRY1);
+            _tft.setTextColor(idiots->val(i) ? TFT_BLACK : darken_color(idiots->color[i]));  // darken_color((*(idiots->lights[index])) ? TFT_BLACK : DGRY)
             _tft.setCursor(x+1, y+1);
             _tft.print(idiots->letters[i]);
         }

@@ -40,7 +40,7 @@ volatile int DrawSp = 0, RefSp = 1;
     // int corner[2] = { 0, 0 };
     int tft_w, tft_h;
     uint32_t drawtime, pushtime;
-    static constexpr uint32_t color_depth = 16;
+    static constexpr uint32_t color_depth = 8;
     static constexpr int iwidth = 128;  // 128x128 for a 16-bit colour Sprite (32Kbytes RAM)
     static constexpr int iheight = 128;  // Maximum is 181x181 (64Kbytes) for DMA -  restricted by processor design
     TFT_eSPI tft = TFT_eSPI();  // Library instance Declare object "tft"

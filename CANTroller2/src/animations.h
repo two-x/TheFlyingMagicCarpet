@@ -23,7 +23,7 @@ class Animation {
         sprwidth = _sprwidth;
         sprheight = _sprheight;
         lcd->startWrite();
-        lcd->setColorDepth(16);
+        lcd->setColorDepth(8);
         if (lcd->width() < lcd->height()) lcd->setRotation(lcd->getRotation() ^ 1);
         for (int i = 0; i <= 1; i++) sp[i].setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
         auto framewidth = sprwidth;
@@ -56,7 +56,7 @@ class Animation {
             else using_psram = true;
         }
         Serial.printf(" made 2x %dx%d sprites in %sram\n", framewidth, frameheight, using_psram ? "ps" : "native ");
-        for (int i=0; i<=1; i++) sp[i].clear(TFT_BLACK);
+        for (int i=0; i<=1; i++) sp[i].clear();
         // sp[0].pushImageDMA() draw(corner[HORZ], corner[VERT]);
         // lcd->display();
         lcd->endWrite();
@@ -138,7 +138,7 @@ class CollisionsSaver : public Animation {
         flip = _draw_count & 1;
         balls = &_balls[flip][0];
         sprite = &(sp[flip]);
-        sprite->clear(TFT_BLACK);
+        sprite->clear();
         for (int32_t i = 8; i < sprwidth; i += 16) sprite->drawFastVLine(i, 0, sprheight, 0x1F);
         for (int32_t i = 8; i < sprheight; i += 16) sprite->drawFastHLine(0, i, sprwidth, 0x1F);
         for (std::uint32_t i = 0; i < _ball_count; i++) {
@@ -261,7 +261,7 @@ class CollisionsSaver : public Animation {
     virtual void setup() override { reset(); }
     virtual void reset() override {
         for (int i = 0; i <= 1; i++) {
-            sp[i].clear(TFT_BLACK);
+            sp[i].clear();
             sp[i].setTextSize(1);
             sp[i].setTextDatum(textdatum_t::top_left);
         }
@@ -309,7 +309,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
     int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 1500, shape = random(NumSaverShapes);
     static constexpr uint32_t saver_cycletime_us = 24000000;
     Timer saverCycleTimer, pentimer = Timer(700000);
-    bool saver_lotto = false;
+    bool saver_lotto = false, has_eraser = true;
 
  public:
     EraserSaver() {}
@@ -367,14 +367,15 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
         // Serial.printf("\r%d,%d,%d ", shape, shapes_done, cycle);
         for (int axis = 0; axis <= 1; axis++) point[axis] = random(sprsize[axis]);
         if (cycle != 2) {
-            spothue-=101;
-            if (!(spothue % 4)) slowhue += random(400);
+            spothue-=201;
+            if (!random(50)) spothue = random(65535);
+            if (!(spothue % 4)) slowhue += random(600);
             if (shape == Wedges) {
                 uint16_t wc = hsv_to_rgb<uint16_t>(random(65536), 127 + (spothue >> 9));
                 float im = 0;
                 if (plast[VERT] != point[VERT]) im = (float)(plast[HORZ] - point[HORZ]) / (float)(plast[VERT] - point[VERT]);
-                sp[now].fillCircle(point[HORZ], point[VERT], 4, wc);
-                sp[now].drawCircle(point[HORZ], point[VERT], 4, TFT_BLACK);
+                sp[now].fillCircle(point[HORZ], point[VERT], 3, wc);
+                // sp[now].drawCircle(point[HORZ], point[VERT], 3, TFT_BLACK);
                 for (int h=-4; h<=4; h++)
                     sp[now].drawGradientLine(point[HORZ], point[VERT], plast[HORZ] + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wc, wclast);
                 // for (int g=-5; g<=5; g+=10)
@@ -395,7 +396,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
                 uint8_t sat = random(128) + (spothue >> 9);
                 uint8_t brt = 180 + random(76);
                 uint16_t c = hsv_to_rgb<uint16_t>(hue, sat, brt);
-                uint16_t c2 = hsv_to_rgb<uint16_t>(hue, sat, brt-20);
+                uint16_t c2 = hsv_to_rgb<uint16_t>(hue, sat, brt-10);
                 // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/2.56), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
                 for (int r = d; r >= (d - 4); r-=1) {
                     sp[now].drawCircle(point[HORZ], point[VERT], r, c);
@@ -429,7 +430,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
             // }
             sp[now].setTextColor(TFT_BLACK);  // allows subliminal messaging
         }
-        if (cycle != 0) {
+        if (cycle && has_eraser) {
             for (int axis = HORZ; axis <= VERT; axis++) {
                 erpos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
                 if (erpos[axis] * eraser_velo_sign[axis] >= erpos_max[axis]) {
@@ -442,18 +443,19 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
                 }
             }
             // Serial.printf(" e %3d,%3d,%3d,%3d,%3d\n", (sprwidth / 2) + erpos[HORZ], (sprheight / 2) + erpos[VERT], eraser_rad, eraser_velo[HORZ], eraser_velo[VERT]);
+            // sp[now].fillCircle((sprwidth / 2) + erpos[HORZ], (sprheight / 2) + erpos[VERT], 20, pencolor);
             sp[now].fillCircle((sprwidth / 2) + erpos[HORZ], (sprheight / 2) + erpos[VERT], eraser_rad, TFT_BLACK);
         }
         if (saver_lotto) sp[now].drawString("do drugs", sprwidth / 2, sprheight / 2);
         for (int axis = HORZ; axis <= VERT; axis++)
             plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
     }
-    void change_pattern(
-        int newpat = -1) {  // pass non-negative value for a specific pattern, or  -1 for cycle, -2 for random
+    void change_pattern(int newpat = -1) {  // pass non-negative value for a specific pattern, or  -1 for cycle, -2 for random
         if (++shapes_done > 4) shapes_done = 0;
         else {
             int last_pat = shape;
             saver_lotto = !random(saver_illicit_prob);
+            has_eraser = !random(2);
             if (0 <= newpat && newpat < NumSaverShapes) shape = newpat;  //
             else if (newpat == -1) ++shape %= NumSaverShapes;
             else if (newpat == -2)
@@ -465,7 +467,7 @@ class BlankSaver : public Animation {
   public: 
     BlankSaver() {}
     void setup() {}
-    void reset() { for (int i = 0; i <= 1; i++) sp[i].clear(TFT_BLACK); }
+    void reset() { for (int i = 0; i <= 1; i++) sp[i].clear(); }
     int update() { return true; }
     virtual void saver_touch(int16_t, int16_t) override{};  // unused
 };
