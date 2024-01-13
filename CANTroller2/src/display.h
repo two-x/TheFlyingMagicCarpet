@@ -253,7 +253,8 @@ class Display {
     bool _procrastinate = false, reset_finished = false, simulating_last;
     int disp_oldmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
     float fps = 0.0;
-    uint8_t palettesize = 0;
+    uint8_t palettesize = 2;
+    uint16_t palette[256] = { TFT_BLACK, TFT_WHITE };
   public:
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
@@ -267,10 +268,16 @@ class Display {
         return &_tft;
     }
     void setup() {
-        Serial.printf("Display..");  // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
+        Serial.printf("Display..");  //
+        // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
         _tft.setColorDepth(8);
+        Serial.printf(" ..");  //
+
         _tft.begin();  // _tft.begin();
+        Serial.printf(" ..");  //
+
         _tft.initDMA();
+        Serial.printf(" ..");  //
         // _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
         if (_tft.width() < _tft.height()) _tft.setRotation(_tft.getRotation() ^ 1);
         // _tft.setTouch(touch_cal_data);
@@ -285,10 +292,12 @@ class Display {
         for (int32_t row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
         yield();
         _tft.fillScreen(TFT_BLACK);  // Black out the whole screen
+        Serial.printf(" ..");  //
         draw_touchgrid(false);
         draw_fixed(datapage, datapage_last, false);
         draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
         all_dirty();
+        Serial.printf(" ..");  //
         animations.setup();
         Serial.printf(" initialized\n");
     }
@@ -519,7 +528,8 @@ class Display {
             char buffer[length+1];
             std::snprintf(buffer, length + 1, (chop_zeroes) ? "%.*g" : "%.*f", length - 1, value);  // (buf, letters incl. end, %.*g = floats formatted in shortest form, length-1 digits after decimal, val)
             std::string result(buffer);  // copy buffer to result            
-            if (value != 0.0 && chop_zeroes) result = result.substr(0, result.find_last_not_of('0') + 1);
+            if (value != 0.0 && chop_zeroes && result.find('.') != std::string::npos) result = result.substr(0, result.find_last_not_of('0') + 1);
+            if (result.back() == '.') result.pop_back();
             return result;
         }
         if (place < 0 && sigdig - place <= maxlength) {  // Then we want decimal w/o initial '0' limited to given significant digits (eg .123, .0123, .00123)
@@ -536,7 +546,7 @@ class Display {
         else if (result.find("e-0") != std::string::npos) result.replace(result.find("e-0"), 3, "\x88");  // For very small scientific notation values, replace the "e-0" with a phoenetic long e character, to indicate negative power  // if (result.find("e-0") != std::string::npos) 
         else if (result.find("e+") != std::string::npos) result.replace(result.find("e+"), 2, "e");  // For ridiculously large values
         else if (result.find("e-") != std::string::npos) result.replace(result.find("e-"), 2, "\x88");  // For ridiculously small values
-        return result;    
+        return result;
     }
     void draw_dynamic(int32_t lineno, int32_t value, int32_t lowlim=-1, int32_t hilim=-1, int32_t target=-1) {
         std::string val_string = num2string(value, (int32_t)disp_maxlength);

@@ -13,7 +13,7 @@ volatile bool _is_running;
 volatile std::uint32_t _draw_count;
 volatile std::uint32_t _loop_;
 class Animation {
- public:
+  public:
     static void init(LGFX* _lcd, Touchscreen* touch, uint32_t _cornerx, uint32_t _cornery, uint32_t _sprwidth, uint32_t _sprheight) {
         Serial.printf("  animations init.. ");
         lcd = _lcd;
@@ -31,13 +31,13 @@ class Animation {
         bool fail = false;
         bool using_psram = false;
         for (std::uint32_t i = 0; !fail && i < 2; ++i) {
-            sp[i].setPsram(true);
+            sp[i].setPsram(false);
             fail = !sp[i].createSprite(framewidth, frameheight);
         }
         if (fail) {
             fail = false;
             for (std::uint32_t i = 0; !fail && i < 2; ++i) {
-                sp[i].setPsram(false);
+                sp[i].setPsram(true);
                 fail = !sp[i].createSprite(framewidth, frameheight);
             }
             if (fail) {
@@ -139,8 +139,8 @@ class CollisionsSaver : public Animation {
         balls = &_balls[flip][0];
         sprite = &(sp[flip]);
         sprite->clear();
-        for (int32_t i = 8; i < sprwidth; i += 16) sprite->drawFastVLine(i, 0, sprheight, 0x1F);
-        for (int32_t i = 8; i < sprheight; i += 16) sprite->drawFastHLine(0, i, sprwidth, 0x1F);
+        for (float i = 0.0; i <= 1.0; i += 0.125) sprite->drawGradientVLine((int)(i * (sprwidth-1)), 0, sprheight, hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
+        for (float i = 0.0; i <= 1.0; i += 0.125) sprite->drawGradientHLine(0, (int)(i * (sprheight-1)), sprwidth, hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
         for (std::uint32_t i = 0; i < _ball_count; i++) {
             a = &balls[i];
             sprite->fillCircle(a->x >> SHIFTSIZE, a->y >> SHIFTSIZE, a->r >> SHIFTSIZE, a->color);
@@ -261,6 +261,7 @@ class CollisionsSaver : public Animation {
     virtual void setup() override { reset(); }
     virtual void reset() override {
         for (int i = 0; i <= 1; i++) {
+            sp[i].setBaseColor(TFT_BLACK);
             sp[i].clear();
             sp[i].setTextSize(1);
             sp[i].setTextDatum(textdatum_t::top_left);
@@ -327,6 +328,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
     virtual void reset() override {
         shapes_done = cycle = 0;
         for (int i = 0; i <= 1; i++) {
+            sp[i].setBaseColor(TFT_WHITE);
             sp[i].setTextSize(1);
             sp[i].fillSprite(TFT_BLACK);
             sp[i].setTextDatum(textdatum_t::middle_center);
@@ -397,7 +399,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
                 uint8_t brt = 180 + random(76);
                 uint16_t c = hsv_to_rgb<uint16_t>(hue, sat, brt);
                 uint16_t c2 = hsv_to_rgb<uint16_t>(hue, sat, brt-10);
-                // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/2.56), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
+                Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/2.56), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
                 for (int r = d; r >= (d - 4); r-=1) {
                     sp[now].drawCircle(point[HORZ], point[VERT], r, c);
                     if (r % 2) sp[now].drawCircle(point[HORZ]+1, point[VERT]+1, r, c);
@@ -430,7 +432,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
             // }
             sp[now].setTextColor(TFT_BLACK);  // allows subliminal messaging
         }
-        if (cycle && has_eraser) {
+        if (cycle) {  // } && has_eraser) {
             for (int axis = HORZ; axis <= VERT; axis++) {
                 erpos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
                 if (erpos[axis] * eraser_velo_sign[axis] >= erpos_max[axis]) {
