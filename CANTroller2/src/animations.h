@@ -369,9 +369,9 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
         // Serial.printf("\r%d,%d,%d ", shape, shapes_done, cycle);
         for (int axis = 0; axis <= 1; axis++) point[axis] = random(sprsize[axis]);
         if (cycle != 2) {
-            spothue-=201;
-            if (!random(50)) spothue = random(65535);
-            if (!(spothue % 4)) slowhue += random(600);
+            spothue -= 213;
+            if (!random(20)) spothue = random(65535);
+            slowhue += (spothue & 1) << 8;
             if (shape == Wedges) {
                 uint16_t wc = hsv_to_rgb<uint16_t>(random(65536), 127 + (spothue >> 9));
                 float im = 0;
@@ -390,7 +390,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
                 uint16_t sat = 100 + random(156);
                 uint8_t brt = 50 + random(206);
                 for (int i = 0; i < (3 + random(10)); i++)
-                    sp[now].drawEllipse(point[HORZ], point[VERT], d[0] - 2 * i, d[1] + 2 * i, hsv_to_rgb<uint16_t>(hue + 2 * i, sat, brt));
+                    sp[now].drawEllipse(point[HORZ], point[VERT], d[0] - 2 * i, d[1] + 2 * i, hsv_to_rgb<uint16_t>(hue + 512 * i, sat, brt));
             }
             else if (shape == Rings) {
                 int d = 8 + random(25);
@@ -399,7 +399,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
                 uint8_t brt = 180 + random(76);
                 uint16_t c = hsv_to_rgb<uint16_t>(hue, sat, brt);
                 uint16_t c2 = hsv_to_rgb<uint16_t>(hue, sat, brt-10);
-                Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/2.56), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
+                // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/2.56), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
                 for (int r = d; r >= (d - 4); r-=1) {
                     sp[now].drawCircle(point[HORZ], point[VERT], r, c);
                     if (r % 2) sp[now].drawCircle(point[HORZ]+1, point[VERT]+1, r, c);
@@ -408,7 +408,7 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
                 sp[now].drawCircle(point[HORZ], point[VERT], d + 1, c2);
             }
             else if (shape == Dots)
-                for (int star = 0; star < 12; star++)
+                for (int star = 0; star < 18; star++)
                     sp[now].fillCircle(random(sprwidth), random(sprheight), 2 + random(2), hsv_to_rgb<uint16_t>((uint16_t)((spothue >> 1) * (1 + random(2))), 128 + random(128), 160 + random(96)));  // hue_to_rgb16(random(255)), TFT_BLACK);
             else if (shape == Ascii)
                 for (int star = 0; star < (shape * 5); star++) {
@@ -453,16 +453,13 @@ class EraserSaver : public Animation {  // draws colorful patterns to exercise
             plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
     }
     void change_pattern(int newpat = -1) {  // pass non-negative value for a specific pattern, or  -1 for cycle, -2 for random
-        if (++shapes_done > 4) shapes_done = 0;
-        else {
-            int last_pat = shape;
-            saver_lotto = !random(saver_illicit_prob);
-            has_eraser = !random(2);
-            if (0 <= newpat && newpat < NumSaverShapes) shape = newpat;  //
-            else if (newpat == -1) ++shape %= NumSaverShapes;
-            else if (newpat == -2)
-                while (last_pat == shape) shape = random(NumSaverShapes);
-        }
+        ++shapes_done %= 5;
+        int last_pat = shape;
+        saver_lotto = !random(saver_illicit_prob);
+        has_eraser = !random(2);
+        if (0 <= newpat && newpat < NumSaverShapes) shape = newpat;  //
+        else if (newpat == -1) ++shape %= NumSaverShapes;
+        else if (newpat == -2) while (last_pat == shape) shape = random(NumSaverShapes);
     }
 };
 class BlankSaver : public Animation {

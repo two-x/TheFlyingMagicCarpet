@@ -107,7 +107,7 @@ bool cruise_speed_lowerable = true;  // Allows use of trigger to adjust cruise s
 bool display_enabled = true;  // Should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
 bool web_enabled = true;
 bool use_i2c_baton = true;
-bool screensaver_max_refresh = true;
+bool screensaver_max_refresh = false;
 // Dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
 bool usb_jtag = true;                // If you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)
 bool dont_take_temperatures = false; // In case debugging dallas sensors or causing problems
@@ -117,6 +117,7 @@ bool looptime_print = false;         // Makes code write out timestamps througho
 bool touch_reticles = true;
 bool button_test_heartbeat_color = false; // Encoder short press when not tuning makes heartbeat a random color (for testing)
 bool wifi_client_mode = false;       // Should wifi be in client or access point mode?
+bool fake_color332 = false;
 
 // global tunable variables
 uint32_t looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. Set to 0 linefeeds all prints
@@ -300,6 +301,9 @@ T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {
     uint8_t s2 = 255 - sat; // 255 to 0
     uint16_t out[3];
     for (int led=0; led<3; led++) out[led] = (((((rgb[led] * s1) >> 8) + s2) * v1) & 0xff00) >> 8;
+    if (fake_color332) {
+        if (std::is_same<T, uint16_t>::value) return (T)((out[0] & 0xe0) << 8) | ((out[1] & 0xe0) << 5) | ((out[2] & 0xc0) >> 3);
+    }
     if (std::is_same<T, uint16_t>::value) return (T)((out[0] & 0xf8) << 8) | ((out[1] & 0xfc) << 5) | (out[2] >> 3);
     else if (std::is_same<T, uint32_t>::value) return (out[0] << 16) | (out[1] << 8) | out[2];
 }
