@@ -120,12 +120,15 @@ class CollisionsSaver : public Animation {
         int32_t m;
         uint32_t color;
     };
-    static constexpr std::uint32_t BALL_MAX = 96;  // 256
+    static constexpr std::uint32_t BALL_MAX = 55;  // 256
     ball_info_t _balls[2][BALL_MAX];
     std::uint32_t _ball_count = 0, _myfps = 0;
     std::uint32_t ball_count = 0;
-    std::uint32_t sec, psec;
+    std::uint32_t sec, psec, ball_create_rate = 2500;
     std::uint32_t myfps = 0, frame_count = 0;
+    uint8_t ball_radius_base = 4;  // originally 4
+    uint8_t ball_radius_modifier = 8;  // originally 4
+    uint8_t ball_redoubler_rate = 12;  // originally 0x07
     volatile bool _is_running;
     volatile std::uint32_t _loop_count = 0;
     CollisionsSaver() {}
@@ -150,7 +153,7 @@ class CollisionsSaver : public Animation {
     bool mainfunc(void) {
         bool new_round = false;
         static constexpr float e = 0.999;  // Coefficient of friction
-        sec = lgfx::millis() / 1000;
+        sec = lgfx::millis() / ball_create_rate;
         if (psec != sec) {
             psec = sec;
             myfps = frame_count;
@@ -165,7 +168,13 @@ class CollisionsSaver : public Animation {
             a->y = 0;
             a->dx = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
             a->dy = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
-            a->r = (4 + (ball_count & 0x07)) << SHIFTSIZE;
+            // float sqrme = ball_radius_base + (ball_count & ball_radius_modifier);
+            uint8_t sqrme = ball_radius_base + random(ball_radius_modifier);
+            for (int i=0; i<=2; i++) if (!random(ball_redoubler_rate)) sqrme *= 2;
+            a->r = sqrme << SHIFTSIZE;  // (sqrme * sqrme)));
+            // float sqrme = ball_radius_base + random(ball_radius_modifier);
+            // a->r = (uint8_t)std::sqrt(std::sqrt(sqrme)) << SHIFTSIZE;  // (sqrme * sqrme)));
+            // Serial.printf("s=%d r=%d\n", sqrme, a->r);
             a->m = 4 + (ball_count & 0x07);
             #if defined(ESP32) || defined(CONFIG_IDF_TARGET_ESP32) || defined(ESP_PLATFORM)
                 vTaskDelay(1);
