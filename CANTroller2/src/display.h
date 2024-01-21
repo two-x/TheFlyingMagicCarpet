@@ -243,9 +243,10 @@ class TunerPanel {
 class Display {
   private:
     LGFX _tft = LGFX();
-    AnimationManager animations;
     NeopixelStrip* neo;
     Touchscreen* touch;
+    FlexPanel panel;
+    AnimationManager animations;
     TunerPanel tuner;
     IdiotLights* idiots;
     Timer valuesRefreshTimer = Timer(160000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
@@ -258,12 +259,15 @@ class Display {
   public:
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
-    Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots) : _tft(), neo(_neo), touch(_touch), idiots(_idiots),
-        animations(&_tft, _touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h) {
-    };
+    Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots)
+        : _tft(), neo(_neo), touch(_touch), idiots(_idiots) {
+        panel.init(&_tft, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
+        animations.init(&panel);
+    }
     Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots) 
-            : _tft(), neo(_neo), touch(_touch), idiots(_idiots), animations(&_tft, _touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h)
-        { Display(_neo, _touch, _idiots); }
+        : _tft(), neo(_neo), touch(_touch), idiots(_idiots) {
+        Display(_neo, _touch, _idiots);
+    }
     LGFX* get_tft() {
         return &_tft;
     }

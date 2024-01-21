@@ -1053,7 +1053,7 @@ class Simulator {
     Potentiometer& _pot;
   public:
     Simulator(Potentiometer& pot_arg, sens potmap_arg=sens::none) : _pot(pot_arg) {
-        for (uint8_t sensor = (uint8_t)sens::none + 1; sensor < (uint8_t)sens::NUM_SENSORS; sensor++ )
+        for (uint8_t sensor = (uint8_t)sens::none + 1; sensor < (uint8_t)sens::NUM_SENSORS; sensor++)
             set_can_sim((sens)sensor, false);   // initially turn off simulation of sensors  // static constexpr bool initial_sim_joy = false;
         set_potmap(potmap_arg); // set initial pot map
     }  // syspower, ignition removed, as they are not sensors or even inputs

@@ -305,7 +305,8 @@ T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {
         if (std::is_same<T, uint16_t>::value) return (T)((out[0] & 0xe0) << 8) | ((out[1] & 0xe0) << 5) | ((out[2] & 0xc0) >> 3);
     }
     if (std::is_same<T, uint16_t>::value) return (T)((out[0] & 0xf8) << 8) | ((out[1] & 0xfc) << 5) | (out[2] >> 3);
-    else if (std::is_same<T, uint32_t>::value) return (out[0] << 16) | (out[1] << 8) | out[2];
+    else if (std::is_same<T, uint8_t>::value) return (T)((out[0] & 0xe0) | ((out[1] & 0xe0) >> 3) | ((out[2] & 0xc0) >> 6));
+    else if (std::is_same<T, uint32_t>::value) return (T)((out[0] << 16) | (out[1] << 8) | out[2]);
 }
 // template <typename T>
 // T hsv_to_rgb(uint8_t hue, uint8_t sat, uint8_t val) {
