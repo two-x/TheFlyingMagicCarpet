@@ -475,7 +475,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             }
             else if (shape == Dots)
                 for (int star = 0; star < 18; star++)
-                    sprite->fillCircle(random(sprsize[HORZ]), random(sprsize[VERT]), 2 + random(2), hsv_to_rgb<uint8_t>((uint8_t)((spothue >> 1) * (1 + random(2))), 128 + random(128), 160 + random(96)));  // hue_to_rgb16(random(255)), TFT_BLACK);
+                    sprite->fillCircle(random(sprsize[HORZ]), random(sprsize[VERT]), 2 + random(2), hsv_to_rgb<uint8_t>((uint16_t)((spothue >> 1) * (1 + random(2))), 128 + random(128), 160 + random(96)));  // hue_to_rgb16(random(255)), TFT_BLACK);
             else if (shape == Ascii)
                 for (int star = 0; star < 40; star++) {
                     uint16_t hue = map(point[VERT], 0, sprsize[VERT], 0, 65535);
@@ -590,6 +590,13 @@ class AnimationManager {
         fps_mark = now;
     }
     float update() {
+        if (!screensaver_last && screensaver) {
+            // if (nowsaver == Eraser) ptrsaver->reset();  else
+            change_saver();  // ptrsaver->reset();
+        }
+        screensaver_last = screensaver;
+        if (!screensaver) return NAN;        // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
+        // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
         if (saverRefreshTimer.expireset() || screensaver_max_refresh) {
             calc_fps();
             // panel->setflip((nowsaver == Collisions));
