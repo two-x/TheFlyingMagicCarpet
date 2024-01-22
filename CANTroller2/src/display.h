@@ -74,12 +74,14 @@ class IdiotLights {
   public:
     static constexpr int row_count = 11;
     static constexpr int row_height = 11;
-    static constexpr int iconcount = 20;  // number of boolean values included on the screen panel (not the neopixels) 
+    static constexpr int iconcount = 33;  // number of boolean values included on the screen panel (not the neopixels) 
     bool* vals[iconcount] = {
         &(diag.err_sens_alarm[LOST]), &(diag.err_sens_alarm[RANGE]), &(diag.temp_err[ENGINE]), &(diag.temp_err[WHEEL]), &panicstop, 
-        hotrc.radiolost_ptr(), &shutdown_incomplete, &park_the_motors, &autostopping, &cruise_adjusting, &car_hasnt_moved, 
-        &starter, &bootbutton, sim.enabled_ptr(), &running_on_devboard, &powering_up, &(brake.posn_pid_active),
-        &(encoder.enc_a), &(encoder.enc_b), &nowtouch,
+        hotrc.radiolost_ptr(), &shutdown_incomplete, &park_the_motors, &autostopping, &cruise_adjusting, &car_hasnt_moved, &starter, &bootbutton, 
+        sim.enabled_ptr(), &running_on_devboard, &powering_up, &(brake.posn_pid_active), &(encoder.enc_a), &(encoder.enc_b), &nowtouch,
+        &ignition, &syspower,  // these are just placeholders
+        &(sensidiots[0]), &(sensidiots[1]), &(sensidiots[2]), &(sensidiots[3]), &(sensidiots[4]), &(sensidiots[5]), &(sensidiots[6]), 
+        &(sensidiots[7]), &(sensidiots[8]), &(sensidiots[9]), &(sensidiots[10]),
     };
     uint8_t icon[iconcount][11] = {
         { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e, },  // 0 = "S" w/ crossout symbol
@@ -102,10 +104,25 @@ class IdiotLights {
         { 0x0e, 0x1d, 0x7d, 0x1d, 0x0e, 0x00, 0x7e, 0x0b, 0x09, 0x0b, 0x7e, },  // 17 = encoder "A"
         { 0x0e, 0x1d, 0x7d, 0x1d, 0x0e, 0x00, 0x7f, 0x49, 0x49, 0x7f, 0x36, },  // 18 = encoder "B"
         { 0x78, 0x7c, 0x7f, 0x7f, 0x7c, 0x7c, 0x1c, 0x0c, 0x0c, 0x0c, 0x0c, },  // 19 = finger
+        { 0x88, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // placeholder
+        { 0x88, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // placeholder
+        { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // sensors
+        { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // sensors
+        { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // sensors
+        { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // sensors
+        { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // sensors
+        { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // sensors
+        { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // sensors
+        { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // sensors
+        { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // sensors
+        { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // sensors
+        { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // sensors
     };
     char letters[iconcount][3] = {
-        "SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "AS", "Aj",
-        "HM", "St", "BB", "Sm", "DB", "PU", "BP", "eA", "eB", "NT"
+        "SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "AS", "Aj", "HM",
+        "St", "BB", "Sm", "DB", "PU", "BP", "eA", "eB", "NT",
+        "XX", "XX",
+        "Th", "Br", "St", "RC", "Sp", "Tc", "Pr", "Ps", "Tm", "Ot", "IO",
     };
     uint16_t color[iconcount];
     bool last[iconcount];
@@ -670,13 +687,13 @@ class Display {
                 _tft.drawPixel(x + xo + 1, y + yo + 1, ((idiots->icon[i][xo] >> yo) & 1) ? color : bg);
     }
     void draw_idiotlight(int32_t i, int32_t x, int32_t y) {
-        if (idiots->icon[i][0] >= 0x80) {
+        if (idiots->icon[i][0] == 0xff) {  // 0xff in the first byte will draw 2-letter string instead of bitmap
             _tft.fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (idiots->val(i) ? idiots->color[i] : TFT_BLACK));  // GRY1);
             _tft.setTextColor(idiots->val(i) ? TFT_BLACK : darken_color(idiots->color[i]));  // darken_color((*(idiots->lights[index])) ? TFT_BLACK : DGRY)
             _tft.setCursor(x+1, y+1);
             _tft.print(idiots->letters[i]);
         }
-        else draw_idiotbitmap(i, x, y);
+        else if (idiots->icon[i][0] != 0x88) draw_idiotbitmap(i, x, y);  // 0x88 in the first byte will skip a space
         idiots->last[i] = idiots->val(i);
     }
     void draw_idiotlights(int32_t x, int32_t y, bool force = false) {

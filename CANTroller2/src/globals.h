@@ -85,14 +85,13 @@ enum tunerstuff : int { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum datapages : int { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
 enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
 enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 }; // Possible sources of gas, brake, steering commands
-enum telemetry_float : int { 
-    _HotRCHorz, _HotRCVert, _Pressure, _BrakePos, _Speedo, _Tach,  _MuleBatt, _GasServo, _BrakeMotor, _SteerMotor,  // 10 per line
-    _TempEng, _TempWhFL, _TempWhFR, _TempWhRL, _TempWhRR, _TempAmb, _AirVelo, _MAP, _MAF, _Pot,
-    NumTelemetryFloats, _None
-};
-enum telemetry_bool : int {
-    _Ignition, _PanicStop, _SysPower, _HotRCCh3, _StarterDr, _StarterExt, _HotRCCh4, _BasicSw, NumTelemetryBools
-};
+// enum telemetry_full : int { 
+//     
+// };
+enum telemetry_short : int { _None=-1, _GasServo=0, _BrakeMotor=1, _SteerMotor=2, _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7, _Temps=8, _Other=9, _GPIO=10 };  // _MuleBatt, _MAP, _MAF, _Pot,
+enum telemetry_full : int { _AirVelo=11, _MAP=12, _MuleBatt=13, _Pot=14, _MAF=15, _HotRCHorz=16, _HotRCVert=17, _TempEng=18, _TempWhFL=19, _TempWhFR=20, _TempWhRL=21, _TempWhRR=22, _TempAmb=23 };  // 10 per line
+enum telemetry_nums : int { NA=-2, None=-1, NumTelemetryBool=9, NumTelemetryShort=11, NumTelemetryFull=24 };
+enum telemetry_bool : int { _Ignition=1, _PanicStop=2, _SysPower=3, _HotRCCh3=4, _HotRCCh4=5, _StarterDr=6, _StarterExt=7, _BasicSw=8 };
 enum err_type : int { LOST=0, RANGE=1, CALIB=2, WARN=3, CRIT=4, INFO=5, NUM_ERR_TYPES=6 };
 
 // global configuration settings
@@ -175,6 +174,7 @@ float maf_gps = 0;                      // Manifold mass airflow in grams per se
 uint16_t heartbeat_override_color = 0x0000;
 bool nowtouch = false;
 bool captouch = true;
+bool sensidiots[11];
 
 // fast macros
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // A macro function to determine the length of string arrays

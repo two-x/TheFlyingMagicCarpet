@@ -590,14 +590,6 @@ class AnimationManager {
         fps_mark = now;
     }
     float update() {
-        if (!screensaver_last && screensaver) {
-            // if (nowsaver == Eraser) ptrsaver->reset();  else
-            change_saver();  // ptrsaver->reset();
-        }
-        screensaver_last = screensaver;
-        if (!screensaver) return NAN;
-        // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
-        // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
         if (saverRefreshTimer.expireset() || screensaver_max_refresh) {
             calc_fps();
             // panel->setflip((nowsaver == Collisions));
@@ -620,5 +612,33 @@ class AnimationManager {
             else change_saver();
         }
         return myfps;
+    }
+};
+class DiagConsole {
+  private:
+    LGFX* mylcd;
+    LGFX_Sprite* nowspr_ptr;
+    FlexPanel* panel;
+    static constexpr int num_lines = 16;
+    std::string textlines[num_lines];
+    int usedlines = 0;
+  public:
+    DiagConsole() {}
+    void init(FlexPanel* _panel) {
+        panel = _panel;
+    }
+    void setup() {}
+    void redraw() {
+        panel->diffdraw();
+    }
+    void add_errorline(std::string type, std::string item) {
+        std::string newerr = type + ": " + item;
+        if (newerr.length() > 15) newerr = newerr.substr(0, 15);
+        textlines[usedlines++] = newerr;
+    }
+    void update() {
+        int flip = panel->setflip(false);
+        nowspr_ptr = &(panel->sp[flip]);
+        panel->diffdraw();
     }
 };
