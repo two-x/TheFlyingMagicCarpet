@@ -285,8 +285,8 @@ class CollisionsSaver {
     void setup(int _flip, LGFX_Sprite* _nowspr) {
         flip = _flip;
         sprite = _nowspr;
-        _width = sprite->width();
-        _height = sprite->height();
+        _width = sprite->width() << SHIFTSIZE;
+        _height = sprite->height() << SHIFTSIZE;
         // reset();
     }
     void reset(LGFX_Sprite* sp0, LGFX_Sprite* sp1) {
@@ -424,14 +424,14 @@ class EraserSaver {  // draws colorful patterns to exercise
         // Serial.printf("\r%d,%d,%d ", shape, shapes_done, cycle);
         for (int axis = 0; axis <= 1; axis++) point[axis] = random(sprsize[axis]);
         if (cycle != 2) {
-            spothue -= 113;
+            spothue -= 13;
             if (!random(20)) spothue = random(65535);
             slowhue += (spothue & 1) << 8;
             if (shape == Wedges) {
                 uint16_t wc = hsv_to_rgb<uint16_t>(random(65536), 127 + (spothue >> 9));
                 float im = 0;
                 if (plast[VERT] != point[VERT]) im = (float)(plast[HORZ] - point[HORZ]) / (float)(plast[VERT] - point[VERT]);
-                sprite->fillCircle(point[HORZ], point[VERT], 3, wc);
+                sprite->fillCircle(plast[HORZ], plast[VERT], 3, wc);
                 // sprite->drawCircle(point[HORZ], point[VERT], 3, TFT_BLACK);
                 for (int h=-4; h<=4; h++)
                     sprite->drawGradientLine(point[HORZ], point[VERT], plast[HORZ] + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wc, wclast);
@@ -456,7 +456,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 uint8_t c2 = hsv_to_rgb<uint8_t>(hue, sat, brt-10);
                 // uint16_t c = hsv_to_rgb<uint16_t>(hue, sat, brt);
                 // uint16_t c2 = hsv_to_rgb<uint16_t>(hue, sat, brt-10);
-                Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/655.35), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
+                // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/655.35), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
                 // for (int xo = -1; xo <= 1; xo += 2)
                 //     for (int yo = -1; yo <= 1; yo += 2)
                 //         sprite->drawCircle(point[HORZ] + xo, point[VERT] + yo, d, c);
@@ -474,15 +474,17 @@ class EraserSaver {  // draws colorful patterns to exercise
                 // sprite->drawCircle(point[HORZ], point[VERT], d + 1, c2);
             }
             else if (shape == Dots)
-                for (int star = 0; star < 18; star++)
+                for (int star = 0; star < 7; star++)
                     sprite->fillCircle(random(sprsize[HORZ]), random(sprsize[VERT]), 2 + random(2), hsv_to_rgb<uint8_t>((uint16_t)((spothue >> 1) * (1 + random(2))), 128 + random(128), 160 + random(96)));  // hue_to_rgb16(random(255)), TFT_BLACK);
             else if (shape == Ascii)
-                for (int star = 0; star < 40; star++) {
+                for (int star = 0; star < 12; star++) {
                     uint16_t hue = map(point[VERT], 0, sprsize[VERT], 0, 65535);
                     uint8_t sat = map(point[HORZ], 0, sprsize[HORZ], 0, 255);
                     char letter = (char)(0x21 + random(0x5d));
                     // char letter = (char)(1 + random(0xbe));
                     // sprite->drawString((String)letter, point[HORZ]-1, point[VERT]-1);
+                    uint16_t c = hsv_to_rgb<uint16_t>(hue, sat, 100 + 100 * (spothue > 32767) + random(56));
+                    // sprite->drawChar(point[HORZ]+1, point[VERT]+1, letter, (uint16_t)TFT_BLACK, c, 1 + random(2), 1 + random(2));
                     sprite->setTextColor(hsv_to_rgb<uint16_t>(hue, sat, 100 + 100 * (spothue > 32767) + random(56)), TFT_BLACK);
                     sprite->drawString((String)letter, point[HORZ]+1, point[VERT]+1);
                     sprite->setTextColor(TFT_BLACK);
