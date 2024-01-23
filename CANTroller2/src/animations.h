@@ -136,15 +136,15 @@ class CollisionsSaver {
     ball_info_t* balls;
     ball_info_t* a;
     LGFX_Sprite* sprite;
-    static constexpr std::uint32_t BALL_MAX = 55;  // 256
+    static constexpr std::uint32_t BALL_MAX = 50;  // 256
     ball_info_t _balls[2][BALL_MAX];
     std::uint32_t _ball_count = 0, _myfps = 0;
     std::uint32_t ball_count = 0;
     int _width, _height;
-    std::uint32_t sec, psec, ball_create_rate = 2500;
+    std::uint32_t sec, psec, ball_create_rate = 4000;
     std::uint32_t myfps = 0, frame_count = 0;
     uint8_t ball_radius_base = 6;  // originally 4
-    uint8_t ball_radius_modifier = 6;  // originally 4
+    uint8_t ball_radius_modifier = 4;  // originally 4
     uint8_t ball_redoubler_rate = 18;  // originally 0x07
     uint8_t ball_gravity = 32;  // originally 0 with suggestion of 4
     volatile bool _is_running;
@@ -183,13 +183,9 @@ class CollisionsSaver {
             a->y = 0;
             a->dx = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
             a->dy = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
-            // float sqrme = ball_radius_base + (ball_count & ball_radius_modifier);
             uint8_t sqrme = ball_radius_base + random(ball_radius_modifier);
             for (int i=0; i<=2; i++) if (!random(ball_redoubler_rate)) sqrme *= 2;
             a->r = sqrme << SHIFTSIZE;  // (sqrme * sqrme)));
-            // float sqrme = ball_radius_base + random(ball_radius_modifier);
-            // a->r = (uint8_t)std::sqrt(std::sqrt(sqrme)) << SHIFTSIZE;  // (sqrme * sqrme)));
-            // Serial.printf("s=%d r=%d\n", sqrme, a->r);
             a->m = 4 + (ball_count & 0x07);
             #if defined(ESP32) || defined(CONFIG_IDF_TARGET_ESP32) || defined(ESP_PLATFORM)
                 vTaskDelay(1);
@@ -329,13 +325,12 @@ class CollisionsSaver {
     void saver_touch(int, int) {};  // unused
 };
 class EraserSaver {  // draws colorful patterns to exercise
-    enum savershapes : int { Wedges, Dots, Rings, Ellipses, Boxes, Ascii, NumSaverShapes, FocusRing };
-
+    enum savershapes : int { Wedges, Dots, Rings, Ellipses, Boxes, Ascii, Rotate, NumSaverShapes };
  private:
     LGFX_Sprite* sprite;
-    int sprsize[2];
+    int sprsize[2], rotate = -1;
     int point[2], plast[2], er[2], flip;
-    int eraser_rad = 14, eraser_rad_min = 12, eraser_rad_max = 32, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
+    int eraser_rad = 14, eraser_rad_min = 22, eraser_rad_max = 40, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, boxsize[2], now = 0;
     int eraser_velo[2] = {random(eraser_velo_max), random(eraser_velo_max)}, shapes_per_run = 5, shapes_done = 0;
     int erpos_max[2];
@@ -346,7 +341,6 @@ class EraserSaver {  // draws colorful patterns to exercise
     static constexpr uint32_t saver_cycletime_us = 18000000;
     Timer saverCycleTimer, pentimer = Timer(1500000);
     bool saver_lotto = false, has_eraser = true;
-
  public:
     EraserSaver() {}
     void setup(int _flip, LGFX_Sprite* _nowspr) {
@@ -396,18 +390,12 @@ class EraserSaver {  // draws colorful patterns to exercise
     //     for (int axis = HORZ; axis <= VERT; axis++) touchlast[axis] = tp[axis];
     // }
     void saver_touch(int x, int y) {  // you can draw colorful lines on the screensaver
-        // touchpoint[HORZ] = x;
-        // touchpoint[VERT] = y;
-        // for (int axis = HORZ; axis <= VERT; axis++)
-        //     if (touchlast[axis] == -1) touchlast[axis] = touchpoint[axis];
         if (pentimer.expireset()) {
             pensat += 1.5;
             if (pensat > 255.0) pensat = 100.0;
             pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint16_t>(++penhue, (uint8_t)pensat, 200 + random(56));
         }
         sprite->fillCircle(x, y, 20, pencolor);
-        // sprite->fillCircle(touchpoint[HORZ], touchpoint[VERT], 20, pencolor);
-        // Serial.printf("x%d y%d ", touchpoint[HORZ], touchpoint[VERT]);
     }
     int update(int _flip, LGFX_Sprite* _nowspr) {
         flip = _flip;
@@ -424,11 +412,13 @@ class EraserSaver {  // draws colorful patterns to exercise
     void drawsprite() {
         // Serial.printf("\r%d,%d,%d ", shape, shapes_done, cycle);
         for (int axis = 0; axis <= 1; axis++) point[axis] = random(sprsize[axis]);
-        if (cycle != 2) {
+        if (shape == Rotate) ++rotate %= Ascii;
+        else rotate = shape;
+        if ((cycle != 2) || !has_eraser) {
             spothue -= 13;
             if (!random(20)) spothue = random(65535);
-            slowhue += (spothue & 1) << 8;
-            if (shape == Wedges) {
+            if (spothue & 1) slowhue += 13;
+            if (rotate == Wedges) {
                 uint16_t wc = hsv_to_rgb<uint16_t>(random(65536), 127 + (spothue >> 9));
                 float im = 0;
                 if (plast[VERT] != point[VERT]) im = (float)(plast[HORZ] - point[HORZ]) / (float)(plast[VERT] - point[VERT]);
@@ -436,61 +426,35 @@ class EraserSaver {  // draws colorful patterns to exercise
                 // sprite->drawCircle(point[HORZ], point[VERT], 3, TFT_BLACK);
                 for (int h=-4; h<=4; h++)
                     sprite->drawGradientLine(point[HORZ], point[VERT], plast[HORZ] + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wc, wclast);
-                // for (int g=-5; g<=5; g+=10)
-                //     sprite->drawLine(point[HORZ], point[VERT], plast[HORZ] + (int)(g / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + (int)(g * ((std::abs(im) > 1.0) ? 1 : im)), TFT_BLACK);
                 wclast = wc;
             }
-            else if (shape == Ellipses) {
+            else if (rotate == Ellipses) {
                 int d[2] = {10 + random(30), 10 + random(30)};
                 uint8_t hue = slowhue;
                 uint16_t sat = 100 + random(156);
-                uint8_t brt = 50 + random(206);
-                for (int i = 0; i < (3 + random(10)); i++)
-                    sprite->drawEllipse(point[HORZ], point[VERT], d[0] - 2 * i, d[1] + 2 * i, hsv_to_rgb<uint16_t>(spothue + 512 * i, sat, brt));
+                uint8_t brt = 90 + random(166);
+                for (int i = 0; i < 6 + random(20); i++)
+                    sprite->drawEllipse(point[HORZ], point[VERT], d[0] - i, d[1] + i, hsv_to_rgb<uint16_t>(spothue + 512 * i, sat, brt));
             }
-            else if (shape == Rings) {
+            else if (rotate == Rings) {
                 int d = 8 + random(25);
                 uint16_t hue = spothue + 32768 * random(1);
                 uint8_t sat = random(128) + (spothue >> 9);
                 uint8_t brt = 180 + random(76);
                 uint8_t c = hsv_to_rgb<uint8_t>(hue, sat, brt);
                 uint8_t c2 = hsv_to_rgb<uint8_t>(hue, sat, brt-10);
-                // uint16_t c = hsv_to_rgb<uint16_t>(hue, sat, brt);
-                // uint16_t c2 = hsv_to_rgb<uint16_t>(hue, sat, brt-10);
                 // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/655.35), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
-                // for (int xo = -1; xo <= 1; xo += 2)
-                //     for (int yo = -1; yo <= 1; yo += 2)
-                //         sprite->drawCircle(point[HORZ] + xo, point[VERT] + yo, d, c);
                 for (int xo = -1; xo <= 1; xo += 2) {
                     sprite->drawCircle(point[HORZ], point[VERT] + xo, d, c);
                     sprite->drawCircle(point[HORZ] + xo, point[VERT], d, c);
                 }
                 for (int edge = -1; edge <= 1; edge += 2)
                     sprite->drawCircle(point[HORZ], point[VERT], d + edge, c2);
-                // for (int r = d; r >= (d - 4); r-=1) {
-                //     sprite->drawCircle(point[HORZ], point[VERT], r, c);
-                //     if (r % 2) sprite->drawCircle(point[HORZ]+1, point[VERT]+1, r, c);
-                // }
-                // sprite->drawCircle(point[HORZ], point[VERT], d - 4, c2);
-                // sprite->drawCircle(point[HORZ], point[VERT], d + 1, c2);
             }
-            else if (shape == Dots)
+            else if (rotate == Dots)
                 for (int star = 0; star < 7; star++)
                     sprite->fillCircle(random(sprsize[HORZ]), random(sprsize[VERT]), 2 + random(2), hsv_to_rgb<uint8_t>((uint16_t)((spothue >> 1) * (1 + random(2))), 128 + random(128), 160 + random(96)));  // hue_to_rgb16(random(255)), TFT_BLACK);
-            else if (shape == Ascii)
-                for (int star = 0; star < 12; star++) {
-                    uint16_t hue = map(point[VERT], 0, sprsize[VERT], 0, 65535);
-                    uint8_t sat = map(point[HORZ], 0, sprsize[HORZ], 0, 255);
-                    char letter = (char)(0x21 + random(0x5d));
-                    // char letter = (char)(1 + random(0xbe));
-                    // sprite->drawString((String)letter, point[HORZ]-1, point[VERT]-1);
-                    uint16_t c = hsv_to_rgb<uint16_t>(hue, sat, 100 + 100 * (spothue > 32767) + random(56));
-                    // sprite->drawChar(point[HORZ]+1, point[VERT]+1, letter, (uint16_t)TFT_BLACK, c, 1 + random(2), 1 + random(2));
-                    sprite->setTextColor(hsv_to_rgb<uint16_t>(hue, sat, 100 + 100 * (spothue > 32767) + random(56)), TFT_BLACK);
-                    sprite->drawString((String)letter, point[HORZ]+1, point[VERT]+1);
-                    sprite->setTextColor(TFT_BLACK);
-                }
-            else if (shape == Boxes) {
+            else if (rotate == Boxes) {
                 boxrad = 2 + random(2);
                 boxminsize = 2 * boxrad + 10;
                 int longer = random(2);
@@ -499,13 +463,18 @@ class EraserSaver {  // draws colorful patterns to exercise
                 for (int dim = 0; dim <= 1; dim++) point[dim] = -boxsize[dim] / 2 + random(sprsize[dim]);
                 sprite->fillSmoothRoundRect(point[HORZ], point[VERT], boxsize[HORZ], boxsize[VERT], boxrad, rando_color());  // Change colors as needed
             }
-            // else if (shape == FocusRing) {
-            // hsv_to_rgb<uint16_t>(random(256), 63+(spothue>>1)+(spothue>>2),
-            // 150+random(106)), TFT_BLACK)
-            // }
-            sprite->setTextColor(TFT_BLACK);  // allows subliminal messaging
+            else if (rotate == Ascii)
+                for (int star = 0; star < 12; star++) {
+                    uint16_t hue = map(point[VERT], 0, sprsize[VERT], 0, 65535);
+                    uint8_t sat = map(point[HORZ], 0, sprsize[HORZ], 0, 255);
+                    char letter = (char)(0x21 + random(0x5d));
+                    uint16_t c = hsv_to_rgb<uint16_t>(hue, sat, 100 + 100 * (spothue > 32767) + random(56));
+                    sprite->setTextColor(hsv_to_rgb<uint16_t>(hue, sat, 100 + 100 * (spothue > 32767) + random(56)), TFT_BLACK);
+                    sprite->drawString((String)letter, point[HORZ]+1, point[VERT]+1);
+                    sprite->setTextColor(TFT_BLACK);  // allows subliminal messaging
+                }
         }
-        if (cycle && has_eraser) {
+        if ((cycle != 0) && has_eraser) {
             for (int axis = HORZ; axis <= VERT; axis++) {
                 erpos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
                 if (erpos[axis] * eraser_velo_sign[axis] >= erpos_max[axis]) {
@@ -538,14 +507,6 @@ class EraserSaver {  // draws colorful patterns to exercise
         //     else sp[i].setFont(&fonts::Font4);
     }
 };
-// class BlankSaver {
-//   public: 
-//     BlankSaver() {}
-//     void setup() {}
-//     void reset() { for (int i = 0; i <= 1; i++) sp[i].clear(); }
-//     int update() { return true; }
-//     // void saver_touch(int16_t, int16_t) {};  // unused
-// };
 class AnimationManager {
   private:
     enum saverchoices : int { Eraser, Collisions, NumSaverMenu, Blank };
@@ -553,13 +514,9 @@ class AnimationManager {
     LGFX* mylcd;
     LGFX_Sprite* nowspr_ptr;
     FlexPanel* panel;
-    // BlankSaver bSaver;
     EraserSaver eSaver;
     CollisionsSaver cSaver;
-    // Animation* ptrsaver = &cSaver;
-    // Touchscreen* touch;
     Timer saverRefreshTimer = Timer(16666);
-    // Timer saverRefreshTimer = Timer(16666);
     Timer fps_timer;
     float myfps = 0.0;
     int64_t fps_mark;
@@ -574,7 +531,6 @@ class AnimationManager {
         panel = _panel;
     }
     void setup() {
-        // panel->initpanel();
         int flip = panel->setflip(true);
         eSaver.setup(panel->flip, &(panel->sp[flip]));
         cSaver.setup(panel->flip, &(panel->sp[flip]));
@@ -603,22 +559,12 @@ class AnimationManager {
         // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
         if (saverRefreshTimer.expireset() || screensaver_max_refresh) {
             calc_fps();
-            // panel->setflip((nowsaver == Collisions));
             int flip = panel->setflip(false);
             nowspr_ptr = &(panel->sp[flip]);
             if (nowsaver == Eraser) still_running = eSaver.update(flip, nowspr_ptr);
             else if (nowsaver == Collisions) still_running = cSaver.update(flip, nowspr_ptr);
             if (panel->touched() && nowsaver == Eraser)
                 eSaver.saver_touch(panel->touch_pt(HORZ), panel->touch_pt(VERT));
-            // Serial.printf("x%d y%d ", panel->touch_pt(HORZ), panel->touch_pt(VERT));
-
-            // if (touch->touched() && nowsaver == Eraser) {
-            //     touchp[HORZ] = touch->touch_x() - corner[HORZ];
-            //     touchp[VERT] = touch->touch_y() - corner[VERT];
-            //     // Serial.printf(" tx%d ty%d \n", touchp[HORZ], touchp[VERT]);
-            //     if (touchp[HORZ] >= 0 && touchp[VERT] >= 0 && touchp[HORZ] <= sizex && touchp[VERT] <= sizey)
-            //         eSaver.saver_touch(touchp[HORZ], touchp[VERT]);
-            // }
             if (still_running) panel->diffdraw();
             else change_saver();
         }
