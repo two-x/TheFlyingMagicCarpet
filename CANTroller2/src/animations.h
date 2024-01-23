@@ -141,10 +141,10 @@ class CollisionsSaver {
     std::uint32_t _ball_count = 0, _myfps = 0;
     std::uint32_t ball_count = 0;
     int _width, _height;
-    std::uint32_t sec, psec, ball_create_rate = 4000;
+    std::uint32_t sec, psec, ball_create_rate = 3200;
     std::uint32_t myfps = 0, frame_count = 0;
-    uint8_t ball_radius_base = 6;  // originally 4
-    uint8_t ball_radius_modifier = 4;  // originally 4
+    uint8_t ball_radius_base = 7;  // originally 4
+    uint8_t ball_radius_modifier = 5;  // originally 4
     uint8_t ball_redoubler_rate = 18;  // originally 0x07
     uint8_t ball_gravity = 32;  // originally 0 with suggestion of 4
     volatile bool _is_running;
@@ -157,8 +157,10 @@ class CollisionsSaver {
         balls = &_balls[flip][0];
         // sprite = &(sp[flip]);
         sprite->clear();
-        for (float i = 0.0; i <= 1.0; i += 0.125) sprite->drawGradientVLine((int)(i * (sprwidth-1)), 0, sprheight, hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
-        for (float i = 0.0; i <= 1.0; i += 0.125) sprite->drawGradientHLine(0, (int)(i * (sprheight-1)), sprwidth, hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
+        for (float i = 0.125; i < 1.0; i += 0.125) sprite->drawGradientVLine((int)(i * (sprwidth-1)), 0, sprheight, hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
+        for (float i = 0.125; i < 1.0; i += 0.125) sprite->drawGradientHLine(0, (int)(i * (sprheight-1)), sprwidth, hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
+        for (float i = 0.0; i <= 1.0; i += 1.0) sprite->drawGradientVLine((int)(i * (sprwidth-1)), 0, sprheight, hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
+        for (float i = 0.0; i <= 1.0; i += 1.0) sprite->drawGradientHLine(0, (int)(i * (sprheight-1)), sprwidth, hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
         for (std::uint32_t i = 0; i < _ball_count; i++) {
             a = &balls[i];
             sprite->fillCircle(a->x >> SHIFTSIZE, a->y >> SHIFTSIZE, a->r >> SHIFTSIZE, a->color);
@@ -179,7 +181,7 @@ class CollisionsSaver {
             }
             auto a = &_balls[_loop_count & 1][ball_count - 1];
             a->color = lgfx::color888(100 + (rand() % 155), 100 + (rand() % 155), 100 + (rand() % 155));
-            a->x = 0;
+            a->x = _width * random(2);
             a->y = 0;
             a->dx = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
             a->dy = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
@@ -402,7 +404,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         sprite = _nowspr;
         if (saverCycleTimer.expired()) {
             ++cycle %= num_cycles;
-            if (cycle == 2) change_pattern(-1);
+            if (cycle == 0) change_pattern(-1);
             saverCycleTimer.set(saver_cycletime_us / ((cycle == 2) ? 5 : 1));
         }
         drawsprite();
@@ -415,7 +417,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         if (shape == Rotate) ++rotate %= Ascii;
         else rotate = shape;
         if ((cycle != 2) || !has_eraser) {
-            spothue -= 13;
+            spothue -= 10;
             if (!random(20)) spothue = random(65535);
             if (spothue & 1) slowhue += 13;
             if (rotate == Wedges) {
@@ -430,11 +432,12 @@ class EraserSaver {  // draws colorful patterns to exercise
             }
             else if (rotate == Ellipses) {
                 int d[2] = {10 + random(30), 10 + random(30)};
-                uint8_t hue = slowhue;
-                uint16_t sat = 100 + random(156);
-                uint8_t brt = 90 + random(166);
-                for (int i = 0; i < 6 + random(20); i++)
-                    sprite->drawEllipse(point[HORZ], point[VERT], d[0] - i, d[1] + i, hsv_to_rgb<uint16_t>(spothue + 512 * i, sat, brt));
+                uint8_t sat, brt, mult = random(4);
+                for (int i = 0; i < 6 + random(20); i++) {
+                    sat = 100 + random(156);
+                    brt = 90 + random(166);
+                    sprite->drawEllipse(point[HORZ], point[VERT], d[0] - i, d[1] + i, hsv_to_rgb<uint16_t>(spothue + ((mult * i) >> 1), sat, brt));
+                }
             }
             else if (rotate == Rings) {
                 int d = 8 + random(25);
@@ -464,13 +467,17 @@ class EraserSaver {  // draws colorful patterns to exercise
                 sprite->fillSmoothRoundRect(point[HORZ], point[VERT], boxsize[HORZ], boxsize[VERT], boxrad, rando_color());  // Change colors as needed
             }
             else if (rotate == Ascii)
-                for (int star = 0; star < 12; star++) {
-                    uint16_t hue = map(point[VERT], 0, sprsize[VERT], 0, 65535);
-                    uint8_t sat = map(point[HORZ], 0, sprsize[HORZ], 0, 255);
-                    char letter = (char)(0x21 + random(0x5d));
+                for (int star = 0; star < 4; star++) {
+                    point[HORZ] = random(sprite->width());
+                    point[VERT] = random(sprite->height());
+                    uint16_t hue = point[VERT] * 65535 / sprite->height();
+                    uint8_t sat = point[HORZ] * 255 / sprite->width();
+                    String letter = (String)((char)(0x21 + random(0x5d)));
                     uint16_t c = hsv_to_rgb<uint16_t>(hue, sat, 100 + 100 * (spothue > 32767) + random(56));
-                    sprite->setTextColor(hsv_to_rgb<uint16_t>(hue, sat, 100 + 100 * (spothue > 32767) + random(56)), TFT_BLACK);
-                    sprite->drawString((String)letter, point[HORZ]+1, point[VERT]+1);
+                    sprite->drawString(letter, point[HORZ]+1, point[VERT]+1);
+                    sprite->drawString(letter, point[HORZ]-1, point[VERT]-1);
+                    sprite->setTextColor(hsv_to_rgb<uint16_t>(hue, sat, 100 + 100 * (spothue > 32767) + random(56)));
+                    sprite->drawString(letter, point[HORZ], point[VERT]);
                     sprite->setTextColor(TFT_BLACK);  // allows subliminal messaging
                 }
         }
@@ -500,8 +507,11 @@ class EraserSaver {  // draws colorful patterns to exercise
         saver_lotto = !random(saver_illicit_prob);
         has_eraser = !random(2);
         if (0 <= newpat && newpat < NumSaverShapes) shape = newpat;  //
-        else if (newpat == -1) ++shape %= NumSaverShapes;
-        else if (newpat == -2) while (last_pat == shape) shape = random(NumSaverShapes);
+        else {
+            if (newpat == -1) ++shape %= Rotate;
+            else if (newpat == -2) while (last_pat == shape) shape = random(Rotate);
+            if (!random(25)) shape = Rotate;
+        }
         // for (int i = 0; i <= 1; i++)
         //     if (shape == Ascii) sp[i].setFont(&fonts::Font4);
         //     else sp[i].setFont(&fonts::Font4);
