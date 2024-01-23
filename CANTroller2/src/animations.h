@@ -146,6 +146,7 @@ class CollisionsSaver {
     uint8_t ball_radius_base = 6;  // originally 4
     uint8_t ball_radius_modifier = 6;  // originally 4
     uint8_t ball_redoubler_rate = 18;  // originally 0x07
+    uint8_t ball_gravity = 32;  // originally 0 with suggestion of 4
     volatile bool _is_running;
     volatile std::uint32_t _loop_count = 0;
     CollisionsSaver() {}
@@ -205,7 +206,7 @@ class CollisionsSaver {
         memcpy(a, b, sizeof(ball_info_t) * ball_count);
         for (int i = 0; i != ball_count; i++) {
             a = &balls[i];
-            //  a->dy += 4; // gravity
+            a->dy += ball_gravity; // gravity
             a->x += a->dx;
             if (a->x < a->r) {
                 a->x = a->r;
@@ -334,7 +335,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     LGFX_Sprite* sprite;
     int sprsize[2];
     int point[2], plast[2], er[2], flip;
-    int eraser_rad = 14, eraser_rad_min = 9, eraser_rad_max = 26, eraser_velo_min = 4, eraser_velo_max = 10, touch_w_last = 2;
+    int eraser_rad = 14, eraser_rad_min = 12, eraser_rad_max = 32, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, boxsize[2], now = 0;
     int eraser_velo[2] = {random(eraser_velo_max), random(eraser_velo_max)}, shapes_per_run = 5, shapes_done = 0;
     int erpos_max[2];
@@ -548,7 +549,7 @@ class EraserSaver {  // draws colorful patterns to exercise
 class AnimationManager {
   private:
     enum saverchoices : int { Eraser, Collisions, NumSaverMenu, Blank };
-    int nowsaver = Collisions, still_running = 0;
+    int nowsaver = Eraser, still_running = 0;
     LGFX* mylcd;
     LGFX_Sprite* nowspr_ptr;
     FlexPanel* panel;
