@@ -26,7 +26,7 @@ class FlexPanel {
         sprsize[VERT] = _sprheight;
         Serial.printf("  multi purpose panel init.. ");
         lcd->startWrite();
-        lcd->setColorDepth(8);
+        lcd->setColorDepth(16);
         if (lcd->width() < lcd->height()) lcd->setRotation(lcd->getRotation() ^ 1);
         for (int i = 0; i <= 1; i++) sp[i].setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
         auto framewidth = sprsize[HORZ];
@@ -100,7 +100,7 @@ class FlexPanel {
                 if (xe >= sprwidth) xe = sprwidth - 1;
                 while (s[xe] == p[xe]) --xe;
                 lcd->pushImageDMA(xs + corner[HORZ], y + corner[VERT], xe - xs + 1, 1, &s[xs]);
-                // lcd->pushImageDMA(xs + corner[HORZ], y + corner[VERT], xe - xs + 1, 1, &s[xs]);
+                memcpy(&p[xs], &s[xs], sizeof(s[0])*(xe - xs + 1));
             } while (x32 < w32);
             s32 += w32;
             p32 += w32;
@@ -149,7 +149,7 @@ class CollisionsSaver {
     volatile bool _is_running;
     volatile std::uint32_t _loop_count = 0;
     CollisionsSaver() {}
-    void drawfunc(void) {
+    void drawfunc() {
         auto sprwidth = sprite->width();
         auto sprheight = sprite->height();
         flip = _draw_count & 1;
@@ -556,6 +556,7 @@ class AnimationManager {
     // Animation* ptrsaver = &cSaver;
     // Touchscreen* touch;
     Timer saverRefreshTimer = Timer(16666);
+    // Timer saverRefreshTimer = Timer(16666);
     Timer fps_timer;
     float myfps = 0.0;
     int64_t fps_mark;
