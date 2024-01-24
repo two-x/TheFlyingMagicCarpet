@@ -20,17 +20,13 @@
 // like "LGFX_DevKitC_SPI_ILI9341" with a matching filename and class name, it'll avoid confusion.
 class LGFX : public lgfx::LGFX_Device {
     lgfx::Panel_ILI9341     _panel_instance;     // Prepare an instance that matches the type of panel you want to connect.
-    #if USE_LGFX_TFT
-        lgfx::Bus_SPI           _bus_instance;       // SPI bus instance // Prepare an instance that matches the type of bus that connects the panel.
-    #else
-    #endif
+    lgfx::Bus_SPI           _bus_instance;       // SPI bus instance // Prepare an instance that matches the type of bus that connects the panel.
     // lgfx::Bus_I2C        _bus_instance;       // I2C bus instance
     // lgfx::Light_PWM      _light_instance;     // Prepare an instance if backlight control is possible. (Delete if unnecessary)
     lgfx::Touch_FT5x06      _cap_touch_instance; // FT5206, FT5306, FT5406, FT6206, FT6236, FT6336, FT6436
     lgfx::Touch_XPT2046     _res_touch_instance;
   public:
     LGFX(void) {  // Create a constructor and configure various settings here.  If you change the class name, please specify the same name for the constructor.
-        #if USE_LGFX_TFT
         {  // Configure bus control settings.
             auto cfg = _bus_instance.config(); // Get the structure for bus settings.
             cfg.spi_host = SPI2_HOST;          // VSPI_HOST is deprecated, use SPI2_HOST.  HSPI_HOST = SPI1_HOST or SPI3_HOST (?)
@@ -54,7 +50,6 @@ class LGFX : public lgfx::LGFX_Device {
             _bus_instance.config(cfg);         // Reflects the setting value on the bus.
             _panel_instance.setBus(&_bus_instance); // Place the bus on the panel.
         }
-        #endif
         {  // Configure display panel control settings.
             auto cfg = _panel_instance.config();    // Gets the structure for display panel settings.
             cfg.pin_cs   = tft_cs_pin;        //   CS pin number

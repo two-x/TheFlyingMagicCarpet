@@ -1,5 +1,5 @@
 #pragma once
-#include "tft.h"
+// #include "tft.h"
 #include "lgfx.h"
 #include "neopixel.h"
 #include "touch.h"
