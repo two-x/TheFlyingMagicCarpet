@@ -213,9 +213,9 @@ static constexpr char datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines
     { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", " Touch X", " Touch Y", "Webservr", "BlnkDemo", neo_bright, "NeoDesat", "Animaton", },  // PG_UI
 };
 static constexpr char tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines][5] = {
-    { "in  ", "V   ", "%   ", "mph ", "psi ", "g/s ", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
+    { "in  ", "V   ", "%   ", "mph ", "atm ", "g/s ", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
     { "us  ", "us  ", "us  ", "us  ", "%   ", "%   ", ______, ______, ______, "us  ", "us  ", },  // PG_JOY
-    { "adc ", "adc ", ______, ______, ______, "mph ", "psi ", "psi ", "mph ", "mph ", "in  ", },  // PG_SENS
+    { "adc ", "adc ", ______, ______, ______, "mph ", "atm ", "atm ", "mph ", "mph ", "in  ", },  // PG_SENS
     { degree, "us  ", "V   ", "us  ", "V   ", "us  ", ______, degree, degree, "us  ", "%   ", },  // PG_PWMS
     { scroll, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", degreF, degreF, "rpms", scroll, },  // PG_IDLE
     { "%   ", "psin", "%   ", "%   ", "%   ", "in  ", "%   ", "%   ", ______, "Hz  ", "s   ", },  // PG_BPID
@@ -766,7 +766,7 @@ class Display {
                 draw_dynamic(10, mulebatt.filt(), mulebatt.op_min_v(), mulebatt.op_max_v());
                 draw_dynamic(11, pot.val(), pot.min(), pot.max());
                 draw_dynamic(12, airvelo.human(), airvelo.min_mph(), airvelo.max_mph());
-                draw_dynamic(13, mapsens.human(), mapsens.min_psi(), mapsens.max_psi());
+                draw_dynamic(13, mapsens.human(), mapsens.min_atm(), mapsens.max_atm());
                 draw_dynamic(14, maf_gps, maf_min_gps, maf_max_gps);
                 for (int line=15; line<=17; line++) draw_eraseval(line);
                 draw_dynamic(18, gas.governor, 0.0, 100.0);
@@ -788,8 +788,8 @@ class Display {
                 draw_dynamic(10, brkpos.raw(), brkpos.min_native(), brkpos.max_native());                    
                 for (int line=11; line<=13; line++) draw_eraseval(line);
                 draw_dynamic(14, airvelo.max_mph(), 0.0, airvelo.abs_max_mph());
-                draw_dynamic(15, mapsens.min_psi(), mapsens.abs_min_psi(), mapsens.abs_max_psi());
-                draw_dynamic(16, mapsens.max_psi(), mapsens.abs_min_psi(), mapsens.abs_max_psi());
+                draw_dynamic(15, mapsens.min_atm(), mapsens.abs_min_atm(), mapsens.abs_max_atm());
+                draw_dynamic(16, mapsens.max_atm(), mapsens.abs_min_atm(), mapsens.abs_max_atm());
                 draw_dynamic(17, speedo.idle_mph(), 0.0, speedo.redline_mph());
                 draw_dynamic(18, speedo.redline_mph(), 0.0, speedo.max_human());
                 draw_dynamic(19, brkpos.zeropoint(), brkpos.min_human(), brkpos.max_human());  // BrakePositionSensor::abs_min_retract_in, BrakePositionSensor::abs_max_extend_in);
@@ -972,8 +972,8 @@ class Tuner {
             }
             else if (datapage == PG_SENS) {
                 if (sel_val == 5) adj_val(airvelo.max_mph_ptr(), fdelta, 0, airvelo.abs_max_mph());
-                else if (sel_val == 6) adj_val(mapsens.min_psi_ptr(), fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
-                else if (sel_val == 6) adj_val(mapsens.max_psi_ptr(), fdelta, mapsens.abs_min_psi(), mapsens.abs_max_psi());
+                else if (sel_val == 6) adj_val(mapsens.min_atm_ptr(), fdelta, mapsens.abs_min_atm(), mapsens.abs_max_atm());
+                else if (sel_val == 6) adj_val(mapsens.max_atm_ptr(), fdelta, mapsens.abs_min_atm(), mapsens.abs_max_atm());
                 else if (sel_val == 8) adj_val(speedo.idle_mph_ptr(), fdelta, 0, speedo.redline_mph() - 1);
                 else if (sel_val == 9) adj_val(speedo.redline_mph_ptr(), fdelta, speedo.idle_mph(), 20);
                 else if (sel_val == 10) adj_val(brkpos.zeropoint_ptr(), fdelta, brkpos.op_min_in(), brkpos.op_max_in());

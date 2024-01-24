@@ -31,8 +31,8 @@ void setup() {
     airvelo.setup();          // must be done after i2c is started
     mapsens.setup();
     lightbox.setup();
-    // tempsens.setup();         // Onewire bus and temp sensors
-    // xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Temperature sensors task
+    tempsens.setup();         // Onewire bus and temp sensors
+    xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Temperature sensors task
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);  // added for servos I think
     gas.setup(&hotrc, &speedo, &tach, &pot, &tempsens);
     brake.setup(&hotrc, &speedo, &mulebatt, &pressure, &brkpos);

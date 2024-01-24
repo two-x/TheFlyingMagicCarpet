@@ -88,9 +88,9 @@ enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 }; // Possible
 // enum telemetry_full : int { 
 //     
 // };
-enum telemetry_short : int { _None=-1, _GasServo=0, _BrakeMotor=1, _SteerMotor=2, _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7, _Temps=8, _Other=9, _GPIO=10 };  // _MuleBatt, _MAP, _MAF, _Pot,
+enum telemetry_short : int { _GasServo=0, _BrakeMotor=1, _SteerMotor=2, _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7, _Temps=8, _Other=9, _GPIO=10 };  // _MuleBatt, _MAP, _MAF, _Pot,
 enum telemetry_full : int { _AirVelo=11, _MAP=12, _MuleBatt=13, _Pot=14, _MAF=15, _HotRCHorz=16, _HotRCVert=17, _TempEng=18, _TempWhFL=19, _TempWhFR=20, _TempWhRL=21, _TempWhRR=22, _TempAmb=23 };  // 10 per line
-enum telemetry_nums : int { NA=-2, None=-1, NumTelemetryBool=9, NumTelemetryShort=11, NumTelemetryFull=24 };
+enum telemetry_nums : int { NA=-2, _None=-1, NumTelemetryBool=9, NumTelemetryShort=11, NumTelemetryFull=24 };
 enum telemetry_bool : int { _Ignition=1, _PanicStop=2, _SysPower=3, _HotRCCh3=4, _HotRCCh4=5, _StarterDr=6, _StarterExt=7, _BasicSw=8 };
 enum err_type : int { LOST=0, RANGE=1, CALIB=2, WARN=3, CRIT=4, INFO=5, NUM_ERR_TYPES=6 };
 

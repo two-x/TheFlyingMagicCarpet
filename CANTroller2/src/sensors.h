@@ -535,11 +535,11 @@ class AirVeloSensor : public I2CSensor {
 class MAPSensor : public I2CSensor {
   protected:
     // NOTE: would all MAPSensors have the same address? how does this get determined?
-    static constexpr float _abs_min_psi = 0.88;  // Sensor min
-    static constexpr float _abs_max_psi = 36.25;  // Sensor max
-    static constexpr float _initial_min_psi = 10.0;  // Typical low map for a car is 10.8 psi = 22 inHg
-    static constexpr float _initial_max_psi = 15.0;
-    static constexpr float _initial_psi = 14.696;  // 1 atm = 14.6959 psi
+    static constexpr float _abs_min_atm = 0.06;  // Sensor min
+    static constexpr float _abs_max_atm = 2.46;  // Sensor max
+    static constexpr float _initial_min_atm = 0.68;  // Typical low map for a car is 10.8 psi = 22 inHg, 1 psi = 0.068 atm
+    static constexpr float _initial_max_atm = 1.02;
+    static constexpr float _initial_atm = 1.00;  // 1 atm = 14.6959 psi
     static constexpr float _initial_ema_alpha = 0.2;
     Timer map_read_timer;
     uint32_t map_read_timeout = 100000, map_retry_timeout = 10000;
@@ -549,7 +549,7 @@ class MAPSensor : public I2CSensor {
         if (!_i2c->detected(i2c_map)) return NAN;
         else if (_i2c->not_my_turn(i2c_map)) return goodreading;
         else if (map_read_timer.expired()) {
-            float temp = _sensor.readPressure(PSI, true);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
+            float temp = _sensor.readPressure(ATM, true);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
             if (!std::isnan(temp)) {
                 goodreading = temp;
                 map_read_timer.set(map_read_timeout);
@@ -564,7 +564,7 @@ class MAPSensor : public I2CSensor {
     static constexpr uint8_t addr = 0x18;
     MAPSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
         _ema_alpha = _initial_ema_alpha;
-        set_human_limits(_initial_min_psi, _initial_max_psi);
+        set_human_limits(_initial_min_atm, _initial_max_atm);
         set_can_source(src::POT, true);
         map_read_timer.set(map_read_timeout);
     }
@@ -596,14 +596,14 @@ class MAPSensor : public I2CSensor {
         }
     }
     // Getter functions
-    float min_psi() { return _human.min(); }
-    float max_psi() { return _human.max(); }
-    float abs_min_psi() { return _abs_min_psi; }
-    float abs_max_psi() { return _abs_max_psi; }
-    float* min_psi_ptr() { return _human.min_ptr(); }
-    float* max_psi_ptr() { return _human.max_ptr(); }
-    std::shared_ptr<float> min_psi_shptr() { return _human.min_shptr(); }
-    std::shared_ptr<float> max_psi_shptr() { return _human.max_shptr(); }
+    float min_atm() { return _human.min(); }
+    float max_atm() { return _human.max(); }
+    float abs_min_atm() { return _abs_min_atm; }
+    float abs_max_atm() { return _abs_max_atm; }
+    float* min_atm_ptr() { return _human.min_ptr(); }
+    float* max_atm_ptr() { return _human.max_ptr(); }
+    std::shared_ptr<float> min_atm_shptr() { return _human.min_shptr(); }
+    std::shared_ptr<float> max_atm_shptr() { return _human.max_shptr(); }
 };
 
 // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
@@ -651,6 +651,10 @@ class CarBattery : public AnalogSensor<int32_t, float> {
         printf("%s..\n", this->_long_name.c_str());
         AnalogSensor::setup();
     }
+    void set_val_from_touch() {
+        set_human(12.0);
+    }
+
     String _long_name = "Vehicle battery voltage";
     String _short_name = "mulbat";
     float v() { return _human.val(); }

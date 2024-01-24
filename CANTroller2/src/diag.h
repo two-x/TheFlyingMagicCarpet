@@ -127,8 +127,7 @@ class DiagRuntime {
             }
             else diag_ign_error_enabled = true;
             // different approach
-            bool not_detected;
-            not_detected = false;  // first reset
+            bool not_detected = false;  // first reset
             for (int cat = 0; cat < NUM_TEMP_CATEGORIES; cat++) temp_err[cat] = false;  // first reset
             for (int l = 0; l < tempsens->locint(); l++) {
                 if (!tempsens->detected(l)) not_detected = true;
