@@ -1,4 +1,5 @@
 #pragma once
+#undef VIDEO_PUSH_ON_OTHER_CORE  // define to try to run animations tasks on 2nd core
 // #include "tft.h"
 #include "lgfx.h"
 #include "neopixel.h"
@@ -257,29 +258,74 @@ class TunerPanel {
   private:
     // DataPage[NUM_DATAPAGES];
 };
+AnimationManager animations;
+FlexPanel flexpanel;
+Timer screenRefreshTimer = Timer(16666);
+volatile float fps = 0.0;
+volatile bool is_pushing = 0;
+volatile bool is_drawing = 0;
+volatile bool pushtime = 0;
+// static void push_task(void*) {
+void push_task() {
+    // if (screensaver && !sim.enabled() && pushtime && (screenRefreshTimer.expired() || screensaver_max_refresh)) {
+    //         screenRefreshTimer.reset();
+
+        // while (screensaver) {
+            //     // Serial.printf("p: s%d id%d e%d\n", screensaver, is_drawing, screenRefreshTimer.expired());
+            //     // taskYIELD();  //
+            //     return;
+            //     delayMicroseconds(50);
+            // }
+            // pushed = false;
+            is_pushing = true;
+            // screenRefreshTimer.reset();
+            flexpanel.diffpush(&flexpanel.sp[flip], &flexpanel.sp[!flip]);
+            flip = !flip;
+            is_pushing = pushtime = false;  // drawn = 
+            // pushed = true;
+        // }
+        // taskYIELD();
+        // delayMicroseconds(25); // allow for wifi etc
+    }
+    // vTaskDelete(NULL);
+void draw_task() {
+    // while (screensaver) {
+    //     while (pushtime) taskYIELD();
+        //     // Serial.printf("d: s%d ip%d e%d\n", screensaver, is_pushing);
+        //     // taskYIELD();  // 
+        //     return;
+        //     delayMicroseconds(50);
+        // }
+        // drawn = false;
+        is_drawing = true;
+        fps = animations.update();
+        is_drawing = false;  // pushed = false;
+        pushtime = true;
+        // drawn = true;
+    // }
+    // vTaskDelete(NULL);
+}
 class Display {
   private:
     LGFX _tft = LGFX();
     NeopixelStrip* neo;
     Touchscreen* touch;
-    FlexPanel panel;
-    AnimationManager animations;
     TunerPanel tuner;
     IdiotLights* idiots;
     Timer valuesRefreshTimer = Timer(160000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
     uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     bool _procrastinate = false, reset_finished = false, simulating_last;
     int disp_oldmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
-    float fps = 0.0;
     uint8_t palettesize = 2;
     uint16_t palette[256] = { TFT_BLACK, TFT_WHITE };
+    static constexpr int runOnCore = CONFIG_ARDUINO_RUNNING_CORE == 0 ? 1 : 0;    
   public:
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
     Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots)
         : _tft(), neo(_neo), touch(_touch), idiots(_idiots) {
-        panel.init(&_tft, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
-        animations.init(&panel);
+        flexpanel.init(&_tft, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
+        animations.init(&flexpanel);
     }
     Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots) 
         : _tft(), neo(_neo), touch(_touch), idiots(_idiots) {
@@ -287,6 +333,84 @@ class Display {
     }
     LGFX* get_tft() {
         return &_tft;
+    }
+    void init_tasks() {
+        TaskHandle_t drawTaskHandle = nullptr;
+        xTaskCreateUniversal([](void*) {
+            while(true) {
+                if (screensaver && !sim.enabled() && !pushtime)
+                    draw_task();
+                delayMicroseconds(25); // allow for wifi etc
+            }
+        }, "drawTask", 4096 , NULL, 1, &drawTaskHandle, runOnCore);  //  8192
+            
+        TaskHandle_t pushTaskHandle = nullptr;
+        xTaskCreateUniversal([](void*) {
+            while(true) {
+                if (screensaver && !sim.enabled() && pushtime && (screenRefreshTimer.expired() || screensaver_max_refresh)) {
+                    screenRefreshTimer.reset();
+                    push_task();
+                }
+                taskYIELD();
+                delayMicroseconds(25); // allow for wifi etc
+            }
+        }, "pushTask", 16384 , NULL, 5, &pushTaskHandle, runOnCore);  //  8192
+
+        // TaskHandle_t drawTaskHandle = nullptr;
+        // xTaskCreateUniversal([](void*) {
+        //     while(true) {
+        //         Serial.printf("draw.. ");
+        //         draw_task();
+        //         taskYIELD()
+        //         delayMicroseconds(10000025); // allow for wifi etc
+        //     }
+        // }, "drawTask", 4096 , NULL, 1, &drawTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  //  8192
+        
+        // TaskHandle_t pushTaskHandle = nullptr;
+        // xTaskCreateUniversal([](void*) {
+        //     while(true) {
+        //         if (!sim.enabled()) {
+        //             while (is_pushing || is_drawing) taskYIELD();
+        //             Serial.printf("l: pt%d\n", pushtime);
+        //             if (pushtime) push_task();
+        //             else draw_task();
+        //         }
+        //         else taskYIELD();
+        //         // delayMicroseconds(25); // allow for wifi etc
+
+        //         // Serial.printf("draw.. ");
+        //         // while (!screensaver || is_pushing) {
+        //         //     // Serial.printf("d: s%d ip%d e%d\n", screensaver, is_pushing);
+        //         //     taskYIELD();  // 
+        //         //     // delayMicroseconds(50);
+        //         // }
+        //         // is_drawing = true;
+        //         // fps = animations.update();
+        //         // is_drawing = false;
+        //         // while (!screensaver || is_drawing || !(screenRefreshTimer.expired() || screensaver_max_refresh)) {
+        //         //     // Serial.printf("p: s%d id%d e%d\n", screensaver, is_drawing, screenRefreshTimer.expired());
+        //         //     taskYIELD();  //
+        //         //     // delayMicroseconds(50);
+        //         // }
+        //         // is_pushing = true;
+        //         // screenRefreshTimer.reset();
+        //         // flexpanel.diffpush(&flexpanel.sp[flip], &flexpanel.sp[!flip]);
+        //         // flip = !flip;
+        //         // is_pushing = false;
+
+
+        //         // draw_task();
+
+        //         // Serial.printf("push.. ");
+        //         // push_task();
+        //         // taskYIELD();
+        //         // delayMicroseconds(1250000); // allow for wifi etc
+        //     }
+        // }, "pushTask", 8192 , NULL, 1, &pushTaskHandle, runOnCore);  //  8192    
+
+        // xTaskCreatePinnedToCore(push_task, "taskPush", 8192, NULL, 3, NULL, runOnCore);
+        //     else xTaskCreatePinnedToCore(draw_task, "taskDraw", 4096, NULL, 3, NULL, runOnCore);
+
     }
     void setup() {
         Serial.printf("Display..");  //
@@ -312,14 +436,17 @@ class Display {
         for (int32_t row=0; row<arraysize(disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
         for (int32_t row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
         yield();
+        Serial.printf(" ..");  //
         _tft.fillScreen(TFT_BLACK);  // Black out the whole screen
         Serial.printf(" ..");  //
         draw_touchgrid(false);
         draw_fixed(datapage, datapage_last, false);
         draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
         all_dirty();
-        Serial.printf(" ..");  //
         animations.setup();
+        #ifdef VIDEO_PUSH_ON_OTHER_CORE
+            init_tasks();
+        #endif
         Serial.printf(" initialized\n");
     }
     // uint8_t add_palette(uint16_t color) {
@@ -905,7 +1032,38 @@ class Display {
             disp_data_dirty = false;
             _procrastinate = true;  // don't do anything else in this same loop
         }
-        if (!sim.enabled() && !_procrastinate) fps = animations.update();
+        #ifndef VIDEO_PUSH_ON_OTHER_CORE
+            if (!sim.enabled() && !_procrastinate && screensaver && !is_pushing && !is_drawing) {
+                // Serial.printf("lp: p%d s%d pt%d\n", _procrastinate, screensaver, pushtime);
+
+                // if (!pushtime) draw_task();
+                // else if (screenRefreshTimer.expired() || screensaver_max_refresh) {
+                //     screenRefreshTimer.reset();
+                //     push_task;
+                // }
+                if (!pushtime) draw_task();
+                else if (screenRefreshTimer.expired() || screensaver_max_refresh) {
+                    screenRefreshTimer.reset();
+                    push_task();
+                }
+            }
+        #endif
+        //     if (pushtime) xTaskCreatePinnedToCore(push_task, "taskPush", 8192, NULL, 1, NULL, runOnCore);
+        //     else xTaskCreatePinnedToCore(draw_task, "taskDraw", 4096, NULL, 3, NULL, runOnCore);
+        // }
+        //     Serial.printf("l: pt%d\n", pushtime);
+        //     if (pushtime) push_task();
+        //     else draw_task();
+            //     drawn = true;
+            //     pushed = false;
+            // }
+            // else if (drawn) {
+            //     push_task();
+            //     drawn = false;
+            //     pushed = true;
+            // }
+            // fps = animations.update();
+        // }
         _procrastinate = false;
     }
 };

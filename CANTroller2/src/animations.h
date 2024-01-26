@@ -2,9 +2,15 @@
 #include <Arduino.h>
 // #define CONFIG_IDF_TARGET_ESP32
 volatile bool _is_running;
-volatile std::uint32_t _draw_count;
+// volatile std::uint32_t _draw_count;
 volatile std::uint32_t _loop_count;
 static constexpr std::uint32_t SHIFTSIZE = 8;
+volatile bool flip = 0;
+
+// volatile int PushSp = 1;
+// volatile int DrawSp = 0;
+// volatile bool pushed[2];
+// volatile bool drawn[2];
 
 class FlexPanel {
   public:
@@ -66,47 +72,51 @@ class FlexPanel {
         _width = framewidth << SHIFTSIZE;
         _height = frameheight << SHIFTSIZE;
     }
-    int setflip(bool clear) {  // clear=true blacks out the sprite before drawing on it
-        flip = _draw_count & 1;
-        nowspr = &(sp[flip]);
-        if (clear) nowspr->clear();
-        return flip;
-    }
-    void diffdraw() {
-        union {
+    // int setflip(bool clear) {  // clear=true blacks out the sprite before drawing on it
+    //     bool flipit = false;
+    //     if (drawn[flip] && pushed[!flip]) flipit = true;
+    //     if (flipit) flip = !flip;
+    //     nowspr = &(sp[flip]);
+    //     if (flipit && clear) nowspr->clear();
+    //     return flip;
+    // }
+    void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref) {
+        union {  // source
             std::uint32_t* s32;
             std::uint8_t* s;
         };
-        union {
-            std::uint32_t* p32;
-            std::uint8_t* p;
+        union {  // reference
+            std::uint32_t* r32;
+            std::uint8_t* r;
         };
-        s32 = (std::uint32_t*)sp[flip].getBuffer();
-        p32 = (std::uint32_t*)sp[!flip].getBuffer();
-        auto sprwidth = sp[flip].width();
-        auto sprheight = sp[flip].height();
+        s32 = (std::uint32_t*)source->getBuffer();
+        r32 = (std::uint32_t*)ref->getBuffer();
+        auto sprwidth = source->width();
+        auto sprheight = source->height();
         auto w32 = (sprwidth + 3) >> 2;
         std::int32_t y = 0;
         lcd->startWrite();
         do {
             std::int32_t x32 = 0;
             do {
-                while (s32[x32] == p32[x32] && ++x32 < w32);
+                while (s32[x32] == r32[x32] && ++x32 < w32);
                 if (x32 == w32) break;
                 std::int32_t xs = x32 << 2;
-                while (s[xs] == p[xs]) ++xs;
-                while (++x32 < w32 && s32[x32] != p32[x32]);
+                while (s[xs] == r[xs]) ++xs;
+                while (++x32 < w32 && s32[x32] != r32[x32]);
                 std::int32_t xe = (x32 << 2) - 1;
                 if (xe >= sprwidth) xe = sprwidth - 1;
-                while (s[xe] == p[xe]) --xe;
+                while (s[xe] == r[xe]) --xe;
                 lcd->pushImageDMA(xs + corner[HORZ], y + corner[VERT], xe - xs + 1, 1, &s[xs]);
-                memcpy(&p[xs], &s[xs], sizeof(s[0])*(xe - xs + 1));
+                memcpy(&r[xs], &s[xs], sizeof(s[0])*(xe - xs + 1));
             } while (x32 < w32);
             s32 += w32;
-            p32 += w32;
+            r32 += w32;
         } while (++y < sprheight);
         // lcd->display();
         lcd->endWrite();
+        // pushed[flip] = true;
+        // drawn[!flip] = false;
     }
     bool touched() {
         if (_touch->touched()) {
@@ -122,7 +132,7 @@ class FlexPanel {
 };
 class CollisionsSaver {
   public:
-    int flip;
+    // int flip;
     // int* draw_count_ptr;
     struct ball_info_t {
         int32_t x;
@@ -139,21 +149,21 @@ class CollisionsSaver {
     static constexpr std::uint32_t BALL_MAX = 50;  // 256
     ball_info_t _balls[2][BALL_MAX];
     std::uint32_t _ball_count = 0, _myfps = 0;
-    std::uint32_t ball_count = 0;
+    std::uint32_t ball_thismax, ball_count = 0;
     int _width, _height;
     std::uint32_t sec, psec, ball_create_rate = 3200;
     std::uint32_t myfps = 0, frame_count = 0;
     uint8_t ball_radius_base = 7;  // originally 4
     uint8_t ball_radius_modifier = 5;  // originally 4
     uint8_t ball_redoubler_rate = 18;  // originally 0x07
-    uint8_t ball_gravity = 32;  // originally 0 with suggestion of 4
+    uint8_t ball_gravity = 16;  // originally 0 with suggestion of 4
     volatile bool _is_running;
     volatile std::uint32_t _loop_count = 0;
     CollisionsSaver() {}
     void drawfunc() {
         auto sprwidth = sprite->width();
         auto sprheight = sprite->height();
-        flip = _draw_count & 1;
+        // flip = _draw_count & 1;
         balls = &_balls[flip][0];
         // sprite = &(sp[flip]);
         sprite->clear();
@@ -165,7 +175,7 @@ class CollisionsSaver {
             a = &balls[i];
             sprite->fillCircle(a->x >> SHIFTSIZE, a->y >> SHIFTSIZE, a->r >> SHIFTSIZE, a->color);
         }
-        _draw_count++;
+        // _draw_count++;
     }
     bool mainfunc(void) {
         bool new_round = false;
@@ -175,7 +185,7 @@ class CollisionsSaver {
             psec = sec;
             myfps = frame_count;
             frame_count = 0;
-            if (++ball_count >= BALL_MAX) {
+            if (++ball_count >= ball_thismax) {
                 new_round = true;
                 ball_count = 1;
             }
@@ -189,9 +199,7 @@ class CollisionsSaver {
             for (int i=0; i<=2; i++) if (!random(ball_redoubler_rate)) sqrme *= 2;
             a->r = sqrme << SHIFTSIZE;  // (sqrme * sqrme)));
             a->m = 4 + (ball_count & 0x07);
-            #if defined(ESP32) || defined(CONFIG_IDF_TARGET_ESP32) || defined(ESP_PLATFORM)
-                vTaskDelay(1);
-            #endif
+            // vTaskDelay(1);
         }
         frame_count++;
         _loop_count++;
@@ -269,20 +277,19 @@ class CollisionsSaver {
         _ball_count = ball_count;
         return new_round;
     }
-    #if defined(ESP32) || defined(CONFIG_IDF_TARGET_ESP32) || defined(ESP_PLATFORM)
-        void taskDraw(void*) {
-            while (_is_running) {
-                while (_loop_count == _draw_count) {
-                    taskYIELD();
-                }
-                drawfunc();
-            }
-            vTaskDelete(NULL);
-        }
-    #endif
+    // #if defined(ESP32) || defined(CONFIG_IDF_TARGET_ESP32) || defined(ESP_PLATFORM)
+    //     void taskDraw(void*) {
+    //         while (_is_running) {
+    //             while (_loop_count == _draw_count) {
+    //                 taskYIELD();
+    //             }
+    //             drawfunc();
+    //         }
+    //         vTaskDelete(NULL);
+    //     }
+    // #endif
 
-    void setup(int _flip, LGFX_Sprite* _nowspr) {
-        flip = _flip;
+    void setup(LGFX_Sprite* _nowspr) {
         sprite = _nowspr;
         _width = sprite->width() << SHIFTSIZE;
         _height = sprite->height() << SHIFTSIZE;
@@ -296,6 +303,7 @@ class CollisionsSaver {
             spp[i]->setTextSize(1);
             spp[i]->setTextDatum(textdatum_t::top_left);
         }
+        ball_thismax = BALL_MAX - random(25);
         for (std::uint32_t i = 0; i < ball_count; ++i) {
             auto a = &_balls[_loop_count & 1][i];
             a->color = lgfx::color888(100 + (rand() % 155), 100 + (rand() % 155), 100 + (rand() % 155));
@@ -307,21 +315,20 @@ class CollisionsSaver {
             a->m = 4 + (i & 0x07);
         }
         _is_running = true;
-        _draw_count = 0;
-        _loop_count = 0;
+        // _draw_count = 0;
+        // _loop_count = 0;
         #if defined(CONFIG_IDF_TARGET_ESP32)
             xTaskCreate(taskDraw, "taskDraw", 2048, NULL, 0, NULL);
         #endif
     }
-    int update(int _flip, LGFX_Sprite* _nowspr) {
-        flip = _flip;
+    int update(LGFX_Sprite* _nowspr) {
         sprite = _nowspr;
         bool round_over = mainfunc();
-        #if defined(CONFIG_IDF_TARGET_ESP32)
-            while (_loop_count != _draw_count) { taskYIELD(); }
-        #else
-            drawfunc();
-        #endif
+        // #if defined(CONFIG_IDF_TARGET_ESP32)
+        //     while (_loop_count != _draw_count) { taskYIELD(); }
+        // #else
+        drawfunc();
+        // #endif
         return !round_over;  // not done yet
     }
     void saver_touch(int, int) {};  // unused
@@ -331,7 +338,7 @@ class EraserSaver {  // draws colorful patterns to exercise
  private:
     LGFX_Sprite* sprite;
     int sprsize[2], rotate = -1;
-    int point[2], plast[2], er[2], flip;
+    int point[2], plast[2], er[2];
     int eraser_rad = 14, eraser_rad_min = 22, eraser_rad_max = 40, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, boxsize[2], now = 0;
     int eraser_velo[2] = {random(eraser_velo_max), random(eraser_velo_max)}, shapes_per_run = 5, shapes_done = 0;
@@ -345,8 +352,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     bool saver_lotto = false, has_eraser = true;
  public:
     EraserSaver() {}
-    void setup(int _flip, LGFX_Sprite* _nowspr) {
-        flip = _flip;
+    void setup(LGFX_Sprite* _nowspr) {
         sprite = _nowspr;
         sprsize[HORZ] = sprite->width();
         sprsize[VERT] = sprite->height();
@@ -372,7 +378,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         change_pattern(-2);  // randomize new pattern whenever turned off and on
         saverCycleTimer.set(saver_cycletime_us);
-        _draw_count = _loop_count = 0;
+        // _draw_count = _loop_count = 0;
         _is_running = true;
     }
     // void saver_touch(int16_t x, int16_t y) {  // you can draw colorful lines on the screensaver
@@ -399,8 +405,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         sprite->fillCircle(x, y, 20, pencolor);
     }
-    int update(int _flip, LGFX_Sprite* _nowspr) {
-        flip = _flip;
+    int update(LGFX_Sprite* _nowspr) {
         sprite = _nowspr;
         if (saverCycleTimer.expired()) {
             ++cycle %= num_cycles;
@@ -455,7 +460,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                     sprite->drawCircle(point[HORZ], point[VERT], d + edge, c2);
             }
             else if (rotate == Dots)
-                for (int star = 0; star < 7; star++)
+                for (int star = 0; star < 12; star++)
                     sprite->fillCircle(random(sprsize[HORZ]), random(sprsize[VERT]), 2 + random(2), hsv_to_rgb<uint8_t>((uint16_t)((spothue >> 1) * (1 + random(2))), 128 + random(128), 160 + random(96)));  // hue_to_rgb16(random(255)), TFT_BLACK);
             else if (rotate == Boxes) {
                 boxrad = 2 + random(2);
@@ -499,7 +504,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         if (saver_lotto) sprite->drawString("do drugs", sprsize[HORZ] / 2, sprsize[VERT] / 2);
         for (int axis = HORZ; axis <= VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
-        _draw_count++;
+        // _draw_count++;
     }
     void change_pattern(int newpat = -1) {  // pass non-negative value for a specific pattern, or  -1 for cycle, -2 for random
         ++shapes_done %= 5;
@@ -520,13 +525,13 @@ class EraserSaver {  // draws colorful patterns to exercise
 class AnimationManager {
   private:
     enum saverchoices : int { Eraser, Collisions, NumSaverMenu, Blank };
-    int nowsaver = Eraser, still_running = 0;
+    int nowsaver = Collisions, still_running = 0;
     LGFX* mylcd;
     LGFX_Sprite* nowspr_ptr;
     FlexPanel* panel;
     EraserSaver eSaver;
     CollisionsSaver cSaver;
-    Timer saverRefreshTimer = Timer(16666);
+    // Timer saverRefreshTimer = Timer(16666);
     Timer fps_timer;
     float myfps = 0.0;
     int64_t fps_mark;
@@ -541,18 +546,19 @@ class AnimationManager {
         panel = _panel;
     }
     void setup() {
-        int flip = panel->setflip(true);
-        eSaver.setup(panel->flip, &(panel->sp[flip]));
-        cSaver.setup(panel->flip, &(panel->sp[flip]));
+        // int flip = panel->setflip(true);
+        eSaver.setup(&panel->sp[flip]);
+        cSaver.setup(&panel->sp[flip]);
     }
     void reset() {
-        int flip = panel->setflip(true);
+        // int flip = panel->setflip(true);
         if (nowsaver == Eraser) eSaver.reset(&panel->sp[flip], &panel->sp[!flip]);
         else if (nowsaver == Collisions) cSaver.reset(&panel->sp[flip], &panel->sp[!flip]);
     }
-    void redraw() {
-        panel->diffdraw();
-    }
+    // void redraw() {
+    //     // if (!is_drawing) is_pushing = false;
+    //     panel->diffpush(&panel->sp[flip], &panel->sp[!flip]);
+    // }
     void calc_fps() {
         int64_t now = fps_timer.elapsed();
         myfps = (float)(now - fps_mark);
@@ -560,24 +566,32 @@ class AnimationManager {
         fps_mark = now;
     }
     float update() {
+        // Serial.printf("sav: l%d s%d n%d", screensaver_last, screensaver, nowsaver);
+
         if (!screensaver_last && screensaver) {
             // if (nowsaver == Eraser) ptrsaver->reset();  else
             change_saver();  // ptrsaver->reset();
         }
+        Serial.printf(",%d\n", nowsaver);
         screensaver_last = screensaver;
         if (!screensaver) return NAN;        // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
         // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
-        if (saverRefreshTimer.expireset() || screensaver_max_refresh) {
-            calc_fps();
-            int flip = panel->setflip(false);
-            nowspr_ptr = &(panel->sp[flip]);
-            if (nowsaver == Eraser) still_running = eSaver.update(flip, nowspr_ptr);
-            else if (nowsaver == Collisions) still_running = cSaver.update(flip, nowspr_ptr);
-            if (panel->touched() && nowsaver == Eraser)
-                eSaver.saver_touch(panel->touch_pt(HORZ), panel->touch_pt(VERT));
-            if (still_running) panel->diffdraw();
-            else change_saver();
+
+        // if (pushed[!flip]) {
+        //     int flip = panel->setflip(false);
+        //     nowspr_ptr = &(panel->sp[flip]);        
+        // }
+        // int flip = panel->setflip(false);  // move to start of push task
+        nowspr_ptr = &(panel->sp[flip]);
+        if (nowsaver == Eraser) {
+            still_running = eSaver.update(nowspr_ptr);
+            if (panel->touched()) eSaver.saver_touch(panel->touch_pt(HORZ), panel->touch_pt(VERT));
         }
+        else if (nowsaver == Collisions) still_running = cSaver.update(nowspr_ptr);
+        if (!still_running) change_saver();
+        // if (still_running) panel->diffpush(&panel->sp[flip], &panel->sp[!flip]);
+        // else change_saver();
+        calc_fps();
         return myfps;
     }
 };
@@ -596,7 +610,7 @@ class DiagConsole {
     }
     void setup() {}
     void redraw() {
-        panel->diffdraw();
+        panel->diffpush(&panel->sp[flip], &panel->sp[!flip]);
     }
     void add_errorline(std::string type, std::string item) {
         std::string newerr = type + ": " + item;
@@ -604,8 +618,8 @@ class DiagConsole {
         textlines[usedlines++] = newerr;
     }
     void update() {
-        int flip = panel->setflip(false);
-        nowspr_ptr = &(panel->sp[flip]);
-        panel->diffdraw();
+        // int flip = panel->setflip(false);
+        // nowspr_ptr = &(panel->sp[flip]);
+        // panel->diffpush(&panel->sp[flip], &panel->sp[!flip]);
     }
 };
