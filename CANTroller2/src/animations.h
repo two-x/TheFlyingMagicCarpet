@@ -6,6 +6,9 @@ volatile bool _is_running;
 volatile std::uint32_t _loop_count;
 static constexpr std::uint32_t SHIFTSIZE = 8;
 volatile bool flip = 0;
+volatile int32_t refresh_limit = 10000; // 16666; // = 60 Hz
+Timer screenRefreshTimer = Timer((int64_t)refresh_limit);
+
 
 // volatile int PushSp = 1;
 // volatile int DrawSp = 0;
@@ -146,7 +149,7 @@ class CollisionsSaver {
     ball_info_t* balls;
     ball_info_t* a;
     LGFX_Sprite* sprite;
-    static constexpr std::uint32_t BALL_MAX = 50;  // 256
+    static constexpr std::uint32_t BALL_MAX = 45;  // 256
     ball_info_t _balls[2][BALL_MAX];
     std::uint32_t _ball_count = 0, _myfps = 0;
     std::uint32_t ball_thismax, ball_count = 0;
@@ -154,8 +157,8 @@ class CollisionsSaver {
     std::uint32_t sec, psec, ball_create_rate = 3200;
     std::uint32_t myfps = 0, frame_count = 0;
     uint8_t ball_radius_base = 7;  // originally 4
-    uint8_t ball_radius_modifier = 5;  // originally 4
-    uint8_t ball_redoubler_rate = 18;  // originally 0x07
+    uint8_t ball_radius_modifier = 4;  // originally 4
+    uint8_t ball_redoubler_rate = 25;  // originally 0x07
     uint8_t ball_gravity = 16;  // originally 0 with suggestion of 4
     volatile bool _is_running;
     volatile std::uint32_t _loop_count = 0;
@@ -314,6 +317,8 @@ class CollisionsSaver {
             a->r = (4 + (i & 0x07)) << SHIFTSIZE;
             a->m = 4 + (i & 0x07);
         }
+        refresh_limit = 20000;  // 50 Hz limit
+        screenRefreshTimer.set(refresh_limit);
         _is_running = true;
         // _draw_count = 0;
         // _loop_count = 0;
@@ -378,6 +383,8 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         change_pattern(-2);  // randomize new pattern whenever turned off and on
         saverCycleTimer.set(saver_cycletime_us);
+        refresh_limit = 11111;  // 90 Hz limit
+        screenRefreshTimer.set(refresh_limit);
         // _draw_count = _loop_count = 0;
         _is_running = true;
     }

@@ -79,7 +79,7 @@ class IdiotLights {
         &(diag.err_sens_alarm[LOST]), &(diag.err_sens_alarm[RANGE]), &(diag.temp_err[ENGINE]), &(diag.temp_err[WHEEL]), &panicstop, 
         hotrc.radiolost_ptr(), &shutdown_incomplete, &park_the_motors, &autostopping, &cruise_adjusting, &car_hasnt_moved, &starter, &bootbutton, 
         sim.enabled_ptr(), &running_on_devboard, &powering_up, &(brake.posn_pid_active), &(encoder.enc_a), &(encoder.enc_b), &nowtouch,
-        &ignition, &syspower,  // these are just placeholders
+        &screensaver, &web_enabled,  // these are just placeholders
         &(sensidiots[0]), &(sensidiots[1]), &(sensidiots[2]), &(sensidiots[3]), &(sensidiots[4]), &(sensidiots[5]), &(sensidiots[6]), 
         &(sensidiots[7]), &(sensidiots[8]), &(sensidiots[9]), &(sensidiots[10]),
     };
@@ -104,8 +104,8 @@ class IdiotLights {
         { 0x0e, 0x1d, 0x7d, 0x1d, 0x0e, 0x00, 0x7e, 0x0b, 0x09, 0x0b, 0x7e, },  // 17 = encoder "A"
         { 0x0e, 0x1d, 0x7d, 0x1d, 0x0e, 0x00, 0x7f, 0x49, 0x49, 0x7f, 0x36, },  // 18 = encoder "B"
         { 0x78, 0x7c, 0x7f, 0x7f, 0x7c, 0x7c, 0x1c, 0x0c, 0x0c, 0x0c, 0x0c, },  // 19 = finger
-        { 0x88, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // placeholder
-        { 0x88, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // placeholder
+        { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // placeholder
+        { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // placeholder
         { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // sensors
         { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // sensors
         { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // sensors
@@ -121,7 +121,7 @@ class IdiotLights {
     char letters[iconcount][3] = {
         "SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "AS", "Aj", "HM",
         "St", "BB", "Sm", "DB", "PU", "BP", "eA", "eB", "NT",
-        "XX", "XX",
+        "An", "ww",
         "Th", "Br", "St", "RC", "Sp", "Tc", "Pr", "Ps", "Tm", "Ot", "IO",
     };
     uint16_t color[iconcount];
@@ -198,7 +198,7 @@ static constexpr char telemetry[disp_fixed_lines][9] = { "TriggerV", "   Speed",
 static constexpr char units[disp_fixed_lines][5] = { "%   ", "mph ", "rpm ", "%   ", "psi ", "%   ", "%   ", "%   " };  // Fixed rows
 static constexpr char brake_pid_card[2][7] = { "presur", "positn" };
 static constexpr char pagecard[datapages::NUM_DATAPAGES][5] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 4, 8, 7, 7, 10, 0, 6 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 4, 8, 7, 7, 9, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
 static constexpr char datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines][9] = {
     { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
@@ -208,9 +208,9 @@ static constexpr char datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines
     { brAk"Targ", "Pn|PrErr", "  P Term", "  I Term", "  D Term", brAk"Posn", "OutRatio", "MotrDuty", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, "OpenLoop", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
-    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
+    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", " Touch X", " Touch Y", __________, "Webservr", "No Temps", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", " Touch X", " Touch Y", "Webservr", "BlnkDemo", neo_bright, "NeoDesat", "Animaton", },  // PG_UI
+    { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "Draw Clk", "Push Clk", "Idle Clk", "BlnkDemo", neo_bright, "NeoDesat", "Animaton", },  // PG_UI
 };
 static constexpr char tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines][5] = {
     { "in  ", "V   ", "%   ", "mph ", "atm ", "g/s ", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
@@ -221,9 +221,9 @@ static constexpr char tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines][5] 
     { "%   ", "psin", "%   ", "%   ", "%   ", "in  ", "%   ", "%   ", ______, "Hz  ", "s   ", },  // PG_BPID
     { "rpm ", "rpm ", "%   ", "%   ", "%   ", "%   ", ______, b1nary, ______, "Hz  ", "s   ", },  // PG_GPID
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%/s ", ______, "Hz  ", "s   ", },  // PG_CPID
-    { degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, b1nary, },  // PG_TEMP
+    { degreF, degreF, degreF, degreF, degreF, degreF, "pix ", "pix ", ______, b1nary, b1nary, },  // PG_TEMP
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "us  ", "us  ", "Hz  ", "fps ", "pix ", "pix ", b1nary, b1nary, "%   ", "/10 ", "eyes", },  // PG_UI
+    { "us  ", "us  ", "Hz  ", "fps ", "us  ", "us  ", "us  ", b1nary, "%   ", "/10 ", "eyes", },  // PG_UI
 };
 static constexpr char unitmapnames[9][5] = { "usps", "us  ", "rpms", scroll, b1nary, "%   ", "ohm ", "eyes", "psin", };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where units use symbols not present in the font, are longer than 3 characters, or are just special
@@ -259,11 +259,13 @@ class TunerPanel {
 };
 AnimationManager animations;
 FlexPanel flexpanel;
-Timer screenRefreshTimer = Timer(16666);
 volatile float fps = 0.0;
 volatile bool is_pushing = 0;
 volatile bool is_drawing = 0;
 volatile bool pushtime = 0;
+volatile int32_t pushclock;
+volatile int32_t drawclock;
+volatile int32_t idleclock;
 // static void push_task(void*) {
 #ifdef VIDEO_PUSH_ON_OTHER_CORE
 static void push_task(void *parameter) {
@@ -273,6 +275,7 @@ static void push_task(void *parameter) {
         screenRefreshTimer.reset();
         is_pushing = true;
         flexpanel.diffpush(&flexpanel.sp[flip], &flexpanel.sp[!flip]);
+        pushclock = (int32_t)screenRefreshTimer.elapsed();
         flip = !flip;
         is_pushing = pushtime = false;  // drawn = 
     }
@@ -282,7 +285,10 @@ static void draw_task(void *parameter) {
     while (true) {
         while (!screensaver || sim.enabled() || pushtime) vTaskDelay(pdMS_TO_TICKS(1));
         is_drawing = true;
+        int32_t mark = (int32_t)screenRefreshTimer.elapsed();
         fps = animations.update();
+        drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
+        idleclock = refresh_limit - pushclock - drawclock;
         is_drawing = false;  // pushed = false;
         pushtime = true;
     }
@@ -297,7 +303,10 @@ void push_task() {
 #endif
 void draw_task() {
     is_drawing = true;
+    int32_t mark = (int32_t)screenRefreshTimer.elapsed();
     fps = animations.update();
+    drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
+    idleclock = refresh_limit - pushclock - drawclock;
     is_drawing = false;  // pushed = false;
     pushtime = true;
 }
@@ -943,7 +952,10 @@ class Display {
                 draw_temperature(loc::WHEEL_FR, 12);
                 draw_temperature(loc::WHEEL_RL, 13);
                 draw_temperature(loc::WHEEL_RR, 14);
-                for (int line=15; line<=18; line++) draw_eraseval(line);
+                draw_dynamic(15, touch->touch_pt(0), 0, disp_width_pix);
+                draw_dynamic(16, touch->touch_pt(1), 0, disp_height_pix);
+                draw_eraseval(17);
+                draw_truth(18, web_enabled, 0);
                 draw_truth(19, dont_take_temperatures, 2);
             }
             else if (datapage == PG_SIM) {
@@ -962,11 +974,11 @@ class Display {
             else if (datapage == PG_UI) {
                 draw_dynamic(9, (int32_t)loop_avg_us, looptimer.loop_scale_min_us, looptimer.loop_scale_avg_max_us);
                 draw_dynamic(10, looptimer.loop_peak_us, looptimer.loop_scale_min_us, looptimer.loop_scale_peak_max_us);
-                draw_dynamic(11, (int32_t)looptimer.loopfreq_hz, 0.0, 600.0);
+                draw_dynamic(11, (int32_t)looptimer.loopfreq_hz, 0.0, 2000.0);
                 draw_dynamic(12, fps, 0.0, 600.0);
-                draw_dynamic(13, touch->touch_pt(0), 0, disp_width_pix);
-                draw_dynamic(14, touch->touch_pt(1), 0, disp_height_pix);
-                draw_truth(15, web_enabled, 0);
+                draw_dynamic(13, drawclock, 0, refresh_limit);
+                draw_dynamic(14, pushclock, 0, refresh_limit);
+                draw_dynamic(15, idleclock, 0, refresh_limit);
                 draw_truth(16, flashdemo, 0);
                 draw_dynamic(17, neobright, 1.0, 100.0, -1, 3);
                 draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
@@ -985,6 +997,7 @@ class Display {
             else if (screenRefreshTimer.expired() || screensaver_max_refresh) { // taskYIELD(); 
                 screenRefreshTimer.reset();
                 push_task();
+                pushclock = (int32_t)screenRefreshTimer.elapsed();
             }
         }
         #endif
@@ -1095,7 +1108,8 @@ class Tuner {
                 else if (sel_val == 10) gas.cruisepid.add_kd(0.001 * fdelta);
             }
             else if (datapage == PG_TEMP) {
-                if (sel_val == 10) adj_bool(&dont_take_temperatures, idelta);
+                if (sel_val == 9) { adj_bool(&web_enabled, idelta); }
+                else if (sel_val == 10) adj_bool(&dont_take_temperatures, idelta);
             }
             else if (datapage == PG_SIM) {
                 if (sel_val == 0) sim.set_can_sim(sens::joy, idelta);
@@ -1111,8 +1125,7 @@ class Tuner {
                 else if (sel_val == 10 && rmode == CAL) adj_bool(&(cal_gasmode_request), idelta);
             }
             else if (datapage == PG_UI) {
-                if (sel_val == 6) { adj_bool(&web_enabled, idelta); }
-                else if (sel_val == 7) { adj_bool(&flashdemo, idelta); neo->enable_flashdemo(flashdemo); }
+                if (sel_val == 7) { adj_bool(&flashdemo, idelta); neo->enable_flashdemo(flashdemo); }
                 else if (sel_val == 8) { adj_val(&neobright, idelta, 1, 100); neo->setbright(neobright); }
                 else if (sel_val == 9) { adj_val(&neodesat, idelta, 0, 10); neo->setdesaturation(neodesat); }
                 else if (sel_val == 10) adj_bool(&screensaver, idelta);
