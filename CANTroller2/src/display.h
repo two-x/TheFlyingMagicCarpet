@@ -1,5 +1,4 @@
 #pragma once
-#define VIDEO_PUSH_ON_OTHER_CORE  // define to try to run animations tasks on 2nd core
 // #include "tft.h"
 #include "lgfx.h"
 #include "neopixel.h"
