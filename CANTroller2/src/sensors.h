@@ -357,7 +357,7 @@ class Transducer : public Device {
         return false;
     }
     bool add_human(HUMAN_T arg_add_human) {
-        HUMAN_T delta = (HUMAN_T)(arg_add_human * tuning_scalar * (max_human() - min_human()));
+        HUMAN_T delta = (HUMAN_T)(arg_add_human * tuning_rate_pcps * loop_avg_us * (max_human() - min_human()) / (100.0 * 1000000));
         _val_raw += to_native(delta);
         if (_human.add(delta)) {
             _native.set(to_native(_human.val()));

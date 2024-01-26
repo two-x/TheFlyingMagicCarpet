@@ -238,7 +238,7 @@ class LoopTimer {
     // Loop timing related
     Timer loop_timer = Timer(1000000);  // how long the previous main loop took to run (in us)
     int32_t loopno = 1, loopindex = 0, loop_recentsum = 0, loop_scale_min_us = 0, loop_scale_avg_max_us = 2500, loop_scale_peak_max_us = 25000;
-    float loop_sum_s, loop_avg_us, loopfreq_hz;
+    float loop_sum_s, loopfreq_hz;
     uint32_t looptimes_us[20];
     bool loop_dirty[20];
     int64_t loop_cout_mark_us;

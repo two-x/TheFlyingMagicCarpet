@@ -1015,7 +1015,7 @@ class Display {
                 draw_truth(19, cal_gasmode, 0);
             }
             else if (datapage == PG_UI) {
-                draw_dynamic(9, (int32_t)looptimer.loop_avg_us, looptimer.loop_scale_min_us, looptimer.loop_scale_avg_max_us);
+                draw_dynamic(9, (int32_t)loop_avg_us, looptimer.loop_scale_min_us, looptimer.loop_scale_avg_max_us);
                 draw_dynamic(10, looptimer.loop_peak_us, looptimer.loop_scale_min_us, looptimer.loop_scale_peak_max_us);
                 draw_dynamic(11, (int32_t)looptimer.loopfreq_hz, 0.0, 600.0);
                 draw_dynamic(12, fps, 0.0, 600.0);

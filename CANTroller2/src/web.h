@@ -180,7 +180,7 @@ class Web {
             JsonObject object = doc.to<JsonObject>();         // create a JSON Object
             object["rand1"] = random(100);                    // write data into the JSON object -> I used "rand1" and "rand2" here, but you can use anything else
             object["rand2"] = random(100);
-            object["loopavg"] = (int32_t)(looptimer->loop_avg_us);                    // write data into the JSON object -> I used "rand1" and "rand2" here, but you can use anything else
+            object["loopavg"] = (int32_t)(loop_avg_us);                    // write data into the JSON object -> I used "rand1" and "rand2" here, but you can use anything else
             object["looppeak"] = looptimer->loop_peak_us;
             serializeJson(doc, jsonString);                   // convert JSON object to string
             // Serial.println(jsonString);                       // print JSON string to console for debug purposes (you can comment this out)
