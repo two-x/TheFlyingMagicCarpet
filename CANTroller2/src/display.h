@@ -338,21 +338,23 @@ class Display {
         TaskHandle_t drawTaskHandle = nullptr;
         xTaskCreateUniversal([](void*) {
             while(true) {
-                if (screensaver && !sim.enabled() && !pushtime)
-                    draw_task();
-                delayMicroseconds(25); // allow for wifi etc
+                while (!screensaver || sim.enabled() || pushtime) taskYIELD();
+                // if (screensaver && !sim.enabled() && !pushtime)
+                draw_task();
+                // delayMicroseconds(25); // allow for wifi etc
             }
         }, "drawTask", 4096 , NULL, 1, &drawTaskHandle, runOnCore);  //  8192
             
         TaskHandle_t pushTaskHandle = nullptr;
         xTaskCreateUniversal([](void*) {
             while(true) {
-                if (screensaver && !sim.enabled() && pushtime && (screenRefreshTimer.expired() || screensaver_max_refresh)) {
-                    screenRefreshTimer.reset();
-                    push_task();
-                }
-                taskYIELD();
-                delayMicroseconds(25); // allow for wifi etc
+                while (!screensaver || sim.enabled() || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh))
+                // if (screensaver && !sim.enabled() && pushtime && (screenRefreshTimer.expired() || screensaver_max_refresh)) {
+                    taskYIELD();
+                screenRefreshTimer.reset();
+                push_task();
+                // taskYIELD();
+                // delayMicroseconds(25); // allow for wifi etc
             }
         }, "pushTask", 16384 , NULL, 5, &pushTaskHandle, runOnCore);  //  8192
 

@@ -20,7 +20,7 @@ class FlexPanel {
     int touchp[2];
     int corner[2], sprsize[2];
     Touchscreen* _touch;
-    std::size_t flip = 0;
+    // std::size_t flip = 0;
     std::uint32_t sec, psec, _width, _height, _myfps = 0, myfps = 0, frame_count = 0;
     FlexPanel() {}
     void init(LGFX* _lcd, Touchscreen* touch, int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
