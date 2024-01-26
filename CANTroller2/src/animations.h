@@ -346,7 +346,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     uint8_t saver_illicit_prob = 12;
     float pensat = 200.0;
     uint16_t pencolor = TFT_RED, wclast, spothue = 65535, slowhue = 0, penhue;
-    int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 1200, shape = random(NumSaverShapes);
+    int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 1200, shape = random(Rotate);
     static constexpr uint32_t saver_cycletime_us = 18000000;
     Timer saverCycleTimer, pentimer = Timer(1500000);
     bool saver_lotto = false, has_eraser = true;
@@ -525,7 +525,7 @@ class EraserSaver {  // draws colorful patterns to exercise
 class AnimationManager {
   private:
     enum saverchoices : int { Eraser, Collisions, NumSaverMenu, Blank };
-    int nowsaver = Collisions, still_running = 0;
+    int nowsaver = Eraser, still_running = 0;
     LGFX* mylcd;
     LGFX_Sprite* nowspr_ptr;
     FlexPanel* panel;
@@ -566,22 +566,11 @@ class AnimationManager {
         fps_mark = now;
     }
     float update() {
-        // Serial.printf("sav: l%d s%d n%d", screensaver_last, screensaver, nowsaver);
-
-        if (!screensaver_last && screensaver) {
-            // if (nowsaver == Eraser) ptrsaver->reset();  else
-            change_saver();  // ptrsaver->reset();
-        }
+        if (!screensaver_last && screensaver) change_saver();  // ptrsaver->reset();
         Serial.printf(",%d\n", nowsaver);
         screensaver_last = screensaver;
         if (!screensaver) return NAN;        // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
         // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
-
-        // if (pushed[!flip]) {
-        //     int flip = panel->setflip(false);
-        //     nowspr_ptr = &(panel->sp[flip]);        
-        // }
-        // int flip = panel->setflip(false);  // move to start of push task
         nowspr_ptr = &(panel->sp[flip]);
         if (nowsaver == Eraser) {
             still_running = eSaver.update(nowspr_ptr);
@@ -589,8 +578,6 @@ class AnimationManager {
         }
         else if (nowsaver == Collisions) still_running = cSaver.update(nowspr_ptr);
         if (!still_running) change_saver();
-        // if (still_running) panel->diffpush(&panel->sp[flip], &panel->sp[!flip]);
-        // else change_saver();
         calc_fps();
         return myfps;
     }

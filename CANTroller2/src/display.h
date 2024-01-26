@@ -1,5 +1,5 @@
 #pragma once
-#undef VIDEO_PUSH_ON_OTHER_CORE  // define to try to run animations tasks on 2nd core
+#define VIDEO_PUSH_ON_OTHER_CORE  // define to try to run animations tasks on 2nd core
 // #include "tft.h"
 #include "lgfx.h"
 #include "neopixel.h"
@@ -267,7 +267,7 @@ volatile bool is_drawing = 0;
 volatile bool pushtime = 0;
 // static void push_task(void*) {
 #ifdef VIDEO_PUSH_ON_OTHER_CORE
-void push_task(void *parameter) {
+static void push_task(void *parameter) {
     while (true) {
         while (!screensaver || sim.enabled() || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh))  // taskYIELD(); 
             vTaskDelay(pdMS_TO_TICKS(1));
@@ -278,6 +278,15 @@ void push_task(void *parameter) {
         is_pushing = pushtime = false;  // drawn = 
     }
     // vTaskDelete(NULL);
+}
+static void draw_task(void *parameter) {
+    while (true) {
+        while (!screensaver || sim.enabled() || pushtime) vTaskDelay(pdMS_TO_TICKS(1));
+        is_drawing = true;
+        fps = animations.update();
+        is_drawing = false;  // pushed = false;
+        pushtime = true;
+    }
 }
 #else
 void push_task() {
@@ -324,9 +333,12 @@ class Display {
     }
     void init_tasks() {
         #ifdef VIDEO_PUSH_ON_OTHER_CORE
-        xTaskCreatePinnedToCore(push_task, "taskPush", 8192, NULL, 3, NULL, runOnCore);
-        // xTaskCreatePinnedToCore(draw_task, "taskDraw", 4096, NULL, 3, NULL, runOnCore);
-        
+        TaskHandle_t pushTaskHandle = nullptr;
+        xTaskCreatePinnedToCore(push_task, "taskPush", 8192, NULL, 2, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  // 16384
+        TaskHandle_t drawTaskHandle = nullptr;
+        xTaskCreatePinnedToCore(draw_task, "taskDraw", 4096, NULL, 3, &drawTaskHandle, runOnCore);
+        #endif
+
         // TaskHandle_t drawTaskHandle = nullptr;
         // xTaskCreateUniversal([](void*) {
         //     while(true) {
@@ -349,7 +361,6 @@ class Display {
         //         // delayMicroseconds(25); // allow for wifi etc
         //     }
         // }, "pushTask", 16384 , NULL, 5, &pushTaskHandle, runOnCore);  //  8192
-        #endif
     }
     void setup() {
         Serial.printf("Display..");  //
@@ -969,15 +980,15 @@ class Display {
             disp_data_dirty = false;
             _procrastinate = true;  // don't do anything else in this same loop
         }
+        #ifndef VIDEO_PUSH_ON_OTHER_CORE
         if (!sim.enabled() && !_procrastinate && screensaver && !is_pushing && !is_drawing) {
             if (!pushtime) draw_task();
-            #ifndef VIDEO_PUSH_ON_OTHER_CORE
-                else if (screenRefreshTimer.expired() || screensaver_max_refresh) { // taskYIELD(); 
-                    screenRefreshTimer.reset();
-                    push_task();
-                }
-            #endif
+            else if (screenRefreshTimer.expired() || screensaver_max_refresh) { // taskYIELD(); 
+                screenRefreshTimer.reset();
+                push_task();
+            }
         }
+        #endif
         // if (pushtime) xTaskCreatePinnedToCore(push_task, "taskPush", 8192, NULL, 1, NULL, runOnCore);
         // else xTaskCreatePinnedToCore(draw_task, "taskDraw", 4096, NULL, 3, NULL, runOnCore);
         _procrastinate = false;
