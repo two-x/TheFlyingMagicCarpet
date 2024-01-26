@@ -266,44 +266,32 @@ volatile bool is_pushing = 0;
 volatile bool is_drawing = 0;
 volatile bool pushtime = 0;
 // static void push_task(void*) {
-void push_task() {
-    // if (screensaver && !sim.enabled() && pushtime && (screenRefreshTimer.expired() || screensaver_max_refresh)) {
-    //         screenRefreshTimer.reset();
-
-        // while (screensaver) {
-            //     // Serial.printf("p: s%d id%d e%d\n", screensaver, is_drawing, screenRefreshTimer.expired());
-            //     // taskYIELD();  //
-            //     return;
-            //     delayMicroseconds(50);
-            // }
-            // pushed = false;
-            is_pushing = true;
-            // screenRefreshTimer.reset();
-            flexpanel.diffpush(&flexpanel.sp[flip], &flexpanel.sp[!flip]);
-            flip = !flip;
-            is_pushing = pushtime = false;  // drawn = 
-            // pushed = true;
-        // }
-        // taskYIELD();
-        // delayMicroseconds(25); // allow for wifi etc
+#ifdef VIDEO_PUSH_ON_OTHER_CORE
+void push_task(void *parameter) {
+    while (true) {
+        while (!screensaver || sim.enabled() || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh))  // taskYIELD(); 
+            vTaskDelay(pdMS_TO_TICKS(1));
+        screenRefreshTimer.reset();
+        is_pushing = true;
+        flexpanel.diffpush(&flexpanel.sp[flip], &flexpanel.sp[!flip]);
+        flip = !flip;
+        is_pushing = pushtime = false;  // drawn = 
     }
     // vTaskDelete(NULL);
+}
+#else
+void push_task() {
+    is_pushing = true;
+    flexpanel.diffpush(&flexpanel.sp[flip], &flexpanel.sp[!flip]);
+    flip = !flip;
+    is_pushing = pushtime = false;  // drawn = 
+}
+#endif
 void draw_task() {
-    // while (screensaver) {
-    //     while (pushtime) taskYIELD();
-        //     // Serial.printf("d: s%d ip%d e%d\n", screensaver, is_pushing);
-        //     // taskYIELD();  // 
-        //     return;
-        //     delayMicroseconds(50);
-        // }
-        // drawn = false;
-        is_drawing = true;
-        fps = animations.update();
-        is_drawing = false;  // pushed = false;
-        pushtime = true;
-        // drawn = true;
-    // }
-    // vTaskDelete(NULL);
+    is_drawing = true;
+    fps = animations.update();
+    is_drawing = false;  // pushed = false;
+    pushtime = true;
 }
 class Display {
   private:
@@ -335,84 +323,33 @@ class Display {
         return &_tft;
     }
     void init_tasks() {
-        TaskHandle_t drawTaskHandle = nullptr;
-        xTaskCreateUniversal([](void*) {
-            while(true) {
-                while (!screensaver || sim.enabled() || pushtime) taskYIELD();
-                // if (screensaver && !sim.enabled() && !pushtime)
-                draw_task();
-                // delayMicroseconds(25); // allow for wifi etc
-            }
-        }, "drawTask", 4096 , NULL, 1, &drawTaskHandle, runOnCore);  //  8192
-            
-        TaskHandle_t pushTaskHandle = nullptr;
-        xTaskCreateUniversal([](void*) {
-            while(true) {
-                while (!screensaver || sim.enabled() || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh))
-                // if (screensaver && !sim.enabled() && pushtime && (screenRefreshTimer.expired() || screensaver_max_refresh)) {
-                    taskYIELD();
-                screenRefreshTimer.reset();
-                push_task();
-                // taskYIELD();
-                // delayMicroseconds(25); // allow for wifi etc
-            }
-        }, "pushTask", 16384 , NULL, 5, &pushTaskHandle, runOnCore);  //  8192
-
+        #ifdef VIDEO_PUSH_ON_OTHER_CORE
+        xTaskCreatePinnedToCore(push_task, "taskPush", 8192, NULL, 3, NULL, runOnCore);
+        // xTaskCreatePinnedToCore(draw_task, "taskDraw", 4096, NULL, 3, NULL, runOnCore);
+        
         // TaskHandle_t drawTaskHandle = nullptr;
         // xTaskCreateUniversal([](void*) {
         //     while(true) {
-        //         Serial.printf("draw.. ");
+        //         while (!screensaver || sim.enabled() || pushtime) taskYIELD();
+        //         // if (screensaver && !sim.enabled() && !pushtime)
         //         draw_task();
-        //         taskYIELD()
-        //         delayMicroseconds(10000025); // allow for wifi etc
+        //         // delayMicroseconds(25); // allow for wifi etc
         //     }
-        // }, "drawTask", 4096 , NULL, 1, &drawTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  //  8192
-        
+        // }, "drawTask", 4096 , NULL, 1, &drawTaskHandle, runOnCore);  //  8192
+        //
         // TaskHandle_t pushTaskHandle = nullptr;
         // xTaskCreateUniversal([](void*) {
         //     while(true) {
-        //         if (!sim.enabled()) {
-        //             while (is_pushing || is_drawing) taskYIELD();
-        //             Serial.printf("l: pt%d\n", pushtime);
-        //             if (pushtime) push_task();
-        //             else draw_task();
-        //         }
-        //         else taskYIELD();
-        //         // delayMicroseconds(25); // allow for wifi etc
-
-        //         // Serial.printf("draw.. ");
-        //         // while (!screensaver || is_pushing) {
-        //         //     // Serial.printf("d: s%d ip%d e%d\n", screensaver, is_pushing);
-        //         //     taskYIELD();  // 
-        //         //     // delayMicroseconds(50);
-        //         // }
-        //         // is_drawing = true;
-        //         // fps = animations.update();
-        //         // is_drawing = false;
-        //         // while (!screensaver || is_drawing || !(screenRefreshTimer.expired() || screensaver_max_refresh)) {
-        //         //     // Serial.printf("p: s%d id%d e%d\n", screensaver, is_drawing, screenRefreshTimer.expired());
-        //         //     taskYIELD();  //
-        //         //     // delayMicroseconds(50);
-        //         // }
-        //         // is_pushing = true;
-        //         // screenRefreshTimer.reset();
-        //         // flexpanel.diffpush(&flexpanel.sp[flip], &flexpanel.sp[!flip]);
-        //         // flip = !flip;
-        //         // is_pushing = false;
-
-
-        //         // draw_task();
-
-        //         // Serial.printf("push.. ");
-        //         // push_task();
+        //         while (!screensaver || sim.enabled() || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh))
+        //         // if (screensaver && !sim.enabled() && pushtime && (screenRefreshTimer.expired() || screensaver_max_refresh)) {
+        //             taskYIELD();
+        //         screenRefreshTimer.reset();
+        //         push_task();
         //         // taskYIELD();
-        //         // delayMicroseconds(1250000); // allow for wifi etc
+        //         // delayMicroseconds(25); // allow for wifi etc
         //     }
-        // }, "pushTask", 8192 , NULL, 1, &pushTaskHandle, runOnCore);  //  8192    
-
-        // xTaskCreatePinnedToCore(push_task, "taskPush", 8192, NULL, 3, NULL, runOnCore);
-        //     else xTaskCreatePinnedToCore(draw_task, "taskDraw", 4096, NULL, 3, NULL, runOnCore);
-
+        // }, "pushTask", 16384 , NULL, 5, &pushTaskHandle, runOnCore);  //  8192
+        #endif
     }
     void setup() {
         Serial.printf("Display..");  //
@@ -446,9 +383,7 @@ class Display {
         draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
         all_dirty();
         animations.setup();
-        #ifdef VIDEO_PUSH_ON_OTHER_CORE
-            init_tasks();
-        #endif
+        init_tasks();
         Serial.printf(" initialized\n");
     }
     // uint8_t add_palette(uint16_t color) {
@@ -1034,38 +969,17 @@ class Display {
             disp_data_dirty = false;
             _procrastinate = true;  // don't do anything else in this same loop
         }
-        #ifndef VIDEO_PUSH_ON_OTHER_CORE
-            if (!sim.enabled() && !_procrastinate && screensaver && !is_pushing && !is_drawing) {
-                // Serial.printf("lp: p%d s%d pt%d\n", _procrastinate, screensaver, pushtime);
-
-                // if (!pushtime) draw_task();
-                // else if (screenRefreshTimer.expired() || screensaver_max_refresh) {
-                //     screenRefreshTimer.reset();
-                //     push_task;
-                // }
-                if (!pushtime) draw_task();
-                else if (screenRefreshTimer.expired() || screensaver_max_refresh) {
+        if (!sim.enabled() && !_procrastinate && screensaver && !is_pushing && !is_drawing) {
+            if (!pushtime) draw_task();
+            #ifndef VIDEO_PUSH_ON_OTHER_CORE
+                else if (screenRefreshTimer.expired() || screensaver_max_refresh) { // taskYIELD(); 
                     screenRefreshTimer.reset();
                     push_task();
                 }
-            }
-        #endif
-        //     if (pushtime) xTaskCreatePinnedToCore(push_task, "taskPush", 8192, NULL, 1, NULL, runOnCore);
-        //     else xTaskCreatePinnedToCore(draw_task, "taskDraw", 4096, NULL, 3, NULL, runOnCore);
-        // }
-        //     Serial.printf("l: pt%d\n", pushtime);
-        //     if (pushtime) push_task();
-        //     else draw_task();
-            //     drawn = true;
-            //     pushed = false;
-            // }
-            // else if (drawn) {
-            //     push_task();
-            //     drawn = false;
-            //     pushed = true;
-            // }
-            // fps = animations.update();
-        // }
+            #endif
+        }
+        // if (pushtime) xTaskCreatePinnedToCore(push_task, "taskPush", 8192, NULL, 1, NULL, runOnCore);
+        // else xTaskCreatePinnedToCore(draw_task, "taskDraw", 4096, NULL, 3, NULL, runOnCore);
         _procrastinate = false;
     }
 };
