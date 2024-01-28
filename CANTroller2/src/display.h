@@ -267,14 +267,14 @@ volatile int32_t pushclock;
 volatile int32_t drawclock;
 volatile int32_t idleclock;
 // static void push_task(void*) {
-#ifdef VIDEO_PUSH_ON_OTHER_CORE
+#ifdef VIDEO_TASKS
 static void push_task(void *parameter) {
     while (true) {
         while (!screensaver || sim.enabled() || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh))  // taskYIELD(); 
             vTaskDelay(pdMS_TO_TICKS(1));
         screenRefreshTimer.reset();
         is_pushing = true;
-        flexpanel.diffpush(&flexpanel.sp[flip], &flexpanel.sp[!flip]);
+        flexpanel.diffpush(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
         pushclock = (int32_t)screenRefreshTimer.elapsed();
         flip = !flip;
         is_pushing = pushtime = false;  // drawn = 
@@ -296,7 +296,7 @@ static void draw_task(void *parameter) {
 #else
 void push_task() {
     is_pushing = true;
-    flexpanel.diffpush(&flexpanel.sp[flip], &flexpanel.sp[!flip]);
+    flexpanel.diffpush(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
     flip = !flip;
     is_pushing = pushtime = false;  // drawn = 
 }
@@ -340,7 +340,7 @@ class Display {
         return &_tft;
     }
     void init_tasks() {
-        #ifdef VIDEO_PUSH_ON_OTHER_CORE
+        #ifdef VIDEO_TASKS
         TaskHandle_t pushTaskHandle = nullptr;
         xTaskCreatePinnedToCore(push_task, "taskPush", 8192, NULL, 2, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  // 16384
         TaskHandle_t drawTaskHandle = nullptr;
@@ -370,8 +370,12 @@ class Display {
         //     }
         // }, "pushTask", 16384 , NULL, 5, &pushTaskHandle, runOnCore);  //  8192
     }
+    void make_sprites() {
+
+    }
     void setup() {
         Serial.printf("Display..");  //
+        _tft.init();
         // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
         _tft.setColorDepth(8);
         Serial.printf(" ..");  //
@@ -805,9 +809,12 @@ class Display {
   public:
     void update(int _nowmode) {
         tiny_text();
+        _tft.startWrite();
         update_idiots(disp_idiots_dirty);
+        _tft.endWrite();
         disp_idiots_dirty = false;
         if (!display_enabled) return;
+        _tft.startWrite();
         if (disp_datapage_dirty) {
             static bool first = true;
             draw_datapage(datapage, datapage_last, first);
@@ -991,7 +998,8 @@ class Display {
             disp_data_dirty = false;
             _procrastinate = true;  // don't do anything else in this same loop
         }
-        #ifndef VIDEO_PUSH_ON_OTHER_CORE
+        _tft.endWrite();
+        #ifndef VIDEO_TASKS
         if (!sim.enabled() && !_procrastinate && screensaver && !is_pushing && !is_drawing) {
             if (!pushtime) draw_task();
             else if (screenRefreshTimer.expired() || screensaver_max_refresh) { // taskYIELD(); 

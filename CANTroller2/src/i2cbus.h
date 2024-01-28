@@ -22,7 +22,7 @@ class I2C {
   public:
     int i2cbaton = i2c_lightbox;             // A semaphore mechanism to prevent bus conflict on i2c bus
     I2C(uint8_t sda_pin_arg, uint8_t scl_pin_arg) : _sda_pin(sda_pin_arg), _scl_pin(scl_pin_arg) {}
-    void setup(uint8_t touch_addr, uint8_t lightbox_addr, uint8_t airvelo_addr, uint8_t map_addr) {
+    int setup(uint8_t touch_addr, uint8_t lightbox_addr, uint8_t airvelo_addr, uint8_t map_addr) {
         _devaddrs[i2c_touch] = touch_addr;
         _devaddrs[i2c_lightbox] = lightbox_addr;
         _devaddrs[i2c_airvelo] = airvelo_addr;
@@ -46,6 +46,7 @@ class I2C {
         if (_devicecount == 0) printf(" no devices found.");
         printf(" ..done\n");
         fill_det_array();
+        return detected(i2c_touch);
     }
     bool detected_by_addr(uint8_t addr) {  // argument is an i2c address
         for (int i=0; i < _devicecount; i++) if (_detaddrs[i] == addr) return true;

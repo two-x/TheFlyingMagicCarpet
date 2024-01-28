@@ -8,7 +8,7 @@ static constexpr std::uint32_t SHIFTSIZE = 8;
 volatile bool flip = 0;
 volatile int32_t refresh_limit = 10000; // 16666; // = 60 Hz
 Timer screenRefreshTimer = Timer((int64_t)refresh_limit);
-
+LGFX_Sprite flexpanel_sp[2];  // , datapage_sp[2], bargraph_sp[2], idiots_sp[2];
 
 // volatile int PushSp = 1;
 // volatile int DrawSp = 0;
@@ -17,7 +17,6 @@ Timer screenRefreshTimer = Timer((int64_t)refresh_limit);
 
 class FlexPanel {
   public:
-    LGFX_Sprite sp[2];
     LGFX_Sprite* nowspr;
     LGFX* lcd;
     int touchp[2];
@@ -37,27 +36,27 @@ class FlexPanel {
         lcd->startWrite();
         lcd->setColorDepth(16);
         if (lcd->width() < lcd->height()) lcd->setRotation(lcd->getRotation() ^ 1);
-        for (int i = 0; i <= 1; i++) sp[i].setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
+        for (int i = 0; i <= 1; i++) flexpanel_sp[i].setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
         auto framewidth = sprsize[HORZ];
         auto frameheight = sprsize[VERT];
         bool fail = false;
         bool using_psram = false;
         for (std::uint32_t i = 0; !fail && i < 2; ++i) {
-            sp[i].setPsram(false);
-            fail = !sp[i].createSprite(framewidth, frameheight);
+            flexpanel_sp[i].setPsram(false);
+            fail = !flexpanel_sp[i].createSprite(framewidth, frameheight);
         }
         if (fail) {
             fail = false;
             for (std::uint32_t i = 0; !fail && i < 2; ++i) {
-                sp[i].setPsram(true);
-                fail = !sp[i].createSprite(framewidth, frameheight);
+                flexpanel_sp[i].setPsram(true);
+                fail = !flexpanel_sp[i].createSprite(framewidth, frameheight);
             }
             if (fail) {
                 fail = false;
                 if (framewidth >= 320) framewidth = 180;
                 if (frameheight >= 240) frameheight = 180;
                 for (std::uint32_t i = 0; !fail && i < 2; ++i) {
-                    fail = !sp[i].createSprite(framewidth, frameheight);
+                    fail = !flexpanel_sp[i].createSprite(framewidth, frameheight);
                 }
                 if (fail) {
                     lcd->print("createSprite fail\n");
@@ -68,7 +67,7 @@ class FlexPanel {
             else using_psram = true;
         }
         Serial.printf(" made 2x %dx%d sprites in %sram\n", framewidth, frameheight, using_psram ? "ps" : "native ");
-        for (int i=0; i<=1; i++) sp[i].clear();
+        for (int i=0; i<=1; i++) flexpanel_sp[i].clear();
         // sp[0].pushImageDMA() draw(corner[HORZ], corner[VERT]);
         // lcd->display();
         lcd->endWrite();
@@ -168,7 +167,7 @@ class CollisionsSaver {
         auto sprheight = sprite->height();
         // flip = _draw_count & 1;
         balls = &_balls[flip][0];
-        // sprite = &(sp[flip]);
+        // sprite = &(flexpanel_sp[flip]);
         sprite->clear();
         for (float i = 0.125; i < 1.0; i += 0.125) sprite->drawGradientVLine((int)(i * (sprwidth-1)), 0, sprheight, hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
         for (float i = 0.125; i < 1.0; i += 0.125) sprite->drawGradientHLine(0, (int)(i * (sprheight-1)), sprwidth, hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
@@ -525,8 +524,8 @@ class EraserSaver {  // draws colorful patterns to exercise
             if (!random(25)) shape = Rotate;
         }
         // for (int i = 0; i <= 1; i++)
-        //     if (shape == Ascii) sp[i].setFont(&fonts::Font4);
-        //     else sp[i].setFont(&fonts::Font4);
+        //     if (shape == Ascii) flexpanel_sp[i].setFont(&fonts::Font4);
+        //     else flexpanel_sp[i].setFont(&fonts::Font4);
     }
 };
 class AnimationManager {
@@ -554,17 +553,17 @@ class AnimationManager {
     }
     void setup() {
         // int flip = panel->setflip(true);
-        eSaver.setup(&panel->sp[flip]);
-        cSaver.setup(&panel->sp[flip]);
+        eSaver.setup(&flexpanel_sp[flip]);
+        cSaver.setup(&flexpanel_sp[flip]);
     }
     void reset() {
         // int flip = panel->setflip(true);
-        if (nowsaver == Eraser) eSaver.reset(&panel->sp[flip], &panel->sp[!flip]);
-        else if (nowsaver == Collisions) cSaver.reset(&panel->sp[flip], &panel->sp[!flip]);
+        if (nowsaver == Eraser) eSaver.reset(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
+        else if (nowsaver == Collisions) cSaver.reset(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
     }
     // void redraw() {
     //     // if (!is_drawing) is_pushing = false;
-    //     panel->diffpush(&panel->sp[flip], &panel->sp[!flip]);
+    //     panel->diffpush(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
     // }
     void calc_fps() {
         int64_t now = fps_timer.elapsed();
@@ -574,11 +573,10 @@ class AnimationManager {
     }
     float update() {
         if (!screensaver_last && screensaver) change_saver();  // ptrsaver->reset();
-        Serial.printf(",%d\n", nowsaver);
         screensaver_last = screensaver;
         if (!screensaver) return NAN;        // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
         // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
-        nowspr_ptr = &(panel->sp[flip]);
+        nowspr_ptr = &flexpanel_sp[flip];
         if (nowsaver == Eraser) {
             still_running = eSaver.update(nowspr_ptr);
             if (panel->touched()) eSaver.saver_touch(panel->touch_pt(HORZ), panel->touch_pt(VERT));
@@ -604,7 +602,7 @@ class DiagConsole {
     }
     void setup() {}
     void redraw() {
-        panel->diffpush(&panel->sp[flip], &panel->sp[!flip]);
+        panel->diffpush(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
     }
     void add_errorline(std::string type, std::string item) {
         std::string newerr = type + ": " + item;
@@ -613,7 +611,7 @@ class DiagConsole {
     }
     void update() {
         // int flip = panel->setflip(false);
-        // nowspr_ptr = &(panel->sp[flip]);
-        // panel->diffpush(&panel->sp[flip], &panel->sp[!flip]);
+        // nowspr_ptr = &(flexpanel_sp[flip]);
+        // panel->diffpush(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
     }
 };

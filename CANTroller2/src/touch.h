@@ -9,7 +9,8 @@ class Touchscreen {
   private:
     LGFX* _tft;
     I2C* _i2c;
-    int32_t corners[2][2] = { { -25, -3549 }, { 185, 3839 } };  // [xx/yy][min/max]  // Read resistance values from upper-left and lower-right corners of screen, for calibration
+    int32_t corners[2][2][2] = { { { -25, -3549 }, { 185, 3839 } },  // [restouch][xx/yy][min/max]  // Read resistance values from upper-left and lower-right corners of screen, for calibration
+                                 { { 0, 319 },     { 0, 179 } } };   // [captouch][xx/yy][min/max]  // Read resistance values from upper-left and lower-right corners of screen, for calibration
     bool touch_longpress_valid = true;
     bool landed_coordinates_valid = false;
     bool touch_now_touched = false;
@@ -38,7 +39,7 @@ class Touchscreen {
         _i2c = i2c;
         disp_size[HORZ] = width;
         disp_size[VERT] = height;
-        captouch = (_i2c->detected(i2c_touch));
+        captouch = (i2c->detected(i2c_touch));
         _tft->touch_init();  // this points touch object to resistive or capacitive driver instance based on captouch
         Serial.printf("Touchscreen.. %s panel\n", (captouch) ? "detected captouch" : "using resistive");
     }
@@ -51,11 +52,11 @@ class Touchscreen {
         if (captouch && _i2c->not_my_turn(i2c_touch)) return nowtouch;
         if (touchSenseTimer.expireset()) {
             uint8_t count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]));
-            nowtouch = count;
+            nowtouch = (count > 0);
             if (nowtouch) {
                 for (int axis=0; axis<=1; axis++) {
-                    if (captouch) tft_touch[axis] = touch_read[axis];  // disp_width - 1 - touch_read[xx];
-                    else tft_touch[axis] = map(touch_read[axis], corners[axis][tsmin], corners[axis][tsmax], 0, disp_size[axis]);  // translate resistance to pixels
+                    // if (captouch) tft_touch[axis] = touch_read[axis];  // disp_width - 1 - touch_read[xx];
+                    tft_touch[axis] = map(touch_read[axis], corners[captouch][axis][tsmin], corners[captouch][axis][tsmax], 0, disp_size[axis]);
                     tft_touch[axis] = constrain(tft_touch[axis], 0, disp_size[axis] - 1);
                     if (flip_the_screen) tft_touch[axis] = disp_size[axis] - tft_touch[axis];
                     if (!landed_coordinates_valid) {

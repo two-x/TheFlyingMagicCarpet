@@ -26,7 +26,8 @@ class LGFX : public lgfx::LGFX_Device {
     lgfx::Touch_FT5x06      _cap_touch_instance; // FT5206, FT5306, FT5406, FT6206, FT6236, FT6336, FT6436
     lgfx::Touch_XPT2046     _res_touch_instance;
   public:
-    LGFX(void) {  // Create a constructor and configure various settings here.  If you change the class name, please specify the same name for the constructor.
+    LGFX(void) {}  // Create a constructor and configure various settings here.  If you change the class name, please specify the same name for the constructor.
+    void init() {
         {  // Configure bus control settings.
             auto cfg = _bus_instance.config(); // Get the structure for bus settings.
             cfg.spi_host = SPI2_HOST;          // VSPI_HOST is deprecated, use SPI2_HOST.  HSPI_HOST = SPI1_HOST or SPI3_HOST (?)
