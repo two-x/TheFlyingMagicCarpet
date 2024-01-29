@@ -28,8 +28,8 @@ void setup() {
     tach.setup();
     speedo.setup();
     i2c.setup(touch.addr, lightbox.addr, airvelo.addr, mapsens.addr);
-    // airvelo.setup();          // must be done after i2c is started
-    // mapsens.setup();
+    airvelo.setup();          // must be done after i2c is started
+    mapsens.setup();
     lightbox.setup();
     tempsens.setup();         // Onewire bus and temp sensors
     xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Temperature sensors task
@@ -64,9 +64,9 @@ void loop() {                 // code takes about 1 ms to loop on average
     tach.update();            // get pulse timing from hall effect tachometer on flywheel
     speedo.update();          // get pulse timing from hall effect speedometer on axle
     mulebatt.update();        // vehicle battery voltage
-    // airvelo.update();         // manifold air velocity sensor  // 20us + 900us every 4 loops
-    // mapsens.update();         // manifold air pressure sensor  // 70 us + 2ms every 9 loops
-    // maf_gps = massairflow();  // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
+    airvelo.update();         // manifold air velocity sensor  // 20us + 900us every 4 loops
+    mapsens.update();         // manifold air pressure sensor  // 70 us + 2ms every 9 loops
+    maf_gps = massairflow();  // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
     hotrc.update();           // ~100us for all hotrc functions
     hotrc_events(run.mode);   // turn hotrc button events into handler requests depending on the runmode
     if (sim.potmapping(sens::joy)) hotrc.set_pc(HORZ, FILT, pot.mapToRange(steer.pc_to_us(steer.pc[OPMIN]), steer.pc_to_us(steer.pc[OPMAX])));
