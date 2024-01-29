@@ -165,7 +165,6 @@ bool starter_drive = false;             // set by handler only. High when we're 
 bool ignition = LOW;                    // set by handler only. Reflects current state of the signal
 bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
 bool basicmodesw = LOW;
-bool bootbutton = false;
 int starter_request = REQ_NA;
 int ignition_request = REQ_NA;
 int panicstop_request = REQ_ON;         // on powerup we assume the code just rebooted during a drive, because for all we know it could have 

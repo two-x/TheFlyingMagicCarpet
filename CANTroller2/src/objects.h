@@ -17,6 +17,7 @@ static Simulator sim(pot);
 static Hotrc hotrc(&sim);
 static TemperatureSensorManager tempsens(onewire_pin);
 static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
+static MomentaryButton bootbutton(boot_sw_pin);
 static CarBattery mulebatt(mulebatt_pin);
 static PressureSensor pressure(pressure_pin);
 static BrakePositionSensor brkpos(brake_pos_pin);
@@ -148,34 +149,6 @@ void ignition_panic_update() {  // Run once each main loop
     }
     panicstop_request = REQ_NA;
     ignition_request = REQ_NA;  // Make sure this goes after the last comparison
-}
-void bootbutton_update() {
-    do {
-        bootbutton = !digitalRead(boot_sw_pin);   // !value because electrical signal is active low
-    } while (bootbutton != !digitalRead(boot_sw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
-        //     if (!read_pin(_sw_pin)) {  // if encoder sw is being pressed (switch is active low)
-        //         if (!sw) {  // if the press just occurred
-        //             sleep_inactivity_timer.reset();  // evidence of user activity
-        //             _longPressTimer.reset();  // start a press timer
-        //             _timer_active = true;  // flag to indicate timing for a possible long press
-        //         }
-        //         else if (_timer_active && _longPressTimer.expired()) {  // If press time exceeds long press threshold
-        //             _sw_action = swLONG;  // Set flag to handle the long press event. Note, routine handling press should clear this
-        //             _timer_active = false;  // Keeps us from entering this logic again until after next sw release (to prevent repeated long presses)
-        //             _suppress_click = true;  // Prevents the switch release after a long press from causing a short press
-        //         }
-        //         sw = true;  // Remember a press is in effect
-        //     }
-        //     else {  // if encoder sw is not being pressed
-        //         if (sw) {
-        //             sleep_inactivity_timer.reset();  // evidence of user activity
-        //             if(!_suppress_click) _sw_action = swSHORT;  // if the switch was just released, a short press occurred, which must be handled
-        //         }
-        //         _timer_active = false;  // Allows detection of next long press event
-        //         sw = false;  // Remember press is not in effect
-        //         _suppress_click = false;  // End click suppression
-        //     }
-        // }
 }
 void basicsw_update() {
     if (!sim.simulating(sens::basicsw)) {  // Basic Mode switch

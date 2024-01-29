@@ -45,15 +45,24 @@ class MomentaryButton {
     //  ---- tunable ----
     Timer _longPressTimer = Timer(375000);  // Used to time long button presses
   public:
-    uint8_t _sw_pin;
-    bool sw = false;  // Remember whether switch is being pressed
+    int _sw_pin = -1;
+    bool now = false;  // Remember whether switch is being pressed
     MomentaryButton() {}
+    MomentaryButton(int pin) : _sw_pin(pin) {}
+    void set_pin(int pin) {
+        _sw_pin = pin;
+    }
     void update() {
         // Read and interpret encoder switch activity. Encoder rotation is handled in interrupt routine
         // Encoder handler routines should act whenever encoder_sw_action is swSHORT or swLONG, setting it back to
         // swNONE once handled. When handling press, if encoder_long_clicked is nonzero then press is a long press
-        if (!read_pin(_sw_pin)) {  // if encoder sw is being pressed (switch is active low)
-            if (!sw) {  // if the press just occurred
+        bool myread = now;
+        do {
+            myread = digitalRead(_sw_pin);   // !value because electrical signal is active low
+        } while (myread != digitalRead(_sw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+
+        if (!myread) {  // if encoder sw is being pressed (switch is active low)
+            if (!now) {  // if the press just occurred
                 sleep_inactivity_timer.reset();  // evidence of user activity
                 _longPressTimer.reset();  // start a press timer
                 _timer_active = true;  // flag to indicate timing for a possible long press
@@ -63,20 +72,20 @@ class MomentaryButton {
                 _timer_active = false;  // Keeps us from entering this logic again until after next sw release (to prevent repeated long presses)
                 _suppress_click = true;  // Prevents the switch release after a long press from causing a short press
             }
-            sw = true;  // Remember a press is in effect
+            now = true;  // Remember a press is in effect
         }
         else {  // if encoder sw is not being pressed
-            if (sw) {
+            if (now) {
                 sleep_inactivity_timer.reset();  // evidence of user activity
                 if(!_suppress_click) _sw_action = swSHORT;  // if the switch was just released, a short press occurred, which must be handled
             }
             _timer_active = false;  // Allows detection of next long press event
-            sw = false;  // Remember press is not in effect
+            now = false;  // Remember press is not in effect
             _suppress_click = false;  // End click suppression
         }
     }
     bool pressed() {
-        return sw;
+        return now;
     }
     uint32_t press_event(bool autoreset = true) {
         uint32_t ret = _sw_action;
@@ -96,8 +105,9 @@ class MomentaryButton {
         if (ret) _sw_action = swNONE;
         return ret;
     }
-    void setup() {
-        set_pin(_sw_pin, INPUT_PULLUP);
+    void setup(int pin = -1) {
+        if (pin != -1) _sw_pin = pin;
+        pinMode(_sw_pin, INPUT_PULLUP);
     }
     void setLongPressTimer(uint32_t t){
         _longPressTimer.set(t);
@@ -118,8 +128,7 @@ class Encoder {
         volatile uint32_t _spinrate_isr_us = 100000;  // Time elapsed between last two detents
         volatile int32_t _bounce_danger = ENC_B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
         volatile int32_t _delta = 0;  // Keeps track of un-handled rotary clicks of the encoder.  Positive for CW clicks, Negative for CCW. 
-        uint8_t _a_pin;
-        uint8_t _b_pin;
+        int _a_pin, _b_pin, _sw_pin;
         int32_t _state = 0;
         uint32_t _spinrate_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
         Timer _spinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
@@ -149,8 +158,8 @@ class Encoder {
         MomentaryButton button;
         bool enc_a = 1;  // if initializing to 0 sets us up right after a reboot with a bit of a hair trigger which turns left at the slightest touch
         bool enc_b;
-        Encoder(uint8_t a, uint8_t b, uint8_t sw) : _a_pin(a), _b_pin(b) {
-            button._sw_pin = sw;
+        Encoder(int a, int b, int sw) : _a_pin(a), _b_pin(b), _sw_pin(sw) {
+            button.setup(_sw_pin);
         }
         Encoder() = delete; // must be instantiated with pins
         
