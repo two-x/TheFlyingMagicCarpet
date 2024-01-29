@@ -1,6 +1,51 @@
 #pragma once
 #include <Arduino.h>
 // #define CONFIG_IDF_TARGET_ESP32
+// #define BLK  0x0000  // greyscale: full black (RGB elements off)
+#define HGRY 0x2104  // greyscale: hella dark grey
+#define DGRY 0x39c7  // greyscale: very dark grey
+#define GRY1 0x8410  // greyscale: dark grey  (10000)(100 000)(10000) = 84 10
+#define GRY2 0xc618  // greyscale: light grey  (11000)(110 000)(11000) = C6 18
+#define LGRY 0xd6ba  // greyscale: very light grey
+#define WHT  0xffff  // greyscale: full white (RGB elements full on)
+#define RED  0xf800  // primary red (R element full on)
+#define YEL  0xffe0  // Secondary yellow (RG elements full on)
+#define GRN  0x07e0  // primary green (G element full on)
+#define CYN  0x07ff  // secondary cyan (GB elements full on)  (00000)(111 111)(11111) = 07 ff
+#define BLU  0x001f  // primary blue (B element full on)
+#define MGT  0xf81f  // secondary magenta (RB elements full on)
+#define DRED 0xb000  // dark red
+#define BORG 0xfa00  // blood orange (very reddish orange)
+#define BRN  0xfa40  // dark orange aka brown
+#define ORG  0xfca0  // 
+#define LYEL 0xfff8  // 
+#define GGRN 0x5cac  // a low saturation greyish pastel green
+#define TEAL 0x07f9  // this teal is barely distinguishable from cyan
+#define STBL 0x767d  // steel blue is desaturated light blue
+#define DCYN 0x0575  // dark cyan
+#define RBLU 0x043f  // royal blue
+#define MBLU 0x009f  // midnight blue
+#define INDG 0x601f  // indigo (deep blue with a hint of purple)
+#define ORCD 0xb81f  // orchid (lighter and less saturated purple)
+#define PUR  0x881f  // 
+#define GPUR 0x8c15  // a low saturation greyish pastel purple
+#define LPUR 0xc59f  // a light pastel purple
+#define PNK  0xfcf3  // pink is the best color
+#define DPNK 0xfa8a  // we need all shades of pink
+#define LPNK 0xfe18  // especially light pink, the champagne of pinks
+static constexpr int simgriddir[4][3] = {
+    { JOY_PLUS,  JOY_PLUS,  JOY_PLUS,  },
+    { JOY_MINUS, JOY_MINUS, JOY_MINUS, },
+    { JOY_PLUS,  JOY_UP,    JOY_RT,    },
+    { JOY_MINUS, JOY_DN,    JOY_LT,    },
+};
+static constexpr char simgrid[4][3][4] = {
+    { "psi", "rpm", "mph" },
+    { "psi", "rpm", "mph" },
+    { "pos", "   ", "   " },
+    { "pos", "   ", "   " },
+};  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
+
 volatile bool _is_running;
 // volatile std::uint32_t _draw_count;
 volatile std::uint32_t _loop_count;
@@ -537,19 +582,21 @@ class AnimationManager {
     FlexPanel* panel;
     EraserSaver eSaver;
     CollisionsSaver cSaver;
+    Simulator* sim;
     // Timer saverRefreshTimer = Timer(16666);
     Timer fps_timer;
     float myfps = 0.0;
     int64_t fps_mark;
-    bool screensaver_last = false;
+    bool screensaver_last = false, simulating_last = false;
     void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
         ++nowsaver %= NumSaverMenu;
         reset();
     }
   public:
     AnimationManager() {}
-    void init(FlexPanel* _panel) {
+    void init(FlexPanel* _panel, Simulator* _sim) {
         panel = _panel;
+        sim = _sim;
     }
     void setup() {
         // int flip = panel->setflip(true);
@@ -565,6 +612,49 @@ class AnimationManager {
     //     // if (!is_drawing) is_pushing = false;
     //     panel->diffpush(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
     // }
+    void draw_reticle(LGFX_Sprite* spr, uint32_t x, uint32_t y) {
+        spr->drawFastHLine(x - 2, y, 5, DGRY);
+        spr->drawFastVLine(x, y - 2, 5, DGRY);
+    }
+    void draw_reticles(LGFX_Sprite* spr) {
+        if (touch_reticles) {
+            draw_reticle(spr, disp_width_pix-touch_reticle_offset, touch_reticle_offset);
+            draw_reticle(spr, touch_reticle_offset, touch_reticle_offset);
+            draw_reticle(spr, touch_reticle_offset, disp_height_pix-touch_reticle_offset);
+            draw_reticle(spr, disp_width_pix-touch_reticle_offset, disp_height_pix-touch_reticle_offset);
+        }
+    }
+    void draw_simbutton(LGFX_Sprite* spr, int cntr_x, int cntr_y, int dir, uint16_t color) {
+        if      (dir == JOY_PLUS)  spr->pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_plus_40, TFT_BLACK);
+        else if (dir == JOY_MINUS) spr->pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_minus_40, TFT_BLACK);
+        else if (dir == JOY_UP)    spr->pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_up_40, TFT_BLACK);
+        else if (dir == JOY_DN)    spr->pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_down_40, TFT_BLACK);
+        else if (dir == JOY_LT)    spr->pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_left_40, TFT_BLACK);
+        else if (dir == JOY_RT)    spr->pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_right_40, TFT_BLACK);
+    }
+    void draw_simbuttons (LGFX_Sprite* spr, bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
+        if (!create) {
+            spr->fillSprite(TFT_BLACK);
+            return;
+        }
+        spr->setTextDatum(textdatum_t::middle_center);
+        spr->setTextColor(LYEL);
+        spr->setFont(&fonts::Font2);
+        for (int32_t row = 0; row < arraysize(simgrid); row++) {
+            for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
+                int32_t cntr_x = touch_cell_h_pix*col + (touch_cell_h_pix>>1) +2;
+                int32_t cntr_y = touch_cell_v_pix*row + (touch_cell_v_pix>>1);
+                if (strcmp(simgrid[row][col], "    ")) {
+                    draw_simbutton(spr, cntr_x + 2, cntr_y - 1, simgriddir[row][col], LYEL);  // for 3d look
+                    draw_simbutton(spr, cntr_x, cntr_y, simgriddir[row][col], DGRY);
+                    if (row % 2) spr->drawString(simgrid[row][col], cntr_x, cntr_y - touch_cell_v_pix/2);
+                }
+            }     
+        }
+        draw_reticles(spr);
+        spr->setTextDatum(textdatum_t::top_left);
+        spr->setFont(&fonts::Font0);
+    }
     void calc_fps() {
         int64_t now = fps_timer.elapsed();
         myfps = (float)(now - fps_mark);
@@ -583,6 +673,16 @@ class AnimationManager {
         }
         else if (nowsaver == Collisions) still_running = cSaver.update(nowspr_ptr);
         if (!still_running) change_saver();
+        if (sim->enabled()) {
+            draw_simbuttons(nowspr_ptr, sim->enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
+            simulating_last = sim->enabled();
+        }
+        // if (disp_simbuttons_dirty || sim->enabled()) {
+        //     draw_simbuttons(sim->enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
+        //     disp_simbuttons_dirty = false;
+        //     simulating_last = sim->enabled();
+        //     _procrastinate = true;
+        // }
         calc_fps();
         return myfps;
     }

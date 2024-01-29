@@ -6,7 +6,7 @@
 static NeopixelStrip neo(neopixel_pin);
 static IdiotLights idiots;
 static Touchscreen touch;
-static Display screen(&neo, &touch, &idiots);
+static Display screen(&neo, &touch, &idiots, &sim);
 static Tuner tuner(&neo, &touch);
 static SdCard sdcard(screen.get_tft());
 static RunModeManager run(&screen, &encoder);

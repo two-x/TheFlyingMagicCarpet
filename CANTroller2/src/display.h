@@ -1,47 +1,14 @@
 #pragma once
+#define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
+#define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
 // #include "tft.h"
 #include "lgfx.h"
 #include "neopixel.h"
 #include "touch.h"
 #include "images.h"
 #include "animations.h"
-// #define BLK  0x0000  // greyscale: full black (RGB elements off)
-#define HGRY 0x2104  // greyscale: hella dark grey
-#define DGRY 0x39c7  // greyscale: very dark grey
-#define GRY1 0x8410  // greyscale: dark grey  (10000)(100 000)(10000) = 84 10
-#define GRY2 0xc618  // greyscale: light grey  (11000)(110 000)(11000) = C6 18
-#define LGRY 0xd6ba  // greyscale: very light grey
-#define WHT  0xffff  // greyscale: full white (RGB elements full on)
-#define RED  0xf800  // primary red (R element full on)
-#define YEL  0xffe0  // Secondary yellow (RG elements full on)
-#define GRN  0x07e0  // primary green (G element full on)
-#define CYN  0x07ff  // secondary cyan (GB elements full on)  (00000)(111 111)(11111) = 07 ff
-#define BLU  0x001f  // primary blue (B element full on)
-#define MGT  0xf81f  // secondary magenta (RB elements full on)
-#define DRED 0xb000  // dark red
-#define BORG 0xfa00  // blood orange (very reddish orange)
-#define BRN  0xfa40  // dark orange aka brown
-#define ORG  0xfca0  // 
-#define LYEL 0xfff8  // 
-#define GGRN 0x5cac  // a low saturation greyish pastel green
-#define TEAL 0x07f9  // this teal is barely distinguishable from cyan
-#define STBL 0x767d  // steel blue is desaturated light blue
-#define DCYN 0x0575  // dark cyan
-#define RBLU 0x043f  // royal blue
-#define MBLU 0x009f  // midnight blue
-#define INDG 0x601f  // indigo (deep blue with a hint of purple)
-#define ORCD 0xb81f  // orchid (lighter and less saturated purple)
-#define PUR  0x881f  // 
-#define GPUR 0x8c15  // a low saturation greyish pastel purple
-#define LPUR 0xc59f  // a light pastel purple
-#define PNK  0xfcf3  // pink is the best color
-#define DPNK 0xfa8a  // we need all shades of pink
-#define LPNK 0xfe18  // especially light pink, the champagne of pinks
-
 // #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
 // #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
-#define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
-#define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
 #define disp_vshift_pix 2  // Unknown.  Note: At smallest text size, characters are 5x7 pix + pad on rt and bot for 6x8 pix.
 #define disp_runmode_text_x 8
 int32_t colorcard[NUM_RUNMODES] = { MGT, WHT, RED, ORG, YEL, GRN, TEAL, PUR };
@@ -239,18 +206,6 @@ static constexpr uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where un
     { 0x3d, 0x00, 0x3e, 0x02, 0x3c, 0x00, 0x7f, 0x00, 0x7e, 0x22, 0x1c, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x3d, },  // inches or psi "in|psi"
 };  // These bitmaps are in the same format as the idiot light bitmaps, described below
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
-static constexpr int simgriddir[4][3] = {
-    { JOY_PLUS,  JOY_PLUS,  JOY_PLUS,  },
-    { JOY_MINUS, JOY_MINUS, JOY_MINUS, },
-    { JOY_PLUS,  JOY_UP,    JOY_RT,    },
-    { JOY_MINUS, JOY_DN,    JOY_LT,    },
-};
-static constexpr char simgrid[4][3][4] = {
-    { "psi", "rpm", "mph" },
-    { "psi", "rpm", "mph" },
-    { "pos", "   ", "   " },
-    { "pos", "   ", "   " },
-};  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 class TunerPanel {
   public:
     TunerPanel() {};
@@ -271,7 +226,7 @@ volatile int32_t idleclock;
 #ifdef VIDEO_TASKS
 static void push_task(void *parameter) {
     while (true) {
-        while (!screensaver  || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh))  // taskYIELD(); || sim.enabled()
+        while (!(screensaver || sim.enabled()) || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh))  // taskYIELD(); || sim.enabled()
             vTaskDelay(pdMS_TO_TICKS(1));
         screenRefreshTimer.reset();
         is_pushing = true;
@@ -284,10 +239,11 @@ static void push_task(void *parameter) {
 }
 static void draw_task(void *parameter) {
     while (true) {
-        while (!screensaver || pushtime) vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
+        while (!(screensaver || sim.enabled()) || pushtime) vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
         is_drawing = true;
         int32_t mark = (int32_t)screenRefreshTimer.elapsed();
-        fps = animations.update();
+        if (screensaver) fps = animations.update();
+        // if (sim.enabled()) draw_simbuttons();
         drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
         idleclock = refresh_limit - pushclock - drawclock;
         is_drawing = false;  // pushed = false;
@@ -316,6 +272,7 @@ class Display {
     LGFX _tft = LGFX();
     NeopixelStrip* neo;
     Touchscreen* touch;
+    Simulator* sim;
     TunerPanel tuner;
     IdiotLights* idiots;
     Timer valuesRefreshTimer = Timer(160000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
@@ -328,14 +285,14 @@ class Display {
   public:
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
-    Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots)
-        : _tft(), neo(_neo), touch(_touch), idiots(_idiots) {
+    Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim)
+        : _tft(), neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {
         flexpanel.init(&_tft, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
-        animations.init(&flexpanel);
+        animations.init(&flexpanel, sim);
     }
-    Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots) 
-        : _tft(), neo(_neo), touch(_touch), idiots(_idiots) {
-        Display(_neo, _touch, _idiots);
+    Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim) 
+        : _tft(), neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {
+        Display(_neo, _touch, _idiots, _sim);
     }
     LGFX* get_tft() {
         return &_tft;
@@ -351,8 +308,8 @@ class Display {
         // TaskHandle_t drawTaskHandle = nullptr;
         // xTaskCreateUniversal([](void*) {
         //     while(true) {
-        //         while (!screensaver || sim.enabled() || pushtime) taskYIELD();
-        //         // if (screensaver && !sim.enabled() && !pushtime)
+        //         while (!screensaver || sim->enabled() || pushtime) taskYIELD();
+        //         // if (screensaver && !sim->enabled() && !pushtime)
         //         draw_task();
         //         // delayMicroseconds(25); // allow for wifi etc
         //     }
@@ -361,8 +318,8 @@ class Display {
         // TaskHandle_t pushTaskHandle = nullptr;
         // xTaskCreateUniversal([](void*) {
         //     while(true) {
-        //         while (!screensaver || sim.enabled() || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh))
-        //         // if (screensaver && !sim.enabled() && pushtime && (screenRefreshTimer.expired() || screensaver_max_refresh)) {
+        //         while (!screensaver || sim->enabled() || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh))
+        //         // if (screensaver && !sim->enabled() && pushtime && (screenRefreshTimer.expired() || screensaver_max_refresh)) {
         //             taskYIELD();
         //         screenRefreshTimer.reset();
         //         push_task();
@@ -701,37 +658,6 @@ class Display {
             disp_bool_values[col-2] = value;
         }
     }
-    void draw_simbutton(int cntr_x, int cntr_y, int dir, uint16_t color) {
-        if      (dir == JOY_PLUS)  _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_plus_40, TFT_BLACK);
-        else if (dir == JOY_MINUS) _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_minus_40, TFT_BLACK);
-        else if (dir == JOY_UP)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_up_40, TFT_BLACK);
-        else if (dir == JOY_DN)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_down_40, TFT_BLACK);
-        else if (dir == JOY_LT)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_left_40, TFT_BLACK);
-        else if (dir == JOY_RT)    _tft.pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_right_40, TFT_BLACK);
-    }
-    void draw_simbuttons (bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
-        if (!create) {
-            _tft.fillRect(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h, TFT_BLACK);
-            return;
-        }
-        _tft.setTextDatum(textdatum_t::middle_center);
-        _tft.setTextColor(LYEL);
-        _tft.setFont(&fonts::Font2);
-        for (int32_t row = 0; row < arraysize(simgrid); row++) {
-            for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
-                int32_t cntr_x = touch_margin_h_pix + touch_cell_h_pix*(col+3) + (touch_cell_h_pix>>1) +2;
-                int32_t cntr_y = touch_cell_v_pix*(row+1) + (touch_cell_v_pix>>1);
-                if (strcmp(simgrid[row][col], ______)) {
-                    draw_simbutton(cntr_x + 2, cntr_y - 1, simgriddir[row][col], LYEL);  // for 3d look
-                    draw_simbutton(cntr_x, cntr_y, simgriddir[row][col], DGRY);
-                    if (row % 2) _tft.drawString(simgrid[row][col], cntr_x, cntr_y - touch_cell_v_pix/2);
-                }
-            }     
-        }
-        draw_reticles();
-        _tft.setTextDatum(textdatum_t::top_left);
-        _tft.setFont(&fonts::Font0);
-    }
     void draw_touchgrid(bool side_only) {  // draws edge buttons with names in 'em. If replace_names, just updates names
         int32_t namelen = 0;
         _tft.setTextColor(WHT);
@@ -752,18 +678,6 @@ class Display {
                 _tft.fillRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
                 _tft.drawRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // _tft.width()-9, 3, 18, (_tft.height()/5)-6, 8, LYEL);
             }
-        }
-    }
-    void draw_reticle(uint32_t x, uint32_t y) {
-        _tft.drawFastHLine(x - 2, y, 5, DGRY);
-        _tft.drawFastVLine(x, y - 2, 5, DGRY);
-    }
-    void draw_reticles() {
-        if (touch_reticles) {
-            draw_reticle(disp_width_pix-touch_reticle_offset, touch_reticle_offset);
-            draw_reticle(touch_reticle_offset, touch_reticle_offset);
-            draw_reticle(touch_reticle_offset, disp_height_pix-touch_reticle_offset);
-            draw_reticle(disp_width_pix-touch_reticle_offset, disp_height_pix-touch_reticle_offset);
         }
     }
     void draw_idiotbitmap(int i, int32_t x, int32_t y) {
@@ -835,12 +749,6 @@ class Display {
             draw_runmode(_nowmode, disp_oldmode, -1);
             disp_oldmode = _nowmode;
             disp_runmode_dirty = false;
-        }
-        if (disp_simbuttons_dirty || (sim.enabled() != simulating_last)) {
-            draw_simbuttons(sim.enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
-            disp_simbuttons_dirty = false;
-            simulating_last = sim.enabled();
-            _procrastinate = true;
         }
         if (valuesRefreshTimer.expireset()) {
             float drange;
@@ -967,15 +875,15 @@ class Display {
                 draw_truth(19, dont_take_temperatures, 2);
             }
             else if (datapage == PG_SIM) {
-                draw_truth(9, sim.can_sim(sens::joy), 0);
-                draw_truth(10, sim.can_sim(sens::pressure), 0);
-                draw_truth(11, sim.can_sim(sens::brkpos), 0);
-                draw_truth(12, sim.can_sim(sens::speedo), 0);
-                draw_truth(13, sim.can_sim(sens::tach), 0);
-                draw_truth(14, sim.can_sim(sens::airvelo), 0);
-                draw_truth(15, sim.can_sim(sens::mapsens), 0);
-                draw_truth(16, sim.can_sim(sens::basicsw), 0);                    
-                draw_asciiname(17, sensorcard[sim.potmap()]);
+                draw_truth(9, sim->can_sim(sens::joy), 0);
+                draw_truth(10, sim->can_sim(sens::pressure), 0);
+                draw_truth(11, sim->can_sim(sens::brkpos), 0);
+                draw_truth(12, sim->can_sim(sens::speedo), 0);
+                draw_truth(13, sim->can_sim(sens::tach), 0);
+                draw_truth(14, sim->can_sim(sens::airvelo), 0);
+                draw_truth(15, sim->can_sim(sens::mapsens), 0);
+                draw_truth(16, sim->can_sim(sens::basicsw), 0);                    
+                draw_asciiname(17, sensorcard[sim->potmap()]);
                 draw_truth(18, cal_brakemode, 0);
                 draw_truth(19, cal_gasmode, 0);
             }
@@ -1001,7 +909,7 @@ class Display {
         }
         _tft.endWrite();
         #ifndef VIDEO_TASKS
-        if (!sim.enabled() && !_procrastinate && screensaver && !is_pushing && !is_drawing) {
+        if (!_procrastinate && screensaver && !is_pushing && !is_drawing) {  // !sim->enabled() && 
             if (!pushtime) draw_task();
             else if (screenRefreshTimer.expired() || screensaver_max_refresh) { // taskYIELD(); 
                 screenRefreshTimer.reset();
