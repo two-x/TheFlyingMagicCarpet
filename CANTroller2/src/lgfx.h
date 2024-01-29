@@ -74,7 +74,24 @@ class LGFX : public lgfx::LGFX_Device {
             // cfg.memory_height =   320;  // Maximum height supported by driver IC
             _panel_instance.config(cfg);
         }
-        {  // Configure touch screen control settings. (Delete if unnecessary)
+        if (captouch) {  // Configure touch screen control settings. (Delete if unnecessary)
+            auto cfg = _cap_touch_instance.config();
+            cfg.x_min      = 0;       // Minimum X value obtained from touch screen (raw value)
+            cfg.x_max      = 239;     // Maximum X value obtained from touch screen (raw value)
+            cfg.y_min      = 0;       // Minimum Y value obtained from touch screen (raw value)
+            cfg.y_max      = 319;     // Maximum Y value obtained from touch screen (raw value)
+            // cfg.pin_int    = touch_irq_pin;      // INT pin number
+            cfg.offset_rotation = 2;  // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
+            cfg.bus_shared = true;   // Set true if using the same bus as the screen
+            cfg.i2c_port   = 0;       // Select I2C to use (0 or 1)
+            cfg.i2c_addr   = 0x38;    // I2C device address number
+            cfg.pin_sda    = i2c_sda_pin;       // SDA pin number
+            cfg.pin_scl    = i2c_scl_pin;       // SCL pin number
+            cfg.freq       = 400000;  // Set I2C clock
+            _cap_touch_instance.config(cfg);
+            _panel_instance.setTouch(&_cap_touch_instance);  // Place the touch screen on the panel
+        }
+        else {  // resistive touch instead
             auto cfg = _res_touch_instance.config();
             cfg.x_min      = 0;       // Minimum X value obtained from touch screen (raw value)
             cfg.x_max      = 239;     // Maximum X value obtained from touch screen (raw value)
@@ -94,22 +111,7 @@ class LGFX : public lgfx::LGFX_Device {
             // cfg.pin_miso = 13;        // MISO pin number
             // cfg.pin_cs   = 47;        //   CS pin number
             _res_touch_instance.config(cfg);
-        }
-        {  // Configure touch screen control settings. (Delete if unnecessary)
-            auto cfg = _cap_touch_instance.config();
-            cfg.x_min      = 0;       // Minimum X value obtained from touch screen (raw value)
-            cfg.x_max      = 239;     // Maximum X value obtained from touch screen (raw value)
-            cfg.y_min      = 0;       // Minimum Y value obtained from touch screen (raw value)
-            cfg.y_max      = 319;     // Maximum Y value obtained from touch screen (raw value)
-            // cfg.pin_int    = touch_irq_pin;      // INT pin number
-            cfg.offset_rotation = 2;  // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
-            cfg.bus_shared = true;   // Set true if using the same bus as the screen
-            cfg.i2c_port   = 0;       // Select I2C to use (0 or 1)
-            cfg.i2c_addr   = 0x38;    // I2C device address number
-            cfg.pin_sda    = i2c_sda_pin;       // SDA pin number
-            cfg.pin_scl    = i2c_scl_pin;       // SCL pin number
-            cfg.freq       = 400000;  // Set I2C clock
-            _cap_touch_instance.config(cfg);
+            _panel_instance.setTouch(&_res_touch_instance);  // Place the touch screen on the panel.
         }
         // {  // Configure backlight control settings. (Delete if unnecessary)
         //     auto cfg = _light_instance.config();    // Gets the structure for backlight settings.
@@ -120,10 +122,6 @@ class LGFX : public lgfx::LGFX_Device {
         //     _light_instance.config(cfg);
         //     _panel_instance.setLight(&_light_instance);  // Set the backlight on the panel.
         // }
-    }
-    void touch_init() {  // This must be run first thing after instantiation, but after we have detected captouch 
-        if (captouch) _panel_instance.setTouch(&_cap_touch_instance);  // Place the touch screen on the panel.
-        else _panel_instance.setTouch(&_res_touch_instance);  // Place the touch screen on the panel.
         setPanel(&_panel_instance);        // Set the panel to be used.
     }
 };

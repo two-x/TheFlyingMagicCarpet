@@ -40,7 +40,7 @@ class Touchscreen {
         disp_size[HORZ] = width;
         disp_size[VERT] = height;
         captouch = (i2c->detected(i2c_touch));
-        _tft->touch_init();  // this points touch object to resistive or capacitive driver instance based on captouch
+        // _tft->touch_init();  // this points touch object to resistive or capacitive driver instance based on captouch
         Serial.printf("Touchscreen.. %s panel\n", (captouch) ? "detected captouch" : "using resistive");
     }
     bool touched() { return nowtouch; }
