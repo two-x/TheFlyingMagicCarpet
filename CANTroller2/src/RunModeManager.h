@@ -125,7 +125,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             sleep_request = REQ_NA;
             powering_up = false;
         }
-        if (encoder->pressed() || sleep_request == REQ_OFF || sleep_request == REQ_TOG) {
+        if (encoder->button.pressed() || sleep_request == REQ_OFF || sleep_request == REQ_TOG) {
             set_syspower(HIGH);
             sleep_request = REQ_NA;
             pwrup_timer.set(pwrup_timeout);

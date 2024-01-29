@@ -271,7 +271,7 @@ volatile int32_t idleclock;
 #ifdef VIDEO_TASKS
 static void push_task(void *parameter) {
     while (true) {
-        while (!screensaver || sim.enabled() || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh))  // taskYIELD(); 
+        while (!screensaver  || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh))  // taskYIELD(); || sim.enabled()
             vTaskDelay(pdMS_TO_TICKS(1));
         screenRefreshTimer.reset();
         is_pushing = true;
@@ -284,7 +284,7 @@ static void push_task(void *parameter) {
 }
 static void draw_task(void *parameter) {
     while (true) {
-        while (!screensaver || sim.enabled() || pushtime) vTaskDelay(pdMS_TO_TICKS(1));
+        while (!screensaver || pushtime) vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
         is_drawing = true;
         int32_t mark = (int32_t)screenRefreshTimer.elapsed();
         fps = animations.update();
@@ -1036,9 +1036,9 @@ class Tuner {
         sel_val_last = sel_val;
         datapage_last = datapage;
         tunctrl_last = tunctrl; // Make sure this goes after the last comparison
-        uint32_t encoder_sw_action = encoder.press_event();  // true = autoreset the event if there is one
-        if (encoder_sw_action != Encoder::NONE) {  // First deal with any unhandled switch press events
-            if (encoder_sw_action == Encoder::SHORT)  {  // if short press
+        uint32_t encoder_sw_action = encoder.button.press_event();  // true = autoreset the event if there is one
+        if (encoder_sw_action != swNONE) {  // First deal with any unhandled switch press events
+            if (encoder_sw_action == swSHORT)  {  // if short press
                 if (tunctrl == EDIT) tunctrl = SELECT;  // If we were editing a value drop back to select mode
                 else if (tunctrl == SELECT) tunctrl = EDIT;  // If we were selecting a variable start editing its value
                 else if (button_test_heartbeat_color) heartbeat_override_color = random(0x10000);  // temporary!! to test heartbeat color override feature
