@@ -176,6 +176,7 @@ bool nowtouch = false;
 bool captouch = true;
 float loop_avg_us;
 bool sensidiots[11];
+// bool sensor_present[telemetry_full];
 
 // fast macros
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // a macro function to determine the length of string arrays

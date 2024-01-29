@@ -56,14 +56,14 @@ class I2C {
         return _detected[device];
     }
     void pass_i2c_baton() {
-        // printf("p b:%d", i2cbaton);
+        // printf("%d->", i2cbaton);
         if (i2cbaton == i2c_airvelo || i2cbaton == i2c_map) i2cbaton = (captouch) ? i2c_touch : i2c_lightbox; 
         else if (i2cbaton == i2c_touch) i2cbaton = i2c_lightbox;
         else if (i2cbaton == i2c_lightbox) {
             i2cbaton = (lastsens == i2c_airvelo) ? i2c_map : i2c_airvelo;
             lastsens = i2cbaton;
         }
-        // printf(" -> b:%d\n", i2cbaton);
+        printf("\r%d", i2cbaton);
     }
     bool not_my_turn(int checkdev) {
         bool retval = (use_i2c_baton && (checkdev != i2cbaton));
