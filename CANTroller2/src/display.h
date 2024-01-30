@@ -118,11 +118,6 @@ class IdiotLights {
         }
     }
 };
-#define touch_simbutton 38
-#define disp_simbuttons_x 164
-#define disp_simbuttons_y 48
-#define disp_simbuttons_w (disp_width_pix - disp_simbuttons_x)
-#define disp_simbuttons_h (disp_height_pix - disp_simbuttons_y)
 // class SimPanel {};
 // class DataPage {};
 #define disp_lines 20  // Max lines of text displayable at line height = disp_line_height_pix
@@ -257,7 +252,6 @@ void push_task() {
     flip = !flip;
     is_pushing = pushtime = false;  // drawn = 
 }
-#endif
 void draw_task() {
     is_drawing = true;
     int32_t mark = (int32_t)screenRefreshTimer.elapsed();
@@ -267,6 +261,7 @@ void draw_task() {
     is_drawing = false;  // pushed = false;
     pushtime = true;
 }
+#endif
 class Display {
   private:
     LGFX _tft = LGFX();
@@ -680,6 +675,18 @@ class Display {
             }
         }
     }
+    void draw_reticle(LGFX_Sprite* spr, uint32_t x, uint32_t y) {
+        spr->drawFastHLine(x - 2, y, 5, DGRY);
+        spr->drawFastVLine(x, y - 2, 5, DGRY);
+    }
+    void draw_reticles(LGFX_Sprite* spr) {
+        if (touch_reticles) {
+            draw_reticle(spr, disp_width_pix-touch_reticle_offset, touch_reticle_offset);
+            draw_reticle(spr, touch_reticle_offset, touch_reticle_offset);
+            draw_reticle(spr, touch_reticle_offset, disp_height_pix-touch_reticle_offset);
+            draw_reticle(spr, disp_width_pix-touch_reticle_offset, disp_height_pix-touch_reticle_offset);
+        }
+    }
     void draw_idiotbitmap(int i, int32_t x, int32_t y) {
         uint16_t bg = idiots->val(i) ? idiots->color[i] : TFT_BLACK;
         uint16_t color = idiots->val(i) ? TFT_BLACK : darken_color(idiots->color[i]);
@@ -909,7 +916,7 @@ class Display {
         }
         _tft.endWrite();
         #ifndef VIDEO_TASKS
-        if (!_procrastinate && screensaver && !is_pushing && !is_drawing) {  // !sim->enabled() && 
+        if (!_procrastinate && !is_pushing && !is_drawing) {  // && (sim->enabled() || screensaver)
             if (!pushtime) draw_task();
             else if (screenRefreshTimer.expired() || screensaver_max_refresh) { // taskYIELD(); 
                 screenRefreshTimer.reset();

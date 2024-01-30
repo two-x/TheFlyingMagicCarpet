@@ -63,7 +63,7 @@ class I2C {
             i2cbaton = (lastsens == i2c_airvelo) ? i2c_map : i2c_airvelo;
             lastsens = i2cbaton;
         }
-        printf("\r%d", i2cbaton);
+        // printf("\r-%d-", i2cbaton);
     }
     bool not_my_turn(int checkdev) {
         bool retval = (use_i2c_baton && (checkdev != i2cbaton));

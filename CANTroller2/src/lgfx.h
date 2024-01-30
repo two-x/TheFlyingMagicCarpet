@@ -77,9 +77,9 @@ class LGFX : public lgfx::LGFX_Device {
         if (captouch) {  // Configure touch screen control settings. (Delete if unnecessary)
             auto cfg = _cap_touch_instance.config();
             cfg.x_min      = 0;       // Minimum X value obtained from touch screen (raw value)
-            cfg.x_max      = 239;     // Maximum X value obtained from touch screen (raw value)
+            cfg.x_max      = 319;     // Maximum X value obtained from touch screen (raw value)
             cfg.y_min      = 0;       // Minimum Y value obtained from touch screen (raw value)
-            cfg.y_max      = 319;     // Maximum Y value obtained from touch screen (raw value)
+            cfg.y_max      = 239;     // Maximum Y value obtained from touch screen (raw value)
             // cfg.pin_int    = touch_irq_pin;      // INT pin number
             cfg.offset_rotation = 2;  // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
             cfg.bus_shared = true;   // Set true if using the same bus as the screen

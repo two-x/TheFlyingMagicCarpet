@@ -1,6 +1,11 @@
 #pragma once
 #include <Arduino.h>
 // #define CONFIG_IDF_TARGET_ESP32
+#define touch_simbutton 38
+#define disp_simbuttons_x 164
+#define disp_simbuttons_y 48
+#define disp_simbuttons_w (disp_width_pix - disp_simbuttons_x)
+#define disp_simbuttons_h (disp_height_pix - disp_simbuttons_y)
 // #define BLK  0x0000  // greyscale: full black (RGB elements off)
 #define HGRY 0x2104  // greyscale: hella dark grey
 #define DGRY 0x39c7  // greyscale: very dark grey
@@ -448,13 +453,13 @@ class EraserSaver {  // draws colorful patterns to exercise
     //     //     sprite->drawLine(touchlast[HORZ]+i, touchlast[VERT]+i, tp[HORZ]+i, tp[VERT]+i, pencolor);  // savtouch_last_w, w, pencolor, pencolor);
     //     for (int axis = HORZ; axis <= VERT; axis++) touchlast[axis] = tp[axis];
     // }
-    void saver_touch(int x, int y) {  // you can draw colorful lines on the screensaver
+    void saver_touch(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
         if (pentimer.expireset()) {
             pensat += 1.5;
             if (pensat > 255.0) pensat = 100.0;
             pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint16_t>(++penhue, (uint8_t)pensat, 200 + random(56));
         }
-        sprite->fillCircle(x, y, 20, pencolor);
+        spr->fillCircle(x, y, 20, pencolor);
     }
     int update(LGFX_Sprite* _nowspr) {
         sprite = _nowspr;
@@ -579,6 +584,7 @@ class AnimationManager {
     int nowsaver = Eraser, still_running = 0;
     LGFX* mylcd;
     LGFX_Sprite* nowspr_ptr;
+    LGFX_Sprite arrowspr;
     FlexPanel* panel;
     EraserSaver eSaver;
     CollisionsSaver cSaver;
@@ -587,7 +593,7 @@ class AnimationManager {
     Timer fps_timer;
     float myfps = 0.0;
     int64_t fps_mark;
-    bool screensaver_last = false, simulating_last = false;
+    bool screensaver_last = false, simulating_last = false, mule_drawn = false;
     void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
         ++nowsaver %= NumSaverMenu;
         reset();
@@ -612,33 +618,25 @@ class AnimationManager {
     //     // if (!is_drawing) is_pushing = false;
     //     panel->diffpush(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
     // }
-    void draw_reticle(LGFX_Sprite* spr, uint32_t x, uint32_t y) {
-        spr->drawFastHLine(x - 2, y, 5, DGRY);
-        spr->drawFastVLine(x, y - 2, 5, DGRY);
-    }
-    void draw_reticles(LGFX_Sprite* spr) {
-        if (touch_reticles) {
-            draw_reticle(spr, disp_width_pix-touch_reticle_offset, touch_reticle_offset);
-            draw_reticle(spr, touch_reticle_offset, touch_reticle_offset);
-            draw_reticle(spr, touch_reticle_offset, disp_height_pix-touch_reticle_offset);
-            draw_reticle(spr, disp_width_pix-touch_reticle_offset, disp_height_pix-touch_reticle_offset);
-        }
-    }
     void draw_simbutton(LGFX_Sprite* spr, int cntr_x, int cntr_y, int dir, uint16_t color) {
-        if      (dir == JOY_PLUS)  spr->pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_plus_40, TFT_BLACK);
-        else if (dir == JOY_MINUS) spr->pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_minus_40, TFT_BLACK);
-        else if (dir == JOY_UP)    spr->pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_up_40, TFT_BLACK);
-        else if (dir == JOY_DN)    spr->pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_down_40, TFT_BLACK);
-        else if (dir == JOY_LT)    spr->pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_left_40, TFT_BLACK);
-        else if (dir == JOY_RT)    spr->pushImage(cntr_x-20, cntr_y-20, 40, 40, blue_right_40, TFT_BLACK);
+        if (dir == JOY_PLUS)  spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_plus_32, TFT_BLACK);
+        else if (dir == JOY_MINUS) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_minus_32, TFT_BLACK);
+        else if (dir == JOY_UP)    spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_up_32, TFT_BLACK);
+        else if (dir == JOY_DN)    spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 180, 1, 1, 32, 32, blue_up_32, TFT_BLACK);
+        else if (dir == JOY_LT)    spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 270, 1, 1, 32, 32, blue_up_32, TFT_BLACK);
+        else if (dir == JOY_RT)    spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 90, 1, 1, 32, 32, blue_up_32, TFT_BLACK);
+
+    // void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void* data, uint32_t transparent, color_depth_t depth, const T* palette)
+
+
     }
+
     void draw_simbuttons (LGFX_Sprite* spr, bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
         if (!create) {
             spr->fillSprite(TFT_BLACK);
             return;
         }
         spr->setTextDatum(textdatum_t::middle_center);
-        spr->setTextColor(LYEL);
         spr->setFont(&fonts::Font2);
         for (int32_t row = 0; row < arraysize(simgrid); row++) {
             for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
@@ -647,13 +645,22 @@ class AnimationManager {
                 if (strcmp(simgrid[row][col], "    ")) {
                     draw_simbutton(spr, cntr_x + 2, cntr_y - 1, simgriddir[row][col], LYEL);  // for 3d look
                     draw_simbutton(spr, cntr_x, cntr_y, simgriddir[row][col], DGRY);
-                    if (row % 2) spr->drawString(simgrid[row][col], cntr_x, cntr_y - touch_cell_v_pix/2);
+                    // spr->fillRoundRect(cntr_x - 20, cntr_y - touch_cell_v_pix/2 - 10, 40, 20, 5, TFT_DARKGRAY);
+                    // spr->drawRoundRect(cntr_x - 20, cntr_y - touch_cell_v_pix/2 - 10, 40, 20, 5, TFT_BLACK);
+                    if (row % 2) {
+                        spr->setTextColor(TFT_BLACK);
+                        spr->drawString(simgrid[row][col], cntr_x - 1, cntr_y - touch_cell_v_pix/2 - 1);
+                        spr->drawString(simgrid[row][col], cntr_x + 1, cntr_y - touch_cell_v_pix/2 + 1);
+                        spr->setTextColor(LYEL);
+                        spr->drawString(simgrid[row][col], cntr_x, cntr_y - touch_cell_v_pix/2);
+                    }
                 }
             }     
         }
-        draw_reticles(spr);
-        spr->setTextDatum(textdatum_t::top_left);
-        spr->setFont(&fonts::Font0);
+        // draw_reticles(spr);
+        // spr->setTextDatum(textdatum_t::top_left);
+        // spr->setFont(&fonts::Font0);
+        spr->setTextColor(TFT_BLACK);
     }
     void calc_fps() {
         int64_t now = fps_timer.elapsed();
@@ -662,21 +669,35 @@ class AnimationManager {
         fps_mark = now;
     }
     float update() {
+        nowspr_ptr = &flexpanel_sp[flip];
         if (!screensaver_last && screensaver) change_saver();  // ptrsaver->reset();
         screensaver_last = screensaver;
-        if (!screensaver) return NAN;        // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
-        // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
-        nowspr_ptr = &flexpanel_sp[flip];
-        if (nowsaver == Eraser) {
-            still_running = eSaver.update(nowspr_ptr);
-            if (panel->touched()) eSaver.saver_touch(panel->touch_pt(HORZ), panel->touch_pt(VERT));
+        if (screensaver) {        // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
+            mule_drawn = false;
+            // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
+            if (nowsaver == Eraser) {
+                still_running = eSaver.update(nowspr_ptr);
+                if (panel->touched()) eSaver.saver_touch(nowspr_ptr, panel->touch_pt(HORZ), panel->touch_pt(VERT));
+            }
+            else if (nowsaver == Collisions) still_running = cSaver.update(nowspr_ptr);
+            if (!still_running) change_saver();
         }
-        else if (nowsaver == Collisions) still_running = cSaver.update(nowspr_ptr);
-        if (!still_running) change_saver();
+        // else {
+        //     nowspr_ptr->pushImageRotateZoom(0, 50, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74, TFT_BLACK);
+        // }
+        else if (!mule_drawn) {
+            nowspr_ptr->pushImageRotateZoom(85, 85, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74, TFT_BLACK);
+            mule_drawn = true;
+        }
         if (sim->enabled()) {
+            mule_drawn = false;
             draw_simbuttons(nowspr_ptr, sim->enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
-            simulating_last = sim->enabled();
         }
+        else if (simulating_last) {
+            nowspr_ptr->fillSprite(TFT_BLACK);
+            mule_drawn = false;
+        }
+        simulating_last = sim->enabled();
         // if (disp_simbuttons_dirty || sim->enabled()) {
         //     draw_simbuttons(sim->enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
         //     disp_simbuttons_dirty = false;
