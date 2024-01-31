@@ -69,7 +69,7 @@ class FlexPanel {
   public:
     LGFX_Sprite* nowspr;
     LGFX* lcd;
-    int touchp[2];
+    int touchp[2], shifter;
     int corner[2], sprsize[2];
     Touchscreen* _touch;
     // std::size_t flip = 0;
@@ -86,7 +86,7 @@ class FlexPanel {
         lcd->startWrite();
         lcd->setColorDepth(16);
         if (lcd->width() < lcd->height()) lcd->setRotation(lcd->getRotation() ^ 1);
-        for (int i = 0; i <= 1; i++) flexpanel_sp[i].setColorDepth(8);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
+        for (int i = 0; i <= 1; i++) flexpanel_sp[i].setColorDepth(sprite_color_depth);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
         auto framewidth = sprsize[HORZ];
         auto frameheight = sprsize[VERT];
         bool fail = false;
@@ -133,6 +133,7 @@ class FlexPanel {
     //     return flip;
     // }
     void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref) {
+        shifter = sizeof(uint32_t) / sprite_color_depth;
         union {  // source
             std::uint32_t* s32;
             std::uint8_t* s;
@@ -619,12 +620,12 @@ class AnimationManager {
     //     panel->diffpush(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
     // }
     void draw_simbutton(LGFX_Sprite* spr, int cntr_x, int cntr_y, int dir, uint16_t color) {
-        if (dir == JOY_PLUS)  spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_plus_32, TFT_BLACK);
-        else if (dir == JOY_MINUS) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_minus_32, TFT_BLACK);
-        else if (dir == JOY_UP)    spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_up_32, TFT_BLACK);
-        else if (dir == JOY_DN)    spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 180, 1, 1, 32, 32, blue_up_32, TFT_BLACK);
-        else if (dir == JOY_LT)    spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 270, 1, 1, 32, 32, blue_up_32, TFT_BLACK);
-        else if (dir == JOY_RT)    spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 90, 1, 1, 32, 32, blue_up_32, TFT_BLACK);
+        if (dir == JOY_PLUS)  spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_plus_32x32x8, TFT_BLACK);
+        else if (dir == JOY_MINUS) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_minus_32x32x8, TFT_BLACK);
+        else if (dir == JOY_UP) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_up_32x32x8, TFT_BLACK);
+        else if (dir == JOY_DN) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 180, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
+        else if (dir == JOY_LT) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 270, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
+        else if (dir == JOY_RT) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 90, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
 
     // void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void* data, uint32_t transparent, color_depth_t depth, const T* palette)
 
@@ -682,15 +683,12 @@ class AnimationManager {
             else if (nowsaver == Collisions) still_running = cSaver.update(nowspr_ptr);
             if (!still_running) change_saver();
         }
-        // else {
-        //     nowspr_ptr->pushImageRotateZoom(0, 50, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74, TFT_BLACK);
-        // }
         else if (!mule_drawn) {
-            nowspr_ptr->pushImageRotateZoom(85, 85, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74, TFT_BLACK);
+            // nowspr_ptr->fillSprite(TFT_BLACK);
+            nowspr_ptr->pushImageRotateZoom(85, 85, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, TFT_BLACK);
             mule_drawn = true;
         }
         if (sim->enabled()) {
-            mule_drawn = false;
             draw_simbuttons(nowspr_ptr, sim->enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
         }
         else if (simulating_last) {

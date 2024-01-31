@@ -119,6 +119,7 @@ bool wifi_client_mode = false;       // Should wifi be in client or access point
 bool fake_color332 = false;
 
 // global tunable variables
+int sprite_color_depth = 8;
 uint32_t looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. Set to 0 linefeeds all prints
 float flycruise_vert_margin_pc = 0.3;       // Margin of error for determining hard brake value for dropping out of cruise mode
 int cruise_setpoint_mode = THROTTLE_DELTA;
