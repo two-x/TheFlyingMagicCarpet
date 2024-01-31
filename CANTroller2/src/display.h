@@ -285,7 +285,9 @@ class Display {
     static constexpr int idiots_corner_y = 13;
     Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim)
         : _tft(), neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {
-        flexpanel.init(&_tft, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
+        if (fullscreen_screensaver_test)
+            flexpanel.init(&_tft, touch, 0, 0, disp_width_pix, disp_height_pix);
+        else flexpanel.init(&_tft, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
         animations.init(&flexpanel, sim);
     }
     Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim) 
@@ -356,11 +358,13 @@ class Display {
         yield();
         Serial.printf(" ..");  //
         _tft.fillScreen(TFT_BLACK);  // Black out the whole screen
-        Serial.printf(" ..");  //
-        draw_touchgrid(false);
-        draw_fixed(datapage, datapage_last, false);
-        draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
-        all_dirty();
+        if (!fullscreen_screensaver_test) {
+            Serial.printf(" ..");  //
+            draw_touchgrid(false);
+            draw_fixed(datapage, datapage_last, false);
+            draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
+            all_dirty();
+        }
         animations.setup();
         init_tasks();
         Serial.printf(" initialized\n");
@@ -732,7 +736,23 @@ class Display {
         if (display_enabled) draw_idiotlights(idiots_corner_x, idiots_corner_y, force);
     }
   public:
+    void update_flexpanel() {
+        #ifndef VIDEO_TASKS
+        if (!is_pushing && !is_drawing) {  // && (sim->enabled() || screensaver)
+            if (!pushtime) draw_task();
+            else if (screenRefreshTimer.expired() || screensaver_max_refresh || fullscreen_screensaver_test) { // taskYIELD(); 
+                screenRefreshTimer.reset();
+                push_task();
+                pushclock = (int32_t)screenRefreshTimer.elapsed();
+            }
+        }
+        #endif
+    }
     void update(int _nowmode) {
+        if (fullscreen_screensaver_test) {
+            update_flexpanel();
+            return;
+        }
         tiny_text();
         _tft.startWrite();
         update_idiots(disp_idiots_dirty);
@@ -918,18 +938,7 @@ class Display {
             _procrastinate = true;  // don't do anything else in this same loop
         }
         _tft.endWrite();
-        #ifndef VIDEO_TASKS
-        if (!_procrastinate && !is_pushing && !is_drawing) {  // && (sim->enabled() || screensaver)
-            if (!pushtime) draw_task();
-            else if (screenRefreshTimer.expired() || screensaver_max_refresh) { // taskYIELD(); 
-                screenRefreshTimer.reset();
-                push_task();
-                pushclock = (int32_t)screenRefreshTimer.elapsed();
-            }
-        }
-        #endif
-        // if (pushtime) xTaskCreatePinnedToCore(push_task, "taskPush", 8192, NULL, 1, NULL, runOnCore);
-        // else xTaskCreatePinnedToCore(draw_task, "taskDraw", 4096, NULL, 3, NULL, runOnCore);
+        if (!_procrastinate) update_flexpanel();
         _procrastinate = false;
     }
 };

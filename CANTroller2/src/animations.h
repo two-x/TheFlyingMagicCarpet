@@ -4,8 +4,8 @@
 #define touch_simbutton 38
 #define disp_simbuttons_x 164
 #define disp_simbuttons_y 48
-#define disp_simbuttons_w (disp_width_pix - disp_simbuttons_x)
-#define disp_simbuttons_h (disp_height_pix - disp_simbuttons_y)
+#define disp_simbuttons_w (disp_width_pix - disp_simbuttons_x)  // 156
+#define disp_simbuttons_h (disp_height_pix - disp_simbuttons_y)  // 192
 // #define BLK  0x0000  // greyscale: full black (RGB elements off)
 #define HGRY 0x2104  // greyscale: hella dark grey
 #define DGRY 0x39c7  // greyscale: very dark grey
@@ -688,6 +688,10 @@ class AnimationManager {
             nowspr_ptr->pushImageRotateZoom(85, 85, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, TFT_BLACK);
             mule_drawn = true;
         }
+        // if (fullscreen_screensaver_test) {
+        //     nowspr_ptr->setCursor(0,0);
+        //     nowspr_ptr->printf("fps:%03d", myfps);
+        // }
         if (sim->enabled()) {
             draw_simbuttons(nowspr_ptr, sim->enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
         }
