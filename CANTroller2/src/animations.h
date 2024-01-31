@@ -489,7 +489,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 sprite->fillCircle(plast[HORZ], plast[VERT], 3, wc);
                 // sprite->drawCircle(point[HORZ], point[VERT], 3, TFT_BLACK);
                 for (int h=-4; h<=4; h++)
-                    sprite->drawGradientLine(point[HORZ], point[VERT], plast[HORZ] + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wc, wclast);
+                    sprite->drawGradientLine(point[HORZ], point[VERT], plast[HORZ] + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wclast, wc);
                 wclast = wc;
             }
             else if (rotate == Ellipses) {
@@ -736,18 +736,13 @@ class DiagConsole {
 };
 
 #ifdef CONVERT_IMAGE
+#define IMAGE_ARRAY mulechassis_145x74
+#define IMAGE_WIDTH 145
 void convert_565_to_332_image() {
-    uint32_t pixcount = 0;
-    uint8_t nowpix;
-    Serial.printf("const uint8_t mulechassis_145x74x8[%ld] PROGMEM={\n", arraysize(mulechassis_145x74));
-    for (int i=0; i<arraysize(mulechassis_145x74); i++) {
-        nowpix = color_16b_to_8b(mulechassis_145x74[i]);
-        Serial.printf("0x%02x, ", nowpix);
-        pixcount++;
-        if ((pixcount % 145) == 0) {
-            Serial.printf("  // pixel# %ld\n", pixcount);
-            if (pixcount < arraysize(mulechassis_145x74)) Serial.printf("\t");
-        } 
+    Serial.printf("const uint8_t %sx8[%ld] PROGMEM = {\n\t", String(IMAGE_ARRAY).c_str(), arraysize(IMAGE_ARRAY));
+    for (int i=0; i<arraysize(IMAGE_ARRAY); i++) {
+        Serial.printf("0x%02x, ", color_16b_to_8b(IMAGE_ARRAY[i]);
+        if (!(i % IMAGE_WIDTH)) Serial.printf("  // pixel# %ld\n%s", pixcount, (i < arraysize(IMAGE_ARRAY) - 1) ? "\t" : "");
     }
     Serial.printf("};\n");
 }
