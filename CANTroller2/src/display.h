@@ -28,45 +28,6 @@ uint16_t color_uint32_to_16b(uint32_t color32b) {  // Convert uint32 color in fo
 uint16_t color_16b_to_8b(uint16_t color565) {  // Convert uint32 color in format 0x00RRGGBB to uint16 5-6-5 encoded color value suitable for screen
     return (uint8_t)(((color565 & 0xe000) >> 8) | ((color565 & 0x700) >> 6) | ((color565 & 0x18) >> 3));
 }
-
-// void convert_565_to_332_image() {
-//     int pixcount = 0;
-//     uint8_t nowpix;
-//     // Serial.printf("const uint8_t mulechassis_145x74x8[%ld] PROGMEM={\n", arraysize(mulechassis_145x74));
-    // for (int i=0; i<arraysize(mulechassis_145x74); i++) {
-    //     nowpix = color_16b_to_8b(mulechassis_145x74[i]);
-    //     Serial.printf("0x%02x, ", nowpix);
-    //     pixcount++;
-    //     if (pixcount % 32 == 0) Serial.printf("  // pixel# %d\n", pixcount);
-    // }
-    // Serial.printf("\n};\n");
-//     Serial.printf("const uint8_t blue_up_32x32x8[%ld] PROGMEM={\n", arraysize(mulechassis_145x74));
-//     for (int i=0; i<arraysize(blue_up_32); i++) {
-//         nowpix = color_16b_to_8b(blue_up_32[i]);
-//         Serial.printf("0x%02x, ", nowpix);
-//         pixcount++;
-//         if (pixcount % 32 == 0) Serial.printf("  // pixel# %d\n", pixcount);
-//     }
-//     Serial.printf("\n};\n");
-//     Serial.printf("const uint8_t blue_minus_32x32x8[%ld] PROGMEM={\n", arraysize(mulechassis_145x74));
-//     for (int i=0; i<arraysize(blue_minus_32); i++) {
-//         nowpix = color_16b_to_8b(blue_minus_32[i]);
-//         Serial.printf("0x%02x, ", nowpix);
-//         pixcount++;
-//         if (pixcount % 32 == 0) Serial.printf("  // pixel# %d\n", pixcount);
-//     }
-//     Serial.printf("\n};\n");
-//     Serial.printf("const uint8_t blue_plus_32x32x8[%ld] PROGMEM={\n", arraysize(mulechassis_145x74));
-//     for (int i=0; i<arraysize(blue_plus_32); i++) {
-//         nowpix = color_16b_to_8b(blue_plus_32[i]);
-//         Serial.printf("0x%02x, ", nowpix);
-//         pixcount++;
-//         if (pixcount % 32 == 0) Serial.printf("  // pixel# %d\n", pixcount);
-//     }
-//     Serial.printf("\n};\n");
-
-// }
-
 class IdiotLight {  // defunct: currently not using individual instances for each idiot light. i couldn't get it to work
     public:
     bool* val = nullptr;

@@ -684,7 +684,7 @@ class AnimationManager {
             if (!still_running) change_saver();
         }
         else if (!mule_drawn) {
-            // nowspr_ptr->fillSprite(TFT_BLACK);
+            nowspr_ptr->fillSprite(TFT_BLACK);
             nowspr_ptr->pushImageRotateZoom(85, 85, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, TFT_BLACK);
             mule_drawn = true;
         }
@@ -734,3 +734,21 @@ class DiagConsole {
         // panel->diffpush(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
     }
 };
+
+#ifdef CONVERT_IMAGE
+void convert_565_to_332_image() {
+    uint32_t pixcount = 0;
+    uint8_t nowpix;
+    Serial.printf("const uint8_t mulechassis_145x74x8[%ld] PROGMEM={\n", arraysize(mulechassis_145x74));
+    for (int i=0; i<arraysize(mulechassis_145x74); i++) {
+        nowpix = color_16b_to_8b(mulechassis_145x74[i]);
+        Serial.printf("0x%02x, ", nowpix);
+        pixcount++;
+        if ((pixcount % 145) == 0) {
+            Serial.printf("  // pixel# %ld\n", pixcount);
+            if (pixcount < arraysize(mulechassis_145x74)) Serial.printf("\t");
+        } 
+    }
+    Serial.printf("};\n");
+}
+#endif
