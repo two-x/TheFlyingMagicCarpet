@@ -117,7 +117,7 @@ bool touch_reticles = true;
 bool button_test_heartbeat_color = false; // Encoder short press when not tuning makes heartbeat a random color (for testing)
 bool wifi_client_mode = false;       // Should wifi be in client or access point mode?
 bool fake_color332 = false;
-bool fullscreen_screensaver_test = true;  // note, in fullscreen mode the animations are always unrestricted fps
+bool fullscreen_screensaver_test = false;  // note, in fullscreen mode the animations are always unrestricted fps
 
 // global tunable variables
 int sprite_color_depth = 8;

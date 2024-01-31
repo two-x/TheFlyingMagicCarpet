@@ -620,12 +620,12 @@ class AnimationManager {
     //     panel->diffpush(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
     // }
     void draw_simbutton(LGFX_Sprite* spr, int cntr_x, int cntr_y, int dir, uint16_t color) {
-        if (dir == JOY_PLUS)  spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_plus_32x32x8, TFT_BLACK);
-        else if (dir == JOY_MINUS) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_minus_32x32x8, TFT_BLACK);
-        else if (dir == JOY_UP) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_up_32x32x8, TFT_BLACK);
-        else if (dir == JOY_DN) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 180, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
-        else if (dir == JOY_LT) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 270, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
-        else if (dir == JOY_RT) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 90, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
+        if (dir == JOY_PLUS)  spr->pushImage(cntr_x-16-5, cntr_y-16, 32, 32, blue_plus_32x32x8, TFT_BLACK);
+        else if (dir == JOY_MINUS) spr->pushImage(cntr_x-16-5, cntr_y-16, 32, 32, blue_minus_32x32x8, TFT_BLACK);
+        else if (dir == JOY_UP) spr->pushImage(cntr_x-16-5, cntr_y-16, 32, 32, blue_up_32x32x8, TFT_BLACK);
+        else if (dir == JOY_DN) spr->pushImageRotateZoom(cntr_x-5, cntr_y, 16, 16, 180, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
+        else if (dir == JOY_LT) spr->pushImageRotateZoom(cntr_x-5, cntr_y, 16, 16, 270, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
+        else if (dir == JOY_RT) spr->pushImageRotateZoom(cntr_x-5, cntr_y, 16, 16, 90, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
 
     // void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void* data, uint32_t transparent, color_depth_t depth, const T* palette)
 
@@ -649,11 +649,12 @@ class AnimationManager {
                     // spr->fillRoundRect(cntr_x - 20, cntr_y - touch_cell_v_pix/2 - 10, 40, 20, 5, TFT_DARKGRAY);
                     // spr->drawRoundRect(cntr_x - 20, cntr_y - touch_cell_v_pix/2 - 10, 40, 20, 5, TFT_BLACK);
                     if (row % 2) {
+                        spr->setFont(&fonts::FreeSans9pt7b);
                         spr->setTextColor(TFT_BLACK);
-                        spr->drawString(simgrid[row][col], cntr_x - 1, cntr_y - touch_cell_v_pix/2 - 1);
-                        spr->drawString(simgrid[row][col], cntr_x + 1, cntr_y - touch_cell_v_pix/2 + 1);
+                        spr->drawString(simgrid[row][col], cntr_x-5 - 1, cntr_y - touch_cell_v_pix/2 + 5 - 1);
+                        spr->drawString(simgrid[row][col], cntr_x-5 + 1, cntr_y - touch_cell_v_pix/2 + 5 + 1);
                         spr->setTextColor(LYEL);
-                        spr->drawString(simgrid[row][col], cntr_x, cntr_y - touch_cell_v_pix/2);
+                        spr->drawString(simgrid[row][col], cntr_x-5, cntr_y - touch_cell_v_pix/2 + 5);
                     }
                 }
             }     
