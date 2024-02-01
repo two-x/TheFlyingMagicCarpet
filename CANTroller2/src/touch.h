@@ -10,7 +10,7 @@ class Touchscreen {
     LGFX* _tft;
     I2C* _i2c;
     int32_t corners[2][2][2] = { { { -25, -3549 }, { 185, 3839 } },  // [restouch][xx/yy][min/max]  // Read resistance values from upper-left and lower-right corners of screen, for calibration
-                                 { { 0, 319 },     { 0, 179 } } };   // [captouch][xx/yy][min/max]  // Read resistance values from upper-left and lower-right corners of screen, for calibration
+                                 { { -100, 319 }, { 0, 174 } } };   // [captouch][xx/yy][min/max]  // Read resistance values from upper-left and lower-right corners of screen, for calibration
     bool touch_longpress_valid = true;
     bool landed_coordinates_valid = false;
     bool touch_now_touched = false;
@@ -29,7 +29,7 @@ class Touchscreen {
     const unsigned long touchPrintInterval = 500; // Adjust this interval as needed (in milliseconds)
     enum touch_axis : int { xx, yy, zz };
     enum touch_lim : int { tsmin, tsmax };
-    int trow, tcol, disp_size[2], touch_read[2], tft_touch[2], landed[2];  // landed are the initial coordinates of a touch event, unaffected by dragging
+    int trow, tcol, disp_size[2], touch_read[3], tft_touch[2], landed[2];  // landed are the initial coordinates of a touch event, unaffected by dragging
   public:
     static constexpr uint8_t addr = 0x38;  // i2c addr for captouch panel
     int idelta = 0;
@@ -52,6 +52,8 @@ class Touchscreen {
         if (captouch && _i2c->not_my_turn(i2c_touch)) return nowtouch;
         if (touchSenseTimer.expireset()) {
             uint8_t count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]));
+            // if (captouch) count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]), &(touch_read[zz]));
+            // Serial.printf("n%d rx:%d ry:%d ", nowtouch, touch_read[0], touch_read[1]);
             nowtouch = (count > 0);
             if (nowtouch) {
                 for (int axis=0; axis<=1; axis++) {
@@ -66,7 +68,7 @@ class Touchscreen {
                 }
             }
             else landed_coordinates_valid = false;
-            // Serial.printf("n:%d c:%d rx:%d ry:%d tx:%d ty:%d\n", nowtouch, captouch, touch_read[0], touch_read[1], tft_touch[0], tft_touch[1]);
+            // Serial.printf("tx:%d ty:%d\n", tft_touch[0], tft_touch[1]);
         }
         _i2c->pass_i2c_baton();
         return nowtouch;
@@ -85,7 +87,7 @@ class Touchscreen {
         }
         // if (touchDoublePressTimer.expired()) {
         tedit = (float)(1 << tedit_exponent);
-        //Serial.printf("(%d,%d), landed(%d,%d)\n",tft_touch[xx],tft_touch[yy],landed[xx],landed[yy]);
+        Serial.printf("(%d,%d), landed(%d,%d)\n",tft_touch[xx],tft_touch[yy],landed[xx],landed[yy]);
         sleep_inactivity_timer.reset();  // evidence of user activity
         tedit = (float)(1 << tedit_exponent);  // Determine value editing rate
         trow = constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);

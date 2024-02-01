@@ -206,8 +206,9 @@ class CollisionsSaver {
     int _width, _height;
     std::uint32_t sec, psec, ball_create_rate = 3200;
     std::uint32_t myfps = 0, frame_count = 0;
-    uint8_t ball_radius_base = 7;  // originally 4
-    uint8_t ball_radius_modifier = 4;  // originally 4
+    // uint32_t ball_radius_pix_per_10ksqpix = 5;
+    float ball_radius_base = 5.0 / 235.0;  // 7 pixels radius / 125x100 sprite = about 5 pix per 235 sides sum
+    float ball_radius_modifier = 3.0 / 235.0;  // 4 pixels radius / 125x100 sprite = about 3 pix per...
     uint8_t ball_redoubler_rate = 25;  // originally 0x07
     uint8_t ball_gravity = 16;  // originally 0 with suggestion of 4
     volatile bool _is_running;
@@ -248,7 +249,7 @@ class CollisionsSaver {
             a->y = 0;
             a->dx = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
             a->dy = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
-            uint8_t sqrme = ball_radius_base + random(ball_radius_modifier);
+            uint8_t sqrme = (uint8_t)((float)(ball_radius_base + random(ball_radius_modifier)) * (float)(sprite->width() + sprite->height()));
             for (int i=0; i<=2; i++) if (!random(ball_redoubler_rate)) sqrme *= 2;
             a->r = sqrme << SHIFTSIZE;  // (sqrme * sqrme)));
             a->m = 4 + (ball_count & 0x07);
@@ -677,11 +678,9 @@ class AnimationManager {
         if (screensaver) {        // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
             mule_drawn = false;
             // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
-            if (nowsaver == Eraser) {
-                still_running = eSaver.update(nowspr_ptr);
-                if (panel->touched()) eSaver.saver_touch(nowspr_ptr, panel->touch_pt(HORZ), panel->touch_pt(VERT));
-            }
+            if (nowsaver == Eraser) still_running = eSaver.update(nowspr_ptr);
             else if (nowsaver == Collisions) still_running = cSaver.update(nowspr_ptr);
+            if (panel->touched()) eSaver.saver_touch(nowspr_ptr, panel->touch_pt(HORZ), panel->touch_pt(VERT));
             if (!still_running) change_saver();
         }
         else if (!mule_drawn) {

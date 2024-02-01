@@ -136,7 +136,6 @@ float temp_sensor_min_f = -67.0; // minimum reading of sensor is -25 C = -67 F
 float temp_sensor_max_f = 257.0; // maximum reading of sensor is 125 C = 257 F
 float maf_min_gps = 0.0;
 float maf_max_gps = 50.0; // i just made this number up as i have no idea what's normal for MAF
-int16_t touch_pt[4] = { 160, 120, 2230, 2130 };
 bool flashdemo = false;
 int32_t neobright = 10;   // default for us dim/brighten the neopixels
 int32_t neodesat = 0;     // default for lets us de/saturate the neopixels
@@ -177,6 +176,7 @@ bool nowtouch = false;
 bool captouch = true;
 float loop_avg_us;
 bool sensidiots[11];
+bool web_disabled = false;
 // bool sensor_present[telemetry_full];
 
 // fast macros
