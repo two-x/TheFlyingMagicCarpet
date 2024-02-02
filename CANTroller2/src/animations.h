@@ -70,25 +70,26 @@ class FlexPanel {
     LGFX_Sprite* nowspr;
     LGFX* lcd;
     int touchp[2], shifter;
-    int corner[2], sprsize[2];
+    int winloc[2], winsize[2];
     Touchscreen* _touch;
     // std::size_t flip = 0;
     std::uint32_t sec, psec, _width, _height, _myfps = 0, myfps = 0, frame_count = 0;
     FlexPanel() {}
-    void init(LGFX* _lcd, Touchscreen* touch, int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
+    void init(LGFX* _lcd, Touchscreen* touch, int _winlocx, int _winlocy, int _winwidth, int _winheight) {
         lcd = _lcd;
         _touch = touch;
-        corner[HORZ] = _cornerx;
-        corner[VERT] = _cornery;
-        sprsize[HORZ] = _sprwidth;
-        sprsize[VERT] = _sprheight;
+        winloc[HORZ] = _winlocx;
+        winloc[VERT] = _winlocy;
+        winsize[HORZ] = _winwidth;
+        winsize[VERT] = _winheight;
         Serial.printf("  multi purpose panel init.. ");
+        lcd->setClipRect(winloc[HORZ], winloc[VERT], winsize[HORZ], winsize[VERT]);
         lcd->startWrite();
         lcd->setColorDepth(16);
         if (lcd->width() < lcd->height()) lcd->setRotation(lcd->getRotation() ^ 1);
         for (int i = 0; i <= 1; i++) flexpanel_sp[i].setColorDepth(sprite_color_depth);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
-        auto framewidth = sprsize[HORZ];
-        auto frameheight = sprsize[VERT];
+        auto framewidth = winsize[HORZ];
+        auto frameheight = winsize[VERT];
         bool fail = false;
         bool using_psram = false;
         for (std::uint32_t i = 0; !fail && i < 2; ++i) {
@@ -118,9 +119,11 @@ class FlexPanel {
         }
         Serial.printf(" made 2x %dx%d sprites in %sram\n", framewidth, frameheight, using_psram ? "ps" : "native ");
         for (int i=0; i<=1; i++) flexpanel_sp[i].clear();
-        // sp[0].pushImageDMA() draw(corner[HORZ], corner[VERT]);
+        // sp[0].pushImageDMA() draw(winloc[HORZ], winloc[VERT]);
         // lcd->display();
         lcd->endWrite();
+        lcd->clearClipRect();
+
         _width = framewidth << SHIFTSIZE;
         _height = frameheight << SHIFTSIZE;
     }
@@ -132,7 +135,10 @@ class FlexPanel {
     //     if (flipit && clear) nowspr->clear();
     //     return flip;
     // }
-    void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref) {
+    // void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref, int _winlocx, int _winlocy, int _width, int _height) {
+    void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref) {  // }, int _winlocx, int _winlocy, int _width, int _height) {
+        // auto winloc[2] = { _winlocx, _winlocy };
+        // int winsize[2] = { _width, _height };
         shifter = sizeof(uint32_t) / sprite_color_depth;
         union {  // source
             std::uint32_t* s32;
@@ -142,6 +148,7 @@ class FlexPanel {
             std::uint32_t* r32;
             std::uint8_t* r;
         };
+        
         s32 = (std::uint32_t*)source->getBuffer();
         r32 = (std::uint32_t*)ref->getBuffer();
         auto sprwidth = source->width();
@@ -160,21 +167,51 @@ class FlexPanel {
                 std::int32_t xe = (x32 << 2) - 1;
                 if (xe >= sprwidth) xe = sprwidth - 1;
                 while (s[xe] == r[xe]) --xe;
-                lcd->pushImageDMA(xs + corner[HORZ], y + corner[VERT], xe - xs + 1, 1, &s[xs]);
+                lcd->pushImageDMA(xs, y, xe - xs + 1, 1, &s[xs]);
                 memcpy(&r[xs], &s[xs], sizeof(s[0])*(xe - xs + 1));
             } while (x32 < w32);
             s32 += w32;
             r32 += w32;
         } while (++y < sprheight);
+
+        // s32 = (std::uint32_t*)source->getBuffer();
+        // r32 = (std::uint32_t*)ref->getBuffer();
+        // auto winsize[2] = { _width, _height };  // source->width();
+        // auto w32 = (winsize[HORZ] + 3) >> 2;
+        // auto lcdw32 = (lcd->width() + 3) >> 2;
+        // std::int32_t y = wincorner[VERT];
+        // lcd->startWrite();
+        // do {
+        //     auto offset8 = y * lcd->width()
+        //     std::int32_t x32 = lcdw32 * wincorner[VERT] + wincorner[HORZ];
+        //     do {
+        //         while (s32[x32 + wincorner[HORZ]] == r32[x32 + wincorner[HORZ]] && ++x32 < w32 + wincorner[HORZ]);
+        //         if (x32 == w32) break;
+        //         std::int32_t xs = x32 << 2;
+        //         while (s[xs] == r[xs]) ++xs;
+        //         while (++x32 < w32 && s32[x32] != r32[x32]);
+        //         std::int32_t xe = (x32 << 2) - 1;
+        //         if (xe >= sprwidth) xe = sprwidth - 1;
+        //         while (s[xe] == r[xe]) --xe;
+        //         lcd->pushImageDMA(xs + wincorner[HORZ], y + wincorner[VERT], xe - xs + 1, 1, &s[xs]);
+        //         memcpy(&r[xs], &s[xs], sizeof(s[0])*(xe - xs + 1));
+        //     } while (x32 < w32);
+        //     s32 += w32;
+        //     r32 += w32;
+        // } while (++y < wincorner[VERT] + winsize[VERT]);
+
         // lcd->display();
         lcd->endWrite();
         // pushed[flip] = true;
         // drawn[!flip] = false;
     }
+    // void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref) {
+    //     diffpush(source, ref, corner[HORZ], corner[VERT], sprsize[HORZ], sprsize[VERT]);
+    // }
     bool touched() {
         if (_touch->touched()) {
             for (int axis=HORZ; axis<=VERT; axis++)
-                touchp[axis] = _touch->touch_pt(axis) - corner[axis];
+                touchp[axis] = _touch->touch_pt(axis) - winloc[axis];
             return true;
         }
         return false;
@@ -196,6 +233,7 @@ class CollisionsSaver {
         int32_t m;
         uint32_t color;
     };
+    int winloc[2], winsize[2];
     ball_info_t* balls;
     ball_info_t* a;
     LGFX_Sprite* sprite;
@@ -215,11 +253,12 @@ class CollisionsSaver {
     volatile std::uint32_t _loop_count = 0;
     CollisionsSaver() {}
     void drawfunc() {
-        auto sprwidth = sprite->width();
-        auto sprheight = sprite->height();
+        auto sprwidth = winsize[HORZ];
+        auto sprheight = winsize[VERT];
         // flip = _draw_count & 1;
         balls = &_balls[flip][0];
         // sprite = &(flexpanel_sp[flip]);
+        sprite->setClipRect(winloc[HORZ], winloc[VERT], winsize[HORZ], winsize[VERT]);
         sprite->clear();
         for (float i = 0.125; i < 1.0; i += 0.125) sprite->drawGradientVLine((int)(i * (sprwidth-1)), 0, sprheight, hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
         for (float i = 0.125; i < 1.0; i += 0.125) sprite->drawGradientHLine(0, (int)(i * (sprheight-1)), sprwidth, hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
@@ -229,6 +268,7 @@ class CollisionsSaver {
             a = &balls[i];
             sprite->fillCircle(a->x >> SHIFTSIZE, a->y >> SHIFTSIZE, a->r >> SHIFTSIZE, a->color);
         }
+        sprite->clearClipRect();
         // _draw_count++;
     }
     bool mainfunc(void) {
@@ -343,19 +383,25 @@ class CollisionsSaver {
     //     }
     // #endif
 
-    void setup(LGFX_Sprite* _nowspr) {
+    void setup(LGFX_Sprite* _nowspr, int loc_x, int loc_y, int size_x, int size_y) {
+        winloc[HORZ] = loc_x;
+        winloc[VERT] = loc_y;
+        winsize[HORZ] = size_x;
+        winsize[VERT] = size_y;
         sprite = _nowspr;
-        _width = sprite->width() << SHIFTSIZE;
-        _height = sprite->height() << SHIFTSIZE;
+        _width = size_x << SHIFTSIZE;  // _width = sprite->width() << SHIFTSIZE;
+        _height = size_y << SHIFTSIZE;  // _height = sprite->height() << SHIFTSIZE;
         // reset();
     }
     void reset(LGFX_Sprite* sp0, LGFX_Sprite* sp1) {
         LGFX_Sprite* spp[2] = { sp0, sp1 };
         for (int i = 0; i <= 1; i++) {
+            spp[i]->setClipRect(winloc[HORZ], winloc[VERT], winsize[HORZ], winsize[VERT]);
             spp[i]->setBaseColor(TFT_BLACK);
             spp[i]->clear();
             spp[i]->setTextSize(1);
             spp[i]->setTextDatum(textdatum_t::top_left);
+            spp[i]->clearClipRect();
         }
         ball_thismax = BALL_MAX - random(25);
         for (std::uint32_t i = 0; i < ball_count; ++i) {
@@ -393,8 +439,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     enum savershapes : int { Wedges, Dots, Rings, Ellipses, Boxes, Ascii, Rotate, NumSaverShapes };
  private:
     LGFX_Sprite* sprite;
-    int sprsize[2], rotate = -1;
-    int point[2], plast[2], er[2];
+    int point[2], plast[2], er[2], winsize[2], winloc[2], rotate = -1;  // sprsize[2], 
     int eraser_rad = 14, eraser_rad_min = 22, eraser_rad_max = 40, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, boxsize[2], now = 0;
     int eraser_velo[2] = {random(eraser_velo_max), random(eraser_velo_max)}, shapes_per_run = 5, shapes_done = 0;
@@ -407,15 +452,20 @@ class EraserSaver {  // draws colorful patterns to exercise
     Timer saverCycleTimer, pentimer = Timer(1500000);
     bool saver_lotto = false, has_eraser = true;
  public:
-    EraserSaver() {}
-    void setup(LGFX_Sprite* _nowspr) {
+    EraserSaver(int _size, int _loc) {}
+
+    void setup(LGFX_Sprite* _nowspr, int loc_x, int loc_y, int size_x, int size_y) {
+        winloc[HORZ] = loc_x;
+        winloc[VERT] = loc_y;
+        winsize[HORZ] = size_x;
+        winsize[VERT] = size_y;
         sprite = _nowspr;
-        sprsize[HORZ] = sprite->width();
-        sprsize[VERT] = sprite->height();
-        erpos_max[HORZ] = (int32_t)sprsize[HORZ] / 2 - eraser_rad;
-        erpos_max[VERT] = (int32_t)sprsize[VERT] / 2 - eraser_rad;
+        // sprsize[HORZ] = sprite->width();
+        // sprsize[VERT] = sprite->height();
+        erpos_max[HORZ] = (int32_t)winsize[HORZ] / 2 - eraser_rad;
+        erpos_max[VERT] = (int32_t)winsize[VERT] / 2 - eraser_rad;
         for (int axis = 0; axis <= 1; axis++) {
-            point[axis] = random(sprsize[axis]);
+            point[axis] = random(winsize[axis]);
             eraser_velo_sign[axis] = (random(1)) ? 1 : -1;
         }
         // reset();
@@ -424,13 +474,15 @@ class EraserSaver {  // draws colorful patterns to exercise
         LGFX_Sprite* spp[2] = { sp0, sp1 };
         shapes_done = cycle = 0;
         for (int i = 0; i <= 1; i++) {
+            spp[i]->setClipRect(winloc[HORZ], winloc[VERT], winsize[HORZ], winsize[VERT]);
             spp[i]->setBaseColor(TFT_BLACK);
             spp[i]->setTextSize(1);
             spp[i]->fillSprite(TFT_BLACK);
             spp[i]->setTextDatum(textdatum_t::middle_center);
             spp[i]->setTextColor(TFT_BLACK);
             spp[i]->setFont(&fonts::Font4);
-            spp[i]->setCursor(sprsize[HORZ] / 2, sprsize[VERT] / 2);
+            spp[i]->setCursor(winsize[HORZ] / 2, winsize[VERT] / 2);
+            spp[i]->clearClipRect();
         }
         change_pattern(-2);  // randomize new pattern whenever turned off and on
         saverCycleTimer.set(saver_cycletime_us);
@@ -461,9 +513,9 @@ class EraserSaver {  // draws colorful patterns to exercise
             if (pensat > 255.0) pensat = 100.0;
             pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint16_t>(++penhue, (uint8_t)pensat, 200 + random(56));
         }
-        spr->fillCircle(x, y, 20, pencolor);
+        spr->fillCircle(x + winloc[HORZ], y + winloc[VERT], 20, pencolor);
     }
-    int update(LGFX_Sprite* _nowspr) {
+    int update(LGFX_Sprite* _nowspr, int _touchx, int _touchy) {
         sprite = _nowspr;
         if (saverCycleTimer.expired()) {
             ++cycle %= num_cycles;
@@ -471,12 +523,13 @@ class EraserSaver {  // draws colorful patterns to exercise
             saverCycleTimer.set(saver_cycletime_us / ((cycle == 2) ? 5 : 1));
         }
         drawsprite();
+        if (_touchx >= 0) saver_touch(_nowspr, _touchx, _touchy);
         return shapes_done;
     }
   private:
     void drawsprite() {
         // Serial.printf("\r%d,%d,%d ", shape, shapes_done, cycle);
-        for (int axis = 0; axis <= 1; axis++) point[axis] = random(sprsize[axis]);
+        for (int axis = 0; axis <= 1; axis++) point[axis] = random(winsize[axis]);
         if (shape == Rotate) ++rotate %= Ascii;
         else rotate = shape;
         if ((cycle != 2) || !has_eraser) {
@@ -487,10 +540,10 @@ class EraserSaver {  // draws colorful patterns to exercise
                 uint16_t wc = hsv_to_rgb<uint16_t>(random(65536), 127 + (spothue >> 9));
                 float im = 0;
                 if (plast[VERT] != point[VERT]) im = (float)(plast[HORZ] - point[HORZ]) / (float)(plast[VERT] - point[VERT]);
-                sprite->fillCircle(plast[HORZ], plast[VERT], 3, wc);
+                sprite->fillCircle(plast[HORZ] + winloc[HORZ], plast[VERT] + winloc[VERT], 3, wc);
                 // sprite->drawCircle(point[HORZ], point[VERT], 3, TFT_BLACK);
                 for (int h=-4; h<=4; h++)
-                    sprite->drawGradientLine(point[HORZ], point[VERT], plast[HORZ] + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wclast, wc);
+                    sprite->drawGradientLine(point[HORZ] + winloc[HORZ], point[VERT] + winloc[VERT], plast[HORZ] + winloc[HORZ] + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + winloc[VERT] + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wclast, wc);
                 wclast = wc;
             }
             else if (rotate == Ellipses) {
@@ -499,7 +552,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 for (int i = 0; i < 6 + random(20); i++) {
                     sat = 100 + random(156);
                     brt = 90 + random(166);
-                    sprite->drawEllipse(point[HORZ], point[VERT], d[0] - i, d[1] + i, hsv_to_rgb<uint16_t>(spothue + ((mult * i) >> 1), sat, brt));
+                    sprite->drawEllipse(point[HORZ] + winloc[HORZ], point[VERT] + winloc[VERT], d[0] - i, d[1] + i, hsv_to_rgb<uint16_t>(spothue + ((mult * i) >> 1), sat, brt));
                 }
             }
             else if (rotate == Rings) {
@@ -511,23 +564,23 @@ class EraserSaver {  // draws colorful patterns to exercise
                 uint8_t c2 = hsv_to_rgb<uint8_t>(hue, sat, brt-10);
                 // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/655.35), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
                 for (int xo = -1; xo <= 1; xo += 2) {
-                    sprite->drawCircle(point[HORZ], point[VERT] + xo, d, c);
-                    sprite->drawCircle(point[HORZ] + xo, point[VERT], d, c);
+                    sprite->drawCircle(point[HORZ] + winloc[HORZ], point[VERT] + winloc[VERT] + xo, d, c);
+                    sprite->drawCircle(point[HORZ] + winloc[HORZ] + xo, point[VERT] + winloc[VERT], d, c);
                 }
                 for (int edge = -1; edge <= 1; edge += 2)
-                    sprite->drawCircle(point[HORZ], point[VERT], d + edge, c2);
+                    sprite->drawCircle(point[HORZ] + winloc[HORZ], point[VERT] + winloc[VERT], d + edge, c2);
             }
             else if (rotate == Dots)
                 for (int star = 0; star < 12; star++)
-                    sprite->fillCircle(random(sprsize[HORZ]), random(sprsize[VERT]), 2 + random(2), hsv_to_rgb<uint8_t>((uint16_t)((spothue >> 1) * (1 + random(2))), 128 + random(128), 160 + random(96)));  // hue_to_rgb16(random(255)), TFT_BLACK);
+                    sprite->fillCircle(random(winsize[HORZ]) + winloc[HORZ], random(winsize[VERT]) + winloc[VERT], 2 + random(2), hsv_to_rgb<uint8_t>((uint16_t)((spothue >> 1) * (1 + random(2))), 128 + random(128), 160 + random(96)));  // hue_to_rgb16(random(255)), TFT_BLACK);
             else if (rotate == Boxes) {
                 boxrad = 2 + random(2);
                 boxminsize = 2 * boxrad + 10;
                 int longer = random(2);
-                boxsize[longer] = boxminsize + random(sprsize[HORZ] - boxminsize);
+                boxsize[longer] = boxminsize + random(winsize[HORZ] - boxminsize);
                 boxsize[!longer] = boxminsize + random(smax(0, boxmaxarea / boxsize[longer] - boxminsize));
-                for (int dim = 0; dim <= 1; dim++) point[dim] = -boxsize[dim] / 2 + random(sprsize[dim]);
-                sprite->fillSmoothRoundRect(point[HORZ], point[VERT], boxsize[HORZ], boxsize[VERT], boxrad, rando_color());  // Change colors as needed
+                for (int dim = 0; dim <= 1; dim++) point[dim] = -boxsize[dim] / 2 + random(winsize[dim]);
+                sprite->fillSmoothRoundRect(point[HORZ] + winloc[HORZ], point[VERT] + winloc[VERT], boxsize[HORZ], boxsize[VERT], boxrad, rando_color());  // Change colors as needed
             }
             else if (rotate == Ascii)
                 for (int star = 0; star < 4; star++) {
@@ -537,10 +590,10 @@ class EraserSaver {  // draws colorful patterns to exercise
                     uint8_t sat = point[HORZ] * 255 / sprite->width();
                     String letter = (String)((char)(0x21 + random(0x5d)));
                     uint16_t c = hsv_to_rgb<uint16_t>(hue, sat, 100 + 100 * (spothue > 32767) + random(56));
-                    sprite->drawString(letter, point[HORZ]+1, point[VERT]+1);
-                    sprite->drawString(letter, point[HORZ]-1, point[VERT]-1);
+                    sprite->drawString(letter, point[HORZ] + winloc[HORZ]+1, point[VERT] + winloc[VERT]+1);
+                    sprite->drawString(letter, point[HORZ] + winloc[HORZ]-1, point[VERT] + winloc[VERT]-1);
                     sprite->setTextColor(hsv_to_rgb<uint16_t>(hue, sat, 100 + 100 * (spothue > 32767) + random(56)));
-                    sprite->drawString(letter, point[HORZ], point[VERT]);
+                    sprite->drawString(letter, point[HORZ] + winloc[HORZ], point[VERT] + winloc[VERT]);
                     sprite->setTextColor(TFT_BLACK);  // allows subliminal messaging
                 }
         }
@@ -558,9 +611,9 @@ class EraserSaver {  // draws colorful patterns to exercise
             }
             // Serial.printf(" e %3d,%3d,%3d,%3d,%3d\n", (sprsize[HORZ] / 2) + erpos[HORZ], (sprsize[VERT] / 2) + erpos[VERT], eraser_rad, eraser_velo[HORZ], eraser_velo[VERT]);
             // sprite->fillCircle((sprsize[HORZ] / 2) + erpos[HORZ], (sprsize[VERT] / 2) + erpos[VERT], 20, pencolor);
-            sprite->fillCircle((sprsize[HORZ] / 2) + erpos[HORZ], (sprsize[VERT] / 2) + erpos[VERT], eraser_rad, (uint8_t)TFT_BLACK);
+            sprite->fillCircle((winsize[HORZ] / 2) + erpos[HORZ] + winloc[HORZ], (winsize[VERT] / 2) + erpos[VERT] + winloc[VERT], eraser_rad, (uint8_t)TFT_BLACK);
         }
-        if (saver_lotto) sprite->drawString("do drugs", sprsize[HORZ] / 2, sprsize[VERT] / 2);
+        if (saver_lotto) sprite->drawString("do drugs", winsize[HORZ] / 2 + winloc[HORZ], winsize[VERT] / 2 + winloc[VERT]);
         for (int axis = HORZ; axis <= VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
         // _draw_count++;
     }
@@ -594,6 +647,7 @@ class AnimationManager {
     // Timer saverRefreshTimer = Timer(16666);
     Timer fps_timer;
     float myfps = 0.0;
+    int touch_pix[2];
     int64_t fps_mark;
     bool screensaver_last = false, simulating_last = false, mule_drawn = false;
     void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
@@ -601,15 +655,15 @@ class AnimationManager {
         reset();
     }
   public:
-    AnimationManager() {}
+    AnimationManager();
     void init(FlexPanel* _panel, Simulator* _sim) {
         panel = _panel;
         sim = _sim;
     }
     void setup() {
         // int flip = panel->setflip(true);
-        eSaver.setup(&flexpanel_sp[flip]);
-        cSaver.setup(&flexpanel_sp[flip]);
+        eSaver.setup(&flexpanel_sp[flip], panel->winloc[HORZ], panel->winloc[VERT], panel->winsize[HORZ], panel->winsize[VERT]);
+        cSaver.setup(&flexpanel_sp[flip], panel->winloc[HORZ], panel->winloc[VERT], panel->winsize[HORZ], panel->winsize[VERT]);
     }
     void reset() {
         // int flip = panel->setflip(true);
@@ -621,12 +675,12 @@ class AnimationManager {
     //     panel->diffpush(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
     // }
     void draw_simbutton(LGFX_Sprite* spr, int cntr_x, int cntr_y, int dir, uint16_t color) {
-        if (dir == JOY_PLUS)  spr->pushImage(cntr_x-16-5, cntr_y-16, 32, 32, blue_plus_32x32x8, TFT_BLACK);
-        else if (dir == JOY_MINUS) spr->pushImage(cntr_x-16-5, cntr_y-16, 32, 32, blue_minus_32x32x8, TFT_BLACK);
-        else if (dir == JOY_UP) spr->pushImage(cntr_x-16-5, cntr_y-16, 32, 32, blue_up_32x32x8, TFT_BLACK);
-        else if (dir == JOY_DN) spr->pushImageRotateZoom(cntr_x-5, cntr_y, 16, 16, 180, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
-        else if (dir == JOY_LT) spr->pushImageRotateZoom(cntr_x-5, cntr_y, 16, 16, 270, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
-        else if (dir == JOY_RT) spr->pushImageRotateZoom(cntr_x-5, cntr_y, 16, 16, 90, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
+        if (dir == JOY_PLUS)  spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_plus_32x32x8, TFT_BLACK);
+        else if (dir == JOY_MINUS) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_minus_32x32x8, TFT_BLACK);
+        else if (dir == JOY_UP) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_up_32x32x8, TFT_BLACK);
+        else if (dir == JOY_DN) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 180, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
+        else if (dir == JOY_LT) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 270, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
+        else if (dir == JOY_RT) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 90, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
 
     // void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void* data, uint32_t transparent, color_depth_t depth, const T* palette)
 
@@ -642,8 +696,8 @@ class AnimationManager {
         spr->setFont(&fonts::Font2);
         for (int32_t row = 0; row < arraysize(simgrid); row++) {
             for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
-                int32_t cntr_x = touch_cell_h_pix*col + (touch_cell_h_pix>>1) +2;
-                int32_t cntr_y = touch_cell_v_pix*row + (touch_cell_v_pix>>1);
+                int32_t cntr_x = touch_cell_h_pix*col + (touch_cell_h_pix>>1) +2 + panel->winloc[HORZ] - 5;
+                int32_t cntr_y = touch_cell_v_pix*row + (touch_cell_v_pix>>1) + panel->winloc[VERT];
                 if (strcmp(simgrid[row][col], "    ")) {
                     draw_simbutton(spr, cntr_x + 2, cntr_y - 1, simgriddir[row][col], LYEL);  // for 3d look
                     draw_simbutton(spr, cntr_x, cntr_y, simgriddir[row][col], DGRY);
@@ -652,10 +706,10 @@ class AnimationManager {
                     if (row % 2) {
                         spr->setFont(&fonts::FreeSans9pt7b);
                         spr->setTextColor(TFT_BLACK);
-                        spr->drawString(simgrid[row][col], cntr_x-5 - 1, cntr_y - touch_cell_v_pix/2 + 5 - 1);
-                        spr->drawString(simgrid[row][col], cntr_x-5 + 1, cntr_y - touch_cell_v_pix/2 + 5 + 1);
+                        spr->drawString(simgrid[row][col], cntr_x - 1, cntr_y - touch_cell_v_pix/2 + 5 - 1);
+                        spr->drawString(simgrid[row][col], cntr_x + 1, cntr_y - touch_cell_v_pix/2 + 5 + 1);
                         spr->setTextColor(LYEL);
-                        spr->drawString(simgrid[row][col], cntr_x-5, cntr_y - touch_cell_v_pix/2 + 5);
+                        spr->drawString(simgrid[row][col], cntr_x, cntr_y - touch_cell_v_pix/2 + 5);
                     }
                 }
             }     
@@ -678,14 +732,21 @@ class AnimationManager {
         if (screensaver) {        // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
             mule_drawn = false;
             // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
-            if (nowsaver == Eraser) still_running = eSaver.update(nowspr_ptr);
-            else if (nowsaver == Collisions) still_running = cSaver.update(nowspr_ptr);
-            if (panel->touched()) eSaver.saver_touch(nowspr_ptr, panel->touch_pt(HORZ), panel->touch_pt(VERT));
+            if (panel->touched()) {
+                touch_pix[HORZ] = panel->touch_pt(HORZ);
+                touch_pix[VERT] = panel->touch_pt(VERT);
+            }
+            else {
+                touch_pix[HORZ] = -1;
+                touch_pix[VERT] = -1;
+            }
+            if (nowsaver == Eraser) still_running = eSaver.update(nowspr_ptr, touch_pix[HORZ], touch_pix[VERT]);
+            else if (nowsaver == Collisions) still_running = cSaver.update(nowspr_ptr, touch_pix[HORZ], touch_pix[VERT]);
             if (!still_running) change_saver();
         }
         else if (!mule_drawn) {
             nowspr_ptr->fillSprite(TFT_BLACK);
-            nowspr_ptr->pushImageRotateZoom(85, 85, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, TFT_BLACK);
+            nowspr_ptr->pushImageRotateZoomWithAA(85 + panel->winloc[HORZ], 85 + panel->winloc[VERT], 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, TFT_BLACK);
             mule_drawn = true;
         }
         // if (fullscreen_screensaver_test) {
@@ -725,7 +786,8 @@ class DiagConsole {
     }
     void setup() {}
     void redraw() {
-        panel->diffpush(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
+        if (fullscreen_screensaver_test) panel->diffpush(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
+        else panel->diffpush(&flexpanel_sp[flip], &flexpanel_sp[!flip], disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
     }
     void add_errorline(std::string type, std::string item) {
         std::string newerr = type + ": " + item;
