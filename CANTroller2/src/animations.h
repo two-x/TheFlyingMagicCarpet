@@ -199,6 +199,7 @@ class CollisionsSaver {
     ball_info_t* balls;
     ball_info_t* a;
     LGFX_Sprite* sprite;
+    bool new_round = false;
     static constexpr std::uint32_t BALL_MAX = 45;  // 256
     ball_info_t _balls[2][BALL_MAX];
     std::uint32_t _ball_count = 0, _myfps = 0;
@@ -211,10 +212,43 @@ class CollisionsSaver {
     float ball_radius_modifier = 3.0 / 235.0;  // 4 pixels radius / 125x100 sprite = about 3 pix per...
     uint8_t ball_redoubler_rate = 25;  // originally 0x07
     uint8_t ball_gravity = 16;  // originally 0 with suggestion of 4
-    volatile bool _is_running;
+    volatile bool _is_running, touch_released = true;
     volatile std::uint32_t _loop_count = 0;
     CollisionsSaver() {}
-    void drawfunc() {
+    void add_a_ball(int _x, int _y) {
+        psec = sec;
+        myfps = frame_count;
+        frame_count = 0;
+        if (++ball_count >= ball_thismax) {
+            new_round = true;
+            ball_count = 1;
+        }
+        auto a = &_balls[_loop_count & 1][ball_count - 1];
+        a->color = lgfx::color888(100 + (rand() % 155), 100 + (rand() % 155), 100 + (rand() % 155));
+        if (_x >= 0) {
+            a->x = _x << SHIFTSIZE;
+            a->y = _y << SHIFTSIZE;
+            a->dx = 0;
+            a->dy = 0;
+        }
+        else {
+            a->x = _width * random(2);
+            a->y = 0;
+            a->dx = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
+            a->dy = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
+        }
+        uint8_t sqrme = (uint8_t)((float)(ball_radius_base + random(ball_radius_modifier)) * (float)(sprite->width() + sprite->height()));
+        for (int i=0; i<=2; i++) if (!random(ball_redoubler_rate)) sqrme *= 2;
+        a->r = sqrme << SHIFTSIZE;  // (sqrme * sqrme)));
+        a->m = 4 + (ball_count & 0x07);
+        // vTaskDelay(1);
+    }
+    void drawfunc(int _touchx, int _touchy) {
+        if (_touchx < 0) touch_released = true;
+        else {
+            if (touch_released) add_a_ball(_touchx, _touchy);
+            touch_released = false;
+        }
         auto sprwidth = sprite->width();
         auto sprheight = sprite->height();
         // flip = _draw_count & 1;
@@ -231,30 +265,11 @@ class CollisionsSaver {
         }
         // _draw_count++;
     }
-    bool mainfunc(void) {
-        bool new_round = false;
+    bool mainfunc(int _touchx, int _touchy) {
+        new_round = false;
         static constexpr float e = 0.999;  // Coefficient of friction
         sec = lgfx::millis() / ball_create_rate;
-        if (psec != sec) {
-            psec = sec;
-            myfps = frame_count;
-            frame_count = 0;
-            if (++ball_count >= ball_thismax) {
-                new_round = true;
-                ball_count = 1;
-            }
-            auto a = &_balls[_loop_count & 1][ball_count - 1];
-            a->color = lgfx::color888(100 + (rand() % 155), 100 + (rand() % 155), 100 + (rand() % 155));
-            a->x = _width * random(2);
-            a->y = 0;
-            a->dx = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
-            a->dy = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
-            uint8_t sqrme = (uint8_t)((float)(ball_radius_base + random(ball_radius_modifier)) * (float)(sprite->width() + sprite->height()));
-            for (int i=0; i<=2; i++) if (!random(ball_redoubler_rate)) sqrme *= 2;
-            a->r = sqrme << SHIFTSIZE;  // (sqrme * sqrme)));
-            a->m = 4 + (ball_count & 0x07);
-            // vTaskDelay(1);
-        }
+        if (psec != sec && touch_released) add_a_ball(-1, -1);
         frame_count++;
         _loop_count++;
         ball_info_t *a, *b, *balls;
@@ -301,7 +316,7 @@ class CollisionsSaver {
                 a->x += vx;
                 b->x -= vx;
                 vx = b->x - a->x;
-                a->y += vy;
+                if (_touchx < 0) a->y += vy;
                 b->y -= vy;
                 vy = b->y - a->y;
                 vx2vy2 = vx * vx + vy * vy;
@@ -323,8 +338,16 @@ class CollisionsSaver {
                 float bdy = -e * (bmy - amy) + ady;
                 a->dx = roundf(adx + arx);
                 a->dy = roundf(ady + ary);
-                b->dx = roundf(bdx + brx);
-                b->dy = roundf(bdy + bry);      
+                if (!touch_released && (i == ball_count - 1)) {
+                    b->dx *= 3;
+                    b->dy *= 3;
+                }
+            }
+            if (!touch_released && (i == ball_count - 1)) {
+                a->x = _touchx << SHIFTSIZE;
+                a->y = _touchy << SHIFTSIZE;
+                a->dx = 0;
+                a->dy = 0;
             }
         }
         _myfps = myfps;
@@ -377,13 +400,13 @@ class CollisionsSaver {
             xTaskCreate(taskDraw, "taskDraw", 2048, NULL, 0, NULL);
         #endif
     }
-    int update(LGFX_Sprite* _nowspr) {
+    int update(LGFX_Sprite* _nowspr, int _touchx, int _touchy) {
         sprite = _nowspr;
-        bool round_over = mainfunc();
+        bool round_over = mainfunc(_touchx, _touchy);
         // #if defined(CONFIG_IDF_TARGET_ESP32)
         //     while (_loop_count != _draw_count) { taskYIELD(); }
         // #else
-        drawfunc();
+        drawfunc(_touchx, _touchy);
         // #endif
         return !round_over;  // not done yet
     }
@@ -463,7 +486,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         spr->fillCircle(x, y, 20, pencolor);
     }
-    int update(LGFX_Sprite* _nowspr) {
+    int update(LGFX_Sprite* _nowspr, int touchx, int touchy) {
         sprite = _nowspr;
         if (saverCycleTimer.expired()) {
             ++cycle %= num_cycles;
@@ -471,6 +494,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             saverCycleTimer.set(saver_cycletime_us / ((cycle == 2) ? 5 : 1));
         }
         drawsprite();
+        if (touchx >= 0) saver_touch(_nowspr, touchx, touchy);
         return shapes_done;
     }
   private:
@@ -591,6 +615,7 @@ class AnimationManager {
     EraserSaver eSaver;
     CollisionsSaver cSaver;
     Simulator* sim;
+    int touchx = -1, touchy = -1;
     // Timer saverRefreshTimer = Timer(16666);
     Timer fps_timer;
     float myfps = 0.0;
@@ -616,10 +641,6 @@ class AnimationManager {
         if (nowsaver == Eraser) eSaver.reset(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
         else if (nowsaver == Collisions) cSaver.reset(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
     }
-    // void redraw() {
-    //     // if (!is_drawing) is_pushing = false;
-    //     panel->diffpush(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
-    // }
     void draw_simbutton(LGFX_Sprite* spr, int cntr_x, int cntr_y, int dir, uint16_t color) {
         if (dir == JOY_PLUS)  spr->pushImage(cntr_x-16-5, cntr_y-16, 32, 32, blue_plus_32x32x8, TFT_BLACK);
         else if (dir == JOY_MINUS) spr->pushImage(cntr_x-16-5, cntr_y-16, 32, 32, blue_minus_32x32x8, TFT_BLACK);
@@ -627,12 +648,7 @@ class AnimationManager {
         else if (dir == JOY_DN) spr->pushImageRotateZoom(cntr_x-5, cntr_y, 16, 16, 180, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
         else if (dir == JOY_LT) spr->pushImageRotateZoom(cntr_x-5, cntr_y, 16, 16, 270, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
         else if (dir == JOY_RT) spr->pushImageRotateZoom(cntr_x-5, cntr_y, 16, 16, 90, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
-
-    // void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void* data, uint32_t transparent, color_depth_t depth, const T* palette)
-
-
     }
-
     void draw_simbuttons (LGFX_Sprite* spr, bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
         if (!create) {
             spr->fillSprite(TFT_BLACK);
@@ -660,9 +676,6 @@ class AnimationManager {
                 }
             }     
         }
-        // draw_reticles(spr);
-        // spr->setTextDatum(textdatum_t::top_left);
-        // spr->setFont(&fonts::Font0);
         spr->setTextColor(TFT_BLACK);
     }
     void calc_fps() {
@@ -678,14 +691,19 @@ class AnimationManager {
         if (screensaver) {        // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
             mule_drawn = false;
             // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
-            if (nowsaver == Eraser) still_running = eSaver.update(nowspr_ptr);
-            else if (nowsaver == Collisions) still_running = cSaver.update(nowspr_ptr);
-            if (panel->touched()) eSaver.saver_touch(nowspr_ptr, panel->touch_pt(HORZ), panel->touch_pt(VERT));
+            touchx = -1;
+            touchy = -1;
+            if (panel->touched()) {
+                touchx = panel->touch_pt(HORZ);
+                touchy = panel->touch_pt(VERT);
+            }
+            if (nowsaver == Eraser) still_running = eSaver.update(nowspr_ptr, touchx, touchy);
+            else if (nowsaver == Collisions) still_running = cSaver.update(nowspr_ptr, touchx, touchy);
             if (!still_running) change_saver();
         }
         else if (!mule_drawn) {
             nowspr_ptr->fillSprite(TFT_BLACK);
-            nowspr_ptr->pushImageRotateZoom(85, 85, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, TFT_BLACK);
+            nowspr_ptr->pushImageRotateZoomWithAA(85, 85, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, TFT_BLACK);
             mule_drawn = true;
         }
         // if (fullscreen_screensaver_test) {

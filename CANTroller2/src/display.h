@@ -285,12 +285,7 @@ class Display {
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
     Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim)
-        : _tft(), neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {
-        if (fullscreen_screensaver_test)
-            flexpanel.init(&_tft, touch, 0, 0, disp_width_pix, disp_height_pix);
-        else flexpanel.init(&_tft, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
-        animations.init(&flexpanel, sim);
-    }
+        : _tft(), neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {}
     Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim) 
         : _tft(), neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {
         Display(_neo, _touch, _idiots, _sim);
@@ -358,6 +353,9 @@ class Display {
         for (int32_t row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
         yield();
         Serial.printf(" ..");  //
+        if (fullscreen_screensaver_test) flexpanel.init(&_tft, touch, 0, 0, disp_width_pix, disp_height_pix);
+        else flexpanel.init(&_tft, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
+        animations.init(&flexpanel, sim);
         _tft.fillScreen(TFT_BLACK);  // Black out the whole screen
         if (!fullscreen_screensaver_test) {
             Serial.printf(" ..");  //
