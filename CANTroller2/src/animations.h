@@ -64,7 +64,6 @@ LGFX_Sprite flexpanel_sp[2];  // , datapage_sp[2], bargraph_sp[2], idiots_sp[2];
 // volatile int DrawSp = 0;
 // volatile bool pushed[2];
 // volatile bool drawn[2];
-
 class FlexPanel {
   public:
     LGFX_Sprite* nowspr;
@@ -393,7 +392,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     enum savershapes : int { Wedges, Dots, Rings, Ellipses, Boxes, Ascii, Rotate, NumSaverShapes };
  private:
     LGFX_Sprite* sprite;
-    int sprsize[2], rotate = -1;
+    int sprsize[2], rotate = -1, scaler = 1;
     int point[2], plast[2], er[2];
     int eraser_rad = 14, eraser_rad_min = 22, eraser_rad_max = 40, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, boxsize[2], now = 0;
@@ -436,6 +435,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         saverCycleTimer.set(saver_cycletime_us);
         refresh_limit = 11111;  // 90 Hz limit
         screenRefreshTimer.set(refresh_limit);
+        scaler = std::max(1, (sprsize[HORZ] + sprsize[VERT])/200);
         // _draw_count = _loop_count = 0;
         _is_running = true;
     }
@@ -461,7 +461,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             if (pensat > 255.0) pensat = 100.0;
             pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint16_t>(++penhue, (uint8_t)pensat, 200 + random(56));
         }
-        spr->fillCircle(x, y, 20, pencolor);
+        spr->fillCircle(x, y, 20 * scaler, pencolor);
     }
     int update(LGFX_Sprite* _nowspr) {
         sprite = _nowspr;
@@ -477,7 +477,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     void drawsprite() {
         // Serial.printf("\r%d,%d,%d ", shape, shapes_done, cycle);
         for (int axis = 0; axis <= 1; axis++) point[axis] = random(sprsize[axis]);
-        if (shape == Rotate) ++rotate %= Ascii;
+        if (shape == Rotate) ++rotate %= NumSaverShapes;
         else rotate = shape;
         if ((cycle != 2) || !has_eraser) {
             spothue -= 10;
@@ -499,7 +499,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 for (int i = 0; i < 6 + random(20); i++) {
                     sat = 100 + random(156);
                     brt = 90 + random(166);
-                    sprite->drawEllipse(point[HORZ], point[VERT], d[0] - i, d[1] + i, hsv_to_rgb<uint16_t>(spothue + ((mult * i) >> 1), sat, brt));
+                    sprite->drawEllipse(point[HORZ], point[VERT], scaler * d[0] - i, scaler * d[1] + i, hsv_to_rgb<uint16_t>(spothue + ((mult * i) >> 1), sat, brt));
                 }
             }
             else if (rotate == Rings) {
@@ -511,19 +511,19 @@ class EraserSaver {  // draws colorful patterns to exercise
                 uint8_t c2 = hsv_to_rgb<uint8_t>(hue, sat, brt-10);
                 // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/655.35), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
                 for (int xo = -1; xo <= 1; xo += 2) {
-                    sprite->drawCircle(point[HORZ], point[VERT] + xo, d, c);
-                    sprite->drawCircle(point[HORZ] + xo, point[VERT], d, c);
+                    sprite->drawCircle(point[HORZ], point[VERT] + xo, d * scaler, c);
+                    sprite->drawCircle(point[HORZ] + xo, point[VERT], d * scaler, c);
                 }
                 for (int edge = -1; edge <= 1; edge += 2)
-                    sprite->drawCircle(point[HORZ], point[VERT], d + edge, c2);
+                    sprite->drawCircle(point[HORZ], point[VERT], d * scaler + edge, c2);
             }
             else if (rotate == Dots)
                 for (int star = 0; star < 12; star++)
-                    sprite->fillCircle(random(sprsize[HORZ]), random(sprsize[VERT]), 2 + random(2), hsv_to_rgb<uint8_t>((uint16_t)((spothue >> 1) * (1 + random(2))), 128 + random(128), 160 + random(96)));  // hue_to_rgb16(random(255)), TFT_BLACK);
+                    sprite->fillCircle(random(sprsize[HORZ]), random(sprsize[VERT]), 2 * scaler + random(2), hsv_to_rgb<uint8_t>((uint16_t)((spothue >> 1) * (1 + random(2))), 128 + random(128), 160 + random(96)));  // hue_to_rgb16(random(255)), TFT_BLACK);
             else if (rotate == Boxes) {
                 boxrad = 2 + random(2);
                 boxminsize = 2 * boxrad + 10;
-                int longer = random(2);
+                int longer = random(2) * scaler;
                 boxsize[longer] = boxminsize + random(sprsize[HORZ] - boxminsize);
                 boxsize[!longer] = boxminsize + random(smax(0, boxmaxarea / boxsize[longer] - boxminsize));
                 for (int dim = 0; dim <= 1; dim++) point[dim] = -boxsize[dim] / 2 + random(sprsize[dim]);
@@ -558,7 +558,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             }
             // Serial.printf(" e %3d,%3d,%3d,%3d,%3d\n", (sprsize[HORZ] / 2) + erpos[HORZ], (sprsize[VERT] / 2) + erpos[VERT], eraser_rad, eraser_velo[HORZ], eraser_velo[VERT]);
             // sprite->fillCircle((sprsize[HORZ] / 2) + erpos[HORZ], (sprsize[VERT] / 2) + erpos[VERT], 20, pencolor);
-            sprite->fillCircle((sprsize[HORZ] / 2) + erpos[HORZ], (sprsize[VERT] / 2) + erpos[VERT], eraser_rad, (uint8_t)TFT_BLACK);
+            sprite->fillCircle((sprsize[HORZ] / 2) + erpos[HORZ], (sprsize[VERT] / 2) + erpos[VERT], eraser_rad * scaler, (uint8_t)TFT_BLACK);
         }
         if (saver_lotto) sprite->drawString("do drugs", sprsize[HORZ] / 2, sprsize[VERT] / 2);
         for (int axis = HORZ; axis <= VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
@@ -583,7 +583,7 @@ class EraserSaver {  // draws colorful patterns to exercise
 class AnimationManager {
   private:
     enum saverchoices : int { Eraser, Collisions, NumSaverMenu, Blank };
-    int nowsaver = Eraser, still_running = 0;
+    int nowsaver = Collisions, still_running = 0;
     LGFX* mylcd;
     LGFX_Sprite* nowspr_ptr;
     LGFX_Sprite arrowspr;
