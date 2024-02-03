@@ -398,9 +398,9 @@ class EraserSaver {  // draws colorful patterns to exercise
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, boxsize[2], now = 0;
     int eraser_velo[2] = {random(eraser_velo_max), random(eraser_velo_max)}, shapes_per_run = 5, shapes_done = 0;
     int erpos_max[2];
-    uint8_t saver_illicit_prob = 12;
+    uint8_t saver_illicit_prob = 12, wclast, pencolor = (uint8_t)TFT_RED;
     float pensat = 200.0;
-    uint16_t pencolor = TFT_RED, wclast, spothue = 65535, slowhue = 0, penhue;
+    uint16_t spothue = 65535, slowhue = 0, penhue;
     int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 1200, shape = random(Rotate);
     static constexpr uint32_t saver_cycletime_us = 18000000;
     Timer saverCycleTimer, pentimer = Timer(1500000);
@@ -459,7 +459,8 @@ class EraserSaver {  // draws colorful patterns to exercise
         if (pentimer.expireset()) {
             pensat += 1.5;
             if (pensat > 255.0) pensat = 100.0;
-            pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint16_t>(++penhue, (uint8_t)pensat, 200 + random(56));
+            penhue += 150;
+            pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + random(56));
         }
         spr->fillCircle(x, y, 20 * scaler, pencolor);
     }
@@ -484,7 +485,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             if (!random(20)) spothue = random(65535);
             if (spothue & 1) slowhue += 13;
             if (rotate == Wedges) {
-                uint16_t wc = hsv_to_rgb<uint16_t>(random(65536), 127 + (spothue >> 9));
+                uint8_t wc = hsv_to_rgb<uint8_t>(random(65536), 127 + (spothue >> 9));
                 float im = 0;
                 if (plast[VERT] != point[VERT]) im = (float)(plast[HORZ] - point[HORZ]) / (float)(plast[VERT] - point[VERT]);
                 sprite->fillCircle(plast[HORZ], plast[VERT], 3, wc);
@@ -499,7 +500,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 for (int i = 0; i < 6 + random(20); i++) {
                     sat = 100 + random(156);
                     brt = 90 + random(166);
-                    sprite->drawEllipse(point[HORZ], point[VERT], scaler * d[0] - i, scaler * d[1] + i, hsv_to_rgb<uint16_t>(spothue + ((mult * i) >> 1), sat, brt));
+                    sprite->drawEllipse(point[HORZ], point[VERT], scaler * d[0] - i, scaler * d[1] + i, hsv_to_rgb<uint8_t>(spothue + ((mult * i) >> 1), sat, brt));
                 }
             }
             else if (rotate == Rings) {
@@ -523,7 +524,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             else if (rotate == Boxes) {
                 boxrad = 2 + random(2);
                 boxminsize = 2 * boxrad + 10;
-                int longer = random(2) * scaler;
+                int longer = random(2);
                 boxsize[longer] = boxminsize + random(sprsize[HORZ] - boxminsize);
                 boxsize[!longer] = boxminsize + random(smax(0, boxmaxarea / boxsize[longer] - boxminsize));
                 for (int dim = 0; dim <= 1; dim++) point[dim] = -boxsize[dim] / 2 + random(sprsize[dim]);
@@ -536,10 +537,10 @@ class EraserSaver {  // draws colorful patterns to exercise
                     uint16_t hue = point[VERT] * 65535 / sprite->height();
                     uint8_t sat = point[HORZ] * 255 / sprite->width();
                     String letter = (String)((char)(0x21 + random(0x5d)));
-                    uint16_t c = hsv_to_rgb<uint16_t>(hue, sat, 100 + 100 * (spothue > 32767) + random(56));
+                    uint8_t c = hsv_to_rgb<uint8_t>(hue, sat, 100 + 100 * (spothue > 32767) + random(56));
                     sprite->drawString(letter, point[HORZ]+1, point[VERT]+1);
                     sprite->drawString(letter, point[HORZ]-1, point[VERT]-1);
-                    sprite->setTextColor(hsv_to_rgb<uint16_t>(hue, sat, 100 + 100 * (spothue > 32767) + random(56)));
+                    sprite->setTextColor(hsv_to_rgb<uint8_t>(hue, sat, 100 + 100 * (spothue > 32767) + random(56)));
                     sprite->drawString(letter, point[HORZ], point[VERT]);
                     sprite->setTextColor(TFT_BLACK);  // allows subliminal messaging
                 }
