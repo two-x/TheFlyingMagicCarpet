@@ -38,6 +38,7 @@
 #define PNK  0xe3  // pink is the best color
 #define MPNK 0xeb  // we need all shades of pink
 #define LPNK 0xf3  // especially light pink, the champagne of pinks
+#define NON  0x45  // used as default value when color is unspecified
 static constexpr int simgriddir[4][3] = {
     { JOY_PLUS,  JOY_PLUS,  JOY_PLUS,  },
     { JOY_MINUS, JOY_MINUS, JOY_MINUS, },
@@ -68,7 +69,7 @@ class FlexPanel {
   public:
     LGFX_Sprite* nowspr;
     LGFX* lcd;
-    int touchp[2], shifter;
+    int touchp[2];
     int corner[2], sprsize[2];
     Touchscreen* _touch;
     // std::size_t flip = 0;
@@ -132,7 +133,7 @@ class FlexPanel {
     //     return flip;
     // }
     void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref) {
-        shifter = sizeof(uint32_t) / sprite_color_depth;
+        // shifter = sizeof(uint32_t) / sprite_color_depth;
         union {  // source
             std::uint32_t* s32;
             std::uint8_t* s;
@@ -195,6 +196,7 @@ class CollisionsSaver {
         int8_t m;
         uint8_t color;
     };
+    uint8_t sqrme;
     ball_info_t* balls;
     ball_info_t* a;
     LGFX_Sprite* sprite;
@@ -220,15 +222,35 @@ class CollisionsSaver {
         balls = &_balls[flip][0];
         // sprite = &(flexpanel_sp[flip]);
         sprite->clear();
-        for (float i = 0.125; i < 1.0; i += 0.125) sprite->drawGradientVLine((int)(i * (sprwidth-1)), 0, sprheight, hsv_to_rgb<uint8_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint8_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
-        for (float i = 0.125; i < 1.0; i += 0.125) sprite->drawGradientHLine(0, (int)(i * (sprheight-1)), sprwidth, hsv_to_rgb<uint8_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint8_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
-        for (float i = 0.0; i <= 1.0; i += 1.0) sprite->drawGradientVLine((int)(i * (sprwidth-1)), 0, sprheight, hsv_to_rgb<uint8_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint8_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
-        for (float i = 0.0; i <= 1.0; i += 1.0) sprite->drawGradientHLine(0, (int)(i * (sprheight-1)), sprwidth, hsv_to_rgb<uint8_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint8_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
+        for (float i = 0.125; i < 1.0; i += 0.125)
+            sprite->drawGradientVLine((int)(i * (sprwidth-1)), 0, sprheight, (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200) >> 8), (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200) >> 8));
+        for (float i = 0.125; i < 1.0; i += 0.125)
+            sprite->drawGradientHLine(0, (int)(i * (sprheight-1)), sprwidth, (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200) >> 8), (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200) >> 8));
+        for (float i = 0.0; i <= 1.0; i += 1.0)
+            sprite->drawGradientVLine((int)(i * (sprwidth-1)), 0, sprheight, (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200) >> 8), (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200) >> 8));
+        for (float i = 0.0; i <= 1.0; i += 1.0) 
+            sprite->drawGradientHLine(0, (int)(i * (sprheight-1)), sprwidth, (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200) >> 8), (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200) >> 8));
         for (std::uint32_t i = 0; i < _ball_count; i++) {
             a = &balls[i];
-            sprite->fillCircle(a->x >> SHIFTSIZE, a->y >> SHIFTSIZE, a->r >> SHIFTSIZE, a->color);
+            sprite->fillCircle(a->x >> SHIFTSIZE, a->y >> SHIFTSIZE, a->r >> SHIFTSIZE, (uint8_t)(a->color));
         }
         // _draw_count++;
+    }
+    void new_ball(int ballno) {
+        auto a = &_balls[_loop_count & 1][ballno];
+        a->color = lgfx::color332(100 + (rand() % 155), 100 + (rand() % 155), 100 + (rand() % 155));
+        Serial.printf("%02x ", a->color);
+        a->x = _width * random(2);
+        a->dx = (rand() & (3 << SHIFTSIZE)) + 1;
+        a->dy = (rand() & (3 << SHIFTSIZE)) + 1;
+        for (int i=0; i<=2; i++) if (!random(ball_redoubler_rate)) sqrme *= 2;
+        // a->color = lgfx::color888(100 + (rand() % 155), 100 + (rand() % 155), 100 + (rand() % 155));
+        // Serial.printf("%02x ", a->color);
+        sqrme = (uint8_t)((float)(ball_radius_base + random(ball_radius_modifier)) * (float)(sprite->width() + sprite->height()));
+        a->r = sqrme << SHIFTSIZE;  // (sqrme * sqrme)));
+        a->m = 4 + (ball_count & 0x07);
+        // a->r = (4 + (i & 0x07)) << SHIFTSIZE;
+        // a->m = 4 + (i & 0x07);
     }
     bool mainfunc(void) {
         bool new_round = false;
@@ -242,18 +264,7 @@ class CollisionsSaver {
                 new_round = true;
                 ball_count = 1;
             }
-            auto a = &_balls[_loop_count & 1][ball_count - 1];
-            // a->color = lgfx::color332(3 + (rand() % 5), 3 + (rand() % 5), 1 + (rand() % 3));
-            a->color = color_to_332((uint32_t)lgfx::color888(100 + (rand() % 155), 100 + (rand() % 155), 100 + (rand() % 155)));
-            a->x = _width * random(2);
-            a->y = 0;
-            a->dx = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
-            a->dy = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
-            uint8_t sqrme = (uint8_t)((float)(ball_radius_base + random(ball_radius_modifier)) * (float)(sprite->width() + sprite->height()));
-            for (int i=0; i<=2; i++) if (!random(ball_redoubler_rate)) sqrme *= 2;
-            a->r = sqrme << SHIFTSIZE;  // (sqrme * sqrme)));
-            a->m = 4 + (ball_count & 0x07);
-            // vTaskDelay(1);
+            new_ball(ball_count - 1);
         }
         frame_count++;
         _loop_count++;
@@ -358,16 +369,7 @@ class CollisionsSaver {
             spp[i]->setTextDatum(textdatum_t::top_left);
         }
         ball_thismax = BALL_MAX - random(25);
-        for (std::uint32_t i = 0; i < ball_count; ++i) {
-            auto a = &_balls[_loop_count & 1][i];
-            a->color = lgfx::color888(100 + (rand() % 155), 100 + (rand() % 155), 100 + (rand() % 155));
-            a->x = 0;
-            a->y = 0;
-            a->dx = (rand() & (3 << SHIFTSIZE)) + 1;
-            a->dy = (rand() & (3 << SHIFTSIZE)) + 1;
-            a->r = (4 + (i & 0x07)) << SHIFTSIZE;
-            a->m = 4 + (i & 0x07);
-        }
+        for (std::uint32_t i = 0; i < ball_count; ++i) new_ball(i);
         refresh_limit = 20000;  // 50 Hz limit
         screenRefreshTimer.set(refresh_limit);
         _is_running = true;
@@ -521,7 +523,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             }
             else if (rotate == Dots)
                 for (int star = 0; star < 12; star++)
-                    sprite->fillCircle(random(sprsize[HORZ]), random(sprsize[VERT]), 2 * scaler + random(2), hsv_to_rgb<uint8_t>((uint8_t)((spothue >> 1) * (1 + random(2))), 128 + random(128), 160 + random(96)));  // hue_to_rgb16(random(255)), BLK);
+                    sprite->fillCircle(random(sprsize[HORZ]), random(sprsize[VERT]), scaler * (2 + random(2)), hsv_to_rgb<uint8_t>((uint8_t)(spothue + (spothue >> 2) * random(4)), 128 + random(128), 160 + random(96)));  // hue_to_rgb16(random(255)), BLK);
             else if (rotate == Boxes) {
                 boxrad = 2 + random(2);
                 boxminsize = 2 * boxrad + 10;

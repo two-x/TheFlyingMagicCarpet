@@ -47,7 +47,7 @@ class IdiotLights {
         { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e, },  // 0 = "S" w/ crossout symbol
         { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x78, 0x70, 0x58, 0x4d, 0x07, 0x0f, },  // 1 = "S" w/ double arrow
         { 0x7f, 0x7f, 0x6b, 0x6b, 0x00, 0x70, 0x10, 0x10, 0x77, 0x65, 0x07, },  // 2 = "En" w/ degree symbol
-        { 0x7f, 0x30, 0x18, 0x30, 0x7f, 0x80, 0x7f, 0x10, 0x77, 0x65, 0x07, },  // 3 = "Wh" w/ degree symbol
+        { 0x7f, 0x30, 0x18, 0x30, 0x7f, 0x00, 0x7e, 0x10, 0x77, 0x65, 0x07, },  // 3 = "Wh" w/ degree symbol
         { 0x7f, 0x7f, 0x29, 0x0b, 0x76, 0x10, 0x70, 0x60, 0x00, 0x6f, 0x6f, },  // 4 = "Pn!"
         { 0x7a, 0x7f, 0x4f, 0x17, 0x06, 0x00, 0x63, 0x36, 0x1c, 0x36, 0x63, },  // 5 = hotrc
         { 0x16, 0x15, 0x0d, 0x60, 0x6f, 0x04, 0x6f, 0x60, 0x0f, 0x69, 0x66, },  // 6 = "SHD..."
@@ -86,10 +86,13 @@ class IdiotLights {
         "An", "ww",
         "Th", "Br", "St", "RC", "Sp", "Tc", "Pr", "Ps", "Tm", "Ot", "IO",
     };
-    uint8_t color[iconcount] = {
-        0xe9, 0xf1, 0xfd, 0xbd, 0x5e, 0x5f, 0x57, 0x4f, 0x6b, 0xab, 0xeb,
-        0xe9, 0xf1, 0xfd, 0xbd, 0x5e, 0x5f, 0x57, 0x4f, 0x6b, 0xab, 0xeb,
-        0xe9, 0xf1, 0xfd, 0xbd, 0x5e, 0x5f, 0x57, 0x4f, 0x6b, 0xab, 0xeb,
+    uint8_t color[2][iconcount] = {
+        { 0xe9, 0xf1, 0xf9, 0xfd, 0xbd, 0x5d, 0x5e, 0x5b, 0x53, 0x8b, 0xeb,
+          0xe9, 0xf1, 0xf9, 0xfd, 0xbd, 0x5d, 0x5e, 0x5b, 0x53, 0x8b, 0xeb,
+          0xe9, 0xf1, 0xf9, 0xfd, 0xbd, 0x5d, 0x5e, 0x5b, 0x53, 0x8b, 0xeb, },
+        { 0xa9, 0xad, 0xb1, 0xb5, 0x95, 0x55, 0x5a, 0x32, 0x2a, 0x66, 0xa6,
+          0xa9, 0xad, 0xb1, 0xb5, 0x95, 0x55, 0x5a, 0x32, 0x2a, 0x66, 0xa6,
+          0xa9, 0xad, 0xb1, 0xb5, 0x95, 0x55, 0x5a, 0x32, 0x2a, 0x66, 0xa6, }
     };
     bool last[iconcount];
     uint8_t idiot_saturation = 225;  // 170-195 makes nice bright yet distinguishable colors
@@ -101,7 +104,7 @@ class IdiotLights {
     void setup(NeopixelStrip* _neo) {
         myneo = _neo;
         // int n = new_idiot(&(err_sens_alarm[LOST]), "SL", { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e })
-        for (int32_t i=0; i<iconcount; i++) myneo->newIdiotLight(i, color[i], val(i));
+        for (int32_t i=0; i<iconcount; i++) myneo->newIdiotLight(i, color[ON][i], val(i));
         std::cout << "Idiot lights.. set up " << iconcount << " toggle icons & " << myneo->idiotcount << " neopixel hazard lights" << std::endl;
     }
     bool val(int index) { return *(vals[index]); }
@@ -112,7 +115,7 @@ class IdiotLights {
         for (int32_t i=0; i<iconcount; i++) {
             int division = row_count;
             uint32_t color32 = hsv_to_rgb<uint32_t>((65535 * (uint16_t)(i % division) / division + idiot_hue_offset), idiot_saturation, 255);  // , 0, 220);
-            color[i] = color_to_332(color32);  // 5957 = 2^16/11
+            color[ON][i] = color_to_332(color32);  // 5957 = 2^16/11
         }
     }
 };
@@ -495,12 +498,12 @@ class Display {
     void draw_hyphen(int32_t x_pos, int32_t y_pos, uint8_t color) {  // Draw minus sign in front of negative numbers
         _tft.drawFastHLine(x_pos+2, y_pos+3, 3, color);
     }
-    void draw_dynamic(int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target=-1, uint8_t color=0x45) {
+    void draw_dynamic(int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target=-1, uint8_t color=NON) {
         int32_t age_us = (color >= 0) ? 15 : (int32_t)((float)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
         int32_t x_base = disp_datapage_values_x;
         bool polarity = (value >= 0);  // polarity 0=negative, 1=positive
         if (strcmp(disp_values[lineno], disp_string) || value == 1234567 || disp_data_dirty) {  // If value differs, Erase old value and write new
-            if (color == 0x45) color = GRN;
+            if (color == NON) color = GRN;
             int32_t y_pos = lineno*disp_line_height_pix+disp_vshift_pix;
             if (polarity != disp_polarities[lineno]) draw_hyphen(x_base, y_pos, (!polarity) ? color : BLK);
             draw_string(x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], color, BLK, (color != disp_val_colors[lineno])); // +6*(arraysize(modecard[run.mode])+4-namelen)/2
@@ -532,10 +535,10 @@ class Display {
                 int32_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || t_pos < disp_bargraph_squeeze) ? BRN : ( (t_pos != n_pos) ? YEL : GRN );
                 t_pos = corner_x + constrain(t_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
                 if (t_pos != disp_targets[lineno] || (t_pos == n_pos)^(disp_needles[lineno] != disp_targets[lineno]) || disp_data_dirty) {
-                    draw_target_shape(disp_targets[lineno], corner_y, BLK, -1);  // Erase old target
+                    draw_target_shape(disp_targets[lineno], corner_y, BLK, NON);  // Erase old target
                     _tft.drawFastHLine(disp_targets[lineno]-(disp_targets[lineno] != corner_x+disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+7, 2+(disp_targets[lineno] != corner_x+disp_bargraph_width-disp_bargraph_squeeze), MGRY);  // Patch bargraph line where old target got erased
                     for (int32_t offset=0; offset<=2; offset++) _tft.drawFastVLine((corner_x+disp_bargraph_squeeze)+offset*(disp_bargraph_width/2 - disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+6, 3, WHT);  // Redraw bargraph graduations in case one got corrupted by target erasure
-                    draw_target_shape(t_pos, corner_y, tcolor, -1);  // Draw the new target
+                    draw_target_shape(t_pos, corner_y, tcolor, NON);  // Draw the new target
                     disp_targets[lineno] = t_pos;  // Remember position of target
                 }
             }
@@ -635,8 +638,8 @@ class Display {
     void draw_truth(int32_t lineno, bool truthy, int32_t styl=2) {  // 0:on/off, 1:yes/no, 2:true/false .
         draw_dynamic(lineno, (truthy) ? ((styl==0) ? "on" : ((styl==1) ? "yes" : "true")) : ((styl==0) ? "off" : ((styl==1) ? "no" : "false")), 1, -1, -1, -1, (truthy) ? LPUR : GPUR);
     }
-    void draw_runmode(int32_t _nowmode, int32_t _oldmode, uint8_t color_override=0x45) {  // color_override = -1 uses default color
-        int32_t color = (color_override == 0x45) ? colorcard[_nowmode] : color_override;
+    void draw_runmode(int32_t _nowmode, int32_t _oldmode, uint8_t color_override=NON) {  // color_override = -1 uses default color
+        int32_t color = (color_override == NON) ? colorcard[_nowmode] : color_override;
         int32_t x_new = disp_runmode_text_x + disp_font_width * (2 + strlen(modecard[_nowmode])) - 3;
         int32_t x_old = disp_runmode_text_x + disp_font_width * (2 + strlen(modecard[_oldmode])) - 3;
         draw_string(disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[_oldmode], "", BLK, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
@@ -694,8 +697,8 @@ class Display {
         }
     }
     void draw_idiotbitmap(int i, int32_t x, int32_t y) {
-        uint8_t bg = idiots->val(i) ? idiots->color[i] : BLK;
-        uint8_t color = idiots->val(i) ? BLK : darken_color(idiots->color[i]);
+        uint8_t bg = idiots->val(i) ? (uint8_t)(idiots->color[OFF][i]) : BLK;
+        uint8_t color = idiots->val(i) ? BLK : (uint8_t)(idiots->color[ON][i]);
         _tft.drawRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, bg);
         for (int xo = 0; xo < (2 * disp_font_width - 1); xo++)
             for (int yo = 0; yo < disp_font_height - 1; yo++)
@@ -703,8 +706,8 @@ class Display {
     }
     void draw_idiotlight(int32_t i, int32_t x, int32_t y) {
         if (idiots->icon[i][0] == 0xff) {  // 0xff in the first byte will draw 2-letter string instead of bitmap
-            _tft.fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (idiots->val(i) ? idiots->color[i] : BLK));  // MGRY);
-            _tft.setTextColor(idiots->val(i) ? BLK : darken_color(idiots->color[i]));  // darken_color((*(idiots->lights[index])) ? BLK : DGRY)
+            _tft.fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (idiots->val(i)) ? (uint8_t)(idiots->color[ON][i]) : BLK);  // MGRY);
+            _tft.setTextColor(idiots->val(i) ? BLK : (uint8_t)(idiots->color[OFF][i]));  // darken_color((*(idiots->lights[index])) ? BLK : DGRY)
             _tft.setCursor(x+1, y+1);
             _tft.print(idiots->letters[i]);
         }
@@ -775,7 +778,7 @@ class Display {
             disp_selected_val_dirty = false;
         }
         if (disp_runmode_dirty) {
-            draw_runmode(_nowmode, disp_oldmode, -1);
+            draw_runmode(_nowmode, disp_oldmode, NON);
             disp_oldmode = _nowmode;
             disp_runmode_dirty = false;
         }
