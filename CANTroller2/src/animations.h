@@ -6,38 +6,38 @@
 #define disp_simbuttons_y 48
 #define disp_simbuttons_w (disp_width_pix - disp_simbuttons_x)  // 156
 #define disp_simbuttons_h (disp_height_pix - disp_simbuttons_y)  // 192
-// #define BLK  0x0000  // greyscale: full black (RGB elements off)
-#define HGRY 0x2104  // greyscale: hella dark grey
-#define DGRY 0x39c7  // greyscale: very dark grey
-#define GRY1 0x8410  // greyscale: dark grey  (10000)(100 000)(10000) = 84 10
-#define GRY2 0xc618  // greyscale: light grey  (11000)(110 000)(11000) = C6 18
-#define LGRY 0xd6ba  // greyscale: very light grey
-#define WHT  0xffff  // greyscale: full white (RGB elements full on)
-#define RED  0xf800  // primary red (R element full on)
-#define YEL  0xffe0  // Secondary yellow (RG elements full on)
-#define GRN  0x07e0  // primary green (G element full on)
-#define CYN  0x07ff  // secondary cyan (GB elements full on)  (00000)(111 111)(11111) = 07 ff
-#define BLU  0x001f  // primary blue (B element full on)
-#define MGT  0xf81f  // secondary magenta (RB elements full on)
-#define DRED 0xb000  // dark red
-#define BORG 0xfa00  // blood orange (very reddish orange)
-#define BRN  0xfa40  // dark orange aka brown
-#define ORG  0xfca0  // 
-#define LYEL 0xfff8  // 
-#define GGRN 0x5cac  // a low saturation greyish pastel green
-#define TEAL 0x07f9  // this teal is barely distinguishable from cyan
-#define STBL 0x767d  // steel blue is desaturated light blue
-#define DCYN 0x0575  // dark cyan
-#define RBLU 0x043f  // royal blue
-#define MBLU 0x009f  // midnight blue
-#define INDG 0x601f  // indigo (deep blue with a hint of purple)
-#define ORCD 0xb81f  // orchid (lighter and less saturated purple)
-#define PUR  0x881f  // 
-#define GPUR 0x8c15  // a low saturation greyish pastel purple
-#define LPUR 0xc59f  // a light pastel purple
-#define PNK  0xfcf3  // pink is the best color
-#define DPNK 0xfa8a  // we need all shades of pink
-#define LPNK 0xfe18  // especially light pink, the champagne of pinks
+#define BLK  0x00  // greyscale: full black (RGB elements off)
+#define DGRY 0x49  // pseudo-greyscale: very dark grey (blueish)
+#define MGRY 0x6d  // pseudo-greyscale: medium grey (yellowish)
+#define LGRY 0xb6  // greyscale: very light grey
+#define WHT  0xff  // greyscale: full white (RGB elements full on)
+#define RED  0xe0  // primary red (R element full on)
+#define YEL  0xfc  // Secondary yellow (RG elements full on)
+#define GRN  0x1c  // primary green (G element full on)
+#define CYN  0x1f  // secondary cyan (GB elements full on)  (00000)(111 111)(11111) = 07 ff
+#define BLU  0x03  // primary blue (B element full on)
+#define MGT  0xe2  // secondary magenta (RB elements full on)
+#define DRED 0x80  // dark red
+#define BORG 0xe8  // blood orange (very reddish orange)
+#define BRN  0x88  // dark orange aka brown
+#define DBRN 0x44  // dark orange aka brown
+#define ORG  0xf0  // 
+#define LYEL 0xfe  // 
+#define GGRN 0x9e  // a low saturation greyish pastel green
+#define TEAL 0x1e  // this teal is barely distinguishable from cyan
+#define STBL 0x9b  // steel blue is desaturated light blue
+#define DCYN 0x12  // dark cyan
+#define RBLU 0x0b  // royal blue
+#define MBLU 0x02  // midnight blue
+#define INDG 0x43  // indigo (deep blue with a hint of purple)
+#define ORCD 0x8f  // orchid (lighter and less saturated purple)
+#define VIO  0x83  // 
+#define PUR  0x63
+#define GPUR 0x6a  // a low saturation greyish pastel purple
+#define LPUR 0xb3  // a light pastel purple
+#define PNK  0xe3  // pink is the best color
+#define MPNK 0xeb  // we need all shades of pink
+#define LPNK 0xf3  // especially light pink, the champagne of pinks
 static constexpr int simgriddir[4][3] = {
     { JOY_PLUS,  JOY_PLUS,  JOY_PLUS,  },
     { JOY_MINUS, JOY_MINUS, JOY_MINUS, },
@@ -83,7 +83,7 @@ class FlexPanel {
         sprsize[VERT] = _sprheight;
         Serial.printf("  multi purpose panel init.. ");
         lcd->startWrite();
-        lcd->setColorDepth(16);
+        lcd->setColorDepth(8);
         if (lcd->width() < lcd->height()) lcd->setRotation(lcd->getRotation() ^ 1);
         for (int i = 0; i <= 1; i++) flexpanel_sp[i].setColorDepth(sprite_color_depth);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
         auto framewidth = sprsize[HORZ];
@@ -187,13 +187,13 @@ class CollisionsSaver {
     // int flip;
     // int* draw_count_ptr;
     struct ball_info_t {
-        int32_t x;
-        int32_t y;
-        int32_t dx;
-        int32_t dy;
-        int32_t r;
-        int32_t m;
-        uint32_t color;
+        int8_t x;
+        int8_t y;
+        int8_t dx;
+        int8_t dy;
+        int8_t r;
+        int8_t m;
+        uint8_t color;
     };
     ball_info_t* balls;
     ball_info_t* a;
@@ -220,10 +220,10 @@ class CollisionsSaver {
         balls = &_balls[flip][0];
         // sprite = &(flexpanel_sp[flip]);
         sprite->clear();
-        for (float i = 0.125; i < 1.0; i += 0.125) sprite->drawGradientVLine((int)(i * (sprwidth-1)), 0, sprheight, hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
-        for (float i = 0.125; i < 1.0; i += 0.125) sprite->drawGradientHLine(0, (int)(i * (sprheight-1)), sprwidth, hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
-        for (float i = 0.0; i <= 1.0; i += 1.0) sprite->drawGradientVLine((int)(i * (sprwidth-1)), 0, sprheight, hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
-        for (float i = 0.0; i <= 1.0; i += 1.0) sprite->drawGradientHLine(0, (int)(i * (sprheight-1)), sprwidth, hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
+        for (float i = 0.125; i < 1.0; i += 0.125) sprite->drawGradientVLine((int)(i * (sprwidth-1)), 0, sprheight, hsv_to_rgb<uint8_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint8_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
+        for (float i = 0.125; i < 1.0; i += 0.125) sprite->drawGradientHLine(0, (int)(i * (sprheight-1)), sprwidth, hsv_to_rgb<uint8_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint8_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
+        for (float i = 0.0; i <= 1.0; i += 1.0) sprite->drawGradientVLine((int)(i * (sprwidth-1)), 0, sprheight, hsv_to_rgb<uint8_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint8_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
+        for (float i = 0.0; i <= 1.0; i += 1.0) sprite->drawGradientHLine(0, (int)(i * (sprheight-1)), sprwidth, hsv_to_rgb<uint8_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200), hsv_to_rgb<uint8_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200));
         for (std::uint32_t i = 0; i < _ball_count; i++) {
             a = &balls[i];
             sprite->fillCircle(a->x >> SHIFTSIZE, a->y >> SHIFTSIZE, a->r >> SHIFTSIZE, a->color);
@@ -243,7 +243,8 @@ class CollisionsSaver {
                 ball_count = 1;
             }
             auto a = &_balls[_loop_count & 1][ball_count - 1];
-            a->color = lgfx::color888(100 + (rand() % 155), 100 + (rand() % 155), 100 + (rand() % 155));
+            // a->color = lgfx::color332(3 + (rand() % 5), 3 + (rand() % 5), 1 + (rand() % 3));
+            a->color = color_to_332((uint32_t)lgfx::color888(100 + (rand() % 155), 100 + (rand() % 155), 100 + (rand() % 155)));
             a->x = _width * random(2);
             a->y = 0;
             a->dx = (rand() & (5 << SHIFTSIZE)) + 1;  // was (3 << SHIFTSIZE)) for slower balls
@@ -351,7 +352,7 @@ class CollisionsSaver {
     void reset(LGFX_Sprite* sp0, LGFX_Sprite* sp1) {
         LGFX_Sprite* spp[2] = { sp0, sp1 };
         for (int i = 0; i <= 1; i++) {
-            spp[i]->setBaseColor(TFT_BLACK);
+            spp[i]->setBaseColor(BLK);
             spp[i]->clear();
             spp[i]->setTextSize(1);
             spp[i]->setTextDatum(textdatum_t::top_left);
@@ -398,7 +399,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, boxsize[2], now = 0;
     int eraser_velo[2] = {random(eraser_velo_max), random(eraser_velo_max)}, shapes_per_run = 5, shapes_done = 0;
     int erpos_max[2];
-    uint8_t saver_illicit_prob = 12, wclast, pencolor = (uint8_t)TFT_RED;
+    uint8_t saver_illicit_prob = 12, wclast, pencolor = RED;
     float pensat = 200.0;
     uint16_t spothue = 65535, slowhue = 0, penhue;
     int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 1200, shape = random(Rotate);
@@ -423,11 +424,11 @@ class EraserSaver {  // draws colorful patterns to exercise
         LGFX_Sprite* spp[2] = { sp0, sp1 };
         shapes_done = cycle = 0;
         for (int i = 0; i <= 1; i++) {
-            spp[i]->setBaseColor(TFT_BLACK);
+            spp[i]->setBaseColor(BLK);
             spp[i]->setTextSize(1);
-            spp[i]->fillSprite(TFT_BLACK);
+            spp[i]->fillSprite(BLK);
             spp[i]->setTextDatum(textdatum_t::middle_center);
-            spp[i]->setTextColor(TFT_BLACK);
+            spp[i]->setTextColor(BLK);
             spp[i]->setFont(&fonts::Font4);
             spp[i]->setCursor(sprsize[HORZ] / 2, sprsize[VERT] / 2);
         }
@@ -447,7 +448,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     //     if (pentimer.expireset()) {
     //         pensat += 1.5;
     //         if (pensat > 255.0) pensat = 100.0;
-    //         pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint16_t>(++penhue, (uint8_t)pensat, 200 + random(56));
+    //         pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(++penhue, (uint8_t)pensat, 200 + random(56));
     //     }
     //     sprite->fillCircle(touchlast[HORZ], touchlast[VERT], 20, pencolor);
     //     // sprite->drawWedgeLine(touchlast[HORZ], touchlast[VERT], tp[HORZ], tp[VERT], 4, 4, pencolor, pencolor);  // savtouch_last_w, w, pencolor, pencolor);
@@ -489,7 +490,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 float im = 0;
                 if (plast[VERT] != point[VERT]) im = (float)(plast[HORZ] - point[HORZ]) / (float)(plast[VERT] - point[VERT]);
                 sprite->fillCircle(plast[HORZ], plast[VERT], 3, wc);
-                // sprite->drawCircle(point[HORZ], point[VERT], 3, TFT_BLACK);
+                // sprite->drawCircle(point[HORZ], point[VERT], 3, BLK);
                 for (int h=-4; h<=4; h++)
                     sprite->drawGradientLine(point[HORZ], point[VERT], plast[HORZ] + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wclast, wc);
                 wclast = wc;
@@ -520,7 +521,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             }
             else if (rotate == Dots)
                 for (int star = 0; star < 12; star++)
-                    sprite->fillCircle(random(sprsize[HORZ]), random(sprsize[VERT]), 2 * scaler + random(2), hsv_to_rgb<uint8_t>((uint16_t)((spothue >> 1) * (1 + random(2))), 128 + random(128), 160 + random(96)));  // hue_to_rgb16(random(255)), TFT_BLACK);
+                    sprite->fillCircle(random(sprsize[HORZ]), random(sprsize[VERT]), 2 * scaler + random(2), hsv_to_rgb<uint8_t>((uint8_t)((spothue >> 1) * (1 + random(2))), 128 + random(128), 160 + random(96)));  // hue_to_rgb16(random(255)), BLK);
             else if (rotate == Boxes) {
                 boxrad = 2 + random(2);
                 boxminsize = 2 * boxrad + 10;
@@ -542,7 +543,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                     sprite->drawString(letter, point[HORZ]-1, point[VERT]-1);
                     sprite->setTextColor(hsv_to_rgb<uint8_t>(hue, sat, 100 + 100 * (spothue > 32767) + random(56)));
                     sprite->drawString(letter, point[HORZ], point[VERT]);
-                    sprite->setTextColor(TFT_BLACK);  // allows subliminal messaging
+                    sprite->setTextColor(BLK);  // allows subliminal messaging
                 }
         }
         if ((cycle != 0) && has_eraser) {
@@ -559,7 +560,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             }
             // Serial.printf(" e %3d,%3d,%3d,%3d,%3d\n", (sprsize[HORZ] / 2) + erpos[HORZ], (sprsize[VERT] / 2) + erpos[VERT], eraser_rad, eraser_velo[HORZ], eraser_velo[VERT]);
             // sprite->fillCircle((sprsize[HORZ] / 2) + erpos[HORZ], (sprsize[VERT] / 2) + erpos[VERT], 20, pencolor);
-            sprite->fillCircle((sprsize[HORZ] / 2) + erpos[HORZ], (sprsize[VERT] / 2) + erpos[VERT], eraser_rad * scaler, (uint8_t)TFT_BLACK);
+            sprite->fillCircle((sprsize[HORZ] / 2) + erpos[HORZ], (sprsize[VERT] / 2) + erpos[VERT], eraser_rad * scaler, (uint8_t)BLK);
         }
         if (saver_lotto) sprite->drawString("do drugs", sprsize[HORZ] / 2, sprsize[VERT] / 2);
         for (int axis = HORZ; axis <= VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
@@ -621,13 +622,13 @@ class AnimationManager {
     //     // if (!is_drawing) is_pushing = false;
     //     panel->diffpush(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
     // }
-    void draw_simbutton(LGFX_Sprite* spr, int cntr_x, int cntr_y, int dir, uint16_t color) {
-        if (dir == JOY_PLUS)  spr->pushImage(cntr_x-16-5, cntr_y-16, 32, 32, blue_plus_32x32x8, TFT_BLACK);
-        else if (dir == JOY_MINUS) spr->pushImage(cntr_x-16-5, cntr_y-16, 32, 32, blue_minus_32x32x8, TFT_BLACK);
-        else if (dir == JOY_UP) spr->pushImage(cntr_x-16-5, cntr_y-16, 32, 32, blue_up_32x32x8, TFT_BLACK);
-        else if (dir == JOY_DN) spr->pushImageRotateZoom(cntr_x-5, cntr_y, 16, 16, 180, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
-        else if (dir == JOY_LT) spr->pushImageRotateZoom(cntr_x-5, cntr_y, 16, 16, 270, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
-        else if (dir == JOY_RT) spr->pushImageRotateZoom(cntr_x-5, cntr_y, 16, 16, 90, 1, 1, 32, 32, blue_up_32x32x8, TFT_BLACK);
+    void draw_simbutton(LGFX_Sprite* spr, int cntr_x, int cntr_y, int dir, uint8_t color) {
+        if (dir == JOY_PLUS)  spr->pushImage(cntr_x-16-5, cntr_y-16, 32, 32, blue_plus_32x32x8, BLK);
+        else if (dir == JOY_MINUS) spr->pushImage(cntr_x-16-5, cntr_y-16, 32, 32, blue_minus_32x32x8, BLK);
+        else if (dir == JOY_UP) spr->pushImage(cntr_x-16-5, cntr_y-16, 32, 32, blue_up_32x32x8, BLK);
+        else if (dir == JOY_DN) spr->pushImageRotateZoom(cntr_x-5, cntr_y, 16, 16, 180, 1, 1, 32, 32, blue_up_32x32x8, BLK);
+        else if (dir == JOY_LT) spr->pushImageRotateZoom(cntr_x-5, cntr_y, 16, 16, 270, 1, 1, 32, 32, blue_up_32x32x8, BLK);
+        else if (dir == JOY_RT) spr->pushImageRotateZoom(cntr_x-5, cntr_y, 16, 16, 90, 1, 1, 32, 32, blue_up_32x32x8, BLK);
 
     // void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void* data, uint32_t transparent, color_depth_t depth, const T* palette)
 
@@ -636,7 +637,7 @@ class AnimationManager {
 
     void draw_simbuttons (LGFX_Sprite* spr, bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
         if (!create) {
-            spr->fillSprite(TFT_BLACK);
+            spr->fillSprite(BLK);
             return;
         }
         spr->setTextDatum(textdatum_t::middle_center);
@@ -646,13 +647,13 @@ class AnimationManager {
                 int32_t cntr_x = touch_cell_h_pix*col + (touch_cell_h_pix>>1) +2;
                 int32_t cntr_y = touch_cell_v_pix*row + (touch_cell_v_pix>>1);
                 if (strcmp(simgrid[row][col], "    ")) {
-                    draw_simbutton(spr, cntr_x + 2, cntr_y - 1, simgriddir[row][col], LYEL);  // for 3d look
+                    draw_simbutton(spr, cntr_x + 2, cntr_y - 1, simgriddir[row][col], YEL);  // for 3d look
                     draw_simbutton(spr, cntr_x, cntr_y, simgriddir[row][col], DGRY);
-                    // spr->fillRoundRect(cntr_x - 20, cntr_y - touch_cell_v_pix/2 - 10, 40, 20, 5, TFT_DARKGRAY);
-                    // spr->drawRoundRect(cntr_x - 20, cntr_y - touch_cell_v_pix/2 - 10, 40, 20, 5, TFT_BLACK);
+                    // spr->fillRoundRect(cntr_x - 20, cntr_y - touch_cell_v_pix/2 - 10, 40, 20, 5, DGRY);
+                    // spr->drawRoundRect(cntr_x - 20, cntr_y - touch_cell_v_pix/2 - 10, 40, 20, 5, BLK);
                     if (row % 2) {
                         spr->setFont(&fonts::FreeSans9pt7b);
-                        spr->setTextColor(TFT_BLACK);
+                        spr->setTextColor(BLK);
                         spr->drawString(simgrid[row][col], cntr_x-5 - 1, cntr_y - touch_cell_v_pix/2 + 5 - 1);
                         spr->drawString(simgrid[row][col], cntr_x-5 + 1, cntr_y - touch_cell_v_pix/2 + 5 + 1);
                         spr->setTextColor(LYEL);
@@ -664,7 +665,7 @@ class AnimationManager {
         // draw_reticles(spr);
         // spr->setTextDatum(textdatum_t::top_left);
         // spr->setFont(&fonts::Font0);
-        spr->setTextColor(TFT_BLACK);
+        spr->setTextColor(BLK);
     }
     void calc_fps() {
         int64_t now = fps_timer.elapsed();
@@ -685,8 +686,8 @@ class AnimationManager {
             if (!still_running) change_saver();
         }
         else if (!mule_drawn) {
-            nowspr_ptr->fillSprite(TFT_BLACK);
-            nowspr_ptr->pushImageRotateZoom(85, 85, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, TFT_BLACK);
+            nowspr_ptr->fillSprite(BLK);
+            nowspr_ptr->pushImageRotateZoom(85, 85, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, BLK);
             mule_drawn = true;
         }
         // if (fullscreen_screensaver_test) {
@@ -697,7 +698,7 @@ class AnimationManager {
             draw_simbuttons(nowspr_ptr, sim->enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
         }
         else if (simulating_last) {
-            nowspr_ptr->fillSprite(TFT_BLACK);
+            nowspr_ptr->fillSprite(BLK);
             mule_drawn = false;
         }
         simulating_last = sim->enabled();

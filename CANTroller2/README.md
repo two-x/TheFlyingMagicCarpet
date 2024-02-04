@@ -49,6 +49,7 @@ SD interface (not yet implemented) is integrated with touchscreen module. We hop
 1. [free images](http://iconarchive.com/) 1. resize to pixels needed, jpg w/ black backgd  2. convert to rgb565 color 
 1. [image to rgb565 color converter](https://www.youtube.com/redirect?event=video_description&redir_token=QUFFLUhqbkYtMGJvMS1VVWV0ZUpIb1Y4U2U2QzRLM3BKZ3xBQ3Jtc0tudG5MS1hVdmlLajdrNHFMWWtWUkFGTFNadUhaWkVob2ExNV8ya29kLXFmcDh1SEVINDFEeWtSX3A0SW40UlNTcy1CYVlSTTV5cXJKM25VcGxoWjdxSk9kZVFadURVWHhJcU9hMVRUWENyVGVjRkw4aw&q=http%3A%2F%2Fwww.rinkydinkelectronics.com%2Ft_imageconverter565.php&v=U4jOFLFNZBI)
 1. [rgb565 color picker](http://www.barth-dev.de/online/rgb565)
+1. [dope rgb332 color picker](https://roger-random.github.io/RGB332_color_wheel_three.js)
 1. [named colors](https://wiki.tcl-lang.org/page/Colors+with+Names)
 1. [font0 character map (use right-side map)](https://learn.adafruit.com/assets/103682)
 1. [SD card formatter](https://www.sdcard.org/downloads/formatter/)

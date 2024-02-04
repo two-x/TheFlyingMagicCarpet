@@ -5,6 +5,42 @@
 NeoPixelBus<NeoGrbFeature, NeoSk6812Method> neoobj(striplength, neopixel_pin);  // NeoWs2812Method, NeoWs2812xMethod, NeoSk6812Method, NeoEsp32Rmt0Ws2812xMethod, NeoEsp32I2s1800KbpsMethod, NeoEsp32I2s1Sk6812Method, 
 // Default for esp32 is dma via I2S bus 1 at 800kHz using RMT. Don't know the protocol difference between "Ws2812", "Ws2812x", and "Sk6812"
 // Run neos in a task example: https://github.com/Makuna/NeoPixelBus/wiki/ESP32-and-RTOS-Tasks
+uint32_t color_to_888(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to uint32 in format 0x00RRGGBB
+    return (static_cast<uint32_t>(color565 & 0xf800) << 8) | (static_cast<uint32_t>(color565 & 0x7e0) << 5) | (static_cast<uint32_t>(color565 & 0x1f) << 3);
+}
+uint32_t color_to_888(uint8_t color332) {  
+    return (static_cast<uint32_t>(color332 & 0xe0) << 16) | (static_cast<uint32_t>(color332 & 0x1c) << 11) | (static_cast<uint32_t>(color332 & 0x3) << 6);
+}
+uint32_t color_to_888(colortype colorneo) {  
+    return (static_cast<uint32_t>(colorneo.R) << 16) | (static_cast<uint32_t>(colorneo.G) << 8) | static_cast<uint32_t>(colorneo.B);  // (static_cast<uint32_t>(color.W) << 24) | 
+}
+uint16_t color_to_565(uint32_t color888) {  // Convert uint32 color in format 0x00RRGGBB to uint16 5-6-5 encoded color value suitable for screen
+    return static_cast<uint16_t>(((color888 & 0xf80000) >> 8) | ((color888 & 0xfc00) >> 5) | ((color888 & 0xf8) >> 3));
+}
+uint16_t color_to_565(uint8_t color332) {  // Convert uint32 color in format 0x00RRGGBB to uint16 5-6-5 encoded color value suitable for screen
+    return ((static_cast<uint16_t>(color332) & 0xe0) << 8) | ((static_cast<uint16_t>(color332) & 0x1c) << 6) | ((static_cast<uint16_t>(color332) & 0x3) << 3);
+}
+uint16_t color_to_565(colortype colorneo) { 
+    return ((static_cast<uint16_t>(colorneo.R) & 0xf8) << 8) | ((static_cast<uint16_t>(colorneo.G) & 0xfc) << 3) | (((static_cast<uint16_t>(colorneo.B) & 0xf8) >> 3));
+}
+uint8_t color_to_332(uint16_t color565) {  // Convert uint32 color in format 0x00RRGGBB to uint16 5-6-5 encoded color value suitable for screen
+    return static_cast<uint8_t>(((color565 & 0xe000) >> 8) | ((color565 & 0x700) >> 6) | ((color565 & 0x18) >> 3));
+}
+uint8_t color_to_332(uint32_t color888) {  // 
+    return static_cast<uint8_t>(((color888 & 0xe00000) >> 16) | ((color888 & 0xe000) >> 11) | ((color888 & 0xc0) >> 6));
+}
+uint8_t color_to_332(colortype colorneo) {  
+    return (colorneo.R & 0xe0) | ((colorneo.G & 0xe0) >> 3) | ((colorneo.B & 0xc0) >> 6);
+}
+colortype color_to_neo(uint32_t color888) {  // 
+    return colortype((color888 >> 16) & 0xff, (color888 >> 8) & 0xff, color888 & 0xff);  // (static_cast<uint32_t>(color.W) << 24) | 
+}
+colortype color_to_neo(uint16_t color565) {  // 
+    return colortype((color565 & 0xf800) >> 8, (color565 & 0x7e0) >> 3, (color565 & 0x1f) << 3);  // , 0);
+}
+colortype color_to_neo(uint8_t color332) {  // 
+    return colortype(color332 & 0xe0, (color332 & 0x1c) << 3, (color332 & 0x3) << 6);  // , 0);
+}
 class NeopixelStrip {
   public:
     static const uint idiotcount = 7;
@@ -40,7 +76,7 @@ class NeopixelStrip {
     static const uint8_t numpixels = 1 + idiotcount;  //  + extIdiotCount;  // 15 pixels = heartbeat RGB + 7 onboard RGB + 7 external RGBW
     colortype neostrip[numpixels];
     colortype heartbeatColor, heartbeatNow;
-    uint16_t heartcolor16 = 0x0000;  // blackened heart
+    uint8_t heartcolor16 = 0x00;  // blackened heart
     bool breadboard = false;
     uint8_t fset[idiotcount][fnumset];
     colortype cidiot[idiotcount][cnumcolors];
@@ -50,12 +86,6 @@ class NeopixelStrip {
     uint32_t fevents[idiotcount][fevpages];
     uint8_t fevcurrpage = 0; uint8_t fevfilled = 0; uint32_t nowtime_us, nowepoch;  // , fevmask_master;
     Timer flashtimer;
-    uint32_t color_to_32b(colortype color);  // Convert library color type to 32b 0xRRGGBB format
-    uint32_t color_to_32b(uint16_t color565);  // Convert 5-6-5 encoded 16-bit color value to 32b 0xRRGGBB format
-    colortype color_to_Rgb(uint16_t color565);  // Convert 5-6-5 encoded 16-bit color value to library color type
-    colortype color_to_Rgb(uint32_t color);  // Convert 32b 0xRRGGBB format color value to library color type
-    uint16_t color_to_16b(uint32_t color);  // Convert 32b 0xRRGGBB format color to 5-6-5 encoded 16-bit color value
-    uint16_t color_to_16b(colortype color);  // Convert library color type to 5-6-5 encoded 16-bit color value
     float maxelement(float r, float g, float b);
     float midelement(float r, float g, float b);
     float minelement(float r, float g, float b);
@@ -74,12 +104,12 @@ class NeopixelStrip {
     void setbright(uint8_t bright_pc);
     void setdesaturation(float _desat_of_ten);  // a way to specify nite or daytime brightness levels
     void heartbeat_ena(bool onoroff);
-    void set_heartcolor(uint16_t newcolor);
-    void heartcolor_override(uint16_t color);
+    void set_heartcolor(uint8_t newcolor);
+    void heartcolor_override(uint8_t color);
     void heartbeat_update();
     void colorfade_update();
     uint32_t neopixelsAvailable();
-    bool newIdiotLight(uint _idiot, uint16_t color565, bool startboolstate = 0);
+    bool newIdiotLight(uint _idiot, uint8_t color332, bool startboolstate = 0);
     void setBoolState(uint _idiot, bool state);
     void setflash(uint _idiot, uint8_t count, uint8_t pulseh=1, uint8_t pulsel=1, int32_t onbrit=-1, int32_t color=0xffffff);
     void update(int16_t heart_color);
@@ -87,24 +117,6 @@ class NeopixelStrip {
     uint32_t idiot_neo_color(uint _idiot);
 };
 
-uint32_t NeopixelStrip::color_to_32b(colortype color) {  // Convert library color type to 32b 0xRRGGBB format
-    return (static_cast<uint32_t>(color.R) << 16) | (static_cast<uint32_t>(color.G) << 8) | static_cast<uint32_t>(color.B);  // (static_cast<uint32_t>(color.W) << 24) | 
-}
-uint32_t NeopixelStrip::color_to_32b(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to 32b 0xRRGGBB format
-    return ((uint32_t)color565 & 0xf800) << 8 | ((uint32_t)color565 & 0x7e0) << 5 | ((uint32_t)color565 & 0x1f) << 3;
-}
-colortype NeopixelStrip::color_to_Rgb(uint32_t color) {  // Convert 32b 0xRRGGBB format color value to library color type
-    return colortype((color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff);  // (static_cast<uint32_t>(color.W) << 24) | 
-}
-colortype NeopixelStrip::color_to_Rgb(uint16_t color565) {  // Convert 5-6-5 encoded 16-bit color value to library color type
-    return colortype((color565 & 0xf800) >> 8, (color565 & 0x7e0) >> 3, (color565 & 0x1f) << 3);  // , 0);
-}
-uint16_t NeopixelStrip::color_to_16b(uint32_t color) {  // Convert 32b 0xRRGGBB format color to 5-6-5 encoded 16-bit color value
-    return (int16_t)(((color & 0xf80000) >> 8) | ((color & 0xfc00) >> 5) | (color & 0xf8) >> 3);
-}
-uint16_t NeopixelStrip::color_to_16b(colortype color) {  // Convert library color type to 5-6-5 encoded 16-bit color value
-    return ((static_cast<uint16_t>(color.R) & 0xf8) << 8) | ((static_cast<uint16_t>(color.G) & 0xfc) << 3) | (((static_cast<uint16_t>(color.B) & 0xf8) >> 3));
-}
 float NeopixelStrip::maxelement(float r, float g, float b) {
     return (r > g) ? ((r > b) ? r : b) : ((g > b) ? g : b);  // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //smax(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
 }
@@ -119,7 +131,7 @@ colortype NeopixelStrip::dimmer(colortype color, uint8_t bright) {  // brightnes
     float rgb[3] = { static_cast<float>(color.R), static_cast<float>(color.G), static_cast<float>(color.B) };
     float fbright = (float)bright / maxelement(rgb[0], rgb[1], rgb[2]);  // smax(color.r, color.g, color.b);  // 2.55 = 0xff / 100
     for (int32_t element=0; element<3; element++) ret[element] = constrain((int32_t)(rgb[element] * fbright), 0, 255);
-    // printf("D br:%d  inc:%06x  outc:%02x%02x%02x\n", bright, color_to_32b(color), (uint8_t)ret[0], (uint8_t)ret[1], (uint8_t)ret[2]);
+    // printf("D br:%d  inc:%06x  outc:%02x%02x%02x\n", bright, color_to_888(color), (uint8_t)ret[0], (uint8_t)ret[1], (uint8_t)ret[2]);
     return colortype(ret[0], ret[1], ret[2]);  // return CRGB((float)(color.r * fbright), (float)(color.g * fbright), (float)(color.b * fbright));
 }
 colortype NeopixelStrip::desaturate(colortype color, int32_t _desat_of_ten) {  // desat_pc=0 has no effect, =10 desaturates all the way to greyscale, =-99 saturates to max. without change in brightness
@@ -159,7 +171,7 @@ void NeopixelStrip::refresh() {
     for (int32_t i=0; i<idiotcount; i++) {
         if (cidiot[i][cnow] != neostrip[i+1]) {
             neoobj.SetPixelColor (1+i, cidiot[i][cnow]);
-            neostrip[i + 1] = cidiot[i][cnow];  // color_to_Rgb(cidiot[i][cnow]);
+            neostrip[i + 1] = cidiot[i][cnow];  // color_to_neo(cidiot[i][cnow]);
             numledstowrite = 2 + i;  // + idiotCount;
         }
     }
@@ -201,11 +213,11 @@ void NeopixelStrip::setdesaturation(float _desat_of_ten) {  // a way to specify 
 void NeopixelStrip::heartbeat_ena(bool onoroff) {
     neo_heartbeat = onoroff;  // Start heart beating
 }
-void NeopixelStrip::set_heartcolor(uint16_t _newcolor) {
-    uint16_t newcolor = _newcolor;
-    if (heartbeat_override_color != 0x0000) newcolor = heartbeat_override_color;
+void NeopixelStrip::set_heartcolor(uint8_t _newcolor) {
+    uint8_t newcolor = _newcolor;
+    if (heartbeat_override_color != 0x00) newcolor = heartbeat_override_color;
     if (heartcolor16 != newcolor) {
-        heartbeatColor = color_to_Rgb(newcolor);
+        heartbeatColor = color_to_neo(newcolor);
         heartcolor_change = true;
         heartcolor16 = newcolor;
     }
@@ -240,11 +252,11 @@ void NeopixelStrip::colorfade_update() {
 uint32_t NeopixelStrip::neopixelsAvailable() {
     return idiotcount;
 }
-bool NeopixelStrip::newIdiotLight(uint _idiot, uint16_t color565, bool startboolstate) {
+bool NeopixelStrip::newIdiotLight(uint _idiot, uint8_t color332, bool startboolstate) {
     if (_idiot > idiotcount-1) return false;
     fset[_idiot][onoff] = startboolstate;
-    cidiot[_idiot][cnormal] = color_to_Rgb(color565);
-    cidiot[_idiot][clast] = color_to_Rgb((uint32_t)0);
+    cidiot[_idiot][cnormal] = color_to_neo(color332);
+    cidiot[_idiot][clast] = color_to_neo((uint32_t)0);
     fset[_idiot][fcount] = 0;
     setBoolState(_idiot, startboolstate);
     for (uint8_t pg = 0; pg < fevpages; pg++) fevents[_idiot][pg] = 0;
@@ -267,7 +279,7 @@ void NeopixelStrip::setflash(uint _idiot, uint8_t count, uint8_t pulseh, uint8_t
     fset[_idiot][fpulseh] = smax(pulseh, 1);
     fset[_idiot][fpulsel] = smax(pulsel, 1);
     fset[_idiot][fonbrit] = (onbrit == -1) ? hibright : (uint8_t)onbrit;
-    cidiot[_idiot][cflash] = dimmer((color == -1) ? cidiot[_idiot][cnormal] : color_to_Rgb((uint32_t)color), hibright);
+    cidiot[_idiot][cflash] = dimmer((color == -1) ? cidiot[_idiot][cnormal] : color_to_neo((uint32_t)color), hibright);
     cidiot[_idiot][cflash] = desaturate(dimmer(cidiot[_idiot][cflash], fset[_idiot][fonbrit]), desat_of_ten);
     for (uint8_t pg = 0; pg < fevpages; pg++) fevents[_idiot][pg] = 0;
     uint8_t filled = 0;
@@ -286,7 +298,7 @@ void NeopixelStrip::setflash(uint _idiot, uint8_t count, uint8_t pulseh, uint8_t
     }
 }
 uint32_t NeopixelStrip::idiot_neo_color(uint _idiot) { 
-    return color_to_32b(cidiot[_idiot][cnow]);
+    return color_to_888(cidiot[_idiot][cnow]);
 }
 void NeopixelStrip::enable_flashdemo(bool ena) {
     if (ena) {
