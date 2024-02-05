@@ -87,12 +87,12 @@ class IdiotLights {
         "Th", "Br", "St", "RC", "Sp", "Tc", "Pr", "Ps", "Tm", "Ot", "IO",
     };
     uint8_t color[2][iconcount] = {
-        { 0xe9, 0xf1, 0xf9, 0xfd, 0xbd, 0x5d, 0x5e, 0x5b, 0x53, 0x8b, 0xeb,
-          0xe9, 0xf1, 0xf9, 0xfd, 0xbd, 0x5d, 0x5e, 0x5b, 0x53, 0x8b, 0xeb,
-          0xe9, 0xf1, 0xf9, 0xfd, 0xbd, 0x5d, 0x5e, 0x5b, 0x53, 0x8b, 0xeb, },
         { 0xa9, 0xad, 0xb1, 0xb5, 0x95, 0x55, 0x5a, 0x32, 0x2a, 0x66, 0xa6,
           0xa9, 0xad, 0xb1, 0xb5, 0x95, 0x55, 0x5a, 0x32, 0x2a, 0x66, 0xa6,
-          0xa9, 0xad, 0xb1, 0xb5, 0x95, 0x55, 0x5a, 0x32, 0x2a, 0x66, 0xa6, }
+          0xa9, 0xad, 0xb1, 0xb5, 0x95, 0x55, 0x5a, 0x32, 0x2a, 0x66, 0xa6, },
+        { 0xe9, 0xf1, 0xf9, 0xfd, 0xbd, 0x5d, 0x5e, 0x5b, 0x53, 0x8b, 0xeb,
+          0xe9, 0xf1, 0xf9, 0xfd, 0xbd, 0x5d, 0x5e, 0x5b, 0x53, 0x8b, 0xeb,
+          0xe9, 0xf1, 0xf9, 0xfd, 0xbd, 0x5d, 0x5e, 0x5b, 0x53, 0x8b, 0xeb, }
     };
     bool last[iconcount];
     uint8_t idiot_saturation = 225;  // 170-195 makes nice bright yet distinguishable colors
@@ -138,7 +138,7 @@ class IdiotLights {
 char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
 bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
 bool disp_bool_values[6];
-bool disp_selected_val_dirty, disp_datapage_dirty, disp_data_dirty, disp_sidemenu_dirty, disp_runmode_dirty, disp_simbuttons_dirty, disp_idiots_dirty;
+bool disp_selected_val_dirty, disp_datapage_dirty, disp_data_dirty[disp_lines], disp_bools_dirty, disp_sidemenu_dirty, disp_runmode_dirty, disp_simbuttons_dirty, disp_idiots_dirty;
 int32_t disp_needles[disp_lines];
 int32_t disp_targets[disp_lines];
 int32_t disp_age_quanta[disp_lines];
@@ -199,7 +199,7 @@ static constexpr uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where un
     { 0x02, 0x45, 0x25, 0x12, 0x08, 0x24, 0x52, 0x51, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // % - just because the font one is feeble
     { 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // capital omega - for ohms
     { 0x08, 0x1c, 0x2a, 0x08, 0x00, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x41, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x3e, },  // googly eyes, are as goofy as they are stupid
-    { 0x3d, 0x00, 0x3e, 0x02, 0x3c, 0x00, 0x7f, 0x00, 0x7e, 0x22, 0x1c, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x3d, },  // inches or psi "in|psi"
+    { 0x3d, 0x00, 0x3e, 0x02, 0x3c, 0x00, 0x7f, 0x00, 0x3e, 0x12, 0x0c, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x3d, },  // inches or psi "in|psi"
 };  // These bitmaps are in the same format as the idiot light bitmaps, described below
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
 class TunerPanel {
@@ -373,7 +373,8 @@ class Display {
     // }
     void all_dirty() {
         disp_idiots_dirty = true;
-        disp_data_dirty = true;
+        for (int i=0; i<disp_lines; i++) disp_data_dirty[i] = true;
+        disp_bools_dirty = true;
         disp_selected_val_dirty = true;
         disp_datapage_dirty = true;
         disp_sidemenu_dirty = true;
@@ -499,10 +500,10 @@ class Display {
         _tft.drawFastHLine(x_pos+2, y_pos+3, 3, color);
     }
     void draw_dynamic(int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target=-1, uint8_t color=NON) {
-        int32_t age_us = (color >= 0) ? 15 : (int32_t)((float)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
+        int32_t age_us = (color != NON) ? 11 : (int32_t)((float)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
         int32_t x_base = disp_datapage_values_x;
         bool polarity = (value >= 0);  // polarity 0=negative, 1=positive
-        if (strcmp(disp_values[lineno], disp_string) || value == 1234567 || disp_data_dirty) {  // If value differs, Erase old value and write new
+        if (strcmp(disp_values[lineno], disp_string) || value == 1234567 || disp_data_dirty[lineno]) {  // If value differs, Erase old value and write new
             if (color == NON) color = GRN;
             int32_t y_pos = lineno*disp_line_height_pix+disp_vshift_pix;
             if (polarity != disp_polarities[lineno]) draw_hyphen(x_base, y_pos, (!polarity) ? color : BLK);
@@ -513,7 +514,7 @@ class Display {
             dispAgeTimer[lineno].reset();
             disp_age_quanta[lineno] = 0;
         }  // to-do: Fix failure to freshen aged coloration of unchanged characters of changed values
-        else if (age_us > disp_age_quanta[lineno] && age_us < 15)  {  // As readings age, redraw in new color. This may fail and redraw when the timer overflows? 
+        else if (age_us > disp_age_quanta[lineno] && age_us < 11)  {  // As readings age, redraw in new color. This may fail and redraw when the timer overflows? 
             // if (age_us < 8) color = 0x1fe0 + age_us*0x2000;  // Base of green with red added as you age, until yellow is achieved
             // else color = 0xffe0 - (age_us-8) * 0x100;  // Then lose green as you age further
             if (age_us < 8) color = 0x1c + (age_us << 5);  // Base of green with red added as you age, until yellow is achieved
@@ -528,13 +529,13 @@ class Display {
             int32_t corner_x = disp_bargraphs_x;    
             int32_t corner_y = lineno*disp_line_height_pix+disp_vshift_pix-1;
             int32_t n_pos = map(value, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
-            int32_t ncolor = (n_pos > disp_bargraph_width-disp_bargraph_squeeze || n_pos < disp_bargraph_squeeze) ? BRN : GRN;
+            int32_t ncolor = (n_pos > disp_bargraph_width-disp_bargraph_squeeze || n_pos < disp_bargraph_squeeze) ? RED : GRN;
             n_pos = corner_x + constrain(n_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
             if (target != -1) {  // If target value is given, draw a target on the bargraph too
                 int32_t t_pos = map(target, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
-                int32_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || t_pos < disp_bargraph_squeeze) ? BRN : ( (t_pos != n_pos) ? YEL : GRN );
+                int32_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || t_pos < disp_bargraph_squeeze) ? RED : ( (t_pos != n_pos) ? YEL : GRN );
                 t_pos = corner_x + constrain(t_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
-                if (t_pos != disp_targets[lineno] || (t_pos == n_pos)^(disp_needles[lineno] != disp_targets[lineno]) || disp_data_dirty) {
+                if (t_pos != disp_targets[lineno] || (t_pos == n_pos)^(disp_needles[lineno] != disp_targets[lineno]) || disp_data_dirty[lineno]) {
                     draw_target_shape(disp_targets[lineno], corner_y, BLK, NON);  // Erase old target
                     _tft.drawFastHLine(disp_targets[lineno]-(disp_targets[lineno] != corner_x+disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+7, 2+(disp_targets[lineno] != corner_x+disp_bargraph_width-disp_bargraph_squeeze), MGRY);  // Patch bargraph line where old target got erased
                     for (int32_t offset=0; offset<=2; offset++) _tft.drawFastVLine((corner_x+disp_bargraph_squeeze)+offset*(disp_bargraph_width/2 - disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+6, 3, WHT);  // Redraw bargraph graduations in case one got corrupted by target erasure
@@ -542,7 +543,7 @@ class Display {
                     disp_targets[lineno] = t_pos;  // Remember position of target
                 }
             }
-            if (n_pos != disp_needles[lineno] || disp_data_dirty) {
+            if (n_pos != disp_needles[lineno] || disp_data_dirty[lineno]) {
                 draw_bargraph_needle(n_pos, disp_needles[lineno], corner_y, ncolor);  // Let's draw a needle
                 disp_needles[lineno] = n_pos;  // Remember position of needle
             }
@@ -551,6 +552,7 @@ class Display {
             draw_bargraph_needle(-1, disp_needles[lineno], lineno*disp_line_height_pix+disp_vshift_pix-1, BLK);  // Erase the old needle
             disp_needles[lineno] = -1;  // Flag for no needle
         }
+        disp_data_dirty[lineno] = false;
     }
     int32_t significant_place(float value) {  // Returns the decimal place of the most significant digit of a positive float value, without relying on logarithm math
         int32_t place = 1;
@@ -656,7 +658,7 @@ class Display {
         draw_string(12, 12, 12+(selected_val+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_val], "", (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : LGRY), BLK);
     }
     void draw_bool(bool value, int32_t col) {  // Draws values of boolean data
-        if ((disp_bool_values[col-2] != value) || disp_data_dirty) {  // If value differs, Erase old value and write new
+        if ((disp_bool_values[col-2] != value) || disp_bools_dirty) {  // If value differs, Erase old value and write new
             int32_t x_mod = touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - arraysize(top_menu_buttons[col-2]-1)*(disp_font_width>>1) - 2;
             draw_string(x_mod, x_mod, 0, top_menu_buttons[col-2], "", (value) ? (uint8_t)GRN : (uint8_t)LGRY, (uint8_t)DGRY);
             disp_bool_values[col-2] = value;
@@ -697,8 +699,8 @@ class Display {
         }
     }
     void draw_idiotbitmap(int i, int32_t x, int32_t y) {
-        uint8_t bg = idiots->val(i) ? (uint8_t)(idiots->color[OFF][i]) : BLK;
-        uint8_t color = idiots->val(i) ? BLK : (uint8_t)(idiots->color[ON][i]);
+        uint8_t bg = idiots->val(i) ? (uint8_t)(idiots->color[ON][i]) : BLK;
+        uint8_t color = idiots->val(i) ? BLK : (uint8_t)(idiots->color[OFF][i]);
         _tft.drawRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, bg);
         for (int xo = 0; xo < (2 * disp_font_width - 1); xo++)
             for (int yo = 0; yo < disp_font_height - 1; yo++)
@@ -706,8 +708,8 @@ class Display {
     }
     void draw_idiotlight(int32_t i, int32_t x, int32_t y) {
         if (idiots->icon[i][0] == 0xff) {  // 0xff in the first byte will draw 2-letter string instead of bitmap
-            _tft.fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 2, (idiots->val(i)) ? (uint8_t)(idiots->color[ON][i]) : BLK);  // MGRY);
-            _tft.setTextColor(idiots->val(i) ? BLK : (uint8_t)(idiots->color[OFF][i]));  // darken_color((*(idiots->lights[index])) ? BLK : DGRY)
+            _tft.fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, (idiots->val(i)) ? (uint8_t)(idiots->color[ON][i]) : BLK);  // MGRY);
+            _tft.setTextColor(idiots->val(i) ? BLK : idiots->color[OFF][i]);  // darken_color((*(idiots->lights[index])) ? BLK : DGRY)
             _tft.setCursor(x+1, y+1);
             _tft.print(idiots->letters[i]);
         }
@@ -764,6 +766,11 @@ class Display {
         _tft.startWrite();
         if (disp_datapage_dirty) {
             static bool first = true;
+            for (int i = disp_fixed_lines; i < disp_lines; i++) {
+                disp_age_quanta[i] = 0;
+                dispAgeTimer[i].reset();
+                disp_data_dirty[i] = true;
+            }
             draw_datapage(datapage, datapage_last, first);
             first = false;
             disp_datapage_dirty = false;
@@ -936,7 +943,7 @@ class Display {
             draw_bool((_nowmode == BASIC), 3);
             draw_bool(ignition, 4);
             draw_bool(syspower, 5);
-            disp_data_dirty = false;
+            disp_bools_dirty = false;
             _procrastinate = true;  // don't do anything else in this same loop
         }
         _tft.endWrite();

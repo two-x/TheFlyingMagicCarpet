@@ -6,39 +6,39 @@
 #define disp_simbuttons_y 48
 #define disp_simbuttons_w (disp_width_pix - disp_simbuttons_x)  // 156
 #define disp_simbuttons_h (disp_height_pix - disp_simbuttons_y)  // 192
-#define BLK  0x00  // greyscale: full black (RGB elements off)
-#define DGRY 0x49  // pseudo-greyscale: very dark grey (blueish)
-#define MGRY 0x6d  // pseudo-greyscale: medium grey (yellowish)
-#define LGRY 0xb6  // greyscale: very light grey
-#define WHT  0xff  // greyscale: full white (RGB elements full on)
-#define RED  0xe0  // primary red (R element full on)
-#define YEL  0xfc  // Secondary yellow (RG elements full on)
-#define GRN  0x1c  // primary green (G element full on)
-#define CYN  0x1f  // secondary cyan (GB elements full on)  (00000)(111 111)(11111) = 07 ff
-#define BLU  0x03  // primary blue (B element full on)
-#define MGT  0xe2  // secondary magenta (RB elements full on)
-#define DRED 0x80  // dark red
-#define BORG 0xe8  // blood orange (very reddish orange)
-#define BRN  0x88  // dark orange aka brown
-#define DBRN 0x44  // dark orange aka brown
-#define ORG  0xf0  // 
-#define LYEL 0xfe  // 
-#define GGRN 0x9e  // a low saturation greyish pastel green
-#define TEAL 0x1e  // this teal is barely distinguishable from cyan
-#define STBL 0x9b  // steel blue is desaturated light blue
-#define DCYN 0x12  // dark cyan
-#define RBLU 0x0b  // royal blue
-#define MBLU 0x02  // midnight blue
-#define INDG 0x43  // indigo (deep blue with a hint of purple)
-#define ORCD 0x8f  // orchid (lighter and less saturated purple)
-#define VIO  0x83  // 
-#define PUR  0x63
-#define GPUR 0x6a  // a low saturation greyish pastel purple
-#define LPUR 0xb3  // a light pastel purple
-#define PNK  0xe3  // pink is the best color
-#define MPNK 0xeb  // we need all shades of pink
-#define LPNK 0xf3  // especially light pink, the champagne of pinks
-#define NON  0x45  // used as default value when color is unspecified
+const uint8_t BLK  = 0x00;  // greyscale: full black (RGB elements off)
+const uint8_t DGRY = 0x49;  // pseudo-greyscale: very dark grey (blueish)
+const uint8_t MGRY = 0x6d;  // pseudo-greyscale: medium grey (yellowish)
+const uint8_t LGRY = 0xb6;  // greyscale: very light grey
+const uint8_t WHT  = 0xff;  // greyscale: full white (RGB elements full on)
+const uint8_t RED  = 0xe0;  // primary red (R element full on)
+const uint8_t YEL  = 0xfc;  // Secondary yellow (RG elements full on)
+const uint8_t GRN  = 0x1c;  // primary green (G element full on)
+const uint8_t CYN  = 0x1f;  // secondary cyan (GB elements full on)  (00000)(111 111)(11111) = 07 ff
+const uint8_t BLU  = 0x03;  // primary blue (B element full on)
+const uint8_t MGT  = 0xe2;  // secondary magenta (RB elements full on)
+const uint8_t DRED = 0x80;  // dark red
+const uint8_t BORG = 0xe8;  // blood orange (very reddish orange)
+const uint8_t BRN  = 0x88;  // dark orange aka brown
+const uint8_t DBRN = 0x44;  // dark orange aka brown
+const uint8_t ORG  = 0xf0;  // 
+const uint8_t LYEL = 0xfe;  // 
+const uint8_t GGRN = 0x9e;  // a low saturation greyish pastel green
+const uint8_t TEAL = 0x1e;  // this teal is barely distinguishable from cyan
+const uint8_t STBL = 0x9b;  // steel blue is desaturated light blue
+const uint8_t DCYN = 0x12;  // dark cyan
+const uint8_t RBLU = 0x0b;  // royal blue
+const uint8_t MBLU = 0x02;  // midnight blue
+const uint8_t INDG = 0x43;  // indigo (deep blue with a hint of purple)
+const uint8_t ORCD = 0x8f;  // orchid (lighter and less saturated purple)
+const uint8_t VIO  = 0x83;  // 
+const uint8_t PUR  = 0x63;
+const uint8_t GPUR = 0x6a;  // a low saturation greyish pastel purple
+const uint8_t LPUR = 0xb3;  // a light pastel purple
+const uint8_t PNK  = 0xe3;  // pink is the best color
+const uint8_t MPNK = 0xeb;  // we need all shades of pink
+const uint8_t LPNK = 0xf3;  // especially light pink, the champagne of pinks
+const uint8_t NON  = 0x45;  // used as default value when color is unspecified
 static constexpr int simgriddir[4][3] = {
     { JOY_PLUS,  JOY_PLUS,  JOY_PLUS,  },
     { JOY_MINUS, JOY_MINUS, JOY_MINUS, },
