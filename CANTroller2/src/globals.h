@@ -374,6 +374,6 @@ class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regul
     //     return true;
     // }
 };
-Timer sleep_inactivity_timer(180000000);
+Timer sleep_inactivity_timer(10000000);
 Timer starterTimer(5000000);  // If remotely-started starting event is left on for this long, end it automatically  
 Timer panicTimer(15000000);  // How long should a panic stop last?  we can't stay mad forever

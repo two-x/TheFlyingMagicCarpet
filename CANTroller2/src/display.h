@@ -220,52 +220,16 @@ volatile int32_t drawclock;
 volatile int32_t idleclock;
 // static void push_task(void*) {
 #ifdef VIDEO_TASKS
-static void push_task(void *parameter) {
-    while (true) {
-        while (!(screensaver || sim.enabled()) || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh))  // taskYIELD(); || sim.enabled()
-            vTaskDelay(pdMS_TO_TICKS(1));
-        screenRefreshTimer.reset();
-        is_pushing = true;
-        flexpanel.diffpush(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
-        pushclock = (int32_t)screenRefreshTimer.elapsed();
-        flip = !flip;
-        is_pushing = pushtime = false;  // drawn = 
-    }
-    // vTaskDelete(NULL);
-}
-static void draw_task(void *parameter) {
-    while (true) {
-        while (!(screensaver || sim.enabled()) || pushtime) vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
-        is_drawing = true;
-        int32_t mark = (int32_t)screenRefreshTimer.elapsed();
-        if (screensaver) fps = animations.update();
-        // if (sim.enabled()) draw_simbuttons();
-        drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
-        idleclock = refresh_limit - pushclock - drawclock;
-        is_drawing = false;  // pushed = false;
-        pushtime = true;
-    }
-}
+static void push_task(void *parameter);
+static void draw_task(void *parameter);
 #else
-void push_task() {
-    is_pushing = true;
-    flexpanel.diffpush(&flexpanel_sp[flip], &flexpanel_sp[!flip]);
-    flip = !flip;
-    is_pushing = pushtime = false;  // drawn = 
-}
-void draw_task() {
-    is_drawing = true;
-    int32_t mark = (int32_t)screenRefreshTimer.elapsed();
-    fps = animations.update();
-    drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
-    idleclock = refresh_limit - pushclock - drawclock;
-    is_drawing = false;  // pushed = false;
-    pushtime = true;
-}
+void push_task();
+void draw_task();
+void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref);
 #endif
 class Display {
   private:
-    LGFX _tft = LGFX();
+    LGFX_Sprite* sprptr;
     NeopixelStrip* neo;
     Touchscreen* touch;
     Simulator* sim;
@@ -273,7 +237,7 @@ class Display {
     IdiotLights* idiots;
     Timer valuesRefreshTimer = Timer(160000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
     uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
-    bool _procrastinate = false, reset_finished = false, simulating_last;
+    bool _procrastinate = false, reset_finished = false, simulating_last, first = true;
     int disp_oldmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
     uint8_t palettesize = 2;
     // uint16_t palette[256] = { BLK, WHT };
@@ -282,14 +246,15 @@ class Display {
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
     Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim)
-        : _tft(), neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {}
-    Display(int8_t cs_pin, int8_t dc_pin, NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim) 
-        : _tft(), neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {
+        : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {
+    }
+    Display(int8_t cs_pin, int8_t dc_pin, LGFX* _lcd, NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim) 
+        : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {
         Display(_neo, _touch, _idiots, _sim);
     }
-    LGFX* get_tft() {
-        return &_tft;
-    }
+    // LGFX* getlcd() {
+    //     return &lcd;
+    // }
     void init_tasks() {
         #ifdef VIDEO_TASKS
         TaskHandle_t pushTaskHandle = nullptr;
@@ -321,25 +286,64 @@ class Display {
         //     }
         // }, "pushTask", 16384 , NULL, 5, &pushTaskHandle, runOnCore);  //  8192
     }
-    void make_sprites() {
-
+    void init_framebuffers(int _sprwidth, int _sprheight) {
+        int sprsize[2] = { _sprwidth, _sprheight };
+        Serial.printf("  multi purpose panel init.. ");
+        lcd.startWrite();
+        lcd.setColorDepth(8);
+        // if (lcd->width() < lcd->height()) lcd->setRotation(lcd->getRotation() ^ 1);
+        for (int i = 0; i <= 1; i++) framebuf[i].setColorDepth(sprite_color_depth);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
+        auto framewidth = sprsize[HORZ];
+        auto frameheight = sprsize[VERT];
+        bool fail = false;
+        bool using_psram = false;
+        for (std::uint32_t i = 0; !fail && i < 2; ++i) {
+            framebuf[i].setPsram(false);
+            fail = !framebuf[i].createSprite(framewidth, frameheight);
+        }
+        if (fail) {
+            fail = false;
+            for (std::uint32_t i = 0; !fail && i < 2; ++i) {
+                framebuf[i].setPsram(true);
+                fail = !framebuf[i].createSprite(framewidth, frameheight);
+            }
+            if (fail) {
+                fail = false;
+                if (framewidth >= 320) framewidth = 180;
+                if (frameheight >= 240) frameheight = 180;
+                for (std::uint32_t i = 0; !fail && i < 2; ++i) {
+                    fail = !framebuf[i].createSprite(framewidth, frameheight);
+                }
+                if (fail) {
+                    lcd.print("createSprite fail\n");
+                    // lgfx::delay(3000);
+                }
+                else using_psram = true;
+            }
+            else using_psram = true;
+        }
+        Serial.printf(" made 2x %dx%d sprites in %sram\n", framewidth, frameheight, using_psram ? "ps" : "native ");
+        for (int i=0; i<=1; i++) framebuf[i].clear();
+        // sp[0].pushImageDMA() draw(vp.x, vp.y);
+        // lcd->display();
+        lcd.endWrite();
     }
     void setup() {
         Serial.printf("Display..");  //
-        _tft.init();
-        // _tft.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
-        _tft.setColorDepth(8);
+        lcd.init();
+        // lcd.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
+        lcd.setColorDepth(8);
         Serial.printf(" ..");  //
 
-        _tft.begin();  // _tft.begin();
+        lcd.begin();  // lcd.begin();
         Serial.printf(" ..");  //
 
-        _tft.initDMA();
+        lcd.initDMA();
         Serial.printf(" ..");  //
-        // _tft.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
-        if (_tft.width() < _tft.height()) _tft.setRotation(_tft.getRotation() ^ 1);
-        // _tft.setTouch(touch_cal_data);
-        _tft.setSwapBytes(true);  // rearranges color ordering of 16bit colors when displaying image files
+        // lcd.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
+        if (lcd.width() < lcd.height()) lcd.setRotation(lcd.getRotation() ^ 1);
+        // lcd.setTouch(touch_cal_data);
+        lcd.setSwapBytes(true);  // rearranges color ordering of 16bit colors when displaying image files
         for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
             disp_age_quanta[lineno] = -1;
             memset(disp_values[lineno], 0, strlen(disp_values[lineno]));
@@ -350,25 +354,31 @@ class Display {
         for (int32_t row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
         yield();
         Serial.printf(" ..");  //
-        if (fullscreen_screensaver_test)
-            flexpanel.init(&_tft, touch, 0, 0, disp_width_pix, disp_height_pix);
-        else flexpanel.init(&_tft, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
+        // if (fullscreen_screensaver_test)
+        init_framebuffers(disp_width_pix, disp_height_pix);
+
+        flexpanel.init(&lcd, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
+        // else 
         animations.init(&flexpanel, sim);
-        _tft.fillScreen(BLK);  // Black out the whole screen
+        sprptr = &framebuf[flip];
+        sprptr->fillScreen(BLK);  // Black out the whole screen
         if (!fullscreen_screensaver_test) {
-            Serial.printf(" ..");  //
             draw_touchgrid(false);
             draw_fixed(datapage, datapage_last, false);
             draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
             all_dirty();
         }
+        Serial.printf(" ...");  //
         animations.setup();
+        Serial.printf(" ....");  //
         init_tasks();
+        Serial.printf(" .....");  //
+        push_task();
         Serial.printf(" initialized\n");
     }
     // uint8_t add_palette(uint8_t color) {
-    //     for (uint8_t i=0; i<palettesize; i++) if (_tft.getPaletteColor(i) == color) return i;
-    //     _tft.setPaletteColor(palettesize++, color);
+    //     for (uint8_t i=0; i<palettesize; i++) if (lcd.getPaletteColor(i) == color) return i;
+    //     lcd.setPaletteColor(palettesize++, color);
     //     return palettesize;
     // }
     void all_dirty() {
@@ -392,8 +402,8 @@ class Display {
         }
     }
     void tiny_text() {
-        _tft.setTextDatum(textdatum_t::top_left);
-        _tft.setFont(&fonts::Font0);
+        sprptr->setTextDatum(textdatum_t::top_left);
+        sprptr->setFont(&fonts::Font0);
     }
     uint8_t darken_color(uint8_t color) {  // halves each of r, g, and b of a 5-6-5 formatted 16-bit color value either once or twice
         return ((color & 0xc0) | (color & 0x18) | (color & 0x2));
@@ -404,18 +414,18 @@ class Display {
     }
   private:
     void draw_bargraph_base(int32_t corner_x, int32_t corner_y, int32_t width) {  // draws a horizontal bargraph scale.  124, y, 40
-        _tft.drawFastHLine(corner_x+disp_bargraph_squeeze, corner_y, width-disp_bargraph_squeeze*2, (uint8_t)MGRY);
-        for (int32_t offset=0; offset<=2; offset++) _tft.drawFastVLine((corner_x+disp_bargraph_squeeze)+offset*(width/2 - disp_bargraph_squeeze), corner_y-1, 3, (uint8_t)WHT);
+        sprptr->drawFastHLine(corner_x+disp_bargraph_squeeze, corner_y, width-disp_bargraph_squeeze*2, (uint8_t)MGRY);
+        for (int32_t offset=0; offset<=2; offset++) sprptr->drawFastVLine((corner_x+disp_bargraph_squeeze)+offset*(width/2 - disp_bargraph_squeeze), corner_y-1, 3, (uint8_t)WHT);
     }
     void draw_needle_shape(int32_t pos_x, int32_t pos_y, uint8_t color) {  // draws a cute little pointy needle
-        _tft.drawFastVLine(pos_x-1, pos_y, 2, color);
-        _tft.drawFastVLine(pos_x, pos_y, 4, color);
-        _tft.drawFastVLine(pos_x+1, pos_y, 2, color);
+        sprptr->drawFastVLine(pos_x-1, pos_y, 2, color);
+        sprptr->drawFastVLine(pos_x, pos_y, 4, color);
+        sprptr->drawFastVLine(pos_x+1, pos_y, 2, color);
     }
     void draw_target_shape(int32_t pos_x, int32_t pos_y, uint8_t t_color, uint8_t r_color) {  // draws a cute little target symbol
-        _tft.drawFastVLine(pos_x-1, pos_y+7, 2, t_color);
-        _tft.drawFastVLine(pos_x, pos_y+5, 4, t_color);
-        _tft.drawFastVLine(pos_x+1, pos_y+7, 2, t_color);
+        sprptr->drawFastVLine(pos_x-1, pos_y+7, 2, t_color);
+        sprptr->drawFastVLine(pos_x, pos_y+5, 4, t_color);
+        sprptr->drawFastVLine(pos_x+1, pos_y+7, 2, t_color);
     }
     void draw_bargraph_needle(int32_t n_pos_x, int32_t old_n_pos_x, int32_t pos_y, uint8_t n_color) {  // draws a cute little pointy needle
         draw_needle_shape(old_n_pos_x, pos_y, BLK);
@@ -424,33 +434,33 @@ class Display {
     void draw_string(int32_t x_new, int32_t x_old, int32_t y, const char* text, const char* oldtext, uint8_t color, uint8_t bgcolor, bool forced=false) {  // Send in "" for oldtext if erase isn't needed
         int32_t oldlen = strlen(oldtext);
         int32_t newlen = strlen(text);
-        _tft.setTextColor(bgcolor);  
+        sprptr->setTextColor(bgcolor);  
         for (int32_t letter=0; letter < oldlen; letter++) {
             if (newlen - letter < 1) {
-                _tft.setCursor(x_old+disp_font_width*letter, y);
-                _tft.print(oldtext[letter]);
+                sprptr->setCursor(x_old+disp_font_width*letter, y);
+                sprptr->print(oldtext[letter]);
             }
             else if (oldtext[letter] != text[letter]) {
-                _tft.setCursor(x_old+disp_font_width*letter, y);
-                _tft.print(oldtext[letter]);
+                sprptr->setCursor(x_old+disp_font_width*letter, y);
+                sprptr->print(oldtext[letter]);
             }
         }
-        _tft.setTextColor(color);  
+        sprptr->setTextColor(color);  
         for (int32_t letter=0; letter < newlen; letter++) {
             if (oldlen - letter < 1) {
-                _tft.setCursor(x_new+disp_font_width*letter, y);
-                _tft.print(text[letter]);
+                sprptr->setCursor(x_new+disp_font_width*letter, y);
+                sprptr->print(text[letter]);
             }
             else if (oldtext[letter] != text[letter] || forced) {
-                _tft.setCursor(x_new+disp_font_width*letter, y);
-                _tft.print(text[letter]);
+                sprptr->setCursor(x_new+disp_font_width*letter, y);
+                sprptr->print(text[letter]);
             }
         }
     }
     void draw_unitmap(int8_t index, int32_t x, int32_t y, uint8_t color) {
         for (int32_t xo = 0; xo < disp_font_width * 3 - 1; xo++)
             for (int32_t yo = 0; yo < disp_font_height - 1; yo++)
-                if ((unitmaps[index][xo] >> yo) & 1) _tft.drawPixel(x + xo, y + yo, color);
+                if ((unitmaps[index][xo] >> yo) & 1) sprptr->drawPixel(x + xo, y + yo, color);
     }
     void draw_string_units(int32_t x, int32_t y, const char* text, const char* oldtext, uint8_t color, uint8_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
         bool drawn = false;
@@ -460,23 +470,23 @@ class Display {
                 drawn = true;
             }
         if (!drawn) {
-            _tft.setCursor(x, y);
-            _tft.setTextColor(bgcolor);
-            _tft.print(oldtext);  // Erase the old content
+            sprptr->setCursor(x, y);
+            sprptr->setTextColor(bgcolor);
+            sprptr->print(oldtext);  // Erase the old content
         }
         for (int8_t i = 0; i<arraysize(unitmaps); i++)
             if (!strcmp(unitmapnames[i], text)) {
                 draw_unitmap(i, x, y, color);
                 return;
             }
-        _tft.setCursor(x, y);
-        _tft.setTextColor(color);
-        _tft.print(text);  // Erase the old content
+        sprptr->setCursor(x, y);
+        sprptr->setTextColor(color);
+        sprptr->print(text);  // Erase the old content
     }
     // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
     void draw_fixed(int32_t page, int32_t page_last, bool redraw_tuning_corner, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
-        _tft.setTextColor(LGRY);
-        _tft.setTextSize(1);
+        sprptr->setTextColor(LGRY);
+        sprptr->setTextSize(1);
         int32_t y_pos;
         if (!redraw_tuning_corner) {
             for (int32_t lineno = 0; lineno < disp_fixed_lines; lineno++)  {  // Step thru lines of fixed telemetry data
@@ -497,7 +507,7 @@ class Display {
         }
     }
     void draw_hyphen(int32_t x_pos, int32_t y_pos, uint8_t color) {  // Draw minus sign in front of negative numbers
-        _tft.drawFastHLine(x_pos+2, y_pos+3, 3, color);
+        sprptr->drawFastHLine(x_pos+2, y_pos+3, 3, color);
     }
     void draw_dynamic(int32_t lineno, char const* disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target=-1, uint8_t color=NON) {
         int32_t age_us = (color != NON) ? 11 : (int32_t)((float)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
@@ -537,8 +547,8 @@ class Display {
                 t_pos = corner_x + constrain(t_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
                 if (t_pos != disp_targets[lineno] || (t_pos == n_pos)^(disp_needles[lineno] != disp_targets[lineno]) || disp_data_dirty[lineno]) {
                     draw_target_shape(disp_targets[lineno], corner_y, BLK, NON);  // Erase old target
-                    _tft.drawFastHLine(disp_targets[lineno]-(disp_targets[lineno] != corner_x+disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+7, 2+(disp_targets[lineno] != corner_x+disp_bargraph_width-disp_bargraph_squeeze), MGRY);  // Patch bargraph line where old target got erased
-                    for (int32_t offset=0; offset<=2; offset++) _tft.drawFastVLine((corner_x+disp_bargraph_squeeze)+offset*(disp_bargraph_width/2 - disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+6, 3, WHT);  // Redraw bargraph graduations in case one got corrupted by target erasure
+                    sprptr->drawFastHLine(disp_targets[lineno]-(disp_targets[lineno] != corner_x+disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+7, 2+(disp_targets[lineno] != corner_x+disp_bargraph_width-disp_bargraph_squeeze), MGRY);  // Patch bargraph line where old target got erased
+                    for (int32_t offset=0; offset<=2; offset++) sprptr->drawFastVLine((corner_x+disp_bargraph_squeeze)+offset*(disp_bargraph_width/2 - disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+6, 3, WHT);  // Redraw bargraph graduations in case one got corrupted by target erasure
                     draw_target_shape(t_pos, corner_y, tcolor, NON);  // Draw the new target
                     disp_targets[lineno] = t_pos;  // Remember position of target
                 }
@@ -666,23 +676,23 @@ class Display {
     }
     void draw_touchgrid(bool side_only) {  // draws edge buttons with names in 'em. If replace_names, just updates names
         int32_t namelen = 0;
-        _tft.setTextColor((uint8_t)WHT);
+        sprptr->setTextColor((uint8_t)WHT);
         for (int32_t row = 0; row < arraysize(side_menu_buttons); row++) {  // Step thru all rows to draw buttons along the left edge
-            _tft.fillRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, (uint8_t)DGRY);
-            _tft.drawRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, (uint8_t)LYEL);
+            sprptr->fillRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, (uint8_t)DGRY);
+            sprptr->drawRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, (uint8_t)LYEL);
             namelen = 0;
             for (uint32_t x = 0 ; x < arraysize(side_menu_buttons[row]) ; x++ ) {
                 if (side_menu_buttons[row][x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
             }
             for (int32_t letter = 0; letter < namelen; letter++) {  // Going letter by letter thru each button name so we can write vertically 
-                _tft.setCursor(1, ( touch_cell_v_pix*row) + (touch_cell_v_pix/2) - (int32_t)(4.5*((float)namelen-1)) + (disp_font_height+1)*letter); // adjusts vertical offset depending how many letters in the button name and which letter we're on
-                _tft.println(side_menu_buttons[row][letter]);  // Writes each letter such that the whole name is centered vertically on the button
+                sprptr->setCursor(1, ( touch_cell_v_pix*row) + (touch_cell_v_pix/2) - (int32_t)(4.5*((float)namelen-1)) + (disp_font_height+1)*letter); // adjusts vertical offset depending how many letters in the button name and which letter we're on
+                sprptr->println(side_menu_buttons[row][letter]);  // Writes each letter such that the whole name is centered vertically on the button
             }
         }
         if (!side_only) {
             for (int32_t col = 2; col <= 5; col++) {  // Step thru all cols to draw buttons across the top edge
-                _tft.fillRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, (uint8_t)DGRY);
-                _tft.drawRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, (uint8_t)LYEL);  // _tft.width()-9, 3, 18, (_tft.height()/5)-6, 8, LYEL);
+                sprptr->fillRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, (uint8_t)DGRY);
+                sprptr->drawRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, (uint8_t)LYEL);  // sprptr->width()-9, 3, 18, (sprptr->height()/5)-6, 8, LYEL);
             }
         }
     }
@@ -701,17 +711,17 @@ class Display {
     void draw_idiotbitmap(int i, int32_t x, int32_t y) {
         uint8_t bg = idiots->val(i) ? (uint8_t)(idiots->color[ON][i]) : BLK;
         uint8_t color = idiots->val(i) ? BLK : (uint8_t)(idiots->color[OFF][i]);
-        _tft.drawRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, bg);
+        sprptr->drawRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, bg);
         for (int xo = 0; xo < (2 * disp_font_width - 1); xo++)
             for (int yo = 0; yo < disp_font_height - 1; yo++)
-                _tft.drawPixel(x + xo + 1, y + yo + 1, ((idiots->icon[i][xo] >> yo) & 1) ? color : bg);
+                sprptr->drawPixel(x + xo + 1, y + yo + 1, ((idiots->icon[i][xo] >> yo) & 1) ? color : bg);
     }
     void draw_idiotlight(int32_t i, int32_t x, int32_t y) {
         if (idiots->icon[i][0] == 0xff) {  // 0xff in the first byte will draw 2-letter string instead of bitmap
-            _tft.fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, (idiots->val(i)) ? (uint8_t)(idiots->color[ON][i]) : BLK);  // MGRY);
-            _tft.setTextColor(idiots->val(i) ? BLK : idiots->color[OFF][i]);  // darken_color((*(idiots->lights[index])) ? BLK : DGRY)
-            _tft.setCursor(x+1, y+1);
-            _tft.print(idiots->letters[i]);
+            sprptr->fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, (idiots->val(i)) ? (uint8_t)(idiots->color[ON][i]) : BLK);  // MGRY);
+            sprptr->setTextColor(idiots->val(i) ? BLK : idiots->color[OFF][i]);  // darken_color((*(idiots->lights[index])) ? BLK : DGRY)
+            sprptr->setCursor(x+1, y+1);
+            sprptr->print(idiots->letters[i]);
         }
         else if (idiots->icon[i][0] != 0x88) draw_idiotbitmap(i, x, y);  // 0x88 in the first byte will skip a space
         idiots->last[i] = idiots->val(i);
@@ -740,32 +750,56 @@ class Display {
         if (display_enabled) draw_idiotlights(idiots_corner_x, idiots_corner_y, force);
     }
   public:
-    void update_flexpanel() {
+    // void update_flexpanel() {
+    //     #ifndef VIDEO_TASKS
+    //     if (!is_pushing && !is_drawing) {  // && (sim->enabled() || screensaver)
+    //         if (!pushtime) draw_task();
+    //         else if (screenRefreshTimer.expired() || screensaver_max_refresh || fullscreen_screensaver_test) { // taskYIELD(); 
+    //             screenRefreshTimer.reset();
+    //             push_task();
+                
+    //         }
+    //     }
+    //     #endif
+    // }
+    void update(int _nowmode) {
         #ifndef VIDEO_TASKS
-        if (!is_pushing && !is_drawing) {  // && (sim->enabled() || screensaver)
-            if (!pushtime) draw_task();
-            else if (screenRefreshTimer.expired() || screensaver_max_refresh || fullscreen_screensaver_test) { // taskYIELD(); 
+        // Serial.printf("pt%d is: d%dp%d\n", pushtime, is_drawing, is_pushing);
+        if (is_drawing || is_pushing) return;
+        if (pushtime) {
+            if (screenRefreshTimer.expired() || screensaver_max_refresh || fullscreen_screensaver_test) {
                 screenRefreshTimer.reset();
                 push_task();
+                sprptr = &framebuf[flip];
                 pushclock = (int32_t)screenRefreshTimer.elapsed();
-            }
+            }        
+        }
+        else {
+            is_drawing = true;
+            int32_t mark = (int32_t)screenRefreshTimer.elapsed();
+            draw_all(_nowmode);
+            fps = animations.update();
+            drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
+            idleclock = refresh_limit - pushclock - drawclock;
+            is_drawing = false;  // pushed = false;
+            pushtime = true;
         }
         #endif
     }
-    void update(int _nowmode) {
-        if (fullscreen_screensaver_test) {
-            update_flexpanel();
-            return;
-        }
+    void draw_all(int _nowmode) {
+        // if (fullscreen_screensaver_test) {
+        //     update_flexpanel();
+        //     return;
+        // }
         tiny_text();
-        _tft.startWrite();
+        // lcd.startWrite();
         update_idiots(disp_idiots_dirty);
-        _tft.endWrite();
+        // lcd.endWrite();
         disp_idiots_dirty = false;
         if (!display_enabled) return;
-        _tft.startWrite();
+        // sprptr->startWrite();
         if (disp_datapage_dirty) {
-            static bool first = true;
+            first = true;
             for (int i = disp_fixed_lines; i < disp_lines; i++) {
                 disp_age_quanta[i] = 0;
                 dispAgeTimer[i].reset();
@@ -946,11 +980,98 @@ class Display {
             disp_bools_dirty = false;
             _procrastinate = true;  // don't do anything else in this same loop
         }
-        _tft.endWrite();
-        if (!_procrastinate) update_flexpanel();
+        // sprptr->endWrite();
+        // if (!_procrastinate) update_flexpanel();
         _procrastinate = false;
     }
 };
+#ifdef VIDEO_TASKS
+static void push_task(void *parameter) {
+    while (true) {
+        while (!(screensaver || sim.enabled()) || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh))  // taskYIELD(); || sim.enabled()
+            vTaskDelay(pdMS_TO_TICKS(1));
+        screenRefreshTimer.reset();
+        is_pushing = true;
+        flexpanel.diffpush(&framebuf[flip], &framebuf[!flip]);
+        pushclock = (int32_t)screenRefreshTimer.elapsed();
+        flip = !flip;
+        is_pushing = pushtime = false;  // drawn = 
+    }
+    // vTaskDelete(NULL);
+}
+static void draw_task(void *parameter) {
+    while (true) {
+        while (!(screensaver || sim.enabled()) || pushtime) vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
+        is_drawing = true;
+        int32_t mark = (int32_t)screenRefreshTimer.elapsed();
+        if (screensaver) fps = animations.update();
+        // if (sim.enabled()) draw_simbuttons();
+        drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
+        idleclock = refresh_limit - pushclock - drawclock;
+        is_drawing = false;  // pushed = false;
+        pushtime = true;
+    }
+}
+#else
+void push_task() {
+    if (is_drawing) return;
+    is_pushing = true;
+    diffpush(&framebuf[flip], &framebuf[!flip]);
+    flip = !flip;
+    is_pushing = pushtime = false;  // drawn = 
+}
+void draw_task() {
+    if (is_pushing) return;
+    is_drawing = true;
+    int32_t mark = (int32_t)screenRefreshTimer.elapsed();
+    fps = animations.update();
+    drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
+    idleclock = refresh_limit - pushclock - drawclock;
+    is_drawing = false;  // pushed = false;
+    pushtime = true;
+}
+#endif
+void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref) {
+    // shifter = sizeof(uint32_t) / sprite_color_depth;
+    union {  // source
+        std::uint32_t* s32;
+        std::uint8_t* s;
+    };
+    union {  // reference
+        std::uint32_t* r32;
+        std::uint8_t* r;
+    };
+    s32 = (std::uint32_t*)source->getBuffer();
+    r32 = (std::uint32_t*)ref->getBuffer();
+    auto sprwidth = source->width();
+    auto sprheight = source->height();
+    auto w32 = (sprwidth + 3) >> 2;
+    std::int32_t y = 0;
+    lcd.startWrite();
+    do {
+        std::int32_t x32 = 0;
+        do {
+            while (s32[x32] == r32[x32] && ++x32 < w32);
+            if (x32 == w32) break;
+            std::int32_t xs = x32 << 2;
+            while (s[xs] == r[xs]) ++xs;
+            while (++x32 < w32 && s32[x32] != r32[x32]);
+            std::int32_t xe = (x32 << 2) - 1;
+            if (xe >= sprwidth) xe = sprwidth - 1;
+            while (s[xe] == r[xe]) --xe;
+            lcd.pushImageDMA(xs, y, xe - xs + 1, 1, &s[xs]);
+            memcpy(&r[xs], &s[xs], sizeof(s[0])*(xe - xs + 1));
+        } while (x32 < w32);
+        s32 += w32;
+        r32 += w32;
+    } while (++y < sprheight);
+    // lcd->display();
+    lcd.endWrite();
+    // pushed[flip] = true;
+    // drawn[!flip] = false;
+}
+
+
 class Tuner {
   private:
     NeopixelStrip* neo;

@@ -8,7 +8,7 @@ static IdiotLights idiots;
 static Touchscreen touch;
 static Display screen(&neo, &touch, &idiots, &sim);
 static Tuner tuner(&neo, &touch);
-static SdCard sdcard(screen.get_tft());
+static SdCard sdcard(&lcd);
 static RunModeManager run(&screen, &encoder);
 
 void setup() {
@@ -42,7 +42,7 @@ void setup() {
     datapage = prefs.getUInt("dpage", PG_RUN);
     datapage_last = prefs.getUInt("dpage", PG_TEMP);
     sim_setup();              // simulator initialize devices and pot map
-    if (display_enabled) touch.setup(screen.get_tft(), &i2c, disp_width_pix, disp_height_pix);
+    if (display_enabled) touch.setup(&lcd, &i2c, disp_width_pix, disp_height_pix);
     if (display_enabled) screen.setup();
     neo.setup();              // set up external neopixel strip for idiot lights visible in daylight from top of carpet
     idiots.setup(&neo);       // assign same idiot light variable associations and colors to neopixels as on screen  
@@ -82,6 +82,7 @@ void loop() {                 // code takes about 1 ms to loop on average
     tuner.update(run.mode);   // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
     diag.update();            // notice any screwy conditions or suspicious shenanigans - consistent 200us
     neo.update(colorcard[run.mode]);  // ~100us
+    // if (!read_pin(boot_sw_pin)) 
     screen.update(run.mode);  // Display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
     // sdcard.update();
     lightbox.update(run.mode, speedo.human());  // communicate any relevant data to the lighting controller
