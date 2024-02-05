@@ -2,6 +2,7 @@
 #pragma once
 #include <Preferences.h>  // Functions for writing to flash, i think
 #include <esp_partition.h>
+#include <random>
 #include "globals.h"
 #include "sensors.h"  // includes uictrl.h, i2cbus.h
 #include "motors.h"  // includes qpid.h, temperature.h
@@ -11,6 +12,8 @@
 // HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
 
 // Instantiate objects
+std::random_device rd;
+std::mt19937 gen(rd());  // randomizer
 static Preferences prefs;  // Persistent config storage
 static Potentiometer pot(pot_pin);
 static Simulator sim(pot);
@@ -34,6 +37,10 @@ static WebManager web(&looptimer);
 static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &maf_gps, &ignition);
 static LightingBox lightbox(&i2c);  // lightbox(&diag);
 
+int rn(int values=256) {  // Generate a random number between 0 and values-1
+    std::uniform_int_distribution<> dis(0, values - 1);
+    return dis(gen);
+}
 void initialize_pins() {
     set_pin(ignition_pin, OUTPUT, LOW);
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);    // deasserting unused cs line ensures available spi bus
