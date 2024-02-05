@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<!--
+
+8-bit RGB332 color picker, using colors laid out in HSV color cylinder.
+
+Copyright (c) Roger Cheng
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-->
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+        <link rel="icon" href="favicon.ico" type="image/x-icon">
+        <title>RGB332 Color Picker</title>
+        <style>
+            body {
+                margin: 0;
+                overflow-y: hidden;
+                overflow-x: hidden;
+            }
+
+            .onScreenText {
+                position: absolute;
+                color: white;
+                text-align: left;
+                z-index: 100;
+                display:block;
+            }
+
+            #instruction1 {
+                top: 10px;
+                left: 10px;
+                font-size: 10px;
+                font-family: Arial, Helvetica, sans-serif;
+            }
+
+            #instruction2 {
+                top: 40px;
+                left: 10px;
+                font-size: 10px;
+                font-family: Arial, Helvetica, sans-serif;
+            }
+
+            #rgb332code {
+                top: 50px;
+                left: 10px;
+                font-size: 60px;
+                font-family: 'Consolas', 'Courier New', Courier, monospace;
+            }
+
+            #modelSwitch {
+                position: absolute;
+                top: 140px;
+                left: 10px;
+                z-index: 100;
+            }
+        </style>
+    </head>
+    <body>
+        <script type="module" src="./color_wheel.js"></script>
+        <div class="onScreenText" id="instruction1">Click on new background color</div>
+        <div class="onScreenText" id="instruction2">Background color in RGB332:</div>
+        <div class="onScreenText" id="rgb332code">0x00</div>
+        <button type="button" id="modelSwitch">Switch to RGB</button>
+    </body>
+</html>
