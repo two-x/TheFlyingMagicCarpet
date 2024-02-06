@@ -122,6 +122,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_asleepMode() {  // turns off syspower and just idles. sleep_request are handled here or in shutdown mode below
         if (we_just_switched_modes) {
             set_syspower(LOW); // Power down devices to save battery
+            if (saver_on_sleep) {
+                sim.disable();
+                display->auto_saver(true);
+            }
             sleep_request = REQ_NA;
             powering_up = false;
         }
@@ -130,6 +134,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             sleep_request = REQ_NA;
             pwrup_timer.set(pwrup_timeout);
             powering_up = true;
+            display->auto_saver(false);
         }
         if (powering_up && pwrup_timer.expired()) {
             display->all_dirty();  // tells display to redraw everything. display must set back to false

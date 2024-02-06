@@ -237,7 +237,7 @@ class Display {
     IdiotLights* idiots;
     Timer valuesRefreshTimer = Timer(160000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
     uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
-    bool _procrastinate = false, reset_finished = false, simulating_last, first = true;
+    bool _procrastinate = false, reset_finished = false, simulating_last, first = true, auto_saver_enabled = false;
     int disp_oldmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
     uint8_t palettesize = 2;
     // uint16_t palette[256] = { BLK, WHT };
@@ -791,6 +791,7 @@ class Display {
         //     update_flexpanel();
         //     return;
         // }
+        if (auto_saver_enabled) return;
         tiny_text();
         // lcd.startWrite();
         update_idiots(disp_idiots_dirty);
@@ -983,6 +984,19 @@ class Display {
         // sprptr->endWrite();
         // if (!_procrastinate) update_flexpanel();
         _procrastinate = false;
+    }
+    void auto_saver(bool enable) {
+        if (enable) {
+            flexpanel.set_vp(0, 0, disp_width_pix, disp_height_pix);
+            screensaver_max_refresh = screensaver = auto_saver_enabled = true;
+            animations.reset();
+        }
+        else {
+            screensaver = screensaver_max_refresh = auto_saver_enabled = false;
+            flexpanel.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
+            animations.reset();
+            all_dirty();  // tells display to redraw everything. display must set back to false
+        }
     }
 };
 #ifdef VIDEO_TASKS
