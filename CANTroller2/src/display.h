@@ -10,7 +10,7 @@
 // #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
 // #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
 #define disp_vshift_pix 2  // Unknown.  Note: At smallest text size, characters are 5x7 pix + pad on rt and bot for 6x8 pix.
-#define disp_runmode_text_x 8
+#define disp_runmode_text_x 11
 uint8_t colorcard[NUM_RUNMODES] = { MGT, WHT, RED, ORG, YEL, GRN, TEAL, PUR };
 char modecard[NUM_RUNMODES][7] = { "Basic", "Asleep", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
@@ -237,7 +237,7 @@ class Display {
     IdiotLights* idiots;
     Timer valuesRefreshTimer = Timer(160000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
     uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
-    bool _procrastinate = false, reset_finished = false, simulating_last, first = true, auto_saver_enabled = false;
+    bool _procrastinate = false, reset_finished = false, simulating_last, auto_saver_enabled = false;
     int disp_oldmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
     uint8_t palettesize = 2;
     // uint16_t palette[256] = { BLK, WHT };
@@ -364,8 +364,10 @@ class Display {
         sprptr->fillScreen(BLK);  // Black out the whole screen
         if (!fullscreen_screensaver_test) {
             draw_touchgrid(false);
-            draw_fixed(datapage, datapage_last, false);
+            draw_fixed(datapage, datapage_last, true, true);
             draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
+            draw_runmode(SHUTDOWN, disp_oldmode, NON);
+            draw_datapage(datapage, datapage_last, true);
             all_dirty();
         }
         Serial.printf(" ...");  //
@@ -433,29 +435,10 @@ class Display {
     }
     void draw_string(int32_t x_new, int32_t x_old, int32_t y, const char* text, const char* oldtext, uint8_t color, uint8_t bgcolor, bool forced=false) {  // Send in "" for oldtext if erase isn't needed
         int32_t oldlen = strlen(oldtext);
-        int32_t newlen = strlen(text);
-        sprptr->setTextColor(bgcolor);  
-        for (int32_t letter=0; letter < oldlen; letter++) {
-            if (newlen - letter < 1) {
-                sprptr->setCursor(x_old+disp_font_width*letter, y);
-                sprptr->print(oldtext[letter]);
-            }
-            else if (oldtext[letter] != text[letter]) {
-                sprptr->setCursor(x_old+disp_font_width*letter, y);
-                sprptr->print(oldtext[letter]);
-            }
-        }
+        sprptr->fillRect(x_old, y, oldlen * disp_font_width, disp_font_height, bgcolor);
         sprptr->setTextColor(color);  
-        for (int32_t letter=0; letter < newlen; letter++) {
-            if (oldlen - letter < 1) {
-                sprptr->setCursor(x_new+disp_font_width*letter, y);
-                sprptr->print(text[letter]);
-            }
-            else if (oldtext[letter] != text[letter] || forced) {
-                sprptr->setCursor(x_new+disp_font_width*letter, y);
-                sprptr->print(text[letter]);
-            }
-        }
+        sprptr->setCursor(x_new, y);
+        sprptr->print(text);
     }
     void draw_unitmap(int8_t index, int32_t x, int32_t y, uint8_t color) {
         for (int32_t xo = 0; xo < disp_font_width * 3 - 1; xo++)
@@ -464,42 +447,33 @@ class Display {
     }
     void draw_string_units(int32_t x, int32_t y, const char* text, const char* oldtext, uint8_t color, uint8_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
         bool drawn = false;
+        sprptr->fillRect(x, y, 3 * disp_font_width, disp_font_height, bgcolor);
         for (int8_t i = 0; i<arraysize(unitmaps); i++)
-            if (!strcmp(unitmapnames[i], oldtext)) {
-                draw_unitmap(i, x, y, bgcolor);
+            if (!strcmp(unitmapnames[i], text)) {
+                draw_unitmap(i, x, y, color);
                 drawn = true;
             }
         if (!drawn) {
             sprptr->setCursor(x, y);
-            sprptr->setTextColor(bgcolor);
-            sprptr->print(oldtext);  // Erase the old content
+            sprptr->setTextColor(color);
+            sprptr->print(text);
         }
-        for (int8_t i = 0; i<arraysize(unitmaps); i++)
-            if (!strcmp(unitmapnames[i], text)) {
-                draw_unitmap(i, x, y, color);
-                return;
-            }
-        sprptr->setCursor(x, y);
-        sprptr->setTextColor(color);
-        sprptr->print(text);  // Erase the old content
     }
     // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
-    void draw_fixed(int32_t page, int32_t page_last, bool redraw_tuning_corner, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
+    void draw_fixed(int32_t page, int32_t page_last, bool redraw_all, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
         sprptr->setTextColor(LGRY);
         sprptr->setTextSize(1);
         int32_t y_pos;
-        if (!redraw_tuning_corner) {
-            for (int32_t lineno = 0; lineno < disp_fixed_lines; lineno++)  {  // Step thru lines of fixed telemetry data
-                y_pos = (lineno + 1) * disp_line_height_pix + disp_vshift_pix;
-                draw_string(disp_datapage_names_x, disp_datapage_names_x, y_pos, telemetry[lineno], "", LGRY, BLK, forced);
-                draw_string_units(disp_datapage_units_x, y_pos, units[lineno], "", LGRY, BLK);
-                draw_bargraph_base(disp_bargraphs_x, y_pos + 7, disp_bargraph_width);
-            }
+        for (int32_t lineno = 0; lineno < disp_fixed_lines; lineno++)  {  // Step thru lines of fixed telemetry data
+            y_pos = (lineno + 1) * disp_line_height_pix + disp_vshift_pix;
+            draw_string(disp_datapage_names_x, disp_datapage_names_x, y_pos, telemetry[lineno], "", LGRY, BLK, forced);
+            draw_string_units(disp_datapage_units_x, y_pos, units[lineno], "", LGRY, BLK);
+            draw_bargraph_base(disp_bargraphs_x, y_pos + 7, disp_bargraph_width);
         }
-        for (int32_t lineno=0; lineno < disp_tuning_lines; lineno++)  {  // Step thru lines of dataset page data
-            draw_string(disp_datapage_names_x, disp_datapage_names_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, datapage_names[page][lineno], datapage_names[page_last][lineno], LGRY, BLK, forced);
-            draw_string_units(disp_datapage_units_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], LGRY, BLK);
-            if (redraw_tuning_corner) {
+        if (redraw_all) {
+            for (int32_t lineno=0; lineno < disp_tuning_lines; lineno++)  {  // Step thru lines of dataset page data
+                draw_string(disp_datapage_names_x, disp_datapage_names_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, datapage_names[page][lineno], datapage_names[page_last][lineno], LGRY, BLK, forced);
+                draw_string_units(disp_datapage_units_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], LGRY, BLK);
                 int32_t corner_y = (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix + 7;  // lineno*disp_line_height_pix+disp_vshift_pix-1;
                 draw_bargraph_base(disp_bargraphs_x, corner_y, disp_bargraph_width);
                 if (disp_needles[lineno] >= 0) draw_bargraph_needle(-1, disp_needles[lineno], corner_y - 6, BLK);  // Let's draw a needle
@@ -651,14 +625,20 @@ class Display {
         draw_dynamic(lineno, (truthy) ? ((styl==0) ? "on" : ((styl==1) ? "yes" : "true")) : ((styl==0) ? "off" : ((styl==1) ? "no" : "false")), 1, -1, -1, -1, (truthy) ? LPUR : GPUR);
     }
     void draw_runmode(int32_t _nowmode, int32_t _oldmode, uint8_t color_override=NON) {  // color_override = -1 uses default color
-        int32_t color = (color_override == NON) ? colorcard[_nowmode] : color_override;
-        int32_t x_new = disp_runmode_text_x + disp_font_width * (2 + strlen(modecard[_nowmode])) - 3;
-        int32_t x_old = disp_runmode_text_x + disp_font_width * (2 + strlen(modecard[_oldmode])) - 3;
-        draw_string(disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[_oldmode], "", BLK, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
-        draw_string(x_old, x_old, disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
-        draw_string(disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[_nowmode], "", color, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
-        draw_string(x_new, x_new, disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
+        sprptr->setTextDatum(textdatum_t::top_left);
+        sprptr->fillRect(disp_runmode_text_x, disp_vshift_pix, (strlen(modecard[_oldmode]) + 5) * disp_font_width, disp_font_height, BLK);
+        sprptr->setTextColor((color_override == NON) ? colorcard[_nowmode] : color_override);  
+        sprptr->setCursor(disp_runmode_text_x, disp_vshift_pix);
+        sprptr->print(modecard[_nowmode]);
+        sprptr->print(" Mode");
+        // draw_string(disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[_oldmode], "", BLK, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
+        // draw_string(x_old, x_old, disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
     }
+    // int32_t x_new = disp_runmode_text_x + disp_font_width * (2 + strlen(modecard[_nowmode])) - 3;
+    // int32_t x_old = disp_runmode_text_x + disp_font_width * (2 + strlen(modecard[_oldmode])) - 3;
+    // draw_string(disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[_oldmode], "", BLK, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
+    // draw_string(disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[_nowmode], "", color, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
+    // draw_string(x_new, x_new, disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
     void draw_datapage(int32_t page, int32_t page_last, bool forced=false) {
         draw_fixed(page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
         draw_string(disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
@@ -685,7 +665,7 @@ class Display {
                 if (side_menu_buttons[row][x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
             }
             for (int32_t letter = 0; letter < namelen; letter++) {  // Going letter by letter thru each button name so we can write vertically 
-                sprptr->setCursor(1, ( touch_cell_v_pix*row) + (touch_cell_v_pix/2) - (int32_t)(4.5*((float)namelen-1)) + (disp_font_height+1)*letter); // adjusts vertical offset depending how many letters in the button name and which letter we're on
+                sprptr->setCursor(1, (touch_cell_v_pix*row) + (touch_cell_v_pix/2) - (int32_t)(4.5*((float)namelen-1)) + (disp_font_height+1)*letter); // adjusts vertical offset depending how many letters in the button name and which letter we're on
                 sprptr->println(side_menu_buttons[row][letter]);  // Writes each letter such that the whole name is centered vertically on the button
             }
         }
@@ -800,14 +780,12 @@ class Display {
         if (!display_enabled) return;
         // sprptr->startWrite();
         if (disp_datapage_dirty) {
-            first = true;
             for (int i = disp_fixed_lines; i < disp_lines; i++) {
                 disp_age_quanta[i] = 0;
                 dispAgeTimer[i].reset();
                 disp_data_dirty[i] = true;
             }
-            draw_datapage(datapage, datapage_last, first);
-            first = false;
+            draw_datapage(datapage, datapage_last, true);
             disp_datapage_dirty = false;
             if (datapage_last != datapage) prefs.putUInt("dpage", datapage);
         }
