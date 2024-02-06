@@ -222,6 +222,7 @@ volatile int32_t idleclock;
 #ifdef VIDEO_TASKS
 static void push_task(void *parameter);
 static void draw_task(void *parameter);
+static void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref);
 #else
 void push_task();
 void draw_task();
@@ -238,7 +239,7 @@ class Display {
     Timer valuesRefreshTimer = Timer(160000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
     uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     bool _procrastinate = false, reset_finished = false, simulating_last, auto_saver_enabled = false;
-    int disp_oldmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
+    int disp_oldmode = SHUTDOWN, nowmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
     uint8_t palettesize = 2;
     // uint16_t palette[256] = { BLK, WHT };
     static constexpr int runOnCore = CONFIG_ARDUINO_RUNNING_CORE == 0 ? 1 : 0;    
@@ -258,6 +259,7 @@ class Display {
     void init_tasks() {
         #ifdef VIDEO_TASKS
         TaskHandle_t pushTaskHandle = nullptr;
+        // xTaskCreatePinnedToCore(push_task, "taskPush", 8192, NULL, 2, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  // 16384
         xTaskCreatePinnedToCore(push_task, "taskPush", 8192, NULL, 2, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  // 16384
         TaskHandle_t drawTaskHandle = nullptr;
         xTaskCreatePinnedToCore(draw_task, "taskDraw", 4096, NULL, 3, &drawTaskHandle, runOnCore);
@@ -373,9 +375,12 @@ class Display {
         Serial.printf(" ...");  //
         animations.setup();
         Serial.printf(" ....");  //
+        #ifdef VIDEO_TASKS
         init_tasks();
-        Serial.printf(" .....");  //
+        #else
         push_task();
+        #endif
+        Serial.printf(" .....");  //
         Serial.printf(" initialized\n");
     }
     // uint8_t add_palette(uint8_t color) {
@@ -742,7 +747,8 @@ class Display {
     //     }
     //     #endif
     // }
-    void update(int _nowmode) {
+    void update(int _nowmode = -1) {
+        if (_nowmode >= 0) nowmode = _nowmode;
         #ifndef VIDEO_TASKS
         // Serial.printf("pt%d is: d%dp%d\n", pushtime, is_drawing, is_pushing);
         if (is_drawing || is_pushing) return;
@@ -764,6 +770,8 @@ class Display {
             is_drawing = false;  // pushed = false;
             pushtime = true;
         }
+        #else
+        draw_all(nowmode);
         #endif
     }
     void draw_all(int _nowmode) {
@@ -802,7 +810,8 @@ class Display {
             disp_oldmode = _nowmode;
             disp_runmode_dirty = false;
         }
-        if (valuesRefreshTimer.expireset()) {
+        // if (valuesRefreshTimer.expireset()) {
+        if (true) {
             float drange;
             draw_dynamic(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
             draw_dynamic(2, speedo.filt(), 0.0, speedo.redline_mph(), gas.cruisepid.target());
@@ -977,93 +986,6 @@ class Display {
         }
     }
 };
-#ifdef VIDEO_TASKS
-static void push_task(void *parameter) {
-    while (true) {
-        while (!(screensaver || sim.enabled()) || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh))  // taskYIELD(); || sim.enabled()
-            vTaskDelay(pdMS_TO_TICKS(1));
-        screenRefreshTimer.reset();
-        is_pushing = true;
-        flexpanel.diffpush(&framebuf[flip], &framebuf[!flip]);
-        pushclock = (int32_t)screenRefreshTimer.elapsed();
-        flip = !flip;
-        is_pushing = pushtime = false;  // drawn = 
-    }
-    // vTaskDelete(NULL);
-}
-static void draw_task(void *parameter) {
-    while (true) {
-        while (!(screensaver || sim.enabled()) || pushtime) vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
-        is_drawing = true;
-        int32_t mark = (int32_t)screenRefreshTimer.elapsed();
-        if (screensaver) fps = animations.update();
-        // if (sim.enabled()) draw_simbuttons();
-        drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
-        idleclock = refresh_limit - pushclock - drawclock;
-        is_drawing = false;  // pushed = false;
-        pushtime = true;
-    }
-}
-#else
-void push_task() {
-    if (is_drawing) return;
-    is_pushing = true;
-    diffpush(&framebuf[flip], &framebuf[!flip]);
-    flip = !flip;
-    is_pushing = pushtime = false;  // drawn = 
-}
-void draw_task() {
-    if (is_pushing) return;
-    is_drawing = true;
-    int32_t mark = (int32_t)screenRefreshTimer.elapsed();
-    fps = animations.update();
-    drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
-    idleclock = refresh_limit - pushclock - drawclock;
-    is_drawing = false;  // pushed = false;
-    pushtime = true;
-}
-#endif
-void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref) {
-    // shifter = sizeof(uint32_t) / sprite_color_depth;
-    union {  // source
-        std::uint32_t* s32;
-        std::uint8_t* s;
-    };
-    union {  // reference
-        std::uint32_t* r32;
-        std::uint8_t* r;
-    };
-    s32 = (std::uint32_t*)source->getBuffer();
-    r32 = (std::uint32_t*)ref->getBuffer();
-    auto sprwidth = source->width();
-    auto sprheight = source->height();
-    auto w32 = (sprwidth + 3) >> 2;
-    std::int32_t y = 0;
-    lcd.startWrite();
-    do {
-        std::int32_t x32 = 0;
-        do {
-            while (s32[x32] == r32[x32] && ++x32 < w32);
-            if (x32 == w32) break;
-            std::int32_t xs = x32 << 2;
-            while (s[xs] == r[xs]) ++xs;
-            while (++x32 < w32 && s32[x32] != r32[x32]);
-            std::int32_t xe = (x32 << 2) - 1;
-            if (xe >= sprwidth) xe = sprwidth - 1;
-            while (s[xe] == r[xe]) --xe;
-            lcd.pushImageDMA(xs, y, xe - xs + 1, 1, &s[xs]);
-            memcpy(&r[xs], &s[xs], sizeof(s[0])*(xe - xs + 1));
-        } while (x32 < w32);
-        s32 += w32;
-        r32 += w32;
-    } while (++y < sprheight);
-    // lcd->display();
-    lcd.endWrite();
-    // pushed[flip] = true;
-    // drawn[!flip] = false;
-}
-
-
 class Tuner {
   private:
     NeopixelStrip* neo;
@@ -1192,6 +1114,97 @@ class Tuner {
         }
     }
 };
+
+static NeopixelStrip neo(neopixel_pin);
+static IdiotLights idiots;
+static Touchscreen touch;
+static Display screen(&neo, &touch, &idiots, &sim);
+static Tuner tuner(&neo, &touch);
+#ifdef VIDEO_TASKS
+static void push_task(void *parameter) {
+    while (true) {
+        while (is_drawing || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh))  // taskYIELD(); || sim.enabled()
+            vTaskDelay(pdMS_TO_TICKS(1));
+        screenRefreshTimer.reset();
+        is_pushing = true;
+        diffpush(&framebuf[flip], &framebuf[!flip]);
+        flip = !flip;
+        is_pushing = pushtime = false;  // drawn = 
+    }
+    // vTaskDelete(NULL);
+}
+static void draw_task(void *parameter) {
+    while (true) {
+        while (is_pushing || pushtime) vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
+        is_drawing = true;
+        int32_t mark = (int32_t)screenRefreshTimer.elapsed();
+        screen.update();
+        fps = animations.update();
+        // if (sim.enabled()) draw_simbuttons();
+        drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
+        idleclock = refresh_limit - pushclock - drawclock;
+        is_drawing = false;  // pushed = false;
+        pushtime = true;
+    }
+}
+#else
+void push_task() {
+    if (is_drawing) return;
+    is_pushing = true;
+    diffpush(&framebuf[flip], &framebuf[!flip]);
+    flip = !flip;
+    is_pushing = pushtime = false;  // drawn = 
+}
+void draw_task() {
+    if (is_pushing) return;
+    is_drawing = true;
+    int32_t mark = (int32_t)screenRefreshTimer.elapsed();
+    fps = animations.update();
+    drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
+    idleclock = refresh_limit - pushclock - drawclock;
+    is_drawing = false;  // pushed = false;
+    pushtime = true;
+}
+#endif
+void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref) {
+    // shifter = sizeof(uint32_t) / sprite_color_depth;
+    union {  // source
+        std::uint32_t* s32;
+        std::uint8_t* s;
+    };
+    union {  // reference
+        std::uint32_t* r32;
+        std::uint8_t* r;
+    };
+    s32 = (std::uint32_t*)source->getBuffer();
+    r32 = (std::uint32_t*)ref->getBuffer();
+    auto sprwidth = source->width();
+    auto sprheight = source->height();
+    auto w32 = (sprwidth + 3) >> 2;
+    std::int32_t y = 0;
+    lcd.startWrite();
+    do {
+        std::int32_t x32 = 0;
+        do {
+            while (s32[x32] == r32[x32] && ++x32 < w32);
+            if (x32 == w32) break;
+            std::int32_t xs = x32 << 2;
+            while (s[xs] == r[xs]) ++xs;
+            while (++x32 < w32 && s32[x32] != r32[x32]);
+            std::int32_t xe = (x32 << 2) - 1;
+            if (xe >= sprwidth) xe = sprwidth - 1;
+            while (s[xe] == r[xe]) --xe;
+            lcd.pushImageDMA(xs, y, xe - xs + 1, 1, &s[xs]);
+            memcpy(&r[xs], &s[xs], sizeof(s[0])*(xe - xs + 1));
+        } while (x32 < w32);
+        s32 += w32;
+        r32 += w32;
+    } while (++y < sprheight);
+    // lcd->display();
+    lcd.endWrite();
+    // pushed[flip] = true;
+    // drawn[!flip] = false;
+}
 // The following project draws a nice looking gauge cluster, very apropos to our needs and the code is given.
 // See this video: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
 // Rinkydink home page: http://www.rinkydinkelectronics.com

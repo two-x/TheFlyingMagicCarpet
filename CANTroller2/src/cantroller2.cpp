@@ -3,11 +3,6 @@
 #include "display.h"  // includes neopixel.h, touch.h
 #include "sdcard.h"
 #include "RunModeManager.h"
-static NeopixelStrip neo(neopixel_pin);
-static IdiotLights idiots;
-static Touchscreen touch;
-static Display screen(&neo, &touch, &idiots, &sim);
-static Tuner tuner(&neo, &touch);
 static SdCard sdcard(&lcd);
 static RunModeManager run(&screen, &encoder);
 
