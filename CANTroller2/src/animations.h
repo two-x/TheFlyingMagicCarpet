@@ -341,7 +341,8 @@ class EraserSaver {  // draws colorful patterns to exercise
     int sprsize[2], rotate = -1, scaler = 1;
     int point[2], plast[2], er[2];
     int eraser_rad = 14, eraser_rad_min = 22, eraser_rad_max = 40, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
-    int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, boxsize[2], now = 0;
+    int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, now = 0;
+    int32_t boxsize[2];
     int eraser_velo[2] = {rn(eraser_velo_max), rn(eraser_velo_max)}, shapes_per_run = 5, shapes_done = 0;
     int erpos_max[2];
     uint8_t saver_illicit_prob = 12, wclast, pencolor = RED;
@@ -357,11 +358,6 @@ class EraserSaver {  // draws colorful patterns to exercise
         sprite = _nowspr;
         vp = _vp;
         // Serial.printf("es: x%d y%d w%d h%d\n", vp->x, vp->y, vp->w, vp->h);
-        erpos_max[HORZ] = (int32_t)vp->w / 2 - eraser_rad;
-        erpos_max[VERT] = (int32_t)vp->h / 2 - eraser_rad;
-        point[HORZ] = rn(vp->w);
-        point[VERT] = rn(vp->h);
-        for (int axis = 0; axis <= 1; axis++) eraser_velo_sign[axis] = (rn(1)) ? 1 : -1;
         // reset();
     }
     void reset(LGFX_Sprite* sp0, LGFX_Sprite* sp1, viewport* _vp) {
@@ -382,6 +378,11 @@ class EraserSaver {  // draws colorful patterns to exercise
         refresh_limit = 11111;  // 90 Hz limit
         screenRefreshTimer.set(refresh_limit);
         scaler = std::max(1, (vp->w + vp->h)/200);
+        erpos_max[HORZ] = (int32_t)vp->w / 2 - eraser_rad;
+        erpos_max[VERT] = (int32_t)vp->h / 2 - eraser_rad;
+        point[HORZ] = rn(vp->w);
+        point[VERT] = rn(vp->h);
+        for (int axis = 0; axis <= 1; axis++) eraser_velo_sign[axis] = (rn(1)) ? 1 : -1;
         // _draw_count = _loop_count = 0;
         _is_running = true;
     }
@@ -475,12 +476,14 @@ class EraserSaver {  // draws colorful patterns to exercise
                     sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, scaler * (2 + rn(2)), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), 128 + rn(128), 160 + rn(96)));  // hue_to_rgb16(rn(255)), BLK);
             }
             else if (rotate == Boxes) {
-                boxrad = 2 + rn(2);
+                boxrad = 2 + random(2);
                 boxminsize = 2 * boxrad + 10;
                 int longer = rn(2);
-                boxsize[longer] = boxminsize + rn(vp->w - boxminsize);
-                boxsize[!longer] = boxminsize + rn(smax(0, boxmaxarea / boxsize[longer] - boxminsize));
-                for (int dim = 0; dim <= 1; dim++) point[dim] = -boxsize[dim] / 2 + rn(sprsize[dim]);
+                boxsize[longer] = std::abs(boxminsize + rn(vp->w - boxminsize));
+                boxsize[!longer] = std::abs((boxminsize + rn(smax(0, boxmaxarea / boxsize[longer] - boxminsize))) % boxsize[longer]);  // cheesy attempt to work around crazy-values bug
+                point[HORZ] = -1 * (int32_t)boxsize[HORZ] / 2 + rn((int32_t)vp->w);
+                point[VERT] = -1 * (int32_t)boxsize[VERT] / 2 + rn((int32_t)vp->h);
+                // Serial.printf("box: r%ld m%ld p%ld,%ld x%ld y%ld\n", boxrad, boxminsize, point[HORZ], point[VERT], boxsize[longer], boxsize[!longer]);
                 sprite->fillSmoothRoundRect(point[HORZ] + vp->x, point[VERT] + vp->y, boxsize[HORZ], boxsize[VERT], boxrad, rando_color());  // Change colors as needed
             }
             else if (rotate == Ascii) {

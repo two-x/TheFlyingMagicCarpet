@@ -138,7 +138,7 @@ class IdiotLights {
 char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
 bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
 bool disp_bool_values[6];
-bool disp_selected_val_dirty, disp_datapage_dirty, disp_data_dirty[disp_lines], disp_bools_dirty, disp_sidemenu_dirty, disp_runmode_dirty, disp_simbuttons_dirty, disp_idiots_dirty;
+bool disp_selected_val_dirty, disp_datapage_dirty, disp_values_dirty, disp_data_dirty[disp_lines], disp_bools_dirty, disp_sidemenu_dirty, disp_runmode_dirty, disp_simbuttons_dirty, disp_idiots_dirty;
 int32_t disp_needles[disp_lines];
 int32_t disp_targets[disp_lines];
 int32_t disp_age_quanta[disp_lines];
@@ -366,16 +366,7 @@ class Display {
         flexpanel.init(&lcd, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
         // else 
         animations.init(&flexpanel, sim);
-        sprptr = &framebuf[flip];
-        sprptr->fillScreen(BLK);  // Black out the whole screen
-        if (!fullscreen_screensaver_test) {
-            draw_touchgrid(false);
-            draw_fixed(datapage, datapage_last, true, true);
-            draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
-            draw_runmode(SHUTDOWN, disp_oldmode, NON);
-            draw_datapage(datapage, datapage_last, true);
-            all_dirty();
-        }
+        if (!fullscreen_screensaver_test) reset();
         Serial.printf(" ...");  //
         animations.setup();
         Serial.printf(" ....");  //
@@ -388,6 +379,16 @@ class Display {
         #endif
         Serial.printf(" .....");  //
         Serial.printf(" initialized\n");
+    }
+    void reset() {
+        sprptr = &framebuf[flip];
+        sprptr->fillScreen(BLK);  // Black out the whole screen
+        draw_touchgrid(false);
+        draw_fixed(datapage, datapage_last, true, true);
+        draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
+        draw_runmode(SHUTDOWN, disp_oldmode, NON);
+        draw_datapage(datapage, datapage_last, true);
+        all_dirty();
     }
     // uint8_t add_palette(uint8_t color) {
     //     for (uint8_t i=0; i<palettesize; i++) if (lcd.getPaletteColor(i) == color) return i;
@@ -403,6 +404,7 @@ class Display {
         disp_sidemenu_dirty = true;
         disp_runmode_dirty = true;
         disp_simbuttons_dirty = true;
+        disp_values_dirty = true;
         screensaver = false;
     }
     void set_runmodecolors() {
@@ -658,10 +660,10 @@ class Display {
         if (selected_val != selected_last) draw_string(12, 12, 12+(selected_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_last], "", LGRY, BLK);
         draw_string(12, 12, 12+(selected_val+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_val], "", (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : LGRY), BLK);
     }
-    void draw_bool(bool value, int32_t col) {  // Draws values of boolean data
-        if ((disp_bool_values[col-2] != value) || disp_bools_dirty) {  // If value differs, Erase old value and write new
+    void draw_bool(bool value, int32_t col, bool force=false) {  // Draws values of boolean data
+        if ((disp_bool_values[col-2] != value) || force) {  // If value differs, Erase old value and write new
             int32_t x_mod = touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - arraysize(top_menu_buttons[col-2]-1)*(disp_font_width>>1) - 2;
-            draw_string(x_mod, x_mod, 0, top_menu_buttons[col-2], "", (value) ? (uint8_t)GRN : (uint8_t)LGRY, (uint8_t)DGRY);
+            draw_string(x_mod, x_mod, 0, top_menu_buttons[col-2], "", (value) ? GRN : LGRY, DGRY);
             disp_bool_values[col-2] = value;
         }
     }
@@ -781,18 +783,11 @@ class Display {
         #endif
     }
     void draw_all(int _nowmode) {
-        // if (fullscreen_screensaver_test) {
-        //     update_flexpanel();
-        //     return;
-        // }
         if (auto_saver_enabled) return;
         tiny_text();
-        // lcd.startWrite();
         update_idiots(disp_idiots_dirty);
-        // lcd.endWrite();
         disp_idiots_dirty = false;
         if (!display_enabled) return;
-        // sprptr->startWrite();
         if (disp_datapage_dirty) {
             for (int i = disp_fixed_lines; i < disp_lines; i++) {
                 disp_age_quanta[i] = 0;
@@ -816,7 +811,7 @@ class Display {
             disp_oldmode = _nowmode;
             disp_runmode_dirty = false;
         }
-        if (valuesRefreshTimer.expireset()) {
+        if (valuesRefreshTimer.expireset() || disp_values_dirty) {
             float drange;
             draw_dynamic(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
             draw_dynamic(2, speedo.filt(), 0.0, speedo.redline_mph(), gas.cruisepid.target());
@@ -895,7 +890,6 @@ class Display {
                 draw_dynamic(14, brkpos.filt(), brkpos.op_min_in(), brkpos.op_max_in(), brake.pids[POSNPID].target());
                 draw_dynamic(15, brake.hybrid_out_ratio_pc, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
                 draw_dynamic(16, brake.duty_continuous, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
-                // draw_eraseval(16);
                 draw_dynamic(17, brake.pid_dom->kp(), 0.0, 8.0);
                 draw_dynamic(18, brake.pid_dom->ki(), 0.0, 8.0);
                 draw_dynamic(19, brake.pid_dom->kd(), 0.0, 8.0);
@@ -966,14 +960,14 @@ class Display {
                 draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
                 draw_truth(19, screensaver, 0);
             }
-            draw_bool((_nowmode == CAL), 2);
-            draw_bool((_nowmode == BASIC), 3);
-            draw_bool(ignition, 4);
-            draw_bool(syspower, 5);
+            draw_bool((_nowmode == CAL), 2, disp_bools_dirty);
+            draw_bool((_nowmode == BASIC), 3, disp_bools_dirty);
+            draw_bool(ignition, 4, disp_bools_dirty);
+            draw_bool(syspower, 5, disp_bools_dirty);
             disp_bools_dirty = false;
+            disp_values_dirty = false;
             _procrastinate = true;  // don't do anything else in this same loop
         }
-        // sprptr->endWrite();
         // if (!_procrastinate) update_flexpanel();
         _procrastinate = false;
     }

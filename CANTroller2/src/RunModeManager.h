@@ -135,6 +135,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             pwrup_timer.set(pwrup_timeout);
             powering_up = true;
             display->auto_saver(false);
+            display->reset();
         }
         if (powering_up && pwrup_timer.expired()) {
             display->all_dirty();  // tells display to redraw everything. display must set back to false
