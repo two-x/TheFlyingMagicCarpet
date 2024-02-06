@@ -214,12 +214,14 @@ FlexPanel flexpanel;
 volatile float fps = 0.0;
 volatile bool is_pushing = 0;
 volatile bool is_drawing = 0;
-volatile bool pushtime = 0;
 volatile int32_t pushclock;
 volatile int32_t drawclock;
 volatile int32_t idleclock;
 // static void push_task(void*) {
+volatile bool pushtime = 0;
+
 #ifdef VIDEO_TASKS
+SemaphoreHandle_t push_time, draw_time;
 static void push_task(void *parameter);
 static void draw_task(void *parameter);
 static void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref);
@@ -258,6 +260,8 @@ class Display {
     // }
     void init_tasks() {
         #ifdef VIDEO_TASKS
+        push_time = xSemaphoreCreateMutex();
+        draw_time = xSemaphoreCreateMutex();
         TaskHandle_t pushTaskHandle = nullptr;
         // xTaskCreatePinnedToCore(push_task, "taskPush", 8192, NULL, 2, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  // 16384
         xTaskCreatePinnedToCore(push_task, "taskPush", 8192, NULL, 2, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  // 16384
@@ -377,6 +381,8 @@ class Display {
         Serial.printf(" ....");  //
         #ifdef VIDEO_TASKS
         init_tasks();
+        delayMicroseconds(500);
+        // xSemaphoreGive(drawtime);
         #else
         push_task();
         #endif
@@ -810,8 +816,7 @@ class Display {
             disp_oldmode = _nowmode;
             disp_runmode_dirty = false;
         }
-        // if (valuesRefreshTimer.expireset()) {
-        if (true) {
+        if (valuesRefreshTimer.expireset()) {
             float drange;
             draw_dynamic(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
             draw_dynamic(2, speedo.filt(), 0.0, speedo.redline_mph(), gas.cruisepid.target());
@@ -1123,28 +1128,44 @@ static Tuner tuner(&neo, &touch);
 #ifdef VIDEO_TASKS
 static void push_task(void *parameter) {
     while (true) {
-        while (is_drawing || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh))  // taskYIELD(); || sim.enabled()
-            vTaskDelay(pdMS_TO_TICKS(1));
+        // xSemaphoreTake(push_time, portMAX_DELAY);
+        // Serial.printf("push0 ");
+        while (is_drawing || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh)) vTaskDelay(pdMS_TO_TICKS(1));
+        // while (!(screenRefreshTimer.expired() || screensaver_max_refresh)) vTaskDelay(pdMS_TO_TICKS(1));
         screenRefreshTimer.reset();
         is_pushing = true;
         diffpush(&framebuf[flip], &framebuf[!flip]);
+        // Serial.printf("p1 ");
         flip = !flip;
-        is_pushing = pushtime = false;  // drawn = 
+        is_pushing = false;
+        pushtime = false;  // drawn =
+        // Serial.printf("p2 ");
+        // xSemaphoreGive(draw_time);
+        // Serial.printf("p3 ");
+        // delayMicroseconds(100);
     }
     // vTaskDelete(NULL);
 }
 static void draw_task(void *parameter) {
     while (true) {
         while (is_pushing || pushtime) vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
+        // Serial.printf("draw0 ");
         is_drawing = true;
         int32_t mark = (int32_t)screenRefreshTimer.elapsed();
+        // Serial.printf("d1 ");
         screen.update();
+        // Serial.printf("d2 ");
         fps = animations.update();
         // if (sim.enabled()) draw_simbuttons();
         drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
         idleclock = refresh_limit - pushclock - drawclock;
         is_drawing = false;  // pushed = false;
         pushtime = true;
+        // Serial.printf("d3 ");
+        // delayMicroseconds(100);
+        // xSemaphoreGive(push_time);
+        // Serial.printf("d4 ");
+        // xSemaphoreTake(draw_time, portMAX_DELAY);
     }
 }
 #else

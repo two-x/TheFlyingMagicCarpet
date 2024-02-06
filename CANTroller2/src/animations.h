@@ -158,14 +158,6 @@ class CollisionsSaver {
         balls = &_balls[flip][0];
         // sprite = &(framebuf[flip]);
         sprite->clear();
-        // for (int i = 1; i < slices; i++) {
-        //     sprite->drawGradientVLine(0, (i * sprwidth) / slices, sprheight - 1, (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)(i * 65535 / sprwidth)+25*_loop_count, 255, 200) >> 8), (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200) >> 8));
-        //     sprite->drawGradientHLine(0, (i * sprheight) / slices, sprwidth - 1, (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)(i * 65535 / sprheight)+25*_loop_count, 255, 200) >> 8), (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200) >> 8));
-        // }
-        // for (int i = 0; i <= 1; i++) {
-        //     sprite->drawGradientVLine(0, i * (sprwidth - 1), sprheight - 1, (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200) >> 8), (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200) >> 8));
-        //     sprite->drawGradientHLine(0, i * (sprheight - 1), sprwidth - 1, (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200) >> 8), (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200) >> 8));
-        // }
         for (float i = 0.125; i < 1.0; i += 0.125) {
             sprite->drawGradientVLine((int)(i * (vp->w - 1)) + vp->x, vp->y, vp->h, (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200) >> 8), (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200) >> 8));
             sprite->drawGradientHLine(vp->x, (int)(i * (vp->h - 1)) + vp->y, vp->w, (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200) >> 8), (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200) >> 8));
@@ -174,12 +166,10 @@ class CollisionsSaver {
             sprite->drawGradientVLine((int)(i * (vp->w - 1)) + vp->x, vp->y, vp->h, (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200) >> 8), (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200) >> 8));
             sprite->drawGradientHLine(vp->x, (int)(i * (vp->h - 1)) + vp->y, vp->w, (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200) >> 8), (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200) >> 8));
         }
-
         for (std::uint32_t i = 0; i < _ball_count; i++) {
             a = &balls[i];
             sprite->fillCircle((a->x >> SHIFTSIZE) + vp->x, (a->y >> SHIFTSIZE) + vp->y, a->r >> SHIFTSIZE, (uint8_t)(a->color));
         }
-        // _draw_count++;
     }
     void new_ball(int ballno) {
         auto a = &_balls[_loop_count & 1][ballno];
@@ -531,9 +521,12 @@ class EraserSaver {  // draws colorful patterns to exercise
             sprite->fillCircle((vp->w / 2) + erpos[HORZ] + vp->x, (vp->h / 2) + erpos[VERT] + vp->y, eraser_rad * scaler, (uint8_t)BLK);
         }
         if (saver_lotto) {
+            sprite->setTextDatum(textdatum_t::middle_center);
             sprite->setFont(&fonts::Font4);
+            sprite->setTextColor(BLK);
             sprite->drawString("do drugs", vp->w / 2 + vp->x, vp->h / 2 + vp->y);
             sprite->setFont(&fonts::Font0);
+            sprite->setTextDatum(textdatum_t::top_left);
         }
         for (int axis = HORZ; axis <= VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
         // _draw_count++;
