@@ -237,11 +237,8 @@ class Display {
     // uint16_t palette[256] = { BLK, WHT };
     static constexpr int runOnCore = CONFIG_ARDUINO_RUNNING_CORE == 0 ? 1 : 0;
     char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
-    bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
-    bool disp_bool_values[6];
-    int32_t disp_needles[disp_lines];
-    int32_t disp_targets[disp_lines];
-    int32_t disp_age_quanta[disp_lines];
+    bool disp_bool_values[6], disp_bargraphs[disp_lines], disp_polarities[disp_lines];  // Holds sign of previously drawn values
+    int32_t disp_needles[disp_lines], disp_targets[disp_lines], disp_age_quanta[disp_lines];
     uint8_t disp_val_colors[disp_lines];
     Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
   public:
@@ -436,10 +433,12 @@ class Display {
         sprptr->drawFastVLine(pos_x+1, pos_y, 2, color);
     }
     void draw_target_shape(int32_t pos_x, int32_t pos_y, uint8_t t_color, uint8_t r_color) {  // draws a cute little target symbol
-        sprptr->drawFastVLine(pos_x-1, pos_y+7, 2, t_color);
-        sprptr->drawFastVLine(pos_x, pos_y+5, 4, t_color);
-        sprptr->drawFastVLine(pos_x+1, pos_y+7, 2, t_color);
+        sprptr->drawFastHLine(pos_x-1, pos_y, 3, t_color);
+        sprptr->drawFastVLine(pos_x, pos_y, 4, t_color);
     }
+        // sprptr->drawFastVLine(pos_x-1, pos_y+7, 2, t_color);
+        // sprptr->drawFastVLine(pos_x, pos_y+5, 4, t_color);
+        // sprptr->drawFastVLine(pos_x+1, pos_y+7, 2, t_color);
     void draw_bargraph_needle(int32_t n_pos_x, int32_t old_n_pos_x, int32_t pos_y, uint8_t n_color) {  // draws a cute little pointy needle
         draw_needle_shape(old_n_pos_x, pos_y, BLK);
         draw_needle_shape(n_pos_x, pos_y, n_color);
@@ -476,14 +475,14 @@ class Display {
             y_pos = (lineno + 1) * disp_line_height_pix + disp_vshift_pix;
             draw_string(disp_datapage_names_x, disp_datapage_names_x, y_pos, telemetry[lineno], "", LGRY, BLK, forced);
             draw_string_units(disp_datapage_units_x, y_pos, units[lineno], "", LGRY, BLK);
-            draw_bargraph_base(disp_bargraphs_x, y_pos + 7, disp_bargraph_width);
+            // draw_bargraph_base(disp_bargraphs_x, y_pos + 7, disp_bargraph_width);
         }
         if (redraw_all) {
             for (int32_t lineno=0; lineno < disp_tuning_lines; lineno++)  {  // Step thru lines of dataset page data
                 draw_string(disp_datapage_names_x, disp_datapage_names_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, datapage_names[page][lineno], datapage_names[page_last][lineno], LGRY, BLK, forced);
                 draw_string_units(disp_datapage_units_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], LGRY, BLK);
                 int32_t corner_y = (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix + 7;  // lineno*disp_line_height_pix+disp_vshift_pix-1;
-                draw_bargraph_base(disp_bargraphs_x, corner_y, disp_bargraph_width);
+                // draw_bargraph_base(disp_bargraphs_x, corner_y, disp_bargraph_width);
                 if (disp_needles[lineno] >= 0) draw_bargraph_needle(-1, disp_needles[lineno], corner_y - 6, BLK);  // Let's draw a needle
             }
         }
@@ -505,10 +504,8 @@ class Display {
             disp_val_colors[lineno] = color;
             dispAgeTimer[lineno].reset();
             disp_age_quanta[lineno] = 0;
-        }  // to-do: Fix failure to freshen aged coloration of unchanged characters of changed values
+        }
         else if (age_us > disp_age_quanta[lineno] && age_us < 11)  {  // As readings age, redraw in new color. This may fail and redraw when the timer overflows? 
-            // if (age_us < 8) color = 0x1fe0 + age_us*0x2000;  // Base of green with red added as you age, until yellow is achieved
-            // else color = 0xffe0 - (age_us-8) * 0x100;  // Then lose green as you age further
             if (age_us < 8) color = 0x1c + (age_us << 5);  // Base of green with red added as you age, until yellow is achieved
             else color = 0xfc - ((age_us-8) << 2);  // Then lose green as you age further
             int32_t y_pos = (lineno)*disp_line_height_pix+disp_vshift_pix;
@@ -517,32 +514,41 @@ class Display {
             disp_age_quanta[lineno] = age_us;
             disp_val_colors[lineno] = color;
         }
+        bool delete_bargraph = false;
+        int32_t corner_x = disp_bargraphs_x;
+        int32_t corner_y = lineno*disp_line_height_pix+disp_vshift_pix;
         if (lowlim < hilim) {  // Any value having a given range deserves a bargraph gauge with a needle
-            int32_t corner_x = disp_bargraphs_x;    
-            int32_t corner_y = lineno*disp_line_height_pix+disp_vshift_pix-1;
             int32_t n_pos = map(value, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
             int32_t ncolor = (n_pos > disp_bargraph_width-disp_bargraph_squeeze || n_pos < disp_bargraph_squeeze) ? RED : GRN;
             n_pos = corner_x + constrain(n_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+            if (!disp_bargraphs[lineno]) draw_bargraph_base(corner_x, corner_y + 7, disp_bargraph_width);
+            disp_bargraphs[lineno] = true;
             if (target != -1) {  // If target value is given, draw a target on the bargraph too
                 int32_t t_pos = map(target, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
                 int32_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || t_pos < disp_bargraph_squeeze) ? RED : ( (t_pos != n_pos) ? YEL : GRN );
                 t_pos = corner_x + constrain(t_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
                 if (t_pos != disp_targets[lineno] || (t_pos == n_pos)^(disp_needles[lineno] != disp_targets[lineno]) || disp_data_dirty[lineno]) {
                     draw_target_shape(disp_targets[lineno], corner_y, BLK, NON);  // Erase old target
-                    sprptr->drawFastHLine(disp_targets[lineno]-(disp_targets[lineno] != corner_x+disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+7, 2+(disp_targets[lineno] != corner_x+disp_bargraph_width-disp_bargraph_squeeze), MGRY);  // Patch bargraph line where old target got erased
-                    for (int32_t offset=0; offset<=2; offset++) sprptr->drawFastVLine((corner_x+disp_bargraph_squeeze)+offset*(disp_bargraph_width/2 - disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+6, 3, WHT);  // Redraw bargraph graduations in case one got corrupted by target erasure
+                    // sprptr->drawFastHLine(disp_targets[lineno]-(disp_targets[lineno] != corner_x+disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+7, 2+(disp_targets[lineno] != corner_x+disp_bargraph_width-disp_bargraph_squeeze), MGRY);  // Patch bargraph line where old target got erased
+                    // for (int32_t offset=0; offset<=2; offset++) sprptr->drawFastVLine((corner_x+disp_bargraph_squeeze)+offset*(disp_bargraph_width/2 - disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+6, 3, WHT);  // Redraw bargraph graduations in case one got corrupted by target erasure
                     draw_target_shape(t_pos, corner_y, tcolor, NON);  // Draw the new target
                     disp_targets[lineno] = t_pos;  // Remember position of target
                 }
             }
-            if (n_pos != disp_needles[lineno] || disp_data_dirty[lineno]) {
-                draw_bargraph_needle(n_pos, disp_needles[lineno], corner_y, ncolor);  // Let's draw a needle
-                disp_needles[lineno] = n_pos;  // Remember position of needle
-            }
+            else draw_target_shape(disp_targets[lineno], corner_y, BLK, NON);  // Erase old target
+            // if (n_pos != disp_needles[lineno] || disp_data_dirty[lineno]) {
+            draw_bargraph_needle(n_pos, disp_needles[lineno], corner_y, ncolor);  // Let's draw a needle
+            disp_needles[lineno] = n_pos;  // Remember position of needle
+            // }
         }
-        else if (disp_needles[lineno] >= 0) {  // If value having no range is drawn over one that did ...
-            draw_bargraph_needle(-1, disp_needles[lineno], lineno*disp_line_height_pix+disp_vshift_pix-1, BLK);  // Erase the old needle
-            disp_needles[lineno] = -1;  // Flag for no needle
+        else delete_bargraph = true;
+            // if (disp_needles[lineno] >= 0) {  // If value having no range is drawn over one that did ...
+            //     draw_bargraph_needle(-1, disp_needles[lineno], lineno*disp_line_height_pix+disp_vshift_pix-1, BLK);  // Erase the old needle
+            //     disp_needles[lineno] = -1;  // Flag for no needle
+            // }
+        if (delete_bargraph || value == 1234567) {
+            sprptr->fillRect(corner_x - 1, corner_y, disp_bargraph_width + 2, disp_line_height_pix, BLK);
+            disp_bargraphs[lineno] = false;
         }
         disp_data_dirty[lineno] = false;
     }
@@ -634,9 +640,9 @@ class Display {
     }
     void draw_runmode(int32_t _nowmode, int32_t _oldmode, uint8_t color_override=NON) {  // color_override = -1 uses default color
         sprptr->setTextDatum(textdatum_t::top_left);
-        sprptr->fillRect(disp_runmode_text_x, disp_vshift_pix + 1, (strlen(modecard[_oldmode]) + 5) * disp_font_width, disp_font_height, BLK);
+        sprptr->fillRect(disp_runmode_text_x, disp_vshift_pix, (strlen(modecard[_oldmode]) + 5) * disp_font_width, disp_font_height, BLK);
         sprptr->setTextColor((color_override == NON) ? colorcard[_nowmode] : color_override);  
-        sprptr->setCursor(disp_runmode_text_x, disp_vshift_pix + 1);
+        sprptr->setCursor(disp_runmode_text_x, disp_vshift_pix);
         sprptr->print(modecard[_nowmode]);
         sprptr->print(" Mode");
         // draw_string(disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[_oldmode], "", BLK, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
@@ -666,7 +672,7 @@ class Display {
             sprptr->setTextColor((value) ? GRN : LGRY);  
             sprptr->drawString(top_menu_buttons[col-2], x_mod, 0);
             disp_bool_values[col-2] = value;
-            Serial.printf("db: xm%d c%d v%d s%s\n", x_mod, col, value, top_menu_buttons[col-2]);
+            // Serial.printf("db: xm%d c%d v%d s%s\n", x_mod, col, value, top_menu_buttons[col-2]);
         }
     }
     void draw_touchgrid(bool side_only) {  // draws edge buttons with names in 'em. If replace_names, just updates names
