@@ -30,6 +30,8 @@ class Touchscreen {
     enum touch_axis : int { xx, yy, zz };
     enum touch_lim : int { tsmin, tsmax };
     int trow, tcol, disp_size[2], touch_read[3], tft_touch[2], landed[2];  // landed are the initial coordinates of a touch event, unaffected by dragging
+    // uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
+    // lcd.setTouch(touch_cal_data);
   public:
     static constexpr uint8_t addr = 0x38;  // i2c addr for captouch panel
     int idelta = 0;

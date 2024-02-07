@@ -477,10 +477,10 @@ class EraserSaver {  // draws colorful patterns to exercise
             }
             else if (rotate == Boxes) {
                 boxrad = 2 + random(2);
-                boxminsize = 2 * boxrad + 10;
+                boxminsize = 2 * boxrad + 5;
                 int longer = rn(2);
                 boxsize[longer] = std::abs(boxminsize + rn(vp->w - boxminsize));
-                boxsize[!longer] = std::abs((boxminsize + rn(smax(0, boxmaxarea / boxsize[longer] - boxminsize))) % boxsize[longer]);  // cheesy attempt to work around crazy-values bug
+                boxsize[!longer] = std::abs((boxminsize + rn(smax(0, boxmaxarea / boxsize[longer] - boxminsize))) % (boxsize[longer] >> 1));  // cheesy attempt to work around crazy-values bug
                 point[HORZ] = -1 * (int32_t)boxsize[HORZ] / 2 + rn((int32_t)vp->w);
                 point[VERT] = -1 * (int32_t)boxsize[VERT] / 2 + rn((int32_t)vp->h);
                 // Serial.printf("box: r%ld m%ld p%ld,%ld x%ld y%ld\n", boxrad, boxminsize, point[HORZ], point[VERT], boxsize[longer], boxsize[!longer]);

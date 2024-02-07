@@ -10,7 +10,7 @@
 // #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
 // #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
 #define disp_vshift_pix 2  // Unknown.  Note: At smallest text size, characters are 5x7 pix + pad on rt and bot for 6x8 pix.
-#define disp_runmode_text_x 11
+#define disp_runmode_text_x 12
 uint8_t colorcard[NUM_RUNMODES] = { MGT, WHT, RED, ORG, YEL, GRN, TEAL, PUR };
 char modecard[NUM_RUNMODES][7] = { "Basic", "Asleep", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 char side_menu_buttons[5][4] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
@@ -135,15 +135,6 @@ class IdiotLights {
 #define disp_datapage_units_x 103        
 #define disp_bargraphs_x 122
 #define disp_datapage_title_x 83
-char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
-bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
-bool disp_bool_values[6];
-bool disp_selected_val_dirty, disp_datapage_dirty, disp_values_dirty, disp_data_dirty[disp_lines], disp_bools_dirty, disp_sidemenu_dirty, disp_runmode_dirty, disp_simbuttons_dirty, disp_idiots_dirty;
-int32_t disp_needles[disp_lines];
-int32_t disp_targets[disp_lines];
-int32_t disp_age_quanta[disp_lines];
-uint8_t disp_val_colors[disp_lines];
-Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
 
 // These defines are just a convenience to keep the below datapage strings array initializations aligned in neat rows & cols for legibility
 #define stEr "St\x88r"
@@ -230,6 +221,7 @@ void push_task();
 void draw_task();
 void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref);
 #endif
+
 class Display {
   private:
     LGFX_Sprite* sprptr;
@@ -239,15 +231,24 @@ class Display {
     TunerPanel tuner;
     IdiotLights* idiots;
     Timer valuesRefreshTimer = Timer(160000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
-    uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     bool _procrastinate = false, reset_finished = false, simulating_last, auto_saver_enabled = false;
     int disp_oldmode = SHUTDOWN, nowmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
     uint8_t palettesize = 2;
     // uint16_t palette[256] = { BLK, WHT };
-    static constexpr int runOnCore = CONFIG_ARDUINO_RUNNING_CORE == 0 ? 1 : 0;    
+    static constexpr int runOnCore = CONFIG_ARDUINO_RUNNING_CORE == 0 ? 1 : 0;
+    char disp_values[disp_lines][disp_maxlength+1];  // Holds previously drawn value strings for each line
+    bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
+    bool disp_bool_values[6];
+    int32_t disp_needles[disp_lines];
+    int32_t disp_targets[disp_lines];
+    int32_t disp_age_quanta[disp_lines];
+    uint8_t disp_val_colors[disp_lines];
+    Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
   public:
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
+    bool disp_selected_val_dirty, disp_datapage_dirty, disp_values_dirty, disp_data_dirty[disp_lines], disp_bools_dirty;
+    bool disp_sidemenu_dirty, disp_runmode_dirty, disp_simbuttons_dirty, disp_idiots_dirty;
     Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim)
         : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {
     }
@@ -295,7 +296,7 @@ class Display {
     void init_framebuffers(int _sprwidth, int _sprheight) {
         int sprsize[2] = { _sprwidth, _sprheight };
         Serial.printf("  multi purpose panel init.. ");
-        lcd.startWrite();
+        // lcd.startWrite();
         lcd.setColorDepth(8);
         // if (lcd->width() < lcd->height()) lcd->setRotation(lcd->getRotation() ^ 1);
         for (int i = 0; i <= 1; i++) framebuf[i].setColorDepth(sprite_color_depth);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
@@ -332,23 +333,22 @@ class Display {
         for (int i=0; i<=1; i++) framebuf[i].clear();
         // sp[0].pushImageDMA() draw(vp.x, vp.y);
         // lcd->display();
-        lcd.endWrite();
+        // lcd.endWrite();
     }
     void setup() {
         Serial.printf("Display..");  //
         lcd.init();
-        // lcd.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
+        #ifdef BOARD_HAS_PSRAM
+        lcd.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
+        #endif
         lcd.setColorDepth(8);
         Serial.printf(" ..");  //
-
         lcd.begin();  // lcd.begin();
         Serial.printf(" ..");  //
-
         lcd.initDMA();
         Serial.printf(" ..");  //
         // lcd.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
         if (lcd.width() < lcd.height()) lcd.setRotation(lcd.getRotation() ^ 1);
-        // lcd.setTouch(touch_cal_data);
         lcd.setSwapBytes(true);  // rearranges color ordering of 16bit colors when displaying image files
         for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
             disp_age_quanta[lineno] = -1;
@@ -362,14 +362,12 @@ class Display {
         Serial.printf(" ..");  //
         // if (fullscreen_screensaver_test)
         init_framebuffers(disp_width_pix, disp_height_pix);
-
         flexpanel.init(&lcd, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
         // else 
         animations.init(&flexpanel, sim);
-        if (!fullscreen_screensaver_test) reset();
-        Serial.printf(" ...");  //
         animations.setup();
-        Serial.printf(" ....");  //
+                if (!fullscreen_screensaver_test) reset();
+
         #ifdef VIDEO_TASKS
         init_tasks();
         delayMicroseconds(500);
@@ -377,16 +375,16 @@ class Display {
         #else
         push_task();
         #endif
-        Serial.printf(" .....");  //
+        Serial.printf(" ..");  //
         Serial.printf(" initialized\n");
     }
     void reset() {
         sprptr = &framebuf[flip];
-        sprptr->fillScreen(BLK);  // Black out the whole screen
+        sprptr->fillRect(0, 0, disp_width_pix, disp_height_pix, BLK);  // Black out the whole screen
         draw_touchgrid(false);
         draw_fixed(datapage, datapage_last, true, true);
         draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
-        draw_runmode(SHUTDOWN, disp_oldmode, NON);
+        draw_runmode(nowmode, disp_oldmode, NON);
         draw_datapage(datapage, datapage_last, true);
         all_dirty();
     }
@@ -448,7 +446,7 @@ class Display {
     }
     void draw_string(int32_t x_new, int32_t x_old, int32_t y, const char* text, const char* oldtext, uint8_t color, uint8_t bgcolor, bool forced=false) {  // Send in "" for oldtext if erase isn't needed
         int32_t oldlen = strlen(oldtext);
-        sprptr->fillRect(x_old, y, oldlen * disp_font_width, disp_font_height, bgcolor);
+        sprptr->fillRect(x_old, y, strlen(oldtext) * disp_font_width, disp_font_height, bgcolor);
         sprptr->setTextColor(color);  
         sprptr->setCursor(x_new, y);
         sprptr->print(text);
@@ -459,18 +457,15 @@ class Display {
                 if ((unitmaps[index][xo] >> yo) & 1) sprptr->drawPixel(x + xo, y + yo, color);
     }
     void draw_string_units(int32_t x, int32_t y, const char* text, const char* oldtext, uint8_t color, uint8_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
-        bool drawn = false;
         sprptr->fillRect(x, y, 3 * disp_font_width, disp_font_height, bgcolor);
         for (int8_t i = 0; i<arraysize(unitmaps); i++)
             if (!strcmp(unitmapnames[i], text)) {
                 draw_unitmap(i, x, y, color);
-                drawn = true;
+                return;
             }
-        if (!drawn) {
-            sprptr->setCursor(x, y);
-            sprptr->setTextColor(color);
-            sprptr->print(text);
-        }
+        sprptr->setCursor(x, y);
+        sprptr->setTextColor(color);
+        sprptr->print(text);
     }
     // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
     void draw_fixed(int32_t page, int32_t page_last, bool redraw_all, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
@@ -639,9 +634,9 @@ class Display {
     }
     void draw_runmode(int32_t _nowmode, int32_t _oldmode, uint8_t color_override=NON) {  // color_override = -1 uses default color
         sprptr->setTextDatum(textdatum_t::top_left);
-        sprptr->fillRect(disp_runmode_text_x, disp_vshift_pix, (strlen(modecard[_oldmode]) + 5) * disp_font_width, disp_font_height, BLK);
+        sprptr->fillRect(disp_runmode_text_x, disp_vshift_pix + 1, (strlen(modecard[_oldmode]) + 5) * disp_font_width, disp_font_height, BLK);
         sprptr->setTextColor((color_override == NON) ? colorcard[_nowmode] : color_override);  
-        sprptr->setCursor(disp_runmode_text_x, disp_vshift_pix);
+        sprptr->setCursor(disp_runmode_text_x, disp_vshift_pix + 1);
         sprptr->print(modecard[_nowmode]);
         sprptr->print(" Mode");
         // draw_string(disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[_oldmode], "", BLK, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
@@ -663,16 +658,23 @@ class Display {
     void draw_bool(bool value, int32_t col, bool force=false) {  // Draws values of boolean data
         if ((disp_bool_values[col-2] != value) || force) {  // If value differs, Erase old value and write new
             int32_t x_mod = touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - arraysize(top_menu_buttons[col-2]-1)*(disp_font_width>>1) - 2;
-            draw_string(x_mod, x_mod, 0, top_menu_buttons[col-2], "", (value) ? GRN : LGRY, DGRY);
+            // draw_string(x_mod, x_mod, 0, top_menu_buttons[col-2], "", (value) ? GRN : LGRY, DGRY);
+            // sprptr->setTextColor((value) ? GRN : PNK);  
+            // sprptr->setCursor(x_mod, 10);
+            sprptr->setTextDatum(textdatum_t::top_left);
+            sprptr->setFont(&fonts::Font0);
+            sprptr->setTextColor((value) ? GRN : LGRY);  
+            sprptr->drawString(top_menu_buttons[col-2], x_mod, 0);
             disp_bool_values[col-2] = value;
+            Serial.printf("db: xm%d c%d v%d s%s\n", x_mod, col, value, top_menu_buttons[col-2]);
         }
     }
     void draw_touchgrid(bool side_only) {  // draws edge buttons with names in 'em. If replace_names, just updates names
         int32_t namelen = 0;
         sprptr->setTextColor((uint8_t)WHT);
         for (int32_t row = 0; row < arraysize(side_menu_buttons); row++) {  // Step thru all rows to draw buttons along the left edge
-            sprptr->fillRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, (uint8_t)DGRY);
-            sprptr->drawRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, (uint8_t)LYEL);
+            sprptr->fillRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, DGRY);
+            sprptr->drawRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, LYEL);
             namelen = 0;
             for (uint32_t x = 0 ; x < arraysize(side_menu_buttons[row]) ; x++ ) {
                 if (side_menu_buttons[row][x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
@@ -684,14 +686,14 @@ class Display {
         }
         if (!side_only) {
             for (int32_t col = 2; col <= 5; col++) {  // Step thru all cols to draw buttons across the top edge
-                sprptr->fillRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, (uint8_t)DGRY);
-                sprptr->drawRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, (uint8_t)LYEL);  // sprptr->width()-9, 3, 18, (sprptr->height()/5)-6, 8, LYEL);
+                sprptr->fillRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
+                sprptr->drawRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // sprptr->width()-9, 3, 18, (sprptr->height()/5)-6, 8, LYEL);
             }
         }
     }
     void draw_reticle(LGFX_Sprite* spr, uint32_t x, uint32_t y) {
-        spr->drawFastHLine(x - 2, y, 5, (uint8_t)DGRY);
-        spr->drawFastVLine(x, y - 2, 5, (uint8_t)DGRY);
+        spr->drawFastHLine(x - 2, y, 5, DGRY);
+        spr->drawFastVLine(x, y - 2, 5, DGRY);
     }
     void draw_reticles(LGFX_Sprite* spr) {
         if (touch_reticles) {
@@ -784,6 +786,7 @@ class Display {
     }
     void draw_all(int _nowmode) {
         if (auto_saver_enabled) return;
+        sprptr = &framebuf[flip];
         tiny_text();
         update_idiots(disp_idiots_dirty);
         disp_idiots_dirty = false;
@@ -987,15 +990,13 @@ class Display {
 };
 class Tuner {
   private:
+    Display* screen;
     NeopixelStrip* neo;
     Touchscreen* touch;
     Timer tuningCtrlTimer = Timer(25000000);  // This times out edit mode after a a long period of inactivity
   public:
     // Tuner(NeopixelStrip* _neo, Touchscreen* _touch) : neo(_neo), touch(_touch) {}
-    Tuner(NeopixelStrip* _neo, Touchscreen* _touch) {
-        neo = _neo;
-        touch = _touch;
-    }
+    Tuner(Display* _screen, NeopixelStrip* _neo, Touchscreen* _touch) : screen(_screen), neo(_neo), touch(_touch) {}
     int32_t idelta = 0, idelta_encoder = 0;
     void update(int rmode) {
         process_inputs();
@@ -1027,13 +1028,13 @@ class Tuner {
         datapage = constrain(datapage, 0, datapages::NUM_DATAPAGES-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
         if (datapage != datapage_last) {
             if (tunctrl == EDIT) tunctrl = SELECT;  // If page is flipped during edit, drop back to select mode
-            disp_datapage_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
+            screen->disp_datapage_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
         }
         if (tunctrl == SELECT) {
             sel_val = constrain(sel_val, tuning_first_editable_line[datapage], disp_tuning_lines-1);  // Skip unchangeable values for all PID modes
-            if (sel_val != sel_val_last) disp_selected_val_dirty = true;
+            if (sel_val != sel_val_last) screen->disp_selected_val_dirty = true;
         }
-        if (tunctrl != tunctrl_last || disp_datapage_dirty) disp_selected_val_dirty = true;
+        if (tunctrl != tunctrl_last || screen->disp_datapage_dirty) screen->disp_selected_val_dirty = true;
     }
     void edit_values(int rmode) {
         float fdelta = (float)idelta;
@@ -1118,7 +1119,7 @@ static NeopixelStrip neo(neopixel_pin);
 static IdiotLights idiots;
 static Touchscreen touch;
 static Display screen(&neo, &touch, &idiots, &sim);
-static Tuner tuner(&neo, &touch);
+static Tuner tuner(&screen, &neo, &touch);
 #ifdef VIDEO_TASKS
 static void push_task(void *parameter) {
     while (true) {
