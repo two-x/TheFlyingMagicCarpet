@@ -88,7 +88,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         we_just_switched_modes = (mode != oldmode);  // currentMode should not be changed after this point in loop
         if (we_just_switched_modes) {
-            display->disp_runmode_dirty = true;
+            disp_runmode_dirty = true;
             cleanup_state_variables();
         }
         oldmode = mode;

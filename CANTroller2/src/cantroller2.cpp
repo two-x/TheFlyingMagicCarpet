@@ -51,9 +51,8 @@ void setup() {
 void loop() {                 // code takes about 1 ms to loop on average
     ignition_panic_update();  // manage panic stop condition and drive ignition signal as needed
     bootbutton.update();      // read the builtin button
-    // #ifdef CONVERT_IMAGE
-    if (bootbutton.longpress()) screensaver = !screensaver;
-    // #endif
+    if (bootbutton.longpress()) screen.auto_saver(!auto_saver_enabled);
+    if (bootbutton.shortpress() && auto_saver_enabled) animations.change_saver();
     basicsw_update();         // see if basic mode switch got hit
     starter_update();         // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
     encoder.update();         // read encoder input signals  // 20 us per loop

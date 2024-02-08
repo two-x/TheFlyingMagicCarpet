@@ -39,13 +39,13 @@ const uint8_t PNK  = 0xe3;  // pink is the best color
 const uint8_t MPNK = 0xeb;  // we need all shades of pink
 const uint8_t LPNK = 0xf3;  // especially light pink, the champagne of pinks
 const uint8_t NON  = 0x45;  // used as default value when color is unspecified
-static constexpr int simgriddir[4][3] = {
+int simgriddir[4][3] = {
     { JOY_PLUS,  JOY_PLUS,  JOY_PLUS,  },
     { JOY_MINUS, JOY_MINUS, JOY_MINUS, },
     { JOY_PLUS,  JOY_UP,    JOY_RT,    },
     { JOY_MINUS, JOY_DN,    JOY_LT,    },
 };
-static constexpr char simgrid[4][3][4] = {
+std::string simgrid[4][3] = {
     { "psi", "rpm", "mph" },
     { "psi", "rpm", "mph" },
     { "pos", "   ", "   " },
@@ -479,8 +479,8 @@ class EraserSaver {  // draws colorful patterns to exercise
                 boxrad = 2 + random(2);
                 boxminsize = 2 * boxrad + 5;
                 int longer = rn(2);
-                boxsize[longer] = std::abs(boxminsize + rn(vp->w - boxminsize));
-                boxsize[!longer] = std::abs((boxminsize + rn(smax(0, boxmaxarea / boxsize[longer] - boxminsize))) % (boxsize[longer] >> 1));  // cheesy attempt to work around crazy-values bug
+                boxsize[longer] = std::abs(boxminsize + rn(vp->w - 3 * boxminsize));
+                boxsize[!longer] = std::abs(boxminsize + rn(vp->w - 4 * boxminsize));  // std::abs((boxminsize + rn(smax(0, boxmaxarea / boxsize[longer] - boxminsize))) % (boxsize[longer] >> 1));  // cheesy attempt to work around crazy-values bug
                 point[HORZ] = -1 * (int32_t)boxsize[HORZ] / 2 + rn((int32_t)vp->w);
                 point[VERT] = -1 * (int32_t)boxsize[VERT] / 2 + rn((int32_t)vp->h);
                 // Serial.printf("box: r%ld m%ld p%ld,%ld x%ld y%ld\n", boxrad, boxminsize, point[HORZ], point[VERT], boxsize[longer], boxsize[!longer]);
@@ -489,6 +489,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             else if (rotate == Ascii) {
                 // sprite->setFont(&fonts::Font4);
                 sprite->setTextSize(1);
+                sprite->setTextDatum(textdatum_t::middle_center);
                 sprite->setFont(&fonts::Font4);
                 for (int star = 0; star < 4; star++) {
                     point[HORZ] = rn(vp->w);
@@ -553,7 +554,7 @@ class EraserSaver {  // draws colorful patterns to exercise
 class AnimationManager {
   private:
     enum saverchoices : int { Eraser, Collisions, NumSaverMenu, Blank };
-    int nowsaver = Collisions, still_running = 0;
+    int nowsaver = Eraser, still_running = 0;
     LGFX* mylcd;
     LGFX_Sprite* nowspr_ptr;
     LGFX_Sprite arrowspr;
@@ -567,12 +568,13 @@ class AnimationManager {
     viewport* vp;
     int64_t fps_mark;
     bool screensaver_last = false, simulating_last = false, mule_drawn = false;
+  public:
+    bool anim_reset_request = false;
+    AnimationManager() {}
     void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
         ++nowsaver %= NumSaverMenu;
-        reset();
+        anim_reset_request = true;
     }
-  public:
-    AnimationManager() {}
     void init(FlexPanel* _panel, Simulator* _sim) {
         vp = &(_panel->vp);
         panel = _panel;
@@ -587,6 +589,7 @@ class AnimationManager {
         // int flip = panel->setflip(true);
         if (nowsaver == Eraser) eSaver.reset(&framebuf[flip], &framebuf[!flip], vp);
         else if (nowsaver == Collisions) cSaver.reset(&framebuf[flip], &framebuf[!flip], vp);
+        anim_reset_request = false;
     }
     // void redraw() {
     //     // if (!is_drawing) is_pushing = false;
@@ -614,7 +617,7 @@ class AnimationManager {
             for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
                 int32_t cntr_x = touch_cell_h_pix*col + (touch_cell_h_pix>>1) + 2 + vp->x - 5;
                 int32_t cntr_y = touch_cell_v_pix*row + (touch_cell_v_pix>>1) + vp->y;
-                if (strcmp(simgrid[row][col], "    ")) {
+                if (simgrid[row][col] == "    ") {
                     draw_simbutton(spr, cntr_x + 2, cntr_y - 1, simgriddir[row][col], YEL);  // for 3d look
                     draw_simbutton(spr, cntr_x, cntr_y, simgriddir[row][col], DGRY);
                     // spr->fillRoundRect(cntr_x - 20, cntr_y - touch_cell_v_pix/2 - 10, 40, 20, 5, DGRY);
@@ -622,10 +625,10 @@ class AnimationManager {
                     if (row % 2) {
                         spr->setFont(&fonts::FreeSans9pt7b);
                         spr->setTextColor(BLK);
-                        spr->drawString(simgrid[row][col], cntr_x - 1, cntr_y - touch_cell_v_pix/2 + 5 - 1);
-                        spr->drawString(simgrid[row][col], cntr_x + 1, cntr_y - touch_cell_v_pix/2 + 5 + 1);
+                        spr->drawString(simgrid[row][col].c_str(), cntr_x - 1, cntr_y - touch_cell_v_pix/2 + 5 - 1);
+                        spr->drawString(simgrid[row][col].c_str(), cntr_x + 1, cntr_y - touch_cell_v_pix/2 + 5 + 1);
                         spr->setTextColor(LYEL);
-                        spr->drawString(simgrid[row][col], cntr_x, cntr_y - touch_cell_v_pix/2 + 5);
+                        spr->drawString(simgrid[row][col].c_str(), cntr_x, cntr_y - touch_cell_v_pix/2 + 5);
                     }
                 }
             }     
@@ -642,6 +645,7 @@ class AnimationManager {
         fps_mark = now;
     }
     float update() {
+        if (anim_reset_request) reset();
         nowspr_ptr = &framebuf[flip];
         nowspr_ptr->setClipRect(vp->x, vp->y, vp->w, vp->h);
         if (!screensaver_last && screensaver) change_saver();  // ptrsaver->reset();
