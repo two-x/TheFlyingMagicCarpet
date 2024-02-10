@@ -89,8 +89,8 @@ class Touchscreen {
         }
         // if (touchDoublePressTimer.expired()) {
         tedit = (float)(1 << tedit_exponent);
-        Serial.printf("(%d,%d), landed(%d,%d)\n",tft_touch[xx],tft_touch[yy],landed[xx],landed[yy]);
-        sleep_inactivity_timer.reset();  // evidence of user activity
+        // Serial.printf("(%d,%d), landed(%d,%d)\n",tft_touch[xx],tft_touch[yy],landed[xx],landed[yy]);
+        kick_inactivity_timer(4);  // evidence of user activity
         tedit = (float)(1 << tedit_exponent);  // Determine value editing rate
         trow = constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
         tcol = constrain((landed[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, 5);

@@ -20,7 +20,7 @@ static Simulator sim(pot);
 static Hotrc hotrc(&sim);
 static TemperatureSensorManager tempsens(onewire_pin);
 static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
-static MomentaryButton bootbutton(boot_sw_pin);
+static MomentaryButton bootbutton(boot_sw_pin, false);
 static CarBattery mulebatt(mulebatt_pin);
 static PressureSensor pressure(pressure_pin);
 static BrakePositionSensor brkpos(brake_pos_pin);
@@ -159,11 +159,13 @@ void ignition_panic_update() {  // Run once each main loop
     ignition_request = REQ_NA;  // Make sure this goes after the last comparison
 }
 void basicsw_update() {
+    bool last_val = basicmodesw;
     if (!sim.simulating(sens::basicsw)) {  // Basic Mode switch
         do {
             basicmodesw = !digitalRead(basicmodesw_pin);   // !value because electrical signal is active low
         } while (basicmodesw != !digitalRead(basicmodesw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
     }
+    if (last_val != basicmodesw) kick_inactivity_timer(7);
 }
 void set_syspower(bool setting) {
     syspower = setting | keep_system_powered;

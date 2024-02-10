@@ -5,7 +5,6 @@
 #include "RunModeManager.h"
 static SdCard sdcard(&lcd);
 static RunModeManager run(&screen, &encoder);
-
 void setup() {
     initialize_pins();
     running_on_devboard = (read_pin(uart_tx_pin));  // detect breadboard vs. real car without use of an additional pin (add weak pullup resistor on your breadboard)
@@ -51,8 +50,9 @@ void setup() {
 void loop() {                 // code takes about 1 ms to loop on average
     ignition_panic_update();  // manage panic stop condition and drive ignition signal as needed
     bootbutton.update();      // read the builtin button
-    if (bootbutton.longpress()) screen.auto_saver(!auto_saver_enabled);
-    if (bootbutton.shortpress() && auto_saver_enabled) animations.change_saver();
+    // #ifdef CONVERT_IMAGE
+    if (bootbutton.longpress()) screen.auto_saver(!screen.auto_saver_enabled);
+    // #endif
     basicsw_update();         // see if basic mode switch got hit
     starter_update();         // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
     encoder.update();         // read encoder input signals  // 20 us per loop

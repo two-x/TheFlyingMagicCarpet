@@ -24,7 +24,7 @@ class Potentiometer {
         new_val = constrain(new_val, _pc_min, _pc_max); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
         _val = ema_filt(new_val, _val, _ema_alpha);
         if (std::abs(_val - _activity_ref) > _pc_activity_margin) {
-            sleep_inactivity_timer.reset();  // evidence of user activity
+            kick_inactivity_timer();
             _activity_ref = _val;
         }
     }
@@ -42,13 +42,14 @@ class MomentaryButton {
     bool _timer_active = false;  // Flag to prevent re-handling long presses if the sw is just kept down
     bool _suppress_click = false;  // Flag to prevent a short click on switch release after successful long press
     Timer _spinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
+    bool activity_timer_keepalive = true;  // will activity on this switch be considered that the user is active?
     //  ---- tunable ----
     Timer _longPressTimer = Timer(375000);  // Used to time long button presses
   public:
     int _sw_pin = -1;
     bool now = false;  // Remember whether switch is being pressed
-    MomentaryButton() {}
-    MomentaryButton(int pin) : _sw_pin(pin) {}
+    MomentaryButton()  {}
+    MomentaryButton(int pin, bool _act_keepalive=true) : _sw_pin(pin), activity_timer_keepalive(_act_keepalive) {}
     void set_pin(int pin) {
         _sw_pin = pin;
     }
@@ -63,7 +64,7 @@ class MomentaryButton {
 
         if (!myread) {  // if encoder sw is being pressed (switch is active low)
             if (!now) {  // if the press just occurred
-                sleep_inactivity_timer.reset();  // evidence of user activity
+                if (activity_timer_keepalive) kick_inactivity_timer(0);  // evidence of user activity
                 _longPressTimer.reset();  // start a press timer
                 _timer_active = true;  // flag to indicate timing for a possible long press
             }
@@ -76,7 +77,7 @@ class MomentaryButton {
         }
         else {  // if encoder sw is not being pressed
             if (now) {
-                sleep_inactivity_timer.reset();  // evidence of user activity
+                if (activity_timer_keepalive) kick_inactivity_timer(1);  // evidence of user activity
                 if(!_suppress_click) _sw_action = swSHORT;  // if the switch was just released, a short press occurred, which must be handled
             }
             _timer_active = false;  // Allows detection of next long press event
@@ -178,7 +179,7 @@ class Encoder {
         int32_t rotation(bool accel = false) {  // Returns detents spun since last call, accelerated by spin rate or not
             int32_t d = 0;
             if (_delta) {  // Now handle any new rotations
-                sleep_inactivity_timer.reset();  // evidence of user activity
+                kick_inactivity_timer(2);  // evidence of user activity
                 if (_spinrate_isr_us >= _spinrate_min_us) {  // Reject clicks coming in too fast as bounces
                     if (accel) {
                         _spinrate_us = constrain (_spinrate_isr_us, _spinrate_min_us, _accel_thresh_us);

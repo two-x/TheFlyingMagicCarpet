@@ -162,7 +162,7 @@ class DiagRuntime {
                 most_critical_sensor[t] = _None;
                 err_sens_alarm[t] = false;
                 err_sens_fails[t] = 0;
-                for (int32_t s=0; s<NumTelemetryFull; s++)
+                for (int32_t s=0; s<NumTelemetryShort; s++)
                     if (err_sens[t][s]) {
                         if (most_critical_sensor[t] = _None) most_critical_sensor[t] = s;
                         err_sens_alarm[t] = true;
