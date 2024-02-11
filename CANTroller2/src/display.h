@@ -358,9 +358,9 @@ class Display {
         animations.init(&lcd, sim, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
         animations.setup();
         sprptr = &framebuf[flip];
+        reset_request = false;
         if (fullscreen_screensaver_test) animations.set_vp(0, 0, disp_width_pix, disp_height_pix);
         else reset_request = true;
-        reset_request = false;
         #ifdef VIDEO_TASKS
         init_tasks();
         delayMicroseconds(500);

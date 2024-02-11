@@ -90,7 +90,7 @@ enum boolean_states : int { ON=1 };
 //     
 // };
 enum telemetry_short : int { _GasServo=0, _BrakeMotor=1, _SteerMotor=2, _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7, _Temps=8, _Other=9, _GPIO=10 };  // _MuleBatt, _MAP, _MAF, _Pot,
-enum telemetry_full : int { _AirVelo=11, _MAP=12, _MuleBatt=13, _Pot=14, _MAF=15, _HotRCHorz=16, _HotRCVert=17, _TempEng=18, _TempWhFL=19, _TempWhFR=20, _TempWhRL=21, _TempWhRR=22, _TempAmb=23 };  // 10 per line
+enum telemetry_full : int { _HotRCHorz=11, _HotRCVert=12, _MuleBatt=13, _AirVelo=14, _MAP=15, _Pot=16, _MAF=17, _TempEng=18, _TempWhFL=19, _TempWhFR=20, _TempWhRL=21, _TempWhRR=22, _TempAmb=23 };  // 10 per line
 enum telemetry_nums : int { NA=-2, _None=-1, NumTelemetryBool=9, NumTelemetryShort=11, NumTelemetryFull=24 };
 enum telemetry_bool : int { _Ignition=1, _PanicStop=2, _SysPower=3, _HotRCCh3=4, _HotRCCh4=5, _StarterDr=6, _StarterExt=7, _BasicSw=8 };
 enum err_type : int { LOST=0, RANGE=1, CALIB=2, WARN=3, CRIT=4, INFO=5, NUM_ERR_TYPES=6 };
@@ -317,10 +317,12 @@ T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {
 // T hsv_to_rgb(uint8_t hue, uint8_t sat, uint8_t val) {
 //     return hsv_to_rgb((uint16_t)hue << 8, sat, val);
 // }
-
-uint16_t rando_color() {
-    return ((uint16_t)random(0x1f) << 11) | ((uint16_t)random(0x3f) << 5) | (uint16_t)random(0x1f); 
+uint8_t rando_color() {
+    return ((uint8_t)random(0x7) << 5) | ((uint8_t)random(0x7) << 2) | (uint8_t)random(0x3); 
 }
+// uint16_t rando_color() {
+//     return ((uint16_t)random(0x1f) << 11) | ((uint16_t)random(0x3f) << 5) | (uint16_t)random(0x1f); 
+// }
 // uint16_t hue_shift(uint16_t orig, int addme) {
 //     return (orig >> 11(uint16_t)random(0x1f) << 11) | ((uint16_t)random(0x3f) << 5) | (uint16_t)random(0x1f); 
 // }
@@ -375,6 +377,11 @@ class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regul
     //     return true;
     // }
 };
-Timer sleep_inactivity_timer(10000000);
+Timer sleep_inactivity_timer(150000000);
 Timer starterTimer(5000000);  // If remotely-started starting event is left on for this long, end it automatically  
 Timer panicTimer(15000000);  // How long should a panic stop last?  we can't stay mad forever
+
+void kick_inactivity_timer(int source=0) {
+    sleep_inactivity_timer.reset();  // evidence of user activity
+    Serial.printf("kick%d ", source);
+}

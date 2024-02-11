@@ -1367,7 +1367,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             sw[chan] = (us[chan][RAW] <= us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  us[CH3][CENT]
             if ((sw[chan] != sw[chan-2]) && !_radiolost) {
                 _sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false. Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
-                sleep_inactivity_timer.reset();  // evidence of user activity
+                kick_inactivity_timer(5);  // evidence of user activity
             }
             sw[chan-2] = sw[chan];  // chan-2 index being used to store previous values of index chan
         }
@@ -1383,7 +1383,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             ema_filt(pc[axis][RAW], &(pc[axis][FILT]), ema_alpha);  // do ema filter to determine joy_vert_filt
             pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
             if (ema_us[axis] > us[axis][DBBOT] && ema_us[axis] < us[axis][DBTOP]) pc[axis][FILT] = pc[axis][CENT];  // if within the deadband set joy_axis_filt to CENTer value
-            else sleep_inactivity_timer.reset();  // otherwise indicate evidence of user activity
+            else if (!_radiolost) kick_inactivity_timer(6);  // otherwise indicate evidence of user activity
             if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set joy_axis_filt to CENTer value
         }
     }

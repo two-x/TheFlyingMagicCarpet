@@ -1,6 +1,5 @@
 #pragma once
 #include <Arduino.h>
-// #define CONFIG_IDF_TARGET_ESP32
 #define touch_simbutton 38
 #define disp_simbuttons_x 164
 #define disp_simbuttons_y 48
@@ -53,7 +52,6 @@ std::string simgrid[4][3] = {
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
 volatile bool _is_running;
-// volatile std::uint32_t _draw_count;
 volatile std::uint32_t _loop_count;
 static constexpr std::uint32_t SHIFTSIZE = 8;
 volatile bool flip = 0;
@@ -67,15 +65,8 @@ struct viewport {
     int32_t w;
     int32_t h;
 };
-
-// volatile int PushSp = 1;
-// volatile int DrawSp = 0;
-// volatile bool pushed[2];
-// volatile bool drawn[2];
 class CollisionsSaver {
   public:
-    // int flip;
-    // int* draw_count_ptr;
     struct ball_info_t {
         int32_t x;
         int32_t y;
@@ -97,7 +88,6 @@ class CollisionsSaver {
     int _width, _height;
     std::uint32_t sec, psec, ball_create_rate = 3200;
     std::uint32_t myfps = 0, frame_count = 0;
-    // uint32_t ball_radius_pix_per_10ksqpix = 5;
     float ball_radius_base = 5.0 / 235.0;  // 7 pixels radius / 125x100 sprite = about 5 pix per 235 sides sum
     float ball_radius_modifier = 3.0 / 235.0;  // 4 pixels radius / 125x100 sprite = about 3 pix per...
     uint8_t ball_redoubler_rate = 0x18;  // originally 0x07
@@ -108,9 +98,7 @@ class CollisionsSaver {
     void drawfunc() {
         auto sprwidth = vp->w;
         auto sprheight = vp->h;
-        // flip = _draw_count & 1;
         balls = &_balls[flip][0];
-        // sprite = &(framebuf[flip]);
         sprite->clear();
         for (float i = 0.125; i < 1.0; i += 0.125) {
             sprite->drawGradientVLine((int)(i * (vp->w - 1)) + vp->x, vp->y, vp->h, (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200) >> 8), (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200) >> 8));
@@ -128,19 +116,14 @@ class CollisionsSaver {
     void new_ball(int ballno) {
         auto a = &_balls[_loop_count & 1][ballno];
         a->color = lgfx::color332(100 + (rand() % 155), 100 + (rand() % 155), 100 + (rand() % 155));
-        // Serial.printf("%02x ", a->color);
         a->x = _width * rn(2);
         a->dx = (rand() & (5 << SHIFTSIZE)) + 1;
         a->dy = (rand() & (5 << SHIFTSIZE)) + 1;
-        // a->color = lgfx::color888(100 + (rand() % 155), 100 + (rand() % 155), 100 + (rand() % 155));
-        // Serial.printf("%02x ", a->color);
         sqrme = (uint8_t)(ball_radius_base * (float)(vp->w + vp->h));
         sqrme += rn((int)(ball_radius_modifier * (float)(vp->w + vp->h)));
         for (int i=0; i<=2; i++) if (!rn(ball_redoubler_rate)) sqrme *=2;
         a->r = sqrme << SHIFTSIZE;  // (sqrme * sqrme)));
         a->m = 4 + (ball_count & 0x07);
-        // a->r = (4 + (i & 0x07)) << SHIFTSIZE;
-        // a->m = 4 + (i & 0x07);
     }
     bool mainfunc(void) {
         bool new_round = false;
@@ -232,24 +215,11 @@ class CollisionsSaver {
         _ball_count = ball_count;
         return new_round;
     }
-    // #if defined(ESP32) || defined(CONFIG_IDF_TARGET_ESP32) || defined(ESP_PLATFORM)
-    //     void taskDraw(void*) {
-    //         while (_is_running) {
-    //             while (_loop_count == _draw_count) {
-    //                 taskYIELD();
-    //             }
-    //             drawfunc();
-    //         }
-    //         vTaskDelete(NULL);
-    //     }
-    // #endif
-
     void setup(LGFX_Sprite* _nowspr, viewport* _vp) {
         sprite = _nowspr;
         vp = _vp;
         _width = vp->w << SHIFTSIZE;
         _height = vp->h << SHIFTSIZE;
-        // reset();
     }
     void reset(LGFX_Sprite* sp0, LGFX_Sprite* sp1, viewport* _vp) {
         vp = _vp;
@@ -260,7 +230,6 @@ class CollisionsSaver {
             spp[i]->setBaseColor(BLK);
             spp[i]->clear();
             spp[i]->setTextSize(1);
-            // sprite->setFont(&fonts::Font4);
             spp[i]->setTextDatum(textdatum_t::top_left);
         }
         ball_thismax = BALL_MAX - rn(25);
@@ -268,11 +237,6 @@ class CollisionsSaver {
         refresh_limit = 20000;  // 50 Hz limit
         screenRefreshTimer.set(refresh_limit);
         _is_running = true;
-        // _draw_count = 0;
-        // _loop_count = 0;
-        #if defined(CONFIG_IDF_TARGET_ESP32)
-            xTaskCreate(taskDraw, "taskDraw", 2048, NULL, 0, NULL);
-        #endif
     }
     int update(LGFX_Sprite* _nowspr, viewport* _vp) {
         sprite = _nowspr;
@@ -307,8 +271,6 @@ class EraserSaver {  // draws colorful patterns to exercise
     void setup(LGFX_Sprite* _nowspr, viewport* _vp) {
         sprite = _nowspr;
         vp = _vp;
-        // Serial.printf("es: x%d y%d w%d h%d\n", vp->x, vp->y, vp->w, vp->h);
-        // reset();
     }
     void reset(LGFX_Sprite* sp0, LGFX_Sprite* sp1, viewport* _vp) {
         vp = _vp;
@@ -320,7 +282,6 @@ class EraserSaver {  // draws colorful patterns to exercise
             spp[i]->fillSprite(BLK);
             spp[i]->setTextDatum(textdatum_t::middle_center);
             spp[i]->setTextColor(BLK);
-            // spp[i]->setFont(&fonts::Font4);
             spp[i]->setCursor(vp->w / 2 + vp->x, vp->h / 2 + vp->y);
         }
         change_pattern(-2);  // randomize new pattern whenever turned off and on
@@ -333,7 +294,6 @@ class EraserSaver {  // draws colorful patterns to exercise
         point[HORZ] = rn(vp->w);
         point[VERT] = rn(vp->h);
         for (int axis = 0; axis <= 1; axis++) eraser_velo_sign[axis] = (rn(1)) ? 1 : -1;
-        // _draw_count = _loop_count = 0;
         _is_running = true;
     }
     void saver_touch(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
@@ -358,7 +318,6 @@ class EraserSaver {  // draws colorful patterns to exercise
     }
   private:
     void drawsprite() {
-        // Serial.printf("\r%d,%d,%d ", shape, shapes_done, cycle);
         point[HORZ] = rn(vp->w);
         point[VERT] = rn(vp->h);
         if (shape == Rotate) ++rotate %= NumSaverShapes;
@@ -383,10 +342,8 @@ class EraserSaver {  // draws colorful patterns to exercise
                 uint16_t mult = rn(2000), hue = spothue + rn(3000);
                 sat = 100 + rn(156);
                 brt = 120 + rn(136);
-                // Serial.printf("\n%d/%d: ", mult, hue);
                 for (int i = 0; i < 6 + rn(20); i++) { 
                     sprite->drawEllipse(point[HORZ] + vp->x, point[VERT] + vp->y, scaler * d[0] - i, scaler * d[1] + i, hsv_to_rgb<uint8_t>(hue + mult * i, sat, brt));
-                    // Serial.printf("%d ", hue + mult * i);
                 }
 
             }
@@ -413,12 +370,6 @@ class EraserSaver {  // draws colorful patterns to exercise
                 boxrad = 2 + random(2);
                 boxminsize = 2 * boxrad + 5;
                 int longer = rn(2);
-                // boxsize[longer] = std::abs(boxminsize + rn(vp->w - 3 * boxminsize));
-                // boxsize[!longer] = std::abs(boxminsize + rn(vp->w - 4 * boxminsize));  // std::abs((boxminsize + rn(smax(0, boxmaxarea / boxsize[longer] - boxminsize))) % (boxsize[longer] >> 1));  // cheesy attempt to work around crazy-values bug
-                // point[HORZ] = -1 * (int32_t)boxsize[HORZ] / 2 + rn((int32_t)vp->w);
-                // point[VERT] = -1 * (int32_t)boxsize[VERT] / 2 + rn((int32_t)vp->h);
-                // // Serial.printf("box: r%ld m%ld p%ld,%ld x%ld y%ld\n", boxrad, boxminsize, point[HORZ], point[VERT], boxsize[longer], boxsize[!longer]);
-                // sprite->fillSmoothRoundRect(point[HORZ] + vp->x, point[VERT] + vp->y, boxsize[HORZ], boxsize[VERT], boxrad, rando_color());  // Change colors as needed
                 boxsize[longer] = std::abs(boxminsize + rn(vp->w - boxminsize));
                 boxsize[!longer] = std::abs((boxminsize + rn(smax(0, boxmaxarea / boxsize[longer] - boxminsize))) % (boxsize[longer] >> 1));  // cheesy attempt to work around crazy-values bug
                 boxsize[HORZ] = constrain(boxsize[HORZ], 2 * boxrad, 200);
@@ -447,14 +398,13 @@ class EraserSaver {  // draws colorful patterns to exercise
                     sprite->drawString(letter, point[HORZ] + vp->x, point[VERT] + vp->y);
                     sprite->setTextColor(BLK);  // allows subliminal messaging
                 }
-                // sprite->setTextSize(0);
                 sprite->setFont(&fonts::Font0);
             }
         }
         if ((cycle != 0) && has_eraser) {
             for (int axis = HORZ; axis <= VERT; axis++) {
                 erpos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
-                if (erpos[axis] * eraser_velo_sign[axis] >= erpos_max[axis]) {
+                if (erpos[axis] * eraser_velo_sign[axis] >= erpos_max[axis] + 5) {
                     erpos[axis] = eraser_velo_sign[axis] * erpos_max[axis];
                     eraser_velo[axis] = eraser_velo_min + rn(eraser_velo_max - eraser_velo_min);
                     eraser_velo[!axis] = eraser_velo_min + rn(eraser_velo_max - eraser_velo_min);
@@ -473,7 +423,6 @@ class EraserSaver {  // draws colorful patterns to exercise
             sprite->setTextDatum(textdatum_t::top_left);
         }
         for (int axis = HORZ; axis <= VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
-        // _draw_count++;
     }
     void change_pattern(int newpat = -1) {  // pass non-negative value for a specific pattern, or  -1 for cycle, -2 for random
         ++shapes_done %= 5;

@@ -35,7 +35,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         return mode;
     }
-    void kick() { sleep_inactivity_timer.reset(); }  // call when user activity is detected, to prevent shutdown mode timeout to asleep mode
+    // void kick() { sleep_inactivity_timer.reset(); }  // call when user activity is detected, to prevent shutdown mode timeout to asleep mode
   private:
     bool autostop(int _cmd = REQ_NA) {
         int cmd = _cmd;
@@ -154,7 +154,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (shutdown_incomplete) {  // first we need to stop the car and release brakes and gas before shutting down  
             if (park_the_motors) shutdown_incomplete = park_motors(); // update any in-progress motor parking. shutdown is complete once parked
             else if (!autostop()) park_motors(REQ_ON);  // start parking motors directly after final autostop update
-            if (!shutdown_incomplete) sleep_inactivity_timer.reset();  // upon shutdown completion, start the sleep timer
+            if (!shutdown_incomplete) kick_inactivity_timer(3);  // upon shutdown completion, start the sleep timer
         }
         else {  // if shutdown is complete
             if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode
