@@ -202,7 +202,6 @@ class TunerPanel {
     // DataPage[NUM_DATAPAGES];
 };
 AnimationManager animations;
-FlexPanel flexpanel;
 volatile float fps = 0.0;
 volatile bool is_pushing = 0;
 volatile bool is_drawing = 0;
@@ -212,6 +211,8 @@ volatile int32_t idleclock;
 volatile bool reset_request = false;
 // static void push_task(void*) {
 volatile bool pushtime = 0;
+volatile bool drawn = false;
+volatile bool pushed = true;
 
 #ifdef VIDEO_TASKS
 SemaphoreHandle_t push_time = NULL;
@@ -219,9 +220,10 @@ SemaphoreHandle_t draw_time = NULL;
 static void push_task_wrapper(void *parameter);
 static void draw_task_wrapper(void *parameter);
 #endif
-void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref);
 void push_task();
 void draw_task();
+void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref);
+
 volatile bool _procrastinate = false;
 volatile bool reset_finished = false;
 volatile bool simulating_last;
@@ -263,6 +265,7 @@ class Display {
     Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
+    bool fullscreen_last = false;
   public:
     Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim)
         : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {
@@ -351,22 +354,18 @@ class Display {
         for (int32_t row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
         yield();
         Serial.printf(" ..");  //
-        // if (fullscreen_screensaver_test)
         init_framebuffers(disp_width_pix, disp_height_pix);
-        flexpanel.init(&lcd, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
-        // else 
-        sprptr = &framebuf[flip];
-        animations.init(&flexpanel, sim);
+        animations.init(&lcd, sim, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
         animations.setup();
+        sprptr = &framebuf[flip];
+        if (fullscreen_screensaver_test) animations.set_vp(0, 0, disp_width_pix, disp_height_pix);
+        else reset_request = true;
         reset_request = false;
-        if (!fullscreen_screensaver_test) reset_request = true;
         #ifdef VIDEO_TASKS
         init_tasks();
         delayMicroseconds(500);
         // xSemaphoreGive(drawtime);
         #else
-        pushtime = false;
-        update();
         update();
         #endif
         Serial.printf(" ..");  //
@@ -380,6 +379,7 @@ class Display {
         draw_runmode(nowmode, disp_oldmode, NON);
         draw_datapage(datapage, datapage_last, true);
         all_dirty();
+        animations.reset();
         reset_request = false;
     }
     // uint8_t add_palette(uint8_t color) {
@@ -750,23 +750,38 @@ class Display {
   public:
     void update(int _nowmode = -1) {
         if (_nowmode >= 0) nowmode = _nowmode;
+        if (fullscreen_screensaver_test || auto_saver_enabled) {
+            if (!fullscreen_last) animations.set_vp(0, 0, disp_width_pix, disp_height_pix);
+            screensaver = true;
+        }
+        else if (fullscreen_last) {
+            animations.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
+            screensaver = false;
+        }
+        fullscreen_last = fullscreen_screensaver_test;
         #ifdef VIDEO_TASKS
         // Serial.printf("pt%d is: d%dp%d\n", pushtime, is_drawing, is_pushing);
-        
         #else
         if (is_drawing || is_pushing) return;
-        if (pushtime) push_task();
+        if (pushtime) {
+            if (screenRefreshTimer.expired() || screensaver_max_refresh || fullscreen_screensaver_test) {
+                screenRefreshTimer.reset();
+                push_task();
+                pushclock = (int32_t)screenRefreshTimer.elapsed();
+            }   
+        }
         else draw_task();
         #endif
     }
-    void draw_all(int _nowmode) {
-        if (auto_saver_enabled) return;
-        if (reset_request) reset();
-        sprptr = &framebuf[flip];
+    bool draw_all(LGFX_Sprite* spr) {
+        sprptr = spr;
+        // if (reset_request) reset();
+        if (!valuesRefreshTimer.expired() || fullscreen_screensaver_test || auto_saver_enabled) return false;
+        // sprptr = &framebuf[flip];
         tiny_text();
         update_idiots(disp_idiots_dirty);
         disp_idiots_dirty = false;
-        if (!display_enabled) return;
+        if (!display_enabled) return false;
         if (disp_datapage_dirty) {
             for (int i = disp_fixed_lines; i < disp_lines; i++) {
                 disp_age_quanta[i] = 0;
@@ -786,8 +801,8 @@ class Display {
             disp_selected_val_dirty = false;
         }
         if (disp_runmode_dirty) {
-            draw_runmode(_nowmode, disp_oldmode, NON);
-            disp_oldmode = _nowmode;
+            draw_runmode(nowmode, disp_oldmode, NON);
+            disp_oldmode = nowmode;
             disp_runmode_dirty = false;
         }
         if (valuesRefreshTimer.expireset() || disp_values_dirty) {
@@ -939,8 +954,8 @@ class Display {
                 draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
                 draw_truth(19, screensaver, 0);
             }
-            draw_bool((_nowmode == CAL), 2, disp_bools_dirty);
-            draw_bool((_nowmode == BASIC), 3, disp_bools_dirty);
+            draw_bool((nowmode == CAL), 2, disp_bools_dirty);
+            draw_bool((nowmode == BASIC), 3, disp_bools_dirty);
             draw_bool(ignition, 4, disp_bools_dirty);
             draw_bool(syspower, 5, disp_bools_dirty);
             disp_bools_dirty = false;
@@ -949,16 +964,17 @@ class Display {
         }
         // if (!_procrastinate) update_flexpanel();
         _procrastinate = false;
+        return true;
     }
     void auto_saver(bool enable) {
         if (enable) {
-            flexpanel.set_vp(0, 0, disp_width_pix, disp_height_pix);
+            animations.set_vp(0, 0, disp_width_pix, disp_height_pix);
             screensaver_max_refresh = screensaver = auto_saver_enabled = true;
             animations.anim_reset_request = true;
         }
         else {
             screensaver = screensaver_max_refresh = auto_saver_enabled = false;
-            flexpanel.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
+            animations.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
             animations.anim_reset_request = true;
             reset_request = true;
             // all_dirty();  // tells display to redraw everything. display must set back to false
@@ -1097,11 +1113,8 @@ static IdiotLights idiots;
 static Touchscreen touch;
 static Display screen(&neo, &touch, &idiots, &sim);
 static Tuner tuner(&screen, &neo, &touch);
-
 void push_task() {
-    // Serial.printf("p0 ");
-    if (is_drawing || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh || fullscreen_screensaver_test)) return;  // vTaskDelay(pdMS_TO_TICKS(1));
-    // Serial.printf("p1 ");
+    if (is_drawing || !pushtime) return;  // vTaskDelay(pdMS_TO_TICKS(1));
     screenRefreshTimer.reset();
     is_pushing = true;
     diffpush(&framebuf[flip], &framebuf[!flip]);
@@ -1110,13 +1123,12 @@ void push_task() {
     is_pushing = pushtime = false;  // drawn = 
 }
 void draw_task() {
-    // Serial.printf("d0 ");
     if (is_pushing || pushtime) return;
-    // Serial.printf("d1 ");
     is_drawing = true;
+    if (reset_request) screen.reset();
     int32_t mark = (int32_t)screenRefreshTimer.elapsed();
-    screen.draw_all(nowmode);
-    fps = animations.update();
+    screen.draw_all(&framebuf[flip]);
+    fps = animations.update(&framebuf[flip]);
     drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
     idleclock = refresh_limit - pushclock - drawclock;
     is_drawing = false;  // pushed = false;
@@ -1129,8 +1141,10 @@ static void push_task_wrapper(void *parameter) {
         // Serial.printf("push0 ");
         // draw_task();
         // vTaskDelay(pdMS_TO_TICKS(1));
+        while (is_drawing || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh)) vTaskDelay(pdMS_TO_TICKS(1));
+        // while (!(screenRefreshTimer.expired() || screensaver_max_refresh)) vTaskDelay(pdMS_TO_TICKS(1));
+        screenRefreshTimer.reset();
         push_task();
-        vTaskDelay(pdMS_TO_TICKS(1));
         // delayMicroseconds(100);  // vTaskDelay(pdMS_TO_TICKS(1));
         // while (is_drawing || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh)) delayMicroseconds(100);  // vTaskDelay(pdMS_TO_TICKS(1));
         // push_task();
@@ -1139,8 +1153,8 @@ static void push_task_wrapper(void *parameter) {
 static void draw_task_wrapper(void *parameter) {
     while (true) {
         // while (is_pushing || pushtime) vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
+        while (is_pushing || pushtime) vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
         draw_task();
-        vTaskDelay(pdMS_TO_TICKS(1));
         // delayMicroseconds(100);  // vTaskDelay(pdMS_TO_TICKS(1));
     }
 }

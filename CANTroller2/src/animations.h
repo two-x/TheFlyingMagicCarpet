@@ -72,52 +72,6 @@ struct viewport {
 // volatile int DrawSp = 0;
 // volatile bool pushed[2];
 // volatile bool drawn[2];
-class FlexPanel {
-  public:
-    viewport vp;
-    LGFX_Sprite* nowspr;
-    LGFX* lcd;
-    int touchp[2];
-    int corner[2], sprsize[2];
-    Touchscreen* _touch;
-    // std::size_t flip = 0;
-    std::uint32_t sec, psec, _width, _height, _myfps = 0, myfps = 0, frame_count = 0;
-    FlexPanel() {}
-    // int setflip(bool clear) {  // clear=true blacks out the sprite before drawing on it
-    //     bool flipit = false;
-    //     if (drawn[flip] && pushed[!flip]) flipit = true;
-    //     if (flipit) flip = !flip;
-    //     nowspr = &(sp[flip]);
-    //     if (flipit && clear) nowspr->clear();
-    //     return flip;
-    // }
-    
-    void init(LGFX* _lcd, Touchscreen* touch, int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
-        lcd = _lcd;
-        _touch = touch;
-        set_vp(_cornerx, _cornery, _sprwidth, _sprheight);
-        _width = vp.w << SHIFTSIZE;
-        _height = vp.h << SHIFTSIZE;
-    }
-    void set_vp(int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
-        vp.x = _cornerx;
-        vp.y = _cornery;
-        vp.w = _sprwidth;
-        vp.h = _sprheight;
-    }
-    bool touched() {
-        if (_touch->touched()) {
-            // for (int axis=HORZ; axis<=VERT; axis++)
-                touchp[HORZ] = _touch->touch_pt(HORZ) - vp.x;
-                touchp[VERT] = _touch->touch_pt(VERT) - vp.y;
-            return true;
-        }
-        return false;
-    }
-    int touch_pt(int axis) {
-        return touchp[axis];
-    }
-};
 class CollisionsSaver {
   public:
     // int flip;
@@ -324,11 +278,7 @@ class CollisionsSaver {
         sprite = _nowspr;
         vp = _vp;
         bool round_over = mainfunc();
-        // #if defined(CONFIG_IDF_TARGET_ESP32)
-        //     while (_loop_count != _draw_count) { taskYIELD(); }
-        // #else
         drawfunc();
-        // #endif
         return !round_over;  // not done yet
     }
     void saver_touch(int, int) {};  // unused
@@ -386,22 +336,6 @@ class EraserSaver {  // draws colorful patterns to exercise
         // _draw_count = _loop_count = 0;
         _is_running = true;
     }
-    // void saver_touch(int16_t x, int16_t y) {  // you can draw colorful lines on the screensaver
-    //     int tp[2] = {(int32_t)x - (int32_t)corner[HORZ], (int32_t)y - (int32_t)corner[VERT]};
-    //     if (tp[HORZ] < 0 || tp[VERT] < 0) return;
-    //     for (int axis = HORZ; axis <= VERT; axis++)
-    //         if (touchlast[axis] == -1) touchlast[axis] = tp[axis];
-    //     if (pentimer.expireset()) {
-    //         pensat += 1.5;
-    //         if (pensat > 255.0) pensat = 100.0;
-    //         pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(++penhue, (uint8_t)pensat, 200 + rn(56));
-    //     }
-    //     sprite->fillCircle(touchlast[HORZ], touchlast[VERT], 20, pencolor);
-    //     // sprite->drawWedgeLine(touchlast[HORZ], touchlast[VERT], tp[HORZ], tp[VERT], 4, 4, pencolor, pencolor);  // savtouch_last_w, w, pencolor, pencolor);
-    //     // for (int i=-7; i<=8; i++)
-    //     //     sprite->drawLine(touchlast[HORZ]+i, touchlast[VERT]+i, tp[HORZ]+i, tp[VERT]+i, pencolor);  // savtouch_last_w, w, pencolor, pencolor);
-    //     for (int axis = HORZ; axis <= VERT; axis++) touchlast[axis] = tp[axis];
-    // }
     void saver_touch(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
         if (pentimer.expireset()) {
             pensat += 1.5;
@@ -479,11 +413,20 @@ class EraserSaver {  // draws colorful patterns to exercise
                 boxrad = 2 + random(2);
                 boxminsize = 2 * boxrad + 5;
                 int longer = rn(2);
-                boxsize[longer] = std::abs(boxminsize + rn(vp->w - 3 * boxminsize));
-                boxsize[!longer] = std::abs(boxminsize + rn(vp->w - 4 * boxminsize));  // std::abs((boxminsize + rn(smax(0, boxmaxarea / boxsize[longer] - boxminsize))) % (boxsize[longer] >> 1));  // cheesy attempt to work around crazy-values bug
+                // boxsize[longer] = std::abs(boxminsize + rn(vp->w - 3 * boxminsize));
+                // boxsize[!longer] = std::abs(boxminsize + rn(vp->w - 4 * boxminsize));  // std::abs((boxminsize + rn(smax(0, boxmaxarea / boxsize[longer] - boxminsize))) % (boxsize[longer] >> 1));  // cheesy attempt to work around crazy-values bug
+                // point[HORZ] = -1 * (int32_t)boxsize[HORZ] / 2 + rn((int32_t)vp->w);
+                // point[VERT] = -1 * (int32_t)boxsize[VERT] / 2 + rn((int32_t)vp->h);
+                // // Serial.printf("box: r%ld m%ld p%ld,%ld x%ld y%ld\n", boxrad, boxminsize, point[HORZ], point[VERT], boxsize[longer], boxsize[!longer]);
+                // sprite->fillSmoothRoundRect(point[HORZ] + vp->x, point[VERT] + vp->y, boxsize[HORZ], boxsize[VERT], boxrad, rando_color());  // Change colors as needed
+                boxsize[longer] = std::abs(boxminsize + rn(vp->w - boxminsize));
+                boxsize[!longer] = std::abs((boxminsize + rn(smax(0, boxmaxarea / boxsize[longer] - boxminsize))) % (boxsize[longer] >> 1));  // cheesy attempt to work around crazy-values bug
+                boxsize[HORZ] = constrain(boxsize[HORZ], 2 * boxrad, 200);
+                boxsize[VERT] = constrain(boxsize[VERT], 2 * boxrad, 150);
                 point[HORZ] = -1 * (int32_t)boxsize[HORZ] / 2 + rn((int32_t)vp->w);
                 point[VERT] = -1 * (int32_t)boxsize[VERT] / 2 + rn((int32_t)vp->h);
-                // Serial.printf("box: r%ld m%ld p%ld,%ld x%ld y%ld\n", boxrad, boxminsize, point[HORZ], point[VERT], boxsize[longer], boxsize[!longer]);
+                point[HORZ] = constrain(point[HORZ], 0, vp->w);
+                point[VERT] = constrain(point[VERT], 0, vp->h);
                 sprite->fillSmoothRoundRect(point[HORZ] + vp->x, point[VERT] + vp->y, boxsize[HORZ], boxsize[VERT], boxrad, rando_color());  // Change colors as needed
             }
             else if (rotate == Ascii) {
@@ -512,7 +455,6 @@ class EraserSaver {  // draws colorful patterns to exercise
             for (int axis = HORZ; axis <= VERT; axis++) {
                 erpos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
                 if (erpos[axis] * eraser_velo_sign[axis] >= erpos_max[axis]) {
-                    // Serial.printf(" w:%3ld h:%3ld l:%3ld m:%3ld ", vp->w, vp->h, erpos[axis] * eraser_velo_sign[axis], erpos_max[axis]);
                     erpos[axis] = eraser_velo_sign[axis] * erpos_max[axis];
                     eraser_velo[axis] = eraser_velo_min + rn(eraser_velo_max - eraser_velo_min);
                     eraser_velo[!axis] = eraser_velo_min + rn(eraser_velo_max - eraser_velo_min);
@@ -520,8 +462,6 @@ class EraserSaver {  // draws colorful patterns to exercise
                     eraser_rad = constrain((int)(eraser_rad + rn(5) - 2), eraser_rad_min, eraser_rad_max);
                 }
             }
-            // Serial.printf(" e %3d,%3d,%3d,%3d,%3d\n", (vp->w / 2) + erpos[HORZ], (vp->h / 2) + erpos[VERT], eraser_rad, eraser_velo[HORZ], eraser_velo[VERT]);
-            // sprite->fillCircle((vp->w / 2) + erpos[HORZ], (vp->h / 2) + erpos[VERT], 20, pencolor);
             sprite->fillCircle((vp->w / 2) + erpos[HORZ] + vp->x, (vp->h / 2) + erpos[VERT] + vp->y, eraser_rad * scaler, (uint8_t)BLK);
         }
         if (saver_lotto) {
@@ -546,9 +486,6 @@ class EraserSaver {  // draws colorful patterns to exercise
             else if (newpat == -2) while (last_pat == shape) shape = rn(Rotate);
             if (!rn(25)) shape = Rotate;
         }
-        // for (int i = 0; i <= 1; i++)
-        //     if (shape == Ascii) framebuf[i].setFont(&fonts::Font4);
-        //     else framebuf[i].setFont(&fonts::Font4);
     }
 };
 class AnimationManager {
@@ -557,44 +494,44 @@ class AnimationManager {
     int nowsaver = Eraser, still_running = 0;
     LGFX* mylcd;
     LGFX_Sprite* nowspr_ptr;
-    LGFX_Sprite arrowspr;
-    FlexPanel* panel;
+    viewport vp;
     EraserSaver eSaver;
     CollisionsSaver cSaver;
     Simulator* sim;
+    Touchscreen* touch;
+    int touchp[2];
+    int corner[2], sprsize[2];
     // Timer saverRefreshTimer = Timer(16666);
     Timer fps_timer;
     float myfps = 0.0;
-    viewport* vp;
     int64_t fps_mark;
     bool screensaver_last = false, simulating_last = false, mule_drawn = false;
   public:
-    bool anim_reset_request = false;
-    AnimationManager() {}
     void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
         ++nowsaver %= NumSaverMenu;
         anim_reset_request = true;
     }
-    void init(FlexPanel* _panel, Simulator* _sim) {
-        vp = &(_panel->vp);
-        panel = _panel;
+    std::uint32_t sec, psec, _width, _height, _myfps = 0, frame_count = 0;
+    bool anim_reset_request = false;
+    AnimationManager() {}
+    void init(LGFX* _lgfx, Simulator* _sim, Touchscreen* _touch, int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
+        mylcd = _lgfx;
         sim = _sim;
+        touch = _touch;
+        set_vp(_cornerx, _cornery, _sprwidth, _sprheight);
+        _width = vp.w << SHIFTSIZE;
+        _height = vp.h << SHIFTSIZE;
+    }
+    void reset() {
+        if (nowsaver == Eraser) eSaver.reset(&framebuf[flip], &framebuf[!flip], &vp);
+        else if (nowsaver == Collisions) cSaver.reset(&framebuf[flip], &framebuf[!flip], &vp);
+        anim_reset_request = false;
     }
     void setup() {
         // int flip = panel->setflip(true);
-        eSaver.setup(&framebuf[flip], vp);
-        cSaver.setup(&framebuf[flip], vp);
+        eSaver.setup(&framebuf[flip], &vp);
+        cSaver.setup(&framebuf[flip], &vp);
     }
-    void reset() {
-        // int flip = panel->setflip(true);
-        if (nowsaver == Eraser) eSaver.reset(&framebuf[flip], &framebuf[!flip], vp);
-        else if (nowsaver == Collisions) cSaver.reset(&framebuf[flip], &framebuf[!flip], vp);
-        anim_reset_request = false;
-    }
-    // void redraw() {
-    //     // if (!is_drawing) is_pushing = false;
-    //     panel->diffpush(&framebuf[flip], &framebuf[!flip]);
-    // }
     void draw_simbutton(LGFX_Sprite* spr, int cntr_x, int cntr_y, int dir, uint8_t color) {
         if (dir == JOY_PLUS)  spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_plus_32x32x8, BLK);
         else if (dir == JOY_MINUS) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_minus_32x32x8, BLK);
@@ -602,10 +539,7 @@ class AnimationManager {
         else if (dir == JOY_DN) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 180, 1, 1, 32, 32, blue_up_32x32x8, BLK);
         else if (dir == JOY_LT) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 270, 1, 1, 32, 32, blue_up_32x32x8, BLK);
         else if (dir == JOY_RT) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 90, 1, 1, 32, 32, blue_up_32x32x8, BLK);
-
-    // void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void* data, uint32_t transparent, color_depth_t depth, const T* palette)
     }
-
     void draw_simbuttons (LGFX_Sprite* spr, bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
         if (!create) {
             spr->fillSprite(BLK);
@@ -615,8 +549,8 @@ class AnimationManager {
         spr->setFont(&fonts::Font2);
         for (int32_t row = 0; row < arraysize(simgrid); row++) {
             for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
-                int32_t cntr_x = touch_cell_h_pix*col + (touch_cell_h_pix>>1) + 2 + vp->x - 5;
-                int32_t cntr_y = touch_cell_v_pix*row + (touch_cell_v_pix>>1) + vp->y;
+                int32_t cntr_x = touch_cell_h_pix*col + (touch_cell_h_pix>>1) + 2 + vp.x - 5;
+                int32_t cntr_y = touch_cell_v_pix*row + (touch_cell_v_pix>>1) + vp.y;
                 if (simgrid[row][col] == "    ") {
                     draw_simbutton(spr, cntr_x + 2, cntr_y - 1, simgriddir[row][col], YEL);  // for 3d look
                     draw_simbutton(spr, cntr_x, cntr_y, simgriddir[row][col], DGRY);
@@ -644,34 +578,33 @@ class AnimationManager {
         if (myfps > 0.001) myfps = 1000000 / myfps;
         fps_mark = now;
     }
-    float update() {
+    float update(LGFX_Sprite* spr) {
         if (anim_reset_request) reset();
-        nowspr_ptr = &framebuf[flip];
-        nowspr_ptr->setClipRect(vp->x, vp->y, vp->w, vp->h);
+        spr->setClipRect(vp.x, vp.y, vp.w, vp.h);
         if (!screensaver_last && screensaver) change_saver();  // ptrsaver->reset();
         screensaver_last = screensaver;
         if (screensaver) {        // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
             mule_drawn = false;
             // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
-            if (nowsaver == Eraser) still_running = eSaver.update(nowspr_ptr, vp);
-            else if (nowsaver == Collisions) still_running = cSaver.update(nowspr_ptr, vp);
-            if (panel->touched()) eSaver.saver_touch(nowspr_ptr, panel->touch_pt(HORZ), panel->touch_pt(VERT));
+            if (nowsaver == Eraser) still_running = eSaver.update(spr, &vp);
+            else if (nowsaver == Collisions) still_running = cSaver.update(spr, &vp);
+            if (touched()) eSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
             if (!still_running) change_saver();
         }
         else if (!mule_drawn) {
-            nowspr_ptr->fillSprite(BLK);
-            nowspr_ptr->pushImageRotateZoom(85 + vp->x , 85 + vp->y, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, BLK);
+            spr->fillSprite(BLK);
+            spr->pushImageRotateZoom(85 + vp.x , 85 + vp.y, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, BLK);
             mule_drawn = true;
         }
         // if (fullscreen_screensaver_test) {
-        //     nowspr_ptr->setCursor(0,0);
-        //     nowspr_ptr->printf("fps:%03d", myfps);
+        //     spr->setCursor(0,0);
+        //     spr->printf("fps:%03d", myfps);
         // }
         if (sim->enabled()) {
-            draw_simbuttons(nowspr_ptr, sim->enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
+            draw_simbuttons(spr, sim->enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
         }
         else if (simulating_last) {
-            nowspr_ptr->fillSprite(BLK);
+            spr->fillSprite(BLK);
             mule_drawn = false;
         }
         simulating_last = sim->enabled();
@@ -682,38 +615,56 @@ class AnimationManager {
         //     _procrastinate = true;
         // }
         calc_fps();
-        nowspr_ptr->clearClipRect();
+        spr->clearClipRect();
         return myfps;
     }
-};
-class DiagConsole {
-  private:
-    LGFX* mylcd;
-    LGFX_Sprite* nowspr_ptr;
-    FlexPanel* panel;
-    static constexpr int num_lines = 16;
-    std::string textlines[num_lines];
-    int usedlines = 0;
-  public:
-    DiagConsole() {}
-    void init(FlexPanel* _panel) {
-        panel = _panel;
+    void set_vp(int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
+        vp.x = _cornerx;
+        vp.y = _cornery;
+        vp.w = _sprwidth;
+        vp.h = _sprheight;
     }
-    void setup() {}
-    // void redraw() {
-    //     panel->diffpush(&framebuf[flip], &framebuf[!flip]);
-    // }
-    void add_errorline(std::string type, std::string item) {
-        std::string newerr = type + ": " + item;
-        if (newerr.length() > 15) newerr = newerr.substr(0, 15);
-        textlines[usedlines++] = newerr;
+    bool touched() {
+        if (touch->touched()) {
+            // for (int axis=HORZ; axis<=VERT; axis++)
+                touchp[HORZ] = touch->touch_pt(HORZ) - vp.x;
+                touchp[VERT] = touch->touch_pt(VERT) - vp.y;
+            return true;
+        }
+        return false;
     }
-    void update() {
-        // int flip = panel->setflip(false);
-        // nowspr_ptr = &(framebuf[flip]);
-        // panel->diffpush(&framebuf[flip], &framebuf[!flip]);
+    int touch_pt(int axis) {
+        return touchp[axis];
     }
 };
+// class DiagConsole {
+//   private:
+//     LGFX* mylcd;
+//     LGFX_Sprite* nowspr_ptr;
+//     FlexPanel* panel;
+//     static constexpr int num_lines = 16;
+//     std::string textlines[num_lines];
+//     int usedlines = 0;
+//   public:
+//     DiagConsole() {}
+//     void init(FlexPanel* _panel) {
+//         panel = _panel;
+//     }
+//     void setup() {}
+//     // void redraw() {
+//     //     panel->diffpush(&framebuf[flip], &framebuf[!flip]);
+//     // }
+//     void add_errorline(std::string type, std::string item) {
+//         std::string newerr = type + ": " + item;
+//         if (newerr.length() > 15) newerr = newerr.substr(0, 15);
+//         textlines[usedlines++] = newerr;
+//     }
+//     void update() {
+//         // int flip = panel->setflip(false);
+//         // nowspr_ptr = &(framebuf[flip]);
+//         // panel->diffpush(&framebuf[flip], &framebuf[!flip]);
+//     }
+// };
 
 #ifdef CONVERT_IMAGE
 #define IMAGE_ARRAY mulechassis_145x74
