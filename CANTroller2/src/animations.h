@@ -1,6 +1,6 @@
 #pragma once
 #include <Arduino.h>
-#define touch_simbutton 38
+// #define touch_simbutton 38
 #define disp_simbuttons_x 164
 #define disp_simbuttons_y 48
 #define disp_simbuttons_w (disp_width_pix - disp_simbuttons_x)  // 156
@@ -99,7 +99,7 @@ class CollisionsSaver {
         auto sprwidth = vp->w;
         auto sprheight = vp->h;
         balls = &_balls[flip][0];
-        sprite->clear();
+        sprite->fillSprite(BLK);
         for (float i = 0.125; i < 1.0; i += 0.125) {
             sprite->drawGradientVLine((int)(i * (vp->w - 1)) + vp->x, vp->y, vp->h, (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200) >> 8), (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200) >> 8));
             sprite->drawGradientHLine(vp->x, (int)(i * (vp->h - 1)) + vp->y, vp->w, (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200) >> 8), (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200) >> 8));
@@ -227,8 +227,8 @@ class CollisionsSaver {
         _height = vp->h << SHIFTSIZE;
         LGFX_Sprite* spp[2] = { sp0, sp1 };
         for (int i = 0; i <= 1; i++) {
-            spp[i]->setBaseColor(BLK);
-            spp[i]->clear();
+            // spp[i]->setBaseColor(BLK);
+            spp[i]->fillSprite(BLK);
             spp[i]->setTextSize(1);
             spp[i]->setTextDatum(textdatum_t::top_left);
         }
@@ -256,28 +256,29 @@ class EraserSaver {  // draws colorful patterns to exercise
     int point[2], plast[2], er[2];
     int eraser_rad = 14, eraser_rad_min = 22, eraser_rad_max = 40, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, now = 0;
-    int32_t boxsize[2];
+    uint32_t boxsize[2];
     int eraser_velo[2] = {rn(eraser_velo_max), rn(eraser_velo_max)}, shapes_per_run = 5, shapes_done = 0;
     int erpos_max[2];
-    uint8_t saver_illicit_prob = 12, wclast, pencolor = RED;
+    uint8_t wclast, pencolor = RED;
     float pensat = 200.0;
     uint16_t spothue = 65535, slowhue = 0, penhue;
-    int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 1200, shape = rn(Rotate);
+    int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 200, shape = rn(Rotate);
     static constexpr uint32_t saver_cycletime_us = 18000000;
-    Timer saverCycleTimer, pentimer = Timer(1500000);
+    Timer saverCycleTimer, pentimer = Timer(1500000), lucktimer;
     bool saver_lotto = false, has_eraser = true;
  public:
     EraserSaver() {}
     void setup(LGFX_Sprite* _nowspr, viewport* _vp) {
         sprite = _nowspr;
         vp = _vp;
+        lucktimer.set((2 + rn(5)) * 10000000);
     }
     void reset(LGFX_Sprite* sp0, LGFX_Sprite* sp1, viewport* _vp) {
         vp = _vp;
         LGFX_Sprite* spp[2] = { sp0, sp1 };
         shapes_done = cycle = 0;
         for (int i = 0; i <= 1; i++) {
-            spp[i]->setBaseColor(BLK);
+            // spp[i]->setBaseColor(BLK);
             spp[i]->setTextSize(1);
             spp[i]->fillSprite(BLK);
             spp[i]->setTextDatum(textdatum_t::middle_center);
@@ -370,18 +371,24 @@ class EraserSaver {  // draws colorful patterns to exercise
                 boxrad = 2 + random(2);
                 boxminsize = 2 * boxrad + 5;
                 int longer = rn(2);
-                boxsize[longer] = std::abs(boxminsize + rn(vp->w - boxminsize));
-                boxsize[!longer] = std::abs((boxminsize + rn(smax(0, boxmaxarea / boxsize[longer] - boxminsize))) % (boxsize[longer] >> 1));  // cheesy attempt to work around crazy-values bug
-                boxsize[HORZ] = constrain(boxsize[HORZ], 2 * boxrad, 200);
-                boxsize[VERT] = constrain(boxsize[VERT], 2 * boxrad, 150);
-                point[HORZ] = -1 * (int32_t)boxsize[HORZ] / 2 + rn((int32_t)vp->w);
-                point[VERT] = -1 * (int32_t)boxsize[VERT] / 2 + rn((int32_t)vp->h);
-                point[HORZ] = constrain(point[HORZ], 0, vp->w);
-                point[VERT] = constrain(point[VERT], 0, vp->h);
+                boxsize[longer] = boxminsize + rn(vp->w - boxminsize);
+                boxsize[!longer] = boxminsize + rn(boxsize[longer] >> 2);  // cheesy attempt to work around crazy-values bug
+                point[HORZ] = rn(vp->w) - (boxsize[HORZ] >> 1);
+                point[VERT] = rn(vp->h) - (boxsize[VERT] >> 1);
+                if (point[HORZ] < 0) {
+                    boxsize[HORZ] += point[HORZ];
+                    point[HORZ] = -boxrad;
+                }
+                if (point[VERT] < 0) {
+                    boxsize[VERT] += point[VERT];
+                    point[VERT] = -boxrad;
+                }
+                if (point[HORZ] + boxsize[HORZ] > vp->w) boxsize[HORZ] = (vp->w + boxrad - point[HORZ]);
+                if (point[VERT] + boxsize[VERT] > vp->h) boxsize[VERT] = (vp->h + boxrad - point[VERT]);
+                // std::cout << "px" << point[HORZ] << " py" << point[VERT] << " bx" << boxsize[HORZ] << " by" << boxsize[VERT] << "\n";
                 sprite->fillSmoothRoundRect(point[HORZ] + vp->x, point[VERT] + vp->y, boxsize[HORZ], boxsize[VERT], boxrad, rando_color());  // Change colors as needed
             }
             else if (rotate == Ascii) {
-                // sprite->setFont(&fonts::Font4);
                 sprite->setTextSize(1);
                 sprite->setTextDatum(textdatum_t::middle_center);
                 sprite->setFont(&fonts::Font4);
@@ -414,6 +421,10 @@ class EraserSaver {  // draws colorful patterns to exercise
             }
             sprite->fillCircle((vp->w / 2) + erpos[HORZ] + vp->x, (vp->h / 2) + erpos[VERT] + vp->y, eraser_rad * scaler, (uint8_t)BLK);
         }
+        if (lucktimer.expired())  {
+            saver_lotto = !saver_lotto;
+            lucktimer.set(3200000 + !saver_lotto * (5 + rn(50)) * 4000000);
+        } 
         if (saver_lotto) {
             sprite->setTextDatum(textdatum_t::middle_center);
             sprite->setFont(&fonts::Font4);
@@ -427,7 +438,6 @@ class EraserSaver {  // draws colorful patterns to exercise
     void change_pattern(int newpat = -1) {  // pass non-negative value for a specific pattern, or  -1 for cycle, -2 for random
         ++shapes_done %= 5;
         int last_pat = shape;
-        saver_lotto = !rn(saver_illicit_prob);
         has_eraser = !rn(2);
         if (0 <= newpat && newpat < NumSaverShapes) shape = newpat;  //
         else {
@@ -450,7 +460,6 @@ class AnimationManager {
     Touchscreen* touch;
     int touchp[2];
     int corner[2], sprsize[2];
-    // Timer saverRefreshTimer = Timer(16666);
     Timer fps_timer;
     float myfps = 0.0;
     int64_t fps_mark;
@@ -528,13 +537,12 @@ class AnimationManager {
         fps_mark = now;
     }
     float update(LGFX_Sprite* spr) {
-        if (anim_reset_request) reset();
         spr->setClipRect(vp.x, vp.y, vp.w, vp.h);
         if (!screensaver_last && screensaver) change_saver();  // ptrsaver->reset();
         screensaver_last = screensaver;
-        if (screensaver) {        // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
-            mule_drawn = false;
-            // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
+        if (anim_reset_request) reset();
+        if (screensaver) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
+            mule_drawn = false;  // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
             if (nowsaver == Eraser) still_running = eSaver.update(spr, &vp);
             else if (nowsaver == Collisions) still_running = cSaver.update(spr, &vp);
             if (touched()) eSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
@@ -545,10 +553,6 @@ class AnimationManager {
             spr->pushImageRotateZoom(85 + vp.x , 85 + vp.y, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, BLK);
             mule_drawn = true;
         }
-        // if (fullscreen_screensaver_test) {
-        //     spr->setCursor(0,0);
-        //     spr->printf("fps:%03d", myfps);
-        // }
         if (sim->enabled()) {
             draw_simbuttons(spr, sim->enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
         }
@@ -557,12 +561,6 @@ class AnimationManager {
             mule_drawn = false;
         }
         simulating_last = sim->enabled();
-        // if (disp_simbuttons_dirty || sim->enabled()) {
-        //     draw_simbuttons(sim->enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
-        //     disp_simbuttons_dirty = false;
-        //     simulating_last = sim->enabled();
-        //     _procrastinate = true;
-        // }
         calc_fps();
         spr->clearClipRect();
         return myfps;
@@ -575,7 +573,6 @@ class AnimationManager {
     }
     bool touched() {
         if (touch->touched()) {
-            // for (int axis=HORZ; axis<=VERT; axis++)
                 touchp[HORZ] = touch->touch_pt(HORZ) - vp.x;
                 touchp[VERT] = touch->touch_pt(VERT) - vp.y;
             return true;
@@ -621,7 +618,7 @@ class AnimationManager {
 void convert_565_to_332_image() {
     Serial.printf("const uint8_t %sx8[%ld] PROGMEM = {\n\t", String(IMAGE_ARRAY).c_str(), arraysize(IMAGE_ARRAY));
     for (int i=0; i<arraysize(IMAGE_ARRAY); i++) {
-        Serial.printf("0x%02x, ", color_16b_to_8b(IMAGE_ARRAY[i]);
+        Serial.printf("0x%02x, ", color_16b_to_8b(IMAGE_ARRAY[i]));
         if (!(i % IMAGE_WIDTH)) Serial.printf("  // pixel# %ld\n%s", pixcount, (i < arraysize(IMAGE_ARRAY) - 1) ? "\t" : "");
     }
     Serial.printf("};\n");

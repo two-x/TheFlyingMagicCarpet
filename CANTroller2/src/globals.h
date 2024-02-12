@@ -13,9 +13,9 @@
 #define     i2c_sda_pin  8 // sda0/adc1.7      // i2c bus for airspeed/map sensors, lighting board, cap touchscreen
 #define     i2c_scl_pin  9 // qhd0/scl0/adc1.8 // i2c bus for airspeed/map sensors, lighting board, cap touchscreen
 #define      tft_cs_pin 10 // cs0/adc1.9       // output, active low, chip select allows ILI9341 display chip use of the spi bus - ! pin is also defined in tft_setup.h
-#define    spi_mosi_pin 11 // mosi0/adc2.0     // used as spi interface data for touchscreen, sd card and tft screen - ! pin is also defined in tft_setup.h
-#define    spi_sclk_pin 12 // sclk0/adc2.1     // used as spi interface clock for touchscreen, sd card and tft screen - ! pin is also defined in tft_setup.h
-#define    spi_miso_pin 13 // miso0/adc2.2     // used as spi interface data from sd card and possibly (?) tft screen - ! pin is also defined in tft_setup.h
+#define    spi_mosi_pin 11 // mosi0/adc2.0     // used as spi interface data for tft screen, sd card and resistive touch panel
+#define    spi_sclk_pin 12 // sclk0/adc2.1     // used as spi interface clock for tft screen, sd card and resistive touch panel
+#define    spi_miso_pin 13 // miso0/adc2.2     // used as spi interface data from sd card, resistive touch panel, and possibly (?) tft screen
 #define hotrc_ch2_v_pin 14 // qwp0/pwm0/adc2.3 // hotrc ch2 bidirectional trigger input
 #define hotrc_ch1_h_pin 15 // pwm1/adc2.4      // hotrc ch1 thumb joystick input
 #define     gas_pwm_pin 16 // pwm1/adc2.5      // output, pwm signal duty cycle controls throttle target. on Due this is the pin labeled DAC1 (where A13 is on Mega)
@@ -57,7 +57,7 @@
 // official pin capabilities: https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/hw-reference/esp32s3/user-guide-devkitc-1.html?highlight=devkitc#user-guide-s3-devkitc-1-v1-1-header-blocks
 // external flash uses pins 27-32. ADC ch2 will not work if wifi is enabled
 // bootstrap pins: Pin 0 must be pulled high, and pins 45 and 46 pulled low during bootup
-// glitch: pins 36 and 39 will be pulled low for ~80ns when "certain RTC peripherals power up" (ESP32 errata 3.11). Can run adc_power_acquire() to work around glitch but draw ~1mA more power. Avoid interrupts on these pins
+// glitch: pins 36 and 39 will be erroneously pulled low for ~80ns when "certain RTC peripherals power up" (ESP32 errata 3.11). Can run adc_power_acquire() to work around glitch but draw ~1mA more power. Avoid interrupts on these pins
 // spi bus page including DMA information: https://docs.espressif.com/projects/esp-idf/en/v4.4/esp32s3/api-reference/peripherals/spi_master.html
 // bm2023 pins: onewire 19, hotrc_ch3_pin 20, hotrc_ch4_pin 21, tach_pin 36, ignition_pin 37, encoder_b_pin 40, encoder_a_pin 41, encoder_sw_pin 42
 #define     tft_rst_pin -1  // tft reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
@@ -161,7 +161,8 @@ bool screensaver = false;                // can enable experiment with animated 
 int tunctrl = OFF, tunctrl_last = OFF;
 int datapage = PG_RUN, datapage_last = PG_TEMP;  // which of the dataset pages is currently displayed and available to edit?
 bool touch_increment_datapage = false;
-int sel_val = 0, sel_val_last = 0;               // in the real time tuning UI, which of the editable values is selected. -1 for none 
+volatile int sel_val = 0;               // in the real time tuning UI, which of the editable values is selected. -1 for none 
+volatile int sel_val_last = 0;          
 bool syspower = HIGH;                   // set by handler only. Reflects current state of the signal
 bool starter = LOW;                     // set by handler only. Reflects current state of starter signal (does not indicate source)
 bool starter_drive = false;             // set by handler only. High when we're driving starter, otherwise starter is an input
@@ -383,5 +384,5 @@ Timer panicTimer(15000000);  // How long should a panic stop last?  we can't sta
 
 void kick_inactivity_timer(int source=0) {
     sleep_inactivity_timer.reset();  // evidence of user activity
-    Serial.printf("kick%d ", source);
+    // Serial.printf("kick%d ", source);
 }

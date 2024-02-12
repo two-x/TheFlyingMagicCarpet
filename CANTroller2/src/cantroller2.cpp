@@ -81,5 +81,5 @@ void loop() {                 // code takes about 1 ms to loop on average
     // sdcard.update();
     lightbox.update(run.mode, speedo.human());  // communicate any relevant data to the lighting controller
     looptimer.update();       // looptimer.mark("F");
-    delayMicroseconds(100);
+    // delayMicroseconds(100);
 }

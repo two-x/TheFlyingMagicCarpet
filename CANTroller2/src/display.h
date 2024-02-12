@@ -284,7 +284,7 @@ class Display {
         TaskHandle_t pushTaskHandle = nullptr;
         xTaskCreatePinnedToCore(push_task_wrapper, "taskPush", 8192, NULL, 2, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  // 16384
         TaskHandle_t drawTaskHandle = nullptr;
-        xTaskCreatePinnedToCore(draw_task_wrapper, "taskDraw", 4096, NULL, 3, &drawTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);
+        xTaskCreatePinnedToCore(draw_task_wrapper, "taskDraw", 4096, NULL, 3, &drawTaskHandle, runOnCore);
         #endif
     }
     void init_framebuffers(int _sprwidth, int _sprheight) {
@@ -324,7 +324,7 @@ class Display {
             else using_psram = true;
         }
         Serial.printf(" made 2x %dx%d sprites in %sram\n", framewidth, frameheight, using_psram ? "ps" : "native ");
-        for (int i=0; i<=1; i++) framebuf[i].clear();
+        // for (int i=0; i<=1; i++) framebuf[i].fillSprite(BLK);
         // sp[0].pushImageDMA() draw(vp.x, vp.y);
         // lcd->display();
         // lcd.endWrite();
@@ -433,14 +433,12 @@ class Display {
         sprptr->drawFastHLine(pos_x-1, pos_y, 3, t_color);
         sprptr->drawFastVLine(pos_x, pos_y, 4, t_color);
     }
-        // sprptr->drawFastVLine(pos_x-1, pos_y+7, 2, t_color);
-        // sprptr->drawFastVLine(pos_x, pos_y+5, 4, t_color);
-        // sprptr->drawFastVLine(pos_x+1, pos_y+7, 2, t_color);
     void draw_bargraph_needle(int32_t n_pos_x, int32_t old_n_pos_x, int32_t pos_y, uint8_t n_color) {  // draws a cute little pointy needle
         draw_needle_shape(old_n_pos_x, pos_y, BLK);
         draw_needle_shape(n_pos_x, pos_y, n_color);
     }
     void draw_string(int32_t x_new, int32_t x_old, int32_t y, std::string text, std::string oldtext, uint8_t color, uint8_t bgcolor, bool forced=false) {  // Send in "" for oldtext if erase isn't needed
+        if ((text == oldtext) && !forced) return; 
         sprptr->fillRect(x_old, y, oldtext.length() * disp_font_width, disp_font_height, bgcolor);
         sprptr->setTextColor(color);  
         sprptr->setCursor(x_new, y);
@@ -479,6 +477,7 @@ class Display {
                 draw_string_units(disp_datapage_units_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], LGRY, BLK);
                 int32_t corner_y = (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix + 7;  // lineno*disp_line_height_pix+disp_vshift_pix-1;
                 // draw_bargraph_base(disp_bargraphs_x, corner_y, disp_bargraph_width);
+                sprptr->fillRect(disp_bargraphs_x-1, (lineno + disp_fixed_lines + 1) * disp_line_height_pix, disp_bargraph_width + 2, 4, BLK);
                 if (disp_needles[lineno] >= 0) draw_bargraph_needle(-1, disp_needles[lineno], corner_y - 6, BLK);  // Let's draw a needle
             }
         }
@@ -654,8 +653,8 @@ class Display {
         draw_string(disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
     }
     void draw_selected_name(int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
-        if (selected_val != selected_last) draw_string(12, 12, 12+(selected_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_last], "", LGRY, BLK);
-        draw_string(12, 12, 12+(selected_val+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_val], "", (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : LGRY), BLK);
+        if (selected_val != selected_last) draw_string(12, 12, 12+(selected_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_last], "", LGRY, BLK, true);
+        draw_string(12, 12, 12+(selected_val+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_val], "", (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : LGRY), BLK, true);
     }
     void draw_bool(bool value, int32_t col, bool force=false) {  // Draws values of boolean data
         if ((disp_bool_values[col-2] != value) || force) {  // If value differs, Erase old value and write new
@@ -671,7 +670,7 @@ class Display {
             // Serial.printf("db: xm%d c%d v%d s%s\n", x_mod, col, value, top_menu_buttons[col-2]);
         }
     }
-    void draw_touchgrid(bool side_only) {  // draws edge buttons with names in 'em. If replace_names, just updates names
+    void draw_touchgrid(bool side_only = false) {  // draws edge buttons with names in 'em. If replace_names, just updates names
         sprptr->setTextDatum(textdatum_t::top_left);
         int32_t namelen = 0;
         sprptr->setTextColor(WHT);
@@ -756,6 +755,7 @@ class Display {
         }
         else if (fullscreen_last) {
             animations.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
+            reset_request = true;
             screensaver = false;
         }
         fullscreen_last = fullscreen_screensaver_test;
@@ -793,7 +793,7 @@ class Display {
             if (datapage_last != datapage) prefs.putUInt("dpage", datapage);
         }
         if (disp_sidemenu_dirty) {
-            draw_touchgrid(true);
+            draw_touchgrid(false);
             disp_sidemenu_dirty = false;
         }
         if (disp_selected_val_dirty) {
@@ -1145,14 +1145,11 @@ static void push_task_wrapper(void *parameter) {
         // while (!(screenRefreshTimer.expired() || screensaver_max_refresh)) vTaskDelay(pdMS_TO_TICKS(1));
         screenRefreshTimer.reset();
         push_task();
-        // delayMicroseconds(100);  // vTaskDelay(pdMS_TO_TICKS(1));
-        // while (is_drawing || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh)) delayMicroseconds(100);  // vTaskDelay(pdMS_TO_TICKS(1));
-        // push_task();
+        // vTaskDelete(NULL);
     }
 }
 static void draw_task_wrapper(void *parameter) {
     while (true) {
-        // while (is_pushing || pushtime) vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
         while (is_pushing || pushtime) vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
         draw_task();
         // delayMicroseconds(100);  // vTaskDelay(pdMS_TO_TICKS(1));
