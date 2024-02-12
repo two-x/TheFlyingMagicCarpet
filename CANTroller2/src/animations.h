@@ -19,7 +19,7 @@ const uint8_t MGT  = 0xe2;  // secondary magenta (RB elements full on)
 const uint8_t DRED = 0x80;  // dark red
 const uint8_t BORG = 0xe8;  // blood orange (very reddish orange)
 const uint8_t BRN  = 0x88;  // dark orange aka brown
-const uint8_t DBRN = 0x44;  // dark orange aka brown
+const uint8_t DBRN = 0x44;  // dark brown
 const uint8_t ORG  = 0xf0;  // 
 const uint8_t LYEL = 0xfe;  // 
 const uint8_t GGRN = 0x9e;  // a low saturation greyish pastel green
@@ -253,12 +253,11 @@ class EraserSaver {  // draws colorful patterns to exercise
     LGFX_Sprite* sprite;
     viewport* vp;
     int sprsize[2], rotate = -1, scaler = 1, season = 0, numseasons = 4;
-    int point[2], plast[2], er[2];
+    int point[2], plast[2], er[2], erpos_max[2];
     int eraser_rad = 14, eraser_rad_min = 22, eraser_rad_max = 40, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, now = 0;
     uint32_t boxsize[2];
     int eraser_velo[2] = {rn(eraser_velo_max), rn(eraser_velo_max)}, shapes_per_run = 5, shapes_done = 0;
-    int erpos_max[2];
     uint8_t wclast, pencolor = RED;
     float pensat = 200.0;
     uint16_t spothue = 65535, slowhue = 0, penhue;
@@ -365,17 +364,17 @@ class EraserSaver {  // draws colorful patterns to exercise
                 for (int i = 0; i < 6 + rn(20); i++) { 
                     sprite->drawEllipse(point[HORZ] + vp->x, point[VERT] + vp->y, scaler * d[0] - i, scaler * d[1] + i, hsv_to_rgb<uint8_t>(hue + mult * i, sat, brt));
                 }
-
             }
             else if (rotate == Rings) {
                 int d = 8 + rn(25);
                 uint16_t hue = spothue + 32768 * rn(2);
-                uint8_t sat = rn(128) + (spothue >> 9);
-                uint8_t brt = 180 + rn(76);
+                uint8_t sat = 255 - ((uint8_t)(spothue >> (7+season)));  // + rn(63) 
+                uint8_t brt = (25 * season) + rn(256 - 25 * season);
                 uint8_t c = hsv_to_rgb<uint8_t>(hue, sat, brt);
-                uint8_t c2 = hsv_to_rgb<uint8_t>(hue, sat, brt-10);
+                uint8_t c2 = hsv_to_rgb<uint8_t>(hue, sat, std::abs(brt-10));
                 // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/655.35), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
                 for (int xo = -1; xo <= 1; xo += 2) {
+                    sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y, d * scaler, c);
                     sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y + xo, d * scaler, c);
                     sprite->drawCircle(point[HORZ] + vp->x + xo, point[VERT] + vp->y, d * scaler, c);
                 }
@@ -383,24 +382,23 @@ class EraserSaver {  // draws colorful patterns to exercise
                     sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y, d * scaler + edge, c2);
             }
             else if (rotate == Dots) {
+                uint8_t sat = (30 * season) + rn(256 - 30 * season);
                 for (int star = 0; star < 12; star++)
-                    sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, scaler * (2 + rn(2)), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), 128 + rn(128), 160 + rn(96)));  // hue_to_rgb16(rn(255)), BLK);
+                    sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, scaler * (2 + rn(2)), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126)));  // hue_to_rgb16(rn(255)), BLK);
             }
             else if (rotate == Boxes) {
-                boxrad = 2 + random(2);
+                boxrad = 2 + rn(2 + 4 * season);
                 boxminsize = 2 * boxrad + 5;
                 int longer = rn(2);
                 boxsize[longer] = boxminsize + rn(vp->w - boxminsize);
                 boxsize[!longer] = boxminsize + rn(boxsize[longer] >> 2);  // cheesy attempt to work around crazy-values bug
                 point[HORZ] = rn(vp->w) - (boxsize[HORZ] >> 1);
                 point[VERT] = rn(vp->h) - (boxsize[VERT] >> 1);
-                if (point[HORZ] < 0) {
-                    boxsize[HORZ] += point[HORZ];
-                    point[HORZ] = -boxrad;
-                }
-                if (point[VERT] < 0) {
-                    boxsize[VERT] += point[VERT];
-                    point[VERT] = -boxrad;
+                for (int axis=HORZ; axis<=VERT; axis++) {
+                    if (point[axis] < 0) {
+                        boxsize[axis] += point[axis];
+                        point[axis] = -boxrad;
+                    }
                 }
                 if (point[HORZ] + boxsize[HORZ] > vp->w) boxsize[HORZ] = (vp->w + boxrad - point[HORZ]);
                 if (point[VERT] + boxsize[VERT] > vp->h) boxsize[VERT] = (vp->h + boxrad - point[VERT]);

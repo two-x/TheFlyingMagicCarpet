@@ -1,14 +1,11 @@
 #pragma once
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
 #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
-// #include "tft.h"
 #include "lgfx.h"
 #include "neopixel.h"
 #include "touch.h"
 #include "images.h"
 #include "animations.h"
-// #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
-// #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
 #define disp_vshift_pix 2  // Unknown.  Note: At smallest text size, characters are 5x7 pix + pad on rt and bot for 6x8 pix.
 #define disp_runmode_text_x 12
 uint8_t colorcard[NUM_RUNMODES] = { MGT, WHT, RED, ORG, YEL, GRN, TEAL, PUR };
@@ -120,8 +117,6 @@ class IdiotLights {
         }
     }
 };
-// class SimPanel {};
-// class DataPage {};
 #define disp_lines 20  // Max lines of text displayable at line height = disp_line_height_pix
 #define disp_fixed_lines 8  // Lines of static variables/values always displayed
 #define disp_line_height_pix 12  // Pixel height of each text line. Screen can fit 16x 15-pixel or 20x 12-pixel lines
@@ -209,7 +204,6 @@ volatile int32_t pushclock;
 volatile int32_t drawclock;
 volatile int32_t idleclock;
 volatile bool reset_request = false;
-// static void push_task(void*) {
 volatile bool pushtime = 0;
 volatile bool drawn = false;
 volatile bool pushed = true;
@@ -223,7 +217,6 @@ static void draw_task_wrapper(void *parameter);
 void push_task();
 void draw_task();
 void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref);
-
 volatile bool _procrastinate = false;
 volatile bool reset_finished = false;
 volatile bool simulating_last;
@@ -274,9 +267,6 @@ class Display {
         : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {
         Display(_neo, _touch, _idiots, _sim);
     }
-    // LGFX* getlcd() {
-    //     return &lcd;
-    // }
     void init_tasks() {
         #ifdef VIDEO_TASKS
         push_time = xSemaphoreCreateMutex();
@@ -290,9 +280,7 @@ class Display {
     void init_framebuffers(int _sprwidth, int _sprheight) {
         int sprsize[2] = { _sprwidth, _sprheight };
         Serial.printf("  multi purpose panel init.. ");
-        // lcd.startWrite();
         lcd.setColorDepth(8);
-        // if (lcd->width() < lcd->height()) lcd->setRotation(lcd->getRotation() ^ 1);
         for (int i = 0; i <= 1; i++) framebuf[i].setColorDepth(sprite_color_depth);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
         auto framewidth = sprsize[HORZ];
         auto frameheight = sprsize[VERT];
@@ -317,17 +305,12 @@ class Display {
                 }
                 if (fail) {
                     lcd.print("createSprite fail\n");
-                    // lgfx::delay(3000);
                 }
                 else using_psram = true;
             }
             else using_psram = true;
         }
         Serial.printf(" made 2x %dx%d sprites in %sram\n", framewidth, frameheight, using_psram ? "ps" : "native ");
-        // for (int i=0; i<=1; i++) framebuf[i].fillSprite(BLK);
-        // sp[0].pushImageDMA() draw(vp.x, vp.y);
-        // lcd->display();
-        // lcd.endWrite();
     }
     void setup() {
         Serial.printf("Display..");  //
@@ -371,13 +354,14 @@ class Display {
         Serial.printf(" ..");  //
         Serial.printf(" initialized\n");
     }
-    void reset() {
-        sprptr->fillSprite(BLK);  // Black out the whole screen
-        draw_touchgrid(false);
+    void reset(LGFX_Sprite* spr) {
+        spr->fillRect(0, 0, disp_width_pix, disp_height_pix, BLK);  // Black out the whole screen
+        // blackout(spr);
+        // draw_touchgrid(false);
         draw_fixed(datapage, datapage_last, true, true);
         draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
-        draw_runmode(nowmode, disp_oldmode, NON);
-        draw_datapage(datapage, datapage_last, true);
+        // draw_runmode(nowmode, disp_oldmode, NON);
+        // draw_datapage(datapage, datapage_last, true);
         all_dirty();
         animations.reset();
         reset_request = false;
@@ -399,6 +383,10 @@ class Display {
         disp_values_dirty = true;
         screensaver = false;
     }
+    // void blackout(LGFX_Sprite* spr) {
+    //     // std::uint32_t* s32 = (std::uint32_t*)spr->getBuffer();
+    //     for (int i=0; i=(sizeof(*spr)); i++) spr[i] = 0;
+    // }
     void set_runmodecolors() {
         uint8_t saturat = 255;  uint8_t hue_offset = 0;
         for (int32_t rm=0; rm<NUM_RUNMODES; rm++) {
@@ -469,6 +457,7 @@ class Display {
             y_pos = (lineno + 1) * disp_line_height_pix + disp_vshift_pix;
             draw_string(disp_datapage_names_x, disp_datapage_names_x, y_pos, telemetry[lineno], nulstr, LGRY, BLK, forced);
             draw_string_units(disp_datapage_units_x, y_pos, units[lineno], nulstr, LGRY, BLK);
+            disp_bargraphs[lineno] = false;
             // draw_bargraph_base(disp_bargraphs_x, y_pos + 7, disp_bargraph_width);
         }
         if (redraw_all) {
@@ -640,14 +629,7 @@ class Display {
         sprptr->setCursor(disp_runmode_text_x, disp_vshift_pix);
         sprptr->print(modecard[_nowmode].c_str());
         sprptr->print(" Mode");
-        // draw_string(disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[_oldmode], "", BLK, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
-        // draw_string(x_old, x_old, disp_vshift_pix, "Mode", "", BLK, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
     }
-    // int32_t x_new = disp_runmode_text_x + disp_font_width * (2 + strlen(modecard[_nowmode])) - 3;
-    // int32_t x_old = disp_runmode_text_x + disp_font_width * (2 + strlen(modecard[_oldmode])) - 3;
-    // draw_string(disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[_oldmode], "", BLK, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
-    // draw_string(disp_runmode_text_x + disp_font_width, disp_runmode_text_x + disp_font_width, disp_vshift_pix, modecard[_nowmode], "", color, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
-    // draw_string(x_new, x_new, disp_vshift_pix, "Mode", "", color, BLK); // +6*(arraysize(modecard[_nowmode])+4-namelen)/2
     void draw_datapage(int32_t page, int32_t page_last, bool forced=false) {
         draw_fixed(page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
         draw_string(disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
@@ -661,16 +643,12 @@ class Display {
     }
     void draw_bool(bool value, int32_t col, bool force=false) {  // Draws values of boolean data
         if ((disp_bool_values[col-2] != value) || force) {  // If value differs, Erase old value and write new
-            int32_t x_mod = touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - top_menu_buttons[col-2].length()*(disp_font_width>>1) - 2;
-            // draw_string(x_mod, x_mod, 0, top_menu_buttons[col-2], "", (value) ? GRN : LGRY, DGRY);
-            // sprptr->setTextColor((value) ? GRN : PNK);  
-            // sprptr->setCursor(x_mod, 10);
+            int32_t x_mod = touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - top_menu_buttons[col-2].length()*(disp_font_width>>1) + 1;
             sprptr->setTextDatum(textdatum_t::top_left);
             sprptr->setFont(&fonts::Font0);
             sprptr->setTextColor((value) ? GRN : LGRY);  
             sprptr->drawString(top_menu_buttons[col-2].c_str(), x_mod, 0);
             disp_bool_values[col-2] = value;
-            // Serial.printf("db: xm%d c%d v%d s%s\n", x_mod, col, value, top_menu_buttons[col-2]);
         }
     }
     void draw_touchgrid(bool side_only = false) {  // draws edge buttons with names in 'em. If replace_names, just updates names
@@ -762,9 +740,7 @@ class Display {
             screensaver = false;
         }
         fullscreen_last = fullscreen_screensaver_test;
-        #ifdef VIDEO_TASKS
-        // Serial.printf("pt%d is: d%dp%d\n", pushtime, is_drawing, is_pushing);
-        #else
+        #ifndef VIDEO_TASKS
         if (is_drawing || is_pushing) return;
         if (pushtime) {
             if (screenRefreshTimer.expired() || screensaver_max_refresh || fullscreen_screensaver_test) {
@@ -778,9 +754,8 @@ class Display {
     }
     bool draw_all(LGFX_Sprite* spr) {
         sprptr = spr;
-        // if (reset_request) reset();
+        if (reset_request) reset(spr);
         if (fullscreen_screensaver_test || auto_saver_enabled) return false;
-        // sprptr = &framebuf[flip];
         tiny_text();
         update_idiots(disp_idiots_dirty);
         disp_idiots_dirty = false;
@@ -963,10 +938,7 @@ class Display {
             draw_bool(syspower, 5, disp_bools_dirty);
             disp_bools_dirty = false;
             disp_values_dirty = false;
-            _procrastinate = true;  // don't do anything else in this same loop
         }
-        // if (!_procrastinate) update_flexpanel();
-        _procrastinate = false;
         return true;
     }
     void auto_saver(bool enable) {
@@ -980,7 +952,6 @@ class Display {
             animations.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
             animations.anim_reset_request = true;
             reset_request = true;
-            // all_dirty();  // tells display to redraw everything. display must set back to false
         }
     }
 };
@@ -991,7 +962,6 @@ class Tuner {
     Touchscreen* touch;
     Timer tuningCtrlTimer = Timer(25000000);  // This times out edit mode after a a long period of inactivity
   public:
-    // Tuner(NeopixelStrip* _neo, Touchscreen* _touch) : neo(_neo), touch(_touch) {}
     Tuner(Display* _screen, NeopixelStrip* _neo, Touchscreen* _touch) : screen(_screen), neo(_neo), touch(_touch) {}
     int32_t idelta = 0, idelta_encoder = 0;
     void update(int rmode) {
@@ -1129,7 +1099,7 @@ void push_task() {
 void draw_task() {
     if (is_pushing || pushtime) return;
     is_drawing = true;
-    if (reset_request) screen.reset();
+    // if (reset_request) screen.reset();
     int32_t mark = (int32_t)screenRefreshTimer.elapsed();
     screen.draw_all(&framebuf[flip]);
     fps = animations.update(&framebuf[flip]);
@@ -1156,12 +1126,10 @@ static void draw_task_wrapper(void *parameter) {
     while (true) {
         while (is_pushing || pushtime) vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
         draw_task();
-        // delayMicroseconds(100);  // vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
 #endif
 void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref) {
-    // shifter = sizeof(uint32_t) / sprite_color_depth;
     union {  // source
         std::uint32_t* s32;
         std::uint8_t* s;
