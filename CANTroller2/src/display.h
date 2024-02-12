@@ -652,9 +652,12 @@ class Display {
         draw_fixed(page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
         draw_string(disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
     }
-    void draw_selected_name(int32_t tun_ctrl, int32_t tun_ctrl_last, int32_t selected_val, int32_t selected_last) {
-        if (selected_val != selected_last) draw_string(12, 12, 12+(selected_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_last], "", LGRY, BLK, true);
-        draw_string(12, 12, 12+(selected_val+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_val], "", (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : LGRY), BLK, true);
+    void draw_selected_name(int32_t tun_ctrl, int32_t selected_val, int32_t selected_last, int32_t selected_last_last) {
+        for (int i = 0; i < disp_tuning_lines; i++)
+            if (selected_val != i) draw_string(12, 12, 12+(i+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][i], nulstr, LGRY, BLK, true);
+        // if (selected_val != selected_last) draw_string(12, 12, 12+(selected_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_last], nulstr, LGRY, BLK, true);
+        // if (selected_val != selected_last_last) draw_string(12, 12, 12+(selected_last_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_last_last], nulstr, LGRY, BLK, true);
+        draw_string(12, 12, 12+(selected_val+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_val], nulstr, (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : LGRY), BLK, true);
     }
     void draw_bool(bool value, int32_t col, bool force=false) {  // Draws values of boolean data
         if ((disp_bool_values[col-2] != value) || force) {  // If value differs, Erase old value and write new
@@ -776,7 +779,7 @@ class Display {
     bool draw_all(LGFX_Sprite* spr) {
         sprptr = spr;
         // if (reset_request) reset();
-        if (!valuesRefreshTimer.expired() || fullscreen_screensaver_test || auto_saver_enabled) return false;
+        if (fullscreen_screensaver_test || auto_saver_enabled) return false;
         // sprptr = &framebuf[flip];
         tiny_text();
         update_idiots(disp_idiots_dirty);
@@ -797,7 +800,7 @@ class Display {
             disp_sidemenu_dirty = false;
         }
         if (disp_selected_val_dirty) {
-            draw_selected_name(tunctrl, tunctrl_last, sel_val, sel_val_last);
+            draw_selected_name(tunctrl, sel_val, sel_val_last, sel_val_last_last);
             disp_selected_val_dirty = false;
         }
         if (disp_runmode_dirty) {
@@ -997,6 +1000,7 @@ class Tuner {
     }
   private:
     void process_inputs() {
+        sel_val_last_last = sel_val_last;
         sel_val_last = sel_val;
         datapage_last = datapage;
         tunctrl_last = tunctrl; // Make sure this goes after the last comparison

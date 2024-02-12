@@ -163,6 +163,7 @@ int datapage = PG_RUN, datapage_last = PG_TEMP;  // which of the dataset pages i
 bool touch_increment_datapage = false;
 volatile int sel_val = 0;               // in the real time tuning UI, which of the editable values is selected. -1 for none 
 volatile int sel_val_last = 0;          
+volatile int sel_val_last_last = 0;          
 bool syspower = HIGH;                   // set by handler only. Reflects current state of the signal
 bool starter = LOW;                     // set by handler only. Reflects current state of starter signal (does not indicate source)
 bool starter_drive = false;             // set by handler only. High when we're driving starter, otherwise starter is an input

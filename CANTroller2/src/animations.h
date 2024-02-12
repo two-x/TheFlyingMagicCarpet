@@ -121,7 +121,7 @@ class CollisionsSaver {
         a->dy = (rand() & (5 << SHIFTSIZE)) + 1;
         sqrme = (uint8_t)(ball_radius_base * (float)(vp->w + vp->h));
         sqrme += rn((int)(ball_radius_modifier * (float)(vp->w + vp->h)));
-        for (int i=0; i<=2; i++) if (!rn(ball_redoubler_rate)) sqrme *=2;
+        for (int i=0; i<2; i++) if (!rn(ball_redoubler_rate)) sqrme *=2;
         a->r = sqrme << SHIFTSIZE;  // (sqrme * sqrme)));
         a->m = 4 + (ball_count & 0x07);
     }
@@ -252,7 +252,7 @@ class EraserSaver {  // draws colorful patterns to exercise
  private:
     LGFX_Sprite* sprite;
     viewport* vp;
-    int sprsize[2], rotate = -1, scaler = 1;
+    int sprsize[2], rotate = -1, scaler = 1, season = 0, numseasons = 4;
     int point[2], plast[2], er[2];
     int eraser_rad = 14, eraser_rad_min = 22, eraser_rad_max = 40, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, now = 0;
@@ -264,7 +264,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     uint16_t spothue = 65535, slowhue = 0, penhue;
     int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 200, shape = rn(Rotate);
     static constexpr uint32_t saver_cycletime_us = 18000000;
-    Timer saverCycleTimer, pentimer = Timer(1500000), lucktimer;
+    Timer saverCycleTimer, pentimer = Timer(1500000), lucktimer, seasontimer;
     bool saver_lotto = false, has_eraser = true;
  public:
     EraserSaver() {}
@@ -289,6 +289,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         saverCycleTimer.set(saver_cycletime_us);
         refresh_limit = 11111;  // 90 Hz limit
         screenRefreshTimer.set(refresh_limit);
+        seasontimer.set(3000000);
         scaler = std::max(1, (vp->w + vp->h)/200);
         erpos_max[HORZ] = (int32_t)vp->w / 2 - eraser_rad;
         erpos_max[VERT] = (int32_t)vp->h / 2 - eraser_rad;
@@ -314,6 +315,10 @@ class EraserSaver {  // draws colorful patterns to exercise
             if (cycle == 0) change_pattern(-1);
             saverCycleTimer.set(saver_cycletime_us / ((cycle == 2) ? 5 : 1));
         }
+        if (seasontimer.expireset()) {
+            ++season %= numseasons;
+            seasontimer.set(1000000 * (1 + rn(4)));
+        }
         drawsprite();
         return shapes_done;
     }
@@ -328,14 +333,28 @@ class EraserSaver {  // draws colorful patterns to exercise
             if (!rn(20)) spothue = rn(65535);
             if (spothue & 1) slowhue += 13;
             if (rotate == Wedges) {
-                uint8_t wc = hsv_to_rgb<uint8_t>(rn(65536), 127 + (spothue >> 9));
+                uint8_t wcball, wctip;
+                uint16_t hue = rn(65536);
+                uint8_t brt = 156 + rn(100);
+                if (season == 1) {
+                    wctip = hsv_to_rgb<uint8_t>(hue, 0, brt);
+                    wcball = hsv_to_rgb<uint8_t>(hue, 64, brt);;
+                }
+                else if (season == 3) {
+                    wctip = hsv_to_rgb<uint8_t>(hue, 0, brt);
+                    wcball = hsv_to_rgb<uint8_t>(hue, 64, 0);;
+                }
+                else {
+                    wcball = hsv_to_rgb<uint8_t>(hue, 127 + (spothue >> 9), 200 + rn(56));
+                    wctip = wclast;
+                }
                 float im = 0;
                 if (plast[VERT] != point[VERT]) im = (float)(plast[HORZ] - point[HORZ]) / (float)(plast[VERT] - point[VERT]);
-                sprite->fillCircle(plast[HORZ] + vp->x, plast[VERT] + vp->y, 3, wc);
+                sprite->fillCircle(plast[HORZ] + vp->x, plast[VERT] + vp->y, 3, wcball);
                 // sprite->drawCircle(point[HORZ], point[VERT], 3, BLK);
                 for (int h=-4; h<=4; h++)
-                    sprite->drawGradientLine(point[HORZ] + vp->x, point[VERT] + vp->y, plast[HORZ]  + vp->x + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + vp->y + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wclast, wc);
-                wclast = wc;
+                    sprite->drawGradientLine(point[HORZ] + vp->x, point[VERT] + vp->y, plast[HORZ]  + vp->x + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + vp->y + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wctip, wcball);
+                wclast = wcball;
             }
             else if (rotate == Ellipses) {
                 int d[2] = {10 + rn(30), 10 + rn(30)};
