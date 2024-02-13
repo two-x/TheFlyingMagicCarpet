@@ -555,6 +555,7 @@ class AnimationManager {
     float update(LGFX_Sprite* spr) {
         spr->setClipRect(vp.x, vp.y, vp.w, vp.h);
         if (!screensaver_last && screensaver) change_saver();  // ptrsaver->reset();
+        else if (screensaver_last && !screensaver) spr->fillSprite(BLK);
         screensaver_last = screensaver;
         if (anim_reset_request) reset();
         if (screensaver) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
@@ -580,6 +581,11 @@ class AnimationManager {
         calc_fps();
         spr->clearClipRect();
         return myfps;
+    }
+    void stop() {
+        screensaver = screensaver_max_refresh = false;
+        set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
+        anim_reset_request = true;
     }
     void set_vp(int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
         vp.x = _cornerx;

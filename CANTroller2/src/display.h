@@ -774,7 +774,10 @@ class Display {
     }
     bool draw_all(LGFX_Sprite* spr) {
         sprptr = spr;
-        if (reset_request) reset(spr);
+        if (reset_request) {
+            spr->fillSprite(BLK);
+            reset(spr);
+        }
         if (fullscreen_screensaver_test || auto_saver_enabled) return false;
         tiny_text();
         update_idiots(disp_idiots_dirty);
@@ -1017,7 +1020,7 @@ class Display {
             s32 += w32;
             r32 += w32;
         } while (++y < sprheight);
-        // lcd->display();
+        lcd.display();
         lcd.endWrite();
     }
     void auto_saver(bool enable) {
@@ -1027,9 +1030,11 @@ class Display {
             animations.anim_reset_request = true;
         }
         else {
-            screensaver = screensaver_max_refresh = auto_saver_enabled = false;
-            animations.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
-            animations.anim_reset_request = true;
+            animations.stop();
+            auto_saver_enabled = false;
+            // screensaver = screensaver_max_refresh = auto_saver_enabled = false;
+            // animations.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
+            // animations.anim_reset_request = true;
             reset_request = true;
         }
     }
@@ -1188,7 +1193,7 @@ static void draw_task_wrapper(void *parameter) {
 }
 #endif
 // The following project draws a nice looking gauge cluster, very apropos to our needs and the code is given.
-// See this video: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
+// See this video: https://www.youtube.com/watch?v=cBtsLxZ13hQ&t=136s&ab_channel=VolosProjects
 // Rinkydink home page: http://www.rinkydinkelectronics.com
 // moving transparent arrow sprite over background: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
 // bar graphs: https://www.youtube.com/watch?v=g4jlj_T-nRw&ab_channel=VolosProjects

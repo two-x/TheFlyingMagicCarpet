@@ -10,7 +10,7 @@ void setup() {
     initialize_pins();
     running_on_devboard = (read_pin(uart_tx_pin));  // detect breadboard vs. real car without use of an additional pin (add weak pullup resistor on your breadboard)
     Serial.begin(115200);     // Open console serial port (will reassign tx pin as output)
-    delay(1000);               // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
+    delay(2000);               // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     partition_table();
     set_board_defaults();     // set variables as appropriate if on a breadboard
     if (RUN_TESTS) run_tests();
