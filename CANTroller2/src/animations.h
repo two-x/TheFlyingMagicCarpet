@@ -521,12 +521,11 @@ class AnimationManager {
             return;
         }
         spr->setTextDatum(textdatum_t::middle_center);
-        // spr->setFont(&fonts::Font2);
         for (int32_t row = 0; row < arraysize(simgrid); row++) {
             for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
-                int32_t cntr_x = touch_cell_h_pix*col + (touch_cell_h_pix>>1) + 2 + vp.x - 5;
-                int32_t cntr_y = touch_cell_v_pix*row + (touch_cell_v_pix>>1) + vp.y;
-                if (simgrid[row][col] == "    ") {
+                int32_t cntr_x = touch_cell_h_pix*col + (touch_cell_h_pix>>1) + 2 + vp.x - 5 + 2;
+                int32_t cntr_y = touch_cell_v_pix*row + (touch_cell_v_pix>>1) + vp.y - 1;
+                if (simgrid[row][col] != "    ") {
                     draw_simbutton(spr, cntr_x + 2, cntr_y - 1, simgriddir[row][col], YEL);  // for 3d look
                     draw_simbutton(spr, cntr_x, cntr_y, simgriddir[row][col], DGRY);
                     // spr->fillRoundRect(cntr_x - 20, cntr_y - touch_cell_v_pix/2 - 10, 40, 20, 5, DGRY);
@@ -567,7 +566,7 @@ class AnimationManager {
         }
         else if (!mule_drawn) {
             spr->fillSprite(BLK);
-            spr->pushImageRotateZoom(85 + vp.x , 85 + vp.y, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, BLK);
+            spr->pushImageRotateZoom(85 + vp.x, 85 + vp.y, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, BLK);
             mule_drawn = true;
         }
         if (sim->enabled()) {
