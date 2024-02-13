@@ -355,10 +355,9 @@ class Display {
         Serial.printf(" initialized\n");
     }
     void reset(LGFX_Sprite* spr) {
-        spr->fillRect(0, 0, disp_width_pix, disp_height_pix, BLK);  // Black out the whole screen
-        // blackout(spr);
+        blackout(spr);
         // draw_touchgrid(false);
-        draw_fixed(datapage, datapage_last, true, true);
+        // draw_fixed(datapage, datapage_last, true, true);
         draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
         // draw_runmode(nowmode, disp_oldmode, NON);
         // draw_datapage(datapage, datapage_last, true);
@@ -383,10 +382,19 @@ class Display {
         disp_values_dirty = true;
         screensaver = false;
     }
-    // void blackout(LGFX_Sprite* spr) {
-    //     // std::uint32_t* s32 = (std::uint32_t*)spr->getBuffer();
-    //     for (int i=0; i=(sizeof(*spr)); i++) spr[i] = 0;
-    // }
+    void blackout(LGFX_Sprite* spr) {
+        // for (int x = 0; x<disp_width_pix; x+=10)
+        //     for (int y = 0; y<disp_height_pix; y+=10) {
+        //         spr->pushImage(x, y, 10, 10, black, BLK);
+        //         Serial.printf("black x%d y%d\n", x, y);
+
+        //     }
+        spr->fillRoundRect(0, 0, disp_width_pix, disp_height_pix, 1, BLK);  // Black out the whole screen        
+        // // spr->fillSprite(BLK);
+        // Serial.printf("blackout@ 0x%08x\n", spr);
+        // // std::uint32_t* s32 = (std::uint32_t*)spr->getBuffer();
+        // // for (int i=0; i=(sizeof(*spr)); i++) spr[i] = 0;
+    }
     void set_runmodecolors() {
         uint8_t saturat = 255;  uint8_t hue_offset = 0;
         for (int32_t rm=0; rm<NUM_RUNMODES; rm++) {
@@ -1091,6 +1099,7 @@ void push_task() {
     if (is_drawing || !pushtime) return;  // vTaskDelay(pdMS_TO_TICKS(1));
     screenRefreshTimer.reset();
     is_pushing = true;
+    // Serial.printf("f%d push@ 0x%08x vs 0x%08x\n", flip, &framebuf[flip], &framebuf[!flip]);
     diffpush(&framebuf[flip], &framebuf[!flip]);
     flip = !flip;
     sprptr = &framebuf[flip];
@@ -1101,6 +1110,7 @@ void draw_task() {
     is_drawing = true;
     // if (reset_request) screen.reset();
     int32_t mark = (int32_t)screenRefreshTimer.elapsed();
+    // Serial.printf("f%d draw@ 0x%08x\n", flip, &framebuf[flip]);
     screen.draw_all(&framebuf[flip]);
     fps = animations.update(&framebuf[flip]);
     drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
