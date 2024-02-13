@@ -281,7 +281,7 @@ class Display {
         int sprsize[2] = { _sprwidth, _sprheight };
         Serial.printf("  multi purpose panel init.. ");
         lcd.setColorDepth(8);
-        for (int i = 0; i <= 1; i++) framebuf[i].setColorDepth(sprite_color_depth);  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
+        for (int i = 0; i <= 1; i++) framebuf[i].setColorDepth(8);  // color_depth_t::rgb332_1Byte = 8  Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
         auto framewidth = sprsize[HORZ];
         auto frameheight = sprsize[VERT];
         bool fail = false;
@@ -383,14 +383,25 @@ class Display {
         screensaver = false;
     }
     void blackout(LGFX_Sprite* spr) {
-        // for (int x = 0; x<disp_width_pix; x+=10)
-        //     for (int y = 0; y<disp_height_pix; y+=10) {
-        //         spr->pushImage(x, y, 10, 10, black, BLK);
-        //         Serial.printf("black x%d y%d\n", x, y);
-
-        //     }
-        spr->fillRoundRect(0, 0, disp_width_pix, disp_height_pix, 1, BLK);  // Black out the whole screen        
-        // // spr->fillSprite(BLK);
+        // from lgfx docs:
+        // You can fill the entire screen using clear or fillScreen.
+        // fillScreen behaves the same as specifying the entire screen with fillRect, and the color specified is treated as the drawing color.
+        // lcd.fillScreen(0xFFFFFFu);  // Fill with white
+        // lcd.setColor(0x00FF00u);    // Set drawing color to green
+        // lcd.fillScreen();           // Fill with green
+        //
+        // clear is separate from drawing functions and holds the color as a background color.
+        // Background color is rarely used, but it is also used as the color to fill gaps when scrolling function is used.
+        // lcd.clear(0xFFFFFFu);       // Fill with white as the background color
+        // lcd.setBaseColor(0x000000u);// Set black as the background color
+        // lcd.clear();                // Fill with black
+        //
+        // When using int8_t and uint8_t types, they are treated as 8-bit RGB332.
+        // uint8_t blue = 0x03;
+        // lcd.fillRect(20, 20, 20, 20, (uint8_t)0xE0);  // 赤で矩形の塗りを描画
+        // lcd.fillRect(30, 30, 20, 20, (uint8_t)0x1C);  // 緑で矩形の塗りを描画
+        // lcd.fillRect(40, 40, 20, 20, blue);           // 青で矩形の塗りを描画
+        spr->fillRect(0, 0, disp_width_pix, disp_height_pix, BLK);  // Black out the whole screen        
         // Serial.printf("blackout@ 0x%08x\n", spr);
         // // std::uint32_t* s32 = (std::uint32_t*)spr->getBuffer();
         // // for (int i=0; i=(sizeof(*spr)); i++) spr[i] = 0;
@@ -703,8 +714,9 @@ class Display {
                 sprptr->drawPixel(x + xo + 1, y + yo + 1, ((idiots->icon[i][xo] >> yo) & 1) ? color : bg);
     }
     void draw_idiotlight(int32_t i, int32_t x, int32_t y) {
+        if (!idiots->val(i)) sprptr->fillRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, BLK);  // erase rectangle when turning off. need to test if this is necessary
         if (idiots->icon[i][0] == 0xff) {  // 0xff in the first byte will draw 2-letter string instead of bitmap
-            sprptr->fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, (idiots->val(i)) ? idiots->color[ON][i] : BLK);  // MGRY);
+            sprptr->fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, (idiots->val(i)) ? idiots->color[ON][i] : BLK);
             sprptr->setTextColor(idiots->val(i) ? BLK : idiots->color[OFF][i]);  // darken_color((*(idiots->lights[index])) ? BLK : DGRY)
             sprptr->setCursor(x+1, y+1);
             sprptr->print(idiots->letters[i].c_str());
