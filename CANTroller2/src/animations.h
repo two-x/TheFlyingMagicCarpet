@@ -521,7 +521,7 @@ class AnimationManager {
             return;
         }
         spr->setTextDatum(textdatum_t::middle_center);
-        spr->setFont(&fonts::Font2);
+        // spr->setFont(&fonts::Font2);
         for (int32_t row = 0; row < arraysize(simgrid); row++) {
             for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
                 int32_t cntr_x = touch_cell_h_pix*col + (touch_cell_h_pix>>1) + 2 + vp.x - 5;
@@ -599,19 +599,19 @@ class AnimationManager {
     int touch_pt(int axis) {
         return touchp[axis];
     }
-    void blackout(LGFX_Sprite* spr) {
-        for (int x = 0; x<disp_width_pix; x+=10)
-            for (int y = 0; y<disp_height_pix; y+=10) {
-                spr->pushImage(x, y, 10, 10, black, BLK);
-                Serial.printf("black x%d y%d\n", x, y);
+    // void blackout(LGFX_Sprite* spr) {
+    //     for (int x = 0; x<disp_width_pix; x+=10)
+    //         for (int y = 0; y<disp_height_pix; y+=10) {
+    //             spr->pushImage(x, y, 10, 10, black, BLK);
+    //             Serial.printf("black x%d y%d\n", x, y);
 
-            }
+    //         }
         // spr->fillRect(0, 0, disp_width_pix, disp_height_pix, BLK);  // Black out the whole screen        
         // spr->fillSprite(BLK);
-        Serial.printf("blackout@ 0x%08x\n", spr);
+        // Serial.printf("blackout@ 0x%08x\n", spr);
         // std::uint32_t* s32 = (std::uint32_t*)spr->getBuffer();
         // for (int i=0; i=(sizeof(*spr)); i++) spr[i] = 0;
-    }
+    // }
 };
 // class DiagConsole {
 //   private:

@@ -987,7 +987,7 @@ class Tuner {
             if (encoder_sw_action == swSHORT)  {  // if short press
                 if (tunctrl == EDIT) tunctrl = SELECT;  // If we were editing a value drop back to select mode
                 else if (tunctrl == SELECT) tunctrl = EDIT;  // If we were selecting a variable start editing its value
-                else if (button_test_heartbeat_color) heartbeat_override_color = random(0x10000);  // temporary!! to test heartbeat color override feature
+                else if (button_test_heartbeat_color) heartbeat_override_color = rando_color();  // temporary!! to test heartbeat color override feature
             }
             else tunctrl = (tunctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
         }

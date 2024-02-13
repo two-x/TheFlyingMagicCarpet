@@ -52,7 +52,11 @@ void loop() {                 // code takes about 1 ms to loop on average
     ignition_panic_update();  // manage panic stop condition and drive ignition signal as needed
     bootbutton.update();      // read the builtin button
     if (bootbutton.longpress()) screen.auto_saver(!auto_saver_enabled);
-    if (bootbutton.shortpress() && auto_saver_enabled) animations.change_saver();
+    if (bootbutton.shortpress()) {
+        if (auto_saver_enabled) animations.change_saver();
+        else if (sim.enabled()) sim.disable();
+        else sim.enable();
+    }
     basicsw_update();         // see if basic mode switch got hit
     starter_update();         // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
     encoder.update();         // read encoder input signals  // 20 us per loop
@@ -76,10 +80,8 @@ void loop() {                 // code takes about 1 ms to loop on average
     tuner.update(run.mode);   // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
     diag.update();            // notice any screwy conditions or suspicious shenanigans - consistent 200us
     neo.update(colorcard[run.mode]);  // ~100us
-    // if (!read_pin(boot_sw_pin)) 
     screen.update(run.mode);  // Display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
     // sdcard.update();
     lightbox.update(run.mode, speedo.human());  // communicate any relevant data to the lighting controller
     looptimer.update();       // looptimer.mark("F");
-    // delayMicroseconds(100);
 }
