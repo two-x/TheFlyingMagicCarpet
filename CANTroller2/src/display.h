@@ -207,16 +207,12 @@ volatile bool reset_request = false;
 volatile bool pushtime = 0;
 volatile bool drawn = false;
 volatile bool pushed = true;
-
 #ifdef VIDEO_TASKS
 SemaphoreHandle_t push_time = NULL;
 SemaphoreHandle_t draw_time = NULL;
 static void push_task_wrapper(void *parameter);
 static void draw_task_wrapper(void *parameter);
 #endif
-void push_task();
-void draw_task();
-void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref);
 volatile bool _procrastinate = false;
 volatile bool reset_finished = false;
 volatile bool simulating_last;
@@ -471,26 +467,27 @@ class Display {
     void draw_fixed(int32_t page, int32_t page_last, bool redraw_all, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
         sprptr->setTextColor(LGRY);
         sprptr->setTextSize(1);
-        int32_t y_pos;
-        for (int32_t lineno = 0; lineno < disp_fixed_lines; lineno++)  {  // Step thru lines of fixed telemetry data
-            y_pos = (lineno + 1) * disp_line_height_pix + disp_vshift_pix;
-            draw_string(disp_datapage_names_x, disp_datapage_names_x, y_pos, telemetry[lineno], nulstr, LGRY, BLK, forced);
-            draw_string_units(disp_datapage_units_x, y_pos, units[lineno], nulstr, LGRY, BLK);
-            disp_bargraphs[lineno] = false;
-            // draw_bargraph_base(disp_bargraphs_x, y_pos + 7, disp_bargraph_width);
-        }
+        int y_pos;
         if (redraw_all) {
-            for (int32_t lineno=0; lineno < disp_tuning_lines; lineno++)  {  // Step thru lines of dataset page data
-                draw_string(disp_datapage_names_x, disp_datapage_names_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, datapage_names[page][lineno], datapage_names[page_last][lineno], LGRY, BLK, forced);
-                draw_string_units(disp_datapage_units_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], LGRY, BLK);
-                int32_t corner_y = (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix + 7;  // lineno*disp_line_height_pix+disp_vshift_pix-1;
-                // draw_bargraph_base(disp_bargraphs_x, corner_y, disp_bargraph_width);
-                disp_age_quanta[lineno + disp_fixed_lines + 1] = 0;
-                dispAgeTimer[lineno + disp_fixed_lines + 1].reset();
-                disp_data_dirty[lineno + disp_fixed_lines + 1] = true;
-                sprptr->fillRect(disp_bargraphs_x-1, (lineno + disp_fixed_lines + 1) * disp_line_height_pix, disp_bargraph_width + 2, 4, BLK);
-                if (disp_needles[lineno] >= 0) draw_bargraph_needle(-1, disp_needles[lineno], corner_y - 6, BLK);  // Let's draw a needle
+            for (int32_t lineno = 0; lineno < disp_fixed_lines; lineno++)  {  // Step thru lines of fixed telemetry data
+                y_pos = (lineno + 1) * disp_line_height_pix + disp_vshift_pix;
+                draw_string(disp_datapage_names_x, disp_datapage_names_x, y_pos, telemetry[lineno], nulstr, LGRY, BLK, forced);
+                draw_string_units(disp_datapage_units_x, y_pos, units[lineno], nulstr, LGRY, BLK);
+                disp_bargraphs[lineno] = false;
+                // draw_bargraph_base(disp_bargraphs_x, y_pos + 7, disp_bargraph_width);
             }
+        }
+        for (int32_t lineno=0; lineno < disp_tuning_lines; lineno++)  {  // Step thru lines of dataset page data
+            y_pos = (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix;
+            draw_string(disp_datapage_names_x, disp_datapage_names_x, y_pos, datapage_names[page][lineno], datapage_names[page_last][lineno], LGRY, BLK, forced);
+            draw_string_units(disp_datapage_units_x, y_pos, tuneunits[page][lineno], tuneunits[page_last][lineno], LGRY, BLK);
+            int32_t corner_y = y_pos + 7;  // lineno*disp_line_height_pix+disp_vshift_pix-1;
+            // draw_bargraph_base(disp_bargraphs_x, corner_y, disp_bargraph_width);
+            disp_age_quanta[lineno] = 0;
+            dispAgeTimer[lineno].reset();
+            disp_data_dirty[lineno] = true;
+            sprptr->fillRect(disp_bargraphs_x-1, lineno * disp_line_height_pix, disp_bargraph_width + 2, 4, BLK);
+            if (disp_needles[lineno] >= 0) draw_bargraph_needle(-1, disp_needles[lineno], corner_y - 6, BLK);  // Let's draw a needle
         }
     }
     void draw_hyphen(int32_t x_pos, int32_t y_pos, uint8_t color) {  // Draw minus sign in front of negative numbers
