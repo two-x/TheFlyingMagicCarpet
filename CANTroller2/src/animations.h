@@ -260,7 +260,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     int eraser_velo[2] = {rn(eraser_velo_max), rn(eraser_velo_max)}, shapes_per_run = 5, shapes_done = 0;
     uint8_t wclast, pencolor = RED;
     float pensat = 200.0;
-    uint16_t spothue = 65535, slowhue = 0, penhue;
+    uint16_t spothue = 65535, jumphue_next, jumphue_last = rn(65535), jumphue, slowhue = 0, penhue;
     int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 200, shape = rn(Rotate);
     static constexpr uint32_t saver_cycletime_us = 18000000;
     Timer saverCycleTimer, pentimer = Timer(1500000), lucktimer, seasontimer;
@@ -440,7 +440,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         if (lucktimer.expired())  {
             saver_lotto = !saver_lotto;
-            lucktimer.set(3200000 + !saver_lotto * (5 + rn(50)) * 4000000);
+            lucktimer.set(3200000 + !saver_lotto * (5 + rn(150)) * 4000000);
         } 
         if (saver_lotto) {
             sprite->setTextDatum(textdatum_t::middle_center);
@@ -553,17 +553,18 @@ class AnimationManager {
         fps_mark = now;
     }
     float update(LGFX_Sprite* spr) {
-        spr->setClipRect(vp.x, vp.y, vp.w, vp.h);
         if (!screensaver_last && screensaver) change_saver();  // ptrsaver->reset();
         else if (screensaver_last && !screensaver) spr->fillSprite(BLK);
         screensaver_last = screensaver;
         if (anim_reset_request) reset();
         if (screensaver) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
+            spr->setClipRect(vp.x, vp.y, vp.w, vp.h);
             mule_drawn = false;  // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
             if (nowsaver == Eraser) still_running = eSaver.update(spr, &vp);
             else if (nowsaver == Collisions) still_running = cSaver.update(spr, &vp);
             if (touched()) eSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
             if (!still_running) change_saver();
+            spr->clearClipRect();
         }
         else if (!mule_drawn) {
             spr->fillSprite(BLK);
@@ -579,7 +580,6 @@ class AnimationManager {
         }
         simulating_last = sim->enabled();
         calc_fps();
-        spr->clearClipRect();
         return myfps;
     }
     void stop() {

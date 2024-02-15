@@ -485,6 +485,9 @@ class Display {
                 draw_string_units(disp_datapage_units_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], LGRY, BLK);
                 int32_t corner_y = (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix + 7;  // lineno*disp_line_height_pix+disp_vshift_pix-1;
                 // draw_bargraph_base(disp_bargraphs_x, corner_y, disp_bargraph_width);
+                disp_age_quanta[lineno + disp_fixed_lines + 1] = 0;
+                dispAgeTimer[lineno + disp_fixed_lines + 1].reset();
+                disp_data_dirty[lineno + disp_fixed_lines + 1] = true;
                 sprptr->fillRect(disp_bargraphs_x-1, (lineno + disp_fixed_lines + 1) * disp_line_height_pix, disp_bargraph_width + 2, 4, BLK);
                 if (disp_needles[lineno] >= 0) draw_bargraph_needle(-1, disp_needles[lineno], corner_y - 6, BLK);  // Let's draw a needle
             }
@@ -648,10 +651,12 @@ class Display {
         sprptr->setCursor(disp_runmode_text_x, disp_vshift_pix);
         sprptr->print(modecard[_nowmode].c_str());
         sprptr->print(" Mode");
+        disp_runmode_dirty = false;
     }
     void draw_datapage(int32_t page, int32_t page_last, bool forced=false) {
         draw_fixed(page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
         draw_string(disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
+        disp_datapage_dirty = false;
     }
     void draw_selected_name(int32_t tun_ctrl, int32_t selected_val, int32_t selected_last, int32_t selected_last_last) {
         for (int i = 0; i < disp_tuning_lines; i++)
@@ -659,6 +664,7 @@ class Display {
         // if (selected_val != selected_last) draw_string(12, 12, 12+(selected_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_last], nulstr, LGRY, BLK, true);
         // if (selected_val != selected_last_last) draw_string(12, 12, 12+(selected_last_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_last_last], nulstr, LGRY, BLK, true);
         draw_string(12, 12, 12+(selected_val+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_val], nulstr, (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : LGRY), BLK, true);
+        disp_selected_val_dirty = false;
     }
     void draw_bool(bool value, int32_t col, bool force=false) {  // Draws values of boolean data
         if ((disp_bool_values[col-2] != value) || force) {  // If value differs, Erase old value and write new
@@ -692,6 +698,7 @@ class Display {
                 sprptr->drawRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // sprptr->width()-9, 3, 18, (sprptr->height()/5)-6, 8, LYEL);
             }
         }
+        disp_sidemenu_dirty = false;
     }
     void draw_reticle(LGFX_Sprite* spr, uint32_t x, uint32_t y) {
         spr->drawFastHLine(x - 2, y, 5, DGRY);
@@ -746,6 +753,7 @@ class Display {
             }
         }
         if (display_enabled) draw_idiotlights(idiots_corner_x, idiots_corner_y, force);
+        disp_idiots_dirty = false;
     }
   public:
     void update(int _nowmode = -1) {
@@ -762,9 +770,10 @@ class Display {
         fullscreen_last = fullscreen_screensaver_test;
         #ifndef VIDEO_TASKS
         if (is_drawing || is_pushing) return;
-        if (pushtime) {
+        if (pushtime || !alternate_draw_push) {
             if (screenRefreshTimer.expired() || screensaver_max_refresh || fullscreen_screensaver_test) {
                 screenRefreshTimer.reset();
+                if (!alternate_draw_push) draw_task();
                 push_task();
                 pushclock = (int32_t)screenRefreshTimer.elapsed();
             }   
@@ -781,30 +790,16 @@ class Display {
         if (fullscreen_screensaver_test || auto_saver_enabled) return false;
         tiny_text();
         update_idiots(disp_idiots_dirty);
-        disp_idiots_dirty = false;
         if (!display_enabled) return false;
         if (disp_datapage_dirty) {
-            for (int i = disp_fixed_lines; i < disp_lines; i++) {
-                disp_age_quanta[i] = 0;
-                dispAgeTimer[i].reset();
-                disp_data_dirty[i] = true;
-            }
             draw_datapage(datapage, datapage_last, true);
-            disp_datapage_dirty = false;
             if (datapage_last != datapage) prefs.putUInt("dpage", datapage);
         }
-        if (disp_sidemenu_dirty) {
-            draw_touchgrid(false);
-            disp_sidemenu_dirty = false;
-        }
-        if (disp_selected_val_dirty) {
-            draw_selected_name(tunctrl, sel_val, sel_val_last, sel_val_last_last);
-            disp_selected_val_dirty = false;
-        }
+        if (disp_sidemenu_dirty) draw_touchgrid(false);
+        if (disp_selected_val_dirty) draw_selected_name(tunctrl, sel_val, sel_val_last, sel_val_last_last);
         if (disp_runmode_dirty) {
             draw_runmode(nowmode, disp_oldmode, NON);
             disp_oldmode = nowmode;
-            disp_runmode_dirty = false;
         }
         if (valuesRefreshTimer.expireset() || disp_values_dirty) {
             float drange;
@@ -955,12 +950,12 @@ class Display {
                 draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
                 draw_truth(19, screensaver, 0);
             }
+            disp_values_dirty = false;
             draw_bool((nowmode == CAL), 2, disp_bools_dirty);
             draw_bool((nowmode == BASIC), 3, disp_bools_dirty);
             draw_bool(ignition, 4, disp_bools_dirty);
             draw_bool(syspower, 5, disp_bools_dirty);
             disp_bools_dirty = false;
-            disp_values_dirty = false;
         }
         return true;
     }

@@ -2,10 +2,10 @@
 #include <Arduino.h>
 #include <FS.h>
 #include <LittleFS.h>
-#include <FFat.h>
+// #include <FFat.h>
 #include <WiFi.h>  // "Wifi.h"
 #include <ESPAsyncWebServer.h>  // To run wifi in Soft Access Point (SAP) mode (standalone w/o router)
-#include <ESPmDNS.h>
+// #include <ESPmDNS.h>
 #include <WebSocketsServer.h>
 #include <ArduinoJson.h>  // <AsyncJson.h>  // "json.h"  needed for JSON encapsulation (send multiple variables with one string)
 #include <ElegantOTA.h>  // includes <AsyncTCP.h>
@@ -104,6 +104,68 @@ class AccessPoint {
     const char* appassword = "checkmate";
     const char* ssid = "";  // non-ap mode need real credentials here, but we don't want this in github
     const char* password = "";  // non-ap mode need real credentials here, but we don't want this in github
+    void wifi_scan() {
+        Serial.println("Wifi scanning.. ");
+        // WiFi.scanNetworks will return the number of networks found.
+        int n = WiFi.scanNetworks();
+        Serial.print("done. ");
+        if (n == 0) {
+            Serial.println("no networks found");
+        } else {
+            Serial.print(n);
+            Serial.println(" networks found");
+            Serial.println("Nr | SSID                             | RSSI | CH | Encryption");
+            for (int i = 0; i < n; ++i) {
+                // Print SSID and RSSI for each network found
+                Serial.printf("%2d",i + 1);
+                Serial.print(" | ");
+                Serial.printf("%-32.32s", WiFi.SSID(i).c_str());
+                Serial.print(" | ");
+                Serial.printf("%4d", WiFi.RSSI(i));
+                Serial.print(" | ");
+                Serial.printf("%2d", WiFi.channel(i));
+                Serial.print(" | ");
+                switch (WiFi.encryptionType(i))
+                {
+                case WIFI_AUTH_OPEN:
+                    Serial.print("open");
+                    break;
+                case WIFI_AUTH_WEP:
+                    Serial.print("WEP");
+                    break;
+                case WIFI_AUTH_WPA_PSK:
+                    Serial.print("WPA");
+                    break;
+                case WIFI_AUTH_WPA2_PSK:
+                    Serial.print("WPA2");
+                    break;
+                case WIFI_AUTH_WPA_WPA2_PSK:
+                    Serial.print("WPA+WPA2");
+                    break;
+                case WIFI_AUTH_WPA2_ENTERPRISE:
+                    Serial.print("WPA2-EAP");
+                    break;
+                case WIFI_AUTH_WPA3_PSK:
+                    Serial.print("WPA3");
+                    break;
+                case WIFI_AUTH_WPA2_WPA3_PSK:
+                    Serial.print("WPA2+WPA3");
+                    break;
+                case WIFI_AUTH_WAPI_PSK:
+                    Serial.print("WAPI");
+                    break;
+                default:
+                    Serial.print("unknown");
+                }
+                Serial.println();
+                delay(10);
+            }
+        }
+        Serial.println("");
+
+        // Delete the scan result to free memory for code below.
+        WiFi.scanDelete();
+    }
     void connect_existing_wifi() {
         printf("connecting to %s", ssid);
         primarydns = IPAddress(8, 8, 8, 8);
@@ -120,16 +182,25 @@ class AccessPoint {
     }
   public:
     AccessPoint() : localip(192,168,1,69), gateway(192,168,1,5), subnet(255,255,255,0) {}
-    void setup() {
-        Serial.printf("Wifi access point.. ");
+    void setup(bool wifi_client_mode = false) {
+        Serial.printf("Wifi.. ");
         WiFi.disconnect();  // in case already connected to another wifi as client or something
-        WiFi.mode(WIFI_STA);
-        WiFi.persistent(false);  // Don't store wifi config in eeprom, b/c it can get stuck there
-        WiFi.setSleep(false);  // ensure server is awake for accessibility
-        WiFi.softAPConfig(localip, gateway, subnet);
-        WiFi.softAP(apssid, appassword);
-        Serial.printf("active. ssid:%s, pwd:%s, ip:", apssid, appassword);
-        Serial.println(WiFi.softAPIP());
+        if (!wifi_client_mode) {
+            Serial.printf("starting access point\n");
+            WiFi.mode(WIFI_STA);
+            WiFi.persistent(false);  // Don't store wifi config in eeprom, b/c it can get stuck there
+            WiFi.setSleep(false);  // ensure server is awake for accessibility
+            WiFi.softAPConfig(localip, gateway, subnet);
+            WiFi.softAP(apssid, appassword);
+            Serial.printf("active. ssid:%s, pwd:%s, ip:", apssid, appassword);
+            Serial.println(WiFi.softAPIP());
+        }
+        else {
+            connect_existing_wifi();
+        }
+        Serial.printf("");
+
+
         // std::cout << "ip = " << WiFi.softAPIP() << std::endl;
         // printf(" ip = %s\n", my_ip.c_str());
     }
@@ -198,7 +269,7 @@ class WebManager {
     Web server;
     WebManager(LoopTimer* _lt) : looptimer(_lt) {}
     void setup() {
-        wifi.setup();
+        wifi.setup(wifi_client_mode);
         fs.setup();
         server.setup(looptimer);
         web_started = true;

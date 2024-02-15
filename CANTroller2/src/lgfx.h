@@ -66,7 +66,7 @@ class LGFX : public lgfx::LGFX_Device {
             cfg.dummy_read_pixel =     8;  // Number of dummy read bits before pixel readout
             cfg.dummy_read_bits  =     1;  // Number of bits for dummy read before reading data other than pixels
             cfg.readable         =  true;  // Set to true if data reading is possible            
-            cfg.invert      = (captouch);  // Set to true if the brightness and darkness of the panel is reversed.
+            cfg.invert      = (captouch || !running_on_devboard);  // Set to true if the brightness and darkness of the panel is reversed.
             cfg.dlen_16bit       = false;  // Set to true for panels that transmit data length in 16-bit units using 16-bit parallel or SPI.
             cfg.bus_shared       =  true;  // Set to true when sharing the bus with the SD card (control the bus using drawJpgFile, etc.)
             // Please set the following only if the display is misaligned with a variable pixel number driver such as ST7735 or ILI9163.
@@ -100,7 +100,7 @@ class LGFX : public lgfx::LGFX_Device {
             cfg.pin_int  = touch_irq_pin;      // INT pin number
             cfg.offset_rotation = 2;  // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
             cfg.bus_shared = true;    // Set true if using the same bus as the screen
-            cfg.spi_host = SPI2_HOST; // VSPI_HOST (doesn't recognize?) Select the SPI to use (HSPI_HOST or VSPI_HOST)
+            cfg.spi_host = SPI2_HOST; // VSPI_HOST (now SPI2_HOST) Select the SPI to use (HSPI_HOST or VSPI_HOST)
             cfg.freq = 1000000;       // Set SPI clock
             cfg.pin_sclk = spi_sclk_pin;        // SCLK pin number
             cfg.pin_mosi = spi_mosi_pin;        // MOSI pin number
