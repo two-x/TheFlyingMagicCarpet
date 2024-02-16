@@ -401,7 +401,7 @@ class Display {
         // lcd.fillRect(20, 20, 20, 20, (uint8_t)0xE0);  // 赤で矩形の塗りを描画
         // lcd.fillRect(30, 30, 20, 20, (uint8_t)0x1C);  // 緑で矩形の塗りを描画
         // lcd.fillRect(40, 40, 20, 20, blue);           // 青で矩形の塗りを描画
-        spr->fillRect(0, 0, disp_width_pix, disp_height_pix, BLK);  // Black out the whole screen        
+        sprptr->fillRect(0, 0, disp_width_pix, disp_height_pix, BLK);  // Black out the whole screen        
         // Serial.printf("blackout@ 0x%08x\n", spr);
         // // std::uint32_t* s32 = (std::uint32_t*)spr->getBuffer();
         // // for (int i=0; i=(sizeof(*spr)); i++) spr[i] = 0;
@@ -759,11 +759,11 @@ class Display {
             reset_request = true;
             screensaver = false;
         }
-        fullscreen_last = fullscreen_screensaver_test;
+        fullscreen_last = fullscreen_screensaver_test || auto_saver_enabled;
         #ifndef VIDEO_TASKS
         if (is_drawing || is_pushing) return;
         if (pushtime) {
-            if (screenRefreshTimer.expired() || screensaver_max_refresh || fullscreen_screensaver_test) {
+            if (screenRefreshTimer.expired() || screensaver_max_refresh || fullscreen_screensaver_test || auto_saver_enabled) {
                 screenRefreshTimer.reset();
                 push_task();
                 pushclock = (int32_t)screenRefreshTimer.elapsed();
