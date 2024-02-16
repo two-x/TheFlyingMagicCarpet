@@ -315,7 +315,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         if (saverCycleTimer.expired()) {
             ++cycle %= num_cycles;
             if (cycle == 0) change_pattern(-1);
-            saverCycleTimer.set(saver_cycletime_us / ((cycle == 2) ? 5 : 1));
+            saverCycleTimer.set(((shape == Worm) ? 2 : 1) * saver_cycletime_us / ((cycle == 2) ? 5 : 1));
         }
         if (seasontimer.expireset()) {
             ++season %= numseasons;
@@ -474,7 +474,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         if (lucktimer.expired())  {
             saver_lotto = !saver_lotto;
-            lucktimer.set(3200000 + !saver_lotto * (5 + rn(150)) * 4000000);
+            lucktimer.set(3200000 + !saver_lotto * (5 + rn(350)) * 4000000);
         } 
         if (saver_lotto) {
             sprite->setTextDatum(textdatum_t::middle_center);

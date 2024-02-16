@@ -342,7 +342,7 @@ class Display {
         else reset_request = true;
         #ifdef VIDEO_TASKS
         init_tasks();
-        delayMicroseconds(500);
+        // delayMicroseconds(500);
         // xSemaphoreGive(drawtime);
         #else
         update();
@@ -354,10 +354,12 @@ class Display {
         blackout(spr);
         // draw_touchgrid(false);
         // draw_fixed(datapage, datapage_last, true, true);
-        draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
+        // draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
         // draw_runmode(nowmode, disp_oldmode, NON);
         // draw_datapage(datapage, datapage_last, true);
+        // draw_fixed(datapage, datapage_last, true, true);  // Erase and redraw dynamic data corner of screen with names, units etc.
         all_dirty();
+        // draw_all(spr);
         animations.reset();
         reset_request = false;
     }
@@ -423,9 +425,9 @@ class Display {
         else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
     }
   private:
-    void draw_bargraph_base(int32_t corner_x, int32_t corner_y, int32_t width) {  // draws a horizontal bargraph scale.  124, y, 40
-        sprptr->drawFastHLine(corner_x+disp_bargraph_squeeze, corner_y, width-disp_bargraph_squeeze*2, (uint8_t)MGRY);
-        for (int32_t offset=0; offset<=2; offset++) sprptr->drawFastVLine((corner_x+disp_bargraph_squeeze)+offset*(width/2 - disp_bargraph_squeeze), corner_y-1, 3, (uint8_t)WHT);
+    void draw_bargraph_base(int32_t corner_x, int32_t corner_y, int32_t width, bool delete_it=false) {  // draws a horizontal bargraph scale.  124, y, 40
+        sprptr->drawFastHLine(corner_x+disp_bargraph_squeeze, corner_y, width-disp_bargraph_squeeze*2, delete_it ? BLK : MGRY);
+        for (int32_t offset=0; offset<=2; offset++) sprptr->drawFastVLine((corner_x+disp_bargraph_squeeze)+offset*(width/2 - disp_bargraph_squeeze), corner_y-1, 3, delete_it ? BLK : WHT);
     }
     void draw_needle_shape(int32_t pos_x, int32_t pos_y, uint8_t color) {  // draws a cute little pointy needle
         sprptr->drawFastVLine(pos_x-1, pos_y, 2, color);
@@ -437,8 +439,9 @@ class Display {
         sprptr->drawFastVLine(pos_x, pos_y, 4, t_color);
     }
     void draw_bargraph_needle(int32_t n_pos_x, int32_t old_n_pos_x, int32_t pos_y, uint8_t n_color) {  // draws a cute little pointy needle
-        draw_needle_shape(old_n_pos_x, pos_y, BLK);
-        draw_needle_shape(n_pos_x, pos_y, n_color);
+        // draw_needle_shape(old_n_pos_x, pos_y, BLK);
+        sprptr->fillRect(old_n_pos_x - 1, pos_y, 3, 4, BLK);
+        if (n_pos_x != 1234567) draw_needle_shape(n_pos_x, pos_y, n_color);
     }
     void draw_string(int32_t x_new, int32_t x_old, int32_t y, std::string text, std::string oldtext, uint8_t color, uint8_t bgcolor, bool forced=false) {  // Send in "" for oldtext if erase isn't needed
         if ((text == oldtext) && !forced) return; 
@@ -464,16 +467,16 @@ class Display {
         sprptr->print(text.c_str());
     }
     // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
-    void draw_fixed(int32_t page, int32_t page_last, bool redraw_all, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
+    void draw_fixed(int32_t page, int32_t page_last, bool draw_all, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
         sprptr->setTextColor(LGRY);
         sprptr->setTextSize(1);
         int y_pos;
-        if (redraw_all) {
+        if (draw_all) {
             for (int32_t lineno = 0; lineno < disp_fixed_lines; lineno++)  {  // Step thru lines of fixed telemetry data
                 y_pos = (lineno + 1) * disp_line_height_pix + disp_vshift_pix;
                 draw_string(disp_datapage_names_x, disp_datapage_names_x, y_pos, telemetry[lineno], nulstr, LGRY, BLK, forced);
                 draw_string_units(disp_datapage_units_x, y_pos, units[lineno], nulstr, LGRY, BLK);
-                disp_bargraphs[lineno] = false;
+                // disp_bargraphs[lineno] = false;
                 // draw_bargraph_base(disp_bargraphs_x, y_pos + 7, disp_bargraph_width);
             }
         }
@@ -481,13 +484,13 @@ class Display {
             y_pos = (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix;
             draw_string(disp_datapage_names_x, disp_datapage_names_x, y_pos, datapage_names[page][lineno], datapage_names[page_last][lineno], LGRY, BLK, forced);
             draw_string_units(disp_datapage_units_x, y_pos, tuneunits[page][lineno], tuneunits[page_last][lineno], LGRY, BLK);
-            int32_t corner_y = y_pos + 7;  // lineno*disp_line_height_pix+disp_vshift_pix-1;
+            // int32_t corner_y = y_pos + 7;  // lineno*disp_line_height_pix+disp_vshift_pix-1;
             // draw_bargraph_base(disp_bargraphs_x, corner_y, disp_bargraph_width);
             disp_age_quanta[lineno] = 0;
             dispAgeTimer[lineno].reset();
             disp_data_dirty[lineno] = true;
-            sprptr->fillRect(disp_bargraphs_x-1, lineno * disp_line_height_pix, disp_bargraph_width + 2, 4, BLK);
-            if (disp_needles[lineno] >= 0) draw_bargraph_needle(-1, disp_needles[lineno], corner_y - 6, BLK);  // Let's draw a needle
+            // sprptr->fillRect(disp_bargraphs_x-1, lineno * disp_line_height_pix, disp_bargraph_width + 2, 4, BLK);
+            // if (disp_needles[lineno] >= 0) draw_bargraph_needle(-1, disp_needles[lineno], corner_y - 6, BLK);  // Let's draw a needle
         }
     }
     void draw_hyphen(int32_t x_pos, int32_t y_pos, uint8_t color) {  // Draw minus sign in front of negative numbers
@@ -550,7 +553,10 @@ class Display {
             //     disp_needles[lineno] = -1;  // Flag for no needle
             // }
         if (delete_bargraph || value == 1234567) {
-            sprptr->fillRect(corner_x - 1, corner_y, disp_bargraph_width + 2, disp_line_height_pix, BLK);
+            draw_bargraph_needle(1234567, disp_needles[lineno], lineno*disp_line_height_pix+disp_vshift_pix, BLK);
+            draw_bargraph_base(corner_x, corner_y + 7, disp_bargraph_width, true);
+            // sprptr->fillRect(corner_x, corner_y + 6, disp_bargraph_width, 3, BRN);
+            // disp_needles[lineno] = 1234567;  // Flag for no needle
             disp_bargraphs[lineno] = false;
         }
         disp_data_dirty[lineno] = false;
@@ -651,7 +657,7 @@ class Display {
         disp_runmode_dirty = false;
     }
     void draw_datapage(int32_t page, int32_t page_last, bool forced=false) {
-        draw_fixed(page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
+        draw_fixed(page, page_last, false, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
         draw_string(disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
         disp_datapage_dirty = false;
     }
@@ -954,6 +960,7 @@ class Display {
             draw_bool(syspower, 5, disp_bools_dirty);
             disp_bools_dirty = false;
         }
+        fps = animations.update(spr);
         return true;
     }
     void push_task() {
@@ -973,7 +980,6 @@ class Display {
         int32_t mark = (int32_t)screenRefreshTimer.elapsed();
         // Serial.printf("f%d draw@ 0x%08x\n", flip, &framebuf[flip]);
         draw_all(&framebuf[flip]);
-        fps = animations.update(&framebuf[flip]);
         drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
         idleclock = refresh_limit - pushclock - drawclock;
         is_drawing = false;  // pushed = false;
