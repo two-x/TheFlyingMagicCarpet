@@ -673,8 +673,8 @@ class AnimationManager {
 //     }
 // };
 
-#ifdef CONVERT_IMAGE
-#define IMAGE_ARRAY mulechassis_145x74
+#ifdef CONVERT_IMAGE 
+#define IMAGE_ARRAY mulechassis_145x74 
 #define IMAGE_WIDTH 145
 void convert_565_to_332_image() {
     Serial.printf("const uint8_t %sx8[%ld] PROGMEM = {\n\t", String(IMAGE_ARRAY).c_str(), arraysize(IMAGE_ARRAY));
