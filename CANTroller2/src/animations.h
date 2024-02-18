@@ -614,7 +614,7 @@ class AnimationManager {
             draw_simbuttons(spr, sim->enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
         }
         else if (simulating_last) {
-            spr->fillSprite(BLK);
+            spr->fillRect(vp.x, vp.y, vp.w, vp.h, BLK);
             mule_drawn = false;
         }
         simulating_last = sim->enabled();
