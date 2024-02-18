@@ -315,7 +315,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         if (saverCycleTimer.expired()) {
             ++cycle %= num_cycles;
             if (cycle == 0) change_pattern(-1);
-            saverCycleTimer.set(((shape == Worm) ? 2 : 1) * saver_cycletime_us / ((cycle == 2) ? 5 : 1));
+            saverCycleTimer.set(((shape == Worm) ? 3 : 1) * saver_cycletime_us / ((cycle == 2) ? 5 : 1));
         }
         if (seasontimer.expireset()) {
             ++season %= numseasons;
@@ -433,8 +433,8 @@ class EraserSaver {  // draws colorful patterns to exercise
             else if (rotate == Worm) {
                 has_eraser = saver_lotto = false;
                 lucktimer.reset();
-                uint8_t sat = 64;
-                uint8_t brt = 63 * (1 + season);
+                uint8_t sat = 92;
+                uint8_t brt = 63 + 48 * (1 + season);
                 uint8_t c = hsv_to_rgb<uint8_t>(spothue, sat, brt);
                 int wormposmax[2] = {(vp->w - wormd[HORZ]) / 2, (vp->h - wormd[VERT]) / 2};
                 if (wormmovetimer.expireset()) {
@@ -539,7 +539,7 @@ class AnimationManager {
     void reset() {
         if (nowsaver == Eraser) eSaver.reset(&framebuf[flip], &framebuf[!flip], &vp);
         else if (nowsaver == Collisions) cSaver.reset(&framebuf[flip], &framebuf[!flip], &vp);
-        // anim_reset_request = false;
+        anim_reset_request = false;
     }
     void setup() {
         // int flip = panel->setflip(true);
