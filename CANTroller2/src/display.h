@@ -243,7 +243,8 @@ volatile bool auto_saver_enabled = false;
 LGFX_Sprite* sprptr;
 std::string nulstr = "";
 std::string* nulstrptr = &nulstr;
-void printframebufs(int reduce = 2, bool ascii = false) {  // reduce is how many times to shrink the screen by half (0, 1, 2, 3, or 4)
+
+void printframebufs(int reduce = 2, bool ascii = false) {  // reduce is how many times to shrink the screen by half (0, 1, 2, 3, or 4). ascii=true gives ascii art output
     std::string brites[16] = {" ", ".", ",", ":", ";", "+", "=", ">", "%", "#", "*", "$", "@", "&", "M", "W"};
     int found;
     std::uint8_t* s;
@@ -266,7 +267,6 @@ void printframebufs(int reduce = 2, bool ascii = false) {  // reduce is how many
         Serial.printf("\n");
     }
 }
-
 class Display {
   private:
     NeopixelStrip* neo;
@@ -364,12 +364,10 @@ class Display {
         animations.init(&lcd, sim, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
         animations.setup();
         sprptr = &framebuf[flip];
-        reset_request = false;
-        if (fullscreen_screensaver_test) animations.set_vp(0, 0, disp_width_pix, disp_height_pix);
-        else reset_request = true;
+        reset_request = true;
         #ifdef VIDEO_TASKS
         init_tasks();
-        delayMicroseconds(500);
+        // delayMicroseconds(500);
         // xSemaphoreGive(drawtime);
         #else
         update();
@@ -385,7 +383,7 @@ class Display {
         // draw_runmode(nowmode, disp_oldmode, NON);
         // draw_datapage(datapage, datapage_last, true);
         all_dirty();
-        animations.reset();
+        // animations.reset();
         reset_request = false;
     }
     // uint8_t add_palette(uint8_t color) {
@@ -395,7 +393,10 @@ class Display {
     // }
     void all_dirty() {
         disp_idiots_dirty = true;
-        for (int i=0; i<disp_lines; i++) disp_data_dirty[i] = true;
+        for (int i=0; i<disp_lines; i++) {
+            disp_data_dirty[i] = true;
+            disp_bargraphs[i] = false;
+        }
         disp_bools_dirty = true;
         disp_selected_val_dirty = true;
         disp_datapage_dirty = true;
@@ -461,8 +462,9 @@ class Display {
     }
   private:
     void draw_bargraph_base(int32_t corner_x, int32_t corner_y, int32_t width) {  // draws a horizontal bargraph scale.  124, y, 40
-        sprptr->drawFastHLine(corner_x+disp_bargraph_squeeze, corner_y, width-disp_bargraph_squeeze*2, (uint8_t)MGRY);
-        for (int32_t offset=0; offset<=2; offset++) sprptr->drawFastVLine((corner_x+disp_bargraph_squeeze)+offset*(width/2 - disp_bargraph_squeeze), corner_y-1, 3, (uint8_t)WHT);
+        sprptr->drawFastHLine(corner_x + disp_bargraph_squeeze, corner_y, width - disp_bargraph_squeeze*2, MGRY);  // base line
+        sprptr->drawFastVLine(corner_x + width/2, corner_y-1, 2, WHT);  // centerpoint gradient line
+        for (int32_t offset=0; offset<=2; offset+=2) sprptr->drawFastVLine((corner_x + disp_bargraph_squeeze) + offset * (width/2 - disp_bargraph_squeeze), corner_y-2, 3, WHT);  // endpoint gradient lines
     }
     void draw_needle_shape(int32_t pos_x, int32_t pos_y, uint8_t color) {  // draws a cute little pointy needle
         sprptr->drawFastVLine(pos_x-1, pos_y, 2, color);
@@ -557,7 +559,7 @@ class Display {
             int32_t n_pos = map(value, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
             int32_t ncolor = (n_pos > disp_bargraph_width-disp_bargraph_squeeze || n_pos < disp_bargraph_squeeze) ? RED : GRN;
             n_pos = corner_x + constrain(n_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
-            if (!disp_bargraphs[lineno]) draw_bargraph_base(corner_x, corner_y + 7, disp_bargraph_width);
+            if (!disp_bargraphs[lineno]) draw_bargraph_base(corner_x, corner_y + 8, disp_bargraph_width);
             disp_bargraphs[lineno] = true;
             if (target != -1) {  // If target value is given, draw a target on the bargraph too
                 int32_t t_pos = map(target, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
@@ -681,10 +683,12 @@ class Display {
         sprptr->setCursor(disp_runmode_text_x, disp_vshift_pix);
         sprptr->print(modecard[_nowmode].c_str());
         sprptr->print(" Mode");
+        disp_runmode_dirty = false;
     }
     void draw_datapage(int32_t page, int32_t page_last, bool forced=false) {
         draw_fixed(page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
         draw_string(disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
+        disp_datapage_dirty = false;
     }
     void draw_selected_name(int32_t tun_ctrl, int32_t selected_val, int32_t selected_last, int32_t selected_last_last) {
         for (int i = 0; i < disp_tuning_lines; i++)
@@ -692,6 +696,7 @@ class Display {
         // if (selected_val != selected_last) draw_string(12, 12, 12+(selected_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_last], nulstr, LGRY, BLK, true);
         // if (selected_val != selected_last_last) draw_string(12, 12, 12+(selected_last_last+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_last_last], nulstr, LGRY, BLK, true);
         draw_string(12, 12, 12+(selected_val+disp_fixed_lines)*disp_line_height_pix+disp_vshift_pix, datapage_names[datapage][selected_val], nulstr, (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : LGRY), BLK, true);
+        disp_selected_val_dirty = false;    
     }
     void draw_bool(bool value, int32_t col, bool force=false) {  // Draws values of boolean data
         if ((disp_bool_values[col-2] != value) || force) {  // If value differs, Erase old value and write new
@@ -725,6 +730,7 @@ class Display {
                 sprptr->drawRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // sprptr->width()-9, 3, 18, (sprptr->height()/5)-6, 8, LYEL);
             }
         }
+        disp_sidemenu_dirty = false;
     }
     void draw_reticle(LGFX_Sprite* spr, uint32_t x, uint32_t y) {
         spr->drawFastHLine(x - 2, y, 5, DGRY);
@@ -775,24 +781,15 @@ class Display {
                 diag.most_critical_last[i] = diag.most_critical_sensor[i];
             }
         }
+        disp_idiots_dirty = false;
     }
   public:
     void update(int _nowmode = -1) {
         if (_nowmode >= 0) nowmode = _nowmode;
-        if (fullscreen_screensaver_test || auto_saver_enabled) {
-            if (!fullscreen_last) animations.set_vp(0, 0, disp_width_pix, disp_height_pix);
-            screensaver = true;
-        }
-        else if (fullscreen_last) {
-            animations.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
-            // reset_request = true;
-            screensaver = false;
-        }
-        fullscreen_last = fullscreen_screensaver_test || auto_saver_enabled;
         #ifndef VIDEO_TASKS
         if (is_drawing || is_pushing) return;
         if (pushtime) {
-            if (screenRefreshTimer.expired() || screensaver_max_refresh || fullscreen_screensaver_test || auto_saver_enabled) {
+            if (screenRefreshTimer.expired() || screensaver_max_refresh || auto_saver_enabled) {
                 screenRefreshTimer.reset();
                 push_task();
                 pushclock = (int32_t)screenRefreshTimer.elapsed();
@@ -809,11 +806,10 @@ class Display {
             just_reset = true;
         }
         if (!display_enabled) return false;
-        if (!fullscreen_screensaver_test && !auto_saver_enabled) {
+        if (!auto_saver_enabled) {
             tiny_text();
             update_idiots(disp_idiots_dirty);
             // if (just_reset) printframebufs(3);
-            disp_idiots_dirty = false;
             if (disp_datapage_dirty) {
                 for (int i = disp_fixed_lines; i < disp_lines; i++) {
                     disp_age_quanta[i] = 0;
@@ -821,21 +817,13 @@ class Display {
                     disp_data_dirty[i] = true;
                 }
                 draw_datapage(datapage, datapage_last, true);
-                disp_datapage_dirty = false;
                 if (datapage_last != datapage) prefs.putUInt("dpage", datapage);
             }
-            if (disp_sidemenu_dirty) {
-                draw_touchgrid(false);
-                disp_sidemenu_dirty = false;
-            }
-            if (disp_selected_val_dirty) {
-                draw_selected_name(tunctrl, sel_val, sel_val_last, sel_val_last_last);
-                disp_selected_val_dirty = false;
-            }
+            if (disp_sidemenu_dirty) draw_touchgrid(false);
+            if (disp_selected_val_dirty) draw_selected_name(tunctrl, sel_val, sel_val_last, sel_val_last_last);
             if (disp_runmode_dirty) {
                 draw_runmode(nowmode, disp_oldmode, NON);
                 disp_oldmode = nowmode;
-                disp_runmode_dirty = false;
             }
             if (valuesRefreshTimer.expireset() || disp_values_dirty) {
                 float drange;
@@ -1002,8 +990,10 @@ class Display {
         screenRefreshTimer.reset();
         is_pushing = true;
         // Serial.printf("f%d push@ 0x%08x vs 0x%08x\n", flip, &framebuf[flip], &framebuf[!flip]);
-        Serial.printf("flip=%d\n", flip);
-        printframebufs(2);
+        if (print_framebuffers) {  // warning this *severely* slows everything down, ~.25 sec/loop. consider disabling word wrap in terminal output
+            Serial.printf("flip=%d\n", flip);
+            printframebufs(2);
+        }
         diffpush(&framebuf[flip], &framebuf[!flip]);
         flip = !flip;
         sprptr = &framebuf[flip];
@@ -1066,7 +1056,6 @@ class Display {
         else {
             screensaver = screensaver_max_refresh = auto_saver_enabled = false;
             animations.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
-            animations.anim_reset_request = true;
             reset_request = true;
         }
     }

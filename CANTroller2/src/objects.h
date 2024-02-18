@@ -52,7 +52,6 @@ void initialize_pins() {
     set_pin(uart_tx_pin, INPUT);             // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
     if (!usb_jtag) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // assign stable defined behavior to currently unused pin
     if (!usb_jtag) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // assign stable defined behavior to currently unused pin
-    if (!read_pin(encoder_sw_pin)) fullscreen_screensaver_test = true;
 }
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
     sim.set_can_sim(sens::joy, false);
@@ -70,6 +69,7 @@ void set_board_defaults() {          // true for dev boards, false for printed b
         keep_system_powered = false; // Use true during development
         dont_take_temperatures = false;
         button_test_heartbeat_color = false;
+        print_framebuffers = false;
     }
     printf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
 }

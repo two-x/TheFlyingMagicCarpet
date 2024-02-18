@@ -226,9 +226,9 @@ class CollisionsSaver {
         _width = vp->w << SHIFTSIZE;
         _height = vp->h << SHIFTSIZE;
         LGFX_Sprite* spp[2] = { sp0, sp1 };
+        // spp[0]->fillSprite(BLK);
         for (int i = 0; i <= 1; i++) {
             // spp[i]->setBaseColor(BLK);
-            spp[i]->fillSprite(BLK);
             spp[i]->setTextSize(1);
             spp[i]->setTextDatum(textdatum_t::top_left);
         }
@@ -279,10 +279,10 @@ class EraserSaver {  // draws colorful patterns to exercise
         vp = _vp;
         LGFX_Sprite* spp[2] = { sp0, sp1 };
         shapes_done = cycle = 0;
+        // spp[0]->fillSprite(BLK);
         for (int i = 0; i <= 1; i++) {
             // spp[i]->setBaseColor(BLK);
             spp[i]->setTextSize(1);
-            spp[i]->fillSprite(BLK);
             spp[i]->setTextDatum(textdatum_t::middle_center);
             spp[i]->setTextColor(BLK);
             spp[i]->setCursor(vp->w / 2 + vp->x, vp->h / 2 + vp->y);
@@ -539,7 +539,7 @@ class AnimationManager {
     void reset() {
         if (nowsaver == Eraser) eSaver.reset(&framebuf[flip], &framebuf[!flip], &vp);
         else if (nowsaver == Collisions) cSaver.reset(&framebuf[flip], &framebuf[!flip], &vp);
-        anim_reset_request = false;
+        // anim_reset_request = false;
     }
     void setup() {
         // int flip = panel->setflip(true);
@@ -593,7 +593,7 @@ class AnimationManager {
     }
     float update(LGFX_Sprite* spr) {
         if (!screensaver_last && screensaver) change_saver();  // ptrsaver->reset();
-        else if (screensaver_last && !screensaver) spr->fillSprite(BLK);
+        // else if (screensaver_last && !screensaver) spr->fillSprite(BLK);
         screensaver_last = screensaver;
         if (anim_reset_request) reset();
         spr->setClipRect(vp.x, vp.y, vp.w, vp.h);
@@ -621,11 +621,11 @@ class AnimationManager {
         calc_fps();
         return myfps;
     }
-    void stop() {
-        screensaver = screensaver_max_refresh = false;
-        set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
-        anim_reset_request = true;
-    }
+    // void stop() {
+    //     screensaver = screensaver_max_refresh = false;
+    //     set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
+    //     anim_reset_request = true;
+    // }
     void set_vp(int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
         vp.x = _cornerx;
         vp.y = _cornery;
@@ -634,8 +634,8 @@ class AnimationManager {
     }
     bool touched() {
         if (touch->touched()) {
-                touchp[HORZ] = touch->touch_pt(HORZ) - vp.x;
-                touchp[VERT] = touch->touch_pt(VERT) - vp.y;
+            touchp[HORZ] = touch->touch_pt(HORZ) - vp.x;
+            touchp[VERT] = touch->touch_pt(VERT) - vp.y;
             return true;
         }
         return false;
@@ -643,19 +643,6 @@ class AnimationManager {
     int touch_pt(int axis) {
         return touchp[axis];
     }
-    // void blackout(LGFX_Sprite* spr) {
-    //     for (int x = 0; x<disp_width_pix; x+=10)
-    //         for (int y = 0; y<disp_height_pix; y+=10) {
-    //             spr->pushImage(x, y, 10, 10, black, BLK);
-    //             Serial.printf("black x%d y%d\n", x, y);
-
-    //         }
-        // spr->fillRect(0, 0, disp_width_pix, disp_height_pix, BLK);  // Black out the whole screen        
-        // spr->fillSprite(BLK);
-        // Serial.printf("blackout@ 0x%08x\n", spr);
-        // std::uint32_t* s32 = (std::uint32_t*)spr->getBuffer();
-        // for (int i=0; i=(sizeof(*spr)); i++) spr[i] = 0;
-    // }
 };
 // class DiagConsole {
 //   private:

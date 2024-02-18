@@ -54,8 +54,7 @@ void loop() {                 // code takes about 1 ms to loop on average
     if (bootbutton.longpress()) screen.auto_saver(!auto_saver_enabled);
     if (bootbutton.shortpress()) {
         if (auto_saver_enabled) animations.change_saver();
-        else if (sim.enabled()) sim.disable();
-        else sim.enable();
+        else sim.toggle();
     }
     basicsw_update();         // see if basic mode switch got hit
     starter_update();         // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
