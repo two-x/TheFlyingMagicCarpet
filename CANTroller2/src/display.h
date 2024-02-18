@@ -243,6 +243,29 @@ volatile bool auto_saver_enabled = false;
 LGFX_Sprite* sprptr;
 std::string nulstr = "";
 std::string* nulstrptr = &nulstr;
+void printframebufs(int reduce = 2, bool ascii = false) {  // reduce is how many times to shrink the screen by half (0, 1, 2, 3, or 4)
+    std::string brites[16] = {" ", ".", ",", ":", ";", "+", "=", ">", "%", "#", "*", "$", "@", "&", "M", "W"};
+    int found;
+    std::uint8_t* s;
+    for (int f=0; f<2; f++) {
+        s = (std::uint8_t*)(framebuf[f]).getBuffer();
+        for (int y=0; y<disp_height_pix >> reduce; y++) {
+            Serial.printf("%d ", f);
+            for (int x=0; x<disp_width_pix >> reduce; x++) {
+                found = 0; 
+                for (int sy=0; sy<reduce; sy++) {
+                    for (int sx=0; sx<reduce; sx++) {
+                        if (s[((y << reduce) + sy)*disp_width_pix + (x << reduce) + sx] != 0x00) found++;
+                    }
+                }
+                if (ascii) Serial.printf("%s", brites[(reduce >= 2) ? (found >> (reduce - 2)) : (found << (2 - reduce))].c_str());
+                else Serial.printf("%s", (found > 0) ? "*" : ".");
+            }
+            Serial.printf("\n");
+        }
+        Serial.printf("\n");
+    }
+}
 
 class Display {
   private:
@@ -383,6 +406,15 @@ class Display {
         screensaver = false;
     }
     void blackout(LGFX_Sprite* spr) {
+        std::uint32_t* s;
+        for (int f=0; f<2; f++) {
+            s = (std::uint32_t*)(*spr).getBuffer();
+            for (int w=0; w<(spr->width() * spr->height() / 4); w++) {
+                s[w] = 0x00000000;
+            }
+        }
+        // sprptr->fillRect(0, 0, disp_width_pix, disp_height_pix, BLK);  // Black out the whole screen        
+
         // from lgfx docs:
         // You can fill the entire screen using clear or fillScreen.
         // fillScreen behaves the same as specifying the entire screen with fillRect, and the color specified is treated as the drawing color.
@@ -401,7 +433,8 @@ class Display {
         // lcd.fillRect(20, 20, 20, 20, (uint8_t)0xE0);  // 赤で矩形の塗りを描画
         // lcd.fillRect(30, 30, 20, 20, (uint8_t)0x1C);  // 緑で矩形の塗りを描画
         // lcd.fillRect(40, 40, 20, 20, blue);           // 青で矩形の塗りを描画
-        sprptr->fillRect(0, 0, disp_width_pix, disp_height_pix, BLK);  // Black out the whole screen        
+        // printframebufs(3);
+        // printframebufs(3);
         // Serial.printf("blackout@ 0x%08x\n", spr);
         // // std::uint32_t* s32 = (std::uint32_t*)spr->getBuffer();
         // // for (int i=0; i=(sizeof(*spr)); i++) spr[i] = 0;
@@ -752,7 +785,7 @@ class Display {
         }
         else if (fullscreen_last) {
             animations.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
-            reset_request = true;
+            // reset_request = true;
             screensaver = false;
         }
         fullscreen_last = fullscreen_screensaver_test || auto_saver_enabled;
@@ -770,11 +803,16 @@ class Display {
     }
     bool draw_all(LGFX_Sprite* spr) {
         sprptr = spr;
-        if (reset_request) reset(spr);
+        bool just_reset = false;
+        if (reset_request) {
+            reset(spr);
+            just_reset = true;
+        }
         if (!display_enabled) return false;
         if (!fullscreen_screensaver_test && !auto_saver_enabled) {
             tiny_text();
             update_idiots(disp_idiots_dirty);
+            // if (just_reset) printframebufs(3);
             disp_idiots_dirty = false;
             if (disp_datapage_dirty) {
                 for (int i = disp_fixed_lines; i < disp_lines; i++) {
@@ -964,6 +1002,8 @@ class Display {
         screenRefreshTimer.reset();
         is_pushing = true;
         // Serial.printf("f%d push@ 0x%08x vs 0x%08x\n", flip, &framebuf[flip], &framebuf[!flip]);
+        Serial.printf("flip=%d\n", flip);
+        printframebufs(2);
         diffpush(&framebuf[flip], &framebuf[!flip]);
         flip = !flip;
         sprptr = &framebuf[flip];

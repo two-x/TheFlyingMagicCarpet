@@ -343,11 +343,11 @@ class EraserSaver {  // draws colorful patterns to exercise
                 uint8_t brt = 156 + rn(100);
                 if (season == 1) {
                     wctip = hsv_to_rgb<uint8_t>(hue, 0, brt);
-                    wcball = hsv_to_rgb<uint8_t>(hue, 64, brt);;
+                    wcball = hsv_to_rgb<uint8_t>(hue, 64, brt);
                 }
                 else if (season == 3) {
                     wctip = hsv_to_rgb<uint8_t>(hue, 0, brt);
-                    wcball = hsv_to_rgb<uint8_t>(hue, 64, 0);;
+                    wcball = hsv_to_rgb<uint8_t>(hue, 64, rn(64));
                 }
                 else {
                     wcball = hsv_to_rgb<uint8_t>(hue, 127 + (spothue >> 9), 200 + rn(56));
@@ -431,9 +431,11 @@ class EraserSaver {  // draws colorful patterns to exercise
                 sprite->setFont(&fonts::Font0);
             }
             else if (rotate == Worm) {
-                has_eraser = false;
+                has_eraser = saver_lotto = false;
                 lucktimer.reset();
-                uint8_t c = (uint8_t)spothue;
+                uint8_t sat = 64;
+                uint8_t brt = 63 * (1 + season);
+                uint8_t c = hsv_to_rgb<uint8_t>(spothue, sat, brt);
                 int wormposmax[2] = {(vp->w - wormd[HORZ]) / 2, (vp->h - wormd[VERT]) / 2};
                 if (wormmovetimer.expireset()) {
                     for (int axis = HORZ; axis <= VERT; axis++) {
@@ -453,6 +455,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                         if (wormvel[axis] == 0) wormsign[axis] = (rn(2) << 1) - 1;
                     }
                 }
+                sprite->fillEllipse((vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x, (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y, wormd[HORZ] * scaler, wormd[VERT] * scaler, BLK);
                 sprite->drawEllipse((vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x, (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y, wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
                 sprite->drawEllipse((vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x + 1, (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y, wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
                 sprite->drawEllipse((vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x - 1, (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y, wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
