@@ -3,7 +3,6 @@
 #include "display.h"  // includes neopixel.h, touch.h
 #include "sdcard.h"
 #include "RunModeManager.h"
-#include <esp_task_wdt.h>
 static SdCard sdcard(&lcd);
 static RunModeManager run(&screen, &encoder);
 
@@ -48,17 +47,13 @@ void setup() {
     // xTaskCreate(update_web, "Update Web Services", 4096, NULL, 6, NULL);
     TaskHandle_t webtask = nullptr;
     xTaskCreatePinnedToCore(update_web, "Update Web Services", 4096, NULL, 6, &webtask, CONFIG_ARDUINO_RUNNING_CORE);  // wifi/web task. 2048 is too low, it crashes when client connects  16384
-    Serial.printf("Watchdog timer.. \n");
-    if (watchdog_enabled) esp_task_wdt_init(10, true);  // see https://github.com/espressif/esp-idf/blob/master/examples/system/task_watchdog/main/task_watchdog_example_main.c
-    if (watchdog_enabled) esp_task_wdt_add(NULL);
-    // if (watchdog_enabled) esp_task_wdt_add(temptask);
-    // if (watchdog_enabled) esp_task_wdt_add(webtask);
     printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     looptimer.setup();
+    watchdog.start();
 }
 void loop() {                 // code takes about 1 ms to loop on average
-    if (watchdog_enabled) esp_task_wdt_reset();     // kick the watchdog
+    watchdog.pet();          // kick the watchdog
     ignition_panic_update();  // manage panic stop condition and drive ignition signal as needed
     bootbutton.update();      // read the builtin button
     if (bootbutton.longpress()) screen.auto_saver(!auto_saver_enabled);

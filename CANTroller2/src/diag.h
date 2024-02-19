@@ -1,5 +1,6 @@
 #pragma once
 #include "Arduino.h"
+#include <esp_task_wdt.h>
 #include <iostream>
 #include <iomanip>  // For formatting console loop timing string output
 class DiagRuntime {
@@ -300,6 +301,27 @@ class LoopTimer {
         }
         ++loop_now %= loop_history;
         loopno++;  // I like to count how many loops
+    }
+};
+class Watchdog {
+  private:
+    int timeout_sec = 10;
+  public:
+    Watchdog() {}
+    void start(int sec = -1) {
+        if (sec >= 0) timeout_sec = sec;
+        if (!watchdog_enabled) return;
+        Serial.printf("Watchdog timer.. \n");
+        esp_task_wdt_init(timeout_sec, true);  // see https://github.com/espressif/esp-idf/blob/master/examples/system/task_watchdog/main/task_watchdog_example_main.c
+        esp_task_wdt_add(NULL);
+    }
+    void add(TaskHandle_t taskh) {
+        if (!watchdog_enabled) return;
+        esp_task_wdt_add(taskh);
+    }
+    void pet() {
+        if (!watchdog_enabled) return;
+        esp_task_wdt_reset();
     }
 };
 
