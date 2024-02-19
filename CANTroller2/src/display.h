@@ -1013,7 +1013,9 @@ class Display {
         lcd.endWrite();
     }
     void auto_saver(bool enable) {
+        static bool was_simulating = sim->enabled();
         if (enable) {
+            sim->disable();
             animations.set_vp(0, 0, disp_width_pix, disp_height_pix);
             screensaver_max_refresh = screensaver = auto_saver_enabled = true;
             animations.anim_reset_request = true;
@@ -1022,6 +1024,7 @@ class Display {
             screensaver = screensaver_max_refresh = auto_saver_enabled = false;
             animations.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
             reset_request = true;
+            if (was_simulating) sim->enable();
         }
     }
 };

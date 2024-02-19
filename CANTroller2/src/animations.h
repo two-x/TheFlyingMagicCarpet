@@ -81,7 +81,7 @@ class CollisionsSaver {
     ball_info_t* balls;
     ball_info_t* a;
     LGFX_Sprite* sprite;
-    static constexpr std::uint32_t BALL_MAX = 45;  // 256
+    static constexpr std::uint32_t BALL_MAX = 55;  // 256
     ball_info_t _balls[2][BALL_MAX];
     std::uint32_t _ball_count = 0, _myfps = 0;
     std::uint32_t ball_thismax, ball_count = 0;
@@ -372,10 +372,10 @@ class EraserSaver {  // draws colorful patterns to exercise
                 }
             }
             else if (rotate == Rings) {
-                int d = 8 + rn(45);
+                int d = 6 + rn(45);
                 uint16_t hue = spothue + 32768 * rn(2);
                 uint8_t sat = 255 - ((uint8_t)(spothue >> (7+season)));  // + rn(63) 
-                uint8_t brt = 30 + (30 * season) + rn(226 - 30 * season);
+                uint8_t brt = 80 + (30 * season) + rn(226 - 30 * season);
                 uint8_t c = hsv_to_rgb<uint8_t>(hue, sat, brt);
                 uint8_t c2 = hsv_to_rgb<uint8_t>(hue, sat, std::abs(brt-10));
                 // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/655.35), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
