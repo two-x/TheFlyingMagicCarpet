@@ -481,7 +481,6 @@ class Display {
             draw_string(disp_datapage_names_x, disp_datapage_names_x, y_pos, telemetry[lineno], nulstr, LGRY, BLK, forced);
             draw_string_units(disp_datapage_units_x, y_pos, units[lineno], nulstr, LGRY, BLK);
             disp_bargraphs[lineno] = false;
-            // draw_bargraph_base(disp_bargraphs_x, y_pos + 7, disp_bargraph_width);
         }
         if (redraw_all) {
             for (int32_t lineno=0; lineno < disp_tuning_lines; lineno++)  {  // Step thru lines of dataset page data
@@ -501,11 +500,12 @@ class Display {
         int32_t age_us = (color != NON) ? 11 : (int32_t)((float)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
         int32_t x_base = disp_datapage_values_x;
         bool polarity = (value >= 0);  // polarity 0=negative, 1=positive
-        if ((disp_values[lineno] != disp_string) || value == 1234567 || disp_data_dirty[lineno]) {  // If value differs, Erase old value and write new
+        bool force = (value == 1234567) || disp_data_dirty[lineno];
+        if ((disp_values[lineno] != disp_string) || force) {  // If value differs, Erase old value and write new
             if (color == NON) color = GRN;
             int32_t y_pos = lineno*disp_line_height_pix+disp_vshift_pix;
             if (polarity != disp_polarities[lineno]) draw_hyphen(x_base, y_pos, (!polarity) ? color : BLK);
-            draw_string(x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], color, BLK, (color != disp_val_colors[lineno])); // +6*(arraysize(modecard[run.mode])+4-namelen)/2
+            draw_string(x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], color, BLK, force || (color != disp_val_colors[lineno])); // +6*(arraysize(modecard[run.mode])+4-namelen)/2
             disp_values[lineno] = disp_string;
             disp_polarities[lineno] = polarity;
             disp_val_colors[lineno] = color;
@@ -536,23 +536,15 @@ class Display {
                 t_pos = corner_x + constrain(t_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
                 if (t_pos != disp_targets[lineno] || (t_pos == n_pos)^(disp_needles[lineno] != disp_targets[lineno]) || disp_data_dirty[lineno]) {
                     draw_target_shape(disp_targets[lineno], corner_y, BLK, NON);  // Erase old target
-                    // sprptr->drawFastHLine(disp_targets[lineno]-(disp_targets[lineno] != corner_x+disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+7, 2+(disp_targets[lineno] != corner_x+disp_bargraph_width-disp_bargraph_squeeze), MGRY);  // Patch bargraph line where old target got erased
-                    // for (int32_t offset=0; offset<=2; offset++) sprptr->drawFastVLine((corner_x+disp_bargraph_squeeze)+offset*(disp_bargraph_width/2 - disp_bargraph_squeeze), lineno*disp_line_height_pix+disp_vshift_pix+6, 3, WHT);  // Redraw bargraph graduations in case one got corrupted by target erasure
                     draw_target_shape(t_pos, corner_y, tcolor, NON);  // Draw the new target
                     disp_targets[lineno] = t_pos;  // Remember position of target
                 }
             }
             else draw_target_shape(disp_targets[lineno], corner_y, BLK, NON);  // Erase old target
-            // if (n_pos != disp_needles[lineno] || disp_data_dirty[lineno]) {
             draw_bargraph_needle(n_pos, disp_needles[lineno], corner_y, ncolor);  // Let's draw a needle
             disp_needles[lineno] = n_pos;  // Remember position of needle
-            // }
         }
         else delete_bargraph = true;
-            // if (disp_needles[lineno] >= 0) {  // If value having no range is drawn over one that did ...
-            //     draw_bargraph_needle(-1, disp_needles[lineno], lineno*disp_line_height_pix+disp_vshift_pix-1, BLK);  // Erase the old needle
-            //     disp_needles[lineno] = -1;  // Flag for no needle
-            // }
         if (delete_bargraph || value == 1234567) {
             sprptr->fillRect(corner_x - 1, corner_y, disp_bargraph_width + 2, disp_line_height_pix, BLK);
             disp_bargraphs[lineno] = false;
@@ -655,6 +647,14 @@ class Display {
         disp_runmode_dirty = false;
     }
     void draw_datapage(int32_t page, int32_t page_last, bool forced=false) {
+        if (forced) {
+            for (int i = disp_fixed_lines; i < disp_lines; i++) {
+                disp_age_quanta[i] = 0;
+                dispAgeTimer[i].reset();
+                disp_data_dirty[i] = true;
+            }
+            disp_values_dirty = true;
+        }
         draw_fixed(page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
         draw_string(disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
         disp_datapage_dirty = false;
@@ -777,11 +777,6 @@ class Display {
             update_idiots(disp_idiots_dirty);
             // if (just_reset) printframebufs(3);
             if (disp_datapage_dirty) {
-                for (int i = disp_fixed_lines; i < disp_lines; i++) {
-                    disp_age_quanta[i] = 0;
-                    dispAgeTimer[i].reset();
-                    disp_data_dirty[i] = true;
-                }
                 draw_datapage(datapage, datapage_last, true);
                 if (datapage_last != datapage) prefs.putUInt("dpage", datapage);
             }
@@ -1009,8 +1004,7 @@ class Display {
             s32 += w32;
             r32 += w32;
         } while (++y < sprheight);
-        // lcd->display();
-        lcd.endWrite();
+        lcd.endWrite();   // lcd->display();
     }
     void auto_saver(bool enable) {
         static bool was_simulating = sim->enabled();

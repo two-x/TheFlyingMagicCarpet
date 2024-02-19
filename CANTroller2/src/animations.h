@@ -526,13 +526,13 @@ class AnimationManager {
     int64_t fps_mark;
     bool screensaver_last = false, simulating_last = false, mule_drawn = false;
   public:
+    std::uint32_t sec, psec, _width, _height, _myfps = 0, frame_count = 0;
+    bool anim_reset_request = false;
+    AnimationManager() {}
     void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
         ++nowsaver %= NumSaverMenu;
         anim_reset_request = true;
     }
-    std::uint32_t sec, psec, _width, _height, _myfps = 0, frame_count = 0;
-    bool anim_reset_request = false;
-    AnimationManager() {}
     void init(LGFX* _lgfx, Simulator* _sim, Touchscreen* _touch, int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
         mylcd = _lgfx;
         sim = _sim;
@@ -547,7 +547,6 @@ class AnimationManager {
         anim_reset_request = false;
     }
     void setup() {
-        // int flip = panel->setflip(true);
         eSaver.setup(&framebuf[flip], &vp);
         cSaver.setup(&framebuf[flip], &vp);
     }
@@ -598,7 +597,6 @@ class AnimationManager {
     }
     float update(LGFX_Sprite* spr) {
         if (!screensaver_last && screensaver) change_saver();  // ptrsaver->reset();
-        // else if (screensaver_last && !screensaver) spr->fillSprite(BLK);
         screensaver_last = screensaver;
         if (anim_reset_request) reset();
         spr->setClipRect(vp.x, vp.y, vp.w, vp.h);
@@ -626,11 +624,6 @@ class AnimationManager {
         calc_fps();
         return myfps;
     }
-    // void stop() {
-    //     screensaver = screensaver_max_refresh = false;
-    //     set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
-    //     anim_reset_request = true;
-    // }
     void set_vp(int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
         vp.x = _cornerx;
         vp.y = _cornery;
