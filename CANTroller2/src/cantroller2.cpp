@@ -3,6 +3,7 @@
 #include "display.h"  // includes neopixel.h, touch.h
 #include "sdcard.h"
 #include "RunModeManager.h"
+#include <esp_task_wdt.h>
 static SdCard sdcard(&lcd);
 static RunModeManager run(&screen, &encoder);
 
@@ -28,7 +29,8 @@ void setup() {
     mapsens.setup();
     lightbox.setup();
     tempsens.setup();         // Onewire bus and temp sensors
-    xTaskCreate(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 5, NULL);  // Temperature sensors task
+    TaskHandle_t temptask = nullptr;
+    xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 6, &temptask, CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);  // added for servos I think
     gas.setup(&hotrc, &speedo, &tach, &pot, &tempsens);
     brake.setup(&hotrc, &speedo, &mulebatt, &pressure, &brkpos);
@@ -43,18 +45,27 @@ void setup() {
     idiots.setup(&neo);       // assign same idiot light variable associations and colors to neopixels as on screen  
     diag.setup();             // initialize diagnostic codes
     web.setup();              // start up access point, web server, and json-enabled web socket for diagnostic phone interface
-    xTaskCreate(update_web, "Update Web Services", 4096, NULL, 6, NULL);  // wifi/web task. 2048 is too low, it crashes when client connects
+    // xTaskCreate(update_web, "Update Web Services", 4096, NULL, 6, NULL);
+    TaskHandle_t webtask = nullptr;
+    xTaskCreatePinnedToCore(update_web, "Update Web Services", 4096, NULL, 6, &webtask, CONFIG_ARDUINO_RUNNING_CORE);  // wifi/web task. 2048 is too low, it crashes when client connects  16384
+    Serial.printf("Watchdog timer.. \n");
+    if (watchdog_enabled) esp_task_wdt_init(10, true);  // see https://github.com/espressif/esp-idf/blob/master/examples/system/task_watchdog/main/task_watchdog_example_main.c
+    if (watchdog_enabled) esp_task_wdt_add(NULL);
+    if (watchdog_enabled) esp_task_wdt_add(temptask);
+    if (watchdog_enabled) esp_task_wdt_add(webtask);
     printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     looptimer.setup();
 }
 void loop() {                 // code takes about 1 ms to loop on average
+    if (watchdog_enabled) esp_task_wdt_reset();     // kick the watchdog
     ignition_panic_update();  // manage panic stop condition and drive ignition signal as needed
     bootbutton.update();      // read the builtin button
     if (bootbutton.longpress()) screen.auto_saver(!auto_saver_enabled);
     if (bootbutton.shortpress()) {
-        if (auto_saver_enabled) animations.change_saver();
-        else sim.toggle();
+        delay(5000);
+        // if (auto_saver_enabled) animations.change_saver();
+        // else sim.toggle();
     }
     basicsw_update();         // see if basic mode switch got hit
     starter_update();         // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
