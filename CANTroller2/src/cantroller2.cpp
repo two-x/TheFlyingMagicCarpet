@@ -51,8 +51,8 @@ void setup() {
     Serial.printf("Watchdog timer.. \n");
     if (watchdog_enabled) esp_task_wdt_init(10, true);  // see https://github.com/espressif/esp-idf/blob/master/examples/system/task_watchdog/main/task_watchdog_example_main.c
     if (watchdog_enabled) esp_task_wdt_add(NULL);
-    if (watchdog_enabled) esp_task_wdt_add(temptask);
-    if (watchdog_enabled) esp_task_wdt_add(webtask);
+    // if (watchdog_enabled) esp_task_wdt_add(temptask);
+    // if (watchdog_enabled) esp_task_wdt_add(webtask);
     printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     looptimer.setup();
