@@ -146,7 +146,7 @@ class Web {
     Web() : webserver(80), socket(81) {}
     void setup(LoopTimer* _lt) {
         looptimer = _lt;
-        printf("Webserver..\n");
+        printf("Web services..\n");
         webserver.on("/tester", HTTP_GET, [](AsyncWebServerRequest *request){
             request->send(200, "text/plain", "Hello, tester");
         });
@@ -161,10 +161,11 @@ class Web {
         webserver.onNotFound([](AsyncWebServerRequest *request) {  // Send back a plain text message (can be made html if required)
             request->send(404, "text/plain", "404 - Page Not Found.  Try '/' or '/update'");
         });
-        printf("Over-The-Air update support..\n");
+        printf("  Over-The-Air update support..\n");
         ElegantOTA.begin(&webserver);  // start OTA after all server.on requests, before starting web server
+        printf("  Webserver..\n");
         webserver.begin();
-        printf("Websockets start..\n");
+        printf("  Websockets..\n");
         socket.begin();
         socket.onEvent(webSocketEvent);
         socket_timer.set(socket_refresh_us);

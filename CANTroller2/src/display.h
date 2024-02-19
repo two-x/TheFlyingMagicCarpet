@@ -159,7 +159,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { brAk"Targ", "Pn|PrErr", "  P Term", "  I Term", "  D Term", brAk"Posn", "OutRatio", "MotrDuty", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, "OpenLoop", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
-    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", " Touch X", " Touch Y", __________, "Webservr", "No Temps", },  // PG_TEMP
+    { " Ambient", "  Engine", "AxleFrLt", "AxleFrRt", "AxleRrLt", "AxleRrRt", " Touch X", " Touch Y", "  Uptime", "Webservr", "No Temps", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
     { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "Draw Clk", "Push Clk", "Idle Clk", "BlnkDemo", neo_bright, "NeoDesat", "Animaton", },  // PG_UI
 };
@@ -172,7 +172,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "%   ", "psin", "%   ", "%   ", "%   ", "in  ", "%   ", "%   ", ______, "Hz  ", "s   ", },  // PG_BPID
     { "rpm ", "rpm ", "%   ", "%   ", "%   ", "%   ", ______, b1nary, ______, "Hz  ", "s   ", },  // PG_GPID
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%/s ", ______, "Hz  ", "s   ", },  // PG_CPID
-    { degreF, degreF, degreF, degreF, degreF, degreF, "pix ", "pix ", ______, b1nary, b1nary, },  // PG_TEMP
+    { degreF, degreF, degreF, degreF, degreF, degreF, "pix ", "pix ", "min ", b1nary, b1nary, },  // PG_TEMP
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
     { "us  ", "us  ", "Hz  ", "fps ", "us  ", "us  ", "us  ", b1nary, "%   ", "/10 ", "eyes", },  // PG_UI
 };
@@ -755,8 +755,8 @@ class Display {
   public:
     void update(int _nowmode = -1) {
         if (_nowmode >= 0) nowmode = _nowmode;
-        #ifndef VIDEO_TASKS
         if (is_drawing || is_pushing) return;
+        #ifndef VIDEO_TASKS
         if (pushtime) {
             if (screenRefreshTimer.expired() || screensaver_max_refresh || auto_saver_enabled) {
                 screenRefreshTimer.reset();
@@ -910,7 +910,7 @@ class Display {
                     draw_temperature(loc::WHEEL_RR, 14);
                     draw_dynamic(15, touch->touch_pt(0), 0, disp_width_pix);
                     draw_dynamic(16, touch->touch_pt(1), 0, disp_height_pix);
-                    draw_eraseval(17);
+                    draw_dynamic(17, looptimer.uptime());
                     draw_truth(18, !web_disabled, 0);  // note this value is inverse to how it's displayed, same for the tuner entry
                     draw_truth(19, dont_take_temperatures, 2);
                 }
