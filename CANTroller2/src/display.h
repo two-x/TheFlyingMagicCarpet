@@ -367,7 +367,6 @@ class Display {
         reset_request = true;
         #ifdef VIDEO_TASKS
         init_tasks();
-        // delayMicroseconds(500);
         // xSemaphoreGive(drawtime);
         #else
         update();
@@ -377,13 +376,7 @@ class Display {
     }
     void reset(LGFX_Sprite* spr) {
         blackout(spr);
-        // draw_touchgrid(false);
-        // draw_fixed(datapage, datapage_last, true, true);
-        // draw_idiotlights(idiots_corner_x, idiots_corner_y, true);
-        // draw_runmode(nowmode, disp_oldmode, NON);
-        // draw_datapage(datapage, datapage_last, true);
         all_dirty();
-        // animations.reset();
         reset_request = false;
     }
     // uint8_t add_palette(uint8_t color) {
@@ -405,6 +398,7 @@ class Display {
         disp_simbuttons_dirty = true;
         disp_values_dirty = true;
         screensaver = false;
+        auto_saver_enabled = false;
     }
     void blackout(LGFX_Sprite* spr) {
         std::uint32_t* s;
@@ -414,31 +408,6 @@ class Display {
                 s[w] = 0x00000000;
             }
         }
-        // sprptr->fillRect(0, 0, disp_width_pix, disp_height_pix, BLK);  // Black out the whole screen        
-
-        // from lgfx docs:
-        // You can fill the entire screen using clear or fillScreen.
-        // fillScreen behaves the same as specifying the entire screen with fillRect, and the color specified is treated as the drawing color.
-        // lcd.fillScreen(0xFFFFFFu);  // Fill with white
-        // lcd.setColor(0x00FF00u);    // Set drawing color to green
-        // lcd.fillScreen();           // Fill with green
-        //
-        // clear is separate from drawing functions and holds the color as a background color.
-        // Background color is rarely used, but it is also used as the color to fill gaps when scrolling function is used.
-        // lcd.clear(0xFFFFFFu);       // Fill with white as the background color
-        // lcd.setBaseColor(0x000000u);// Set black as the background color
-        // lcd.clear();                // Fill with black
-        //
-        // When using int8_t and uint8_t types, they are treated as 8-bit RGB332.
-        // uint8_t blue = 0x03;
-        // lcd.fillRect(20, 20, 20, 20, (uint8_t)0xE0);  // 赤で矩形の塗りを描画
-        // lcd.fillRect(30, 30, 20, 20, (uint8_t)0x1C);  // 緑で矩形の塗りを描画
-        // lcd.fillRect(40, 40, 20, 20, blue);           // 青で矩形の塗りを描画
-        // printframebufs(3);
-        // printframebufs(3);
-        // Serial.printf("blackout@ 0x%08x\n", spr);
-        // // std::uint32_t* s32 = (std::uint32_t*)spr->getBuffer();
-        // // for (int i=0; i=(sizeof(*spr)); i++) spr[i] = 0;
     }
     void set_runmodecolors() {
         uint8_t saturat = 255;  uint8_t hue_offset = 0;
@@ -801,10 +770,7 @@ class Display {
     bool draw_all(LGFX_Sprite* spr) {
         sprptr = spr;
         bool just_reset = false;
-        if (reset_request) {
-            reset(spr);
-            just_reset = true;
-        }
+        if (reset_request) reset(spr);
         if (!display_enabled) return false;
         if (!auto_saver_enabled) {
             tiny_text();
@@ -1002,7 +968,6 @@ class Display {
     void draw_task() {
         if (is_pushing || pushtime) return;
         is_drawing = true;
-        // if (reset_request) screen.reset();
         int32_t mark = (int32_t)screenRefreshTimer.elapsed();
         // Serial.printf("f%d draw@ 0x%08x\n", flip, &framebuf[flip]);
         draw_all(&framebuf[flip]);

@@ -253,7 +253,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     LGFX_Sprite* sprite;
     viewport* vp;
     int wormpos[2] = {0, 0}, wormvel[2] = {0, 0}, wormsign[2] = {1, 1}, wormd[2] = {20, 20};
-    int shifter = 2, wormdmin = 8, wormdmax = 60, wormvelmax = 1 << shifter;
+    int shifter = 2, wormdmin = 8, wormdmax = 50, wormvelmax = 1 << shifter, wormsat = 128;
     uint32_t boxsize[2], huebase = 0;
     int sprsize[2], rotate = -1, scaler = 1, season = 0, numseasons = 4;
     int point[2], plast[2], er[2], erpos_max[2];
@@ -334,7 +334,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             // if (!rn(35)) huebase = rn(1 << 21);
             // else ++huebase %= (1 << 21);
             // spothue = (uint16_t)(huebase >> 5);
-            spothue -= 1;
+            spothue -= 2;
             if (!rn(20)) spothue = rn(65535);
             if (spothue & 1) slowhue += 13;
             if (rotate == Wedges) {
@@ -433,9 +433,13 @@ class EraserSaver {  // draws colorful patterns to exercise
             else if (rotate == Worm) {
                 has_eraser = saver_lotto = false;
                 lucktimer.reset();
-                uint8_t sat = 92;
-                uint8_t brt = 63 + 48 * (1 + season);
-                uint8_t c = hsv_to_rgb<uint8_t>(spothue, sat, brt);
+                // uint8_t sat = spothue >> 8;
+                uint8_t brt = 129 + 42 * (1 + std::abs(season-1));
+                uint8_t c = hsv_to_rgb<uint8_t>(spothue, wormsat, brt);
+                // if ((spothue >> 5) & 3 == 3) {
+                //     if (season == 3) c = BLK;
+                //     else if (season ==1) c = WHT;
+                // }
                 int wormposmax[2] = {(vp->w - wormd[HORZ]) / 2, (vp->h - wormd[VERT]) / 2};
                 if (wormmovetimer.expireset()) {
                     for (int axis = HORZ; axis <= VERT; axis++) {
@@ -445,6 +449,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                             wormsign[axis] *= -1;
                         }
                     }
+                    wormsat = constrain(wormsat + rn(3) - 1, 96, 255);
                 }
                 for (int axis = HORZ; axis <= VERT; axis++) {
                     if (!rn(3)) wormd[axis] = constrain(wormd[axis] + rn(3) - 1, wormdmin, wormdmax);
@@ -455,7 +460,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                         if (wormvel[axis] == 0) wormsign[axis] = (rn(2) << 1) - 1;
                     }
                 }
-                sprite->fillEllipse((vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x, (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y, wormd[HORZ] * scaler, wormd[VERT] * scaler, BLK);
+                // sprite->fillEllipse((vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x, (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y, wormd[HORZ] * scaler, wormd[VERT] * scaler, BLK);
                 sprite->drawEllipse((vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x, (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y, wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
                 sprite->drawEllipse((vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x + 1, (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y, wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
                 sprite->drawEllipse((vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x - 1, (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y, wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
@@ -499,7 +504,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         else {
             if (newpat == -1) ++shape %= Worm;
             else if (newpat == -2) while (last_pat == shape) shape = rn(Rotate);
-            if (!rn(25)) shape = Rotate;
+            if (rn(25) == 13) shape = Rotate;
         }
     }
 };
