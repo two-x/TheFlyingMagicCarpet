@@ -398,7 +398,7 @@ class Display {
         disp_simbuttons_dirty = true;
         disp_values_dirty = true;
         screensaver = false;
-        auto_saver_enabled = false;
+        // auto_saver_enabled = false;  // uncommenting this line makes it crash when rapidly changing screensavers during autosaver 
     }
     void blackout(LGFX_Sprite* spr) {
         std::uint32_t* s;
@@ -769,7 +769,7 @@ class Display {
     }
     bool draw_all(LGFX_Sprite* spr) {
         sprptr = spr;
-        bool just_reset = false;
+        // bool just_reset = false;
         if (reset_request) reset(spr);
         if (!display_enabled) return false;
         if (!auto_saver_enabled) {
