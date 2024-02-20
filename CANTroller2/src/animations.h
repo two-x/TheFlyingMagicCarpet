@@ -81,15 +81,15 @@ class CollisionsSaver {
     ball_info_t* balls;
     ball_info_t* a;
     LGFX_Sprite* sprite;
-    static constexpr std::uint32_t BALL_MAX = 55;  // 256
+    static constexpr std::uint32_t BALL_MAX = 35;  // 256
     ball_info_t _balls[2][BALL_MAX];
     std::uint32_t _ball_count = 0, _myfps = 0;
     std::uint32_t ball_thismax, ball_count = 0;
     int _width, _height;
     std::uint32_t sec, psec, ball_create_rate = 3200;
     std::uint32_t myfps = 0, frame_count = 0;
-    float ball_radius_base = 5.0 / 235.0;  // 7 pixels radius / 125x100 sprite = about 5 pix per 235 sides sum
-    float ball_radius_modifier = 3.0 / 235.0;  // 4 pixels radius / 125x100 sprite = about 3 pix per...
+    float ball_radius_base = 4.5 / 235.0;  // 7 pixels radius / 125x100 sprite = about 5 pix per 235 sides sum
+    float ball_radius_modifier = 2.6 / 235.0;  // 4 pixels radius / 125x100 sprite = about 3 pix per...
     uint8_t ball_redoubler_rate = 0x18;  // originally 0x07
     uint8_t ball_gravity = 16;  // originally 0 with suggestion of 4
     volatile bool _is_running;
@@ -315,7 +315,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         if (saverCycleTimer.expired()) {
             ++cycle %= num_cycles;
             if (cycle == 0) change_pattern(-1);
-            saverCycleTimer.set(((shape == Worm) ? 3 : 1) * saver_cycletime_us / ((cycle == 2) ? 5 : 1));
+            saverCycleTimer.set((saver_cycletime_us / ((cycle == 2) ? 5 : 1)) << (shape == Worm));
         }
         if (seasontimer.expireset()) {
             ++season %= numseasons;

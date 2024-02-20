@@ -339,7 +339,7 @@ class Display {
         Serial.printf("Display..");  //
         lcd.init();
         #ifdef BOARD_HAS_PSRAM
-        lcd.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM
+        // lcd.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM - (this is only relevant for TFT_eSPI display library)
         #endif
         lcd.setColorDepth(8);
         Serial.printf(" ..");  //
