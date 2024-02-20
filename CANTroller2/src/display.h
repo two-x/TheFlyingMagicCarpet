@@ -1007,8 +1007,9 @@ class Display {
         lcd.endWrite();   // lcd->display();
     }
     void auto_saver(bool enable) {
-        static bool was_simulating = sim->enabled();
+        static bool was_simulating;
         if (enable) {
+            was_simulating = sim->enabled();
             sim->disable();
             animations.set_vp(0, 0, disp_width_pix, disp_height_pix);
             screensaver_max_refresh = screensaver = auto_saver_enabled = true;
