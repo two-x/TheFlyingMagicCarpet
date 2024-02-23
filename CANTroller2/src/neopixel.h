@@ -274,6 +274,13 @@ void NeopixelStrip::fevpush(uint _idiot, int8_t push_off, bool push_val) {
     int8_t page = push_off / 32;
     fevents[_idiot][page] |= (push_val << (push_off - 32 * page));
 }
+// setflash() : Call this to add a blink sequence to one of the idiot lights which will repeat indefinitely in [up to 6.4 sec] cycles
+//   _idiot = which idiot light
+//   count  = number of blinks per cycle. Use 0 to cancel a previously applied blink pattern
+//   pulseh = high pulse width of each blink, in increments of 50 ms (of which there are max 128 per cycle)
+//   pulsel = low pulse width of each blink, in increments of 50 ms (of which there are max 128 per cycle)
+//   onbrit = percent brightness to apply during high pulses (use -1 to avoid)
+//   color  = alternate color to apply during high pulses (use -1 to avoid)
 void NeopixelStrip::setflash(uint _idiot, uint8_t count, uint8_t pulseh, uint8_t pulsel, int32_t onbrit, int32_t color) {
     fset[_idiot][fcount] = count;
     fset[_idiot][fpulseh] = smax(pulseh, 1);
