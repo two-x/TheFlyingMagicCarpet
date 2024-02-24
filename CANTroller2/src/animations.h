@@ -262,7 +262,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     int eraser_velo[2] = {rn(eraser_velo_max), rn(eraser_velo_max)}, shapes_per_run = 5, shapes_done = 0;
     uint8_t wclast, pencolor = RED;
     float pensat = 200.0;
-    uint16_t spothue = 65535, slowhue = 0, penhue;
+    uint16_t spothue = 65535, slowhue = 0, penhue = rn(65535);
     int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 200, shape = rn(Rotate);
     static constexpr uint32_t saver_cycletime_us = 18000000;
     Timer saverCycleTimer, pentimer = Timer(1500000), lucktimer, seasontimer;
@@ -304,7 +304,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         if (pentimer.expireset()) {
             pensat += 1.5;
             if (pensat > 255.0) pensat = 100.0;
-            penhue += 150;
+            penhue += 255;
             pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
         }
         spr->fillCircle(x + vp->x, y + vp->y, 20 * scaler, pencolor);
