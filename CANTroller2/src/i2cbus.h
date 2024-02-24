@@ -4,7 +4,7 @@ enum i2c_nodes : int { i2c_touch, i2c_lightbox, i2c_airvelo, i2c_map, num_i2c_sl
 
 class I2C {
   private:
-    
+    bool disabled = false;
     int32_t _devicecount = 0;
     uint8_t _detaddrs[10];  // addresses detected, unordered
     uint8_t _devaddrs[num_i2c_slaves];  // addresses of known devices, ordered per enum
@@ -29,6 +29,7 @@ class I2C {
         _devaddrs[i2c_map] = map_addr;
         printf("I2C bus"); delay(1);  // Attempt to force print to happen before init
         scanTimer.reset();
+        if (disabled) return 0;
         Wire.begin(_sda_pin, _scl_pin);  // I2c bus needed for airflow sensor
         byte error, address;
         printf(" scan..");

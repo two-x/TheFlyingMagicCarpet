@@ -7,7 +7,7 @@
 #include <FunctionalInterrupt.h>
 #include "driver/rmt.h"
 #include <ESP32Servo.h>        // Makes PWM output to control motors (for rudimentary control of our gas and steering)
-#include "uictrl.h"
+// #include "uictrl.h"
 
 // This enum class represent the components which can be simulated (sensor). It's a uint8_t type under the covers, so it can be used as an index
 // typedef uint8_t opt_t;
@@ -23,6 +23,41 @@ enum class sens : int { none=0, joy, pressure, brkpos, speedo, tach, airvelo, ma
 // Param is a value which is constrained between min/max limits, representing a "raw" (aka unfiltered) quantity. A value with tight limits
 // (wehere min=val=max) is constant and cannot be changed without changing the limits. An unconstrained value can be represented by setting
 // either or both min/max to infinity.
+class Potentiometer {
+  protected:
+    static constexpr float adc_min = 300; // TUNED 230603 - Used only in determining theconversion factor
+    static constexpr float adc_max = 4095; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
+    static constexpr float _ema_alpha = 0.35;
+    static constexpr float _pc_min = 0.0;
+    static constexpr float _pc_max = 100.0;
+    static constexpr float _pc_activity_margin = 1.0;
+    uint8_t _pin;
+    float _val = 0.0, _activity_ref;
+  public:
+    Potentiometer(uint8_t arg_pin) : _pin(arg_pin) {}
+    Potentiometer() = delete; // must have a pin defined
+    void setup() {
+        printf("Pot setup..\n");
+        set_pin(_pin, INPUT);
+        _activity_ref = _val;
+    }
+    void update() {
+        float new_val = map(static_cast<float>(analogRead(_pin)), adc_min, adc_max, _pc_min, _pc_max);
+        new_val = constrain(new_val, _pc_min, _pc_max); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
+        _val = ema_filt(new_val, _val, _ema_alpha);
+        if (std::abs(_val - _activity_ref) > _pc_activity_margin) {
+            kick_inactivity_timer(7);  // evidence of user activity
+            _activity_ref = _val;
+        }
+    }
+    template<typename VAL_T>
+    VAL_T mapToRange(VAL_T min, VAL_T max) {
+        return static_cast<VAL_T>(map(_val, _pc_min, _pc_max, static_cast<float>(min), static_cast<float>(max)));
+    }
+    float val() { return _val; }
+    float min() { return _pc_min; }
+    float max() { return _pc_max; }
+};
 template<typename VALUE_T>
 class Param {
   protected:

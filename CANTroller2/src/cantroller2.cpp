@@ -2,7 +2,7 @@
 #include "objects.h"
 #include "display.h"  // includes neopixel.h, touch.h
 #include "sdcard.h"
-#include "RunModeManager.h"
+#include "runmodes.h"
 static SdCard sdcard(&lcd);
 static RunModeManager run(&screen, &encoder);
 
@@ -52,8 +52,8 @@ void setup() {
     looptimer.setup();
     watchdog.start();
 }
-void loop() {                 // code takes about 1 ms to loop on average
-    watchdog.pet();          // kick the watchdog
+void loop() {
+    watchdog.pet();           // pet the watchdog regularly to prevent reset
     ignition_panic_update();  // manage panic stop condition and drive ignition signal as needed
     bootbutton.update();      // read the builtin button
     if (bootbutton.longpress()) screen.auto_saver(!auto_saver_enabled);

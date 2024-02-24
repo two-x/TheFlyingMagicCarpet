@@ -3,9 +3,12 @@
 #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
 #include "lgfx.h"
 #include "neopixel.h"
-#include "touch.h"
+// #include "touch.h"
+#include "uictrl.h"
 #include "images.h"
 #include "animations.h"
+static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
+static MomentaryButton bootbutton(boot_sw_pin, false);
 #define disp_vshift_pix 2  // Unknown.  Note: At smallest text size, characters are 5x7 pix + pad on rt and bot for 6x8 pix.
 #define disp_runmode_text_x 12
 uint8_t colorcard[NUM_RUNMODES] = { MGT, WHT, RED, ORG, YEL, GRN, TEAL, PUR };
@@ -1149,7 +1152,6 @@ class Tuner {
         }
     }
 };
-
 static NeopixelStrip neo(neopixel_pin);
 static IdiotLights idiots;
 static Touchscreen touch;
@@ -1176,7 +1178,7 @@ static void draw_task_wrapper(void *parameter) {
     }
 }
 #endif
-// The following project draws a nice looking gauge cluster, very apropos to our needs and the code is given.
+// The following prkoject draws a nice looking gauge cluster, very apropos to our needs and the code is given.
 // See this video: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
 // Rinkydink home page: http://www.rinkydinkelectronics.com
 // moving transparent arrow sprite over background: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects

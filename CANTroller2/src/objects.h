@@ -19,8 +19,6 @@ static Potentiometer pot(pot_pin);
 static Simulator sim(pot);
 static Hotrc hotrc(&sim);
 static TemperatureSensorManager tempsens(onewire_pin);
-static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
-static MomentaryButton bootbutton(boot_sw_pin, false);
 static CarBattery mulebatt(mulebatt_pin);
 static PressureSensor pressure(pressure_pin);
 static BrakePositionSensor brkpos(brake_pos_pin);

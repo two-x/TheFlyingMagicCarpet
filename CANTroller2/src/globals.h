@@ -108,7 +108,7 @@ bool display_enabled = true;         // should we run 325x slower in order to ge
 bool web_enabled = true;
 bool use_i2c_baton = true;
 bool screensaver_max_refresh = false;
-bool watchdog_enabled = true;
+bool watchdog_enabled = false;
 // dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
 bool usb_jtag = true;                // if you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)
 bool dont_take_temperatures = false; // in case debugging dallas sensors or causing problems
@@ -118,7 +118,6 @@ bool looptime_print = false;         // makes code write out timestamps througho
 bool touch_reticles = true;
 bool button_test_heartbeat_color = false; // Encoder short press when not tuning makes heartbeat a random color (for testing)
 bool wifi_client_mode = false;       // Should wifi be in client or access point mode?
-bool fake_color332 = false;
 bool saver_on_sleep = true;
 bool print_framebuffers = false;
 
@@ -309,9 +308,9 @@ T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {
     uint8_t s2 = 255 - sat; // 255 to 0
     uint16_t out[3];
     for (int led=0; led<3; led++) out[led] = (((((rgb[led] * s1) >> 8) + s2) * v1) & 0xff00) >> 8;
-    if (fake_color332) {
-        if (std::is_same<T, uint16_t>::value) return (T)((out[0] & 0xe0) << 8) | ((out[1] & 0xe0) << 5) | ((out[2] & 0xc0) >> 3);
-    }
+    // if (fake_color332) {
+    //     if (std::is_same<T, uint16_t>::value) return (T)((out[0] & 0xe0) << 8) | ((out[1] & 0xe0) << 5) | ((out[2] & 0xc0) >> 3);
+    // }
     if (std::is_same<T, uint16_t>::value) return (T)((out[0] & 0xf8) << 8) | ((out[1] & 0xfc) << 5) | (out[2] >> 3);
     else if (std::is_same<T, uint8_t>::value) return (T)((out[0] & 0xe0) | ((out[1] & 0xe0) >> 3) | ((out[2] & 0xc0) >> 6));
     else if (std::is_same<T, uint32_t>::value) return (T)((out[0] << 16) | (out[1] << 8) | out[2]);
