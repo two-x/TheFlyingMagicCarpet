@@ -4,7 +4,7 @@
 #include "lgfx.h"
 #include "neopixel.h"
 // #include "touch.h"
-#include "uictrl.h"
+#include "inputs.h"
 #include "images.h"
 #include "animations.h"
 static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
