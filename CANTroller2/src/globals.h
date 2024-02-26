@@ -86,6 +86,7 @@ enum datapages : int { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GP
 enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
 enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };   // possible sources of gas, brake, steering commands
 enum boolean_states : int { ON=1 };
+enum ui_modes : int { DatapagesUI=0, ScreensaverUI=1 };
 // enum telemetry_full : int { 
 //     
 // };
@@ -108,6 +109,7 @@ bool display_enabled = true;         // should we run 325x slower in order to ge
 bool web_enabled = true;
 bool use_i2c_baton = true;
 bool screensaver_max_refresh = false;
+bool brake_before_starting = true;
 bool watchdog_enabled = false;
 // dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
 bool usb_jtag = true;                // if you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)
@@ -181,6 +183,7 @@ bool captouch = true;
 float loop_avg_us;
 bool sensidiots[11];
 bool web_disabled = false;
+int ui_context = DatapagesUI;
 // bool sensor_present[telemetry_full];
 
 // fast macros

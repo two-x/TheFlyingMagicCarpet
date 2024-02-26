@@ -171,7 +171,7 @@ class Touchscreen {
                                  { { -100, 319 }, { 0, 174 } } };   // [captouch][xx/yy][min/max]  // Read resistance values from upper-left and lower-right corners of screen, for calibration
     bool touch_longpress_valid = true;
     bool landed_coordinates_valid = false;
-    bool touch_now_touched = false;
+    bool lasttouch = false;
     int tedit_exponent = 0;
     float tedit = (float)(1 << tedit_exponent);
     int touch_fudge = 0;
@@ -237,22 +237,25 @@ class Touchscreen {
         read_touch();
         if (!nowtouch) {  // if not being touched
             idelta = 0;  // Stop changing the value
-            if (touch_now_touched) touchDoublePressTimer.reset();  // Upon end of a touch, begin timer to reject any accidental double touches
-            touch_now_touched = false;  // Remember the last touch state
+            if (lasttouch) touchDoublePressTimer.reset();  // Upon end of a touch, begin timer to reject any accidental double touches
             tedit_exponent = 0;
             tedit = (float)(1 << tedit_exponent); // Reset touch acceleration value to 1
             touchHoldTimer.reset();
             touch_longpress_valid = true;
-            return;
         }
-        // if (touchDoublePressTimer.expired()) {
-        tedit = (float)(1 << tedit_exponent);
-        // Serial.printf("(%d,%d), landed(%d,%d)\n",tft_touch[xx],tft_touch[yy],landed[xx],landed[yy]);
-        kick_inactivity_timer(4);  // evidence of user activity
+        else {
+            // if (touchDoublePressTimer.expired()) {
+            // Serial.printf("(%d,%d), landed(%d,%d)\n",tft_touch[xx],tft_touch[yy],landed[xx],landed[yy]);
+            kick_inactivity_timer(4);  // evidence of user activity
+            if (ui_context == DatapagesUI) process_ui();
+        }
+        lasttouch = nowtouch;
+    }
+    void process_ui() {
         tedit = (float)(1 << tedit_exponent);  // Determine value editing rate
         trow = constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
         tcol = constrain((landed[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, 5);
-        if (tcol == 0 && trow == 0 && !touch_now_touched) {
+        if (tcol == 0 && trow == 0 && !lasttouch) {
             // if (!(landed[xx] == 0 && landed[yy] == 0)) touch_increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
             touch_increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
         }
@@ -264,12 +267,12 @@ class Touchscreen {
                     touch_longpress_valid = false;
                 }
             }
-            else if (tunctrl == EDIT && !touch_now_touched) {
+            else if (tunctrl == EDIT && !lasttouch) {
                 tunctrl = SELECT;  // Drop back to select mode
                 sel_val++;  // Move to the next selection
             }
             else if (tunctrl == SELECT) {
-                if (!touch_now_touched) sel_val = (sel_val + 1) % disp_tuning_lines;
+                if (!lasttouch) sel_val = (sel_val + 1) % disp_tuning_lines;
                 else if (touch_longpress_valid && touchHoldTimer.expired()) {
                     tunctrl = OFF;
                     touch_longpress_valid = false;
@@ -297,7 +300,7 @@ class Touchscreen {
                 else if (tcol == 5 && trow == 0) sleep_request = REQ_TOG;  // sleep requests are handled by shutdown or asleep mode, otherwise will be ignored
                 touch_longpress_valid = false;
             }
-            else if (tcol == 3 && trow == 0 && sim.can_sim(sens::basicsw) && !touch_now_touched) basicmodesw = !basicmodesw;
+            else if (tcol == 3 && trow == 0 && sim.can_sim(sens::basicsw) && !lasttouch) basicmodesw = !basicmodesw;
             else if (tcol == 3 && trow == 1 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(tedit); // (+= 25) Pressed the increase brake pressure button
             else if (tcol == 3 && trow == 2 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(-tedit); // (-= 25) Pressed the decrease brake pressure button
             else if (tcol == 3 && trow == 3 && sim.can_sim(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_human(tedit); // (-= 25) Pressed the decrease brake pressure button
@@ -315,7 +318,6 @@ class Touchscreen {
             tedit_exponent++;
             tedit = (float)(1 << tedit_exponent); // Update the touch acceleration value
         }
-        touch_now_touched = true;
     }
     void enableTouchPrint(bool enable) {
         touchPrintEnabled = enable;

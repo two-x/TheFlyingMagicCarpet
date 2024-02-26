@@ -256,17 +256,17 @@ class EraserSaver {  // draws colorful patterns to exercise
     int shifter = 2, wormdmin = 8, wormdmax = 50, wormvelmax = 1 << shifter, wormsat = 128;
     uint32_t boxsize[2], huebase = 0;
     int sprsize[2], rotate = -1, scaler = 1, season = 0, numseasons = 4;
-    int point[2], plast[2], er[2], erpos_max[2];
+    int point[2], plast[2], er[2], erpos_max[2], wormstripe = 2;
     int eraser_rad = 14, eraser_rad_min = 22, eraser_rad_max = 40, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, now = 0;
     int eraser_velo[2] = {rn(eraser_velo_max), rn(eraser_velo_max)}, shapes_per_run = 5, shapes_done = 0;
     uint8_t wclast, pencolor = RED;
     float pensat = 200.0;
     uint16_t spothue = 65535, slowhue = 0, penhue = rn(65535);
-    int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 200, shape = rn(Rotate);
+    int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 200, shape = rn(Rotate), pensatdir = 1;
     static constexpr uint32_t saver_cycletime_us = 18000000;
-    Timer saverCycleTimer, pentimer = Timer(1500000), lucktimer, seasontimer;
-    Timer wormmovetimer = Timer(20000), wormtimer = Timer(1000000);
+    Timer saverCycleTimer, pentimer = Timer(100000), lucktimer, seasontimer;
+    Timer wormmovetimer = Timer(20000), wormtimer = Timer(1000000), wormstripetimer = Timer(2850000);
     bool saver_lotto = false, has_eraser = true;
  public:
     EraserSaver() {}
@@ -301,12 +301,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         _is_running = true;
     }
     void saver_touch(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
-        if (pentimer.expireset()) {
-            pensat += 1.5;
-            if (pensat > 255.0) pensat = 100.0;
-            penhue += 255;
-            pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
-        }
+        // pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
         spr->fillCircle(x + vp->x, y + vp->y, 20 * scaler, pencolor);
     }
     int update(LGFX_Sprite* _nowspr, viewport* _vp) {
@@ -334,6 +329,21 @@ class EraserSaver {  // draws colorful patterns to exercise
             // if (!rn(35)) huebase = rn(1 << 21);
             // else ++huebase %= (1 << 21);
             // spothue = (uint16_t)(huebase >> 5);
+            if (pentimer.expireset()) {
+                if (season <= 1) {
+                    pensat += (float)pensatdir * 1.5;
+                    if (pensat > 255.0) {
+                        pensat = 255;
+                        pensatdir = -1;
+                    }
+                    else if (pensat < 100.0) {
+                        pensat = 100;
+                        pensatdir = 1;
+                    };
+                }
+                else penhue += 255;
+                pencolor = hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
+            }
             spothue -= 2;
             if (!rn(20)) spothue = rn(65535);
             if (spothue & 1) slowhue += 13;
@@ -434,8 +444,12 @@ class EraserSaver {  // draws colorful patterns to exercise
                 has_eraser = saver_lotto = false;
                 lucktimer.reset();
                 // uint8_t sat = spothue >> 8;
-                uint8_t brt = 129 + 42 * (1 + std::abs(season-1));
-                uint8_t c = hsv_to_rgb<uint8_t>(spothue, wormsat, brt);
+                // uint8_t brt = 129 + 42 * (1 + std::abs(season-1));
+                uint8_t c = (wormstripe == 2 || wormstripe == 0) ? pencolor : BLK;
+                if (wormstripetimer.expired()) {
+                    ++wormstripe %= 4;
+                    wormstripetimer.set(2850000 * (wormstripe == 2 || wormstripe == 0) ? 3 : 1);
+                }
                 // if ((spothue >> 5) & 3 == 3) {
                 //     if (season == 3) c = BLK;
                 //     else if (season ==1) c = WHT;
@@ -449,7 +463,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                             wormsign[axis] *= -1;
                         }
                     }
-                    wormsat = constrain(wormsat + rn(3) - 1, 96, 255);
+                    // wormsat = constrain(wormsat + rn(3) - 1, 96, 255);
                 }
                 for (int axis = HORZ; axis <= VERT; axis++) {
                     if (!rn(3)) wormd[axis] = constrain(wormd[axis] + rn(3) - 1, wormdmin, wormdmax);

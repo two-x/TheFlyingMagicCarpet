@@ -25,12 +25,12 @@ enum class sens : int { none=0, joy, pressure, brkpos, speedo, tach, airvelo, ma
 // either or both min/max to infinity.
 class Potentiometer {
   protected:
-    static constexpr float adc_min = 300; // TUNED 230603 - Used only in determining theconversion factor
-    static constexpr float adc_max = 4095; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
-    static constexpr float _ema_alpha = 0.35;
-    static constexpr float _pc_min = 0.0;
-    static constexpr float _pc_max = 100.0;
-    static constexpr float _pc_activity_margin = 1.0;
+    float adc_min = 300; // TUNED 230603 - Used only in determining theconversion factor
+    float adc_max = 4095; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
+    float _ema_alpha = 0.35;
+    float _pc_min = 0.0;
+    float _pc_max = 100.0;
+    float _pc_activity_margin = 1.0;
     uint8_t _pin;
     float _val = 0.0, _activity_ref;
   public:
@@ -508,11 +508,11 @@ class I2CSensor : public Sensor<float,float> {
 class AirVeloSensor : public I2CSensor {
   protected:
     // NOTE: would all AirVeloSensors have the same address? how does this get determined?
-    static constexpr float _min_mph = 0.0;
-    static constexpr float _abs_max_mph = 33.55; // Sensor maximum mph reading.  Our sensor mounted in 2-in ID intake tube
-    static constexpr float _initial_max_mph = 28.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
-    static constexpr float _initial_airvelo_mph = 0.0;
-    static constexpr float _initial_ema_alpha = 0.2;
+    float _min_mph = 0.0;
+    float _abs_max_mph = 33.55; // Sensor maximum mph reading.  Our sensor mounted in 2-in ID intake tube
+    float _initial_max_mph = 28.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
+    float _initial_airvelo_mph = 0.0;
+    float _initial_ema_alpha = 0.2;
     FS3000 _sensor;
     float goodreading = NAN;
     int64_t airvelo_read_period_us = 35000;
@@ -570,12 +570,12 @@ class AirVeloSensor : public I2CSensor {
 class MAPSensor : public I2CSensor {
   protected:
     // NOTE: would all MAPSensors have the same address? how does this get determined?
-    static constexpr float _abs_min_atm = 0.06;  // Sensor min
-    static constexpr float _abs_max_atm = 2.46;  // Sensor max
-    static constexpr float _initial_min_atm = 0.68;  // Typical low map for a car is 10.8 psi = 22 inHg, 1 psi = 0.068 atm
-    static constexpr float _initial_max_atm = 1.02;
-    static constexpr float _initial_atm = 1.00;  // 1 atm = 14.6959 psi
-    static constexpr float _initial_ema_alpha = 0.2;
+    float _abs_min_atm = 0.06;  // Sensor min
+    float _abs_max_atm = 2.46;  // Sensor max
+    float _initial_min_atm = 0.68;  // Typical low map for a car is 10.8 psi = 22 inHg, 1 psi = 0.068 atm
+    float _initial_max_atm = 1.02;
+    float _initial_atm = 1.00;  // 1 atm = 14.6959 psi
+    float _initial_ema_alpha = 0.2;
     Timer map_read_timer;
     uint32_t map_read_timeout = 100000, map_retry_timeout = 10000;
     float goodreading = NAN;
@@ -665,14 +665,14 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
 // CarBattery reads the voltage level from the Mule battery
 class CarBattery : public AnalogSensor<int32_t, float> {
   protected:
-    static constexpr float _initial_adc = adcmidscale_adc;
-    static constexpr float _initial_v = 10.0;
-    static constexpr float _abs_min_v = 0.0; // The min vehicle voltage we can sense
-    static constexpr float _abs_max_v = 16.0; // The min vehicle voltage we can sense
-    static constexpr float _op_min_v = 7.0; // The min vehicle voltage we expect to see
-    static constexpr float _op_max_v = 13.8;  // The max vehicle voltage we expect to see.
-    static constexpr float _v_per_adc = _abs_max_v / adcrange_adc;
-    static constexpr float _ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+    float _initial_adc = adcmidscale_adc;
+    float _initial_v = 10.0;
+    float _abs_min_v = 0.0; // The min vehicle voltage we can sense
+    float _abs_max_v = 16.0; // The min vehicle voltage we can sense
+    float _op_min_v = 7.0; // The min vehicle voltage we expect to see
+    float _op_max_v = 13.8;  // The max vehicle voltage we expect to see.
+    float _v_per_adc = _abs_max_v / adcrange_adc;
+    float _ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
   public:
     CarBattery(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
         _m_factor = _v_per_adc;
@@ -702,14 +702,14 @@ class CarBattery : public AnalogSensor<int32_t, float> {
 // LiPoBatt reads the voltage level from a LiPo cell
 class LiPoBatt : public AnalogSensor<int32_t, float> {
   protected:
-    static constexpr float _initial_adc = adcmidscale_adc;
-    static constexpr float _initial_v = 10.0;
-    static constexpr float _abs_min_v = 0.0; // The min lipo voltage we can sense
-    static constexpr float _abs_max_v = 4.8; // The min lipo voltage we can sense
-    static constexpr float _op_min_v = 3.2; // The min lipo voltage we expect to see
-    static constexpr float _op_max_v = 4.3;  // The max lipo voltage we expect to see
-    static constexpr float _initial_v_per_adc = _abs_max_v / adcrange_adc;
-    static constexpr float _initial_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+    float _initial_adc = adcmidscale_adc;
+    float _initial_v = 10.0;
+    float _abs_min_v = 0.0; // The min lipo voltage we can sense
+    float _abs_max_v = 4.8; // The min lipo voltage we can sense
+    float _op_min_v = 3.2; // The min lipo voltage we expect to see
+    float _op_max_v = 4.3;  // The max lipo voltage we expect to see
+    float _initial_v_per_adc = _abs_max_v / adcrange_adc;
+    float _initial_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
   public:
     LiPoBatt(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
         _ema_alpha = _initial_ema_alpha;
@@ -737,18 +737,19 @@ class LiPoBatt : public AnalogSensor<int32_t, float> {
 // and converting the ADC value to a pressure value in PSI.
 class PressureSensor : public AnalogSensor<int32_t, float> {
   public:
-    static constexpr int32_t op_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
+    int32_t op_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
     // Soren 230920: Reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
-    static constexpr int32_t op_max_adc = 2080; // ~208psi by this math - "Maximum" braking
+    int32_t op_max_adc = 2080; // ~208psi by this math - "Maximum" braking
     // static constexpr int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
-    static constexpr float initial_psi_per_adc = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - op_min_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
-    static constexpr float initial_ema_alpha = 0.15;
-    static constexpr float initial_offset = 0.0;
+    float initial_psi_per_adc = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - op_min_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
+    float initial_offset = 0.0;
     static constexpr bool initial_invert = false;
-    static constexpr float hold_initial_psi = 45;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
-    static constexpr float hold_increment_psi = 3;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
-    static constexpr float panic_initial_psi = 80; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
-    static constexpr float panic_increment_psi = 5; // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
+    float initial_ema_alpha = 0.15;
+    float hold_initial_psi = 45;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
+    float hold_increment_psi = 3;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
+    float panic_initial_psi = 80; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
+    float panic_increment_psi = 5; // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
+    float prestart_psi = hold_initial_psi;
     String _long_name = "Brake pressure sensor";
     String _short_name = "presur";
 
@@ -784,21 +785,21 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     std::shared_ptr<float> _zeropoint;
     // void set_val_from_touch() { _val_filt.set((op_min_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
   public:
-    static constexpr int32_t abs_min_retract_adc = 0;
-    static constexpr int32_t abs_max_extend_adc = adcrange_adc;
-    static constexpr float park_in = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
-    static constexpr float op_min_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-    static constexpr float op_max_extend_in = park_in; // 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-    static constexpr int32_t op_min_retract_adc = 76;  // Calculated on windows calculator. Calculate it here, silly
-    static constexpr int32_t op_max_extend_adc = 965;  // Calculated on windows calculator. Calculate it here, silly
-    static constexpr float abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
-    static constexpr float abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
-    static constexpr float margin_in = .01;  // TODO: add description
-    static constexpr float initial_in_per_adc = 3.3 * 10000.0 / (3.3 * adcrange_adc * 557); // 3.3 v * 10k ohm * 1/5 1/v * 1/4095 1/adc * 1/557 in/ohm = 0.0029 in/adc
-    static constexpr float initial_zeropoint_in = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
-    static constexpr float initial_ema_alpha = 0.35;
+    int32_t abs_min_retract_adc = 0;
+    int32_t abs_max_extend_adc = adcrange_adc;
+    float park_in = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
+    float op_min_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
+    float op_max_extend_in = park_in; // 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
+    float margin_in = .01;  // TODO: add description
+    float initial_zeropoint_in = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
+    int32_t op_min_retract_adc = 76;  // Calculated on windows calculator. Calculate it here, silly
+    int32_t op_max_extend_adc = 965;  // Calculated on windows calculator. Calculate it here, silly
+    float abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
+    float abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
+    float initial_in_per_adc = 3.3 * 10000.0 / (3.3 * adcrange_adc * 557); // 3.3 v * 10k ohm * 1/5 1/v * 1/4095 1/adc * 1/557 in/ohm = 0.0029 in/adc
     static constexpr bool initial_invert = false;
-    static constexpr float initial_offset = 0.0;
+    float initial_offset = 0.0;
+    float initial_ema_alpha = 0.35;
     String _long_name = "Brake position sensor";
     String _short_name = "brkpos";
 
@@ -841,7 +842,7 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
 template<typename HUMAN_T>
 class PulseSensor : public Sensor<int32_t, HUMAN_T> {
   protected:
-    static constexpr int64_t _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
+    int64_t _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
     Timer _stop_timer;
     bool _negative = false;
     float _stop_thresh;
@@ -903,16 +904,16 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
 // It extends PulseSensor to handle reading a hall monitor sensor and converting RPU to RPM
 class Tachometer : public PulseSensor<float> {
   protected:
-    static constexpr int64_t _delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
-    static constexpr float _stop_thresh_rpm = 0.2;  // Below which the engine is considered stopped
-    static constexpr float _abs_max_rpm = 7000.0;  // Max possible engine rotation speed
-    static constexpr float _redline_rpm = 5500.0;  // Max possible engine rotation speed
+    int64_t _delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
+    float _stop_thresh_rpm = 0.2;  // Below which the engine is considered stopped
+    float _abs_max_rpm = 7000.0;  // Max possible engine rotation speed
+    float _redline_rpm = 5500.0;  // Max possible engine rotation speed
     // NOTE: should we start at 50rpm? shouldn't it be zero?
-    static constexpr float _initial_rpm = 50.0; // Current engine speed, raw value converted to rpm (in rpm)
-    static constexpr float _initial_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
+    float _initial_rpm = 50.0; // Current engine speed, raw value converted to rpm (in rpm)
+    float _initial_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
     static constexpr bool _initial_invert = true;
     static constexpr int64_t _initial_zerovalue = 999999;
-    static constexpr float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+    float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
   public:
     float _govern_rpm = _redline_rpm;    
     Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_rpm) {
@@ -950,16 +951,16 @@ class Tachometer : public PulseSensor<float> {
 // It extends PulseSensor to handle reading a hall monitor sensor and converting RPU to MPH
 class Speedometer : public PulseSensor<float> {
   protected:
-    static constexpr int64_t _delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
-    static constexpr float _stop_thresh_mph = 0.2;  // Below which the car is considered stopped
-    static constexpr float _min_mph = 0.0;
-    static constexpr float _max_mph = 25.0; // What is max speed car can ever go
-    static constexpr float _initial_mph = 0.0; // Current speed, raw value converted to mph (in mph)
-    static constexpr float _initial_redline_mph = 15.0; // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
-    static constexpr float _initial_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 pulrot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 whlrot/pulrot * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
+    int64_t _delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
+    float _stop_thresh_mph = 0.2;  // Below which the car is considered stopped
+    float _min_mph = 0.0;
+    float _max_mph = 25.0; // What is max speed car can ever go
+    float _initial_mph = 0.0; // Current speed, raw value converted to mph (in mph)
+    float _initial_redline_mph = 15.0; // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
+    float _initial_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 pulrot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 whlrot/pulrot * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
     static constexpr bool _initial_invert = true;
-    static constexpr int64_t _initial_zerovalue = 999999;
-    static constexpr float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+    int64_t _initial_zerovalue = 999999;
+    float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
     float _govern_mph, _idle_mph;
   public:
     Speedometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_mph) {

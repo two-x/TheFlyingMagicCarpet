@@ -220,28 +220,7 @@ static void draw_task_wrapper(void *parameter);
 void push_task();
 void draw_task();
 void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref);
-volatile bool _procrastinate = false;
-volatile bool reset_finished = false;
-volatile bool simulating_last;
 volatile int disp_oldmode = SHUTDOWN;
-volatile int nowmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
-std::string disp_values[disp_lines];  // Holds previously drawn value strings for each line
-volatile bool disp_bool_values[6];
-volatile bool disp_bargraphs[disp_lines];
-volatile bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
-volatile int32_t disp_needles[disp_lines];
-volatile int32_t disp_targets[disp_lines];
-volatile int32_t disp_age_quanta[disp_lines];
-volatile uint8_t disp_val_colors[disp_lines];
-volatile bool disp_selected_val_dirty;
-volatile bool disp_datapage_dirty;
-volatile bool disp_values_dirty;
-volatile bool disp_data_dirty[disp_lines];
-volatile bool disp_bools_dirty;
-volatile bool disp_sidemenu_dirty;
-volatile bool disp_runmode_dirty;
-volatile bool disp_simbuttons_dirty;
-volatile bool disp_idiots_dirty;
 volatile bool auto_saver_enabled = false;
 LGFX_Sprite* sprptr;
 std::string nulstr = "";
@@ -286,6 +265,24 @@ class Display {
     static constexpr int idiots_corner_y = 13;
     bool fullscreen_last = false;
   public:
+    volatile int nowmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
+    std::string disp_values[disp_lines];  // Holds previously drawn value strings for each line
+    volatile bool disp_bool_values[6];
+    volatile bool disp_bargraphs[disp_lines];
+    volatile bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
+    volatile int32_t disp_needles[disp_lines];
+    volatile int32_t disp_targets[disp_lines];
+    volatile int32_t disp_age_quanta[disp_lines];
+    volatile uint8_t disp_val_colors[disp_lines];
+    volatile bool disp_selected_val_dirty;
+    volatile bool disp_datapage_dirty;
+    volatile bool disp_values_dirty;
+    volatile bool disp_data_dirty[disp_lines];
+    volatile bool disp_bools_dirty;
+    volatile bool disp_sidemenu_dirty;
+    volatile bool disp_runmode_dirty;
+    volatile bool disp_simbuttons_dirty;
+    volatile bool disp_idiots_dirty;
     Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim)
         : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {
     }
@@ -1017,12 +1014,14 @@ class Display {
             animations.set_vp(0, 0, disp_width_pix, disp_height_pix);
             screensaver_max_refresh = screensaver = auto_saver_enabled = true;
             animations.anim_reset_request = true;
+            ui_context = ScreensaverUI;
         }
         else {
             screensaver = screensaver_max_refresh = auto_saver_enabled = false;
             animations.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
             reset_request = true;
             if (was_simulating) sim->enable();
+            ui_context = DatapagesUI;
         }
     }
 };
@@ -1066,13 +1065,13 @@ class Tuner {
         datapage = constrain(datapage, 0, datapages::NUM_DATAPAGES-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
         if (datapage != datapage_last) {
             if (tunctrl == EDIT) tunctrl = SELECT;  // If page is flipped during edit, drop back to select mode
-            disp_datapage_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
+            screen->disp_datapage_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
         }
         if (tunctrl == SELECT) {
             sel_val = constrain(sel_val, tuning_first_editable_line[datapage], disp_tuning_lines-1);  // Skip unchangeable values for all PID modes
-            if (sel_val != sel_val_last) disp_selected_val_dirty = true;
+            if (sel_val != sel_val_last) screen->disp_selected_val_dirty = true;
         }
-        if (tunctrl != tunctrl_last || disp_datapage_dirty) disp_selected_val_dirty = true;
+        if (tunctrl != tunctrl_last || screen->disp_datapage_dirty) screen->disp_selected_val_dirty = true;
     }
     void edit_values(int rmode) {
         float fdelta = (float)idelta;

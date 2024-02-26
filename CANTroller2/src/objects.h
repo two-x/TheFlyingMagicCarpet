@@ -125,11 +125,15 @@ void starter_update () {  // Starter bidirectional handler logic.  Outside code 
             } while (starter != digitalRead(starter_pin)); // due to a chip glitch, starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
         }
         else if (!starter && (starter_request == REQ_ON) && remote_start_support) {  // If we got a request to start the motor, and it's not already being driven externally
+            starterTimer.reset();  // if left on the starter will turn off automatically after X seconds
+            if (brake_before_starting && (pressure.psi() < pressure.prestart_psi)) {
+                // First apply the brakes, so we don't lurch forward (code does not exist yet)
+                // brake.set_pidtarg()
+            }
             starter_drive = true;
             starter = HIGH;  // ensure starter variable always reflects the starter status regardless who is driving it
             set_pin (starter_pin, OUTPUT);  // then set pin to an output
             write_pin (starter_pin, starter);  // and start the motor
-            starterTimer.reset();  // if left on the starter will turn off automatically after X seconds
         }
         starter_request = REQ_NA;  // we have serviced whatever requests
     }
