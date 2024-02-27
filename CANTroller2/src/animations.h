@@ -76,16 +76,18 @@ class CollisionsSaver {
         int32_t m;
         uint8_t color;
     };
+    bool touchnow = false, touchlast;
     viewport* vp;
     uint8_t sqrme, slices = 8;
     ball_info_t* balls;
     ball_info_t* a;
+    ball_info_t touchball = { 100, 100, 0, 0, 30 << SHIFTSIZE, 10, GRN };
     LGFX_Sprite* sprite;
     static constexpr std::uint32_t BALL_MAX = 35;  // 256
     ball_info_t _balls[2][BALL_MAX];
     std::uint32_t _ball_count = 0, _myfps = 0;
     std::uint32_t ball_thismax, ball_count = 0;
-    int _width, _height;
+    int _width, _height, touchx, touchy, lastx, lasty;
     std::uint32_t sec, psec, ball_create_rate = 3200;
     std::uint32_t myfps = 0, frame_count = 0;
     float ball_radius_base = 4.5 / 235.0;  // 7 pixels radius / 125x100 sprite = about 5 pix per 235 sides sum
@@ -112,6 +114,8 @@ class CollisionsSaver {
             a = &balls[i];
             sprite->fillCircle((a->x >> SHIFTSIZE) + vp->x, (a->y >> SHIFTSIZE) + vp->y, a->r >> SHIFTSIZE, (uint8_t)(a->color));
         }
+        if (touchnow) sprite->fillCircle(touchx + vp->x, touchy + vp->y, touchball.r >> SHIFTSIZE, touchball.color);
+        touchnow = false;
     }
     void new_ball(int ballno) {
         auto a = &_balls[_loop_count & 1][ballno];
@@ -125,6 +129,21 @@ class CollisionsSaver {
         a->r = sqrme << SHIFTSIZE;  // (sqrme * sqrme)));
         a->m = 4 + (ball_count & 0x07);
     }
+    void saver_touch(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
+        // pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
+        lastx = touchx;
+        lasty = touchy;
+        touchx = x;
+        touchy = y;
+        touchnow = true;
+        touchball.x = touchx << SHIFTSIZE;
+        touchball.y = touchy << SHIFTSIZE;
+        touchball.dx = (touchx - lastx) << SHIFTSIZE;
+        touchball.dy = (touchy - lasty) << SHIFTSIZE;
+    }
+    // ball_info_t temp_ball(int32_t x, int32_t y, int32_t dx, int32_t dy, int32_t r, int32_t m, uint8_t color) {
+    //     return { x, y, dx, dy, r, m, color }; // Uniform initialization
+    // }
     bool mainfunc(void) {
         bool new_round = false;
         static constexpr float e = 0.999;  // Coefficient of friction
@@ -148,29 +167,31 @@ class CollisionsSaver {
         balls = a = &_balls[f][0];
         b = &_balls[!f][0];
         memcpy(a, b, sizeof(ball_info_t) * ball_count);
-        for (int i = 0; i != ball_count; i++) {
-            a = &balls[i];
-            a->dy += ball_gravity; // gravity
-            a->x += a->dx;
-            if (a->x < a->r) {
-                a->x = a->r;
-                if (a->dx < 0) a->dx = -a->dx * e;
+        for (int i = 0; i < ball_count + touchnow; i++) {
+            a = (i == ball_count) ? &touchball : &balls[i];
+            if (i < ball_count) {
+                a->dy += ball_gravity; // gravity
+                a->x += a->dx;
+                if (a->x < a->r) {
+                    a->x = a->r;
+                    if (a->dx < 0) a->dx = -a->dx * e;
+                }
+                else if (a->x >= _width - a->r) {
+                    a->x = _width - a->r - 1;
+                    if (a->dx > 0) a->dx = -a->dx * e;
+                }
+                a->y += a->dy;
+                if (a->y < a->r) {
+                    a->y = a->r;
+                    if (a->dy < 0) a->dy = -a->dy * e;
+                }
+                else if (a->y >= _height - a->r) {
+                    a->y = _height - a->r - 1;
+                    if (a->dy > 0) a->dy = -a->dy * e;
+                }
             }
-            else if (a->x >= _width - a->r) {
-                a->x = _width - a->r - 1;
-                if (a->dx > 0) a->dx = -a->dx * e;
-            }
-            a->y += a->dy;
-            if (a->y < a->r) {
-                a->y = a->r;
-                if (a->dy < 0) a->dy = -a->dy * e;
-            }
-            else if (a->y >= _height - a->r) {
-                a->y = _height - a->r - 1;
-                if (a->dy > 0) a->dy = -a->dy * e;
-            }
-            for (int j = i + 1; j != ball_count; j++) {
-                b = &balls[j];
+            for (int j = i + 1; j < ball_count + touchnow; j++) {
+                b = (j == ball_count) ? &touchball  : &balls[j];
                 rr = a->r + b->r;
                 vx = a->x - b->x;
                 if (abs(vx) > rr) continue;
@@ -183,10 +204,10 @@ class CollisionsSaver {
                 vx *= distance / len;
                 vy *= distance / len;
                 a->x += vx;
-                b->x -= vx;
+                if (j < ball_count) b->x -= vx;
                 vx = b->x - a->x;
                 a->y += vy;
-                b->y -= vy;
+                if (j < ball_count) b->y -= vy;
                 vy = b->y - a->y;
                 vx2vy2 = vx * vx + vy * vy;
                 t = -(vx * a->dx + vy * a->dy) / vx2vy2;
@@ -207,8 +228,10 @@ class CollisionsSaver {
                 float bdy = -e * (bmy - amy) + ady;
                 a->dx = roundf(adx + arx);
                 a->dy = roundf(ady + ary);
-                b->dx = roundf(bdx + brx);
-                b->dy = roundf(bdy + bry);      
+                if (j < ball_count) {
+                    b->dx = roundf(bdx + brx);
+                    b->dy = roundf(bdy + bry);
+                }
             }
         }
         _myfps = myfps;
@@ -616,9 +639,14 @@ class AnimationManager {
         spr->setClipRect(vp.x, vp.y, vp.w, vp.h);
         if (screensaver) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
             mule_drawn = false;  // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
-            if (nowsaver == Eraser) still_running = eSaver.update(spr, &vp);
-            else if (nowsaver == Collisions) still_running = cSaver.update(spr, &vp);
-            if (touched()) eSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
+            if (nowsaver == Eraser) {
+                still_running = eSaver.update(spr, &vp);
+                if (touched()) eSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
+            }
+            else if (nowsaver == Collisions) {
+                if (touched()) cSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
+                still_running = cSaver.update(spr, &vp);
+            }
             if (!still_running) change_saver();
         }
         else if (!mule_drawn) {
