@@ -28,8 +28,8 @@ class NeopixelStrip {
     enum ledcolor : int { cnow, clast, cnormal, coff, con, cflash, cnumcolors };
     uint8_t neo_wheelcounter = 0;
     enum brightness_contexts { NITE, DAY };  // Indoors = NITE
-    uint8_t brightlev[2][7] = { { 0, 1,  6, 10, 17, 30,  50 },     // [NITE] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
-                                { 0, 2, 16, 30, 45, 65, 100 }, };  // [DAY] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
+    uint8_t brightlev[2][7] = { { 0, 2,  6, 10, 17, 30,  50 },     // [NITE] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
+                                { 0, 3, 16, 30, 45, 65, 100 }, };  // [DAY] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
     bool context = NITE;
     bool neo_heartbeat_variable_brightness = false;  // If false then brightness control only affect idiotlights
     uint8_t lobright;
@@ -197,7 +197,7 @@ void NeopixelStrip::heartbeat_update() {
     if (!neo_heartbeat) return;
     if (neoHeartbeatTimer.expired()) {
         heartbeat_pulse = !heartbeat_pulse;
-        if (++heartbeat_state >= arraysize(heartbeat_ekg_us)) heartbeat_state -= arraysize(heartbeat_ekg_us);
+        ++heartbeat_state %= arraysize(heartbeat_ekg_us);
         neoHeartbeatTimer.set(heartbeat_ekg_us[heartbeat_state]);
         if (heartbeat_pulse) heartbeat_brightness = heartbright;
         else neoFadeTimer.reset();

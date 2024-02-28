@@ -115,6 +115,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (we_just_switched_modes) {
             park_motors(REQ_ON);  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
             powering_up = false;  // to cover unlikely edge case where basic mode switch is enabled during wakeup from asleep mode
+            watchdog.set_codemode(Parked);
         }
         else if (park_the_motors) park_motors();  // Update motor parking until finished
         if (!basicmodesw && !tach.engine_stopped()) mode = speedo.car_stopped() ? HOLD : FLY;  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
@@ -157,6 +158,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         else {  // if shutdown is complete
             if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode
+            watchdog.set_codemode(Parked);
             if (sleep_inactivity_timer.expired() || sleep_request == REQ_ON || sleep_request == REQ_TOG) mode = ASLEEP;
         }
         sleep_request == REQ_NA;
@@ -168,7 +170,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (starter || !tach.engine_stopped()) mode = HOLD;  // If we started the car, enter hold mode once starter is released
     }
     void run_holdMode() {
-        if (we_just_switched_modes) joy_centered = false;  // Fly mode will be locked until the joystick first is put at or below center
+        if (we_just_switched_modes) {
+            joy_centered = false;  // Fly mode will be locked until the joystick first is put at or below center
+            watchdog.set_codemode(Driving);
+        }
         if (!speedo.car_stopped()) autostop(REQ_ON);
         gas.idlectrl.goto_idle();  // Let off gas (if gas using PID mode) and keep target updated to possibly changing idle value
         if (hotrc.joydir(VERT) != JOY_UP) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode

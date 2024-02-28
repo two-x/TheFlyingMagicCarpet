@@ -310,10 +310,28 @@ class LoopTimer {
 class Watchdog {
   private:
     int timeout_sec = 10;
+    Preferences* myprefs;
+    int codemode_last = 50000, crashcount = 0;
+    std::string codemodecard[4] = { "confused", "booting", "parked", "driving" };
   public:
-    Watchdog() {}
-    void start(int sec = -1) {
+    Watchdog(Preferences* _prefs) : myprefs(_prefs) {}
+    void bootcounter() {
+        bootcount = myprefs->getUInt("bootcount", 0) + 1;
+        myprefs->putUInt("bootcount", bootcount);
+        codemode_postmortem = myprefs->getUInt("codemode", Confused);
+        crashcount = myprefs->getUInt("crashcount", 0);
+        if (codemode_postmortem != Parked) crashcount++;
+        myprefs->putUInt("crashcount", crashcount);
+        Serial.printf("Boot count: %d (%d/%d). Last lost power while %s\n", bootcount, bootcount-crashcount, crashcount, codemodecard[codemode_postmortem].c_str());
+    }
+    void set_codemode(int _mode) {
+        codemode = _mode;
+        if (codemode_last != codemode) myprefs->putUInt("codemode", codemode);
+        codemode_last = codemode;
+    }
+    void setup(int sec = -1) {
         if (sec >= 0) timeout_sec = sec;
+        bootcounter();
         if (!watchdog_enabled) return;
         Serial.printf("Watchdog timer.. \n");
         esp_task_wdt_init(timeout_sec, true);  // see https://github.com/espressif/esp-idf/blob/master/examples/system/task_watchdog/main/task_watchdog_example_main.c

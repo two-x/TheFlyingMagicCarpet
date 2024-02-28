@@ -138,8 +138,8 @@ class CollisionsSaver {
         touchnow = true;
         touchball.x = touchx << SHIFTSIZE;
         touchball.y = touchy << SHIFTSIZE;
-        touchball.dx = (touchx - lastx) << SHIFTSIZE;
-        touchball.dy = (touchy - lasty) << SHIFTSIZE;
+        touchball.dx = (touchx - lastx) << (SHIFTSIZE - 1);
+        touchball.dy = (touchy - lasty) << (SHIFTSIZE - 1);
     }
     // ball_info_t temp_ball(int32_t x, int32_t y, int32_t dx, int32_t dy, int32_t r, int32_t m, uint8_t color) {
     //     return { x, y, dx, dy, r, m, color }; // Uniform initialization
@@ -288,7 +288,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     uint16_t spothue = 65535, slowhue = 0, penhue = rn(65535);
     int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 200, shape = rn(Rotate), pensatdir = 1;
     static constexpr uint32_t saver_cycletime_us = 18000000;
-    Timer saverCycleTimer, pentimer = Timer(100000), lucktimer, seasontimer;
+    Timer saverCycleTimer, pentimer = Timer(70000), lucktimer, seasontimer;
     Timer wormmovetimer = Timer(20000), wormtimer = Timer(1000000), wormstripetimer = Timer(2850000);
     bool saver_lotto = false, has_eraser = true;
  public:
@@ -468,10 +468,10 @@ class EraserSaver {  // draws colorful patterns to exercise
                 lucktimer.reset();
                 // uint8_t sat = spothue >> 8;
                 // uint8_t brt = 129 + 42 * (1 + std::abs(season-1));
-                uint8_t c = (wormstripe == 2 || wormstripe == 0) ? pencolor : BLK;
+                uint8_t c = (!wormstripe) ? BLK : pencolor;
                 if (wormstripetimer.expired()) {
-                    ++wormstripe %= 4;
-                    wormstripetimer.set(2850000 * (wormstripe == 2 || wormstripe == 0) ? 3 : 1);
+                    ++wormstripe %= 2;
+                    wormstripetimer.set(500000 * ((!wormstripe) ? 1 : 3));
                 }
                 // if ((spothue >> 5) & 3 == 3) {
                 //     if (season == 3) c = BLK;

@@ -87,6 +87,7 @@ enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3
 enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };   // possible sources of gas, brake, steering commands
 enum boolean_states : int { ON=1 };
 enum ui_modes : int { DatapagesUI=0, ScreensaverUI=1 };
+enum codemodes : int { Confused=0, Booting=1, Parked=2, Driving=3 };
 // enum telemetry_full : int { 
 //     
 // };
@@ -110,7 +111,7 @@ bool web_enabled = true;
 bool use_i2c_baton = true;
 bool screensaver_max_refresh = false;
 bool brake_before_starting = true;
-bool watchdog_enabled = false;
+bool watchdog_enabled = true;
 // dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
 bool usb_jtag = true;                // if you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)
 bool dont_take_temperatures = false; // in case debugging dallas sensors or causing problems
@@ -146,6 +147,9 @@ int32_t neodesat = 0;     // default for lets us de/saturate the neopixels
 float tuning_rate_pcps = 7.5;  // values being edited change value at this percent of their overall range per second
 
 // non-tunable values. probably these belong with their related code
+uint bootcount;                         // variable to track total number of boots of this code build
+uint codemode = Booting;
+uint codemode_postmortem;
 bool running_on_devboard = false;       // will overwrite with value read thru pull resistor on tx pin at boot
 bool shutdown_incomplete = true;        // minor state variable for shutdown mode - Shutdown mode has not completed its work and can't yet stop activity
 bool park_the_motors = false;           // indicates we should release the brake & gas so the pedals can be used manually without interference

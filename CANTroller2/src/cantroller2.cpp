@@ -14,6 +14,8 @@ void setup() {
     partition_table();
     set_board_defaults();     // set variables as appropriate if on a breadboard
     if (RUN_TESTS) run_tests();
+    prefs.begin("FlyByWire", false);
+    watchdog.setup();
     bootbutton.setup();
     hotrc.setup();
     pot.setup();
@@ -34,7 +36,6 @@ void setup() {
     gas.setup(&hotrc, &speedo, &tach, &pot, &tempsens);
     brake.setup(&hotrc, &speedo, &mulebatt, &pressure, &brkpos);
     steer.setup(&hotrc, &speedo, &mulebatt);
-    prefs.begin("FlyByWire", false);
     datapage = prefs.getUInt("dpage", PG_RUN);
     datapage_last = prefs.getUInt("dpage", PG_TEMP);
     sim_setup();              // simulator initialize devices and pot map
@@ -50,7 +51,6 @@ void setup() {
     printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     looptimer.setup();
-    watchdog.start();
 }
 void loop() {
     watchdog.pet();           // pet the watchdog regularly to prevent reset

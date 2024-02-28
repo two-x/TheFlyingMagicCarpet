@@ -34,7 +34,7 @@ static LoopTimer looptimer;
 static WebManager web(&looptimer);
 static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &maf_gps, &ignition);
 static LightingBox lightbox(&i2c);  // lightbox(&diag);
-static Watchdog watchdog;
+static Watchdog watchdog(&prefs);
 
 int rn(int values=256) {  // Generate a random number between 0 and values-1
     std::uniform_int_distribution<> dis(0, values - 1);
