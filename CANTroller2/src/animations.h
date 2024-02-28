@@ -81,7 +81,8 @@ class CollisionsSaver {
     uint8_t sqrme, slices = 8;
     ball_info_t* balls;
     ball_info_t* a;
-    ball_info_t touchball = { 100, 100, 0, 0, 30 << SHIFTSIZE, 10, GRN };
+    static constexpr int touchball_r = 15;
+    ball_info_t touchball = { 100, 100, 0, 0, touchball_r << SHIFTSIZE, 10, GRN };
     LGFX_Sprite* sprite;
     static constexpr std::uint32_t BALL_MAX = 35;  // 256
     ball_info_t _balls[2][BALL_MAX];
@@ -114,7 +115,7 @@ class CollisionsSaver {
             a = &balls[i];
             sprite->fillCircle((a->x >> SHIFTSIZE) + vp->x, (a->y >> SHIFTSIZE) + vp->y, a->r >> SHIFTSIZE, (uint8_t)(a->color));
         }
-        if (touchnow) sprite->fillCircle(touchx + vp->x, touchy + vp->y, touchball.r >> SHIFTSIZE, touchball.color);
+        if (touchnow) sprite->fillCircle((touchball.x >> SHIFTSIZE) + vp->x, (touchball.y >> SHIFTSIZE) + vp->y, touchball.r >> SHIFTSIZE, touchball.color);
         touchnow = false;
     }
     void new_ball(int ballno) {
@@ -131,15 +132,15 @@ class CollisionsSaver {
     }
     void saver_touch(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
         // pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
-        lastx = touchx;
-        lasty = touchy;
+        lastx = touchball.x;
+        lasty = touchball.y;
         touchx = x;
         touchy = y;
         touchnow = true;
-        touchball.x = touchx << SHIFTSIZE;
-        touchball.y = touchy << SHIFTSIZE;
-        touchball.dx = (touchx - lastx) << (SHIFTSIZE - 1);
-        touchball.dy = (touchy - lasty) << (SHIFTSIZE - 1);
+        touchball.x = constrain(touchx, touchball_r, vp->w - touchball_r) << SHIFTSIZE;
+        touchball.y = constrain(touchy, touchball_r, vp->h - touchball_r) << SHIFTSIZE;
+        touchball.dx = (touchball.x - lastx) / 2;
+        touchball.dy = (touchball.y - lasty) / 2;
     }
     // ball_info_t temp_ball(int32_t x, int32_t y, int32_t dx, int32_t dy, int32_t r, int32_t m, uint8_t color) {
     //     return { x, y, dx, dy, r, m, color }; // Uniform initialization
