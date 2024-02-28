@@ -937,7 +937,8 @@ class Tachometer : public PulseSensor<float> {
     String _short_name = "tach";
     // Query/getter functions
     float rpm() { return _human.val(); }
-    bool engine_stopped() { return stopped(); }
+    // bool engine_stopped() { return stopped(); }
+    bool engine_stopped() { return _val_filt.val() < _stop_thresh_rpm ; }  // Note due to weird float math stuff, can not just check if tach == 0.0
     float redline_rpm() { return _human.max(); }
     float govern_rpm() { return _govern_rpm; }
     float* govern_rpm_ptr() { return &_govern_rpm; }
@@ -983,7 +984,8 @@ class Speedometer : public PulseSensor<float> {
     String _short_name = "speedo";
     // Query/getter functions
     float mph() { return _human.val(); }
-    bool car_stopped() { return stopped(); }
+    // bool car_stopped() { return stopped(); }
+    bool car_stopped() { return _val_filt.val() < _stop_thresh_mph ; }  // Note due to weird float math stuff, can not just check if tach == 0.0
     float redline_mph() { return _human.max(); }
     float govern_mph() { return _govern_mph; }
     float idle_mph() { return _idle_mph; }
@@ -1409,6 +1411,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         }
     }
     void direction_update() {
+        if (sim->simulating(sens::joy)) return;
         for (int8_t axis = HORZ; axis <= VERT; axis++) {
             us[axis][RAW] = (int32_t)(rmt[axis].readPulseWidth(true));
             us[axis][RAW] = spike_filter(axis, us[axis][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need

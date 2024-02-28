@@ -755,15 +755,9 @@ class Display {
   public:
     void update(int _nowmode = -1) {
         if (_nowmode >= 0) nowmode = _nowmode;
-        if (is_drawing || is_pushing) return;
         #ifndef VIDEO_TASKS
-        if (pushtime) {
-            if (screenRefreshTimer.expired() || screensaver_max_refresh || auto_saver_enabled) {
-                screenRefreshTimer.reset();
-                push_task();
-                pushclock = (int32_t)screenRefreshTimer.elapsed();
-            }   
-        }
+        // if (is_drawing || is_pushing) return;
+        if (pushtime) push_task();
         else draw_task();
         #endif
     }
@@ -947,18 +941,20 @@ class Display {
         return true;
     }
     void push_task() {
-        if (is_drawing || !pushtime) return;  // vTaskDelay(pdMS_TO_TICKS(1));
-        screenRefreshTimer.reset();
+        if (is_drawing || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh || auto_saver_enabled)) return;  // vTaskDelay(pdMS_TO_TICKS(1));
         is_pushing = true;
         // Serial.printf("f%d push@ 0x%08x vs 0x%08x\n", flip, &framebuf[flip], &framebuf[!flip]);
         if (print_framebuffers) {  // warning this *severely* slows everything down, ~.25 sec/loop. consider disabling word wrap in terminal output
             Serial.printf("flip=%d\n", flip);
             printframebufs(2);
         }
+        screenRefreshTimer.reset();
         diffpush(&framebuf[flip], &framebuf[!flip]);
         flip = !flip;
         sprptr = &framebuf[flip];
+        pushclock = (int32_t)screenRefreshTimer.elapsed();
         is_pushing = pushtime = false;  // drawn = 
+
     }
     void draw_task() {
         if (is_pushing || pushtime) return;
@@ -1163,16 +1159,16 @@ static void push_task_wrapper(void *parameter) {
         // Serial.printf("push0 ");
         // draw_task();
         // vTaskDelay(pdMS_TO_TICKS(1));
-        while (is_drawing || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh)) vTaskDelay(pdMS_TO_TICKS(1));
-        // while (!(screenRefreshTimer.expired() || screensaver_max_refresh)) vTaskDelay(pdMS_TO_TICKS(1));
-        screenRefreshTimer.reset();
         screen.push_task();
+        vTaskDelay(pdMS_TO_TICKS(1));
+        // while (!(screenRefreshTimer.expired() || screensaver_max_refresh)) vTaskDelay(pdMS_TO_TICKS(1));
+        // screenRefreshTimer.reset();
         // vTaskDelete(NULL);
     }
 }
 static void draw_task_wrapper(void *parameter) {
     while (true) {
-        while (is_pushing || pushtime) vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
+        vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
         screen.draw_task();
     }
 }
