@@ -111,7 +111,7 @@ bool web_enabled = true;
 bool use_i2c_baton = true;
 bool screensaver_max_refresh = false;
 bool brake_before_starting = true;
-bool watchdog_enabled = true;
+bool watchdog_enabled = false;
 // dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
 bool usb_jtag = true;                // if you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)
 bool dont_take_temperatures = false; // in case debugging dallas sensors or causing problems
