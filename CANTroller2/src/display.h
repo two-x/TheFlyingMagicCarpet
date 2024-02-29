@@ -553,6 +553,8 @@ class Display {
             n_pos = corner_x + constrain(n_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
             if (!disp_bargraphs[lineno]) draw_bargraph_base(corner_x, corner_y + 8, disp_bargraph_width);
             disp_bargraphs[lineno] = true;
+            draw_bargraph_needle(n_pos, disp_needles[lineno], corner_y, ncolor);  // Let's draw a needle
+            disp_needles[lineno] = n_pos;  // Remember position of needle
             if (target != -1) {  // If target value is given, draw a target on the bargraph too
                 int32_t t_pos = map(target, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
                 int32_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || t_pos < disp_bargraph_squeeze) ? RED : ( (t_pos != n_pos) ? YEL : GRN );
@@ -563,9 +565,7 @@ class Display {
                     disp_targets[lineno] = t_pos;  // Remember position of target
                 }
             }
-            else draw_target_shape(disp_targets[lineno], corner_y, BLK, NON);  // Erase old target
-            draw_bargraph_needle(n_pos, disp_needles[lineno], corner_y, ncolor);  // Let's draw a needle
-            disp_needles[lineno] = n_pos;  // Remember position of needle
+            else if (disp_data_dirty[lineno]) draw_target_shape(disp_targets[lineno], corner_y, BLK, NON);  // Erase old target
         }
         else delete_bargraph = true;
         if (delete_bargraph || value == 1234567) {
