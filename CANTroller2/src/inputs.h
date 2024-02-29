@@ -270,7 +270,7 @@ class Touchscreen {
             }
             else if (tunctrl == EDIT && !lasttouch) {
                 tunctrl = SELECT;  // Drop back to select mode
-                sel_val++;  // Move to the next selection
+                touch_increment_sel_val = true;  // Move to the next selection
             }
             else if (tunctrl == SELECT) {
                 if (!lasttouch) touch_increment_sel_val = true;
