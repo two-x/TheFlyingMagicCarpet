@@ -193,7 +193,7 @@ class Touchscreen {
   public:
     static constexpr uint8_t addr = 0x38;  // i2c addr for captouch panel
     int idelta = 0;
-;
+    bool increment_datapage = false, increment_sel_val = false;
     Touchscreen() {}
     void setup(LGFX* tft, I2C* i2c, int width, int height) {
         _tft = tft;
@@ -257,8 +257,8 @@ class Touchscreen {
         trow = constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
         tcol = constrain((landed[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, 5);
         if (tcol == 0 && trow == 0 && !lasttouch) {
-            // if (!(landed[xx] == 0 && landed[yy] == 0)) touch_increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
-            touch_increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
+            // if (!(landed[xx] == 0 && landed[yy] == 0)) increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
+            increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
         }
         else if (tcol == 0 && trow == 1) {  // Long touch to enter/exit editing mode, if in editing mode, press to change the selection of the item to edit
             if (tunctrl == OFF) {
@@ -270,10 +270,10 @@ class Touchscreen {
             }
             else if (tunctrl == EDIT && !lasttouch) {
                 tunctrl = SELECT;  // Drop back to select mode
-                touch_increment_sel_val = true;  // Move to the next selection
+                increment_sel_val = true;  // Move to the next selection
             }
             else if (tunctrl == SELECT) {
-                if (!lasttouch) touch_increment_sel_val = true;
+                if (!lasttouch) increment_sel_val = true;
                 else if (touch_longpress_valid && touchHoldTimer.expired()) {
                     tunctrl = OFF;
                     touch_longpress_valid = false;

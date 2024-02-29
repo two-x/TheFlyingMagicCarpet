@@ -1334,6 +1334,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
     int32_t failsafe_pad_us = 10;
   private:
     Simulator* sim;
+    Potentiometer* pot;
     static const uint32_t failsafe_timeout = 15000;
     Timer failsafe_timer;  // How long to receive failsafe pulse value continuously before recognizing radio is lost. To prevent false positives
     bool _radiolost = true;
@@ -1353,8 +1354,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
     static const int32_t depth = 9;  // more depth will reject longer spikes at the expense of controller delay
     int32_t raw_history[NUM_AXES][depth], filt_history[NUM_AXES][depth];  // Values before and after filtering.
   public:
-    Hotrc(Simulator* _sim) {
-        sim = _sim;
+    Hotrc(Simulator* _sim, Potentiometer* _pot) : sim(_sim), pot(_pot) {
         calc_params();
     }
     void setup() {
@@ -1411,7 +1411,11 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         }
     }
     void direction_update() {
-        if (sim->simulating(sens::joy)) return;
+        if (sim->simulating(sens::joy)) {
+            if (sim->potmapping(sens::joy)) pc[HORZ][FILT] = pot->mapToRange(pc[HORZ][OPMIN], pc[HORZ][OPMAX]);  // overwrite horz value if potmapping
+            Serial.printf("%d %d %lf\n",sim->potmapping(sens::joy),sim->potmapping(), pc[HORZ][FILT]);
+            return;
+        }
         for (int8_t axis = HORZ; axis <= VERT; axis++) {
             us[axis][RAW] = (int32_t)(rmt[axis].readPulseWidth(true));
             us[axis][RAW] = spike_filter(axis, us[axis][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
@@ -1425,6 +1429,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             else if (!_radiolost) kick_inactivity_timer(6);  // otherwise indicate evidence of user activity
             if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set joy_axis_filt to CENTer value
         }
+
     }
     bool radiolost_update() {
         if (ema_us[VERT] > failsafe_us + failsafe_margin_us) {

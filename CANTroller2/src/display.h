@@ -660,14 +660,15 @@ class Display {
         else if (result.find("e-") != std::string::npos) result.replace(result.find("e-"), 2, "\x88");  // For ridiculously small values
         return result;
     }
-    void draw_runmode(int32_t _nowmode, int32_t _oldmode, uint8_t color_override=NON) {  // color_override = -1 uses default color
+    void draw_runmode(int32_t _nowmode, uint8_t color_override=NON) {  // color_override = -1 uses default color
         sprptr->setTextDatum(textdatum_t::top_left);
-        sprptr->fillRect(disp_runmode_text_x, disp_vshift_pix, (modecard[_oldmode].length() + 5) * disp_font_width, disp_font_height, BLK);
+        sprptr->fillRect(disp_runmode_text_x, disp_vshift_pix, (modecard[disp_oldmode].length() + 5) * disp_font_width, disp_font_height, BLK);
         sprptr->setTextColor((color_override == NON) ? colorcard[_nowmode] : color_override);  
         sprptr->setCursor(disp_runmode_text_x, disp_vshift_pix);
         sprptr->print(modecard[_nowmode].c_str());
         sprptr->print(" Mode");
         disp_runmode_dirty = false;
+        disp_oldmode = _nowmode;
     }
     void draw_datapage(int32_t page, int32_t page_last, bool forced=false) {
         if (forced) {
@@ -793,17 +794,11 @@ class Display {
             tiny_text();
             update_idiots(disp_idiots_dirty);
             // if (just_reset) printframebufs(3);
-            if (disp_datapage_dirty) {
-                draw_datapage(datapage, datapage_last, true);
-                if (datapage_last != datapage) prefs.putUInt("dpage", datapage);
-            }
+            if (disp_datapage_dirty) draw_datapage(datapage, datapage_last, true);
             if (disp_sidemenu_dirty) draw_touchgrid(false);
             if (disp_selected_val_dirty) draw_selected_name(tunctrl, sel_val, sel_val_last, sel_val_last_last);
-            if (disp_runmode_dirty) {
-                draw_runmode(nowmode, disp_oldmode, NON);
-                disp_oldmode = nowmode;
-            }
-            if (valuesRefreshTimer.expireset() || disp_values_dirty) {
+            if (disp_runmode_dirty) draw_runmode(nowmode, NON);
+            if (disp_values_dirty || valuesRefreshTimer.expireset()) {
                 float drange;
                 draw_dynamic(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
                 draw_dynamic(2, speedo.filt(), 0.0, speedo.redline_mph(), gas.cruisepid.target());
@@ -960,24 +955,24 @@ class Display {
                 disp_values_dirty = false;
             }
         }
-        fps = animations.update(spr);
+        fps = animations.update(spr, disp_simbuttons_dirty);
+        disp_simbuttons_dirty = false;
         return true;
     }
     void push_task() {
         if (is_drawing || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh || auto_saver_enabled)) return;  // vTaskDelay(pdMS_TO_TICKS(1));
         is_pushing = true;
         // Serial.printf("f%d push@ 0x%08x vs 0x%08x\n", flip, &framebuf[flip], &framebuf[!flip]);
+        screenRefreshTimer.reset();
         if (print_framebuffers) {  // warning this *severely* slows everything down, ~.25 sec/loop. consider disabling word wrap in terminal output
             Serial.printf("flip=%d\n", flip);
             printframebufs(2);
         }
-        screenRefreshTimer.reset();
         diffpush(&framebuf[flip], &framebuf[!flip]);
         flip = !flip;
         sprptr = &framebuf[flip];
         pushclock = (int32_t)screenRefreshTimer.elapsed();
         is_pushing = pushtime = false;  // drawn = 
-
     }
     void draw_task() {
         if (is_pushing || pushtime) return;
@@ -1075,9 +1070,9 @@ class Tuner {
         if (tunctrl == EDIT) idelta_encoder = encoder.rotation(true);  // true = include acceleration
         else if (tunctrl == SELECT) sel_val += encoder.rotation();  // If overflow constrain will fix in general handler below
         else if (tunctrl == OFF) datapage += encoder.rotation();  // If overflow tconstrain will fix in general below
-        if (touch_increment_sel_val) ++sel_val %= disp_tuning_lines;
-        if (touch_increment_datapage) ++datapage %= NUM_DATAPAGES;
-        touch_increment_sel_val = touch_increment_datapage = false;
+        if (touch->increment_sel_val) ++sel_val %= disp_tuning_lines;
+        if (touch->increment_datapage) ++datapage %= NUM_DATAPAGES;
+        touch->increment_sel_val = touch->increment_datapage = false;
         idelta += idelta_encoder + touch->idelta;  // Allow edits using the encoder or touchscreen
         touch->idelta = idelta_encoder = 0;
         if (tunctrl != tunctrl_last || datapage != datapage_last || sel_val != sel_val_last || idelta) tuningCtrlTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
@@ -1086,6 +1081,7 @@ class Tuner {
         if (datapage != datapage_last) {
             if (tunctrl == EDIT) tunctrl = SELECT;  // If page is flipped during edit, drop back to select mode
             screen->disp_datapage_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
+            prefs.putUInt("dpage", datapage);
         }
         if (tunctrl == SELECT) {
             sel_val = constrain(sel_val, tuning_first_editable_line[datapage], disp_tuning_lines-1);  // Skip unchangeable values for all PID modes
@@ -1107,7 +1103,7 @@ class Tuner {
             else if (datapage == PG_SENS) {
                 if (sel_val == 5) adj_val(airvelo.max_mph_ptr(), fdelta, 0, airvelo.abs_max_mph());
                 else if (sel_val == 6) adj_val(mapsens.min_atm_ptr(), fdelta, mapsens.abs_min_atm(), mapsens.abs_max_atm());
-                else if (sel_val == 6) adj_val(mapsens.max_atm_ptr(), fdelta, mapsens.abs_min_atm(), mapsens.abs_max_atm());
+                else if (sel_val == 7) adj_val(mapsens.max_atm_ptr(), fdelta, mapsens.abs_min_atm(), mapsens.abs_max_atm());
                 else if (sel_val == 8) adj_val(speedo.idle_mph_ptr(), fdelta, 0, speedo.redline_mph() - 1);
                 else if (sel_val == 9) adj_val(speedo.redline_mph_ptr(), fdelta, speedo.idle_mph(), 20);
                 else if (sel_val == 10) adj_val(brkpos.zeropoint_ptr(), fdelta, brkpos.op_min_in(), brkpos.op_max_in());
@@ -1133,7 +1129,7 @@ class Tuner {
                 else if (sel_val == 10) brake.pid_dom->add_kd(0.001 * fdelta);
             }
             else if (datapage == PG_GPID) {
-                if (sel_val == 7) { adj_bool(&(gas.openloop), idelta); }  // gas_pid.SetMode(gas_open_loop ? QPID::ctrl::manual : QPID::ctrl::automatic);
+                if (sel_val == 7) adj_bool(&(gas.openloop), idelta);  // gas_pid.SetMode(gas_open_loop ? QPID::ctrl::manual : QPID::ctrl::automatic);
                 else if (sel_val == 8) gas.pid.add_kp(0.001 * fdelta);
                 else if (sel_val == 9) gas.pid.add_ki(0.001 * fdelta);
                 else if (sel_val == 10) gas.pid.add_kd(0.001 * fdelta);
@@ -1145,19 +1141,19 @@ class Tuner {
                 else if (sel_val == 10) gas.cruisepid.add_kd(0.001 * fdelta);
             }
             else if (datapage == PG_TEMP) {
-                if (sel_val == 9) { adj_bool(&web_disabled, -1 * idelta); }  // note this value is inverse to how it's displayed, same for the value display entry
+                if (sel_val == 9) adj_bool(&web_disabled, -1 * idelta);  // note this value is inverse to how it's displayed, same for the value display entry
                 else if (sel_val == 10) adj_bool(&dont_take_temperatures, idelta);
             }
             else if (datapage == PG_SIM) {
-                if (sel_val == 0) sim.set_can_sim(sens::joy, idelta);
-                else if (sel_val == 1) sim.set_can_sim(sens::pressure, idelta);
-                else if (sel_val == 2) sim.set_can_sim(sens::brkpos, idelta);
-                else if (sel_val == 3) sim.set_can_sim(sens::speedo, idelta);
-                else if (sel_val == 4) sim.set_can_sim(sens::tach, idelta);
-                else if (sel_val == 5) sim.set_can_sim(sens::airvelo, idelta);
-                else if (sel_val == 6) sim.set_can_sim(sens::mapsens, idelta);  // else if (sel_val == 7) sim.set_can_sim(sens::starter, idelta);
-                else if (sel_val == 7) sim.set_can_sim(sens::basicsw, idelta);
-                else if (sel_val == 8) { sim.set_potmap((adj_val(sim.potmap(), idelta, 0, (int)(sens::starter) - 1))); prefs.putUInt("potmap", sim.potmap()); }
+                if (sel_val == 0) { sim.set_can_sim(sens::joy, idelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel_val == 1) { sim.set_can_sim(sens::pressure, idelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel_val == 2) { sim.set_can_sim(sens::brkpos, idelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel_val == 3) { sim.set_can_sim(sens::speedo, idelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel_val == 4) { sim.set_can_sim(sens::tach, idelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel_val == 5) { sim.set_can_sim(sens::airvelo, idelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel_val == 6) { sim.set_can_sim(sens::mapsens, idelta); screen->disp_simbuttons_dirty = true; } // else if (sel_val == 7) sim.set_can_sim(sens::starter, idelta);
+                else if (sel_val == 7) { sim.set_can_sim(sens::basicsw, idelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel_val == 8) { sim.set_potmap((adj_val(sim.potmap(), idelta, 0, (int)(sens::starter) - 1))); prefs.putUInt("potmap", sim.potmap()); screen->disp_simbuttons_dirty = true; }
                 else if (sel_val == 9 && rmode == CAL) adj_bool(&(cal_brakemode), idelta);
                 else if (sel_val == 10 && rmode == CAL) adj_bool(&(cal_gasmode_request), idelta);
             }
@@ -1180,13 +1176,8 @@ static Tuner tuner(&screen, &neo, &touch);
 static void push_task_wrapper(void *parameter) {
     while (true) {
         // xSemaphoreTake(push_time, portMAX_DELAY);
-        // Serial.printf("push0 ");
-        // draw_task();
-        // vTaskDelay(pdMS_TO_TICKS(1));
         screen.push_task();
         vTaskDelay(pdMS_TO_TICKS(1));
-        // while (!(screenRefreshTimer.expired() || screensaver_max_refresh)) vTaskDelay(pdMS_TO_TICKS(1));
-        // screenRefreshTimer.reset();
         // vTaskDelete(NULL);
     }
 }
@@ -1197,7 +1188,7 @@ static void draw_task_wrapper(void *parameter) {
     }
 }
 #endif
-// The following prkoject draws a nice looking gauge cluster, very apropos to our needs and the code is given.
+// The following project draws a nice looking gauge cluster, very apropos to our needs and the code is given.
 // See this video: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
 // Rinkydink home page: http://www.rinkydinkelectronics.com
 // moving transparent arrow sprite over background: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects

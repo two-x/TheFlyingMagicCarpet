@@ -17,7 +17,7 @@ std::mt19937 gen(rd());  // randomizer
 static Preferences prefs;  // Persistent config storage
 static Potentiometer pot(pot_pin);
 static Simulator sim(pot);
-static Hotrc hotrc(&sim);
+static Hotrc hotrc(&sim, &pot);
 static TemperatureSensorManager tempsens(onewire_pin);
 static CarBattery mulebatt(mulebatt_pin);
 static PressureSensor pressure(pressure_pin);

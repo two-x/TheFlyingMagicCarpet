@@ -47,8 +47,8 @@ int simgriddir[4][3] = {
 std::string simgrid[4][3] = {
     { "psi", "rpm", "mph" },
     { "psi", "rpm", "mph" },
-    { "pos", "   ", "   " },
-    { "pos", "   ", "   " },
+    { "pos", "joy", "joy" },
+    { "pos", "joy", "joy" },
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
 volatile bool _is_running;
@@ -602,22 +602,34 @@ class AnimationManager {
             return;
         }
         spr->setTextDatum(textdatum_t::middle_center);
+        bool do_draw;
         for (int32_t row = 0; row < arraysize(simgrid); row++) {
             for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
-                int32_t cntr_x = touch_cell_h_pix*col + (touch_cell_h_pix>>1) + 2 + vp.x - 5 + 2;
-                int32_t cntr_y = touch_cell_v_pix*row + (touch_cell_v_pix>>1) + vp.y - 1;
-                if (simgrid[row][col] != "    ") {
-                    draw_simbutton(spr, cntr_x + 2, cntr_y - 1, simgriddir[row][col], YEL);  // for 3d look
-                    draw_simbutton(spr, cntr_x, cntr_y, simgriddir[row][col], DGRY);
-                    // spr->fillRoundRect(cntr_x - 20, cntr_y - touch_cell_v_pix/2 - 10, 40, 20, 5, DGRY);
-                    // spr->drawRoundRect(cntr_x - 20, cntr_y - touch_cell_v_pix/2 - 10, 40, 20, 5, BLK);
-                    if (row % 2) {
-                        spr->setFont(&fonts::FreeSans9pt7b);
-                        spr->setTextColor(BLK);
-                        spr->drawString(simgrid[row][col].c_str(), cntr_x - 1, cntr_y - touch_cell_v_pix/2 + 5 - 1);
-                        spr->drawString(simgrid[row][col].c_str(), cntr_x + 1, cntr_y - touch_cell_v_pix/2 + 5 + 1);
-                        spr->setTextColor(LYEL);
-                        spr->drawString(simgrid[row][col].c_str(), cntr_x, cntr_y - touch_cell_v_pix/2 + 5);
+                do_draw = true;
+                if ((simgrid[row][col].find("pos") != std::string::npos) && (!sim->can_sim(sens::brkpos) || sim->potmapping(sens::brkpos))) do_draw = false;
+                if ((simgrid[row][col].find("psi") != std::string::npos) && (!sim->can_sim(sens::pressure) || sim->potmapping(sens::pressure))) do_draw = false;
+                if ((simgrid[row][col].find("mph") != std::string::npos) && (!sim->can_sim(sens::speedo) || sim->potmapping(sens::speedo))) do_draw = false;
+                if ((simgrid[row][col].find("rpm") != std::string::npos) && (!sim->can_sim(sens::tach) || sim->potmapping(sens::tach))) do_draw = false;
+                if (simgrid[row][col].find("joy") != std::string::npos) {
+                    if (sim->potmapping(sens::joy) && (col == 2)) do_draw = false;
+                    if (!sim->can_sim(sens::joy)) do_draw = false;
+                }
+                if (do_draw) {
+                    int32_t cntr_x = touch_cell_h_pix*col + (touch_cell_h_pix>>1) + 2 + vp.x - 5 + 2;
+                    int32_t cntr_y = touch_cell_v_pix*row + (touch_cell_v_pix>>1) + vp.y - 1;
+                    if (simgrid[row][col] != "    ") {
+                        draw_simbutton(spr, cntr_x + 2, cntr_y - 1, simgriddir[row][col], YEL);  // for 3d look
+                        draw_simbutton(spr, cntr_x, cntr_y, simgriddir[row][col], DGRY);
+                        // spr->fillRoundRect(cntr_x - 20, cntr_y - touch_cell_v_pix/2 - 10, 40, 20, 5, DGRY);
+                        // spr->drawRoundRect(cntr_x - 20, cntr_y - touch_cell_v_pix/2 - 10, 40, 20, 5, BLK);
+                        if ((row % 2) && (simgrid[row][col].find("joy") == std::string::npos)) {
+                            spr->setFont(&fonts::FreeSans9pt7b);
+                            spr->setTextColor(BLK);
+                            spr->drawString(simgrid[row][col].c_str(), cntr_x - 1, cntr_y - touch_cell_v_pix/2 + 5 - 1);
+                            spr->drawString(simgrid[row][col].c_str(), cntr_x + 1, cntr_y - touch_cell_v_pix/2 + 5 + 1);
+                            spr->setTextColor(LYEL);
+                            spr->drawString(simgrid[row][col].c_str(), cntr_x, cntr_y - touch_cell_v_pix/2 + 5);
+                        }
                     }
                 }
             }     
@@ -633,11 +645,15 @@ class AnimationManager {
         if (myfps > 0.001) myfps = 1000000 / myfps;
         fps_mark = now;
     }
-    float update(LGFX_Sprite* spr) {
+    float update(LGFX_Sprite* spr, bool dirty=false) {
         if (!screensaver_last && screensaver) change_saver();  // ptrsaver->reset();
         screensaver_last = screensaver;
         if (anim_reset_request) reset();
         spr->setClipRect(vp.x, vp.y, vp.w, vp.h);
+        if (dirty) {
+            spr->fillSprite(BLK);
+            mule_drawn = false;
+        }
         if (screensaver) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
             mule_drawn = false;  // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
             if (nowsaver == Eraser) {

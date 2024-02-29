@@ -75,7 +75,6 @@ void loop() {
     maf_gps = massairflow();  // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
     hotrc.update();           // ~100us for all hotrc functions
     hotrc_events(run.mode);   // turn hotrc button events into handler requests depending on the runmode
-    if (sim.potmapping(sens::joy)) hotrc.set_pc(HORZ, FILT, pot.mapToRange(steer.pc_to_us(steer.pc[OPMIN]), steer.pc_to_us(steer.pc[OPMAX])));
     run.mode_logic();         // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     gas.update(run.mode);     // drive servo output based on controller inputs, idle controller, (possible) feedback, run mode, etc.
     brake.update(run.mode);   // drive motor output based on controller inputs, feedback, run mode, etc.
