@@ -193,6 +193,7 @@ class Touchscreen {
   public:
     static constexpr uint8_t addr = 0x38;  // i2c addr for captouch panel
     int idelta = 0;
+;
     Touchscreen() {}
     void setup(LGFX* tft, I2C* i2c, int width, int height) {
         _tft = tft;
@@ -272,7 +273,7 @@ class Touchscreen {
                 sel_val++;  // Move to the next selection
             }
             else if (tunctrl == SELECT) {
-                if (!lasttouch) sel_val = (sel_val + 1) % disp_tuning_lines;
+                if (!lasttouch) touch_increment_sel_val = true;
                 else if (touch_longpress_valid && touchHoldTimer.expired()) {
                     tunctrl = OFF;
                     touch_longpress_valid = false;

@@ -430,6 +430,29 @@ class Display {
         else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
     }
   private:
+    void drawWideLine(int x0, int y0, int x1, int y1, float wd) {  // took from http://members.chello.at/~easyfilter/bresenham.html
+        int dx = std::abs(x1-x0), sx = x0 < x1 ? 1 : -1; 
+        int dy = std::abs(y1-y0), sy = y0 < y1 ? 1 : -1; 
+        int err = dx-dy, e2, x2, y2;                          /* error value e_xy */
+        float ed = dx+dy == 0 ? 1 : sqrt((float)dx*dx+(float)dy*dy);
+        
+        for (wd = (wd+1)/2; ; ) {                                   /* pixel loop */
+            sprptr->drawPixel(x0, y0, std::max(0.0f, 255*(std::abs(err-dx+dy)/ed-wd+1)));
+            e2 = err; x2 = x0;
+            if (2*e2 >= -dx) {                                           /* x step */
+                for (e2 += dy, y2 = y0; e2 < ed*wd && (y1 != y2 || dx > dy); e2 += dx)
+                   sprptr->drawPixel(x0, y2 += sy, std::max(0.0f, 255*(abs(e2)/ed-wd+1)));
+                if (x0 == x1) break;
+                e2 = err; err -= dy; x0 += sx; 
+            } 
+            if (2*e2 <= dy) {                                            /* y step */
+                for (e2 = dx-e2; e2 < ed*wd && (x1 != x2 || dx < dy); e2 += dy)
+                    sprptr->drawPixel(x2 += sx, y0, std::max(0.0f, 255*(abs(e2)/ed-wd+1)));
+                if (y0 == y1) break;
+                err += dx; y0 += sy; 
+            }
+        }
+    }
     void draw_bargraph_base(int32_t corner_x, int32_t corner_y, int32_t width) {  // draws a horizontal bargraph scale.  124, y, 40
         sprptr->drawFastHLine(corner_x + disp_bargraph_squeeze, corner_y, width - disp_bargraph_squeeze*2, MGRY);  // base line
         sprptr->drawFastVLine(corner_x + width/2, corner_y-1, 2, WHT);  // centerpoint gradient line
@@ -1052,8 +1075,9 @@ class Tuner {
         if (tunctrl == EDIT) idelta_encoder = encoder.rotation(true);  // true = include acceleration
         else if (tunctrl == SELECT) sel_val += encoder.rotation();  // If overflow constrain will fix in general handler below
         else if (tunctrl == OFF) datapage += encoder.rotation();  // If overflow tconstrain will fix in general below
+        if (touch_increment_sel_val) ++sel_val %= disp_tuning_lines;
         if (touch_increment_datapage) ++datapage %= NUM_DATAPAGES;
-        touch_increment_datapage = false;
+        touch_increment_sel_val = touch_increment_datapage = false;
         idelta += idelta_encoder + touch->idelta;  // Allow edits using the encoder or touchscreen
         touch->idelta = idelta_encoder = 0;
         if (tunctrl != tunctrl_last || datapage != datapage_last || sel_val != sel_val_last || idelta) tuningCtrlTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
