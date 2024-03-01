@@ -178,7 +178,7 @@ class Touchscreen {
     int tedit_exponent_max = 8;
     int tlast_x, tlast_y;
     Timer touchHoldTimer{550000};  // Hold this long to count as a long press
-    Timer touchAccelTimer{850000};
+    Timer touchAccelTimer{380000};
     Timer touchDoublePressTimer{40000};  // Won't allow a new press within this long after an old press (prevent accidental double clicks)
     Timer touchSenseTimer{15000};  // touch chip can't respond faster than some time period
     // debug printing
@@ -188,6 +188,7 @@ class Touchscreen {
     enum touch_axis : int { xx, yy, zz };
     enum touch_lim : int { tsmin, tsmax };
     int trow, tcol, disp_size[2], touch_read[3], tft_touch[2], landed[2];  // landed are the initial coordinates of a touch event, unaffected by dragging
+    uint16_t tquad;  // imagine screen divided into rows and columns as touch buttons. First byte encodes row, 2nd byte is column 
     // uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     // lcd.setTouch(touch_cal_data);
   public:
@@ -208,15 +209,21 @@ class Touchscreen {
     int touch_x() { return tft_touch[xx]; }
     int touch_y() { return tft_touch[yy]; }
     int16_t touch_pt(uint8_t axis) { return tft_touch[axis]; }
-
-    int read_touch() {
-        if (captouch && _i2c->not_my_turn(i2c_touch)) return nowtouch;
+    bool ontouch() { return nowtouch && !lasttouch; }
+    bool longpress() {
+        bool retval = touch_longpress_valid && touchHoldTimer.expired();
+        if (retval) touch_longpress_valid = false;
+        return retval;
+    }
+    void update() {
+        if (captouch && _i2c->not_my_turn(i2c_touch)) return;
         if (touchSenseTimer.expireset()) {
             uint8_t count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]));
             // if (captouch) count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]), &(touch_read[zz]));
             // Serial.printf("n%d rx:%d ry:%d ", nowtouch, touch_read[0], touch_read[1]);
             nowtouch = (count > 0);
             if (nowtouch) {
+                kick_inactivity_timer(4);  // evidence of user activity
                 for (int axis=0; axis<=1; axis++) {
                     // if (captouch) tft_touch[axis] = touch_read[axis];  // disp_width - 1 - touch_read[xx];
                     tft_touch[axis] = map(touch_read[axis], corners[captouch][axis][tsmin], corners[captouch][axis][tsmax], 0, disp_size[axis]);
@@ -224,100 +231,86 @@ class Touchscreen {
                     if (flip_the_screen) tft_touch[axis] = disp_size[axis] - tft_touch[axis];
                     if (!landed_coordinates_valid) {
                         landed[axis] = tft_touch[axis];
-                        if (axis) landed_coordinates_valid = true;  // on 2nd time thru set this true
+                        if (axis) {
+                            landed_coordinates_valid = true;  // on 2nd time thru set this true
+                        }
                     }
                 }
+                if (ui_context == DatapagesUI) {
+                    if (touchHoldTimer.elapsed() > (tedit_exponent + 1) * touchAccelTimer.timeout()) {
+                        tedit_exponent = constrain(tedit_exponent+1, 0, tedit_exponent_max);
+                    }
+                    tedit = (float)(1 << tedit_exponent); // Update the touch acceleration value
+                    process_ui();
+                }
             }
-            else landed_coordinates_valid = false;
-            // Serial.printf("tx:%d ty:%d\n", tft_touch[0], tft_touch[1]);
+            else {  // if not being touched
+                if (lasttouch) {
+                    landed_coordinates_valid = false;
+                    idelta = 0;  // Stop changing the value
+                    // touchDoublePressTimer.reset();  // Upon end of a touch, begin timer to reject any accidental double touches
+                    tedit_exponent = 0;
+                    tedit = (float)(1 << tedit_exponent); // Reset touch acceleration value to 1
+                }
+                touchHoldTimer.reset();
+                touch_longpress_valid = true;
+            }
         }
         _i2c->pass_i2c_baton();
-        return nowtouch;
-    }
-    void update() {
-        read_touch();
-        if (!nowtouch) {  // if not being touched
-            idelta = 0;  // Stop changing the value
-            if (lasttouch) touchDoublePressTimer.reset();  // Upon end of a touch, begin timer to reject any accidental double touches
-            tedit_exponent = 0;
-            tedit = (float)(1 << tedit_exponent); // Reset touch acceleration value to 1
-            touchHoldTimer.reset();
-            touch_longpress_valid = true;
-        }
-        else {
-            // if (touchDoublePressTimer.expired()) {
-            // Serial.printf("(%d,%d), landed(%d,%d)\n",tft_touch[xx],tft_touch[yy],landed[xx],landed[yy]);
-            kick_inactivity_timer(4);  // evidence of user activity
-            if (ui_context == DatapagesUI) process_ui();
-        }
         lasttouch = nowtouch;
     }
     void process_ui() {
-        tedit = (float)(1 << tedit_exponent);  // Determine value editing rate
-        trow = constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
-        tcol = constrain((landed[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, 5);
-        if (tcol == 0 && trow == 0 && !lasttouch) {
-            // if (!(landed[xx] == 0 && landed[yy] == 0)) increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
+        if (!nowtouch) return;
+        tquad = (constrain((landed[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, 5) << 4) | constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
+        // Serial.printf("n%dl%dv%d q%02x tx:%3d ty:%3d e%d x%d\r", nowtouch, lasttouch, landed_coordinates_valid, tquad, tft_touch[0], tft_touch[1], tedit, (int)tedit_exponent);
+        // std::cout << "n" << nowtouch << " e" << tedit << " x" << tedit_exponent << "\r";
+        if (tquad == 0x00 && ontouch()) {
             increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
         }
-        else if (tcol == 0 && trow == 1) {  // Long touch to enter/exit editing mode, if in editing mode, press to change the selection of the item to edit
+        else if (tquad == 0x01) {  // Long touch to enter/exit editing mode, if in editing mode, press to change the selection of the item to edit
             if (tunctrl == OFF) {
                 sel_val = 0;  // If entering select mode from off mode, select the first variable
-                if (touch_longpress_valid && touchHoldTimer.expired()) {
-                    tunctrl = SELECT;
-                    touch_longpress_valid = false;
-                }
+                if (longpress()) tunctrl = SELECT;
             }
-            else if (tunctrl == EDIT && !lasttouch) {
+            else if (tunctrl == EDIT && ontouch()) {
                 tunctrl = SELECT;  // Drop back to select mode
                 increment_sel_val = true;  // Move to the next selection
             }
             else if (tunctrl == SELECT) {
-                if (!lasttouch) increment_sel_val = true;
-                else if (touch_longpress_valid && touchHoldTimer.expired()) {
-                    tunctrl = OFF;
-                    touch_longpress_valid = false;
-                }
+                if (ontouch()) increment_sel_val = true;
+                else if (longpress()) tunctrl = OFF;
             }
         }
-        else if (tcol == 0 && trow == 2) {  // Pressed the increase value button, for real-time tuning of variables
+        else if (tquad == 0x02) {  // Pressed the increase value button, for real-time tuning of variables
             if (tunctrl == SELECT) tunctrl = EDIT;  // If just entering edit mode, don't change the value yet
             else if (tunctrl == EDIT) idelta = (int)tedit;  // If in edit mode, increase the value
         }
-        else if (tcol == 0 && trow == 3) {  // Pressed the decrease value button, for real-time tuning of variables
+        else if (tquad == 0x03) {  // Pressed the decrease value button, for real-time tuning of variables
             if (tunctrl == SELECT) tunctrl = EDIT;  // If just entering edit mode, don't change the value yet
             else if (tunctrl == EDIT) idelta = (int)(-tedit);  // If in edit mode, decrease the value
         }
-        else if (tcol == 0 && trow == 4) {  // Pressed the simulation mode toggle. Needs long-press
-            if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout()) {
-                sim.toggle();
-                touch_longpress_valid = false;
-            }
+        else if (tquad == 0x04) {  // Pressed the simulation mode toggle. Needs long-press
+            if (longpress()) sim.toggle();
         }
         else if (sim.enabled()) {
-            if (touch_longpress_valid && touchHoldTimer.elapsed() > touchHoldTimer.timeout()) {
-                if (tcol == 2 && trow == 0) calmode_request = true;
-                else if (tcol == 4 && trow == 0) ignition_request = REQ_TOG;
-                else if (tcol == 5 && trow == 0) sleep_request = REQ_TOG;  // sleep requests are handled by shutdown or asleep mode, otherwise will be ignored
-                touch_longpress_valid = false;
+            if (longpress()) {
+                if (tquad == 0x20) calmode_request = true;
+                else if (tquad == 0x40) ignition_request = REQ_TOG;
+                else if (tquad == 0x50) sleep_request = REQ_TOG;  // sleep requests are handled by shutdown or asleep mode, otherwise will be ignored
             }
-            else if (tcol == 3 && trow == 0 && sim.can_sim(sens::basicsw) && !lasttouch) basicmodesw = !basicmodesw;
-            else if (tcol == 3 && trow == 1 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(tedit); // (+= 25) Pressed the increase brake pressure button
-            else if (tcol == 3 && trow == 2 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(-tedit); // (-= 25) Pressed the decrease brake pressure button
-            else if (tcol == 3 && trow == 3 && sim.can_sim(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_human(tedit); // (-= 25) Pressed the decrease brake pressure button
-            else if (tcol == 3 && trow == 4 && sim.can_sim(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_human(-tedit); // (-= 25) Pressed the decrease brake pressure button
-            else if (tcol == 4 && trow == 1 && sim.can_sim(sens::tach) && tach.source() == src::TOUCH) tach.add_human(tedit);
-            else if (tcol == 4 && trow == 2 && sim.can_sim(sens::tach) && tach.source() == src::TOUCH) tach.add_human(-tedit);
-            else if (tcol == 4 && trow == 3 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-            else if (tcol == 4 && trow == 4 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], -tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-            else if (tcol == 5 && trow == 1 && sim.can_sim(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human(tedit);
-            else if (tcol == 5 && trow == 2 && sim.can_sim(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human(-tedit);
-            else if (tcol == 5 && trow == 3 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
-            else if (tcol == 5 && trow == 4 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], -tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
-        }
-        if (tedit_exponent < tedit_exponent_max && (touchHoldTimer.elapsed() > (tedit_exponent + 1) * touchAccelTimer.timeout())) {
-            tedit_exponent++;
-            tedit = (float)(1 << tedit_exponent); // Update the touch acceleration value
+            else if (tquad == 0x30 && sim.can_sim(sens::basicsw) && ontouch()) basicmodesw = !basicmodesw;
+            else if (tquad == 0x31 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(tedit); // (+= 25) Pressed the increase brake pressure button
+            else if (tquad == 0x32 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(-tedit); // (-= 25) Pressed the decrease brake pressure button
+            else if (tquad == 0x33 && sim.can_sim(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_human(tedit); // (-= 25) Pressed the decrease brake pressure button
+            else if (tquad == 0x34 && sim.can_sim(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_human(-tedit); // (-= 25) Pressed the decrease brake pressure button
+            else if (tquad == 0x41 && sim.can_sim(sens::tach) && tach.source() == src::TOUCH) tach.add_human(tedit);
+            else if (tquad == 0x42 && sim.can_sim(sens::tach) && tach.source() == src::TOUCH) tach.add_human(-tedit);
+            else if (tquad == 0x43 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+            else if (tquad == 0x44 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], -tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+            else if (tquad == 0x51 && sim.can_sim(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human(tedit);
+            else if (tquad == 0x52 && sim.can_sim(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human(-tedit);
+            else if (tquad == 0x53 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+            else if (tquad == 0x54 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], -tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
         }
     }
     void enableTouchPrint(bool enable) {
@@ -327,7 +320,7 @@ class Touchscreen {
         if (touchPrintEnabled && touched()) {
             unsigned long currentTime = millis();
             if (currentTime - lastTouchPrintTime >= touchPrintInterval) {}
-            Serial.printf("Touch %sdetected", (read_touch()) ? "" : "not ");
+            // Serial.printf("Touch %sdetected", (read_touch()) ? "" : "not ");
             if (nowtouch) Serial.printf(" x:%d y:%d\n", tft_touch[xx], tft_touch[yy]);
             else Serial.printf("\n");                // If available, you can print touch pressure as well (for capacitive touch)
             lastTouchPrintTime = currentTime;

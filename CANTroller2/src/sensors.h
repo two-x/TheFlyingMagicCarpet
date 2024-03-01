@@ -11,7 +11,10 @@
 
 // This enum class represent the components which can be simulated (sensor). It's a uint8_t type under the covers, so it can be used as an index
 // typedef uint8_t opt_t;
-enum class sens : int { none=0, joy, pressure, brkpos, speedo, tach, airvelo, mapsens, engtemp, mulebatt, starter, basicsw, NUM_SENSORS };  //, ignition, syspower };  // , NUM_SENSORS, err_flag };
+enum class sens : int { none=0, joy=1, pressure=2, brkpos=3, speedo=4, tach=5, airvelo=6, mapsens=7, engtemp=8, mulebatt=9, starter=10, basicsw=11, NUM_SENSORS=12 };  //, ignition, syspower };  // , NUM_SENSORS, err_flag };
+enum class src : int { UNDEF=0, FIXED=1, PIN=2, TOUCH=3, POT=4, CALC=5 };
+
+int sources[static_cast<int>(sens::NUM_SENSORS)] = { static_cast<int>(src::UNDEF) };
 
 #include "i2cbus.h"
 // #include "xtensa/core-macros.h"  // access to ccount register for esp32 timing ticks
@@ -36,6 +39,7 @@ class Potentiometer {
   public:
     Potentiometer(uint8_t arg_pin) : _pin(arg_pin) {}
     Potentiometer() = delete; // must have a pin defined
+    sens senstype = sens::none;
     void setup() {
         printf("Pot setup..\n");
         set_pin(_pin, INPUT);
@@ -164,8 +168,6 @@ class Param {
     bool saturated() { return _saturated; }
 };
 
-enum class src : uint8_t {UNDEF=0, FIXED, PIN, TOUCH, POT, CALC};
-
 // Device class - is a base class for any connected system device or signal associated with a pin
 class Device {
   protected:
@@ -189,7 +191,7 @@ class Device {
     Timer timer;  // Can be used for external purposes
     String _long_name = "Unknown device";
     String _short_name = "device";
-
+    sens senstype = sens::none;
     Device() = delete; // should always be created with a pin
     // NOTE: should we start in PIN mode?
     Device(uint8_t arg_pin) : _pin(arg_pin) {}
@@ -198,6 +200,7 @@ class Device {
         if (_can_source[static_cast<uint8_t>(arg_source)]) {
             _source = arg_source;
             update_source();
+            sources[static_cast<int>(senstype)] = static_cast<int>(arg_source);
             return true;
         } 
         return false;
@@ -525,7 +528,7 @@ class AirVeloSensor : public I2CSensor {
     }
   public:
     static constexpr uint8_t addr = 0x28;
-
+    sens senstype = sens::airvelo;
     AirVeloSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
         _ema_alpha = _initial_ema_alpha;
         set_human_limits(_min_mph, _initial_max_mph);
@@ -597,6 +600,7 @@ class MAPSensor : public I2CSensor {
     }
   public:
     static constexpr uint8_t addr = 0x18;
+    sens senstype = sens::mapsens;
     MAPSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
         _ema_alpha = _initial_ema_alpha;
         set_human_limits(_initial_min_atm, _initial_max_atm);
@@ -674,6 +678,7 @@ class CarBattery : public AnalogSensor<int32_t, float> {
     float _v_per_adc = _abs_max_v / adcrange_adc;
     float _ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
   public:
+    sens senstype = sens::mulebatt;
     CarBattery(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
         _m_factor = _v_per_adc;
         _human.set_limits(_abs_min_v, _abs_max_v);
@@ -711,6 +716,7 @@ class LiPoBatt : public AnalogSensor<int32_t, float> {
     float _initial_v_per_adc = _abs_max_v / adcrange_adc;
     float _initial_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
   public:
+    sens senstype = sens::none;
     LiPoBatt(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
         _ema_alpha = _initial_ema_alpha;
         _m_factor = _initial_v_per_adc;
@@ -737,6 +743,7 @@ class LiPoBatt : public AnalogSensor<int32_t, float> {
 // and converting the ADC value to a pressure value in PSI.
 class PressureSensor : public AnalogSensor<int32_t, float> {
   public:
+    sens senstype = sens::pressure;
     int32_t op_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
     // Soren 230920: Reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
     int32_t op_max_adc = 2080; // ~208psi by this math - "Maximum" braking
@@ -752,7 +759,6 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     float prestart_psi = hold_initial_psi;
     String _long_name = "Brake pressure sensor";
     String _short_name = "presur";
-
     PressureSensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
         _ema_alpha = initial_ema_alpha;
         _m_factor = initial_psi_per_adc;
@@ -785,6 +791,7 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     std::shared_ptr<float> _zeropoint;
     // void set_val_from_touch() { _val_filt.set((op_min_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
   public:
+    sens senstype = sens::brkpos;
     int32_t abs_min_retract_adc = 0;
     int32_t abs_max_extend_adc = adcrange_adc;
     float park_in = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
@@ -915,6 +922,7 @@ class Tachometer : public PulseSensor<float> {
     static constexpr int64_t _initial_zerovalue = 999999;
     float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
   public:
+    sens senstype = sens::tach;
     float _govern_rpm = _redline_rpm;    
     Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_rpm) {
         _ema_alpha = _initial_ema_alpha;
@@ -964,6 +972,7 @@ class Speedometer : public PulseSensor<float> {
     float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
     float _govern_mph, _idle_mph;
   public:
+    sens senstype = sens::speedo;
     Speedometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_mph) {
         _ema_alpha = _initial_ema_alpha;
         _m_factor = _initial_mph_per_rpus;
@@ -1176,7 +1185,9 @@ class Simulator {
         }
         return false; // couldn't find component, so there's no way we can simulate it
     }
-
+    bool touchable(sens arg_sensor) {
+        return can_sim(arg_sensor) && (sources[static_cast<int>(arg_sensor)] == static_cast<int>(src::TOUCH));
+    }
     // set simulatability status for a component
     void set_can_sim(sens arg_sensor, int32_t can_sim) { set_can_sim(arg_sensor, (can_sim > 0)); }  // allows interpreting -1 as 0, convenient for our tuner etc.
     

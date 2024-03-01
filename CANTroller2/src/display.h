@@ -1041,7 +1041,8 @@ class Tuner {
     Display* screen;
     NeopixelStrip* neo;
     Touchscreen* touch;
-    Timer tuningCtrlTimer = Timer(25000000);  // This times out edit mode after a a long period of inactivity
+    Timer tuningAbandonmentTimer{25000000};  // This times out edit mode after a a long period of inactivity
+    Timer tuningEditTimer{50000};  // This times out edit mode after a a long period of inactivity
   public:
     Tuner(Display* _screen, NeopixelStrip* _neo, Touchscreen* _touch) : screen(_screen), neo(_neo), touch(_touch) {}
     int32_t idelta = 0, idelta_encoder = 0;
@@ -1051,10 +1052,8 @@ class Tuner {
     }
   private:
     void process_inputs() {
-        sel_val_last_last = sel_val_last;
-        sel_val_last = sel_val;
-        datapage_last = datapage;
-        tunctrl_last = tunctrl; // Make sure this goes after the last comparison
+        if (!tuningEditTimer.expired()) return;
+        tuningEditTimer.reset();
         uint32_t encoder_sw_action = encoder.button.press_event();  // true = autoreset the event if there is one
         if (encoder_sw_action != swNONE) {  // First deal with any unhandled switch press events
             if (encoder_sw_action == swSHORT)  {  // if short press
@@ -1072,8 +1071,8 @@ class Tuner {
         touch->increment_sel_val = touch->increment_datapage = false;
         idelta += idelta_encoder + touch->idelta;  // Allow edits using the encoder or touchscreen
         touch->idelta = idelta_encoder = 0;
-        if (tunctrl != tunctrl_last || datapage != datapage_last || sel_val != sel_val_last || idelta) tuningCtrlTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
-        else if (tuningCtrlTimer.expired()) tunctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
+        if (tunctrl != tunctrl_last || datapage != datapage_last || sel_val != sel_val_last || idelta) tuningAbandonmentTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
+        else if (tuningAbandonmentTimer.expired()) tunctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
         datapage = constrain(datapage, 0, datapages::NUM_DATAPAGES-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
         if (datapage != datapage_last) {
             if (tunctrl == EDIT) tunctrl = SELECT;  // If page is flipped during edit, drop back to select mode
@@ -1085,6 +1084,10 @@ class Tuner {
             if (sel_val != sel_val_last) screen->disp_selected_val_dirty = true;
         }
         if (tunctrl != tunctrl_last || screen->disp_datapage_dirty) screen->disp_selected_val_dirty = true;
+        sel_val_last_last = sel_val_last;
+        sel_val_last = sel_val;
+        datapage_last = datapage;
+        tunctrl_last = tunctrl; // Make sure this goes after the last comparison
     }
     void edit_values(int rmode) {
         float fdelta = (float)idelta;
