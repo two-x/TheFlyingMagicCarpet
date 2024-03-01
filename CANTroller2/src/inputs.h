@@ -311,6 +311,21 @@ class Touchscreen {
             else if (tquad == 0x52 && sim.can_sim(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human(-tedit);
             else if (tquad == 0x53 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
             else if (tquad == 0x54 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], -tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+
+            // my touchable() function doesn't work, but here's what I was hoping to be able to do:
+            // else if (tquad == 0x30 && sim.can_sim(sens::basicsw) && ontouch()) basicmodesw = !basicmodesw;
+            // else if (tquad == 0x31 && sim.touchable(sens::pressure)) pressure.add_human(tedit); // (+= 25) Pressed the increase brake pressure button
+            // else if (tquad == 0x32 && sim.touchable(sens::pressure)) pressure.add_human(-tedit); // (-= 25) Pressed the decrease brake pressure button
+            // else if (tquad == 0x33 && sim.touchable(sens::brkpos)) brkpos.add_human(tedit); // (-= 25) Pressed the decrease brake pressure button
+            // else if (tquad == 0x34 && sim.touchable(sens::brkpos)) brkpos.add_human(-tedit); // (-= 25) Pressed the decrease brake pressure button
+            // else if (tquad == 0x41 && sim.touchable(sens::tach)) tach.add_human(tedit);
+            // else if (tquad == 0x42 && sim.touchable(sens::tach)) tach.add_human(-tedit);
+            // else if (tquad == 0x43 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+            // else if (tquad == 0x44 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], -tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+            // else if (tquad == 0x51 && sim.touchable(sens::speedo)) speedo.add_human(tedit);
+            // else if (tquad == 0x52 && sim.touchable(sens::speedo)) speedo.add_human(-tedit);
+            // else if (tquad == 0x53 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+            // else if (tquad == 0x54 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], -tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);   
         }
     }
     void enableTouchPrint(bool enable) {
