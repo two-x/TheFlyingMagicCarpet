@@ -81,6 +81,7 @@ enum req : int { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting han
 enum cruise_modes : int { PID_SUSPEND_FLY, THROTTLE_ANGLE, THROTTLE_DELTA };
 enum sw_presses : int { swNONE, swSHORT, swLONG };
 enum brake_pids : int { POSNPID=0, PRESPID=1, NUM_BRAKEPIDS=2, HYBRIDPID=3 };
+enum motor_modes : int { NA=-1, Disabled=0, Release=1, Active=2, AutoHold=3, ParkMotor=4, Calibrate=5 };
 enum tunerstuff : int { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum datapages : int { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
 enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
@@ -159,6 +160,7 @@ bool cal_gasmode_ready = false;         // whether pot is in valid range
 bool cal_gasmode = false;               // allows direct control of gas servo using pot. First requires pot to be in valid position before mode is entered
 bool cal_gasmode_request = false;
 bool autostopping = false;              // true when in process of stopping the car (hold or shutdown modes)
+bool autoholding = false;              // true when in actively preventing the stopped car from moving (hold or shutdown modes)
 bool car_hasnt_moved = false;           // minor state variable for fly mode - Whether car has moved at all since entering fly mode
 bool powering_up = false;               // minor state variable for asleep mode
 bool calmode_request = false;

@@ -37,29 +37,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
     // void kick() { sleep_inactivity_timer.reset(); }  // call when user activity is detected, to prevent shutdown mode timeout to asleep mode
   private:
-    bool autostop(int _cmd = REQ_NA) {
-        int cmd = _cmd;
-        if (autostop_disabled) autostopping = false;
-        else {
-            if (autostopping) {
-                if (speedo.car_stopped() || brake.stopcar_timer.expired()) cmd = REQ_OFF; 
-                else if (brake.interval_timer.expireset()) brake.autostop_increment(panicstop);
-            }
-            if (cmd == REQ_TOG) cmd = !autostopping;
-            if (autostopping && cmd == REQ_OFF) {
-                brake.set_pidtarg(0);
-                autostopping = false;
-            }
-            else if (!autostopping && cmd == REQ_ON && !speedo.car_stopped()) {
-                gas.idlectrl.goto_idle();  // Keep target updated to possibly changing idle value
-                brake.autostop_initial(panicstop);
-                brake.interval_timer.reset();
-                brake.stopcar_timer.reset();
-                autostopping = true;
-            }
-        }
-        return autostopping;
-    }
     bool park_motors(int _cmd = REQ_NA) {
         int cmd = _cmd;
         if (park_the_motors) {
