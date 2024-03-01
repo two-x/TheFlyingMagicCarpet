@@ -679,20 +679,31 @@ class BrakeMotor : public JagMotor {
     // }
     void mode_logic() { // services any requests for change in brake mode
         // int newmode = mode_request;
-        if (mode_request != brakemode) interval_timer.reset();
+        if (mode_request != brakemode) {
+            interval_timer.reset();
+            stopcar_timer.reset();
+        }
         if (mode_request != NA) brakemode = mode_request;
         // if (brakemode != oldmode) stopcar_timer.reset();
         autostopping = autoholding = park_the_motors = false;
-        if (brakemode == AutoHold) {
-            throttle->goto_idle();  // Keep target updated to possibly changing idle value
-            // action_stop_baseline(panicstop);
-            set_pidtarg(smax(panic ? panic_initial_pc : hold_initial_pc, pid_dom->target()));
-            if (speedo->car_stopped()) autoholding = true;
-            else {
-                if (interval_timer.expireset()) set_pidtarg(smin(pid_dom->target() + panic ? panic_increment_pc : hold_increment_pc, 100.0));
-                // action_stop_increment(panicstop);
+        if (brakemode == AutoHold || brakemode == AutoStop) {
+            autostopping = speedo->car_stopped();
+            if (!speedo->car_stopped()) {
+                throttle->goto_idle();  // Stop pushing the gas, will help us stop the car better
+                set_pidtarg(std::max(panicstop ? panic_initial_pc : hold_initial_pc, pid_dom->target()));
                 autostopping = true;
             }
+            if (brakemode == AutoStop && (speedo->car_stopped() || stopcar_timer.expired())) {
+                brakemode = Release;  // After AutoStop mode stops the car or times out, then Release the brake pedal
+                autostopping = false;
+            }
+            else if (interval_timer.expireset()) {
+                if (speedo->car_stopped()) autoholding = true;
+                else {
+                    if (interval_timer.expireset()) set_pidtarg(smin(pid_dom->target() + panic ? panic_increment_pc : hold_increment_pc, 100.0));
+                    // action_stop_increment(panicstop);
+                    
+                }
         }
         else if (brakemode == Disabled) {
             pc[OUT] = pc[STOP];

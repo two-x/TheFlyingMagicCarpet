@@ -81,7 +81,7 @@ enum req : int { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting han
 enum cruise_modes : int { PID_SUSPEND_FLY, THROTTLE_ANGLE, THROTTLE_DELTA };
 enum sw_presses : int { swNONE, swSHORT, swLONG };
 enum brake_pids : int { POSNPID=0, PRESPID=1, NUM_BRAKEPIDS=2, HYBRIDPID=3 };
-enum motor_modes : int { NA=-1, Disabled=0, Release=1, Active=2, AutoHold=3, ParkMotor=4, Calibrate=5 };
+enum motor_modes : int { NA=-1, Disabled=0, Release=1, Active=2, AutoStop=3, AutoHold=4, ParkMotor=5, Calibrate=6 };
 enum tunerstuff : int { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum datapages : int { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
 enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
