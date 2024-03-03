@@ -39,16 +39,17 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
   private:
     bool park_motors(int _cmd = REQ_NA) {
         int cmd = _cmd;
-        if (park_the_motors) {
-            bool brake_parked = brkpos.parked();
-            bool gas_parked = ((std::abs(gas.pc_to_si(gas.pc[OUT]) - gas.si[PARKED]) < 1) && gas.servo_delay_timer.expired());
-            if ((brake_parked && gas_parked) || motor_park_timer.expired()) cmd = REQ_OFF;
-        }
+        if (park_the_motors && ((brkpos.parked() && gas.parked()) || motor_park_timer.expired())) cmd = REQ_OFF;
         if (cmd == REQ_TOG) cmd = !park_the_motors;
-        if (park_the_motors && cmd == REQ_OFF) park_the_motors = false;
+        if (park_the_motors && cmd == REQ_OFF) {
+            brake.setmode(Disabled);
+            park_the_motors = false;
+        }
         else if (!park_the_motors && cmd == REQ_ON) {
             gas.servo_delay_timer.reset();  // Ensure we give the servo enough time to move to position
             motor_park_timer.reset();  // Set a timer to timebox this effort
+            gas.setmode(ParkMotor);
+            brake.setmode(ParkMotor);
             park_the_motors = true;
         }
         return park_the_motors;
@@ -74,13 +75,13 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (oldmode == BASIC) park_motors(REQ_OFF);
         else if (oldmode == ASLEEP);
         else if (oldmode == SHUTDOWN) {
-            autostop(REQ_OFF);
-            park_motors(REQ_OFF);
+            // autostop(REQ_OFF);
+            // park_motors(REQ_OFF);
             shutdown_incomplete = false;
         }
         else if (oldmode == STALL);
         else if (oldmode == HOLD) {
-            autostop(REQ_OFF);
+            // autostop(REQ_OFF);
             joy_centered = false;
             starter_request = REQ_OFF;  // Stop any in-progress startings
         }
@@ -94,16 +95,13 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             powering_up = false;  // to cover unlikely edge case where basic mode switch is enabled during wakeup from asleep mode
             watchdog.set_codemode(Parked);
         }
-        else if (park_the_motors) park_motors();  // Update motor parking until finished
+        // else if (park_the_motors) park_motors();  // Update motor parking until finished
         if (!basicmodesw && !tach.engine_stopped()) mode = speedo.car_stopped() ? HOLD : FLY;  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
     }
     void run_asleepMode() {  // turns off syspower and just idles. sleep_request are handled here or in shutdown mode below
         if (we_just_switched_modes) {
             set_syspower(LOW); // Power down devices to save battery
-            if (saver_on_sleep) {
-                sim.disable();
-                display->auto_saver(true);
-            }
+            if (saver_on_sleep) display->auto_saver(true);
             sleep_request = REQ_NA;
             powering_up = false;
         }
@@ -114,24 +112,25 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             powering_up = true;
             display->auto_saver(false);
         }
-        if (powering_up && pwrup_timer.expired()) {
-            display->all_dirty();  // tells display to redraw everything. display must set back to false
-            mode = SHUTDOWN;
-        }
+        if (powering_up && pwrup_timer.expired()) mode = SHUTDOWN;  // display->all_dirty();  // tells display to redraw everything. display must set back to false
     }
     void run_shutdownMode() { // In shutdown mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.
         if (we_just_switched_modes) {              
-            gas.idlectrl.goto_idle();  //  Release the throttle 
             shutdown_incomplete = !(powering_up);
             powering_up = calmode_request = false;
             sleep_request = REQ_NA;
-            park_motors(REQ_OFF);  // stop any in-progress parking
-            if (!speedo.car_stopped()) autostop(REQ_ON);  // if car is moving begin autostopping
+            // park_the_motors = false;
+            // autostopping = true;
+            // park_motors(REQ_OFF);  // stop any in-progress parking
+            // if (!speedo.car_stopped()) brake.setmode(AutoStop);  // if car is moving begin autostopping
+            brake.setmode(AutoStop);  // if car is moving begin autostopping
         }
         else if (shutdown_incomplete) {  // first we need to stop the car and release brakes and gas before shutting down  
-            if (park_the_motors) shutdown_incomplete = park_motors(); // update any in-progress motor parking. shutdown is complete once parked
-            else if (!autostop()) park_motors(REQ_ON);  // start parking motors directly after final autostop update
-            if (!shutdown_incomplete) kick_inactivity_timer(3);  // upon shutdown completion, start the sleep timer
+            if (!autostopping && !park_the_motors) park_motors(REQ_ON);
+            else if (!brake.mode_busy) shutdown_incomplete = false;
+            // if (park_the_motors) shutdown_incomplete = park_motors(); // update any in-progress motor parking. shutdown is complete once parked
+            // else if (!autostop()) park_motors(REQ_ON);  // start parking motors directly after final autostop update
+            // if (!shutdown_incomplete) kick_inactivity_timer(3);  // upon shutdown completion, start the sleep timer
         }
         else {  // if shutdown is complete
             if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode
@@ -142,8 +141,8 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if ((speedo.car_stopped() || allow_rolling_start) && ignition && !panicstop && !tach.engine_stopped()) mode = HOLD;  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
     }
     void run_stallMode() {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
-        if (hotrc.joydir(VERT) != JOY_DN) brake.set_pidtarg(0);  // If in deadband or being pushed up, no pressure target
-        else brake.set_pidtarg(map (hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBBOT], hotrc.pc[VERT][OPMIN], 0.0, 100.0));  // Scale joystick value to pressure adc setpoint
+        gas.setmode(OpenLoop);
+        brake.setmode(PIDLoop);
         if (starter || !tach.engine_stopped()) mode = HOLD;  // If we started the car, enter hold mode once starter is released
     }
     void run_holdMode() {
@@ -151,29 +150,22 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             joy_centered = false;  // Fly mode will be locked until the joystick first is put at or below center
             watchdog.set_codemode(Driving);
         }
-        if (!speedo.car_stopped()) autostop(REQ_ON);
-        gas.idlectrl.goto_idle();  // Let off gas (if gas using PID mode) and keep target updated to possibly changing idle value
+        brake.setmode(AutoHold);
         if (hotrc.joydir(VERT) != JOY_UP) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
         else if (joy_centered && !starter && !hotrc.radiolost()) mode = FLY; // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
     }
     void run_flyMode() {
-        if (we_just_switched_modes) car_hasnt_moved = speedo.car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
-        _joydir = hotrc.joydir(VERT);
+        if (we_just_switched_modes) {
+            car_hasnt_moved = speedo.car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
+            gas.setmode(PIDLoop);
+            brake.setmode(PIDLoop);
+        }
         if (car_hasnt_moved) {
-            if (_joydir != JOY_UP) mode = HOLD;  // Must keep pulling trigger until car moves, or it drops back to hold mode
+            if (hotrc.joydir(VERT) != JOY_UP) mode = HOLD;  // Must keep pulling trigger until car moves, or it drops back to hold mode
             else if (!speedo.car_stopped()) car_hasnt_moved = false;  // Once car moves, we're allowed to release the trigger without falling out of fly mode
         }
         else if (speedo.car_stopped() && hotrc.joydir() != JOY_UP) mode = HOLD;  // Go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) mode = HOLD;  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
-        else {  // Update the gas and brake targets based on joystick position, for the PIDs to drive
-            if (_joydir == JOY_UP)  // If we are trying to accelerate, scale joystick value to determine gas setpoint
-                gas.pid.set_target(map(hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBTOP], hotrc.pc[VERT][OPMAX], gas.idlectrl.idle_rpm, tach.govern_rpm()));
-            else gas.idlectrl.goto_idle();  // Else let off gas (if gas using PID mode)
-            
-            if (_joydir == JOY_DN)  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
-                brake.set_pidtarg(map(hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBBOT], hotrc.pc[VERT][OPMIN], 0.0, 100.0));
-            else brake.set_pidtarg(0);  // Else let off the brake   
-        }
         if (flycruise_toggle_request) mode = CRUISE;  // enter cruise mode by pressing hrc ch4 button
         flycruise_toggle_request = false;
     }
@@ -224,6 +216,8 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (calmode_request) mode = SHUTDOWN;
         float temp = pot.mapToRange(0.0, 180.0);
         cal_gasmode_ready = (temp >= gas.si[PARKED] && temp <= gas.si[OPMAX]);
+        if (cal_brakemode) brake.setmode(Calibrate);
+        else if (brake.brakemode == Calibrate) brake.setmode(Release);
         if (!cal_gasmode_request) cal_gasmode = false;
         else if (cal_gasmode_ready) cal_gasmode = true;
     }

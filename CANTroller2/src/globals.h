@@ -81,12 +81,12 @@ enum req : int { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting han
 enum cruise_modes : int { PID_SUSPEND_FLY, THROTTLE_ANGLE, THROTTLE_DELTA };
 enum sw_presses : int { swNONE, swSHORT, swLONG };
 enum brake_pids : int { POSNPID=0, PRESPID=1, NUM_BRAKEPIDS=2, HYBRIDPID=3 };
-enum motor_modes : int { NA=-1, Disabled=0, Release=1, Active=2, AutoStop=3, AutoHold=4, ParkMotor=5, Calibrate=6 };
-enum tunerstuff : int { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
+enum motor_modes : int { NA=-1, Disabled=0, Release=1, PIDLoop=2, OpenLoop=3, AutoStop=4, AutoHold=5, ParkMotor=6, Calibrate=7 };
+enum tunerstuff : int { ERASE=-1, SELECT=1, EDIT=2 };
 enum datapages : int { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
 enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
 enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };   // possible sources of gas, brake, steering commands
-enum boolean_states : int { ON=1 };
+enum boolean_states : int { OFF=0, ON=1 };
 enum ui_modes : int { DatapagesUI=0, ScreensaverUI=1 };
 enum codemodes : int { Confused=0, Booting=1, Parked=2, Driving=3 };
 // enum telemetry_full : int { 
@@ -94,7 +94,7 @@ enum codemodes : int { Confused=0, Booting=1, Parked=2, Driving=3 };
 // };
 enum telemetry_short : int { _GasServo=0, _BrakeMotor=1, _SteerMotor=2, _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7, _Temps=8, _Other=9, _GPIO=10 };  // _MuleBatt, _MAP, _MAF, _Pot,
 enum telemetry_full : int { _HotRCHorz=11, _HotRCVert=12, _MuleBatt=13, _AirVelo=14, _MAP=15, _Pot=16, _MAF=17, _TempEng=18, _TempWhFL=19, _TempWhFR=20, _TempWhRL=21, _TempWhRR=22, _TempAmb=23 };  // 10 per line
-enum telemetry_nums : int { NA=-2, _None=-1, NumTelemetryBool=9, NumTelemetryShort=11, NumTelemetryFull=24 };
+enum telemetry_nums : int { _None=-1, NumTelemetryBool=9, NumTelemetryShort=11, NumTelemetryFull=24 };
 enum telemetry_bool : int { _Ignition=1, _PanicStop=2, _SysPower=3, _HotRCCh3=4, _HotRCCh4=5, _StarterDr=6, _StarterExt=7, _BasicSw=8 };
 enum err_type : int { LOST=0, RANGE=1, CALIB=2, WARN=3, CRIT=4, INFO=5, NUM_ERR_TYPES=6 };
 

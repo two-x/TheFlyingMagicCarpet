@@ -759,16 +759,18 @@ class Display {
     }
     void update_idiots(bool force = false) {
         for (int i = 0; i < idiots->iconcount; i++) {
-            if (force || (idiots->val(i) ^ idiots->last[i]))
-                draw_idiotlight(i, idiots_corner_x + (2 * disp_font_width + 2) * (i % idiots->row_count), idiots_corner_y + idiots->row_height * (int32_t)(i / idiots->row_count));
-            if (i <= neo->neopixelsAvailable())
+            if (i <= neo->neopixelsAvailable()) {
                 if (idiots->val(i) != idiots->last[i]) neo->setBoolState(i, idiots->val(i));
+            }
             if (i == LOST || i == RANGE) {
                 if (diag.most_critical_last[i] != diag.most_critical_sensor[i]) {
                     if (diag.most_critical_sensor[i] == _None) neo->setflash((int)i, 0);
                     else neo->setflash((int)i, diag.most_critical_sensor[i] + 1, 2, 6, 1, 0);
                 }
                 diag.most_critical_last[i] = diag.most_critical_sensor[i];
+            }
+            if (force || (idiots->val(i) ^ idiots->last[i])) {
+                draw_idiotlight(i, idiots_corner_x + (2 * disp_font_width + 2) * (i % idiots->row_count), idiots_corner_y + idiots->row_height * (int32_t)(i / idiots->row_count));
             }
         }
         disp_idiots_dirty = false;
@@ -777,20 +779,16 @@ class Display {
     void update(int _nowmode = -1) {
         if (_nowmode >= 0) nowmode = _nowmode;
         #ifndef VIDEO_TASKS
-        // if (is_drawing || is_pushing) return;
-        if (pushtime) push_task();
-        else draw_task();
+            if (pushtime) push_task();
+            else draw_task();
         #endif
     }
     bool draw_all(LGFX_Sprite* spr) {
-        sprptr = spr;
-        // bool just_reset = false;
         if (reset_request) reset(spr);
         if (!display_enabled) return false;
         if (!auto_saver_enabled) {
             tiny_text();
             update_idiots(disp_idiots_dirty);
-            // if (just_reset) printframebufs(3);
             if (disp_datapage_dirty) draw_datapage(datapage, datapage_last, true);
             if (disp_sidemenu_dirty) draw_touchgrid(false);
             if (disp_selected_val_dirty) draw_selected_name(tunctrl, sel_val, sel_val_last, sel_val_last_last);
@@ -1177,12 +1175,14 @@ static void push_task_wrapper(void *parameter) {
     while (true) {
         // xSemaphoreTake(push_time, portMAX_DELAY);
         screen.push_task();
+        // delayMicroseconds(50);
         vTaskDelay(pdMS_TO_TICKS(1));
         // vTaskDelete(NULL);
     }
 }
 static void draw_task_wrapper(void *parameter) {
     while (true) {
+        // delayMicroseconds(50);
         vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
         screen.draw_task();
     }

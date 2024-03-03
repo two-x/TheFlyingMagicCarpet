@@ -466,6 +466,9 @@ class GasServo : public ServoMotor {
     using ServoMotor::ServoMotor;
     IdleControl idlectrl;
     QPID pid, cruisepid;
+    int gasmode = PIDLoop, oldmode = PIDLoop;
+    int mode_request = NA;
+    bool mode_busy = false;
     bool openloop = true, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
     float (&deg)[arraysize(si)] = si;  // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
     float tach_last, cruise_target_pc, governor = 95;     // Software governor will only allow this percent of full-open throttle (percent 0-100)
@@ -490,6 +493,28 @@ class GasServo : public ServoMotor {
             QPID::dmod::onerr, QPID::awmod::clamp, QPID::cdir::direct, pid_timeout);
         cruisepid.init(speedo->filt_ptr(), idlectrl.idle_rpm_ptr(), tach->govern_rpm_ptr(), cruise_initial_kp, cruise_initial_ki,
             cruise_initial_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::round, QPID::cdir::direct, pid_timeout);
+    }
+  private:
+    void set_output() { // services any requests for change in brake mode
+        if (mode_request != NA) gasmode = mode_request;
+        mode_request = NA;
+        // park_the_motors = false;
+        else if (gasmode == Calibrate) {
+        }
+        else if (gasmode == ParkMotor) {
+        }
+        else if (gasmode == PIDLoop) {
+            if (hotrc.joydir(VERT) == JOY_UP)  // If we are trying to accelerate, scale joystick value to determine gas setpoint
+                gas.pid.set_target(map(hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBTOP], hotrc.pc[VERT][OPMAX], gas.idlectrl.idle_rpm, tach.govern_rpm()));
+            else gas.idlectrl.goto_idle();  // Else let off gas (if gas using PID mode)
+        }    
+        mode_busy = park_the_motors;
+        oldmode = gasmode;
+    }
+  public:
+    void setmode(int _mode=NA) { mode_request = _mode; }
+    int parked() {
+        return (std::abs(pc_to_si(gas.pc[OUT]) - si[PARKED]) < 1) && servo_delay_timer.expired();
     }
     void update(int runmode) {
         float tach_now = tach->human();
@@ -559,8 +584,9 @@ class BrakeMotor : public JagMotor {
     }
   public:
     using JagMotor::JagMotor;
-    int brakemode = Active, oldmode = Active;
+    int brakemode = Disabled, oldmode = Disabled;
     int mode_request = NA;
+    bool mode_busy = false;
     QPID pids[NUM_BRAKEPIDS];  // brake changes from pressure target to position target as pressures decrease, and vice versa
     QPID* pid_dom = &(pids[PRESPID]);  // AnalogSensor sensed[NUM_BRAKEPIDS];
     Timer stopcar_timer = Timer(stopcar_timeout);
@@ -604,8 +630,8 @@ class BrakeMotor : public JagMotor {
     }
   private:
     // The influence on the final output from the pressure and position pids is weighted based on the pressure reading
-    // Which PID is dominant is the pid having more than 50% influence
-    // PID outputs are weighted based on where in the pedal press we are. Near the bottom is pressure control, and near the top is position control.
+    // Definition: "dominant" PID = The PID loop (pressure or position) that has the majority influence over the motor
+    // PID outputs are weighted based on where in the pedal press we are. Near the bottom is 100% pressure control, and near the top is 100% position control.
     void calc_hybrid_ratio() {
         if (sens_ratio[PRESPID] >= brake_pid_trans_threshold_hi) hybrid_out_ratio = 1.0;  // at pressure above hi threshold, pressure has 100% influence
         else if (sens_ratio[PRESPID] <= brake_pid_trans_threshold_lo) hybrid_out_ratio = 0.0;  // at pressure below lo threshold, position has 100% influence
@@ -677,33 +703,32 @@ class BrakeMotor : public JagMotor {
     //     }
     //     return autostopping;
     // }
-    void mode_logic() { // services any requests for change in brake mode
-        // int newmode = mode_request;
+
+    // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
+    // autohold: apply initial brake pressure, and incrementally more if car is moving until it stops, then stop motor but continue to monitor car speed indefinitely and react with more brake as needed
+    void set_output() { // services any requests for change in brake mode
         if (mode_request != brakemode) {
             interval_timer.reset();
             stopcar_timer.reset();
         }
         if (mode_request != NA) brakemode = mode_request;
+        mode_request = NA;
         // if (brakemode != oldmode) stopcar_timer.reset();
-        autostopping = autoholding = park_the_motors = false;
+        autostopping = autoholding = false;
         if (brakemode == AutoHold || brakemode == AutoStop) {
-            autostopping = speedo->car_stopped();
-            if (!speedo->car_stopped()) {
-                throttle->goto_idle();  // Stop pushing the gas, will help us stop the car better
-                set_pidtarg(std::max(panicstop ? panic_initial_pc : hold_initial_pc, pid_dom->target()));
-                autostopping = true;
+            throttle->goto_idle();  // Stop pushing the gas, will help us stop the car better
+            if (brakemode == AutoHold) {
+                autoholding = true;
+                set_pidtarg(std::max(hold_initial_pc, pid_dom->target()));  // Autohold always applies the brake somewhat, even if already stopped
             }
-            if (brakemode == AutoStop && (speedo->car_stopped() || stopcar_timer.expired())) {
-                brakemode = Release;  // After AutoStop mode stops the car or times out, then Release the brake pedal
-                autostopping = false;
+            if (brakemode == AutoStop && (speedo->car_stopped() || stopcar_timer.expired())) mode_request = Disabled;  // After AutoStop mode stops the car or times out, then stop driving the motor
+            else autostopping = !speedo->car_stopped();
+            if (autostopping) {
+                if (interval_timer.expireset()) set_pidtarg(std::min(pid_dom->target() + panicstop ? panic_increment_pc : hold_increment_pc, 100.0));
+                else set_pidtarg(std::max(panicstop ? panic_initial_pc : hold_initial_pc, pid_dom->target()));
+                pc[OUT] = pid_out();
             }
-            else if (interval_timer.expireset()) {
-                if (speedo->car_stopped()) autoholding = true;
-                else {
-                    if (interval_timer.expireset()) set_pidtarg(smin(pid_dom->target() + panic ? panic_increment_pc : hold_increment_pc, 100.0));
-                    // action_stop_increment(panicstop);
-                    
-                }
+            else pc[OUT] = pc[STOP];
         }
         else if (brakemode == Disabled) {
             pc[OUT] = pc[STOP];
@@ -715,39 +740,38 @@ class BrakeMotor : public JagMotor {
             else pc[OUT] = pc[STOP];
         }
         else if (brakemode == Release) {
-            if (brkpos->filt() + brkpos->margin() <= brkpos->zeropoint())  // If brake is retracted from park point, extend toward park point, slowing as we approach
+            if (brkpos->filt() <= brkpos->zeropoint())  // If brake is retracted from park point, extend toward park point, slowing as we approach
                 pc[OUT] = map(brkpos->filt(), brkpos->zeropoint(), brkpos->min_in(), pc[STOP], pc[OPMIN]);
-            else if (brkpos->filt() - >= brkpos->zeropoint())  // If brake is extended from park point, retract toward park point, slowing as we approach
+            else if (brkpos->filt() >= brkpos->zeropoint())  // If brake is extended from park point, retract toward park point, slowing as we approach
                 pc[OUT] = map(brkpos->filt(), brkpos->zeropoint(), brkpos->max_in(), pc[STOP], pc[OPMAX]);
         }
         else if (brakemode == ParkMotor) {
-            park_the_motors = true;
             if (brkpos->filt() + brkpos->margin() <= brkpos->parkpos())  // If brake is retracted from park point, extend toward park point, slowing as we approach
                 pc[OUT] = map(brkpos->filt(), brkpos->parkpos(), brkpos->min_in(), pc[STOP], pc[OPMIN]);
             else if (brkpos->filt() - brkpos->margin() >= brkpos->parkpos())  // If brake is extended from park point, retract toward park point, slowing as we approach
                 pc[OUT] = map(brkpos->filt(), brkpos->parkpos(), brkpos->max_in(), pc[STOP], pc[OPMAX]);
         }
-        else if (brakemode == Active) {
-             pc[OUT] = pid_out();
+        else if (brakemode == PIDLoop) {
+            if (hotrc->joydir(VERT) != JOY_DN) set_pidtarg(0);  // let off the brake
+            else set_pidtarg(map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], 0.0, 100.0));  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
+            pc[OUT] = pid_out();
         }
-        mode_request = NA;
+        mode_busy = autostopping || park_the_motors;
         oldmode = brakemode;
     }
-    void setmode(int _mode=NA) { mode_request = _mode; }
   public:
+    void setmode(int _mode=NA) { mode_request = _mode; }
+    int parked() {
+        return (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
+    }
     void update(int runmode) {
         // Brakes - Determine motor output and write it to motor
         if (volt_check_timer.expireset()) derive();
         if (pid_timer.expireset()) {
             calc_motor_duty();
             // Step 1 : Determine motor percent value
-            mode_logic();
+            set_output();
             // if (park_the_motors) {
-            //     if (brkpos->filt() + brkpos->margin() <= brkpos->parkpos())  // If brake is retracted from park point, extend toward park point, slowing as we approach
-            //         pc[OUT] = map(brkpos->filt(), brkpos->parkpos(), brkpos->min_in(), pc[STOP], pc[OPMIN]);
-            //     else if (brkpos->filt() - brkpos->margin() >= brkpos->parkpos())  // If brake is extended from park point, retract toward park point, slowing as we approach
-            //         pc[OUT] = map(brkpos->filt(), brkpos->parkpos(), brkpos->max_in(), pc[STOP], pc[OPMAX]);
-            // }
             // else if (runmode == CAL && cal_brakemode) {
             //     int _joydir = hotrc->joydir();
             //     if (_joydir == JOY_UP) pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[STOP], pc[OPMAX]);
@@ -758,7 +782,7 @@ class BrakeMotor : public JagMotor {
             //     pc[OUT] = pc[STOP];
             // else pc[OUT] = pid_out(); // Otherwise the pid control is active  // First attenuate max power to avoid blowing out the motor like in bm2023, if retracting, as a proportion of position from zeropoint to fully retracted
             // Step 2 : Fix motor pc value if it's out of range or exceeding positional limits
-            if (runmode == CAL && cal_brakemode)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
+            if (brakemode == Calibrate)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
                 pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);  // Constrain to full potential range when calibrating. Caution don't break anything!
             else if ((pc[OUT] < pc[STOP] && brkpos->filt() > brkpos->parkpos() - brkpos->margin()) 
                   || (pc[OUT] > pc[STOP] && brkpos->filt() < brkpos->min_in() + brkpos->margin()))  // If brake is at position limits and we're tring to go further, stop the motor
