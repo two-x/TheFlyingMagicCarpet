@@ -81,12 +81,12 @@ enum req : int { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting han
 enum cruise_modes : int { PID_SUSPEND_FLY, THROTTLE_ANGLE, THROTTLE_DELTA };
 enum sw_presses : int { swNONE, swSHORT, swLONG };
 enum brake_pids : int { POSNPID=0, PRESPID=1, NUM_BRAKEPIDS=2, HYBRIDPID=3 };
-enum motor_modes : int { NA=-1, Disabled=0, Release=1, PIDLoop=2, OpenLoop=3, AutoStop=4, AutoHold=5, ParkMotor=6, Calibrate=7 };
-enum tunerstuff : int { ERASE=-1, SELECT=1, EDIT=2 };
+enum motor_modes : int { NA=-1, Idle=0, Release=1, ActivePID=2, OpenLoop=3, AutoStop=4, AutoHold=5, ParkMotor=6, Cruise=7, Calibrate=8, NumMotorModes=9 };
+enum tunerstuff : int { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum datapages : int { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
 enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
 enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };   // possible sources of gas, brake, steering commands
-enum boolean_states : int { OFF=0, ON=1 };
+enum boolean_states : int { ON=1 };
 enum ui_modes : int { DatapagesUI=0, ScreensaverUI=1 };
 enum codemodes : int { Confused=0, Booting=1, Parked=2, Driving=3 };
 // enum telemetry_full : int { 
@@ -156,6 +156,7 @@ bool shutdown_incomplete = true;        // minor state variable for shutdown mod
 bool park_the_motors = false;           // indicates we should release the brake & gas so the pedals can be used manually without interference
 bool cruise_adjusting = false;
 bool cal_brakemode = false;             // allows direct control of brake motor using controller vert
+bool cal_brakemode_request = false;             // allows direct control of brake motor using controller vert
 bool cal_gasmode_ready = false;         // whether pot is in valid range
 bool cal_gasmode = false;               // allows direct control of gas servo using pot. First requires pot to be in valid position before mode is entered
 bool cal_gasmode_request = false;

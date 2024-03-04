@@ -1424,10 +1424,9 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
     void direction_update() {
         if (sim->simulating(sens::joy)) {
             if (sim->potmapping(sens::joy)) pc[HORZ][FILT] = pot->mapToRange(pc[HORZ][OPMIN], pc[HORZ][OPMAX]);  // overwrite horz value if potmapping
-            Serial.printf("%d %d %lf\n",sim->potmapping(sens::joy),sim->potmapping(), pc[HORZ][FILT]);
-            return;
+            // Serial.printf("%d %d %lf\n",sim->potmapping(sens::joy),sim->potmapping(), pc[HORZ][FILT]);
         }
-        for (int8_t axis = HORZ; axis <= VERT; axis++) {
+        else for (int8_t axis = HORZ; axis <= VERT; axis++) {
             us[axis][RAW] = (int32_t)(rmt[axis].readPulseWidth(true));
             us[axis][RAW] = spike_filter(axis, us[axis][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
             ema_filt(us[axis][RAW], &ema_us[axis], ema_alpha);  // Need unconstrained ema-filtered vertical for radio lost detection 
@@ -1435,12 +1434,11 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
                 pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
             else pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
             ema_filt(pc[axis][RAW], &(pc[axis][FILT]), ema_alpha);  // do ema filter to determine joy_vert_filt
-            pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
             if (ema_us[axis] > us[axis][DBBOT] && ema_us[axis] < us[axis][DBTOP]) pc[axis][FILT] = pc[axis][CENT];  // if within the deadband set joy_axis_filt to CENTer value
             else if (!_radiolost) kick_inactivity_timer(6);  // otherwise indicate evidence of user activity
             if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set joy_axis_filt to CENTer value
         }
-
+        for (int8_t axis = HORZ; axis <= VERT; axis++) pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
     }
     bool radiolost_update() {
         if (ema_us[VERT] > failsafe_us + failsafe_margin_us) {

@@ -152,9 +152,10 @@ static std::string telemetry[disp_fixed_lines] = { "TriggerV", "   Speed", "    
 static std::string units[disp_fixed_lines] = { "%   ", "mph ", "rpm ", "%   ", "psi ", "%   ", "%   ", "%   " };  // Fixed rows
 static std::string brake_pid_card[2] = { "presur", "positn" };
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
+static std::string motormodecard[NumMotorModes+1] = { "Idle", "Releas", "ActPID", "OpenLp", "AuStop", "AuHold", "Cruise", "Park", "Calib", "NA" };
 static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 4, 8, 7, 7, 9, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
-    { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
+    { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", __________, "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
     { "PressRaw", "BkPosRaw", __________, __________, __________, "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
@@ -167,7 +168,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "Draw Clk", "Push Clk", "Idle Clk", "BlnkDemo", neo_bright, "NeoDesat", "Animaton", },  // PG_UI
 };
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
-    { "in  ", "V   ", "%   ", "mph ", "atm ", "g/s ", ______, ______, ______, "%   ", "%   ", },  // PG_RUN
+    { "in  ", "V   ", "%   ", "mph ", "atm ", "g/s ", scroll, scroll, ______, "%   ", "%   ", },  // PG_RUN
     { "us  ", "us  ", "us  ", "us  ", "%   ", "%   ", ______, ______, ______, "us  ", "us  ", },  // PG_JOY
     { "adc ", "adc ", ______, ______, ______, "mph ", "atm ", "atm ", "mph ", "mph ", "in  ", },  // PG_SENS
     { degree, "us  ", "V   ", "us  ", "V   ", "us  ", ______, degree, degree, "us  ", "%   ", },  // PG_PWMS
@@ -810,7 +811,9 @@ class Display {
                     draw_dynamic(12, airvelo.human(), airvelo.min_mph(), airvelo.max_mph());
                     draw_dynamic(13, mapsens.human(), mapsens.min_atm(), mapsens.max_atm());
                     draw_dynamic(14, maf_gps, maf_min_gps, maf_max_gps);
-                    for (int line=15; line<=17; line++) draw_eraseval(line);
+                    draw_asciiname(15, motormodecard[(gas.motormode == NA) ? NumMotorModes : gas.motormode]);
+                    draw_asciiname(16, motormodecard[(brake.motormode == NA) ? NumMotorModes : brake.motormode]);
+                    draw_eraseval(17);
                     draw_dynamic(18, gas.governor, 0.0, 100.0);
                     draw_dynamic(19, steer.steer_safe_pc, 0.0, 100.0);
                 }

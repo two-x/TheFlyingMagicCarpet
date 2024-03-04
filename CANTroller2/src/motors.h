@@ -462,11 +462,14 @@ class GasServo : public ServoMotor {
     float initial_kp = 0.013;  // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
     float initial_ki = 0.000;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
     float initial_kd = 0.000;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
+    float cruise_ctrl_extent_pc, adjustpoint;       // During cruise adjustments, saves farthest trigger position read
+    bool cruise_trigger_released = false;
+    Timer cruiseDeltaTimer;
   public:
     using ServoMotor::ServoMotor;
     IdleControl idlectrl;
     QPID pid, cruisepid;
-    int gasmode = PIDLoop, oldmode = PIDLoop;
+    int motormode = Idle, oldmode = Idle;
     int mode_request = NA;
     bool mode_busy = false;
     bool openloop = true, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
@@ -496,25 +499,77 @@ class GasServo : public ServoMotor {
     }
   private:
     void set_output() { // services any requests for change in brake mode
-        if (mode_request != NA) gasmode = mode_request;
+        if (mode_request == Calibrate) {
+            float temp = pot->mapToRange(0.0, 180.0);
+            if (temp >= si[PARKED] && temp <= si[OPMAX]) motormode = Calibrate;
+        }
+        else if (mode_request == Cruise) {
+            cruisepid.set_target(speedo->filt());  // set pid loop speed target to current speed  (for PID_SUSPEND_FLY mode)
+            pid.set_target(tach->filt());  // initialize pid output (rpm target) to current rpm  (for PID_SUSPEND_FLY mode)
+            cruise_target_pc = pc[OUT];  //  set target throttle angle to current throttle angle  (for THROTTLE_ANGLE/THROTTLE_DELTA modes)
+            cruise_adjusting = cruise_trigger_released = false;  // in case trigger is being pulled as cruise mode is entered, the ability to adjust is only unlocked after the trigger is subsequently released to the center
+            motormode = Cruise;
+        }
+        else if ((mode_request == ActivePID) && openloop) motormode = OpenLoop;
+        else if (mode_request != NA) motormode = mode_request;
         mode_request = NA;
+        cal_gasmode = false;
         // park_the_motors = false;
-        else if (gasmode == Calibrate) {
+        if (motormode == Calibrate) {
+            cal_gasmode = true;
+            pc[OUT] = si_to_pc(map(pot->val(), pot->min(), pot->max(), deg[ABSMIN], deg[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
         }
-        else if (gasmode == ParkMotor) {
+        else if (motormode == Cruise) {
+            int joydir = hotrc->joydir(VERT);
+            if (joydir == JOY_CENT) {
+                cruise_adjusting = false;
+                cruise_trigger_released = true;
+                cruise_ctrl_extent_pc = hotrc->pc[VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
+                if (cruise_setpoint_mode == PID_SUSPEND_FLY) pid.set_target(cruisepid.compute());
+            }
+            else if ((joydir == JOY_UP || (joydir == JOY_DN && cruise_speed_lowerable)) && cruise_trigger_released) {  // adjustments disabled until trigger has been to center at least once since going to cruise mode
+                float ctrlratio = (std::abs(hotrc->pc[VERT][FILT]) - hotrc->pc[VERT][DBTOP]) / (hotrc->pc[VERT][OPMAX] - hotrc->pc[VERT][DBTOP]);
+                if (cruise_setpoint_mode == THROTTLE_DELTA) {
+                    if (cruise_adjusting) cruise_target_pc += joydir * ctrlratio * cruise_delta_max_pc_per_s * cruiseDeltaTimer.elapsed() / 1000000.0;
+                    cruiseDeltaTimer.reset(); 
+                }
+                else if (cruise_setpoint_mode == PID_SUSPEND_FLY) {
+                    if (!cruise_adjusting) adjustpoint = tach->filt();
+                    pid.set_target(adjustpoint + ctrlratio * (((joydir == JOY_UP) ? tach->govern_rpm() : idlectrl.idle_rpm) - adjustpoint));
+                    cruisepid.set_target(speedo->filt());
+                }
+                else if (cruise_setpoint_mode == THROTTLE_ANGLE && std::abs(hotrc->pc[VERT][FILT]) >= cruise_ctrl_extent_pc) {  // to avoid the adjustments following the trigger back to center when released
+                    if (!cruise_adjusting) adjustpoint = cruise_target_pc;  // When beginning adjustment, save current throttle pulse value to use as adjustment endpoint
+                    cruise_target_pc = adjustpoint + ctrlratio * cruise_angle_attenuator * (((joydir == JOY_UP) ? 100.0 : 0.0) - adjustpoint);
+                    cruise_ctrl_extent_pc = std::abs(hotrc->pc[VERT][FILT]);
+                }
+                cruise_target_pc = constrain(cruise_target_pc, 0.0, 100.0);
+                cruise_adjusting = true;
+            }
+            if (cruise_setpoint_mode == PID_SUSPEND_FLY) pc[OUT] = pid.compute();
+            else pc[OUT] = cruise_target_pc;
         }
-        else if (gasmode == PIDLoop) {
-            if (hotrc.joydir(VERT) == JOY_UP)  // If we are trying to accelerate, scale joystick value to determine gas setpoint
-                gas.pid.set_target(map(hotrc.pc[VERT][FILT], hotrc.pc[VERT][DBTOP], hotrc.pc[VERT][OPMAX], gas.idlectrl.idle_rpm, tach.govern_rpm()));
-            else gas.idlectrl.goto_idle();  // Else let off gas (if gas using PID mode)
-        }    
+        else if (motormode == ParkMotor) {
+            pc[OUT] = pc[PARKED];
+        }
+        else if (motormode == ActivePID) {
+            if (hotrc->joydir(VERT) == JOY_UP)  // If we are trying to accelerate, scale joystick value to determine gas setpoint
+                pid.set_target(map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], idlectrl.idle_rpm, tach->govern_rpm()));
+            else idlectrl.goto_idle();  // Else let off gas (if gas using PID mode)
+            pc[OUT] = pid.compute();  // Do proper pid math to determine gas_out_us from engine rpm error
+        }
+        else if (motormode == OpenLoop) {
+            if (hotrc->joydir() != JOY_UP) pc[OUT] = pc[OPMIN];  // If in deadband or being pushed down, we want idle
+            else pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[OPMIN], pc[GOVERN]);  // actuators still respond even w/ engine turned off
+        }
+        // else if (mode_request != NA) motormode = Idle;  // Change invalid mode to a valid one
         mode_busy = park_the_motors;
-        oldmode = gasmode;
+        oldmode = motormode;
     }
   public:
     void setmode(int _mode=NA) { mode_request = _mode; }
     int parked() {
-        return (std::abs(pc_to_si(gas.pc[OUT]) - si[PARKED]) < 1) && servo_delay_timer.expired();
+        return (std::abs(pc_to_si(pc[OUT]) - si[PARKED]) < 1) && servo_delay_timer.expired();
     }
     void update(int runmode) {
         float tach_now = tach->human();
@@ -523,22 +578,23 @@ class GasServo : public ServoMotor {
         if (pid_timer.expireset()) {
             // Step 1 : update throttle target from idle control or cruise mode pid, if applicable (on the same timer as gas pid)
             idlectrl.update();  // Allow idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
-            if (runmode == CRUISE && (cruise_setpoint_mode == PID_SUSPEND_FLY) && !cruise_adjusting)
-                pid.set_target(cruisepid.compute());  // cruise pid calculates new output (tach_target_rpm) based on input (speedmeter::human) and target (speedo_target_mph)
-            // Step 2 : Determine servo pulse width value
-            if (park_the_motors)
-                pc[OUT] = pc[PARKED];
-            else if (runmode == CAL && cal_gasmode)
-                pc[OUT] = si_to_pc(map(pot->val(), pot->min(), pot->max(), deg[ABSMIN], deg[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
-            else if (runmode == CRUISE && (cruise_setpoint_mode != PID_SUSPEND_FLY))
-                pc[OUT] = cruise_target_pc;
-            else if (runmode != BASIC && runmode != CAL && runmode != ASLEEP && (runmode != SHUTDOWN || shutdown_incomplete)) {
-                if (runmode == STALL || openloop) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
-                    if (hotrc->joydir() != JOY_UP) pc[OUT] = pc[OPMIN];  // If in deadband or being pushed down, we want idle
-                    else pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[OPMIN], pc[GOVERN]);  // actuators still respond even w/ engine turned off
-                }
-                else pc[OUT] = pid.compute();  // Do proper pid math to determine gas_out_us from engine rpm error
-            }
+            set_output();
+            // if (runmode == CRUISE && (cruise_setpoint_mode == PID_SUSPEND_FLY) && !cruise_adjusting)
+            //     pid.set_target(cruisepid.compute());  // cruise pid calculates new output (tach_target_rpm) based on input (speedmeter::human) and target (speedo_target_mph)
+            // // Step 2 : Determine servo pulse width value
+            // if (park_the_motors)
+            //     pc[OUT] = pc[PARKED];
+            // else if (runmode == CAL && cal_gasmode)
+            //     pc[OUT] = si_to_pc(map(pot->val(), pot->min(), pot->max(), deg[ABSMIN], deg[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
+            // else if (runmode == CRUISE && (cruise_setpoint_mode != PID_SUSPEND_FLY))
+            //     pc[OUT] = cruise_target_pc;
+            // else if (runmode != BASIC && runmode != CAL && runmode != ASLEEP && (runmode != SHUTDOWN || shutdown_incomplete)) {
+            //     if (runmode == STALL || openloop) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
+            //         if (hotrc->joydir() != JOY_UP) pc[OUT] = pc[OPMIN];  // If in deadband or being pushed down, we want idle
+            //         else pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[OPMIN], pc[GOVERN]);  // actuators still respond even w/ engine turned off
+            //     }
+            //     else pc[OUT] = pid.compute();  // Do proper pid math to determine gas_out_us from engine rpm error
+            // }
             // Step 3 : Convert to degrees and constrain if out of range
             deg[OUT] = pc_to_si(pc[OUT]);  // convert to degrees
             if (runmode == CAL && cal_gasmode)  // Constrain to operating limits. 
@@ -584,7 +640,7 @@ class BrakeMotor : public JagMotor {
     }
   public:
     using JagMotor::JagMotor;
-    int brakemode = Disabled, oldmode = Disabled;
+    int motormode = Idle, oldmode = Idle;
     int mode_request = NA;
     bool mode_busy = false;
     QPID pids[NUM_BRAKEPIDS];  // brake changes from pressure target to position target as pressures decrease, and vice versa
@@ -705,59 +761,61 @@ class BrakeMotor : public JagMotor {
     // }
 
     // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
-    // autohold: apply initial brake pressure, and incrementally more if car is moving until it stops, then stop motor but continue to monitor car speed indefinitely and react with more brake as needed
+    // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
     void set_output() { // services any requests for change in brake mode
-        if (mode_request != brakemode) {
+        if (mode_request != motormode) {
             interval_timer.reset();
             stopcar_timer.reset();
         }
-        if (mode_request != NA) brakemode = mode_request;
+        if (mode_request != NA) motormode = mode_request;
         mode_request = NA;
-        // if (brakemode != oldmode) stopcar_timer.reset();
-        autostopping = autoholding = false;
-        if (brakemode == AutoHold || brakemode == AutoStop) {
-            throttle->goto_idle();  // Stop pushing the gas, will help us stop the car better
-            if (brakemode == AutoHold) {
+        // if (motormode != oldmode) stopcar_timer.reset();
+        autostopping = autoholding = cal_brakemode = false;
+        if (motormode == AutoHold || motormode == AutoStop) {
+            if (panicstop) throttle->goto_idle();  // Stop pushing the gas, will help us stop the car better
+            if (motormode == AutoHold) {
                 autoholding = true;
                 set_pidtarg(std::max(hold_initial_pc, pid_dom->target()));  // Autohold always applies the brake somewhat, even if already stopped
             }
-            if (brakemode == AutoStop && (speedo->car_stopped() || stopcar_timer.expired())) mode_request = Disabled;  // After AutoStop mode stops the car or times out, then stop driving the motor
+            if (motormode == AutoStop && (speedo->car_stopped() || stopcar_timer.expired())) mode_request = Idle;  // After AutoStop mode stops the car or times out, then stop driving the motor
             else autostopping = !speedo->car_stopped();
             if (autostopping) {
-                if (interval_timer.expireset()) set_pidtarg(std::min(pid_dom->target() + panicstop ? panic_increment_pc : hold_increment_pc, 100.0));
+                if (interval_timer.expireset()) set_pidtarg(std::min(pid_dom->target() + panicstop ? panic_increment_pc : hold_increment_pc, 100.0f));
                 else set_pidtarg(std::max(panicstop ? panic_initial_pc : hold_initial_pc, pid_dom->target()));
                 pc[OUT] = pid_out();
             }
             else pc[OUT] = pc[STOP];
         }
-        else if (brakemode == Disabled) {
+        else if (motormode == Idle) {
             pc[OUT] = pc[STOP];
         }
-        else if (brakemode == Calibrate) {
+        else if (motormode == Calibrate) {
+            cal_brakemode = true;
             int _joydir = hotrc->joydir();
             if (_joydir == JOY_UP) pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[STOP], pc[OPMAX]);
             else if (_joydir == JOY_DN) pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][OPMIN], hotrc->pc[VERT][DBBOT], pc[OPMIN], pc[STOP]);
             else pc[OUT] = pc[STOP];
         }
-        else if (brakemode == Release) {
+        else if (motormode == Release) {
             if (brkpos->filt() <= brkpos->zeropoint())  // If brake is retracted from park point, extend toward park point, slowing as we approach
                 pc[OUT] = map(brkpos->filt(), brkpos->zeropoint(), brkpos->min_in(), pc[STOP], pc[OPMIN]);
             else if (brkpos->filt() >= brkpos->zeropoint())  // If brake is extended from park point, retract toward park point, slowing as we approach
                 pc[OUT] = map(brkpos->filt(), brkpos->zeropoint(), brkpos->max_in(), pc[STOP], pc[OPMAX]);
         }
-        else if (brakemode == ParkMotor) {
+        else if (motormode == ParkMotor) {
             if (brkpos->filt() + brkpos->margin() <= brkpos->parkpos())  // If brake is retracted from park point, extend toward park point, slowing as we approach
                 pc[OUT] = map(brkpos->filt(), brkpos->parkpos(), brkpos->min_in(), pc[STOP], pc[OPMIN]);
             else if (brkpos->filt() - brkpos->margin() >= brkpos->parkpos())  // If brake is extended from park point, retract toward park point, slowing as we approach
                 pc[OUT] = map(brkpos->filt(), brkpos->parkpos(), brkpos->max_in(), pc[STOP], pc[OPMAX]);
         }
-        else if (brakemode == PIDLoop) {
+        else if (motormode == ActivePID) {
             if (hotrc->joydir(VERT) != JOY_DN) set_pidtarg(0);  // let off the brake
             else set_pidtarg(map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], 0.0, 100.0));  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
             pc[OUT] = pid_out();
         }
+        // else if (mode_request != NA) motormode = Idle;  // Change invalid mode to a valid one
         mode_busy = autostopping || park_the_motors;
-        oldmode = brakemode;
+        oldmode = motormode;
     }
   public:
     void setmode(int _mode=NA) { mode_request = _mode; }
@@ -782,7 +840,7 @@ class BrakeMotor : public JagMotor {
             //     pc[OUT] = pc[STOP];
             // else pc[OUT] = pid_out(); // Otherwise the pid control is active  // First attenuate max power to avoid blowing out the motor like in bm2023, if retracting, as a proportion of position from zeropoint to fully retracted
             // Step 2 : Fix motor pc value if it's out of range or exceeding positional limits
-            if (brakemode == Calibrate)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
+            if (motormode == Calibrate)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
                 pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);  // Constrain to full potential range when calibrating. Caution don't break anything!
             else if ((pc[OUT] < pc[STOP] && brkpos->filt() > brkpos->parkpos() - brkpos->margin()) 
                   || (pc[OUT] > pc[STOP] && brkpos->filt() < brkpos->min_in() + brkpos->margin()))  // If brake is at position limits and we're tring to go further, stop the motor
