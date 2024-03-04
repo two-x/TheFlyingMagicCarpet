@@ -515,7 +515,10 @@ class GasServo : public ServoMotor {
         mode_request = NA;
         cal_gasmode = false;
         // park_the_motors = false;
-        if (motormode == Calibrate) {
+        if (motormode == Idle) {
+            idlectrl.goto_idle();
+        }
+        else if (motormode == Calibrate) {
             cal_gasmode = true;
             pc[OUT] = si_to_pc(map(pot->val(), pot->min(), pot->max(), deg[ABSMIN], deg[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
         }
@@ -564,7 +567,6 @@ class GasServo : public ServoMotor {
         }
         // else if (mode_request != NA) motormode = Idle;  // Change invalid mode to a valid one
         mode_busy = park_the_motors;
-        oldmode = motormode;
     }
   public:
     void setmode(int _mode=NA) { mode_request = _mode; }
@@ -579,22 +581,6 @@ class GasServo : public ServoMotor {
             // Step 1 : update throttle target from idle control or cruise mode pid, if applicable (on the same timer as gas pid)
             idlectrl.update();  // Allow idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
             set_output();
-            // if (runmode == CRUISE && (cruise_setpoint_mode == PID_SUSPEND_FLY) && !cruise_adjusting)
-            //     pid.set_target(cruisepid.compute());  // cruise pid calculates new output (tach_target_rpm) based on input (speedmeter::human) and target (speedo_target_mph)
-            // // Step 2 : Determine servo pulse width value
-            // if (park_the_motors)
-            //     pc[OUT] = pc[PARKED];
-            // else if (runmode == CAL && cal_gasmode)
-            //     pc[OUT] = si_to_pc(map(pot->val(), pot->min(), pot->max(), deg[ABSMIN], deg[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
-            // else if (runmode == CRUISE && (cruise_setpoint_mode != PID_SUSPEND_FLY))
-            //     pc[OUT] = cruise_target_pc;
-            // else if (runmode != BASIC && runmode != CAL && runmode != ASLEEP && (runmode != SHUTDOWN || shutdown_incomplete)) {
-            //     if (runmode == STALL || openloop) {  // Stall mode runs the gas servo directly proportional to joystick. This is truly open loop
-            //         if (hotrc->joydir() != JOY_UP) pc[OUT] = pc[OPMIN];  // If in deadband or being pushed down, we want idle
-            //         else pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[OPMIN], pc[GOVERN]);  // actuators still respond even w/ engine turned off
-            //     }
-            //     else pc[OUT] = pid.compute();  // Do proper pid math to determine gas_out_us from engine rpm error
-            // }
             // Step 3 : Convert to degrees and constrain if out of range
             deg[OUT] = pc_to_si(pc[OUT]);  // convert to degrees
             if (runmode == CAL && cal_gasmode)  // Constrain to operating limits. 
@@ -732,34 +718,6 @@ class BrakeMotor : public JagMotor {
         if (duty_continuous < 0.001) duty_continuous = 0.0;  // otherwise displays "5.67e-" (?)
         // now we know our continuous duty, need to limit motor output based on this
     }
-    // bool autostop(float _target=NAN) {
-    //     std::isnan(_target) {
-    //         autostop_mode = false;
-    //         return;
-    //     }
-    //     int cmd = _cmd;
-    //     if (autostop_disabled) autostopping = false;
-    //     else {
-    //         if (autostopping) {
-    //             if (speedo.car_stopped() || brake.stopcar_timer.expired()) cmd = REQ_OFF; 
-    //             else if (brake.interval_timer.expireset()) brake.autostop_increment(panicstop);
-    //         }
-    //         if (cmd == REQ_TOG) cmd = !autostopping;
-    //         if (autostopping && cmd == REQ_OFF) {
-    //             brake.set_pidtarg(0);
-    //             autostopping = false;
-    //         }
-    //         else if (!autostopping && cmd == REQ_ON && !speedo.car_stopped()) {
-    //             gas.idlectrl.goto_idle();  // Keep target updated to possibly changing idle value
-    //             brake.autostop_baseline(panicstop);
-    //             brake.interval_timer.reset();
-    //             brake.stopcar_timer.reset();
-    //             autostopping = true;
-    //         }
-    //     }
-    //     return autostopping;
-    // }
-
     // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
     // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
     void set_output() { // services any requests for change in brake mode
@@ -815,7 +773,6 @@ class BrakeMotor : public JagMotor {
         }
         // else if (mode_request != NA) motormode = Idle;  // Change invalid mode to a valid one
         mode_busy = autostopping || park_the_motors;
-        oldmode = motormode;
     }
   public:
     void setmode(int _mode=NA) { mode_request = _mode; }
@@ -829,16 +786,6 @@ class BrakeMotor : public JagMotor {
             calc_motor_duty();
             // Step 1 : Determine motor percent value
             set_output();
-            // if (park_the_motors) {
-            // else if (runmode == CAL && cal_brakemode) {
-            //     int _joydir = hotrc->joydir();
-            //     if (_joydir == JOY_UP) pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[STOP], pc[OPMAX]);
-            //     else if (_joydir == JOY_DN) pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][OPMIN], hotrc->pc[VERT][DBBOT], pc[OPMIN], pc[STOP]);
-            //     else pc[OUT] = pc[STOP];
-            // }
-            // else if (runmode == CAL || runmode == BASIC || runmode == ASLEEP || (runmode == SHUTDOWN && !shutdown_incomplete))
-            //     pc[OUT] = pc[STOP];
-            // else pc[OUT] = pid_out(); // Otherwise the pid control is active  // First attenuate max power to avoid blowing out the motor like in bm2023, if retracting, as a proportion of position from zeropoint to fully retracted
             // Step 2 : Fix motor pc value if it's out of range or exceeding positional limits
             if (motormode == Calibrate)  // Constrain the motor to the operational range, unless calibrating (then constraint already performed above)
                 pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);  // Constrain to full potential range when calibrating. Caution don't break anything!
@@ -855,6 +802,8 @@ class BrakeMotor : public JagMotor {
     }
 };
 class SteerMotor : public JagMotor {
+  private:
+    int motormode = Idle, oldmode = Idle, mode_request;
   public:
     using JagMotor::JagMotor;
     float steer_safe_pc = 72.0;  // this percent otaken off full steering power when driving full speed (linearly applied)
@@ -866,20 +815,28 @@ class SteerMotor : public JagMotor {
     void update(int runmode) {
         if (volt_check_timer.expireset()) derive();
         if (pid_timer.expireset()) {
-            if (runmode == ASLEEP || (runmode == SHUTDOWN && !shutdown_incomplete)) pc[OUT] = pc[STOP];  // Stop the steering motor if in shutdown mode and shutdown is complete
-            else {
-                int _joydir = hotrc->joydir(HORZ);
-                if (_joydir == JOY_RT) pc[OUT] = map(hotrc->pc[HORZ][FILT], hotrc->pc[HORZ][DBTOP], hotrc->pc[HORZ][OPMAX], pc[STOP], steer_safe(pc[OPMAX]));  // if joy to the right of deadband
-                else if (_joydir == JOY_LT) pc[OUT] = map(hotrc->pc[HORZ][FILT], hotrc->pc[HORZ][DBBOT], hotrc->pc[HORZ][OPMIN], pc[STOP], steer_safe(pc[OPMIN]));  // if joy to the left of deadband
-                else pc[OUT] = pc[STOP];  // Stop the steering motor if inside the deadband
-            }
+            set_output();
             pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);  // Don't be out of range
             us[OUT] = pc_to_us(pc[OUT]);
             volt[OUT] = pc_to_si(pc[OUT]);
             write_motor();
         }
     }
+    void setmode(int _mode=NA) { mode_request = _mode; }
   private:
+    void set_output() {
+        if (mode_request != NA) motormode = mode_request;
+        mode_request = NA;
+        if (motormode == Idle) {
+            pc[OUT] = pc[STOP];  // Stop the steering motor if in shutdown mode and shutdown is complete
+        }
+        else if (motormode == OpenLoop) {
+            int _joydir = hotrc->joydir(HORZ);
+            if (_joydir == JOY_RT) pc[OUT] = map(hotrc->pc[HORZ][FILT], hotrc->pc[HORZ][DBTOP], hotrc->pc[HORZ][OPMAX], pc[STOP], steer_safe(pc[OPMAX]));  // if joy to the right of deadband
+            else if (_joydir == JOY_LT) pc[OUT] = map(hotrc->pc[HORZ][FILT], hotrc->pc[HORZ][DBBOT], hotrc->pc[HORZ][OPMIN], pc[STOP], steer_safe(pc[OPMIN]));  // if joy to the left of deadband
+            else pc[OUT] = pc[STOP];  // Stop the steering motor if inside the deadband
+        }
+    }
     float steer_safe(float endpoint) {
         return pc[STOP] + (endpoint - pc[STOP]) * (1.0 - steer_safe_pc * speedo->filt() / (100.0 * speedo->redline_mph()));
     }

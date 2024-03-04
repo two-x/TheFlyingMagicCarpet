@@ -90,6 +90,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_basicMode() { // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         if (we_just_switched_modes) {
             park_motors(REQ_ON);  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
+            steer.setmode(OpenLoop);
             powering_up = false;  // to cover unlikely edge case where basic mode switch is enabled during wakeup from asleep mode
             watchdog.set_codemode(Parked);
         }
@@ -103,6 +104,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             powering_up = false;
             gas.setmode(Idle);
             brake.setmode(Idle);
+            steer.setmode(Idle);
             set_syspower(LOW); // Power down devices to save battery
         }
         if (encoder->button.pressed() || sleep_request == REQ_OFF || sleep_request == REQ_TOG) {
@@ -121,13 +123,11 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             sleep_request = REQ_NA;
             gas.setmode(Idle);  // if car is moving begin autostopping
             brake.setmode(AutoStop);  // if car is moving begin autostopping
+            steer.setmode(Idle);
         }
         else if (shutdown_incomplete) {  // first we need to stop the car and release brakes and gas before shutting down  
             if (!autostopping && !park_the_motors) park_motors(REQ_ON);
             else if (!brake.mode_busy) shutdown_incomplete = false;
-            // if (park_the_motors) shutdown_incomplete = park_motors(); // update any in-progress motor parking. shutdown is complete once parked
-            // else if (!autostop()) park_motors(REQ_ON);  // start parking motors directly after final autostop update
-            // if (!shutdown_incomplete) kick_inactivity_timer(3);  // upon shutdown completion, start the sleep timer
         }
         else {  // if shutdown is complete
             if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode
@@ -141,6 +141,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (we_just_switched_modes) {
             gas.setmode(OpenLoop);
             brake.setmode(ActivePID);
+            steer.setmode(OpenLoop);
         }
         if (starter || !tach.engine_stopped()) mode = HOLD;  // If we started the car, enter hold mode once starter is released
     }
@@ -150,6 +151,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             watchdog.set_codemode(Driving);
             gas.setmode(OpenLoop);
             brake.setmode(AutoHold);
+            steer.setmode(OpenLoop);
         }
         if (hotrc.joydir(VERT) != JOY_UP) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
         else if (joy_centered && !starter && !hotrc.radiolost()) mode = FLY; // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
@@ -159,6 +161,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             car_hasnt_moved = speedo.car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
             gas.setmode(OpenLoop);
             brake.setmode(ActivePID);
+            steer.setmode(OpenLoop);
         }
         if (car_hasnt_moved) {
             if (hotrc.joydir(VERT) != JOY_UP) mode = HOLD;  // Must keep pulling trigger until car moves, or it drops back to hold mode
@@ -173,11 +176,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
             gas.setmode(Cruise);
             brake.setmode(Release);
-            // brake.set_pidtarg(0);  // Let off the brake and keep it there till out of Cruise mode
-            // gas.cruisepid.set_target(speedo.filt());  // set pid loop speed target to current speed  (for PID_SUSPEND_FLY mode)
-            // gas.pid.set_target(tach.filt());  // initialize pid output (rpm target) to current rpm  (for PID_SUSPEND_FLY mode)
-            // gas.cruise_target_pc = gas.pc[OUT];  //  set target throttle angle to current throttle angle  (for THROTTLE_ANGLE/THROTTLE_DELTA modes)
-            // cruise_adjusting = cruise_trigger_released = false;  // in case trigger is being pulled as cruise mode is entered, the ability to adjust is only unlocked after the trigger is subsequently released to the center
+            steer.setmode(OpenLoop);
             gestureFlyTimer.reset();  // initialize brake-trigger timer
         }
         if (hotrc.joydir(VERT) == JOY_DN && !cruise_speed_lowerable) mode = FLY;
@@ -189,7 +188,12 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (speedo.car_stopped()) mode = (_joydir == JOY_UP) ? FLY : HOLD;  // In case we slam into camp Q woofer stack, get out of cruise mode.
     }
     void run_calMode() {  // Calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration. Don't use it unless you know how.
-        if (we_just_switched_modes) calmode_request = cal_gasmode_request = cal_brakemode = false;
+        if (we_just_switched_modes) {
+            calmode_request = cal_gasmode_request = cal_brakemode = false;
+            gas.setmode(Idle);
+            brake.setmode(Idle);
+            steer.setmode(Idle);
+        }
         else if (calmode_request) mode = SHUTDOWN;
         if (cal_brakemode) brake.setmode(Calibrate);
         else if (brake.motormode == Calibrate) brake.setmode(Idle);
