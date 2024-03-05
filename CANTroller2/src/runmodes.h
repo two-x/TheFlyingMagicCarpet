@@ -2,8 +2,8 @@
 class RunModeManager {  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
   private:
     int _joydir;
-    Timer gestureFlyTimer = Timer(1250000);  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
-    Timer pwrup_timer = Timer(500000), motor_park_timer = Timer(4000000);  // Timeout when parking motors if they don't park for whatever reason (in us)
+    Timer gestureFlyTimer{1250000};  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
+    Timer pwrup_timer{500000};  // Timeout when parking motors if they don't park for whatever reason (in us)
     uint32_t pwrup_timeout = 500000;
     Encoder* encoder;
     Display* display;
@@ -35,23 +35,23 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
     // void kick() { sleep_inactivity_timer.reset(); }  // call when user activity is detected, to prevent shutdown mode timeout to asleep mode
   private:
-    bool park_motors(int _cmd = REQ_NA) {
-        int cmd = _cmd;
-        if (park_the_motors && ((brkpos.parked() && gas.parked()) || motor_park_timer.expired())) cmd = REQ_OFF;
-        if (cmd == REQ_TOG) cmd = !park_the_motors;
-        if (park_the_motors && cmd == REQ_OFF) {
-            brake.setmode(Idle);
-            park_the_motors = false;
-        }
-        else if (!park_the_motors && cmd == REQ_ON) {
-            gas.servo_delay_timer.reset();  // Ensure we give the servo enough time to move to position
-            motor_park_timer.reset();  // Set a timer to timebox this effort
-            gas.setmode(ParkMotor);
-            brake.setmode(ParkMotor);
-            park_the_motors = true;
-        }
-        return park_the_motors;
-    }
+    // bool park_motors(int _cmd = REQ_NA) {
+    //     int cmd = _cmd;
+    //     if (park_the_motors && ((brkpos.parked() && gas.parked()) || motor_park_timer.expired())) cmd = REQ_OFF;
+    //     if (cmd == REQ_TOG) cmd = !park_the_motors;
+    //     if (park_the_motors && cmd == REQ_OFF) {
+    //         brake.setmode(Idle);
+    //         park_the_motors = false;
+    //     }
+    //     else if (!park_the_motors && cmd == REQ_ON) {
+    //         gas.servo_delay_timer.reset();  // Ensure we give the servo enough time to move to position
+    //         motor_park_timer.reset();  // Set a timer to timebox this effort
+    //         gas.setmode(ParkMotor);
+    //         brake.setmode(ParkMotor);
+    //         park_the_motors = true;
+    //     }
+    //     return park_the_motors;
+    // }
     // void sleep_for(uint32_t wakeup_us) {
     //     esp_sleep_enable_timer_wakeup(wakeup_us);
     //     esp_deep_sleep_start();
@@ -70,7 +70,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         oldmode = mode;
     }
     void cleanup_state_variables() {
-        if (oldmode == BASIC) park_motors(REQ_OFF);
+        if (oldmode == BASIC);
         else if (oldmode == ASLEEP);
         else if (oldmode == SHUTDOWN) {
             // autostop(REQ_OFF);
@@ -89,7 +89,8 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
     void run_basicMode() { // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         if (we_just_switched_modes) {
-            park_motors(REQ_ON);  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
+            gas.setmode(ParkMotor);  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
+            brake.setmode(ParkMotor);
             steer.setmode(OpenLoop);
             powering_up = false;  // to cover unlikely edge case where basic mode switch is enabled during wakeup from asleep mode
             watchdog.set_codemode(Parked);
@@ -102,7 +103,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (saver_on_sleep) display->auto_saver(true);
             sleep_request = REQ_NA;
             powering_up = false;
-            gas.setmode(Idle);
+            // gas.setmode(Idle);
             brake.setmode(Idle);
             steer.setmode(Idle);
             set_syspower(LOW); // Power down devices to save battery
@@ -121,13 +122,15 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             shutdown_incomplete = !(powering_up);
             powering_up = calmode_request = false;
             sleep_request = REQ_NA;
-            gas.setmode(Idle);  // if car is moving begin autostopping
+            gas.setmode(ParkMotor);  // if car is moving begin autostopping
             brake.setmode(AutoStop);  // if car is moving begin autostopping
             steer.setmode(Idle);
         }
-        else if (shutdown_incomplete) {  // first we need to stop the car and release brakes and gas before shutting down  
-            if (!autostopping && !park_the_motors) park_motors(REQ_ON);
-            else if (!brake.mode_busy) shutdown_incomplete = false;
+        else if (shutdown_incomplete) {  // first we need to stop the car and release brakes and gas before shutting down
+            if (brake.motormode != AutoStop) {
+                if (brake.parked()) shutdown_incomplete = false;
+                else brake.setmode(ParkMotor);
+            }
         }
         else {  // if shutdown is complete
             if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode

@@ -82,6 +82,7 @@ enum cruise_modes : int { PID_SUSPEND_FLY, THROTTLE_ANGLE, THROTTLE_DELTA };
 enum sw_presses : int { swNONE, swSHORT, swLONG };
 enum brake_pids : int { POSNPID=0, PRESPID=1, NUM_BRAKEPIDS=2, HYBRIDPID=3 };
 enum motor_modes : int { NA=-1, Idle=0, Release=1, ActivePID=2, OpenLoop=3, AutoStop=4, AutoHold=5, ParkMotor=6, Cruise=7, Calibrate=8, NumMotorModes=9 };
+enum brake_pid_modes : int { PositionPID=0, PressurePID=1, HybridPID=2, NumBrakePIDModes=3 };
 enum tunerstuff : int { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum datapages : int { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
 enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
