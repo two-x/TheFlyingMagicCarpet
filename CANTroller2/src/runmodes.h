@@ -4,6 +4,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     int _joydir;
     Timer gestureFlyTimer{1250000};  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
     Timer pwrup_timer{500000};  // Timeout when parking motors if they don't park for whatever reason (in us)
+    Timer shutdown_timer{5000000};
     uint32_t pwrup_timeout = 500000;
     Encoder* encoder;
     Display* display;
@@ -125,14 +126,17 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             gas.setmode(ParkMotor);  // if car is moving begin autostopping
             brake.setmode(AutoStop);  // if car is moving begin autostopping
             steer.setmode(Idle);
+            shutdown_timer.reset();
         }
         else if (shutdown_incomplete) {  // first we need to stop the car and release brakes and gas before shutting down
+            if (shutdown_timer.expired()) shutdown_incomplete = false;
             if (brake.motormode != AutoStop) {
                 if (brake.parked()) shutdown_incomplete = false;
                 else brake.setmode(ParkMotor);
             }
         }
         else {  // if shutdown is complete
+            brake.setmode(Idle);
             if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode
             watchdog.set_codemode(Parked);
             if (sleep_inactivity_timer.expired() || sleep_request == REQ_ON || sleep_request == REQ_TOG) mode = ASLEEP;
