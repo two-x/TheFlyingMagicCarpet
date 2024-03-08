@@ -632,8 +632,8 @@ class BrakeMotor : public JagMotor {
     int mode_request = NA;
     bool mode_busy = false;
     int pid_status = HybridPID;
-    QPID pids[NumBrakePIDs];  // brake changes from pressure target to position target as pressures decrease, and vice versa
-    QPID* pid_dom = &(pids[PressurePID]);  // AnalogSensor sensed[NumBrakePIDs];
+    QPID pids[2];  // brake changes from pressure target to position target as pressures decrease, and vice versa
+    QPID* pid_dom = &(pids[PressurePID]);  // AnalogSensor sensed[2];
     Timer stopcar_timer{stopcar_timeout};
     Timer interval_timer{interval_timeout};
     Timer motor_park_timer{4000000};
@@ -644,7 +644,7 @@ class BrakeMotor : public JagMotor {
     int dominantpid = brake_default_pid, dominantpid_last = brake_default_pid;
     bool posn_pid_active = (dominantpid == PositionPID);
     float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2, pid_targ_pc, pid_err_pc, pid_final_out;
-    float sens_ratio[NumBrakePIDs], sensnow[NumBrakePIDs], outnow[NumBrakePIDs], hybrid_math_offset, hybrid_math_coeff;  // , senslast[NumBrakePIDs], d_ratio[NumBrakePIDs], 
+    float sens_ratio[2], sensnow[2], outnow[2], hybrid_math_offset, hybrid_math_coeff;  // , senslast[2], d_ratio[2], 
     float hybrid_sens_ratio, hybrid_sens_ratio_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0;
     float duty_integral_sum, duty_instant, duty_continuous;
     void derive() {
@@ -730,21 +730,30 @@ class BrakeMotor : public JagMotor {
     // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
     void set_output() { // services any requests for change in brake mode
         autostopping = autoholding = false;
-        if (motormode == AutoHold || motormode == AutoStop) {
+        if (motormode == AutoHold) {
+            pid_status = HybridPID;
+            set_pidtarg(std::max(hold_initial_pc, pid_dom->target()));  // Autohold always applies the brake somewhat, even if already stopped
+            autoholding = speedo->car_stopped();
+            if (!autoholding) {
+                autostopping = true;
+                if (interval_timer.expireset()) set_pidtarg(std::min(pid_dom->target() + panicstop ? panic_increment_pc : hold_increment_pc, 100.0f));
+                pc[OUT] = pid_out();
+            }
+            else pc[OUT] = pc[STOP];
+        }
+        else if (motormode == AutoStop) {
             pid_status = HybridPID;
             if (panicstop) throttle->goto_idle();  // Stop pushing the gas, will help us stop the car better
-            if (motormode == AutoHold) {
-                autoholding = true;
-                set_pidtarg(std::max(hold_initial_pc, pid_dom->target()));  // Autohold always applies the brake somewhat, even if already stopped
+            if (speedo->car_stopped() || stopcar_timer.expired()) {
+                mode_request = Halt;  // After AutoStop mode stops the car or times out, then stop driving the motor
+                pc[OUT] = pc[STOP];
             }
-            if (motormode == AutoStop && (speedo->car_stopped() || stopcar_timer.expired())) mode_request = Halt;  // After AutoStop mode stops the car or times out, then stop driving the motor
-            else autostopping = !speedo->car_stopped();
-            if (autostopping) {
+            else {
+                autostopping = true;
                 if (interval_timer.expireset()) set_pidtarg(std::min(pid_dom->target() + panicstop ? panic_increment_pc : hold_increment_pc, 100.0f));
                 else set_pidtarg(std::max(panicstop ? panic_initial_pc : hold_initial_pc, pid_dom->target()));
                 pc[OUT] = pid_out();
             }
-            else pc[OUT] = pc[STOP];
         }
         else if (motormode == Halt) {
             pid_status = HybridPID;
