@@ -57,6 +57,7 @@ void set_board_defaults() {          // true for dev boards, false for printed b
     for (sens sen=sens::pressure; sen<=sens::mapsens; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, running_on_devboard);
     for (sens sen=sens::engtemp; sen<sens::basicsw; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, false);
     sim.set_can_sim(sens::basicsw, running_on_devboard);
+    sim.set_can_sim(sens::starter, running_on_devboard);
     sim.set_can_sim(sens::mulebatt, running_on_devboard);
     if (!running_on_devboard) {      // override settings if running on the real car
         sim.set_potmap(sens::none);        
@@ -118,24 +119,38 @@ void starter_update () {  // Starter bidirectional handler logic.  Outside code 
         if (starter_drive && ((starter_request == REQ_OFF) || starterTimer.expired())) {  // If we're driving the motor but need to stop
             starter_drive = false;
             set_pin (starter_pin, INPUT_PULLDOWN);  // we never assert low on the pin, just set pin as input and let the pulldown bring it low
+            starter_request = REQ_NA;
         }
-        if (!starter_drive && (starter_request != REQ_ON) && !sim.simulating(sens::starter)) {  // If we haven't been and shouldn't be driving, and not simulating
-            do {
-                starter = digitalRead(starter_pin);  // then read the pin, and starter variable will reflect whether starter has been turned on externally
-            } while (starter != digitalRead(starter_pin)); // due to a chip glitch, starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
-        }
-        else if (!starter && (starter_request == REQ_ON) && remote_start_support) {  // If we got a request to start the motor, and it's not already being driven externally
-            starterTimer.reset();  // if left on the starter will turn off automatically after X seconds
-            if (brake_before_starting && (pressure.psi() < pressure.prestart_psi)) {
-                // First apply the brakes, so we don't lurch forward (code does not exist yet)
-                // brake.set_pidtarg()
+        else {
+            if (!starter_drive) {  // If we haven't been and shouldn't be driving, and not simulating
+                if (sim.simulating(sens::starter)) starter = false;
+                else {
+                    do {
+                        starter = digitalRead(starter_pin);  // then read the pin, and starter variable will reflect whether starter has been turned on externally
+                    } while (starter != digitalRead(starter_pin)); // due to a chip glitch, starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+                    if (starter_request != REQ_ON) starter_request = REQ_NA;
+                }
             }
-            starter_drive = true;
-            starter = HIGH;  // ensure starter variable always reflects the starter status regardless who is driving it
-            set_pin (starter_pin, OUTPUT);  // then set pin to an output
-            write_pin (starter_pin, starter);  // and start the motor
+            if (!starter && (starter_request == REQ_ON) && remote_start_support) {  // If we got a request to start the motor, and it's not already being driven externally
+                if (brake.autoholding || !brake_before_starting) {
+                    starterTimer.reset();  // if left on the starter will turn off automatically after X seconds
+                    starter_drive = true;
+                    starter = HIGH;  // ensure starter variable always reflects the starter status regardless who is driving it
+                    set_pin (starter_pin, OUTPUT);  // then set pin to an output
+                    write_pin (starter_pin, starter);  // and start the motor
+                    starter_request = REQ_NA;  // we have serviced whatever requests
+                }
+                else if (pushBrakeTimer.expired() && brake.motormode != AutoHold) {
+                    pushBrakeTimer.reset();
+                    brake.setmode(AutoHold);
+                }
+                else if (pushBrakeTimer.expired()) {
+                    starter_request - REQ_OFF;
+                    brake.setmode(Halt);
+                    starter_request = REQ_NA;
+                }
+            }
         }
-        starter_request = REQ_NA;  // we have serviced whatever requests
     }
     else starter = LOW;
 }
@@ -176,13 +191,6 @@ void set_syspower(bool setting) {
 }
 void hotrc_events(int runmode) {
     if (hotrc.sw_event(CH3) && runmode != ASLEEP) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. If ign is turned off while the car is moving, this leads to panic stop
-    if (hotrc.sw_event(CH4)) {
-        if (runmode == FLY || runmode == CRUISE) flycruise_toggle_request = true;
-        else if (runmode == STALL) starter_request = REQ_TOG;
-        else if (runmode == HOLD) starter_request = REQ_OFF;
-        else if (runmode == SHUTDOWN && !shutdown_incomplete) sleep_request = REQ_ON;
-        else if (runmode == ASLEEP) sleep_request = REQ_OFF; 
-    }
     // hotrc.toggles_reset();
 }
 // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values

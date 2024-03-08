@@ -92,7 +92,7 @@ class DiagRuntime {
     void set_sensidiots() {
         for (int err=0; err<=_GPIO; err++) {
             sensidiots[err] = false;
-            for (int typ=LOST; typ<=RANGE; typ++) {
+            for (int typ=LOST; typ<=VALUE; typ++) {
                 if (err == _HotRC)
                     for (int ch = HORZ; ch <= CH4; ch++) 
                         sensidiots[err] = sensidiots[err] || err_sens[typ][ch];
@@ -107,7 +107,6 @@ class DiagRuntime {
                 else if (err == _GPIO) {
                     sensidiots[err] = sensidiots[err] || err_sens[typ][_Ignition];
                     sensidiots[err] = sensidiots[err] || err_sens[typ][_SysPower];
-                    sensidiots[err] = sensidiots[err] || err_sens[typ][_BasicSw];
                 }
                 else sensidiots[err] = err_sens[typ][err];
             }
@@ -116,18 +115,9 @@ class DiagRuntime {
     void update() {
         if (errTimer.expireset()) {
             // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
-            // this is one approach
             // This section should become a real time self-diagnostic system, to look for anything that doesn't seem right and display an
             // informed trouble code. Much like the engine computer in cars nowadays, which keep track of any detectable failures for you to
             // retreive with an OBD tool. Some checks are below, along with other possible things to check for:
-            if (!ignition && !tach->engine_stopped()) {  // Check: if engine is turning when ignition signal is off
-                if (diag_ign_error_enabled) { // See if the engine is turning despite the ignition being off
-                    Serial.println (F("Detected engine rotation in the absense of ignition signal"));  // , tach_filt_rpm, ignition
-                    diag_ign_error_enabled = false;  // Prevents endless error reporting the same error
-                }
-            }
-            else diag_ign_error_enabled = true;
-            // different approach
             bool not_detected = false;  // first reset
             for (int cat = 0; cat < NUM_TEMP_CATEGORIES; cat++) temp_err[cat] = false;  // first reset
             for (int l = 0; l < tempsens->locint(); l++) {
@@ -138,6 +128,9 @@ class DiagRuntime {
 
             // Detect sensors disconnected or giving out-of-range readings.
             // TODO : The logic of this for each sensor should be moved to devices.h objects
+            err_sens[RANGE][_BrakeMotor] = (brake->pc[OUT] < brake->pc[OPMIN] || brake->pc[OUT] > brake->pc[OPMAX]);
+            err_sens[RANGE][_GasServo] = (gas->pc[OUT] < gas->pc[OPMIN] || gas->pc[OUT] > gas->pc[OPMAX]);
+            err_sens[RANGE][_BrakeMotor] = (steer->pc[OUT] < steer->pc[OPMIN] || steer->pc[OUT] > steer->pc[OPMAX]);
             err_sens[RANGE][_BrakePosn] = (brkpos->in() < brkpos->op_min_in() || brkpos->in() > brkpos->op_max_in());
             err_sens[LOST][_BrakePosn] = (brkpos->raw() < err_margin_adc);
             err_sens[RANGE][_BrakePres] = (pressure->psi() < pressure->op_min_psi() || pressure->psi() > pressure->op_max_psi());
@@ -149,6 +142,8 @@ class DiagRuntime {
                 err_sens[LOST][ch] = !hotrc->radiolost() && ((hotrc->us[ch][RAW] < (hotrc->absmin_us - hotrc->us[ch][MARGIN]))
                                         || (hotrc->us[ch][RAW] > (hotrc->absmax_us + hotrc->us[ch][MARGIN])));
             }
+            err_sens[VALUE][_Ignition] = (!ignition && !tach->engine_stopped());
+            // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != ASLEEP));
             set_sensidiots();
 
             // err_sens[RANGE][_HotRCVert] = (hotrc->us[VERT][RAW] < hotrc->failsafe_us - hotrc->us[ch][MARGIN])

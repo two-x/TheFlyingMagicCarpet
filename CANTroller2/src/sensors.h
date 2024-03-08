@@ -756,7 +756,7 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     float hold_increment_psi = 3;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
     float panic_initial_psi = 80; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
     float panic_increment_psi = 5; // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
-    float prestart_psi = hold_initial_psi;
+    float margin_psi = 1;  // Max acceptible error when checking psi levels
     String _long_name = "Brake pressure sensor";
     String _short_name = "presur";
     PressureSensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
@@ -1445,7 +1445,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             failsafe_timer.reset();
             _radiolost = false;
         }
-        else if (!_radiolost && failsafe_timer.expired()) _radiolost = true;
+        else if (failsafe_timer.expired()) _radiolost = true;
         return _radiolost;
     }
     float us_to_pc(int8_t _axis, int32_t _us) {  // float us_to_pc(int8_t axis, int32_t us) {

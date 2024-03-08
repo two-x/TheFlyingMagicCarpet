@@ -80,14 +80,13 @@ enum runmode : int { BASIC, ASLEEP, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, NUM
 enum req : int { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
 enum cruise_modes : int { PID_SUSPEND_FLY, THROTTLE_ANGLE, THROTTLE_DELTA };
 enum sw_presses : int { swNONE, swSHORT, swLONG };
-enum brake_pids : int { POSNPID=0, PRESPID=1, NUM_BRAKEPIDS=2, HYBRIDPID=3 };
-enum motor_modes : int { NA=-1, Idle=0, Release=1, ActivePID=2, OpenLoop=3, AutoStop=4, AutoHold=5, ParkMotor=6, Cruise=7, Calibrate=8, NumMotorModes=9 };
-enum brake_pid_modes : int { PositionPID=0, PressurePID=1, HybridPID=2, NumBrakePIDModes=3 };
+enum motor_modes : int { NA=-1, Halt=0, Idle=1, Release=2, ActivePID=3, OpenLoop=4, AutoStop=5, AutoHold=6, ParkMotor=7, Cruise=8, Calibrate=9, NumMotorModes=10 };
+enum brake_pid_modes : int { PositionPID=0, PressurePID=1, HybridPID=2, NumBrakePIDs=3 };
 enum tunerstuff : int { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
+enum boolean_states : int { ON=1 };
 enum datapages : int { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
 enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
 enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };   // possible sources of gas, brake, steering commands
-enum boolean_states : int { ON=1 };
 enum ui_modes : int { DatapagesUI=0, ScreensaverUI=1 };
 enum codemodes : int { Confused=0, Booting=1, Parked=2, Driving=3 };
 // enum telemetry_full : int { 
@@ -97,11 +96,11 @@ enum telemetry_short : int { _GasServo=0, _BrakeMotor=1, _SteerMotor=2, _HotRC=3
 enum telemetry_full : int { _HotRCHorz=11, _HotRCVert=12, _MuleBatt=13, _AirVelo=14, _MAP=15, _Pot=16, _MAF=17, _TempEng=18, _TempWhFL=19, _TempWhFR=20, _TempWhRL=21, _TempWhRR=22, _TempAmb=23 };  // 10 per line
 enum telemetry_nums : int { _None=-1, NumTelemetryBool=9, NumTelemetryShort=11, NumTelemetryFull=24 };
 enum telemetry_bool : int { _Ignition=1, _PanicStop=2, _SysPower=3, _HotRCCh3=4, _HotRCCh4=5, _StarterDr=6, _StarterExt=7, _BasicSw=8 };
-enum err_type : int { LOST=0, RANGE=1, CALIB=2, WARN=3, CRIT=4, INFO=5, NUM_ERR_TYPES=6 };
+enum err_type : int { LOST=0, RANGE=1, VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, NUM_ERR_TYPES=7 };
 
 // global configuration settings
 bool brake_hybrid_pid = true;
-int brake_default_pid = PRESPID;
+int brake_default_pid = PressurePID;
 bool starter_signal_support = true;
 bool remote_start_support = true;
 bool autostop_disabled = false;      // temporary measure to keep brake behaving until we get it debugged. Eventually should be false
@@ -154,7 +153,7 @@ uint codemode = Booting;
 uint codemode_postmortem;
 bool running_on_devboard = false;       // will overwrite with value read thru pull resistor on tx pin at boot
 bool shutdown_incomplete = true;        // minor state variable for shutdown mode - Shutdown mode has not completed its work and can't yet stop activity
-bool park_the_motors = false;           // indicates we should release the brake & gas so the pedals can be used manually without interference
+bool parking = false;           // indicates we should release the brake & gas so the pedals can be used manually without interference
 bool cruise_adjusting = false;
 bool cal_brakemode = false;             // allows direct control of brake motor using controller vert
 bool cal_brakemode_request = false;             // allows direct control of brake motor using controller vert
@@ -389,8 +388,9 @@ class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regul
     //     return true;
     // }
 };
-Timer sleep_inactivity_timer(150000000);
-Timer starterTimer(5000000);  // If remotely-started starting event is left on for this long, end it automatically  
+Timer sleep_inactivity_timer(300000000);
+Timer starterTimer(5000000);  // If remotely-started starting event is left on for this long, end it automatically
+Timer pushBrakeTimer(2500000);  // time allowed to push the brake pedal before remotely powering the starter motor
 Timer panicTimer(15000000);  // How long should a panic stop last?  we can't stay mad forever
 
 void kick_inactivity_timer(int source=0) {

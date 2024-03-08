@@ -551,7 +551,7 @@ class GasServo : public ServoMotor {
             else pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[OPMIN], pc[GOVERN]);  // actuators still respond even w/ engine turned off
         }
         // else if (mode_request != NA) motormode = Idle;  // Change invalid mode to a valid one
-        // mode_busy = park_the_motors;
+        // mode_busy = parking;
     }
   public:
     void setmode(int _mode=NA) {
@@ -628,23 +628,23 @@ class BrakeMotor : public JagMotor {
     }
   public:
     using JagMotor::JagMotor;
-    int motormode = Idle, oldmode = Idle;
+    int motormode = Halt, oldmode = Halt;
     int mode_request = NA;
     bool mode_busy = false;
     int pid_status = HybridPID;
-    QPID pids[NUM_BRAKEPIDS];  // brake changes from pressure target to position target as pressures decrease, and vice versa
-    QPID* pid_dom = &(pids[PressurePID]);  // AnalogSensor sensed[NUM_BRAKEPIDS];
+    QPID pids[NumBrakePIDs];  // brake changes from pressure target to position target as pressures decrease, and vice versa
+    QPID* pid_dom = &(pids[PressurePID]);  // AnalogSensor sensed[NumBrakePIDs];
     Timer stopcar_timer{stopcar_timeout};
     Timer interval_timer{interval_timeout};
     Timer motor_park_timer{4000000};
     float brake_pid_trans_threshold_lo = 0.25;  // tunable. At what fraction of full brake pressure will motor control begin to transition from posn control to pressure control
     float brake_pid_trans_threshold_hi = 0.50;  // tunable. At what fraction of full brake pressure will motor control be fully transitioned to pressure control
-    bool autostopping = false, reverse = false, openloop = false, duty_tracker_load_sensitive = true;
+    bool autostopping = false, autoholding = false, reverse = false, openloop = false, duty_tracker_load_sensitive = true;
     // float duty_pc = 25;
     int dominantpid = brake_default_pid, dominantpid_last = brake_default_pid;
     bool posn_pid_active = (dominantpid == PositionPID);
     float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2, pid_targ_pc, pid_err_pc, pid_final_out;
-    float sens_ratio[NUM_BRAKEPIDS], sensnow[NUM_BRAKEPIDS], outnow[NUM_BRAKEPIDS], hybrid_math_offset, hybrid_math_coeff;  // , senslast[NUM_BRAKEPIDS], d_ratio[NUM_BRAKEPIDS], 
+    float sens_ratio[NumBrakePIDs], sensnow[NumBrakePIDs], outnow[NumBrakePIDs], hybrid_math_offset, hybrid_math_coeff;  // , senslast[NumBrakePIDs], d_ratio[NumBrakePIDs], 
     float hybrid_sens_ratio, hybrid_sens_ratio_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0;
     float duty_integral_sum, duty_instant, duty_continuous;
     void derive() {
@@ -737,7 +737,7 @@ class BrakeMotor : public JagMotor {
                 autoholding = true;
                 set_pidtarg(std::max(hold_initial_pc, pid_dom->target()));  // Autohold always applies the brake somewhat, even if already stopped
             }
-            if (motormode == AutoStop && (speedo->car_stopped() || stopcar_timer.expired())) mode_request = Idle;  // After AutoStop mode stops the car or times out, then stop driving the motor
+            if (motormode == AutoStop && (speedo->car_stopped() || stopcar_timer.expired())) mode_request = Halt;  // After AutoStop mode stops the car or times out, then stop driving the motor
             else autostopping = !speedo->car_stopped();
             if (autostopping) {
                 if (interval_timer.expireset()) set_pidtarg(std::min(pid_dom->target() + panicstop ? panic_increment_pc : hold_increment_pc, 100.0f));
@@ -746,7 +746,7 @@ class BrakeMotor : public JagMotor {
             }
             else pc[OUT] = pc[STOP];
         }
-        else if (motormode == Idle) { // "Idle" status for the brake and steering motors simply means they're stopped
+        else if (motormode == Halt) {
             pid_status = HybridPID;
             pc[OUT] = pc[STOP];
         }
@@ -762,7 +762,7 @@ class BrakeMotor : public JagMotor {
             pid_status = PositionPID;
             mode_busy = true;
             if (released() || motor_park_timer.expired()) {
-                mode_request = Idle;
+                mode_request = Halt;
                 mode_busy = false;
             }
             else set_pidtarg(map(brkpos->zeropoint(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0));  // Flipped to 100-value because function argument subtracts back for position pid
@@ -774,10 +774,10 @@ class BrakeMotor : public JagMotor {
         }
         else if (motormode == ParkMotor) {
             pid_status = PositionPID;
-            park_the_motors = mode_busy = true;
+            parking = mode_busy = true;
             if (parked() || motor_park_timer.expired()) {
-                mode_request = Idle;
-                park_the_motors = mode_busy = false;
+                mode_request = Halt;
+                parking = mode_busy = false;
             }
             else set_pidtarg(map(brkpos->parkpos(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0));  // Flipped to 100-value because function argument subtracts back for position pid
             pc[OUT] = pid_out();
@@ -792,8 +792,8 @@ class BrakeMotor : public JagMotor {
             else set_pidtarg(map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], 0.0, 100.0));  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
             pc[OUT] = pid_out();
         }
-        // else if (mode_request != NA) motormode = Idle;  // Change invalid mode to a valid one
-        mode_busy = autostopping || park_the_motors;
+        // else if (mode_request != NA) motormode = Halt;  // Change invalid mode to a valid one
+        mode_busy = autostopping || parking;
     }
   public:
     void setmode(int _mode=NA) {
@@ -839,10 +839,9 @@ class BrakeMotor : public JagMotor {
     }
 };
 class SteerMotor : public JagMotor {
-  private:
-    int motormode = Idle, oldmode = Idle, mode_request;
   public:
     using JagMotor::JagMotor;
+    int motormode = Halt, oldmode = Halt, mode_request;
     float steer_safe_pc = 72.0;  // this percent otaken off full steering power when driving full speed (linearly applied)
     bool reverse = false, openloop = true;
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
@@ -864,7 +863,7 @@ class SteerMotor : public JagMotor {
     void set_output() {
         if (mode_request != NA) motormode = mode_request;
         mode_request = NA;
-        if (motormode == Idle) {
+        if (motormode == Halt) {
             pc[OUT] = pc[STOP];  // Stop the steering motor if in shutdown mode and shutdown is complete
         }
         else if (motormode == OpenLoop) {
