@@ -152,8 +152,8 @@ static std::string telemetry[disp_fixed_lines] = { "TriggerV", "   Speed", "    
 static std::string units[disp_fixed_lines] = { "%   ", "mph ", "rpm ", "%   ", "psi ", "%   ", "%   ", "%   " };  // Fixed rows
 static std::string brake_pid_card[2] = { "presur", "positn" };
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-static std::string motormodecard[NumMotorModes+1] = { "Halt", "Idle", "Releas", "PID", "OpLoop", "AuStop", "AuHold", "Park", "Cruise", "Calib", "NA" };
-static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 4, 8, 7, 7, 9, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
+static std::string motormodecard[NumMotorModes+1] = { "Halt", "Idle", "Releas", "OpLoop", "PID", "AuStop", "AuHold", "Park", "Cruise", "Calib", "NA" };
+static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 4, 8, 8, 7, 9, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
@@ -161,7 +161,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
     { brAk"Targ", "Pn|PrErr", "  P Term", "  I Term", "  D Term", brAk"Posn", "OutRatio", "MotrDuty", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
-    { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, "OpenLoop", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
+    { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, __________, "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", " Touch X", " Touch Y", "  Uptime", "Webservr", "No Temps", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
@@ -174,7 +174,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { degree, "us  ", "V   ", "us  ", "V   ", "us  ", ______, degree, degree, "us  ", "%   ", },  // PG_PWMS
     { scroll, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", degreF, degreF, "rpms", scroll, },  // PG_IDLE
     { "%   ", "psin", "%   ", "%   ", "%   ", "in  ", "%   ", "%   ", ______, "Hz  ", "s   ", },  // PG_BPID
-    { "rpm ", "rpm ", "%   ", "%   ", "%   ", "%   ", ______, b1nary, ______, "Hz  ", "s   ", },  // PG_GPID
+    { "rpm ", "rpm ", "%   ", "%   ", "%   ", "%   ", ______, ______, ______, "Hz  ", "s   ", },  // PG_GPID
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%/s ", ______, "Hz  ", "s   ", },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, "pix ", "pix ", "min ", b1nary, b1nary, },  // PG_TEMP
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
@@ -882,7 +882,7 @@ class Display {
                     draw_dynamic(13, gas.pid.dterm(), -100.0, 100.0);
                     draw_dynamic(14, gas.pid.outsum(), -gas.pid.outrange(), gas.pid.outrange());
                     draw_eraseval(15);
-                    draw_truth(16, gas.openloop, 1);
+                    draw_eraseval(16);
                     draw_dynamic(17, gas.pid.kp(), 0.0, 1.0);
                     draw_dynamic(18, gas.pid.ki(), 0.0, 1.0);
                     draw_dynamic(19, gas.pid.kd(), 0.0, 1.0);
@@ -1125,8 +1125,7 @@ class Tuner {
                 else if (sel_val == 10) brake.pid_dom->add_kd(0.001 * fdelta);
             }
             else if (datapage == PG_GPID) {
-                if (sel_val == 7) adj_bool(&(gas.openloop), idelta);  // gas_pid.SetMode(gas_open_loop ? QPID::ctrl::manual : QPID::ctrl::automatic);
-                else if (sel_val == 8) gas.pid.add_kp(0.001 * fdelta);
+                if (sel_val == 8) gas.pid.add_kp(0.001 * fdelta);
                 else if (sel_val == 9) gas.pid.add_ki(0.001 * fdelta);
                 else if (sel_val == 10) gas.pid.add_kd(0.001 * fdelta);
             }
