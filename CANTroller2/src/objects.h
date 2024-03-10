@@ -144,15 +144,15 @@ void starter_update () {  // starter bidirectional handler logic.  Outside code 
         starter_request = REQ_NA;          // we have serviced starter on request, so cancel it
         return;                            // if the brake was right we have started driving the starter
     }  // from here on, we can assume we do care about the brake, but it's not now held down
-    if (pushBrakeTimer.expired() && brake.motormode != AutoHold) {  // if we haven't yet told the brake to hold down
+    if (brake.motormode != AutoHold) {  // if we haven't yet told the brake to hold down
         brake.setmode(AutoHold);  // tell the brake to hold
         pushBrakeTimer.reset();   // start a timer to time box that action
         return;  // we told the brake to hold down, leaving the request to turn the starter on intact, so we'll be back to check
-    }  // from here on, we can assume the brake is in the process of being pressed
-    if (pushBrakeTimer.expired()) {  // if we've waited long enough for the damn brake, but it's not holding
+    }  // at this point the brake has been told to hold but isn't holding yet
+    if (pushBrakeTimer.expired()) {  // if we've waited long enough for the damn brake
         brake.setmode(Halt);  // tell the brake to stop trying
         starter_request = REQ_NA;  // cancel the starter on request, we can't drive the starter cuz the car might lurch forward
-    }
+    }  // now we can assume we're still waiting for the brake to push. the starter turn-on request remains intact
 }
 void ignition_panic_update() {  // Run once each main loop
     if (panicstop_request == REQ_TOG) panicstop_request = !panicstop;
