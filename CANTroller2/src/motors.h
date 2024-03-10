@@ -758,10 +758,10 @@ class BrakeMotor : public JagMotor {
         if (motormode == AutoHold) {
             pid_status = HybridPID;
             set_pidtarg(std::max(hold_initial_pc, pid_dom->target()));  // Autohold always applies the brake somewhat, even if already stopped
-            autoholding = speedo->car_stopped();
-            if (!autoholding) {
+            autoholding = speedo->car_stopped() && (pc[OUT] >= hold_initial_pc);
+            if (!speedo->car_stopped()) {
                 autostopping = true;
-                if (interval_timer.expireset()) set_pidtarg(std::min(pid_dom->target() + panicstop ? panic_increment_pc : hold_increment_pc, 100.0f));
+                if (interval_timer.expireset()) set_pidtarg(std::min(pid_dom->target() + hold_increment_pc, 100.0f));
                 pc[OUT] = pid_out();
             }
             else pc[OUT] = pc[STOP];
@@ -867,7 +867,7 @@ class SteerMotor : public JagMotor {
   public:
     using JagMotor::JagMotor;
     int motormode = Halt, oldmode = Halt, mode_request;
-    float steer_safe_pc = 72.0;  // this percent otaken off full steering power when driving full speed (linearly applied)
+    float steer_safe_pc = 72.0;  // this percent is taken off full steering power when driving full speed (linearly applied)
     bool reverse = false;
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         printf("Steering motor..\n");

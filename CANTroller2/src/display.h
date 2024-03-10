@@ -11,7 +11,7 @@ static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 static MomentaryButton bootbutton(boot_sw_pin, false);
 #define disp_vshift_pix 2  // Unknown.  Note: At smallest text size, characters are 5x7 pix + pad on rt and bot for 6x8 pix.
 #define disp_runmode_text_x 12
-uint8_t colorcard[NUM_RUNMODES] = { MGT, WHT, RED, ORG, YEL, GRN, TEAL, PUR };
+uint8_t colorcard[NUM_RUNMODES] = { WHT, RED, PNK, ORG, YEL, GRN, TEAL, BLU };
 std::string modecard[NUM_RUNMODES] = { "Basic", "Asleep", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 std::string top_menu_buttons[4]  = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
@@ -299,6 +299,7 @@ class Display {
         xTaskCreatePinnedToCore(push_task_wrapper, "taskPush", 8192, NULL, 2, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  // 16384
         TaskHandle_t drawTaskHandle = nullptr;
         xTaskCreatePinnedToCore(draw_task_wrapper, "taskDraw", 4096, NULL, 3, &drawTaskHandle, runOnCore);
+        // xSemaphoreGive(push_time);
         #endif
     }
     void init_framebuffers(int _sprwidth, int _sprheight) {
@@ -364,7 +365,6 @@ class Display {
         reset_request = true;
         #ifdef VIDEO_TASKS
         init_tasks();
-        // xSemaphoreGive(drawtime);
         #else
         update();
         #endif
@@ -1172,16 +1172,17 @@ static void push_task_wrapper(void *parameter) {
     while (true) {
         // xSemaphoreTake(push_time, portMAX_DELAY);
         screen.push_task();
-        // delayMicroseconds(50);
+        // xSemaphoreGive(draw_time);
         vTaskDelay(pdMS_TO_TICKS(1));
         // vTaskDelete(NULL);
     }
 }
 static void draw_task_wrapper(void *parameter) {
     while (true) {
-        // delayMicroseconds(50);
         vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
+        // xSemaphoreTake(draw_time, portMAX_DELAY);
         screen.draw_task();
+        // xSemaphoreGive(push_time);
     }
 }
 #endif

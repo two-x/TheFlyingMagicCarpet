@@ -116,10 +116,10 @@ void update_temperature_sensors(void *parameter) {
 void starter_update () {  // starter bidirectional handler logic.  Outside code interacts with handler by setting starter_request = REQ_OFF, REQ_ON, or REQ_TOG
     if (!starter_signal_support) {  // if we don't get involved with starting the car
         starter = LOW;              // arbitrarily give this variable a fixed value
-        starter_request = REQ_NA;   // cancel any requests which we ignored
+        starter_request = REQ_NA;   // cancel any requests which we are ignoring anyway
         return;                     // no action
     }  // from here on, we can assume starter signal is supported
-    if (starter_request == REQ_TOG) starter_request = !starter_drive;  // translate toggle request to a drive request opposite to the current drive state
+    if (starter_request == REQ_TOG) starter_request = !starter_drive;  // translate a toggle request to a drive request opposite to the current drive state
     if (starter_drive && ((starter_request == REQ_OFF) || starterTimer.expired())) {  // if we're driving the motor but need to stop
         starter_drive = false;
         set_pin (starter_pin, INPUT_PULLDOWN);  // we never assert low on the pin, just set pin as input and let the pulldown bring it low
