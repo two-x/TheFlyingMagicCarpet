@@ -11,7 +11,7 @@ static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 static MomentaryButton bootbutton(boot_sw_pin, false);
 #define disp_vshift_pix 2  // Unknown.  Note: At smallest text size, characters are 5x7 pix + pad on rt and bot for 6x8 pix.
 #define disp_runmode_text_x 12
-uint8_t colorcard[NUM_RUNMODES] = { WHT, RED, PNK, ORG, YEL, GRN, TEAL, BLU };
+uint8_t colorcard[NUM_RUNMODES] = { MGT, WHT, RED, ORG, YEL, GRN, TEAL, PUR };
 std::string modecard[NUM_RUNMODES] = { "Basic", "Asleep", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 std::string top_menu_buttons[4]  = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
