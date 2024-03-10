@@ -10,7 +10,8 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     Encoder* encoder;
     Display* display;
     int oldmode;
-    bool autostopping_last = false;
+    bool autostopping_last = false, still_interactive = true;
+    uint32_t initial_inactivity;
   public:
     int mode = SHUTDOWN;
     bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
@@ -75,14 +76,21 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_asleepMode() {  // turns off syspower and just idles. sleep_request are handled here or in shutdown mode below
         if (we_just_switched_modes) {
             screenSaverTimer.reset();
+            initial_inactivity = (uint32_t)sleep_inactivity_timer.elapsed();  // if entered asleep mode manually rather than timeout, start screensaver countdown
             sleep_request = REQ_NA;
+            still_interactive = true;
             powering_up = false;
             brake.setmode(Halt);
             steer.setmode(Halt);
             set_syspower(LOW); // Power down devices to save battery
         }
-        if (!sleep_inactivity_timer.expired()) screenSaverTimer.reset();  // keep resetting the screen saver timer if user is looking at data, etc.
-        if (saver_on_sleep && screenSaverTimer.expired()) display->auto_saver(true);  // after a bit turn on the screen saver
+        if (still_interactive) {
+            if ((uint32_t)sleep_inactivity_timer.elapsed() < initial_inactivity) screenSaverTimer.reset();  // keep resetting the screen saver timer if user is looking at data, etc.
+            if (saver_on_sleep && screenSaverTimer.expired()) {
+                display->auto_saver(true);  // after a bit turn on the screen saver
+                still_interactive = false;
+            }
+        }
         if (hotrc.sw_event(CH4)) sleep_request = REQ_OFF; 
         if (encoder->button.pressed() || sleep_request == REQ_OFF || sleep_request == REQ_TOG) {
             set_syspower(HIGH);
