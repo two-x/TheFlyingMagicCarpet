@@ -114,6 +114,7 @@ void update_temperature_sensors(void *parameter) {
     }
 }
 void starter_update () {  // starter bidirectional handler logic.  Outside code interacts with handler by setting starter_request = REQ_OFF, REQ_ON, or REQ_TOG
+    static int lastbrakemode;
     if (!starter_signal_support) {  // if we don't get involved with starting the car
         starter = LOW;              // arbitrarily give this variable a fixed value
         starter_request = REQ_NA;   // cancel any requests which we are ignoring anyway
@@ -145,12 +146,13 @@ void starter_update () {  // starter bidirectional handler logic.  Outside code 
         return;                            // if the brake was right we have started driving the starter
     }  // from here on, we can assume we do care about the brake, but it's not now held down
     if (brake.motormode != AutoHold) {  // if we haven't yet told the brake to hold down
+        lastbrakemode = brake.motormode;
         brake.setmode(AutoHold);  // tell the brake to hold
         pushBrakeTimer.reset();   // start a timer to time box that action
         return;  // we told the brake to hold down, leaving the request to turn the starter on intact, so we'll be back to check
     }  // at this point the brake has been told to hold but isn't holding yet
     if (pushBrakeTimer.expired()) {  // if we've waited long enough for the damn brake
-        brake.setmode(Halt);  // tell the brake to stop trying
+        brake.setmode(lastbrakemode);  // put the brake back to doing whatever it was doing before
         starter_request = REQ_NA;  // cancel the starter on request, we can't drive the starter cuz the car might lurch forward
     }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
 }

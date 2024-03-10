@@ -2,6 +2,7 @@
 class RunModeManager {  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
   private:
     int _joydir;
+    Timer screenSaverTimer{30000000};  // Time after entering sleep mode where screensaver turns on
     Timer gestureFlyTimer{1250000};  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
     Timer pwrup_timer{500000};  // Timeout when parking motors if they don't park for whatever reason (in us)
     Timer shutdown_timer{5000000};
@@ -73,13 +74,15 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
     void run_asleepMode() {  // turns off syspower and just idles. sleep_request are handled here or in shutdown mode below
         if (we_just_switched_modes) {
-            if (saver_on_sleep) display->auto_saver(true);
+            screenSaverTimer.reset();
             sleep_request = REQ_NA;
             powering_up = false;
             brake.setmode(Halt);
             steer.setmode(Halt);
             set_syspower(LOW); // Power down devices to save battery
         }
+        if (!sleep_inactivity_timer.expired()) screenSaverTimer.reset();  // keep resetting the screen saver timer if user is looking at data, etc.
+        if (saver_on_sleep && screenSaverTimer.expired()) display->auto_saver(true);  // after a bit turn on the screen saver
         if (hotrc.sw_event(CH4)) sleep_request = REQ_OFF; 
         if (encoder->button.pressed() || sleep_request == REQ_OFF || sleep_request == REQ_TOG) {
             set_syspower(HIGH);
@@ -124,7 +127,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             steer.setmode(OpenLoop);
         }
         if (hotrc.sw_event(CH4)) starter_request = REQ_TOG;
-        if (brake.motormode == Halt) brake.setmode(ActivePID);  // Can happen if starter attempt fails to autohold the brakes
         if (starter || !tach.engine_stopped()) mode = HOLD;  // If we started the car, enter hold mode once starter is released
         // Serial.printf("%d/%d ", starter_request, starter);
     }
