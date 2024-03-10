@@ -152,7 +152,7 @@ void starter_update () {  // starter bidirectional handler logic.  Outside code 
     if (pushBrakeTimer.expired()) {  // if we've waited long enough for the damn brake
         brake.setmode(Halt);  // tell the brake to stop trying
         starter_request = REQ_NA;  // cancel the starter on request, we can't drive the starter cuz the car might lurch forward
-    }  // now we can assume we're still waiting for the brake to push. the starter turn-on request remains intact
+    }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
 }
 void ignition_panic_update() {  // Run once each main loop
     if (panicstop_request == REQ_TOG) panicstop_request = !panicstop;
