@@ -396,5 +396,5 @@ Timer panicTimer(15000000);  // How long should a panic stop last?  we can't sta
 
 void kick_inactivity_timer(int source=0) {
     sleep_inactivity_timer.reset();  // evidence of user activity
-    // Serial.printf("kick%d ", source);
+    Serial.printf("kick%d ", source);
 }

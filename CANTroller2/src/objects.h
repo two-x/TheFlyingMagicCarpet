@@ -183,7 +183,7 @@ void basicsw_update() {
             basicmodesw = !digitalRead(basicmodesw_pin);   // !value because electrical signal is active low
         } while (basicmodesw != !digitalRead(basicmodesw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
     }
-    // if (last_val != basicmodesw) kick_inactivity_timer(7);  // Commented due to lots of bouncing causing kicks
+    if (last_val != basicmodesw) kick_inactivity_timer(8);
 }
 void set_syspower(bool setting) {
     syspower = setting | keep_system_powered;
