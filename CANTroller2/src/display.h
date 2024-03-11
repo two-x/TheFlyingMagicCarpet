@@ -368,7 +368,7 @@ class Display {
         #else
         update();
         #endif
-        Serial.printf(" initialized\n");
+        Serial.printf(" display initialized\n");
     }
     void reset(LGFX_Sprite* spr) {
         blackout(spr);
@@ -894,7 +894,13 @@ class Display {
                     draw_dynamic(11, gas.cruisepid.pterm(), -drange, drange);
                     draw_dynamic(12, gas.cruisepid.iterm(), -drange, drange);
                     draw_dynamic(13, gas.cruisepid.dterm(), -drange, drange);
-                    draw_dynamic(14, gas.cruisepid.outsum(), -gas.cruisepid.outrange(), gas.cruisepid.outrange());  // cruise_spid_speedo_delta_adc, -drange, drange);
+                    
+                    // draw_dynamic(14, gas.cruisepid.outsum(), -gas.cruisepid.outrange(), gas.cruisepid.outrange());  // cruise_spid_speedo_delta_adc, -drange, drange);
+                    Serial.printf("min:%lf max:%lf", gas.pc[OPMIN], gas.pc[OPMAX]);
+                    Serial.printf(" gmin():%lf gmax():%lf", gas.pid.outmin(), gas.pid.outmax());
+                    // Serial.printf(" cmin():%lf cmax():%lf", gas.cruisepid.outmin(), gas.cruisepid.outmax());
+                    draw_eraseval(14);
+                    
                     draw_dynamic(15, gas.cruise_target_pc, 0.0, 100.0);
                     draw_dynamic(16, cruise_delta_max_pc_per_s, 1, 35);
                     draw_dynamic(17, gas.cruisepid.kp(), 0.0, 10.0);
