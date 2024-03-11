@@ -127,7 +127,8 @@ void starter_update () {  // starter bidirectional handler logic.  Outside code 
         set_pin (starter_pin, INPUT_PULLDOWN);  // we never assert low on the pin, just set pin as input and let the pulldown bring it low
         starter_request = REQ_NA;
     }  // now, we have stopped driving the starter if we were supposed to stop
-    if (!starter_drive && !sim.simulating(sens::starter)) {  // if we aren't driving the starter, and not simulating (where simulator will decide starter value)
+    if (sim.simulating(sens::starter)) starter = starter_drive;
+    else if (!starter_drive) {  // if we aren't driving the starter
         do {
             starter = digitalRead(starter_pin);         // then read the pin, and starter variable will reflect whether starter has been turned on externally
         } while (starter != digitalRead(starter_pin));  // due to a chip glitch, starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure

@@ -119,7 +119,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             steer.setmode(Halt);  // disable steering, in case it was left on while we were panic stopping
             brake.setmode(Halt);
             watchdog.set_codemode(Parked);  // write to flash we are in an appropriate place to lose power, so we can detect crashes on boot
-            if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
+            if (hotrc.sw_event(CH3) && (allow_rolling_start || speedo.car_stopped()) && !panicstop) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
             if (hotrc.sw_event(CH4) || sleep_inactivity_timer.expired()) mode = ASLEEP;
             if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode
         }

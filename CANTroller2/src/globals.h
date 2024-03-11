@@ -104,7 +104,7 @@ int brake_default_pid = PressurePID;
 bool starter_signal_support = true;
 bool remote_start_support = true;
 bool autostop_disabled = false;      // temporary measure to keep brake behaving until we get it debugged. Eventually should be false
-bool allow_rolling_start = false;    // may be a smart prerequisite, may be us putting obstacles in our way
+bool allow_rolling_start = true;    // may be a smart prerequisite, may be us putting obstacles in our way
 bool flip_the_screen = false;
 bool cruise_speed_lowerable = true;  // allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool display_enabled = true;         // should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
@@ -113,7 +113,7 @@ bool use_i2c_baton = true;
 bool screensaver_max_refresh = false;
 bool brake_before_starting = true;
 bool watchdog_enabled = false;
-bool throttle_ctrl_mode = OpenLoop;
+int throttle_ctrl_mode = OpenLoop;
 // dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
 bool usb_jtag = true;                // if you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)
 bool dont_take_temperatures = false; // in case debugging dallas sensors or causing problems
