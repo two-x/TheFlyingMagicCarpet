@@ -378,9 +378,9 @@ class ServoMotor {
     int pin, freq;
   public:
     bool reverse = false;  // defaults. subclasses override as necessary
-    float pc[NUM_MOTORVALS] = { 0, NAN, 100, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX]  values range from -100% to 100% are all derived or auto-assigned
-    float si[NUM_MOTORVALS] = { 45.0, 43.0, 168.2, 45.0, NAN, 0, 180 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX]
-    float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 500, 2500 };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX]
+    float pc[NUM_MOTORVALS] = { 0, NAN, 100, NAN, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]  values range from -100% to 100% are all derived or auto-assigned
+    float si[NUM_MOTORVALS] = { 45.0, 43.0, 168.2, 45.0, NAN, 0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
+    float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 500, 2500, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-]
     ServoMotor(int _pin, int _freq) { pin = _pin; freq = _freq; }
     void setup(Hotrc* _hotrc, Speedometer* _speedo) {
         hotrc = _hotrc;
@@ -411,9 +411,9 @@ class JagMotor : public ServoMotor {
     using ServoMotor::ServoMotor;
     float duty_fwd_pc = 100;  // default. subclasses override as necessary
     float duty_rev_pc = 100;  // default. subclasses override as necessary
-    float pc[NUM_MOTORVALS] = { NAN, 0, NAN, NAN, NAN, -100, 100 };  // percent values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX]  values range from -100% to 100% are all derived or auto-assigned
-    float si[NUM_MOTORVALS] = { NAN, 0, NAN, NAN, NAN, NAN, NAN };  // standard si-unit values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX]
-    float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 670, 2330 };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX]
+    float pc[NUM_MOTORVALS] = { NAN, 0, NAN, NAN, NAN, -100, 100, 2 };  // percent values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]  values range from -100% to 100% are all derived or auto-assigned
+    float si[NUM_MOTORVALS] = { NAN, 0, NAN, NAN, NAN, NAN, NAN, NAN };  // standard si-unit values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
+    float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 670, 2330, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-]
     float (&volt)[arraysize(si)] = si;  // our standard si value is volts. Create reference so si and volt are interchangeable
     // JagMotor(int _pin, int _freq) : ServoMotor(_pin, _freq) {}
     void derive() {  // calc pc and voltage op limits from volt and us abs limits 
@@ -423,6 +423,8 @@ class JagMotor : public ServoMotor {
         pc[OPMAX] = pc[ABSMAX] * duty_fwd_pc / 100.0;
         si[OPMIN] = map(pc[OPMIN], pc[STOP], pc[ABSMIN], si[STOP], si[ABSMIN]);
         si[OPMAX] = map(pc[OPMAX], pc[STOP], pc[ABSMAX], si[STOP], si[ABSMAX]);
+        si[MARGIN] = map(pc[MARGIN], pc[ABSMIN], pc[ABSMAX], si[ABSMIN], si[ABSMAX]);
+        // us[MARGIN] = map(pc[MARGIN], pc[ABSMIN], pc[ABSMAX], us[ABSMIN], us[ABSMAX]);
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {
         ServoMotor::setup(_hotrc, _speedo);
@@ -484,6 +486,7 @@ class GasServo : public ServoMotor {
         pc[PARKED] = map(si[PARKED], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);
         pc[GOVERN] = map(governor, 0.0, 100.0, pc[OPMIN], pc[OPMAX]);  // pc[GOVERN] = pc[OPMIN] + governor * (pc[OPMAX] - pc[OPMIN]) / 100.0;      
         si[GOVERN] = map(pc[GOVERN], pc[OPMIN], pc[OPMAX], si[OPMIN], si[OPMAX]);
+        pc[MARGIN] = map(si[MARGIN], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, TemperatureSensorManager* _temp) {
         printf("Gas servo..\n");
@@ -508,7 +511,7 @@ class GasServo : public ServoMotor {
   private:
     // throttle_ctrl_mode : (compile time option)
     //    OpenLoop : Servo angle is simply proportional to trigger pull. This is our tested default
-    //    ActivePID : Servo angle determined by PID calculation designed to converge engine rpm to an rpm target value
+    //    ActivePID : Servo angle determined by PID calculation designed to converge engine rpm to an rpm target value which is based on trigger
     // cruise_setpoint_scheme : (compile time option) Pick from 3 different styles for adjustment of cruise setpoint. I prefer THROTTLE_DELTA.
     //    THROTTLE_ANGLE : Cruise locks servo angle (cruise_target_pc), instead of pid. Moving trigger from center adjusts setpoint proportional to how far you push it before releasing (and reduced by an attenuation factor)
     //    THROTTLE_DELTA : Cruise locks servo angle (cruise_target_pc), instead of pid. Any non-center trigger position continuously adjusts setpoint proportional to how far it's pulled over time (up to a specified maximum rate)
@@ -521,7 +524,7 @@ class GasServo : public ServoMotor {
             cruise_ctrl_extent_pc = hotrc->pc[VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
             if (cruise_setpoint_scheme == PID_SUSPEND_FLY) {
                 cruise_target_pc = cruisepid.compute();
-                if (throttle_ctrl_mode == ActivePID) pid.set_target(cruise_target_pc);
+                if (throttle_ctrl_mode == ActivePID) pid.set_target(cruise_target_pc);  // this is a bit misleading use of variables, because this argument value is actually an rpm target, not cruise percent, if gas is on pid
             }
         }
         else if ((joydir == JOY_UP || (joydir == JOY_DN && cruise_speed_lowerable)) && cruise_trigger_released) {  // adjustments disabled until trigger has been to center at least once since going to cruise mode
@@ -730,12 +733,6 @@ class BrakeMotor : public JagMotor {
         pid_final_out = outnow[dominantpid];
         return pid_final_out;
     }
-    void fault_filter() {
-        // 1. Detect  brake chain is not connected (evidenced by change in brake position without expected pressure changes)
-        // 2. Detect obstruction, motor failure, or inaccurate position. Evidenced by motor instructed to move but position not changing even when pressure is low.
-        // 3. Detet brake hydraulics failure or inaccurate pressure. Evidenced by normal positional change not causing expected increase in pressure.
-        // retract_effective_max_us = volt[STOP] + duty_pc * (volt[OPMAX] - volt[STOP]);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
-    }
     // Duty tracking: we keep a buffer of motor work done
     void calc_motor_duty() {
         ++duty_index %= history_depth;  // advance ring buffer index, this is the oldest value in the buffer
@@ -758,7 +755,7 @@ class BrakeMotor : public JagMotor {
         if (motormode == AutoHold) {
             pid_status = HybridPID;
             set_pidtarg(std::max(hold_initial_pc, pid_dom->target()));  // Autohold always applies the brake somewhat, even if already stopped
-            autoholding = speedo->car_stopped() && (pc[OUT] >= hold_initial_pc);
+            autoholding = speedo->car_stopped() && (pc[OUT] >= hold_initial_pc - pc[MARGIN]);  // this needs to be tested
             if (!speedo->car_stopped()) {
                 autostopping = true;
                 if (interval_timer.expireset()) set_pidtarg(std::min(pid_dom->target() + hold_increment_pc, 100.0f));

@@ -77,7 +77,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (we_just_switched_modes) {
             screenSaverTimer.reset();
             initial_inactivity = (uint32_t)sleep_inactivity_timer.elapsed();  // if entered asleep mode manually rather than timeout, start screensaver countdown
-            sleep_request = REQ_NA;
             still_interactive = true;
             powering_up = false;
             brake.setmode(Halt);
@@ -91,46 +90,42 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
                 still_interactive = false;
             }
         }
-        if (hotrc.sw_event(CH4)) sleep_request = REQ_OFF; 
-        if (encoder->button.pressed() || sleep_request == REQ_OFF || sleep_request == REQ_TOG) {
-            set_syspower(HIGH);
-            sleep_request = REQ_NA;
-            pwrup_timer.set(pwrup_timeout);
+        if (hotrc.sw_event(CH4) || encoder->button.pressed()) {  // if we've been triggered to wake up
+            set_syspower(HIGH);              // switch on control system devices
+            pwrup_timer.set(pwrup_timeout);  // stay in asleep mode for a delay to allow devices to power up
             powering_up = true;
-            display->auto_saver(false);
+            display->auto_saver(false);      // turn off screensaver
         }
         if (powering_up && pwrup_timer.expired()) mode = SHUTDOWN;  // display->all_dirty();  // tells display to redraw everything. display must set back to false
     }
     void run_shutdownMode() { // In shutdown mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.
         if (we_just_switched_modes) {              
-            shutdown_incomplete = !(powering_up);
+            shutdown_incomplete = !(powering_up);   // if waking up from sleep shutdown is already complete
             powering_up = calmode_request = false;
-            sleep_request = REQ_NA;
-            gas.setmode(ParkMotor);  // if car is moving begin autostopping
-            brake.setmode(AutoStop);  // if car is moving begin autostopping
-            steer.setmode(Halt);
+            gas.setmode(ParkMotor);                 // carburetor parked 
+            brake.setmode(AutoStop);                // if car is moving begin autostopping
+            if (!panicstop) steer.setmode(Halt);    // steering disabled, unless panic stopping
             shutdown_timer.reset();
         }
         else if (shutdown_incomplete) {  // first we need to stop the car and release brakes and gas before shutting down
             if (shutdown_timer.expired()) shutdown_incomplete = false;
-            if (brake.motormode != AutoStop) {
+            if (brake.motormode != AutoStop) {  // brake autostop mode will have dropped to Halt mode once complete, check for that
                 if (brake.parked()) shutdown_incomplete = false;
                 else brake.setmode(ParkMotor);
             }
         }
         else {  // if shutdown is complete
+            steer.setmode(Halt);  // disable steering, in case it was left on while we were panic stopping
             brake.setmode(Halt);
-            watchdog.set_codemode(Parked);
-            if (hotrc.sw_event(CH4)) sleep_request = REQ_ON;
-            if (sleep_inactivity_timer.expired() || sleep_request == REQ_ON || sleep_request == REQ_TOG) mode = ASLEEP;
+            watchdog.set_codemode(Parked);  // write to flash we are in an appropriate place to lose power, so we can detect crashes on boot
+            if (hotrc.sw_event(CH4) || sleep_inactivity_timer.expired()) mode = ASLEEP;
+            if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode
         }
-        sleep_request = REQ_NA;
-        if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode
         if ((speedo.car_stopped() || allow_rolling_start) && ignition && !panicstop && !tach.engine_stopped()) mode = HOLD;  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
     }
     void run_stallMode() {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
         if (we_just_switched_modes) {
-            gas.setmode(OpenLoop);
+            gas.setmode(OpenLoop);     // throttle always runs open loop in stall mode, b/c there's no rpm for the pid to measure anyway
             brake.setmode(ActivePID);
             steer.setmode(OpenLoop);
         }
@@ -141,7 +136,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_holdMode() {
         if (we_just_switched_modes) {
             joy_centered = false;  // Fly mode will be locked until the joystick first is put at or below center
-            watchdog.set_codemode(Driving);
+            watchdog.set_codemode(Driving);  // write to flash we are NOT in an appropriate place to lose power, so we can detect crashes on boot
             gas.setmode(throttle_ctrl_mode);
             brake.setmode(AutoHold);
             steer.setmode(OpenLoop);

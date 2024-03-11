@@ -227,6 +227,12 @@ class DiagRuntime {
 //   D) Car is accelerating yet engine is at idle.
 // * The control system has nonsensical values in its variables.
 
+// more notes on brake error detection ideas:
+// 1. Detect  brake chain is not connected (evidenced by change in brake position without expected pressure changes)
+// 2. Detect obstruction, motor failure, or inaccurate position. Evidenced by motor instructed to move but position not changing even when pressure is low.
+// 3. Detet brake hydraulics failure or inaccurate pressure. Evidenced by normal positional change not causing expected increase in pressure.
+// retract_effective_max_us = volt[STOP] + duty_pc * (volt[OPMAX] - volt[STOP]);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
+
 class LoopTimer {
   public:
     LoopTimer() {}

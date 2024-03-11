@@ -70,11 +70,11 @@
 
 // these global enums are super convenient, just take care when making changes
 enum hotrc_axis : int { HORZ=0, VERT=1, CH3=2, CH4=3 };
-enum hotrc_val : int { OPMIN=0, CENT=1, OPMAX=2, RAW=3, FILT=4, DBBOT=5, DBTOP=6, MARGIN=7 };
-enum motor_val : int { PARKED=1, OUT=3, GOVERN=4 , ABSMIN=5, ABSMAX=6 };
+enum hotrc_val : int { OPMIN=0, CENT=1, OPMAX=2, RAW=3, FILT=4, DBBOT=5, DBTOP=6 };
+enum motor_val : int { PARKED=1, OUT=3, GOVERN=4 , ABSMIN=5, ABSMAX=6, MARGIN=7, NUM_MOTORVALS=8 };
 enum stop_val : int { STOP=1 };
 enum steer_val : int { SAFE=1 };
-enum size_enums : int { NUM_AXES=2, NUM_CHANS=4, NUM_MOTORVALS=7, NUM_VALUS=8 };
+enum size_enums : int { NUM_AXES=2, NUM_CHANS=4, NUM_VALUS=8 };
 enum joydirs : int { JOY_RT=-2, JOY_DN=-1, JOY_CENT=0, JOY_UP=1, JOY_LT=2, JOY_PLUS=3, JOY_MINUS=4 };
 enum runmode : int { BASIC, ASLEEP, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, NUM_RUNMODES };
 enum req : int { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
