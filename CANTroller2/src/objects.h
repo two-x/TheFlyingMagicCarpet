@@ -191,10 +191,6 @@ void set_syspower(bool setting) {
     syspower = setting | keep_system_powered;
     write_pin(syspower_pin, syspower);
 }
-void hotrc_events(int runmode) {
-    if (hotrc.sw_event(CH3) && runmode != ASLEEP) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
-    // hotrc.toggles_reset();
-}
 // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
 float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
     static float maf_map_last;
