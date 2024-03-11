@@ -180,6 +180,7 @@ bool ignition = LOW;                    // set by handler only. Reflects current
 bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
 bool basicmodesw = LOW;
 int starter_request = REQ_NA;
+bool starter_req_on_bool = false;
 int ignition_request = REQ_NA;
 int panicstop_request = REQ_ON;         // on powerup we assume the code just rebooted during a drive, because for all we know it could have 
 int sleep_request = REQ_NA;

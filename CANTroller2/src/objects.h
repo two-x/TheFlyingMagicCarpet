@@ -121,6 +121,7 @@ void starter_update () {  // starter bidirectional handler logic.  Outside code 
         return;                     // no action
     }  // from here on, we can assume starter signal is supported
     if (starter_request == REQ_TOG) starter_request = !starter_drive;  // translate a toggle request to a drive request opposite to the current drive state
+    starter_req_on_bool = (starter_request == REQ_ON);
     if (starter_drive && ((starter_request == REQ_OFF) || starterTimer.expired())) {  // if we're driving the motor but need to stop
         starter_drive = false;
         set_pin (starter_pin, INPUT_PULLDOWN);  // we never assert low on the pin, just set pin as input and let the pulldown bring it low
