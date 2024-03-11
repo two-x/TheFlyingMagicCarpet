@@ -2,11 +2,10 @@
 class RunModeManager {  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
   private:
     int _joydir;
-    Timer screenSaverTimer{30000000};  // Time after entering sleep mode where screensaver turns on
+    Timer screenSaverTimer{15000000};  // Time after entering sleep mode where screensaver turns on
     Timer gestureFlyTimer{1250000};  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
-    Timer pwrup_timer{500000};  // Timeout when parking motors if they don't park for whatever reason (in us)
+    Timer pwrup_timer{1500000};  // Timeout when parking motors if they don't park for whatever reason (in us)
     Timer shutdown_timer{5000000};
-    uint32_t pwrup_timeout = 500000;
     Encoder* encoder;
     Display* display;
     int oldmode;
@@ -93,7 +92,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         if (hotrc.sw_event(CH4) || encoder->button.pressed()) {  // if we've been triggered to wake up
             set_syspower(HIGH);              // switch on control system devices
-            pwrup_timer.set(pwrup_timeout);  // stay in asleep mode for a delay to allow devices to power up
+            pwrup_timer.reset();  // stay in asleep mode for a delay to allow devices to power up
             powering_up = true;
             display->auto_saver(false);      // turn off screensaver
         }

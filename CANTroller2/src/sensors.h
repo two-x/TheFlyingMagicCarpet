@@ -413,6 +413,7 @@ class Transducer : public Device {
     // Getter functions
     NATIVE_T native() { return _native.val(); }
     HUMAN_T human() { return _human.val(); }
+    float percent() { return map(_human.val(), _human.min, _human.max, 0.0, 100.0); }
     NATIVE_T raw() { return _val_raw; }  // This is a native unit value, unconstrained and unfiltered
     NATIVE_T min_native() { return _native.min(); }
     NATIVE_T max_native() { return _native.max(); }

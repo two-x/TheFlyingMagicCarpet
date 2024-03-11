@@ -671,12 +671,19 @@ class BrakeMotor : public JagMotor {
     // float duty_pc = 25;
     int dominantpid = brake_default_pid, dominantpid_last = brake_default_pid;
     bool posn_pid_active = (dominantpid == PositionPID);
-    float panic_initial_pc = 60, hold_initial_pc = 40, panic_increment_pc = 4, hold_increment_pc = 2, pid_targ_pc, pid_err_pc, pid_final_out;
+    float panic_initial_pc, hold_initial_pc, panic_increment_pc, hold_increment_pc, parkpos_pc, zeropoint_pc, pid_targ_pc, pid_err_pc, pid_final_out;
     float sens_ratio[2], sensnow[2], outnow[2], hybrid_math_offset, hybrid_math_coeff;  // , senslast[2], d_ratio[2], 
     float hybrid_sens_ratio, hybrid_sens_ratio_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0;
     float duty_integral_sum, duty_instant, duty_continuous;
     void derive() {
         JagMotor::derive();
+        parkpos_pc = map(brkpos->parkpos(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0);
+        zeropoint_pc = map(brkpos->zeropoint(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0);
+        panic_initial_pc = map(pressure->panic_initial_psi, pressure->min_human(), pressure->max_human(), 0.0, 100.0);
+        hold_initial_pc = map(pressure->hold_initial_psi, pressure->min_human(), pressure->max_human(), 0.0, 100.0);
+        panic_increment_pc = map(pressure->panic_increment_psi, pressure->min_human(), pressure->max_human(), 0.0, 100.0);
+        hold_increment_pc = map(pressure->hold_increment_psi, pressure->min_human(), pressure->max_human(), 0.0, 100.0);
+        pc[MARGIN] = map(pressure->margin_psi, pressure->min_human(), pressure->max_human(), 0.0, 100.0);
         hybrid_math_offset = 0.5 * (brake_pid_trans_threshold_lo + brake_pid_trans_threshold_hi);
         hybrid_math_coeff = M_PI / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo);
     }
@@ -796,7 +803,7 @@ class BrakeMotor : public JagMotor {
                 mode_request = Halt;
                 mode_busy = false;
             }
-            else set_pidtarg(map(brkpos->zeropoint(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0));  // Flipped to 100-value because function argument subtracts back for position pid
+            else set_pidtarg(zeropoint_pc);  // Flipped to 100-value because function argument subtracts back for position pid
             pc[OUT] = pid_out();
         }
         else if (motormode == ParkMotor) {
@@ -806,7 +813,7 @@ class BrakeMotor : public JagMotor {
                 mode_request = Halt;
                 parking = mode_busy = false;
             }
-            else set_pidtarg(map(brkpos->parkpos(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0));  // Flipped to 100-value because function argument subtracts back for position pid
+            else set_pidtarg(parkpos_pc);  // Flipped to 100-value because function argument subtracts back for position pid
             pc[OUT] = pid_out();
         }
         else if (motormode == ActivePID) {
@@ -828,15 +835,17 @@ class BrakeMotor : public JagMotor {
         else if ((mode_request == Release || mode_request == ParkMotor) && mode_request != motormode) {
             motor_park_timer.reset();
         }
-        else if (mode_request != NA) motormode = mode_request;
+        if (mode_request != NA) motormode = mode_request;
         mode_request = NA;
         // if (motormode != oldmode) stopcar_timer.reset();    
     }
     int parked() {
-        return (std::abs(brkpos->filt() - brkpos->parkpos()) <= brkpos->margin());   // (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
+        return (std::abs(pc[OUT] - parkpos_pc) <= pc[MARGIN]);
+        // return (std::abs(brkpos->filt() - brkpos->parkpos()) <= brkpos->margin());   // (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
     }
     int released() {
-        return (std::abs(brkpos->filt() - brkpos->zeropoint()) <= brkpos->margin());   // (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
+        return (std::abs(pc[OUT] - zeropoint_pc) <= pc[MARGIN]);
+        // return (std::abs(brkpos->filt() - brkpos->zeropoint()) <= brkpos->margin());   // (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
     }
     void update(int runmode) {
         // Brakes - Determine motor output and write it to motor
