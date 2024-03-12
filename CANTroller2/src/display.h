@@ -217,6 +217,8 @@ volatile bool pushed = true;
 #ifdef VIDEO_TASKS
 SemaphoreHandle_t push_time = NULL;
 SemaphoreHandle_t draw_time = NULL;
+StaticSemaphore_t push_semaphore_buffer;
+StaticSemaphore_t draw_semaphore_buffer;
 static void push_task_wrapper(void *parameter);
 static void draw_task_wrapper(void *parameter);
 #endif
@@ -295,18 +297,22 @@ class Display {
     }
     void init_tasks() {
         #ifdef VIDEO_TASKS
-        push_time = xSemaphoreCreateMutex();
-        draw_time = xSemaphoreCreateMutex();
+        // push_time = xSemaphoreCreateMutexStatic(&push_semaphore_buffer);
+        // draw_time = xSemaphoreCreateMutexStatic(&draw_semaphore_buffer);
+        // push_time = xSemaphoreCreateBinaryStatic(&push_semaphore_buffer);
+        // draw_time = xSemaphoreCreateBinaryStatic(&draw_semaphore_buffer);
+        push_time = xSemaphoreCreateBinary();
+        draw_time = xSemaphoreCreateBinary();
         TaskHandle_t pushTaskHandle = nullptr;
-        xTaskCreatePinnedToCore(push_task_wrapper, "taskPush", 8192, NULL, 2, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  // 16384
+        xTaskCreatePinnedToCore(push_task_wrapper, "taskPush", 8192, NULL, 4, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  // 16384
         TaskHandle_t drawTaskHandle = nullptr;
-        xTaskCreatePinnedToCore(draw_task_wrapper, "taskDraw", 4096, NULL, 3, &drawTaskHandle, runOnCore);
+        xTaskCreatePinnedToCore(draw_task_wrapper, "taskDraw", 4096, NULL, 4, &drawTaskHandle, runOnCore);
         // xSemaphoreGive(push_time);
         #endif
     }
     void init_framebuffers(int _sprwidth, int _sprheight) {
         int sprsize[2] = { _sprwidth, _sprheight };
-        Serial.printf("  multi purpose panel init.. ");
+        Serial.printf("  create frame buffers.. ");
         lcd.setColorDepth(8);
         for (int i = 0; i <= 1; i++) framebuf[i].setColorDepth(8);  // color_depth_t::rgb332_1Byte = 8  Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
         auto framewidth = sprsize[HORZ];
