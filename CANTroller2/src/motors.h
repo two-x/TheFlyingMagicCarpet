@@ -632,7 +632,7 @@ class BrakeMotor : public JagMotor {
     BrakePositionSensor* brkpos;
     PressureSensor* pressure;
     IdleControl* throttle;
-    float brakemotor_max_duty_pc = 40.0;  // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
+    float brakemotor_max_duty_pc = 100.0;  // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
     float press_initial_kp = 0.142;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float press_initial_ki = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float press_initial_kd = 0.000;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
@@ -706,6 +706,7 @@ class BrakeMotor : public JagMotor {
     }
     void set_pidtarg(float targ_pc) {
         pid_targ_pc = targ_pc;
+        if (pid_targ_pc <= 25) activate_pid(PositionPID);
         pids[PressurePID].set_target(pressure->min_human() + pid_targ_pc * (pressure->max_human() - pressure->min_human()) / 100.0);
         pids[PositionPID].set_target(brkpos->min_human() + (100.0 - pid_targ_pc) * (brkpos->max_human() - brkpos->min_human()) / 100.0);
     }
@@ -737,7 +738,7 @@ class BrakeMotor : public JagMotor {
         calc_hybrid_ratio();  // calculate pressure vs. position multiplier based on the sensed values
         pid_final_out = hybrid_out_ratio * outnow[PressurePID] + (1.0 - hybrid_out_ratio) * outnow[PositionPID];  // combine pid outputs weighted by the multiplier
         for (int p = PositionPID; p <= PressurePID; p++) pids[p].set_output(pid_final_out);  // Feed the final value back into the pids
-        pid_final_out = outnow[dominantpid];
+        // pid_final_out = outnow[dominantpid];
         return pid_final_out;
     }
     // Duty tracking: we keep a buffer of motor work done
