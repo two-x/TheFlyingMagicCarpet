@@ -647,7 +647,7 @@ class BrakeMotor : public JagMotor {
     static constexpr int history_depth = duty_integration_period / pid_timeout;
     uint8_t history[history_depth];  // stores past motor work done. cast to uint8_t to save ram
     float duty_integral = sens_ratio[PressurePID] * hybrid_out_ratio;
-    int duty_index = 0, duty_index_last; 
+    int duty_index = 0, duty_index_last, dominantpid_last = brake_default_pid;
     // float posn_inflect, pres_inflect, pc_inflect;
     void activate_pid(int _pid) {
         dominantpid = _pid;
@@ -656,23 +656,17 @@ class BrakeMotor : public JagMotor {
     }
   public:
     using JagMotor::JagMotor;
-    int motormode = Halt, oldmode = Halt;
-    int mode_request = NA;
-    bool mode_busy = false;
-    int pid_status = HybridPID;
+    int motormode = Halt, oldmode = Halt, mode_request = NA, pid_status = HybridPID;
+    int dominantpid = brake_default_pid;
+    bool mode_busy = false, posn_pid_active = (dominantpid == PositionPID);
     QPID pids[2];  // brake changes from pressure target to position target as pressures decrease, and vice versa
     QPID* pid_dom = &(pids[PressurePID]);  // AnalogSensor sensed[2];
-    Timer stopcar_timer{stopcar_timeout};
-    Timer interval_timer{interval_timeout};
-    Timer motor_park_timer{4000000};
+    Timer stopcar_timer{8000000}, interval_timer{1000000}, motor_park_timer{4000000};
     float brake_pid_trans_threshold_lo = 0.25;  // tunable. At what fraction of full brake pressure will motor control begin to transition from posn control to pressure control
     float brake_pid_trans_threshold_hi = 0.50;  // tunable. At what fraction of full brake pressure will motor control be fully transitioned to pressure control
     bool autostopping = false, autoholding = false, reverse = false, duty_tracker_load_sensitive = true;
-    // float duty_pc = 25;
-    int dominantpid = brake_default_pid, dominantpid_last = brake_default_pid;
-    bool posn_pid_active = (dominantpid == PositionPID);
-    float panic_initial_pc, hold_initial_pc, panic_increment_pc, hold_increment_pc, parkpos_pc, zeropoint_pc, pid_targ_pc, pid_err_pc, pid_final_out;
-    float sens_ratio[2], sensnow[2], outnow[2], hybrid_math_offset, hybrid_math_coeff;  // , senslast[2], d_ratio[2], 
+    float panic_initial_pc, hold_initial_pc, panic_increment_pc, hold_increment_pc, parkpos_pc, zeropoint_pc;
+    float sens_ratio[2], sensnow[2], outnow[2], hybrid_math_offset, hybrid_math_coeff, pid_targ_pc, pid_err_pc, pid_final_out;
     float hybrid_sens_ratio, hybrid_sens_ratio_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0;
     float duty_integral_sum, duty_instant, duty_continuous;
     void derive() {
@@ -688,11 +682,9 @@ class BrakeMotor : public JagMotor {
         hybrid_math_coeff = M_PI / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo);
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, IdleControl* _throttle) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+        pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;
         printf("Brake motor..\n");
         JagMotor::setup(_hotrc, _speedo, _batt);
-        pressure = _pressure;  // press_pin = _press_pin;  // sensed[PressurePID] = _pressure;
-        brkpos = _brkpos;  // posn_pin = _posn_pin;  // sensed[PositionPID] = _brkpos;
-        throttle = _throttle;
         duty_fwd_pc = brakemotor_max_duty_pc;  
         pres_last = pressure->human();
         posn_last = brkpos->human();
@@ -706,7 +698,6 @@ class BrakeMotor : public JagMotor {
     }
     void set_pidtarg(float targ_pc) {
         pid_targ_pc = targ_pc;
-        if (pid_targ_pc <= 25) activate_pid(PositionPID);
         pids[PressurePID].set_target(pressure->min_human() + pid_targ_pc * (pressure->max_human() - pressure->min_human()) / 100.0);
         pids[PositionPID].set_target(brkpos->min_human() + (100.0 - pid_targ_pc) * (brkpos->max_human() - brkpos->min_human()) / 100.0);
     }
@@ -738,11 +729,9 @@ class BrakeMotor : public JagMotor {
         calc_hybrid_ratio();  // calculate pressure vs. position multiplier based on the sensed values
         pid_final_out = hybrid_out_ratio * outnow[PressurePID] + (1.0 - hybrid_out_ratio) * outnow[PositionPID];  // combine pid outputs weighted by the multiplier
         for (int p = PositionPID; p <= PressurePID; p++) pids[p].set_output(pid_final_out);  // Feed the final value back into the pids
-        // pid_final_out = outnow[dominantpid];
         return pid_final_out;
     }
-    // Duty tracking: we keep a buffer of motor work done
-    void calc_motor_duty() {
+    void calc_motor_duty() {  // Duty tracking: we keep a buffer of motor work done
         ++duty_index %= history_depth;  // advance ring buffer index, this is the oldest value in the buffer
         duty_integral_sum -= (float)history[duty_index] / 2.5;  // subtract oldest value from our running sum.
         int duty_instant = std::abs(pc[OUT]);  // what is current motor drive percent
@@ -756,14 +745,12 @@ class BrakeMotor : public JagMotor {
         if (duty_continuous < 0.001) duty_continuous = 0.0;  // otherwise displays "5.67e-" (?)
         // now we know our continuous duty, need to limit motor output based on this
     }
-    // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
-    // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
     void set_output() { // services any requests for change in brake mode
         autostopping = autoholding = false;
-        if (motormode == AutoHold) {
+        if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
             pid_status = HybridPID;
             set_pidtarg(std::max(hold_initial_pc, pid_dom->target()));  // Autohold always applies the brake somewhat, even if already stopped
-            autoholding = speedo->car_stopped() && (pc[OUT] >= hold_initial_pc - pc[MARGIN]);  // this needs to be tested
+            autoholding = speedo->car_stopped() && (pressure->human() >= pressure->hold_initial_psi - pressure->margin_psi);  // this needs to be tested
             if (!speedo->car_stopped()) {
                 autostopping = true;
                 if (interval_timer.expireset()) set_pidtarg(std::min(pid_dom->target() + hold_increment_pc, 100.0f));
@@ -771,7 +758,7 @@ class BrakeMotor : public JagMotor {
             }
             else pc[OUT] = pc[STOP];
         }
-        else if (motormode == AutoStop) {
+        else if (motormode == AutoStop) {  // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
             pid_status = HybridPID;
             if (panicstop) throttle->goto_idle();  // Stop pushing the gas, will help us stop the car better
             if (speedo->car_stopped() || stopcar_timer.expired()) {
