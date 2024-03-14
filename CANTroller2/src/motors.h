@@ -475,7 +475,6 @@ class GasServo : public ServoMotor {
     IdleControl idlectrl;
     QPID pid, cruisepid;
     int motormode = Idle, oldmode = Idle;
-    int mode_request = NA;
     bool mode_busy = false;
     bool reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
     float (&deg)[arraysize(si)] = si;  // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
@@ -584,21 +583,20 @@ class GasServo : public ServoMotor {
     }
   public:
     void setmode(int _mode=NA) {
-        mode_request = _mode;
         mode_busy = false;
-        if (mode_request == Calibrate) {
-            float temp = pot->mapToRange(0.0, 180.0);
-            if (temp >= si[PARKED] && temp <= si[OPMAX]) motormode = Calibrate;
+        if (_mode != motormode) {
+            if (_mode == Cruise) {
+                cruisepid.set_target(speedo->filt());  // set pid loop speed target to current speed  (for PID_SUSPEND_FLY mode)
+                pid.set_target(tach->filt());  // initialize pid output (rpm target) to current rpm  (for PID_SUSPEND_FLY mode)
+                cruise_target_pc = pc[OUT];  //  set target throttle angle to current throttle angle  (for THROTTLE_ANGLE/THROTTLE_DELTA modes)
+                cruise_adjusting = cruise_trigger_released = false;  // in case trigger is being pulled as cruise mode is entered, the ability to adjust is only unlocked after the trigger is subsequently released to the center
+            }
+            if (_mode == Calibrate) {
+                float temp = pot->mapToRange(0.0, 180.0);
+                if (temp >= si[PARKED] && temp <= si[OPMAX]) motormode = Calibrate;
+            }
+            else if (_mode != NA) motormode = _mode;
         }
-        else if (mode_request == Cruise) {
-            cruisepid.set_target(speedo->filt());  // set pid loop speed target to current speed  (for PID_SUSPEND_FLY mode)
-            pid.set_target(tach->filt());  // initialize pid output (rpm target) to current rpm  (for PID_SUSPEND_FLY mode)
-            cruise_target_pc = pc[OUT];  //  set target throttle angle to current throttle angle  (for THROTTLE_ANGLE/THROTTLE_DELTA modes)
-            cruise_adjusting = cruise_trigger_released = false;  // in case trigger is being pulled as cruise mode is entered, the ability to adjust is only unlocked after the trigger is subsequently released to the center
-            motormode = Cruise;
-        }
-        else if (mode_request != NA) motormode = mode_request;
-        mode_request = NA;
     }
     int parked() {
         return (std::abs(pc_to_si(pc[OUT]) - si[PARKED]) < 1);
@@ -640,15 +638,12 @@ class BrakeMotor : public JagMotor {
     float posn_initial_ki = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float posn_initial_kd = 0.000;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     static constexpr uint32_t pid_timeout = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
-    static constexpr uint32_t interval_timeout = 1000000;  // How often to apply increment during auto-stopping (in us)
-    static constexpr uint32_t stopcar_timeout = 8000000;  // How often to apply increment during auto-stopping (in us)
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
     static constexpr uint32_t duty_integration_period = 300000000;  // in us. note every 5 minutes uses 1% of our RAM for history buffer
     static constexpr int history_depth = duty_integration_period / pid_timeout;
     uint8_t history[history_depth];  // stores past motor work done. cast to uint8_t to save ram
     float duty_integral = sens_ratio[PressurePID] * hybrid_out_ratio;
-    int duty_index = 0, duty_index_last, dominantpid_last = brake_default_pid;
-    // float posn_inflect, pres_inflect, pc_inflect;
+    int duty_index = 0, duty_index_last, dominantpid_last = brake_default_pid;    // float posn_inflect, pres_inflect, pc_inflect;
     void activate_pid(int _pid) {
         dominantpid = _pid;
         pid_dom = &(pids[dominantpid]);
@@ -656,7 +651,7 @@ class BrakeMotor : public JagMotor {
     }
   public:
     using JagMotor::JagMotor;
-    int motormode = Halt, oldmode = Halt, mode_request = NA, pid_status = HybridPID;
+    int motormode = Halt, oldmode = Halt, pid_status = HybridPID;
     int dominantpid = brake_default_pid;
     bool mode_busy = false, posn_pid_active = (dominantpid == PositionPID);
     QPID pids[2];  // brake changes from pressure target to position target as pressures decrease, and vice versa
@@ -682,9 +677,9 @@ class BrakeMotor : public JagMotor {
         hybrid_math_coeff = M_PI / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo);
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, IdleControl* _throttle) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
-        pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;
         printf("Brake motor..\n");
         JagMotor::setup(_hotrc, _speedo, _batt);
+        pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;
         duty_fwd_pc = brakemotor_max_duty_pc;  
         pres_last = pressure->human();
         posn_last = brkpos->human();
@@ -745,12 +740,14 @@ class BrakeMotor : public JagMotor {
         if (duty_continuous < 0.001) duty_continuous = 0.0;  // otherwise displays "5.67e-" (?)
         // now we know our continuous duty, need to limit motor output based on this
     }
+    // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
+    // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
     void set_output() { // services any requests for change in brake mode
         autostopping = autoholding = false;
         if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
             pid_status = HybridPID;
             set_pidtarg(std::max(hold_initial_pc, pid_dom->target()));  // Autohold always applies the brake somewhat, even if already stopped
-            autoholding = speedo->car_stopped() && (pressure->human() >= pressure->hold_initial_psi - pressure->margin_psi);  // this needs to be tested
+            autoholding = speedo->car_stopped() && (pressure->human() >= pressure->hold_initial_psi - pressure->margin_psi);  // this needs to be tested            if (!speedo->car_stopped()) {
             if (!speedo->car_stopped()) {
                 autostopping = true;
                 if (interval_timer.expireset()) set_pidtarg(std::min(pid_dom->target() + hold_increment_pc, 100.0f));
@@ -762,7 +759,7 @@ class BrakeMotor : public JagMotor {
             pid_status = HybridPID;
             if (panicstop) throttle->goto_idle();  // Stop pushing the gas, will help us stop the car better
             if (speedo->car_stopped() || stopcar_timer.expired()) {
-                mode_request = Halt;  // After AutoStop mode stops the car or times out, then stop driving the motor
+                motormode = Halt;  // After AutoStop mode stops the car or times out, then stop driving the motor
                 pc[OUT] = pc[STOP];
             }
             else {
@@ -788,7 +785,7 @@ class BrakeMotor : public JagMotor {
             pid_status = PositionPID;
             mode_busy = true;
             if (released() || motor_park_timer.expired()) {
-                mode_request = Halt;
+                motormode = Halt;
                 mode_busy = false;
             }
             else set_pidtarg(zeropoint_pc);  // Flipped to 100-value because function argument subtracts back for position pid
@@ -798,7 +795,7 @@ class BrakeMotor : public JagMotor {
             pid_status = PositionPID;
             parking = mode_busy = true;
             if (parked() || motor_park_timer.expired()) {
-                mode_request = Halt;
+                motormode = Halt;
                 parking = mode_busy = false;
             }
             else set_pidtarg(parkpos_pc);  // Flipped to 100-value because function argument subtracts back for position pid
@@ -814,18 +811,13 @@ class BrakeMotor : public JagMotor {
     }
   public:
     void setmode(int _mode=NA) {
-        mode_request = _mode;
         mode_busy = false;
-        if ((mode_request == AutoStop || mode_request == AutoHold) && mode_request != motormode) {
+        if (_mode != motormode) {
             interval_timer.reset();
             stopcar_timer.reset();
-        }
-        else if ((mode_request == Release || mode_request == ParkMotor) && mode_request != motormode) {
             motor_park_timer.reset();
         }
-        if (mode_request != NA) motormode = mode_request;
-        mode_request = NA;
-        // if (motormode != oldmode) stopcar_timer.reset();    
+        if (_mode != NA) motormode = _mode;
     }
     int parked() {
         return (std::abs(pc[OUT] - parkpos_pc) <= pc[MARGIN]);
@@ -847,7 +839,7 @@ class BrakeMotor : public JagMotor {
                 pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);  // Constrain to full potential range when calibrating. Caution don't break anything!
             else if ((pc[OUT] < pc[STOP] && brkpos->filt() > brkpos->parkpos() - brkpos->margin()) 
                   || (pc[OUT] > pc[STOP] && brkpos->filt() < brkpos->min_in() + brkpos->margin()))  // If brake is at position limits and we're tring to go further, stop the motor
-                pc[OUT] = pc[STOP];
+                pc[OUT] = pc[STOP]; 
             else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);  // Send to the actuator. Refuse to exceed range
             // Step 3 : Convert motor percent value to pulse width for motor, and to volts for display
             us[OUT] = pc_to_us(pc[OUT]);
@@ -860,7 +852,7 @@ class BrakeMotor : public JagMotor {
 class SteerMotor : public JagMotor {
   public:
     using JagMotor::JagMotor;
-    int motormode = Halt, oldmode = Halt, mode_request;
+    int motormode = Halt, oldmode = Halt;
     float steer_safe_pc = 72.0;  // this percent is taken off full steering power when driving full speed (linearly applied)
     bool reverse = false;
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
@@ -877,11 +869,11 @@ class SteerMotor : public JagMotor {
             write_motor();
         }
     }
-    void setmode(int _mode=NA) { mode_request = _mode; }
+    void setmode(int _mode=NA) { 
+        if (_mode != NA) motormode = _mode;
+    }
   private:
     void set_output() {
-        if (mode_request != NA) motormode = mode_request;
-        mode_request = NA;
         if (motormode == Halt) {
             pc[OUT] = pc[STOP];  // Stop the steering motor if in shutdown mode and shutdown is complete
         }
