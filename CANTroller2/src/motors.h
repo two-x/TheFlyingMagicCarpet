@@ -582,7 +582,7 @@ class GasServo : public ServoMotor {
         }
     }
   public:
-    void setmode(int _mode=NA) {
+    void setmode(int _mode) {
         mode_busy = false;
         if (_mode != motormode) {
             if (_mode == Cruise) {
@@ -595,7 +595,7 @@ class GasServo : public ServoMotor {
                 float temp = pot->mapToRange(0.0, 180.0);
                 if (temp >= si[PARKED] && temp <= si[OPMAX]) motormode = Calibrate;
             }
-            else if (_mode != NA) motormode = _mode;
+            else motormode = _mode;
         }
     }
     int parked() {
@@ -810,14 +810,14 @@ class BrakeMotor : public JagMotor {
         mode_busy = autostopping || parking;
     }
   public:
-    void setmode(int _mode=NA) {
+    void setmode(int _mode) {
         mode_busy = false;
         if (_mode != motormode) {
             interval_timer.reset();
             stopcar_timer.reset();
             motor_park_timer.reset();
         }
-        if (_mode != NA) motormode = _mode;
+        motormode = _mode;
     }
     int parked() {
         return (std::abs(pc[OUT] - parkpos_pc) <= pc[MARGIN]);
@@ -869,9 +869,7 @@ class SteerMotor : public JagMotor {
             write_motor();
         }
     }
-    void setmode(int _mode=NA) { 
-        if (_mode != NA) motormode = _mode;
-    }
+    void setmode(int _mode) { motormode = _mode; }
   private:
     void set_output() {
         if (motormode == Halt) {
