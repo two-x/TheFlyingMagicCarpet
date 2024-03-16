@@ -597,7 +597,7 @@ class GasServo : public ServoMotor {
     int parked() {
         return (std::abs(pc_to_si(pc[OUT]) - si[PARKED]) < 1);
     }
-    void update(int runmode) {
+    void update() {
         float tach_now = tach->human();
         if (tach_now != tach_last) idlectrl.push_tach_reading(tach_now, tach->last_read_time());    
         tach_last = tach_now;
@@ -824,7 +824,7 @@ class BrakeMotor : public JagMotor {
         return (brkpos->human() >= brkpos->zeropoint() - brkpos->margin());
         // return (std::abs(brkpos->filt() - brkpos->zeropoint()) <= brkpos->margin());   // (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
     }
-    void update(int runmode) {
+    void update() {
         // Brakes - Determine motor output and write it to motor
         if (volt_check_timer.expireset()) derive();
         if (pid_timer.expireset()) {
@@ -856,7 +856,7 @@ class SteerMotor : public JagMotor {
         printf("Steering motor..\n");
         JagMotor::setup(_hotrc, _speedo, _batt);
     }
-    void update(int runmode) {
+    void update() {
         if (volt_check_timer.expireset()) derive();
         if (pid_timer.expireset()) {
             set_output();
