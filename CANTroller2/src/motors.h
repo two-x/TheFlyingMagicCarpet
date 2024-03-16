@@ -468,15 +468,13 @@ class GasServo : public ServoMotor {
     float gas_initial_ki = 0.000;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
     float gas_initial_kd = 0.000;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
     float cruise_ctrl_extent_pc, adjustpoint;       // During cruise adjustments, saves farthest trigger position read
-    bool cruise_trigger_released = false;
     Timer cruiseDeltaTimer;
   public:
     using ServoMotor::ServoMotor;
     IdleControl idlectrl;
     QPID pid, cruisepid;
-    int motormode = Idle, oldmode = Idle;
-    bool mode_busy = false;
-    bool reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
+    int motormode = Idle;
+    bool cruise_trigger_released = false, mode_busy = false, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
     float (&deg)[arraysize(si)] = si;  // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
     float tach_last, cruise_target_pc, governor = 95;     // Software governor will only allow this percent of full-open throttle (percent 0-100)
     void derive() {  // calc derived limit values for all units based on tuned values for each motor
@@ -488,29 +486,27 @@ class GasServo : public ServoMotor {
         pc[MARGIN] = map(si[MARGIN], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, TemperatureSensorManager* _temp) {
+        tach = _tach;  pot = _pot;  tempsens = _temp;
         printf("Gas servo..\n");
         ServoMotor::setup(_hotrc, _speedo);
-        tach = _tach;
-        pot = _pot;
-        tempsens = _temp;
         derive();
         idlectrl.setup(pid.target_ptr(), tach->human_ptr(), tach->filt_ptr(), tempsens->get_sensor(loc::ENGINE), 
             temp_lims_f[ENGINE][OPMIN], temp_lims_f[ENGINE][WARNING], 50, IdleControl::idlemodes::CONTROL);
-        pid.init(tach->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), gas_initial_kp, gas_initial_ki, gas_initial_kd, QPID::pmod::onerr, 
+        pid.init(tach->filt_ptr(), &pc[OPMIN], &pc[OPMAX], gas_initial_kp, gas_initial_ki, gas_initial_kd, QPID::pmod::onerr, 
             QPID::dmod::onerr, QPID::awmod::clamp, QPID::cdir::direct, pid_timeout);
         if (throttle_ctrl_mode == OpenLoop) {
-            cruisepid.init(speedo->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), cruise_opengas_initial_kp, cruise_opengas_initial_ki,
-                cruise_opengas_initial_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::round, QPID::cdir::direct, pid_timeout);
+            cruisepid.init(speedo->filt_ptr(), &pc[OPMIN], &pc[OPMAX], cruise_opengas_initial_kp, cruise_opengas_initial_ki,
+              cruise_opengas_initial_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::round, QPID::cdir::direct, pid_timeout);
         }
         else if (throttle_ctrl_mode == ActivePID) {
             cruisepid.init(speedo->filt_ptr(), idlectrl.idle_rpm_ptr(), tach->govern_rpm_ptr(), cruise_pidgas_initial_kp, cruise_pidgas_initial_ki,
-                cruise_pidgas_initial_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::round, QPID::cdir::direct, pid_timeout);
+              cruise_pidgas_initial_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::round, QPID::cdir::direct, pid_timeout);
         }
     }
   private:
     // throttle_ctrl_mode : (compile time option)
     //    OpenLoop : Servo angle is simply proportional to trigger pull. This is our tested default
-    //    ActivePID : Servo angle determined by PID calculation designed to converge engine rpm to an rpm target value which is based on trigger
+    //    ActivePID : Servo angle is determined by PID calculation designed to converge engine rpm to a target value set proportional to trigger pull
     // cruise_setpoint_scheme : (compile time option) Pick from 3 different styles for adjustment of cruise setpoint. I prefer THROTTLE_DELTA.
     //    THROTTLE_ANGLE : Cruise locks servo angle (cruise_target_pc), instead of pid. Moving trigger from center adjusts setpoint proportional to how far you push it before releasing (and reduced by an attenuation factor)
     //    THROTTLE_DELTA : Cruise locks servo angle (cruise_target_pc), instead of pid. Any non-center trigger position continuously adjusts setpoint proportional to how far it's pulled over time (up to a specified maximum rate)
@@ -611,10 +607,8 @@ class GasServo : public ServoMotor {
             set_output();
             // Step 3 : Convert to degrees and constrain if out of range
             deg[OUT] = pc_to_si(pc[OUT]);  // convert to degrees
-            if (runmode == CAL && cal_gasmode)  // Constrain to operating limits. 
-                deg[OUT] = constrain(deg[OUT], deg[ABSMIN], deg[ABSMAX]);
-            else if (runmode == BASIC || runmode == SHUTDOWN || runmode == ASLEEP)
-                deg[OUT] = constrain(deg[OUT], deg[PARKED], deg[GOVERN]);
+            if (motormode == Calibrate) deg[OUT] = constrain(deg[OUT], deg[ABSMIN], deg[ABSMAX]);
+            else if (motormode == ParkMotor || motormode == Halt) deg[OUT] = constrain(deg[OUT], deg[PARKED], deg[GOVERN]);
             else deg[OUT] = constrain(deg[OUT], deg[OPMIN], deg[GOVERN]);
             pc[OUT] = si_to_pc(deg[OUT]);
             // Step 4 : Write to servo
@@ -631,12 +625,12 @@ class BrakeMotor : public JagMotor {
     PressureSensor* pressure;
     IdleControl* throttle;
     float brakemotor_max_duty_pc = 100.0;  // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
-    float press_initial_kp = 0.142;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-    float press_initial_ki = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-    float press_initial_kd = 0.000;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-    float posn_initial_kp = 6.5;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-    float posn_initial_ki = 0.000;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-    float posn_initial_kd = 0.000;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+    float press_initial_kp = 0.142;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+    float press_initial_ki = 0.000;        // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+    float press_initial_kd = 0.000;        // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+    float posn_initial_kp = 6.5;           // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+    float posn_initial_ki = 0.000;         // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+    float posn_initial_kd = 0.000;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     static constexpr uint32_t pid_timeout = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
     static constexpr uint32_t duty_integration_period = 300000000;  // in us. note every 5 minutes uses 1% of our RAM for history buffer
@@ -705,7 +699,7 @@ class BrakeMotor : public JagMotor {
             if (sens_ratio[PressurePID] >= brake_pid_trans_threshold_hi) hybrid_out_ratio = 1.0;  // at pressure above hi threshold, pressure has 100% influence
             else if (sens_ratio[PressurePID] <= brake_pid_trans_threshold_lo) hybrid_out_ratio = 0.0;  // at pressure below lo threshold, position has 100% influence
             else hybrid_out_ratio = 0.5 + 0.5 * sin(hybrid_math_coeff * (sens_ratio[PressurePID] - hybrid_math_offset));  // in between we make a steep but smooth transition during which both have some influence
-            activate_pid((int)(sens_ratio[PressurePID] > 0.5 * (brake_pid_trans_threshold_lo + brake_pid_trans_threshold_hi)));  // pressure pid == 1. sets the "dominant" pid
+            activate_pid((int)(2.0 * sens_ratio[PressurePID] > brake_pid_trans_threshold_lo + brake_pid_trans_threshold_hi));  // pressure pid == 1. sets the "dominant" pid
         }
         else {
             hybrid_out_ratio = (float)pid_status;
@@ -733,7 +727,7 @@ class BrakeMotor : public JagMotor {
         if (duty_tracker_load_sensitive) {  // if we are being fancy
             if (pc[OUT] < 0) duty_instant = 0.0;  // ignore motion in the extend direction due to low load
             else duty_instant *= sens_ratio[PressurePID];  // scale load with brake pressure
-        }        
+        }
         history[duty_index] = (uint8_t)(duty_instant * 2.5);  // write over current indexed value in the history ring buffer. scale to optimize for uint8
         duty_integral_sum += duty_instant;  // add value to our running sum
         duty_continuous = duty_integral_sum / history_depth;  // divide ring buffer total by its size to get average value
@@ -765,6 +759,7 @@ class BrakeMotor : public JagMotor {
             else {
                 autostopping = true;
                 if (interval_timer.expireset()) set_pidtarg(std::min(pid_dom->target() + panicstop ? panic_increment_pc : hold_increment_pc, 100.0f));
+                
                 else set_pidtarg(std::max(panicstop ? panic_initial_pc : hold_initial_pc, pid_dom->target()));
                 pc[OUT] = pid_out();
             }
@@ -820,11 +815,13 @@ class BrakeMotor : public JagMotor {
         motormode = _mode;
     }
     int parked() {
-        return (std::abs(pc[OUT] - parkpos_pc) <= pc[MARGIN]);
+        // return (std::abs(pc[OUT] - parkpos_pc) <= pc[MARGIN]);
+        return (brkpos->human() >= brkpos->parkpos() - brkpos->margin());
         // return (std::abs(brkpos->filt() - brkpos->parkpos()) <= brkpos->margin());   // (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
     }
     int released() {
-        return (std::abs(pc[OUT] - zeropoint_pc) <= pc[MARGIN]);
+        // return (std::abs(pc[OUT] - zeropoint_pc) <= pc[MARGIN]);
+        return (brkpos->human() >= brkpos->zeropoint() - brkpos->margin());
         // return (std::abs(brkpos->filt() - brkpos->zeropoint()) <= brkpos->margin());   // (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
     }
     void update(int runmode) {
