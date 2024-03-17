@@ -388,16 +388,16 @@ class ServoMotor {
         motor.setPeriodHertz(freq);
         motor.attach(pin, us[ABSMIN], us[ABSMAX]);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     }
-    float pc_to_si(float _pc) {  // Eventually this should be linearized
+    float out_pc_to_si(float _pc) {  // Eventually this should be linearized
         return map(_pc, pc[ABSMIN], pc[ABSMAX], si[ABSMIN], si[ABSMAX]); 
     }
-    float si_to_pc(float _si) {  // Eventually this should be linearized
+    float out_si_to_pc(float _si) {  // Eventually this should be linearized
         return map(_si, si[ABSMIN], si[ABSMAX], pc[ABSMIN], pc[ABSMAX]);
     }
-    float si_to_us(float _si) {  // works for motor with or without stop value
+    float out_si_to_us(float _si) {  // works for motor with or without stop value
         return map(_si, si[ABSMIN], si[ABSMAX], reverse ? us[ABSMAX] : us[ABSMIN], reverse ? us[ABSMIN] : us[ABSMAX]);
     }
-    float pc_to_us(float _pc) {  // works for motor with or without stop value
+    float out_pc_to_us(float _pc) {  // works for motor with or without stop value
         return map(_pc, pc[ABSMIN], pc[ABSMAX], reverse ? us[ABSMAX] : us[ABSMIN], reverse ? us[ABSMIN] : us[ABSMAX]);
     }
     void write_motor() { motor.writeMicroseconds((int32_t)(us[OUT])); }
@@ -431,22 +431,22 @@ class JagMotor : public ServoMotor {
         mulebatt = _batt;
         derive();
     }
-    float pc_to_si(float _pc) {  // Eventually this should be linearized
+    float out_pc_to_si(float _pc) {  // Eventually this should be linearized
         if (_pc > pc[STOP]) return map(_pc, pc[STOP], pc[ABSMAX], si[STOP], si[ABSMAX]);
         if (_pc < pc[STOP]) return map(_pc, pc[STOP], pc[ABSMIN], si[STOP], si[ABSMIN]);
         return si[STOP];
     }
-    float si_to_pc(float _si) {  // Eventually this should be linearized
+    float out_si_to_pc(float _si) {  // Eventually this should be linearized
         if (_si > si[STOP]) return map(_si, si[STOP], si[ABSMAX], pc[STOP], pc[ABSMAX]);
         if (_si < si[STOP]) return map(_si, si[STOP], si[ABSMIN], pc[STOP], pc[ABSMIN]);
         return pc[STOP];
     }
-    float si_to_us(float _si) {  // works for motor with center stop value
+    float out_si_to_us(float _si) {  // works for motor with center stop value
         if (_si > si[STOP]) return map(_si, si[STOP], si[ABSMAX], us[STOP], reverse ? us[ABSMIN] : us[ABSMAX]);
         if (_si < si[STOP]) return map(_si, si[STOP], si[ABSMIN], us[STOP], reverse ? us[ABSMAX] : us[ABSMIN]);
         return us[STOP];
     }
-    float pc_to_us(float _pc) {  // works for motor with center stop value
+    float out_pc_to_us(float _pc) {  // works for motor with center stop value
         if (_pc > pc[STOP]) return map(_pc, pc[STOP], pc[ABSMAX], us[STOP], reverse ? us[ABSMIN] : us[ABSMAX]);
         if (_pc < pc[STOP]) return map(_pc, pc[STOP], pc[ABSMIN], us[STOP], reverse ? us[ABSMAX] : us[ABSMIN]);
         return us[STOP];
@@ -555,7 +555,7 @@ class GasServo : public ServoMotor {
         }
         else if (motormode == Calibrate) {
             cal_gasmode = true;
-            pc[OUT] = si_to_pc(map(pot->val(), pot->min(), pot->max(), deg[ABSMIN], deg[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
+            pc[OUT] = out_si_to_pc(map(pot->val(), pot->min(), pot->max(), deg[ABSMIN], deg[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
         }
         else if (motormode == Cruise) {
             calc_cruise_target();  // cruise mode just got too big to be nested in this if-else clause
@@ -595,7 +595,7 @@ class GasServo : public ServoMotor {
         }
     }
     int parked() {
-        return (std::abs(pc_to_si(pc[OUT]) - si[PARKED]) < 1);
+        return (std::abs(out_pc_to_si(pc[OUT]) - si[PARKED]) < 1);
     }
     void update() {
         float tach_now = tach->human();
@@ -606,13 +606,13 @@ class GasServo : public ServoMotor {
             idlectrl.update();  // Allow idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
             set_output();
             // Step 3 : Convert to degrees and constrain if out of range
-            deg[OUT] = pc_to_si(pc[OUT]);  // convert to degrees
+            deg[OUT] = out_pc_to_si(pc[OUT]);  // convert to degrees
             if (motormode == Calibrate) deg[OUT] = constrain(deg[OUT], deg[ABSMIN], deg[ABSMAX]);
             else if (motormode == ParkMotor || motormode == Halt) deg[OUT] = constrain(deg[OUT], deg[PARKED], deg[GOVERN]);
             else deg[OUT] = constrain(deg[OUT], deg[OPMIN], deg[GOVERN]);
-            pc[OUT] = si_to_pc(deg[OUT]);
+            pc[OUT] = out_si_to_pc(deg[OUT]);
             // Step 4 : Write to servo
-            us[OUT] = si_to_us(deg[OUT]);
+            us[OUT] = out_si_to_us(deg[OUT]);
             write_motor();
         }
     }
@@ -636,16 +636,19 @@ class BrakeMotor : public JagMotor {
     static constexpr uint32_t duty_integration_period = 300000000;  // in us. note every 5 minutes uses 1% of our RAM for history buffer
     static constexpr int history_depth = duty_integration_period / pid_timeout;
     uint8_t history[history_depth];  // stores past motor work done. cast to uint8_t to save ram
-    float duty_integral = sens_ratio[PressurePID] * hybrid_out_ratio;
+    float duty_integral = hybrid_sens_ratio * hybrid_out_ratio;
     int duty_index = 0, duty_index_last, dominantpid_last = brake_default_pid;    // float posn_inflect, pres_inflect, pc_inflect;
-    void activate_pid(int _pid) {
+    void set_dominant_pid(int _pid) {
         dominantpid = _pid;
         pid_dom = &(pids[dominantpid]);
         posn_pid_active = (dominantpid == PositionPID);
     }
+    float pressure_pc_to_si(float pc) {
+        return map(pc, 0.0, 100.0, pressure->min_human(), pressure->max_human());
+    }
   public:
     using JagMotor::JagMotor;
-    int motormode = Halt, oldmode = Halt, pid_status = HybridPID;
+    int motormode = Halt, oldmode = Halt, active_pids = HybridPID;
     int dominantpid = brake_default_pid;
     bool mode_busy = false, posn_pid_active = (dominantpid == PositionPID);
     QPID pids[2];  // brake changes from pressure target to position target as pressures decrease, and vice versa
@@ -655,8 +658,8 @@ class BrakeMotor : public JagMotor {
     float brake_pid_trans_threshold_hi = 0.50;  // tunable. At what fraction of full brake pressure will motor control be fully transitioned to pressure control
     bool autostopping = false, autoholding = false, reverse = false, duty_tracker_load_sensitive = true;
     float panic_initial_pc, hold_initial_pc, panic_increment_pc, hold_increment_pc, parkpos_pc, zeropoint_pc;
-    float sens_ratio[2], sensnow[2], outnow[2], hybrid_math_offset, hybrid_math_coeff, pid_targ_pc, pid_err_pc, pid_final_out;
-    float hybrid_sens_ratio, hybrid_sens_ratio_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0;
+    float outnow_pc[2], hybrid_math_offset, hybrid_math_coeff, pid_targ_pc, pid_err_pc, pid_final_out_pc;
+    float hybrid_sens_ratio, hybrid_sens_ratio_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0, hybrid_targ_ratio = 1.0, hybrid_targ_ratio_pc = 100.0;
     float duty_integral_sum, duty_instant, duty_continuous;
     void derive() {
         JagMotor::derive();
@@ -677,48 +680,48 @@ class BrakeMotor : public JagMotor {
         duty_fwd_pc = brakemotor_max_duty_pc;  
         pres_last = pressure->human();
         posn_last = brkpos->human();
-        activate_pid(brake_default_pid);
+        set_dominant_pid(brake_default_pid);
         derive();
-        if (brake_hybrid_pid) calc_hybrid_ratio();
+        if (brake_hybrid_pid) calc_hybrid_ratio(pressure->human());
         pids[PressurePID].init(pressure->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), press_initial_kp, press_initial_ki, press_initial_kd, QPID::pmod::onerr,
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
         pids[PositionPID].init(brkpos->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), posn_initial_kp, posn_initial_ki, posn_initial_kd, QPID::pmod::onerr, 
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::reverse, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
     }
-    void set_pidtarg(float targ_pc) {
+  private:
+    // the influence on the final output from the pressure and position pids is weighted based on the pressure reading
+    // as the brakes are pressurized beyond X psi, use pressure reading, otherwise use position as feedback, because
+    // near either extreme only one of the two sensors is accurate. So at lower psi, control is 100% position-based, fade to 100% pressure-based at mid/high pressures
+    // "dominant" PID means the PID loop (pressure or position) that has the majority influence over the motor
+    float calc_hybrid_ratio(float pressure_val) {  // pass in a pressure reading or target value (in psi). returns the appropriate ratio of pressure influence (from 0.0 to 1.0)
+        float pressure_ratio = (pressure_val - pressure->min_human()) / (pressure->max_human() - pressure->min_human());  // calculate ratio of output to range
+        float hybrid_ratio = (float)active_pids;  // will get written over if using hybrid pid
+        if (active_pids == HybridPID) {
+            if (pressure_ratio >= brake_pid_trans_threshold_hi) hybrid_ratio = 1.0;  // at pressure above hi threshold, pressure has 100% influence
+            else if (pressure_ratio <= brake_pid_trans_threshold_lo) hybrid_ratio = 0.0;  // at pressure below lo threshold, position has 100% influence
+            else hybrid_ratio = 0.5 + 0.5 * sin(hybrid_math_coeff * (pressure_ratio - hybrid_math_offset));  // in between we make a steep but smooth transition during which both have some influence
+            // set_dominant_pid((int)(2.0 * pressure_ratio > brake_pid_trans_threshold_lo + brake_pid_trans_threshold_hi));  // sets the "dominant" pid (pressure pid == 1)
+        }
+        return hybrid_ratio;
+    }
+  public:
+    void set_pidtarg(float targ_pc) {  // pass in desired brake target as an overall percent, will set pressure and position pid targets consistent with current configuration
         pid_targ_pc = targ_pc;
-        pids[PressurePID].set_target(pressure->min_human() + pid_targ_pc * (pressure->max_human() - pressure->min_human()) / 100.0);
-        pids[PositionPID].set_target(brkpos->min_human() + (100.0 - pid_targ_pc) * (brkpos->max_human() - brkpos->min_human()) / 100.0);
+        if (brake_linearize_target_extremes) hybrid_targ_ratio = pid_targ_pc / 100.0;
+        else hybrid_targ_ratio = calc_hybrid_ratio(pressure_pc_to_si(pid_targ_pc));
+        pids[PressurePID].set_target(pressure->min_human() + hybrid_targ_ratio * (pressure->max_human() - pressure->min_human()));
+        pids[PositionPID].set_target(brkpos->min_human() + (1.0 - hybrid_targ_ratio) * (brkpos->max_human() - brkpos->min_human()));
+        hybrid_targ_ratio_pc = 100.0 * hybrid_targ_ratio;  // for display
     }
   private:
-    // The influence on the final output from the pressure and position pids is weighted based on the pressure reading
-    // Definition: "dominant" PID = The PID loop (pressure or position) that has the majority influence over the motor
-    // PID outputs are weighted based on where in the pedal press we are. Near the bottom is 100% pressure control, and near the top is 100% position control.
-    void calc_hybrid_ratio() {
-        if (pid_status == HybridPID) {
-            if (sens_ratio[PressurePID] >= brake_pid_trans_threshold_hi) hybrid_out_ratio = 1.0;  // at pressure above hi threshold, pressure has 100% influence
-            else if (sens_ratio[PressurePID] <= brake_pid_trans_threshold_lo) hybrid_out_ratio = 0.0;  // at pressure below lo threshold, position has 100% influence
-            else hybrid_out_ratio = 0.5 + 0.5 * sin(hybrid_math_coeff * (sens_ratio[PressurePID] - hybrid_math_offset));  // in between we make a steep but smooth transition during which both have some influence
-            activate_pid((int)(2.0 * sens_ratio[PressurePID] > brake_pid_trans_threshold_lo + brake_pid_trans_threshold_hi));  // pressure pid == 1. sets the "dominant" pid
-        }
-        else {
-            hybrid_out_ratio = (float)pid_status;
-            activate_pid(pid_status);
-        }    
+    float pid_out() {  // returns motor output percent calculated using dynamic combination of position and pressure influence
+        hybrid_out_ratio = calc_hybrid_ratio(pressure->human());  // calculate pressure vs. position multiplier based on the sensed values
         hybrid_out_ratio_pc = 100.0 * hybrid_out_ratio;  // for display
-    }
-    float pid_out() {  // feedback brake pid with position or pressure, whichever is changing more quickly
-        float range;
-        for (int p = PositionPID; p <= PressurePID; p++) {
-            range = (p == PressurePID) ? (pressure->max_human() - pressure->min_human()) : (brkpos->max_human() - brkpos->min_human());
-            sensnow[p] = (p == PressurePID) ? pressure->human() : brkpos->human();  // latest sensed value
-            sens_ratio[p] = (sensnow[p] - ((p == PressurePID) ? pressure->min_human() : brkpos->min_human())) / range;  // calculate ratio of output to range
-            outnow[p] = pids[p].compute();  // get each pid calculated output
-        }
-        calc_hybrid_ratio();  // calculate pressure vs. position multiplier based on the sensed values
-        pid_final_out = hybrid_out_ratio * outnow[PressurePID] + (1.0 - hybrid_out_ratio) * outnow[PositionPID];  // combine pid outputs weighted by the multiplier
-        for (int p = PositionPID; p <= PressurePID; p++) pids[p].set_output(pid_final_out);  // Feed the final value back into the pids
-        return pid_final_out;
+        set_dominant_pid((int)(hybrid_out_ratio));  // note posn pid == 0 and pressure pid == 1
+        for (int p = PositionPID; p <= PressurePID; p++) outnow_pc[p] = pids[p].compute();  // get each pid calculated output
+        pid_final_out_pc = hybrid_out_ratio * outnow_pc[PressurePID] + (1.0 - hybrid_out_ratio) * outnow_pc[PositionPID];  // combine pid outputs weighted by the multiplier
+        for (int p = PositionPID; p <= PressurePID; p++) pids[p].set_output(pid_final_out_pc);  // Feed the final value back into the pids
+        return pid_final_out_pc;
     }
     void calc_motor_duty() {  // Duty tracking: we keep a buffer of motor work done
         ++duty_index %= history_depth;  // advance ring buffer index, this is the oldest value in the buffer
@@ -726,7 +729,7 @@ class BrakeMotor : public JagMotor {
         int duty_instant = std::abs(pc[OUT]);  // what is current motor drive percent
         if (duty_tracker_load_sensitive) {  // if we are being fancy
             if (pc[OUT] < 0) duty_instant = 0.0;  // ignore motion in the extend direction due to low load
-            else duty_instant *= sens_ratio[PressurePID];  // scale load with brake pressure
+            else duty_instant *= hybrid_sens_ratio;  // scale load with brake pressure
         }
         history[duty_index] = (uint8_t)(duty_instant * 2.5);  // write over current indexed value in the history ring buffer. scale to optimize for uint8
         duty_integral_sum += duty_instant;  // add value to our running sum
@@ -739,7 +742,7 @@ class BrakeMotor : public JagMotor {
     void set_output() { // services any requests for change in brake mode
         autostopping = autoholding = false;
         if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
-            pid_status = HybridPID;
+            active_pids = HybridPID;
             set_pidtarg(std::max(hold_initial_pc, pid_dom->target()));  // Autohold always applies the brake somewhat, even if already stopped
             autoholding = speedo->car_stopped() && (pressure->human() >= pressure->hold_initial_psi - pressure->margin_psi);  // this needs to be tested            if (!speedo->car_stopped()) {
             if (!speedo->car_stopped()) {
@@ -750,7 +753,7 @@ class BrakeMotor : public JagMotor {
             else pc[OUT] = pc[STOP];
         }
         else if (motormode == AutoStop) {  // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
-            pid_status = HybridPID;
+            active_pids = HybridPID;
             if (panicstop) throttle->goto_idle();  // Stop pushing the gas, will help us stop the car better
             if (speedo->car_stopped() || stopcar_timer.expired()) {
                 motormode = Halt;  // After AutoStop mode stops the car or times out, then stop driving the motor
@@ -765,11 +768,11 @@ class BrakeMotor : public JagMotor {
             }
         }
         else if (motormode == Halt) {
-            pid_status = HybridPID;
+            active_pids = HybridPID;
             pc[OUT] = pc[STOP];
         }
         else if (motormode == Calibrate) {
-            pid_status = HybridPID;
+            active_pids = HybridPID;
             cal_brakemode = true;
             int _joydir = hotrc->joydir(); 
             if (_joydir == JOY_UP) pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[STOP], pc[OPMAX]);
@@ -777,7 +780,7 @@ class BrakeMotor : public JagMotor {
             else pc[OUT] = pc[STOP];
         }
         else if (motormode == Release) {
-            pid_status = PositionPID;
+            active_pids = PositionPID;
             mode_busy = true;
             if (released() || motor_park_timer.expired()) {
                 motormode = Halt;
@@ -787,7 +790,7 @@ class BrakeMotor : public JagMotor {
             pc[OUT] = pid_out();
         }
         else if (motormode == ParkMotor) {
-            pid_status = PositionPID;
+            active_pids = PositionPID;
             parking = mode_busy = true;
             if (parked() || motor_park_timer.expired()) {
                 motormode = Halt;
@@ -797,7 +800,7 @@ class BrakeMotor : public JagMotor {
             pc[OUT] = pid_out();
         }
         else if (motormode == ActivePID) {
-            pid_status = HybridPID;
+            active_pids = HybridPID;
             if (hotrc->joydir(VERT) != JOY_DN) set_pidtarg(0);  // let off the brake
             else set_pidtarg(map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], 0.0, 100.0));  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
             pc[OUT] = pid_out();
@@ -839,8 +842,8 @@ class BrakeMotor : public JagMotor {
                 pc[OUT] = pc[STOP]; 
             else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);  // Send to the actuator. Refuse to exceed range
             // Step 3 : Convert motor percent value to pulse width for motor, and to volts for display
-            us[OUT] = pc_to_us(pc[OUT]);
-            volt[OUT] = pc_to_si(pc[OUT]);
+            us[OUT] = out_pc_to_us(pc[OUT]);
+            volt[OUT] = out_pc_to_si(pc[OUT]);
             // Step 4 : Write to motor
             write_motor();
         }
@@ -861,8 +864,8 @@ class SteerMotor : public JagMotor {
         if (pid_timer.expireset()) {
             set_output();
             pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);  // Don't be out of range
-            us[OUT] = pc_to_us(pc[OUT]);
-            volt[OUT] = pc_to_si(pc[OUT]);
+            us[OUT] = out_pc_to_us(pc[OUT]);
+            volt[OUT] = out_pc_to_si(pc[OUT]);
             write_motor();
         }
     }
