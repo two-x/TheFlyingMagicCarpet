@@ -83,8 +83,8 @@ class Param {
     }
     
   public:
-    String _long_name = "Unnamed value";
-    String _short_name = "noname";
+    std::string _long_name = "Unnamed value";
+    std::string _short_name = "noname";
 
     // Creates a constant Param with the default value for VALUE_T
     // NOTE: this is really only needed for initalization cases where we don't have a valid starting value when we first make the Param
@@ -189,8 +189,8 @@ class Device {
     virtual void update_source() {}
   public:
     Timer timer;  // Can be used for external purposes
-    String _long_name = "Unknown device";
-    String _short_name = "device";
+    std::string _long_name = "Unknown device";
+    std::string _short_name = "device";
     sens senstype = sens::none;
     Device() = delete; // should always be created with a pin
     // NOTE: should we start in PIN mode?
@@ -251,8 +251,8 @@ enum class TransducerDirection : uint8_t {REV, FWD}; // possible dir values. REV
 template<typename NATIVE_T, typename HUMAN_T>
 class Transducer : public Device {
   private:
-    String _long_name = "Unknown transducer";
-    String _short_name = "xducer";
+    std::string _long_name = "Unknown transducer";
+    std::string _short_name = "xducer";
   protected:
     // Multiplier and adder values to plug in for unit conversion math
     NATIVE_T _val_raw;  // Keep track of the most recent unfiltered and unconstrained native value, for monitoring and diag purposes
@@ -431,12 +431,12 @@ class Transducer : public Device {
 template<typename NATIVE_T, typename HUMAN_T>
 class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
   private:
-    String _long_name = "Unknown sensor";
-    String _short_name = "sensor";
+    std::string _long_name = "Unknown sensor";
+    std::string _short_name = "sensor";
   protected:
     float _ema_alpha = 0.1;
     Param<HUMAN_T> _val_filt;
-    bool _should_filter = false;
+    bool _should_filter = true;
 
     void calculate_ema() { // Exponential Moving Average
         if (_should_filter) {
@@ -445,7 +445,7 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
             _val_filt.set(ema_filt(cur_val, filt_val, _ema_alpha));
         } else {
             _val_filt.set(this->_human.val());
-            _should_filter = true;
+            // _should_filter = true;  // soren: I commented this out, wouldn't this always turn on filtering?
         }
     }
 
@@ -500,8 +500,8 @@ class I2CSensor : public Sensor<float,float> {
     uint8_t addr;
     I2CSensor(I2C* i2c_arg, uint8_t i2c_address_arg) : Sensor<float,float>(-1), _i2c(i2c_arg), addr(i2c_address_arg) { set_can_source(src::PIN, true); }
     I2CSensor() = delete;
-    String _long_name = "Unknown I2C device";
-    String _short_name = "i2cdev";
+    std::string _long_name = "Unknown I2C device";
+    std::string _short_name = "i2cdev";
     virtual void setup() {
         _detected = _i2c->detected_by_addr(addr);
         set_source(src::PIN); // we aren't actually reading from a pin but the point is the same...
@@ -514,9 +514,9 @@ class AirVeloSensor : public I2CSensor {
     // NOTE: would all AirVeloSensors have the same address? how does this get determined?
     float _min_mph = 0.0;
     float _abs_max_mph = 33.55; // Sensor maximum mph reading.  Our sensor mounted in 2-in ID intake tube
-    float _initial_max_mph = 28.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
+    float _op_max_mph = 28.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
     float _initial_airvelo_mph = 0.0;
-    float _initial_ema_alpha = 0.2;
+    float _ema_alpha = 0.2;
     FS3000 _sensor;
     float goodreading = NAN;
     int64_t airvelo_read_period_us = 35000;
@@ -531,14 +531,13 @@ class AirVeloSensor : public I2CSensor {
     static constexpr uint8_t addr = 0x28;
     sens senstype = sens::airvelo;
     AirVeloSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
-        _ema_alpha = _initial_ema_alpha;
-        set_human_limits(_min_mph, _initial_max_mph);
+        set_human_limits(_min_mph, _op_max_mph);
         set_can_source(src::POT, true);
         airveloTimer.set(airvelo_read_period_us);
     }
     AirVeloSensor() = delete;
-    String _long_name = "Air velocity sensor";
-    String _short_name = "airvel";
+    std::string _long_name = "Air velocity sensor";
+    std::string _short_name = "airvel";
 
     virtual void set_val_common() {
         if (_i2c->i2cbaton == i2c_airvelo) _i2c->pass_i2c_baton();
@@ -576,10 +575,10 @@ class MAPSensor : public I2CSensor {
     // NOTE: would all MAPSensors have the same address? how does this get determined?
     float _abs_min_atm = 0.06;  // Sensor min
     float _abs_max_atm = 2.46;  // Sensor max
-    float _initial_min_atm = 0.68;  // Typical low map for a car is 10.8 psi = 22 inHg, 1 psi = 0.068 atm
-    float _initial_max_atm = 1.02;
+    float _op_min_atm = 0.68;  // Typical low map for a car is 10.8 psi = 22 inHg, 1 psi = 0.068 atm
+    float _op_max_atm = 1.02;
     float _initial_atm = 1.00;  // 1 atm = 14.6959 psi
-    float _initial_ema_alpha = 0.2;
+    float _ema_alpha = 0.2;
     Timer map_read_timer;
     uint32_t map_read_timeout = 100000, map_retry_timeout = 10000;
     float goodreading = NAN;
@@ -603,19 +602,17 @@ class MAPSensor : public I2CSensor {
     static constexpr uint8_t addr = 0x18;
     sens senstype = sens::mapsens;
     MAPSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
-        _ema_alpha = _initial_ema_alpha;
-        set_human_limits(_initial_min_atm, _initial_max_atm);
+        set_human_limits(_op_min_atm, _op_max_atm);
         set_can_source(src::POT, true);
         map_read_timer.set(map_read_timeout);
     }
     MAPSensor() = delete;
-    String _long_name = "Manifold Air Pressure sensor";
-    String _short_name = "map";
+    std::string _long_name = "Manifold Air Pressure sensor";
+    std::string _short_name = "map";
 
     virtual void set_val_common() {
         if (_i2c->i2cbaton == i2c_map) _i2c->pass_i2c_baton();
     }
-
     void setup() {
         _m_factor = 1.0;
         _b_offset = 0.0;
@@ -656,8 +653,8 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
     }
   public:
     AnalogSensor(uint8_t arg_pin) : Sensor<NATIVE_T, HUMAN_T>(arg_pin) {}
-    String _long_name = "Unknown analog sensor";
-    String _short_name = "analog";
+    std::string _long_name = "Unknown analog sensor";
+    std::string _short_name = "analog";
     void setup() {
         set_pin(this->_pin, INPUT);
         this->set_source(src::PIN);
@@ -676,12 +673,11 @@ class CarBattery : public AnalogSensor<int32_t, float> {
     float _abs_max_v = 16.0; // The min vehicle voltage we can sense
     float _op_min_v = 7.0; // The min vehicle voltage we expect to see
     float _op_max_v = 13.8;  // The max vehicle voltage we expect to see.
-    float _v_per_adc = _abs_max_v / adcrange_adc;
+    float _m_factor = _abs_max_v / adcrange_adc;
     float _ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
   public:
     sens senstype = sens::mulebatt;
     CarBattery(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
-        _m_factor = _v_per_adc;
         _human.set_limits(_abs_min_v, _abs_max_v);
         _native.set_limits(0.0, adcrange_adc);
         set_native(_initial_adc);
@@ -696,8 +692,8 @@ class CarBattery : public AnalogSensor<int32_t, float> {
         set_human(12.0);
     }
 
-    String _long_name = "Vehicle battery voltage";
-    String _short_name = "mulbat";
+    std::string _long_name = "Vehicle battery voltage";
+    std::string _short_name = "mulbat";
     float v() { return _human.val(); }
     float min_v() { return _human.min(); }
     float max_v() { return _human.max(); }
@@ -714,13 +710,11 @@ class LiPoBatt : public AnalogSensor<int32_t, float> {
     float _abs_max_v = 4.8; // The min lipo voltage we can sense
     float _op_min_v = 3.2; // The min lipo voltage we expect to see
     float _op_max_v = 4.3;  // The max lipo voltage we expect to see
-    float _initial_v_per_adc = _abs_max_v / adcrange_adc;
-    float _initial_ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+    float _m_factor = _abs_max_v / adcrange_adc;
+    float _ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
   public:
     sens senstype = sens::none;
     LiPoBatt(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
-        _ema_alpha = _initial_ema_alpha;
-        _m_factor = _initial_v_per_adc;
         _human.set_limits(_abs_min_v, _abs_max_v);
         _native.set_limits(0.0, adcrange_adc);
         set_native(_initial_adc);
@@ -731,8 +725,8 @@ class LiPoBatt : public AnalogSensor<int32_t, float> {
         printf("%s..\n", this->_long_name.c_str());
         AnalogSensor::setup();
     }
-    String _long_name = "LiPo pack voltage ";
-    String _short_name = "lipo";
+    std::string _long_name = "LiPo pack voltage ";
+    std::string _short_name = "lipo";
     float v() { return _human.val(); }
     float min_v() { return _human.min(); }
     float max_v() { return _human.max(); }
@@ -747,24 +741,19 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     sens senstype = sens::pressure;
     int32_t op_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
     // Soren 230920: Reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
-    int32_t op_max_adc = 2080; // ~208psi by this math - "Maximum" braking
-    // static constexpr int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
-    float initial_psi_per_adc = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - op_min_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
-    float initial_offset = 0.0;
-    static constexpr bool initial_invert = false;
-    float initial_ema_alpha = 0.15;
+    int32_t op_max_adc = 2080; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
+    float _m_factor = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - op_min_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
+    float _b_offset = -from_native(op_min_adc);
+    bool _invert = false;
+    float _ema_alpha = 0.15;
     float hold_initial_psi = 45;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
     float hold_increment_psi = 3;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
     float panic_initial_psi = 80; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
     float panic_increment_psi = 5; // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
     float margin_psi = 1;  // Max acceptible error when checking psi levels
-    String _long_name = "Brake pressure sensor";
-    String _short_name = "presur";
+    std::string _long_name = "Brake pressure sensor";
+    std::string _short_name = "presur";
     PressureSensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
-        _ema_alpha = initial_ema_alpha;
-        _m_factor = initial_psi_per_adc;
-        _b_offset = -from_native(op_min_adc);
-        _invert = initial_invert;
         set_native_limits(op_min_adc, op_max_adc);
         set_human_limits(from_native(op_min_adc), from_native(op_max_adc));
         set_native(op_min_adc);
@@ -782,43 +771,34 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     float op_min_psi() { return from_native(op_min_adc); }
     float op_max_psi() { return from_native(op_max_adc); }
 };
-
 // BrakePositionSensor represents a linear position sensor
 // for measuring brake position (TODO which position? pad? pedal?)
 // Extends AnalogSensor for handling analog pin reading and conversion.
 class BrakePositionSensor : public AnalogSensor<int32_t, float> {
   protected:
     // TODO: add description
-    std::shared_ptr<float> _zeropoint;
+    // std::shared_ptr<float> _zeropoint;
     // void set_val_from_touch() { _val_filt.set((op_min_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
   public:
     sens senstype = sens::brkpos;
     int32_t abs_min_retract_adc = 0;
     int32_t abs_max_extend_adc = adcrange_adc;
-    float park_in = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
+    float _parkpos = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
     float op_min_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-    float op_max_extend_in = park_in; // 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-    float margin_in = .01;  // TODO: add description
-    float initial_zeropoint_in = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
+    float op_max_extend_in = _parkpos; // 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
+    float _margin = .01;  // TODO: add description
+    float _zeropoint = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
     int32_t op_min_retract_adc = 76;  // Calculated on windows calculator. Calculate it here, silly
     int32_t op_max_extend_adc = 965;  // Calculated on windows calculator. Calculate it here, silly
     float abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
     float abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
-    float initial_in_per_adc = 3.3 * 10000.0 / (3.3 * adcrange_adc * 557); // 3.3 v * 10k ohm * 1/5 1/v * 1/4095 1/adc * 1/557 in/ohm = 0.0029 in/adc
-    static constexpr bool initial_invert = false;
-    float initial_offset = 0.0;
-    float initial_ema_alpha = 0.35;
-    String _long_name = "Brake position sensor";
-    String _short_name = "brkpos";
-
+    float _m_factor = 3.3 * 10000.0 / (3.3 * adcrange_adc * 557); // 3.3 v * 10k ohm * 1/5 1/v * 1/4095 1/adc * 1/557 in/ohm = 0.0029 in/adc
+    bool _invert = false;
+    float _b_offset = 0.0;
+    float _ema_alpha = 0.35;
+    std::string _long_name = "Brake position sensor";
+    std::string _short_name = "brkpos";
     BrakePositionSensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
-        _ema_alpha = initial_ema_alpha;
-        _m_factor = initial_in_per_adc;
-        _invert = initial_invert;
-        _b_offset = initial_offset;
-        _zeropoint = std::make_shared<float>(initial_zeropoint_in);
-        // Soren: this line might be why we broke our brake motor at bm23:
-        // set_human_limits(op_min_retract_in, op_max_extend_in);  // wouldn't this be safer?
         set_human_limits(op_min_retract_in, op_max_extend_in);            
         set_native_limits(op_min_retract_adc, op_max_extend_adc);
         set_can_source(src::PIN, true);
@@ -829,9 +809,8 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         printf("%s..\n", this->_long_name.c_str());
         AnalogSensor::setup();
     }
-    // is tha brake motor parked?
-    bool parked() { return std::abs(_val_filt.val() - park_in) <= margin_in; }
-
+    bool parked() { return (_val_filt.val() >= _parkpos - _margin); }  // is tha brake motor parked?
+    bool released() { return (_val_filt.val() >= _zeropoint - _margin); }
     float in() { return _human.val(); }
     float min_in() { return _human.min(); }
     float max_in() { return _human.max(); }
@@ -839,11 +818,11 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     float op_max_in() { return op_max_extend_in; }
     // float absmin_in() { return abs_min_retract_in; }
     // float absmax_in() { return abs_max_extend_in; }
-    float parkpos() { return park_in; }
-    float margin() { return margin_in; }
-    float zeropoint() { return *_zeropoint; }
-    float* zeropoint_ptr() { return _zeropoint.get(); }
-    std::shared_ptr<float> zeropoint_shptr() { return _zeropoint; }
+    float parkpos() { return _parkpos; }
+    float margin() { return _margin; }
+    float zeropoint() { return _zeropoint; }
+    float* zeropoint_ptr() { return &_zeropoint; }
+    // std::shared_ptr<float> zeropoint_shptr() { return _zeropoint; }
 };
 
 // class PulseSensor are hall-monitor sensors where the value is based on magnetic pulse timing of a rotational Source (eg tachometer, speedometer)
@@ -893,8 +872,8 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
   public:
     PulseSensor(uint8_t arg_pin, int64_t delta_abs_min_us_arg, float stop_thresh_arg) : Sensor<int32_t, HUMAN_T>(arg_pin), _stop_timer(_stop_timeout_us), _delta_abs_min_us(delta_abs_min_us_arg), _stop_thresh(stop_thresh_arg) {}
     PulseSensor() = delete;
-    String _long_name = "Unknown Hall Effect sensor";
-    String _short_name = "pulsen";
+    std::string _long_name = "Unknown Hall Effect sensor";
+    std::string _short_name = "pulsen";
     void setup() {
         set_pin(this->_pin, INPUT_PULLUP);
         attachInterrupt(digitalPinToInterrupt(this->_pin), [this]{ _isr(); }, _negative ? FALLING : RISING);
@@ -918,19 +897,15 @@ class Tachometer : public PulseSensor<float> {
     float _redline_rpm = 5500.0;  // Max possible engine rotation speed
     // NOTE: should we start at 50rpm? shouldn't it be zero?
     float _initial_rpm = 50.0; // Current engine speed, raw value converted to rpm (in rpm)
-    float _initial_rpm_per_rpus = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
-    static constexpr bool _initial_invert = true;
-    static constexpr int64_t _initial_zerovalue = 999999;
-    float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+    float _m_factor = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
+    bool _invert = true;
+    int64_t _zerovalue = 999999;
+    float _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
   public:
     sens senstype = sens::tach;
     float _govern_rpm = _redline_rpm;    
     Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_rpm) {
-        _ema_alpha = _initial_ema_alpha;
-        _m_factor = _initial_rpm_per_rpus;
-        _invert = _initial_invert;
         _negative = true;
-        _zerovalue = _initial_zerovalue;
         set_human_limits(0.0, _redline_rpm);
         set_native_limits(0.0, _stop_timeout_us);
         set_human(_initial_rpm);
@@ -942,8 +917,8 @@ class Tachometer : public PulseSensor<float> {
         printf("%s..\n", this->_long_name.c_str());
         PulseSensor::setup();
     }
-    String _long_name = "Tachometer";
-    String _short_name = "tach";
+    std::string _long_name = "Tachometer";
+    std::string _short_name = "tach";
     // Query/getter functions
     float rpm() { return _human.val(); }
     // bool engine_stopped() { return stopped(); }
@@ -966,20 +941,16 @@ class Speedometer : public PulseSensor<float> {
     float _min_mph = 0.0;
     float _max_mph = 25.0; // What is max speed car can ever go
     float _initial_mph = 0.0; // Current speed, raw value converted to mph (in mph)
-    float _initial_redline_mph = 15.0; // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
-    float _initial_mph_per_rpus = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 pulrot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 whlrot/pulrot * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
-    static constexpr bool _initial_invert = true;
-    int64_t _initial_zerovalue = 999999;
-    float _initial_ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+    float _redline_mph = 15.0; // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
+    float _m_factor = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 pulrot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 whlrot/pulrot * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
+    bool _invert = true;
+    int64_t _zerovalue = 999999;
+    float _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
     float _govern_mph, _idle_mph;
   public:
     sens senstype = sens::speedo;
     Speedometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_mph) {
-        _ema_alpha = _initial_ema_alpha;
-        _m_factor = _initial_mph_per_rpus;
-        _invert = _initial_invert;
-        _zerovalue = _initial_zerovalue;
-        set_human_limits(_min_mph, _initial_redline_mph);
+        set_human_limits(_min_mph, _redline_mph);
         set_native_limits(0.0, _stop_timeout_us);
         set_human(_initial_mph);
         set_can_source(src::PIN, true);
@@ -990,8 +961,8 @@ class Speedometer : public PulseSensor<float> {
         printf("%s..\n", this->_long_name.c_str());
         PulseSensor::setup();
     }
-    String _long_name = "Speedometer";
-    String _short_name = "speedo";
+    std::string _long_name = "Speedometer";
+    std::string _short_name = "speedo";
     // Query/getter functions
     float mph() { return _human.val(); }
     // bool car_stopped() { return stopped(); }
@@ -1032,8 +1003,8 @@ class ServoPWM : public Transducer<NATIVE_T, HUMAN_T> {
         // _servo.attach(this->_pin, this->_native.abs_min(), this->_native.abs_max());
     }
     ServoPWM() = delete;
-    String _long_name = "Unknown PWM motor output";
-    String _short_name = "pwmout";
+    std::string _long_name = "Unknown PWM motor output";
+    std::string _short_name = "pwmout";
 
     void setup() {
         set_pin(this->_pin, OUTPUT);
@@ -1136,28 +1107,22 @@ class Simulator {
         // Update the simulation status
         _enabled = enableSimulation;
     }
-
     // turn on the simulator. all components which are set to be simulated will switch to simulated input
     void enable() {
         updateSimulationStatus(true);
     }
-
     // turn off the simulator. all devices will be set to their default input (if they are not being mapped from the pot)
     void disable() {
         updateSimulationStatus(false);
     }
-
     void toggle() {
         return _enabled ? disable() : enable();
     }
-
     // check if a componenet is currently being simulated (by either the touchscreen or the pot)
     bool simulating() { return _enabled; }  // equivalent to enabled()  // Maybe include || potmapping() too ?
-
     bool simulating(sens arg_sensor) {
         return can_sim(arg_sensor) && (_enabled || _potmap == arg_sensor);
     }
-
     // associate a Device and a given fall-back source with a sensor
     void register_device(sens arg_sensor, Device &d, src default_mode) {
         bool can_sim = false; // by default, disable simulation for this component
@@ -1177,7 +1142,6 @@ class Simulator {
         }
         _devices[arg_sensor] = simulable_t(can_sim, &d, default_mode); // store info for this component
     }
-
     // check if a component can be simulated (by either the touchscreen or the pot)
     bool can_sim(sens arg_sensor) {
         auto kv = _devices.find(arg_sensor); // look for the component
@@ -1217,7 +1181,6 @@ class Simulator {
             _devices[arg_sensor] = simulable_t(can_sim, nullptr, src::UNDEF); // add a new entry with the simulatability status for this component
         }
     }
-
     // set the component to be overridden by the pot (the pot can only override one component at a time)
     void set_potmap(sens arg_sensor) {
         if (arg_sensor != _potmap) { // if we're mapping to a different component, we need to reset the input source for the old one
@@ -1252,7 +1215,6 @@ class Simulator {
         }
     }
     void set_potmap(int32_t arg_sensor) { set_potmap(static_cast<sens>(arg_sensor)); }
-
     // Getter functions
     bool potmapping(sens s) { return can_sim(s) && _potmap == s; }  // query if a certain sensor is being potmapped
     bool potmapping(int32_t s) { return can_sim(static_cast<sens>(s)) && (_potmap == static_cast<sens>(s)); }  // query if a certain sensor is being potmapped        

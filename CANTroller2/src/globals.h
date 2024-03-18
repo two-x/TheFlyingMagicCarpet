@@ -155,7 +155,8 @@ uint codemode = Booting;
 uint codemode_postmortem;
 bool running_on_devboard = false;       // will overwrite with value read thru pull resistor on tx pin at boot
 bool shutdown_incomplete = true;        // minor state variable for shutdown mode - Shutdown mode has not completed its work and can't yet stop activity
-bool parking = false;           // indicates we should release the brake & gas so the pedals can be used manually without interference
+bool parking = false;                   // indicates in process of parking the brake & gas motors so the pedals can be used manually without interference
+bool releasing = false;                 // indicates in process of releasing the brake to the zero brake point
 bool cruise_adjusting = false;
 bool cal_brakemode = false;             // allows direct control of brake motor using controller vert
 bool cal_brakemode_request = false;             // allows direct control of brake motor using controller vert

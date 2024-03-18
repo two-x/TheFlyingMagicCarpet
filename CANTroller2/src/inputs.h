@@ -80,83 +80,83 @@ class MomentaryButton {
     }
 };
 class Encoder {
-    private:
-        enum _inputs { ENC_A, ENC_B };
+  private:
+    enum _inputs { ENC_A, ENC_B };
 
-        // class vars
-        //  ---- tunable ----
-        // TODO: these are all currently private const, if we ever actually want to tune them live we would need to change this
-        static const uint32_t _spinrate_min_us = 2500;  // Will reject spins faster than this as an attempt to debounce behavior
-        static const uint32_t _accel_thresh_us = 60000;  // Spins faster than this will be accelerated
-        static const int32_t _accel_max = 15;  // Maximum acceleration factor
+    // class vars
+    //  ---- tunable ----
+    // TODO: these are all currently private const, if we ever actually want to tune them live we would need to change this
+    static const uint32_t _spinrate_min_us = 2500;  // Will reject spins faster than this as an attempt to debounce behavior
+    static const uint32_t _accel_thresh_us = 60000;  // Spins faster than this will be accelerated
+    static const int32_t _accel_max = 15;  // Maximum acceleration factor
 
-        // instance vars
-        volatile uint32_t _spinrate_isr_us = 100000;  // Time elapsed between last two detents
-        volatile int32_t _bounce_danger = ENC_B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
-        volatile int32_t _delta = 0;  // Keeps track of un-handled rotary clicks of the encoder.  Positive for CW clicks, Negative for CCW. 
-        int _a_pin, _b_pin, _sw_pin;
-        int32_t _state = 0;
-        uint32_t _spinrate_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
-        Timer _spinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
-        //  ---- tunable ----
+    // instance vars
+    volatile uint32_t _spinrate_isr_us = 100000;  // Time elapsed between last two detents
+    volatile int32_t _bounce_danger = ENC_B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
+    volatile int32_t _delta = 0;  // Keeps track of un-handled rotary clicks of the encoder.  Positive for CW clicks, Negative for CCW. 
+    int _a_pin, _b_pin, _sw_pin;
+    int32_t _state = 0;
+    uint32_t _spinrate_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
+    Timer _spinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
+    //  ---- tunable ----
 
-        void IRAM_ATTR _a_isr() {
-            if (_bounce_danger != Encoder::ENC_A) {
-                if (!enc_a) {
-                    _spinrate_isr_us = _spinspeedTimer.elapsed();
-                    _spinspeedTimer.reset();
-                    // _spinrate_isr_us = _spinspeedTimer.elapset();
-                    enc_b = digitalRead(_b_pin);
-                    _delta += enc_b ? -1 : 1;
+    void IRAM_ATTR _a_isr() {
+        if (_bounce_danger != Encoder::ENC_A) {
+            if (!enc_a) {
+                _spinrate_isr_us = _spinspeedTimer.elapsed();
+                _spinspeedTimer.reset();
+                // _spinrate_isr_us = _spinspeedTimer.elapset();
+                enc_b = digitalRead(_b_pin);
+                _delta += enc_b ? -1 : 1;
+            }
+            _bounce_danger = Encoder::ENC_A;
+        }
+    }
+
+    void IRAM_ATTR _b_isr() {
+        if (_bounce_danger != Encoder::ENC_B) {
+            enc_a = digitalRead(_a_pin);
+            _bounce_danger = Encoder::ENC_B;
+        }
+    }
+
+  public:
+    MomentaryButton button;
+    bool enc_a = 1;  // if initializing to 0 sets us up right after a reboot with a bit of a hair trigger which turns left at the slightest touch
+    bool enc_b;
+    Encoder(int a, int b, int sw) : _a_pin(a), _b_pin(b), _sw_pin(sw) {
+        button.setup(_sw_pin);
+    }
+    Encoder() = delete; // must be instantiated with pins
+    
+    void setup() {
+        printf("Encoder setup..\n");
+        set_pin(_a_pin, INPUT_PULLUP);
+        set_pin(_b_pin, INPUT_PULLUP);
+        button.setup();
+        // set_pin(_sw_pin, INPUT_PULLUP);  // The esp32 pullup is too weak. Use resistor
+        attachInterrupt(digitalPinToInterrupt(_a_pin), [this]{ _a_isr(); }, CHANGE); \
+        attachInterrupt(digitalPinToInterrupt(_b_pin), [this]{ _b_isr(); }, CHANGE);
+    }
+    void update() {
+        button.update();
+    }
+    int32_t rotation(bool accel = false) {  // Returns detents spun since last call, accelerated by spin rate or not
+        int32_t d = 0;
+        if (_delta) {  // Now handle any new rotations
+            kick_inactivity_timer(2);  // evidence of user activity
+            if (_spinrate_isr_us >= _spinrate_min_us) {  // Reject clicks coming in too fast as bounces
+                if (accel) {
+                    _spinrate_us = constrain (_spinrate_isr_us, _spinrate_min_us, _accel_thresh_us);
+                    _spinrate_us = map (_spinrate_us, _spinrate_min_us, _accel_thresh_us, _accel_max, 1);  // if turning faster than 100ms/det, proportionally accelerate the effect of each detent by up to 50x. encoder_temp variable repurposed here to hold # of edits per detent turned
+                    d = _delta * _spinrate_us;  // If a tunable value is being edited, turning the encoder changes the value
                 }
-                _bounce_danger = Encoder::ENC_A;
+                else d = constrain (_delta, -1, 1);  // Only change one at a time when selecting or turning pages
             }
+            _delta = 0;  // Our responsibility to reset this flag after handling events
         }
-
-        void IRAM_ATTR _b_isr() {
-            if (_bounce_danger != Encoder::ENC_B) {
-                enc_a = digitalRead(_a_pin);
-                _bounce_danger = Encoder::ENC_B;
-            }
-        }
-
-    public:
-        MomentaryButton button;
-        bool enc_a = 1;  // if initializing to 0 sets us up right after a reboot with a bit of a hair trigger which turns left at the slightest touch
-        bool enc_b;
-        Encoder(int a, int b, int sw) : _a_pin(a), _b_pin(b), _sw_pin(sw) {
-            button.setup(_sw_pin);
-        }
-        Encoder() = delete; // must be instantiated with pins
-        
-        void setup() {
-            printf("Encoder setup..\n");
-            set_pin(_a_pin, INPUT_PULLUP);
-            set_pin(_b_pin, INPUT_PULLUP);
-            button.setup();
-            // set_pin(_sw_pin, INPUT_PULLUP);  // The esp32 pullup is too weak. Use resistor
-            attachInterrupt(digitalPinToInterrupt(_a_pin), [this]{ _a_isr(); }, CHANGE); \
-            attachInterrupt(digitalPinToInterrupt(_b_pin), [this]{ _b_isr(); }, CHANGE);
-        }
-        void update() {
-            button.update();
-        }
-        int32_t rotation(bool accel = false) {  // Returns detents spun since last call, accelerated by spin rate or not
-            int32_t d = 0;
-            if (_delta) {  // Now handle any new rotations
-                kick_inactivity_timer(2);  // evidence of user activity
-                if (_spinrate_isr_us >= _spinrate_min_us) {  // Reject clicks coming in too fast as bounces
-                    if (accel) {
-                        _spinrate_us = constrain (_spinrate_isr_us, _spinrate_min_us, _accel_thresh_us);
-                        _spinrate_us = map (_spinrate_us, _spinrate_min_us, _accel_thresh_us, _accel_max, 1);  // if turning faster than 100ms/det, proportionally accelerate the effect of each detent by up to 50x. encoder_temp variable repurposed here to hold # of edits per detent turned
-                        d = _delta * _spinrate_us;  // If a tunable value is being edited, turning the encoder changes the value
-                    }
-                    else d = constrain (_delta, -1, 1);  // Only change one at a time when selecting or turning pages
-                }
-                _delta = 0;  // Our responsibility to reset this flag after handling events
-            }
-            return d;
-        }
+        return d;
+    }
 };
 #define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
@@ -175,19 +175,18 @@ class Touchscreen {
     int tedit_exponent = 0;
     float tedit = (float)(1 << tedit_exponent);
     int touch_fudge = 0;
-    int tedit_exponent_max = 8;
+    int tedit_exponent_max = 6;
     int tlast_x, tlast_y;
     Timer touchHoldTimer{550000};  // Hold this long to count as a long press
-    Timer touchAccelTimer{380000};
+    Timer touchAccelTimer{400000};
     Timer touchDoublePressTimer{40000};  // Won't allow a new press within this long after an old press (prevent accidental double clicks)
     Timer touchSenseTimer{15000};  // touch chip can't respond faster than some time period
-    // debug printing
     bool touchPrintEnabled = true;
     unsigned long lastTouchPrintTime = 0;
     const unsigned long touchPrintInterval = 500; // Adjust this interval as needed (in milliseconds)
     enum touch_axis : int { xx, yy, zz };
     enum touch_lim : int { tsmin, tsmax };
-    int trow, tcol, disp_size[2], touch_read[3], tft_touch[2], landed[2];  // landed are the initial coordinates of a touch event, unaffected by dragging
+    int trow, tcol, disp_size[2], touch_read[3], tft_touch[2], landed[2];  // landed are the initial coordinates of a touch event, unaffected by subsequent dragging
     uint16_t tquad;  // imagine screen divided into rows and columns as touch buttons. First byte encodes row, 2nd byte is column 
     // uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     // lcd.setTouch(touch_cal_data);
@@ -202,7 +201,6 @@ class Touchscreen {
         disp_size[HORZ] = width;
         disp_size[VERT] = height;
         captouch = (i2c->detected(i2c_touch));
-        // _tft->touch_init();  // this points touch object to resistive or capacitive driver instance based on captouch
         Serial.printf("Touchscreen.. %s panel\n", (captouch) ? "detected captouch" : "using resistive");
     }
     bool touched() { return nowtouch; }
@@ -264,9 +262,7 @@ class Touchscreen {
         tquad = (constrain((landed[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, 5) << 4) | constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
         // Serial.printf("n%dl%dv%d q%02x tx:%3d ty:%3d e%d x%d\r", nowtouch, lasttouch, landed_coordinates_valid, tquad, tft_touch[0], tft_touch[1], tedit, (int)tedit_exponent);
         // std::cout << "n" << nowtouch << " e" << tedit << " x" << tedit_exponent << "\r";
-        if (tquad == 0x00 && ontouch()) {
-            increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
-        }
+        if (tquad == 0x00 && ontouch()) increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
         else if (tquad == 0x01) {  // Long touch to enter/exit editing mode, if in editing mode, press to change the selection of the item to edit
             if (tunctrl == OFF) {
                 sel_val = 0;  // If entering select mode from off mode, select the first variable
@@ -289,44 +285,23 @@ class Touchscreen {
             if (tunctrl == SELECT) tunctrl = EDIT;  // If just entering edit mode, don't change the value yet
             else if (tunctrl == EDIT) idelta = (int)(-tedit);  // If in edit mode, decrease the value
         }
-        else if (tquad == 0x04) {  // Pressed the simulation mode toggle. Needs long-press
-            if (longpress()) sim.toggle();
-        }
-        else if (sim.enabled()) {
-            if (longpress()) {
-                if (tquad == 0x20) calmode_request = true;
-                else if (tquad == 0x40) ignition_request = REQ_TOG;
-                else if (tquad == 0x50) sleep_request = REQ_TOG;  // sleep requests are handled by shutdown or asleep mode, otherwise will be ignored
-            }
-            else if (tquad == 0x30 && sim.can_sim(sens::basicsw) && ontouch()) basicmodesw = !basicmodesw;
-            else if (tquad == 0x31 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(tedit); // (+= 25) Pressed the increase brake pressure button
-            else if (tquad == 0x32 && sim.can_sim(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(-tedit); // (-= 25) Pressed the decrease brake pressure button
-            else if (tquad == 0x33 && sim.can_sim(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_human(tedit); // (-= 25) Pressed the decrease brake pressure button
-            else if (tquad == 0x34 && sim.can_sim(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_human(-tedit); // (-= 25) Pressed the decrease brake pressure button
-            else if (tquad == 0x41 && sim.can_sim(sens::tach) && tach.source() == src::TOUCH) tach.add_human(tedit);
-            else if (tquad == 0x42 && sim.can_sim(sens::tach) && tach.source() == src::TOUCH) tach.add_human(-tedit);
-            else if (tquad == 0x43 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-            else if (tquad == 0x44 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], -tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-            else if (tquad == 0x51 && sim.can_sim(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human(tedit);
-            else if (tquad == 0x52 && sim.can_sim(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human(-tedit);
-            else if (tquad == 0x53 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
-            else if (tquad == 0x54 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], -tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
-
-            // my touchable() function doesn't work, but here's what I was hoping to be able to do:
-            // else if (tquad == 0x30 && sim.can_sim(sens::basicsw) && ontouch()) basicmodesw = !basicmodesw;
-            // else if (tquad == 0x31 && sim.touchable(sens::pressure)) pressure.add_human(tedit); // (+= 25) Pressed the increase brake pressure button
-            // else if (tquad == 0x32 && sim.touchable(sens::pressure)) pressure.add_human(-tedit); // (-= 25) Pressed the decrease brake pressure button
-            // else if (tquad == 0x33 && sim.touchable(sens::brkpos)) brkpos.add_human(tedit); // (-= 25) Pressed the decrease brake pressure button
-            // else if (tquad == 0x34 && sim.touchable(sens::brkpos)) brkpos.add_human(-tedit); // (-= 25) Pressed the decrease brake pressure button
-            // else if (tquad == 0x41 && sim.touchable(sens::tach)) tach.add_human(tedit);
-            // else if (tquad == 0x42 && sim.touchable(sens::tach)) tach.add_human(-tedit);
-            // else if (tquad == 0x43 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-            // else if (tquad == 0x44 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], -tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-            // else if (tquad == 0x51 && sim.touchable(sens::speedo)) speedo.add_human(tedit);
-            // else if (tquad == 0x52 && sim.touchable(sens::speedo)) speedo.add_human(-tedit);
-            // else if (tquad == 0x53 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
-            // else if (tquad == 0x54 && sim.can_sim(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], -tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);   
-        }
+        else if (tquad == 0x04 && longpress()) sim.toggle();  // Pressed the simulation mode toggle. Needs long-press
+        else if (tquad == 0x20 && sim.enabled() && longpress()) calmode_request = true;
+        else if (tquad == 0x40 && sim.enabled() && longpress()) ignition_request = REQ_TOG;
+        else if (tquad == 0x50 && sim.enabled() && longpress()) sleep_request = REQ_TOG;  // sleep requests are handled by shutdown or asleep mode, otherwise will be ignored
+        else if (tquad == 0x30 && sim.simulating(sens::basicsw) && ontouch()) basicmodesw = !basicmodesw;
+        else if (tquad == 0x31 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(tedit); // (+= 25) Pressed the increase brake pressure button
+        else if (tquad == 0x32 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(-tedit); // (-= 25) Pressed the decrease brake pressure button
+        else if (tquad == 0x33 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_human(tedit); // (-= 25) Pressed the decrease brake pressure button
+        else if (tquad == 0x34 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_human(-tedit); // (-= 25) Pressed the decrease brake pressure button
+        else if (tquad == 0x41 && sim.simulating(sens::tach) && tach.source() == src::TOUCH) tach.add_human(tedit);
+        else if (tquad == 0x42 && sim.simulating(sens::tach) && tach.source() == src::TOUCH) tach.add_human(-tedit);
+        else if (tquad == 0x43 && sim.simulating(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+        else if (tquad == 0x44 && sim.simulating(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], -tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+        else if (tquad == 0x51 && sim.simulating(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human(tedit);
+        else if (tquad == 0x52 && sim.simulating(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_human(-tedit);
+        else if (tquad == 0x53 && sim.simulating(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+        else if (tquad == 0x54 && sim.simulating(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], -tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
     }
     void enableTouchPrint(bool enable) {
         touchPrintEnabled = enable;
@@ -334,8 +309,7 @@ class Touchscreen {
     void printTouchInfo() {
         if (touchPrintEnabled && touched()) {
             unsigned long currentTime = millis();
-            if (currentTime - lastTouchPrintTime >= touchPrintInterval) {}
-            // Serial.printf("Touch %sdetected", (read_touch()) ? "" : "not ");
+            if (currentTime - lastTouchPrintTime >= touchPrintInterval) {}  // Serial.printf("Touch %sdetected", (read_touch()) ? "" : "not ");
             if (nowtouch) Serial.printf(" x:%d y:%d\n", tft_touch[xx], tft_touch[yy]);
             else Serial.printf("\n");                // If available, you can print touch pressure as well (for capacitive touch)
             lastTouchPrintTime = currentTime;
