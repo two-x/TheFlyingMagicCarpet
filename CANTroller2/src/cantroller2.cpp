@@ -54,7 +54,7 @@ void setup() {
 }
 void loop() {
     watchdog.pet();           // pet the watchdog regularly to prevent reset
-    ignition_panic_update();  // manage panic stop condition and drive ignition signal as needed
+    ignition_panic_update(run.mode);  // manage panic stop condition and drive ignition signal as needed
     bootbutton.update();      // read the builtin button
     if (bootbutton.longpress()) screen.auto_saver(!auto_saver_enabled);
     if (bootbutton.shortpress()) {

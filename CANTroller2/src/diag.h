@@ -131,9 +131,9 @@ class DiagRuntime {
             err_sens[RANGE][_BrakeMotor] = (brake->pc[OUT] < brake->pc[OPMIN] || brake->pc[OUT] > brake->pc[OPMAX]);
             err_sens[RANGE][_GasServo] = (gas->pc[OUT] < gas->pc[OPMIN] || gas->pc[OUT] > gas->pc[OPMAX]);
             err_sens[RANGE][_BrakeMotor] = (steer->pc[OUT] < steer->pc[OPMIN] || steer->pc[OUT] > steer->pc[OPMAX]);
-            err_sens[RANGE][_BrakePosn] = (brkpos->in() < brkpos->op_min_in() || brkpos->in() > brkpos->op_max_in());
+            err_sens[RANGE][_BrakePosn] = (brkpos->in() < brkpos->op_min() || brkpos->in() > brkpos->op_max());
             err_sens[LOST][_BrakePosn] = (brkpos->raw() < err_margin_adc);
-            err_sens[RANGE][_BrakePres] = (pressure->psi() < pressure->op_min_psi() || pressure->psi() > pressure->op_max_psi());
+            err_sens[RANGE][_BrakePres] = (pressure->psi() < pressure->op_min() || pressure->psi() > pressure->op_max());
             err_sens[LOST][_BrakePres] = (pressure->raw() < err_margin_adc);
             err_sens[RANGE][_MuleBatt] = (mulebatt->v() < mulebatt->op_min_v() || mulebatt->v() > mulebatt->op_max_v());
             for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors

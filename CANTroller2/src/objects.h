@@ -158,12 +158,12 @@ void starter_update () {  // starter bidirectional handler logic.  Outside code 
         starter_request = REQ_NA;  // cancel the starter on request, we can't drive the starter cuz the car might lurch forward
     }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
 }
-void ignition_panic_update() {  // Run once each main loop
+void ignition_panic_update(int runmode) {  // Run once each main loop
     if (panicstop_request == REQ_TOG) panicstop_request = !panicstop;
     if (ignition_request == REQ_TOG) ignition_request = !ignition;
     // else if (ignition_request == ignition) ignition_request = REQ_NA;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
     if (speedo.car_stopped() || panicTimer.expired()) panicstop_request = REQ_OFF;  // Cancel panic stop if car is stopped
-    if (!speedo.car_stopped()) {
+    if (!speedo.car_stopped() && (runmode == FLY || runmode == CRUISE || runmode == HOLD)) {
         if (ignition && ignition_request == REQ_OFF) panicstop_request = REQ_ON;  // ignition cut causes panic stop
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) panicstop_request = REQ_ON;
     }

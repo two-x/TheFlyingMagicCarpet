@@ -803,12 +803,10 @@ class BrakeMotor : public JagMotor {
         }
         motormode = _mode;
     }
-    bool parked() {
-        return (brkpos->filt() >= brkpos->parkpos() - brkpos->margin());  // return (std::abs(pc[OUT] - parkpos_pc) <= pc[MARGIN]);  // return (std::abs(brkpos->filt() - brkpos->parkpos()) <= brkpos->margin());   // (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
-    }
-    bool released() {
-        return (brkpos->filt() >= brkpos->zeropoint() - brkpos->margin());  // return (std::abs(pc[OUT] - zeropoint_pc) <= pc[MARGIN]);  // return (std::abs(brkpos->filt() - brkpos->zeropoint()) <= brkpos->margin());   // (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
-    }
+    bool parked() { return brkpos->parked(); }  // return (brkpos->filt() >= brkpos->parkpos() - brkpos->margin());  // return (std::abs(pc[OUT] - parkpos_pc) <= pc[MARGIN]);  // return (std::abs(brkpos->filt() - brkpos->parkpos()) <= brkpos->margin());   // (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
+    bool released() { return brkpos->released(); }  // return (brkpos->filt() >= brkpos->zeropoint() - brkpos->margin());  // return (std::abs(pc[OUT] - zeropoint_pc) <= pc[MARGIN]);  // return (std::abs(brkpos->filt() - brkpos->zeropoint()) <= brkpos->margin());   // (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
+    float sensmin() { return (dominantpid == PressurePID) ? pressure->op_min() : brkpos->op_min(); }
+    float sensmax() { return (dominantpid == PressurePID) ? pressure->op_max() : brkpos->op_max(); }    
     void update() {
         // Brakes - Determine motor output and write it to motor
         if (volt_check_timer.expireset()) derive();

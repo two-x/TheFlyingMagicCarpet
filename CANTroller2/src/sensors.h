@@ -768,8 +768,8 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     float psi() { return _human.val(); }
     float min_psi() { return _human.min(); }
     float max_psi() { return _human.max(); }
-    float op_min_psi() { return from_native(op_min_adc); }
-    float op_max_psi() { return from_native(op_max_adc); }
+    float op_min() { return from_native(op_min_adc); }
+    float op_max() { return from_native(op_max_adc); }
 };
 // BrakePositionSensor represents a linear position sensor
 // for measuring brake position (TODO which position? pad? pedal?)
@@ -814,8 +814,8 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     float in() { return _human.val(); }
     float min_in() { return _human.min(); }
     float max_in() { return _human.max(); }
-    float op_min_in() { return op_min_retract_in; }
-    float op_max_in() { return op_max_extend_in; }
+    float op_min() { return op_min_retract_in; }
+    float op_max() { return op_max_extend_in; }
     // float absmin_in() { return abs_min_retract_in; }
     // float absmax_in() { return abs_max_extend_in; }
     float parkpos() { return _parkpos; }

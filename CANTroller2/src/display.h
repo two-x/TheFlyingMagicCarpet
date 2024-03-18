@@ -38,8 +38,8 @@ class IdiotLights {
     bool* vals[iconcount] = {
         &diag.err_sens_alarm[LOST], &diag.err_sens_alarm[RANGE], &diag.temp_err[ENGINE], &diag.temp_err[WHEEL], &panicstop, 
         hotrc.radiolost_ptr(), &shutdown_incomplete, &parking, &brake.posn_pid_active, &autostopping, &autoholding,
-        &cruise_adjusting, &car_hasnt_moved, &starter_req_on_bool, &starter, &bootbutton.now, 
-        sim.enabled_ptr(), &running_on_devboard, &powering_up, &web_disabled, &nowtouch, &encoder.enc_a,
+        &cruise_adjusting, &car_hasnt_moved, &starter_req_on_bool, &starter, &powering_up, &web_disabled, 
+        &bootbutton.now, &nowtouch, &encoder.enc_a, sim.enabled_ptr(), &running_on_devboard, 
         &(sensidiots[0]), &(sensidiots[1]), &(sensidiots[2]), &(sensidiots[3]), &(sensidiots[4]), 
         &(sensidiots[5]), &(sensidiots[6]), &(sensidiots[7]), &(sensidiots[8]), &(sensidiots[9]), &(sensidiots[10]),
     };
@@ -59,13 +59,13 @@ class IdiotLights {
         { 0x1d, 0x23, 0x47, 0x00, 0x3e, 0x63, 0x55, 0x49, 0x55, 0x63, 0x3e, },  // 12 = rotation arrow w/ X wheel
         { 0x3f, 0x0d, 0x36, 0x00, 0x3f, 0x2d, 0x21, 0x00, 0x1e, 0x21, 0x5e, },  // 13 = "REQ"
         { 0x3e, 0x41, 0x7f, 0x7b, 0x7b, 0x7b, 0x3e, 0x1c, 0x7f, 0x55, 0x7f, },  // 14 = motor w/ spur gear
-        { 0x01, 0x7f, 0x7f, 0x7f, 0x3f, 0x38, 0x74, 0x70, 0x70, 0x70, 0x60, },  // 15 = boot
-        { 0x6e, 0x6b, 0x3b, 0x00, 0x7f, 0x00, 0x7f, 0x06, 0x1c, 0x06, 0x7f, },  // 16 = "SIM"
-        { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, },  // 17 = "DEV"
-        { 0x00, 0x3e, 0x63, 0x41, 0x40, 0x4f, 0x40, 0x41, 0x63, 0x3e, 0x00, },  // 18 = power symbol
-        { 0x36, 0x1c, 0x36, 0x00, 0x22, 0x1c, 0x00, 0x22, 0x1c, 0x41, 0x3e, },  // 19 = wifi symbol w/ X
-        { 0x78, 0x7c, 0x7f, 0x7f, 0x7c, 0x7c, 0x1c, 0x0c, 0x0c, 0x0c, 0x0c, },  // 20 = finger
-        { 0x0e, 0x1d, 0x7d, 0x1d, 0x0e, 0x00, 0x7e, 0x0b, 0x09, 0x0b, 0x7e, },  // 21 = encoder "A"
+        { 0x00, 0x3e, 0x63, 0x41, 0x40, 0x4f, 0x40, 0x41, 0x63, 0x3e, 0x00, },  // 15 = power symbol
+        { 0x36, 0x1c, 0x36, 0x00, 0x22, 0x1c, 0x00, 0x22, 0x1c, 0x41, 0x3e, },  // 16 = wifi symbol w/ X
+        { 0x01, 0x7f, 0x7f, 0x7f, 0x3f, 0x38, 0x74, 0x70, 0x70, 0x70, 0x60, },  // 17 = boot
+        { 0x78, 0x7c, 0x7f, 0x7f, 0x7c, 0x7c, 0x1c, 0x0c, 0x0c, 0x0c, 0x0c, },  // 18 = finger
+        { 0x0e, 0x1d, 0x7d, 0x1d, 0x0e, 0x00, 0x7e, 0x0b, 0x09, 0x0b, 0x7e, },  // 19 = encoder "A"
+        { 0x6e, 0x6b, 0x3b, 0x00, 0x7f, 0x00, 0x7f, 0x06, 0x1c, 0x06, 0x7f, },  // 20 = "SIM"
+        { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, },  // 21 = "DEV"
         { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // sensors
         { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // sensors
         { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },  // sensors
@@ -83,9 +83,8 @@ class IdiotLights {
      // { 0x3e, 0x41, 0x1c, 0x22, 0x08, 0x7c, 0x08, 0x22, 0x1c, 0x41, 0x3e, },  // 21 = X w/ waves
      // { 0x63, 0x36, 0x1c, 0x36, 0x63, 0x14, 0x08, 0x22, 0x1c, 0x41, 0x3e, },  // 21 = wifi symbol w/ X
     std::string letters[iconcount] = {
-        "SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "AS", "Aj", "HM",
-        "St", "BB", "Sm", "DB", "PU", "BP", "eA", "eB", "NT",
-        "An", "ww",
+        "SL", "SR", "\xf7""E", "\xf7""W", "P\x13", "RC", "SI", "Pk", "BP", "AS", "AH",
+        "Aj", "HM", "Rq", "St", "PU", "Wi", "BB", "NT", "eA", "Sm", "Dv", 
         "Th", "Br", "St", "RC", "Sp", "Tc", "Pr", "Ps", "Tm", "Ot", "IO",
     };
     uint8_t color[2][iconcount] = {
@@ -162,7 +161,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { "PressRaw", "BkPosRaw", __________, __________, __________, "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
-    { brAk"Targ", "Pn|PrErr", "  P Term", "  I Term", "  D Term", brAk"Posn", "OutRatio", "MotrDuty", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
+    { brAk"Posn", brAk"Mode", "Pn|PrErr", "BrakeTgt", "HybrdTgt", "TgtRatio", "OutRatio", "MotrDuty", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", __________, __________, "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", " Touch X", " Touch Y", "  Uptime", "Webservr", "No Temps", },  // PG_TEMP
@@ -175,7 +174,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "adc ", "adc ", ______, ______, ______, "mph ", "atm ", "atm ", "mph ", "mph ", "in  ", },  // PG_SENS
     { degree, "us  ", "V   ", "us  ", "V   ", "us  ", ______, degree, degree, "us  ", "%   ", },  // PG_PWMS
     { scroll, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", degreF, degreF, "rpms", scroll, },  // PG_IDLE
-    { "%   ", "psin", "%   ", "%   ", "%   ", "in  ", "%   ", "%   ", ______, "Hz  ", "s   ", },  // PG_BPID
+    { "in  ", scroll, "psin", "psin", "%   ", "%   ", "%   ", "%   ", ______, "Hz  ", "s   ", },  // PG_BPID
     { "rpm ", "rpm ", "%   ", "%   ", "%   ", "%   ", ______, ______, ______, "Hz  ", "s   ", },  // PG_GPID
     { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%/s ", ______, "Hz  ", "s   ", },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, "pix ", "pix ", "min ", b1nary, b1nary, },  // PG_TEMP
@@ -808,15 +807,15 @@ class Display {
                 draw_dynamic(7, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
                 draw_dynamic(8, steer.pc[OUT], steer.pc[OPMIN], steer.pc[OPMAX]);
                 if (datapage == PG_RUN) {
-                    draw_dynamic(9, brkpos.filt(), brkpos.op_min_in(), brkpos.op_max_in());
+                    draw_dynamic(9, brkpos.filt(), brkpos.op_min(), brkpos.op_max());
                     draw_dynamic(10, mulebatt.filt(), mulebatt.op_min_v(), mulebatt.op_max_v());
                     draw_dynamic(11, pot.val(), pot.min(), pot.max());
                     draw_dynamic(12, airvelo.human(), airvelo.min_mph(), airvelo.max_mph());
                     draw_dynamic(13, mapsens.human(), mapsens.min_atm(), mapsens.max_atm());
                     draw_dynamic(14, maf_gps, maf_min_gps, maf_max_gps);
-                    draw_asciiname(15, motormodecard[(gas.motormode == NA) ? NumMotorModes : gas.motormode]);
-                    draw_asciiname(16, motormodecard[(brake.motormode == NA) ? NumMotorModes : brake.motormode]);
-                    draw_asciiname(17, motormodecard[(steer.motormode == NA) ? NumMotorModes : steer.motormode]);
+                    draw_asciiname(15, motormodecard[gas.motormode]);
+                    draw_asciiname(16, motormodecard[brake.motormode]);
+                    draw_asciiname(17, motormodecard[steer.motormode]);
                     draw_dynamic(18, gas.governor, 0.0, 100.0);
                     draw_dynamic(19, steer.steer_safe_pc, 0.0, 100.0);
                 }
@@ -870,17 +869,21 @@ class Display {
                 }
                 else if (datapage == PG_BPID) {
                     drange = brake.us[ABSMIN]-brake.us[ABSMAX];
-                    draw_dynamic(9, brake.pid_dom->target(), 0.0, 100.0);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
-                    draw_dynamic(10, brake.pid_dom->err(), brake.pid_dom->outmin(), brake.pid_dom->outmax());
-                    draw_dynamic(11, brake.pid_dom->pterm(), -drange, drange);
-                    draw_dynamic(12, brake.pid_dom->iterm(), -drange, drange);
-                    draw_dynamic(13, brake.pid_dom->dterm(), -drange, drange);
-                    draw_dynamic(14, brkpos.filt(), brkpos.op_min_in(), brkpos.op_max_in(), brake.pids[PositionPID].target());
+                    draw_dynamic(9, brkpos.filt(), brkpos.op_min(), brkpos.op_max(), brake.pids[PositionPID].target());
+                    draw_asciiname(10, motormodecard[brake.motormode]);
+                    draw_dynamic(11, brake.pid_dom->err(), -brake.sensmax(), brake.sensmax());
+                    draw_dynamic(12, brake.pid_dom->target(), brake.sensmin(), brake.sensmax());
+                    draw_dynamic(13, brake.pid_targ_pc, 0.0, 100.0);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
+                    draw_dynamic(14, brake.hybrid_targ_ratio_pc, 0.0, 100.0);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
                     draw_dynamic(15, brake.hybrid_out_ratio_pc, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
                     draw_dynamic(16, brake.duty_continuous, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
                     draw_dynamic(17, brake.pid_dom->kp(), 0.0, 8.0);
                     draw_dynamic(18, brake.pid_dom->ki(), 0.0, 8.0);
                     draw_dynamic(19, brake.pid_dom->kd(), 0.0, 8.0);
+                    // draw_dynamic(11, brake.pid_dom->pterm(), -drange, drange);
+                    // draw_dynamic(12, brake.pid_dom->iterm(), -drange, drange);
+                    // draw_dynamic(13, brake.pid_dom->dterm(), -drange, drange);
+
                 }
                 else if (datapage == PG_GPID) {
                     draw_dynamic(9, gas.pid.target(), 0.0, tach.redline_rpm());
@@ -944,7 +947,7 @@ class Display {
                 else if (datapage == PG_UI) {
                     draw_dynamic(9, (int32_t)loop_avg_us, looptimer.loop_scale_min_us, looptimer.loop_scale_avg_max_us);
                     draw_dynamic(10, looptimer.loop_peak_us, looptimer.loop_scale_min_us, looptimer.loop_scale_peak_max_us);
-                    draw_dynamic(11, (int32_t)looptimer.loopfreq_hz, 0.0, 2000.0);
+                    draw_dynamic(11, (int32_t)looptimer.loopfreq_hz, 0.0, 4000.0);
                     draw_dynamic(12, fps, 0.0, 600.0);
                     draw_dynamic(13, drawclock, 0, refresh_limit);
                     draw_dynamic(14, pushclock, 0, refresh_limit);
@@ -1116,7 +1119,7 @@ class Tuner {
                 else if (sel_val == 7) adj_val(mapsens.max_atm_ptr(), fdelta, mapsens.abs_min_atm(), mapsens.abs_max_atm());
                 else if (sel_val == 8) adj_val(speedo.idle_mph_ptr(), fdelta, 0, speedo.redline_mph() - 1);
                 else if (sel_val == 9) adj_val(speedo.redline_mph_ptr(), fdelta, speedo.idle_mph(), 20);
-                else if (sel_val == 10) adj_val(brkpos.zeropoint_ptr(), fdelta, brkpos.op_min_in(), brkpos.op_max_in());
+                else if (sel_val == 10) adj_val(brkpos.zeropoint_ptr(), fdelta, brkpos.op_min(), brkpos.op_max());
             }
             else if (datapage == PG_PWMS) {
                 if (sel_val == 7) { adj_val(&(gas.si[OPMIN]), fdelta, gas.si[PARKED] + 1, gas.si[OPMAX] - 1); gas.derive(); }
