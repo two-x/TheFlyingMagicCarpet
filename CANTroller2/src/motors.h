@@ -667,10 +667,10 @@ class BrakeMotor : public JagMotor {
         zeropoint_pc = map(brkpos->zeropoint(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0);
         panic_initial_pc = map(pressure->panic_initial_psi, pressure->min_human(), pressure->max_human(), 0.0, 100.0);
         hold_initial_pc = map(pressure->hold_initial_psi, pressure->min_human(), pressure->max_human(), 0.0, 100.0);
-        panic_increment_pc = map(pressure->panic_increment_psi, pressure->min_human(), pressure->max_human(), 0.0, 100.0);
-        hold_increment_pc = map(pressure->hold_increment_psi, pressure->min_human(), pressure->max_human(), 0.0, 100.0);
-        pc[MARGIN] = map(pressure->margin_psi, pressure->min_human(), pressure->max_human(), 0.0, 100.0);
-        hybrid_math_offset = 0.5 * (brake_pid_trans_threshold_lo + brake_pid_trans_threshold_hi);
+        panic_increment_pc = 100.0 * pressure->panic_increment_psi / (pressure->max_human() - pressure->min_human());
+        hold_increment_pc = 100.0 * pressure->hold_increment_psi / (pressure->max_human() - pressure->min_human());
+        pc[MARGIN] = 100.0 * pressure->margin_psi / (pressure->max_human() - pressure->min_human());
+        hybrid_math_offset = 0.5 * (brake_pid_trans_threshold_hi + brake_pid_trans_threshold_lo);
         hybrid_math_coeff = M_PI / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo);
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, IdleControl* _throttle) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
@@ -740,7 +740,7 @@ class BrakeMotor : public JagMotor {
     // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
     // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
     void set_output() { // services any requests for change in brake mode
-        autostopping = autoholding = false;
+        autostopping = autoholding = cal_brakemode = false;
         if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
             active_pids = HybridPID;
             set_pidtarg(std::max(hold_initial_pc, pid_dom->target()));  // Autohold always applies the brake somewhat, even if already stopped
@@ -817,12 +817,12 @@ class BrakeMotor : public JagMotor {
         }
         motormode = _mode;
     }
-    int parked() {
+    bool parked() {
         // return (std::abs(pc[OUT] - parkpos_pc) <= pc[MARGIN]);
         return (brkpos->human() >= brkpos->parkpos() - brkpos->margin());
         // return (std::abs(brkpos->filt() - brkpos->parkpos()) <= brkpos->margin());   // (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
     }
-    int released() {
+    bool released() {
         // return (std::abs(pc[OUT] - zeropoint_pc) <= pc[MARGIN]);
         return (brkpos->human() >= brkpos->zeropoint() - brkpos->margin());
         // return (std::abs(brkpos->filt() - brkpos->zeropoint()) <= brkpos->margin());   // (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
