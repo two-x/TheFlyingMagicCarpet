@@ -106,8 +106,8 @@ class Encoder {
                 _spinrate_isr_us = _spinspeedTimer.elapsed();
                 _spinspeedTimer.reset();
                 // _spinrate_isr_us = _spinspeedTimer.elapset();
-                enc_b = digitalRead(_b_pin);
-                _delta += enc_b ? -1 : 1;
+                enc_b = !digitalRead(_b_pin);
+                _delta += enc_b ? 1 : -1;
             }
             _bounce_danger = Encoder::ENC_A;
         }
@@ -115,15 +115,15 @@ class Encoder {
 
     void IRAM_ATTR _b_isr() {
         if (_bounce_danger != Encoder::ENC_B) {
-            enc_a = digitalRead(_a_pin);
+            enc_a = !digitalRead(_a_pin);
             _bounce_danger = Encoder::ENC_B;
         }
     }
 
   public:
     MomentaryButton button;
-    bool enc_a = 1;  // if initializing to 0 sets us up right after a reboot with a bit of a hair trigger which turns left at the slightest touch
-    bool enc_b;
+    bool enc_a = LOW;  // if initializing HIGH sets us up right after a reboot with a bit of a hair trigger which turns left at the slightest touch
+    bool enc_b = HIGH;
     Encoder(int a, int b, int sw) : _a_pin(a), _b_pin(b), _sw_pin(sw) {
         button.setup(_sw_pin);
     }

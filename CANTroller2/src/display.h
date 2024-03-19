@@ -1,9 +1,6 @@
 #pragma once
-#define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
-#define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
 #include "lgfx.h"
 #include "neopixel.h"
-// #include "touch.h"
 #include "inputs.h"
 #include "images.h"
 #include "animations.h"
@@ -407,9 +404,7 @@ class Display {
         std::uint32_t* s;
         for (int f=0; f<2; f++) {
             s = (std::uint32_t*)(*spr).getBuffer();
-            for (int w=0; w<(spr->width() * spr->height() / 4); w++) {
-                s[w] = 0x00000000;
-            }
+            for (int w=0; w<(spr->width() * spr->height() / 4); w++) s[w] = 0x00000000;
         }
     }
     void set_runmodecolors() {

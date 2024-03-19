@@ -1,6 +1,9 @@
 #pragma once
 #define LGFX_USE_V1
 #include <LovyanGFX.hpp>
+
+#define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
+#define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
 // Custom settings for ESP32 LovyanGFX library - all chinese commentary has been translated
 // The original setting is the same as the original setting, and the LGFX_Device is a derivative of the original creation.
 
@@ -53,12 +56,11 @@ class LGFX : public lgfx::LGFX_Device {
         }
         {  // Configure display panel control settings.
             auto cfg = _panel_instance.config();    // Gets the structure for display panel settings.
-            cfg.pin_cs   = tft_cs_pin;        //   CS pin number
-            // cfg.pin_cs           =    10;  // CS pin number   (-1 = disable)
+            cfg.pin_cs   = tft_cs_pin;        //   CS pin number  (-1 = disable)
             cfg.pin_rst      = tft_rst_pin;  // RST pin number  (-1 = disable)
             cfg.pin_busy         =    -1;  // BUSY pin number (-1 = disable)
-            cfg.panel_width      =   240;  // Actual displayable width, default = 240
-            cfg.panel_height     =   320;  // Actual display height, default = 320
+            cfg.panel_width      =   disp_height_pix;  // Actual displayable width, default = 240
+            cfg.panel_height     =   disp_width_pix;  // Actual display height, default = 320
             cfg.offset_rotation  =     8;  // Offset of value in rotation direction 0~7 (4~7 are upside down), default = 1
             cfg.rgb_order        = false;  // Set to true if the red and blue colors of the panel are swapped, default = false
             cfg.offset_x         =     0;  // Panel X direction offset amount
@@ -67,20 +69,20 @@ class LGFX : public lgfx::LGFX_Device {
             cfg.dummy_read_bits  =     1;  // Number of bits for dummy read before reading data other than pixels
             cfg.readable         =  true;  // Set to true if data reading is possible            
             cfg.invert      = (captouch || !running_on_devboard);  // Set to true if the brightness and darkness of the panel is reversed.
-            cfg.dlen_16bit       = false;  // Set to true for panels that transmit data length in 16-bit units using 16-bit parallel or SPI.
+            cfg.dlen_16bit       =  true;  // Set to true for panels that transmit data length in 16-bit units using 16-bit parallel or SPI.
             cfg.bus_shared       =  true;  // Set to true when sharing the bus with the SD card (control the bus using drawJpgFile, etc.)
             // Please set the following only if the display is misaligned with a variable pixel number driver such as ST7735 or ILI9163.
-            // cfg.memory_width  =   240;  // Maximum width supported by driver IC
-            // cfg.memory_height =   320;  // Maximum height supported by driver IC
+            // cfg.memory_width  =   disp_height_pix;  // Maximum width supported by driver IC
+            // cfg.memory_height =   disp_width_pix;  // Maximum height supported by driver IC
             _panel_instance.config(cfg);
         }
         if (captouch) {  // Configure touch screen control settings. (Delete if unnecessary)
             auto cfg = _cap_touch_instance.config();
             cfg.x_min      = 0;       // Minimum X value obtained from touch screen (raw value)
-            cfg.x_max      = 319;     // Maximum X value obtained from touch screen (raw value)
+            cfg.x_max      = disp_width_pix-1;     // Maximum X value obtained from touch screen (raw value)
             cfg.y_min      = 0;       // Minimum Y value obtained from touch screen (raw value)
-            cfg.y_max      = 239;     // Maximum Y value obtained from touch screen (raw value)
-            // cfg.pin_int    = touch_irq_pin;      // INT pin number
+            cfg.y_max      = disp_height_pix-1;     // Maximum Y value obtained from touch screen (raw value)
+            // cfg.pin_int    = touch_irq_pin;      // INT pin number  (-1 = disable)
             cfg.offset_rotation = 2;  // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
             cfg.bus_shared = true;   // Set true if using the same bus as the screen
             cfg.i2c_port   = 0;       // Select I2C to use (0 or 1)
@@ -94,9 +96,9 @@ class LGFX : public lgfx::LGFX_Device {
         else {  // resistive touch instead
             auto cfg = _res_touch_instance.config();
             cfg.x_min      = 0;       // Minimum X value obtained from touch screen (raw value)
-            cfg.x_max      = 239;     // Maximum X value obtained from touch screen (raw value)
+            cfg.x_max      = disp_height_pix-1;     // Maximum X value obtained from touch screen (raw value)
             cfg.y_min      = 0;       // Minimum Y value obtained from touch screen (raw value)
-            cfg.y_max      = 319;     // Maximum Y value obtained from touch screen (raw value)
+            cfg.y_max      = disp_width_pix-1;     // Maximum Y value obtained from touch screen (raw value)
             cfg.pin_int  = touch_irq_pin;      // INT pin number
             cfg.offset_rotation = 2;  // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
             cfg.bus_shared = true;    // Set true if using the same bus as the screen
@@ -106,10 +108,6 @@ class LGFX : public lgfx::LGFX_Device {
             cfg.pin_mosi = spi_mosi_pin;        // MOSI pin number
             cfg.pin_miso = spi_miso_pin;        // MISO pin number
             cfg.pin_cs   = touch_cs_pin;        //   CS pin number
-            // cfg.pin_sclk = 12;        // SCLK pin number
-            // cfg.pin_mosi = 11;        // MOSI pin number
-            // cfg.pin_miso = 13;        // MISO pin number
-            // cfg.pin_cs   = 47;        //   CS pin number
             _res_touch_instance.config(cfg);
             _panel_instance.setTouch(&_res_touch_instance);  // Place the touch screen on the panel.
         }
