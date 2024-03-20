@@ -624,6 +624,7 @@ class BrakeMotor : public JagMotor {
     BrakePositionSensor* brkpos;
     PressureSensor* pressure;
     IdleControl* throttle;
+    TemperatureSensorManager* tempsens;
     float brakemotor_max_duty_pc = 100.0;  // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
     float press_initial_kp = 0.142;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float press_initial_ki = 0.000;        // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
@@ -633,11 +634,15 @@ class BrakeMotor : public JagMotor {
     float posn_initial_kd = 0.000;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     static constexpr uint32_t pid_timeout = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
-    static constexpr uint32_t duty_integration_period = 30000000;  // long enough for heat buildup to begin to dissipate from motor. note every 5 minutes uses 1% of our RAM for history buffer
+    // soren note: I tried reducing duty_integration_period from 300sec to 30sec, and it started crashing whenever I stop the simulator. weird!
+    static constexpr uint32_t duty_integration_period = 300000000;  // long enough for heat buildup to begin to dissipate from motor. note every 5 minutes uses 1% of our RAM for history buffer
     static constexpr int history_depth = duty_integration_period / pid_timeout;
     uint8_t history[history_depth];  // stores past motor work done. cast to uint8_t to save ram
     float duty_integral = hybrid_sens_ratio * hybrid_out_ratio;
     int duty_index = 0, duty_index_last, dominantpid_last = brake_default_pid;    // float posn_inflect, pres_inflect, pc_inflect;
+    float heat_math_offset, motor_heat_min = 50.0, motor_heat_max = 200.0;
+    Timer stopcar_timer{8000000}, interval_timer{1000000}, motor_park_timer{4000000}, motorheat_timer{500000};
+    int32_t motor_time_mark = -1;
     void set_dominant_pid(int _pid) {
         dominantpid = _pid;
         pid_dom = &(pids[dominantpid]);
@@ -652,14 +657,13 @@ class BrakeMotor : public JagMotor {
     bool mode_busy = false, posn_pid_active = (dominantpid == PositionPID);
     QPID pids[2];  // brake changes from pressure target to position target as pressures decrease, and vice versa
     QPID* pid_dom = &(pids[PressurePID]);  // AnalogSensor sensed[2];
-    Timer stopcar_timer{8000000}, interval_timer{1000000}, motor_park_timer{4000000};
     float brake_pid_trans_threshold_lo = 0.25;  // tunable. At what fraction of full brake pressure will motor control begin to transition from posn control to pressure control
     float brake_pid_trans_threshold_hi = 0.50;  // tunable. At what fraction of full brake pressure will motor control be fully transitioned to pressure control
     bool autostopping = false, autoholding = false, reverse = false, duty_tracker_load_sensitive = true;
     float panic_initial_pc, hold_initial_pc, panic_increment_pc, hold_increment_pc, parkpos_pc, zeropoint_pc;
     float outnow_pc[2], hybrid_math_offset, hybrid_math_coeff, pid_targ_pc, pid_err_pc, pid_final_out_pc;
     float hybrid_sens_ratio, hybrid_sens_ratio_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0, hybrid_targ_ratio = 1.0, hybrid_targ_ratio_pc = 100.0;
-    float duty_integral_sum, duty_instant, duty_continuous;
+    float duty_integral_sum, duty_instant, duty_continuous, motor_heat = NAN, motor_heatloss_rate = 0.3, motor_max_heatup_rate = 1.5;  // deg F per timer timeout
     void derive() {
         JagMotor::derive();
         parkpos_pc = map(brkpos->parkpos(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0);
@@ -671,15 +675,18 @@ class BrakeMotor : public JagMotor {
         pc[MARGIN] = 100.0 * pressure->margin_psi / (pressure->max_human() - pressure->min_human());
         hybrid_math_offset = 0.5 * (brake_pid_trans_threshold_hi + brake_pid_trans_threshold_lo);
         hybrid_math_coeff = M_PI / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo);
+        // heat_math_offset = motor_max_heatup_rate * 10000.0;
     }
-    void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, IdleControl* _throttle) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+    void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, IdleControl* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         printf("Brake motor..\n");
         JagMotor::setup(_hotrc, _speedo, _batt);
-        pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;
+        pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  tempsens = _tempsens;
         duty_fwd_pc = brakemotor_max_duty_pc;  
         pres_last = pressure->filt();
         posn_last = brkpos->filt();
         set_dominant_pid(brake_default_pid);
+        // motor_time_mark = (int32_t)esp_timer_get_time();
+        motor_heat_min = tempsens->val(loc::AMBIENT);
         derive();
         if (brake_hybrid_pid) calc_hybrid_ratio(pressure->filt());
         pids[PressurePID].init(pressure->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), press_initial_kp, press_initial_ki, press_initial_kd, QPID::pmod::onerr,
@@ -688,6 +695,21 @@ class BrakeMotor : public JagMotor {
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::reverse, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
     }
   private:
+    void update_motorheat() {
+        float added_heat;
+        float out_ratio = pc[OUT] / 100.0;
+        if (motorheat_timer.expireset()) {
+            if (std::isnan(motor_heat) && !std::isnan(tempsens->val(loc::AMBIENT))) {
+                motor_heat = tempsens->val(loc::AMBIENT);
+                return;
+            }
+            if (std::abs(pc[OUT]) <= pc[MARGIN]) added_heat = 0.0;
+            else if (pc[OUT] <= duty_continuous) added_heat = map(pc[OUT], -100.0, 0.0, 0.0, -motor_heatloss_rate);
+            else if (pc[OUT] > duty_continuous) added_heat = map(pc[OUT], duty_continuous, 100.0, 0.0, motor_max_heatup_rate);
+            motor_heat_min = tempsens->val(loc::AMBIENT);
+            motor_heat = constrain(motor_heat + added_heat, motor_heat_min, motor_heat_max);
+        }    
+    }
     void calc_motor_duty() {  // Duty tracking: we keep a buffer of motor work done
         ++duty_index %= history_depth;  // advance ring buffer index, this is the oldest value in the buffer
         duty_integral_sum -= (float)history[duty_index] / 2.5;  // subtract oldest value from our running sum.
@@ -804,12 +826,16 @@ class BrakeMotor : public JagMotor {
     bool parked() { return brkpos->parked(); }  // return (brkpos->filt() >= brkpos->parkpos() - brkpos->margin());  // return (std::abs(pc[OUT] - parkpos_pc) <= pc[MARGIN]);  // return (std::abs(brkpos->filt() - brkpos->parkpos()) <= brkpos->margin());   // (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
     bool released() { return brkpos->released(); }  // return (brkpos->filt() >= brkpos->zeropoint() - brkpos->margin());  // return (std::abs(pc[OUT] - zeropoint_pc) <= pc[MARGIN]);  // return (std::abs(brkpos->filt() - brkpos->zeropoint()) <= brkpos->margin());   // (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
     float sensmin() { return (dominantpid == PressurePID) ? pressure->op_min() : brkpos->op_min(); }
-    float sensmax() { return (dominantpid == PressurePID) ? pressure->op_max() : brkpos->op_max(); }    
+    float sensmax() { return (dominantpid == PressurePID) ? pressure->op_max() : brkpos->op_max(); }
+    float motorheat() { return motor_heat; }
+    float motorheatmin() { return motor_heat_min; }
+    float motorheatmax() { return motor_heat_max; }
     void update() {
         // Brakes - Determine motor output and write it to motor
         if (volt_check_timer.expireset()) derive();
         if (pid_timer.expireset()) {
-            calc_motor_duty();
+            // calc_motor_duty();
+            update_motorheat();
             // Step 1 : Determine motor percent value
             set_output();
             // Step 2 : Fix motor pc value if it's out of range or exceeding positional limits
