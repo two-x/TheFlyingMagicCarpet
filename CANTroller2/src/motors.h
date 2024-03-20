@@ -633,7 +633,7 @@ class BrakeMotor : public JagMotor {
     float posn_initial_kd = 0.000;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     static constexpr uint32_t pid_timeout = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
-    static constexpr uint32_t duty_integration_period = 300000000;  // in us. note every 5 minutes uses 1% of our RAM for history buffer
+    static constexpr uint32_t duty_integration_period = 30000000;  // long enough for heat buildup to begin to dissipate from motor. note every 5 minutes uses 1% of our RAM for history buffer
     static constexpr int history_depth = duty_integration_period / pid_timeout;
     uint8_t history[history_depth];  // stores past motor work done. cast to uint8_t to save ram
     float duty_integral = hybrid_sens_ratio * hybrid_out_ratio;
@@ -738,10 +738,9 @@ class BrakeMotor : public JagMotor {
     // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
     void set_output() { // services any requests for change in brake mode
         if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
-            active_pids = HybridPID;
             set_pidtarg(std::max(hold_initial_pc, pid_dom->target()));  // Autohold always applies the brake somewhat, even if already stopped
             autostopping = !speedo->car_stopped();
-            autoholding = !autostopping && (pressure->filt() >= pressure->hold_initial_psi - pressure->margin_psi);  // this needs to be tested            if (!speedo->car_stopped()) {            
+            autoholding = !autostopping && (pressure->filt() >= pressure->hold_initial_psi - pressure->margin_psi);  // this needs to be tested  // if (!speedo->car_stopped()) {            
             if (autostopping) {
                 if (interval_timer.expireset()) set_pidtarg(std::min(100.0f, pid_targ_pc + hold_increment_pc));
                 pc[OUT] = pid_out();
@@ -749,7 +748,6 @@ class BrakeMotor : public JagMotor {
             else pc[OUT] = pc[STOP];
         }
         else if (motormode == AutoStop) {  // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
-            active_pids = HybridPID;
             throttle->goto_idle();  // Stop pushing the gas, will help us stop the car better
             autostopping = (!speedo->car_stopped() && !stopcar_timer.expired());
             if (autostopping) {
@@ -786,7 +784,6 @@ class BrakeMotor : public JagMotor {
             pc[OUT] = pid_out();
         }
         else if (motormode == ActivePID) {
-            active_pids = HybridPID;
             if (hotrc->joydir(VERT) != JOY_DN) set_pidtarg(0);  // let off the brake
             else set_pidtarg(map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], 0.0, 100.0));  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
             pc[OUT] = pid_out();
@@ -800,6 +797,7 @@ class BrakeMotor : public JagMotor {
             interval_timer.reset();
             stopcar_timer.reset();
             motor_park_timer.reset();
+            active_pids = HybridPID;
         }
         motormode = _mode;
     }

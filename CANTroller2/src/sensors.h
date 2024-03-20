@@ -33,7 +33,7 @@ class Potentiometer {
     float _ema_alpha = 0.35;
     float _pc_min = 0.0;
     float _pc_max = 100.0;
-    float _pc_activity_margin = 2.0;
+    float _pc_activity_margin = 4.5;
     uint8_t _pin;
     float _val = 0.0, _activity_ref;
   public:

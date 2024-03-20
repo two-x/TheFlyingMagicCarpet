@@ -75,9 +75,9 @@ void loop() {
     maf_gps = massairflow();  // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
     hotrc.update();           // ~100us for all hotrc functions
     run.mode_logic();         // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
-    gas.update();             // drive servo output based on controller inputs, idle controller, (possible) feedback, run mode, etc.
-    brake.update();           // drive motor output based on controller inputs, feedback, run mode, etc.
-    steer.update();           // drive motor output based on controller inputs, run mode, etc.
+    // gas.update();             // drive servo output based on controller inputs, idle controller, (possible) feedback, run mode, etc.
+    // brake.update();           // drive motor output based on controller inputs, feedback, run mode, etc.
+    // steer.update();           // drive motor output based on controller inputs, run mode, etc.
     touch.update();           // read touchscreen input and do what it tells us to
     tuner.update(run.mode);   // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
     diag.update();            // notice any screwy conditions or suspicious shenanigans - consistent 200us

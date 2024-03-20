@@ -107,7 +107,7 @@ class Encoder {
                 _spinspeedTimer.reset();
                 // _spinrate_isr_us = _spinspeedTimer.elapset();
                 enc_b = !digitalRead(_b_pin);
-                _delta += enc_b ? 1 : -1;
+                _delta += enc_b ? -1 : 1;
             }
             _bounce_danger = Encoder::ENC_A;
         }
