@@ -212,7 +212,7 @@ class WebManager {
         return String("rgb(") + String(random(256)) + "," + String(random(256)) + "," + String(random(256)) + ")";  // Generate a random RGB color
     }
     void update() {
-        if (web_enabled) return;
+        if (web_disabled) return;
         if (!web_started) setup();
         wifi.enable(syspower);
         if (syspower) server.update();

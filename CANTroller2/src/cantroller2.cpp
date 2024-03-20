@@ -1,4 +1,4 @@
-// Carpet CANTroller II  Source Code  - For ESP32-S3-DevKitC-1-N8R8
+// Carpet CANTroller III  main source Code  - see README.md
 #include "objects.h"
 #include "display.h"  // includes neopixel.h, touch.h
 #include "sdcard.h"
@@ -9,10 +9,10 @@ static RunModeManager run(&screen, &encoder);
 void setup() {
     initialize_pins();
     running_on_devboard = (read_pin(uart_tx_pin));  // detect breadboard vs. real car without use of an additional pin (add weak pullup resistor on your breadboard)
-    Serial.begin(115200);     // Open console serial port (will reassign tx pin as output)
+    Serial.begin(115200);      // open console serial port (will reassign tx pin as output)
     delay(1000);               // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     partition_table();
-    set_board_defaults();     // set variables as appropriate if on a breadboard
+    set_board_defaults();      // set variables as appropriate if on a breadboard
     if (RUN_TESTS) run_tests();
     prefs.begin("FlyByWire", false);
     watchdog.setup();
@@ -29,7 +29,7 @@ void setup() {
     airvelo.setup();          // must be done after i2c is started
     mapsens.setup();
     lightbox.setup();
-    tempsens.setup();         // Onewire bus and temp sensors
+    tempsens.setup();         // onewire bus and temp sensors
     TaskHandle_t temptask = nullptr;
     xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 6, &temptask, CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);  // added for servos I think
@@ -56,11 +56,14 @@ void loop() {
     watchdog.pet();           // pet the watchdog regularly to prevent reset
     ignition_panic_update(run.mode);  // manage panic stop condition and drive ignition signal as needed
     bootbutton.update();      // read the builtin button
+
+    // temporarily added for development convenience
     if (bootbutton.longpress()) screen.auto_saver(!auto_saver_enabled);
     if (bootbutton.shortpress()) {
         if (auto_saver_enabled) animations.change_saver();
         else sim.toggle();
     }
+    
     basicsw_update();         // see if basic mode switch got hit
     starter_update();         // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
     encoder.update();         // read encoder input signals  // 20 us per loop
@@ -74,7 +77,7 @@ void loop() {
     mapsens.update();         // manifold air pressure sensor  // 70 us + 2ms every 9 loops
     maf_gps = massairflow();  // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
     hotrc.update();           // ~100us for all hotrc functions
-    run.mode_logic();         // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
+    run.mode_logic();         // runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     gas.update();             // drive servo output based on controller inputs, idle controller, (possible) feedback, run mode, etc.
     brake.update();           // drive motor output based on controller inputs, feedback, run mode, etc.
     steer.update();           // drive motor output based on controller inputs, run mode, etc.
@@ -82,8 +85,8 @@ void loop() {
     tuner.update(run.mode);   // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
     diag.update();            // notice any screwy conditions or suspicious shenanigans - consistent 200us
     neo.update(colorcard[run.mode]);  // ~100us
-    screen.update(run.mode);  // Display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
-    // sdcard.update();
+    screen.update(run.mode);  // display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
+    // sdcard.update();       // needs to be developed
     lightbox.update(run.mode, speedo.human());  // communicate any relevant data to the lighting controller
     looptimer.update();       // looptimer.mark("F");
 }

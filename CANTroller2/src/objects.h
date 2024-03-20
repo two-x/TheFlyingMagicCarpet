@@ -1,6 +1,6 @@
 // objects.h : contains instantiations of major system components, and global functions
 #pragma once
-#include <Preferences.h>  // Functions for writing to flash, i think
+#include <Preferences.h>  // Functions for writing values to nvs flash partition
 #include <esp_partition.h>
 #include <random>
 #include "globals.h"

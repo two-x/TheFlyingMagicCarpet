@@ -812,12 +812,12 @@ class BrakeMotor : public JagMotor {
         }
         mode_busy = autostopping || parking || releasing;
     }
-    void constrain_output() {
-        if (motormode == Calibrate) pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]); // Constrain the motor to the operational range, or to full absolute range if calibrating (caution don't break anything!)
+    void constrain_output() {  // keep within the operational range, or to full absolute range if calibrating (caution don't break anything!)
+        if (motormode == Calibrate) pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);
         else if ((pc[OUT] < pc[STOP] && brkpos->filt() > brkpos->parkpos() - brkpos->margin()) 
-                || (pc[OUT] > pc[STOP] && brkpos->filt() < brkpos->min_in() + brkpos->margin()))  // If brake is at position limits and we're tring to go further, stop the motor
+                || (pc[OUT] > pc[STOP] && brkpos->filt() < brkpos->min_in() + brkpos->margin()))  // if brake is at position limits and we're tring to go further, stop the motor
             pc[OUT] = pc[STOP]; 
-        else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);  // Send to the actuator. Refuse to exceed range
+        else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);  // send to the actuator. refuse to exceed range
     }
   public:
     void setmode(int _mode) {

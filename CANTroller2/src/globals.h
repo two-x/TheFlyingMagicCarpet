@@ -109,7 +109,6 @@ bool allow_rolling_start = true;    // may be a smart prerequisite, may be us pu
 bool flip_the_screen = false;
 bool cruise_speed_lowerable = true;  // allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool display_enabled = true;         // should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
-bool web_enabled = true;
 bool use_i2c_baton = true;
 bool screensaver_max_refresh = false;
 bool brake_before_starting = true;
