@@ -85,6 +85,8 @@ class Param {
   public:
     std::string _long_name = "Unnamed value";
     std::string _short_name = "noname";
+    std::string _native_units_name = "";
+    std::string _human_units_name = "";
 
     // Creates a constant Param with the default value for VALUE_T
     // NOTE: this is really only needed for initalization cases where we don't have a valid starting value when we first make the Param
@@ -538,6 +540,8 @@ class AirVeloSensor : public I2CSensor {
     AirVeloSensor() = delete;
     std::string _long_name = "Air velocity sensor";
     std::string _short_name = "airvel";
+    std::string _native_units_name = "mph";
+    std::string _human_units_name = "mph";
 
     virtual void set_val_common() {
         if (_i2c->i2cbaton == i2c_airvelo) _i2c->pass_i2c_baton();
@@ -609,6 +613,8 @@ class MAPSensor : public I2CSensor {
     MAPSensor() = delete;
     std::string _long_name = "Manifold Air Pressure sensor";
     std::string _short_name = "map";
+    std::string _native_units_name = "atm";
+    std::string _human_units_name = "atm";
 
     virtual void set_val_common() {
         if (_i2c->i2cbaton == i2c_map) _i2c->pass_i2c_baton();
@@ -655,6 +661,8 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
     AnalogSensor(uint8_t arg_pin) : Sensor<NATIVE_T, HUMAN_T>(arg_pin) {}
     std::string _long_name = "Unknown analog sensor";
     std::string _short_name = "analog";
+    std::string _native_units_name = "adc";
+
     void setup() {
         set_pin(this->_pin, INPUT);
         this->set_source(src::PIN);
@@ -694,6 +702,8 @@ class CarBattery : public AnalogSensor<int32_t, float> {
 
     std::string _long_name = "Vehicle battery voltage";
     std::string _short_name = "mulbat";
+    std::string _human_units_name = "V";
+
     float v() { return _human.val(); }
     float min_v() { return _human.min(); }
     float max_v() { return _human.max(); }
@@ -727,6 +737,8 @@ class LiPoBatt : public AnalogSensor<int32_t, float> {
     }
     std::string _long_name = "LiPo pack voltage ";
     std::string _short_name = "lipo";
+    std::string _human_units_name = "V";
+
     float v() { return _human.val(); }
     float min_v() { return _human.min(); }
     float max_v() { return _human.max(); }
@@ -753,6 +765,8 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     float margin_psi = 1;  // Max acceptible error when checking psi levels
     std::string _long_name = "Brake pressure sensor";
     std::string _short_name = "presur";
+    std::string _human_units_name = "psi";
+
     PressureSensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
         set_native_limits(op_min_adc, op_max_adc);
         set_human_limits(from_native(op_min_adc), from_native(op_max_adc));
@@ -798,6 +812,8 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     float _ema_alpha = 0.35;
     std::string _long_name = "Brake position sensor";
     std::string _short_name = "brkpos";
+    std::string _human_units_name = "in";
+
     BrakePositionSensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
         set_human_limits(op_min_retract_in, op_max_extend_in);            
         set_native_limits(op_min_retract_adc, op_max_extend_adc);
@@ -874,6 +890,8 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
     PulseSensor() = delete;
     std::string _long_name = "Unknown Hall Effect sensor";
     std::string _short_name = "pulsen";
+    std::string _native_units_name = "us";
+
     void setup() {
         set_pin(this->_pin, INPUT_PULLUP);
         attachInterrupt(digitalPinToInterrupt(this->_pin), [this]{ _isr(); }, _negative ? FALLING : RISING);
@@ -919,6 +937,8 @@ class Tachometer : public PulseSensor<float> {
     }
     std::string _long_name = "Tachometer";
     std::string _short_name = "tach";
+    std::string _human_units_name = "rpm";
+
     // Query/getter functions
     float rpm() { return _human.val(); }
     // bool engine_stopped() { return stopped(); }
@@ -963,6 +983,8 @@ class Speedometer : public PulseSensor<float> {
     }
     std::string _long_name = "Speedometer";
     std::string _short_name = "speedo";
+    std::string _human_units_name = "mph";
+
     // Query/getter functions
     float mph() { return _human.val(); }
     // bool car_stopped() { return stopped(); }
@@ -1005,6 +1027,7 @@ class ServoPWM : public Transducer<NATIVE_T, HUMAN_T> {
     ServoPWM() = delete;
     std::string _long_name = "Unknown PWM motor output";
     std::string _short_name = "pwmout";
+    std::string _native_units_name = "us";
 
     void setup() {
         set_pin(this->_pin, OUTPUT);

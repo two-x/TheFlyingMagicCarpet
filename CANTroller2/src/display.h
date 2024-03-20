@@ -137,17 +137,17 @@ class IdiotLights {
 #define stEr "St\x88r"
 #define brAk "Br\x83k"
 #define spEd "Sp\x88""d"
-#define b1nary "  \xa7 "
-#define scroll "\x12   "
-#define degree "\xf7   "
-#define degreF "\xf7""F  "
-#define ______ "    "
-#define __________ "      \xf9 "
+#define b1nary "  \xa7"
+#define scroll "\x12"
+#define degree "\xf7"
+#define degreF "\xf7""F"
+#define ______ ""
+#define __________ "      \xf9"
 #define neo_bright "NeoBr\x8dgt"
 #define maxadjrate "MaxAjR\x83t"
 #define horfailsaf "HFails\x83""f"
 static std::string telemetry[disp_fixed_lines] = { "TriggerV", "   Speed", "    Tach", "Throttle", brAk"Pres", brAk"Motr", "JoysticH", stEr"Motr", };  // Fixed rows
-static std::string units[disp_fixed_lines] = { "%   ", "mph ", "rpm ", "%   ", "psi ", "%   ", "%   ", "%   " };  // Fixed rows
+static std::string units[disp_fixed_lines] = { "%", "mph", "rpm", "%", "psi", "%", "%", "%" };  // Fixed rows
 static std::string brake_pid_card[2] = { "presur", "positn" };
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
 static std::string motormodecard[NumMotorModes+1] = { "Halt", "Idle", "Releas", "OpLoop", "PID", "AuStop", "AuHold", "Park", "Cruise", "Calib", "NA" };
@@ -166,19 +166,19 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "Draw Clk", "Push Clk", "Idle Clk", "BlnkDemo", neo_bright, "NeoDesat", "Animaton", },  // PG_UI
 };
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
-    { "in  ", "V   ", "%   ", "mph ", "atm ", "g/s ", scroll, scroll, scroll, "%   ", "%   ", },  // PG_RUN
-    { "us  ", "us  ", "us  ", "us  ", "%   ", "%   ", ______, ______, ______, "us  ", "us  ", },  // PG_JOY
-    { "adc ", "adc ", ______, ______, ______, "mph ", "atm ", "atm ", "mph ", "mph ", "in  ", },  // PG_SENS
-    { degree, "us  ", "V   ", "us  ", "V   ", "us  ", ______, degree, degree, "us  ", "%   ", },  // PG_PWMS
-    { scroll, "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", "rpm ", degreF, degreF, "rpms", scroll, },  // PG_IDLE
-    { "in  ", scroll, "psin", "psin", "%   ", "%   ", "%   ", degreF, ______, "Hz  ", "s   ", },  // PG_BPID
-    { "rpm ", "rpm ", "%   ", "%   ", "%   ", "%   ", ______, ______, ______, "Hz  ", "s   ", },  // PG_GPID
-    { "mph ", "mph ", "rpm ", "rpm ", "rpm ", "rpm ", "%   ", "%/s ", ______, "Hz  ", "s   ", },  // PG_CPID
-    { degreF, degreF, degreF, degreF, degreF, degreF, "pix ", "pix ", "min ", b1nary, b1nary, },  // PG_TEMP
+    { "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, "%",    "%",    },  // PG_RUN
+    { "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, ______, "us",   "us",   },  // PG_JOY
+    { "adc",  "adc",  ______, ______, ______, "mph",  "atm",  "atm",  "mph",  "mph",  "in",   },  // PG_SENS
+    { degree, "us",   "V",    "us",   "V",    "us",   ______, degree, degree, "us",   "%",    },  // PG_PWMS
+    { scroll, "rpm",  "rpm",  "rpm",  "rpm",  "rpm",  "rpm",  degreF, degreF, "rpms", scroll, },  // PG_IDLE
+    { "in",   scroll, "psin", "psin", "%",    "%",    "%",    degreF, ______, "Hz",   "s",    },  // PG_BPID
+    { "rpm",  "rpm",  "%",    "%",    "%",    "%",    ______, ______, ______, "Hz",   "s",    },  // PG_GPID
+    { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "rpm",  "%",    "%/s",  ______, "Hz",   "s",    },  // PG_CPID
+    { degreF, degreF, degreF, degreF, degreF, degreF, "pix",  "pix",  "min",  b1nary, b1nary, },  // PG_TEMP
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "us  ", "us  ", "Hz  ", "fps ", "us  ", "us  ", "us  ", b1nary, "%   ", "/10 ", "eyes", },  // PG_UI
+    { "us",   "us",   "Hz",   "fps",  "us",   "us",   "us",   b1nary, "%",    "/10",  "eyes", },  // PG_UI
 };
-static std::string unitmapnames[9] = { "usps", "us  ", "rpms", scroll, b1nary, "%   ", "ohm ", "eyes", "psin", };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
+static std::string unitmapnames[9] = { "usps", "us", "rpms", scroll, b1nary, "%", "ohm ", "eyes", "psin", };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[9][17] = {  // 17x7-pixel bitmaps for where units use symbols not present in the font, are longer than 3 characters, or are just special
     { 0x7e, 0x20, 0x20, 0x3c, 0x00, 0x24, 0x2a, 0x2a, 0x12, 0x00, 0x70, 0x0e, 0x00, 0x24, 0x2a, 0x2a, 0x12, },  // usps - microseconds per second
     { 0x40, 0x7e, 0x20, 0x20, 0x1c, 0x20, 0x00, 0x24, 0x2a, 0x2a, 0x2a, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, },  // us - b/c the font's "mu" character doesn't work
