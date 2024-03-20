@@ -662,6 +662,7 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
     std::string _long_name = "Unknown analog sensor";
     std::string _short_name = "analog";
     std::string _native_units_name = "adc";
+    std::string _human_units_name = "";
 
     void setup() {
         set_pin(this->_pin, INPUT);
@@ -702,6 +703,7 @@ class CarBattery : public AnalogSensor<int32_t, float> {
 
     std::string _long_name = "Vehicle battery voltage";
     std::string _short_name = "mulbat";
+    std::string _native_units_name = "adc";
     std::string _human_units_name = "V";
 
     float v() { return _human.val(); }
@@ -737,6 +739,7 @@ class LiPoBatt : public AnalogSensor<int32_t, float> {
     }
     std::string _long_name = "LiPo pack voltage ";
     std::string _short_name = "lipo";
+    std::string _native_units_name = "adc";
     std::string _human_units_name = "V";
 
     float v() { return _human.val(); }
@@ -765,6 +768,7 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     float margin_psi = 1;  // Max acceptible error when checking psi levels
     std::string _long_name = "Brake pressure sensor";
     std::string _short_name = "presur";
+    std::string _native_units_name = "adc";
     std::string _human_units_name = "psi";
 
     PressureSensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
@@ -812,6 +816,7 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     float _ema_alpha = 0.35;
     std::string _long_name = "Brake position sensor";
     std::string _short_name = "brkpos";
+    std::string _native_units_name = "adc";
     std::string _human_units_name = "in";
 
     BrakePositionSensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
@@ -891,6 +896,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
     std::string _long_name = "Unknown Hall Effect sensor";
     std::string _short_name = "pulsen";
     std::string _native_units_name = "us";
+    std::string _human_units_name = "";
 
     void setup() {
         set_pin(this->_pin, INPUT_PULLUP);
@@ -937,6 +943,7 @@ class Tachometer : public PulseSensor<float> {
     }
     std::string _long_name = "Tachometer";
     std::string _short_name = "tach";
+    std::string _native_units_name = "us";
     std::string _human_units_name = "rpm";
 
     // Query/getter functions
@@ -983,6 +990,7 @@ class Speedometer : public PulseSensor<float> {
     }
     std::string _long_name = "Speedometer";
     std::string _short_name = "speedo";
+    std::string _native_units_name = "us";
     std::string _human_units_name = "mph";
 
     // Query/getter functions
@@ -1028,6 +1036,7 @@ class ServoPWM : public Transducer<NATIVE_T, HUMAN_T> {
     std::string _long_name = "Unknown PWM motor output";
     std::string _short_name = "pwmout";
     std::string _native_units_name = "us";
+    std::string _human_units_name = "";
 
     void setup() {
         set_pin(this->_pin, OUTPUT);
