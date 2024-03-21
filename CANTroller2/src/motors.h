@@ -468,7 +468,7 @@ class GasServo : public ServoMotor {
     float gas_initial_ki = 0.000;  // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
     float gas_initial_kd = 0.000;  // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
     float cruise_ctrl_extent_pc, adjustpoint;       // During cruise adjustments, saves farthest trigger position read
-    Timer cruiseDeltaTimer;
+    Timer cruiseDeltaTimer, throttleRateTimer;
   public:
     using ServoMotor::ServoMotor;
     IdleControl idlectrl;
@@ -476,7 +476,8 @@ class GasServo : public ServoMotor {
     int motormode = Idle;
     bool cruise_trigger_released = false, mode_busy = false, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
     float (&deg)[arraysize(si)] = si;  // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
-    float tach_last, cruise_target_pc, governor = 95;     // Software governor will only allow this percent of full-open throttle (percent 0-100)
+    float max_throttle_angular_velocity_degps = 30.0;  // deg/sec How quickly can the throttle change angle?  too low is unresponsive, too high can cause engine hesitations (going up) or stalls (going down)
+    float tach_last, throttle_target_pc, governor = 95, max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
     void derive() {  // calc derived limit values for all units based on tuned values for each motor
         pc[ABSMIN] = map(si[ABSMIN], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);
         pc[ABSMAX] = map(si[ABSMAX], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);
@@ -484,11 +485,13 @@ class GasServo : public ServoMotor {
         pc[GOVERN] = map(governor, 0.0, 100.0, pc[OPMIN], pc[OPMAX]);  // pc[GOVERN] = pc[OPMIN] + governor * (pc[OPMAX] - pc[OPMIN]) / 100.0;      
         si[GOVERN] = map(pc[GOVERN], pc[OPMIN], pc[OPMAX], si[OPMIN], si[OPMAX]);
         pc[MARGIN] = map(si[MARGIN], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);
+        max_throttle_angular_velocity_pcps = out_si_to_pc(max_throttle_angular_velocity_degps);
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, TemperatureSensorManager* _temp) {
         tach = _tach;  pot = _pot;  tempsens = _temp;
         printf("Gas servo..\n");
         ServoMotor::setup(_hotrc, _speedo);
+        throttleRateTimer.reset();
         derive();
         idlectrl.setup(pid.target_ptr(), tach->human_ptr(), tach->filt_ptr(), tempsens->get_sensor(loc::ENGINE), 
             temp_lims_f[ENGINE][OPMIN], temp_lims_f[ENGINE][WARNING], 50, IdleControl::idlemodes::CONTROL);
@@ -508,8 +511,8 @@ class GasServo : public ServoMotor {
     //    OpenLoop : Servo angle is simply proportional to trigger pull. This is our tested default
     //    ActivePID : Servo angle is determined by PID calculation designed to converge engine rpm to a target value set proportional to trigger pull
     // cruise_setpoint_scheme : (compile time option) Pick from 3 different styles for adjustment of cruise setpoint. I prefer THROTTLE_DELTA.
-    //    THROTTLE_ANGLE : Cruise locks servo angle (cruise_target_pc), instead of pid. Moving trigger from center adjusts setpoint proportional to how far you push it before releasing (and reduced by an attenuation factor)
-    //    THROTTLE_DELTA : Cruise locks servo angle (cruise_target_pc), instead of pid. Any non-center trigger position continuously adjusts setpoint proportional to how far it's pulled over time (up to a specified maximum rate)
+    //    THROTTLE_ANGLE : Cruise locks servo angle (throttle_target_pc), instead of pid. Moving trigger from center adjusts setpoint proportional to how far you push it before releasing (and reduced by an attenuation factor)
+    //    THROTTLE_DELTA : Cruise locks servo angle (throttle_target_pc), instead of pid. Any non-center trigger position continuously adjusts setpoint proportional to how far it's pulled over time (up to a specified maximum rate)
     //    PID_SUSPEND_FLY : Cruise uses its own pid targeting a speed value. The PID output is either a servo angle or an rpm target for the gas pid, depending on throttle_ctrl_mode setting above. Whatever speed you're at when trigger releases is new cruise target  
     void calc_cruise_target() {
         int joydir = hotrc->joydir(VERT);
@@ -518,25 +521,25 @@ class GasServo : public ServoMotor {
             cruise_trigger_released = true;
             cruise_ctrl_extent_pc = hotrc->pc[VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
             if (cruise_setpoint_scheme == PID_SUSPEND_FLY) {
-                cruise_target_pc = cruisepid.compute();
-                if (throttle_ctrl_mode == ActivePID) pid.set_target(cruise_target_pc);  // this is a bit misleading use of variables, because this argument value is actually an rpm target, not cruise percent, if gas is on pid
+                throttle_target_pc = cruisepid.compute();
+                if (throttle_ctrl_mode == ActivePID) pid.set_target(throttle_target_pc);  // this is a bit misleading use of variables, because this argument value is actually an rpm target, not cruise percent, if gas is on pid
             }
         }
         else if ((joydir == JOY_UP || (joydir == JOY_DN && cruise_speed_lowerable)) && cruise_trigger_released) {  // adjustments disabled until trigger has been to center at least once since going to cruise mode
             float ctrlratio = (std::abs(hotrc->pc[VERT][FILT]) - hotrc->pc[VERT][DBTOP]) / (hotrc->pc[VERT][OPMAX] - hotrc->pc[VERT][DBTOP]);
             if (cruise_setpoint_scheme == THROTTLE_DELTA) {
-                if (cruise_adjusting) cruise_target_pc += joydir * ctrlratio * cruise_delta_max_pc_per_s * cruiseDeltaTimer.elapsed() / 1000000.0;
+                if (cruise_adjusting) throttle_target_pc += joydir * ctrlratio * cruise_delta_max_pc_per_s * cruiseDeltaTimer.elapsed() / 1000000.0;
                 cruiseDeltaTimer.reset(); 
             }
             else if (cruise_setpoint_scheme == THROTTLE_ANGLE && std::abs(hotrc->pc[VERT][FILT]) >= cruise_ctrl_extent_pc) {  // to avoid the adjustments following the trigger back to center when released
-                if (!cruise_adjusting) adjustpoint = cruise_target_pc;  // When beginning adjustment, save current throttle pulse value to use as adjustment endpoint
-                cruise_target_pc = adjustpoint + ctrlratio * cruise_angle_attenuator * (((joydir == JOY_UP) ? 100.0 : 0.0) - adjustpoint);
+                if (!cruise_adjusting) adjustpoint = throttle_target_pc;  // When beginning adjustment, save current throttle pulse value to use as adjustment endpoint
+                throttle_target_pc = adjustpoint + ctrlratio * cruise_angle_attenuator * (((joydir == JOY_UP) ? 100.0 : 0.0) - adjustpoint);
                 cruise_ctrl_extent_pc = std::abs(hotrc->pc[VERT][FILT]);
             }
             else if (cruise_setpoint_scheme == PID_SUSPEND_FLY) {
                 if (throttle_ctrl_mode == OpenLoop) {
                     if (!cruise_adjusting) adjustpoint = pc[OUT];
-                    cruise_target_pc = adjustpoint + ctrlratio * (((joydir == JOY_UP) ? pc[OPMAX] : pc[OPMIN]) - adjustpoint);;
+                    throttle_target_pc = adjustpoint + ctrlratio * (((joydir == JOY_UP) ? pc[OPMAX] : pc[OPMIN]) - adjustpoint);;
                 }
                 else if (throttle_ctrl_mode == ActivePID) {
                     if (!cruise_adjusting) adjustpoint = tach->filt();
@@ -544,9 +547,15 @@ class GasServo : public ServoMotor {
                 }
                 cruisepid.set_target(speedo->filt());
             }
-            cruise_target_pc = constrain(cruise_target_pc, 0.0, 100.0);
+            throttle_target_pc = constrain(throttle_target_pc, 0.0, 100.0);
             cruise_adjusting = true;
         }
+    }
+    float goto_openloop_target(float tgt) {  // pass in an angle target, get back new angle to go to, respecting the max allowed angular change per second
+        float max_change = (float)throttleRateTimer.elapsed() * max_throttle_angular_velocity_pcps / 1000000.0;
+        throttleRateTimer.reset();
+        if (tgt > pc[OUT]) return std::min(pc[OUT] + max_change, tgt);
+        else return std::max(pc[OUT] - max_change, tgt);
     }
     void set_output() { // services any requests for change in brake mode
         cal_gasmode = false;
@@ -560,7 +569,7 @@ class GasServo : public ServoMotor {
         else if (motormode == Cruise) {
             calc_cruise_target();  // cruise mode just got too big to be nested in this if-else clause
             if (throttle_ctrl_mode == ActivePID) pc[OUT] = pid.compute();
-            else if (throttle_ctrl_mode == OpenLoop) pc[OUT] = cruise_target_pc;
+            else if (throttle_ctrl_mode == OpenLoop) pc[OUT] = goto_openloop_target(throttle_target_pc);
         }
         else if (motormode == ParkMotor) {
             mode_busy = true;
@@ -573,8 +582,9 @@ class GasServo : public ServoMotor {
             pc[OUT] = pid.compute();  // Do proper pid math to determine gas_out_us from engine rpm error
         }
         else if (motormode == OpenLoop) {
-            if (hotrc->joydir() != JOY_UP) pc[OUT] = pc[OPMIN];  // If in deadband or being pushed down, we want idle
-            else pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[OPMIN], pc[GOVERN]);  // actuators still respond even w/ engine turned off
+            if (hotrc->joydir() != JOY_UP) throttle_target_pc = pc[OPMIN];  // If in deadband or being pushed down, we want idle
+            else throttle_target_pc = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[OPMIN], pc[GOVERN]);  // actuators still respond even w/ engine turned off
+            pc[OUT] = goto_openloop_target(throttle_target_pc);
         }
     }
     void constrain_output() {
@@ -588,10 +598,11 @@ class GasServo : public ServoMotor {
     void setmode(int _mode) {
         mode_busy = false;
         if (_mode != motormode) {
+            throttleRateTimer.reset();
             if (_mode == Cruise) {
                 cruisepid.set_target(speedo->filt());  // set pid loop speed target to current speed  (for PID_SUSPEND_FLY mode)
                 pid.set_target(tach->filt());  // initialize pid output (rpm target) to current rpm  (for PID_SUSPEND_FLY mode)
-                cruise_target_pc = pc[OUT];  //  set target throttle angle to current throttle angle  (for THROTTLE_ANGLE/THROTTLE_DELTA modes)
+                throttle_target_pc = pc[OUT];  //  set target throttle angle to current throttle angle  (for THROTTLE_ANGLE/THROTTLE_DELTA modes)
                 cruise_adjusting = cruise_trigger_released = false;  // in case trigger is being pulled as cruise mode is entered, the ability to adjust is only unlocked after the trigger is subsequently released to the center
             }
             if (_mode == Calibrate) {
