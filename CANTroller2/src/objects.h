@@ -1,6 +1,5 @@
 // objects.h : contains instantiations of major system components, and global functions
 #pragma once
-#include <Preferences.h>  // Functions for writing values to nvs flash partition
 #include <esp_partition.h>
 #include <random>
 #include "globals.h"
@@ -16,7 +15,7 @@ std::random_device rd;
 std::mt19937 gen(rd());  // randomizer
 static Preferences prefs;  // Persistent config storage
 static Potentiometer pot(pot_pin);
-static Simulator sim(pot);
+static Simulator sim(pot, &prefs);
 static Hotrc hotrc(&sim, &pot);
 static TemperatureSensorManager tempsens(onewire_pin);
 static CarBattery mulebatt(mulebatt_pin);
@@ -92,7 +91,7 @@ void sim_setup() {
     sim.register_device(sens::mapsens, mapsens, mapsens.source());
     sim.register_device(sens::tach, tach, tach.source());
     sim.register_device(sens::speedo, speedo, speedo.source());
-    sim.set_potmap(prefs.getUInt("potmap", 2));  // 2 = sens::pressure
+    sim.set_potmap();
 }
 void update_web(void *parameter) {
     while (true) {

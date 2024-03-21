@@ -714,6 +714,7 @@ class BrakeMotor : public JagMotor {
             nowtemp = tempsens->val(loc::AMBIENT);
             if (std::isnan(motor_heat) && !std::isnan(nowtemp)) {
                 motor_heat = nowtemp;
+                Serial.printf("Tracking brake motor duty cycle\n");
                 return;
             }
             if (std::isnan(nowtemp)) added_heat = motor_heatloss_rate / -4.0;

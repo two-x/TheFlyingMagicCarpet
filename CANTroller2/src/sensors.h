@@ -7,7 +7,7 @@
 #include <FunctionalInterrupt.h>
 #include "driver/rmt.h"
 #include <ESP32Servo.h>        // Makes PWM output to control motors (for rudimentary control of our gas and steering)
-// #include "uictrl.h"
+#include <Preferences.h>  // Functions for writing values to nvs flash partition
 
 // This enum class represent the components which can be simulated (sensor). It's a uint8_t type under the covers, so it can be used as an index
 // typedef uint8_t opt_t;
@@ -1106,11 +1106,11 @@ class Simulator {
     bool _enabled = false; // keep track of whether the simulator is running or not
     sens _potmap; // keep track of which component is getting info from the pot
     Potentiometer& _pot;
+    Preferences* _myprefs;
   public:
-    Simulator(Potentiometer& pot_arg, sens potmap_arg=sens::none) : _pot(pot_arg) {
-        for (uint8_t sensor = (uint8_t)sens::none + 1; sensor < (uint8_t)sens::NUM_SENSORS; sensor++)
-            set_can_sim((sens)sensor, false);   // initially turn off simulation of sensors  // static constexpr bool initial_sim_joy = false;
-        set_potmap(potmap_arg); // set initial pot map
+    Simulator(Potentiometer& pot_arg, Preferences* myprefs) : _pot(pot_arg), _myprefs(myprefs) {
+        for (uint8_t sensor = (uint8_t)sens::none + 1; sensor < (uint8_t)sens::NUM_SENSORS; sensor++) set_can_sim((sens)sensor, false);   // initially turn off simulation of sensors  // static constexpr bool initial_sim_joy = false;
+        set_potmap(); // set initial pot map
     }  // syspower, ignition removed, as they are not sensors or even inputs
 
     void updateSimulationStatus(bool enableSimulation) {
@@ -1244,9 +1244,12 @@ class Simulator {
                 }
             }
             _potmap = arg_sensor;
+            _myprefs->putUInt("potmap", static_cast<uint32_t>(_potmap));
         }
     }
-    void set_potmap(int32_t arg_sensor) { set_potmap(static_cast<sens>(arg_sensor)); }
+    void set_potmap() { 
+        set_potmap(static_cast<sens>(_myprefs->getUInt("potmap", static_cast<uint32_t>(sens::none))));
+    }
     // Getter functions
     bool potmapping(sens s) { return can_sim(s) && _potmap == s; }  // query if a certain sensor is being potmapped
     bool potmapping(int32_t s) { return can_sim(static_cast<sens>(s)) && (_potmap == static_cast<sens>(s)); }  // query if a certain sensor is being potmapped        
