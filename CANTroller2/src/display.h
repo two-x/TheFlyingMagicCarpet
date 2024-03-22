@@ -151,13 +151,13 @@ static std::string units[disp_fixed_lines] = { "%", "mph", "rpm", "%", "psi", "%
 static std::string brake_pid_card[2] = { "presur", "positn" };
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
 static std::string motormodecard[NumMotorModes+1] = { "Halt", "Idle", "Releas", "OpLoop", "PID", "AuStop", "AuHold", "Park", "Cruise", "Calib", "NA" };
-static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 4, 8, 7, 7, 9, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 7, 8, 7, 7, 9, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
     { "PressRaw", "BkPosRaw", __________, __________, __________, "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
-    { "Tach Tgt", "IdleAngl", __________, __________, __________, __________, __________, "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp" },  // PG_IDLE
+    { "Tach Tgt", "IdleAngl", __________, __________, __________, __________, __________, "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", },  // PG_IDLE
     { brAk"Posn", brAk"Mode", "Pn|PrErr", "BrakeTgt", "HybrdTgt", "TgtRatio", "OutRatio", "MotrHeat", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
@@ -850,9 +850,6 @@ class Display {
                     draw_dynamic(19, brake.duty_fwd_pc, 0.0, 100.0);
                 }
                 else if (datapage == PG_IDLE) {
-                    // draw_asciiname(9, idlestatecard[gas.idlectrl.targetstate]);
-                    // draw_dynamic(11, gas.idlectrl.stallpoint, gas.idlectrl.idle_absmin, gas.idlectrl.idle_absmax);
-                    // draw_dynamic(13, gas.idlectrl.idlehigh, gas.idlectrl.idle_absmin, gas.idlectrl.idle_absmax);
                     draw_dynamic(9, gas.pid.target(), 0.0, tach.redline_rpm());
                     draw_dynamic(10, gas.idle_deg[OUT], gas.idle_deg[OPMIN], gas.idle_deg[OPMAX]);  // gas.idlectrl.idlehot(), gas.idlectrl.idlecold());
                     draw_eraseval(11);
@@ -864,23 +861,25 @@ class Display {
                     draw_dynamic(17, gas.idle_deg[HOT], gas.idle_deg[ABSMIN], gas.idle_deg[ABSMAX], -1, 4);
                     draw_dynamic(18, gas.idletemp_f[COLD], temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]); //  gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX], -1, 4);
                     draw_dynamic(19, gas.idletemp_f[HOT], temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]); // gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX], -1, 4); 
+                    // draw_asciiname(9, idlestatecard[gas.idlectrl.targetstate]);
+                    // draw_dynamic(11, gas.idlectrl.stallpoint, gas.idlectrl.idle_absmin, gas.idlectrl.idle_absmax);
+                    // draw_dynamic(13, gas.idlectrl.idlehigh, gas.idlectrl.idle_absmin, gas.idlectrl.idle_absmax);
                     // draw_dynamic(18, (int32_t)gas.idlectrl.settlerate_rpmps, 0, 500);
                     // draw_asciiname(19, idlemodecard[(int32_t)gas.idlectrl.idlemode]);
                 }
                 else if (datapage == PG_BPID) {
                     drange = brake.us[ABSMIN]-brake.us[ABSMAX];
-                    // draw_dynamic(9, brkpos.filt(), brkpos.op_min(), brkpos.op_max(), brake.pids[PositionPID].target());
-                    // draw_asciiname(10, motormodecard[brake.motormode]);
-                    // draw_dynamic(11, brake.pid_dom->err(), -brake.sensmax(), brake.sensmax());
-                    // draw_dynamic(12, brake.pid_dom->target(), brake.sensmin(), brake.sensmax());
-                    // draw_dynamic(13, brake.pid_targ_pc, 0.0, 100.0);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
-                    // draw_dynamic(14, brake.hybrid_targ_ratio_pc, 0.0, 100.0);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
-                    // draw_dynamic(15, brake.hybrid_out_ratio_pc, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
-                    // draw_dynamic(16, brake.motorheat(), brake.motorheatmin(), brake.motorheatmax());  // brake_spid_speedo_delta_adc, -range, range);
-                    // draw_dynamic(17, brake.pid_dom->kp(), 0.0, 8.0);
-                    // draw_dynamic(18, brake.pid_dom->ki(), 0.0, 8.0);
-                    // draw_dynamic(19, brake.pid_dom->kd(), 0.0, 8.0);
-
+                    draw_dynamic(9, brkpos.filt(), brkpos.op_min(), brkpos.op_max(), brake.pids[PositionPID].target());
+                    draw_asciiname(10, motormodecard[brake.motormode]);
+                    draw_dynamic(11, brake.pid_dom->err(), -brake.sensmax(), brake.sensmax());
+                    draw_dynamic(12, brake.pid_dom->target(), brake.sensmin(), brake.sensmax());
+                    draw_dynamic(13, brake.pid_targ_pc, 0.0, 100.0);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
+                    draw_dynamic(14, brake.hybrid_targ_ratio_pc, 0.0, 100.0);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
+                    draw_dynamic(15, brake.hybrid_out_ratio_pc, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
+                    draw_dynamic(16, brake.motorheat(), brake.motorheatmin(), brake.motorheatmax());  // brake_spid_speedo_delta_adc, -range, range);
+                    draw_dynamic(17, brake.pid_dom->kp(), 0.0, 8.0);
+                    draw_dynamic(18, brake.pid_dom->ki(), 0.0, 8.0);
+                    draw_dynamic(19, brake.pid_dom->kd(), 0.0, 8.0);
                     // draw_dynamic(11, brake.pid_dom->pterm(), -drange, drange);
                     // draw_dynamic(12, brake.pid_dom->iterm(), -drange, drange);
                     // draw_dynamic(13, brake.pid_dom->dterm(), -drange, drange);
