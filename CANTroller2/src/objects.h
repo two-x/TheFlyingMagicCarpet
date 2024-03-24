@@ -120,23 +120,23 @@ void starter_update () {  // starter bidirectional handler logic.  Outside code 
         starter_request = REQ_NA;   // cancel any requests which we are ignoring anyway
         return;                     // no action
     }  // from here on, we can assume starter signal is supported
-    if (starter_request == REQ_TOG) starter_request = !starter_drive;  // translate a toggle request to a drive request opposite to the current drive state
+    if (starter_request == REQ_TOG) starter_request = !starter_output;  // translate a toggle request to a drive request opposite to the current drive state
     starter_req_on_bool = (starter_request == REQ_ON);
-    if (starter_drive && (starter_turnoff || (starter_request == REQ_OFF) || starterTimer.expired())) {  // if we're driving the motor but need to stop
-        if (!starter_turnoff) {
-            starter_turnoff = true;
-            write_pin (starter_pin, LOW);  // stop the motor drive circui
+    if (starter_output && (!starter || (starter_request == REQ_OFF) || starterTimer.expired())) {  // if we're driving the motor but need to stop
+        if (starter) {
+            starter = LOW;
+            write_pin (starter_pin, starter);  // stop the motor drive circuit
             starterTimer.set((int64_t)starter_turnoff_timeout);
+            return;
         }
         else if (starterTimer.expired()) {
             set_pin (starter_pin, INPUT_PULLDOWN);  // set pin as input and let the pulldown bring it low
-            starter_drive = starter_turnoff = false;
+            starter_output = false;
             starter_request = REQ_NA;
         }
-        return;
     }  // now, we have stopped driving the starter if we were supposed to stop
-    if (sim.simulating(sens::starter)) starter = starter_drive;
-    else if (!starter_drive) {  // if we aren't driving the starter
+    if (sim.simulating(sens::starter)) starter = starter_output;
+    else if (!starter_output) {  // if we aren't driving the starter
         do {
             starter = digitalRead(starter_pin);         // then read the pin, and starter variable will reflect whether starter has been turned on externally
         } while (starter != digitalRead(starter_pin));  // due to a chip glitch, starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
@@ -148,7 +148,7 @@ void starter_update () {  // starter bidirectional handler logic.  Outside code 
     }  // from here on, we can assume the starter is off and we are supposed to turn it on
     if (brake.autoholding || !brake_before_starting) {  // if the brake is being held down, or if we don't care whether it is
         starterTimer.set((int64_t)starter_run_timeout);              // if left on the starter will turn off automatically after X seconds
-        starter_drive = starter = true;    // ensure starter variable always reflects the starter status regardless who is driving it
+        starter_output = starter = HIGH;    // ensure starter variable always reflects the starter status regardless who is driving it
         set_pin (starter_pin, OUTPUT);     // then set pin to an output
         write_pin (starter_pin, starter);  // and start the motor
         starter_request = REQ_NA;          // we have serviced starter on request, so cancel it
