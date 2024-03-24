@@ -51,7 +51,7 @@ void setup() {
     looptimer.setup();
 }
 void loop() {
-    Serial.printf("1");
+    // Serial.printf("1");
     watchdog.pet();           // pet the watchdog regularly to prevent reset
     ignition_panic_update(run.mode);  // manage panic stop condition and drive ignition signal as needed
     bootbutton.update();      // read the builtin button
@@ -70,28 +70,28 @@ void loop() {
     brkpos.update();          // brake position (consistent 120 us)
     pressure.update();        // brake pressure  // ~50 us
     tach.update();            // get pulse timing from hall effect tachometer on flywheel
-    Serial.printf("2");
+    // Serial.printf("2");
     speedo.update();          // get pulse timing from hall effect speedometer on axle
     mulebatt.update();        // vehicle battery voltage
     airvelo.update();         // manifold air velocity sensor  // 20us + 900us every 4 loops
     mapsens.update();         // manifold air pressure sensor  // 70 us + 2ms every 9 loops
     maf_gps = massairflow();  // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
     hotrc.update();           // ~100us for all hotrc functions
-     Serial.printf("3");
+    //  Serial.printf("3");
     run.mode_logic();         // runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
     gas.update();             // drive servo output based on controller inputs, idle controller, (possible) feedback, run mode, etc.
     brake.update();           // drive motor output based on controller inputs, feedback, run mode, etc.
     steer.update();           // drive motor output based on controller inputs, run mode, etc.
     touch.update();           // read touchscreen input and do what it tells us to
     tuner.update(run.mode);   // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
-    Serial.printf("4");
+    // Serial.printf("4");
     diag.update();            // notice any screwy conditions or suspicious shenanigans - consistent 200us
-    Serial.printf("5");
+    // Serial.printf("5");
     neo.update(colorcard[run.mode]);  // ~100us
-    Serial.printf("6");
+    // Serial.printf("6");
     screen.update(run.mode);  // display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
     // sdcard.update();       // needs to be developed
-    Serial.printf("7");
+    // Serial.printf("7");
     lightbox.update(run.mode, speedo.human());  // communicate any relevant data to the lighting controller
     looptimer.update();       // looptimer.mark("F");
 }

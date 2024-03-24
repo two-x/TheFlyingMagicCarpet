@@ -178,11 +178,15 @@ volatile int sel_val_last_last = 0;
 bool syspower = HIGH;                   // set by handler only. Reflects current state of the signal
 bool starter = LOW;                     // set by handler only. Reflects current state of starter signal (does not indicate source)
 bool starter_drive = false;             // set by handler only. High when we're driving starter, otherwise starter is an input
+uint32_t starter_pushbrake_timeout = 3000000;
+uint32_t starter_run_timeout = 5000000;
+uint32_t starter_turnoff_timeout = 100000;
 bool ignition = LOW;                    // set by handler only. Reflects current state of the signal
 bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
 bool basicmodesw = LOW;
 int starter_request = REQ_NA;
 bool starter_req_on_bool = false;
+bool starter_turnoff = false;
 int ignition_request = REQ_NA;
 int panicstop_request = REQ_ON;         // on powerup we assume the code just rebooted during a drive, because for all we know it could have 
 int sleep_request = REQ_NA;
@@ -393,8 +397,7 @@ class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regul
     // }
 };
 Timer sleep_inactivity_timer(300000000);
-Timer starterTimer(5000000);  // If remotely-started starting event is left on for this long, end it automatically
-Timer pushBrakeTimer(2500000);  // time allowed to push the brake pedal before remotely powering the starter motor
+Timer starterTimer;  // If remotely-started starting event is left on for this long, end it automatically
 Timer panicTimer(15000000);  // How long should a panic stop last?  we can't stay mad forever
 
 void kick_inactivity_timer(int source=0) {

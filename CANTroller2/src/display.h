@@ -26,8 +26,8 @@ uint8_t colorcard[NUM_RUNMODES] = { MGT, WHT, RED, ORG, YEL, GRN, TEAL, PUR };
 std::string modecard[NUM_RUNMODES] = { "Basic", "Asleep", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 std::string top_menu_buttons[4]  = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
-std::string idlemodecard[IdleControl::idlemodes::NUM_IDLEMODES] = { "direct", "cntrol", "minimz" };
-std::string idlestatecard[IdleControl::targetstates::NUM_STATES] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
+// std::string idlemodecard[IdleControl::idlemodes::NUM_IDLEMODES] = { "direct", "cntrol", "minimz" };
+// std::string idlestatecard[IdleControl::targetstates::NUM_STATES] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 
 // These defines are just a convenience to keep the below datapage strings array initializations aligned in neat rows & cols for legibility
