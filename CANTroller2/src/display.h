@@ -755,10 +755,10 @@ class Display {
                     draw_eraseval(13);
                     draw_eraseval(14);
                     draw_eraseval(15);
-                    draw_dynamic(16, gas.idle_deg[COLD], gas.idle_deg[ABSMIN], gas.idle_deg[ABSMAX], -1, 4);
-                    draw_dynamic(17, gas.idle_deg[HOT], gas.idle_deg[ABSMIN], gas.idle_deg[ABSMAX], -1, 4);
-                    draw_dynamic(18, gas.idletemp_f[COLD], temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]); //  gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX], -1, 4);
-                    draw_dynamic(19, gas.idletemp_f[HOT], temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]); // gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX], -1, 4); 
+                    draw_dynamic(16, gas.idle_deg[OPMAX], gas.idle_deg[ABSMIN], gas.idle_deg[ABSMAX], -1, 4);
+                    draw_dynamic(17, gas.idle_deg[OPMIN], gas.idle_deg[ABSMIN], gas.idle_deg[ABSMAX], -1, 4);
+                    draw_dynamic(18, gas.idletemp_f[OPMIN], temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]); //  gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX], -1, 4);
+                    draw_dynamic(19, gas.idletemp_f[OPMAX], temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]); // gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX], -1, 4); 
                     // draw_asciiname(9, idlestatecard[gas.idlectrl.targetstate]);
                     // draw_dynamic(11, gas.idlectrl.stallpoint, gas.idlectrl.idle_absmin, gas.idlectrl.idle_absmax);
                     // draw_dynamic(13, gas.idlectrl.idlehigh, gas.idlectrl.idle_absmin, gas.idlectrl.idle_absmax);

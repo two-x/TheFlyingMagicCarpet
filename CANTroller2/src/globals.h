@@ -71,8 +71,8 @@
 // these global enums are super convenient, just take care when making changes
 enum hotrc_axis : int { HORZ=0, VERT=1, CH3=2, CH4=3 };
 enum hotrc_val : int { OPMIN=0, CENT=1, OPMAX=2, RAW=3, FILT=4, DBBOT=5, DBTOP=6 };
-enum motor_val : int { PARKED=1, OUT=3, GOVERN=4 , ABSMIN=5, ABSMAX=6, MARGIN=7, NUM_MOTORVALS=8 };
-enum idle_val : int { COLD=0, HOT=2 };
+enum motor_val : int { PARKED=1, OUT=3, GOVERN=4 , ABSMIN=5, ABSMAX=6, MARGIN=7, IDLE=8, NUM_MOTORVALS=9 };
+// enum idle_val : int { COLD=0, HOT=2 };
 enum stop_val : int { STOP=1 };
 enum steer_val : int { SAFE=1 };
 enum size_enums : int { NUM_AXES=2, NUM_CHANS=4, NUM_VALUS=8 };
@@ -177,16 +177,15 @@ volatile int sel_val_last = 0;
 volatile int sel_val_last_last = 0;          
 bool syspower = HIGH;                   // set by handler only. Reflects current state of the signal
 bool starter = LOW;                     // set by handler only. Reflects current state of starter signal (does not indicate source)
-bool starter_drive = false;             // set by handler only. High when we're driving starter, otherwise starter is an input
+bool starter_output = false;             // set by handler only. High when we're driving starter, otherwise starter is an input
+int starter_request = REQ_NA;
+bool starter_req_on_bool = false;
 uint32_t starter_pushbrake_timeout = 3000000;
 uint32_t starter_run_timeout = 5000000;
 uint32_t starter_turnoff_timeout = 100000;
 bool ignition = LOW;                    // set by handler only. Reflects current state of the signal
 bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
 bool basicmodesw = LOW;
-int starter_request = REQ_NA;
-bool starter_req_on_bool = false;
-bool starter_turnoff = false;
 int ignition_request = REQ_NA;
 int panicstop_request = REQ_ON;         // on powerup we assume the code just rebooted during a drive, because for all we know it could have 
 int sleep_request = REQ_NA;

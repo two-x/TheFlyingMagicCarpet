@@ -217,9 +217,9 @@ class ServoMotor {
     int pin, freq;
   public:
     bool reverse = false;  // defaults. subclasses override as necessary
-    float pc[NUM_MOTORVALS] = { 0, NAN, 100, NAN, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]  values range from -100% to 100% are all derived or auto-assigned
-    float si[NUM_MOTORVALS] = { 45.0, 43.0, 168.2, 45.0, NAN, 0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
-    float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 500, 2500, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-]
+    float pc[NUM_MOTORVALS] = { 0, NAN, 100, NAN, NAN, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN/IDLE]  values range from -100% to 100% are all derived or auto-assigned
+    float si[NUM_MOTORVALS] = { 45.0, 43.0, 168.2, 45.0, NAN, 0, 180, 1.0, 45.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN/IDLE]
+    float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 500, 2500, NAN, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-/IDLE]
     ServoMotor(int _pin, int _freq) { pin = _pin; freq = _freq; }
     void setup(Hotrc* _hotrc, Speedometer* _speedo) {
         hotrc = _hotrc;
@@ -250,9 +250,9 @@ class JagMotor : public ServoMotor {
     using ServoMotor::ServoMotor;
     float duty_fwd_pc = 100;  // default. subclasses override as necessary
     float duty_rev_pc = 100;  // default. subclasses override as necessary
-    float pc[NUM_MOTORVALS] = { NAN, 0, NAN, NAN, NAN, -100, 100, 2 };  // percent values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]  values range from -100% to 100% are all derived or auto-assigned
-    float si[NUM_MOTORVALS] = { NAN, 0, NAN, NAN, NAN, NAN, NAN, NAN };  // standard si-unit values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
-    float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 670, 2330, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-]
+    float pc[NUM_MOTORVALS] = { NAN, 0, NAN, NAN, NAN, -100, 100, 2, NAN };  // percent values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN/-]  values range from -100% to 100% are all derived or auto-assigned
+    float si[NUM_MOTORVALS] = { NAN, 0, NAN, NAN, NAN, NAN, NAN, NAN, NAN };  // standard si-unit values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
+    float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 670, 2330, NAN, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-/-]
     float (&volt)[arraysize(si)] = si;  // our standard si value is volts. Create reference so si and volt are interchangeable
     // JagMotor(int _pin, int _freq) : ServoMotor(_pin, _freq) {}
     void derive() {  // calc pc and voltage op limits from volt and us abs limits 
@@ -317,9 +317,15 @@ class GasServo : public ServoMotor {
     float (&deg)[arraysize(si)] = si;  // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
     float max_throttle_angular_velocity_degps = 30.0;  // deg/sec How quickly can the throttle change angle?  too low is unresponsive, too high can cause engine hesitations (going up) or stalls (going down)
     float tach_last, throttle_target_pc, governor = 95, max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
-    float idle_deg[NUM_MOTORVALS]   = {  45.0, NAN,  60.0,  60.0, NAN,  43.0,   75.0, 1.0 };  // in angular degrees [COLD/-/HOT/OUT/-/ABSMIN/ABSMAX/MARGIN]
-    // float idle_rpm[NUM_MOTORVALS]   = { 775.0, NAN, 550.0, 700.0, NAN, 450.0, 1100.0, 5.0 };  // in rpm (for gas using pid) [COLD/-/HOT/OUT/-/ABSMIN/ABSMAX/MARGIN]
-    float idletemp_f[NUM_MOTORVALS] = {  60.0, NAN, 205.0,  75.0, NAN,  40.0,  225.0, 1.5 };  // in degrees F [COLD/-/HOT/OUT/-/ABSMIN/ABSMAX/MARGIN]
+    float idle_deg[NUM_MOTORVALS]   = {  45.0, NAN,  60.0,  NAN, NAN,  43.0,   75.0, 1.0, NAN };  // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
+    // float idle_rpm[NUM_MOTORVALS]   = { 775.0, NAN, 550.0, 700.0, NAN, 450.0, 1100.0, 5.0, NAN };  // in rpm (for gas using pid) [COLD/-/HOT/-/-/ABSMIN/ABSMAX/MARGIN/-]
+    float idletemp_f[NUM_MOTORVALS] = {  60.0, NAN, 205.0,  75.0, NAN,  40.0,  225.0, 1.5, NAN };  // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
+    float pc_to_rpm(float _rpm) {
+        return map(_rpm, tach->idle_rpm(), tach->govern_rpm(), 0.0, 100.0);
+    }
+    float rpm_to_pc(float _pc) {
+        return map(_pc, 0.0, 100.0, tach->idle_rpm(), tach->govern_rpm());
+    }
     void derive() {  // calc derived limit values for all units based on tuned values for each motor
         pc[ABSMIN] = map(si[ABSMIN], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);
         pc[ABSMAX] = map(si[ABSMAX], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);
@@ -351,21 +357,12 @@ class GasServo : public ServoMotor {
     void update_idlespeed() {
         if (!std::isnan(tempsens->val(loc::ENGINE))) idletemp_f[OUT] = tempsens->val(loc::ENGINE);
         if (std::isnan(idletemp_f[OUT])) return;
-        if (throttle_ctrl_mode == OpenLoop) {
-            idle_deg[OUT] = map(idletemp_f[OUT], idletemp_f[COLD], idletemp_f[HOT], idle_deg[COLD], idle_deg[HOT]);
-            idle_deg[OUT] = constrain(idle_deg[OUT], idle_deg[HOT], idle_deg[COLD]);
-            if (std::abs(si[OPMIN] - idle_deg[OUT]) >= 1.0) {
-                si[OPMIN] = idle_deg[OUT];
-                derive();
-            }
-        }
-        else if (throttle_ctrl_mode == ActivePID) {
-            tach->set_idle_rpm(map(idletemp_f[OUT], idletemp_f[COLD], idletemp_f[HOT], tach->idle_cold_rpm(), tach->idle_hot_rpm()));
-        }
-    }
-    void goto_idle() {
-        if (throttle_ctrl_mode == OpenLoop) throttle_target_pc = out_si_to_pc(idle_deg[OUT]);
-        // else if (throttle_ctrl_mode == ActivePID) pid.set_target(pid.min) throttle_target_pc = out_si_to_pc(idle_deg[OUT]);
+        // if (throttle_ctrl_mode == OpenLoop) {
+            si[IDLE] = map(idletemp_f[OUT], idletemp_f[OPMIN], idletemp_f[OPMAX], idle_deg[OPMAX], idle_deg[OPMIN]);
+            si[IDLE] = constrain(si[IDLE], idle_deg[OPMIN], idle_deg[OPMAX]);
+            pc[IDLE] = out_si_to_pc(si[IDLE]);
+            us[IDLE] = out_si_to_us(si[IDLE]);            
+            tach->set_idle_rpm(map(idletemp_f[OUT], idletemp_f[OPMIN], idletemp_f[OPMAX], tach->idle_cold_rpm(), tach->idle_hot_rpm()));
     }
   private:
     // throttle_ctrl_mode : (compile time option)
@@ -381,10 +378,7 @@ class GasServo : public ServoMotor {
             cruise_adjusting = false;
             cruise_trigger_released = true;
             cruise_ctrl_extent_pc = hotrc->pc[VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
-            if (cruise_setpoint_scheme == PID_SUSPEND_FLY) {
-                if (throttle_ctrl_mode == OpenLoop) throttle_target_pc = cruisepid.compute();
-                if (throttle_ctrl_mode == ActivePID) pid.set_target(cruisepid.compute());
-            }
+            if (cruise_setpoint_scheme == PID_SUSPEND_FLY) throttle_target_pc = cruisepid.compute();
         }
         else if ((joydir == JOY_UP || (joydir == JOY_DN && cruise_speed_lowerable)) && cruise_trigger_released) {  // adjustments disabled until trigger has been to center at least once since going to cruise mode
             float ctrlratio = (std::abs(hotrc->pc[VERT][FILT]) - hotrc->pc[VERT][DBTOP]) / (hotrc->pc[VERT][OPMAX] - hotrc->pc[VERT][DBTOP]);
@@ -398,55 +392,49 @@ class GasServo : public ServoMotor {
                 cruise_ctrl_extent_pc = std::abs(hotrc->pc[VERT][FILT]);
             }
             else if (cruise_setpoint_scheme == PID_SUSPEND_FLY) {
-                if (throttle_ctrl_mode == OpenLoop) {
-                    if (!cruise_adjusting) adjustpoint = pc[OUT];
-                    throttle_target_pc = adjustpoint + ctrlratio * (((joydir == JOY_UP) ? pc[OPMAX] : pc[OPMIN]) - adjustpoint);;
-                }
-                else if (throttle_ctrl_mode == ActivePID) {
-                    if (!cruise_adjusting) adjustpoint = tach->filt();
-                    pid.set_target(adjustpoint + ctrlratio * (((joydir == JOY_UP) ? tach->govern_rpm() : tach->idle_rpm()) - adjustpoint));
-                }
+                if (!cruise_adjusting) adjustpoint = (throttle_ctrl_mode == OpenLoop) ? pc[OUT] : rpm_to_pc(tach->filt());
+                throttle_target_pc = adjustpoint + ctrlratio * (((joydir == JOY_UP) ? pc[GOVERN] : pc[IDLE]) - adjustpoint);
                 cruisepid.set_target(speedo->filt());
             }
-            throttle_target_pc = constrain(throttle_target_pc, 0.0, 100.0);
             cruise_adjusting = true;
         }
     }
-    float goto_openloop_target(float tgt) {  // pass in an angle target, get back new angle to go to, respecting the max allowed angular change per second
+    void postprocess_output() {  // limits angular velocity, and if using pid this converts target to rpm value and hand-holds the pid
+        float new_out;
+        throttle_target_pc = constrain(throttle_target_pc, 0.0, 100.0);
+        if (throttle_ctrl_mode == ActivePID) {
+            pid.set_target(pc_to_rpm(throttle_target_pc));
+            new_out = pid.compute();
+        }
+        else if (throttle_ctrl_mode == OpenLoop) new_out = throttle_target_pc;
         float max_change = (float)throttleRateTimer.elapsed() * max_throttle_angular_velocity_pcps / 1000000.0;
         throttleRateTimer.reset();
-        if (tgt > pc[OUT]) return std::min(pc[OUT] + max_change, tgt);
-        else return std::max(pc[OUT] - max_change, tgt);
+        if (new_out > pc[OUT]) pc[OUT] = std::min(pc[OUT] + max_change, new_out);
+        else pc[OUT] = std::max(pc[OUT] - max_change, new_out);
+        if (throttle_ctrl_mode == ActivePID) pid.set_output(pc[OUT]);
     }
-    void set_output() { // services any requests for change in brake mode
+    void set_output() {
         cal_gasmode = false;
         if (motormode == Idle) {
-            goto_idle();
+            mode_busy = true;
+            throttle_target_pc = pc[IDLE];
         }
         else if (motormode == Calibrate) {
             cal_gasmode = true;
-            pc[OUT] = out_si_to_pc(map(pot->val(), pot->min(), pot->max(), deg[ABSMIN], deg[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
+            pc[OUT] = out_si_to_pc(map(pot->val(), pot->min(), pot->max(), pc[ABSMIN], pc[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
         }
         else if (motormode == Cruise) {
             calc_cruise_target();  // cruise mode just got too big to be nested in this if-else clause
-            if (throttle_ctrl_mode == ActivePID) pc[OUT] = pid.compute();
-            else if (throttle_ctrl_mode == OpenLoop) pc[OUT] = goto_openloop_target(throttle_target_pc);
         }
         else if (motormode == ParkMotor) {
             mode_busy = true;
-            pc[OUT] = pc[PARKED];
+            throttle_target_pc = pc[PARKED];
         }
-        else if (motormode == ActivePID) {
-            if (hotrc->joydir(VERT) == JOY_UP)  // If we are trying to accelerate, scale joystick value to determine gas setpoint
-                pid.set_target(map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], tach->idle_rpm(), tach->govern_rpm()));
-            else goto_idle();  // Else let off gas (if gas using PID mode)
-            pc[OUT] = pid.compute();  // Do proper pid math to determine gas_out_us from engine rpm error
+        else if (motormode == OpenLoop || motormode == ActivePID) {
+            if (hotrc->joydir() != JOY_UP) throttle_target_pc = pc[IDLE];  // If in deadband or being pushed down, we want idle
+            else throttle_target_pc = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[IDLE], pc[GOVERN]);  // actuators still respond even w/ engine turned off
         }
-        else if (motormode == OpenLoop) {
-            if (hotrc->joydir() != JOY_UP) throttle_target_pc = pc[OPMIN];  // If in deadband or being pushed down, we want idle
-            else throttle_target_pc = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[OPMIN], pc[GOVERN]);  // actuators still respond even w/ engine turned off
-            pc[OUT] = goto_openloop_target(throttle_target_pc);
-        }
+        if (motormode != Calibrate) postprocess_output();  // skip final motor calculations which impose limitations on the value
     }
     void constrain_output() {
         if (motormode == Calibrate) pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);
@@ -488,27 +476,27 @@ class GasServo : public ServoMotor {
         }
     }
     void set_idlehot(float newidlehot) {
-        if (throttle_ctrl_mode == OpenLoop) idle_deg[HOT] = constrain(newidlehot, idle_deg[ABSMIN], idle_deg[COLD] - 1.0);
+        if (throttle_ctrl_mode == OpenLoop) idle_deg[OPMIN] = constrain(newidlehot, idle_deg[ABSMIN], idle_deg[OPMAX] - 1.0);
         else if (throttle_ctrl_mode == ActivePID) tach->set_idlehot_rpm(constrain(newidlehot, tach->min_human(), tach->idle_cold_rpm() - 1.0));
         update_idlespeed();
     }
     void set_idlecold(float newidlecold) {
-        if (throttle_ctrl_mode == OpenLoop) idle_deg[COLD] = constrain(newidlecold, idle_deg[HOT] + 1, idle_deg[ABSMAX]);
+        if (throttle_ctrl_mode == OpenLoop) idle_deg[OPMAX] = constrain(newidlecold, idle_deg[OPMIN] + 1.0, idle_deg[ABSMAX]);
         else if (throttle_ctrl_mode == ActivePID) tach->set_idlecold_rpm(constrain(newidlecold, tach->idle_hot_rpm() + 1.0, tach->max_human()));
         update_idlespeed();
     }
     void add_idlehot(float add) { 
-        if (throttle_ctrl_mode == OpenLoop) set_idlehot(idle_deg[HOT] + add);
+        if (throttle_ctrl_mode == OpenLoop) set_idlehot(idle_deg[OPMIN] + add);
         else if (throttle_ctrl_mode == ActivePID) tach->set_idlehot_rpm(tach->idle_hot_rpm() + add);
     }
     void add_idlecold(float add) {
-        if (throttle_ctrl_mode == OpenLoop) set_idlecold(idle_deg[COLD] + add);
+        if (throttle_ctrl_mode == OpenLoop) set_idlecold(idle_deg[OPMAX] + add);
         else if (throttle_ctrl_mode == ActivePID) tach->set_idlecold_rpm(tach->idle_cold_rpm() + add);
     }
-    void set_temphot(float newtemphot) { idletemp_f[HOT] = constrain(newtemphot, idletemp_f[COLD] + 1.0, idletemp_f[ABSMAX]); update_idlespeed(); }
-    void set_tempcold(float newtempcold) { idletemp_f[COLD] = constrain(newtempcold, idletemp_f[ABSMIN], idletemp_f[HOT] - 1.0); update_idlespeed(); }
-    void add_temphot(float add) { set_temphot(idletemp_f[HOT] + add); }
-    void add_tempcold(float add) { set_tempcold(idletemp_f[COLD] + add); }
+    void set_temphot(float newtemphot) { idletemp_f[OPMAX] = constrain(newtemphot, idletemp_f[OPMIN] + 1.0, idletemp_f[ABSMAX]); update_idlespeed(); }
+    void set_tempcold(float newtempcold) { idletemp_f[OPMIN] = constrain(newtempcold, idletemp_f[ABSMIN], idletemp_f[OPMAX] - 1.0); update_idlespeed(); }
+    void add_temphot(float add) { set_temphot(idletemp_f[OPMAX] + add); }
+    void add_tempcold(float add) { set_tempcold(idletemp_f[OPMIN] + add); }
 };
 // Brake uses two PID loops: one based on pressure (accurate for high brake pressures), and one based on position (accurate when pedal is more released)
 // Note as pedal is pressed down, position decreases as pressure increases. PID output is percent motor power.
@@ -581,9 +569,9 @@ class BrakeMotor : public JagMotor {
         if (!std::isnan(tempsens->val(loc::AMBIENT))) motor_heat_min = tempsens->val(loc::AMBIENT);
         derive();
         if (brake_hybrid_pid) calc_hybrid_ratio(pressure->filt());
-        pids[PressurePID].init(pressure->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), press_initial_kp, press_initial_ki, press_initial_kd, QPID::pmod::onerr,
+        pids[PressurePID].init(pressure->filt_ptr(), &pc[OPMIN], &pc[OPMAX], press_initial_kp, press_initial_ki, press_initial_kd, QPID::pmod::onerr,
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
-        pids[PositionPID].init(brkpos->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), posn_initial_kp, posn_initial_ki, posn_initial_kd, QPID::pmod::onerr, 
+        pids[PositionPID].init(brkpos->filt_ptr(), &pc[OPMIN], &pc[OPMAX], posn_initial_kp, posn_initial_ki, posn_initial_kd, QPID::pmod::onerr, 
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::reverse, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
     }
   private:
@@ -667,7 +655,7 @@ class BrakeMotor : public JagMotor {
             else pc[OUT] = pc[STOP];
         }
         else if (motormode == AutoStop) {  // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
-            throttle->goto_idle();  // Stop pushing the gas, will help us stop the car better
+            throttle->setmode(Idle);  // Stop pushing the gas, will help us stop the car better
             autostopping = (!speedo->car_stopped() && !stopcar_timer.expired());
             if (autostopping) {
                 if (interval_timer.expireset()) set_pidtarg(std::min(100.0f, pid_targ_pc + panicstop ? panic_increment_pc : hold_increment_pc));   
