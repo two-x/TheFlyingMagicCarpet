@@ -790,10 +790,10 @@ class Display {
                     draw_dynamic(13, gas.pid.iterm(), -100.0, 100.0);
                     draw_dynamic(14, gas.pid.dterm(), -100.0, 100.0);
                     draw_dynamic(15, gas.pid.outsum(), -gas.pid.outrange(), gas.pid.outrange());
-                    draw_dynamic(16, gas.max_throttle_angular_velocity_degps, 0.0, 360.0);
-                    draw_dynamic(17, gas.pid.kp(), 0.0, 1.0);
-                    draw_dynamic(18, gas.pid.ki(), 0.0, 1.0);
-                    draw_dynamic(19, gas.pid.kd(), 0.0, 1.0);
+                    // draw_dynamic(16, gas.max_throttle_angular_velocity_degps, 0.0, 360.0);
+                    // draw_dynamic(17, gas.pid.kp(), 0.0, 1.0);
+                    // draw_dynamic(18, gas.pid.ki(), 0.0, 1.0);
+                    // draw_dynamic(19, gas.pid.kd(), 0.0, 1.0);
                 }
                 else if (datapage == PG_CPID) {
                     drange = tach.govern_rpm() - tach.idle_rpm();
