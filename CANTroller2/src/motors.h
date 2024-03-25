@@ -462,7 +462,7 @@ class GasServo : public ServoMotor {
             update_idlespeed();                // Step 1 : do any idle speed management needed
             set_output();                      // Step 2 : determine motor output value. updates throttle target from idle control or cruise mode pid, if applicable (on the same timer as gas pid). allows idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
             constrain_output();                // Step 3 : fix output to ensure it's in range
-            us[OUT] = out_si_to_us(deg[OUT]);  // Step 4 : convert motor value to pulsewidth time
+            us[OUT] = out_si_to_us(pc[OUT]);  // Step 4 : convert motor value to pulsewidth time
             deg[OUT] = out_pc_to_si(pc[OUT]);
             write_motor();                     // Step 5 : write to servo
         }
