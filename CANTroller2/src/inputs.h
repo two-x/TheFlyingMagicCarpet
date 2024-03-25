@@ -1,6 +1,5 @@
 #pragma once
 #include "FunctionalInterrupt.h"
-// Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class MomentaryButton {
   private:
     int32_t _sw_action = swNONE;  // Flag for encoder handler to know an encoder switch action needs to be handled

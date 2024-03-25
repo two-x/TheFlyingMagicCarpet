@@ -310,7 +310,6 @@ class GasServo : public ServoMotor {
     Timer cruiseDeltaTimer, throttleRateTimer;
   public:
     using ServoMotor::ServoMotor;
-    // IdleControl idlectrl;
     QPID pid, cruisepid;
     int motormode = Idle;
     bool cruise_trigger_released = false, mode_busy = false, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
@@ -318,7 +317,6 @@ class GasServo : public ServoMotor {
     float max_throttle_angular_velocity_degps = 30.0;  // deg/sec How quickly can the throttle change angle?  too low is unresponsive, too high can cause engine hesitations (going up) or stalls (going down)
     float tach_last, throttle_target_pc, governor = 95, max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
     float idle_deg[NUM_MOTORVALS]   = {  45.0, NAN,  60.0,  NAN, NAN,  43.0,   75.0, 1.0, NAN };  // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
-    // float idle_rpm[NUM_MOTORVALS]   = { 775.0, NAN, 550.0, 700.0, NAN, 450.0, 1100.0, 5.0, NAN };  // in rpm (for gas using pid) [COLD/-/HOT/-/-/ABSMIN/ABSMAX/MARGIN/-]
     float idletemp_f[NUM_MOTORVALS] = {  60.0, NAN, 205.0,  75.0, NAN,  40.0,  225.0, 1.5, NAN };  // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
     float pc_to_rpm(float _rpm) {
         return map(_rpm, tach->idle_rpm(), tach->govern_rpm(), 0.0, 100.0);
@@ -341,8 +339,6 @@ class GasServo : public ServoMotor {
         ServoMotor::setup(_hotrc, _speedo);
         throttleRateTimer.reset();
         derive();
-        // idlectrl.setup(pid.target_ptr(), tach->human_ptr(), tach->filt_ptr(), tempsens->get_sensor(loc::ENGINE), 
-        //     temp_lims_f[ENGINE][OPMIN], temp_lims_f[ENGINE][WARNING], 50, IdleControl::idlemodes::CONTROL);
         pid.init(tach->filt_ptr(), &pc[OPMIN], &pc[OPMAX], gas_initial_kp, gas_initial_ki, gas_initial_kd, QPID::pmod::onerr, 
             QPID::dmod::onerr, QPID::awmod::clamp, QPID::cdir::direct, pid_timeout);
         if (throttle_ctrl_mode == OpenLoop) {
@@ -357,12 +353,11 @@ class GasServo : public ServoMotor {
     void update_idlespeed() {
         if (!std::isnan(tempsens->val(loc::ENGINE))) idletemp_f[OUT] = tempsens->val(loc::ENGINE);
         if (std::isnan(idletemp_f[OUT])) return;
-        // if (throttle_ctrl_mode == OpenLoop) {
-            si[IDLE] = map(idletemp_f[OUT], idletemp_f[OPMIN], idletemp_f[OPMAX], idle_deg[OPMAX], idle_deg[OPMIN]);
-            si[IDLE] = constrain(si[IDLE], idle_deg[OPMIN], idle_deg[OPMAX]);
-            pc[IDLE] = out_si_to_pc(si[IDLE]);
-            us[IDLE] = out_si_to_us(si[IDLE]);            
-            tach->set_idle_rpm(map(idletemp_f[OUT], idletemp_f[OPMIN], idletemp_f[OPMAX], tach->idle_cold_rpm(), tach->idle_hot_rpm()));
+        si[IDLE] = map(idletemp_f[OUT], idletemp_f[OPMIN], idletemp_f[OPMAX], idle_deg[OPMAX], idle_deg[OPMIN]);
+        si[IDLE] = constrain(si[IDLE], idle_deg[OPMIN], idle_deg[OPMAX]);
+        pc[IDLE] = out_si_to_pc(si[IDLE]);
+        us[IDLE] = out_si_to_us(si[IDLE]);            
+        tach->set_idle_rpm(map(idletemp_f[OUT], idletemp_f[OPMIN], idletemp_f[OPMAX], tach->idle_cold_rpm(), tach->idle_hot_rpm()));
     }
   private:
     // throttle_ctrl_mode : (compile time option)
@@ -463,9 +458,6 @@ class GasServo : public ServoMotor {
         return (std::abs(out_pc_to_si(pc[OUT]) - si[PARKED]) < 1);
     }
     void update() {
-        // float tach_now = tach->human();
-        // if (tach_now != tach_last) idlectrl.push_tach_reading(tach_now, tach->last_read_time());    
-        // tach_last = tach_now;
         if (pid_timer.expireset()) {          
             update_idlespeed();                // Step 1 : do any idle speed management needed
             set_output();                      // Step 2 : determine motor output value. updates throttle target from idle control or cruise mode pid, if applicable (on the same timer as gas pid). allows idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
@@ -515,12 +507,6 @@ class BrakeMotor : public JagMotor {
     float posn_initial_kd = 0.000;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     static constexpr uint32_t pid_timeout = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
-    // // soren note: I tried reducing duty_integration_period from 300sec to 30sec, and it started crashing whenever I stop the simulator. weird!
-    // static constexpr uint32_t duty_integration_period = 300000000;  // long enough for heat buildup to begin to dissipate from motor. note every 5 minutes uses 1% of our RAM for history buffer
-    // static constexpr int history_depth = duty_integration_period / pid_timeout;
-    // uint8_t history[history_depth];  // stores past motor work done. cast to uint8_t to save ram
-    // float duty_integral = hybrid_sens_ratio * hybrid_out_ratio;
-    // int duty_index = 0, duty_index_last;
     int dominantpid_last = brake_default_pid;    // float posn_inflect, pres_inflect, pc_inflect;
     float heat_math_offset, motor_heat_min = 75.0, motor_heat_max = 200.0;
     Timer stopcar_timer{8000000}, interval_timer{1000000}, motor_park_timer{4000000}, motorheat_timer{500000};
@@ -575,20 +561,6 @@ class BrakeMotor : public JagMotor {
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::reverse, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
     }
   private:
-    // void calc_motor_duty() {  // Duty tracking: we keep a buffer of motor work done
-    //     ++duty_index %= history_depth;  // advance ring buffer index, this is the oldest value in the buffer
-    //     duty_integral_sum -= (float)history[duty_index] / 2.5;  // subtract oldest value from our running sum.
-    //     int duty_instant = std::abs(pc[OUT]);  // what is current motor drive percent
-    //     if (duty_tracker_load_sensitive) {  // if we are being fancy
-    //         if (pc[OUT] < 0) duty_instant = 0.0;  // ignore motion in the extend direction due to low load
-    //         else duty_instant *= hybrid_sens_ratio;  // scale load with brake pressure
-    //     }
-    //     history[duty_index] = (uint8_t)(duty_instant * 2.5);  // write over current indexed value in the history ring buffer. scale to optimize for uint8
-    //     duty_integral_sum += duty_instant;  // add value to our running sum
-    //     duty_continuous = duty_integral_sum / history_depth;  // divide ring buffer total by its size to get average value
-    //     if (duty_continuous < 0.001) duty_continuous = 0.0;  // otherwise displays "5.67e-" (?)
-    //     // now we know our continuous duty, need to limit motor output based on this
-    // }
     void update_motorheat() {
         float added_heat, nowtemp, out_ratio;
         if (motorheat_timer.expireset()) {

@@ -15,17 +15,9 @@ enum class sens : int { none=0, joy=1, pressure=2, brkpos=3, speedo=4, tach=5, a
 enum class src : int { UNDEF=0, FIXED=1, PIN=2, TOUCH=3, POT=4, CALC=5 };
 
 int sources[static_cast<int>(sens::NUM_SENSORS)] = { static_cast<int>(src::UNDEF) };
-
 #include "i2cbus.h"
-// #include "xtensa/core-macros.h"  // access to ccount register for esp32 timing ticks
 
-// NOTE: the following classes all contain their own initial config values (for simplicity). We could instead use Config objects and pass them in at construction time, which might be
-//       a little cleaner organization-wise, since all the configs would be consolidated. It would also allow us to read Configs from storage somewhere, so we could have persistent
-//       calibration.
-
-// Param is a value which is constrained between min/max limits, representing a "raw" (aka unfiltered) quantity. A value with tight limits
-// (wehere min=val=max) is constant and cannot be changed without changing the limits. An unconstrained value can be represented by setting
-// either or both min/max to infinity.
+// Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class Potentiometer {
   protected:
     float adc_min = 300; // TUNED 230603 - Used only in determining theconversion factor
@@ -62,6 +54,15 @@ class Potentiometer {
     float min() { return _pc_min; }
     float max() { return _pc_max; }
 };
+
+// NOTE: the following classes all contain their own initial config values (for simplicity). We could instead use Config objects and pass them in at construction time, which might be
+//       a little cleaner organization-wise, since all the configs would be consolidated. It would also allow us to read Configs from storage somewhere, so we could have persistent
+//       calibration.
+
+// Param is a value which is constrained between min/max limits, representing a "raw" (aka unfiltered) quantity. A value with tight limits
+// (wehere min=val=max) is constant and cannot be changed without changing the limits. An unconstrained value can be represented by setting
+// either or both min/max to infinity.
+
 template<typename VALUE_T>
 class Param {
   protected:
