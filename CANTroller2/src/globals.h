@@ -2,6 +2,7 @@
 #pragma once
 #include "Arduino.h"
 // pin assignments  ESP32-S3-DevkitC series   (Note: "*" are pins we can reclaim if needed)
+#undef use_bm23_pins
 #define     boot_sw_pin  0 // button0/strap1   // the esp "boot" button.  If more pins are needed, move encoder_sw_pin to this pin, no other signal of ours can work on this pin due to high-at-boot requirement
 #define      tft_dc_pin  1 // adc1.0           // output, assert when sending data to display chip to indicate commands vs. screen data - ! pin is also defined in tft_setup.h
 #define    touch_cs_pin  2 // adc1.1         * // output, chip select for resistive touchscreen, active low. Not used on car, so can assign pin to something else if needed
@@ -59,10 +60,27 @@
 // bootstrap pins: Pin 0 must be pulled high, and pins 45 and 46 pulled low during bootup
 // glitch: pins 36 and 39 will be erroneously pulled low for ~80ns when "certain RTC peripherals power up" (ESP32 errata 3.11). Can run adc_power_acquire() to work around glitch but draw ~1mA more power. Avoid interrupts on these pins
 // spi bus page including DMA information: https://docs.espressif.com/projects/esp-idf/en/v4.4/esp32s3/api-reference/peripherals/spi_master.html
-// bm2023 pins: onewire 19, hotrc_ch3_pin 20, hotrc_ch4_pin 21, tach_pin 36, ignition_pin 37, encoder_b_pin 40, encoder_a_pin 41, encoder_sw_pin 42
 #define     tft_rst_pin -1  // tft reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
 #define    tft_ledk_pin -1  // output, optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
 #define   touch_irq_pin -1  // input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - Set to 255 if not used
+// bm2023 pins: tft_dc_pin 3, onewire_pin 19, hotrc_ch3_pin 20, hotrc_ch4_pin 21, tach_pin 36, ignition_pin 37, syspower_pin 38, encoder_b_pin 40, encoder_a_pin 41, encoder_sw_pin 42, starter_pin 45, sdcard_cs_pin 46, touch_cs_pin 47
+#ifdef use_bm23_pins       // for testing using box from bm23, override new pin assignments with old ones
+#define steer_enc_a_pin 1  // not used in bm23, but moving to an unused pin
+#define steer_enc_b_pin 2  // not used in bm23, but moving to an unused pin
+#define tft_dc_pin 3
+#define onewire_pin 19
+#define hotrc_ch3_pin 20
+#define hotrc_ch4_pin 21
+#define tach_pin 36
+#define ignition_pin 37
+#define syspower_pin 38
+#define encoder_b_pin 40
+#define encoder_a_pin 41
+#define encoder_sw_pin 42
+#define starter_pin 45
+#define sdcard_cs_pin 46
+#define touch_cs_pin 47
+#endif
 
 #define adcbits 12
 #define adcrange_adc 4095     // = 2^adcbits-1
