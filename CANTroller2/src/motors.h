@@ -218,7 +218,7 @@ class ServoMotor {
   public:
     bool reverse = false;  // defaults. subclasses override as necessary
     float pc[NUM_MOTORVALS] = { 0, NAN, 100, NAN, NAN, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN/IDLE]  values range from -100% to 100% are all derived or auto-assigned
-    float si[NUM_MOTORVALS] = { 45.0, 43.0, 168.2, 45.0, NAN, 0, 180, 1.0, 45.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN/IDLE]
+    float si[NUM_MOTORVALS] = { 45.0, 43.0, 168.2, 45.0, NAN, 0, 180, 1.0, 58.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN/IDLE]
     float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 500, 2500, NAN, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-/IDLE]
     ServoMotor(int _pin, int _freq) { pin = _pin; freq = _freq; }
     void setup(Hotrc* _hotrc, Speedometer* _speedo) {
@@ -462,7 +462,7 @@ class GasServo : public ServoMotor {
             update_idlespeed();                // Step 1 : do any idle speed management needed
             set_output();                      // Step 2 : determine motor output value. updates throttle target from idle control or cruise mode pid, if applicable (on the same timer as gas pid). allows idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
             constrain_output();                // Step 3 : fix output to ensure it's in range
-            us[OUT] = out_si_to_us(pc[OUT]);  // Step 4 : convert motor value to pulsewidth time
+            us[OUT] = out_pc_to_us(pc[OUT]);   // Step 4 : convert motor value to pulsewidth time
             deg[OUT] = out_pc_to_si(pc[OUT]);
             write_motor();                     // Step 5 : write to servo
         }
