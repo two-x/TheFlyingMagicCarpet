@@ -182,7 +182,7 @@ class Starter {
     Starter(int _pin) : pin(_pin) {}
     bool motor = LOW;             // set by handler only. Reflects current state of starter signal (does not indicate source)
     int now_req = REQ_NA;
-    bool req_on = false;
+    bool req_active = false;
     void request(int req) { now_req = req; }
     void update() {  // starter bidirectional handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
         if (!starter_signal_support) {  // if we don't get involved with starting the car
@@ -191,7 +191,7 @@ class Starter {
             return;                     // no action
         }  // from here on, we can assume starter signal is supported
         if (now_req == REQ_TOG) now_req = !pin_outputting;  // translate a toggle request to a drive request opposite to the current drive state
-        req_on = (now_req == REQ_ON);
+        req_active = (now_req != REQ_NA);
         if (pin_outputting && (!motor || (now_req == REQ_OFF) || starterTimer.expired())) {  // if we're driving the motor but need to stop or in the process of stopping
             if (motor) {                         // if motor is currently on
                 motor = LOW;                     // we will turn it off
@@ -199,7 +199,7 @@ class Starter {
                 starterTimer.set((int64_t)turnoff_timeout);  // start timer to control length of low output
                 return;                 // ditch out, leaving the motor-off request intact. we'll check on the timer next time
             }
-            else if ((now_req == REQ_OFF) || starterTimer.expired()) {          // if it's been long enough since turning off the motor circuit ...
+            else if (starterTimer.expired()) {          // if it's been long enough since turning off the motor circuit ...
                 set_pin (pin, INPUT_PULLDOWN);  // set pin as input
                 pin_outputting = false;                 // we are no longer driving the pin
                 now_req = REQ_NA;               // reset the request line
