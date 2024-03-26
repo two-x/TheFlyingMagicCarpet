@@ -572,7 +572,7 @@ class Display {
             }
             disp_values_dirty = true;
         }
-        draw_fixed(page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
+        draw_fixed(page, page_last, true, forced);  // Erase and redraw variable names and units for data on this page
         draw_string(disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
         disp_datapage_dirty = false;
     }
@@ -745,7 +745,7 @@ class Display {
                     draw_dynamic(16, gas.deg[OPMIN], gas.deg[ABSMAX], gas.deg[ABSMAX]);
                     draw_dynamic(17, gas.deg[OPMAX], gas.deg[ABSMAX], gas.deg[ABSMAX]);
                     draw_dynamic(18, brake.us[STOP], brake.us[ABSMIN], brake.us[ABSMAX]);
-                    draw_dynamic(19, brake.duty_fwd_pc, 0.0, 100.0f);
+                    draw_dynamic(19, brake.duty_fwd_pc, 0.0f, 100.0f);
                 }
                 else if (datapage == PG_IDLE) {
                     draw_dynamic(9, gas.pid.target(), 0.0f, tach.redline_rpm());

@@ -94,7 +94,7 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
     float fuelpump_v = 0.0;
     float fuelpump_turnon_rpm = 200.0;
     int fuelpump_adc = 0;
-    bool fuelpump_bool = LOW;
+    bool fuelpump_bool = LOW, fuelpump_off = HIGH;
   private:
     bool variable_speed_output = true;
     int ledc_channel, pwm_frequency = 42, pwm_resolution = 8;
@@ -133,6 +133,7 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
             fuelpump_adc = map((int)fuelpump_v, 0, (int)fuelpump_on_max_v, 0, 255);
             fuelpump_bool = HIGH;
         }
+        fuelpump_off = !fuelpump_bool;
         writepin();
     }
     float volts() { return fuelpump_v; }
