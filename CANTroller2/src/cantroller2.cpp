@@ -1,8 +1,8 @@
 // Carpet CANTroller III  main source Code  - see README.md
 #include "objects.h"
+static FuelPump fuelpump;
 #include "display.h"  // includes neopixel.h, touch.h
 #include "runmodes.h"
-static FuelPump fuelpump;
 static RunModeManager run(&screen, &encoder);
 
 void setup() {

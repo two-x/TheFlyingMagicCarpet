@@ -96,8 +96,8 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
     int fuelpump_adc = 0;
     bool fuelpump_bool = LOW;
   private:
+    bool variable_speed_output = true;
     int ledc_channel, pwm_frequency = 42, pwm_resolution = 8;
-    bool variable_speed_output = false;
     void writepin() {
         if (variable_speed_output) ledcWrite(ledc_channel, fuelpump_adc);
         else write_pin(fuelpump_pin, fuelpump_bool);
@@ -135,6 +135,9 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
         }
         writepin();
     }
+    float volts() { return fuelpump_v; }
+    float volts_min() { return fuelpump_off_v; }
+    float volts_max() { return fuelpump_on_max_v; }
 };
 void sim_setup() {
     sim.register_device(sens::pressure, pressure, pressure.source());
