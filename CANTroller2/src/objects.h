@@ -97,12 +97,13 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
     bool fuelpump_bool = LOW, fuelpump_off = HIGH;
   private:
     bool variable_speed_output = true;
-    int ledc_channel, pwm_frequency = 42, pwm_resolution = 8;
+    int pin, ledc_channel, pwm_frequency = 42, pwm_resolution = 8;
     void writepin() {
         if (variable_speed_output) ledcWrite(ledc_channel, fuelpump_adc);
-        else write_pin(fuelpump_pin, fuelpump_bool);
+        else write_pin(pin, fuelpump_bool);
     }
   public:
+    FuelPump(int _pin) : pin(_pin) {}
     void update() {
         float tachnow = tach.filt();
         if ((tachnow < fuelpump_turnon_rpm) || !ignition) {
@@ -122,16 +123,16 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
     void setup() {
         Serial.printf("Fuel pump.. ");
         if (variable_speed_output) {
-            int ledc_channel = analogGetChannel(fuelpump_pin);
+            int ledc_channel = analogGetChannel(pin);
             if (ledcSetup(ledc_channel, pwm_frequency, pwm_resolution) == 0) Serial.printf("failed to configure ");
             else {
                 Serial.printf("using ");
-                ledcAttachPin(fuelpump_pin, ledc_channel);
+                ledcAttachPin(pin, ledc_channel);
             }
             Serial.printf("ledc ch %d, %d bit at %d Hz\n", ledc_channel, pwm_resolution, pwm_frequency);
         }
         else {
-            set_pin(fuelpump_pin, OUTPUT);  // initialize_pin
+            set_pin(pin, OUTPUT);  // initialize_pin
             Serial.printf("using digital drive\n");
         }
         update();
@@ -175,9 +176,10 @@ class Starter {
     uint32_t run_timeout = 5000000;
     uint32_t turnoff_timeout = 100000;
     Timer starterTimer;  // If remotely-started starting event is left on for this long, end it automatically
-    int lastbrakemode;
+    int lastbrakemode, pin;
     bool pin_outputting = false;   // set by handler only. High when we're driving starter, otherwise starter is an input
   public:
+    Starter(int _pin) : pin(_pin) {}
     bool motor = LOW;             // set by handler only. Reflects current state of starter signal (does not indicate source)
     int now_req = REQ_NA;
     bool req_on = false;
@@ -193,12 +195,12 @@ class Starter {
         if (pin_outputting && (!motor || (now_req == REQ_OFF) || starterTimer.expired())) {  // if we're driving the motor but need to stop or in the process of stopping
             if (motor) {                         // if motor is currently on
                 motor = LOW;                     // we will turn it off
-                write_pin (starter_pin, motor);  // begin driving the pin low voltage
+                write_pin (pin, motor);  // begin driving the pin low voltage
                 starterTimer.set((int64_t)turnoff_timeout);  // start timer to control length of low output
                 return;                 // ditch out, leaving the motor-off request intact. we'll check on the timer next time
             }
             else if ((now_req == REQ_OFF) || starterTimer.expired()) {          // if it's been long enough since turning off the motor circuit ...
-                set_pin (starter_pin, INPUT_PULLDOWN);  // set pin as input
+                set_pin (pin, INPUT_PULLDOWN);  // set pin as input
                 pin_outputting = false;                 // we are no longer driving the pin
                 now_req = REQ_NA;               // reset the request line
             }
@@ -206,8 +208,8 @@ class Starter {
         if (sim.simulating(sens::starter)) motor = pin_outputting;  // if simulating starter, there's no external influence
         else if (!pin_outputting) {  // otherwise if we aren't driving the starter ...
             do {
-                motor = digitalRead(starter_pin);         // then let's read the pin, and starter variable will reflect whether starter has been turned on externally
-            } while (motor != digitalRead(starter_pin));  // due to a chip glitch, starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+                motor = digitalRead(pin);         // then let's read the pin, and starter variable will reflect whether starter has been turned on externally
+            } while (motor != digitalRead(pin));  // due to a chip glitch, starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
             if (now_req != REQ_ON) now_req = REQ_NA;
         }  // now, if we aren't driving the starter, we've read the pin and know its status
         if (motor || now_req != REQ_ON || !remote_start_support) {  // if starter is already being driven by us or externally, or we aren't being tasked to drive it, or we don't even support driving it
@@ -217,8 +219,8 @@ class Starter {
         if (brake.autoholding || !brake_before_starting) {  // if the brake is being held down, or if we don't care whether it is
             starterTimer.set((int64_t)run_timeout);              // if left on the starter will turn off automatically after X seconds
             pin_outputting = motor = HIGH;    // ensure starter variable always reflects the starter status regardless who is driving it
-            set_pin (starter_pin, OUTPUT);     // then set pin to an output
-            write_pin (starter_pin, motor);  // and start the motor
+            set_pin (pin, OUTPUT);     // then set pin to an output
+            write_pin (pin, motor);  // and start the motor
             now_req = REQ_NA;          // we have serviced starter on request, so cancel it
             return;                            // if the brake was right we have started driving the starter
         }  // from here on, we can assume the brake isn't being held on, which is in the way of our task to begin driving the starter
