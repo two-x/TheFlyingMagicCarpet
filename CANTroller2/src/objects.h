@@ -103,6 +103,22 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
         else write_pin(fuelpump_pin, fuelpump_bool);
     }
   public:
+    void update() {
+        float tachnow = tach.filt();
+        if ((tachnow < fuelpump_turnon_rpm) || !ignition) {
+            fuelpump_v = fuelpump_off_v;
+            fuelpump_adc = 0;
+            fuelpump_bool = LOW;
+        }
+        else {
+            fuelpump_v = map(gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], fuelpump_on_min_v, fuelpump_on_max_v);
+            fuelpump_v = constrain(fuelpump_v, fuelpump_on_min_v, fuelpump_on_max_v);
+            fuelpump_adc = map((int)fuelpump_v, 0, (int)fuelpump_on_max_v, 0, 255);
+            fuelpump_bool = HIGH;
+        }
+        fuelpump_off = !fuelpump_bool;
+        writepin();
+    }
     void setup() {
         Serial.printf("Fuel pump.. ");
         if (variable_speed_output) {
@@ -118,23 +134,7 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
             set_pin(fuelpump_pin, OUTPUT);  // initialize_pin
             Serial.printf("using digital drive\n");
         }
-        writepin();
-    }
-    void update() {
-        float tachnow = tach.filt();
-        if (tachnow < fuelpump_turnon_rpm) {
-            fuelpump_v = fuelpump_off_v;
-            fuelpump_adc = 0;
-            fuelpump_bool = LOW;
-        }
-        else {
-            fuelpump_v = map(tachnow, tach.idle_rpm(), tach.redline_rpm(), fuelpump_on_min_v, fuelpump_on_max_v);
-            fuelpump_v = constrain(fuelpump_v, fuelpump_on_min_v, fuelpump_on_max_v);
-            fuelpump_adc = map((int)fuelpump_v, 0, (int)fuelpump_on_max_v, 0, 255);
-            fuelpump_bool = HIGH;
-        }
-        fuelpump_off = !fuelpump_bool;
-        writepin();
+        update();
     }
     float volts() { return fuelpump_v; }
     float volts_min() { return fuelpump_off_v; }
