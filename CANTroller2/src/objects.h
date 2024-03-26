@@ -93,26 +93,44 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
     float fuelpump_on_max_v = 12.0;
     float fuelpump_v = 0.0;
     float fuelpump_turnon_rpm = 200.0;
+    int fuelpump_adc = 0;
     bool fuelpump_bool = LOW;
   private:
+    int ledc_channel, pwm_frequency = 42, pwm_resolution = 8;
     bool variable_speed_output = false;
     void writepin() {
-        if (!variable_speed_output) writepin();
+        if (variable_speed_output) ledcWrite(ledc_channel, fuelpump_adc);
+        else write_pin(fuelpump_pin, fuelpump_bool);
     }
   public:
     void setup() {
-        set_pin(fuelpump_pin, OUTPUT);  // initialize_pin
+        Serial.printf("Fuel pump.. ");
+        if (variable_speed_output) {
+            int ledc_channel = analogGetChannel(fuelpump_pin);
+            if (ledcSetup(ledc_channel, pwm_frequency, pwm_resolution) == 0) Serial.printf("failed to configure ");
+            else {
+                Serial.printf("using ");
+                ledcAttachPin(fuelpump_pin, ledc_channel);
+            }
+            Serial.printf("ledc ch %d, %d bit at %d Hz\n", ledc_channel, pwm_resolution, pwm_frequency);
+        }
+        else {
+            set_pin(fuelpump_pin, OUTPUT);  // initialize_pin
+            Serial.printf("using digital drive\n");
+        }
         writepin();
     }
     void update() {
         float tachnow = tach.filt();
         if (tachnow < fuelpump_turnon_rpm) {
             fuelpump_v = fuelpump_off_v;
+            fuelpump_adc = 0;
             fuelpump_bool = LOW;
         }
         else {
             fuelpump_v = map(tachnow, tach.idle_rpm(), tach.redline_rpm(), fuelpump_on_min_v, fuelpump_on_max_v);
             fuelpump_v = constrain(fuelpump_v, fuelpump_on_min_v, fuelpump_on_max_v);
+            fuelpump_adc = map((int)fuelpump_v, 0, (int)fuelpump_on_max_v, 0, 255);
             fuelpump_bool = HIGH;
         }
         writepin();
