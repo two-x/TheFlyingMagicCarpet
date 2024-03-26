@@ -1,6 +1,7 @@
 // Carpet CANTroller III  main source Code  - see README.md
 #include "objects.h"
 static FuelPump fuelpump;
+static Starter starter;
 #include "display.h"  // includes neopixel.h, touch.h
 #include "runmodes.h"
 static RunModeManager run(&screen, &encoder);
@@ -64,7 +65,7 @@ void loop() {
     }
     
     basicsw_update();         // see if basic mode switch got hit
-    starter_update();         // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
+    starter.update();         // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
     encoder.update();         // read encoder input signals  // 20 us per loop
     pot.update();             // consistent 400 us per loop for analog read operation. we only see this for the pot (!?) changing pins is no help 
     fuelpump.update();        // drives power to the fuel pump when the engine is turning

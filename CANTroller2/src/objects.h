@@ -169,58 +169,71 @@ void update_temperature_sensors(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently
     }
 }
-void starter_update () {  // starter bidirectional handler logic.  Outside code interacts with handler by setting starter_request = REQ_OFF, REQ_ON, or REQ_TOG
-    static int lastbrakemode;
-    if (!starter_signal_support) {  // if we don't get involved with starting the car
-        starter = LOW;              // arbitrarily give this variable a fixed value
-        starter_request = REQ_NA;   // cancel any requests which we are ignoring anyway
-        return;                     // no action
-    }  // from here on, we can assume starter signal is supported
-    if (starter_request == REQ_TOG) starter_request = !starter_output;  // translate a toggle request to a drive request opposite to the current drive state
-    starter_req_on_bool = (starter_request == REQ_ON);
-    if (starter_output && (!starter || (starter_request == REQ_OFF) || starterTimer.expired())) {  // if we're driving the motor but need to stop or in the process of stopping
-        if (starter) {                         // if motor is currently on
-            starter = LOW;                     // we will turn it off
-            write_pin (starter_pin, starter);  // begin driving the pin low voltage
-            starterTimer.set((int64_t)starter_turnoff_timeout);  // start timer to control length of low output
-            return;                 // ditch out, leaving the motor-off request intact. we'll check on the timer next time
-        }
-        else if ((starter_request == REQ_OFF) || starterTimer.expired()) {          // if it's been long enough since turning off the motor circuit ...
-            set_pin (starter_pin, INPUT_PULLDOWN);  // set pin as input
-            starter_output = false;                 // we are no longer driving the pin
-            starter_request = REQ_NA;               // reset the request line
-        }
-    }  // now, we have stopped driving the starter if we were supposed to stop
-    if (sim.simulating(sens::starter)) starter = starter_output;  // if simulating starter, there's no external influence
-    else if (!starter_output) {  // otherwise if we aren't driving the starter ...
-        do {
-            starter = digitalRead(starter_pin);         // then let's read the pin, and starter variable will reflect whether starter has been turned on externally
-        } while (starter != digitalRead(starter_pin));  // due to a chip glitch, starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
-        if (starter_request != REQ_ON) starter_request = REQ_NA;
-    }  // now, if we aren't driving the starter, we've read the pin and know its status
-    if (starter || starter_request != REQ_ON || !remote_start_support) {  // if starter is already being driven by us or externally, or we aren't being tasked to drive it, or we don't even support driving it
-        starter_request = REQ_NA;  // cancel any requests
-        return;                    // and ditch
-    }  // from here on, we can assume the starter is off and we are supposed to turn it on
-    if (brake.autoholding || !brake_before_starting) {  // if the brake is being held down, or if we don't care whether it is
-        starterTimer.set((int64_t)starter_run_timeout);              // if left on the starter will turn off automatically after X seconds
-        starter_output = starter = HIGH;    // ensure starter variable always reflects the starter status regardless who is driving it
-        set_pin (starter_pin, OUTPUT);     // then set pin to an output
-        write_pin (starter_pin, starter);  // and start the motor
-        starter_request = REQ_NA;          // we have serviced starter on request, so cancel it
-        return;                            // if the brake was right we have started driving the starter
-    }  // from here on, we can assume the brake isn't being held on, which is in the way of our task to begin driving the starter
-    if (brake.motormode != AutoHold) {  // if we haven't yet told the brake to hold down
-        lastbrakemode = brake.motormode;
-        brake.setmode(AutoHold);  // tell the brake to hold
-        starterTimer.set((int64_t)starter_pushbrake_timeout);   // start a timer to time box that action
-        return;  // we told the brake to hold down, leaving the request to turn the starter on intact, so we'll be back to check
-    }  // at this point the brake has been told to hold but isn't holding yet
-    if (starterTimer.expired()) {  // if we've waited long enough for the damn brake
-        if (brake.motormode == AutoHold) brake.setmode(lastbrakemode);  // put the brake back to doing whatever it was doing before
-        starter_request = REQ_NA;  // cancel the starter on request, we can't drive the starter cuz the car might lurch forward
-    }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
-}
+class Starter {
+  private:
+    uint32_t pushbrake_timeout = 3000000;
+    uint32_t run_timeout = 5000000;
+    uint32_t turnoff_timeout = 100000;
+    Timer starterTimer;  // If remotely-started starting event is left on for this long, end it automatically
+    int lastbrakemode;
+    bool pin_outputting = false;   // set by handler only. High when we're driving starter, otherwise starter is an input
+  public:
+    bool motor = LOW;             // set by handler only. Reflects current state of starter signal (does not indicate source)
+    int now_req = REQ_NA;
+    bool req_on = false;
+    void request(int req) { now_req = req; }
+    void update() {  // starter bidirectional handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
+        if (!starter_signal_support) {  // if we don't get involved with starting the car
+            motor = LOW;              // arbitrarily give this variable a fixed value
+            now_req = REQ_NA;   // cancel any requests which we are ignoring anyway
+            return;                     // no action
+        }  // from here on, we can assume starter signal is supported
+        if (now_req == REQ_TOG) now_req = !pin_outputting;  // translate a toggle request to a drive request opposite to the current drive state
+        req_on = (now_req == REQ_ON);
+        if (pin_outputting && (!motor || (now_req == REQ_OFF) || starterTimer.expired())) {  // if we're driving the motor but need to stop or in the process of stopping
+            if (motor) {                         // if motor is currently on
+                motor = LOW;                     // we will turn it off
+                write_pin (starter_pin, motor);  // begin driving the pin low voltage
+                starterTimer.set((int64_t)turnoff_timeout);  // start timer to control length of low output
+                return;                 // ditch out, leaving the motor-off request intact. we'll check on the timer next time
+            }
+            else if ((now_req == REQ_OFF) || starterTimer.expired()) {          // if it's been long enough since turning off the motor circuit ...
+                set_pin (starter_pin, INPUT_PULLDOWN);  // set pin as input
+                pin_outputting = false;                 // we are no longer driving the pin
+                now_req = REQ_NA;               // reset the request line
+            }
+        }  // now, we have stopped driving the starter if we were supposed to stop
+        if (sim.simulating(sens::starter)) motor = pin_outputting;  // if simulating starter, there's no external influence
+        else if (!pin_outputting) {  // otherwise if we aren't driving the starter ...
+            do {
+                motor = digitalRead(starter_pin);         // then let's read the pin, and starter variable will reflect whether starter has been turned on externally
+            } while (motor != digitalRead(starter_pin));  // due to a chip glitch, starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+            if (now_req != REQ_ON) now_req = REQ_NA;
+        }  // now, if we aren't driving the starter, we've read the pin and know its status
+        if (motor || now_req != REQ_ON || !remote_start_support) {  // if starter is already being driven by us or externally, or we aren't being tasked to drive it, or we don't even support driving it
+            now_req = REQ_NA;  // cancel any requests
+            return;                    // and ditch
+        }  // from here on, we can assume the starter is off and we are supposed to turn it on
+        if (brake.autoholding || !brake_before_starting) {  // if the brake is being held down, or if we don't care whether it is
+            starterTimer.set((int64_t)run_timeout);              // if left on the starter will turn off automatically after X seconds
+            pin_outputting = motor = HIGH;    // ensure starter variable always reflects the starter status regardless who is driving it
+            set_pin (starter_pin, OUTPUT);     // then set pin to an output
+            write_pin (starter_pin, motor);  // and start the motor
+            now_req = REQ_NA;          // we have serviced starter on request, so cancel it
+            return;                            // if the brake was right we have started driving the starter
+        }  // from here on, we can assume the brake isn't being held on, which is in the way of our task to begin driving the starter
+        if (brake.motormode != AutoHold) {  // if we haven't yet told the brake to hold down
+            lastbrakemode = brake.motormode;
+            brake.setmode(AutoHold);  // tell the brake to hold
+            starterTimer.set((int64_t)pushbrake_timeout);   // start a timer to time box that action
+            return;  // we told the brake to hold down, leaving the request to turn the starter on intact, so we'll be back to check
+        }  // at this point the brake has been told to hold but isn't holding yet
+        if (starterTimer.expired()) {  // if we've waited long enough for the damn brake
+            if (brake.motormode == AutoHold) brake.setmode(lastbrakemode);  // put the brake back to doing whatever it was doing before
+            now_req = REQ_NA;  // cancel the starter on request, we can't drive the starter cuz the car might lurch forward
+        }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
+    }
+};
 void ignition_panic_update(int runmode) {  // Run once each main loop
     if (panicstop_request == REQ_TOG) panicstop_request = !panicstop;
     if (ignition_request == REQ_TOG) ignition_request = !ignition;

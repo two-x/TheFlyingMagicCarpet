@@ -56,7 +56,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (oldmode == STALL);
         else if (oldmode == HOLD) {
             joy_centered = false;
-            starter_request = REQ_OFF;  // Stop any in-progress startings
+            starter.request(REQ_OFF);  // Stop any in-progress startings
         }
         else if (oldmode == FLY) car_hasnt_moved = false;
         else if (oldmode == CRUISE) cruise_adjusting = false;
@@ -133,9 +133,8 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             steer.setmode(OpenLoop);
         }
         if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
-        if (hotrc.sw_event(CH4)) starter_request = REQ_TOG;
-        if (starter || !tach.engine_stopped()) mode = HOLD;  // If we started the car, enter hold mode once starter is released
-        // Serial.printf("%d/%d ", starter_request, starter);
+        if (hotrc.sw_event(CH4)) starter.request(REQ_TOG);
+        if (starter.motor || !tach.engine_stopped()) mode = HOLD;  // If we started the car, enter hold mode once starter is released
     }
     void run_holdMode() {
         if (we_just_switched_modes) {
@@ -146,9 +145,9 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             steer.setmode(OpenLoop);
         }
         if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
-        if (hotrc.sw_event(CH4)) starter_request = REQ_OFF;
+        if (hotrc.sw_event(CH4)) starter.request(REQ_OFF);
         if (hotrc.joydir(VERT) != JOY_UP) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
-        else if (joy_centered && !starter && !hotrc.radiolost()) mode = FLY; // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
+        else if (joy_centered && !starter.motor && !hotrc.radiolost()) mode = FLY; // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
     }
     void run_flyMode() {
         if (we_just_switched_modes) {
