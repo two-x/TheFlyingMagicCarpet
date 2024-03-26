@@ -23,7 +23,7 @@
 #define   brake_pwm_pin 17 // pwm0/adc2.6/tx1  // output, pwm signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% is stopped)
 #define   steer_pwm_pin 18 // pwm0/adc2.7/rx1  // output, pwm signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
 #define steer_enc_a_pin 19 // usb-d-/adc2.8  * // reserved for usb or a steering quadrature encoder. encoder "A" signal
-#define steer_enc_b_pin 20 // usb-d+/adc2.9  * // reserved for usb or a steering quadrature encoder. encoder "B" signal
+#define    fuelpump_pin 20 // usb-d+/adc2.9  * // alternate fuel pump power signal, or use for usb or a steering quadrature encoder. encoder "B" signal
 #define     onewire_pin 21 // pwm0             // onewire bus for temperature sensor data. note: tested this does not work on higher-numbered pins (~35+)
 #define      speedo_pin 35 // spiram/octspi    // int Input, active high, asserted when magnet south is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
 #define     starter_pin 36 // sram/ospi/glitch // input/Output (both active high), output when starter is being driven, otherwise input senses external starter activation
@@ -132,6 +132,7 @@ bool use_i2c_baton = true;
 bool screensaver_max_refresh = false;
 bool brake_before_starting = true;
 bool watchdog_enabled = false;
+bool fuelpump_supported = true;
 int throttle_ctrl_mode = OpenLoop;
 // dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
 bool usb_jtag = true;                // if you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)

@@ -50,7 +50,9 @@ void initialize_pins() {
     // set_pin(free_pin, INPUT_PULLUP);         // ensure defined voltage level is present for unused pin
     set_pin(uart_tx_pin, INPUT);             // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
     if (!usb_jtag) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // assign stable defined behavior to currently unused pin
+    #ifdef steer_enc_b_pin
     if (!usb_jtag) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // assign stable defined behavior to currently unused pin
+    #endif
 }
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
     sim.set_can_sim(sens::joy, false);
@@ -84,6 +86,38 @@ void partition_table() {
     }
     esp_partition_iterator_release(iterator);
 }
+class FuelPump {  // drives power to the fuel pump when the engine is turning
+  public:
+    float fuelpump_off_v = 0.0;
+    float fuelpump_on_min_v = 8.0;
+    float fuelpump_on_max_v = 12.0;
+    float fuelpump_v = 0.0;
+    float fuelpump_turnon_rpm = 200.0;
+    bool fuelpump_bool = LOW;
+  private:
+    bool variable_speed_output = false;
+    void writepin() {
+        if (!variable_speed_output) writepin();
+    }
+  public:
+    void setup() {
+        set_pin(fuelpump_pin, OUTPUT);  // initialize_pin
+        writepin();
+    }
+    void update() {
+        float tachnow = tach.filt();
+        if (tachnow < fuelpump_turnon_rpm) {
+            fuelpump_v = fuelpump_off_v;
+            fuelpump_bool = LOW;
+        }
+        else {
+            fuelpump_v = map(tachnow, tach.idle_rpm(), tach.redline_rpm(), fuelpump_on_min_v, fuelpump_on_max_v);
+            fuelpump_v = constrain(fuelpump_v, fuelpump_on_min_v, fuelpump_on_max_v);
+            fuelpump_bool = HIGH;
+        }
+        writepin();
+    }
+};
 void sim_setup() {
     sim.register_device(sens::pressure, pressure, pressure.source());
     sim.register_device(sens::brkpos, brkpos, brkpos.source());
@@ -129,7 +163,7 @@ void starter_update () {  // starter bidirectional handler logic.  Outside code 
             starterTimer.set((int64_t)starter_turnoff_timeout);  // start timer to control length of low output
             return;                 // ditch out, leaving the motor-off request intact. we'll check on the timer next time
         }
-        else if (starterTimer.expired()) {          // if it's been long enough since turning off the motor circuit ...
+        else if ((starter_request == REQ_OFF) || starterTimer.expired()) {          // if it's been long enough since turning off the motor circuit ...
             set_pin (starter_pin, INPUT_PULLDOWN);  // set pin as input
             starter_output = false;                 // we are no longer driving the pin
             starter_request = REQ_NA;               // reset the request line

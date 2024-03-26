@@ -2,6 +2,7 @@
 #include "objects.h"
 #include "display.h"  // includes neopixel.h, touch.h
 #include "runmodes.h"
+static FuelPump fuelpump;
 static RunModeManager run(&screen, &encoder);
 
 void setup() {
@@ -27,6 +28,7 @@ void setup() {
     airvelo.setup();          // must be done after i2c is started
     mapsens.setup();
     lightbox.setup();
+    fuelpump.setup();
     tempsens.setup();         // onewire bus and temp sensors
     TaskHandle_t temptask = nullptr;
     xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 6, &temptask, CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task
@@ -67,6 +69,7 @@ void loop() {
     starter_update();         // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
     encoder.update();         // read encoder input signals  // 20 us per loop
     pot.update();             // consistent 400 us per loop for analog read operation. we only see this for the pot (!?) changing pins is no help 
+    fuelpump.update();        // drives power to the fuel pump when the engine is turning
     brkpos.update();          // brake position (consistent 120 us)
     pressure.update();        // brake pressure  // ~50 us
     tach.update();            // get pulse timing from hall effect tachometer on flywheel
