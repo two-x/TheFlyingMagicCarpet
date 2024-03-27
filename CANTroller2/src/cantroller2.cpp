@@ -30,6 +30,7 @@ void setup() {
     mapsens.setup();
     lightbox.setup();
     fuelpump.setup();
+    starter.setup();
     tempsens.setup();         // onewire bus and temp sensors
     TaskHandle_t temptask = nullptr;
     xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 6, &temptask, CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task

@@ -46,13 +46,8 @@ void initialize_pins() {
     set_pin(touch_cs_pin, OUTPUT, HIGH);     // deasserting touch cs line in case i2c captouch screen is used
     set_pin(syspower_pin, OUTPUT, syspower);
     set_pin(basicmodesw_pin, INPUT_PULLUP);
-    set_pin(starter_pin, INPUT_PULLDOWN);
-    // set_pin(free_pin, INPUT_PULLUP);         // ensure defined voltage level is present for unused pin
+    set_pin(free_pin, INPUT_PULLUP);         // ensure defined voltage level is present for unused pin
     set_pin(uart_tx_pin, INPUT);             // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
-    if (!usb_jtag) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // assign stable defined behavior to currently unused pin
-    #ifdef steer_enc_b_pin
-    if (!usb_jtag) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // assign stable defined behavior to currently unused pin
-    #endif
 }
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
     sim.set_can_sim(sens::joy, false);
@@ -63,7 +58,6 @@ void set_board_defaults() {          // true for dev boards, false for printed b
     sim.set_can_sim(sens::mulebatt, running_on_devboard);
     if (!running_on_devboard) {      // override settings if running on the real car
         sim.set_potmap(sens::none);        
-        usb_jtag = false;
         looptime_print = false;      // Makes code write out timestamps throughout loop to serial port
         touch_reticles = false;
         console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
@@ -86,61 +80,6 @@ void partition_table() {
     }
     esp_partition_iterator_release(iterator);
 }
-class FuelPump {  // drives power to the fuel pump when the engine is turning
-  public:
-    float fuelpump_off_v = 0.0;
-    float fuelpump_on_min_v = 8.0;
-    float fuelpump_on_max_v = 12.0;
-    float fuelpump_v = 0.0;
-    float fuelpump_turnon_rpm = 200.0;
-    int fuelpump_adc = 0;
-    bool fuelpump_bool = LOW, fuelpump_off = HIGH;
-  private:
-    bool variable_speed_output = true;
-    int pin, ledc_channel, pwm_frequency = 42, pwm_resolution = 8;
-    void writepin() {
-        if (variable_speed_output) ledcWrite(ledc_channel, fuelpump_adc);
-        else write_pin(pin, fuelpump_bool);
-    }
-  public:
-    FuelPump(int _pin) : pin(_pin) {}
-    void update() {
-        float tachnow = tach.filt();
-        if ((tachnow < fuelpump_turnon_rpm) || !ignition) {
-            fuelpump_v = fuelpump_off_v;
-            fuelpump_adc = 0;
-            fuelpump_bool = LOW;
-        }
-        else {
-            fuelpump_v = map(gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], fuelpump_on_min_v, fuelpump_on_max_v);
-            fuelpump_v = constrain(fuelpump_v, fuelpump_on_min_v, fuelpump_on_max_v);
-            fuelpump_adc = map((int)fuelpump_v, 0, (int)fuelpump_on_max_v, 0, 255);
-            fuelpump_bool = HIGH;
-        }
-        fuelpump_off = !fuelpump_bool;
-        writepin();
-    }
-    void setup() {
-        Serial.printf("Fuel pump.. ");
-        if (variable_speed_output) {
-            int ledc_channel = analogGetChannel(pin);
-            if (ledcSetup(ledc_channel, pwm_frequency, pwm_resolution) == 0) Serial.printf("failed to configure ");
-            else {
-                Serial.printf("using ");
-                ledcAttachPin(pin, ledc_channel);
-            }
-            Serial.printf("ledc ch %d, %d bit at %d Hz\n", ledc_channel, pwm_resolution, pwm_frequency);
-        }
-        else {
-            set_pin(pin, OUTPUT);  // initialize_pin
-            Serial.printf("using digital drive\n");
-        }
-        update();
-    }
-    float volts() { return fuelpump_v; }
-    float volts_min() { return fuelpump_off_v; }
-    float volts_max() { return fuelpump_on_max_v; }
-};
 void sim_setup() {
     sim.register_device(sens::pressure, pressure, pressure.source());
     sim.register_device(sens::brkpos, brkpos, brkpos.source());
@@ -170,72 +109,6 @@ void update_temperature_sensors(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently
     }
 }
-class Starter {
-  private:
-    uint32_t pushbrake_timeout = 3000000;
-    uint32_t run_timeout = 5000000;
-    uint32_t turnoff_timeout = 100000;
-    Timer starterTimer;  // If remotely-started starting event is left on for this long, end it automatically
-    int lastbrakemode, pin;
-    bool pin_outputting = false;   // set by handler only. High when we're driving starter, otherwise starter is an input
-  public:
-    Starter(int _pin) : pin(_pin) {}
-    bool motor = LOW;             // set by handler only. Reflects current state of starter signal (does not indicate source)
-    int now_req = REQ_NA;
-    bool req_active = false;
-    void request(int req) { now_req = req; }
-    void update() {  // starter bidirectional handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
-        if (!starter_signal_support) {  // if we don't get involved with starting the car
-            motor = LOW;              // arbitrarily give this variable a fixed value
-            now_req = REQ_NA;   // cancel any requests which we are ignoring anyway
-            return;                     // no action
-        }  // from here on, we can assume starter signal is supported
-        if (now_req == REQ_TOG) now_req = !pin_outputting;  // translate a toggle request to a drive request opposite to the current drive state
-        req_active = (now_req != REQ_NA);
-        if (pin_outputting && (!motor || (now_req == REQ_OFF) || starterTimer.expired())) {  // if we're driving the motor but need to stop or in the process of stopping
-            if (motor) {                         // if motor is currently on
-                motor = LOW;                     // we will turn it off
-                write_pin (pin, motor);  // begin driving the pin low voltage
-                starterTimer.set((int64_t)turnoff_timeout);  // start timer to control length of low output
-                return;                 // ditch out, leaving the motor-off request intact. we'll check on the timer next time
-            }
-            else if (starterTimer.expired()) {          // if it's been long enough since turning off the motor circuit ...
-                set_pin (pin, INPUT_PULLDOWN);  // set pin as input
-                pin_outputting = false;                 // we are no longer driving the pin
-                now_req = REQ_NA;               // reset the request line
-            }
-        }  // now, we have stopped driving the starter if we were supposed to stop
-        if (sim.simulating(sens::starter)) motor = pin_outputting;  // if simulating starter, there's no external influence
-        else if (!pin_outputting) {  // otherwise if we aren't driving the starter ...
-            do {
-                motor = digitalRead(pin);         // then let's read the pin, and starter variable will reflect whether starter has been turned on externally
-            } while (motor != digitalRead(pin));  // due to a chip glitch, starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
-            if (now_req != REQ_ON) now_req = REQ_NA;
-        }  // now, if we aren't driving the starter, we've read the pin and know its status
-        if (motor || now_req != REQ_ON || !remote_start_support) {  // if starter is already being driven by us or externally, or we aren't being tasked to drive it, or we don't even support driving it
-            now_req = REQ_NA;  // cancel any requests
-            return;                    // and ditch
-        }  // from here on, we can assume the starter is off and we are supposed to turn it on
-        if (brake.autoholding || !brake_before_starting) {  // if the brake is being held down, or if we don't care whether it is
-            starterTimer.set((int64_t)run_timeout);              // if left on the starter will turn off automatically after X seconds
-            pin_outputting = motor = HIGH;    // ensure starter variable always reflects the starter status regardless who is driving it
-            set_pin (pin, OUTPUT);     // then set pin to an output
-            write_pin (pin, motor);  // and start the motor
-            now_req = REQ_NA;          // we have serviced starter on request, so cancel it
-            return;                            // if the brake was right we have started driving the starter
-        }  // from here on, we can assume the brake isn't being held on, which is in the way of our task to begin driving the starter
-        if (brake.motormode != AutoHold) {  // if we haven't yet told the brake to hold down
-            lastbrakemode = brake.motormode;
-            brake.setmode(AutoHold);  // tell the brake to hold
-            starterTimer.set((int64_t)pushbrake_timeout);   // start a timer to time box that action
-            return;  // we told the brake to hold down, leaving the request to turn the starter on intact, so we'll be back to check
-        }  // at this point the brake has been told to hold but isn't holding yet
-        if (starterTimer.expired()) {  // if we've waited long enough for the damn brake
-            if (brake.motormode == AutoHold) brake.setmode(lastbrakemode);  // put the brake back to doing whatever it was doing before
-            now_req = REQ_NA;  // cancel the starter on request, we can't drive the starter cuz the car might lurch forward
-        }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
-    }
-};
 void ignition_panic_update(int runmode) {  // Run once each main loop
     if (panicstop_request == REQ_TOG) panicstop_request = !panicstop;
     if (ignition_request == REQ_TOG) ignition_request = !ignition;
@@ -295,3 +168,128 @@ float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) 
     if (std::abs(maf) < 0.001) maf = 0;
     return maf;
 }
+class Starter {
+  private:
+    uint32_t pushbrake_timeout = 3000000;
+    uint32_t run_timeout = 5000000;
+    uint32_t turnoff_timeout = 100000;
+    Timer starterTimer;  // If remotely-started starting event is left on for this long, end it automatically
+    int lastbrakemode, pin;
+    bool pin_outputting = false;   // set by handler only. High when we're driving starter, otherwise starter is an input
+  public:
+    Starter(int _pin) : pin(_pin) {}
+    bool motor = LOW;             // set by handler only. Reflects current state of starter signal (does not indicate source)
+    int now_req = REQ_NA;
+    bool req_active = false;
+    void setup() {
+        Serial.printf("Starter..\n");
+        set_pin (pin, INPUT_PULLDOWN);  // set pin as input
+    }
+    void request(int req) { now_req = req; }
+    void update() {  // starter bidirectional handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
+        if (!starter_signal_support) {  // if we don't get involved with starting the car
+            motor = LOW;              // arbitrarily give this variable a fixed value
+            now_req = REQ_NA;   // cancel any requests which we are ignoring anyway
+            return;                     // no action
+        }  // from here on, we can assume starter signal is supported
+        if (now_req == REQ_TOG) now_req = !pin_outputting;  // translate a toggle request to a drive request opposite to the current drive state
+        req_active = (now_req != REQ_NA);
+        if (pin_outputting && (!motor || (now_req == REQ_OFF) || starterTimer.expired())) {  // if we're driving the motor but need to stop or in the process of stopping
+            if (motor) {                         // if motor is currently on
+                motor = LOW;                     // we will turn it off
+                write_pin (pin, motor);  // begin driving the pin low voltage
+                starterTimer.set((int64_t)turnoff_timeout);  // start timer to control length of low output
+                return;                 // ditch out, leaving the motor-off request intact. we'll check on the timer next time
+            }
+            else if (starterTimer.expired()) {          // if it's been long enough since turning off the motor circuit ...
+                set_pin (pin, INPUT_PULLDOWN);  // set pin as input
+                pin_outputting = false;                 // we are no longer driving the pin
+                now_req = REQ_NA;               // reset the request line
+            }
+        }  // now, we have stopped driving the starter if we were supposed to stop
+        if (sim.simulating(sens::starter)) motor = pin_outputting;  // if simulating starter, there's no external influence
+        else if (!pin_outputting) {  // otherwise if we aren't driving the starter ...
+            do {
+                motor = digitalRead(pin);         // then let's read the pin, and starter variable will reflect whether starter has been turned on externally
+            } while (motor != digitalRead(pin));  // due to a chip glitch, starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+            if (now_req != REQ_ON) now_req = REQ_NA;
+        }  // now, if we aren't driving the starter, we've read the pin and know its status
+        if (motor || now_req != REQ_ON || !remote_start_support) {  // if starter is already being driven by us or externally, or we aren't being tasked to drive it, or we don't even support driving it
+            now_req = REQ_NA;  // cancel any requests
+            return;                    // and ditch
+        }  // from here on, we can assume the starter is off and we are supposed to turn it on
+        if (brake.autoholding || !brake_before_starting) {  // if the brake is being held down, or if we don't care whether it is
+            starterTimer.set((int64_t)run_timeout);              // if left on the starter will turn off automatically after X seconds
+            pin_outputting = motor = HIGH;    // ensure starter variable always reflects the starter status regardless who is driving it
+            set_pin (pin, OUTPUT);     // then set pin to an output
+            write_pin (pin, motor);  // and start the motor
+            now_req = REQ_NA;          // we have serviced starter on request, so cancel it
+            return;                            // if the brake was right we have started driving the starter
+        }  // from here on, we can assume the brake isn't being held on, which is in the way of our task to begin driving the starter
+        if (brake.motormode != AutoHold) {  // if we haven't yet told the brake to hold down
+            lastbrakemode = brake.motormode;
+            brake.setmode(AutoHold);  // tell the brake to hold
+            starterTimer.set((int64_t)pushbrake_timeout);   // start a timer to time box that action
+            return;  // we told the brake to hold down, leaving the request to turn the starter on intact, so we'll be back to check
+        }  // at this point the brake has been told to hold but isn't holding yet
+        if (starterTimer.expired()) {  // if we've waited long enough for the damn brake
+            if (brake.motormode == AutoHold) brake.setmode(lastbrakemode);  // put the brake back to doing whatever it was doing before
+            now_req = REQ_NA;  // cancel the starter on request, we can't drive the starter cuz the car might lurch forward
+        }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
+    }
+};
+class FuelPump {  // drives power to the fuel pump when the engine is turning
+  public:
+    float fuelpump_off_v = 0.0;
+    float fuelpump_on_min_v = 8.0;
+    float fuelpump_on_max_v = 12.0;
+    float fuelpump_v = 0.0;
+    float fuelpump_turnon_rpm = 200.0;
+    int fuelpump_adc = 0;
+    bool fuelpump_bool = LOW, fuelpump_off = HIGH;
+  private:
+    bool variable_speed_output = true;
+    int pin, ledc_channel, pwm_frequency = 42, pwm_resolution = 8;
+    void writepin() {
+        if (variable_speed_output) ledcWrite(ledc_channel, fuelpump_adc);
+        else write_pin(pin, fuelpump_bool);
+    }
+  public:
+    FuelPump(int _pin) : pin(_pin) {}
+    void update() {
+        float tachnow = tach.filt();
+        if ((tachnow < fuelpump_turnon_rpm) || !ignition) {
+            fuelpump_v = fuelpump_off_v;
+            fuelpump_adc = 0;
+            fuelpump_bool = LOW;
+        }
+        else {
+            fuelpump_v = map(gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], fuelpump_on_min_v, fuelpump_on_max_v);
+            fuelpump_v = constrain(fuelpump_v, fuelpump_on_min_v, fuelpump_on_max_v);
+            fuelpump_adc = map((int)fuelpump_v, 0, (int)fuelpump_on_max_v, 0, 255);
+            fuelpump_bool = HIGH;
+        }
+        fuelpump_off = !fuelpump_bool;
+        writepin();
+    }
+    void setup() {
+        Serial.printf("Fuel pump.. ");
+        if (variable_speed_output) {
+            int ledc_channel = analogGetChannel(pin);
+            if (ledcSetup(ledc_channel, pwm_frequency, pwm_resolution) == 0) Serial.printf("failed to configure ");
+            else {
+                Serial.printf("using ");
+                ledcAttachPin(pin, ledc_channel);
+            }
+            Serial.printf("ledc ch %d, %d bit at %d Hz\n", ledc_channel, pwm_resolution, pwm_frequency);
+        }
+        else {
+            set_pin(pin, OUTPUT);  // initialize_pin
+            Serial.printf("using digital drive\n");
+        }
+        update();
+    }
+    float volts() { return fuelpump_v; }
+    float volts_min() { return fuelpump_off_v; }
+    float volts_max() { return fuelpump_on_max_v; }
+};
