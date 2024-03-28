@@ -46,7 +46,7 @@ void initialize_pins() {
     set_pin(touch_cs_pin, OUTPUT, HIGH);     // deasserting touch cs line in case i2c captouch screen is used
     set_pin(syspower_pin, OUTPUT, syspower);
     set_pin(basicmodesw_pin, INPUT_PULLUP);
-    set_pin(free_pin, INPUT_PULLUP);         // ensure defined voltage level is present for unused pin
+    set_pin(free_pin, INPUT_PULLUP);         // avoid voltage level contention
     set_pin(uart_tx_pin, INPUT);             // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
 }
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
@@ -223,7 +223,7 @@ class Starter {
             pin_outputting = motor = HIGH;    // ensure starter variable always reflects the starter status regardless who is driving it
             set_pin (pin, OUTPUT);     // then set pin to an output
             write_pin (pin, motor);  // and start the motor
-            now_req = REQ_NA;          // we have serviced starter on request, so cancel it
+            now_req = REQ_NA;          // we have serviced starter-on request, so cancel it
             return;                            // if the brake was right we have started driving the starter
         }  // from here on, we can assume the brake isn't being held on, which is in the way of our task to begin driving the starter
         if (brake.motormode != AutoHold) {  // if we haven't yet told the brake to hold down
@@ -234,7 +234,7 @@ class Starter {
         }  // at this point the brake has been told to hold but isn't holding yet
         if (starterTimer.expired()) {  // if we've waited long enough for the damn brake
             if (brake.motormode == AutoHold) brake.setmode(lastbrakemode);  // put the brake back to doing whatever it was doing before
-            now_req = REQ_NA;  // cancel the starter on request, we can't drive the starter cuz the car might lurch forward
+            now_req = REQ_NA;  // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
         }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
     }
 };

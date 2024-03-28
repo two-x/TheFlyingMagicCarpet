@@ -21,8 +21,8 @@
 #define     gas_pwm_pin 16 // pwm1/adc2.5      // output, pwm signal duty cycle controls throttle target. on Due this is the pin labeled DAC1 (where A13 is on Mega)
 #define   brake_pwm_pin 17 // pwm0/adc2.6/tx1  // output, pwm signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% is stopped)
 #define   steer_pwm_pin 18 // pwm0/adc2.7/rx1  // output, pwm signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). jaguar asks for an added 150ohm series R when high is 3.3V
-#define        free_pin 19 // usb-d-/adc2.8  * // reserved for usb or a steering quadrature encoder. encoder "A" signal
-#define    fuelpump_pin 20 // usb-d+/adc2.9  * // alternate fuel pump power signal, or use for usb or a steering quadrature encoder. encoder "B" signal
+#define        free_pin 19 // usb-d-/adc2.8  * // reserved for usb or a steering quadrature encoder.
+#define    fuelpump_pin 20 // usb-d+/adc2.9  * // alternate fuel pump power signal, or use for usb or a steering quadrature encoder. 
 #define     onewire_pin 21 // pwm0             // onewire bus for temperature sensor data. note: tested this does not work on higher-numbered pins (~35+)
 #define      speedo_pin 35 // spiram/octspi    // int input, active high, asserted when magnet south is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
 #define     starter_pin 36 // sram/ospi/glitch // input/Output (both active high), output when starter is being driven, otherwise input senses external starter activation
@@ -59,16 +59,16 @@
 // bootstrap pins: Pin 0 must be pulled high, and pins 45 and 46 pulled low during bootup
 // glitch: pins 36 and 39 will be erroneously pulled low for ~80ns when "certain RTC peripherals power up" (ESP32 errata 3.11). can run adc_power_acquire() to work around glitch but draw ~1mA more power. avoid interrupts on these pins
 // spi bus page including DMA information: https://docs.espressif.com/projects/esp-idf/en/v4.4/esp32s3/api-reference/peripherals/spi_master.html
-#define     tft_rst_pin -1  // tft reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
-#define    tft_ledk_pin -1  // output, optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
-#define   touch_irq_pin -1  // input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - set to 255 if not used
+#define tft_rst_pin -1     // tft reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
+#define tft_ledk_pin -1    // output, optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
+#define touch_irq_pin -1   // input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - set to 255 if not used
 // bm2023 pins: tft_dc_pin 3, onewire_pin 19, hotrc_ch3_pin 20, hotrc_ch4_pin 21, tach_pin 36, ignition_pin 37, syspower_pin 38, encoder_b_pin 40, encoder_a_pin 41, encoder_sw_pin 42, starter_pin 45, sdcard_cs_pin 46, touch_cs_pin 47
 #ifdef USE_BM23_PINS       // for testing using box from bm23, override new pin assignments with old ones
-#define steer_enc_a_pin 1  // not used in bm23, but moving to an unused pin
-#define steer_enc_b_pin 2  // not used in bm23, but moving to an unused pin
+#define fuelpump_pin 1     // not used in bm23, but moving to an unused pin
+#define free_pin 2         // not used in bm23, but moving to an unused pin
 #define tft_dc_pin 3
 #define onewire_pin 19
-#define hotrc_ch3_pin 20
+#define hotrc_ch3_pin 20`
 #define hotrc_ch4_pin 21
 #define tach_pin 36
 #define ignition_pin 37
@@ -89,7 +89,6 @@
 enum hotrc_axis : int { HORZ=0, VERT=1, CH3=2, CH4=3 };
 enum hotrc_val : int { OPMIN=0, CENT=1, OPMAX=2, RAW=3, FILT=4, DBBOT=5, DBTOP=6 };
 enum motor_val : int { PARKED=1, OUT=3, GOVERN=4 , ABSMIN=5, ABSMAX=6, MARGIN=7, IDLE=8, NUM_MOTORVALS=9 };
-// enum idle_val : int { COLD=0, HOT=2 };
 enum stop_val : int { STOP=1 };
 enum steer_val : int { SAFE=1 };
 enum size_enums : int { NUM_AXES=2, NUM_CHANS=4, NUM_VALUS=8 };
@@ -107,9 +106,6 @@ enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3
 enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };   // possible sources of gas, brake, steering commands
 enum ui_modes : int { DatapagesUI=0, ScreensaverUI=1 };
 enum codemodes : int { Confused=0, Booting=1, Parked=2, Driving=3 };
-// enum telemetry_full : int { 
-//     
-// };
 enum telemetry_short : int { _GasServo=0, _BrakeMotor=1, _SteerMotor=2, _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7, _Temps=8, _Other=9, _GPIO=10 };  // _MuleBatt, _MAP, _MAF, _Pot,
 enum telemetry_full : int { _HotRCHorz=11, _HotRCVert=12, _MuleBatt=13, _AirVelo=14, _MAP=15, _Pot=16, _MAF=17, _TempEng=18, _TempWhFL=19, _TempWhFR=20, _TempWhRL=21, _TempWhRR=22, _TempAmb=23 };  // 10 per line
 enum telemetry_nums : int { _None=-1, NumTelemetryBool=9, NumTelemetryShort=11, NumTelemetryFull=24 };
@@ -128,7 +124,7 @@ bool flip_the_screen = false;
 bool cruise_speed_lowerable = true;  // allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool display_enabled = true;         // should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
 bool use_i2c_baton = true;
-bool screensaver_max_refresh = false;
+bool always_max_refresh = false;
 bool brake_before_starting = true;
 bool watchdog_enabled = false;
 bool fuelpump_supported = true;
@@ -212,34 +208,11 @@ int ui_context = DatapagesUI;
 
 // fast macros
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // a macro function to determine the length of string arrays
-#define floor(amt, lim) ((amt <= lim) ? lim : amt)
-#define ceiling(amt, lim) ((amt >= lim) ? lim : amt)
-#undef min
-#undef max
-inline float smax(float a, float b) { return (a > b) ? a : b; }
-inline int32_t smax(int32_t a, int32_t b) { return (a > b) ? a : b; }
-inline uint32_t smax(uint32_t a, uint32_t b) { return (a > b) ? a : b; }
-inline uint32_t smax(uint32_t a, uint32_t b, uint32_t c) { return (a > b) ? ((c > a) ? c : a) : ((c > b) ? c : b); }
-inline float smin(float a, float b) { return (a < b) ? a : b; }
-inline int32_t smin(int32_t a, int32_t b) { return (a < b) ? a : b; }
-inline uint32_t smin(uint32_t a, uint32_t b) { return (a < b) ? a : b; }
-inline uint32_t smin(uint32_t a, uint32_t b, uint32_t c) { return (a < b) ? ((c < a) ? c : a) : ((c < b) ? c : b); }
 #undef constrain
 inline float constrain(float amt, float low, float high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline int32_t constrain(int32_t amt, int32_t low, int32_t high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline uint32_t constrain(uint32_t amt, uint32_t low, uint32_t high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline long constrain(long amt, long low, long high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
-// the above should be templated, i'm sure. i tried the following but it didn't work
-// template <typename T> inline T smax(T a, T b) { return (a > b) ? a : b; }
-// template <typename T> inline T smax(T a, T b, T c) { return (a > b) ? ((c > a) ? c : a) : ((c > b) ? c : b); }
-// template <typename T> inline T smin(T a, T b) { return (a < b) ? a : b; }
-// template <typename T> inline T smin(T a, T b, T c) { return (a < b) ? ((c < a) ? c : a) : ((c < b) ? c : b); }
-// template <typename T> inline T constrain(T amt, T low, T high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
-// template <typename T> inline T map(T x, T in_min, T in_max, T out_min, T out_max) {
-//     if (in_max - in_min > (T)0.001) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
-//     printf ("map not dividing by zero\n");
-//     return out_max;  // Instead of dividing by zero, return the highest valid result
-// }
 #undef map
 inline float map(float x, float in_min, float in_max, float out_min, float out_max) {
     if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
@@ -249,8 +222,6 @@ inline int32_t map(int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, i
     if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
     return out_max;  // instead of dividing by zero, return the highest valid result
 }
-bool rounding = true;
-float dround(float val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
 
 // pin operations
 void set_pin(int pin, int mode) { if (pin >= 0 && pin != 255) pinMode (pin, mode); }
@@ -296,20 +267,6 @@ bool adj_val(float *variable, float modify, float low_limit, float high_limit) {
 bool adj_bool(bool val, int32_t delta) { return delta != 0 ? delta > 0 : val; } // returns 1 on delta=1, 0 on delta=-1, or val on delta=0
 void adj_bool(bool *val, int32_t delta) { *val = adj_bool(*val, delta); }       // sets a bool reference to 1 on 1 delta or 0 on -1 delta
 
-// // hue: 0,255 = red, 85 = grn, 170 = blu | sat: 0 = saturated up to greyscale, 255 = pure color | bright: 0 = blk, 255 = "full" | bright_flat: if =1, "full" brightness varies w/ hue for consistent luminance, otherwise "full" always ranges to 255 (mixed-element colors are brighter) | blu_boost: adds blu_boost/255 desaturation as a ratio of blu dominance
-// template <typename T>
-// T hsv_to_rgb_old(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool bright_flat = 1, uint8_t blu_boost = 0) {  // returns uint32 color in format 0x00RRGGBB
-//     uint32_t rgb[3] = { 255 - 3 * (uint32_t)((255 - hue) % 85), 0, 3 * (uint32_t)((255 - hue) % 85) };
-//     float maxc = (float)((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]);
-//     if (hue <= 85) { rgb[1] = rgb[0]; rgb[0] = rgb[2]; rgb[2] = 0; }
-//     else if (hue <= 170) { rgb[1] = rgb[2]; rgb[2] = rgb[0]; rgb[0] = 0; }
-//     float brightener = (float)bright / (bright_flat ? 255.0 : maxc);
-//     float blu_booster = 1 + (float)(blu_boost * rgb[2]) / (float)(255.0 * (rgb[0] + rgb[1] + rgb[2]));
-//     for (int led=0; led<=2; led++) 
-//         rgb[led] = brightener * ((float)rgb[led] + blu_booster * (255.0 - sat) * (float)(maxc - rgb[led]) / 255.0);
-//     if (std::is_same<T, uint16_t>::value) return (T)((rgb[0] & 0xf8) << 8) | ((rgb[1] & 0xfc) << 5) | (rgb[2] >> 3);
-//     else if (std::is_same<T, uint32_t>::value) return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
-// }
 template <typename T>
 T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {
     uint8_t rgb[3];  // [r,g,b];
@@ -349,13 +306,6 @@ T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {
 uint8_t rando_color() {
     return ((uint8_t)random(0x7) << 5) | ((uint8_t)random(0x7) << 2) | (uint8_t)random(0x3); 
 }
-// uint16_t rando_color() {
-//     return ((uint16_t)random(0x1f) << 11) | ((uint16_t)random(0x3f) << 5) | (uint16_t)random(0x1f); 
-// }
-// uint16_t hue_shift(uint16_t orig, int addme) {
-//     return (orig >> 11(uint16_t)random(0x1f) << 11) | ((uint16_t)random(0x3f) << 5) | (uint16_t)random(0x1f); 
-// }
-
 class Timer {  // !!! beware, this 54-bit microsecond timer overflows after every 571 years
   protected:
     volatile int64_t start_us, timeout_us;

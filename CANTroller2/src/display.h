@@ -529,7 +529,7 @@ class Display {
             return result;
         }
         if (place >= 0 && place < maxlength) {  // Then we want float formatted with enough nonzero digits after the decimal point for given significant digits (eg 123.4, 12.34, 1.234, 0.000)
-            int32_t length = smin(sigdig+1, maxlength);
+            int32_t length = std::min(sigdig+1, maxlength);
             char buffer[length+1];
             std::snprintf(buffer, length + 1, (chop_zeroes) ? "%.*g" : "%.*f", length - 1, value);  // (buf, letters incl. end, %.*g = floats formatted in shortest form, length-1 digits after decimal, val)
             std::string result(buffer);  // copy buffer to result            
@@ -540,11 +540,11 @@ class Display {
         if (place < 0 && sigdig - place <= maxlength) {  // Then we want decimal w/o initial '0' limited to given significant digits (eg .123, .0123, .00123)
             std::string result (std::to_string(value));  // sd=3,  0.1234  d=1 l=6    0.00123
             size_t decimalPos = result.find('.');  // decimalPos will always be 1 (?)
-            if (decimalPos != std::string::npos) result = result.substr(decimalPos, smin(sigdig-place, maxlength));  // Remove any digits to the left of the decimal point
+            if (decimalPos != std::string::npos) result = result.substr(decimalPos, std::min(sigdig-place, maxlength));  // Remove any digits to the left of the decimal point
             return result;
         }  // Otherwise we want scientific notation with precision removed as needed to respect maxlength (eg 1.23e4, 1.23e5, but using long e character not e for negative exponents
         char buffer[maxlength+1];  // Allocate buffer with the maximum required size
-        int32_t truncit = smin(sigdig - 1, maxlength - 4 - (int)(place <= -10 || place >= 10));
+        int32_t truncit = std::min(sigdig - 1, maxlength - 4 - (int)(place <= -10 || place >= 10));
         std::snprintf(buffer, sizeof(buffer), "%.*e", truncit, value);
         std::string result(buffer);  // copy buffer to result
         if (result.find("e+0") != std::string::npos) result.replace(result.find("e+0"), 3, "e");  // Remove useless "+0" from exponent
@@ -700,14 +700,14 @@ class Display {
                 // disp_values_dirty = false;
                 if (disp_values_dirty) {
                     float drange;
-                    draw_dynamic(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-                    draw_dynamic(2, speedo.filt(), 0.0f, speedo.redline_mph(), gas.cruisepid.target());
-                    draw_dynamic(3, tach.filt(), 0.0f, tach.redline_rpm(), gas.pid.target());
-                    draw_dynamic(4, gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], gas.throttle_target_pc);
-                    draw_dynamic(5, pressure.filt(), pressure.min_human(), pressure.max_human(), brake.pids[PressurePID].target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
-                    draw_dynamic(6, brake.pc[OUT], brake.pc[OPMIN], brake.pc[OPMAX]);
-                    draw_dynamic(7, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
-                    draw_dynamic(8, steer.pc[OUT], steer.pc[OPMIN], steer.pc[OPMAX]);
+                    // draw_dynamic(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+                    // draw_dynamic(2, speedo.filt(), 0.0f, speedo.redline_mph(), gas.cruisepid.target());
+                    // draw_dynamic(3, tach.filt(), 0.0f, tach.redline_rpm(), gas.pid.target());
+                    // draw_dynamic(4, gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], gas.throttle_target_pc);
+                    // draw_dynamic(5, pressure.filt(), pressure.min_human(), pressure.max_human(), brake.pids[PressurePID].target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
+                    // draw_dynamic(6, brake.pc[OUT], brake.pc[OPMIN], brake.pc[OPMAX]);
+                    // draw_dynamic(7, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+                    // draw_dynamic(8, steer.pc[OUT], steer.pc[OPMIN], steer.pc[OPMAX]);
                     // if (datapage == PG_RUN) {
                     //     draw_dynamic(9, brkpos.filt(), brkpos.op_min(), brkpos.op_max());
                     //     draw_dynamic(10, mulebatt.filt(), mulebatt.op_min_v(), mulebatt.op_max_v());
@@ -838,17 +838,17 @@ class Display {
                     //     draw_truth(19, dont_take_temperatures, 2);
                     // }
                     // else if (datapage == PG_SIM) {
-                        draw_truth(9, sim->can_sim(sens::joy), 0);
-                        draw_truth(10, sim->can_sim(sens::pressure), 0);
-                        draw_truth(11, sim->can_sim(sens::brkpos), 0);
-                        draw_truth(12, sim->can_sim(sens::speedo), 0);
-                        draw_truth(13, sim->can_sim(sens::tach), 0);
-                        draw_truth(14, sim->can_sim(sens::airvelo), 0);
-                        draw_truth(15, sim->can_sim(sens::mapsens), 0);
-                        draw_truth(16, sim->can_sim(sens::basicsw), 0);                    
-                        draw_asciiname(17, sensorcard[sim->potmap()]);
-                        draw_truth(18, cal_brakemode, 0);
-                        draw_truth(19, cal_gasmode, 0);
+                        // draw_truth(9, sim->can_sim(sens::joy), 0);
+                        // draw_truth(10, sim->can_sim(sens::pressure), 0);
+                        // draw_truth(11, sim->can_sim(sens::brkpos), 0);
+                        // draw_truth(12, sim->can_sim(sens::speedo), 0);
+                        // draw_truth(13, sim->can_sim(sens::tach), 0);
+                        // draw_truth(14, sim->can_sim(sens::airvelo), 0);
+                        // draw_truth(15, sim->can_sim(sens::mapsens), 0);
+                        // draw_truth(16, sim->can_sim(sens::basicsw), 0);                    
+                        // draw_asciiname(17, sensorcard[sim->potmap()]);
+                        // draw_truth(18, cal_brakemode, 0);
+                        // draw_truth(19, cal_gasmode, 0);
                     // }
                     // else if (datapage == PG_UI) {
                     //     draw_dynamic(9, (int32_t)loop_avg_us, looptimer.loop_scale_min_us, looptimer.loop_scale_avg_max_us);
@@ -867,7 +867,7 @@ class Display {
                 }
             }
         }
-        fps = animations.update(spr, disp_simbuttons_dirty);
+        // fps = animations.update(spr, disp_simbuttons_dirty);
         disp_simbuttons_dirty = false;
         return true;
     }
