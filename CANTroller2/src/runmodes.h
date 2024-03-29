@@ -8,7 +8,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     Timer shutdown_timer{5000000};
     Encoder* encoder;
     Display* display;
-    int oldmode = ASLEEP;
+    int oldmode = ASLEEP, last_conscious_mode;
     bool autostopping_last = false, still_interactive = true;
     uint32_t initial_inactivity;
   public:
@@ -37,9 +37,9 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
   private:
     void updateMode() {
-        if (basicmodesw) mode = BASIC;  // if basicmode switch on --> Basic Mode
-        else if ((mode != CAL) && (mode != ASLEEP)) {
-            if (panicstop || !ignition) mode = SHUTDOWN;
+        if (mode != ASLEEP) {
+            if (basicmodesw) mode = BASIC;  // if basicmode switch on --> Basic Mode
+            else if (mode != CAL && !ignition) mode = SHUTDOWN;
             else if (tach.engine_stopped()) mode = STALL;;  // otherwise if engine not running --> Stall Mode
         }
         we_just_switched_modes = (mode != oldmode);  // currentMode should not be changed after this point in loop
@@ -49,6 +49,18 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         oldmode = mode;
     }
+    //     if (basicmodesw) mode = BASIC;  // if basicmode switch on --> Basic Mode
+    //     else if ((mode != CAL) && (mode != ASLEEP)) {
+    //         if (panicstop || !ignition) mode = SHUTDOWN;
+    //         else if (tach.engine_stopped()) mode = STALL;;  // otherwise if engine not running --> Stall Mode
+    //     }
+    //     we_just_switched_modes = (mode != oldmode);  // currentMode should not be changed after this point in loop
+    //     if (we_just_switched_modes) {
+    //         display->disp_runmode_dirty = true;
+    //         cleanup_state_variables();
+    //     }
+    //     oldmode = mode;
+    // }
     void cleanup_state_variables() {
         if (oldmode == BASIC);
         else if (oldmode == ASLEEP);
@@ -71,6 +83,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             watchdog.set_codemode(Parked);
         }
         if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
+        if (hotrc.sw_event(CH4) && !ignition) mode = ASLEEP;
         if (!basicmodesw && !tach.engine_stopped()) mode = speedo.car_stopped() ? HOLD : FLY;  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
     }
     void run_asleepMode() {  // turns off syspower and just idles. sleep_request are handled here or in shutdown mode below
@@ -78,7 +91,9 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             screenSaverTimer.reset();
             initial_inactivity = (uint32_t)sleep_inactivity_timer.elapsed();  // if entered asleep mode manually rather than timeout, start screensaver countdown
             still_interactive = true;
+            sleep_request = REQ_NA;
             powering_up = false;
+            last_conscious_mode = oldmode;
             brake.setmode(Halt);
             steer.setmode(Halt);
             set_syspower(LOW); // Power down devices to save battery
@@ -90,13 +105,13 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
                 still_interactive = false;
             }
         }
-        if (hotrc.sw_event(CH4) || encoder->button.pressed()) {  // if we've been triggered to wake up
+        if (hotrc.sw_event(CH4) || encoder->button.pressed() || sleep_request == REQ_TOG || sleep_request == REQ_ON) {  // if we've been triggered to wake up
             set_syspower(HIGH);              // switch on control system devices
             pwrup_timer.reset();  // stay in asleep mode for a delay to allow devices to power up
             powering_up = true;
             display->auto_saver(false);      // turn off screensaver
         }
-        if (powering_up && pwrup_timer.expired()) mode = SHUTDOWN;  // display->all_dirty();  // tells display to redraw everything. display must set back to false
+        if (powering_up && pwrup_timer.expired()) mode = (basicmodesw || (last_conscious_mode == BASIC)) ? BASIC : SHUTDOWN;  // display->all_dirty();  // tells display to redraw everything. display must set back to false
     }
     void run_shutdownMode() { // In shutdown mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.
         if (we_just_switched_modes) {              
@@ -135,6 +150,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
         if (hotrc.sw_event(CH4)) starter.request(REQ_TOG);
         if (starter.motor || !tach.engine_stopped()) mode = HOLD;  // If we started the car, enter hold mode once starter is released
+        // Serial.printf("%d/%d ", starter_request, starter);
     }
     void run_holdMode() {
         if (we_just_switched_modes) {
@@ -182,12 +198,12 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (we_just_switched_modes) {
             calmode_request = cal_gasmode_request = cal_brakemode = false;
             gas.setmode(Idle);
-            brake.setmode(Halt);
+            brake.setmode(Calibrate);
             steer.setmode(Halt);
         }
         else if (calmode_request) mode = SHUTDOWN;
-        if (cal_brakemode) brake.setmode(Calibrate);
-        else if (brake.motormode == Calibrate) brake.setmode(Halt);
+        // if (cal_brakemode) brake.setmode(Calibrate);
+        // else if (brake.motormode == Calibrate) brake.setmode(Halt);
         if (cal_gasmode_request) gas.setmode(Calibrate);
         else gas.setmode(Idle);
         if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
