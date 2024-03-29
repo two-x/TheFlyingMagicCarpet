@@ -73,18 +73,21 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (oldmode == FLY) car_hasnt_moved = false;
         else if (oldmode == CRUISE) cruise_adjusting = false;
         else if (oldmode == CAL) cal_gasmode = cal_gasmode_request = cal_brakemode = false;
+        display->disp_bools_dirty = true;
     }
     void run_basicMode() { // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         if (we_just_switched_modes) {
             gas.setmode(ParkMotor);  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
             brake.setmode(ParkMotor);
             steer.setmode(OpenLoop);
-            powering_up = false;  // to cover unlikely edge case where basic mode switch is enabled during wakeup from asleep mode
+            powering_up = basicmode_request = false;  // to cover unlikely edge case where basic mode switch is enabled during wakeup from asleep mode
             watchdog.set_codemode(Parked);
+            display->disp_bools_dirty = true;
         }
         if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
         if (hotrc.sw_event(CH4) && !ignition) mode = ASLEEP;
         if (!basicmodesw && !tach.engine_stopped()) mode = speedo.car_stopped() ? HOLD : FLY;  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
+        if (basicmode_request) mode = SHUTDOWN;  // if fully shut down and cal mode requested, go to cal mode
     }
     void run_asleepMode() {  // turns off syspower and just idles. sleep_request are handled here or in shutdown mode below
         if (we_just_switched_modes) {
@@ -94,6 +97,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             sleep_request = REQ_NA;
             powering_up = false;
             last_conscious_mode = oldmode;
+            display->disp_bools_dirty = true;
             brake.setmode(Halt);
             steer.setmode(Halt);
             set_syspower(LOW); // Power down devices to save battery
@@ -111,12 +115,15 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             powering_up = true;
             display->auto_saver(false);      // turn off screensaver
         }
-        if (powering_up && pwrup_timer.expired()) mode = (basicmodesw || (last_conscious_mode == BASIC)) ? BASIC : SHUTDOWN;  // display->all_dirty();  // tells display to redraw everything. display must set back to false
+        if (powering_up && pwrup_timer.expired()) {
+            mode = (basicmodesw || (last_conscious_mode == BASIC)) ? BASIC : SHUTDOWN;  // display->all_dirty();  // tells display to redraw everything. display must set back to false
+            display->disp_bools_dirty = true;
+        }
     }
     void run_shutdownMode() { // In shutdown mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.
         if (we_just_switched_modes) {              
             shutdown_incomplete = !(powering_up);   // if waking up from sleep shutdown is already complete
-            powering_up = calmode_request = false;
+            powering_up = calmode_request = basicmode_request = false;
             gas.setmode(ParkMotor);                 // carburetor parked 
             brake.setmode(AutoStop);                // if car is moving begin autostopping
             if (!panicstop) steer.setmode(Halt);    // steering disabled, unless panic stopping
@@ -138,6 +145,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (hotrc.sw_event(CH4) || sleep_inactivity_timer.expired() || sleep_request == REQ_TOG || sleep_request == REQ_ON) mode = ASLEEP;
             sleep_request = REQ_NA;
             if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode
+            if (basicmode_request) mode = BASIC;  // if fully shut down and cal mode requested, go to cal mode
         }
         if ((speedo.car_stopped() || allow_rolling_start) && ignition && !panicstop && !tach.engine_stopped()) mode = HOLD;  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
     }
@@ -197,6 +205,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_calMode() {  // Calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration. Don't use it unless you know how.
         if (we_just_switched_modes) {
             calmode_request = cal_gasmode_request = cal_brakemode = false;
+            display->disp_bools_dirty = true;
             gas.setmode(Idle);
             brake.setmode(Calibrate);
             steer.setmode(Halt);

@@ -672,7 +672,7 @@ class Display {
         disp_idiots_dirty = false;
     }
     void disp_menu_bools() {
-        if (!disp_bools_dirty) return;
+        // if (!disp_bools_dirty) return;
         draw_bool((nowmode == CAL), 2, disp_bools_dirty);
         draw_bool((nowmode == BASIC), 3, disp_bools_dirty);
         draw_bool(ignition, 4, disp_bools_dirty);
@@ -870,7 +870,7 @@ class Display {
                 disp_datapage_values();
             }
         }
-        // fps = animations.update(spr, disp_simbuttons_dirty);
+        fps = animations.update(spr, disp_simbuttons_dirty);
         disp_simbuttons_dirty = false;
         return true;
     }
