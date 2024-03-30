@@ -316,7 +316,7 @@ class GasServo : public ServoMotor {
     int motormode = Idle;
     bool cruise_trigger_released = false, mode_busy = false, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
     float (&deg)[arraysize(si)] = si;  // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
-    float max_throttle_angular_velocity_degps = 30.0;  // deg/sec How quickly can the throttle change angle?  too low is unresponsive, too high can cause engine hesitations (going up) or stalls (going down)
+    float max_throttle_angular_velocity_degps = 55.0;  // deg/sec How quickly can the throttle change angle?  too low is unresponsive, too high can cause engine hesitations (going up) or stalls (going down)
     float tach_last, throttle_target_pc, governor = 95, max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
     float idle_deg[NUM_MOTORVALS] = { 45.0, NAN, 60.0, NAN, NAN, 43.0, 75.0, 1.0, NAN };  // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
     float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5, NAN };  // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
@@ -399,7 +399,7 @@ class GasServo : public ServoMotor {
         }
     }
     void postprocess_output() {  // limits angular velocity, and if using pid this converts target to rpm value and hand-holds the pid
-        // Serial.printf("post");
+        Serial.printf("post");
         float new_out;
         throttle_target_pc = constrain(throttle_target_pc, pc[PARKED], pc[OPMAX]);
         if (throttle_ctrl_mode == ActivePID) {
@@ -415,10 +415,10 @@ class GasServo : public ServoMotor {
         else if (new_out < pc[OUT] && new_out < pc[OUT] - max_change) pc[OUT] -= max_change;
         else pc[OUT] = new_out;
         if (throttle_ctrl_mode == ActivePID) pid.set_output(pc[OUT]);
-        // Serial.printf(" tgt:%lf pc1:%lf\n", throttle_target_pc, pc[OUT]);
+        Serial.printf(" tgt:%lf pc1:%lf\n", throttle_target_pc, pc[OUT]);
     }
     void set_output() {
-        // Serial.printf("mode");
+        Serial.printf("mode");
         cal_gasmode = false;
         if (motormode == Idle) {
             mode_busy = true;
@@ -439,7 +439,7 @@ class GasServo : public ServoMotor {
             if (hotrc->joydir() != JOY_UP) throttle_target_pc = pc[IDLE];  // If in deadband or being pushed down, we want idle
             else throttle_target_pc = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[IDLE], pc[GOVERN]);  // actuators still respond even w/ engine turned off
         }
-        // Serial.printf(":%d tgt:%lf pk:%lf idl:%lf\n", motormode, throttle_target_pc, pc[PARKED], pc[IDLE]);
+        Serial.printf(":%d tgt:%lf pk:%lf idl:%lf\n", motormode, throttle_target_pc, pc[PARKED], pc[IDLE]);
         if (motormode != Calibrate) postprocess_output();  // skip final motor calculations which impose limitations on the value
     }
     void constrain_output() {
@@ -475,6 +475,7 @@ class GasServo : public ServoMotor {
             constrain_output();                // Step 3 : fix output to ensure it's in range
             us[OUT] = out_pc_to_us(pc[OUT]);   // Step 4 : convert motor value to pulsewidth time
             deg[OUT] = out_pc_to_si(pc[OUT]);
+            Serial.printf("out pc:%lf us:%lf\n", pc[OUT], us[OUT]);
             write_motor();                     // Step 5 : write to servo
         }
     }
