@@ -109,12 +109,13 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
                 still_interactive = false;
             }
         }
-        if (hotrc.sw_event(CH4) || encoder->button.pressed() || sleep_request == REQ_TOG || sleep_request == REQ_ON) {  // if we've been triggered to wake up
+        if (hotrc.sw_event(CH4) || encoder->button.pressed() || sleep_request == REQ_TOG || sleep_request == REQ_OFF) {  // if we've been triggered to wake up
             set_syspower(HIGH);              // switch on control system devices
             pwrup_timer.reset();  // stay in asleep mode for a delay to allow devices to power up
             powering_up = true;
             display->auto_saver(false);      // turn off screensaver
         }
+        sleep_request = REQ_NA;
         if (powering_up && pwrup_timer.expired()) {
             mode = (basicmodesw || (last_conscious_mode == BASIC)) ? BASIC : SHUTDOWN;  // display->all_dirty();  // tells display to redraw everything. display must set back to false
             display->disp_bools_dirty = true;
@@ -267,7 +268,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
 // THROTTLE_DELTA mode holds a fixed throttle servo position as long as the trigger is centered, and if not,
 // it adjusts the setpoint up or down proportional to how far and how long you hold the trigger away from center.
 // If you panic and push full brake for over 500ms, it will drop to fly mode and then push brakes.
-
 //
 // ** Cal Mode **
 // This mode allows direct control of some actuators without respecting limits of motion, for purpose of

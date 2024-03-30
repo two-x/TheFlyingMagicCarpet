@@ -35,7 +35,7 @@ class LGFX : public lgfx::LGFX_Device {
             auto cfg = _bus_instance.config(); // Get the structure for bus settings.
             cfg.spi_host = SPI2_HOST;          // VSPI_HOST is deprecated, use SPI2_HOST.  HSPI_HOST = SPI1_HOST or SPI3_HOST (?)
             cfg.spi_mode = 0;                  // Set SPI communication mode (0 ~ 3)
-            cfg.freq_write = 20000000;         // SPI clock when transmitting (maximum 80MHz, rounded to 80MHz divided by an integer)
+            cfg.freq_write = ((int)captouch + 1) * 20000000;  // 20000000 or 40000000; SPI clock when transmitting (maximum 80MHz, rounded to 80MHz divided by an integer)
             cfg.freq_read  = 16000000;         // SPI clock when receiving
             cfg.spi_3wire  = true;             // Set true if receiving is done using the MOSI pin.
             cfg.use_lock   = true;             // Set true to use transaction locking

@@ -115,7 +115,7 @@ enum err_type : int { LOST=0, RANGE=1, VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6,
 // global configuration settings
 bool brake_hybrid_pid = true;
 int brake_default_pid = PressurePID;
-bool brake_linearize_target_extremes = true;  // keep brake target values linear near endpoints despite decreasing inaccuracy of one sensor (more accurate)?  otherwise jump inaccurate-sensor influence near endpoint to actual endpoint (more predictable/consistent)
+bool brake_linearize_target_extremes = true;  // keep brake target values linear near endpoints despite decreasing accuracy of one of the sensors? (this is the more accurate choice)  otherwise jump inaccurate-sensor influence near endpoint to actual endpoint (this is more predictable/consistent)
 bool starter_signal_support = true;
 bool remote_start_support = true;
 bool autostop_disabled = false;      // temporary measure to keep brake behaving until we get it debugged. Eventually should be false
@@ -161,7 +161,7 @@ float maf_max_gps = 50.0; // i just made this number up as i have no idea what's
 bool flashdemo = false;
 int32_t neobright = 10;   // default for us dim/brighten the neopixels
 int32_t neodesat = 0;     // default for lets us de/saturate the neopixels
-float tuning_rate_pcps = 7.5;  // values being edited change value at this percent of their overall range per second
+float tuning_rate_pcps = 7.5;  // values being edited by touch buttons change value at this percent of their overall range per second
 
 // non-tunable values. probably these belong with their related code
 uint bootcount;                         // variable to track total number of boots of this code build
@@ -198,7 +198,7 @@ int ignition_request = REQ_NA;
 int panicstop_request = REQ_ON;         // on powerup we assume the code just rebooted during a drive, because for all we know it could have 
 int sleep_request = REQ_NA;
 float maf_gps = 0;                      // manifold mass airflow in grams per second
-uint16_t heartbeat_override_color = 0x0000;
+uint16_t heartbeat_override_color = 0x00;
 bool nowtouch = false;
 bool captouch = true;
 float loop_avg_us;
@@ -270,24 +270,21 @@ void adj_bool(bool *val, int32_t delta) { *val = adj_bool(*val, delta); }       
 
 template <typename T>
 T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {
-    uint8_t rgb[3];  // [r,g,b];
+    uint8_t rgb[3] = { 0, 0, 0 };  // [r,g,b];
     hue = (hue * 1530L + 32768) / 65536;
     if (hue < 510) { // Red to Green-1
-        rgb[2] = 0;
         if (hue < 255) { rgb[0] = 255; rgb[1] = hue; }  //   Red to Yellow-1, g = 0 to 254
         else { rgb[0] = 510 - hue; rgb[1] = 255; }  //  Yellow to Green-1, r = 255 to 1
     }
     else if (hue < 1020) { // Green to Blue-1
-        rgb[0] = 0;
         if (hue < 765) { rgb[1] = 255; rgb[2] = hue - 510; }  //  Green to Cyan-1, b = 0 to 254
         else { rgb[1] = 1020 - hue; rgb[2] = 255; }  // Cyan to Blue-1, g = 255 to 1
     }
     else if (hue < 1530) {  // Blue to Red-1
-        rgb[1] = 0;
         if (hue < 1275) { rgb[0] = hue - 1020; rgb[2] = 255; }  // Blue to Magenta-1, r = 0 to 254
         else { rgb[0] = 255; rgb[2] = 1530 - hue; }  //   Magenta to Red-1, b = 255 to 1
     }
-    else { rgb[0] = 255; rgb[1] = rgb[2] = 0; }  // Last 0.5 Red (quicker than % operator)
+    else { rgb[0] = 255; }  // Last 0.5 Red (quicker than % operator)
     uint32_t v1 = 1 + val;  // 1 to 256; allows >>8 instead of /255
     uint16_t s1 = 1 + sat;  // 1 to 256; same reason
     uint8_t s2 = 255 - sat; // 255 to 0
