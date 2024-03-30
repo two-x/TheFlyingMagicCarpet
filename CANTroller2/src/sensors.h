@@ -15,9 +15,7 @@ enum class sens : int { none=0, joy=1, pressure=2, brkpos=3, speedo=4, tach=5, a
 enum class src : int { UNDEF=0, FIXED=1, PIN=2, TOUCH=3, POT=4, CALC=5 };
 
 int sources[static_cast<int>(sens::NUM_SENSORS)] = { static_cast<int>(src::UNDEF) };
-
 #include "i2cbus.h"
-// #include "xtensa/core-macros.h"  // access to ccount register for esp32 timing ticks
 
 // Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class Potentiometer {

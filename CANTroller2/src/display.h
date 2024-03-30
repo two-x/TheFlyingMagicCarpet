@@ -49,13 +49,13 @@ static std::string units[disp_fixed_lines] = { "%", "mph", "rpm", "%", "psi", "%
 static std::string brake_pid_card[2] = { "presur", "positn" };
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
 static std::string motormodecard[NumMotorModes+1] = { "Halt", "Idle", "Releas", "OpLoop", "PID", "AuStop", "AuHold", "Park", "Cruise", "Calib", "NA" };
-static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 4, 8, 7, 7, 9, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 7, 8, 7, 7, 9, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
     { "PressRaw", "BkPosRaw", __________, __________, __________, "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
-    { "IdlState", "Tach Tgt", "StallIdl", "Low Idle", "HighIdle", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", "SetlRate", "IdleMode", },  // PG_IDLE
+    { "Gas Mode", "Tach Tgt", "    Idle", "    Idle", "    Idle", "FuelPump", __________, "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", },  // PG_IDLE
     { brAk"Posn", brAk"Mode", "Pn|PrErr", "BrakeTgt", "HybrdTgt", "TgtRatio", "OutRatio", "MotrHeat", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
@@ -68,7 +68,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, ______, "us",   "us",   },  // PG_JOY
     { "adc",  "adc",  ______, ______, ______, "mph",  "atm",  "atm",  "mph",  "mph",  "in",   },  // PG_SENS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, degree, degree, "us",   "%",    },  // PG_PWMS
-    { scroll, "rpm",  "rpm",  "rpm",  "rpm",  "rpm",  "rpm",  degreF, degreF, "rpms", scroll, },  // PG_IDLE
+    { scroll, "rpm",  "%",    degree, "rpm",  "V",    ______, degree, degree, degreF, degreF, },  // PG_IDLE
     { "in",   scroll, "psin", "psin", "%",    "%",    "%",    degreF, ______, "Hz",   "s",    },  // PG_BPID
     { "%",    "rpm",  "rpm",  "%",    "%",    "%",    "%",    degsec, ______, "Hz",   "s",    },  // PG_GPID
     { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "rpm",  "%",    "%/s",  ______, "Hz",   "s",    },  // PG_CPID
@@ -572,7 +572,7 @@ class Display {
             }
             disp_values_dirty = true;
         }
-        draw_fixed(page, page_last, true, forced);  // Erase and redraw dynamic data corner of screen with names, units etc.
+        draw_fixed(page, page_last, true, forced);  // Erase and redraw variable names and units for data on this page
         draw_string(disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
         disp_datapage_dirty = false;
     }

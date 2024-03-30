@@ -1,7 +1,6 @@
 // motors.h : centralized wrapper classes for all braking or throttle activity, as holistic coordination between sensors, actuator, and intent is critical
 #pragma once
 #include <ESP32Servo.h>  // Eventually move Servos into new ServoPWM objects then remove this
-// #include "qpid.h"
 #include "temperature.h"
 #include <cmath>
 class IdleControl {  // Soren - To allow creative control of PID targets in case your engine idle problems need that.
@@ -164,17 +163,18 @@ void setup(float* target, float* measraw, float* measfilt,  // Variable referenc
     float* target_ptr(void) { return target_rpm; }
     float* idle_rpm_ptr(void) { return &idle_rpm; }
 };
+
 // I stole this library and modified it heavily to our purpposes - Soren
 // QPID Library for Arduino - Version 3.1.9 by dlloydev https://github.com/Dlloydev/QPID
 // Based on the Arduino PID_v1 Library. Licensed under the MIT License.
 class QPID {
   public:
     enum class ctrl : int {manual, automatic, toggle};            // controller mode
-    enum class cdir : int {reverse=-1, direct=1};                      // controller direction
+    enum class cdir : int {reverse=-1, direct=1};                 // controller direction
     enum class pmod : int {onerr, onmeas, onerrmeas};             // proportional mode
     enum class dmod : int {onerr, onmeas};                        // derivative mode
-    enum class awmod : int {cond, clamp, off, round, roundcond};  // integral anti-windup mode  // Soren edit
-    enum class centmod : int {off, on, strict};                   // Soren - Allows a defined output zero point
+    enum class awmod : int {cond, clamp, off, round, roundcond};  // integral anti-windup mode
+    enum class centmod : int {off, on, strict};                   // Allows a defined output zero point
   private:
     float dispkp = 0; float dispki = 0; float dispkd = 0;
     float _pterm, _iterm, _dterm, _kp, _ki, _kd, _err, lasterr, lastin, _cent, _outsum, _target, _output;
@@ -186,16 +186,16 @@ class QPID {
     pmod _pmode = pmod::onerr;
     dmod _dmode = dmod::onmeas;
     awmod _awmode = awmod::cond;
-    centmod _centmode = centmod::off;  // Soren
+    centmod _centmode = centmod::off;
     uint32_t sampletime, lasttime;
   public:
     QPID() {}  // Default constructor
-    QPID(float* a_in, float* a_min, float* a_max, float a_kp = 0, float a_ki = 0, float a_kd = 0,  // Soren edit
+    QPID(float* a_in, float* a_min, float* a_max, float a_kp = 0, float a_ki = 0, float a_kd = 0,
       pmod a_pmode = pmod::onerr, dmod a_dmode = dmod::onmeas, awmod a_awmode = awmod::cond, cdir a_dir = cdir::direct,
       uint32_t a_sampletime = 100000, ctrl a_mode = ctrl::manual, centmod a_centmode = centmod::off, float a_cent = NAN) {
         init(a_in, a_min, a_max, a_kp, a_ki, a_kd, a_pmode, a_dmode, a_awmode, a_dir, a_sampletime, a_mode, a_centmode, a_cent);
     }
-    void init(float* a_in, float* a_min, float* a_max, float a_kp = 0, float a_ki = 0, float a_kd = 0,  // Soren edit
+    void init(float* a_in, float* a_min, float* a_max, float a_kp = 0, float a_ki = 0, float a_kd = 0,
       pmod a_pmode = pmod::onerr, dmod a_dmode = dmod::onmeas, awmod a_awmode = awmod::cond, cdir a_dir = cdir::direct,
       uint32_t a_sampletime = 100000, ctrl a_mode = ctrl::manual, centmod a_centmode = centmod::off, float a_cent = NAN) {
         myin = a_in;
@@ -204,37 +204,36 @@ class QPID {
         _outmax = a_max;
         _output = constrain(_output, *_outmin, *_outmax);
         _outsum = constrain(_outsum, *_outmin, *_outmax);
-        set_centmode(a_centmode);  // Soren
-        if (_centmode != centmod::off && !std::isnan(a_cent)) {  // Soren
-            set_cent(a_cent);  // Soren
+        set_centmode(a_centmode);
+        if (_centmode != centmod::off && !std::isnan(a_cent)) {
+            set_cent(a_cent);
             _outsum = _cent;
         }
-        else set_cent(*_outmin);  // Soren
-        sampletime = a_sampletime;              // Soren edit
+        else set_cent(*_outmin);
+        sampletime = a_sampletime;
         set_dir(a_dir);
         set_tunings(a_kp, a_ki, a_kd, _pmode, _dmode, _awmode);
-        lasttime = micros() - sampletime;  // Soren edit
-
+        lasttime = micros() - sampletime;
     }
     void init(float preload_output = NAN) {  // Ensure a bumpless transfer from manual to automatic mode
         if (!std::isnan(preload_output)) _output = preload_output;
-        _outsum = _output;  // Soren
+        _outsum = _output;
         lastin = *myin;
         _outsum = constrain(_outsum, *_outmin, *_outmax);
     }
     // This function should be called every time "void loop()" executes. The function will decide whether a new 
     // PID output needs to be computed. Returns true when the output is computed, false when nothing has been done.
     float compute() {
-        uint32_t now = micros();  // Soren edit
+        uint32_t now = micros();
         uint32_t timechange = (now - lasttime);
         if (_mode == ctrl::automatic && timechange < sampletime) return _output;  // If class is handling the timing and this time was a nop
 
         float in = *myin;
         float din = in - lastin;
-        if (_dir == cdir::reverse) din = -din;  // Soren
+        if (_dir == cdir::reverse) din = -din;
 
         _err = _target - in;
-        if (_dir == cdir::reverse) _err = -_err;  // Soren
+        if (_dir == cdir::reverse) _err = -_err;
         float derr = _err - lasterr;
 
         float peterm = _kp * _err;
@@ -261,14 +260,14 @@ class QPID {
             _err = 0.0;
             if (_centmode == centmod::on || _centmode == centmod::strict) _outsum = _cent;     
         }
-        if (_centmode == centmod::strict && _err * lasterr < 0) _outsum = _cent;  // Soren - Recenters any old integral when error crosses zero
+        if (_centmode == centmod::strict && _err * lasterr < 0) _outsum = _cent;  // Recenters any old integral when error crosses zero
 
         _outsum += _iterm - pmterm;  // by default, compute output as per PID_v1    // include integral amount and pmterm
         if (_awmode != awmod::off) _outsum = constrain(_outsum, *_outmin, *_outmax);  // Clamp
 
         _output = constrain(_outsum + peterm + _dterm, *_outmin, *_outmax);  // include _dterm, clamp and drive output
 
-        lasterr = _err;  // Soren
+        lasterr = _err;
         lastin = in;
         lasttime = now;
         return _output;
@@ -277,7 +276,7 @@ class QPID {
     // automatically from the constructor, but tunings can also be adjusted on the fly during normal operation.
     void set_tunings(float a_kp, float a_ki, float a_kd, pmod a_pmode = pmod::onerr,
       dmod a_dmode = dmod::onmeas, awmod a_awmode = awmod::cond) {
-        if (a_kp < 0 || a_ki < 0 || a_kd < 0 || !sampletime) return;  // Soren - added divide by zero protection
+        if (a_kp < 0 || a_ki < 0 || a_kd < 0 || !sampletime) return;  // added divide by zero protection
         if (a_ki == 0) _outsum = 0;
         _pmode = a_pmode; _dmode = a_dmode; _awmode = a_awmode;
         dispkp = a_kp; dispki = a_ki; dispkd = a_kd;
@@ -292,7 +291,7 @@ class QPID {
     }
     // set_sampletime  Sets the period, in microseconds, at which the calculation is performed.
     void set_sampletime(uint32_t a_sampletime) {
-        if (a_sampletime > 0 && sampletime) {  // Soren - added more divide by zero protection
+        if (a_sampletime > 0 && sampletime) {  // added more divide by zero protection
             float ratio  = (float)a_sampletime / (float)sampletime;
             _ki *= ratio;
             _kd /= ratio;
@@ -313,19 +312,19 @@ class QPID {
     void set_mode(int a_mode) { set_mode((ctrl)a_mode); }
     // Does all the things that need to happen to ensure a bumpless transfer from manual to automatic mode.
     void reset() {
-        lasttime = micros() - sampletime;  // Soren edit
+        lasttime = micros() - sampletime;
         lastin = 0; _outsum = 0;
         _pterm = 0; _iterm = 0; _dterm = 0;
     }
-    void set_kp(float a_kp) { set_tunings(a_kp, dispki, dispkd, _pmode, _dmode, _awmode); }  // Soren
-    void set_ki(float a_ki) { set_tunings(dispkp, a_ki, dispkd, _pmode, _dmode, _awmode); }  // Soren
-    void set_kd(float a_kd) { set_tunings(dispkp, dispki, a_kd, _pmode, _dmode, _awmode); }  // Soren
-    void add_kp(float add) { set_kp(_kp + add); }  // Soren
-    void add_ki(float add) { set_ki(_ki + add); }  // Soren
-    void add_kd(float add) { set_kd(_kd + add); }  // Soren
-    void set_centmode(centmod a_centmode) { _centmode = a_centmode; }  // Soren
-    void set_centmode(int a_centmode) { _centmode = (centmod)a_centmode; }  // Soren
-    void set_cent(float a_cent) { if (*_outmin <= a_cent && *_outmax >= a_cent) _cent = a_cent; }  // Soren
+    void set_kp(float a_kp) { set_tunings(a_kp, dispki, dispkd, _pmode, _dmode, _awmode); }
+    void set_ki(float a_ki) { set_tunings(dispkp, a_ki, dispkd, _pmode, _dmode, _awmode); }
+    void set_kd(float a_kd) { set_tunings(dispkp, dispki, a_kd, _pmode, _dmode, _awmode); }
+    void add_kp(float add) { set_kp(_kp + add); }
+    void add_ki(float add) { set_ki(_ki + add); }
+    void add_kd(float add) { set_kd(_kd + add); }
+    void set_centmode(centmod a_centmode) { _centmode = a_centmode; }
+    void set_centmode(int a_centmode) { _centmode = (centmod)a_centmode; }
+    void set_cent(float a_cent) { if (*_outmin <= a_cent && *_outmax >= a_cent) _cent = a_cent; }
     void set_target(float a_target) { _target = a_target; }
     void set_output(float a_output) { _output = constrain(a_output, *_outmin, *_outmax); }
     // The PID will either be connected to a direct acting process (+output leads to +input) or a reverse acting process(+output leads to -input).
@@ -344,7 +343,7 @@ class QPID {
     // sets the output summation value
     void set_outsum(float a_outsum) { _outsum = a_outsum; }
     // Getter functions
-    float err() { return _err; }  // Soren
+    float err() { return _err; }
     float kp() { return dispkp; }
     float ki() { return dispki; }
     float kd() { return dispkd; }
@@ -352,18 +351,18 @@ class QPID {
     float iterm() { return _iterm; }
     float dterm() { return _dterm; }
     float outsum() { return _outsum; }
-    float outmin() { return *_outmin; }  // Soren
-    float outmax() { return *_outmax; }  // Soren
-    float outrange() { return *_outmax - *_outmin; }  // Soren
-    float cent() { return _cent; }  // Soren
-    float target() { return _target; }  // Soren
-    float output() { return _output; }  // Soren
+    float outmin() { return *_outmin; }
+    float outmax() { return *_outmax; }
+    float outrange() { return *_outmax - *_outmin; }
+    float cent() { return _cent; }
+    float target() { return _target; }
+    float output() { return _output; }
     int mode() { return static_cast<int>(_mode); }
     int dir() { return static_cast<int>(_dir); }
     int pmode() { return static_cast<int>(_pmode); }
     int dmode() { return static_cast<int>(_dmode); }
     int awmode() { return static_cast<int>(_awmode); }
-    int centmode() { return static_cast<int>(_centmode); }  // Soren
+    int centmode() { return static_cast<int>(_centmode); }
     float* target_ptr() { return &_target; }
 };
 // ServoMotor - a parent class providing common elements for motor manager child classes. These subclasses each
@@ -502,7 +501,7 @@ class GasServo : public ServoMotor {
               cruise_opengas_initial_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::round, QPID::cdir::direct, pid_timeout);
         }
         else if (throttle_ctrl_mode == ActivePID) {
-            cruisepid.init(speedo->filt_ptr(), idlectrl.idle_rpm_ptr(), tach->govern_rpm_ptr(), cruise_pidgas_initial_kp, cruise_pidgas_initial_ki,
+            cruisepid.init(speedo->filt_ptr(), tach->idle_rpm_ptr(), tach->govern_rpm_ptr(), cruise_pidgas_initial_kp, cruise_pidgas_initial_ki,
               cruise_pidgas_initial_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::round, QPID::cdir::direct, pid_timeout);
         }
     }
@@ -543,7 +542,7 @@ class GasServo : public ServoMotor {
                 }
                 else if (throttle_ctrl_mode == ActivePID) {
                     if (!cruise_adjusting) adjustpoint = tach->filt();
-                    pid.set_target(adjustpoint + ctrlratio * (((joydir == JOY_UP) ? tach->govern_rpm() : idlectrl.idle_rpm) - adjustpoint));
+                    pid.set_target(adjustpoint + ctrlratio * (((joydir == JOY_UP) ? tach->govern_rpm() : idlectrl.idle_rpm) - adjustpoint));  // fake
                 }
                 cruisepid.set_target(speedo->filt());
             }
@@ -560,7 +559,7 @@ class GasServo : public ServoMotor {
     void set_output() { // services any requests for change in brake mode
         cal_gasmode = false;
         if (motormode == Idle) {
-            idlectrl.goto_idle();
+            idlectrl.goto_idle();  // fake
         }
         else if (motormode == Calibrate) {
             cal_gasmode = true;
@@ -577,8 +576,8 @@ class GasServo : public ServoMotor {
         }
         else if (motormode == ActivePID) {
             if (hotrc->joydir(VERT) == JOY_UP)  // If we are trying to accelerate, scale joystick value to determine gas setpoint
-                pid.set_target(map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], idlectrl.idle_rpm, tach->govern_rpm()));
-            else idlectrl.goto_idle();  // Else let off gas (if gas using PID mode)
+                pid.set_target(map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], idlectrl.idle_rpm, tach->govern_rpm()));  // fake
+            else idlectrl.goto_idle();  // Else let off gas (if gas using PID mode)  // fake
             pc[OUT] = pid.compute();  // Do proper pid math to determine gas_out_us from engine rpm error
         }
         else if (motormode == OpenLoop) {
@@ -614,11 +613,7 @@ class GasServo : public ServoMotor {
         return (std::abs(out_pc_to_si(pc[OUT]) - si[PARKED]) < 1);
     }
     void update() {
-        float tach_now = tach->human();
-        if (tach_now != tach_last) idlectrl.push_tach_reading(tach_now, tach->last_read_time());    
-        tach_last = tach_now;
         if (pid_timer.expireset()) {          
-            idlectrl.update();                 // Step 1 : do any idle speed management needed
             set_output();                      // Step 2 : determine motor output value. updates throttle target from idle control or cruise mode pid, if applicable (on the same timer as gas pid). allows idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
             constrain_output();                // Step 3 : fix output to ensure it's in range
             us[OUT] = out_si_to_us(deg[OUT]);  // Step 4 : convert motor value to pulsewidth time
@@ -690,7 +685,7 @@ class BrakeMotor : public JagMotor {
         printf("Brake motor..\n");
         JagMotor::setup(_hotrc, _speedo, _batt);
         pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  tempsens = _tempsens;
-        duty_fwd_pc = brakemotor_max_duty_pc;  
+        // duty_fwd_pc = brakemotor_max_duty_pc;
         pres_last = pressure->filt();
         posn_last = brkpos->filt();
         set_dominant_pid(brake_default_pid);
@@ -781,7 +776,7 @@ class BrakeMotor : public JagMotor {
             else pc[OUT] = pc[STOP];
         }
         else if (motormode == AutoStop) {  // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
-            throttle->goto_idle();  // Stop pushing the gas, will help us stop the car better
+            throttle->goto_idle();  // Stop pushing the gas, will help us stop the car better  // fake
             autostopping = (!speedo->car_stopped() && !stopcar_timer.expired());
             if (autostopping) {
                 if (interval_timer.expireset()) set_pidtarg(std::min(100.0f, pid_targ_pc + panicstop ? panic_increment_pc : hold_increment_pc));   
