@@ -529,7 +529,7 @@ class Display {
             return result;
         }
         if (place >= 0 && place < maxlength) {  // Then we want float formatted with enough nonzero digits after the decimal point for given significant digits (eg 123.4, 12.34, 1.234, 0.000)
-            int32_t length = smin(sigdig+1, maxlength);
+            int32_t length = std::min(sigdig+1, maxlength);
             char buffer[length+1];
             std::snprintf(buffer, length + 1, (chop_zeroes) ? "%.*g" : "%.*f", length - 1, value);  // (buf, letters incl. end, %.*g = floats formatted in shortest form, length-1 digits after decimal, val)
             std::string result(buffer);  // copy buffer to result            
@@ -540,11 +540,11 @@ class Display {
         if (place < 0 && sigdig - place <= maxlength) {  // Then we want decimal w/o initial '0' limited to given significant digits (eg .123, .0123, .00123)
             std::string result (std::to_string(value));  // sd=3,  0.1234  d=1 l=6    0.00123
             size_t decimalPos = result.find('.');  // decimalPos will always be 1 (?)
-            if (decimalPos != std::string::npos) result = result.substr(decimalPos, smin(sigdig-place, maxlength));  // Remove any digits to the left of the decimal point
+            if (decimalPos != std::string::npos) result = result.substr(decimalPos, std::min(sigdig-place, maxlength));  // Remove any digits to the left of the decimal point
             return result;
         }  // Otherwise we want scientific notation with precision removed as needed to respect maxlength (eg 1.23e4, 1.23e5, but using long e character not e for negative exponents
         char buffer[maxlength+1];  // Allocate buffer with the maximum required size
-        int32_t truncit = smin(sigdig - 1, maxlength - 4 - (int)(place <= -10 || place >= 10));
+        int32_t truncit = std::min(sigdig - 1, maxlength - 4 - (int)(place <= -10 || place >= 10));
         std::snprintf(buffer, sizeof(buffer), "%.*e", truncit, value);
         std::string result(buffer);  // copy buffer to result
         if (result.find("e+0") != std::string::npos) result.replace(result.find("e+0"), 3, "e");  // Remove useless "+0" from exponent
@@ -862,7 +862,7 @@ class Display {
         return true;
     }
     void push_task() {
-        if (is_drawing || !pushtime || !(screenRefreshTimer.expired() || screensaver_max_refresh || auto_saver_enabled)) return;  // vTaskDelay(pdMS_TO_TICKS(1));
+        if (is_drawing || !pushtime || !(screenRefreshTimer.expired() || always_max_refresh || auto_saver_enabled)) return;  // vTaskDelay(pdMS_TO_TICKS(1));
         is_pushing = true;
         // Serial.printf("f%d push@ 0x%08x vs 0x%08x\n", flip, &framebuf[flip], &framebuf[!flip]);
         screenRefreshTimer.reset();
@@ -928,12 +928,12 @@ class Display {
             was_simulating = sim->enabled();
             sim->disable();
             animations.set_vp(0, 0, disp_width_pix, disp_height_pix);
-            screensaver_max_refresh = screensaver = auto_saver_enabled = true;
+            always_max_refresh = screensaver = auto_saver_enabled = true;
             animations.anim_reset_request = true;
             ui_context = ScreensaverUI;
         }
         else {
-            screensaver = screensaver_max_refresh = auto_saver_enabled = false;
+            screensaver = always_max_refresh = auto_saver_enabled = false;
             animations.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
             reset_request = true;
             if (was_simulating) sim->enable();

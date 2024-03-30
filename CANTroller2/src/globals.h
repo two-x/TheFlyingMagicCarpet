@@ -1,9 +1,8 @@
-// globals.h - not dependent on anything, so include this first
 #pragma once
 #include "Arduino.h"
-// pin assignments  ESP32-S3-DevkitC series   (Note: "*" are pins we can reclaim if needed)
-#define     boot_sw_pin  0 // button0/strap1   // the esp "boot" button.  If more pins are needed, move encoder_sw_pin to this pin, no other signal of ours can work on this pin due to high-at-boot requirement
-#define      tft_dc_pin  1 // adc1.0           // output, assert when sending data to display chip to indicate commands vs. screen data - ! pin is also defined in tft_setup.h
+// pin assignments  ESP32-S3-DevkitC series   (note: "*" are pins we can reclaim if needed)
+#define     boot_sw_pin  0 // button0/strap1   // input, the esp "boot" button. if more pins are needed, move encoder_sw_pin to this pin, no other signal of ours can work on this pin due to high-at-boot requirement
+#define      tft_dc_pin  1 // adc1.0           // output, assert when sending data to display chip to indicate commands vs. screen data
 #define    touch_cs_pin  2 // adc1.1         * // output, chip select for resistive touchscreen, active low. Not used on car, so can assign pin to something else if needed
 #define   sdcard_cs_pin  3 // adc1.2/strapX  * // output, chip select for SD card controller on SPI bus. sdcard functionality is not implemented, we may not even need it
 #define    mulebatt_pin  4 // adc1.3           // analog input, mule battery voltage sense, full scale is 16V
@@ -12,7 +11,7 @@
 #define    pressure_pin  7 // adc1.6           // analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V.
 #define     i2c_sda_pin  8 // sda0/adc1.7      // i2c bus for airspeed/map sensors, lighting board, cap touchscreen
 #define     i2c_scl_pin  9 // qhd0/scl0/adc1.8 // i2c bus for airspeed/map sensors, lighting board, cap touchscreen
-#define      tft_cs_pin 10 // cs0/adc1.9       // output, active low, chip select allows ILI9341 display chip use of the spi bus - ! pin is also defined in tft_setup.h
+#define      tft_cs_pin 10 // cs0/adc1.9       // output, active low, chip select allows ILI9341 display chip use of the spi bus
 #define    spi_mosi_pin 11 // mosi0/adc2.0     // used as spi interface data for tft screen, sd card and resistive touch panel
 #define    spi_sclk_pin 12 // sclk0/adc2.1     // used as spi interface clock for tft screen, sd card and resistive touch panel
 #define    spi_miso_pin 13 // miso0/adc2.2     // used as spi interface data from sd card, resistive touch panel, and possibly (?) tft screen
@@ -20,49 +19,66 @@
 #define hotrc_ch1_h_pin 15 // pwm1/adc2.4      // hotrc ch1 thumb joystick input
 #define     gas_pwm_pin 16 // pwm1/adc2.5      // output, pwm signal duty cycle controls throttle target. on Due this is the pin labeled DAC1 (where A13 is on Mega)
 #define   brake_pwm_pin 17 // pwm0/adc2.6/tx1  // output, pwm signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% is stopped)
-#define   steer_pwm_pin 18 // pwm0/adc2.7/rx1  // output, pwm signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). Jaguar asks for an added 150ohm series R when high is 3.3V
-#define steer_enc_a_pin 19 // usb-d-/adc2.8  * // reserved for usb or a steering quadrature encoder. encoder "A" signal
-#define steer_enc_b_pin 20 // usb-d+/adc2.9  * // reserved for usb or a steering quadrature encoder. encoder "B" signal
+#define   steer_pwm_pin 18 // pwm0/adc2.7/rx1  // output, pwm signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). jaguar asks for an added 150ohm series R when high is 3.3V
+#define        free_pin 19 // usb-d-/adc2.8  * // reserved for usb or a steering quadrature encoder.
+#define    fuelpump_pin 20 // usb-d+/adc2.9  * // alternate fuel pump power signal, or use for usb or a steering quadrature encoder. 
 #define     onewire_pin 21 // pwm0             // onewire bus for temperature sensor data. note: tested this does not work on higher-numbered pins (~35+)
-#define      speedo_pin 35 // spiram/octspi    // int Input, active high, asserted when magnet south is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
+#define      speedo_pin 35 // spiram/octspi    // int input, active high, asserted when magnet south is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
 #define     starter_pin 36 // sram/ospi/glitch // input/Output (both active high), output when starter is being driven, otherwise input senses external starter activation
-#define        tach_pin 37 // spiram/octspi    // int Input, active high, asserted when magnet south is in range of sensor. 1 pulse per engine rotation. (no pullup) - Note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on
-#define  encoder_sw_pin 38 // spiram/octspi  * // input, Rotary encoder push switch, for the UI. active low (needs pullup). Signal can be moved to pin 0 to free up this pin. Pin 38 is the neopixel pin on v1.1 boards
+#define        tach_pin 37 // spiram/octspi    // int Input, active high, asserted when magnet south is in range of sensor. 1 pulse per engine rotation. (no pullup) - note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on
+#define  encoder_sw_pin 38 // spiram/octspi  * // input, Rotary encoder push switch, for the UI. active low (needs pullup). signal can be moved to pin 0 to free up this pin. Pin 38 is the neopixel pin on v1.1 boards
 #define basicmodesw_pin 39 // jtck/glitch      // input, asserted to tell us to run in basic mode, active low (has ext pullup) - note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define   hotrc_ch4_pin 40 // jtdo             // syspower, starter, and cruise mode toggle control. hotrc ch4 pwm toggle signal
 #define   hotrc_ch3_pin 41 // jtdi             // ignition control, hotrc Ch3 PWM toggle signal
-#define   encoder_a_pin 42 // jtms             // int input, The A (aka CLK) pin of the encoder. Both A and B complete a negative pulse in between detents. If A pulse goes low first, turn is CCW. (needs pullup)
+#define   encoder_a_pin 42 // jtms             // int input, the A (aka CLK) pin of the encoder. both A and B complete a negative pulse in between detents. if A pulse goes low first, turn is CCW. (needs pullup)
 #define     uart_tx_pin 43 // "TX"/tx0         // serial monitor data out. Also used to detect devboard vs. pcb at boot time (using pullup/pulldown, see below)
-#define     uart_rx_pin 44 // "RX"/rx0         // serial monitor data in. Maybe could repurpose during runtime since we only need outgoing console data?
+#define     uart_rx_pin 44 // "RX"/rx0         // serial monitor data in. maybe could repurpose during runtime since we only need outgoing console data?
 #define    ignition_pin 45 // strap0           // output to an nfet/pfet pair to control the car ignition
 #define    syspower_pin 46 // strap0           // output to an nfet/pfet pair to power all the tranducers.
-#define   encoder_b_pin 47 // NA               // int input, The B (aka DT) pin of the encoder. both A and B complete a negative pulse in between detents. If B pulse goes low first, turn is CW. (needs pullup)
+#define   encoder_b_pin 47 // NA               // int input, the B (aka DT) pin of the encoder. both A and B complete a negative pulse in between detents. if B pulse goes low first, turn is CW. (needs pullup)
 #define    neopixel_pin 48 // neopix           // data line to onboard neopixel WS281x (on all v1 devkit boards - pin 38 is used on v1.1 boards). Also used for onboard and external neopoxels - ! pin is also defined in neopixel.h
-// external components needed (pullup/pulldown resistors, capacitors, etc.): (note: "BB" = On dev breadboards only, "PCB" = On vehicle PCB only)
+// external components needed (pullup/pulldown resistors, capacitors, etc.): (note: "BB" = on dev breadboards only, "PCB" = on vehicle PCB only)
 // 1. onewire_pin, tach_pin, speedo_pin: Add 4.7k-ohm to 3.3V, needed for open collector sensor output to define logic-high voltage level.
-// 2. uart_tx_pin: (PCB) Add 22k-ohm to GND. (BB) connect the 22k-ohm to 3.3V instead. For boot detection of vehicle PCB, so defaults are set appropriately.
-// 3. Resistor dividers are needed for these inputs: starter_pin (16V->3.3V), mulebatt_pin (16V->3.3V), and pressure_pin (5V->3.3V).
+// 2. uart_tx_pin: (PCB) add 22k-ohm to GND. (BB) connect the 22k-ohm to 3.3V instead. for boot detection of vehicle PCB, so defaults are set appropriately.
+// 3. resistor dividers are needed for these inputs: starter_pin (16V->3.3V), mulebatt_pin (16V->3.3V), and pressure_pin (5V->3.3V).
 // 4. ignition_pin, syspower_pin, starter_pin: require pulldowns to gnd, this is provided by nfet gate pulldown.
 // 5. gas_pwm_pin: should have a series ~680-ohm R going to the servo.
-// 6. encoder_a_pin, encoder_b_pin, button_pin: should have 10nF to gnd, tho it should work w/o it. Pullups to 3.3V (4.7k-ohm is good) are also necessary, but the encoder we're using includes these.
-// 7. neopixel_pin: (PCB) Add 330 ohm in series (between pin and the DataIn pin of the 1st pixel). (BB) Same, but this one is likely optional, e.g. mine works w/o it.  For signal integrity over long wires. 
+// 6. encoder_a_pin, encoder_b_pin, button_pin: should have 10nF to gnd, tho it should work w/o it. pullups to 3.3V (4.7k-ohm is good) are also necessary, but the encoder we're using includes these.
+// 7. neopixel_pin: (PCB) Add 330 ohm in series (between pin and the DataIn pin of the 1st pixel). (BB) same, but this one is likely optional, e.g. mine works w/o it.  for signal integrity over long wires. 
 // 6. mulebatt_pin, pressure_pin, brake_pos_pin, pot_wipe_pin: (ADC inputs) should have 100nF cap to gnd, to improve signal stability, tho it works w/o it.
 
 // note onewire works on pins 19-21 but not on pins 39-42
 // if one more pin becomes needed, encoder_sw may be moved to pin 0, freeing up pin 38 (pin 0 requires a pullup, which encoder_sw has)
 // ESP32-S3 TRM: https://www.espressif.com/sites/default/files/documentation/esp32-s3_technical_reference_manual_en.pdf#dma
-// ESP32-S3 Datasheet: https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf
-// ESP32-S3 has 5 DMA channels in each direction. We would use them for SPI data out to TFT, Neopixel data out, and possibly out to the 3 motor outputs and in from the 4 hotrc channels.
+// ESP32-S3 datasheet: https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf
+// ESP32-S3 has 5 DMA channels in each direction. We would use them for SPI data out to TFT, neopixel data out, and possibly out to the 3 motor outputs and in from the 4 hotrc channels.
 // dma works with: RMT, I2S0, I2S1, SPI2, SPI3, ADC, internal RAM, external PSRAM, and a few others (see the TRM)
 // official pin capabilities: https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/hw-reference/esp32s3/user-guide-devkitc-1.html?highlight=devkitc#user-guide-s3-devkitc-1-v1-1-header-blocks
 // external flash uses pins 27-32. ADC ch2 will not work if wifi is enabled
 // bootstrap pins: Pin 0 must be pulled high, and pins 45 and 46 pulled low during bootup
-// glitch: pins 36 and 39 will be erroneously pulled low for ~80ns when "certain RTC peripherals power up" (ESP32 errata 3.11). Can run adc_power_acquire() to work around glitch but draw ~1mA more power. Avoid interrupts on these pins
+// glitch: pins 36 and 39 will be erroneously pulled low for ~80ns when "certain RTC peripherals power up" (ESP32 errata 3.11). can run adc_power_acquire() to work around glitch but draw ~1mA more power. avoid interrupts on these pins
 // spi bus page including DMA information: https://docs.espressif.com/projects/esp-idf/en/v4.4/esp32s3/api-reference/peripherals/spi_master.html
-// bm2023 pins: onewire 19, hotrc_ch3_pin 20, hotrc_ch4_pin 21, tach_pin 36, ignition_pin 37, encoder_b_pin 40, encoder_a_pin 41, encoder_sw_pin 42
-#define     tft_rst_pin -1  // tft reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
-#define    tft_ledk_pin -1  // output, optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
-#define   touch_irq_pin -1  // input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - Set to 255 if not used
+#define tft_rst_pin -1     // tft reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
+#define tft_ledk_pin -1    // output, optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
+#define touch_irq_pin -1   // input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - set to 255 if not used
+// bm2023 pins: tft_dc_pin 3, onewire_pin 19, hotrc_ch3_pin 20, hotrc_ch4_pin 21, tach_pin 36, ignition_pin 37, syspower_pin 38, encoder_b_pin 40, encoder_a_pin 41, encoder_sw_pin 42, starter_pin 45, sdcard_cs_pin 46, touch_cs_pin 47
+#ifdef USE_BM23_PINS       // for testing using box from bm23, override new pin assignments with old ones
+#define fuelpump_pin 1     // not used in bm23, but moving to an unused pin
+#define free_pin 2         // not used in bm23, but moving to an unused pin
+#define tft_dc_pin 3
+#define onewire_pin 19
+#define hotrc_ch3_pin 20`
+#define hotrc_ch4_pin 21
+#define tach_pin 36
+#define ignition_pin 37
+#define syspower_pin 38
+#define encoder_b_pin 40
+#define encoder_a_pin 41
+#define encoder_sw_pin 42
+#define starter_pin 45
+#define sdcard_cs_pin 46
+#define touch_cs_pin 47
+#endif
 
 #define adcbits 12
 #define adcrange_adc 4095     // = 2^adcbits-1
@@ -89,9 +105,6 @@ enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3
 enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };   // possible sources of gas, brake, steering commands
 enum ui_modes : int { DatapagesUI=0, ScreensaverUI=1 };
 enum codemodes : int { Confused=0, Booting=1, Parked=2, Driving=3 };
-// enum telemetry_full : int { 
-//     
-// };
 enum telemetry_short : int { _GasServo=0, _BrakeMotor=1, _SteerMotor=2, _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7, _Temps=8, _Other=9, _GPIO=10 };  // _MuleBatt, _MAP, _MAF, _Pot,
 enum telemetry_full : int { _HotRCHorz=11, _HotRCVert=12, _MuleBatt=13, _AirVelo=14, _MAP=15, _Pot=16, _MAF=17, _TempEng=18, _TempWhFL=19, _TempWhFR=20, _TempWhRL=21, _TempWhRR=22, _TempAmb=23 };  // 10 per line
 enum telemetry_nums : int { _None=-1, NumTelemetryBool=9, NumTelemetryShort=11, NumTelemetryFull=24 };
@@ -101,7 +114,7 @@ enum err_type : int { LOST=0, RANGE=1, VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6,
 // global configuration settings
 bool brake_hybrid_pid = true;
 int brake_default_pid = PressurePID;
-bool brake_linearize_target_extremes = true;  // keep brake target values linear near endpoints despite decreasing inaccuracy of one sensor (more accurate)?  otherwise jump inaccurate-sensor influence near endpoint to actual endpoint (more predictable/consistent)
+bool brake_linearize_target_extremes = true;  // keep brake target values linear near endpoints despite decreasing accuracy of one of the sensors? (this is the more accurate choice)  otherwise jump inaccurate-sensor influence near endpoint to actual endpoint (this is more predictable/consistent)
 bool starter_signal_support = true;
 bool remote_start_support = true;
 bool autostop_disabled = false;      // temporary measure to keep brake behaving until we get it debugged. Eventually should be false
@@ -110,12 +123,13 @@ bool flip_the_screen = false;
 bool cruise_speed_lowerable = true;  // allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool display_enabled = true;         // should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
 bool use_i2c_baton = true;
-bool screensaver_max_refresh = false;
+bool always_max_refresh = false;
 bool brake_before_starting = true;
 bool watchdog_enabled = false;
+bool fuelpump_supported = true;
 int throttle_ctrl_mode = OpenLoop;
 // dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
-bool usb_jtag = true;                // if you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)
+// bool usb_jtag = true;                // if you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)
 bool dont_take_temperatures = false; // in case debugging dallas sensors or causing problems
 bool console_enabled = true;         // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
 bool keep_system_powered = false;    // use true during development
@@ -146,7 +160,7 @@ float maf_max_gps = 50.0; // i just made this number up as i have no idea what's
 bool flashdemo = false;
 int32_t neobright = 10;   // default for us dim/brighten the neopixels
 int32_t neodesat = 0;     // default for lets us de/saturate the neopixels
-float tuning_rate_pcps = 7.5;  // values being edited change value at this percent of their overall range per second
+float tuning_rate_pcps = 7.5;  // values being edited by touch buttons change value at this percent of their overall range per second
 
 // non-tunable values. probably these belong with their related code
 uint bootcount;                         // variable to track total number of boots of this code build
@@ -169,24 +183,21 @@ bool powering_up = false;               // minor state variable for asleep mode
 bool calmode_request = false;
 bool flycruise_toggle_request = false;
 bool screensaver = false;                // can enable experiment with animated screen draws
+bool basicmode_request = false;
 int tunctrl = OFF, tunctrl_last = OFF;
 int datapage = PG_RUN, datapage_last = PG_TEMP;  // which of the dataset pages is currently displayed and available to edit?
 volatile int sel_val = 0;               // in the real time tuning UI, which of the editable values is selected. -1 for none 
 volatile int sel_val_last = 0;          
 volatile int sel_val_last_last = 0;          
 bool syspower = HIGH;                   // set by handler only. Reflects current state of the signal
-bool starter = LOW;                     // set by handler only. Reflects current state of starter signal (does not indicate source)
-bool starter_drive = false;             // set by handler only. High when we're driving starter, otherwise starter is an input
 bool ignition = LOW;                    // set by handler only. Reflects current state of the signal
 bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
 bool basicmodesw = LOW;
-int starter_request = REQ_NA;
-bool starter_req_on_bool = false;
 int ignition_request = REQ_NA;
 int panicstop_request = REQ_ON;         // on powerup we assume the code just rebooted during a drive, because for all we know it could have 
 int sleep_request = REQ_NA;
 float maf_gps = 0;                      // manifold mass airflow in grams per second
-uint16_t heartbeat_override_color = 0x0000;
+uint16_t heartbeat_override_color = 0x00;
 bool nowtouch = false;
 bool captouch = true;
 float loop_avg_us;
@@ -197,34 +208,11 @@ int ui_context = DatapagesUI;
 
 // fast macros
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // a macro function to determine the length of string arrays
-#define floor(amt, lim) ((amt <= lim) ? lim : amt)
-#define ceiling(amt, lim) ((amt >= lim) ? lim : amt)
-#undef min
-#undef max
-inline float smax(float a, float b) { return (a > b) ? a : b; }
-inline int32_t smax(int32_t a, int32_t b) { return (a > b) ? a : b; }
-inline uint32_t smax(uint32_t a, uint32_t b) { return (a > b) ? a : b; }
-inline uint32_t smax(uint32_t a, uint32_t b, uint32_t c) { return (a > b) ? ((c > a) ? c : a) : ((c > b) ? c : b); }
-inline float smin(float a, float b) { return (a < b) ? a : b; }
-inline int32_t smin(int32_t a, int32_t b) { return (a < b) ? a : b; }
-inline uint32_t smin(uint32_t a, uint32_t b) { return (a < b) ? a : b; }
-inline uint32_t smin(uint32_t a, uint32_t b, uint32_t c) { return (a < b) ? ((c < a) ? c : a) : ((c < b) ? c : b); }
 #undef constrain
 inline float constrain(float amt, float low, float high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline int32_t constrain(int32_t amt, int32_t low, int32_t high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline uint32_t constrain(uint32_t amt, uint32_t low, uint32_t high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline long constrain(long amt, long low, long high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
-// the above should be templated, i'm sure. i tried the following but it didn't work
-// template <typename T> inline T smax(T a, T b) { return (a > b) ? a : b; }
-// template <typename T> inline T smax(T a, T b, T c) { return (a > b) ? ((c > a) ? c : a) : ((c > b) ? c : b); }
-// template <typename T> inline T smin(T a, T b) { return (a < b) ? a : b; }
-// template <typename T> inline T smin(T a, T b, T c) { return (a < b) ? ((c < a) ? c : a) : ((c < b) ? c : b); }
-// template <typename T> inline T constrain(T amt, T low, T high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
-// template <typename T> inline T map(T x, T in_min, T in_max, T out_min, T out_max) {
-//     if (in_max - in_min > (T)0.001) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
-//     printf ("map not dividing by zero\n");
-//     return out_max;  // Instead of dividing by zero, return the highest valid result
-// }
 #undef map
 inline float map(float x, float in_min, float in_max, float out_min, float out_max) {
     if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
@@ -234,8 +222,6 @@ inline int32_t map(int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, i
     if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
     return out_max;  // instead of dividing by zero, return the highest valid result
 }
-bool rounding = true;
-float dround(float val, int32_t digits) { return (rounding) ? (std::round(val * std::pow (10, digits)) / std::pow (10, digits)) : val; }
 
 // pin operations
 void set_pin(int pin, int mode) { if (pin >= 0 && pin != 255) pinMode (pin, mode); }
@@ -281,40 +267,23 @@ bool adj_val(float *variable, float modify, float low_limit, float high_limit) {
 bool adj_bool(bool val, int32_t delta) { return delta != 0 ? delta > 0 : val; } // returns 1 on delta=1, 0 on delta=-1, or val on delta=0
 void adj_bool(bool *val, int32_t delta) { *val = adj_bool(*val, delta); }       // sets a bool reference to 1 on 1 delta or 0 on -1 delta
 
-// // hue: 0,255 = red, 85 = grn, 170 = blu | sat: 0 = saturated up to greyscale, 255 = pure color | bright: 0 = blk, 255 = "full" | bright_flat: if =1, "full" brightness varies w/ hue for consistent luminance, otherwise "full" always ranges to 255 (mixed-element colors are brighter) | blu_boost: adds blu_boost/255 desaturation as a ratio of blu dominance
-// template <typename T>
-// T hsv_to_rgb_old(uint8_t hue, uint8_t sat = 255, uint8_t bright = 255, bool bright_flat = 1, uint8_t blu_boost = 0) {  // returns uint32 color in format 0x00RRGGBB
-//     uint32_t rgb[3] = { 255 - 3 * (uint32_t)((255 - hue) % 85), 0, 3 * (uint32_t)((255 - hue) % 85) };
-//     float maxc = (float)((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]);
-//     if (hue <= 85) { rgb[1] = rgb[0]; rgb[0] = rgb[2]; rgb[2] = 0; }
-//     else if (hue <= 170) { rgb[1] = rgb[2]; rgb[2] = rgb[0]; rgb[0] = 0; }
-//     float brightener = (float)bright / (bright_flat ? 255.0 : maxc);
-//     float blu_booster = 1 + (float)(blu_boost * rgb[2]) / (float)(255.0 * (rgb[0] + rgb[1] + rgb[2]));
-//     for (int led=0; led<=2; led++) 
-//         rgb[led] = brightener * ((float)rgb[led] + blu_booster * (255.0 - sat) * (float)(maxc - rgb[led]) / 255.0);
-//     if (std::is_same<T, uint16_t>::value) return (T)((rgb[0] & 0xf8) << 8) | ((rgb[1] & 0xfc) << 5) | (rgb[2] >> 3);
-//     else if (std::is_same<T, uint32_t>::value) return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
-// }
 template <typename T>
 T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {
-    uint8_t rgb[3];  // [r,g,b];
+    uint8_t rgb[3] = { 0, 0, 0 };  // [r,g,b];
     hue = (hue * 1530L + 32768) / 65536;
     if (hue < 510) { // Red to Green-1
-        rgb[2] = 0;
         if (hue < 255) { rgb[0] = 255; rgb[1] = hue; }  //   Red to Yellow-1, g = 0 to 254
         else { rgb[0] = 510 - hue; rgb[1] = 255; }  //  Yellow to Green-1, r = 255 to 1
     }
     else if (hue < 1020) { // Green to Blue-1
-        rgb[0] = 0;
         if (hue < 765) { rgb[1] = 255; rgb[2] = hue - 510; }  //  Green to Cyan-1, b = 0 to 254
         else { rgb[1] = 1020 - hue; rgb[2] = 255; }  // Cyan to Blue-1, g = 255 to 1
     }
     else if (hue < 1530) {  // Blue to Red-1
-        rgb[1] = 0;
         if (hue < 1275) { rgb[0] = hue - 1020; rgb[2] = 255; }  // Blue to Magenta-1, r = 0 to 254
         else { rgb[0] = 255; rgb[2] = 1530 - hue; }  //   Magenta to Red-1, b = 255 to 1
     }
-    else { rgb[0] = 255; rgb[1] = rgb[2] = 0; }  // Last 0.5 Red (quicker than % operator)
+    else { rgb[0] = 255; }  // Last 0.5 Red (quicker than % operator)
     uint32_t v1 = 1 + val;  // 1 to 256; allows >>8 instead of /255
     uint16_t s1 = 1 + sat;  // 1 to 256; same reason
     uint8_t s2 = 255 - sat; // 255 to 0
@@ -334,13 +303,6 @@ T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {
 uint8_t rando_color() {
     return ((uint8_t)random(0x7) << 5) | ((uint8_t)random(0x7) << 2) | (uint8_t)random(0x3); 
 }
-// uint16_t rando_color() {
-//     return ((uint16_t)random(0x1f) << 11) | ((uint16_t)random(0x3f) << 5) | (uint16_t)random(0x1f); 
-// }
-// uint16_t hue_shift(uint16_t orig, int addme) {
-//     return (orig >> 11(uint16_t)random(0x1f) << 11) | ((uint16_t)random(0x3f) << 5) | (uint16_t)random(0x1f); 
-// }
-
 class Timer {  // !!! beware, this 54-bit microsecond timer overflows after every 571 years
   protected:
     volatile int64_t start_us, timeout_us;
@@ -392,8 +354,6 @@ class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regul
     // }
 };
 Timer sleep_inactivity_timer(300000000);
-Timer starterTimer(5000000);  // If remotely-started starting event is left on for this long, end it automatically
-Timer pushBrakeTimer(2500000);  // time allowed to push the brake pedal before remotely powering the starter motor
 Timer panicTimer(15000000);  // How long should a panic stop last?  we can't stay mad forever
 
 void kick_inactivity_timer(int source=0) {

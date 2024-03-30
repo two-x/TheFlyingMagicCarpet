@@ -8,7 +8,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     Timer shutdown_timer{5000000};
     Encoder* encoder;
     Display* display;
-    int oldmode = ASLEEP;
+    int oldmode = ASLEEP, last_conscious_mode;
     bool autostopping_last = false, still_interactive = true;
     uint32_t initial_inactivity;
   public:
@@ -37,9 +37,9 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
   private:
     void updateMode() {
-        if (basicmodesw) mode = BASIC;  // if basicmode switch on --> Basic Mode
-        else if ((mode != CAL) && (mode != ASLEEP)) {
-            if (panicstop || !ignition) mode = SHUTDOWN;
+        if (mode != ASLEEP) {
+            if (basicmodesw) mode = BASIC;  // if basicmode switch on --> Basic Mode
+            else if (mode != CAL && !ignition) mode = SHUTDOWN;
             else if (tach.engine_stopped()) mode = STALL;;  // otherwise if engine not running --> Stall Mode
         }
         we_just_switched_modes = (mode != oldmode);  // currentMode should not be changed after this point in loop
@@ -49,6 +49,18 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         oldmode = mode;
     }
+    //     if (basicmodesw) mode = BASIC;  // if basicmode switch on --> Basic Mode
+    //     else if ((mode != CAL) && (mode != ASLEEP)) {
+    //         if (panicstop || !ignition) mode = SHUTDOWN;
+    //         else if (tach.engine_stopped()) mode = STALL;;  // otherwise if engine not running --> Stall Mode
+    //     }
+    //     we_just_switched_modes = (mode != oldmode);  // currentMode should not be changed after this point in loop
+    //     if (we_just_switched_modes) {
+    //         display->disp_runmode_dirty = true;
+    //         cleanup_state_variables();
+    //     }
+    //     oldmode = mode;
+    // }
     void cleanup_state_variables() {
         if (oldmode == BASIC);
         else if (oldmode == ASLEEP);
@@ -56,29 +68,36 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (oldmode == STALL);
         else if (oldmode == HOLD) {
             joy_centered = false;
-            starter_request = REQ_OFF;  // Stop any in-progress startings
+            starter.request(REQ_OFF);  // Stop any in-progress startings
         }
         else if (oldmode == FLY) car_hasnt_moved = false;
         else if (oldmode == CRUISE) cruise_adjusting = false;
         else if (oldmode == CAL) cal_gasmode = cal_gasmode_request = cal_brakemode = false;
+        display->disp_bools_dirty = true;
     }
     void run_basicMode() { // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         if (we_just_switched_modes) {
             gas.setmode(ParkMotor);  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
             brake.setmode(ParkMotor);
             steer.setmode(OpenLoop);
-            powering_up = false;  // to cover unlikely edge case where basic mode switch is enabled during wakeup from asleep mode
+            powering_up = basicmode_request = false;  // to cover unlikely edge case where basic mode switch is enabled during wakeup from asleep mode
             watchdog.set_codemode(Parked);
+            display->disp_bools_dirty = true;
         }
         if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
+        if (hotrc.sw_event(CH4) && !ignition) mode = ASLEEP;
         if (!basicmodesw && !tach.engine_stopped()) mode = speedo.car_stopped() ? HOLD : FLY;  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
+        if (basicmode_request) mode = SHUTDOWN;  // if fully shut down and cal mode requested, go to cal mode
     }
     void run_asleepMode() {  // turns off syspower and just idles. sleep_request are handled here or in shutdown mode below
         if (we_just_switched_modes) {
             screenSaverTimer.reset();
             initial_inactivity = (uint32_t)sleep_inactivity_timer.elapsed();  // if entered asleep mode manually rather than timeout, start screensaver countdown
             still_interactive = true;
+            sleep_request = REQ_NA;
             powering_up = false;
+            last_conscious_mode = oldmode;
+            display->disp_bools_dirty = true;
             brake.setmode(Halt);
             steer.setmode(Halt);
             set_syspower(LOW); // Power down devices to save battery
@@ -90,18 +109,22 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
                 still_interactive = false;
             }
         }
-        if (hotrc.sw_event(CH4) || encoder->button.pressed()) {  // if we've been triggered to wake up
+        if (hotrc.sw_event(CH4) || encoder->button.pressed() || sleep_request == REQ_TOG || sleep_request == REQ_OFF) {  // if we've been triggered to wake up
             set_syspower(HIGH);              // switch on control system devices
             pwrup_timer.reset();  // stay in asleep mode for a delay to allow devices to power up
             powering_up = true;
             display->auto_saver(false);      // turn off screensaver
         }
-        if (powering_up && pwrup_timer.expired()) mode = SHUTDOWN;  // display->all_dirty();  // tells display to redraw everything. display must set back to false
+        sleep_request = REQ_NA;
+        if (powering_up && pwrup_timer.expired()) {
+            mode = (basicmodesw || (last_conscious_mode == BASIC)) ? BASIC : SHUTDOWN;  // display->all_dirty();  // tells display to redraw everything. display must set back to false
+            display->disp_bools_dirty = true;
+        }
     }
     void run_shutdownMode() { // In shutdown mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.
         if (we_just_switched_modes) {              
             shutdown_incomplete = !(powering_up);   // if waking up from sleep shutdown is already complete
-            powering_up = calmode_request = false;
+            powering_up = calmode_request = basicmode_request = false;
             gas.setmode(ParkMotor);                 // carburetor parked 
             brake.setmode(AutoStop);                // if car is moving begin autostopping
             if (!panicstop) steer.setmode(Halt);    // steering disabled, unless panic stopping
@@ -123,6 +146,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (hotrc.sw_event(CH4) || sleep_inactivity_timer.expired() || sleep_request == REQ_TOG || sleep_request == REQ_ON) mode = ASLEEP;
             sleep_request = REQ_NA;
             if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode
+            if (basicmode_request) mode = BASIC;  // if fully shut down and cal mode requested, go to cal mode
         }
         if ((speedo.car_stopped() || allow_rolling_start) && ignition && !panicstop && !tach.engine_stopped()) mode = HOLD;  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
     }
@@ -133,8 +157,8 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             steer.setmode(OpenLoop);
         }
         if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
-        if (hotrc.sw_event(CH4)) starter_request = REQ_TOG;
-        if (starter || !tach.engine_stopped()) mode = HOLD;  // If we started the car, enter hold mode once starter is released
+        if (hotrc.sw_event(CH4)) starter.request(REQ_TOG);
+        if (starter.motor || !tach.engine_stopped()) mode = HOLD;  // If we started the car, enter hold mode once starter is released
         // Serial.printf("%d/%d ", starter_request, starter);
     }
     void run_holdMode() {
@@ -146,9 +170,9 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             steer.setmode(OpenLoop);
         }
         if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
-        if (hotrc.sw_event(CH4)) starter_request = REQ_OFF;
+        if (hotrc.sw_event(CH4)) starter.request(REQ_OFF);
         if (hotrc.joydir(VERT) != JOY_UP) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
-        else if (joy_centered && !starter && !hotrc.radiolost()) mode = FLY; // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
+        else if (joy_centered && !starter.motor && !hotrc.radiolost()) mode = FLY; // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
     }
     void run_flyMode() {
         if (we_just_switched_modes) {
@@ -182,13 +206,14 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_calMode() {  // Calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration. Don't use it unless you know how.
         if (we_just_switched_modes) {
             calmode_request = cal_gasmode_request = cal_brakemode = false;
+            display->disp_bools_dirty = true;
             gas.setmode(Idle);
-            brake.setmode(Halt);
+            brake.setmode(Calibrate);
             steer.setmode(Halt);
         }
         else if (calmode_request) mode = SHUTDOWN;
-        if (cal_brakemode) brake.setmode(Calibrate);
-        else if (brake.motormode == Calibrate) brake.setmode(Halt);
+        // if (cal_brakemode) brake.setmode(Calibrate);
+        // else if (brake.motormode == Calibrate) brake.setmode(Halt);
         if (cal_gasmode_request) gas.setmode(Calibrate);
         else gas.setmode(Idle);
         if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
@@ -243,7 +268,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
 // THROTTLE_DELTA mode holds a fixed throttle servo position as long as the trigger is centered, and if not,
 // it adjusts the setpoint up or down proportional to how far and how long you hold the trigger away from center.
 // If you panic and push full brake for over 500ms, it will drop to fly mode and then push brakes.
-
 //
 // ** Cal Mode **
 // This mode allows direct control of some actuators without respecting limits of motion, for purpose of
