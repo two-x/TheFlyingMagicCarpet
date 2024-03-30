@@ -19,13 +19,7 @@ int sources[static_cast<int>(sens::NUM_SENSORS)] = { static_cast<int>(src::UNDEF
 #include "i2cbus.h"
 // #include "xtensa/core-macros.h"  // access to ccount register for esp32 timing ticks
 
-// NOTE: the following classes all contain their own initial config values (for simplicity). We could instead use Config objects and pass them in at construction time, which might be
-//       a little cleaner organization-wise, since all the configs would be consolidated. It would also allow us to read Configs from storage somewhere, so we could have persistent
-//       calibration.
-
-// Param is a value which is constrained between min/max limits, representing a "raw" (aka unfiltered) quantity. A value with tight limits
-// (wehere min=val=max) is constant and cannot be changed without changing the limits. An unconstrained value can be represented by setting
-// either or both min/max to infinity.
+// Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class Potentiometer {
   protected:
     float adc_min = 300; // TUNED 230603 - Used only in determining theconversion factor
@@ -62,6 +56,13 @@ class Potentiometer {
     float min() { return _pc_min; }
     float max() { return _pc_max; }
 };
+// NOTE: the following classes all contain their own initial config values (for simplicity). We could instead use Config objects and pass them in at construction time, which might be
+//       a little cleaner organization-wise, since all the configs would be consolidated. It would also allow us to read Configs from storage somewhere, so we could have persistent
+//       calibration.
+
+// Param is a value which is constrained between min/max limits, representing a "raw" (aka unfiltered) quantity. A value with tight limits
+// (wehere min=val=max) is constant and cannot be changed without changing the limits. An unconstrained value can be represented by setting
+// either or both min/max to infinity.
 template<typename VALUE_T>
 class Param {
   protected:
@@ -927,7 +928,8 @@ class Tachometer : public PulseSensor<float> {
     float _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
   public:
     sens senstype = sens::tach;
-    float _govern_rpm = _redline_rpm;    
+    float _govern_rpm = _redline_rpm;
+    float _idle_rpm = 600.0, _idle_cold_rpm = 550.0, _idle_hot_rpm = 700.0;
     Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_rpm) {
         _negative = true;
         set_human_limits(0.0, _redline_rpm);
@@ -953,7 +955,14 @@ class Tachometer : public PulseSensor<float> {
     float redline_rpm() { return _human.max(); }
     float govern_rpm() { return _govern_rpm; }
     float* govern_rpm_ptr() { return &_govern_rpm; }
-    void set_govern_rpm(float newgovern) { _govern_rpm = newgovern; }
+    float idle_rpm() { return _idle_rpm; }
+    float idle_cold_rpm() { return _idle_cold_rpm; }
+    float idle_hot_rpm() { return _idle_hot_rpm; }
+    float* idle_rpm_ptr() { return &_idle_rpm; }
+    void set_idle_rpm(float newidle) { _idle_rpm = constrain(newidle, _human.min(), _govern_rpm); }
+    void set_govern_rpm(float newgovern) { _govern_rpm = constrain(newgovern, _idle_rpm, _human.max()); }
+    void set_idlecold_rpm(float newidlecold) { _idle_cold_rpm = constrain(newidlecold, _idle_hot_rpm + 1.0, _human.max()); }
+    void set_idlehot_rpm(float newidlehot) { _idle_hot_rpm = constrain(newidlehot, _human.min(), _idle_cold_rpm - 1.0); }
     float abs_max_rpm() { return _abs_max_rpm; }
     float* redline_rpm_ptr() { return _human.max_ptr(); }
     std::shared_ptr<float> redline_rpm_shptr() { return _human.max_shptr(); }
