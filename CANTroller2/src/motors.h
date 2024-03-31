@@ -399,7 +399,7 @@ class ServoMotor {
     float out_pc_to_us(float _pc) {  // works for motor with or without stop value
         return map(_pc, pc[ABSMIN], pc[ABSMAX], reverse ? us[ABSMAX] : us[ABSMIN], reverse ? us[ABSMIN] : us[ABSMAX]);
     }
-    void write_motor() { motor.writeMicroseconds((int32_t)(us[OUT])); }
+    void write_motor() { if (!std::isnan(us[OUT])) motor.writeMicroseconds((int32_t)(us[OUT])); }
 };
 class JagMotor : public ServoMotor {
   protected:
@@ -536,10 +536,7 @@ class GasServo : public ServoMotor {
             cruise_adjusting = false;
             cruise_trigger_released = true;
             cruise_ctrl_extent_pc = hotrc->pc[VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
-            if (cruise_setpoint_scheme == PID_SUSPEND_FLY) {
-                throttle_target_pc = cruisepid.compute();
-                if (throttle_ctrl_mode == ActivePID) pid.set_target(throttle_target_pc);  // this is a bit misleading use of variables, because this argument value is actually an rpm target, not cruise percent, if gas is on pid
-            }
+            if (cruise_setpoint_scheme == PID_SUSPEND_FLY) throttle_target_pc = cruisepid.compute();
         }
         else if ((joydir == JOY_UP || (joydir == JOY_DN && cruise_speed_lowerable)) && cruise_trigger_released) {  // adjustments disabled until trigger has been to center at least once since going to cruise mode
             float ctrlratio = (std::abs(hotrc->pc[VERT][FILT]) - hotrc->pc[VERT][DBTOP]) / (hotrc->pc[VERT][OPMAX] - hotrc->pc[VERT][DBTOP]);
@@ -553,19 +550,31 @@ class GasServo : public ServoMotor {
                 cruise_ctrl_extent_pc = std::abs(hotrc->pc[VERT][FILT]);
             }
             else if (cruise_setpoint_scheme == PID_SUSPEND_FLY) {
-                if (throttle_ctrl_mode == OpenLoop) {
-                    if (!cruise_adjusting) adjustpoint = pc[OUT];
-                    throttle_target_pc = adjustpoint + ctrlratio * (((joydir == JOY_UP) ? pc[OPMAX] : pc[OPMIN]) - adjustpoint);;
-                }
-                else if (throttle_ctrl_mode == ActivePID) {
-                    if (!cruise_adjusting) adjustpoint = tach->filt();
-                    pid.set_target(adjustpoint + ctrlratio * (((joydir == JOY_UP) ? tach->govern_rpm() : idlectrl.idle_rpm) - adjustpoint));  // fake
-                }
+                if (!cruise_adjusting) adjustpoint = (throttle_ctrl_mode == OpenLoop) ? pc[OUT] : rpm_to_pc(tach->filt());
+                throttle_target_pc = adjustpoint + ctrlratio * (((joydir == JOY_UP) ? pc[GOVERN] : idle_pc()) - adjustpoint);
                 cruisepid.set_target(speedo->filt());
             }
-            throttle_target_pc = constrain(throttle_target_pc, 0.0, 100.0);
             cruise_adjusting = true;
         }
+    }
+    void postprocess_output() {  // limits angular velocity, and if using pid this converts target to rpm value and hand-holds the pid
+        Serial.printf("post");
+        float new_out;
+        throttle_target_pc = constrain(throttle_target_pc, pc[PARKED], pc[OPMAX]);
+        if (throttle_ctrl_mode == ActivePID) {
+            pid.set_target(pc_to_rpm(throttle_target_pc));
+            new_out = pid.compute();
+        }
+        else if (throttle_ctrl_mode == OpenLoop) new_out = throttle_target_pc;
+        // Serial.printf(" ela:%ld pcps:%lf", throttleRateTimer.elapsed(), max_throttle_angular_velocity_pcps);
+        float max_change = (float)throttleRateTimer.elapsed() * max_throttle_angular_velocity_pcps / 1000000.0;
+        throttleRateTimer.reset();
+        // Serial.printf(" new:%lf pc0:%lf mx:%lf", throttle_target_pc, pc[OUT], max_change);
+        if (new_out > pc[OUT] && new_out > pc[OUT] + max_change) pc[OUT] += max_change;
+        else if (new_out < pc[OUT] && new_out < pc[OUT] - max_change) pc[OUT] -= max_change;
+        else pc[OUT] = new_out;
+        if (throttle_ctrl_mode == ActivePID) pid.set_output(pc[OUT]);
+        Serial.printf(" tgt:%lf pc1:%lf\n", throttle_target_pc, pc[OUT]);
     }
     float goto_openloop_target(float tgt) {  // pass in an angle target, get back new angle to go to, respecting the max allowed angular change per second
         float max_change = (float)throttleRateTimer.elapsed() * max_throttle_angular_velocity_pcps / 1000000.0;
@@ -630,14 +639,40 @@ class GasServo : public ServoMotor {
         return (std::abs(out_pc_to_si(pc[OUT]) - si[PARKED]) < 1);
     }
     void update() {
-        if (pid_timer.expireset()) {          
+        if (pid_timer.expireset()) {
+            update_idlespeed();                // Step 1 : do any idle speed management needed          
             set_output();                      // Step 2 : determine motor output value. updates throttle target from idle control or cruise mode pid, if applicable (on the same timer as gas pid). allows idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
             constrain_output();                // Step 3 : fix output to ensure it's in range
-            us[OUT] = out_si_to_us(deg[OUT]);  // Step 4 : convert motor value to pulsewidth time
+            us[OUT] = out_pc_to_us(pc[OUT]);  // Step 4 : convert motor value to pulsewidth time
             deg[OUT] = out_pc_to_si(pc[OUT]);
+            Serial.printf("out pc:%lf us:%lf\n", pc[OUT], us[OUT]);
             write_motor();                     // Step 5 : write to servo
         }
     }
+    void set_idlehot(float newidlehot) {
+        if (throttle_ctrl_mode == OpenLoop) idle_si[OPMIN] = constrain(newidlehot, idle_si[ABSMIN], idle_si[OPMAX] - 1.0);
+        else if (throttle_ctrl_mode == ActivePID) tach->set_idlehot_rpm(constrain(newidlehot, tach->min_human(), tach->idle_cold_rpm() - 1.0));
+        update_idlespeed();
+    }
+    void set_idlecold(float newidlecold) {
+        if (throttle_ctrl_mode == OpenLoop) idle_si[OPMAX] = constrain(newidlecold, idle_si[OPMIN] + 1.0, idle_si[ABSMAX]);
+        else if (throttle_ctrl_mode == ActivePID) tach->set_idlecold_rpm(constrain(newidlecold, tach->idle_hot_rpm() + 1.0, tach->max_human()));
+        update_idlespeed();
+    }
+    void add_idlehot(float add) { 
+        if (throttle_ctrl_mode == OpenLoop) set_idlehot(idle_si[OPMIN] + add);
+        else if (throttle_ctrl_mode == ActivePID) tach->set_idlehot_rpm(tach->idle_hot_rpm() + add);
+    }
+    void add_idlecold(float add) {
+        if (throttle_ctrl_mode == OpenLoop) set_idlecold(idle_si[OPMAX] + add);
+        else if (throttle_ctrl_mode == ActivePID) tach->set_idlecold_rpm(tach->idle_cold_rpm() + add);
+    }
+    void set_temphot(float newtemphot) { idletemp_f[OPMAX] = constrain(newtemphot, idletemp_f[OPMIN] + 1.0, idletemp_f[ABSMAX]); update_idlespeed(); }
+    void set_tempcold(float newtempcold) { idletemp_f[OPMIN] = constrain(newtempcold, idletemp_f[ABSMIN], idletemp_f[OPMAX] - 1.0); update_idlespeed(); }
+    void add_temphot(float add) { set_temphot(idletemp_f[OPMAX] + add); }
+    void add_tempcold(float add) { set_tempcold(idletemp_f[OPMIN] + add); }
+    float idle_deg() { return idle_si[OUT]; }
+    float idle_pc() { return out_si_to_pc(idle_si[OUT]); }
 };
 // Brake uses two PID loops: one based on pressure (accurate for high brake pressures), and one based on position (accurate when pedal is more released)
 // Note as pedal is pressed down, position decreases as pressure increases. PID output is percent motor power.
@@ -647,7 +682,7 @@ class BrakeMotor : public JagMotor {
     PressureSensor* pressure;
     IdleControl* throttle;
     TemperatureSensorManager* tempsens;
-    float brakemotor_max_duty_pc = 100.0;  // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
+    float brakemotor_max_duty_pc = 25.0;  // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
     float press_initial_kp = 0.142;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float press_initial_ki = 0.000;        // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float press_initial_kd = 0.000;        // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
@@ -656,14 +691,8 @@ class BrakeMotor : public JagMotor {
     float posn_initial_kd = 0.000;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     static constexpr uint32_t pid_timeout = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
-    // // soren note: I tried reducing duty_integration_period from 300sec to 30sec, and it started crashing whenever I stop the simulator. weird!
-    // static constexpr uint32_t duty_integration_period = 300000000;  // long enough for heat buildup to begin to dissipate from motor. note every 5 minutes uses 1% of our RAM for history buffer
-    // static constexpr int history_depth = duty_integration_period / pid_timeout;
-    // uint8_t history[history_depth];  // stores past motor work done. cast to uint8_t to save ram
-    // float duty_integral = hybrid_sens_ratio * hybrid_out_ratio;
-    // int duty_index = 0, duty_index_last;
     int dominantpid_last = brake_default_pid;    // float posn_inflect, pres_inflect, pc_inflect;
-    float heat_math_offset, motor_heat_min = 50.0, motor_heat_max = 200.0;
+    float heat_math_offset, motor_heat_min = 75.0, motor_heat_max = 200.0;
     Timer stopcar_timer{8000000}, interval_timer{1000000}, motor_park_timer{4000000}, motorheat_timer{500000};
     void set_dominant_pid(int _pid) {
         dominantpid = _pid;
@@ -715,20 +744,6 @@ class BrakeMotor : public JagMotor {
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::reverse, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
     }
   private:
-    // void calc_motor_duty() {  // Duty tracking: we keep a buffer of motor work done
-    //     ++duty_index %= history_depth;  // advance ring buffer index, this is the oldest value in the buffer
-    //     duty_integral_sum -= (float)history[duty_index] / 2.5;  // subtract oldest value from our running sum.
-    //     int duty_instant = std::abs(pc[OUT]);  // what is current motor drive percent
-    //     if (duty_tracker_load_sensitive) {  // if we are being fancy
-    //         if (pc[OUT] < 0) duty_instant = 0.0;  // ignore motion in the extend direction due to low load
-    //         else duty_instant *= hybrid_sens_ratio;  // scale load with brake pressure
-    //     }
-    //     history[duty_index] = (uint8_t)(duty_instant * 2.5);  // write over current indexed value in the history ring buffer. scale to optimize for uint8
-    //     duty_integral_sum += duty_instant;  // add value to our running sum
-    //     duty_continuous = duty_integral_sum / history_depth;  // divide ring buffer total by its size to get average value
-    //     if (duty_continuous < 0.001) duty_continuous = 0.0;  // otherwise displays "5.67e-" (?)
-    //     // now we know our continuous duty, need to limit motor output based on this
-    // }
     void update_motorheat() {
         float added_heat, nowtemp, out_ratio;
         if (motorheat_timer.expireset()) {
