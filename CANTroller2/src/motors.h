@@ -425,11 +425,6 @@ class JagMotor : public ServoMotor {
         si[MARGIN] = map(pc[MARGIN], pc[ABSMIN], pc[ABSMAX], si[ABSMIN], si[ABSMAX]);
         // us[MARGIN] = map(pc[MARGIN], pc[ABSMIN], pc[ABSMAX], us[ABSMIN], us[ABSMAX]);
     }
-    void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {
-        ServoMotor::setup(_hotrc, _speedo);
-        mulebatt = _batt;
-        derive();
-    }
     float out_pc_to_si(float _pc) {  // Eventually this should be linearized
         if (_pc > pc[STOP]) return map(_pc, pc[STOP], pc[ABSMAX], si[STOP], si[ABSMAX]);
         if (_pc < pc[STOP]) return map(_pc, pc[STOP], pc[ABSMIN], si[STOP], si[ABSMIN]);
@@ -450,7 +445,14 @@ class JagMotor : public ServoMotor {
         if (_pc < pc[STOP]) return map(_pc, pc[STOP], pc[ABSMIN], us[STOP], reverse ? us[ABSMAX] : us[ABSMIN]);
         return us[STOP];
     }
-    void write_motor() { motor.writeMicroseconds((int32_t)(us[OUT])); }
+    void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {
+        ServoMotor::setup(_hotrc, _speedo);
+        mulebatt = _batt;
+        derive();
+        pc[OUT] = out_si_to_pc(si[OUT]);
+        us[OUT] = out_si_to_us(si[OUT]);
+    }
+    void write_motor() { if (!std::isnan(us[OUT])) motor.writeMicroseconds((int32_t)(us[OUT])); }
 };
 class GasServo : public ServoMotor {
   private:
@@ -582,40 +584,35 @@ class GasServo : public ServoMotor {
         if (tgt > pc[OUT]) return std::min(pc[OUT] + max_change, tgt);
         else return std::max(pc[OUT] - max_change, tgt);
     }
-    void set_output() { // services any requests for change in brake mode
+    void set_output() {
+        Serial.printf("mode");
         cal_gasmode = false;
         if (motormode == Idle) {
-            idlectrl.goto_idle();  // fake
+            mode_busy = true;
+            throttle_target_pc = idle_pc();
         }
         else if (motormode == Calibrate) {
             cal_gasmode = true;
-            pc[OUT] = out_si_to_pc(map(pot->val(), pot->min(), pot->max(), deg[ABSMIN], deg[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
+            pc[OUT] = out_si_to_pc(map(pot->val(), pot->min(), pot->max(), si[ABSMIN], si[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
         }
         else if (motormode == Cruise) {
             calc_cruise_target();  // cruise mode just got too big to be nested in this if-else clause
-            if (throttle_ctrl_mode == ActivePID) pc[OUT] = pid.compute();
-            else if (throttle_ctrl_mode == OpenLoop) pc[OUT] = goto_openloop_target(throttle_target_pc);
         }
         else if (motormode == ParkMotor) {
             mode_busy = true;
-            pc[OUT] = pc[PARKED];
+            throttle_target_pc = pc[PARKED];
         }
-        else if (motormode == ActivePID) {
-            if (hotrc->joydir(VERT) == JOY_UP)  // If we are trying to accelerate, scale joystick value to determine gas setpoint
-                pid.set_target(map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], idlectrl.idle_rpm, tach->govern_rpm()));  // fake
-            else idlectrl.goto_idle();  // Else let off gas (if gas using PID mode)  // fake
-            pc[OUT] = pid.compute();  // Do proper pid math to determine gas_out_us from engine rpm error
+        else if (motormode == OpenLoop || motormode == ActivePID) {
+            if (hotrc->joydir() != JOY_UP) throttle_target_pc = idle_pc();  // If in deadband or being pushed down, we want idle
+            else throttle_target_pc = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], idle_pc(), pc[GOVERN]);  // actuators still respond even w/ engine turned off
         }
-        else if (motormode == OpenLoop) {
-            if (hotrc->joydir() != JOY_UP) throttle_target_pc = pc[OPMIN];  // If in deadband or being pushed down, we want idle
-            else throttle_target_pc = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[OPMIN], pc[GOVERN]);  // actuators still respond even w/ engine turned off
-            pc[OUT] = goto_openloop_target(throttle_target_pc);
-        }
+        Serial.printf(":%d tgt:%lf pk:%lf idl:%lf\n", motormode, throttle_target_pc, pc[PARKED], idle_pc());
+        if (motormode != Calibrate) postprocess_output();  // skip final motor calculations which impose limitations on the value
     }
     void constrain_output() {
         if (motormode == Calibrate) pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);
         else if (motormode == ParkMotor || motormode == Halt) pc[OUT] = constrain(pc[OUT], pc[PARKED], pc[GOVERN]);
-        else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[GOVERN]);
+        else pc[OUT] = constrain(pc[OUT], idle_pc(), pc[GOVERN]);
     }
   public:
     void setmode(int _mode) {
@@ -680,6 +677,7 @@ class BrakeMotor : public JagMotor {
   private:
     BrakePositionSensor* brkpos;
     PressureSensor* pressure;
+    GasServo* mygas;
     IdleControl* throttle;
     TemperatureSensorManager* tempsens;
     float brakemotor_max_duty_pc = 25.0;  // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
@@ -714,7 +712,7 @@ class BrakeMotor : public JagMotor {
     float panic_initial_pc, hold_initial_pc, panic_increment_pc, hold_increment_pc, parkpos_pc, zeropoint_pc;
     float outnow_pc[2], hybrid_math_offset, hybrid_math_coeff, pid_targ_pc, pid_err_pc, pid_final_out_pc;
     float hybrid_sens_ratio, hybrid_sens_ratio_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0, hybrid_targ_ratio = 1.0, hybrid_targ_ratio_pc = 100.0;
-    float duty_integral_sum, duty_instant, duty_continuous, motor_heat = NAN, motor_heatloss_rate = 3.0, motor_max_loaded_heatup_rate = 1.5, motor_max_unloaded_heatup_rate = 0.3;  // deg F per timer timeout
+    float motor_heat = NAN, motor_heatloss_rate = 3.0, motor_max_loaded_heatup_rate = 1.5, motor_max_unloaded_heatup_rate = 0.3;  // deg F per timer timeout
     void derive() {
         JagMotor::derive();
         parkpos_pc = map(brkpos->parkpos(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0);
@@ -727,15 +725,15 @@ class BrakeMotor : public JagMotor {
         hybrid_math_offset = 0.5 * (brake_pid_trans_threshold_hi + brake_pid_trans_threshold_lo);
         hybrid_math_coeff = M_PI / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo);
     }
-    void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, IdleControl* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+    void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, GasServo* _gas, IdleControl* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         printf("Brake motor..\n");
         JagMotor::setup(_hotrc, _speedo, _batt);
-        pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  tempsens = _tempsens;
+        pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  tempsens = _tempsens; mygas = _gas;
         // duty_fwd_pc = brakemotor_max_duty_pc;
         pres_last = pressure->filt();
         posn_last = brkpos->filt();
         set_dominant_pid(brake_default_pid);
-        motor_heat_min = tempsens->val(loc::AMBIENT);
+        if (!std::isnan(tempsens->val(loc::AMBIENT))) motor_heat_min = tempsens->val(loc::AMBIENT);
         derive();
         if (brake_hybrid_pid) calc_hybrid_ratio(pressure->filt());
         pids[PressurePID].init(pressure->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), press_initial_kp, press_initial_ki, press_initial_kd, QPID::pmod::onerr,
@@ -755,13 +753,15 @@ class BrakeMotor : public JagMotor {
                 return;
             }
             if (std::isnan(nowtemp)) added_heat = motor_heatloss_rate / -4.0;
-            else if (motor_heat > nowtemp) added_heat = -motor_heatloss_rate * (motor_heat - nowtemp) / nowtemp;
-            if (pc[OUT] <= duty_continuous + pc[MARGIN]) added_heat += map(pc[OUT], 0.0, -100.0, 0.0, motor_max_unloaded_heatup_rate);
-            else if (pc[OUT] > duty_continuous - pc[MARGIN]) added_heat += map(pc[OUT], duty_continuous, 100.0, 0.0, motor_max_loaded_heatup_rate);
-            motor_heat_min = nowtemp;
+            else {
+                motor_heat_min = nowtemp;
+                if (motor_heat > nowtemp) added_heat = -motor_heatloss_rate * (motor_heat - nowtemp) / nowtemp;
+            }
+            if (pc[OUT] <= brakemotor_max_duty_pc + pc[MARGIN]) added_heat += map(pc[OUT], 0.0, -100.0, 0.0, motor_max_unloaded_heatup_rate);
+            else if (pc[OUT] > brakemotor_max_duty_pc - pc[MARGIN]) added_heat += map(pc[OUT], brakemotor_max_duty_pc, 100.0, 0.0, motor_max_loaded_heatup_rate);
             motor_heat = constrain(motor_heat + added_heat, motor_heat_min, motor_heat_max);
         }
-        // that's great to know if the motor is hot. but we need to take some actions in response
+        // that's great to have some idea whether the motor is hot. but we need to take some actions in response
     }
     // the influence on the final output from the pressure and position pids is weighted based on the pressure reading
     // as the brakes are pressurized beyond X psi, use pressure reading, otherwise use position as feedback, because
@@ -808,7 +808,8 @@ class BrakeMotor : public JagMotor {
             else pc[OUT] = pc[STOP];
         }
         else if (motormode == AutoStop) {  // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
-            throttle->goto_idle();  // Stop pushing the gas, will help us stop the car better  // fake
+            mygas->setmode(Idle);  // Stop pushing the gas, will help us stop the car better
+            throttle->goto_idle();  // REMOVE THIS
             autostopping = (!speedo->car_stopped() && !stopcar_timer.expired());
             if (autostopping) {
                 if (interval_timer.expireset()) set_pidtarg(std::min(100.0f, pid_targ_pc + panicstop ? panic_increment_pc : hold_increment_pc));   

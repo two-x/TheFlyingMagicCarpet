@@ -36,7 +36,7 @@ void setup() {
     xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 6, &temptask, CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);  // added for servos I think
     gas.setup(&hotrc, &speedo, &tach, &pot, &tempsens);
-    brake.setup(&hotrc, &speedo, &mulebatt, &pressure, &brkpos, &gas.idlectrl, &tempsens);
+    brake.setup(&hotrc, &speedo, &mulebatt, &pressure, &brkpos, &gas, &gas.idlectrl, &tempsens);
     steer.setup(&hotrc, &speedo, &mulebatt);
     datapage = prefs.getUInt("dpage", PG_RUN);
     datapage_last = prefs.getUInt("dpage", PG_TEMP);
