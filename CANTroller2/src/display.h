@@ -741,13 +741,13 @@ class Display {
         else if (datapage == PG_IDLE) {
             draw_asciiname(9, motormodecard[gas.motormode]);
             draw_dynamic(10, gas.pid.target(), 0.0f, tach.redline_rpm());
-            draw_dynamic(11, gas.pc[IDLE], gas.pc[OPMIN], gas.pc[OPMAX]);  // gas.idlectrl.idlehot(), gas.idlectrl.idlecold());
-            draw_dynamic(12, gas.si[IDLE], gas.si[OPMIN], gas.si[OPMAX]);  // gas.idlectrl.idlehot(), gas.idlectrl.idlecold());
+            draw_dynamic(11, gas.idle_pc(), gas.pc[OPMIN], gas.pc[OPMAX]);  // gas.idlectrl.idlehot(), gas.idlectrl.idlecold());
+            draw_dynamic(12, gas.idle_deg(), gas.si[OPMIN], gas.si[OPMAX]);  // gas.idlectrl.idlehot(), gas.idlectrl.idlecold());
             draw_dynamic(13, tach.idle_rpm(), tach.min_human(), tach.max_human());
             draw_dynamic(14, fuelpump.volts(), 0.0f, fuelpump.volts_max());
             draw_eraseval(15);
-            draw_dynamic(16, gas.idle_deg[OPMAX], gas.idle_deg[ABSMIN], gas.idle_deg[ABSMAX], -1, 4);
-            draw_dynamic(17, gas.idle_deg[OPMIN], gas.idle_deg[ABSMIN], gas.idle_deg[ABSMAX], -1, 4);
+            draw_dynamic(16, gas.idle_si[OPMAX], gas.idle_si[ABSMIN], gas.idle_si[ABSMAX], -1, 4);
+            draw_dynamic(17, gas.idle_si[OPMIN], gas.idle_si[ABSMIN], gas.idle_si[ABSMAX], -1, 4);
             draw_dynamic(18, gas.idletemp_f[OPMIN], gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX]); //  gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX], -1, 4);
             draw_dynamic(19, gas.idletemp_f[OPMAX], gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX]); // gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX], -1, 4); 
         }
@@ -862,10 +862,10 @@ class Display {
             if (disp_runmode_dirty) draw_runmode(nowmode, NON);
             if (valuesRefreshTimer.expireset()) {
                 disp_menu_bools();
-                // disp_datapage_values();
+                disp_datapage_values();
             }
         }
-        // fps = animations.update(spr, disp_simbuttons_dirty);
+        fps = animations.update(spr, disp_simbuttons_dirty);
         disp_simbuttons_dirty = false;
         return true;
     }
