@@ -377,9 +377,9 @@ class ServoMotor {
     int pin, freq;
   public:
     bool reverse = false;  // defaults. subclasses override as necessary
-    float pc[NUM_MOTORVALS] = { 0, NAN, 100, NAN, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]  values range from -100% to 100% are all derived or auto-assigned
-    float si[NUM_MOTORVALS] = { 45.0, 43.0, 168.2, 45.0, NAN, 0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
-    float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 500, 2500, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-]
+    float pc[NUM_MOTORVALS] = { 0, NAN, 100, 0, NAN, NAN, NAN, NAN }; // , NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN/IDLE]  values range from -100% to 100% are all derived or auto-assigned
+    float si[NUM_MOTORVALS] = { 45.0, 43.0, 168.2, 45.0, NAN, 0, 180, 1.0 }; // , 58.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN/IDLE]
+    float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 500, 2500, NAN }; // , NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-/IDLE]
     ServoMotor(int _pin, int _freq) { pin = _pin; freq = _freq; }
     void setup(Hotrc* _hotrc, Speedometer* _speedo) {
         hotrc = _hotrc;
@@ -410,9 +410,9 @@ class JagMotor : public ServoMotor {
     using ServoMotor::ServoMotor;
     float duty_fwd_pc = 100;  // default. subclasses override as necessary
     float duty_rev_pc = 100;  // default. subclasses override as necessary
-    float pc[NUM_MOTORVALS] = { NAN, 0, NAN, NAN, NAN, -100, 100, 2 };  // percent values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]  values range from -100% to 100% are all derived or auto-assigned
-    float si[NUM_MOTORVALS] = { NAN, 0, NAN, NAN, NAN, NAN, NAN, NAN };  // standard si-unit values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
-    float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 670, 2330, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-]
+    float pc[NUM_MOTORVALS] = { NAN, 0, NAN, 0, NAN, -100, 100, 2 }; // , NAN };  // percent values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN/-]  values range from -100% to 100% are all derived or auto-assigned
+    float si[NUM_MOTORVALS] = { NAN, 0, NAN, 0, NAN, NAN, NAN, NAN }; // , NAN };  // standard si-unit values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
+    float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 670, 2330, NAN }; // , NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-/-]
     float (&volt)[arraysize(si)] = si;  // our standard si value is volts. Create reference so si and volt are interchangeable
     // JagMotor(int _pin, int _freq) : ServoMotor(_pin, _freq) {}
     void derive() {  // calc pc and voltage op limits from volt and us abs limits 
@@ -475,8 +475,16 @@ class GasServo : public ServoMotor {
     int motormode = Idle;
     bool cruise_trigger_released = false, mode_busy = false, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
     float (&deg)[arraysize(si)] = si;  // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
-    float max_throttle_angular_velocity_degps = 30.0;  // deg/sec How quickly can the throttle change angle?  too low is unresponsive, too high can cause engine hesitations (going up) or stalls (going down)
+    float max_throttle_angular_velocity_degps = 55.0;  // deg/sec How quickly can the throttle change angle?  too low is unresponsive, too high can cause engine hesitations (going up) or stalls (going down)
     float tach_last, throttle_target_pc, governor = 95, max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
+    float idle_si[NUM_MOTORVALS] = { 45.0, NAN, 60.0, 58.0, NAN, 43.0, 75.0, 1.0 }; // , NAN };  // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
+    float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5}; // , NAN };  // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
+    float pc_to_rpm(float _rpm) {
+        return map(_rpm, tach->idle_rpm(), tach->govern_rpm(), 0.0, 100.0);
+    }
+    float rpm_to_pc(float _pc) {
+        return map(_pc, 0.0, 100.0, tach->idle_rpm(), tach->govern_rpm());
+    }
     void derive() {  // calc derived limit values for all units based on tuned values for each motor
         pc[ABSMIN] = map(si[ABSMIN], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);
         pc[ABSMAX] = map(si[ABSMAX], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);
@@ -484,7 +492,7 @@ class GasServo : public ServoMotor {
         pc[GOVERN] = map(governor, 0.0, 100.0, pc[OPMIN], pc[OPMAX]);  // pc[GOVERN] = pc[OPMIN] + governor * (pc[OPMAX] - pc[OPMIN]) / 100.0;      
         si[GOVERN] = map(pc[GOVERN], pc[OPMIN], pc[OPMAX], si[OPMIN], si[OPMAX]);
         pc[MARGIN] = map(si[MARGIN], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);
-        max_throttle_angular_velocity_pcps = out_si_to_pc(max_throttle_angular_velocity_degps);
+        max_throttle_angular_velocity_pcps = 100.0 * max_throttle_angular_velocity_degps / (si[OPMAX] - si[OPMIN]);
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, TemperatureSensorManager* _temp) {
         tach = _tach;  pot = _pot;  tempsens = _temp;
@@ -504,6 +512,15 @@ class GasServo : public ServoMotor {
             cruisepid.init(speedo->filt_ptr(), tach->idle_rpm_ptr(), tach->govern_rpm_ptr(), cruise_pidgas_initial_kp, cruise_pidgas_initial_ki,
               cruise_pidgas_initial_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::round, QPID::cdir::direct, pid_timeout);
         }
+    }
+    void update_idlespeed() {
+        // Serial.printf("idle");
+        if (!std::isnan(tempsens->val(loc::ENGINE))) idletemp_f[OUT] = tempsens->val(loc::ENGINE);
+        if (std::isnan(idletemp_f[OUT])) return;
+        idle_si[OUT] = map(idletemp_f[OUT], idletemp_f[OPMIN], idletemp_f[OPMAX], idle_si[OPMAX], idle_si[OPMIN]);
+        idle_si[OUT] = constrain(idle_si[OUT], idle_si[OPMIN], idle_si[OPMAX]);
+        tach->set_idle_rpm(map(idletemp_f[OUT], idletemp_f[OPMIN], idletemp_f[OPMAX], tach->idle_cold_rpm(), tach->idle_hot_rpm()));
+        // Serial.printf(" si:%lf pc:%lf\n", idle_si[OUT], idle_pc());
     }
   private:
     // throttle_ctrl_mode : (compile time option)
