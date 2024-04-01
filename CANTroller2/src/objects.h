@@ -244,7 +244,7 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
     float fuelpump_on_min_v = 8.0;
     float fuelpump_on_max_v = 12.0;
     float fuelpump_v = 0.0;
-    float fuelpump_turnon_rpm = 200.0;
+    float fuelpump_turnon_rpm = 50.0;
     int fuelpump_adc = 0;
     bool fuelpump_bool = LOW, fuelpump_off = HIGH;
   private:
@@ -287,7 +287,6 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
             set_pin(pin, OUTPUT);  // initialize_pin
             Serial.printf("using digital drive\n");
         }
-        update();
     }
     float volts() { return fuelpump_v; }
     float volts_min() { return fuelpump_off_v; }

@@ -26,8 +26,6 @@ uint8_t colorcard[NUM_RUNMODES] = { MGT, WHT, RED, ORG, YEL, GRN, TEAL, PUR };
 std::string modecard[NUM_RUNMODES] = { "Basic", "Asleep", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 std::string top_menu_buttons[4]  = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
-std::string idlemodecard[IdleControl::idlemodes::NUM_IDLEMODES] = { "direct", "cntrol", "minimz" };
-std::string idlestatecard[IdleControl::targetstates::NUM_STATES] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 
 // These defines are just a convenience to keep the below datapage strings array initializations aligned in neat rows & cols for legibility
@@ -741,8 +739,8 @@ class Display {
         else if (datapage == PG_IDLE) {
             draw_asciiname(9, motormodecard[gas.motormode]);
             draw_dynamic(10, gas.pid.target(), 0.0f, tach.redline_rpm());
-            draw_dynamic(11, gas.idle_pc(), gas.pc[OPMIN], gas.pc[OPMAX]);  // gas.idlectrl.idlehot(), gas.idlectrl.idlecold());
-            draw_dynamic(12, gas.idle_deg(), gas.si[OPMIN], gas.si[OPMAX]);  // gas.idlectrl.idlehot(), gas.idlectrl.idlecold());
+            draw_dynamic(11, gas.idle_pc, gas.pc[OPMIN], gas.pc[OPMAX]);
+            draw_dynamic(12, gas.idle_si[OUT], gas.si[OPMIN], gas.si[OPMAX]);
             draw_dynamic(13, tach.idle_rpm(), tach.min_human(), tach.max_human());
             draw_dynamic(14, fuelpump.volts(), 0.0f, fuelpump.volts_max());
             draw_eraseval(15);
@@ -790,8 +788,8 @@ class Display {
             draw_dynamic(13, gas.cruisepid.dterm(), -drange, drange);
             
             // draw_dynamic(14, gas.cruisepid.outsum(), -gas.cruisepid.outrange(), gas.cruisepid.outrange());  // cruise_spid_speedo_delta_adc, -drange, drange);
-            Serial.printf("min:%lf max:%lf", gas.pc[OPMIN], gas.pc[OPMAX]);
-            Serial.printf(" gmin():%lf gmax():%lf", gas.pid.outmin(), gas.pid.outmax());
+            // Serial.printf("min:%lf max:%lf", gas.pc[OPMIN], gas.pc[OPMAX]);
+            // Serial.printf(" gmin():%lf gmax():%lf", gas.pid.outmin(), gas.pid.outmax());
             // Serial.printf(" cmin():%lf cmax():%lf", gas.cruisepid.outmin(), gas.cruisepid.outmax());
             draw_eraseval(14);
             
