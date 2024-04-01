@@ -680,11 +680,11 @@ class Display {
         disp_bools_dirty = false;
     }
     void disp_datapage_values() {
-        if (!disp_values_dirty) return;
+        // if (!disp_values_dirty) return;
         float drange;
         draw_dynamic(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-        draw_dynamic(2, speedo.filt(), 0.0, speedo.redline_mph(), gas.cruisepid.target());
-        draw_dynamic(3, tach.filt(), 0.0, tach.redline_rpm(), gas.pid.target());
+        draw_dynamic(2, speedo.filt(), 0.0f, speedo.redline_mph(), gas.cruisepid.target());
+        draw_dynamic(3, tach.filt(), 0.0f, tach.redline_rpm(), gas.pid.target());
         draw_dynamic(4, gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], gas.throttle_target_pc);
         draw_dynamic(5, pressure.filt(), pressure.min_human(), pressure.max_human(), brake.pids[PressurePID].target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
         draw_dynamic(6, brake.pc[OUT], brake.pc[OPMIN], brake.pc[OPMAX]);
@@ -700,8 +700,8 @@ class Display {
             draw_asciiname(15, motormodecard[gas.motormode]);
             draw_asciiname(16, motormodecard[brake.motormode]);
             draw_asciiname(17, motormodecard[steer.motormode]);
-            draw_dynamic(18, gas.governor, 0.0, 100.0);
-            draw_dynamic(19, steer.steer_safe_pc, 0.0, 100.0);
+            draw_dynamic(18, gas.governor, 0.0f, 100.0f);
+            draw_dynamic(19, steer.steer_safe_pc, 0.0f, 100.0f);
         }
         else if (datapage == PG_JOY) {
             draw_dynamic(9, hotrc.us[HORZ][RAW], hotrc.us[HORZ][OPMIN], hotrc.us[HORZ][OPMAX]);
@@ -718,11 +718,11 @@ class Display {
             draw_dynamic(9, pressure.raw(), pressure.min_native(), pressure.max_native());                    
             draw_dynamic(10, brkpos.raw(), brkpos.min_native(), brkpos.max_native());                    
             for (int line=11; line<=13; line++) draw_eraseval(line);
-            draw_dynamic(14, airvelo.max_mph(), 0.0, airvelo.abs_max_mph());
+            draw_dynamic(14, airvelo.max_mph(), 0.0f, airvelo.abs_max_mph());
             draw_dynamic(15, mapsens.min_atm(), mapsens.abs_min_atm(), mapsens.abs_max_atm());
             draw_dynamic(16, mapsens.max_atm(), mapsens.abs_min_atm(), mapsens.abs_max_atm());
-            draw_dynamic(17, speedo.idle_mph(), 0.0, speedo.redline_mph());
-            draw_dynamic(18, speedo.redline_mph(), 0.0, speedo.max_human());
+            draw_dynamic(17, speedo.idle_mph(), 0.0f, speedo.redline_mph());
+            draw_dynamic(18, speedo.redline_mph(), 0.0f, speedo.max_human());
             draw_dynamic(19, brkpos.zeropoint(), brkpos.min_human(), brkpos.max_human());  // BrakePositionSensor::abs_min_retract_in, BrakePositionSensor::abs_max_extend_in);
         }
         else if (datapage == PG_PWMS) {
@@ -736,20 +736,20 @@ class Display {
             draw_dynamic(16, gas.deg[OPMIN], gas.deg[ABSMAX], gas.deg[ABSMAX]);
             draw_dynamic(17, gas.deg[OPMAX], gas.deg[ABSMAX], gas.deg[ABSMAX]);
             draw_dynamic(18, brake.us[STOP], brake.us[ABSMIN], brake.us[ABSMAX]);
-            draw_dynamic(19, brake.duty_fwd_pc, 0.0, 100.0);
+            draw_dynamic(19, brake.duty_fwd_pc, 0.0f, 100.0f);
         }
         else if (datapage == PG_IDLE) {
-            draw_asciiname(9, idlestatecard[gas.idlectrl.targetstate]);
-            draw_dynamic(10, gas.pid.target(), 0.0, tach.redline_rpm());
-            draw_dynamic(11, gas.idlectrl.stallpoint, gas.idlectrl.idle_absmin, gas.idlectrl.idle_absmax);
-            draw_dynamic(12, gas.idlectrl.idle_rpm, gas.idlectrl.idle_absmin, gas.idlectrl.idle_absmax);  // gas.idlectrl.idlehot(), gas.idlectrl.idlecold());
-            draw_dynamic(13, gas.idlectrl.idlehigh, gas.idlectrl.idle_absmin, gas.idlectrl.idle_absmax);
-            draw_dynamic(14, gas.idlectrl.idlecold, gas.idlectrl.idle_absmin, gas.idlectrl.idle_absmax, -1, 4);
-            draw_dynamic(15, gas.idlectrl.idlehot, gas.idlectrl.idle_absmin, gas.idlectrl.idle_absmax, -1, 4);
-            draw_dynamic(16, gas.idlectrl.tempcold, temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
-            draw_dynamic(17, gas.idlectrl.temphot, temp_lims_f[ENGINE][DISP_MIN], temp_lims_f[ENGINE][DISP_MAX]);
-            draw_dynamic(18, (int32_t)gas.idlectrl.settlerate_rpmps, 0, 500);
-            draw_asciiname(19, idlemodecard[(int32_t)gas.idlectrl.idlemode]);
+            draw_asciiname(9, motormodecard[gas.motormode]);
+            draw_dynamic(10, gas.pid.target(), 0.0f, tach.redline_rpm());
+            draw_dynamic(11, gas.idle_pc(), gas.pc[OPMIN], gas.pc[OPMAX]);  // gas.idlectrl.idlehot(), gas.idlectrl.idlecold());
+            draw_dynamic(12, gas.idle_deg(), gas.si[OPMIN], gas.si[OPMAX]);  // gas.idlectrl.idlehot(), gas.idlectrl.idlecold());
+            draw_dynamic(13, tach.idle_rpm(), tach.min_human(), tach.max_human());
+            draw_dynamic(14, fuelpump.volts(), 0.0f, fuelpump.volts_max());
+            draw_eraseval(15);
+            draw_dynamic(16, gas.idle_si[OPMAX], gas.idle_si[ABSMIN], gas.idle_si[ABSMAX], -1, 4);
+            draw_dynamic(17, gas.idle_si[OPMIN], gas.idle_si[ABSMIN], gas.idle_si[ABSMAX], -1, 4);
+            draw_dynamic(18, gas.idletemp_f[OPMIN], gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX]); //  gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX], -1, 4);
+            draw_dynamic(19, gas.idletemp_f[OPMAX], gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX]); // gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX], -1, 4); 
         }
         else if (datapage == PG_BPID) {
             drange = brake.us[ABSMIN]-brake.us[ABSMAX];
@@ -757,33 +757,33 @@ class Display {
             draw_asciiname(10, motormodecard[brake.motormode]);
             draw_dynamic(11, brake.pid_dom->err(), -brake.sensmax(), brake.sensmax());
             draw_dynamic(12, brake.pid_dom->target(), brake.sensmin(), brake.sensmax());
-            draw_dynamic(13, brake.pid_targ_pc, 0.0, 100.0);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
-            draw_dynamic(14, brake.hybrid_targ_ratio_pc, 0.0, 100.0);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
-            draw_dynamic(15, brake.hybrid_out_ratio_pc, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
+            draw_dynamic(13, brake.pid_targ_pc, 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
+            draw_dynamic(14, brake.hybrid_targ_ratio_pc, 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
+            draw_dynamic(15, brake.hybrid_out_ratio_pc, 0.0f, 100.0f);  // brake_spid_speedo_delta_adc, -range, range);
             draw_dynamic(16, brake.motorheat(), brake.motorheatmin(), brake.motorheatmax());  // brake_spid_speedo_delta_adc, -range, range);
-            draw_dynamic(17, brake.pid_dom->kp(), 0.0, 8.0);
-            draw_dynamic(18, brake.pid_dom->ki(), 0.0, 8.0);
-            draw_dynamic(19, brake.pid_dom->kd(), 0.0, 8.0);
+            draw_dynamic(17, brake.pid_dom->kp(), 0.0f, 8.0);
+            draw_dynamic(18, brake.pid_dom->ki(), 0.0f, 8.0);
+            draw_dynamic(19, brake.pid_dom->kd(), 0.0f, 8.0);
             // draw_dynamic(11, brake.pid_dom->pterm(), -drange, drange);
             // draw_dynamic(12, brake.pid_dom->iterm(), -drange, drange);
             // draw_dynamic(13, brake.pid_dom->dterm(), -drange, drange);
         }
         else if (datapage == PG_GPID) {
-            draw_dynamic(9, gas.throttle_target_pc, 0.0, tach.redline_rpm());
-            draw_dynamic(10, gas.pid.target(), 0.0, tach.redline_rpm());
-            draw_dynamic(11, gas.pid.err(), gas.idlectrl.idle_rpm - tach.govern_rpm(), tach.govern_rpm() - gas.idlectrl.idle_rpm);
-            draw_dynamic(12, gas.pid.pterm(), -100.0, 100.0);
-            draw_dynamic(13, gas.pid.iterm(), -100.0, 100.0);
-            draw_dynamic(14, gas.pid.dterm(), -100.0, 100.0);
+            draw_dynamic(9, gas.throttle_target_pc, 0.0f, tach.redline_rpm());
+            draw_dynamic(10, gas.pid.target(), 0.0f, tach.redline_rpm());
+            draw_dynamic(11, gas.pid.err(), tach.idle_rpm() - tach.govern_rpm(), tach.govern_rpm() - tach.idle_rpm());
+            draw_dynamic(12, gas.pid.pterm(), -100.0f, 100.0f);
+            draw_dynamic(13, gas.pid.iterm(), -100.0f, 100.0f);
+            draw_dynamic(14, gas.pid.dterm(), -100.0f, 100.0f);
             draw_dynamic(15, gas.pid.outsum(), -gas.pid.outrange(), gas.pid.outrange());
-            draw_dynamic(16, gas.max_throttle_angular_velocity_degps, 0.0, 360.0);
-            draw_dynamic(17, gas.pid.kp(), 0.0, 1.0);
-            draw_dynamic(18, gas.pid.ki(), 0.0, 1.0);
-            draw_dynamic(19, gas.pid.kd(), 0.0, 1.0);
+            draw_dynamic(16, gas.max_throttle_angular_velocity_degps, 0.0f, 360.0f);
+            draw_dynamic(17, gas.pid.kp(), 0.0f, 1.0);
+            draw_dynamic(18, gas.pid.ki(), 0.0f, 1.0);
+            draw_dynamic(19, gas.pid.kd(), 0.0f, 1.0);
         }
         else if (datapage == PG_CPID) {
-            drange = tach.govern_rpm() - gas.idlectrl.idle_rpm;
-            draw_dynamic(9, gas.cruisepid.target(), 0.0, speedo.govern_mph());
+            drange = tach.govern_rpm() - tach.idle_rpm();
+            draw_dynamic(9, gas.cruisepid.target(), 0.0f, speedo.govern_mph());
             draw_dynamic(10, gas.cruisepid.err(), speedo.idle_mph()-speedo.govern_mph(), speedo.govern_mph()-speedo.idle_mph());
             draw_dynamic(11, gas.cruisepid.pterm(), -drange, drange);
             draw_dynamic(12, gas.cruisepid.iterm(), -drange, drange);
@@ -795,11 +795,11 @@ class Display {
             // Serial.printf(" cmin():%lf cmax():%lf", gas.cruisepid.outmin(), gas.cruisepid.outmax());
             draw_eraseval(14);
             
-            draw_dynamic(15, gas.throttle_target_pc, 0.0, 100.0);
+            draw_dynamic(15, gas.throttle_target_pc, 0.0f, 100.0f);
             draw_dynamic(16, cruise_delta_max_pc_per_s, 1, 35);
-            draw_dynamic(17, gas.cruisepid.kp(), 0.0, 10.0);
-            draw_dynamic(18, gas.cruisepid.ki(), 0.0, 10.0);
-            draw_dynamic(19, gas.cruisepid.kd(), 0.0, 10.0);
+            draw_dynamic(17, gas.cruisepid.kp(), 0.0f, 10.0f);
+            draw_dynamic(18, gas.cruisepid.ki(), 0.0f, 10.0f);
+            draw_dynamic(19, gas.cruisepid.kd(), 0.0f, 10.0f);
         }
         else if (datapage == PG_TEMP) {
             draw_temperature(loc::AMBIENT, 9);
@@ -830,13 +830,13 @@ class Display {
         else if (datapage == PG_UI) {
             draw_dynamic(9, (int32_t)loop_avg_us, looptimer.loop_scale_min_us, looptimer.loop_scale_avg_max_us);
             draw_dynamic(10, looptimer.loop_peak_us, looptimer.loop_scale_min_us, looptimer.loop_scale_peak_max_us);
-            draw_dynamic(11, (int32_t)looptimer.loopfreq_hz, 0.0, 4000.0);
-            draw_dynamic(12, fps, 0.0, 600.0);
+            draw_dynamic(11, (int32_t)looptimer.loopfreq_hz, 0, 4000);
+            draw_dynamic(12, fps, 0.0f, 600.0f);
             draw_dynamic(13, drawclock, 0, refresh_limit);
             draw_dynamic(14, pushclock, 0, refresh_limit);
             draw_dynamic(15, idleclock, 0, refresh_limit);
             draw_truth(16, flashdemo, 0);
-            draw_dynamic(17, neobright, 1.0, 100.0, -1, 3);
+            draw_dynamic(17, neobright, 1.0, 100.0f, -1, 3);
             draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
             draw_truth(19, screensaver, 0);
         }
@@ -1023,35 +1023,34 @@ class Tuner {
             }
             else if (datapage == PG_PWMS) {
                 if (sel_val == 7) { adj_val(&(gas.si[OPMIN]), fdelta, gas.si[PARKED] + 1, gas.si[OPMAX] - 1); gas.derive(); }
-                else if (sel_val == 8) { adj_val(&(gas.si[OPMAX]), fdelta, gas.si[OPMIN] + 1, 180.0); gas.derive(); }
+                else if (sel_val == 8) { adj_val(&(gas.si[OPMAX]), fdelta, gas.si[OPMIN] + 1, 180.0f); gas.derive(); }
                 else if (sel_val == 9) { adj_val(&(brake.us[STOP]), fdelta, brake.us[OPMIN] + 1, brake.us[OPMAX] - 1); brake.derive(); }
-                else if (sel_val == 10) { adj_val(&(brake.duty_fwd_pc), fdelta, 0.0, 100.0); brake.derive(); }
+                else if (sel_val == 10) { adj_val(&(brake.duty_fwd_pc), fdelta, 0.0f, 100.0f); brake.derive(); }
             }
             else if (datapage == PG_IDLE) {
-                if (sel_val == 4) gas.idlectrl.add_idlehigh(fdelta);
-                else if (sel_val == 5) gas.idlectrl.add_idlecold(fdelta);
-                else if (sel_val == 6) gas.idlectrl.add_idlehot(fdelta);
-                else if (sel_val == 7) gas.idlectrl.add_tempcold(fdelta);
-                else if (sel_val == 8) gas.idlectrl.add_temphot(fdelta);
-                else if (sel_val == 9) gas.idlectrl.add_settlerate(idelta);
-                else if (sel_val == 10) gas.idlectrl.cycle_idlemode(idelta);
+                if (sel_val == 6) gas.add_idlecold(fdelta);
+                else if (sel_val == 7) gas.add_idlehot(fdelta);
+                else if (sel_val == 8) gas.add_tempcold(fdelta);
+                else if (sel_val == 9) gas.add_temphot(fdelta);
+                // else if (sel_val == 9) gas.add_settlerate(idelta);
+                // else if (sel_val == 10) gas.cycle_idlemode(idelta);
             }
             else if (datapage == PG_BPID) {
-                if (sel_val == 8) brake.pid_dom->add_kp(0.001 * fdelta);
-                else if (sel_val == 9) brake.pid_dom->add_ki(0.001 * fdelta);
-                else if (sel_val == 10) brake.pid_dom->add_kd(0.001 * fdelta);
+                if (sel_val == 8) brake.pid_dom->add_kp(0.001f * fdelta);
+                else if (sel_val == 9) brake.pid_dom->add_ki(0.001f * fdelta);
+                else if (sel_val == 10) brake.pid_dom->add_kd(0.001f * fdelta);
             }
             else if (datapage == PG_GPID) {
-                if (sel_val == 7) adj_val(&(gas.max_throttle_angular_velocity_degps), fdelta, 0.0, 180.0);
-                else if (sel_val == 8) gas.pid.add_kp(0.001 * fdelta);
-                else if (sel_val == 9) gas.pid.add_ki(0.001 * fdelta);
-                else if (sel_val == 10) gas.pid.add_kd(0.001 * fdelta);
+                if (sel_val == 7) adj_val(&(gas.max_throttle_angular_velocity_degps), fdelta, 0.0f, 180.0f);
+                else if (sel_val == 8) gas.pid.add_kp(0.001f * fdelta);
+                else if (sel_val == 9) gas.pid.add_ki(0.001f * fdelta);
+                else if (sel_val == 10) gas.pid.add_kd(0.001f * fdelta);
             }
             else if (datapage == PG_CPID) {
                 if (sel_val == 7) adj_val(&cruise_delta_max_pc_per_s, idelta, 1, 35);
-                else if (sel_val == 8) gas.cruisepid.add_kp(0.001 * fdelta);
-                else if (sel_val == 9) gas.cruisepid.add_ki(0.001 * fdelta);
-                else if (sel_val == 10) gas.cruisepid.add_kd(0.001 * fdelta);
+                else if (sel_val == 8) gas.cruisepid.add_kp(0.001f * fdelta);
+                else if (sel_val == 9) gas.cruisepid.add_ki(0.001f * fdelta);
+                else if (sel_val == 10) gas.cruisepid.add_kd(0.001f * fdelta);
             }
             else if (datapage == PG_TEMP) {
                 if (sel_val == 9) adj_bool(&web_disabled, -1 * idelta);  // note this value is inverse to how it's displayed, same for the value display entry
