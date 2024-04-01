@@ -7,8 +7,6 @@
 #include "motors.h"  // includes qpid.h, temperature.h
 #include "diag.h"
 #include "web.h"
-// #include <HardwareSerial.h>  // In case we ever talk to jaguars over asynchronous serial port, uncomment:
-// HardwareSerial jagPort(1); // Open serisl port to communicate with jaguar controllers for steering & brake motors
 
 // Instantiate objects
 std::random_device rd;
@@ -242,7 +240,7 @@ class Starter {
             now_req = REQ_NA;  // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
         }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
     }
-    src source() { return src::PIN; }
+    src source() { return pin_outputting ? src::CALC : src::PIN; }
 };
 class FuelPump {  // drives power to the fuel pump when the engine is turning
   public:
