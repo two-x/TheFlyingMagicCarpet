@@ -552,6 +552,8 @@ class GasServo : public ServoMotor {
         }
     }
     float goto_openloop_target(float tgt) {  // pass in an angle target, get back new angle to go to, respecting the max allowed angular change per second
+        return tgt;
+        
         float max_change = (float)throttleRateTimer.elapsed() * max_throttle_angular_velocity_pcps / 1000000.0;
         throttleRateTimer.reset();
         if (tgt > pc[OUT]) return std::min(pc[OUT] + max_change, tgt);
