@@ -47,7 +47,6 @@ void setup() {
     idiots.setup(&neo);       // assign same idiot light variable associations and colors to neopixels as on screen  
     diag.setup();             // initialize diagnostic codes
     web.setup();              // start up access point, web server, and json-enabled web socket for diagnostic phone interface
-    // xTaskCreate(update_web, "Update Web Services", 4096, NULL, 6, NULL);
     TaskHandle_t webtask = nullptr;
     xTaskCreatePinnedToCore(update_web, "Update Web Services", 4096, NULL, 6, &webtask, CONFIG_ARDUINO_RUNNING_CORE);  // wifi/web task. 2048 is too low, it crashes when client connects  16384
     printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
@@ -70,6 +69,7 @@ void loop() {
     starter.update();         // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
     encoder.update();         // read encoder input signals  // 20 us per loop
     pot.update();             // consistent 400 us per loop for analog read operation. we only see this for the pot (!?) changing pins is no help 
+    fuelpump.update();        // drives power to the fuel pump when the engine is turning
     brkpos.update();          // brake position (consistent 120 us)
     pressure.update();        // brake pressure  // ~50 us
     tach.update();            // get pulse timing from hall effect tachometer on flywheel

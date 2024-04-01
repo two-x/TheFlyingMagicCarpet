@@ -106,9 +106,6 @@ enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3
 enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };   // possible sources of gas, brake, steering commands
 enum ui_modes : int { DatapagesUI=0, ScreensaverUI=1 };
 enum codemodes : int { Confused=0, Booting=1, Parked=2, Driving=3 };
-// enum telemetry_full : int { 
-//     
-// };
 enum telemetry_short : int { _GasServo=0, _BrakeMotor=1, _SteerMotor=2, _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7, _Temps=8, _Other=9, _GPIO=10 };  // _MuleBatt, _MAP, _MAF, _Pot,
 enum telemetry_full : int { _HotRCHorz=11, _HotRCVert=12, _MuleBatt=13, _AirVelo=14, _MAP=15, _Pot=16, _MAF=17, _TempEng=18, _TempWhFL=19, _TempWhFR=20, _TempWhRL=21, _TempWhRR=22, _TempAmb=23 };  // 10 per line
 enum telemetry_nums : int { _None=-1, NumTelemetryBool=9, NumTelemetryShort=11, NumTelemetryFull=24 };
@@ -118,7 +115,7 @@ enum err_type : int { LOST=0, RANGE=1, VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6,
 // global configuration settings
 bool brake_hybrid_pid = true;
 int brake_default_pid = PressurePID;
-bool brake_linearize_target_extremes = true;  // keep brake target values linear near endpoints despite decreasing inaccuracy of one sensor (more accurate)?  otherwise jump inaccurate-sensor influence near endpoint to actual endpoint (more predictable/consistent)
+bool brake_linearize_target_extremes = true;  // keep brake target values linear near endpoints despite decreasing accuracy of one of the sensors? (this is the more accurate choice)  otherwise jump inaccurate-sensor influence near endpoint to actual endpoint (this is more predictable/consistent)
 bool starter_signal_support = true;
 bool remote_start_support = true;
 bool autostop_disabled = false;      // temporary measure to keep brake behaving until we get it debugged. Eventually should be false
@@ -127,12 +124,13 @@ bool flip_the_screen = false;
 bool cruise_speed_lowerable = true;  // allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool display_enabled = true;         // should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
 bool use_i2c_baton = true;
-bool screensaver_max_refresh = false;
+bool always_max_refresh = false;
 bool brake_before_starting = true;
 bool watchdog_enabled = false;
+bool fuelpump_supported = true;
 int throttle_ctrl_mode = OpenLoop;
 // dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
-bool usb_jtag = true;                // if you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)
+// bool usb_jtag = true;                // if you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)
 bool dont_take_temperatures = false; // in case debugging dallas sensors or causing problems
 bool console_enabled = true;         // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
 bool keep_system_powered = false;    // use true during development
@@ -163,7 +161,7 @@ float maf_max_gps = 50.0; // i just made this number up as i have no idea what's
 bool flashdemo = false;
 int32_t neobright = 10;   // default for us dim/brighten the neopixels
 int32_t neodesat = 0;     // default for lets us de/saturate the neopixels
-float tuning_rate_pcps = 7.5;  // values being edited change value at this percent of their overall range per second
+float tuning_rate_pcps = 7.5;  // values being edited by touch buttons change value at this percent of their overall range per second
 
 // non-tunable values. probably these belong with their related code
 uint bootcount;                         // variable to track total number of boots of this code build
