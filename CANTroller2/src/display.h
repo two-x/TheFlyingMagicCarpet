@@ -367,7 +367,7 @@ class Display {
     }
     void draw_string(int32_t x_new, int32_t x_old, int32_t y, std::string text, std::string oldtext, uint8_t color, uint8_t bgcolor, bool forced=false) {  // Send in "" for oldtext if erase isn't needed
         if ((text == oldtext) && !forced) return; 
-        sprptr->fillRect(x_old, y, oldtext.length() * disp_font_width, disp_font_height, bgcolor);
+        sprptr->fillRect(x_old, y, (oldtext.length() + 1) * disp_font_width, disp_font_height, bgcolor);
         sprptr->setTextColor(color);  
         sprptr->setCursor(x_new, y);
         sprptr->print(text.c_str());
