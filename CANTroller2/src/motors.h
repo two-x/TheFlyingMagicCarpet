@@ -318,6 +318,7 @@ class GasServo : public ServoMotor {
     float tach_last, throttle_target_pc, governor = 95, max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
     float idle_si[NUM_MOTORVALS] = { 45.0, NAN, 60.0, 58.0, NAN, 43.0, 75.0, 1.0 }; // , NAN };  // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
     float idle_pc = 11.3;  // idle percent is derived from the si (degrees) value
+    float starting_pc = 25.0;  // percent throttle to open to while starting the car
     float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5}; // , NAN };  // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
     float pc_to_rpm(float _rpm) {
         return map(_rpm, tach->idle_rpm(), tach->govern_rpm(), 0.0, 100.0);
@@ -408,6 +409,10 @@ class GasServo : public ServoMotor {
         if (motormode == Idle) {
             mode_busy = true;
             throttle_target_pc = idle_pc;
+        }
+        else if (motormode == Starting) {
+            mode_busy = true;
+            throttle_target_pc = starting_pc;
         }
         else if (motormode == Cruise) {
             calc_cruise_target();  // cruise mode just got too big to be nested in this if-else clause

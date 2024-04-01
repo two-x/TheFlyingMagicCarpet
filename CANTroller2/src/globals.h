@@ -97,7 +97,7 @@ enum runmode : int { BASIC, ASLEEP, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, NUM
 enum req : int { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
 enum cruise_modes : int { PID_SUSPEND_FLY, THROTTLE_ANGLE, THROTTLE_DELTA };
 enum sw_presses : int { swNONE, swSHORT, swLONG };
-enum motor_modes : int { NA=-1, Halt=0, Idle=1, Release=2, OpenLoop=3, ActivePID=4, AutoStop=5, AutoHold=6, ParkMotor=7, Cruise=8, Calibrate=9, NumMotorModes=10 };
+enum motor_modes : int { NA=-1, Halt=0, Idle=1, Release=2, OpenLoop=3, ActivePID=4, AutoStop=5, AutoHold=6, ParkMotor=7, Cruise=8, Calibrate=9, Starting=10, NumMotorModes=11 };
 enum brake_pid_modes : int { PositionPID=0, PressurePID=1, HybridPID=2, NumBrakePIDs=4 };  // OpenLoop=3
 enum tunerstuff : int { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum boolean_states : int { ON=1 };

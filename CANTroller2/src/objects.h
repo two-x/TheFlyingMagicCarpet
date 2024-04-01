@@ -174,7 +174,7 @@ class Starter {
     uint32_t run_timeout = 5000000;
     uint32_t turnoff_timeout = 100000;
     Timer starterTimer;  // If remotely-started starting event is left on for this long, end it automatically
-    int lastbrakemode, pin;
+    int lastbrakemode, lastgasmode, pin;
     bool pin_outputting = false;   // set by handler only. High when we're driving starter, otherwise starter is an input
   public:
     Starter(int _pin) : pin(_pin) {}
@@ -195,40 +195,43 @@ class Starter {
         if (now_req == REQ_TOG) now_req = !pin_outputting;  // translate a toggle request to a drive request opposite to the current drive state
         req_active = (now_req != REQ_NA);
         if (pin_outputting && (!motor || (now_req == REQ_OFF) || starterTimer.expired())) {  // if we're driving the motor but need to stop or in the process of stopping
-            if (motor) {                         // if motor is currently on
-                motor = LOW;                     // we will turn it off
+            if (motor) {                 // if motor is currently on
+                motor = LOW;             // we will turn it off
                 write_pin (pin, motor);  // begin driving the pin low voltage
-                starterTimer.set((int64_t)turnoff_timeout);  // start timer to control length of low output
-                return;                 // ditch out, leaving the motor-off request intact. we'll check on the timer next time
+                starterTimer.set((int64_t)turnoff_timeout);               // start timer to control length of low output
+                if (gas.motormode == Starting) gas.setmode(lastgasmode);  // put the brake back to doing whatever it was doing before
+                return;                  // ditch out, leaving the motor-off request intact. we'll check on the timer next time
             }
-            else if (starterTimer.expired()) {          // if it's been long enough since turning off the motor circuit ...
+            else if (starterTimer.expired()) {  // if it's been long enough since turning off the motor circuit ...
                 set_pin (pin, INPUT_PULLDOWN);  // set pin as input
-                pin_outputting = false;                 // we are no longer driving the pin
+                pin_outputting = false;         // we are no longer driving the pin
                 now_req = REQ_NA;               // reset the request line
             }
         }  // now, we have stopped driving the starter if we were supposed to stop
         if (sim.simulating(sens::starter)) motor = pin_outputting;  // if simulating starter, there's no external influence
-        else if (!pin_outputting) {  // otherwise if we aren't driving the starter ...
+        else if (!pin_outputting) {               // otherwise if we aren't driving the starter ...
             do {
                 motor = digitalRead(pin);         // then let's read the pin, and starter variable will reflect whether starter has been turned on externally
             } while (motor != digitalRead(pin));  // due to a chip glitch, starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
             if (now_req != REQ_ON) now_req = REQ_NA;
         }  // now, if we aren't driving the starter, we've read the pin and know its status
         if (motor || now_req != REQ_ON || !remote_start_support) {  // if starter is already being driven by us or externally, or we aren't being tasked to drive it, or we don't even support driving it
-            now_req = REQ_NA;  // cancel any requests
+            now_req = REQ_NA;          // cancel any requests
             return;                    // and ditch
         }  // from here on, we can assume the starter is off and we are supposed to turn it on
         if (brake.autoholding || !brake_before_starting) {  // if the brake is being held down, or if we don't care whether it is
-            starterTimer.set((int64_t)run_timeout);              // if left on the starter will turn off automatically after X seconds
+            lastgasmode = gas.motormode;      // remember incumbent gas setting
+            gas.setmode(Starting);            // give it some gas
+            starterTimer.set((int64_t)run_timeout);  // if left on the starter will turn off automatically after X seconds
             pin_outputting = motor = HIGH;    // ensure starter variable always reflects the starter status regardless who is driving it
-            set_pin (pin, OUTPUT);     // then set pin to an output
-            write_pin (pin, motor);  // and start the motor
-            now_req = REQ_NA;          // we have serviced starter-on request, so cancel it
-            return;                            // if the brake was right we have started driving the starter
+            set_pin (pin, OUTPUT);            // then set pin to an output
+            write_pin (pin, motor);           // and start the motor
+            now_req = REQ_NA;                 // we have serviced starter-on request, so cancel it
+            return;                           // if the brake was right we have started driving the starter
         }  // from here on, we can assume the brake isn't being held on, which is in the way of our task to begin driving the starter
-        if (brake.motormode != AutoHold) {  // if we haven't yet told the brake to hold down
-            lastbrakemode = brake.motormode;
-            brake.setmode(AutoHold);  // tell the brake to hold
+        if (brake.motormode != AutoHold) {   // if we haven't yet told the brake to hold down
+            lastbrakemode = brake.motormode; // remember incumbent brake setting
+            brake.setmode(AutoHold);         // tell the brake to hold
             starterTimer.set((int64_t)pushbrake_timeout);   // start a timer to time box that action
             return;  // we told the brake to hold down, leaving the request to turn the starter on intact, so we'll be back to check
         }  // at this point the brake has been told to hold but isn't holding yet

@@ -207,7 +207,7 @@ class DiagRuntime {
         gunning_last = gunning_it;
         return fail;
     }
-    bool TachFailure() {  // checks if speedo isn't zero when stopped, or doesn't increase when we drive
+    bool TachFailure() {  // checks if tach isn't zero when stopped, or doesn't increase when we drive
         static bool running_it, running_last = true;
         static float baseline_rpm;
         bool fail = false;
