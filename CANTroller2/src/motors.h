@@ -677,8 +677,7 @@ class BrakeMotor : public JagMotor {
   private:
     BrakePositionSensor* brkpos;
     PressureSensor* pressure;
-    GasServo* mygas;
-    IdleControl* throttle;
+    GasServo* throttle;
     TemperatureSensorManager* tempsens;
     float brakemotor_max_duty_pc = 25.0;  // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
     float press_initial_kp = 0.142;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
@@ -725,10 +724,10 @@ class BrakeMotor : public JagMotor {
         hybrid_math_offset = 0.5 * (brake_pid_trans_threshold_hi + brake_pid_trans_threshold_lo);
         hybrid_math_coeff = M_PI / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo);
     }
-    void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, GasServo* _gas, IdleControl* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+    void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, GasServo* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         printf("Brake motor..\n");
         JagMotor::setup(_hotrc, _speedo, _batt);
-        pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  tempsens = _tempsens; mygas = _gas;
+        pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
         // duty_fwd_pc = brakemotor_max_duty_pc;
         pres_last = pressure->filt();
         posn_last = brkpos->filt();
@@ -808,8 +807,7 @@ class BrakeMotor : public JagMotor {
             else pc[OUT] = pc[STOP];
         }
         else if (motormode == AutoStop) {  // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
-            mygas->setmode(Idle);  // Stop pushing the gas, will help us stop the car better
-            // throttle->goto_idle();  // REMOVE THIS
+            throttle->setmode(Idle);  // Stop pushing the gas, will help us stop the car better
             autostopping = (!speedo->car_stopped() && !stopcar_timer.expired());
             if (autostopping) {
                 if (interval_timer.expireset()) set_pidtarg(std::min(100.0f, pid_targ_pc + panicstop ? panic_increment_pc : hold_increment_pc));   
