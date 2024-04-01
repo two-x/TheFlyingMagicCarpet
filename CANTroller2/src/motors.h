@@ -477,7 +477,7 @@ class GasServo : public ServoMotor {
     int motormode = Idle;
     bool cruise_trigger_released = false, mode_busy = false, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
     float (&deg)[arraysize(si)] = si;  // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
-    float max_throttle_angular_velocity_degps = 55.0;  // deg/sec How quickly can the throttle change angle?  too low is unresponsive, too high can cause engine hesitations (going up) or stalls (going down)
+    float max_throttle_angular_velocity_degps = 65.0;  // deg/sec How quickly can the throttle change angle?  too low is unresponsive, too high can cause engine hesitations (going up) or stalls (going down)
     float tach_last, throttle_target_pc, governor = 95, max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
     float idle_si[NUM_MOTORVALS] = { 45.0, NAN, 60.0, 58.0, NAN, 43.0, 75.0, 1.0 }; // , NAN };  // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
     float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5}; // , NAN };  // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
@@ -809,7 +809,7 @@ class BrakeMotor : public JagMotor {
         }
         else if (motormode == AutoStop) {  // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
             mygas->setmode(Idle);  // Stop pushing the gas, will help us stop the car better
-            throttle->goto_idle();  // REMOVE THIS
+            // throttle->goto_idle();  // REMOVE THIS
             autostopping = (!speedo->car_stopped() && !stopcar_timer.expired());
             if (autostopping) {
                 if (interval_timer.expireset()) set_pidtarg(std::min(100.0f, pid_targ_pc + panicstop ? panic_increment_pc : hold_increment_pc));   

@@ -1,3 +1,4 @@
+// globals.h - not dependent on anything, so include this first
 #pragma once
 #include "Arduino.h"
 // pin assignments  ESP32-S3-DevkitC series   (note: "*" are pins we can reclaim if needed)
@@ -87,7 +88,7 @@
 // these global enums are super convenient, just take care when making changes
 enum hotrc_axis : int { HORZ=0, VERT=1, CH3=2, CH4=3 };
 enum hotrc_val : int { OPMIN=0, CENT=1, OPMAX=2, RAW=3, FILT=4, DBBOT=5, DBTOP=6 };
-enum motor_val : int { PARKED=1, OUT=3, GOVERN=4 , ABSMIN=5, ABSMAX=6, MARGIN=7, NUM_MOTORVALS=8 };
+enum motor_val : int { PARKED=1, OUT=3, GOVERN=4 , ABSMIN=5, ABSMAX=6, MARGIN=7, NUM_MOTORVALS=8 }; // IDLE=8, NUM_MOTORVALS=9 };
 enum stop_val : int { STOP=1 };
 enum steer_val : int { SAFE=1 };
 enum size_enums : int { NUM_AXES=2, NUM_CHANS=4, NUM_VALUS=8 };
