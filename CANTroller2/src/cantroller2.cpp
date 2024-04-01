@@ -1,5 +1,7 @@
 // Carpet CANTroller III  main source Code  - see README.md
 #include "objects.h"
+static FuelPump fuelpump(fuelpump_pin);
+static Starter starter(starter_pin);
 #include "display.h"  // includes neopixel.h, touch.h
 #include "runmodes.h"
 static RunModeManager run(&screen, &encoder);
@@ -27,6 +29,8 @@ void setup() {
     airvelo.setup();          // must be done after i2c is started
     mapsens.setup();
     lightbox.setup();
+    fuelpump.setup();
+    starter.setup();
     tempsens.setup();         // onewire bus and temp sensors
     TaskHandle_t temptask = nullptr;
     xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 6, &temptask, CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task
@@ -63,7 +67,7 @@ void loop() {
     }
     
     basicsw_update();         // see if basic mode switch got hit
-    starter_update();         // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
+    starter.update();         // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
     encoder.update();         // read encoder input signals  // 20 us per loop
     pot.update();             // consistent 400 us per loop for analog read operation. we only see this for the pot (!?) changing pins is no help 
     brkpos.update();          // brake position (consistent 120 us)
