@@ -109,7 +109,7 @@ class DiagRuntime {
                     sensidiots[err] = sensidiots[err] || err_sens[typ][_Ignition];
                     sensidiots[err] = sensidiots[err] || err_sens[typ][_SysPower];
                 }
-                else sensidiots[err] = err_sens[typ][err];
+                else sensidiots[err] = sensidiots[err] || err_sens[typ][err];
             }
         }
     }
@@ -193,13 +193,13 @@ class DiagRuntime {
         static float baseline_speed;
         bool fail = false;
         if (runmode == SHUTDOWN) {  // || runmode == HOLD  // check that the speed is zero when stopped
-            if (gunning_last) speedoTimer.reset();       // if we just stopped driving, allow time for car to stop
-            else if (speedoTimer.expired()) {            // if it has been enough time since entering shutdown, we should be stopped
-                fail = (baseline_speed > speedo->margin_mph());  // when stopped the speedo reading should be zero, otherwise fail
-                baseline_speed = speedo->filt();         // store the speed value when we are stopped
-            }
+            // if (gunning_last) speedoTimer.reset();       // if we just stopped driving, allow time for car to stop
+            // else if (speedoTimer.expired()) {            // if it has been enough time since entering shutdown, we should be stopped
+            fail = (baseline_speed > speedo->margin_mph());  // when stopped the speedo reading should be zero, otherwise fail
+            baseline_speed = speedo->filt();         // store the speed value when we are stopped
+            // }
         }
-        gunning_it = (gas->pc[OUT] > 40.0 && (runmode == FLY || runmode == CRUISE));
+        gunning_it = (gas->pc[OUT] > 20.0 && (runmode == FLY || runmode == CRUISE));
         if (gunning_it) {                                                             // if we're attempting to drive
             if (!gunning_last) speedoTimer.reset();                     // delay our speed comparison so car can accelerate
             else if (speedoTimer.expired()) fail = (speedo->filt() - baseline_speed < speedo->margin_mph());  // the car should be moving by now
@@ -212,13 +212,13 @@ class DiagRuntime {
         static float baseline_rpm;
         bool fail = false;
         if (runmode == SHUTDOWN) {  // || runmode == STALL  // check that the speed is zero when stopped
-            if (running_last) tachTimer.reset();       // if we just stopped driving, allow time for car to stop
-            else if (tachTimer.expired()) {            // if it has been enough time since entering shutdown, we should be stopped
-                fail = (baseline_rpm > tach->margin_rpm());  // when stopped the speedo reading should be zero, otherwise fail
-                baseline_rpm = tach->filt();         // store the speed value when we are stopped
-            }
+            // if (running_last) tachTimer.reset();       // if we just stopped driving, allow time for car to stop
+            // else if (tachTimer.expired()) {            // if it has been enough time since entering shutdown, we should be stopped
+            fail = (baseline_rpm > tach->margin_rpm());  // when stopped the speedo reading should be zero, otherwise fail
+            baseline_rpm = tach->filt();         // store the speed value when we are stopped
+            // }
         }
-        running_it = (gas->pc[OUT] > 40.0 && (runmode == FLY || runmode == CRUISE));
+        running_it = (gas->pc[OUT] > 20.0 && (runmode == FLY || runmode == CRUISE));
         if (running_it) {                                               // if we're attempting to drive
             if (!running_last) tachTimer.reset();                     // delay our rpm comparison so car can respond
             else if (tachTimer.expired()) fail = (tach->filt() - baseline_rpm < tach->margin_rpm());  // the car should be moving by now
