@@ -3,6 +3,166 @@
 #include <ESP32Servo.h>  // Eventually move Servos into new ServoPWM objects then remove this
 #include "temperature.h"
 #include <cmath>
+class IdleControl {  // Soren - To allow creative control of PID targets in case your engine idle problems need that.
+  public:
+    enum idlemodes : int { DIRECT, CONTROL, MINIMIZE, NUM_IDLEMODES };  // DIRECT: disable idle management.  CONTROL: soft landing to idle rpm.  MINIMIZE: attempt to minimize idle to edge of instability
+    enum targetstates : int { TODRIVE, DRIVING, DROPTOHIGH, DROPTOLOW, IDLING, MINIMIZING, NUM_STATES };
+    float idlehot = 550.0, idlecold = 775.0, idlehigh = 950.0;  // Idle speed at op_max and op_min engine temps, and elevated rpm above idle guaranteed never to stall
+    float margin = 10, idle_absmin = 450.0, idle_absmax = 1000.0;  // High limit of idle speed adjustability
+    float idle_rpm, stallpoint, dynamic_rpm, temphot, tempcold, idle_slope_rpmps;
+    uint32_t settlerate_rpmps, stallrate_rpmps = 400;  // Engine rpm drops exceeding this much per second are considered a stall in progress
+    int idlemode, targetstate, nextstate;
+  protected:
+    // String modenames[3] = { "direct", "cntrol", "minimz" };
+    // String statenames[4] = { "drivng", "tohigh", "tolow", "tostal" };
+    float* target_rpm; float* measraw_rpm; float* measfilt_rpm; float engine_temp_f;
+    TemperatureSensor* engine_sensor = nullptr;   // Rate to lower idle from high point to low point (in rpm per second)
+    bool we_just_changed_states = true, target_externally_set = false; // bool now_trying_to_idle = false;
+    uint32_t index_now, index_last;  // Engine rpm drops exceeding this much per second are considered a stall in progress
+    float targetlast_rpm, recovery_boost_rpm = 5;  // How much to increase rpm target in response to detection of stall slope
+    // The following are for detecting arhythmic period in tach pulses, which isn't implemented yet
+    uint32_t history_depth = 100;
+    int32_t tach_history_rpm[100];  // Why can't I use [history_depth] here instead of [20] in this instantiation?  c++ is a pain in my ass
+    uint32_t timestamps_us[100];
+    Timer settleTimer, tachHistoryTimer, tachIdleTimer = Timer(5000000);  // tachIdleTimer = How often to update tach idle value based on engine temperature
+    int64_t readtime_last;
+  public:
+    IdleControl() {}
+void setup(float* target, float* measraw, float* measfilt,  // Variable references: idle target, rpm raw, rpm filt
+        TemperatureSensor* engine_sensor_ptr,
+        float tempcold, float temphot, int32_t settlerate = 100,  // Values for: engine operational temp cold (min) and temp hot (max) in degrees-f
+        int myidlemode = CONTROL) {  // Configure idle control to just soft land or also attempt to minimize idle
+        Serial.printf("Idle control..");
+        target_rpm = target;
+        measraw_rpm = measraw;
+        measfilt_rpm = measfilt;
+        *target_rpm = *measfilt_rpm;
+        set_idlehigh(idlehigh);
+        idlehot = constrain(idlehot, 0.0, idlehigh);
+        stallpoint = idlehot - 1;  // Just to give a sane initial value
+        set_idlecold(idlecold);
+        set_temphot(temphot);
+        set_tempcold(tempcold);        
+        calc_idlespeed();
+        targetlast_rpm = *target_rpm;
+        settlerate_rpmps = settlerate;
+        settleTimer.reset();
+        idlemode = myidlemode;
+        targetstate = DRIVING;
+        if (engine_sensor_ptr == nullptr) Serial.printf(" err: no temp sensor");
+        else engine_sensor = engine_sensor_ptr;
+        tachIdleTimer.reset();
+        Serial.printf("\n");
+    }
+    void update(void) {  // this should be called to update idle and throttle target values before throttle-related control loop outputs are calculated
+        // update engine temp if it's ready
+        if (engine_sensor != nullptr) engine_temp_f = engine_sensor->get_temperature();
+        antistall();
+        calc_idlespeed();  // determine our appropriate idle speed, based on latest engine temperature reading
+        targetstate_changer();  // if targetstate was changed, prepare to run any initial actions upon processing our new targetstate algorithm
+        if (targetstate == TODRIVE) process_todrive();  // Target is above idle, but currently engine is still idling 
+        else if (targetstate == DRIVING) process_driving();  // while throttle is open when driving, we don't mess with the rpm target value
+        else if (targetstate == DROPTOHIGH) process_droptohigh();  // once the metaphorical foot is taken off the gas, first we let the carb close quickly to a high-idle rpm level (that won't stall)
+        else if (targetstate == DROPTOLOW) process_droptolow();  // after the rpm hits the high-idle level, we slowly close the throttle further until we reach the correct low-idle speed for the current engine temperature
+        else if (targetstate == IDLING) process_idling();  // maintain the low-idle level, adjusting to track temperature cchanges as appropriate
+        else if (targetstate == MINIMIZING) process_minimizing();  // if idlemode == MINIMIZE, we then further allow the idle to drop, until we begin to sense irregularity in our rpm sensor pulses
+    }
+    void goto_idle(void) {  // The gods request the engine should idle now
+        if (targetstate == DRIVING) nextstate = (idlemode == DIRECT) ? DROPTOLOW : DROPTOHIGH;
+        // now_trying_to_idle = true;
+    }
+    void push_tach_reading(int32_t reading, int64_t readtime) {  // Add a new rpm reading to a small LIFO ring buffer. We will use this to detect arhythmic rpm
+        if (readtime == readtime_last) return;  // Ignore new tach values unless rpm has changed
+        index_last = index_now;
+        index_now = (index_now + 1) % history_depth;
+        tach_history_rpm[index_now] = reading;
+        timestamps_us[index_now] = (uint32_t)(readtime-readtime_last);  // (uint32_t)tachHistoryTimer.elapsed();
+        // tachHistoryTimer.reset();
+        readtime_last = readtime;
+    }
+    void set_target(float argtarget) {
+        if ((int32_t)(*target_rpm) != (int32_t)argtarget) {
+            target_externally_set = true;
+            set_target_internal(argtarget);
+        }
+    }
+    void set_engine_sensor(TemperatureSensor* sensor) { engine_sensor = sensor; }
+  protected:
+    void set_target_internal(float argtarget) {
+        if ((int32_t)(*target_rpm) != (int32_t)argtarget) {
+            targetlast_rpm = *target_rpm;
+            *target_rpm = argtarget;
+        }
+    }
+    void calc_idlespeed(void) {
+        idle_rpm = map(engine_temp_f, tempcold, temphot, idlecold, idlehot);
+        idle_rpm = constrain(idle_rpm, idlehot, idlecold);
+    }
+    void targetstate_changer(void) {  // If nextstate was changed during last update, or someone externally changed the target, change our targetstate
+        if (target_externally_set) {  // If the target has been changed externally, then determine our appropriate targetstate based on target value
+            if (*target_rpm > idle_rpm + margin) nextstate = (*measfilt_rpm > idlehigh) ? DRIVING : TODRIVE;
+            // else nextstate = (idlemode == MINIMIZE) ? MINIMIZING : IDLING;
+        }
+        target_externally_set = false;
+        we_just_changed_states = (nextstate != targetstate);
+        targetstate = nextstate;
+    }
+    void process_todrive(void) {
+        if (we_just_changed_states);  // { printf("todriv "); }
+        else if (*measfilt_rpm > idlehigh) nextstate = DRIVING;
+    }
+    void process_driving(void) {}  // if (we_just_changed_states) { printf("driving "); }
+    void process_droptohigh(void) {
+        if (we_just_changed_states) { set_target_internal(idlehigh); }  // printf("droptohigh "); }
+        else if (*measfilt_rpm <= idlehigh + margin) nextstate = DROPTOLOW;  // Done dropping to high idle, next continue dropping to low idle
+    }
+    void process_droptolow(void) {
+        if (we_just_changed_states) { settleTimer.reset(); }  // printf("droptolow "); }
+        if (*measfilt_rpm <= idle_rpm + margin) nextstate = (idlemode == MINIMIZE) ? MINIMIZING : IDLING;  // Done dropping to low idle, next proceed to a steady state
+        else {  // Drop from current rpm toward low idle speed at configured rate
+            set_target_internal(*measfilt_rpm - settlerate_rpmps * (float)settleTimer.elapsed()/1000000);  // Need to review the dynamics of this considering update frequency and motor latency 
+            settleTimer.reset();
+        }
+    }
+    void process_idling(void) {  // If we aren't set to attempt to minimize idle speed, then we end up here
+        // if (we_just_changed_states) {       printf("idling "); }
+        if (idlemode == MINIMIZE) nextstate = MINIMIZING;  // in case idlemode is changed while in idling state
+        set_target_internal(idle_rpm);  // We're done dropping to the idle point, but keep tracking as idle speed may change
+    }
+    void process_minimizing(void) {
+        if (we_just_changed_states) { stallpoint = idle_rpm; }  // printf("minimizing "); }
+        else if (idlemode != MINIMIZE) nextstate = IDLING;  // in case idlemode is changed while in stallpoint state
+        // else if (*measfilt_rpm > )
+        // Soren finish writing this
+    }
+    void antistall(void) {  // Soren:  This is rather arbitrary and unlikely to work. Need to determine anti-stall strategy
+        idle_slope_rpmps = (float)(tach_history_rpm[index_now] - tach_history_rpm[index_last]) * 1000000 / timestamps_us[index_now];
+        if (*measfilt_rpm <= idlehigh && idle_slope_rpmps < stallrate_rpmps) set_target_internal(idle_rpm + recovery_boost_rpm);
+    }
+    // String get_modename(void) { return modenames[(int32_t)idlemode].c_str(); }
+    // String get_statename(void) { return statenames[targetstate].c_str(); }
+  public:
+    void cycle_idlemode(int32_t cycledir) {  // Cycldir positive or negative
+        if(cycledir) idlemode = constrain(idlemode + constrain(cycledir, -1, 1), 0, NUM_IDLEMODES - 1);
+    }
+    void set_target_ptr(float* __ptr) { target_rpm = __ptr; }
+    void set_idlehot(float newidlehot) { idlehot = constrain(newidlehot, stallpoint, idlecold - 1); calc_idlespeed(); }
+    void set_idlecold(float newidlecold) { idlecold = constrain(newidlecold, idlehot + 1, idlehigh - 1); calc_idlespeed(); }
+    void set_temphot(float newtemphot) { if (newtemphot > tempcold) temphot = newtemphot; calc_idlespeed(); }
+    void set_tempcold(float newtempcold) { if (newtempcold < temphot) tempcold = newtempcold; calc_idlespeed(); }
+    void set_idlehigh(float newidlehigh) { idlehigh = constrain(newidlehigh, idlecold + 1, idle_absmax); }
+    void set_settlerate(int32_t newrate) { settlerate_rpmps = newrate; }
+    void add_idlehigh(float add) { set_idlehigh(idlehigh + add); }
+    void add_idlehot(float add) { set_idlehot(idlehot + add); }
+    void add_idlecold(float add) { set_idlecold(idlecold + add); }
+    void add_temphot(float add) { set_temphot(temphot + add); }
+    void add_tempcold(float add) { set_tempcold(tempcold + add); }
+    void add_settlerate(int32_t add) { set_settlerate(settlerate_rpmps + add); }
+    // Getter functions
+    float target(void) { return *target_rpm; }
+    float* target_ptr(void) { return target_rpm; }
+    float* idle_rpm_ptr(void) { return &idle_rpm; }
+};
 
 // I stole this library and modified it heavily to our purpposes - Soren
 // QPID Library for Arduino - Version 3.1.9 by dlloydev https://github.com/Dlloydev/QPID
@@ -239,7 +399,7 @@ class ServoMotor {
     float out_pc_to_us(float _pc) {  // works for motor with or without stop value
         return map(_pc, pc[ABSMIN], pc[ABSMAX], reverse ? us[ABSMAX] : us[ABSMIN], reverse ? us[ABSMIN] : us[ABSMAX]);
     }
-void write_motor() { if (!std::isnan(us[OUT])) motor.writeMicroseconds((int32_t)(us[OUT])); }
+    void write_motor() { if (!std::isnan(us[OUT])) motor.writeMicroseconds((int32_t)(us[OUT])); }
 };
 class JagMotor : public ServoMotor {
   protected:
@@ -312,11 +472,12 @@ class GasServo : public ServoMotor {
     Timer cruiseDeltaTimer, throttleRateTimer;
   public:
     using ServoMotor::ServoMotor;
+    IdleControl idlectrl;
     QPID pid, cruisepid;
     int motormode = Idle;
     bool cruise_trigger_released = false, mode_busy = false, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
     float (&deg)[arraysize(si)] = si;  // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
-    float max_throttle_angular_velocity_degps = 55.0;  // deg/sec How quickly can the throttle change angle?  too low is unresponsive, too high can cause engine hesitations (going up) or stalls (going down)
+    float max_throttle_angular_velocity_degps = 65.0;  // deg/sec How quickly can the throttle change angle?  too low is unresponsive, too high can cause engine hesitations (going up) or stalls (going down)
     float tach_last, throttle_target_pc, governor = 95, max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
     float idle_si[NUM_MOTORVALS] = { 45.0, NAN, 60.0, 58.0, NAN, 43.0, 75.0, 1.0 }; // , NAN };  // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
     float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5}; // , NAN };  // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
@@ -341,10 +502,12 @@ class GasServo : public ServoMotor {
         ServoMotor::setup(_hotrc, _speedo);
         throttleRateTimer.reset();
         derive();
-        pid.init(tach->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), gas_initial_kp, gas_initial_ki, gas_initial_kd, QPID::pmod::onerr, 
+        idlectrl.setup(pid.target_ptr(), tach->human_ptr(), tach->filt_ptr(), tempsens->get_sensor(loc::ENGINE), 
+            temp_lims_f[ENGINE][OPMIN], temp_lims_f[ENGINE][WARNING], 50, IdleControl::idlemodes::CONTROL);
+        pid.init(tach->filt_ptr(), &pc[OPMIN], &pc[OPMAX], gas_initial_kp, gas_initial_ki, gas_initial_kd, QPID::pmod::onerr, 
             QPID::dmod::onerr, QPID::awmod::clamp, QPID::cdir::direct, pid_timeout);
         if (throttle_ctrl_mode == OpenLoop) {
-            cruisepid.init(speedo->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), cruise_opengas_initial_kp, cruise_opengas_initial_ki,
+            cruisepid.init(speedo->filt_ptr(), &pc[OPMIN], &pc[OPMAX], cruise_opengas_initial_kp, cruise_opengas_initial_ki,
               cruise_opengas_initial_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::round, QPID::cdir::direct, pid_timeout);
         }
         else if (throttle_ctrl_mode == ActivePID) {
@@ -397,7 +560,7 @@ class GasServo : public ServoMotor {
         }
     }
     void postprocess_output() {  // limits angular velocity, and if using pid this converts target to rpm value and hand-holds the pid
-        Serial.printf("post");
+        // Serial.printf("post");
         float new_out;
         throttle_target_pc = constrain(throttle_target_pc, pc[PARKED], pc[OPMAX]);
         if (throttle_ctrl_mode == ActivePID) {
@@ -413,10 +576,16 @@ class GasServo : public ServoMotor {
         else if (new_out < pc[OUT] && new_out < pc[OUT] - max_change) pc[OUT] -= max_change;
         else pc[OUT] = new_out;
         if (throttle_ctrl_mode == ActivePID) pid.set_output(pc[OUT]);
-        Serial.printf(" tgt:%lf pc1:%lf\n", throttle_target_pc, pc[OUT]);
+        // Serial.printf(" tgt:%lf pc1:%lf\n", throttle_target_pc, pc[OUT]);
+    }
+    float goto_openloop_target(float tgt) {  // pass in an angle target, get back new angle to go to, respecting the max allowed angular change per second
+        float max_change = (float)throttleRateTimer.elapsed() * max_throttle_angular_velocity_pcps / 1000000.0;
+        throttleRateTimer.reset();
+        if (tgt > pc[OUT]) return std::min(pc[OUT] + max_change, tgt);
+        else return std::max(pc[OUT] - max_change, tgt);
     }
     void set_output() {
-        Serial.printf("mode");
+        // Serial.printf("mode");
         cal_gasmode = false;
         if (motormode == Idle) {
             mode_busy = true;
@@ -437,7 +606,7 @@ class GasServo : public ServoMotor {
             if (hotrc->joydir() != JOY_UP) throttle_target_pc = idle_pc();  // If in deadband or being pushed down, we want idle
             else throttle_target_pc = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], idle_pc(), pc[GOVERN]);  // actuators still respond even w/ engine turned off
         }
-        Serial.printf(":%d tgt:%lf pk:%lf idl:%lf\n", motormode, throttle_target_pc, pc[PARKED], idle_pc());
+        // Serial.printf(":%d tgt:%lf pk:%lf idl:%lf\n", motormode, throttle_target_pc, pc[PARKED], idle_pc());
         if (motormode != Calibrate) postprocess_output();  // skip final motor calculations which impose limitations on the value
     }
     void constrain_output() {
@@ -467,13 +636,13 @@ class GasServo : public ServoMotor {
         return (std::abs(out_pc_to_si(pc[OUT]) - si[PARKED]) < 1);
     }
     void update() {
-        if (pid_timer.expireset()) {          
-            update_idlespeed();                // Step 1 : do any idle speed management needed
+        if (pid_timer.expireset()) {
+            update_idlespeed();                // Step 1 : do any idle speed management needed          
             set_output();                      // Step 2 : determine motor output value. updates throttle target from idle control or cruise mode pid, if applicable (on the same timer as gas pid). allows idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
             constrain_output();                // Step 3 : fix output to ensure it's in range
-            us[OUT] = out_pc_to_us(pc[OUT]);   // Step 4 : convert motor value to pulsewidth time
+            us[OUT] = out_pc_to_us(pc[OUT]);  // Step 4 : convert motor value to pulsewidth time
             deg[OUT] = out_pc_to_si(pc[OUT]);
-            Serial.printf("out pc:%lf us:%lf\n", pc[OUT], us[OUT]);
+            // Serial.printf("out pc:%lf us:%lf\n", pc[OUT], us[OUT]);
             write_motor();                     // Step 5 : write to servo
         }
     }
@@ -510,7 +679,7 @@ class BrakeMotor : public JagMotor {
     PressureSensor* pressure;
     GasServo* throttle;
     TemperatureSensorManager* tempsens;
-    float brakemotor_max_duty_pc = 25.0;   // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
+    float brakemotor_max_duty_pc = 25.0;  // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
     float press_initial_kp = 0.142;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float press_initial_ki = 0.000;        // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float press_initial_kd = 0.000;        // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
@@ -542,7 +711,6 @@ class BrakeMotor : public JagMotor {
     float panic_initial_pc, hold_initial_pc, panic_increment_pc, hold_increment_pc, parkpos_pc, zeropoint_pc;
     float outnow_pc[2], hybrid_math_offset, hybrid_math_coeff, pid_targ_pc, pid_err_pc, pid_final_out_pc;
     float hybrid_sens_ratio, hybrid_sens_ratio_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0, hybrid_targ_ratio = 1.0, hybrid_targ_ratio_pc = 100.0;
-    // float duty_integral_sum, duty_instant, duty_continuous;
     float motor_heat = NAN, motor_heatloss_rate = 3.0, motor_max_loaded_heatup_rate = 1.5, motor_max_unloaded_heatup_rate = 0.3;  // deg F per timer timeout
     void derive() {
         JagMotor::derive();
@@ -559,17 +727,17 @@ class BrakeMotor : public JagMotor {
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, GasServo* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         printf("Brake motor..\n");
         JagMotor::setup(_hotrc, _speedo, _batt);
-        pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  tempsens = _tempsens;
-        // duty_fwd_pc = brakemotor_max_duty_pc;  
+        pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
+        // duty_fwd_pc = brakemotor_max_duty_pc;
         pres_last = pressure->filt();
         posn_last = brkpos->filt();
         set_dominant_pid(brake_default_pid);
         if (!std::isnan(tempsens->val(loc::AMBIENT))) motor_heat_min = tempsens->val(loc::AMBIENT);
         derive();
         if (brake_hybrid_pid) calc_hybrid_ratio(pressure->filt());
-        pids[PressurePID].init(pressure->filt_ptr(), &pc[OPMIN], &pc[OPMAX], press_initial_kp, press_initial_ki, press_initial_kd, QPID::pmod::onerr,
+        pids[PressurePID].init(pressure->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), press_initial_kp, press_initial_ki, press_initial_kd, QPID::pmod::onerr,
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
-        pids[PositionPID].init(brkpos->filt_ptr(), &pc[OPMIN], &pc[OPMAX], posn_initial_kp, posn_initial_ki, posn_initial_kd, QPID::pmod::onerr, 
+        pids[PositionPID].init(brkpos->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), posn_initial_kp, posn_initial_ki, posn_initial_kd, QPID::pmod::onerr, 
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::reverse, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
     }
   private:

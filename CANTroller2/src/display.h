@@ -26,8 +26,8 @@ uint8_t colorcard[NUM_RUNMODES] = { MGT, WHT, RED, ORG, YEL, GRN, TEAL, PUR };
 std::string modecard[NUM_RUNMODES] = { "Basic", "Asleep", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 std::string top_menu_buttons[4]  = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
-// std::string idlemodecard[IdleControl::idlemodes::NUM_IDLEMODES] = { "direct", "cntrol", "minimz" };
-// std::string idlestatecard[IdleControl::targetstates::NUM_STATES] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
+std::string idlemodecard[IdleControl::idlemodes::NUM_IDLEMODES] = { "direct", "cntrol", "minimz" };
+std::string idlestatecard[IdleControl::targetstates::NUM_STATES] = { "todriv", "drving", "toidle", "tolow", "idling", "minimz" };
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 
 // These defines are just a convenience to keep the below datapage strings array initializations aligned in neat rows & cols for legibility
@@ -155,7 +155,7 @@ class Display {
     Simulator* sim;
     TunerPanel tuner;
     IdiotLights* idiots;
-    Timer valuesRefreshTimer = Timer(66666);  // Max rate to update data values (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
+    Timer valuesRefreshTimer = Timer(160000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
     uint8_t palettesize = 2;
     // uint16_t palette[256] = { BLK, WHT };
     static constexpr int runOnCore = CONFIG_ARDUINO_RUNNING_CORE == 0 ? 1 : 0;
@@ -680,7 +680,7 @@ class Display {
         disp_bools_dirty = false;
     }
     void disp_datapage_values() {
-        if (!disp_values_dirty) return;
+        // if (!disp_values_dirty) return;
         float drange;
         draw_dynamic(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
         draw_dynamic(2, speedo.filt(), 0.0f, speedo.redline_mph(), gas.cruisepid.target());
@@ -860,7 +860,7 @@ class Display {
             if (disp_sidemenu_dirty) draw_touchgrid(false);
             if (disp_selected_val_dirty) draw_selected_name(tunctrl, sel_val, sel_val_last, sel_val_last_last);
             if (disp_runmode_dirty) draw_runmode(nowmode, NON);
-            if (valuesRefreshTimer.expireset()) {
+            if (disp_values_dirty || valuesRefreshTimer.expireset()) {
                 disp_menu_bools();
                 disp_datapage_values();
             }

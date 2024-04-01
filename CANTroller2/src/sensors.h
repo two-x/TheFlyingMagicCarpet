@@ -54,7 +54,6 @@ class Potentiometer {
     float min() { return _pc_min; }
     float max() { return _pc_max; }
 };
-
 // NOTE: the following classes all contain their own initial config values (for simplicity). We could instead use Config objects and pass them in at construction time, which might be
 //       a little cleaner organization-wise, since all the configs would be consolidated. It would also allow us to read Configs from storage somewhere, so we could have persistent
 //       calibration.
@@ -62,7 +61,6 @@ class Potentiometer {
 // Param is a value which is constrained between min/max limits, representing a "raw" (aka unfiltered) quantity. A value with tight limits
 // (wehere min=val=max) is constant and cannot be changed without changing the limits. An unconstrained value can be represented by setting
 // either or both min/max to infinity.
-
 template<typename VALUE_T>
 class Param {
   protected:
