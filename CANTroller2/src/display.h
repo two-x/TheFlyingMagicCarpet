@@ -367,8 +367,11 @@ class Display {
     }
     void draw_string(int32_t x_new, int32_t x_old, int32_t y, std::string text, std::string oldtext, uint8_t color, uint8_t bgcolor, bool forced=false) {  // Send in "" for oldtext if erase isn't needed
         if ((text == oldtext) && !forced) return; 
-        sprptr->fillRect(x_old, y, (oldtext.length() + 1) * disp_font_width, disp_font_height, bgcolor);
-        sprptr->setTextColor(color);  
+        // sprptr->fillRect(x_old, y, oldtext.length() * disp_font_width, disp_font_height, bgcolor);
+        sprptr->setTextColor(bgcolor);
+        sprptr->setCursor(x_old, y);
+        sprptr->print(oldtext.c_str());
+        sprptr->setTextColor(color);
         sprptr->setCursor(x_new, y);
         sprptr->print(text.c_str());
     }
@@ -965,6 +968,10 @@ class Tuner {
     void process_inputs() {
         if (!tuningEditTimer.expired()) return;
         tuningEditTimer.reset();
+        sel_val_last_last = sel_val_last;
+        sel_val_last = sel_val;
+        datapage_last = datapage;
+        tunctrl_last = tunctrl;
         uint32_t encoder_sw_action = encoder.button.press_event();  // true = autoreset the event if there is one
         if (encoder_sw_action != swNONE) {  // First deal with any unhandled switch press events
             if (encoder_sw_action == swSHORT)  {  // if short press
@@ -995,10 +1002,6 @@ class Tuner {
             if (sel_val != sel_val_last) screen->disp_selected_val_dirty = true;
         }
         if (tunctrl != tunctrl_last || screen->disp_datapage_dirty) screen->disp_selected_val_dirty = true;
-        sel_val_last_last = sel_val_last;
-        sel_val_last = sel_val;
-        datapage_last = datapage;
-        tunctrl_last = tunctrl; // Make sure this goes after the last comparison
     }
     void edit_values(int rmode) {
         float fdelta = (float)idelta;

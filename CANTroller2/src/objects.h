@@ -51,11 +51,11 @@ void initialize_pins() {
 }
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
     sim.set_can_sim(sens::joy, false);
-    for (sens sen=sens::pressure; sen<=sens::mapsens; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, running_on_devboard);
-    for (sens sen=sens::engtemp; sen<sens::basicsw; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, false);
-    sim.set_can_sim(sens::basicsw, running_on_devboard);
-    sim.set_can_sim(sens::starter, running_on_devboard);
-    sim.set_can_sim(sens::mulebatt, running_on_devboard);
+    for (sens sen=sens::pressure; sen<=sens::basicsw; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, running_on_devboard);
+    // for (sens sen=sens::engtemp; sen<sens::basicsw; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, false);
+    // sim.set_can_sim(sens::basicsw, running_on_devboard);
+    // sim.set_can_sim(sens::starter, running_on_devboard);
+    // sim.set_can_sim(sens::mulebatt, running_on_devboard);
     if (!running_on_devboard) {      // override settings if running on the real car
         sim.set_potmap(sens::none);        
         looptime_print = false;      // Makes code write out timestamps throughout loop to serial port
@@ -87,6 +87,8 @@ void sim_setup() {
     sim.register_device(sens::mapsens, mapsens, mapsens.source());
     sim.register_device(sens::tach, tach, tach.source());
     sim.register_device(sens::speedo, speedo, speedo.source());
+    // sim.register_device(sens::engtemp, temp, temp.source());
+    // sim.register_device(sens::starter, starter, starter.source());
     sim.set_potmap();
 }
 void update_web(void *parameter) {
@@ -240,6 +242,7 @@ class Starter {
             now_req = REQ_NA;  // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
         }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
     }
+    src source() { return src::PIN; }
 };
 class FuelPump {  // drives power to the fuel pump when the engine is turning
   public:

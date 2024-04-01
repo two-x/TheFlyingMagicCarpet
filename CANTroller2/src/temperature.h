@@ -308,4 +308,5 @@ public:
     int errclass(int locat) { return errclass(static_cast<loc>(locat)); }
     float val(int locat) { return val(static_cast<loc>(locat)); }
     bool detected(int locat) { return detected(static_cast<loc>(locat)); }
+    src source() { return src::PIN; }
 };

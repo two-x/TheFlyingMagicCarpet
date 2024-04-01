@@ -320,11 +320,11 @@ class GasServo : public ServoMotor {
     float idle_pc = 11.3;  // idle percent is derived from the si (degrees) value
     float starting_pc = 25.0;  // percent throttle to open to while starting the car
     float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5}; // , NAN };  // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
-    float pc_to_rpm(float _rpm) {
-        return map(_rpm, tach->idle_rpm(), tach->govern_rpm(), 0.0, 100.0);
-    }
-    float rpm_to_pc(float _pc) {
+    float pc_to_rpm(float _pc) {
         return map(_pc, 0.0, 100.0, tach->idle_rpm(), tach->govern_rpm());
+    }
+    float rpm_to_pc(float _rpm) {
+        return map(_rpm, tach->idle_rpm(), tach->govern_rpm(), 0.0, 100.0);
     }
     void derive() {  // calc derived limit values for all units based on tuned values for each motor
         pc[ABSMIN] = map(si[ABSMIN], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);

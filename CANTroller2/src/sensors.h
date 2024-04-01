@@ -927,7 +927,7 @@ class Tachometer : public PulseSensor<float> {
   public:
     sens senstype = sens::tach;
     float _govern_rpm = _redline_rpm;
-    float _idle_rpm = 600.0, _idle_cold_rpm = 550.0, _idle_hot_rpm = 700.0;
+    float _idle_rpm = 600.0, _idle_cold_rpm = 750.0, _idle_hot_rpm = 500.0;
     float _margin = 10; 
     Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_rpm) {
         _negative = true;
