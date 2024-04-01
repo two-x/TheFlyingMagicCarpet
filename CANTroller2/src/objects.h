@@ -248,7 +248,7 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
     int fuelpump_adc = 0;
     bool fuelpump_bool = LOW, fuelpump_off = HIGH;
   private:
-    bool variable_speed_output = true;
+    bool variable_speed_output = false;  // this interferes with the gas servo when enabled 
     int pin, ledc_channel, pwm_frequency = 42, pwm_resolution = 8;
     void writepin() {
         if (variable_speed_output) ledcWrite(ledc_channel, fuelpump_adc);
@@ -287,7 +287,6 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
             set_pin(pin, OUTPUT);  // initialize_pin
             Serial.printf("using digital drive\n");
         }
-        update();
     }
     float volts() { return fuelpump_v; }
     float volts_min() { return fuelpump_off_v; }
