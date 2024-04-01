@@ -85,7 +85,7 @@ void loop() {
     steer.update();           // drive motor output based on controller inputs, run mode, etc.
     touch.update();           // read touchscreen input and do what it tells us to
     tuner.update(run.mode);   // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
-    diag.update();            // notice any screwy conditions or suspicious shenanigans - consistent 200us
+    diag.update(run.mode);            // notice any screwy conditions or suspicious shenanigans - consistent 200us
     neo.update(colorcard[run.mode]);  // ~100us
     screen.update(run.mode);  // display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
     // sdcard.update();       // needs to be developed

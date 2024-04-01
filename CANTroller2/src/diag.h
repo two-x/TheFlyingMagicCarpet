@@ -25,9 +25,10 @@ class DiagRuntime {
     // two sets of large arrays for storage of log data. when one fills up it jumps to the other, so the first might be written to an sd card
     float tel[2][NumTelemetryFull][entries];  // array for telemetry of all sensors for given timestamp
     bool bools[2][NumTelemetryBool][entries];  // boolean control values
-    int index = 0, dic = 0;  // start with dictionary 0
-    Timer logTimer = Timer(100000);  // microseconds per logged reading
-    Timer errTimer = Timer(175000);
+    int index = 0, dic = 0, runmode;  // start with dictionary 0
+    Timer logTimer{100000};  // microseconds per logged reading
+    Timer errTimer{175000};
+    Timer speedoTimer{2500000}, tachTimer{2500000};  // how much time within which we expect the car will move after hitting the gas
   public:
     // diag tunable values
     uint32_t err_margin_adc = 5;
@@ -112,7 +113,8 @@ class DiagRuntime {
             }
         }
     }
-    void update() {
+    void update(int _runmode) {
+        runmode = _runmode;
         if (errTimer.expireset()) {
             // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
             // This section should become a real time self-diagnostic system, to look for anything that doesn't seem right and display an
@@ -143,6 +145,11 @@ class DiagRuntime {
                                         || (hotrc->us[ch][RAW] > (hotrc->absmax_us + hotrc->us[ch][MARGIN])));
             }
             err_sens[VALUE][_Ignition] = (!ignition && !tach->engine_stopped());
+            err_sens[LOST][_Speedo] = SpeedoFailure();
+            err_sens[LOST][_Tach] = TachFailure();
+            err_sens[RANGE][_Speedo] = (speedo->mph() < speedo->min_human() || speedo->mph() > speedo->max_human());;
+            err_sens[RANGE][_Tach] = (tach->rpm() < tach->min_human() || tach->rpm() > tach->max_human());
+            
             // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != ASLEEP));
             set_sensidiots();
 
@@ -180,6 +187,44 @@ class DiagRuntime {
             }
             printf("\n");
         }
+    }
+    bool SpeedoFailure() {  // checks if speedo isn't zero when stopped, or doesn't increase when we drive
+        static bool gunning_it, gunning_last = true;
+        static float baseline_speed;
+        bool fail = false;
+        if (runmode == SHUTDOWN) {  // || runmode == HOLD  // check that the speed is zero when stopped
+            if (gunning_last) speedoTimer.reset();       // if we just stopped driving, allow time for car to stop
+            else if (speedoTimer.expired()) {            // if it has been enough time since entering shutdown, we should be stopped
+                fail = (baseline_speed > speedo->margin_mph());  // when stopped the speedo reading should be zero, otherwise fail
+                baseline_speed = speedo->filt();         // store the speed value when we are stopped
+            }
+        }
+        gunning_it = (gas->pc[OUT] > 40.0 && (runmode == FLY || runmode == CRUISE));
+        if (gunning_it) {                                                             // if we're attempting to drive
+            if (!gunning_last) speedoTimer.reset();                     // delay our speed comparison so car can accelerate
+            else if (speedoTimer.expired()) fail = (speedo->filt() - baseline_speed < speedo->margin_mph());  // the car should be moving by now
+        }
+        gunning_last = gunning_it;
+        return fail;
+    }
+    bool TachFailure() {  // checks if speedo isn't zero when stopped, or doesn't increase when we drive
+        static bool running_it, running_last = true;
+        static float baseline_rpm;
+        bool fail = false;
+        if (runmode == SHUTDOWN) {  // || runmode == STALL  // check that the speed is zero when stopped
+            if (running_last) tachTimer.reset();       // if we just stopped driving, allow time for car to stop
+            else if (tachTimer.expired()) {            // if it has been enough time since entering shutdown, we should be stopped
+                fail = (baseline_rpm > tach->margin_rpm());  // when stopped the speedo reading should be zero, otherwise fail
+                baseline_rpm = tach->filt();         // store the speed value when we are stopped
+            }
+        }
+        running_it = (gas->pc[OUT] > 40.0 && (runmode == FLY || runmode == CRUISE));
+        if (running_it) {                                               // if we're attempting to drive
+            if (!running_last) tachTimer.reset();                     // delay our rpm comparison so car can respond
+            else if (tachTimer.expired()) fail = (tach->filt() - baseline_rpm < tach->margin_rpm());  // the car should be moving by now
+        }
+        running_last = running_it;
+        return fail;
     }
 };
 // Detectable transducer-related failures :: How we can detect them

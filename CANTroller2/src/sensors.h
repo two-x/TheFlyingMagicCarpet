@@ -928,6 +928,7 @@ class Tachometer : public PulseSensor<float> {
     sens senstype = sens::tach;
     float _govern_rpm = _redline_rpm;
     float _idle_rpm = 600.0, _idle_cold_rpm = 550.0, _idle_hot_rpm = 700.0;
+    float _margin = 10; 
     Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_rpm) {
         _negative = true;
         set_human_limits(0.0, _redline_rpm);
@@ -950,6 +951,7 @@ class Tachometer : public PulseSensor<float> {
     float rpm() { return _human.val(); }
     // bool engine_stopped() { return stopped(); }
     bool engine_stopped() { return _val_filt.val() < _stop_thresh_rpm ; }  // Note due to weird float math stuff, can not just check if tach == 0.0
+    float margin_rpm() { return _margin; }
     float redline_rpm() { return _human.max(); }
     float govern_rpm() { return _govern_rpm; }
     float* govern_rpm_ptr() { return &_govern_rpm; }
@@ -976,11 +978,15 @@ class Speedometer : public PulseSensor<float> {
     float _max_mph = 25.0; // What is max speed car can ever go
     float _initial_mph = 0.0; // Current speed, raw value converted to mph (in mph)
     float _redline_mph = 15.0; // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
-    float _m_factor = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 pulrot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 whlrot/pulrot * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
+    // new math with two magnets on the rear axle:
+    float _m_factor = 1000000.0 * 3600.0 * 20 * M_PI / (2 * 12 * 5280);  // 1 magnet/us * 1000000 us/sec * 3600 sec/hr * 1/2 whlrot/magnet * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1785000 mi/hr (mph)
+    // old math with one magnet on driven pulley:
+    // float _m_factor = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 pulrot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 whlrot/pulrot * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
     bool _invert = true;
-    int64_t _zerovalue = 999999;
+    int64_t _zerovalue = 9999999;
     float _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
     float _govern_mph, _idle_mph;
+    float _margin = 0.2; 
   public:
     sens senstype = sens::speedo;
     Speedometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_mph) {
@@ -1004,6 +1010,7 @@ class Speedometer : public PulseSensor<float> {
     float mph() { return _human.val(); }
     // bool car_stopped() { return stopped(); }
     bool car_stopped() { return _val_filt.val() < _stop_thresh_mph ; }  // Note due to weird float math stuff, can not just check if tach == 0.0
+    float margin_mph() { return _margin; }
     float redline_mph() { return _human.max(); }
     float govern_mph() { return _govern_mph; }
     float idle_mph() { return _idle_mph; }
