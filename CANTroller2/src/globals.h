@@ -4,7 +4,7 @@
 // pin assignments  ESP32-S3-DevkitC series   (note: "*" are pins we can reclaim if needed)
 #define     boot_sw_pin  0 // button0/strap1   // input, the esp "boot" button. if more pins are needed, move encoder_sw_pin to this pin, no other signal of ours can work on this pin due to high-at-boot requirement
 #define      tft_dc_pin  1 // adc1.0           // output, assert when sending data to display chip to indicate commands vs. screen data
-#define    touch_cs_pin  2 // adc1.1         * // output, chip select for resistive touchscreen, active low. Not used on car, so can assign pin to something else if needed
+#define    touch_cs_pin  2 // adc1.1         * // output, this controls touch screen chip select for resistive touchscreen (dev board) OR drives the vehicle's fuel pump (on car)
 #define   sdcard_cs_pin  3 // adc1.2/strapX  * // output, chip select for SD card controller on SPI bus. sdcard functionality is not implemented, we may not even need it
 #define    mulebatt_pin  4 // adc1.3           // analog input, mule battery voltage sense, full scale is 16V
 #define         pot_pin  5 // adc1.4           // analog in from 20k pot
@@ -126,7 +126,7 @@ bool display_enabled = true;         // should we run 325x slower in order to ge
 bool use_i2c_baton = true;
 bool always_max_refresh = false;
 bool brake_before_starting = true;
-bool watchdog_enabled = false;
+bool watchdog_enabled = true;
 bool fuelpump_supported = true;
 int throttle_ctrl_mode = OpenLoop;
 // dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin

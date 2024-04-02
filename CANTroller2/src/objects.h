@@ -188,8 +188,8 @@ class Starter {
     void request(int req) { now_req = req; }
     void update() {  // starter bidirectional handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
         if (!starter_signal_support) {  // if we don't get involved with starting the car
-            motor = LOW;              // arbitrarily give this variable a fixed value
-            now_req = REQ_NA;   // cancel any requests which we are ignoring anyway
+            motor = LOW;                // arbitrarily give this variable a fixed value
+            now_req = REQ_NA;           // cancel any requests which we are ignoring anyway
             return;                     // no action
         }  // from here on, we can assume starter signal is supported
         if (now_req == REQ_TOG) now_req = !pin_outputting;  // translate a toggle request to a drive request opposite to the current drive state
@@ -199,7 +199,7 @@ class Starter {
                 motor = LOW;             // we will turn it off
                 write_pin (pin, motor);  // begin driving the pin low voltage
                 starterTimer.set((int64_t)turnoff_timeout);               // start timer to control length of low output
-                if (gas.motormode == Starting) gas.setmode(lastgasmode);  // put the brake back to doing whatever it was doing before
+                if (gas.motormode == Starting) gas.setmode(lastgasmode);  // put the throttle back to doing whatever it was doing before
                 return;                  // ditch out, leaving the motor-off request intact. we'll check on the timer next time
             }
             else if (starterTimer.expired()) {  // if it's been long enough since turning off the motor circuit ...
