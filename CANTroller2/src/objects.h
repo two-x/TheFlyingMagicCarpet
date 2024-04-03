@@ -246,58 +246,82 @@ static Starter starter(starter_pin);
 
 class FuelPump {  // drives power to the fuel pump when the engine is turning
   public:
-    float fuelpump_off_v = 0.0;
-    float fuelpump_on_min_v = 8.0;
-    float fuelpump_on_max_v = 12.0;
-    float fuelpump_v = 0.0;
-    float fuelpump_turnon_rpm = 50.0;
-    int fuelpump_adc = 0;
-    bool fuelpump_bool = LOW, fuelpump_off = HIGH;
+    float off_v = 0.0;
+    float on_min_v = 8.0;
+    float on_max_v = 12.0;
+    float volts = 0.0;
+    float turnon_rpm = 50.0;
+    float duty, pwm_period = 25000;  // used for software pwm timing
+    int adc = 0;
+    bool status = LOW, status_inverse = HIGH, pump_last = LOW, sw_pwm_out_now = LOW;
   private:
     bool variable_speed_output = false;  // this interferes with the gas servo pwm when enabled
-    int pin, ledc_channel, pwm_frequency = 42, pwm_resolution = 8;
+    bool use_software_pwm = true;  // avoid using hardware resources for variable output, we can fake it with a timer
+    Timer fuelTimer;
+    int timeout = 25000;  // not tunable
+    int pin, ledc_channel, pwm_frequency = 42, pwm_resolution = 8;  // for if hardware pwm is used
     void writepin() {
-        if (variable_speed_output) ledcWrite(ledc_channel, fuelpump_adc);
-        else write_pin(pin, fuelpump_bool);
+        if (variable_speed_output) {
+            if (use_software_pwm) {
+                if (duty > 99.5) write_pin(pin, HIGH);
+                else if (duty < 0.5) write_pin(pin, LOW);
+                else if (fuelTimer.expired()) {
+                    sw_pwm_out_now = !sw_pwm_out_now;
+                    timeout = (int)(duty * pwm_period / 100.0);
+                    if (!sw_pwm_out_now) timeout = (int)pwm_period - timeout;
+                    write_pin(pin, sw_pwm_out_now);
+                    fuelTimer.set(timeout);
+                }
+            }
+            else ledcWrite(ledc_channel, adc);
+        }
+        else write_pin(pin, status);
     }
   public:
     FuelPump(int _pin) : pin(_pin) {}
     void update() {
         if (!fuelpump_supported || !captouch) return;
         float tachnow = tach.filt();
-        if (starter.motor || (ignition && (tachnow >= fuelpump_turnon_rpm))) {
-            fuelpump_v = map(gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], fuelpump_on_min_v, fuelpump_on_max_v);
-            fuelpump_v = constrain(fuelpump_v, fuelpump_on_min_v, fuelpump_on_max_v);
-            fuelpump_adc = map((int)fuelpump_v, 0, (int)fuelpump_on_max_v, 0, 255);
-            fuelpump_bool = HIGH;
+        pump_last = status;
+        if (starter.motor || (ignition && (tachnow >= turnon_rpm))) {
+            volts = map(gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], on_min_v, on_max_v);
+            volts = constrain(volts, on_min_v, on_max_v);
+            adc = map((int)volts, 0, (int)on_max_v, 0, 255);
+            duty = 100.0 * volts / on_max_v;
+            status = HIGH;
         }
         else {
-            fuelpump_v = fuelpump_off_v;
-            fuelpump_adc = 0;
-            fuelpump_bool = LOW;
+            volts = off_v;
+            adc = 0;
+            duty = 0.0;
+            status = LOW;
         }
-        fuelpump_off = !fuelpump_bool;
+        status_inverse = !status;  // for idiot light
         writepin();
     }
     void setup() {
         if (!fuelpump_supported || !captouch) return;  // if resistive touchscreen, then pin is needed for chip select
         Serial.printf("Fuel pump.. ");
         if (variable_speed_output) {
-            int ledc_channel = analogGetChannel(pin);
-            if (ledcSetup(ledc_channel, pwm_frequency, pwm_resolution) == 0) Serial.printf("failed to configure ");
-            else {
-                Serial.printf("using ");
-                ledcAttachPin(pin, ledc_channel);
+            if (use_software_pwm) {
+                set_pin(pin, OUTPUT);  // initialize_pin
+                fuelTimer.set(timeout);  // start the timer in case we are doing software pwm
+                Serial.printf("using software pwm\n");
             }
-            Serial.printf("ledc ch %d, %d bit at %d Hz\n", ledc_channel, pwm_resolution, pwm_frequency);
+            else {
+                int ledc_channel = analogGetChannel(pin);
+                if (ledcSetup(ledc_channel, pwm_frequency, pwm_resolution) == 0) Serial.printf("failed to configure ");
+                else {
+                    Serial.printf("using ");
+                    ledcAttachPin(pin, ledc_channel);
+                }
+                Serial.printf("ledc ch %d, %d bit at %d Hz\n", ledc_channel, pwm_resolution, pwm_frequency);
+            }
         }
         else {
             set_pin(pin, OUTPUT);  // initialize_pin
             Serial.printf("using digital drive\n");
         }
     }
-    float volts() { return fuelpump_v; }
-    float volts_min() { return fuelpump_off_v; }
-    float volts_max() { return fuelpump_on_max_v; }
 };
 static FuelPump fuelpump(tp_cs_fuel_pin);

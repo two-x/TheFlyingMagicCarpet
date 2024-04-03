@@ -746,7 +746,7 @@ class Display {
             draw_dynamic(11, gas.idle_pc, gas.pc[OPMIN], gas.pc[OPMAX]);
             draw_dynamic(12, gas.idle_si[OUT], gas.si[OPMIN], gas.si[OPMAX]);
             draw_dynamic(13, tach.idle_rpm(), tach.min_human(), tach.max_human());
-            draw_dynamic(14, fuelpump.volts(), 0.0f, fuelpump.volts_max());
+            draw_dynamic(14, fuelpump.volts, fuelpump.off_v, fuelpump.on_max_v);
             draw_dynamic(15, gas.starting_pc, gas.pc[OPMIN], gas.pc[OPMAX]);
             draw_dynamic(16, gas.idle_si[OPMAX], gas.idle_si[ABSMIN], gas.idle_si[ABSMAX], -1, 4);
             draw_dynamic(17, gas.idle_si[OPMIN], gas.idle_si[ABSMIN], gas.idle_si[ABSMAX], -1, 4);
