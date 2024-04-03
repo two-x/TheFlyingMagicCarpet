@@ -127,7 +127,7 @@ bool use_i2c_baton = true;
 bool always_max_refresh = false;
 bool brake_before_starting = true;
 bool watchdog_enabled = true;
-bool fuelpump_supported = true;
+bool fuelpump_supported = !USB_JTAG;
 int throttle_ctrl_mode = OpenLoop;
 // dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
 // bool usb_jtag = true;                // if you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)
