@@ -4,7 +4,7 @@
 // pin assignments  ESP32-S3-DevkitC series   (note: "*" are pins we can reclaim if needed)
 #define     boot_sw_pin  0 // button0/strap1   // input, the esp "boot" button. if more pins are needed, move encoder_sw_pin to this pin, no other signal of ours can work on this pin due to high-at-boot requirement
 #define      tft_dc_pin  1 // adc1.0           // output, assert when sending data to display chip to indicate commands vs. screen data
-#define    touch_cs_pin  2 // adc1.1         * // output, this controls touch screen chip select for resistive touchscreen (dev board) OR drives the vehicle's fuel pump (on car)
+#define  tp_cs_fuel_pin  2 // adc1.1           // output, this controls touch panel chip select for resistive touchscreen (dev board) OR drives the vehicle's fuel pump (on car)
 #define   sdcard_cs_pin  3 // adc1.2/strapX  * // output, chip select for SD card controller on SPI bus. sdcard functionality is not implemented, we may not even need it
 #define    mulebatt_pin  4 // adc1.3           // analog input, mule battery voltage sense, full scale is 16V
 #define         pot_pin  5 // adc1.4           // analog in from 20k pot
@@ -21,8 +21,8 @@
 #define     gas_pwm_pin 16 // pwm1/adc2.5      // output, pwm signal duty cycle controls throttle target. on Due this is the pin labeled DAC1 (where A13 is on Mega)
 #define   brake_pwm_pin 17 // pwm0/adc2.6/tx1  // output, pwm signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% is stopped)
 #define   steer_pwm_pin 18 // pwm0/adc2.7/rx1  // output, pwm signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). jaguar asks for an added 150ohm series R when high is 3.3V
-#define        free_pin 19 // usb-d-/adc2.8  * // reserved for usb or a steering quadrature encoder.
-#define    fuelpump_pin 20 // usb-d+/adc2.9  * // alternate fuel pump power signal, or use for usb or a steering quadrature encoder. 
+#define steer_enc_a_pin 19 // usb-d-/adc2.8  * // reserved for usb or a steering quadrature encoder.
+#define steer_enc_b_pin 20 // usb-d+/adc2.9  * // reserved for usb or a steering quadrature encoder.
 #define     onewire_pin 21 // pwm0             // onewire bus for temperature sensor data. note: tested this does not work on higher-numbered pins (~35+)
 #define      speedo_pin 35 // spiram/octspi    // int input, active high, asserted when magnet south is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
 #define     starter_pin 36 // sram/ospi/glitch // input/Output (both active high), output when starter is being driven, otherwise input senses external starter activation
@@ -64,8 +64,8 @@
 #define touch_irq_pin -1   // input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - set to 255 if not used
 // bm2023 pins: tft_dc_pin 3, onewire_pin 19, hotrc_ch3_pin 20, hotrc_ch4_pin 21, tach_pin 36, ignition_pin 37, syspower_pin 38, encoder_b_pin 40, encoder_a_pin 41, encoder_sw_pin 42, starter_pin 45, sdcard_cs_pin 46, touch_cs_pin 47
 #ifdef USE_BM23_PINS       // for testing using box from bm23, override new pin assignments with old ones
-#define fuelpump_pin 1     // not used in bm23, but moving to an unused pin
-#define free_pin 2         // not used in bm23, but moving to an unused pin
+#define steer_enc_a_pin 1  // not used in bm23, but moving to an unused pin
+#define steer_enc_b_pin 2  // not used in bm23, but moving to an unused pin
 #define tft_dc_pin 3
 #define onewire_pin 19
 #define hotrc_ch3_pin 20`
@@ -78,7 +78,7 @@
 #define encoder_sw_pin 42
 #define starter_pin 45
 #define sdcard_cs_pin 46
-#define touch_cs_pin 47
+#define tp_cs_fuel_pin 47
 #endif
 
 #define adcbits 12
@@ -127,7 +127,7 @@ bool use_i2c_baton = true;
 bool always_max_refresh = false;
 bool brake_before_starting = true;
 bool watchdog_enabled = true;
-bool fuelpump_supported = !USB_JTAG;
+bool fuelpump_supported = true;      // note if resistive touchscreen is present then fuelpump is automatically not supported regardless of this
 int throttle_ctrl_mode = OpenLoop;
 // dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
 // bool usb_jtag = true;                // if you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)

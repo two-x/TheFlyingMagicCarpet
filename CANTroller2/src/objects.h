@@ -41,10 +41,10 @@ int rn(int values=256) {  // Generate a random number between 0 and values-1
 void initialize_pins() {
     set_pin(ignition_pin, OUTPUT, LOW);
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);    // deasserting unused cs line ensures available spi bus
-    set_pin(touch_cs_pin, OUTPUT, HIGH);     // deasserting touch cs line in case i2c captouch screen is used
     set_pin(syspower_pin, OUTPUT, syspower);
     set_pin(basicmodesw_pin, INPUT_PULLUP);
-    if (!USB_JTAG) set_pin(free_pin, INPUT_PULLUP);         // avoid voltage level contention
+    if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);         // avoid voltage level contention
+    if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);         // avoid voltage level contention
     set_pin(uart_tx_pin, INPUT);             // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
 }
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
@@ -261,7 +261,7 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
   public:
     FuelPump(int _pin) : pin(_pin) {}
     void update() {
-        if (!fuelpump_supported) return;
+        if (!fuelpump_supported || !captouch) return;
         float tachnow = tach.filt();
         if ((tachnow < fuelpump_turnon_rpm) || !ignition) {
             fuelpump_v = fuelpump_off_v;
@@ -278,7 +278,7 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
         writepin();
     }
     void setup() {
-        if (!fuelpump_supported) return;
+        if (!fuelpump_supported || !captouch) return;  // if resistive touchscreen, then pin is needed for chip select
         Serial.printf("Fuel pump.. ");
         if (variable_speed_output) {
             int ledc_channel = analogGetChannel(pin);
