@@ -242,6 +242,8 @@ class Starter {
     }
     src source() { return pin_outputting ? src::CALC : src::PIN; }
 };
+static Starter starter(starter_pin);
+
 class FuelPump {  // drives power to the fuel pump when the engine is turning
   public:
     float fuelpump_off_v = 0.0;
@@ -263,16 +265,16 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
     void update() {
         if (!fuelpump_supported || !captouch) return;
         float tachnow = tach.filt();
-        if ((tachnow < fuelpump_turnon_rpm) || !ignition) {
-            fuelpump_v = fuelpump_off_v;
-            fuelpump_adc = 0;
-            fuelpump_bool = LOW;
-        }
-        else {
+        if (starter.motor || (ignition && (tachnow >= fuelpump_turnon_rpm))) {
             fuelpump_v = map(gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], fuelpump_on_min_v, fuelpump_on_max_v);
             fuelpump_v = constrain(fuelpump_v, fuelpump_on_min_v, fuelpump_on_max_v);
             fuelpump_adc = map((int)fuelpump_v, 0, (int)fuelpump_on_max_v, 0, 255);
             fuelpump_bool = HIGH;
+        }
+        else {
+            fuelpump_v = fuelpump_off_v;
+            fuelpump_adc = 0;
+            fuelpump_bool = LOW;
         }
         fuelpump_off = !fuelpump_bool;
         writepin();
@@ -298,3 +300,4 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
     float volts_min() { return fuelpump_off_v; }
     float volts_max() { return fuelpump_on_max_v; }
 };
+static FuelPump fuelpump(tp_cs_fuel_pin);
