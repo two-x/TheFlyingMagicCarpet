@@ -215,9 +215,9 @@ class ServoMotor {
     int pin, freq;
   public:
     bool reverse = false;  // defaults. subclasses override as necessary
-    float pc[NUM_MOTORVALS] = { 0, NAN, 100, 0, NAN, NAN, NAN, NAN }; // , NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN/IDLE]  values range from -100% to 100% are all derived or auto-assigned
-    float si[NUM_MOTORVALS] = { 45.0, 43.0, 168.2, 45.0, NAN, 0, 180, 1.0 }; // , 58.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN/IDLE]
-    float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 500, 2500, NAN }; // , NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-/IDLE]
+    float pc[NUM_MOTORVALS] = { 0, NAN, 100, 0, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]  values range from -100% to 100% are all derived or auto-assigned
+    float si[NUM_MOTORVALS] = { 45.0, 43.0, 168.2, 45.0, NAN, 0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
+    float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 500, 2500, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-]
     ServoMotor(int _pin, int _freq) { pin = _pin; freq = _freq; }
     void setup(Hotrc* _hotrc, Speedometer* _speedo) {
         hotrc = _hotrc;
@@ -248,9 +248,9 @@ class JagMotor : public ServoMotor {
     using ServoMotor::ServoMotor;
     float duty_fwd_pc = 100;  // default. subclasses override as necessary
     float duty_rev_pc = 100;  // default. subclasses override as necessary
-    float pc[NUM_MOTORVALS] = { NAN, 0, NAN, 0, NAN, -100, 100, 2 }; // , NAN };  // percent values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN/-]  values range from -100% to 100% are all derived or auto-assigned
-    float si[NUM_MOTORVALS] = { NAN, 0, NAN, 0, NAN, NAN, NAN, NAN }; // , NAN };  // standard si-unit values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
-    float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 670, 2330, NAN }; // , NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-/-]
+    float pc[NUM_MOTORVALS] = { NAN, 0, NAN, 0, NAN, -100, 100, 2 };  // percent values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]  values range from -100% to 100% are all derived or auto-assigned
+    float si[NUM_MOTORVALS] = { NAN, 0, NAN, 0, NAN, NAN, NAN, NAN };  // standard si-unit values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
+    float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 670, 2330, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-]
     float (&volt)[arraysize(si)] = si;  // our standard si value is volts. Create reference so si and volt are interchangeable
     // JagMotor(int _pin, int _freq) : ServoMotor(_pin, _freq) {}
     void derive() {  // calc pc and voltage op limits from volt and us abs limits 
@@ -323,8 +323,8 @@ class GasServo : public ServoMotor {
     float (&deg)[arraysize(si)] = si;                  // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
     float max_throttle_angular_velocity_degps = 65.0;  // deg/sec How quickly can the throttle change angle?  too low is unresponsive, too high can cause engine hesitations (going up) or stalls (going down)
     float tach_last, throttle_target_pc, governor = 95, max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
-    float idle_si[NUM_MOTORVALS] = { 45.0, NAN, 60.0, 58.0, NAN, 43.0, 75.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
-    float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};  // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN/-]
+    float idle_si[NUM_MOTORVALS] = { 45.0, NAN, 60.0, 58.0, NAN, 43.0, 75.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
+    float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idle_pc = 11.3;                              // idle percent is derived from the si (degrees) value
     float starting_pc = 25.0;                          // percent throttle to open to while starting the car
     float pc_to_rpm(float _pc) {
@@ -483,12 +483,10 @@ class GasServo : public ServoMotor {
     void set_idlehot(float newidlehot) {
         if (throttle_ctrl_mode == ActivePID) tach->set_idlehot_rpm(constrain(newidlehot, tach->min_human(), tach->idle_cold_rpm() - 1.0));
         else idle_si[OPMIN] = constrain(newidlehot, idle_si[ABSMIN], idle_si[OPMAX] - 1.0);
-        update_idlespeed();
     }
     void set_idlecold(float newidlecold) {
         if (throttle_ctrl_mode == ActivePID) tach->set_idlecold_rpm(constrain(newidlecold, tach->idle_hot_rpm() + 1.0, tach->max_human()));
         else idle_si[OPMAX] = constrain(newidlecold, idle_si[OPMIN] + 1.0, idle_si[ABSMAX]);
-        update_idlespeed();
     }
     void add_idlehot(float add) { 
         if (throttle_ctrl_mode == ActivePID) tach->set_idlehot_rpm(tach->idle_hot_rpm() + add);
@@ -498,8 +496,8 @@ class GasServo : public ServoMotor {
         if (throttle_ctrl_mode == ActivePID) tach->set_idlecold_rpm(tach->idle_cold_rpm() + add);
         else set_idlecold(idle_si[OPMAX] + add);
     }
-    void set_temphot(float newtemphot) { idletemp_f[OPMAX] = constrain(newtemphot, idletemp_f[OPMIN] + 1.0, idletemp_f[ABSMAX]); update_idlespeed(); }
-    void set_tempcold(float newtempcold) { idletemp_f[OPMIN] = constrain(newtempcold, idletemp_f[ABSMIN], idletemp_f[OPMAX] - 1.0); update_idlespeed(); }
+    void set_temphot(float newtemphot) { idletemp_f[OPMAX] = constrain(newtemphot, idletemp_f[OPMIN] + 1.0, idletemp_f[ABSMAX]); }
+    void set_tempcold(float newtempcold) { idletemp_f[OPMIN] = constrain(newtempcold, idletemp_f[ABSMIN], idletemp_f[OPMAX] - 1.0); }
     void add_temphot(float add) { set_temphot(idletemp_f[OPMAX] + add); }
     void add_tempcold(float add) { set_tempcold(idletemp_f[OPMIN] + add); }
 };
@@ -753,26 +751,6 @@ class SteerMotor : public JagMotor {
     }
 };
 
-// this class is no longer used, i've removed all references. but if i try to delete it, the code crashes repeatedly. wtf!
-class IdleControl {  // Soren - To allow creative control of PID targets in case your engine idle problems need that.
-  public:
-    float idlehot = 550.0, idlecold = 775.0, idlehigh = 950.0;  // Idle speed at op_max and op_min engine temps, and elevated rpm above idle guaranteed never to stall
-    float margin = 10, idle_absmin = 450.0, idle_absmax = 1000.0;  // High limit of idle speed adjustability
-    float idle_rpm, stallpoint, dynamic_rpm, temphot, tempcold, idle_slope_rpmps;
-    uint32_t settlerate_rpmps, stallrate_rpmps = 400;  // Engine rpm drops exceeding this much per second are considered a stall in progress
-    int idlemode, targetstate, nextstate;
-  protected:
-    float* target_rpm; float* measraw_rpm; float* measfilt_rpm; float engine_temp_f;
-    TemperatureSensor* engine_sensor = nullptr;   // Rate to lower idle from high point to low point (in rpm per second)
-    bool we_just_changed_states = true, target_externally_set = false; // bool now_trying_to_idle = false;
-    uint32_t index_now, index_last;  // Engine rpm drops exceeding this much per second are considered a stall in progress
-    float targetlast_rpm, recovery_boost_rpm = 5;  // How much to increase rpm target in response to detection of stall slope
-    uint32_t history_depth = 100;
-    int32_t tach_history_rpm[100];  // Why can't I use [history_depth] here instead of [20] in this instantiation?  c++ is a pain in my ass
-    uint32_t timestamps_us[100];
-    Timer settleTimer, tachHistoryTimer, tachIdleTimer = Timer(5000000);  // tachIdleTimer = How often to update tach idle value based on engine temperature
-    int64_t readtime_last;
-  public:
-    IdleControl() {}
-};
-IdleControl idlectrl;  // i have no idea WHY i can't delete this without the code crashing
+// this class is obviously useless, but if i try to delete it, the code crashes repeatedly. wtf!
+class WeGotMemoryIssues { uint32_t a[100], b[100], c; };
+WeGotMemoryIssues AndersFixEm;

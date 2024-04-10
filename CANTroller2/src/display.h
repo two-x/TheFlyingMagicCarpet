@@ -86,15 +86,8 @@ static constexpr uint8_t unitmaps[10][17] = {  // 17x7-pixel bitmaps for where u
     { 0x08, 0x1c, 0x2a, 0x08, 0x00, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x41, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x3e, },  // googly eyes, are as goofy as they are stupid
     { 0x3d, 0x00, 0x3e, 0x02, 0x3c, 0x00, 0x7f, 0x00, 0x3e, 0x12, 0x0c, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x3d, },  // inches or psi "in|psi"
     { 0x02, 0x07, 0x05, 0x07, 0x42, 0x60, 0x50, 0x48, 0x44, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // angular degrees
-};  // These bitmaps are in the same format as the idiot light bitmaps, described below
+};  // These bitmaps are in the same format as the idiot light bitmaps, described in neopixel.h
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
-class TunerPanel {
-  public:
-    TunerPanel() {};
-    void setup() {};
-  private:
-    // DataPage[NUM_DATAPAGES];
-};
 AnimationManager animations;
 volatile float fps = 0.0;
 volatile bool is_pushing = 0;
@@ -115,9 +108,6 @@ StaticSemaphore_t draw_semaphore_buffer;
 static void push_task_wrapper(void *parameter);
 static void draw_task_wrapper(void *parameter);
 #endif
-void push_task();
-void draw_task();
-void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref);
 volatile int disp_oldmode = SHUTDOWN;
 volatile bool auto_saver_enabled = false;
 LGFX_Sprite* sprptr;
@@ -152,7 +142,6 @@ class Display {
     NeopixelStrip* neo;
     Touchscreen* touch;
     Simulator* sim;
-    TunerPanel tuner;
     IdiotLights* idiots;
     Timer valuesRefreshTimer = Timer(160000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
     uint8_t palettesize = 2;
@@ -182,18 +171,11 @@ class Display {
     volatile bool disp_simbuttons_dirty;
     volatile bool disp_idiots_dirty;
     Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim)
-        : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {
-    }
-    Display(int8_t cs_pin, int8_t dc_pin, LGFX* _lcd, NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim) 
-        : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {
-        Display(_neo, _touch, _idiots, _sim);
-    }
+      : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {}
     void init_tasks() {
         #ifdef VIDEO_TASKS
-        // push_time = xSemaphoreCreateMutexStatic(&push_semaphore_buffer);
-        // draw_time = xSemaphoreCreateMutexStatic(&draw_semaphore_buffer);
-        // push_time = xSemaphoreCreateBinaryStatic(&push_semaphore_buffer);
-        // draw_time = xSemaphoreCreateBinaryStatic(&draw_semaphore_buffer);
+        // push_time = xSemaphoreCreateMutexStatic(&push_semaphore_buffer);  // xSemaphoreCreateBinaryStatic(&push_semaphore_buffer);
+        // draw_time = xSemaphoreCreateMutexStatic(&draw_semaphore_buffer);  // xSemaphoreCreateBinaryStatic(&draw_semaphore_buffer);
         push_time = xSemaphoreCreateBinary();
         draw_time = xSemaphoreCreateBinary();
         TaskHandle_t pushTaskHandle = nullptr;
@@ -287,15 +269,9 @@ class Display {
             disp_data_dirty[i] = true;
             disp_bargraphs[i] = false;
         }
-        disp_bools_dirty = true;
-        disp_selected_val_dirty = true;
-        disp_datapage_dirty = true;
-        disp_sidemenu_dirty = true;
-        disp_runmode_dirty = true;
-        disp_simbuttons_dirty = true;
-        disp_values_dirty = true;
+        disp_bools_dirty = disp_selected_val_dirty = disp_datapage_dirty = disp_sidemenu_dirty = true;
+        disp_runmode_dirty = disp_simbuttons_dirty = disp_values_dirty = true;
         screensaver = false;
-        // auto_saver_enabled = false;  // uncommenting this line makes it crash when rapidly changing screensavers during autosaver 
     }
     void blackout(LGFX_Sprite* spr) {
         std::uint32_t* s;
@@ -383,11 +359,12 @@ class Display {
     }
     void draw_string_units(int32_t x, int32_t y, std::string text, std::string oldtext, uint8_t color, uint8_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
         sprptr->fillRect(x, y, 3 * disp_font_width, disp_font_height, bgcolor);
-        for (int8_t i = 0; i<arraysize(unitmaps); i++)
+        for (int8_t i = 0; i<arraysize(unitmaps); i++) {
             if (unitmapnames[i] == text) {
                 draw_unitmap(i, x, y, color);
                 return;
             }
+        }
         sprptr->setCursor(x, y);
         sprptr->setTextColor(color);
         sprptr->print(text.c_str());
@@ -408,7 +385,6 @@ class Display {
                 draw_string(disp_datapage_names_x, disp_datapage_names_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, datapage_names[page][lineno], datapage_names[page_last][lineno], LGRY, BLK, forced);
                 draw_string_units(disp_datapage_units_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], LGRY, BLK);
                 int32_t corner_y = (lineno + disp_fixed_lines + 1) * disp_line_height_pix + disp_vshift_pix + 7;  // lineno*disp_line_height_pix+disp_vshift_pix-1;
-                // draw_bargraph_base(disp_bargraphs_x, corner_y, disp_bargraph_width);
                 sprptr->fillRect(disp_bargraphs_x-1, (lineno + disp_fixed_lines + 1) * disp_line_height_pix, disp_bargraph_width + 2, 4, BLK);
                 if (disp_needles[lineno] >= 0) draw_bargraph_needle(-1, disp_needles[lineno], corner_y - 6, BLK);  // Let's draw a needle
             }
@@ -1035,8 +1011,6 @@ class Tuner {
                 else if (sel_val == 7) gas.add_idlehot(fdelta);
                 else if (sel_val == 8) gas.add_tempcold(fdelta);
                 else if (sel_val == 9) gas.add_temphot(fdelta);
-                // else if (sel_val == 9) gas.add_settlerate(idelta);
-                // else if (sel_val == 10) gas.cycle_idlemode(idelta);
             }
             else if (datapage == PG_BPID) {
                 if (sel_val == 8) brake.pid_dom->add_kp(0.001f * fdelta);
