@@ -192,7 +192,7 @@ class CollisionsSaver {
                 }
             }
             for (int j = i + 1; j < ball_count + touchnow; j++) {
-                b = (j == ball_count) ? &touchball  : &balls[j];
+                b = (j == ball_count) ? &touchball : &balls[j];
                 rr = a->r + b->r;
                 vx = a->x - b->x;
                 if (abs(vx) > rr) continue;

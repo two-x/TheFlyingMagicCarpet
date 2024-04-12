@@ -655,8 +655,6 @@ class FatFs {
         else Serial.println("- failed to open file for reading");
     }
 };
-
-#define RUN_TESTS 0  // set this to 0 for the car
 #if RUN_TESTS
     #include "unittests.h"
     void run_tests() {

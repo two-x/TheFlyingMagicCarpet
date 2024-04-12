@@ -100,7 +100,7 @@ volatile bool pushtime = 0;
 volatile bool drawn = false;
 volatile bool pushed = true;
 
-#ifdef VIDEO_TASKS
+#if VIDEO_TASKS
 SemaphoreHandle_t push_time = NULL;
 SemaphoreHandle_t draw_time = NULL;
 StaticSemaphore_t push_semaphore_buffer;
@@ -173,7 +173,7 @@ class Display {
     Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim)
       : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {}
     void init_tasks() {
-        #ifdef VIDEO_TASKS
+        #if VIDEO_TASKS
         // push_time = xSemaphoreCreateMutexStatic(&push_semaphore_buffer);  // xSemaphoreCreateBinaryStatic(&push_semaphore_buffer);
         // draw_time = xSemaphoreCreateMutexStatic(&draw_semaphore_buffer);  // xSemaphoreCreateBinaryStatic(&draw_semaphore_buffer);
         push_time = xSemaphoreCreateBinary();
@@ -246,7 +246,7 @@ class Display {
         animations.setup();
         sprptr = &framebuf[flip];
         reset_request = true;
-        #ifdef VIDEO_TASKS
+        #if VIDEO_TASKS
         init_tasks();
         #else
         update();
@@ -772,7 +772,6 @@ class Display {
             // Serial.printf(" gmin():%lf gmax():%lf", gas.pid.outmin(), gas.pid.outmax());
             // Serial.printf(" cmin():%lf cmax():%lf", gas.cruisepid.outmin(), gas.cruisepid.outmax());
             draw_eraseval(14);
-            
             draw_dynamic(15, gas.throttle_target_pc, 0.0f, 100.0f);
             draw_dynamic(16, cruise_delta_max_pc_per_s, 1, 35);
             draw_dynamic(17, gas.cruisepid.kp(), 0.0f, 10.0f);
@@ -823,7 +822,7 @@ class Display {
   public:
     void update(int _nowmode = -1) {
         if (_nowmode >= 0) nowmode = _nowmode;
-        #ifndef VIDEO_TASKS
+        #if !VIDEO_TASKS
             if (pushtime) push_task();
             else draw_task();
         #endif
@@ -1061,7 +1060,7 @@ static IdiotLights idiots;
 static Touchscreen touch;
 static Display screen(&neo, &touch, &idiots, &sim);
 static Tuner tuner(&screen, &neo, &touch);
-#ifdef VIDEO_TASKS
+#if VIDEO_TASKS
 static void push_task_wrapper(void *parameter) {
     while (true) {
         // xSemaphoreTake(push_time, portMAX_DELAY);
