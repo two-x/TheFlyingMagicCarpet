@@ -168,6 +168,26 @@ float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) 
     if (std::abs(maf) < 0.001) maf = 0;
     return maf;
 }
+void psram_setup() {  // see https://www.upesy.com/blogs/tutorials/get-more-ram-on-esp32-with-psram#
+    Serial.println("PSRAM..");
+    #ifndef BOARD_HAS_PSRAM
+    Serial.println(" support is currently disabled\n");
+    return;
+    #endif
+    if (psramInit()) Serial.println(" is correctly initialized");
+    else Serial.println(" is not available");
+    // int available_PSRAM_size = ESP.getFreePsram();
+    // Serial.println((String)"  PSRAM Size available (bytes): " + available_PSRAM_size);
+    // int *array_int = (int *) ps_malloc(1000 * sizeof(int)); // Create an integer array of 1000
+    // array_int[0] = 42;
+    // array_int[999] = 42; //We access array values like classic array
+    // int available_PSRAM_size_after = ESP.getFreePsram();
+    // Serial.println((String)"  PSRAM Size available (bytes): " + available_PSRAM_size_after); // Free memory space has decreased
+    // int array_size = available_PSRAM_size - available_PSRAM_size_after;
+    // Serial.println((String)"Array size in PSRAM in bytes: " + array_size);
+    // // free(array_int); //The allocated memory is freed.
+    Serial.println((String)", size available (B): " +ESP.getFreePsram());
+}
 class Starter {
   private:
     uint32_t pushbrake_timeout = 3000000;

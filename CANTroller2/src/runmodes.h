@@ -169,10 +169,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             brake.setmode(AutoHold);
             steer.setmode(OpenLoop);
         }
-        if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
+        if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
         if (hotrc.sw_event(CH4)) starter.request(REQ_OFF);
-        if (hotrc.joydir(VERT) != JOY_UP) joy_centered = true; // Mark joystick at or below center, now pushing up will go to fly mode
-        else if (joy_centered && !starter.motor && !hotrc.radiolost()) mode = FLY; // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
+        if (hotrc.joydir(VERT) != JOY_UP) joy_centered = true;  // mark joystick at or below center, now pushing up will go to fly mode
+        else if (joy_centered && !starter.motor && !hotrc.radiolost()) mode = FLY;  // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
     }
     void run_flyMode() {
         if (we_just_switched_modes) {
@@ -181,29 +181,29 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             brake.setmode(ActivePID);
         }
         if (car_hasnt_moved) {
-            if (hotrc.joydir(VERT) != JOY_UP) mode = HOLD;  // Must keep pulling trigger until car moves, or it drops back to hold mode
-            else if (!speedo.car_stopped()) car_hasnt_moved = false;  // Once car moves, we're allowed to release the trigger without falling out of fly mode
+            if (hotrc.joydir(VERT) != JOY_UP) mode = HOLD;            // must keep pulling trigger until car moves, or it drops back to hold mode
+            else if (!speedo.car_stopped()) car_hasnt_moved = false;  // once car moves, we're allowed to release the trigger without falling out of fly mode
         }
-        else if (speedo.car_stopped() && hotrc.joydir() != JOY_UP) mode = HOLD;  // Go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
-        if (!sim.simulating(sens::joy) && hotrc.radiolost()) mode = HOLD;  // Radio must be good to fly. This should already be handled elsewhere but another check can't hurt
-        if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
-        if (hotrc.sw_event(CH4)) mode = CRUISE;  // enter cruise mode by pressing hrc ch4 button
+        else if (speedo.car_stopped() && hotrc.joydir() != JOY_UP) mode = HOLD;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
+        if (!sim.simulating(sens::joy) && hotrc.radiolost()) mode = HOLD;        // radio must be good to fly, this should already be handled elsewhere but another check can't hurt
+        if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;                     // turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
+        if (hotrc.sw_event(CH4)) mode = FLY;                                     // enter fly mode by pressing hrc ch4 button
     }
     void run_cruiseMode() {
-        if (we_just_switched_modes) {  // Upon first entering cruise mode, initialize things
+        if (we_just_switched_modes) {  // upon first entering cruise mode, initialize things
             gas.setmode(Cruise);
             brake.setmode(Release);
             gestureFlyTimer.reset();  // initialize brake-trigger timer
         }
         if (hotrc.joydir(VERT) == JOY_DN && !cruise_speed_lowerable) mode = FLY;
-        if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
-        if (hotrc.sw_event(CH4)) mode = FLY;  // Go to fly mode if hotrc ch4 button pushed
-        // If joystick is held full-brake for more than X, driver could be confused & panicking, drop to fly mode so fly mode will push the brakes
-        if (hotrc.pc[VERT][FILT] > hotrc.pc[VERT][OPMIN] + flycruise_vert_margin_pc) gestureFlyTimer.reset();  // Keep resetting timer if joystick not at bottom
-        else if (gestureFlyTimer.expired()) mode = FLY;  // New gesture to drop to fly mode is hold the brake all the way down for more than X ms
-        if (speedo.car_stopped()) mode = (hotrc.joydir(VERT) == JOY_UP) ? FLY : HOLD;  // In case we slam into camp Q woofer stack, get out of cruise mode.
+        if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // turn on/off the vehicle ignition. if ign is killed while stopped, this leads to panic stop
+        if (hotrc.sw_event(CH4)) mode = FLY;                  // go to fly mode if hotrc ch4 button pushed
+        // if joystick is held full-brake for more than X, driver could be confused & panicking, drop to fly mode so fly mode will push the brakes
+        if (hotrc.pc[VERT][FILT] > hotrc.pc[VERT][OPMIN] + flycruise_vert_margin_pc) gestureFlyTimer.reset();  // keep resetting timer if joystick not at bottom
+        else if (gestureFlyTimer.expired()) mode = FLY;  // new gesture to drop to fly mode is hold the brake all the way down for more than X ms
+        if (speedo.car_stopped()) mode = (hotrc.joydir(VERT) == JOY_UP) ? FLY : HOLD;  // in case we slam into camp Q woofer stack, get out of cruise mode.
     }
-    void run_calMode() {  // Calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration. Don't use it unless you know how.
+    void run_calMode() {  // calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration - don't use it unless you know how.
         if (we_just_switched_modes) {
             calmode_request = cal_gasmode_request = cal_brakemode = false;
             display->disp_bools_dirty = true;
@@ -216,7 +216,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         // else if (brake.motormode == Calibrate) brake.setmode(Halt);
         if (cal_gasmode_request) gas.setmode(Calibrate);
         else gas.setmode(Idle);
-        if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
+        if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // turn on/off the vehicle ignition. if ign is killed while stopped, this leads to panic stop
     }
 };
 // Here are the different runmodes documented

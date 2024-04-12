@@ -278,7 +278,10 @@ class Transducer : public Device {
             if (dir == TransducerDirection::REV) {
                 ret = min_f + max_f - _b_offset - _m_factor / arg_val_f;
             }
-            else ret = _b_offset + _m_factor / arg_val_f;
+            else {
+                ret = _b_offset + _m_factor / arg_val_f;
+                Serial.printf("%lf = %lf + %lf / %lf\n", ret, _b_offset, _m_factor, arg_val_f);
+            }
         } else {
             printf ("err: from_native conversion div/zero attempt. max=%5.2f, d=%d, i=%d, v=%5.2f, m=%5.2f, b=%5.2f\n", max_f, dir, _invert, arg_val_f, _m_factor, _b_offset);
             ret = max_f;  // Best return given division would be infinite
@@ -851,7 +854,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
   protected:
     int64_t _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
     Timer _stop_timer;
-    bool _negative = false;
+    bool _negative = false, _pin_activity;
     float _stop_thresh;
     float _last_read_time_us;
     volatile int64_t _isr_us = 0;
@@ -881,6 +884,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
             this->calculate_ema();
             _last_read_time_us = _stop_timer.elapsed();
             _stop_timer.reset();
+            this->_pin_activity = !_pin_activity;
         }
         // NOTE: should be checking filt here maybe?
         if (_stop_timer.expired()) {  // If time between pulses is long enough an engine can't run that slow
@@ -921,9 +925,10 @@ class Tachometer : public PulseSensor<float> {
     // NOTE: should we start at 50rpm? shouldn't it be zero?
     float _initial_rpm = 50.0; // Current engine speed, raw value converted to rpm (in rpm)
     float _m_factor = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
-    bool _invert = true;
+    bool _invert = true, _pin_activity = LOW;
     int64_t _zerovalue = 999999;
     float _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+    int64_t _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
   public:
     sens senstype = sens::tach;
     float _govern_rpm = _redline_rpm;
@@ -966,6 +971,7 @@ class Tachometer : public PulseSensor<float> {
     float abs_max_rpm() { return _abs_max_rpm; }
     float* redline_rpm_ptr() { return _human.max_ptr(); }
     std::shared_ptr<float> redline_rpm_shptr() { return _human.max_shptr(); }
+    bool* pin_activity_ptr() { return &_pin_activity; }
 };
 
 // Speedometer represents a magnetic pulse measurement of the enginge rotation.
@@ -982,7 +988,7 @@ class Speedometer : public PulseSensor<float> {
     float _m_factor = 1000000.0 * 3600.0 * 20 * M_PI / (2 * 12 * 5280);  // 1 magnet/us * 1000000 us/sec * 3600 sec/hr * 1/2 whlrot/magnet * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1785000 mi/hr (mph)
     // old math with one magnet on driven pulley:
     // float _m_factor = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 pulrot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 whlrot/pulrot * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
-    bool _invert = true;
+    bool _invert = true, _pin_activity = LOW;
     int64_t _zerovalue = 9999999;
     float _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
     float _govern_mph, _idle_mph;
@@ -1019,6 +1025,7 @@ class Speedometer : public PulseSensor<float> {
     float max_mph() { return _max_mph; }
     float* redline_mph_ptr() { return _human.max_ptr(); }
     std::shared_ptr<float> redline_mph_shptr() { return _human.max_shptr(); }
+    bool* pin_activity_ptr() { return &_pin_activity; }
 };
 // NOTE: I implemented the gas servo, but it looks like it's all in native units. should it still be a transducer?
 // ServoPWM is a base class for our type of actuators, where by varying a pulse width (in us), motors move.

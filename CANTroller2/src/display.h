@@ -51,7 +51,7 @@ static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = 
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
-    { "PressRaw", "BkPosRaw", __________, __________, __________, "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
+    { "PressRaw", "BkPosRaw", "TachPuls", __________, __________, "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "Gas Mode", "Tach Tgt", "    Idle", "    Idle", "    Idle", "FuelPump", "StartGas", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", },  // PG_IDLE
     { brAk"Posn", brAk"Mode", "Pn|PrErr", "BrakeTgt", "HybrdTgt", "TgtRatio", "OutRatio", "MotrHeat", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
@@ -64,7 +64,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, "%",    "%",    },  // PG_RUN
     { "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, ______, "us",   "us",   },  // PG_JOY
-    { "adc",  "adc",  ______, ______, ______, "mph",  "atm",  "atm",  "mph",  "mph",  "in",   },  // PG_SENS
+    { "adc",  "adc",  "ms",   ______, ______, "mph",  "atm",  "atm",  "mph",  "mph",  "in",   },  // PG_SENS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, degree, degree, "us",   "%",    },  // PG_PWMS
     { scroll, "rpm",  "%",    degree, "rpm",  "V",    "%",    degree, degree, degreF, degreF, },  // PG_IDLE
     { "in",   scroll, "psin", "psin", "%",    "%",    "%",    degreF, ______, "Hz",   "s",    },  // PG_BPID
@@ -101,12 +101,10 @@ volatile bool drawn = false;
 volatile bool pushed = true;
 
 #if VIDEO_TASKS
-SemaphoreHandle_t push_time = NULL;
-SemaphoreHandle_t draw_time = NULL;
-StaticSemaphore_t push_semaphore_buffer;
-StaticSemaphore_t draw_semaphore_buffer;
-static void push_task_wrapper(void *parameter);
-static void draw_task_wrapper(void *parameter);
+  SemaphoreHandle_t pushbuf_sem = NULL;  // StaticSemaphore_t push_semaphorebuf_sem;
+  SemaphoreHandle_t drawbuf_sem = NULL;  // StaticSemaphore_t draw_semaphorebuf_sem;
+  static void push_task_wrapper(void *parameter);
+  static void draw_task_wrapper(void *parameter);
 #endif
 volatile int disp_oldmode = SHUTDOWN;
 volatile bool auto_saver_enabled = false;
@@ -114,29 +112,6 @@ LGFX_Sprite* sprptr;
 std::string nulstr = "";
 std::string* nulstrptr = &nulstr;
 
-void printframebufs(int reduce = 2, bool ascii = false) {  // reduce is how many times to shrink the screen by half (0, 1, 2, 3, or 4). ascii=true gives ascii art output
-    std::string brites[16] = {" ", ".", ",", ":", ";", "+", "=", ">", "%", "#", "*", "$", "@", "&", "M", "W"};
-    int found;
-    std::uint8_t* s;
-    for (int f=0; f<2; f++) {
-        s = (std::uint8_t*)(framebuf[f]).getBuffer();
-        for (int y=0; y<disp_height_pix >> reduce; y++) {
-            Serial.printf("%d ", f);
-            for (int x=0; x<disp_width_pix >> reduce; x++) {
-                found = 0; 
-                for (int sy=0; sy<reduce; sy++) {
-                    for (int sx=0; sx<reduce; sx++) {
-                        if (s[((y << reduce) + sy)*disp_width_pix + (x << reduce) + sx] != 0x00) found++;
-                    }
-                }
-                if (ascii) Serial.printf("%s", brites[(reduce >= 2) ? (found >> (reduce - 2)) : (found << (2 - reduce))].c_str());
-                else Serial.printf("%s", (found > 0) ? "*" : ".");
-            }
-            Serial.printf("\n");
-        }
-        Serial.printf("\n");
-    }
-}
 class Display {
   private:
     NeopixelStrip* neo;
@@ -174,15 +149,15 @@ class Display {
       : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {}
     void init_tasks() {
         #if VIDEO_TASKS
-        // push_time = xSemaphoreCreateMutexStatic(&push_semaphore_buffer);  // xSemaphoreCreateBinaryStatic(&push_semaphore_buffer);
-        // draw_time = xSemaphoreCreateMutexStatic(&draw_semaphore_buffer);  // xSemaphoreCreateBinaryStatic(&draw_semaphore_buffer);
-        push_time = xSemaphoreCreateBinary();
-        draw_time = xSemaphoreCreateBinary();
-        TaskHandle_t pushTaskHandle = nullptr;
+        // pushbuf_sem = xSemaphoreCreateMutexStatic(&push_semaphorebuf_sem);  // xSemaphoreCreateBinaryStatic(&push_semaphorebuf_sem);
+        // drawbuf_sem = xSemaphoreCreateMutexStatic(&draw_semaphorebuf_sem);  // xSemaphoreCreateBinaryStatic(&draw_semaphorebuf_sem);
+        pushbuf_sem = xSemaphoreCreateBinary();
+        drawbuf_sem = xSemaphoreCreateBinary();
+        TaskHandle_t pushTaskHandle = NULL;
         xTaskCreatePinnedToCore(push_task_wrapper, "taskPush", 8192, NULL, 4, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  // 16384
-        TaskHandle_t drawTaskHandle = nullptr;
+        TaskHandle_t drawTaskHandle = NULL;
         xTaskCreatePinnedToCore(draw_task_wrapper, "taskDraw", 4096, NULL, 4, &drawTaskHandle, runOnCore);
-        // xSemaphoreGive(push_time);
+        // xSemaphoreGive(pushbuf_sem);
         #endif
     }
     void init_framebuffers(int _sprwidth, int _sprheight) {
@@ -695,7 +670,8 @@ class Display {
         else if (datapage == PG_SENS) {
             draw_dynamic(9, pressure.raw(), pressure.min_native(), pressure.max_native());                    
             draw_dynamic(10, brkpos.raw(), brkpos.min_native(), brkpos.max_native());                    
-            for (int line=11; line<=13; line++) draw_eraseval(line);
+            draw_dynamic(11, tach.native()/1000, tach.min_native()/1000, tach.max_native()/1000);                    
+            for (int line=12; line<=13; line++) draw_eraseval(line);
             draw_dynamic(14, airvelo.max_mph(), 0.0f, airvelo.abs_max_mph());
             draw_dynamic(15, mapsens.min_atm(), mapsens.abs_min_atm(), mapsens.abs_max_atm());
             draw_dynamic(16, mapsens.max_atm(), mapsens.abs_min_atm(), mapsens.abs_max_atm());
@@ -925,6 +901,29 @@ class Display {
             ui_context = DatapagesUI;
         }
     }
+    void printframebufs(int reduce = 2, bool ascii = false) {  // reduce is how many times to shrink the screen by half (0, 1, 2, 3, or 4). ascii=true gives ascii art output
+        std::string brites[16] = {" ", ".", ",", ":", ";", "+", "=", ">", "%", "#", "*", "$", "@", "&", "M", "W"};
+        int found;
+        uint8_t* s;
+        for (int f=0; f<2; f++) {
+            s = (uint8_t*)(framebuf[f]).getBuffer();
+            for (int y=0; y<disp_height_pix >> reduce; y++) {
+                Serial.printf("%d ", f);
+                for (int x=0; x<disp_width_pix >> reduce; x++) {
+                    found = 0; 
+                    for (int sy=0; sy<reduce; sy++) {
+                        for (int sx=0; sx<reduce; sx++) {
+                            if (s[((y << reduce) + sy)*disp_width_pix + (x << reduce) + sx] != 0x00) found++;
+                        }
+                    }
+                    if (ascii) Serial.printf("%s", brites[(reduce >= 2) ? (found >> (reduce - 2)) : (found << (2 - reduce))].c_str());
+                    else Serial.printf("%s", (found > 0) ? "*" : ".");
+                }
+                Serial.printf("\n");
+            }
+            Serial.printf("\n");
+        }
+    }
 };
 class Tuner {
   private:
@@ -944,7 +943,6 @@ class Tuner {
     void process_inputs() {
         if (!tuningEditTimer.expired()) return;
         tuningEditTimer.reset();
-        sel_val_last_last = sel_val_last;
         sel_val_last = sel_val;
         datapage_last = datapage;
         tunctrl_last = tunctrl;
@@ -1063,9 +1061,9 @@ static Tuner tuner(&screen, &neo, &touch);
 #if VIDEO_TASKS
 static void push_task_wrapper(void *parameter) {
     while (true) {
-        // xSemaphoreTake(push_time, portMAX_DELAY);
+        // xSemaphoreTake(pushbuf_sem, portMAX_DELAY);
         screen.push_task();
-        // xSemaphoreGive(draw_time);
+        // xSemaphoreGive(drawbuf_sem);
         vTaskDelay(pdMS_TO_TICKS(1));
         // vTaskDelete(NULL);
     }
@@ -1073,9 +1071,9 @@ static void push_task_wrapper(void *parameter) {
 static void draw_task_wrapper(void *parameter) {
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
-        // xSemaphoreTake(draw_time, portMAX_DELAY);
+        // xSemaphoreTake(drawbuf_sem, portMAX_DELAY);
         screen.draw_task();
-        // xSemaphoreGive(push_time);
+        // xSemaphoreGive(pushbuf_sem);
     }
 }
 #endif
