@@ -750,6 +750,10 @@ class SteerMotor : public JagMotor {
         return pc[STOP] + (endpoint - pc[STOP]) * (1.0 - steer_safe_pc * speedo->filt() / (100.0 * speedo->redline_mph()));
     }
 };
-// this class is obviously useless, but if i try to delete it, the code crashes repeatedly. wtf!
-class WeGotMemoryIssues { uint32_t a[100], b[100], c; };
+// this class is no longer used, i've removed all references. but if i try to delete it, the code crashes repeatedly. wtf!
+class WeGotMemoryIssues {
+    uint32_t killll[200];
+    Timer meee;
+    public: WeGotMemoryIssues() {}
+};
 WeGotMemoryIssues AndersFixEm;
