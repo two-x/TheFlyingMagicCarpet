@@ -86,31 +86,31 @@
 #define adcmidscale_adc 2047  // = 2^(adcbits-1)-1
 
 // these global enums are super convenient, just take care when making changes
-enum hotrc_axis : int { HORZ=0, VERT=1, CH3=2, CH4=3 };
-enum hotrc_val : int { OPMIN=0, CENT=1, OPMAX=2, RAW=3, FILT=4, DBBOT=5, DBTOP=6 };
-enum motor_val : int { PARKED=1, OUT=3, GOVERN=4 , ABSMIN=5, ABSMAX=6, MARGIN=7, NUM_MOTORVALS=8 }; // IDLE=8, NUM_MOTORVALS=9 };
-enum stop_val : int { STOP=1 };
-enum steer_val : int { SAFE=1 };
-enum size_enums : int { NUM_AXES=2, NUM_CHANS=4, NUM_VALUS=8 };
-enum joydirs : int { JOY_RT=-2, JOY_DN=-1, JOY_CENT=0, JOY_UP=1, JOY_LT=2, JOY_PLUS=3, JOY_MINUS=4 };
-enum runmode : int { BASIC, ASLEEP, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, NUM_RUNMODES };
-enum req : int { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
-enum cruise_modes : int { PID_SUSPEND_FLY, THROTTLE_ANGLE, THROTTLE_DELTA };
-enum sw_presses : int { swNONE, swSHORT, swLONG };
-enum motor_modes : int { NA=-1, Halt=0, Idle=1, Release=2, OpenLoop=3, ActivePID=4, AutoStop=5, AutoHold=6, ParkMotor=7, Cruise=8, Calibrate=9, Starting=10, NumMotorModes=11 };
-enum brake_pid_modes : int { PositionPID=0, PressurePID=1, HybridPID=2, NumBrakePIDs=4 };  // OpenLoop=3
-enum tunerstuff : int { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
-enum boolean_states : int { ON=1 };
-enum datapages : int { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
-enum temp_categories : int { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
-enum temp_lims : int { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };   // possible sources of gas, brake, steering commands
-enum ui_modes : int { DatapagesUI=0, ScreensaverUI=1 };
-enum codemodes : int { Confused=0, Booting=1, Parked=2, Driving=3 };
-enum telemetry_short : int { _GasServo=0, _BrakeMotor=1, _SteerMotor=2, _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7, _Temps=8, _Other=9, _GPIO=10 };  // _MuleBatt, _MAP, _MAF, _Pot,
-enum telemetry_full : int { _HotRCHorz=11, _HotRCVert=12, _MuleBatt=13, _AirVelo=14, _MAP=15, _Pot=16, _MAF=17, _TempEng=18, _TempWhFL=19, _TempWhFR=20, _TempWhRL=21, _TempWhRR=22, _TempAmb=23 };  // 10 per line
-enum telemetry_nums : int { _None=-1, NumTelemetryBool=9, NumTelemetryShort=11, NumTelemetryFull=24 };
-enum telemetry_bool : int { _Ignition=1, _PanicStop=2, _SysPower=3, _HotRCCh3=4, _HotRCCh4=5, _StarterDr=6, _StarterExt=7, _BasicSw=8 };
-enum err_type : int { LOST=0, RANGE=1, VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, NUM_ERR_TYPES=7 };
+enum hotrc_axis { HORZ=0, VERT=1, CH3=2, CH4=3 };
+enum hotrc_val { OPMIN=0, CENT=1, OPMAX=2, RAW=3, FILT=4, DBBOT=5, DBTOP=6 };
+enum motor_val { PARKED=1, OUT=3, GOVERN=4 , ABSMIN=5, ABSMAX=6, MARGIN=7, NUM_MOTORVALS=8 }; // IDLE=8, NUM_MOTORVALS=9 };
+enum stop_val { STOP=1 };
+enum steer_val { SAFE=1 };
+enum size_enums { NUM_AXES=2, NUM_CHANS=4, NUM_VALUS=8 };
+enum joydirs { JOY_RT=-2, JOY_DN=-1, JOY_CENT=0, JOY_UP=1, JOY_LT=2, JOY_PLUS=3, JOY_MINUS=4 };
+enum runmode { BASIC, ASLEEP, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, NUM_RUNMODES };
+enum req { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
+enum cruise_modes { PID_SUSPEND_FLY, THROTTLE_ANGLE, THROTTLE_DELTA };
+enum sw_presses { swNONE, swSHORT, swLONG };
+enum motor_modes { NA=-1, Halt=0, Idle=1, Release=2, OpenLoop=3, ActivePID=4, AutoStop=5, AutoHold=6, ParkMotor=7, Cruise=8, Calibrate=9, Starting=10, NumMotorModes=11 };
+enum brake_pid_modes { PositionPID=0, PressurePID=1, HybridPID=2, NumBrakePIDs=4 };  // OpenLoop=3
+enum tunerstuff { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
+enum boolean_states { ON=1 };
+enum datapages { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
+enum temp_categories { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
+enum temp_lims { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };   // possible sources of gas, brake, steering commands
+enum ui_modes { DatapagesUI=0, ScreensaverUI=1 };
+enum codemodes { Confused=0, Booting=1, Parked=2, Driving=3 };
+enum telemetry_short { _GasServo=0, _BrakeMotor=1, _SteerMotor=2, _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7, _Temps=8, _Other=9, _GPIO=10 };  // _MuleBatt, _MAP, _MAF, _Pot,
+enum telemetry_full { _HotRCHorz=11, _HotRCVert=12, _MuleBatt=13, _AirVelo=14, _MAP=15, _Pot=16, _MAF=17, _TempEng=18, _TempWhFL=19, _TempWhFR=20, _TempWhRL=21, _TempWhRR=22, _TempAmb=23 };  // 10 per line
+enum telemetry_nums { _None=-1, NumTelemetryBool=9, NumTelemetryShort=11, NumTelemetryFull=24 };
+enum telemetry_bool { _Ignition=1, _PanicStop=2, _SysPower=3, _HotRCCh3=4, _HotRCCh4=5, _StarterDr=6, _StarterExt=7, _BasicSw=8 };
+enum err_type { LOST=0, RANGE=1, VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, NUM_ERR_TYPES=7 };
 
 // global configuration settings
 bool brake_hybrid_pid = true;

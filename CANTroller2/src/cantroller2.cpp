@@ -52,7 +52,7 @@ void setup() {
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     looptimer.setup();
 }
-void loop() {
+void loop() {                 // arduino-style loop() is like main() but with a builtin infinite while(1) loop.
     watchdog.pet();           // pet the watchdog regularly to prevent reset
     ignition_panic_update(run.mode);  // manage panic stop condition and drive ignition signal as needed
     bootbutton.update();      // read the builtin button

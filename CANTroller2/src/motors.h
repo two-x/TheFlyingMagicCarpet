@@ -753,5 +753,10 @@ class SteerMotor : public JagMotor {
 
 // ================ welcome to the beating heart of our instabilities ===================================
 // this useless code chunk is not referenced or needed, but if i try to delete it, we crash crazily. wtf!
-class WeGotMemoryIssues { public: WeGotMemoryIssues() {} uint32_t killll[200]; Timer meee; };
+class WeGotMemoryIssues {
+  public:
+    WeGotMemoryIssues() {}
+    uint32_t killll[200];
+    Timer meee;
+};
 WeGotMemoryIssues AndersFixEm;

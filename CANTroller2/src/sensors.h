@@ -272,11 +272,13 @@ class Transducer : public Device {
         if (!_invert) {
             if (dir == TransducerDirection::REV) {
                 ret = min_f + max_f - _b_offset - _m_factor * arg_val_f;
+                Serial.printf("%lf = %lf + %lf - %lf - %lf * %lf\n", ret, min_f, max_f, _b_offset, _m_factor, arg_val_f);
             }
             else ret = _b_offset + _m_factor * arg_val_f;
         } else if (std::abs(arg_val_f) > 0.000001) { // NOTE: isn't 0.0 a valid value tho?  Soren: Only if the pulley can rotate all the way around in under 1 planck time
             if (dir == TransducerDirection::REV) {
                 ret = min_f + max_f - _b_offset - _m_factor / arg_val_f;
+                Serial.printf("%lf = %lf + %lf - %lf - %lf / %lf\n", ret, min_f, max_f, _b_offset, _m_factor, arg_val_f);
             }
             else {
                 ret = _b_offset + _m_factor / arg_val_f;
@@ -285,6 +287,7 @@ class Transducer : public Device {
         } else {
             printf ("err: from_native conversion div/zero attempt. max=%5.2f, d=%d, i=%d, v=%5.2f, m=%5.2f, b=%5.2f\n", max_f, dir, _invert, arg_val_f, _m_factor, _b_offset);
             ret = max_f;  // Best return given division would be infinite
+            Serial.printf("%lf = %lf\n", ret, max_f);
         }
         return static_cast<HUMAN_T>(ret);
     }
