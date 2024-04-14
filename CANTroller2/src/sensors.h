@@ -271,23 +271,21 @@ class Transducer : public Device {
         float ret = -1;
         if (!_invert) {
             if (dir == TransducerDirection::REV) {
-                ret = min_f + max_f - _b_offset - _m_factor * arg_val_f;
-                Serial.printf("%lf = %lf + %lf - %lf - %lf * %lf\n", ret, min_f, max_f, _b_offset, _m_factor, arg_val_f);
-            }
-            else ret = _b_offset + _m_factor * arg_val_f;
-        } else if (std::abs(arg_val_f) > 0.000001) { // NOTE: isn't 0.0 a valid value tho?  Soren: Only if the pulley can rotate all the way around in under 1 planck time
-            if (dir == TransducerDirection::REV) {
-                ret = min_f + max_f - _b_offset - _m_factor / arg_val_f;
-                Serial.printf("%lf = %lf + %lf - %lf - %lf / %lf\n", ret, min_f, max_f, _b_offset, _m_factor, arg_val_f);
+                ret = min_f + max_f - _b_offset - _m_factor * arg_val_f;  // Serial.printf("%lf = %lf + %lf - %lf - %lf * %lf\n", ret, min_f, max_f, _b_offset, _m_factor, arg_val_f);
             }
             else {
-                ret = _b_offset + _m_factor / arg_val_f;
-                Serial.printf("%lf = %lf + %lf / %lf\n", ret, _b_offset, _m_factor, arg_val_f);
+                ret = _b_offset + _m_factor * arg_val_f; // Serial.printf("%lf = %lf + %lf * %lf\n", ret, _b_offset, _m_factor, arg_val_f);
+            }
+        } else if (std::abs(arg_val_f) > 0.000001) { // NOTE: isn't 0.0 a valid value tho?  Soren: Only if the pulley can rotate all the way around in under 1 planck time
+            if (dir == TransducerDirection::REV) {
+                ret = min_f + max_f - _b_offset - _m_factor / arg_val_f;  // Serial.printf("%lf = %lf + %lf - %lf - %lf / %lf\n", ret, min_f, max_f, _b_offset, _m_factor, arg_val_f);
+            }
+            else {
+                ret = _b_offset + _m_factor / arg_val_f;  // Serial.printf("%lf = %lf + %lf / %lf\n", ret, _b_offset, _m_factor, arg_val_f);
             }
         } else {
             printf ("err: from_native conversion div/zero attempt. max=%5.2f, d=%d, i=%d, v=%5.2f, m=%5.2f, b=%5.2f\n", max_f, dir, _invert, arg_val_f, _m_factor, _b_offset);
-            ret = max_f;  // Best return given division would be infinite
-            Serial.printf("%lf = %lf\n", ret, max_f);
+            ret = max_f;  // Best return given division would be infinite  // Serial.printf("%lf = %lf\n", ret, max_f);
         }
         return static_cast<HUMAN_T>(ret);
     }
@@ -523,7 +521,6 @@ class AirVeloSensor : public I2CSensor {
     float _abs_max_mph = 33.55; // Sensor maximum mph reading.  Our sensor mounted in 2-in ID intake tube
     float _op_max_mph = 28.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
     float _initial_airvelo_mph = 0.0;
-    float _ema_alpha = 0.2;
     FS3000 _sensor;
     float goodreading = NAN;
     int64_t airvelo_read_period_us = 35000;
@@ -538,7 +535,9 @@ class AirVeloSensor : public I2CSensor {
     static constexpr uint8_t addr = 0x28;
     sens senstype = sens::airvelo;
     AirVeloSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
-        set_human_limits(_min_mph, _op_max_mph);
+        _ema_alpha = 0.2;
+        set_human_limits(_min_mph, _abs_max_mph);
+        set_human(_initial_airvelo_mph);
         set_can_source(src::POT, true);
         airveloTimer.set(airvelo_read_period_us);
     }
@@ -587,7 +586,6 @@ class MAPSensor : public I2CSensor {
     float _op_min_atm = 0.68;  // Typical low map for a car is 10.8 psi = 22 inHg, 1 psi = 0.068 atm
     float _op_max_atm = 1.02;
     float _initial_atm = 1.00;  // 1 atm = 14.6959 psi
-    float _ema_alpha = 0.2;
     Timer map_read_timer;
     uint32_t map_read_timeout = 100000, map_retry_timeout = 10000;
     float goodreading = NAN;
@@ -611,7 +609,9 @@ class MAPSensor : public I2CSensor {
     static constexpr uint8_t addr = 0x18;
     sens senstype = sens::mapsens;
     MAPSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
-        set_human_limits(_op_min_atm, _op_max_atm);
+        _ema_alpha = 0.2;
+        set_human_limits(_abs_min_atm, _abs_max_atm);
+        set_human(_initial_atm);
         set_can_source(src::POT, true);
         map_read_timer.set(map_read_timeout);
     }
@@ -681,20 +681,20 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
 // CarBattery reads the voltage level from the Mule battery
 class CarBattery : public AnalogSensor<int32_t, float> {
   protected:
-    float _initial_adc = adcmidscale_adc;
+    // float _initial_adc = adcmidscale_adc;
     float _initial_v = 10.0;
     float _abs_min_v = 0.0; // The min vehicle voltage we can sense
     float _abs_max_v = 16.0; // The min vehicle voltage we can sense
     float _op_min_v = 7.0; // The min vehicle voltage we expect to see
     float _op_max_v = 13.8;  // The max vehicle voltage we expect to see.
-    float _m_factor = _abs_max_v / adcrange_adc;
-    float _ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
   public:
     sens senstype = sens::mulebatt;
     CarBattery(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
+        _ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+        _m_factor = _abs_max_v / adcrange_adc;
         _human.set_limits(_abs_min_v, _abs_max_v);
         _native.set_limits(0.0, adcrange_adc);
-        set_native(_initial_adc);
+        set_human(_initial_v);
         set_can_source(src::PIN, true);
     }
     CarBattery() = delete;
@@ -727,11 +727,11 @@ class LiPoBatt : public AnalogSensor<int32_t, float> {
     float _abs_max_v = 4.8; // The min lipo voltage we can sense
     float _op_min_v = 3.2; // The min lipo voltage we expect to see
     float _op_max_v = 4.3;  // The max lipo voltage we expect to see
-    float _m_factor = _abs_max_v / adcrange_adc;
-    float _ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
   public:
     sens senstype = sens::none;
     LiPoBatt(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
+        _ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+        _m_factor = _abs_max_v / adcrange_adc;
         _human.set_limits(_abs_min_v, _abs_max_v);
         _native.set_limits(0.0, adcrange_adc);
         set_native(_initial_adc);
@@ -762,10 +762,6 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     int32_t op_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
     // Soren 230920: Reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
     int32_t op_max_adc = 2080; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
-    float _m_factor = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - op_min_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
-    float _b_offset = -from_native(op_min_adc);
-    bool _invert = false;
-    float _ema_alpha = 0.15;
     float hold_initial_psi = 45;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
     float hold_increment_psi = 3;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
     float panic_initial_psi = 80; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
@@ -777,6 +773,10 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     std::string _human_units_name = "psi";
 
     PressureSensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
+        _m_factor = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - op_min_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
+        _b_offset = -from_native(op_min_adc);
+        _invert = false;
+        _ema_alpha = 0.15;
         set_native_limits(op_min_adc, op_max_adc);
         set_human_limits(from_native(op_min_adc), from_native(op_max_adc));
         set_native(op_min_adc);
@@ -815,16 +815,16 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     int32_t op_max_extend_adc = 965;  // Calculated on windows calculator. Calculate it here, silly
     float abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
     float abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
-    float _m_factor = 3.3 * 10000.0 / (3.3 * adcrange_adc * 557); // 3.3 v * 10k ohm * 1/5 1/v * 1/4095 1/adc * 1/557 in/ohm = 0.0029 in/adc
-    bool _invert = false;
-    float _b_offset = 0.0;
-    float _ema_alpha = 0.35;
     std::string _long_name = "Brake position sensor";
     std::string _short_name = "brkpos";
     std::string _native_units_name = "adc";
     std::string _human_units_name = "in";
 
     BrakePositionSensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
+        _m_factor = 3.3 * 10000.0 / (3.3 * adcrange_adc * 557); // 3.3 v * 10k ohm * 1/5 1/v * 1/4095 1/adc * 1/557 in/ohm = 0.0029 in/adc
+        _invert = false;
+        _b_offset = 0.0;
+        _ema_alpha = 0.35;
         set_human_limits(op_min_retract_in, op_max_extend_in);            
         set_native_limits(op_min_retract_adc, op_max_extend_adc);
         set_can_source(src::PIN, true);
@@ -927,10 +927,9 @@ class Tachometer : public PulseSensor<float> {
     float _redline_rpm = 5500.0;  // Max possible engine rotation speed
     // NOTE: should we start at 50rpm? shouldn't it be zero?
     float _initial_rpm = 50.0; // Current engine speed, raw value converted to rpm (in rpm)
-    float _m_factor = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
-    bool _invert = true, _pin_activity = LOW;
+    // float _m_factor = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
+    bool _pin_activity = LOW;  // _invert = true,
     int64_t _zerovalue = 999999;
-    float _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
     int64_t _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
   public:
     sens senstype = sens::tach;
@@ -939,6 +938,10 @@ class Tachometer : public PulseSensor<float> {
     float _margin = 10; 
     Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_rpm) {
         _negative = true;
+        _invert = true;
+        _m_factor = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
+        _b_offset = 0.0;
+        _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_human_limits(0.0, _redline_rpm);
         set_native_limits(0.0, _stop_timeout_us);
         set_human(_initial_rpm);
@@ -987,18 +990,20 @@ class Speedometer : public PulseSensor<float> {
     float _max_mph = 25.0; // What is max speed car can ever go
     float _initial_mph = 0.0; // Current speed, raw value converted to mph (in mph)
     float _redline_mph = 15.0; // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
-    // new math with two magnets on the rear axle:
-    float _m_factor = 1000000.0 * 3600.0 * 20 * M_PI / (2 * 12 * 5280);  // 1 magnet/us * 1000000 us/sec * 3600 sec/hr * 1/2 whlrot/magnet * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1785000 mi/hr (mph)
     // old math with one magnet on driven pulley:
     // float _m_factor = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 pulrot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 whlrot/pulrot * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
-    bool _invert = true, _pin_activity = LOW;
+    bool _pin_activity = LOW;
     int64_t _zerovalue = 9999999;
-    float _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
     float _govern_mph, _idle_mph;
     float _margin = 0.2; 
   public:
     sens senstype = sens::speedo;
     Speedometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_mph) {
+        _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+        _invert = true;
+        // new math with two magnets on the rear axle:
+        _m_factor = 1000000.0 * 3600.0 * 20 * M_PI / (2 * 12 * 5280);  // 1 magnet/us * 1000000 us/sec * 3600 sec/hr * 1/2 whlrot/magnet * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1785000 mi/hr (mph)    
+        _b_offset = 0.0;
         set_human_limits(_min_mph, _redline_mph);
         set_native_limits(0.0, _stop_timeout_us);
         set_human(_initial_mph);
@@ -1033,90 +1038,84 @@ class Speedometer : public PulseSensor<float> {
 // NOTE: I implemented the gas servo, but it looks like it's all in native units. should it still be a transducer?
 // ServoPWM is a base class for our type of actuators, where by varying a pulse width (in us), motors move.
 //    e.g. the gas, brake and steering motors. The gas motor is an actual servo, the others are controlled with servo signaling via jaguars.
-template<typename NATIVE_T, typename HUMAN_T>
-class ServoPWM : public Transducer<NATIVE_T, HUMAN_T> {
-  protected:
-    Servo _servo;
-
-    // NOTE: should be marked 'override' but compiler says it doesn't override anything...?
-    void set_native_limits(Param<NATIVE_T> &minParam, Param<NATIVE_T> &maxParam) {
-        this->set_native_limits(minParam, maxParam);
-        _servo.attach(this->_pin, this->min_native->val(), this->max_native->val());
-    }
-
-    void set_human_limits(Param<HUMAN_T> &minParam, Param<HUMAN_T> &maxParam) {
-        this->set_human_limits(minParam, maxParam);
-        _servo.attach(this->_pin, this->min_native->val(), this->max_native->val());
-    }
-
-  public:
-    // ServoPWM(uint8_t pin, uint_t freq) : Transducer<NATIVE_T, HUMAN_T>(pin) {
-    ServoPWM(uint8_t pin, uint8_t freq) : Transducer<NATIVE_T, HUMAN_T>(pin) {
-        _servo.setPeriodHertz(freq);
-        _servo.attach(this->_pin, this->_native.min(), this->_native.max());
-        // _servo.attach(this->_pin, this->_native.abs_min(), this->_native.abs_max());
-    }
-    ServoPWM() = delete;
-    std::string _long_name = "Unknown PWM motor output";
-    std::string _short_name = "pwmout";
-    std::string _native_units_name = "us";
-    std::string _human_units_name = "";
-
-    void setup() {
-        set_pin(this->_pin, OUTPUT);
-    }
-    void write() {
-        this->_val_raw = this->_native.val();
-        _servo.writeMicroseconds((int32_t)this->_val_raw);  // Write result to servo interface
-    }
-};
-// Device::Toggle is a base class for system signals or devices having a boolean value
-class Toggle : public Device {
-  public:
-    // NOTE: how should we handle simulatability? I almost think it should be done at a higher level than the device...
-    // NOTE: should use Param here maybe?
-    bool val, val_last, can_sim;
-    Toggle(int32_t arg_pin) : Device(arg_pin){  // std::string& eng_name, 
-        can_sim = true;
-    }
-};
-// Device::Toggle::InToggle is system signals or devices having a boolean value that serve as inputs (eg basicsw, cruisesw)
-class InToggle : public Toggle {
-  public:
-    InToggle(int32_t arg_pin) : Toggle(arg_pin) {
-        set_can_source(src::PIN, true);
-        _source = src::PIN;
-    }
-    void set_val(bool arg_val) {
-        if (_source != src::PIN) {
-            val_last = val;
-            val = arg_val;
-        }
-    }
-    void read() {
-        val_last = val;
-        val = digitalRead(_pin);
-    }
-};
-
-// Device::Toggle::OutToggle is system signals or devices having a boolean value that serve as outputs (eg ignition, leds, etc.)
-class OutToggle : public Toggle {
-  public:
-    OutToggle(int32_t arg_pin) : Toggle(arg_pin) {
-        // NOTE: LIVE is not a valid source, what should this be? Not PIN, we write to that. CALC maybe?
-        // val_source = LIVE;
-    }
-    void set_val(bool arg_val) {
-        val_last = val;
-        val = arg_val;
-        // if (val_source == LIVE) write();
-    }
-    void write() {
-        digitalWrite(_pin, val);
-    }
-};
+// template<typename NATIVE_T, typename HUMAN_T>
+// class ServoPWM : public Transducer<NATIVE_T, HUMAN_T> {
+//   protected:
+//     Servo _servo;
+//     // NOTE: should be marked 'override' but compiler says it doesn't override anything...?
+//     void set_native_limits(Param<NATIVE_T> &minParam, Param<NATIVE_T> &maxParam) {
+//         this->set_native_limits(minParam, maxParam);
+//         _servo.attach(this->_pin, this->min_native->val(), this->max_native->val());
+//     }
+//     void set_human_limits(Param<HUMAN_T> &minParam, Param<HUMAN_T> &maxParam) {
+//         this->set_human_limits(minParam, maxParam);
+//         _servo.attach(this->_pin, this->min_native->val(), this->max_native->val());
+//     }
+//   public:
+//     // ServoPWM(uint8_t pin, uint_t freq) : Transducer<NATIVE_T, HUMAN_T>(pin) {
+//     ServoPWM(uint8_t pin, uint8_t freq) : Transducer<NATIVE_T, HUMAN_T>(pin) {
+//         _servo.setPeriodHertz(freq);
+//         _servo.attach(this->_pin, this->_native.min(), this->_native.max());
+//         // _servo.attach(this->_pin, this->_native.abs_min(), this->_native.abs_max());
+//     }
+//     ServoPWM() = delete;
+//     std::string _long_name = "Unknown PWM motor output";
+//     std::string _short_name = "pwmout";
+//     std::string _native_units_name = "us";
+//     std::string _human_units_name = "";
+//     void setup() {
+//         set_pin(this->_pin, OUTPUT);
+//     }
+//     void write() {
+//         this->_val_raw = this->_native.val();
+//         _servo.writeMicroseconds((int32_t)this->_val_raw);  // Write result to servo interface
+//     }
+// };
+// // Device::Toggle is a base class for system signals or devices having a boolean value
+// class Toggle : public Device {
+//   public:
+//     // NOTE: how should we handle simulatability? I almost think it should be done at a higher level than the device...
+//     // NOTE: should use Param here maybe?
+//     bool val, val_last, can_sim;
+//     Toggle(int32_t arg_pin) : Device(arg_pin){  // std::string& eng_name, 
+//         can_sim = true;
+//     }
+// };
+// // Device::Toggle::InToggle is system signals or devices having a boolean value that serve as inputs (eg basicsw, cruisesw)
+// class InToggle : public Toggle {
+//   public:
+//     InToggle(int32_t arg_pin) : Toggle(arg_pin) {
+//         set_can_source(src::PIN, true);
+//         _source = src::PIN;
+//     }
+//     void set_val(bool arg_val) {
+//         if (_source != src::PIN) {
+//             val_last = val;
+//             val = arg_val;
+//         }
+//     }
+//     void read() {
+//         val_last = val;
+//         val = digitalRead(_pin);
+//     }
+// };
+// // Device::Toggle::OutToggle is system signals or devices having a boolean value that serve as outputs (eg ignition, leds, etc.)
+// class OutToggle : public Toggle {
+//   public:
+//     OutToggle(int32_t arg_pin) : Toggle(arg_pin) {
+//         // NOTE: LIVE is not a valid source, what should this be? Not PIN, we write to that. CALC maybe?
+//         // val_source = LIVE;
+//     }
+//     void set_val(bool arg_val) {
+//         val_last = val;
+//         val = arg_val;
+//         // if (val_source == LIVE) write();
+//     }
+//     void write() {
+//         digitalWrite(_pin, val);
+//     }
+// };
 // NOTE: if devices.h gets to be too long, we can (and maybe just should) move this to a separate file, it's not really a device...
-
 // Simulator manages the source handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
 // NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use sources,
 //       we can simplify the logic here a lot.
