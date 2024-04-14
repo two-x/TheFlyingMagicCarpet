@@ -4,6 +4,23 @@
 
 #define disp_width_pix 320  // Horizontal resolution in pixels (held landscape)
 #define disp_height_pix 240  // Vertical resolution in pixels (held landscape)
+
+// these defines affect use of psram, but are already set to something inside lgfx library i think
+// #define CONFIG_SPIRAM_BOOT_INIT
+// #define CONFIG_SPIRAM_USE_MEMMAP
+// #define CONFIG_SPIRAM_USE_CAPS_ALLOC y
+// #define CONFIG_SPIRAM_USE_MALLOC
+// #define CONFIG_SPIRAM_TYPE_AUTO y
+// #define CONFIG_SPIRAM_TYPE_ESPPSRAM32
+// #define CONFIG_SPIRAM_TYPE_ESPPSRAM64
+// #define CONFIG_SPIRAM_SIZE -1
+// #define CONFIG_SPIRAM_SPEED_40M y
+// #define CONFIG_SPIRAM_CACHE_WORKAROUND y
+// #define CONFIG_SPIRAM_BANKSWITCH_ENABLE y
+// #define CONFIG_SPIRAM_BANKSWITCH_RESERVE 8
+// #define CONFIG_WIFI_LWIP_ALLOCATION_FROM_SPIRAM_FIRST
+// #define CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY
+
 // Custom settings for ESP32 LovyanGFX library - all chinese commentary has been translated
 // The original setting is the same as the original setting, and the LGFX_Device is a derivative of the original creation.
 

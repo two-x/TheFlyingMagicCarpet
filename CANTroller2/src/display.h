@@ -51,7 +51,7 @@ static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = 
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
-    { "PressRaw", "BkPosRaw", "TachPuls", __________, __________, "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
+    { "PressRaw", "BkPosRaw", "TachPuls", " Pot Raw", __________, "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "Gas Mode", "Tach Tgt", "    Idle", "    Idle", "    Idle", "FuelPump", "StartGas", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", },  // PG_IDLE
     { brAk"Posn", brAk"Mode", "Pn|PrErr", "BrakeTgt", "HybrdTgt", "TgtRatio", "OutRatio", "MotrHeat", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
@@ -64,7 +64,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, "%",    "%",    },  // PG_RUN
     { "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, ______, "us",   "us",   },  // PG_JOY
-    { "adc",  "adc",  "ms",   ______, ______, "mph",  "atm",  "atm",  "mph",  "mph",  "in",   },  // PG_SENS
+    { "adc",  "adc",  "ms",   "adc",  ______, "mph",  "atm",  "atm",  "mph",  "mph",  "in",   },  // PG_SENS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, degree, degree, "us",   "%",    },  // PG_PWMS
     { scroll, "rpm",  "%",    degree, "rpm",  "V",    "%",    degree, degree, degreF, degreF, },  // PG_IDLE
     { "in",   scroll, "psin", "psin", "%",    "%",    "%",    degreF, ______, "Hz",   "s",    },  // PG_BPID
@@ -196,6 +196,7 @@ class Display {
         Serial.printf(" made 2x %dx%d sprites in %sram\n", framewidth, frameheight, using_psram ? "ps" : "native ");
     }
     void setup() {
+        if (!display_enabled) return;
         Serial.printf("Display..");  //
         lcd.init();
         #ifdef BOARD_HAS_PSRAM
@@ -671,7 +672,8 @@ class Display {
             draw_dynamic(9, pressure.raw(), pressure.min_native(), pressure.max_native());                    
             draw_dynamic(10, brkpos.raw(), brkpos.min_native(), brkpos.max_native());                    
             draw_dynamic(11, tach.native()/1000, tach.min_native()/1000, tach.max_native()/1000);                    
-            for (int line=12; line<=13; line++) draw_eraseval(line);
+            draw_dynamic(12, pot.adc_raw, pot.adc_min, pot.adc_max);
+            draw_eraseval(13);
             draw_dynamic(14, airvelo.max_mph(), 0.0f, airvelo.abs_max_mph());
             draw_dynamic(15, mapsens.min_atm(), mapsens.abs_min_atm(), mapsens.abs_max_atm());
             draw_dynamic(16, mapsens.max_atm(), mapsens.abs_min_atm(), mapsens.abs_max_atm());
@@ -823,7 +825,8 @@ class Display {
         return true;
     }
     void push_task() {
-        if (is_drawing || !pushtime || (!screenRefreshTimer.expired() && !always_max_refresh && !auto_saver_enabled)) return;  // vTaskDelay(pdMS_TO_TICKS(1));
+        bool refresh_ready = screenRefreshTimer.expired() || always_max_refresh || auto_saver_enabled;
+        if (is_drawing || !pushtime || !refresh_ready) return;  // vTaskDelay(pdMS_TO_TICKS(1));
         is_pushing = true;
         // Serial.printf("f%d push@ 0x%08x vs 0x%08x\n", flip, &framebuf[flip], &framebuf[!flip]);
         screenRefreshTimer.reset();

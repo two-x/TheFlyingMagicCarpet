@@ -195,6 +195,7 @@ class Touchscreen {
     bool increment_datapage = false, increment_sel_val = false;
     Touchscreen() {}
     void setup(LGFX* tft, I2C* i2c, int width, int height) {
+        if (!display_enabled) return;
         _tft = tft;
         _i2c = i2c;
         disp_size[HORZ] = width;

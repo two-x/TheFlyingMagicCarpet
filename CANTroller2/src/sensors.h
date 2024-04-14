@@ -20,15 +20,17 @@ int sources[static_cast<int>(sens::NUM_SENSORS)] = { static_cast<int>(src::UNDEF
 // Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class Potentiometer {
   protected:
-    float adc_min = 300; // TUNED 230603 - Used only in determining theconversion factor
-    float adc_max = 4095; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
-    float _ema_alpha = 0.35;
+    float _ema_alpha = .95;
     float _pc_min = 0.0;
     float _pc_max = 100.0;
     float _pc_activity_margin = 4.5;
     uint8_t _pin;
     float _val = 0.0, _activity_ref;
   public:
+    // tune these by monitoring adc_raw and twist pot to each limit. set min at the highest value seen when turned full CCW, and vice versas for max, then trim each toward adc_midrange until you get full 0 to 100% range
+    float adc_min = 380; // TUNED 230603 - Used only in determining theconversion factor
+    float adc_max = 4095; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
+    float adc_raw;
     Potentiometer(uint8_t arg_pin) : _pin(arg_pin) {}
     Potentiometer() = delete; // must have a pin defined
     sens senstype = sens::none;
@@ -38,9 +40,10 @@ class Potentiometer {
         _activity_ref = _val;
     }
     void update() {
-        float new_val = map(static_cast<float>(analogRead(_pin)), adc_min, adc_max, _pc_min, _pc_max);
+        adc_raw = static_cast<float>(analogRead(_pin));
+        float new_val = map(adc_raw, adc_min, adc_max, _pc_min, _pc_max);
         new_val = constrain(new_val, _pc_min, _pc_max); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
-        _val = ema_filt(new_val, _val, _ema_alpha);
+        ema_filt(new_val, &_val, _ema_alpha);
         if (std::abs(_val - _activity_ref) > _pc_activity_margin) {
             kick_inactivity_timer(7);  // evidence of user activity
             _activity_ref = _val;
@@ -261,7 +264,7 @@ class Transducer : public Device {
     float _b_offset = 0.0;
     float _zerovalue = NAN;  // value to return from to_native conversion when val is zero (needed for speedometer)
     bool _invert = false;  // Flag to indicated if unit conversion math should multiply or divide
-    TransducerDirection dir = TransducerDirection::FWD; // NOTE: what is this for, exactly?
+    TransducerDirection dir = TransducerDirection::FWD; // NOTE: whats ts for, exactly?
     
     // conversion functions (can be overridden in child classes different conversion methods are needed)
     virtual HUMAN_T from_native(NATIVE_T arg_val_native) {

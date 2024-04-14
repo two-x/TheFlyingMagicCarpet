@@ -31,8 +31,6 @@ void setup() {
     fuelpump.setup();
     starter.setup();
     tempsens.setup();         // onewire bus and temp sensors
-    TaskHandle_t temptask = nullptr;
-    xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 6, &temptask, CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);  // added for servos I think
     gas.setup(&hotrc, &speedo, &tach, &pot, &tempsens);
     brake.setup(&hotrc, &speedo, &mulebatt, &pressure, &brkpos, &gas, &tempsens);
@@ -40,14 +38,13 @@ void setup() {
     datapage = prefs.getUInt("dpage", PG_RUN);
     datapage_last = prefs.getUInt("dpage", PG_TEMP);
     sim_setup();              // simulator initialize devices and pot map
-    if (display_enabled) touch.setup(&lcd, &i2c, disp_width_pix, disp_height_pix);
-    if (display_enabled) screen.setup();
+    touch.setup(&lcd, &i2c, disp_width_pix, disp_height_pix);
+    screen.setup();
     neo.setup();              // set up external neopixel strip for idiot lights visible in daylight from top of carpet
     idiots.setup(&neo);       // assign same idiot light variable associations and colors to neopixels as on screen  
     diag.setup();             // initialize dia                                                                                                                gnostic codes
     web.setup();              // start up access point, web server, and json-enabled web socket for diagnostic phone interface
-    TaskHandle_t webtask = nullptr;
-    xTaskCreatePinnedToCore(update_web, "Update Web Services", 4096, NULL, 6, &webtask, CONFIG_ARDUINO_RUNNING_CORE);  // wifi/web task. 2048 is too low, it crashes when client connects  16384
+    start_tasks();            // begin rtos tasks for temperature and web
     printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     looptimer.setup();
