@@ -823,7 +823,7 @@ class Display {
         return true;
     }
     void push_task() {
-        if (is_drawing || !pushtime || !(screenRefreshTimer.expired() || always_max_refresh || auto_saver_enabled)) return;  // vTaskDelay(pdMS_TO_TICKS(1));
+        if (is_drawing || !pushtime || (!screenRefreshTimer.expired() && !always_max_refresh && !auto_saver_enabled)) return;  // vTaskDelay(pdMS_TO_TICKS(1));
         is_pushing = true;
         // Serial.printf("f%d push@ 0x%08x vs 0x%08x\n", flip, &framebuf[flip], &framebuf[!flip]);
         screenRefreshTimer.reset();
@@ -889,12 +889,12 @@ class Display {
             was_simulating = sim->enabled();
             sim->disable();
             animations.set_vp(0, 0, disp_width_pix, disp_height_pix);
-            always_max_refresh = screensaver = auto_saver_enabled = true;
+            screensaver = auto_saver_enabled = true;
             animations.anim_reset_request = true;
             ui_context = ScreensaverUI;
         }
         else {
-            screensaver = always_max_refresh = auto_saver_enabled = false;
+            screensaver = auto_saver_enabled = false;
             animations.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
             reset_request = true;
             if (was_simulating) sim->enable();
@@ -931,7 +931,7 @@ class Tuner {
     NeopixelStrip* neo;
     Touchscreen* touch;
     Timer tuningAbandonmentTimer{25000000};  // This times out edit mode after a a long period of inactivity
-    Timer tuningEditTimer{50000};  // This times out edit mode after a a long period of inactivity
+    Timer tuningEditTimer{50000};  // Control frequency of polling for new edits
   public:
     Tuner(Display* _screen, NeopixelStrip* _neo, Touchscreen* _touch) : screen(_screen), neo(_neo), touch(_touch) {}
     int32_t idelta = 0, idelta_encoder = 0;
