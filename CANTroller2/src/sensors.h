@@ -266,7 +266,14 @@ class Transducer : public Device {
     bool _invert = false;  // Flag to indicated if unit conversion math should multiply or divide
     TransducerDirection dir = TransducerDirection::FWD; // NOTE: whats ts for, exactly?
     
-    // conversion functions (can be overridden in child classes different conversion methods are needed)
+    // these linear conversion functions change native values to human and back - overwrite in child classes as needed
+    //   _m_factor : is conversion rate in human/native units (in normal noninverted case)
+    //   _b_offset : (in human units) is added to result of multiplying native value by _m_factor
+    //   _invert : if set true, before multiplying the math will invert the given native value. 
+    //             intended if native and human are inverse values like time (eg us) and frequency (eg mph, rpm). 
+    //             e.g. for native in sec/event and human in k-events/minute, then _m_factor is 60 * 0.001 = 0.06 k-events/min (aka kHz)
+    //   dir : causes mirroring of result around min/max range center point. set to REV if native value increases as human decreases
+    // note, to avoid crashes, divide by zero attempts result in return of max value in lieu of infinity
     virtual HUMAN_T from_native(NATIVE_T arg_val_native) {
         float arg_val_f = static_cast<float>(arg_val_native); // convert everything to floats so we don't introduce rounding errors
         float min_f = static_cast<float>(_native.min());
@@ -292,7 +299,6 @@ class Transducer : public Device {
         }
         return static_cast<HUMAN_T>(ret);
     }
-
     virtual NATIVE_T to_native(HUMAN_T arg_val_human) {
         float arg_val_f = static_cast<float>(arg_val_human); // convert everything to floats so we don't introduce rounding errors
         float min_f = static_cast<float>(_human.min());
