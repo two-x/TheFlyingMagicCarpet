@@ -72,7 +72,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         else if (oldmode == FLY) car_hasnt_moved = false;
         else if (oldmode == CRUISE) cruise_adjusting = false;
-        else if (oldmode == CAL) cal_gasmode = cal_gasmode_request = cal_brakemode = false;
+        else if (oldmode == CAL) cal_gasmode = cal_brakemode = cal_gasmode_request = cal_brakemode_request = false;
         display->disp_bools_dirty = true;
     }
     void run_basicMode() { // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
@@ -205,17 +205,19 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
     void run_calMode() {  // calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration - don't use it unless you know how.
         if (we_just_switched_modes) {
-            calmode_request = cal_gasmode_request = cal_brakemode = false;
+            calmode_request = cal_gasmode_request = cal_brakemode_request = false;
             display->disp_bools_dirty = true;
             gas.setmode(Idle);
-            brake.setmode(Calibrate);
+            brake.setmode(Halt);
             steer.setmode(Halt);
         }
         else if (calmode_request) mode = SHUTDOWN;
         // if (cal_brakemode) brake.setmode(Calibrate);
         // else if (brake.motormode == Calibrate) brake.setmode(Halt);
-        if (cal_gasmode_request) gas.setmode(Calibrate);
-        else gas.setmode(Idle);
+        if (cal_gasmode_request && gas.motormode != Calibrate) gas.setmode(Calibrate);
+        else if (!cal_gasmode_request && gas.motormode == Calibrate) gas.setmode(Idle);
+        if (cal_brakemode_request && brake.motormode != Calibrate) brake.setmode(Calibrate);
+        else if (!cal_brakemode_request && brake.motormode == Calibrate) brake.setmode(Halt);
         if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // turn on/off the vehicle ignition. if ign is killed while stopped, this leads to panic stop
     }
 };
