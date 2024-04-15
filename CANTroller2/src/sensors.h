@@ -872,12 +872,12 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
 template<typename HUMAN_T>
 class PulseSensor : public Sensor<int32_t, HUMAN_T> {
   protected:
-    int64_t _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
+    int32_t _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
     Timer _stop_timer;
     bool _negative = false, _pin_activity;
     float _stop_thresh;
     float _last_read_time_us;
-    float _min_us = 100000.0;  // default. overwrite in children
+    int32_t _min_us = 100000.0;  // default. overwrite in children
     volatile int64_t _isr_us = 0;
     volatile int64_t _isr_timer_start_us = 0;
     volatile int64_t _isr_timer_read_us = 0;
@@ -946,13 +946,13 @@ class Tachometer : public PulseSensor<float> {
     float _stop_thresh_rpm = 0.2;  // Below which the engine is considered stopped
     float _abs_max_rpm = 7000.0;  // Max possible engine rotation speed
     float _redline_rpm = 5500.0;  // Max possible engine rotation speed
-    float _min_us = 110000.0 ;  // corresponds to 5500 rpm
+    int32_t _min_us = 110000;  // corresponds to 5500 rpm
     // NOTE: should we start at 50rpm? shouldn't it be zero?
     float _initial_rpm = 50.0; // Current engine speed, raw value converted to rpm (in rpm)
     // float _m_factor = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
     bool _pin_activity = LOW;  // _invert = true,
-    int64_t _zerovalue = 999999;
-    int64_t _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
+    int32_t _zerovalue = 999999;
+    int32_t _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
   public:
     sens senstype = sens::tach;
     float _govern_rpm = _redline_rpm;
@@ -1010,13 +1010,13 @@ class Speedometer : public PulseSensor<float> {
     float _stop_thresh_mph = 0.2;  // Below which the car is considered stopped
     float _min_mph = 0.0;
     float _max_mph = 25.0; // What is max speed car can ever go
-    float _min_us = 119000.0;  // corresponds to 25.0 mph
+    int32_t _min_us = 119000;  // corresponds to 25.0 mph
     float _initial_mph = 0.0; // Current speed, raw value converted to mph (in mph)
     float _redline_mph = 15.0; // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
     // old math with one magnet on driven pulley:
     // float _m_factor = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 pulrot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 whlrot/pulrot * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
     bool _pin_activity = LOW;
-    int64_t _zerovalue = 9999999;
+    int32_t _zerovalue = 9999999;
     float _govern_mph, _idle_mph;
     float _margin = 0.2; 
   public:
