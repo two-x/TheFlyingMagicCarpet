@@ -26,6 +26,7 @@ class Potentiometer {
     float _pc_activity_margin = 4.5;
     uint8_t _pin;
     float _val = 0.0, _activity_ref;
+    Timer pot_timer{100000};  // adc cannot read too fast w/o errors, so give some time between readings
   public:
     // tune these by monitoring adc_raw and twist pot to each limit. set min at the highest value seen when turned full CCW, and vice versas for max, then trim each toward adc_midrange until you get full 0 to 100% range
     float adc_min = 380; // TUNED 230603 - Used only in determining theconversion factor
@@ -40,13 +41,17 @@ class Potentiometer {
         _activity_ref = _val;
     }
     void update() {
-        adc_raw = static_cast<float>(analogRead(_pin));
-        float new_val = map(adc_raw, adc_min, adc_max, _pc_min, _pc_max);
-        new_val = constrain(new_val, _pc_min, _pc_max); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
-        ema_filt(new_val, &_val, _ema_alpha);
-        if (std::abs(_val - _activity_ref) > _pc_activity_margin) {
-            kick_inactivity_timer(7);  // evidence of user activity
-            _activity_ref = _val;
+        if (pot_timer.expireset()) {
+            adc_raw = static_cast<float>(analogRead(_pin));
+            float new_val = map(adc_raw, adc_min, adc_max, _pc_min, _pc_max);
+            ema_filt(new_val, &_val, _ema_alpha);
+            _val = constrain(_val, _pc_min, _pc_max); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
+            if (std::abs(_val - _activity_ref) > _pc_activity_margin) {
+                // Serial.printf("a:%ld n:%lf v:%lf r:%lf m:%lf ", adc_raw, new_val, _val, _activity_ref, _pc_activity_margin);
+                kick_inactivity_timer(7);  // evidence of user activity
+                _activity_ref = _val;
+                // Serial.printf("r2:%lf\n", _activity_ref);
+            }
         }
     }
     template<typename VAL_T>
@@ -667,9 +672,12 @@ class MAPSensor : public I2CSensor {
 template<typename NATIVE_T, typename HUMAN_T>
 class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
   protected:
+    Timer read_timer{25000};  // adc cannot read too fast w/o errors, so give some time between readings
     virtual void set_val_from_pin() {
-        this->set_native(static_cast<NATIVE_T>(analogRead(this->_pin)));  // Soren: can this be done without two casts?
-        this->calculate_ema(); // filtered values are kept in human format
+        if (read_timer.expireset()) {
+            this->set_native(static_cast<NATIVE_T>(analogRead(this->_pin)));  // Soren: can this be done without two casts?
+            this->calculate_ema(); // filtered values are kept in human format
+        }
     }
   public:
     AnalogSensor(uint8_t arg_pin) : Sensor<NATIVE_T, HUMAN_T>(arg_pin) {}
@@ -869,6 +877,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
     bool _negative = false, _pin_activity;
     float _stop_thresh;
     float _last_read_time_us;
+    float _min_us = 100000.0;  // default. overwrite in children
     volatile int64_t _isr_us = 0;
     volatile int64_t _isr_timer_start_us = 0;
     volatile int64_t _isr_timer_read_us = 0;
@@ -891,13 +900,15 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
     virtual void set_val_from_pin() {
         _isr_buf_us = static_cast<int32_t>(_isr_us);  // Copy delta value (in case another interrupt happens during handling)
         _isr_us = 0;  // Indicates to isr we processed this value
-        if (_isr_buf_us) {  // If a valid rotation has happened since last time, delta will have a value
+        if (_isr_buf_us >= _min_us) {  // If a valid rotation has happened since last time, delta will have a value
             this->set_native(_isr_buf_us);
             this->calculate_ema();
             _last_read_time_us = _stop_timer.elapsed();
             _stop_timer.reset();
             this->_pin_activity = !_pin_activity;
         }
+        else; // TODO: flag an error here, out of range or sensor problem
+
         // NOTE: should be checking filt here maybe?
         if (_stop_timer.expired()) {  // If time between pulses is long enough an engine can't run that slow
             this->_human.set(0.0);
@@ -906,7 +917,8 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
     }
 
   public:
-    PulseSensor(uint8_t arg_pin, int64_t delta_abs_min_us_arg, float stop_thresh_arg) : Sensor<int32_t, HUMAN_T>(arg_pin), _stop_timer(_stop_timeout_us), _delta_abs_min_us(delta_abs_min_us_arg), _stop_thresh(stop_thresh_arg) {}
+    PulseSensor(uint8_t arg_pin, int64_t delta_abs_min_us_arg, float stop_thresh_arg)
+      : Sensor<int32_t, HUMAN_T>(arg_pin), _stop_timer(_stop_timeout_us), _delta_abs_min_us(delta_abs_min_us_arg), _stop_thresh(stop_thresh_arg) {}
     PulseSensor() = delete;
     std::string _long_name = "Unknown Hall Effect sensor";
     std::string _short_name = "pulsen";
@@ -934,6 +946,7 @@ class Tachometer : public PulseSensor<float> {
     float _stop_thresh_rpm = 0.2;  // Below which the engine is considered stopped
     float _abs_max_rpm = 7000.0;  // Max possible engine rotation speed
     float _redline_rpm = 5500.0;  // Max possible engine rotation speed
+    float _min_us = 110000.0 ;  // corresponds to 5500 rpm
     // NOTE: should we start at 50rpm? shouldn't it be zero?
     float _initial_rpm = 50.0; // Current engine speed, raw value converted to rpm (in rpm)
     // float _m_factor = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
@@ -952,7 +965,7 @@ class Tachometer : public PulseSensor<float> {
         _b_offset = 0.0;
         _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_human_limits(0.0, _redline_rpm);
-        set_native_limits(0.0, _stop_timeout_us);
+        set_native_limits(_min_us, _stop_timeout_us);
         set_human(_initial_rpm);
         set_can_source(src::PIN, true);
         set_can_source(src::POT, true);
@@ -997,6 +1010,7 @@ class Speedometer : public PulseSensor<float> {
     float _stop_thresh_mph = 0.2;  // Below which the car is considered stopped
     float _min_mph = 0.0;
     float _max_mph = 25.0; // What is max speed car can ever go
+    float _min_us = 119000.0;  // corresponds to 25.0 mph
     float _initial_mph = 0.0; // Current speed, raw value converted to mph (in mph)
     float _redline_mph = 15.0; // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
     // old math with one magnet on driven pulley:
@@ -1014,7 +1028,7 @@ class Speedometer : public PulseSensor<float> {
         _m_factor = 1000000.0 * 3600.0 * 20 * M_PI / (2 * 12 * 5280);  // 1 magnet/us * 1000000 us/sec * 3600 sec/hr * 1/2 whlrot/magnet * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1785000 mi/hr (mph)    
         _b_offset = 0.0;
         set_human_limits(_min_mph, _redline_mph);
-        set_native_limits(0.0, _stop_timeout_us);
+        set_native_limits(_min_us, _stop_timeout_us);
         set_human(_initial_mph);
         set_can_source(src::PIN, true);
         set_can_source(src::POT, true);
