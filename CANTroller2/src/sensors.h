@@ -271,8 +271,8 @@ class Transducer : public Device {
     //   _b_offset : (in human units) is added to result of multiplying native value by _m_factor
     //   _invert : if set true, before multiplying the math will invert the given native value. 
     //             intended if native and human are inverse values like time (eg us) and frequency (eg mph, rpm). 
-    //             e.g. for native in sec/event and human in k-events/minute, then _m_factor is 60 * 0.001 = 0.06 k-events/min (aka kHz)
-    //   dir : causes mirroring of result around min/max range center point. set to REV if native value increases as human decreases
+    //             e.g. for native in sec/in and human in ft/minute, then use _m_factor of 60 / 12 = 5 ft/min (per in/sec)
+    //   dir : optional mirroring of result around min/max range center point. set to REV if native value increases as human decreases
     // note, to avoid crashes, divide by zero attempts result in return of max value in lieu of infinity
     virtual HUMAN_T from_native(NATIVE_T arg_val_native) {
         float arg_val_f = static_cast<float>(arg_val_native); // convert everything to floats so we don't introduce rounding errors
