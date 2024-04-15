@@ -825,8 +825,8 @@ class Display {
         return true;
     }
     void push_task() {
-        bool refresh_ready = screenRefreshTimer.expired() || always_max_refresh || auto_saver_enabled;
-        if (is_drawing || !pushtime || !refresh_ready) return;  // vTaskDelay(pdMS_TO_TICKS(1));
+        if (!(screenRefreshTimer.expired() || always_max_refresh || auto_saver_enabled)) return;
+        if (is_drawing || !pushtime) return;  // vTaskDelay(pdMS_TO_TICKS(1));
         is_pushing = true;
         // Serial.printf("f%d push@ 0x%08x vs 0x%08x\n", flip, &framebuf[flip], &framebuf[!flip]);
         screenRefreshTimer.reset();

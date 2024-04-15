@@ -45,6 +45,11 @@ SD interface (not yet implemented) is integrated with touchscreen module. We hop
 1. Temperature Sensors
 1. Manifold Mass Air Flow Sensors
 
+## JTAG Debugging
+1. [espressif guide](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-guides/jtag-debugging/index.html#)
+1. [a youtube video](https://www.youtube.com/watch?v=HGB9PI3IDL0&t=316s&ab_channel=Tech-Relief)
+1. [jtag interface tool for windows](https://zadig.akeo.ie/)
+
 ## Links
 1. [free images](http://iconarchive.com/) 1. resize to pixels needed, jpg w/ black backgd  2. convert to rgb565 color 
 1. [image to rgb565 color converter](https://www.youtube.com/redirect?event=video_description&redir_token=QUFFLUhqbkYtMGJvMS1VVWV0ZUpIb1Y4U2U2QzRLM3BKZ3xBQ3Jtc0tudG5MS1hVdmlLajdrNHFMWWtWUkFGTFNadUhaWkVob2ExNV8ya29kLXFmcDh1SEVINDFEeWtSX3A0SW40UlNTcy1CYVlSTTV5cXJKM25VcGxoWjdxSk9kZVFadURVWHhJcU9hMVRUWENyVGVjRkw4aw&q=http%3A%2F%2Fwww.rinkydinkelectronics.com%2Ft_imageconverter565.php&v=U4jOFLFNZBI)
