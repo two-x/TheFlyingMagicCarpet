@@ -49,7 +49,7 @@ void initialize_pins() {
 }
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
     sim.set_can_sim(sens::joy, false);
-    for (sens sen=sens::pressure; sen<=sens::basicsw; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, running_on_devboard);
+    for (sens sen=sens::pressure; sen<=sens::mulebatt; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, running_on_devboard);
     // for (sens sen=sens::engtemp; sen<sens::basicsw; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, false);
     // sim.set_can_sim(sens::basicsw, running_on_devboard);
     // sim.set_can_sim(sens::starter, running_on_devboard);
@@ -214,6 +214,7 @@ class Starter {
     }
     void request(int req) { now_req = req; }
     void update() {  // starter bidirectional handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
+        // Serial.printf("m:%d o:%d r:%d\n", motor, pin_outputting, now_req);
         if (!starter_signal_support) {  // if we don't get involved with starting the car
             motor = LOW;                // arbitrarily give this variable a fixed value
             now_req = REQ_NA;           // cancel any requests which we are ignoring anyway
