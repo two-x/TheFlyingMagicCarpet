@@ -126,7 +126,7 @@ bool display_enabled = true;         // should we run 325x slower in order to ge
 bool use_i2c_baton = true;
 bool always_max_refresh = false;
 bool brake_before_starting = true;
-bool watchdog_enabled = true;
+bool watchdog_enabled = false;      // enabling this messes with the hotrc (?)
 bool fuelpump_supported = true;      // note if resistive touchscreen is present then fuelpump is automatically not supported regardless of this
 int throttle_ctrl_mode = OpenLoop;
 // dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
