@@ -31,7 +31,7 @@ static LoopTimer looptimer;
 static WebManager web(&looptimer);
 static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &maf_gps, &ignition);
 static LightingBox lightbox(&i2c);  // lightbox(&diag);
-static Watchdog watchdog(&prefs);
+static BootManager watchdog(&prefs, &looptimer);
 static SdCard sdcard;
 
 int rn(int values=256) {  // Generate a random number between 0 and values-1
