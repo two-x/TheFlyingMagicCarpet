@@ -20,7 +20,19 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         encoder = _encoder;
     }
     int mode_logic() {
-        updateMode(); // Update the current mode if needed, this also sets we_just_switched_modes
+        if (mode != ASLEEP) {
+            if (basicmodesw) mode = BASIC;  // if basicmode switch on --> Basic Mode
+            else if (mode != CAL && !ignition) mode = SHUTDOWN;
+            else if (tach.engine_stopped()) mode = STALL;;  // otherwise if engine not running --> Stall Mode
+        }
+        we_just_switched_modes = (mode != oldmode);  // currentMode should not be changed after this point in loop
+        if (we_just_switched_modes) {
+            display->disp_runmode_dirty = true;
+            cleanup_state_variables();
+        }
+        // common to almost all the modes, so i put it here
+        if (hotrc.sw_event(CH3) && mode != ASLEEP) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
+
         if (mode == BASIC) run_basicMode(); // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         else if (mode == ASLEEP) run_asleepMode();
         else if (mode == SHUTDOWN) run_shutdownMode();
@@ -33,34 +45,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             Serial.println (F("Error: Invalid runmode entered"));
             mode = SHUTDOWN;
         }
+        oldmode = mode;        
         return mode;
     }
   private:
-    void updateMode() {
-        if (mode != ASLEEP) {
-            if (basicmodesw) mode = BASIC;  // if basicmode switch on --> Basic Mode
-            else if (mode != CAL && !ignition) mode = SHUTDOWN;
-            else if (tach.engine_stopped()) mode = STALL;;  // otherwise if engine not running --> Stall Mode
-        }
-        we_just_switched_modes = (mode != oldmode);  // currentMode should not be changed after this point in loop
-        if (we_just_switched_modes) {
-            display->disp_runmode_dirty = true;
-            cleanup_state_variables();
-        }
-        oldmode = mode;
-    }
-    //     if (basicmodesw) mode = BASIC;  // if basicmode switch on --> Basic Mode
-    //     else if ((mode != CAL) && (mode != ASLEEP)) {
-    //         if (panicstop || !ignition) mode = SHUTDOWN;
-    //         else if (tach.engine_stopped()) mode = STALL;;  // otherwise if engine not running --> Stall Mode
-    //     }
-    //     we_just_switched_modes = (mode != oldmode);  // currentMode should not be changed after this point in loop
-    //     if (we_just_switched_modes) {
-    //         display->disp_runmode_dirty = true;
-    //         cleanup_state_variables();
-    //     }
-    //     oldmode = mode;
-    // }
     void cleanup_state_variables() {
         if (oldmode == BASIC);
         else if (oldmode == ASLEEP);
@@ -84,7 +72,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             watchdog.set_codemode(Parked);
             display->disp_bools_dirty = true;
         }
-        if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
         if (hotrc.sw_event(CH4) && !ignition) mode = ASLEEP;
         if (!basicmodesw && !tach.engine_stopped()) mode = speedo.car_stopped() ? HOLD : FLY;  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
         if (basicmode_request) mode = SHUTDOWN;  // if fully shut down and cal mode requested, go to cal mode
@@ -141,7 +128,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             steer.setmode(Halt);  // disable steering, in case it was left on while we were panic stopping
             brake.setmode(Halt);
             watchdog.set_codemode(Parked);  // write to flash we are in an appropriate place to lose power, so we can detect crashes on boot
-            if (hotrc.sw_event(CH3) && (allow_rolling_start || speedo.car_stopped()) && !panicstop) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
             if (hotrc.sw_event(CH4) || sleep_inactivity_timer.expired() || sleep_request == REQ_TOG || sleep_request == REQ_ON) mode = ASLEEP;
             sleep_request = REQ_NA;
             if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode
@@ -155,7 +141,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             brake.setmode(ActivePID);
             steer.setmode(OpenLoop);
         }
-        if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
         if (hotrc.sw_event(CH4)) starter.request(REQ_TOG);
         if (starter.motor || !tach.engine_stopped()) mode = HOLD;  // If we started the car, enter hold mode once starter is released
         // Serial.printf("%d/%d ", starter_request, starter);
@@ -168,7 +153,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             brake.setmode(AutoHold);
             steer.setmode(OpenLoop);
         }
-        if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
         if (hotrc.sw_event(CH4)) starter.request(REQ_OFF);
         if (hotrc.joydir(VERT) != JOY_UP) joy_centered = true;  // mark joystick at or below center, now pushing up will go to fly mode
         else if (joy_centered && !starter.motor && !hotrc.radiolost()) mode = FLY;  // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
@@ -185,7 +169,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         else if (speedo.car_stopped() && hotrc.joydir() != JOY_UP) mode = HOLD;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) mode = HOLD;        // radio must be good to fly, this should already be handled elsewhere but another check can't hurt
-        if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;                     // turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
         if (hotrc.sw_event(CH4)) mode = CRUISE;                                     // enter fly mode by pressing hrc ch4 button
     }
     void run_cruiseMode() {
@@ -195,7 +178,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             gestureFlyTimer.reset();  // initialize brake-trigger timer
         }
         if (hotrc.joydir(VERT) == JOY_DN && !cruise_speed_lowerable) mode = FLY;
-        if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // turn on/off the vehicle ignition. if ign is killed while stopped, this leads to panic stop
         if (hotrc.sw_event(CH4)) mode = FLY;                  // go to fly mode if hotrc ch4 button pushed
         // if joystick is held full-brake for more than X, driver could be confused & panicking, drop to fly mode so fly mode will push the brakes
         if (hotrc.pc[VERT][FILT] > hotrc.pc[VERT][OPMIN] + flycruise_vert_margin_pc) gestureFlyTimer.reset();  // keep resetting timer if joystick not at bottom
@@ -217,7 +199,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (!cal_gasmode_request && gas.motormode == Calibrate) gas.setmode(Idle);
         if (cal_brakemode_request && brake.motormode != Calibrate) brake.setmode(Calibrate);
         else if (!cal_brakemode_request && brake.motormode == Calibrate) brake.setmode(Halt);
-        if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // turn on/off the vehicle ignition. if ign is killed while stopped, this leads to panic stop
     }
 };
 // Here are the different runmodes documented

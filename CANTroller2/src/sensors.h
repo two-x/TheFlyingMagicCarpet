@@ -883,6 +883,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
     volatile int64_t _isr_timer_read_us = 0;
     int32_t _isr_buf_us = 0;
     int64_t _delta_abs_min_us; // must be passed into constructor
+    // bool _pin_activity = LOW;  // _invert = true,
 
     // Shadows a hall sensor being triggered by a passing magnet once per pulley turn. The ISR calls
     // esp_timer_get_time() on every pulse to know the time since the previous pulse. I tested this on the bench up
@@ -894,6 +895,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
         if (time_us > _delta_abs_min_us) {  // ignore spurious triggers or bounces
             _isr_timer_start_us = _isr_timer_read_us;
             _isr_us = time_us;
+            _pin_activity = !_pin_activity;
         }
     }
 
@@ -905,7 +907,6 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
             this->calculate_ema();
             _last_read_time_us = _stop_timer.elapsed();
             _stop_timer.reset();
-            this->_pin_activity = !_pin_activity;
         }
         else; // TODO: flag an error here, out of range or sensor problem
 
@@ -950,7 +951,6 @@ class Tachometer : public PulseSensor<float> {
     // NOTE: should we start at 50rpm? shouldn't it be zero?
     float _initial_rpm = 50.0; // Current engine speed, raw value converted to rpm (in rpm)
     // float _m_factor = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
-    bool _pin_activity = LOW;  // _invert = true,
     int32_t _zerovalue = 999999;
     int32_t _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
   public:
