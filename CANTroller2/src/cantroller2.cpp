@@ -42,6 +42,14 @@ void setup() {
     sim_setup();              // simulator initialize devices and pot map
     touch.setup(&lcd, &i2c, disp_width_pix, disp_height_pix);
     screen.setup();
+    #if VIDEO_TASKS
+        pushbuf_sem = xSemaphoreCreateBinary();
+        drawbuf_sem = xSemaphoreCreateBinary();
+        TaskHandle_t pushTaskHandle = NULL;
+        TaskHandle_t drawTaskHandle = NULL;
+        xTaskCreatePinnedToCore(push_task_wrapper, "taskPush", 8192, NULL, 4, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  // 16384
+        xTaskCreatePinnedToCore(draw_task_wrapper, "taskDraw", 4096, NULL, 4, &drawTaskHandle, 1 - CONFIG_ARDUINO_RUNNING_CORE);
+    #endif
     neo.setup();              // set up external neopixel strip for idiot lights visible in daylight from top of carpet
     idiots.setup(&neo);       // assign same idiot light variable associations and colors to neopixels as on screen  
     diag.setup();             // initialize dia                                                                                                                gnostic codes

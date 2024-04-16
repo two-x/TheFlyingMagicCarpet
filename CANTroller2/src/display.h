@@ -223,7 +223,7 @@ class Display {
         sprptr = &framebuf[flip];
         reset_request = true;
         #if VIDEO_TASKS
-        init_tasks();
+        // init_tasks();
         #else
         update();
         #endif
