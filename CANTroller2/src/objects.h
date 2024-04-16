@@ -111,12 +111,12 @@ void update_temperature_sensors(void *parameter) {
     }
 }
 
-TaskHandle_t webtask = nullptr;
-TaskHandle_t temptask = nullptr;
-void start_tasks() {
-    xTaskCreatePinnedToCore(update_web, "Update Web Services", 4096, NULL, 6, &webtask, CONFIG_ARDUINO_RUNNING_CORE);  // wifi/web task. 2048 is too low, it crashes when client connects  16384
-    xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temp Sensors", 2048, NULL, 6, &temptask, CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task
-}
+// TaskHandle_t webtask = nullptr;
+// TaskHandle_t temptask = nullptr;
+// void start_tasks() {
+//     xTaskCreatePinnedToCore(update_web, "Update Web Services", 4096, NULL, 6, &webtask, CONFIG_ARDUINO_RUNNING_CORE);  // wifi/web task. 2048 is too low, it crashes when client connects  16384
+//     xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temp Sensors", 2048, NULL, 6, &temptask, CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task
+// }
 
 void ignition_panic_update(int runmode) {  // Run once each main loop
     if (panicstop_request == REQ_TOG) panicstop_request = !panicstop;
