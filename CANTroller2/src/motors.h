@@ -614,33 +614,31 @@ class BrakeMotor : public JagMotor {
         pids[PositionPID].set_target(brkpos->min_human() + (1.0 - hybrid_targ_ratio) * (brkpos->max_human() - brkpos->min_human()));
         hybrid_targ_ratio_pc = 100.0 * hybrid_targ_ratio;  // for display
     }
-    float pid_out() {  // returns motor output percent calculated using dynamic combination of position and pressure influence
+    void pid_out() {  // returns motor output percent calculated using dynamic combination of position and pressure influence
         hybrid_out_ratio = calc_hybrid_ratio(pressure->filt());  // calculate pressure vs. position multiplier based on the sensed values
         hybrid_out_ratio_pc = 100.0 * hybrid_out_ratio;  // for display
         set_dominant_pid((int)(hybrid_out_ratio + 0.5));  // round to 0 (posn pid) or 1 (pressure pid)
         for (int p = PositionPID; p <= PressurePID; p++) outnow_pc[p] = pids[p].compute();  // get each pid calculated output
         pid_final_out_pc = hybrid_out_ratio * outnow_pc[PressurePID] + (1.0 - hybrid_out_ratio) * outnow_pc[PositionPID];  // combine pid outputs weighted by the multiplier
-        for (int p = PositionPID; p <= PressurePID; p++) pids[p].set_output(pid_final_out_pc);  // Feed the final value back into the pids
-        return pid_final_out_pc;
+        pc[OUT] = pid_final_out_pc;
+    }
+    void autostop(bool panic_support=true) {
+        bool panic = panic_support && panicstop;
+        if (interval_timer.expireset()) set_pidtarg(std::min(100.0f, pid_targ_pc + panic ? panic_increment_pc : hold_increment_pc));
+        else set_pidtarg(std::max(pid_targ_pc, panic ? panic_initial_pc : hold_initial_pc));
+        pid_out();
     }
     void set_output() {
         if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
             autostopping = !speedo->car_stopped();
             autoholding = !autostopping && (pressure->filt() >= pressure->hold_initial_psi - pressure->margin_psi);  // this needs to be tested  // if (!speedo->car_stopped()) {            
-            if (autostopping) {
-                if (interval_timer.expireset()) set_pidtarg(std::min(100.0f, pid_targ_pc + hold_increment_pc));
-                pc[OUT] = pid_out();
-            }
+            if (autostopping) autostop(false);
             else pc[OUT] = pc[STOP];
         }
         else if (motormode == AutoStop) {  // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
             throttle->setmode(Idle);  // Stop pushing the gas, will help us stop the car better
             autostopping = (!speedo->car_stopped() && !stopcar_timer.expired());
-            if (autostopping) {
-                if (interval_timer.expireset()) set_pidtarg(std::min(100.0f, pid_targ_pc + panicstop ? panic_increment_pc : hold_increment_pc));   
-                else set_pidtarg(std::max(pid_targ_pc, panicstop ? panic_initial_pc : hold_initial_pc));
-                pc[OUT] = pid_out();
-            }
+            if (autostopping) autostop(true);
             else setmode(Halt);  // After AutoStop mode stops the car or times out, then stop driving the motor
         }
         else if (motormode == Halt) {
@@ -660,19 +658,19 @@ class BrakeMotor : public JagMotor {
             releasing = (!released() && !motor_park_timer.expired());
             if (releasing) set_pidtarg(zeropoint_pc);  // Flipped to 100-value because function argument subtracts back for position pid
             else setmode(Halt);
-            pc[OUT] = pid_out();
+            pid_out();
         }
         else if (motormode == ParkMotor) {
             active_pids = PositionPID;
             parking = (!parked() && !motor_park_timer.expired());
             if (parking) set_pidtarg(parkpos_pc);  // Flipped to 100-value because function argument subtracts back for position pid
             else setmode(Halt);
-            pc[OUT] = pid_out();
+            pid_out();
         }
         else if (motormode == ActivePID) {
             if (hotrc->joydir(VERT) != JOY_DN) set_pidtarg(0);  // let off the brake
             else set_pidtarg(map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], 0.0, 100.0));  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
-            pc[OUT] = pid_out();
+            pid_out();
         }
         mode_busy = autostopping || parking || releasing;
     }
@@ -682,6 +680,7 @@ class BrakeMotor : public JagMotor {
                 || (pc[OUT] > pc[STOP] && brkpos->filt() < brkpos->min_in() + brkpos->margin()))  // if brake is at position limits and we're tring to go further, stop the motor
             pc[OUT] = pc[STOP]; 
         else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);  // send to the actuator. refuse to exceed range
+        for (int p = PositionPID; p <= PressurePID; p++) pids[p].set_output(pc[OUT]);  // Feed the final value back into the pids
     }
   public:
     void setmode(int _mode) {

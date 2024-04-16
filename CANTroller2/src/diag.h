@@ -353,16 +353,18 @@ class LoopTimer {
         return (float)((esp_timer_get_time() - boot_mark)) / (60.0 * 1000000.0);
     }
 };
-class BootManager {
+class BootMonitor {
   private:
     int timeout_sec = 10;
     uint32_t uptime_recorded = -1, uptime_rounding = 5;
     Preferences* myprefs;
     LoopTimer* myloop;
     int codemode_last = 50000, crashcount = 0;
+    uint32_t bootcount;                         // variable to track total number of boots of this code build
+    uint32_t codemode_postmortem;
     std::string codemodecard[4] = { "confused", "booting", "parked", "driving" };
   public:
-    BootManager(Preferences* _prefs, LoopTimer* _loop) : myprefs(_prefs), myloop(_loop) {}
+    BootMonitor(Preferences* _prefs, LoopTimer* _loop) : myprefs(_prefs), myloop(_loop) {}
     void bootcounter() {
         bootcount = myprefs->getUInt("bootcount", 0) + 1;
         myprefs->putUInt("bootcount", bootcount);
@@ -394,7 +396,7 @@ class BootManager {
     void write_uptime() {
         float get_uptime = myloop->uptime();
         uint32_t myround = std::min((uint32_t)get_uptime, uptime_rounding);
-        uint32_t uptime_new = ((uint32_t)(get_uptime / (float)myround) * myround);
+        uint32_t uptime_new = (uint32_t)(get_uptime / (float)myround) * myround;
         if (uptime_new == uptime_recorded) return;
         myprefs->putUInt("uptime", uptime_new);
         uptime_recorded = uptime_new;
@@ -408,9 +410,13 @@ class BootManager {
         else Serial.printf("under 1 min uptime\n");
     }
     void pet() {
-        write_uptime();
         if (!watchdog_enabled) return;
         esp_task_wdt_reset();
+    }
+    void update() {
+        pet();
+        if (codemode == Booting) set_codemode(Confused);
+        write_uptime();
     }
 };
 

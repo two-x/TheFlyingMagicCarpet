@@ -164,9 +164,7 @@ int32_t neodesat = 0;     // default for lets us de/saturate the neopixels
 float tuning_rate_pcps = 7.5;  // values being edited by touch buttons change value at this percent of their overall range per second
 
 // non-tunable values. probably these belong with their related code
-uint bootcount;                         // variable to track total number of boots of this code build
-uint codemode = Booting;
-uint codemode_postmortem;
+uint32_t codemode = Booting;
 bool running_on_devboard = false;       // will overwrite with value read thru pull resistor on tx pin at boot
 bool shutdown_incomplete = true;        // minor state variable for shutdown mode - Shutdown mode has not completed its work and can't yet stop activity
 bool parking = false;                   // indicates in process of parking the brake & gas motors so the pedals can be used manually without interference

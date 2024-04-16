@@ -50,7 +50,7 @@ void setup() {
     looptimer.setup();
 }
 void loop() {                 // arduino-style loop() is like main() but with a builtin infinite while(1) loop.
-    watchdog.pet();           // pet the watchdog regularly to prevent reset
+    watchdog.update();           // pet the watchdog regularly to prevent reset
     ignition_panic_update(run.mode);  // manage panic stop condition and drive ignition signal as needed
     bootbutton.update();      // read the builtin button
 

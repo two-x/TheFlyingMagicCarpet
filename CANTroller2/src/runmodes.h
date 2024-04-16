@@ -127,7 +127,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             powering_up = calmode_request = basicmode_request = false;
             gas.setmode(ParkMotor);                 // carburetor parked 
             brake.setmode(AutoStop);                // if car is moving begin autostopping
-            if (!panicstop) steer.setmode(Halt);    // steering disabled, unless panic stopping
             shutdown_timer.reset();
             sleep_request = REQ_NA;
         }
@@ -187,7 +186,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (speedo.car_stopped() && hotrc.joydir() != JOY_UP) mode = HOLD;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) mode = HOLD;        // radio must be good to fly, this should already be handled elsewhere but another check can't hurt
         if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;                     // turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
-        if (hotrc.sw_event(CH4)) mode = FLY;                                     // enter fly mode by pressing hrc ch4 button
+        if (hotrc.sw_event(CH4)) mode = CRUISE;                                     // enter fly mode by pressing hrc ch4 button
     }
     void run_cruiseMode() {
         if (we_just_switched_modes) {  // upon first entering cruise mode, initialize things

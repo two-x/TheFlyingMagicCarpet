@@ -11,6 +11,7 @@
 // Instantiate objects
 std::random_device rd;
 std::mt19937 gen(rd());  // randomizer
+
 static Preferences prefs;  // Persistent config storage
 static Potentiometer pot(pot_pin);
 static Simulator sim(pot, &prefs);
@@ -24,14 +25,14 @@ static Tachometer tach(tach_pin);
 static I2C i2c(i2c_sda_pin, i2c_scl_pin);
 static AirVeloSensor airvelo(&i2c);
 static MAPSensor mapsens(&i2c);
-static GasServo gas(gas_pwm_pin, 60);
+static GasServo gas(gas_pwm_pin, 52);
 static BrakeMotor brake(brake_pwm_pin, 50);
 static SteerMotor steer(steer_pwm_pin, 50);
 static LoopTimer looptimer;
 static WebManager web(&looptimer);
 static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &maf_gps, &ignition);
 static LightingBox lightbox(&i2c);  // lightbox(&diag);
-static BootManager watchdog(&prefs, &looptimer);
+static BootMonitor watchdog(&prefs, &looptimer);
 static SdCard sdcard;
 
 int rn(int values=256) {  // Generate a random number between 0 and values-1
@@ -114,29 +115,29 @@ TaskHandle_t webtask = nullptr;
 TaskHandle_t temptask = nullptr;
 void start_tasks() {
     xTaskCreatePinnedToCore(update_web, "Update Web Services", 4096, NULL, 6, &webtask, CONFIG_ARDUINO_RUNNING_CORE);  // wifi/web task. 2048 is too low, it crashes when client connects  16384
-    xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 6, &temptask, CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task
+    xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temp Sensors", 2048, NULL, 6, &temptask, CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task
 }
+
 void ignition_panic_update(int runmode) {  // Run once each main loop
     if (panicstop_request == REQ_TOG) panicstop_request = !panicstop;
     if (ignition_request == REQ_TOG) ignition_request = !ignition;
     // else if (ignition_request == ignition) ignition_request = REQ_NA;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
     if (speedo.car_stopped() || panicTimer.expired()) panicstop_request = REQ_OFF;  // Cancel panic stop if car is stopped
     if (!speedo.car_stopped() && (runmode == FLY || runmode == CRUISE || runmode == HOLD)) {
-        if (ignition && ignition_request == REQ_OFF) panicstop_request = REQ_ON;  // ignition cut causes panic stop
+        if (ignition && ignition_request == REQ_OFF) panicstop_request = REQ_ON;  // ignition cut while driving causes panic stop
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) panicstop_request = REQ_ON;
     }
     bool paniclast = panicstop;
     if (panicstop_request != REQ_NA) {
-        panicstop = (bool)panicstop_request;  // printf("panic=%d\n", panicstop);
+        panicstop = (bool)panicstop_request;    // printf("panic=%d\n", panicstop);
         if (panicstop && !paniclast) panicTimer.reset();
     }
     if (panicstop) ignition_request = REQ_OFF;  // panic stop causes ignition cut
     if (ignition_request != REQ_NA) {
         ignition = (bool)ignition_request;
-        write_pin (ignition_pin, ignition);  // Turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
+        write_pin (ignition_pin, ignition);  // turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
     }
-    panicstop_request = REQ_NA;
-    ignition_request = REQ_NA;  // Make sure this goes after the last comparison
+    panicstop_request = ignition_request = REQ_NA;  // cancel outstanding requests
 }
 void basicsw_update() {
     bool last_val = basicmodesw;
@@ -176,13 +177,13 @@ float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) 
     return maf;
 }
 void psram_setup() {  // see https://www.upesy.com/blogs/tutorials/get-more-ram-on-esp32-with-psram#
-    Serial.println("PSRAM..");
+    Serial.printf("PSRAM..");
     #ifndef BOARD_HAS_PSRAM
-    Serial.println(" support is currently disabled\n");
+    Serial.printf(" support is currently disabled\n");
     return;
     #endif
-    if (psramInit()) Serial.println(" is correctly initialized");
-    else Serial.println(" is not available");
+    if (psramInit()) Serial.printf(" is correctly initialized, ");
+    else Serial.printf(" is not available, ");
     // int available_PSRAM_size = ESP.getFreePsram();
     // Serial.println((String)"  PSRAM Size available (bytes): " + available_PSRAM_size);
     // int *array_int = (int *) ps_malloc(1000 * sizeof(int)); // Create an integer array of 1000
@@ -193,7 +194,7 @@ void psram_setup() {  // see https://www.upesy.com/blogs/tutorials/get-more-ram-
     // int array_size = available_PSRAM_size - available_PSRAM_size_after;
     // Serial.println((String)"Array size in PSRAM in bytes: " + array_size);
     // // free(array_int); //The allocated memory is freed.
-    Serial.println((String)", size available (B): " +ESP.getFreePsram());
+    Serial.println((String)"size (B): " +ESP.getFreePsram());
 }
 class Starter {
   private:
@@ -215,13 +216,13 @@ class Starter {
     void request(int req) { now_req = req; }
     void update() {  // starter bidirectional handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
         // Serial.printf("m:%d o:%d r:%d\n", motor, pin_outputting, now_req);
-        if (!starter_signal_support) {  // if we don't get involved with starting the car
+        if (!starter_signal_support) {  // if we don't get involved with or care about the car's starter
             motor = LOW;                // arbitrarily give this variable a fixed value
             now_req = REQ_NA;           // cancel any requests which we are ignoring anyway
             return;                     // no action
         }  // from here on, we can assume starter signal is supported
         if (now_req == REQ_TOG) now_req = !pin_outputting;  // translate a toggle request to a drive request opposite to the current drive state
-        req_active = (now_req != REQ_NA);
+        req_active = (now_req != REQ_NA);                   // for display
         if (pin_outputting && (!motor || (now_req == REQ_OFF) || starterTimer.expired())) {  // if we're driving the motor but need to stop or in the process of stopping
             if (motor) {                 // if motor is currently on
                 motor = LOW;             // we will turn it off
@@ -264,7 +265,7 @@ class Starter {
             return;  // we told the brake to hold down, leaving the request to turn the starter on intact, so we'll be back to check
         }  // at this point the brake has been told to hold but isn't holding yet
         if (starterTimer.expired()) {  // if we've waited long enough for the damn brake
-            if (brake.motormode == AutoHold) brake.setmode(lastbrakemode);  // put the brake back to doing whatever it was doing before
+            if (brake.motormode == AutoHold) brake.setmode(lastbrakemode);  // put the brake back to doing whatever it was doing before, unless it's already been changed
             now_req = REQ_NA;  // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
         }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
     }
