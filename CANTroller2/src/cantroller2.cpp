@@ -32,7 +32,7 @@ void setup() {
     starter.setup();
     tempsens.setup();         // onewire bus and temp sensors
     TaskHandle_t temptask = nullptr;
-    xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task
+    xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task  // 2048 works, 1024 failed
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);  // added for servos I think
     gas.setup(&hotrc, &speedo, &tach, &pot, &tempsens);
     brake.setup(&hotrc, &speedo, &mulebatt, &pressure, &brkpos, &gas, &tempsens);
@@ -47,8 +47,8 @@ void setup() {
         drawbuf_sem = xSemaphoreCreateBinary();
         TaskHandle_t pushTaskHandle = NULL;
         TaskHandle_t drawTaskHandle = NULL;
-        xTaskCreatePinnedToCore(push_task_wrapper, "taskPush", 8192, NULL, 4, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  // 16384
-        xTaskCreatePinnedToCore(draw_task_wrapper, "taskDraw", 4096, NULL, 4, &drawTaskHandle, 1 - CONFIG_ARDUINO_RUNNING_CORE);
+        xTaskCreatePinnedToCore(push_task_wrapper, "taskPush", 2048, NULL, 4, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  // 2048 works, 1024 failed
+        xTaskCreatePinnedToCore(draw_task_wrapper, "taskDraw", 4096, NULL, 4, &drawTaskHandle, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // 4096 works, 2048 failed
     #endif
     neo.setup();              // set up external neopixel strip for idiot lights visible in daylight from top of carpet
     idiots.setup(&neo);       // assign same idiot light variable associations and colors to neopixels as on screen  
@@ -56,7 +56,7 @@ void setup() {
     web.setup();              // start up access point, web server, and json-enabled web socket for diagnostic phone interface
     // start_tasks();            // begin rtos tasks for temperature and web
     TaskHandle_t webtask = nullptr;
-    xTaskCreatePinnedToCore(update_web, "Update Web Services", 4096, NULL, 6, &webtask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // wifi/web task. 2048 is too low, it crashes when client connects  16384
+    xTaskCreatePinnedToCore(update_web, "Update Web Services", 8192, NULL, 6, &webtask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // wifi/web task. with 4096 wifi runs but fails to connect (maybe unrelated?).  2048 is too low, it crashes when client connects  16384
     printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     looptimer.setup();
