@@ -381,6 +381,7 @@ class BootManager {
     void setup(int sec = -1) {
         if (sec >= 0) timeout_sec = sec;
         bootcounter();
+        set_codemode(Booting);
         if (!watchdog_enabled) return;
         Serial.printf("Boot manager.. \n");
         esp_task_wdt_init(timeout_sec, true);  // see https://github.com/espressif/esp-idf/blob/master/examples/system/task_watchdog/main/task_watchdog_example_main.c
@@ -391,21 +392,25 @@ class BootManager {
         esp_task_wdt_add(taskh);
     }
     void write_uptime() {
-        uint32_t uptime_new = ((uint32_t)(myloop->uptime() / (float)uptime_rounding) * uptime_rounding);
+        float get_uptime = myloop->uptime();
+        uint32_t myround = std::min((uint32_t)get_uptime, uptime_rounding);
+        uint32_t uptime_new = ((uint32_t)(get_uptime / (float)myround) * myround);
         if (uptime_new == uptime_recorded) return;
         myprefs->putUInt("uptime", uptime_new);
         uptime_recorded = uptime_new;
     }
     void uptime_postmortem() {
         uint32_t last_uptime = myprefs->getUInt("uptime", 0);
-        if (last_uptime == 0) Serial.printf("under %1d min uptime\n", uptime_rounding);
-        else Serial.printf("just over %d min uptime\n", last_uptime);
-        if (last_uptime != 0) write_uptime();
+        if (last_uptime > 0) {
+            Serial.printf("just over %d min uptime\n", last_uptime);
+            write_uptime();
+        }
+        else Serial.printf("under 1 min uptime\n");
     }
     void pet() {
+        write_uptime();
         if (!watchdog_enabled) return;
         esp_task_wdt_reset();
-        write_uptime();
     }
 };
 
