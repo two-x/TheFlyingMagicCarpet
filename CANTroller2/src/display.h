@@ -250,11 +250,12 @@ class Display {
         screensaver = false;
     }
     void blackout(LGFX_Sprite* spr) {
-        std::uint32_t* s;
-        for (int f=0; f<2; f++) {
-            s = (std::uint32_t*)(*spr).getBuffer();
-            for (int w=0; w<(spr->width() * spr->height() / 4); w++) s[w] = 0x00000000;
-        }
+        spr->fillSprite(BLK);
+        // std::uint32_t* s;
+        // for (int f=0; f<2; f++) {
+        //     s = (std::uint32_t*)(*spr).getBuffer();
+        //     for (int w=0; w<(spr->width() * spr->height() / 4); w++) s[w] = 0x00000000;
+        // }
     }
     void set_runmodecolors() {
         uint8_t saturat = 255;  uint8_t hue_offset = 0;
