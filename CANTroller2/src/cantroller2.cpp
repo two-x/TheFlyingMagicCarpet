@@ -54,9 +54,8 @@ void setup() {
     idiots.setup(&neo);       // assign same idiot light variable associations and colors to neopixels as on screen  
     diag.setup();             // initialize dia                                                                                                                gnostic codes
     web.setup();              // start up access point, web server, and json-enabled web socket for diagnostic phone interface
-    // start_tasks();            // begin rtos tasks for temperature and web
     TaskHandle_t webtask = nullptr;
-    xTaskCreatePinnedToCore(update_web, "Update Web Services", 8192, NULL, 6, &webtask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // wifi/web task. with 4096 wifi runs but fails to connect (maybe unrelated?).  2048 is too low, it crashes when client connects  16384
+    xTaskCreatePinnedToCore(update_web, "Update Web Services", 8192, NULL, 6, &webtask, CONFIG_ARDUINO_RUNNING_CORE);  // wifi/web task. with 4096 wifi runs but fails to connect (maybe unrelated?).  2048 is too low, it crashes when client connects  16384
     printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing
     looptimer.setup();

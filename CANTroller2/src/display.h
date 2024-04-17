@@ -147,19 +147,6 @@ class Display {
     volatile bool disp_idiots_dirty;
     Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim)
       : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {}
-    void init_tasks() {
-        #if VIDEO_TASKS
-        // pushbuf_sem = xSemaphoreCreateMutexStatic(&push_semaphorebuf_sem);  // xSemaphoreCreateBinaryStatic(&push_semaphorebuf_sem);
-        // drawbuf_sem = xSemaphoreCreateMutexStatic(&draw_semaphorebuf_sem);  // xSemaphoreCreateBinaryStatic(&draw_semaphorebuf_sem);
-        pushbuf_sem = xSemaphoreCreateBinary();
-        drawbuf_sem = xSemaphoreCreateBinary();
-        TaskHandle_t pushTaskHandle = NULL;
-        xTaskCreatePinnedToCore(push_task_wrapper, "taskPush", 8192, NULL, 4, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  // 16384
-        TaskHandle_t drawTaskHandle = NULL;
-        xTaskCreatePinnedToCore(draw_task_wrapper, "taskDraw", 4096, NULL, 4, &drawTaskHandle, runOnCore);
-        // xSemaphoreGive(pushbuf_sem);
-        #endif
-    }
     void init_framebuffers(int _sprwidth, int _sprheight) {
         int sprsize[2] = { _sprwidth, _sprheight };
         Serial.printf("  create frame buffers.. ");
@@ -222,9 +209,7 @@ class Display {
         animations.setup();
         sprptr = &framebuf[flip];
         reset_request = true;
-        #if VIDEO_TASKS
-        // init_tasks();
-        #else
+        #if !VIDEO_TASKS
         update();
         #endif
         Serial.printf(" display initialized\n");
@@ -1063,6 +1048,8 @@ static Touchscreen touch;
 static Display screen(&neo, &touch, &idiots, &sim);
 static Tuner tuner(&screen, &neo, &touch);
 #if VIDEO_TASKS
+// pushbuf_sem = xSemaphoreCreateMutexStatic(&push_semaphorebuf_sem);  // xSemaphoreCreateBinaryStatic(&push_semaphorebuf_sem);
+// drawbuf_sem = xSemaphoreCreateMutexStatic(&draw_semaphorebuf_sem);  // xSemaphoreCreateBinaryStatic(&draw_semaphorebuf_sem);
 static void push_task_wrapper(void *parameter) {
     while (true) {
         // xSemaphoreTake(pushbuf_sem, portMAX_DELAY);
