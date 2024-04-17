@@ -33,18 +33,18 @@ class DiagRuntime {
   public:
     // diag tunable values
     uint32_t err_margin_adc = 5;
-    char err_type_card[NUM_ERR_TYPES][5] = { "Lost", "Rang", "Valu" };  // this needs to match err_type enum   // , "Cal", "Warn", "Crit", "Info" };
+    char err_type_card[NUM_ERR_TYPES][5] = { "Lost", "Rang" };  // this needs to match err_type enum   // , "Cal", "Warn", "Crit", "Info" };
+    char err_bool_card[NumTelemetryBool][7] =     // this needs to match telemetry_bool enum
+      { "Ign", "Panic", "SysPwr", "HrcCh3", "HrcCh4", "StartD", "StartX", "BasicS", "FuelP" };
     char err_sens_card[NumTelemetryFull+2][7] = {  // this needs to match telemetry_short and telemetry_long enums, with NA and None tacked on the end
         "Throtl", "BkMotr", "Steer", "HotRC", "Speedo", "Tach", "BkPres", "BkPosn", "Temps", "Other", "GPIO", 
         "HrcHrz", "HrcVrt", "Batery", "AirVel", "MAP", "Pot", "MAF", "TmpEng", "TmpWFL", "TmpWFR", "TmpWRL", "TmpWRR", "TmpAmb",
         "NA", "None"
     };
-    char err_bool_card[NumTelemetryBool][7] = { "Ign", "Panic", "SysPwr", "HrcCh3", "HrcCh4", "StartD", "StartX", "BasicS" };  // this needs to match telemetry_bool enum
-
     // diag non-tunable values
     bool temp_err[NUM_TEMP_CATEGORIES];  // [AMBIENT/ENGINE/WHEEL]
-    bool err_sens_alarm[NUM_ERR_TYPES] = { false, false, false };
-    int8_t err_sens_fails[NUM_ERR_TYPES] = { 0, 0, 0 };
+    bool err_sens_alarm[NUM_ERR_TYPES] = { false, false };
+    int8_t err_sens_fails[NUM_ERR_TYPES] = { 0, 0 };
     bool err_sens[NUM_ERR_TYPES][NumTelemetryFull]; //  [LOST/RANGE] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
     bool err_last[NUM_ERR_TYPES][NumTelemetryFull]; //  [LOST/RANGE] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
     uint8_t most_critical_sensor[NUM_ERR_TYPES];
@@ -146,7 +146,7 @@ class DiagRuntime {
                 err_sens[LOST][ch] = !hotrc->radiolost() && ((hotrc->us[ch][RAW] < (hotrc->absmin_us - hotrc->us[ch][MARGIN]))
                                         || (hotrc->us[ch][RAW] > (hotrc->absmax_us + hotrc->us[ch][MARGIN])));
             }
-            err_sens[VALUE][_Ignition] = (!ignition && !tach->engine_stopped());
+            err_sens[LOST][_Ignition] = (!ignition && !tach->engine_stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
             err_sens[LOST][_Speedo] = SpeedoFailure();
             err_sens[LOST][_Tach] = TachFailure();
             err_sens[RANGE][_Speedo] = (speedo->mph() < speedo->min_human() || speedo->mph() > speedo->max_human());;

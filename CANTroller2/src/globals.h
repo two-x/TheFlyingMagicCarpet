@@ -106,11 +106,10 @@ enum temp_categories { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  /
 enum temp_lims { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };   // possible sources of gas, brake, steering commands
 enum ui_modes { DatapagesUI=0, ScreensaverUI=1 };
 enum codemodes { Confused=0, Booting=1, Parked=2, Driving=3 };
-enum telemetry_short { _GasServo=0, _BrakeMotor=1, _SteerMotor=2, _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7, _Temps=8, _Other=9, _GPIO=10 };  // _MuleBatt, _MAP, _MAF, _Pot,
-enum telemetry_full { _HotRCHorz=11, _HotRCVert=12, _MuleBatt=13, _AirVelo=14, _MAP=15, _Pot=16, _MAF=17, _TempEng=18, _TempWhFL=19, _TempWhFR=20, _TempWhRL=21, _TempWhRR=22, _TempAmb=23 };  // 10 per line
-enum telemetry_nums { _None=-1, NumTelemetryBool=9, NumTelemetryShort=11, NumTelemetryFull=24 };
-enum telemetry_bool { _Ignition=1, _PanicStop=2, _SysPower=3, _HotRCCh3=4, _HotRCCh4=5, _StarterDr=6, _StarterExt=7, _BasicSw=8 };
-enum err_type { LOST=0, RANGE=1, VALUE=2, NUM_ERR_TYPES=3 };  // STATE=3, WARN=4, CRIT=5, INFO=6, 
+enum telemetry_short { _None=-1, _GasServo=0, _BrakeMotor=1, _SteerMotor=2, _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7, _Temps=8, _Other=9, _GPIO=10, NumTelemetryShort=11 };  // _MuleBatt, _MAP, _MAF, _Pot,
+enum telemetry_full { _HotRCHorz=11, _HotRCVert=12, _MuleBatt=13, _AirVelo=14, _MAP=15, _Pot=16, _MAF=17, _TempEng=18, _TempWhFL=19, _TempWhFR=20, _TempWhRL=21, _TempWhRR=22, _TempAmb=23, NumTelemetryFull=24 };  // 10 per line
+enum telemetry_bool { _Ignition=1, _PanicStop=2, _SysPower=3, _HotRCCh3=4, _HotRCCh4=5, _StarterDr=6, _StarterExt=7, _BasicSw=8, _FuelPump=9, NumTelemetryBool=10 };
+enum err_type { LOST=0, RANGE=1, NUM_ERR_TYPES=2 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, 
 
 // global configuration settings
 bool brake_hybrid_pid = true;
