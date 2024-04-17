@@ -110,7 +110,7 @@ enum telemetry_short { _GasServo=0, _BrakeMotor=1, _SteerMotor=2, _HotRC=3, _Spe
 enum telemetry_full { _HotRCHorz=11, _HotRCVert=12, _MuleBatt=13, _AirVelo=14, _MAP=15, _Pot=16, _MAF=17, _TempEng=18, _TempWhFL=19, _TempWhFR=20, _TempWhRL=21, _TempWhRR=22, _TempAmb=23 };  // 10 per line
 enum telemetry_nums { _None=-1, NumTelemetryBool=9, NumTelemetryShort=11, NumTelemetryFull=24 };
 enum telemetry_bool { _Ignition=1, _PanicStop=2, _SysPower=3, _HotRCCh3=4, _HotRCCh4=5, _StarterDr=6, _StarterExt=7, _BasicSw=8 };
-enum err_type { LOST=0, RANGE=1, VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, NUM_ERR_TYPES=7 };
+enum err_type { LOST=0, RANGE=1, VALUE=2, NUM_ERR_TYPES=3 };  // STATE=3, WARN=4, CRIT=5, INFO=6, 
 
 // global configuration settings
 bool brake_hybrid_pid = true;

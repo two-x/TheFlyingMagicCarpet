@@ -5,6 +5,7 @@
 #include <iomanip>  // For formatting console loop timing string output
 class DiagRuntime {
   private:
+    bool report_error_changes = true;
     Hotrc* hotrc;
     TemperatureSensorManager* tempsens;
     PressureSensor* pressure;
@@ -32,19 +33,20 @@ class DiagRuntime {
   public:
     // diag tunable values
     uint32_t err_margin_adc = 5;
-    char err_type_card[NUM_ERR_TYPES][5] = { "Lost", "Rang", "Cal", "Warn", "Crit", "Info" };
-    char err_sens_card[NumTelemetryFull+2][7] = { 
+    char err_type_card[NUM_ERR_TYPES][5] = { "Lost", "Rang", "Valu" };  // this needs to match err_type enum   // , "Cal", "Warn", "Crit", "Info" };
+    char err_sens_card[NumTelemetryFull+2][7] = {  // this needs to match telemetry_short and telemetry_long enums, with NA and None tacked on the end
         "Throtl", "BkMotr", "Steer", "HotRC", "Speedo", "Tach", "BkPres", "BkPosn", "Temps", "Other", "GPIO", 
-        "AirVel", "MAP", "Batery", "Pot", "MAF", "HrcHrz", "HrcVrt", "TmpEng", "TmpWFL", "TmpWFR", "TmpWRL", "TmpWRR", "TmpAmb",
+        "HrcHrz", "HrcVrt", "Batery", "AirVel", "MAP", "Pot", "MAF", "TmpEng", "TmpWFL", "TmpWFR", "TmpWRL", "TmpWRR", "TmpAmb",
         "NA", "None"
     };
+    char err_bool_card[NumTelemetryBool][7] = { "Ign", "Panic", "SysPwr", "HrcCh3", "HrcCh4", "StartD", "StartX", "BasicS" };  // this needs to match telemetry_bool enum
 
-    bool diag_ign_error_enabled = true;
     // diag non-tunable values
     bool temp_err[NUM_TEMP_CATEGORIES];  // [AMBIENT/ENGINE/WHEEL]
-    bool err_sens_alarm[NUM_ERR_TYPES] = { false, false, false, false, false, false };
-    int8_t err_sens_fails[NUM_ERR_TYPES] = { 0, 0, 0, 0, 0, 0 };
+    bool err_sens_alarm[NUM_ERR_TYPES] = { false, false, false };
+    int8_t err_sens_fails[NUM_ERR_TYPES] = { 0, 0, 0 };
     bool err_sens[NUM_ERR_TYPES][NumTelemetryFull]; //  [LOST/RANGE] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
+    bool err_last[NUM_ERR_TYPES][NumTelemetryFull]; //  [LOST/RANGE] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
     uint8_t most_critical_sensor[NUM_ERR_TYPES];
     uint8_t most_critical_last[NUM_ERR_TYPES];
     DiagRuntime (Hotrc* a_hotrc, TemperatureSensorManager* a_temp, PressureSensor* a_pressure, BrakePositionSensor* a_brkpos,
@@ -56,7 +58,7 @@ class DiagRuntime {
     void setup() {
         for (int32_t i=0; i<NUM_ERR_TYPES; i++)
             for (int32_t j=0; j<NumTelemetryFull; j++)
-                err_sens[i][j] = false; // Initialize sensor error flags to false
+                err_sens[i][j] = err_last[i][j] = false; // Initialize sensor error flags to false
     }
     void make_log_entry() {
         if (logTimer.expireset()) {
@@ -93,7 +95,7 @@ class DiagRuntime {
     void set_sensidiots() {
         for (int err=0; err<=_GPIO; err++) {
             sensidiots[err] = false;
-            for (int typ=LOST; typ<=VALUE; typ++) {
+            for (int typ=0; typ<=NUM_ERR_TYPES; typ++) {
                 if (err == _HotRC)
                     for (int ch = HORZ; ch <= CH4; ch++) 
                         sensidiots[err] = sensidiots[err] || err_sens[typ][ch];
@@ -171,15 +173,34 @@ class DiagRuntime {
                         err_sens_fails[t]++;
                     }
             }
+            // detect and report changes in any error values
+            report_changes();
+
+            for (int32_t i=0; i<NUM_ERR_TYPES; i++)
+                for (int32_t j=0; j<NumTelemetryFull; j++)
+
             // printf ("\n");
             make_log_entry();
         }
+    }
+    void report_changes() {
+        for (int32_t i=0; i<NUM_ERR_TYPES; i++) {
+            for (int32_t j=0; j<NumTelemetryFull; j++) {
+                if (report_error_changes) {
+                    if (err_sens[i][j] && !err_last[i][j])
+                        Serial.printf("!diag: detected %s %s error\n", err_sens_card[j], err_type_card[i]);
+                    else if (!err_sens[i][j] && err_last[i][j])
+                        Serial.printf("!diag: cleared %s %s error\n", err_sens_card[j], err_type_card[i]);
+                }
+                err_last[i][j] = err_sens[i][j];
+            }
+        }    
     }
     int worst_sensor(int type) {
         return most_critical_sensor[type];  // for global awareness
     }
     void print() {
-        for (int32_t t=LOST; t<=INFO; t++) {
+        for (int32_t t=0; t<=NUM_ERR_TYPES; t++) {
             printf ("diag err: %s (%d): ", err_type_card[t], err_sens_fails[t]);
             for (int32_t s=0; s<=NumTelemetryFull; s++) {
                 if (s == NumTelemetryFull) s++;
