@@ -11,9 +11,8 @@ void setup() {
     delay(1000);               // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     partition_table();
     set_board_defaults();      // set variables as appropriate if on a breadboard
-    if (RUN_TESTS) run_tests();
+    run_tests();
     psram_setup();
-    prefs.begin("FlyByWire", false);
     watchdog.setup();
     bootbutton.setup();
     hotrc.setup();
@@ -31,7 +30,7 @@ void setup() {
     fuelpump.setup();
     starter.setup();
     tempsens.setup();         // onewire bus and temp sensors
-    TaskHandle_t temptask = nullptr;
+    TaskHandle_t temptask = nullptr, webtask = nullptr, pushTaskHandle = NULL, drawTaskHandle = NULL;
     xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task  // 2048 works, 1024 failed
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);  // added for servos I think
     gas.setup(&hotrc, &speedo, &tach, &pot, &tempsens);
@@ -43,10 +42,6 @@ void setup() {
     touch.setup(&lcd, &i2c, disp_width_pix, disp_height_pix);
     screen.setup();
     #if VIDEO_TASKS
-        pushbuf_sem = xSemaphoreCreateBinary();
-        drawbuf_sem = xSemaphoreCreateBinary();
-        TaskHandle_t pushTaskHandle = NULL;
-        TaskHandle_t drawTaskHandle = NULL;
         xTaskCreatePinnedToCore(push_task_wrapper, "taskPush", 2048, NULL, 4, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);  // 2048 works, 1024 failed
         xTaskCreatePinnedToCore(draw_task_wrapper, "taskDraw", 6144, NULL, 4, &drawTaskHandle, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // 4096 works, 2048 failed
     #endif
@@ -54,7 +49,6 @@ void setup() {
     idiots.setup(&neo);       // assign same idiot light variable associations and colors to neopixels as on screen  
     diag.setup();             // initialize dia                                                                                                                gnostic codes
     web.setup();              // start up access point, web server, and json-enabled web socket for diagnostic phone interface
-    TaskHandle_t webtask = nullptr;
     xTaskCreatePinnedToCore(update_web, "Update Web Services", 8192, NULL, 6, &webtask, CONFIG_ARDUINO_RUNNING_CORE);  // wifi/web task. with 4096 wifi runs but fails to connect (maybe unrelated?).  2048 is too low, it crashes when client connects  16384
     printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) Serial.end();  // close serial console to prevent crashes due to error printing

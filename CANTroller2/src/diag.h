@@ -412,6 +412,7 @@ class BootMonitor {
     }
     void setup(int sec = -1) {
         if (sec >= 0) timeout_sec = sec;
+        myprefs->begin("FlyByWire", false);
         bootcounter();
         set_codemode(Booting);
         if (!watchdog_enabled) return;

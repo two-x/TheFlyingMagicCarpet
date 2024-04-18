@@ -101,8 +101,8 @@ volatile bool drawn = false;
 volatile bool pushed = true;
 
 #if VIDEO_TASKS
-  SemaphoreHandle_t pushbuf_sem = NULL;  // StaticSemaphore_t push_semaphorebuf_sem;
-  SemaphoreHandle_t drawbuf_sem = NULL;  // StaticSemaphore_t draw_semaphorebuf_sem;
+  SemaphoreHandle_t pushbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t push_semaphorebuf_sem;
+  SemaphoreHandle_t drawbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t draw_semaphorebuf_sem;
   static void push_task_wrapper(void *parameter);
   static void draw_task_wrapper(void *parameter);
 #endif
