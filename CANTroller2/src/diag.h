@@ -19,7 +19,6 @@ class DiagRuntime {
     AirVeloSensor* airvelo;
     MAPSensor* mapsens;
     Potentiometer* pot;
-    float* maf;
     bool* ignition;
     static constexpr int entries = 100;  // size of log buffers
     int64_t times[2][entries];
@@ -169,18 +168,7 @@ class DiagRuntime {
             // Set sensor error idiot light flags
             // printf ("Sensors errors: ");
             
-            // printf ("Sensor check: ");
-            for (int32_t t=LOST; t<=RANGE; t++) {
-                most_critical_sensor[t] = _None;
-                err_sens_alarm[t] = false;
-                err_sens_fails[t] = 0;
-                for (int32_t s=0; s<NumTelemetryIdiots; s++)
-                    if (err_sens[t][s]) {
-                        if (most_critical_sensor[t] = _None) most_critical_sensor[t] = s;
-                        err_sens_alarm[t] = true;
-                        err_sens_fails[t]++;
-                    }
-            }
+            set_idiot_blinks();
             // detect and report changes in any error values
             report_changes();
 
@@ -189,6 +177,19 @@ class DiagRuntime {
 
             // printf ("\n");
             make_log_entry();
+        }
+    }
+    void set_idiot_blinks() {  // adds blink code to lost and range err neopixels corresponing to the lowest numbered failing sensor
+        for (int32_t t=LOST; t<=RANGE; t++) {
+            most_critical_sensor[t] = _None;
+            err_sens_alarm[t] = false;
+            err_sens_fails[t] = 0;
+            for (int32_t s=0; s<NumTelemetryIdiots; s++)
+                if (err_sens[t][s]) {
+                    if (most_critical_sensor[t] = _None) most_critical_sensor[t] = s;
+                    err_sens_alarm[t] = true;
+                    err_sens_fails[t]++;
+                }
         }
     }
     void report_changes() {
@@ -236,7 +237,7 @@ class DiagRuntime {
         gunning_last = gunning_it;
         return fail;
     }
-    bool TachFailure() {  // checks if tach isn't zero when stopped, or doesn't increase when we drive
+    bool TachFailure() {  // checks if tach isn't low when throttle is released, or doesn't increase when we gun it
         static bool running_it, running_last = true;
         static float baseline_rpm;
         bool fail = false;
