@@ -30,7 +30,7 @@ static BrakeMotor brake(brake_pwm_pin, 50);
 static SteerMotor steer(steer_pwm_pin, 50);
 static LoopTimer looptimer;
 static WebManager web(&looptimer);
-static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &maf_gps, &ignition);
+static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &ignition);
 static LightingBox lightbox(&i2c);  // lightbox(&diag);
 static BootMonitor watchdog(&prefs, &looptimer);
 static SdCard sdcard;

@@ -25,7 +25,6 @@ class DiagRuntime {
     int64_t times[2][entries];
     // two sets of large arrays for storage of log data. when one fills up it jumps to the other, so the first might be written to an sd card
     float tel[2][NumTelemetryFull][entries];  // array for telemetry of all sensors for given timestamp
-    bool bools[2][NumTelemetryBool][entries];  // boolean control values
     int index = 0, dic = 0, runmode;  // start with dictionary 0
     Timer logTimer{100000};  // microseconds per logged reading
     Timer errTimer{175000};
@@ -34,13 +33,13 @@ class DiagRuntime {
     // diag tunable values
     uint32_t err_margin_adc = 5;
     char err_type_card[NUM_ERR_TYPES][5] = { "Lost", "Rang" };  // this needs to match err_type enum   // , "Cal", "Warn", "Crit", "Info" };
-    char err_bool_card[NumTelemetryBool][7] =     // this needs to match telemetry_bool enum
-      { "Ign", "Panic", "SysPwr", "HrcCh3", "HrcCh4", "StartD", "StartX", "BasicS", "FuelP" };
-    char err_sens_card[NumTelemetryFull+2][7] = {  // this needs to match telemetry_short and telemetry_long enums, with NA and None tacked on the end
+    char err_sens_card[NumTelemetryFull+2][7] = {  // this needs to match telemetry_idiots and telemetry_full enums, with NA and None tacked on the end
         "Throtl", "BkMotr", "Steer", "HotRC", "Speedo", "Tach", "BkPres", "BkPosn", "Temps", "Other", "GPIO", 
-        "HrcHrz", "HrcVrt", "Batery", "AirVel", "MAP", "Pot", "MAF", "TmpEng", "TmpWFL", "TmpWFR", "TmpWRL", "TmpWRR", "TmpAmb",
+        "HrcHrz", "HrcVrt", "HrcCh3", "HrcCh4", "Batery", "AirVel", "MAP", "Pot", "TmpEng", "TmpWFL", "TmpWFR",
+        "TmpWRL", "TmpWRR", "TmpAmb", "Ign", "Start", "BasicS", "FuelP",
         "NA", "None"
     };
+
     // diag non-tunable values
     bool temp_err[NUM_TEMP_CATEGORIES];  // [AMBIENT/ENGINE/WHEEL]
     bool err_sens_alarm[NUM_ERR_TYPES] = { false, false };
@@ -51,9 +50,9 @@ class DiagRuntime {
     uint8_t most_critical_last[NUM_ERR_TYPES];
     DiagRuntime (Hotrc* a_hotrc, TemperatureSensorManager* a_temp, PressureSensor* a_pressure, BrakePositionSensor* a_brkpos,
         Tachometer* a_tach, Speedometer* a_speedo, GasServo* a_gas, BrakeMotor* a_brake, SteerMotor* a_steer, 
-        CarBattery* a_mulebatt, AirVeloSensor* a_airvelo, MAPSensor* a_mapsens, Potentiometer* a_pot, float* a_maf, bool* a_ignition)
+        CarBattery* a_mulebatt, AirVeloSensor* a_airvelo, MAPSensor* a_mapsens, Potentiometer* a_pot, bool* a_ignition)
         : hotrc(a_hotrc), tempsens(a_temp), pressure(a_pressure), brkpos(a_brkpos), tach(a_tach), speedo(a_speedo), gas(a_gas), brake(a_brake), 
-          steer(a_steer), mulebatt(a_mulebatt), airvelo(a_airvelo), mapsens(a_mapsens), pot(a_pot), maf(a_maf), ignition(a_ignition) {}
+          steer(a_steer), mulebatt(a_mulebatt), airvelo(a_airvelo), mapsens(a_mapsens), pot(a_pot), ignition(a_ignition) {}
 
     void setup() {
         for (int32_t i=0; i<NUM_ERR_TYPES; i++)
@@ -96,20 +95,24 @@ class DiagRuntime {
         for (int err=0; err<=_GPIO; err++) {
             sensidiots[err] = false;
             for (int typ=0; typ<=NUM_ERR_TYPES; typ++) {
-                if (err == _HotRC)
+                if (err == _HotRC)  // error with any hotrc channel triggers the hotrc idiot light
                     for (int ch = HORZ; ch <= CH4; ch++) 
                         sensidiots[err] = sensidiots[err] || err_sens[typ][ch];
-                else if (err == _Temps)
+                else if (err == _Temps)  // error with any temp sensor triggers the temp idiot light
                     for (int sens = _TempEng; sens <= _TempAmb; sens++)
                         sensidiots[err] = sensidiots[err] || err_sens[typ][sens];
-                else if (err == _Other) {
+                else if (err == _GPIO) {  // error with any digital signal triggers the GPIO idiot light
+                    sensidiots[err] = sensidiots[err] || err_sens[typ][_Ignition];
+                    sensidiots[err] = sensidiots[err] || err_sens[typ][_BasicSw];
+                    sensidiots[err] = sensidiots[err] || err_sens[typ][_FuelPump];
+                    sensidiots[err] = sensidiots[err] || err_sens[typ][_Starter];
+                    sensidiots[err] = sensidiots[err] || err_sens[typ][_FuelPump];
+                }
+                else if (err == _Other) {  // error with any other sensor not having its own idiot light triggers the "Other" (aka "ETC") idiot light
                     sensidiots[err] = sensidiots[err] || err_sens[typ][_MuleBatt];
                     sensidiots[err] = sensidiots[err] || err_sens[typ][_AirVelo];
                     sensidiots[err] = sensidiots[err] || err_sens[typ][_MAP];
-                }
-                else if (err == _GPIO) {
-                    sensidiots[err] = sensidiots[err] || err_sens[typ][_Ignition];
-                    sensidiots[err] = sensidiots[err] || err_sens[typ][_SysPower];
+                    sensidiots[err] = sensidiots[err] || err_sens[typ][_Pot];
                 }
                 else sensidiots[err] = sensidiots[err] || err_sens[typ][err];
             }
@@ -141,9 +144,14 @@ class DiagRuntime {
             err_sens[LOST][_BrakePres] = (pressure->raw() < err_margin_adc);
             err_sens[RANGE][_MuleBatt] = (mulebatt->v() < mulebatt->op_min_v() || mulebatt->v() > mulebatt->op_max_v());
             for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
-                err_sens[RANGE][ch] = !hotrc->radiolost() && ((hotrc->us[ch][RAW] < hotrc->us[ch][OPMIN] - (hotrc->us[ch][MARGIN] >> 1)) 
+                int errindex;
+                if (ch == HORZ) errindex = _HotRCHorz;
+                else if (ch == VERT) errindex = _HotRCVert;
+                else if (ch == CH3) errindex = _HotRCCh3;
+                else if (ch == CH4) errindex = _HotRCCh4;
+                err_sens[RANGE][errindex] = !hotrc->radiolost() && ((hotrc->us[ch][RAW] < hotrc->us[ch][OPMIN] - (hotrc->us[ch][MARGIN] >> 1)) 
                                         || (hotrc->us[ch][RAW] > hotrc->us[ch][OPMAX] + (hotrc->us[ch][MARGIN] >> 1)));  // && ch != VERT
-                err_sens[LOST][ch] = !hotrc->radiolost() && ((hotrc->us[ch][RAW] < (hotrc->absmin_us - hotrc->us[ch][MARGIN]))
+                err_sens[LOST][errindex] = !hotrc->radiolost() && ((hotrc->us[ch][RAW] < (hotrc->absmin_us - hotrc->us[ch][MARGIN]))
                                         || (hotrc->us[ch][RAW] > (hotrc->absmax_us + hotrc->us[ch][MARGIN])));
             }
             err_sens[LOST][_Ignition] = (!ignition && !tach->engine_stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
@@ -166,7 +174,7 @@ class DiagRuntime {
                 most_critical_sensor[t] = _None;
                 err_sens_alarm[t] = false;
                 err_sens_fails[t] = 0;
-                for (int32_t s=0; s<NumTelemetryShort; s++)
+                for (int32_t s=0; s<NumTelemetryIdiots; s++)
                     if (err_sens[t][s]) {
                         if (most_critical_sensor[t] = _None) most_critical_sensor[t] = s;
                         err_sens_alarm[t] = true;
@@ -188,9 +196,9 @@ class DiagRuntime {
             for (int32_t j=0; j<NumTelemetryFull; j++) {
                 if (report_error_changes) {
                     if (err_sens[i][j] && !err_last[i][j])
-                        Serial.printf("!diag: detected %s %s error\n", err_sens_card[j], err_type_card[i]);
+                        Serial.printf("!diag: %s %s err\n", err_sens_card[j], err_type_card[i]);
                     else if (!err_sens[i][j] && err_last[i][j])
-                        Serial.printf("!diag: cleared %s %s error\n", err_sens_card[j], err_type_card[i]);
+                        Serial.printf("!diag: %s %s ok\n", err_sens_card[j], err_type_card[i]);
                 }
                 err_last[i][j] = err_sens[i][j];
             }
