@@ -195,7 +195,6 @@ class Starter {
     uint32_t turnoff_timeout = 100000;
     Timer starterTimer;  // If remotely-started starting event is left on for this long, end it automatically
     int lastbrakemode, lastgasmode, pin;
-    bool pin_outputting = false;   // set by handler only. High when we're driving starter, otherwise starter is an input
   public:
     Starter(int _pin) : pin(_pin) {}
     bool motor = LOW;             // set by handler only. Reflects current state of starter signal (does not indicate source)
@@ -205,19 +204,19 @@ class Starter {
         Serial.printf("Starter.. output-only supported\n");
         set_pin(pin, OUTPUT);  // set pin as input or output
     }
-    void request(int req) { now_req = req; }
+    void request(int req) { now_req = req; }  // Serial.printf("r:%d n:%d\n", req, now_req);}
     void update() {  // starter bidirectional handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
-        // Serial.printf("m:%d o:%d r:%d\n", motor, pin_outputting, now_req);
-        if (now_req == REQ_TOG) now_req = !pin_outputting;  // translate a toggle request to a drive request opposite to the current drive state
+        // if (now_req != NA) Serial.printf("m:%d r:%d\n", motor, now_req);
+        if (now_req == REQ_TOG) now_req = !motor;  // translate a toggle request to a drive request opposite to the current drive state
         req_active = (now_req != REQ_NA);                   // for display
-        if (pin_outputting && (now_req == REQ_OFF)) {  // if we're driving the motor but need to stop or in the process of stopping
-            motor = pin_outputting = LOW;             // we will turn it off
+        if (motor && (now_req == REQ_OFF)) {  // if we're driving the motor but need to stop or in the process of stopping
+            motor = LOW;             // we will turn it off
             write_pin (pin, motor);  // begin driving the pin low voltage
             if (gas.motormode == Starting) gas.setmode(lastgasmode);  // put the throttle back to doing whatever it was doing before
             now_req = REQ_NA;
             return;                  // ditch out, leaving the motor-off request intact. we'll check on the timer next time
         }  // now, we have stopped driving the starter if we were supposed to stop
-        if (sim.simulating(sens::starter)) motor = pin_outputting;  // if simulating starter, there's no external influence
+        // if (sim.simulating(sens::starter)) motor = pin_outputting;  // if simulating starter, there's no external influence
         if (motor || now_req != REQ_ON) {  // if starter is already being driven by us or externally, or we aren't being tasked to drive it
             now_req = REQ_NA;          // cancel any requests
             return;                    // and ditch
@@ -226,7 +225,7 @@ class Starter {
             lastgasmode = gas.motormode;      // remember incumbent gas setting
             gas.setmode(Starting);            // give it some gas
             starterTimer.set((int64_t)run_timeout);  // if left on the starter will turn off automatically after X seconds
-            pin_outputting = motor = HIGH;    // ensure starter variable always reflects the starter status regardless who is driving it
+            motor = HIGH;    // ensure starter variable always reflects the starter status regardless who is driving it
             write_pin (pin, motor);           // and start the motor
             now_req = REQ_NA;                 // we have serviced starter-on request, so cancel it
             return;                           // if the brake was right we have started driving the starter
@@ -242,7 +241,7 @@ class Starter {
             now_req = REQ_NA;  // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
         }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
     }
-    src source() { return pin_outputting ? src::CALC : src::PIN; }
+    // src source() { return pin_outputting ? src::CALC : src::PIN; }
 };
 static Starter starter(starter_pin);
 

@@ -23,7 +23,7 @@ class Potentiometer {
     float _ema_alpha = .95;
     float _pc_min = 0.0;
     float _pc_max = 100.0;
-    float _pc_activity_margin = 4.5;
+    float _pc_activity_margin = 7.5;
     uint8_t _pin;
     float _val = 0.0, _activity_ref;
     Timer pot_timer{100000};  // adc cannot read too fast w/o errors, so give some time between readings
@@ -776,14 +776,9 @@ class LiPoBatt : public AnalogSensor<int32_t, float> {
 class PressureSensor : public AnalogSensor<int32_t, float> {
   public:
     sens senstype = sens::pressure;
-    int32_t op_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
+    int32_t op_min_adc, op_max_adc; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
     // Soren 230920: Reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
-    int32_t op_max_adc = 2080; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
-    float hold_initial_psi = 45;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
-    float hold_increment_psi = 3;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
-    float panic_initial_psi = 80; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
-    float panic_increment_psi = 5; // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
-    float margin_psi = 1;  // Max acceptible error when checking psi levels
+    float hold_initial_psi, hold_increment_psi, panic_initial_psi, panic_increment_psi, margin_psi;
     std::string _long_name = "Brake pressure sensor";
     std::string _short_name = "presur";
     std::string _native_units_name = "adc";
@@ -794,6 +789,14 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
         _b_offset = -from_native(op_min_adc);
         _invert = false;
         _ema_alpha = 0.15;
+        op_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
+        op_max_adc = 2080; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
+        hold_initial_psi = 45;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
+        hold_increment_psi = 3;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
+        panic_initial_psi = 80; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
+        panic_increment_psi = 5; // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
+        margin_psi = 1;  // Max acceptible error when checking psi levels
+
         set_native_limits(op_min_adc, op_max_adc);
         set_human_limits(from_native(op_min_adc), from_native(op_max_adc));
         set_native(op_min_adc);
@@ -821,17 +824,8 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     // void set_val_from_touch() { _val_filt.set((op_min_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
   public:
     sens senstype = sens::brkpos;
-    int32_t abs_min_retract_adc = 0;
-    int32_t abs_max_extend_adc = adcrange_adc;
-    float _parkpos = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
-    float op_min_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-    float op_max_extend_in = _parkpos; // 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-    float _margin = .01;  // TODO: add description
-    float _zeropoint = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
-    int32_t op_min_retract_adc = 76;  // Calculated on windows calculator. Calculate it here, silly
-    int32_t op_max_extend_adc = 965;  // Calculated on windows calculator. Calculate it here, silly
-    float abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
-    float abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
+    int32_t abs_min_retract_adc, abs_max_extend_adc, op_min_retract_adc, op_max_extend_adc;
+    float op_min_retract_in, op_max_extend_in, _parkpos, _margin, _zeropoint, abs_min_retract_in, abs_max_extend_in;
     std::string _long_name = "Brake position sensor";
     std::string _short_name = "brkpos";
     std::string _native_units_name = "adc";
@@ -842,6 +836,17 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         _invert = false;
         _b_offset = 0.0;
         _ema_alpha = 0.35;
+        _zeropoint = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
+        _margin = .01;  // TODO: add description
+        _parkpos = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
+        op_min_retract_adc = 76;  // Calculated on windows calculator. Calculate it here, silly
+        op_max_extend_adc = 965;  // Calculated on windows calculator. Calculate it here, silly
+        abs_min_retract_adc = 0;
+        abs_max_extend_adc = adcrange_adc;
+        abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
+        abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
+        op_min_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
+        op_max_extend_in = _parkpos; // 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
         set_human_limits(op_min_retract_in, op_max_extend_in);            
         set_native_limits(op_min_retract_adc, op_max_extend_adc);
         set_can_source(src::PIN, true);
@@ -943,27 +948,29 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
 // It extends PulseSensor to handle reading a hall monitor sensor and converting RPU to RPM
 class Tachometer : public PulseSensor<float> {
   protected:
-    int64_t _delta_abs_min_us = 6500;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
-    float _stop_thresh_rpm = 0.2;  // Below which the engine is considered stopped
-    float _abs_max_rpm = 7000.0;  // Max possible engine rotation speed
-    float _redline_rpm = 5500.0;  // Max possible engine rotation speed
-    int32_t _min_us = 110000;  // corresponds to 5500 rpm
-    // NOTE: should we start at 50rpm? shouldn't it be zero?
-    float _initial_rpm = 50.0; // Current engine speed, raw value converted to rpm (in rpm)
-    // float _m_factor = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
-    int32_t _zerovalue = 999999;
-    int32_t _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
+    int64_t _delta_abs_min_us = 6500;;
+    float _stop_thresh_rpm = 0.2;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
+    float _abs_max_rpm, _redline_rpm, _initial_rpm;
+    int32_t _min_us, _zerovalue, _stop_timeout_us;
   public:
     sens senstype = sens::tach;
-    float _govern_rpm = _redline_rpm;
     float _idle_rpm = 600.0, _idle_cold_rpm = 750.0, _idle_hot_rpm = 500.0;
-    float _margin = 10; 
+    float _margin, _govern_rpm; 
     Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_rpm) {
+        _abs_max_rpm = 7000.0;  // Max possible engine rotation speed
+        _redline_rpm = 5500.0;  // Max possible engine rotation speed
+        _min_us = 110000;  // corresponds to 5500 rpm
         _negative = true;
         _invert = true;
         _m_factor = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
         _b_offset = 0.0;
         _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+        _govern_rpm = _redline_rpm;
+        _stop_thresh_rpm = 0.2;
+        _margin = 10;
+        _initial_rpm = 50.0;
+        _zerovalue = 999999;
+        _stop_timeout_us = 1250000;
         set_human_limits(0.0, _redline_rpm);
         set_native_limits(_min_us, _stop_timeout_us);
         set_human(_initial_rpm);
@@ -1006,27 +1013,27 @@ class Tachometer : public PulseSensor<float> {
 // It extends PulseSensor to handle reading a hall monitor sensor and converting RPU to MPH
 class Speedometer : public PulseSensor<float> {
   protected:
-    int64_t _delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
-    float _stop_thresh_mph = 0.2;  // Below which the car is considered stopped
-    float _min_mph = 0.0;
-    float _max_mph = 25.0; // What is max speed car can ever go
-    int32_t _min_us = 119000;  // corresponds to 25.0 mph
-    float _initial_mph = 0.0; // Current speed, raw value converted to mph (in mph)
-    float _redline_mph = 15.0; // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
-    // old math with one magnet on driven pulley:
-    // float _m_factor = 1000000.0 * 3600.0 * 20 * 3.14159 / (19.85 * 12 * 5280);  // 1 pulrot/us * 1000000 us/sec * 3600 sec/hr * 1/19.85 whlrot/pulrot * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 179757 mi/hr (mph)
+    int64_t _delta_abs_min_us; 
+    float _stop_thresh_mph, _min_mph, _max_mph, _min_us, _initial_mph, _redline_mph, _govern_mph, _idle_mph, _margin;
     bool _pin_activity = LOW;
-    int32_t _zerovalue = 9999999;
-    float _govern_mph, _idle_mph;
-    float _margin = 0.2; 
+    int32_t _zerovalue;
   public:
     sens senstype = sens::speedo;
     Speedometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_mph) {
+        _delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
+        _min_mph = 0.0;
+        _max_mph = 25.0; // What is max speed car can ever go
+        _min_us = 119000;  // corresponds to 25.0 mph
+        _initial_mph = 0.0; // Current speed, raw value converted to mph (in mph)
+        _redline_mph = 15.0; // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
         _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         _invert = true;
         // new math with two magnets on the rear axle:
         _m_factor = 1000000.0 * 3600.0 * 20 * M_PI / (2 * 12 * 5280);  // 1 magnet/us * 1000000 us/sec * 3600 sec/hr * 1/2 whlrot/magnet * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1785000 mi/hr (mph)    
         _b_offset = 0.0;
+        _margin = 0.2;
+        _stop_thresh_mph = 0.2;  // Below which the car is considered stopped
+        _zerovalue = 9999999;
         set_human_limits(_min_mph, _redline_mph);
         set_native_limits(_min_us, _stop_timeout_us);
         set_human(_initial_mph);

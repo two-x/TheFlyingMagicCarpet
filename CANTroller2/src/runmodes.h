@@ -20,16 +20,17 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         encoder = _encoder;
     }
     int mode_logic() {
-        if (mode != ASLEEP) {
+        if (mode != ASLEEP && mode != CAL) {
             if (basicmodesw) mode = BASIC;  // if basicmode switch on --> Basic Mode
-            else if (mode != CAL && !ignition) mode = SHUTDOWN;
-            else if (tach.engine_stopped()) mode = STALL;;  // otherwise if engine not running --> Stall Mode
+            else if (!ignition) mode = SHUTDOWN;
+            else if (tach.engine_stopped()) mode = STALL;  // otherwise if engine not running --> Stall Mode
         }
         we_just_switched_modes = (mode != oldmode);  // currentMode should not be changed after this point in loop
         if (we_just_switched_modes) {
             display->disp_runmode_dirty = true;
             cleanup_state_variables();
         }
+        oldmode = mode;        
         // common to almost all the modes, so i put it here
         if (hotrc.sw_event(CH3) && mode != ASLEEP) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
 
@@ -45,7 +46,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             Serial.println (F("Error: Invalid runmode entered"));
             mode = SHUTDOWN;
         }
-        oldmode = mode;        
         return mode;
     }
   private:
@@ -54,10 +54,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (oldmode == ASLEEP);
         else if (oldmode == SHUTDOWN) shutdown_incomplete = false;
         else if (oldmode == STALL);
-        else if (oldmode == HOLD) {
-            joy_centered = false;
-            starter.request(REQ_OFF);  // Stop any in-progress startings
-        }
+        else if (oldmode == HOLD) joy_centered = false;  // starter.request(REQ_OFF);  // Stop any in-progress startings
         else if (oldmode == FLY) car_hasnt_moved = false;
         else if (oldmode == CRUISE) cruise_adjusting = false;
         else if (oldmode == CAL) cal_gasmode = cal_brakemode = cal_gasmode_request = cal_brakemode_request = false;
@@ -141,7 +138,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             brake.setmode(ActivePID);
             steer.setmode(OpenLoop);
         }
-        if (hotrc.sw_event(CH4)) starter.request(REQ_TOG);
+        if (hotrc.sw_event(CH4)) starter.request(REQ_TOG);  // Serial.printf("stall: req=%d\n", REQ_TOG);
         if (starter.motor || !tach.engine_stopped()) mode = HOLD;  // If we started the car, enter hold mode once starter is released
         // Serial.printf("%d/%d ", starter_request, starter);
     }
