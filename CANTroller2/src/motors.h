@@ -572,7 +572,7 @@ class BrakeMotor : public JagMotor {
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::reverse, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
     }
   private:
-    void update_motorheat() {
+    void update_motorheat() {  // i am probably going to scrap all this nonsense and just put another temp sensor on the motor
         float added_heat, nowtemp, out_ratio;
         if (motorheat_timer.expireset()) {
             out_ratio = pc[OUT] / 100.0;
@@ -629,6 +629,14 @@ class BrakeMotor : public JagMotor {
         else set_pidtarg(std::max(pid_targ_pc, panic ? panic_initial_pc : hold_initial_pc));
         pid_out();
     }
+    bool goto_fixed_position(float tgt_position, bool at_position) {  // goes to a fixed position then stops.  useful for parking and releasing modes
+        active_pids = PositionPID;
+        bool in_progress = (!at_position && !motor_park_timer.expired());
+        if (in_progress) set_pidtarg(tgt_position);  // Flipped to 100-value because function argument subtracts back for position pid
+        else setmode(Halt);
+        pid_out();
+        return in_progress;
+    }
     void set_output() {
         if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
             autostopping = !speedo->car_stopped();
@@ -659,18 +667,10 @@ class BrakeMotor : public JagMotor {
             else pc[OUT] = pc[STOP];
         }
         else if (motormode == Release) {
-            active_pids = PositionPID;
-            releasing = (!released() && !motor_park_timer.expired());
-            if (releasing) set_pidtarg(zeropoint_pc);  // Flipped to 100-value because function argument subtracts back for position pid
-            else setmode(Halt);
-            pid_out();
+            releasing = goto_fixed_position(zeropoint_pc, released());
         }
         else if (motormode == ParkMotor) {
-            active_pids = PositionPID;
-            parking = (!parked() && !motor_park_timer.expired());
-            if (parking) set_pidtarg(parkpos_pc);  // Flipped to 100-value because function argument subtracts back for position pid
-            else setmode(Halt);
-            pid_out();
+            parking = goto_fixed_position(parkpos_pc, parked());
         }
         else if (motormode == ActivePID) {
             if (hotrc->joydir(VERT) != JOY_DN) set_pidtarg(0);  // let off the brake
