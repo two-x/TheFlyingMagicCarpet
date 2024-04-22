@@ -30,7 +30,8 @@ static BrakeMotor brake(brake_pwm_pin, 50);
 static SteerMotor steer(steer_pwm_pin, 50);
 static LoopTimer looptimer;
 static WebManager web(&looptimer);
-static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &ignition);
+static Logger logger;
+static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &logger, &ignition);
 static LightingBox lightbox(&i2c);  // lightbox(&diag);
 static BootMonitor watchdog(&prefs, &looptimer);
 static SdCard sdcard;
@@ -326,3 +327,7 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
     }
 };
 static FuelPump fuelpump(tp_cs_fuel_pin);
+
+#include "display.h"  // includes neopixel.h, touch.h
+#include "runmodes.h"
+static RunModeManager run(&screen, &encoder);

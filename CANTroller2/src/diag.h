@@ -1,4 +1,74 @@
 #pragma once
+
+// Logger collects lines of reporting kept in an array of strings, which may be displayed on the screen or on a web page, or console
+#include <iostream>
+#include <string>
+#include <vector>
+#include <sstream>
+#include <stdarg.h>
+class Logger {
+  private:
+    // LGFX* mylcd;
+    // LGFX_Sprite* nowspr_ptr;
+    // std::string textlines[num_lines];
+    int usedlines = 0;
+    std::vector<std::string> textlines; // Ring buffer array
+    size_t bufferSize; // Size of the ring buffer
+  public:
+    static constexpr int num_lines = 16;
+    static constexpr int colwidth = 30;
+    size_t nextIndex; // Index for the next insertion
+
+    void init() {
+        this->printd("Temperature: %d, Humidity: %.2f", 25, 50.67);
+        this->printd("Error Code: %d", 404);
+        for (size_t i = 0; i < 5; ++i) {
+            std::cout << "Element " << i << ": " << this->getlogline(i) << std::endl;
+        }
+    }
+    void setup() {}
+    // void redraw() {
+    //     panel->diffpush(&framebuf[flip], &framebuf[!flip]);
+    // }
+    // void add_errorline(std::string type, std::string item) {
+    //     std::string newerr = type + ": " + item;
+    //     if (newerr.length() > 15) newerr = newerr.substr(0, 15);
+    //     textlines[usedlines++] = newerr;
+    // }
+    void update() {
+        // int flip = panel->setflip(false);
+        // nowspr_ptr = &(framebuf[flip]);
+        // panel->diffpush(&framebuf[flip], &framebuf[!flip]);
+    }
+    // DiagConsole(size_t size) : bufferSize(size), nextIndex(0) {
+    //     textlines.resize(size);
+    // }
+    Logger() {
+        nextIndex = 0;
+        textlines.resize(bufferSize);
+    }
+
+    // Function similar to Serial.printf()
+    void printd(const char* format, ...) {
+        va_list args;
+        va_start(args, format);
+        char temp[100]; // Assuming maximum length of output string
+        vsnprintf(temp, sizeof(temp), format, args);
+        va_end(args);
+        textlines[nextIndex] = temp; // Store formatted output into buffer
+        nextIndex = (nextIndex + 1) % bufferSize; // Update next insertion index
+    }
+
+    // Function to retrieve the stored strings
+    std::string getlogline(size_t index) {
+        if (index < bufferSize) {
+            return textlines[index];
+        } else {
+            return ""; // Return empty string if index is out of range
+        }
+    }
+};
+
 #include "Arduino.h"
 #include <esp_task_wdt.h>
 #include <iostream>
@@ -19,6 +89,7 @@ class DiagRuntime {
     AirVeloSensor* airvelo;
     MAPSensor* mapsens;
     Potentiometer* pot;
+    Logger* mylog;
     bool* ignition;
     static constexpr int entries = 100;  // size of log buffers
     int64_t times[2][entries];
@@ -49,9 +120,9 @@ class DiagRuntime {
     uint8_t most_critical_last[NUM_ERR_TYPES];
     DiagRuntime (Hotrc* a_hotrc, TemperatureSensorManager* a_temp, PressureSensor* a_pressure, BrakePositionSensor* a_brkpos,
         Tachometer* a_tach, Speedometer* a_speedo, GasServo* a_gas, BrakeMotor* a_brake, SteerMotor* a_steer, 
-        CarBattery* a_mulebatt, AirVeloSensor* a_airvelo, MAPSensor* a_mapsens, Potentiometer* a_pot, bool* a_ignition)
+        CarBattery* a_mulebatt, AirVeloSensor* a_airvelo, MAPSensor* a_mapsens, Potentiometer* a_pot, Logger* a_logger, bool* a_ignition)
         : hotrc(a_hotrc), tempsens(a_temp), pressure(a_pressure), brkpos(a_brkpos), tach(a_tach), speedo(a_speedo), gas(a_gas), brake(a_brake), 
-          steer(a_steer), mulebatt(a_mulebatt), airvelo(a_airvelo), mapsens(a_mapsens), pot(a_pot), ignition(a_ignition) {}
+          steer(a_steer), mulebatt(a_mulebatt), airvelo(a_airvelo), mapsens(a_mapsens), pot(a_pot), mylog(a_logger), ignition(a_ignition) {}
 
     void setup() {
         for (int32_t i=0; i<NUM_ERR_TYPES; i++)
@@ -196,10 +267,14 @@ class DiagRuntime {
         for (int32_t i=0; i<NUM_ERR_TYPES; i++) {
             for (int32_t j=0; j<NumTelemetryFull; j++) {
                 if (report_error_changes) {
-                    if (err_sens[i][j] && !err_last[i][j])
-                        Serial.printf("!diag: %s %s err\n", err_sens_card[j], err_type_card[i]);
-                    else if (!err_sens[i][j] && err_last[i][j])
-                        Serial.printf("!diag: %s %s ok\n", err_sens_card[j], err_type_card[i]);
+                    if (err_sens[i][j] && !err_last[i][j]) {
+                        mylog->printd("!diag: %s %s err\n", err_sens_card[j], err_type_card[i]);
+                        // Serial.printf("!diag: %s %s err\n", err_sens_card[j], err_type_card[i]);
+                    }
+                    else if (!err_sens[i][j] && err_last[i][j]) {
+                        mylog->printd("!diag: %s %s ok\n", err_sens_card[j], err_type_card[i]);
+                        // Serial.printf("!diag: %s %s ok\n", err_sens_card[j], err_type_card[i]);
+                    }
                 }
                 err_last[i][j] = err_sens[i][j];
             }

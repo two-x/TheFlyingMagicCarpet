@@ -1,8 +1,5 @@
 // Carpet CANTroller III  main source Code  - see README.md
 #include "objects.h"
-#include "display.h"  // includes neopixel.h, touch.h
-#include "runmodes.h"
-static RunModeManager run(&screen, &encoder);
 
 void setup() {
     initialize_pins();

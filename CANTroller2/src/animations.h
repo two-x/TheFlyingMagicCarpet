@@ -546,73 +546,9 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
     }
 };
-#include <iostream>
-#include <string>
-#include <vector>
-#include <sstream>
-#include <stdarg.h>
-class DiagConsole {
-  private:
-    LGFX* mylcd;
-    LGFX_Sprite* nowspr_ptr;
-    static constexpr int num_lines = 16;
-    // std::string textlines[num_lines];
-    int usedlines = 0;
-    std::vector<std::string> textlines; // Ring buffer array
-    size_t bufferSize; // Size of the ring buffer
-    size_t nextIndex; // Index for the next insertion
-  public:
-    void init() {
-        this->printf("Temperature: %d, Humidity: %.2f", 25, 50.67);
-        this->printf("Error Code: %d", 404);
-        for (size_t i = 0; i < 5; ++i) {
-            std::cout << "Element " << i << ": " << this->getBufferElement(i) << std::endl;
-        }
-    }
-    void setup() {}
-    // void redraw() {
-    //     panel->diffpush(&framebuf[flip], &framebuf[!flip]);
-    // }
-    // void add_errorline(std::string type, std::string item) {
-    //     std::string newerr = type + ": " + item;
-    //     if (newerr.length() > 15) newerr = newerr.substr(0, 15);
-    //     textlines[usedlines++] = newerr;
-    // }
-    void update() {
-        // int flip = panel->setflip(false);
-        // nowspr_ptr = &(framebuf[flip]);
-        // panel->diffpush(&framebuf[flip], &framebuf[!flip]);
-    }
-    // DiagConsole(size_t size) : bufferSize(size), nextIndex(0) {
-    //     textlines.resize(size);
-    // }
-    DiagConsole() {
-        nextIndex = 0;
-        textlines.resize(bufferSize);
-    }
-
-    // Function similar to Serial.printf()
-    void printf(const char* format, ...) {
-        va_list args;
-        va_start(args, format);
-        char temp[100]; // Assuming maximum length of output string
-        vsnprintf(temp, sizeof(temp), format, args);
-        va_end(args);
-        textlines[nextIndex] = temp; // Store formatted output into buffer
-        nextIndex = (nextIndex + 1) % bufferSize; // Update next insertion index
-    }
-
-    // Function to retrieve the stored strings
-    std::string getBufferElement(size_t index) {
-        if (index < bufferSize) {
-            return textlines[index];
-        } else {
-            return ""; // Return empty string if index is out of range
-        }
-    }
-};
 class AnimationManager {
   private:
+    bool draw_logs_not_mule = true;
     enum saverchoices : int { Eraser, Collisions, NumSaverMenu, Blank };
     int nowsaver = Eraser, still_running = 0;
     LGFX* mylcd;
@@ -622,7 +558,7 @@ class AnimationManager {
     CollisionsSaver cSaver;
     Simulator* sim;
     Touchscreen* touch;
-    DiagConsole diagconsole; // Initialize serial buffer with size 5
+    Logger* mylog; // Initialize serial buffer with size 5
     int touchp[2];
     int corner[2], sprsize[2];
     Timer fps_timer;
@@ -637,11 +573,12 @@ class AnimationManager {
         ++nowsaver %= NumSaverMenu;
         anim_reset_request = true;
     }
-    void init(LGFX* _lgfx, Simulator* _sim, Touchscreen* _touch, int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
+    void init(LGFX* _lgfx, Simulator* _sim, Touchscreen* _touch, Logger* _logger, int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
         Serial.printf("  animations init ..");
         mylcd = _lgfx;
         sim = _sim;
         touch = _touch;
+        mylog = _logger;
         set_vp(_cornerx, _cornery, _sprwidth, _sprheight);
         _width = vp.w << SHIFTSIZE;
         _height = vp.h << SHIFTSIZE;
@@ -735,6 +672,9 @@ class AnimationManager {
             }
             if (!still_running) change_saver();
         }
+        else if (draw_logs_not_mule) {
+            draw_logs(spr);
+        }
         else if (!mule_drawn) {
             spr->fillSprite(BLK);
             spr->pushImageRotateZoom(85 + vp.x, 85 + vp.y, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, BLK);
@@ -769,6 +709,17 @@ class AnimationManager {
     int touch_pt(int axis) {
         return touchp[axis];
     }
+    void draw_logline(LGFX_Sprite* _spr, int lineno) {
+        int yy = lineno * 8;  // disp_font_height;
+        _spr->setTextSize(1);
+        _spr->setTextColor(WHT);
+        _spr->drawRect(0, yy, mylog->colwidth * 6, 8, BLK);  //  disp_font_width, disp_font_height, BLK);
+        _spr->drawString(mylog->getlogline(lineno).c_str(), 0, yy);
+    }
+    void draw_logs(LGFX_Sprite* _spr) {
+        for (int lin=0; lin<mylog->num_lines; lin++) draw_logline(_spr, lin);
+    }
+    
 };
 #ifdef CONVERT_IMAGE 
 #define IMAGE_ARRAY mulechassis_145x74 

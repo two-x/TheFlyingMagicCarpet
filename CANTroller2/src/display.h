@@ -115,6 +115,7 @@ std::string* nulstrptr = &nulstr;
 class Display {
   private:
     NeopixelStrip* neo;
+    Logger* mylog;
     Touchscreen* touch;
     Simulator* sim;
     IdiotLights* idiots;
@@ -145,8 +146,8 @@ class Display {
     volatile bool disp_runmode_dirty;
     volatile bool disp_simbuttons_dirty;
     volatile bool disp_idiots_dirty;
-    Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim)
-      : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {}
+    Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim, Logger* _logger)
+      : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim), mylog(_logger) {}
     void init_framebuffers(int _sprwidth, int _sprheight) {
         int sprsize[2] = { _sprwidth, _sprheight };
         Serial.printf("  create frame buffers.. ");
@@ -205,7 +206,7 @@ class Display {
         for (int32_t row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
         yield();
         init_framebuffers(disp_width_pix, disp_height_pix);
-        animations.init(&lcd, sim, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
+        animations.init(&lcd, sim, touch, mylog, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
         animations.setup();
         sprptr = &framebuf[flip];
         reset_request = true;
@@ -1045,7 +1046,7 @@ class Tuner {
 static NeopixelStrip neo(neopixel_pin);
 static IdiotLights idiots;
 static Touchscreen touch;
-static Display screen(&neo, &touch, &idiots, &sim);
+static Display screen(&neo, &touch, &idiots, &sim, &logger);
 static Tuner tuner(&screen, &neo, &touch);
 #if VIDEO_TASKS
 // pushbuf_sem = xSemaphoreCreateMutexStatic(&push_semaphorebuf_sem);  // xSemaphoreCreateBinaryStatic(&push_semaphorebuf_sem);
