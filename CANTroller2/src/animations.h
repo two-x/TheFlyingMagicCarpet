@@ -563,8 +563,8 @@ class DiagConsole {
     size_t nextIndex; // Index for the next insertion
   public:
     void init() {
-        this->printf("Temperature: %d, Humidity: %.2f", 25, 50.67);
-        this->printf("Error Code: %d", 404);
+        this->dprintf("Temperature: %d, Humidity: %.2f", 25, 50.67);
+        this->dprintf("Error Code: %d", 404);
         for (size_t i = 0; i < 5; ++i) {
             std::cout << "Element " << i << ": " << this->getBufferElement(i) << std::endl;
         }
@@ -590,9 +590,7 @@ class DiagConsole {
         nextIndex = 0;
         textlines.resize(bufferSize);
     }
-
-    // Function similar to Serial.printf()
-    void printf(const char* format, ...) {
+    void dprintf(const char* format, ...) {  // Function similar to Serial.printf()
         va_list args;
         va_start(args, format);
         char temp[100]; // Assuming maximum length of output string
@@ -601,14 +599,17 @@ class DiagConsole {
         textlines[nextIndex] = temp; // Store formatted output into buffer
         nextIndex = (nextIndex + 1) % bufferSize; // Update next insertion index
     }
-
     // Function to retrieve the stored strings
     std::string getBufferElement(size_t index) {
         if (index < bufferSize) {
             return textlines[index];
-        } else {
+        }
+        else {
             return ""; // Return empty string if index is out of range
         }
+    }
+    void drawline(size_t index) {
+        Serial.printf("diag.test: %s\n", textlines[index]);
     }
 };
 class AnimationManager {

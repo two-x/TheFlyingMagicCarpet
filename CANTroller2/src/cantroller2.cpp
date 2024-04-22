@@ -2,7 +2,10 @@
 #include "objects.h"
 #include "display.h"  // includes neopixel.h, touch.h
 #include "runmodes.h"
+#include "diag.h"
 static RunModeManager run(&screen, &encoder);
+static SdCard sdcard;
+static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &ignition);
 
 void setup() {
     initialize_pins();

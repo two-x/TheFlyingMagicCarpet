@@ -1470,10 +1470,11 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             if (sim->potmapping(sens::joy)) pc[HORZ][FILT] = pot->mapToRange(pc[HORZ][OPMIN], pc[HORZ][OPMAX]);  // overwrite horz value if potmapping
             // Serial.printf("%d %d %lf\n",sim->potmapping(sens::joy),sim->potmapping(), pc[HORZ][FILT]);
         }
+        // note the following should be modified to scale from 0 at the deadband edge rather than the centerpoint
         else for (int8_t axis = HORZ; axis <= VERT; axis++) {
             us[axis][RAW] = (int32_t)(rmt[axis].readPulseWidth(true));
-            us[axis][RAW] = spike_filter(axis, us[axis][RAW]);  // Not exactly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
-            ema_filt(us[axis][RAW], &ema_us[axis], ema_alpha);  // Need unconstrained ema-filtered vertical for radio lost detection 
+            us[axis][RAW] = spike_filter(axis, us[axis][RAW]);  // Hardly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
+            ema_filt(us[axis][RAW], &ema_us[axis], ema_alpha);  // Store unconstrained ema-filtered value for radio lost detection and for checking against center deadband
             if (us[axis][RAW] >= us[axis][CENT])  // pc[axis][RAW] = us_to_pc(axis, us[axis][RAW]);
                 pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
             else pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
