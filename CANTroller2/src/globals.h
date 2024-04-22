@@ -114,8 +114,6 @@ enum err_type { LOST=0, RANGE=1, NUM_ERR_TYPES=2 };  // VALUE=2, STATE=3, WARN=4
 bool brake_hybrid_pid = true;
 int brake_default_pid = PressurePID;
 bool brake_linearize_target_extremes = true;  // keep brake target values linear near endpoints despite decreasing accuracy of one of the sensors? (this is the more accurate choice)  otherwise jump inaccurate-sensor influence near endpoint to actual endpoint (this is more predictable/consistent)
-bool starter_signal_support = true;
-bool remote_start_support = true;
 bool autostop_disabled = false;      // temporary measure to keep brake behaving until we get it debugged. Eventually should be false
 bool allow_rolling_start = true;    // may be a smart prerequisite, may be us putting obstacles in our way
 bool flip_the_screen = false;

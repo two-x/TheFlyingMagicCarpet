@@ -313,7 +313,7 @@ class GasServo : public ServoMotor {
     float gas_kp = 0.013;             // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
     float gas_ki = 0.000;             // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
     float gas_kd = 0.000;             // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
-    float cruise_ctrl_extent_pc, adjustpoint;  // During cruise adjustments, saves farthest trigger position read
+    float cruise_ctrl_extent_pc, adjustpoint, ctrlratio;  // During cruise adjustments, saves farthest trigger position read
     Timer cruiseDeltaTimer, throttleRateTimer;
   public:
     using ServoMotor::ServoMotor;
@@ -380,7 +380,8 @@ class GasServo : public ServoMotor {
             if (cruise_setpoint_scheme == PID_SUSPEND_FLY) throttle_target_pc = cruisepid.compute();
         }
         else if ((joydir == JOY_UP || (joydir == JOY_DN && cruise_speed_lowerable)) && cruise_trigger_released) {  // adjustments disabled until trigger has been to center at least once since going to cruise mode
-            float ctrlratio = (std::abs(hotrc->pc[VERT][FILT]) - hotrc->pc[VERT][DBTOP]) / (hotrc->pc[VERT][OPMAX] - hotrc->pc[VERT][DBTOP]);
+            if (joydir == JOY_UP) ctrlratio = (hotrc->pc[VERT][FILT] - hotrc->pc[VERT][DBTOP]) / (hotrc->pc[VERT][OPMAX] - hotrc->pc[VERT][DBTOP]);
+            else ctrlratio = (hotrc->pc[VERT][FILT] - hotrc->pc[VERT][DBBOT]) / (hotrc->pc[VERT][OPMIN] - hotrc->pc[VERT][DBBOT]);
             if (cruise_setpoint_scheme == THROTTLE_DELTA) {
                 if (cruise_adjusting) throttle_target_pc += joydir * ctrlratio * cruise_delta_max_pc_per_s * cruiseDeltaTimer.elapsed() / 1000000.0;
                 cruiseDeltaTimer.reset(); 

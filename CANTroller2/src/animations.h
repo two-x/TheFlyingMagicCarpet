@@ -409,7 +409,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 int d = 6 + rn(45);
                 uint16_t hue = spothue + 32768 * rn(2);
                 uint8_t sat = 255 - ((uint8_t)(spothue >> (7+season)));  // + rn(63) 
-                uint8_t brt = 80 + (30 * season) + rn(226 - 30 * season);
+                uint8_t brt = 150 + (30 * season) + rn(156 - 30 * season);
                 uint8_t c = hsv_to_rgb<uint8_t>(hue, sat, brt);
                 uint8_t c2 = hsv_to_rgb<uint8_t>(hue, sat, std::abs(brt-10));
                 // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/655.35), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);

@@ -202,41 +202,23 @@ class Starter {
     int now_req = REQ_NA;
     bool req_active = false;
     void setup() {
-        Serial.printf("Starter..\n");
-        set_pin (pin, INPUT_PULLDOWN);  // set pin as input
+        Serial.printf("Starter.. output-only supported\n");
+        set_pin(pin, OUTPUT);  // set pin as input or output
     }
     void request(int req) { now_req = req; }
     void update() {  // starter bidirectional handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
         // Serial.printf("m:%d o:%d r:%d\n", motor, pin_outputting, now_req);
-        if (!starter_signal_support) {  // if we don't get involved with or care about the car's starter
-            motor = LOW;                // arbitrarily give this variable a fixed value
-            now_req = REQ_NA;           // cancel any requests which we are ignoring anyway
-            return;                     // no action
-        }  // from here on, we can assume starter signal is supported
         if (now_req == REQ_TOG) now_req = !pin_outputting;  // translate a toggle request to a drive request opposite to the current drive state
         req_active = (now_req != REQ_NA);                   // for display
-        if (pin_outputting && (!motor || (now_req == REQ_OFF) || starterTimer.expired())) {  // if we're driving the motor but need to stop or in the process of stopping
-            if (motor) {                 // if motor is currently on
-                motor = LOW;             // we will turn it off
-                write_pin (pin, motor);  // begin driving the pin low voltage
-                starterTimer.set((int64_t)turnoff_timeout);               // start timer to control length of low output
-                if (gas.motormode == Starting) gas.setmode(lastgasmode);  // put the throttle back to doing whatever it was doing before
-                return;                  // ditch out, leaving the motor-off request intact. we'll check on the timer next time
-            }
-            else if (starterTimer.expired()) {  // if it's been long enough since turning off the motor circuit ...
-                set_pin (pin, INPUT_PULLDOWN);  // set pin as input
-                pin_outputting = false;         // we are no longer driving the pin
-                now_req = REQ_NA;               // reset the request line
-            }
+        if (pin_outputting && (now_req == REQ_OFF)) {  // if we're driving the motor but need to stop or in the process of stopping
+            motor = pin_outputting = LOW;             // we will turn it off
+            write_pin (pin, motor);  // begin driving the pin low voltage
+            if (gas.motormode == Starting) gas.setmode(lastgasmode);  // put the throttle back to doing whatever it was doing before
+            now_req = REQ_NA;
+            return;                  // ditch out, leaving the motor-off request intact. we'll check on the timer next time
         }  // now, we have stopped driving the starter if we were supposed to stop
         if (sim.simulating(sens::starter)) motor = pin_outputting;  // if simulating starter, there's no external influence
-        else if (!pin_outputting) {               // otherwise if we aren't driving the starter ...
-            do {
-                motor = digitalRead(pin);         // then let's read the pin, and starter variable will reflect whether starter has been turned on externally
-            } while (motor != digitalRead(pin));  // due to a chip glitch, starter pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
-            if (now_req != REQ_ON) now_req = REQ_NA;
-        }  // now, if we aren't driving the starter, we've read the pin and know its status
-        if (motor || now_req != REQ_ON || !remote_start_support) {  // if starter is already being driven by us or externally, or we aren't being tasked to drive it, or we don't even support driving it
+        if (motor || now_req != REQ_ON) {  // if starter is already being driven by us or externally, or we aren't being tasked to drive it
             now_req = REQ_NA;          // cancel any requests
             return;                    // and ditch
         }  // from here on, we can assume the starter is off and we are supposed to turn it on
@@ -245,7 +227,6 @@ class Starter {
             gas.setmode(Starting);            // give it some gas
             starterTimer.set((int64_t)run_timeout);  // if left on the starter will turn off automatically after X seconds
             pin_outputting = motor = HIGH;    // ensure starter variable always reflects the starter status regardless who is driving it
-            set_pin (pin, OUTPUT);            // then set pin to an output
             write_pin (pin, motor);           // and start the motor
             now_req = REQ_NA;                 // we have serviced starter-on request, so cancel it
             return;                           // if the brake was right we have started driving the starter
