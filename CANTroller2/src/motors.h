@@ -634,7 +634,11 @@ class BrakeMotor : public JagMotor {
             autostopping = !speedo->car_stopped();
             autoholding = !autostopping && (pressure->filt() >= pressure->hold_initial_psi - pressure->margin_psi);  // this needs to be tested  // if (!speedo->car_stopped()) {            
             if (autostopping) autostop(false);
-            else pc[OUT] = pc[STOP];
+            else if (autoholding) pc[OUT] = pc[STOP];
+            else {
+                set_pidtarg(std::max(pid_targ_pc, hold_initial_pc));
+                pid_out();
+            }
         }
         else if (motormode == AutoStop) {  // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
             throttle->setmode(Idle);  // Stop pushing the gas, will help us stop the car better
