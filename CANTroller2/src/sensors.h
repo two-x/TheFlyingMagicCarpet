@@ -1490,7 +1490,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         }
         else for (int8_t axis = HORZ; axis <= VERT; axis++) {  // read pulses and update filtered percent values
             us[axis][RAW] = (int32_t)(rmt[axis].readPulseWidth(true));
-            float us_spike = (float)spike_filter(axis, us[axis][RAW]);
+            int32_t us_spike = spike_filter(axis, us[axis][RAW]);
             ema_filt(us_spike, &us[axis][FILT], ema_alpha);
             pc[axis][RAW] = us_to_pc(axis, us[axis][RAW], false);
             pc[axis][FILT] = us_to_pc(axis, us[axis][FILT], true);

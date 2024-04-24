@@ -1,8 +1,6 @@
 // Carpet CANTroller III  main source Code  - see README.md
 #include "objects.h"
-#include "display.h"  // includes neopixel.h, touch.h
-#include "runmodes.h"
-static RunModeManager run(&screen, &encoder);
+TaskHandle_t temptask = nullptr, webtask = nullptr, pushTaskHandle = NULL, drawTaskHandle = NULL;
 
 void setup() {
     initialize_pins();
@@ -30,8 +28,7 @@ void setup() {
     fuelpump.setup();
     starter.setup();
     tempsens.setup();         // onewire bus and temp sensors
-    TaskHandle_t temptask = nullptr, webtask = nullptr, pushTaskHandle = NULL, drawTaskHandle = NULL;
-    xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temperature Sensors", 2048, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task  // 2048 works, 1024 failed
+    xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temp Sensors", 2048, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task  // 2048 works, 1024 failed
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);  // added for servos I think
     gas.setup(&hotrc, &speedo, &tach, &pot, &tempsens);
     brake.setup(&hotrc, &speedo, &mulebatt, &pressure, &brkpos, &gas, &tempsens);
@@ -89,7 +86,6 @@ void loop() {                 // arduino-style loop() is like main() but with a 
     diag.update(run.mode);            // notice any screwy conditions or suspicious shenanigans - consistent 200us
     neo.update(colorcard[run.mode]);  // ~100us
     screen.update(run.mode);  // display updates (50us + 3.5ms every 8 loops. screensaver add 15ms every 4 loops)
-    // sdcard.update();       // needs to be developed
     lightbox.update(run.mode, speedo.human());  // communicate any relevant data to the lighting controller
     looptimer.update();       // looptimer.mark("F");
 }

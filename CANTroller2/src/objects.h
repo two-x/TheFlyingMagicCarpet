@@ -326,3 +326,7 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
     }
 };
 static FuelPump fuelpump(tp_cs_fuel_pin);
+
+#include "display.h"  // includes neopixel.h, touch.h
+#include "runmodes.h"
+static RunModeManager run(&screen, &encoder);
