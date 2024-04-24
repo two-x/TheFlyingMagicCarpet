@@ -1490,12 +1490,12 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         }
         else for (int8_t axis = HORZ; axis <= VERT; axis++) {  // read pulses and update filtered percent values
             us[axis][RAW] = (int32_t)(rmt[axis].readPulseWidth(true));
-            pc[axis][RAW] = us_to_pc(axis, us[axis][RAW], false);
             float us_spike = (float)spike_filter(axis, us[axis][RAW]);
             ema_filt(us_spike, &us[axis][FILT], ema_alpha);
+            pc[axis][RAW] = us_to_pc(axis, us[axis][RAW], false);
             pc[axis][FILT] = us_to_pc(axis, us[axis][FILT], true);
             if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set joy_axis_filt to CENTer value
-            else if (pc[axis][FILT] != pc[axis][CENT]) kick_inactivity_timer(6);  // indicate evidence of user activity
+            else if (std::abs(pc[axis][FILT] - pc[axis][CENT]) > pc[axis][MARGIN]) kick_inactivity_timer(6);  // indicate evidence of user activity
         }
         for (int8_t axis = HORZ; axis <= VERT; axis++) pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
     }
