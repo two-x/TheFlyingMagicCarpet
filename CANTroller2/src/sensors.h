@@ -1425,6 +1425,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         failsafe_timer.set(failsafe_timeout); 
     }
     void calc_params() {
+        float m_factor;
         for (int8_t axis=HORZ; axis<=VERT; axis++) {
             us[axis][DBBOT] = us[axis][CENT] - deadband_us;
             us[axis][DBTOP] = us[axis][CENT] + deadband_us;
@@ -1432,9 +1433,10 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             pc[axis][OPMIN] = -100.0;
             pc[axis][CENT] = 0.0;
             pc[axis][OPMAX] = 100.0;
-            pc[axis][DBBOT] = pc[axis][CENT] - us_to_pc(axis, deadband_us);  // us_to_pc(axis, deadband_us);
-            pc[axis][DBTOP] = pc[axis][CENT] + us_to_pc(axis, deadband_us);  // us_to_pc(axis, deadband_us);
-            pc[axis][MARGIN] = us_to_pc(axis, margin_us);  // us_to_pc(axis, margin_us);
+            m_factor = (pc[axis][OPMAX] - pc[axis][OPMIN]) / (float)(us[axis][OPMAX] - us[axis][OPMIN]);
+            pc[axis][DBBOT] = pc[axis][CENT] - deadband_us * m_factor;
+            pc[axis][DBTOP] = pc[axis][CENT] + deadband_us * m_factor;
+            pc[axis][MARGIN] = margin_us * m_factor;
         }
     }
     int update() {
@@ -1472,6 +1474,15 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             sw[chan-2] = sw[chan];  // chan-2 index being used to store previous values of index chan
         }
     }
+    float us_to_pc(int8_t axis, int32_t _us, bool deadbands=false) {
+        if (deadbands) {
+            if (_us >= us[axis][DBTOP]) return map((float)us[axis][FILT], (float)us[axis][DBTOP], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
+            if (_us <= us[axis][DBBOT]) return map((float)us[axis][FILT], (float)us[axis][DBBOT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
+            return pc[axis][CENT];
+        }
+        if (_us >= us[axis][CENT]) return map((float)_us, (float)us[axis][CENT], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
+        return map((float)_us, (float)us[axis][CENT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);    
+    }
     void direction_update() {
         if (sim->simulating(sens::joy)) {
             if (sim->potmapping(sens::joy)) pc[HORZ][FILT] = pot->mapToRange(pc[HORZ][OPMIN], pc[HORZ][OPMAX]);  // overwrite horz value if potmapping
@@ -1479,16 +1490,10 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         }
         else for (int8_t axis = HORZ; axis <= VERT; axis++) {  // read pulses and update filtered percent values
             us[axis][RAW] = (int32_t)(rmt[axis].readPulseWidth(true));
-            if (us[axis][RAW] >= us[axis][CENT])
-                pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
-            else pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
+            pc[axis][RAW] = us_to_pc(axis, us[axis][RAW], false);
             float us_spike = (float)spike_filter(axis, us[axis][RAW]);
             ema_filt(us_spike, &us[axis][FILT], ema_alpha);
-            if (us[axis][FILT] >= us[axis][DBTOP])
-                pc[axis][FILT] = map((float)us[axis][FILT], (float)us[axis][DBTOP], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
-            else if (us[axis][FILT] <= us[axis][DBBOT])
-                pc[axis][FILT] = map((float)us[axis][FILT], (float)us[axis][DBBOT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
-            else pc[axis][FILT] = pc[axis][CENT];
+            pc[axis][FILT] = us_to_pc(axis, us[axis][FILT], true);
             if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set joy_axis_filt to CENTer value
             else if (pc[axis][FILT] != pc[axis][CENT]) kick_inactivity_timer(6);  // indicate evidence of user activity
         }
@@ -1501,12 +1506,6 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         }
         else if (failsafe_timer.expired()) _radiolost = true;
         return _radiolost;
-    }
-    float us_to_pc(int8_t _axis, int32_t _us) {  // float us_to_pc(int8_t axis, int32_t us) {
-        return (float)_us * (pc[VERT][OPMAX] - pc[VERT][OPMIN]) / (float)(us[VERT][OPMAX] - us[VERT][OPMIN]);
-        // if (us >= us[axis][CENT])
-        //     return map((float)us, (float)us[axis][CENT], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
-        // else return map((float)us, (float)us[axis][CENT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
     }
     // Spike filter pushes new hotrc readings into a LIFO ring buffer, replaces any well-defined spikes with values 
     // interpolated from before and after the spike. Also smoothes out abrupt value changes that don't recover later

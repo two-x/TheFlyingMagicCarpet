@@ -12,7 +12,7 @@
 #define    pressure_pin  7 // adc1.6           // analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V.
 #define     i2c_sda_pin  8 // sda0/adc1.7      // i2c bus for airspeed/map sensors, lighting board, cap touchscreen
 #define     i2c_scl_pin  9 // qhd0/scl0/adc1.8 // i2c bus for airspeed/map sensors, lighting board, cap touchscreen
-#define      tft_cs_pin 10 // cs0/adc1.9       // output, active low, chip select allows ILI9341 display chip use of the spi bus
+#define      tft_cs_pin 10 // cs0/adc1.9     * // output, active low, chip select allows ILI9341 display chip use of the spi bus. pin can be reclaimed if tft is the only spi device (lose the sd card)
 #define    spi_mosi_pin 11 // mosi0/adc2.0     // used as spi interface data for tft screen, sd card and resistive touch panel
 #define    spi_sclk_pin 12 // sclk0/adc2.1     // used as spi interface clock for tft screen, sd card and resistive touch panel
 #define    spi_miso_pin 13 // miso0/adc2.2     // used as spi interface data from sd card, resistive touch panel, and possibly (?) tft screen
@@ -49,7 +49,8 @@
 // 6. mulebatt_pin, pressure_pin, brake_pos_pin, pot_wipe_pin: (ADC inputs) should have 100nF cap to gnd, to improve signal stability, tho it works w/o it.
 
 // note onewire works on pins 19-21 but not on pins 39-42
-// if one more pin becomes needed, encoder_sw may be moved to pin 0, freeing up pin 38 (pin 0 requires a pullup, which encoder_sw has)
+// if more pins become needed, encoder_sw may be moved to pin 0, freeing up pin 38 (pin 0 requires a pullup, which encoder_sw has)
+// if more pins become needed, we can abandon the sd card and permanently enable the tft, getting us back 2 pins for those chip selects
 // ESP32-S3 TRM: https://www.espressif.com/sites/default/files/documentation/esp32-s3_technical_reference_manual_en.pdf#dma
 // ESP32-S3 datasheet: https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf
 // ESP32-S3 has 5 DMA channels in each direction. We would use them for SPI data out to TFT, neopixel data out, and possibly out to the 3 motor outputs and in from the 4 hotrc channels.
