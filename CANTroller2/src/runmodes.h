@@ -196,6 +196,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (!cal_gasmode_request && gas.motormode == Calibrate) gas.setmode(Idle);
         if (cal_brakemode_request && brake.motormode != Calibrate) brake.setmode(Calibrate);
         else if (!cal_brakemode_request && brake.motormode == Calibrate) brake.setmode(Halt);
+        cal_gasmode_request = cal_brakemode_request = false;
     }
 };
 // Here are the different runmodes documented

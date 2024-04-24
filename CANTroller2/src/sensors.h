@@ -1489,8 +1489,8 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             else if (us[axis][FILT] <= us[axis][DBBOT])
                 pc[axis][FILT] = map((float)us[axis][FILT], (float)us[axis][DBBOT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
             else pc[axis][FILT] = pc[axis][CENT];
-            if ((pc[axis][FILT] != pc[axis][CENT]) && !_radiolost) kick_inactivity_timer(6);  // indicate evidence of user activity
             if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set joy_axis_filt to CENTer value
+            else if (pc[axis][FILT] != pc[axis][CENT]) kick_inactivity_timer(6);  // indicate evidence of user activity
         }
         for (int8_t axis = HORZ; axis <= VERT; axis++) pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
     }
