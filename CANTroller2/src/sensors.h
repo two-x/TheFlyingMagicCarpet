@@ -1476,8 +1476,8 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
     }
     float us_to_pc(int8_t axis, int32_t _us, bool deadbands=false) {
         if (deadbands) {
-            if (_us >= us[axis][DBTOP]) return map((float)us[axis][FILT], (float)us[axis][DBTOP], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
-            if (_us <= us[axis][DBBOT]) return map((float)us[axis][FILT], (float)us[axis][DBBOT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
+            if (_us >= us[axis][DBTOP]) return map((float)_us, (float)us[axis][DBTOP], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
+            if (_us <= us[axis][DBBOT]) return map((float)_us, (float)us[axis][DBBOT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
             return pc[axis][CENT];
         }
         if (_us >= us[axis][CENT]) return map((float)_us, (float)us[axis][CENT], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
