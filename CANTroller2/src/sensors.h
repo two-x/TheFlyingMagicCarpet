@@ -1477,23 +1477,25 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             if (sim->potmapping(sens::joy)) pc[HORZ][FILT] = pot->mapToRange(pc[HORZ][OPMIN], pc[HORZ][OPMAX]);  // overwrite horz value if potmapping
             // Serial.printf("%d %d %lf\n",sim->potmapping(sens::joy),sim->potmapping(), pc[HORZ][FILT]);
         }
-        // note the following should be modified to scale from 0 at the deadband edge rather than the centerpoint
-        else for (int8_t axis = HORZ; axis <= VERT; axis++) {
+        else for (int8_t axis = HORZ; axis <= VERT; axis++) {  // read pulses and update filtered percent values
             us[axis][RAW] = (int32_t)(rmt[axis].readPulseWidth(true));
-            us[axis][RAW] = spike_filter(axis, us[axis][RAW]);  // Hardly "raw" any more after spike filter (not to mention really several readings in the past), but that's what we need
-            ema_filt(us[axis][RAW], &ema_us[axis], ema_alpha);  // Store unconstrained ema-filtered value for radio lost detection and for checking against center deadband
-            if (us[axis][RAW] >= us[axis][CENT])  // pc[axis][RAW] = us_to_pc(axis, us[axis][RAW]);
+            if (us[axis][RAW] >= us[axis][CENT])
                 pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
             else pc[axis][RAW] = map((float)us[axis][RAW], (float)us[axis][CENT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
-            ema_filt(pc[axis][RAW], &(pc[axis][FILT]), ema_alpha);  // do ema filter to determine joy_vert_filt
-            if (ema_us[axis] > us[axis][DBBOT] && ema_us[axis] < us[axis][DBTOP]) pc[axis][FILT] = pc[axis][CENT];  // if within the deadband set joy_axis_filt to CENTer value
-            else if (!_radiolost) kick_inactivity_timer(6);  // otherwise indicate evidence of user activity
+            float us_spike = spike_filter(axis, us[axis][RAW]);
+            ema_filt(us_spike, &us[axis][FILT], ema_alpha);
+            if (us[axis][FILT] >= us[axis][DBTOP])
+                pc[axis][FILT] = map((float)us[axis][FILT], (float)us[axis][DBTOP], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
+            else if (us[axis][FILT] <= us[axis][DBBOT])
+                pc[axis][FILT] = map((float)us[axis][FILT], (float)us[axis][DBBOT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
+            else pc[axis][FILT] = pc[axis][CENT];
+            if ((pc[axis][FILT] != pc[axis][CENT]) && !_radiolost) kick_inactivity_timer(6);  // indicate evidence of user activity
             if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set joy_axis_filt to CENTer value
         }
         for (int8_t axis = HORZ; axis <= VERT; axis++) pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
     }
     bool radiolost_update() {
-        if (ema_us[VERT] > failsafe_us + failsafe_margin_us) {
+        if (us[VERT][FILT] > failsafe_us + failsafe_margin_us) {
             failsafe_timer.reset();
             _radiolost = false;
         }
