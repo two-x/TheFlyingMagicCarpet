@@ -1,4 +1,6 @@
 #pragma once
+#include "freertos/FreeRTOS.h"  // for semaphores
+#include "freertos/semphr.h"  // for semaphores
 #include "tftsetup.h"
 #include "inputs.h"
 static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
@@ -101,11 +103,24 @@ volatile bool drawn = false;
 volatile bool pushed = true;
 
 #if VIDEO_TASKS
-  SemaphoreHandle_t pushbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t push_semaphorebuf_sem;
-  SemaphoreHandle_t drawbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t draw_semaphorebuf_sem;
+  SemaphoreHandle_t pushbuf_sem;  // StaticSemaphore_t push_semaphorebuf_sem;
+  SemaphoreHandle_t drawbuf_sem;  // StaticSemaphore_t draw_semaphorebuf_sem;
   static void push_task_wrapper(void *parameter);
   static void draw_task_wrapper(void *parameter);
 #endif
+void semaphore_setup() {
+    #if VIDEO_TASKS
+    Serial.println("Semaphores..");
+    pushbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t push_semaphorebuf_sem;
+    drawbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t draw_semaphorebuf_sem;
+    if (pushbuf_sem == NULL || drawbuf_sem == NULL) Serial.println(" creation failed");
+    else {
+        xSemaphoreGive(pushbuf_sem);
+        xSemaphoreGive(drawbuf_sem);
+    }
+    Serial.println("\n");
+    #endif
+}
 volatile int disp_oldmode = SHUTDOWN;
 volatile bool auto_saver_enabled = false;
 LGFX_Sprite* sprptr;
@@ -811,9 +826,9 @@ class Display {
         return true;
     }
     void push_task() {
-        if (!(screenRefreshTimer.expired() || always_max_refresh || auto_saver_enabled)) return;
-        if (is_drawing || !pushtime) return;  // vTaskDelay(pdMS_TO_TICKS(1));
-        is_pushing = true;
+        // if (!(screenRefreshTimer.expired() || always_max_refresh || auto_saver_enabled)) return;
+        // if (is_drawing || !pushtime) return;  // vTaskDelay(pdMS_TO_TICKS(1));
+        // is_pushing = true;
         // Serial.printf("f%d push@ 0x%08x vs 0x%08x\n", flip, &framebuf[flip], &framebuf[!flip]);
         screenRefreshTimer.reset();
         if (print_framebuffers) {  // warning this *severely* slows everything down, ~.25 sec/loop. consider disabling word wrap in terminal output
@@ -824,18 +839,18 @@ class Display {
         flip = !flip;
         sprptr = &framebuf[flip];
         pushclock = (int32_t)screenRefreshTimer.elapsed();
-        is_pushing = pushtime = false;  // drawn = 
+        // is_pushing = pushtime = false;  // drawn = 
     }
     void draw_task() {
-        if (is_pushing || pushtime) return;
-        is_drawing = true;
+        // if (is_pushing || pushtime) return;
+        // is_drawing = true;
         int32_t mark = (int32_t)screenRefreshTimer.elapsed();
         // Serial.printf("f%d draw@ 0x%08x\n", flip, &framebuf[flip]);
         draw_all(&framebuf[flip]);
         drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
         idleclock = refresh_limit - pushclock - drawclock;
-        is_drawing = false;  // pushed = false;
-        pushtime = true;
+        // is_drawing = false;  // pushed = false;
+        // pushtime = true;
     }
     void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref) {
         union {  // source
@@ -1048,23 +1063,35 @@ static Touchscreen touch;
 static Display screen(&neo, &touch, &idiots, &sim);
 static Tuner tuner(&screen, &neo, &touch);
 #if VIDEO_TASKS
+bool take_two_semaphores(SemaphoreHandle_t* sem1, SemaphoreHandle_t* sem2, TickType_t waittime=portMAX_DELAY) {   // pdMS_TO_TICKS(1)
+    if (xSemaphoreTake(*sem1, waittime) == pdTRUE) {
+        if (xSemaphoreTake(*sem2, waittime) == pdTRUE) return true;
+        xSemaphoreGive(*sem1);
+    }
+    return false;
+}
 // pushbuf_sem = xSemaphoreCreateMutexStatic(&push_semaphorebuf_sem);  // xSemaphoreCreateBinaryStatic(&push_semaphorebuf_sem);
 // drawbuf_sem = xSemaphoreCreateMutexStatic(&draw_semaphorebuf_sem);  // xSemaphoreCreateBinaryStatic(&draw_semaphorebuf_sem);
 static void push_task_wrapper(void *parameter) {
     while (true) {
-        // xSemaphoreTake(pushbuf_sem, portMAX_DELAY);
-        screen.push_task();
-        // xSemaphoreGive(drawbuf_sem);
+        if (screenRefreshTimer.expired() || always_max_refresh || auto_saver_enabled) {
+            if (take_two_semaphores(&pushbuf_sem, &drawbuf_sem, portMAX_DELAY)) {
+                screen.push_task();
+                xSemaphoreGive(pushbuf_sem);
+                xSemaphoreGive(drawbuf_sem);
+            }
+        }
         vTaskDelay(pdMS_TO_TICKS(1));
         // vTaskDelete(NULL);
     }
 }
 static void draw_task_wrapper(void *parameter) {
     while (true) {
+        if (xSemaphoreTake(drawbuf_sem, portMAX_DELAY) == pdTRUE) {
+            screen.draw_task();
+            xSemaphoreGive(drawbuf_sem);
+        }
         vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
-        // xSemaphoreTake(drawbuf_sem, portMAX_DELAY);
-        screen.draw_task();
-        // xSemaphoreGive(pushbuf_sem);
     }
 }
 #endif

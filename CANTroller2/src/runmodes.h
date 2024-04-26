@@ -32,8 +32,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         oldmode = mode;        
         // common to almost all the modes, so i put it here
-        if (hotrc.sw_event(CH3) && mode != ASLEEP) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
-
+        if (mode != ASLEEP) {
+            last_conscious_mode = mode;
+            if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
+        }
         if (mode == BASIC) run_basicMode(); // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         else if (mode == ASLEEP) run_asleepMode();
         else if (mode == SHUTDOWN) run_shutdownMode();
@@ -80,7 +82,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             still_interactive = true;
             sleep_request = REQ_NA;
             powering_up = false;
-            last_conscious_mode = oldmode;
             display->disp_bools_dirty = true;
             brake.setmode(Halt);
             steer.setmode(Halt);
