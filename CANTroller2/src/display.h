@@ -1,6 +1,4 @@
 #pragma once
-#include "freertos/FreeRTOS.h"  // for semaphores
-#include "freertos/semphr.h"  // for semaphores
 #include "tftsetup.h"
 #include "inputs.h"
 static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);

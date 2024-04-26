@@ -393,6 +393,9 @@ class BootMonitor {
     uint32_t bootcount;                         // variable to track total number of boots of this code build
     uint32_t codemode_postmortem;
     std::string codemodecard[4] = { "confused", "booting", "parked", "driving" };
+    Timer highWaterTimer{5000000};
+    TaskHandle_t* task1; TaskHandle_t* task2; TaskHandle_t* task3; TaskHandle_t* task4;
+    UBaseType_t highWaterBytes;
   public:
     BootMonitor(Preferences* _prefs, LoopTimer* _loop) : myprefs(_prefs), myloop(_loop) {}
     void bootcounter() {
@@ -410,7 +413,8 @@ class BootMonitor {
         if (codemode_last != codemode) myprefs->putUInt("codemode", codemode);
         codemode_last = codemode;
     }
-    void setup(int sec = -1) {
+    void setup(TaskHandle_t* t1, TaskHandle_t* t2, TaskHandle_t* t3, TaskHandle_t* t4, int sec = -1) {
+        task1 = t1;  task2 = t2;  task3 = t3;  task4 = t4;
         if (sec >= 0) timeout_sec = sec;
         myprefs->begin("FlyByWire", false);
         bootcounter();
@@ -444,10 +448,23 @@ class BootMonitor {
         if (!watchdog_enabled) return;
         esp_task_wdt_reset();
     }
+    void print_high_water(xTaskHandle* t1, xTaskHandle* t2, xTaskHandle* t3, xTaskHandle* t4) {
+        if (print_task_stack_usage && highWaterTimer.expireset()) {
+            highWaterBytes = uxTaskGetStackHighWaterMark(*t1) * sizeof(StackType_t);
+            Serial.printf("mem avail: temp:%d", highWaterBytes);
+            highWaterBytes = uxTaskGetStackHighWaterMark(*t2) * sizeof(StackType_t);
+            Serial.printf(", web:%d", highWaterBytes);
+            highWaterBytes = uxTaskGetStackHighWaterMark(*t3) * sizeof(StackType_t);
+            Serial.printf(", draw:%d", highWaterBytes);
+            highWaterBytes = uxTaskGetStackHighWaterMark(*t4) * sizeof(StackType_t);
+            Serial.printf(", push:%d\n", highWaterBytes);
+        }
+    }
     void update() {
         pet();
         if (codemode == Booting) set_codemode(Confused);
         write_uptime();
+        print_high_water(task1, task2, task3, task4);
     }
 };
 

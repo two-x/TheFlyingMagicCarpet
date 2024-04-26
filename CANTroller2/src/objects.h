@@ -1,5 +1,7 @@
 // objects.h : contains instantiations of major system components, and global functions
 #pragma once
+#include "freertos/FreeRTOS.h"  // for semaphores
+#include "freertos/semphr.h"  // for semaphores
 #include <esp_partition.h>
 #include <random>
 #include "globals.h"
@@ -65,6 +67,7 @@ void set_board_defaults() {          // true for dev boards, false for printed b
         dont_take_temperatures = false;
         button_test_heartbeat_color = false;
         print_framebuffers = false;
+        print_task_stack_usage = false;
     }
     printf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
 }
