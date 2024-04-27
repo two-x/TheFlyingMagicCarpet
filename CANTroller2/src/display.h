@@ -225,7 +225,7 @@ class Display {
         #if !VIDEO_TASKS
         update();
         #endif
-        Serial.printf(" display initialized\n");
+        Serial.printf("  display initialized\n");
     }
     void reset(LGFX_Sprite* spr) {
         blackout(spr);

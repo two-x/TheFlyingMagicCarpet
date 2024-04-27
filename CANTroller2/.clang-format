@@ -1,0 +1,61 @@
+# syntax formatting support, soren-optimized
+AlignTrailingComments: true
+AllowAllArgumentsOnNextLine: false
+AllowAllConstructorInitializersOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortBlocksOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: true
+AllowShortLoopsOnASingleLine: true
+BasedOnStyle: Microsoft  # All possible: LLVM, Google, Chromium, Mozilla, WebKit, Microsoft, GNU, Java, Stroustrup
+BinPackArguments: true
+BinPackParameters: true
+BraceWrapping:
+  AfterClass: false
+  AfterControlStatement: false
+  AfterEnum: false
+  AfterFunction: false
+  AfterNamespace: false
+  AfterStruct: false
+  AfterUnion: false
+  # BeforeCatch: false
+  # BeforeElse: false
+  IndentBraces: false
+BreakBeforeBinaryOperators: false
+BreakBeforeBraces: Attach
+BreakBeforeTernaryOperators: false
+BreakConstructorInitializersBeforeComma: false
+ColumnLimit: 0
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+ConstructorInitializerIndentWidth: 2
+ContinuationIndentWidth: 2
+# Cpp11BracedListStyle:  # Format braced lists as per C++11 style.
+DerivePointerAlignment: false
+DisableFormat: false
+# ExperimentalAutoDetectBinPacking: 
+# IncludeBlocks: Regroup
+# IncludeCategories:
+IndentCaseLabels: true
+IndentWidth: 4
+IndentWrappedFunctionNames: false
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+# NamespaceIndentation: 
+# ObjCBlockIndentWidth: 
+PenaltyBreakBeforeFirstCallParameter: 20
+PenaltyBreakComment: 10
+PenaltyBreakFirstLessLess: 25
+PenaltyBreakString: 20
+PenaltyExcessCharacter: 1
+PenaltyReturnTypeOnItsOwnLine: 50
+PointerAlignment: Left
+# SortIncludes: false
+SpaceAfterCStyleCast: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 2
+SpacesInParentheses: false
+TabWidth: 4
+UseTab: Never

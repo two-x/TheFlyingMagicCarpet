@@ -624,7 +624,7 @@ class BrakeMotor : public JagMotor {
         pid_final_out_pc = hybrid_out_ratio * outnow_pc[PressurePID] + (1.0 - hybrid_out_ratio) * outnow_pc[PositionPID];  // combine pid outputs weighted by the multiplier
         pc[OUT] = pid_final_out_pc;
     }
-    void autostop(bool panic_support=true) {
+    void carstop(bool panic_support=true) {
         bool panic = panic_support && panicstop;
         bool stopped_now = speedo->car_stopped();
         if (stopped_last && !stopped_now) stopcar_timer.reset();
@@ -645,9 +645,9 @@ class BrakeMotor : public JagMotor {
     }
     void set_output() {
         if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
-            autostop(false);
+            carstop(false);
             autoholding = !autostopping && (pressure->filt() >= pressure->hold_initial_psi - pressure->margin_psi);  // this needs to be tested  // if (!speedo->car_stopped()) {            
-            Serial.printf("as:%d ah:%d f:%lf, h:%lf, m:%lf\n", autostopping, autoholding, pressure->filt(), pressure->hold_initial_psi, pressure->margin_psi);
+            // Serial.printf("as:%d ah:%d f:%lf, h:%lf, m:%lf\n", autostopping, autoholding, pressure->filt(), pressure->hold_initial_psi, pressure->margin_psi);
             if (autoholding) pc[OUT] = pc[STOP];
             else if (!autostopping) {
                 set_pidtarg(std::max(pid_targ_pc, hold_initial_pc));
@@ -656,7 +656,7 @@ class BrakeMotor : public JagMotor {
         }
         else if (motormode == AutoStop) {  // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
             throttle->setmode(Idle);  // Stop pushing the gas, will help us stop the car better
-            autostop(true);
+            carstop(true);
             if (!autostopping) setmode(Halt);  // After AutoStop mode stops the car or times out, then stop driving the motor
         }
         else if (motormode == Halt) {

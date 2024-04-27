@@ -11,6 +11,7 @@ void setup() {
     set_board_defaults();      // set variables as appropriate if on a breadboard
     run_tests();
     psram_setup();
+    semaphore_setup();
     watchdog.setup(&temptask, &webtask, &drawTaskHandle, &pushTaskHandle);
     bootbutton.setup();
     hotrc.setup();
@@ -28,7 +29,6 @@ void setup() {
     fuelpump.setup();
     starter.setup();
     tempsens.setup();         // onewire bus and temp sensors
-    semaphore_setup();
     xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temp Sensors", 2048, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task  // 2048 works, 1024 failed,  priority is from 0 to 24=highest
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);  // added for servos I think
     gas.setup(&hotrc, &speedo, &tach, &pot, &tempsens);
