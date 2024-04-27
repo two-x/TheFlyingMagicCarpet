@@ -712,10 +712,10 @@ class BrakeMotor : public JagMotor {
             constrain_output();                // Step 3 : Fix motor pc value if it's out of range or threatening to exceed positional limits
             us[OUT] = out_pc_to_us(pc[OUT]);   // Step 4 : Convert motor percent value to pulse width for motor, and to volts for display
             volt[OUT] = out_pc_to_si(pc[OUT]);
-            write_motor();                     // Step 5 : Write to motor
+            write_motor();  // Step 5 : Write to motor
         }
     }
-    bool parked() { return brkpos->parked(); }  // return (brkpos->filt() >= brkpos->parkpos() - brkpos->margin());  // return (std::abs(pc[OUT] - parkpos_pc) <= pc[MARGIN]);  // return (std::abs(brkpos->filt() - brkpos->parkpos()) <= brkpos->margin());   // (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
+    bool parked() { return brkpos->parked(); }      // return (brkpos->filt() >= brkpos->parkpos() - brkpos->margin());  // return (std::abs(pc[OUT] - parkpos_pc) <= pc[MARGIN]);  // return (std::abs(brkpos->filt() - brkpos->parkpos()) <= brkpos->margin());   // (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
     bool released() { return brkpos->released(); }  // return (brkpos->filt() >= brkpos->zeropoint() - brkpos->margin());  // return (std::abs(pc[OUT] - zeropoint_pc) <= pc[MARGIN]);  // return (std::abs(brkpos->filt() - brkpos->zeropoint()) <= brkpos->margin());   // (brkpos->filt() + brkpos->margin() > brkpos->parkpos());
     float sensmin() { return (dominantpid == PressurePID) ? pressure->op_min() : brkpos->op_min(); }
     float sensmax() { return (dominantpid == PressurePID) ? pressure->op_max() : brkpos->op_max(); }
@@ -736,24 +736,27 @@ class SteerMotor : public JagMotor {
     void update() {
         if (volt_check_timer.expireset()) derive();
         if (pid_timer.expireset()) {
-            set_output();                                        // Step 1 : Determine motor percent value
-            constrain_output();                                  // Step 2 : Fix motor pc value if it's out of range
-            us[OUT] = out_pc_to_us(pc[OUT]);                     // Step 3 : Convert motor percent value to pulse width for motor, and to volts for display
+            set_output();                     // Step 1 : Determine motor percent value
+            constrain_output();               // Step 2 : Fix motor pc value if it's out of range
+            us[OUT] = out_pc_to_us(pc[OUT]);  // Step 3 : Convert motor percent value to pulse width for motor, and to volts for display
             volt[OUT] = out_pc_to_si(pc[OUT]);
-            write_motor();                                       // Step 4 : Write to motor
+            write_motor();  // Step 4 : Write to motor
         }
     }
     void setmode(int _mode) { motormode = _mode; }
+
   private:
     void set_output() {
         if (motormode == Halt) {
             pc[OUT] = pc[STOP];  // Stop the steering motor if in shutdown mode and shutdown is complete
-        }
-        else if (motormode == OpenLoop) {
+        } else if (motormode == OpenLoop) {
             int _joydir = hotrc->joydir(HORZ);
-            if (_joydir == JOY_RT) pc[OUT] = map(hotrc->pc[HORZ][FILT], hotrc->pc[HORZ][DBTOP], hotrc->pc[HORZ][OPMAX], pc[STOP], steer_safe(pc[OPMAX]));  // if joy to the right of deadband
-            else if (_joydir == JOY_LT) pc[OUT] = map(hotrc->pc[HORZ][FILT], hotrc->pc[HORZ][DBBOT], hotrc->pc[HORZ][OPMIN], pc[STOP], steer_safe(pc[OPMIN]));  // if joy to the left of deadband
-            else pc[OUT] = pc[STOP];  // Stop the steering motor if inside the deadband
+            if (_joydir == JOY_RT)
+                pc[OUT] = map(hotrc->pc[HORZ][FILT], hotrc->pc[HORZ][DBTOP], hotrc->pc[HORZ][OPMAX], pc[STOP], steer_safe(pc[OPMAX]));  // if joy to the right of deadband
+            else if (_joydir == JOY_LT)
+                pc[OUT] = map(hotrc->pc[HORZ][FILT], hotrc->pc[HORZ][DBBOT], hotrc->pc[HORZ][OPMIN], pc[STOP], steer_safe(pc[OPMIN]));  // if joy to the left of deadband
+            else
+                pc[OUT] = pc[STOP];  // Stop the steering motor if inside the deadband
         }
     }
     void constrain_output() {

@@ -56,6 +56,7 @@ volatile std::uint32_t _loop_count;
 static constexpr std::uint32_t SHIFTSIZE = 8;
 volatile bool flip = 0;
 volatile int32_t refresh_limit = 16666; // 16666; // = 60 Hz
+volatile bool auto_saver_enabled = false;
 Timer screenRefreshTimer = Timer((int64_t)refresh_limit);
 LGFX lcd;
 LGFX_Sprite framebuf[2];  // , datapage_sp[2], bargraph_sp[2], idiots_sp[2];
@@ -623,9 +624,9 @@ class AnimationManager {
     Simulator* sim;
     Touchscreen* touch;
     DiagConsole diagconsole; // Initialize serial buffer with size 5
-    int touchp[2];
+    int touchp[2], dispfps;
     int corner[2], sprsize[2];
-    Timer fps_timer;
+    Timer fps_timer, fps_timer2{250000};
     float myfps = 0.0;
     int64_t fps_mark;
     bool screensaver_last = false, simulating_last = false, mule_drawn = false;
@@ -714,6 +715,17 @@ class AnimationManager {
         if (myfps > 0.001) myfps = 1000000 / myfps;
         fps_mark = now;
     }
+    void display_fps(LGFX_Sprite* spr) {
+        if (auto_saver_enabled && autosaver_display_fps) {
+            if (fps_timer2.expireset()) dispfps = (int)myfps;
+            spr->fillRect(9, 9, 20, 10, BLK);
+            spr->setFont(&fonts::Font0);
+            spr->setTextDatum(textdatum_t::top_left);
+            spr->setCursor(10, 10);
+            spr->setTextColor(WHT);
+            spr->print(std::to_string(dispfps).c_str());
+        }
+    }
     float update(LGFX_Sprite* spr, bool dirty=false) {
         if (!screensaver_last && screensaver) change_saver();  // ptrsaver->reset();
         screensaver_last = screensaver;
@@ -728,10 +740,12 @@ class AnimationManager {
             if (nowsaver == Eraser) {
                 still_running = eSaver.update(spr, &vp);
                 if (touched()) eSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
+                display_fps(spr);
             }
             else if (nowsaver == Collisions) {
                 if (touched()) cSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
                 still_running = cSaver.update(spr, &vp);
+                display_fps(spr);
             }
             if (!still_running) change_saver();
         }

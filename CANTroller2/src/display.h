@@ -120,7 +120,6 @@ void semaphore_setup() {
     #endif
 }
 volatile int disp_oldmode = SHUTDOWN;
-volatile bool auto_saver_enabled = false;
 LGFX_Sprite* sprptr;
 std::string nulstr = "";
 std::string* nulstrptr = &nulstr;
