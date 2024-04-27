@@ -791,10 +791,10 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
         _ema_alpha = 0.15;
         op_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
         op_max_adc = 2080; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
-        hold_initial_psi = 45;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
-        hold_increment_psi = 3;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
-        panic_initial_psi = 80; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
-        panic_increment_psi = 5; // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
+        hold_initial_psi = 120.0;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
+        hold_increment_psi = 3.0;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
+        panic_initial_psi = 140.0; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
+        panic_increment_psi = 5.0; // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
         margin_psi = 1;  // Max acceptible error when checking psi levels
 
         set_native_limits(op_min_adc, op_max_adc);

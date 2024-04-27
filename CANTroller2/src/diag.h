@@ -450,8 +450,9 @@ class BootMonitor {
     }
     void print_high_water(xTaskHandle* t1, xTaskHandle* t2, xTaskHandle* t3, xTaskHandle* t4) {
         if (print_task_stack_usage && highWaterTimer.expireset()) {
+            Serial.printf("mem maxused(B): heap:%d", xPortGetMinimumEverFreeHeapSize());            
             highWaterBytes = uxTaskGetStackHighWaterMark(*t1) * sizeof(StackType_t);
-            Serial.printf("mem avail: temp:%d", highWaterBytes);
+            Serial.printf(" (tasks) temp:%d", highWaterBytes);
             highWaterBytes = uxTaskGetStackHighWaterMark(*t2) * sizeof(StackType_t);
             Serial.printf(", web:%d", highWaterBytes);
             highWaterBytes = uxTaskGetStackHighWaterMark(*t3) * sizeof(StackType_t);

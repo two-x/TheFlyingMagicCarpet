@@ -521,7 +521,8 @@ class BrakeMotor : public JagMotor {
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
     int dominantpid_last = brake_default_pid;    // float posn_inflect, pres_inflect, pc_inflect;
     float heat_math_offset, motor_heat_min = 75.0, motor_heat_max = 200.0;
-    Timer stopcar_timer{8000000}, interval_timer{1000000}, motor_park_timer{4000000}, motorheat_timer{500000};
+    Timer stopcar_timer{10000000}, interval_timer{1000000}, motor_park_timer{4000000}, motorheat_timer{500000};
+    bool stopped_last = false;
     void set_dominant_pid(int _pid) {
         dominantpid = _pid;
         pid_dom = &(pids[dominantpid]);
@@ -625,7 +626,10 @@ class BrakeMotor : public JagMotor {
     }
     void autostop(bool panic_support=true) {
         bool panic = panic_support && panicstop;
-        autostopping = (!speedo->car_stopped() && !stopcar_timer.expired());
+        bool stopped_now = speedo->car_stopped();
+        if (stopped_last && !stopped_now) stopcar_timer.reset();
+        stopped_last = stopped_now;
+        autostopping = (!stopped_now && !stopcar_timer.expired());
         if (!autostopping) return;
         if (interval_timer.expireset()) set_pidtarg(std::min(100.0f, pid_targ_pc + panic ? panic_increment_pc : hold_increment_pc));
         else set_pidtarg(std::max(pid_targ_pc, panic ? panic_initial_pc : hold_initial_pc));
@@ -643,6 +647,7 @@ class BrakeMotor : public JagMotor {
         if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
             autostop(false);
             autoholding = !autostopping && (pressure->filt() >= pressure->hold_initial_psi - pressure->margin_psi);  // this needs to be tested  // if (!speedo->car_stopped()) {            
+            Serial.printf("as:%d ah:%d f:%lf, h:%lf, m:%lf\n", autostopping, autoholding, pressure->filt(), pressure->hold_initial_psi, pressure->margin_psi);
             if (autoholding) pc[OUT] = pc[STOP];
             else if (!autostopping) {
                 set_pidtarg(std::max(pid_targ_pc, hold_initial_pc));
@@ -685,6 +690,7 @@ class BrakeMotor : public JagMotor {
                 || (pc[OUT] > pc[STOP] && brkpos->filt() < brkpos->min_in() + brkpos->margin()))  // if brake is at position limits and we're tring to go further, stop the motor
             pc[OUT] = pc[STOP]; 
         else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);  // send to the actuator. refuse to exceed range
+        if (std::abs(pc[OUT]) < 0.01) pc[OUT] = 0.0;
         for (int p = PositionPID; p <= PressurePID; p++) pids[p].set_output(pc[OUT]);  // Feed the final value back into the pids
     }
   public:
@@ -731,7 +737,7 @@ class SteerMotor : public JagMotor {
         if (volt_check_timer.expireset()) derive();
         if (pid_timer.expireset()) {
             set_output();                                        // Step 1 : Determine motor percent value
-            pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);  // Step 2 : Fix motor pc value if it's out of range or exceeding positional limits
+            constrain_output();                                  // Step 2 : Fix motor pc value if it's out of range
             us[OUT] = out_pc_to_us(pc[OUT]);                     // Step 3 : Convert motor percent value to pulse width for motor, and to volts for display
             volt[OUT] = out_pc_to_si(pc[OUT]);
             write_motor();                                       // Step 4 : Write to motor
@@ -749,6 +755,10 @@ class SteerMotor : public JagMotor {
             else if (_joydir == JOY_LT) pc[OUT] = map(hotrc->pc[HORZ][FILT], hotrc->pc[HORZ][DBBOT], hotrc->pc[HORZ][OPMIN], pc[STOP], steer_safe(pc[OPMIN]));  // if joy to the left of deadband
             else pc[OUT] = pc[STOP];  // Stop the steering motor if inside the deadband
         }
+    }
+    void constrain_output() {
+        pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);
+        if (std::abs(pc[OUT]) < 0.01) pc[OUT] = 0.0;
     }
     float steer_safe(float endpoint) {
         return pc[STOP] + (endpoint - pc[STOP]) * (1.0 - steer_safe_pc * speedo->filt() / (100.0 * speedo->redline_mph()));

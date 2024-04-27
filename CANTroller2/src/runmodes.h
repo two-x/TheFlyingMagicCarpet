@@ -9,7 +9,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     Encoder* encoder;
     Display* display;
     int oldmode = ASLEEP, last_conscious_mode;
-    bool autostopping_last = false, still_interactive = true;
+    bool still_interactive = true;
     uint32_t initial_inactivity;
   public:
     int mode = SHUTDOWN;
