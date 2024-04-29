@@ -128,7 +128,7 @@ void ignition_panic_update(int runmode) {  // Run once each main loop
         if (panicstop && !paniclast) panicTimer.reset();
     }
     if (panicstop) ignition_request = REQ_OFF;  // panic stop causes ignition cut
-    if (ignition_request != REQ_NA) {
+    if (ignition_request != REQ_NA && runmode != ASLEEP) {
         ignition = (bool)ignition_request;
         write_pin (ignition_pin, ignition);  // turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
     }

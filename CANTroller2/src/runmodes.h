@@ -130,11 +130,11 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             brake.setmode(Halt);
             watchdog.set_codestatus(Parked);  // write to flash we are in an appropriate place to lose power, so we can detect crashes on boot
             if (hotrc.sw_event(CH4) || sleep_inactivity_timer.expired() || sleep_request == REQ_TOG || sleep_request == REQ_ON) mode = ASLEEP;
-            sleep_request = REQ_NA;
             if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode
             if (basicmode_request) mode = BASIC;  // if fully shut down and basic mode requested, go to basic mode
         }
         if ((speedo.car_stopped() || allow_rolling_start) && ignition && !panicstop && !tach.engine_stopped()) mode = HOLD;  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
+        sleep_request = REQ_NA;
     }
     void run_stallMode(bool recovering=false) {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
         if (we_just_switched_modes) {
