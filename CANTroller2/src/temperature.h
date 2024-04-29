@@ -2,7 +2,7 @@
 #include <vector>
 #include <DallasTemperature.h>
 
-enum class loc { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR, NUM_LOCATIONS };  // , SOREN_DEV0, SOREN_DEV1, };
+enum class loc { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR, BRAKE, NUM_LOCATIONS };  // , SOREN_DEV0, SOREN_DEV1, };
 
 class TemperatureSensor {
 public:
@@ -79,6 +79,7 @@ public:
             case loc::WHEEL_FR: return "wheel_fr";
             case loc::WHEEL_RL: return "wheel_rl";
             case loc::WHEEL_RR: return "wheel_rr";
+            case loc::BRAKE: return "brakemotor";
             default: return "unknown";
         }
     }
@@ -113,6 +114,7 @@ private:
         loc::WHEEL_FR,
         loc::WHEEL_RL,
         loc::WHEEL_RR,
+        loc::BRAKE,
         };
     std::map<loc, DeviceAddress> known_addresses = {
         {loc::ENGINE, {0x28, 0x1a, 0x27, 0x90, 0x5c, 0x21, 0x01, 0x59}},
@@ -120,7 +122,8 @@ private:
         {loc::WHEEL_FL, {0x28, 0x55, 0x42, 0x8f, 0x5c, 0x21, 0x01, 0x69}},
         {loc::WHEEL_FR, {0x28, 0x70, 0x73, 0xb3, 0x5c, 0x21, 0x01, 0x27}},
         {loc::WHEEL_RL, {0x28, 0x54, 0xfb, 0x88, 0x5c, 0x21, 0x01, 0x64}},
-        {loc::WHEEL_RR, {0x28, 0x6f, 0xcd, 0xba, 0x5c, 0x21, 0x01, 0x26}}
+        {loc::WHEEL_RR, {0x28, 0x6f, 0xcd, 0xba, 0x5c, 0x21, 0x01, 0x26}},
+        {loc::BRAKE, {0x28, 0x09, 0xe0, 0xd7, 0x5c, 0x21, 0x01, 0x4e}},
     };
 
     std::map<loc, TemperatureSensor> sensors;
@@ -147,7 +150,7 @@ private:
                     // The sensor already exists, so just update its address
                     sensor_it->second.set_address(*detected_address_it);
                     // Print the updated sensor address for debugging purposes
-                    printf("  updated sensor addr: ");
+                    Serial.printf("  updated sensor addr: ");
                     sensor_it->second.print_address();
                 }
             } else {
@@ -156,7 +159,7 @@ private:
                 // Serial.printf("  known sensor %s not detected\n", TemperatureSensor::location_to_string(known_address.first).c_str());
             }
         }
-        if (lost_sensors) Serial.printf("  did not detect %d known sensor(s)\n", lost_sensors);
+        if (lost_sensors) Serial.printf("  did not detect %d known sensor(s)", lost_sensors);
     }
 
     // Assign remaining addresses to any unassigned locations, in order of the locations enum
@@ -171,10 +174,10 @@ private:
                 }
                 if (it != all_locations.end()) {
                     // The sensor doesn't exist yet, so create it and add it to the map and print the sensor address
-                    printf("  detected unknown sensor addr: ");
+                    Serial.printf("  detected unknown sensor addr: ");
                     sensors.emplace(*it, TemperatureSensor(*it, detected_address, &tempsensebus));
                     sensors.at(*it).print_address();
-                    printf("\n");
+                    Serial.printf("\n");
                 }
             }
         }

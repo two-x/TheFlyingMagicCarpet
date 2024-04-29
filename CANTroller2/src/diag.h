@@ -35,7 +35,7 @@ class DiagRuntime {
     char err_sens_card[NumTelemetryFull+2][7] = {  // this needs to match telemetry_idiots and telemetry_full enums, with NA and None tacked on the end
         "Throtl", "BkMotr", "Steer", "HotRC", "Speedo", "Tach", "BkPres", "BkPosn", "Temps", "Other", "GPIO", 
         "HrcHrz", "HrcVrt", "HrcCh3", "HrcCh4", "Batery", "AirVel", "MAP", "Pot", "TmpEng", "TmpWFL", "TmpWFR",
-        "TmpWRL", "TmpWRR", "TmpAmb", "Ign", "Start", "BasicS", "FuelP",
+        "TmpWRL", "TmpWRR", "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS", "FuelP",
         "NA", "None"
     };
 

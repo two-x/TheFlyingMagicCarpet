@@ -47,7 +47,7 @@ static std::string units[disp_fixed_lines] = { "%", "mph", "rpm", "%", "psi", "%
 static std::string brake_pid_card[2] = { "presur", "positn" };
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
 static std::string motormodecard[NumMotorModes+1] = { "Halt", "Idle", "Releas", "OpenLp", "PID", "AuStop", "AuHold", "Park", "Cruise", "Calib", "Start", "NA" };
-static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 6, 8, 7, 7, 9, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 6, 8, 7, 7, 10, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
@@ -57,7 +57,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { brAk"Posn", brAk"Mode", "Pn|PrErr", "BrakeTgt", "HybrdTgt", "TgtRatio", "OutRatio", "MotrHeat", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
-    { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", " Touch X", " Touch Y", "  Uptime", "Webservr", "No Temps", },  // PG_TEMP
+    { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", " Touch X", " Touch Y", "  Uptime", "Webservr", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
     { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "Draw Clk", "Push Clk", "Idle Clk", "BlnkDemo", neo_bright, "NeoDesat", "Animaton", },  // PG_UI
 };
@@ -70,7 +70,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "in",   scroll, "psin", "psin", "%",    "%",    "%",    degreF, ______, "Hz",   "s",    },  // PG_BPID
     { "%",    "rpm",  "rpm",  "%",    "%",    "%",    "%",    degsec, ______, "Hz",   "s",    },  // PG_GPID
     { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "rpm",  "%",    "%/s",  ______, "Hz",   "s",    },  // PG_CPID
-    { degreF, degreF, degreF, degreF, degreF, degreF, "pix",  "pix",  "min",  b1nary, b1nary, },  // PG_TEMP
+    { degreF, degreF, degreF, degreF, degreF, degreF, degreF, "pix",  "pix",  "min",  b1nary, },  // PG_TEMP
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
     { "us",   "us",   "Hz",   "fps",  "us",   "us",   "us",   b1nary, "%",    "/10",  "eyes", },  // PG_UI
 };
@@ -761,11 +761,12 @@ class Display {
             draw_temperature(loc::WHEEL_FR, 12);
             draw_temperature(loc::WHEEL_RL, 13);
             draw_temperature(loc::WHEEL_RR, 14);
-            draw_dynamic(15, touch->touch_pt(0), 0, disp_width_pix);
-            draw_dynamic(16, touch->touch_pt(1), 0, disp_height_pix);
-            draw_dynamic(17, looptimer.uptime());
-            draw_truth(18, !web_disabled, 0);  // note this value is inverse to how it's displayed, same for the tuner entry
-            draw_truth(19, dont_take_temperatures, 2);
+            draw_temperature(loc::BRAKE, 15);
+            draw_dynamic(16, touch->touch_pt(0), 0, disp_width_pix);
+            draw_dynamic(17, touch->touch_pt(1), 0, disp_height_pix);
+            draw_dynamic(18, looptimer.uptime());
+            draw_truth(19, !web_disabled, 0);  // note this value is inverse to how it's displayed, same for the tuner entry
+            // draw_truth(19, dont_take_temperatures, 2);
         }
         else if (datapage == PG_SIM) {
             draw_truth(9, sim->can_sim(sens::joy), 0);
@@ -799,8 +800,16 @@ class Display {
     void update(int _nowmode = -1) {
         if (_nowmode >= 0) nowmode = _nowmode;
         #if !VIDEO_TASKS
-            if (pushtime) push_task();
-            else draw_task();
+            if (pushtime) {
+                if (!(screenRefreshTimer.expired() || always_max_refresh || auto_saver_enabled)) return;
+                screenRefreshTimer.reset();
+                push_task();
+                pushtime = false;
+            }
+            else {
+                draw_task();
+                pushtime = true;
+            }
         #endif
     }
     bool draw_all(LGFX_Sprite* spr) {
@@ -823,11 +832,7 @@ class Display {
         return true;
     }
     void push_task() {
-        // if (!(screenRefreshTimer.expired() || always_max_refresh || auto_saver_enabled)) return;
-        // if (is_drawing || !pushtime) return;  // vTaskDelay(pdMS_TO_TICKS(1));
-        // is_pushing = true;
         // Serial.printf("f%d push@ 0x%08x vs 0x%08x\n", flip, &framebuf[flip], &framebuf[!flip]);
-        screenRefreshTimer.reset();
         if (print_framebuffers) {  // warning this *severely* slows everything down, ~.25 sec/loop. consider disabling word wrap in terminal output
             Serial.printf("flip=%d\n", flip);
             printframebufs(2);
@@ -836,18 +841,13 @@ class Display {
         flip = !flip;
         sprptr = &framebuf[flip];
         pushclock = (int32_t)screenRefreshTimer.elapsed();
-        // is_pushing = pushtime = false;  // drawn = 
     }
     void draw_task() {
-        // if (is_pushing || pushtime) return;
-        // is_drawing = true;
         int32_t mark = (int32_t)screenRefreshTimer.elapsed();
         // Serial.printf("f%d draw@ 0x%08x\n", flip, &framebuf[flip]);
         draw_all(&framebuf[flip]);
         drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
         idleclock = refresh_limit - pushclock - drawclock;
-        // is_drawing = false;  // pushed = false;
-        // pushtime = true;
     }
     void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref) {
         union {  // source
@@ -1028,8 +1028,8 @@ class Tuner {
                 else if (sel_val == 10) gas.cruisepid.add_kd(0.001f * fdelta);
             }
             else if (datapage == PG_TEMP) {
-                if (sel_val == 9) adj_bool(&web_disabled, -1 * idelta);  // note this value is inverse to how it's displayed, same for the value display entry
-                else if (sel_val == 10) adj_bool(&dont_take_temperatures, idelta);
+                if (sel_val == 10) adj_bool(&web_disabled, -1 * idelta);  // note this value is inverse to how it's displayed, same for the value display entry
+                // else if (sel_val == 10) adj_bool(&dont_take_temperatures, idelta);
             }
             else if (datapage == PG_SIM) {
                 if (sel_val == 0) { sim.set_can_sim(sens::joy, idelta); screen->disp_simbuttons_dirty = true; }
@@ -1073,6 +1073,7 @@ static void push_task_wrapper(void *parameter) {
     while (true) {
         if (screenRefreshTimer.expired() || always_max_refresh || auto_saver_enabled) {
             if (take_two_semaphores(&pushbuf_sem, &drawbuf_sem, portMAX_DELAY)) {
+                screenRefreshTimer.reset();
                 screen.push_task();
                 xSemaphoreGive(pushbuf_sem);
                 xSemaphoreGive(drawbuf_sem);

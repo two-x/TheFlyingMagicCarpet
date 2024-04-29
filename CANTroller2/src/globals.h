@@ -103,12 +103,12 @@ enum brake_pid_modes { PositionPID=0, PressurePID=1, HybridPID=2, NumBrakePIDs=4
 enum tunerstuff { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum boolean_states { ON=1 };
 enum datapages { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
-enum temp_categories { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
+enum temp_categories { AMBIENT=0, ENGINE=1, WHEEL=2, BRAKE=3, NUM_TEMP_CATEGORIES=4 };  // 
 enum temp_lims { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };   // possible sources of gas, brake, steering commands
 enum ui_modes { DatapagesUI=0, ScreensaverUI=1 };
 enum codestatus { Confused=0, Booting=1, Parked=2, Stopped=3, Driving=4, NumCodeStatuses=5 };
 enum telemetry_idiots { _None=-1, _GasServo=0, _BrakeMotor=1, _SteerMotor=2, _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7, _Temps=8, _Other=9, _GPIO=10, NumTelemetryIdiots=11 };  // _MuleBatt, _MAP, _MAF, _Pot,
-enum telemetry_full { _HotRCHorz=11, _HotRCVert=12, _HotRCCh3=13, _HotRCCh4=14, _MuleBatt=15, _AirVelo=16, _MAP=17, _Pot=18, _TempEng=19, _TempWhFL=20, _TempWhFR=21, _TempWhRL=22, _TempWhRR=23, _TempAmb=24, _Ignition=25, _Starter=26, _BasicSw=27, _FuelPump=28, NumTelemetryFull=29 };  // 10 per line
+enum telemetry_full { _HotRCHorz=11, _HotRCVert=12, _HotRCCh3=13, _HotRCCh4=14, _MuleBatt=15, _AirVelo=16, _MAP=17, _Pot=18, _TempEng=19, _TempWhFL=20, _TempWhFR=21, _TempWhRL=22, _TempWhRR=23, _TempBrake=24, _TempAmb=25, _Ignition=26, _Starter=27, _BasicSw=28, _FuelPump=29, NumTelemetryFull=30 };  // 10 per line
 enum err_type { LOST=0, RANGE=1, NUM_ERR_TYPES=2 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, 
 
 // global configuration settings
@@ -148,10 +148,11 @@ float flycruise_vert_margin_pc = 0.3;       // Margin of error for determining h
 int cruise_setpoint_scheme = THROTTLE_DELTA;
 int32_t cruise_delta_max_pc_per_s = 16;  // (in THROTTLE_DELTA mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
 float cruise_angle_attenuator = 0.016;   // (in THROTTLE_ANGLE mode) Limits the change of each adjust trigger pull to this fraction of what's possible
-float temp_lims_f[3][6]{
+float temp_lims_f[NUM_TEMP_CATEGORIES][6]{
     {45.0, 0.0, 115.0, 120.0, 130.0, 220.0},  // [AMBIENT] [OPMIN/DISP_MIN/OPMAX/WARNING/ALARM]
     {178.0, 0.0, 198.0, 202.0, 205.0, 220.0}, // [ENGINE] [OPMIN/DISP_MIN/OPMAX/WARNING/ALARM]
     {50.0, 0.0, 120.0, 130.0, 140.0, 220.0},  // [WHEEL] [OPMIN/DISP_MIN/OPMAX/WARNING/ALARM] (applies to all wheels)
+    {45.0, 0.0, 120.0, 130.0, 140.0, 220.0},  // [BRAKE] [OPMIN/DISP_MIN/OPMAX/WARNING/ALARM]
 };
 float temp_room = 77.0;          // "room" temperature is 25 C = 77 F  Who cares?
 float temp_sensor_min_f = -67.0; // minimum reading of sensor is -25 C = -67 F
