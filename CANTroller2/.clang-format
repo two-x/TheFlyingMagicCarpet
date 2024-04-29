@@ -96,7 +96,7 @@ BreakBeforeTernaryOperators: false
 # BreakConstructorInitializers: BeforeColon  # BreakConstructorInitializersBeforeComma: false
 # BreakInheritanceList: BeforeColon
 BreakStringLiterals: true
-ColumnLimit: 0
+ColumnLimit: 300
 # CommentPragmas: '^ IWYU pragma:'
 # ConstructorInitializerAllOnOneLineOrOnePerLine: true    # is this a valid key?
 ConstructorInitializerIndentWidth: 2
@@ -116,18 +116,18 @@ FixNamespaceComments: true
 #   - KJ_IF_MAYBE
 IncludeBlocks:   Preserve     # Regroup
 # IncludeCategories:
-#   - Regex:           '^"(llvm|llvm-c|clang|clang-c)/'
-#     Priority:        2
-#     SortPriority:    0
-#     CaseSensitive:   false
-#   - Regex:           '^(<|"(gtest|gmock|isl|json)/)'
-#     Priority:        3
-#     SortPriority:    0
-#     CaseSensitive:   false
-#   - Regex:           '.*'
-#     Priority:        1
-#     SortPriority:    0
-#     CaseSensitive:   false
+#   - Regex: '^"(llvm|llvm-c|clang|clang-c)/'
+#     Priority: 2
+#     SortPriority: 0
+#     CaseSensitive: false
+#   - Regex: '^(<|"(gtest|gmock|isl|json)/)'
+#     Priority: 3
+#     SortPriority: 0
+#     CaseSensitive: false
+#   - Regex: '.*'
+#     Priority: 1
+#     SortPriority: 0
+#     CaseSensitive: false
 # IncludeIsMainRegex: '(Test)?$'
 IncludeIsMainSourceRegex: ''
 IndentAccessModifiers: false
@@ -175,13 +175,12 @@ PenaltyBreakString: 1000
 PenaltyBreakTemplateDeclaration: 10
 PenaltyExcessCharacter: 1
 PenaltyIndentedWhitespace: 0
-
 PenaltyReturnTypeOnItsOwnLine: 1000
 PointerAlignment: Left
-PPIndentWidth:   -1
+PPIndentWidth: -1
 QualifierAlignment: Leave
 ReferenceAlignment: Pointer
-ReflowComments:  true
+ReflowComments: true
 RemoveBracesLLVM: false
 RemoveParentheses: Leave
 RemoveSemicolon: false
