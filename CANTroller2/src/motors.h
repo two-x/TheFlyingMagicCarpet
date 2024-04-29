@@ -534,7 +534,7 @@ class BrakeMotor : public JagMotor {
   public:
     using JagMotor::JagMotor;
     int motormode = Halt, oldmode = Halt, active_pids = HybridPID, dominantpid = brake_default_pid;
-    bool mode_busy = false, posn_pid_active = (dominantpid == PositionPID);
+    bool mode_busy = false, brake_tempsens_exists = false, posn_pid_active = (dominantpid == PositionPID);
     QPID pids[2];  // brake changes from pressure target to position target as pressures decrease, and vice versa
     QPID* pid_dom = &(pids[PressurePID]);  // AnalogSensor sensed[2];
     float brake_pid_trans_threshold_lo = 0.25;  // tunable. At what fraction of full brake pressure will motor control begin to transition from posn control to pressure control
@@ -556,14 +556,21 @@ class BrakeMotor : public JagMotor {
         hybrid_math_offset = 0.5 * (brake_pid_trans_threshold_hi + brake_pid_trans_threshold_lo);
         hybrid_math_coeff = M_PI / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo);
     }
+    bool detect_tempsens() {
+        float trytemp = tempsens->val(loc::BRAKE);
+        brake_tempsens_exists = !std::isnan(trytemp);
+        Serial.printf(" using heat %s sensor\n", brake_tempsens_exists ? "readings from detected" : "estimates in lieu of");
+        return brake_tempsens_exists;
+    }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, GasServo* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
-        printf("Brake motor..\n");
+        Serial.printf("Brake motor..");
         JagMotor::setup(_hotrc, _speedo, _batt);
         pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
         // duty_fwd_pc = brakemotor_max_duty_pc;
         pres_last = pressure->filt();
         posn_last = brkpos->filt();
         set_dominant_pid(brake_default_pid);
+        detect_tempsens();
         if (!std::isnan(tempsens->val(loc::AMBIENT))) motor_heat_min = tempsens->val(loc::AMBIENT);
         derive();
         if (brake_hybrid_pid) calc_hybrid_ratio(pressure->filt());
@@ -577,20 +584,24 @@ class BrakeMotor : public JagMotor {
         float added_heat, nowtemp, out_ratio;
         if (motorheat_timer.expireset()) {
             out_ratio = pc[OUT] / 100.0;
-            nowtemp = tempsens->val(loc::AMBIENT);
-            if (std::isnan(motor_heat) && !std::isnan(nowtemp)) {
-                motor_heat = nowtemp;
-                Serial.printf("Actively forecasting brake motor heat generation\n");
-                return;
-            }
-            if (std::isnan(nowtemp)) added_heat = motor_heatloss_rate / -4.0;
+            if (brake_tempsens_exists) motor_heat = tempsens->val(loc::BRAKE);
             else {
-                motor_heat_min = nowtemp;
-                if (motor_heat > nowtemp) added_heat = -motor_heatloss_rate * (motor_heat - nowtemp) / nowtemp;
+                nowtemp = tempsens->val(loc::AMBIENT);
+                if (std::isnan(motor_heat) && !std::isnan(nowtemp)) {
+                    motor_heat = nowtemp;
+                    Serial.printf("Actively forecasting brake motor heat generation\n");
+                    return;
+                }
+                if (std::isnan(nowtemp)) added_heat = motor_heatloss_rate / -4.0;
+                else {
+                    motor_heat_min = nowtemp;
+                    if (motor_heat > nowtemp) added_heat = -motor_heatloss_rate * (motor_heat - nowtemp) / nowtemp;
+                }
+                if (pc[OUT] <= brakemotor_max_duty_pc + pc[MARGIN]) added_heat += map(pc[OUT], 0.0, -100.0, 0.0, motor_max_unloaded_heatup_rate);
+                else if (pc[OUT] > brakemotor_max_duty_pc - pc[MARGIN]) added_heat += map(pc[OUT], brakemotor_max_duty_pc, 100.0, 0.0, motor_max_loaded_heatup_rate);
+                motor_heat += added_heat;
             }
-            if (pc[OUT] <= brakemotor_max_duty_pc + pc[MARGIN]) added_heat += map(pc[OUT], 0.0, -100.0, 0.0, motor_max_unloaded_heatup_rate);
-            else if (pc[OUT] > brakemotor_max_duty_pc - pc[MARGIN]) added_heat += map(pc[OUT], brakemotor_max_duty_pc, 100.0, 0.0, motor_max_loaded_heatup_rate);
-            motor_heat = constrain(motor_heat + added_heat, motor_heat_min, motor_heat_max);
+            motor_heat = constrain(motor_heat, motor_heat_min, motor_heat_max);
         }
         // that's great to have some idea whether the motor is hot. but we need to take some actions in response
     }

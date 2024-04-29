@@ -24,9 +24,9 @@ public:
      void request_temperature() {
         // Request temperature from sensor
         if (!_tempsensebus->requestTemperaturesByAddress(_address.data())) {
-            printf("  failed temperature request from sensor addr: ");
+            Serial.printf("  failed temperature request from sensor addr: ");
             print_address();
-            printf("\n");
+            Serial.printf("\n");
         }
     }
 
@@ -39,9 +39,9 @@ public:
     float read_temperature() {
         float temp = _tempsensebus->getTempF(_address.data());
         if (temp == DEVICE_DISCONNECTED_F) {
-            printf("  disconnected device %s w/ addr: ", location_to_string(_location));
+            Serial.printf("  disconnected device %s w/ addr: ", location_to_string(_location));
             print_address();
-            printf("\n");
+            Serial.printf("\n");
             return DEVICE_DISCONNECTED_F;
         } 
         _temperature = temp;
@@ -61,14 +61,15 @@ public:
     }
     
     void print_address() const {
-        printf("0x");
-        for(uint8_t i = 0; i < _address.size(); i++) printf("%02x", _address[i]);
+        Serial.printf("0x");
+        for(uint8_t i = 0; i < _address.size(); i++) Serial.printf("%02x", _address[i]);
+        Serial.printf("\n");
     }
 
     void print_sensor_info() const {
-        printf("  location: %s, assigned addr: ", location_to_string(_location).c_str());
+        Serial.printf("  location: %s, assigned addr: ", location_to_string(_location).c_str());
         print_address();
-        printf("\n");
+        Serial.printf("\n");
     }
 
     static std::string location_to_string(loc location) {
@@ -159,7 +160,7 @@ private:
                 // Serial.printf("  known sensor %s not detected\n", TemperatureSensor::location_to_string(known_address.first).c_str());
             }
         }
-        if (lost_sensors) Serial.printf("  did not detect %d known sensor(s)", lost_sensors);
+        if (lost_sensors) Serial.printf("  did not detect %d known sensor(s)\n", lost_sensors);
     }
 
     // Assign remaining addresses to any unassigned locations, in order of the locations enum
@@ -186,16 +187,16 @@ private:
 public:
     TemperatureSensorManager(uint8_t _onewire_pin) : one_wire_bus(_onewire_pin), tempsensebus(&one_wire_bus),  last_read_request_time(0), sensor_index(0), _state(State::CONVERTING) {}
     void setup() {
-        printf("Temperature sensors..");
+        Serial.printf("Temperature sensors..");
         
         tempsensebus.setWaitForConversion(false);
         tempsensebus.setCheckForConversion(true);
         tempsensebus.begin();
         detected_devices_ct = tempsensebus.getDeviceCount();
         detected_addresses.resize(detected_devices_ct);
-        printf(" parasitic power %s. found %d device(s):\n", (tempsensebus.isParasitePowerMode()) ? "on" : "off", detected_devices_ct);  // , DEC);
+        Serial.printf(" parasitic power %s. found %d device(s):\n", (tempsensebus.isParasitePowerMode()) ? "on" : "off", detected_devices_ct);  // , DEC);
         if (detected_devices_ct == 0) {
-            // printf("  no devices detected\n");
+            // Serial.printf("  no devices detected\n");
             return;
         }
 
