@@ -393,7 +393,7 @@ class BootMonitor {
     uint32_t bootcount;                         // variable to track total number of boots of this code build
     uint32_t codestatus_postmortem;
     std::string codestatuscard[NumCodeStatuses] = { "confused", "booting", "parked", "stopped", "driving" };
-    Timer highWaterTimer{5000000};
+    Timer highWaterTimer{30000000};
     TaskHandle_t* task1; TaskHandle_t* task2; TaskHandle_t* task3; TaskHandle_t* task4;
     UBaseType_t highWaterBytes;
   public:

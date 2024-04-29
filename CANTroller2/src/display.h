@@ -108,15 +108,15 @@ volatile bool pushed = true;
 #endif
 void semaphore_setup() {
     #if VIDEO_TASKS
-    Serial.println("Semaphores..");
+    Serial.printf("Semaphores..");
     pushbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t push_semaphorebuf_sem;
     drawbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t draw_semaphorebuf_sem;
-    if (pushbuf_sem == NULL || drawbuf_sem == NULL) Serial.println(" creation failed");
+    if (pushbuf_sem == NULL || drawbuf_sem == NULL) Serial.printf(" creation failed");
     else {
         xSemaphoreGive(pushbuf_sem);
         xSemaphoreGive(drawbuf_sem);
     }
-    Serial.println("\n");
+    Serial.printf("\n");
     #endif
 }
 volatile int disp_oldmode = SHUTDOWN;
