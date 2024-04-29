@@ -452,15 +452,15 @@ class BootMonitor {
     }
     void print_high_water(xTaskHandle* t1, xTaskHandle* t2, xTaskHandle* t3, xTaskHandle* t4) {
         if (print_task_stack_usage && highWaterTimer.expireset()) {
-            Serial.printf("mem maxused(B): heap:%d", xPortGetMinimumEverFreeHeapSize());            
+            Serial.printf("mem minfree(B): heap:%d", xPortGetMinimumEverFreeHeapSize());            
             highWaterBytes = uxTaskGetStackHighWaterMark(*t1) * sizeof(StackType_t);
-            Serial.printf(" (tasks) temp:%d", highWaterBytes);
+            Serial.printf(" temptask:%d", highWaterBytes);
             highWaterBytes = uxTaskGetStackHighWaterMark(*t2) * sizeof(StackType_t);
-            Serial.printf(", web:%d", highWaterBytes);
+            Serial.printf(", webtask:%d", highWaterBytes);
             highWaterBytes = uxTaskGetStackHighWaterMark(*t3) * sizeof(StackType_t);
-            Serial.printf(", draw:%d", highWaterBytes);
+            Serial.printf(", drawtask:%d", highWaterBytes);
             highWaterBytes = uxTaskGetStackHighWaterMark(*t4) * sizeof(StackType_t);
-            Serial.printf(", push:%d\n", highWaterBytes);
+            Serial.printf(", pushtask:%d\n", highWaterBytes);
         }
     }
     void recover_drive() {
@@ -471,7 +471,7 @@ class BootMonitor {
     }
     void update() {
         pet();
-        if (codestatus == Booting) set_codestatus(Confused);
+        if (codestatus == Booting) set_codestatus(Confused);  // we are not booting any more
         write_uptime();
         print_high_water(task1, task2, task3, task4);
     }
