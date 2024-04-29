@@ -389,36 +389,37 @@ class BootMonitor {
     uint32_t uptime_recorded = -1, uptime_rounding = 5;
     Preferences* myprefs;
     LoopTimer* myloop;
-    int codemode_last = 50000, crashcount = 0;
+    int codestatus_last = 50000, crashcount = 0;
     uint32_t bootcount;                         // variable to track total number of boots of this code build
-    uint32_t codemode_postmortem;
-    std::string codemodecard[4] = { "confused", "booting", "parked", "driving" };
+    uint32_t codestatus_postmortem;
+    std::string codestatuscard[NumCodeStatuses] = { "confused", "booting", "parked", "stopped", "driving" };
     Timer highWaterTimer{5000000};
     TaskHandle_t* task1; TaskHandle_t* task2; TaskHandle_t* task3; TaskHandle_t* task4;
     UBaseType_t highWaterBytes;
   public:
+    int boot_to_runmode = SHUTDOWN;
     BootMonitor(Preferences* _prefs, LoopTimer* _loop) : myprefs(_prefs), myloop(_loop) {}
     void bootcounter() {
         bootcount = myprefs->getUInt("bootcount", 0) + 1;
         myprefs->putUInt("bootcount", bootcount);
-        codemode_postmortem = myprefs->getUInt("codemode", Confused);
+        codestatus_postmortem = myprefs->getUInt("codestatus", Confused);
         crashcount = myprefs->getUInt("crashcount", 0);
-        if (codemode_postmortem != Parked) crashcount++;
+        if (codestatus_postmortem != Parked) crashcount++;
         myprefs->putUInt("crashcount", crashcount);
-        Serial.printf("Boot count: %d (%d/%d). Last lost power while %s after ", bootcount, bootcount-crashcount, crashcount, codemodecard[codemode_postmortem].c_str());
-        uptime_postmortem();
     }
-    void set_codemode(int _mode) {
-        codemode = _mode;
-        if (codemode_last != codemode) myprefs->putUInt("codemode", codemode);
-        codemode_last = codemode;
+    void set_codestatus(int _mode) {
+        codestatus = _mode;
+        if (codestatus_last != codestatus) myprefs->putUInt("codestatus", codestatus);
+        codestatus_last = codestatus;
     }
     void setup(TaskHandle_t* t1, TaskHandle_t* t2, TaskHandle_t* t3, TaskHandle_t* t4, int sec = -1) {
         task1 = t1;  task2 = t2;  task3 = t3;  task4 = t4;
         if (sec >= 0) timeout_sec = sec;
         myprefs->begin("FlyByWire", false);
         bootcounter();
-        set_codemode(Booting);
+        set_codestatus(Booting);
+        print_postmortem();
+        if ((codestatus_postmortem == Driving || codestatus_postmortem == Stopped) && crash_driving_recovery) recover_drive();
         if (!watchdog_enabled) return;
         Serial.printf("Boot manager.. \n");
         esp_task_wdt_init(timeout_sec, true);  // see https://github.com/espressif/esp-idf/blob/master/examples/system/task_watchdog/main/task_watchdog_example_main.c
@@ -436,7 +437,8 @@ class BootMonitor {
         myprefs->putUInt("uptime", uptime_new);
         uptime_recorded = uptime_new;
     }
-    void uptime_postmortem() {
+    void print_postmortem() {
+        Serial.printf("Boot count: %d (%d/%d). Last lost power while %s after ", bootcount, bootcount-crashcount, crashcount, codestatuscard[codestatus_postmortem].c_str());
         uint32_t last_uptime = myprefs->getUInt("uptime", 0);
         if (last_uptime > 0) {
             Serial.printf("just over %d min uptime\n", last_uptime);
@@ -461,9 +463,15 @@ class BootMonitor {
             Serial.printf(", push:%d\n", highWaterBytes);
         }
     }
+    void recover_drive() {
+        Serial.printf("  Resuming %s status..\n", codestatuscard[codestatus_postmortem]);
+        boot_to_runmode = (codestatus_postmortem == Driving) ? FLY : HOLD;
+        ignition_request = REQ_ON;
+        // gas.(brake.pc[STOP]);  // brake.pid_targ_pc(brake.pc[STOP]);
+    }
     void update() {
         pet();
-        if (codemode == Booting) set_codemode(Confused);
+        if (codestatus == Booting) set_codestatus(Confused);
         write_uptime();
         print_high_water(task1, task2, task3, task4);
     }

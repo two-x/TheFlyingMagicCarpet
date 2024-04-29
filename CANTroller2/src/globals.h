@@ -106,7 +106,7 @@ enum datapages { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_BPID, PG_GPID, PG
 enum temp_categories { AMBIENT=0, ENGINE=1, WHEEL=2, NUM_TEMP_CATEGORIES=3 };  // 
 enum temp_lims { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };   // possible sources of gas, brake, steering commands
 enum ui_modes { DatapagesUI=0, ScreensaverUI=1 };
-enum codemodes { Confused=0, Booting=1, Parked=2, Driving=3 };
+enum codestatus { Confused=0, Booting=1, Parked=2, Stopped=3, Driving=4, NumCodeStatuses=5 };
 enum telemetry_idiots { _None=-1, _GasServo=0, _BrakeMotor=1, _SteerMotor=2, _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7, _Temps=8, _Other=9, _GPIO=10, NumTelemetryIdiots=11 };  // _MuleBatt, _MAP, _MAF, _Pot,
 enum telemetry_full { _HotRCHorz=11, _HotRCVert=12, _HotRCCh3=13, _HotRCCh4=14, _MuleBatt=15, _AirVelo=16, _MAP=17, _Pot=18, _TempEng=19, _TempWhFL=20, _TempWhFR=21, _TempWhRL=22, _TempWhRR=23, _TempAmb=24, _Ignition=25, _Starter=26, _BasicSw=27, _FuelPump=28, NumTelemetryFull=29 };  // 10 per line
 enum err_type { LOST=0, RANGE=1, NUM_ERR_TYPES=2 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, 
@@ -128,6 +128,7 @@ bool fuelpump_supported = true;      // note if resistive touchscreen is present
 int throttle_ctrl_mode = OpenLoop;
 bool print_task_stack_usage = false;
 bool autosaver_display_fps = true;
+bool crash_driving_recovery = true;  // if code crashes while driving, should it continue driving after reboot?
 // dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
 // bool usb_jtag = true;                // if you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)
 bool dont_take_temperatures = false; // in case debugging dallas sensors or causing problems
@@ -163,7 +164,7 @@ int32_t neodesat = 0;     // default for lets us de/saturate the neopixels
 float tuning_rate_pcps = 7.5;  // values being edited by touch buttons change value at this percent of their overall range per second
 
 // non-tunable values. probably these belong with their related code
-uint32_t codemode = Booting;
+uint32_t codestatus = Booting;
 bool running_on_devboard = false;       // will overwrite with value read thru pull resistor on tx pin at boot
 bool shutdown_incomplete = true;        // minor state variable for shutdown mode - Shutdown mode has not completed its work and can't yet stop activity
 bool parking = false;                   // indicates in process of parking the brake & gas motors so the pedals can be used manually without interference
