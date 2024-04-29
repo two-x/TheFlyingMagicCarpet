@@ -45,8 +45,8 @@ void setup() {
     #endif
     neo.setup();              // set up external neopixel strip for idiot lights visible in daylight from top of carpet
     idiots.setup(&neo);       // assign same idiot light variable associations and colors to neopixels as on screen  
-    diag.setup();
-    run.setup();             // initialize dia                                                                                                                gnostic codes
+    diag.setup();             // initialize diagnostic engine
+    run.setup();              // initialize runmode state machine
     web.setup();              // start up access point, web server, and json-enabled web socket for diagnostic phone interface
     xTaskCreatePinnedToCore(update_web, "Update Web Services", 4096, NULL, 6, &webtask, CONFIG_ARDUINO_RUNNING_CORE);  // wifi/web task. with 4096 wifi runs but fails to connect (maybe unrelated?).  2048 is too low, it crashes when client connects  16384
     printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");

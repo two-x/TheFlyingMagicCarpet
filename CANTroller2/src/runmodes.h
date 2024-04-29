@@ -161,7 +161,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_flyMode(bool recovering=false) {
         if (we_just_switched_modes) {
             car_hasnt_moved = speedo.car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
-            watchdog.set_codestatus(Driving);  // write to flash we are NOT in an appropriate place to lose power, so we can detect crashes on boot
             gas.setmode(throttle_ctrl_mode);
             brake.setmode(ActivePID);
         }
@@ -169,7 +168,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (hotrc.joydir(VERT) != JOY_UP) mode = HOLD;            // must keep pulling trigger until car moves, or it drops back to hold mode
             else if (!speedo.car_stopped()) car_hasnt_moved = false;  // once car moves, we're allowed to release the trigger without falling out of fly mode
         }
-        else if (speedo.car_stopped() && hotrc.joydir() != JOY_UP) mode = HOLD;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
+        else {
+            watchdog.set_codestatus(Driving);  // write to flash we are NOT in an appropriate place to lose power, so we can detect crashes on boot
+            if (speedo.car_stopped() && hotrc.joydir() != JOY_UP) mode = HOLD;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
+        }
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) mode = HOLD;        // radio must be good to fly, this should already be handled elsewhere but another check can't hurt
         if (hotrc.sw_event(CH4)) mode = CRUISE;                                     // enter fly mode by pressing hrc ch4 button
     }
