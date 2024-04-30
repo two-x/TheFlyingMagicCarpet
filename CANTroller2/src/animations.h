@@ -59,7 +59,9 @@ volatile int32_t refresh_limit = 16666; // 16666; // = 60 Hz
 volatile bool auto_saver_enabled = false;
 Timer screenRefreshTimer = Timer((int64_t)refresh_limit);
 LGFX lcd;
-LGFX_Sprite framebuf[2];  // , datapage_sp[2], bargraph_sp[2], idiots_sp[2];
+LGFX_Sprite actualframebuf[NumBufs];  // , datapage_sp[2], bargraph_sp[2], idiots_sp[2];
+LGFX_Sprite* framebuf[NumBufs];  // , datapage_sp[2], bargraph_sp[2], idiots_sp[2];
+
 struct viewport {
     int32_t x;
     int32_t y;
@@ -648,14 +650,14 @@ class AnimationManager {
         _height = vp.h << SHIFTSIZE;
     }
     void reset() {
-        if (nowsaver == Eraser) eSaver.reset(&framebuf[flip], &framebuf[!flip], &vp);
-        else if (nowsaver == Collisions) cSaver.reset(&framebuf[flip], &framebuf[!flip], &vp);
+        if (nowsaver == Eraser) eSaver.reset(framebuf[DrawBuf], framebuf[!PushBuf], &vp);
+        else if (nowsaver == Collisions) cSaver.reset(framebuf[DrawBuf], framebuf[!PushBuf], &vp);
         anim_reset_request = false;
     }
     void setup() {
         Serial.printf(" screensavers .. ");
-        eSaver.setup(&framebuf[flip], &vp);
-        cSaver.setup(&framebuf[flip], &vp);
+        eSaver.setup(framebuf[DrawBuf], &vp);
+        cSaver.setup(framebuf[DrawBuf], &vp);
         Serial.printf("set up\n");
     }
     void draw_simbutton(LGFX_Sprite* spr, int cntr_x, int cntr_y, int dir, uint8_t color) {

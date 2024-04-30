@@ -100,24 +100,34 @@ volatile bool pushtime = 0;
 volatile bool drawn = false;
 volatile bool pushed = true;
 
-#if VIDEO_TASKS
-  SemaphoreHandle_t pushbuf_sem;  // StaticSemaphore_t push_semaphorebuf_sem;
-  SemaphoreHandle_t drawbuf_sem;  // StaticSemaphore_t draw_semaphorebuf_sem;
-  static void push_task_wrapper(void *parameter);
-  static void draw_task_wrapper(void *parameter);
-#endif
-void semaphore_setup() {
-    #if VIDEO_TASKS
+SemaphoreHandle_t actualbufsem[NumBufs];  // pushbuf_sem;  // StaticSemaphore_t push_semaphorebuf_sem;
+// SemaphoreHandle_t drawbuf_sem;  // StaticSemaphore_t draw_semaphorebuf_sem;
+SemaphoreHandle_t* bufsem[NumBufs];  // pushbuf_sem;  // StaticSemaphore_t push_semaphorebuf_sem;
+static void push_task_wrapper(void *parameter);
+static void draw_task_wrapper(void *parameter);
+
+// actualframebuf[] buffers are real memory areas, indexed using integers (not PushBuf/DrawBuf enums)
+// actualbufsem[] semaphores each controls one actual buffer matching their index, again indexed using integers
+// framebuf[] are pointers to actualbufs. Like framebuf[0] (AKA framebuf[DrawBuf]) might point to actualbuf[2]
+// bufsem[] are pointers to actualbufsems. So in this example bufsem[DrawBuf] would point to actualbufsem[2]
+// This allows us to safely swap two buffers in a multitask context by:
+// 1. taking both semaphores *bufsem[PushBuf] and *bufsem[DrawBuf] (so other processes using the buffers don't get hosed)
+// 2. make framebuf[PushBuf] point to where framebuf[DrawBuf] was pointed, and vice versa
+// 3. make bufsem[PushBuf] point to where bufsem[DrawBuf] was pointed, and vice versa
+// 4. give back both semaphores *bufsem[PushBuf] and *bufsem[DrawBuf]
+// 5. any process that was waiting for, say, *bufsem[DrawBuf] will now be barking up a different tree w/o knowing it 
+void framebuf_setup() {
     Serial.printf("Semaphores..");
-    pushbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t push_semaphorebuf_sem;
-    drawbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t draw_semaphorebuf_sem;
-    if (pushbuf_sem == NULL || drawbuf_sem == NULL) Serial.printf(" creation failed");
-    else {
-        xSemaphoreGive(pushbuf_sem);
-        xSemaphoreGive(drawbuf_sem);
+    bool fail = false;
+    for (int buf=0; buf<NumBufs; buf++) {
+        framebuf[buf] = &actualframebuf[buf];  // arbitrarily initialize buffer pointers to their own numbered buffer
+        bufsem[buf] = &actualbufsem[buf];  // set up semaphores to match
+        *bufsem[buf] = xSemaphoreCreateBinary();  // StaticSemaphore_t push_semaphorebuf_sem;
+        if (*bufsem[buf] == NULL) fail = true;
     }
+    if (fail) Serial.printf(" creation failed");
+    else for (int buf=0; buf<NumBufs; buf++) xSemaphoreGive(*bufsem[buf]);
     Serial.printf("\n");
-    #endif
 }
 volatile int disp_oldmode = SHUTDOWN;
 LGFX_Sprite* sprptr;
@@ -163,27 +173,27 @@ class Display {
         int sprsize[2] = { _sprwidth, _sprheight };
         Serial.printf("  create frame buffers.. ");
         lcd.setColorDepth(8);
-        for (int i = 0; i <= 1; i++) framebuf[i].setColorDepth(8);  // color_depth_t::rgb332_1Byte = 8  Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
+        for (int i = 0; i < NumBufs; i++) actualframebuf[i].setColorDepth(8);  // color_depth_t::rgb332_1Byte = 8  Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
         auto framewidth = sprsize[HORZ];
         auto frameheight = sprsize[VERT];
         bool fail = false;
         bool using_psram = false;
-        for (std::uint32_t i = 0; !fail && i < 2; ++i) {
-            framebuf[i].setPsram(false);
-            fail = !framebuf[i].createSprite(framewidth, frameheight);
+        for (std::uint32_t i = 0; !fail && i < NumBufs; ++i) {
+            actualframebuf[i].setPsram(false);
+            fail = !actualframebuf[i].createSprite(framewidth, frameheight);
         }
         if (fail) {
             fail = false;
-            for (std::uint32_t i = 0; !fail && i < 2; ++i) {
-                framebuf[i].setPsram(true);
-                fail = !framebuf[i].createSprite(framewidth, frameheight);
+            for (std::uint32_t i = 0; !fail && i < NumBufs; ++i) {
+                actualframebuf[i].setPsram(true);
+                fail = !actualframebuf[i].createSprite(framewidth, frameheight);
             }
             if (fail) {
                 fail = false;
                 if (framewidth >= 320) framewidth = 180;
                 if (frameheight >= 240) frameheight = 180;
                 for (std::uint32_t i = 0; !fail && i < 2; ++i) {
-                    fail = !framebuf[i].createSprite(framewidth, frameheight);
+                    fail = !actualframebuf[i].createSprite(framewidth, frameheight);
                 }
                 if (fail) {
                     lcd.print("createSprite fail\n");
@@ -192,7 +202,7 @@ class Display {
             }
             else using_psram = true;
         }
-        Serial.printf(" made 2x %dx%d sprites in %sram\n", framewidth, frameheight, using_psram ? "ps" : "native ");
+        Serial.printf(" made %dx %dx%d sprites in %sram\n", NumBufs, framewidth, frameheight, using_psram ? "ps" : "native ");
     }
     void setup() {
         if (!display_enabled) return;
@@ -219,11 +229,8 @@ class Display {
         init_framebuffers(disp_width_pix, disp_height_pix);
         animations.init(&lcd, sim, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
         animations.setup();
-        sprptr = &framebuf[flip];
+        sprptr = framebuf[DrawBuf];
         reset_request = true;
-        #if !VIDEO_TASKS
-        update();
-        #endif
         Serial.printf("  display initialized\n");
     }
     void reset(LGFX_Sprite* spr) {
@@ -799,18 +806,6 @@ class Display {
   public:
     void update(int _nowmode = -1) {
         if (_nowmode >= 0) nowmode = _nowmode;
-        #if !VIDEO_TASKS
-            if (pushtime) {
-                if (!(screenRefreshTimer.expired() || always_max_refresh || auto_saver_enabled)) return;
-                screenRefreshTimer.reset();
-                push_task();
-                pushtime = false;
-            }
-            else {
-                draw_task();
-                pushtime = true;
-            }
-        #endif
     }
     bool draw_all(LGFX_Sprite* spr) {
         if (reset_request) reset(spr);
@@ -831,21 +826,29 @@ class Display {
         disp_simbuttons_dirty = false;
         return true;
     }
+    void swap_bufs(int buf1index, int buf2index) {
+        LGFX_Sprite* temp = framebuf[buf1index];
+        framebuf[buf1index] = framebuf[buf2index];
+        framebuf[buf2index] = temp;
+        SemaphoreHandle_t* temp2 = bufsem[buf1index];
+        bufsem[buf1index] = bufsem[buf2index];
+        bufsem[buf2index] = temp2;
+    } 
     void push_task() {
         // Serial.printf("f%d push@ 0x%08x vs 0x%08x\n", flip, &framebuf[flip], &framebuf[!flip]);
         if (print_framebuffers) {  // warning this *severely* slows everything down, ~.25 sec/loop. consider disabling word wrap in terminal output
             Serial.printf("flip=%d\n", flip);
             printframebufs(2);
         }
-        diffpush(&framebuf[flip], &framebuf[!flip]);
-        flip = !flip;
-        sprptr = &framebuf[flip];
+        diffpush(framebuf[DrawBuf], framebuf[PushBuf]);
+        swap_bufs(PushBuf, DrawBuf);
+        sprptr = framebuf[DrawBuf];
         pushclock = (int32_t)screenRefreshTimer.elapsed();
     }
     void draw_task() {
         int32_t mark = (int32_t)screenRefreshTimer.elapsed();
         // Serial.printf("f%d draw@ 0x%08x\n", flip, &framebuf[flip]);
-        draw_all(&framebuf[flip]);
+        draw_all(framebuf[DrawBuf]);
         drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
         idleclock = refresh_limit - pushclock - drawclock;
     }
@@ -1059,7 +1062,6 @@ static IdiotLights idiots;
 static Touchscreen touch;
 static Display screen(&neo, &touch, &idiots, &sim);
 static Tuner tuner(&screen, &neo, &touch);
-#if VIDEO_TASKS
 bool take_two_semaphores(SemaphoreHandle_t* sem1, SemaphoreHandle_t* sem2, TickType_t waittime=portMAX_DELAY) {   // pdMS_TO_TICKS(1)
     if (xSemaphoreTake(*sem1, waittime) == pdTRUE) {
         if (xSemaphoreTake(*sem2, waittime) == pdTRUE) return true;
@@ -1072,11 +1074,11 @@ bool take_two_semaphores(SemaphoreHandle_t* sem1, SemaphoreHandle_t* sem2, TickT
 static void push_task_wrapper(void *parameter) {
     while (true) {
         if (screenRefreshTimer.expired() || always_max_refresh || auto_saver_enabled) {
-            if (take_two_semaphores(&pushbuf_sem, &drawbuf_sem, portMAX_DELAY)) {
+            if (take_two_semaphores(bufsem[PushBuf], bufsem[DrawBuf], portMAX_DELAY)) {
                 screenRefreshTimer.reset();
                 screen.push_task();
-                xSemaphoreGive(pushbuf_sem);
-                xSemaphoreGive(drawbuf_sem);
+                xSemaphoreGive(*bufsem[PushBuf]);
+                xSemaphoreGive(*bufsem[DrawBuf]);
             }
         }
         vTaskDelay(pdMS_TO_TICKS(1));
@@ -1085,14 +1087,13 @@ static void push_task_wrapper(void *parameter) {
 }
 static void draw_task_wrapper(void *parameter) {
     while (true) {
-        if (xSemaphoreTake(drawbuf_sem, portMAX_DELAY) == pdTRUE) {
+        if (xSemaphoreTake(*bufsem[DrawBuf], portMAX_DELAY) == pdTRUE) {
             screen.draw_task();
-            xSemaphoreGive(drawbuf_sem);
+            xSemaphoreGive(*bufsem[DrawBuf]);
         }
         vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
     }
 }
-#endif
 // The following project draws a nice looking gauge cluster, very apropos to our needs and the code is given.
 // See this video: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
 // Rinkydink home page: http://www.rinkydinkelectronics.com
