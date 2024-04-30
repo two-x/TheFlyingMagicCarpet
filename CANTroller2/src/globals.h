@@ -110,7 +110,7 @@ enum codestatus { Confused=0, Booting=1, Parked=2, Stopped=3, Driving=4, NumCode
 enum telemetry_idiots { _None=-1, _GasServo=0, _BrakeMotor=1, _SteerMotor=2, _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7, _Temps=8, _Other=9, _GPIO=10, NumTelemetryIdiots=11 };  // _MuleBatt, _MAP, _MAF, _Pot,
 enum telemetry_full { _HotRCHorz=11, _HotRCVert=12, _HotRCCh3=13, _HotRCCh4=14, _MuleBatt=15, _AirVelo=16, _MAP=17, _Pot=18, _TempEng=19, _TempWhFL=20, _TempWhFR=21, _TempWhRL=22, _TempWhRR=23, _TempBrake=24, _TempAmb=25, _Ignition=26, _Starter=27, _BasicSw=28, _FuelPump=29, NumTelemetryFull=30 };  // 10 per line
 enum err_type { LOST=0, RANGE=1, NUM_ERR_TYPES=2 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, 
-
+enum video_bufs { DrawBuf, PushBuf, NumBufs };
 // global configuration settings
 bool brake_hybrid_pid = true;
 int brake_default_pid = PressurePID;

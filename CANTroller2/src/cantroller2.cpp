@@ -11,7 +11,7 @@ void setup() {
     set_board_defaults();      // set variables as appropriate if on a breadboard
     run_tests();
     psram_setup();
-    semaphore_setup();
+    framebuf_setup();
     watchdog.setup(&temptask, &webtask, &drawTaskHandle, &pushTaskHandle);
     bootbutton.setup();
     hotrc.setup();

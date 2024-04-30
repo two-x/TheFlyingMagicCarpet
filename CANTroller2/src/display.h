@@ -909,8 +909,8 @@ class Display {
         std::string brites[16] = {" ", ".", ",", ":", ";", "+", "=", ">", "%", "#", "*", "$", "@", "&", "M", "W"};
         int found;
         uint8_t* s;
-        for (int f=0; f<2; f++) {
-            s = (uint8_t*)(framebuf[f]).getBuffer();
+        for (int f=0; f<NumBufs; f++) {
+            s = (uint8_t*)(actualframebuf[f]).getBuffer();
             for (int y=0; y<disp_height_pix >> reduce; y++) {
                 Serial.printf("%d ", f);
                 for (int x=0; x<disp_width_pix >> reduce; x++) {
