@@ -342,6 +342,26 @@ class GasServo : public ServoMotor {
         pc[MARGIN] = map(si[MARGIN], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);
         max_throttle_angular_velocity_pcps = 100.0 * max_throttle_angular_velocity_degps / (si[OPMAX] - si[OPMIN]);
     }
+    void linearize_throttle() {  // todo : compensate for at least 3 known sources of non-linearity in the throttle
+        // 1. The coin-shaped butterfly valve blocks the cylindrical carb intake passage. The engine power is a function
+        // of the airflow which is a function of the elliptical cross-section of the valve as it rotates. Here's math:
+        // d = throttle intake / valve diameter (about 1 inch)
+        // g = angle of valve, with 90 deg = full closed and 0 deg = full open
+        // Open Area:  A = pi/4 * d^2 - pi * d^2 * cos(g)    // in squared units of d
+        // Open Ratio: R = 1 - 4 * cos(g)                    // as a ratio to full-open (range 0-1)
+        //
+        // 2. Due to the mount and pull angles, the servo opens the throttle more degrees per degree of its own rotation 
+        // when the throttle is closed vs. when it's open. Need to do the math for this, but I imagine it'll be another 
+        // curve from 1 to 0, perhaps another cosine, to multiply by depending on current servo angle. Note it's possible
+        // to mechanically nullify this pull angle non-linearity by having a rotational linkage instead of servo horns,
+        // for example like a belt, or maybe pulleys on both servo and valve with a string wrapped around them.
+        //
+        // 3. The engine will characteristically produce power as a nonlinear function of carb airflow. Data for this would
+        // be nice. [Research into typical curves] < [Specific performance data for this engine] < [Do empirical testing].
+        //
+        // It's a bit too complex (I'm too ignorant) to predict which of the above might serve to cancel/exacerbate the 
+        // others. None of this matters if we use the throttle PID, only if we run open loop
+    }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, TemperatureSensorManager* _temp) {
         tach = _tach;  pot = _pot;  tempsens = _temp;
         printf("Gas servo..\n");
@@ -758,9 +778,8 @@ class SteerMotor : public JagMotor {
 
   private:
     void set_output() {
-        if (motormode == Halt) {
-            pc[OUT] = pc[STOP];  // Stop the steering motor if in shutdown mode and shutdown is complete
-        } else if (motormode == OpenLoop) {
+        if (motormode == Halt) pc[OUT] = pc[STOP];  // Stop the steering motor if in shutdown mode and shutdown is complete
+        else if (motormode == OpenLoop) {
             int _joydir = hotrc->joydir(HORZ);
             if (_joydir == JOY_RT)
                 pc[OUT] = map(hotrc->pc[HORZ][FILT], hotrc->pc[HORZ][DBTOP], hotrc->pc[HORZ][OPMAX], pc[STOP], steer_safe(pc[OPMAX]));  // if joy to the right of deadband
