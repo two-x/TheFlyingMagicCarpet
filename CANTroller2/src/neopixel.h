@@ -322,7 +322,7 @@ class IdiotLights {
     static constexpr int iconcount = 33;  // number of boolean values included on the screen panel (not the neopixels) 
     bool* vals[iconcount] = {
         &diag.err_sens_alarm[LOST], &diag.err_sens_alarm[RANGE], &diag.temp_err[ENGINE], &diag.temp_err[WHEEL], hotrc.radiolost_ptr(),
-        &panicstop, &shutdown_incomplete, &parking, &brake.posn_pid_active, &brake.autostopping, &brake.autoholding,
+        &ignition.panicstop, &shutdown_incomplete, &parking, &brake.posn_pid_active, &brake.autostopping, &brake.autoholding,
         &cruise_adjusting, &car_hasnt_moved, 
         &starter.req_active, &starter.motor, tach.pin_activity_ptr(), // &powering_up,
         &web_disabled, &fuelpump.status_inverse,

@@ -25,7 +25,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     int mode_logic() {
         if (mode != ASLEEP && mode != CAL) {
             if (basicmodesw) mode = BASIC;  // if basicmode switch on --> Basic Mode
-            else if (!ignition) mode = SHUTDOWN;
+            else if (!ignition.signal) mode = SHUTDOWN;
             else if (tach.engine_stopped()) mode = STALL;  // otherwise if engine not running --> Stall Mode
         }
         we_just_switched_modes = (mode != oldmode);  // currentMode should not be changed after this point in loop
@@ -37,7 +37,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         // common to almost all the modes, so i put it here
         if (mode != ASLEEP) {
             last_conscious_mode = mode;
-            if (hotrc.sw_event(CH3)) ignition_request = REQ_TOG;  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
+            if (hotrc.sw_event(CH3)) ignition.ign_request(REQ_TOG);  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
         }
         if (mode == BASIC) run_basicMode(); // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         else if (mode == ASLEEP) run_asleepMode();
@@ -74,7 +74,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             watchdog.set_codestatus(Parked);
             display->disp_bools_dirty = true;
         }
-        if (hotrc.sw_event(CH4) && !ignition) mode = ASLEEP;
+        if (hotrc.sw_event(CH4) && !ignition.signal) mode = ASLEEP;
         if (!basicmodesw && !tach.engine_stopped()) mode = speedo.car_stopped() ? HOLD : FLY;  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
         if (basicmode_request) mode = SHUTDOWN;  // if fully shut down and cal mode requested, go to cal mode
     }
@@ -111,7 +111,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
     void run_shutdownMode(bool recovering=false) { // In shutdown mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.
         if (we_just_switched_modes) {              
-            shutdown_incomplete = !(powering_up);   // if waking up from sleep shutdown is already complete
+            shutdown_incomplete = !powering_up;   // if waking up from sleep shutdown is already complete
             powering_up = calmode_request = basicmode_request = false;
             gas.setmode(ParkMotor);                 // carburetor parked 
             brake.setmode(AutoStop);                // if car is moving begin autostopping
@@ -133,7 +133,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode
             if (basicmode_request) mode = BASIC;  // if fully shut down and basic mode requested, go to basic mode
         }
-        if ((speedo.car_stopped() || allow_rolling_start) && ignition && !panicstop && !tach.engine_stopped()) mode = HOLD;  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
+        if ((speedo.car_stopped() || allow_rolling_start) && ignition.signal && !ignition.panicstop && !tach.engine_stopped()) mode = HOLD;  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
         sleep_request = REQ_NA;
     }
     void run_stallMode(bool recovering=false) {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick

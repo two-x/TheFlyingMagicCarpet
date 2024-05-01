@@ -32,8 +32,6 @@ static BrakeMotor brake(brake_pwm_pin, 50);
 static SteerMotor steer(steer_pwm_pin, 50);
 static LoopTimer looptimer;
 static WebManager web(&looptimer);
-static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &ignition);
-static LightingBox lightbox(&i2c);  // lightbox(&diag);
 static BootMonitor watchdog(&prefs, &looptimer);
 static SdCard sdcard;
 
@@ -42,7 +40,6 @@ int rn(int values=256) {  // Generate a random number between 0 and values-1
     return dis(gen);
 }
 void initialize_pins() {
-    set_pin(ignition_pin, OUTPUT, LOW);
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);    // deasserting unused cs line ensures available spi bus
     set_pin(syspower_pin, OUTPUT, syspower);
     set_pin(basicmodesw_pin, INPUT_PULLUP);
@@ -113,27 +110,6 @@ void update_temperature_sensors(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently
     }
 }
-void ignition_panic_update(int runmode) {  // Run once each main loop
-    if (panicstop_request == REQ_TOG) panicstop_request = !panicstop;
-    if (ignition_request == REQ_TOG) ignition_request = !ignition;
-    // else if (ignition_request == ignition) ignition_request = REQ_NA;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
-    if (speedo.car_stopped() || panicTimer.expired()) panicstop_request = REQ_OFF;  // Cancel panic stop if car is stopped
-    if (!speedo.car_stopped() && (runmode == FLY || runmode == CRUISE || runmode == HOLD)) {
-        if (ignition && ignition_request == REQ_OFF) panicstop_request = REQ_ON;  // ignition cut while driving causes panic stop
-        if (!sim.simulating(sens::joy) && hotrc.radiolost()) panicstop_request = REQ_ON;
-    }
-    bool paniclast = panicstop;
-    if (panicstop_request != REQ_NA) {
-        panicstop = (bool)panicstop_request;    // printf("panic=%d\n", panicstop);
-        if (panicstop && !paniclast) panicTimer.reset();
-    }
-    if (panicstop) ignition_request = REQ_OFF;  // panic stop causes ignition cut
-    if (ignition_request != REQ_NA && runmode != ASLEEP) {
-        ignition = (bool)ignition_request;
-        write_pin (ignition_pin, ignition);  // turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
-    }
-    panicstop_request = ignition_request = REQ_NA;  // cancel outstanding requests
-}
 void basicsw_update() {
     bool last_val = basicmodesw;
     if (!sim.simulating(sens::basicsw)) {  // Basic Mode switch
@@ -191,6 +167,41 @@ void psram_setup() {  // see https://www.upesy.com/blogs/tutorials/get-more-ram-
     // // free(array_int); //The allocated memory is freed.
     Serial.println((String)"size (B): " +ESP.getFreePsram());
 }
+class Ignition {
+  private:
+    int ign_request = REQ_NA, panic_request = REQ_NA, pin;
+    bool paniclast;
+    Timer panicTimer{15000000};  // How long should a panic stop last?  we can't stay mad forever
+  public:
+    bool signal = LOW;                    // set by handler only. Reflects current state of the signal
+    bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
+    Ignition(int _pin) : pin(_pin) { set_pin(ignition_pin, OUTPUT, LOW); }
+    void panic_request(int req) { panic_request = req; }
+    void ign_request(int req) { ign_request = req; }
+    void update(int runmode) {  // Run once each main loop
+        if (panic_request == REQ_TOG) panic_request = !panicstop;
+        if (ign_request == REQ_TOG) ign_request = !signal;
+        // else if (request == signal) request = REQ_NA;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
+        if (speedo.car_stopped() || panicTimer.expired()) panic_request = REQ_OFF;  // Cancel panic stop if car is stopped
+        if (!speedo.car_stopped() && (runmode == FLY || runmode == CRUISE || runmode == HOLD)) {
+            if (signal && ign_request == REQ_OFF) panic_request = REQ_ON;  // ignition cut while driving causes panic stop
+            if (!sim.simulating(sens::joy) && hotrc.radiolost()) panic_request = REQ_ON;
+        }
+        paniclast = panicstop;
+        if (panic_request != REQ_NA) {
+            panicstop = (bool)panic_request;    // printf("panic=%d\n", panicstop);
+            if (panicstop && !paniclast) panicTimer.reset();
+        }
+        if (panicstop) ign_request = REQ_OFF;  // panic stop causes ignition cut
+        if (ign_request != REQ_NA && runmode != ASLEEP) {
+            signal = (bool)ign_request;
+            write_pin (ignition_pin, signal);  // turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
+        }
+        panic_request = ign_request = REQ_NA;  // cancel outstanding requests
+    }
+};
+Ignition ignition(ignition_pin);
+
 class Starter {
   private:
     uint32_t pushbrake_timeout = 6000000;
@@ -287,7 +298,7 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
         if (!fuelpump_supported || !captouch) return;
         float tachnow = tach.filt();
         pump_last = status;
-        if (starter.motor || (ignition && (tachnow >= turnon_rpm))) {
+        if (starter.motor || (ignition.signal && (tachnow >= turnon_rpm))) {
             volts = map(gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], on_min_v, on_max_v);
             volts = constrain(volts, on_min_v, on_max_v);
             adc = map((int)volts, 0, (int)on_max_v, 0, 255);
@@ -329,6 +340,8 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
     }
 };
 static FuelPump fuelpump(tp_cs_fuel_pin);
+static LightingBox lightbox(&i2c);  // lightbox(&diag);
+static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &ignition);
 
 #include "display.h"  // includes neopixel.h, touch.h
 #include "runmodes.h"

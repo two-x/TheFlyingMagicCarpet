@@ -19,7 +19,7 @@ class DiagRuntime {
     AirVeloSensor* airvelo;
     MAPSensor* mapsens;
     Potentiometer* pot;
-    bool* ignition;
+    Ignition* ignition;
     static constexpr int entries = 100;  // size of log buffers
     int64_t times[2][entries];
     // two sets of large arrays for storage of log data. when one fills up it jumps to the other, so the first might be written to an sd card
@@ -49,7 +49,7 @@ class DiagRuntime {
     uint8_t most_critical_last[NUM_ERR_TYPES];
     DiagRuntime (Hotrc* a_hotrc, TemperatureSensorManager* a_temp, PressureSensor* a_pressure, BrakePositionSensor* a_brkpos,
         Tachometer* a_tach, Speedometer* a_speedo, GasServo* a_gas, BrakeMotor* a_brake, SteerMotor* a_steer, 
-        CarBattery* a_mulebatt, AirVeloSensor* a_airvelo, MAPSensor* a_mapsens, Potentiometer* a_pot, bool* a_ignition)
+        CarBattery* a_mulebatt, AirVeloSensor* a_airvelo, MAPSensor* a_mapsens, Potentiometer* a_pot, Ignition* a_ignition)
         : hotrc(a_hotrc), tempsens(a_temp), pressure(a_pressure), brkpos(a_brkpos), tach(a_tach), speedo(a_speedo), gas(a_gas), brake(a_brake), 
           steer(a_steer), mulebatt(a_mulebatt), airvelo(a_airvelo), mapsens(a_mapsens), pot(a_pot), ignition(a_ignition) {}
 
@@ -153,7 +153,7 @@ class DiagRuntime {
                 err_sens[LOST][errindex] = !hotrc->radiolost() && ((hotrc->us[ch][RAW] < (hotrc->absmin_us - hotrc->us[ch][MARGIN]))
                                         || (hotrc->us[ch][RAW] > (hotrc->absmax_us + hotrc->us[ch][MARGIN])));
             }
-            err_sens[LOST][_Ignition] = (!ignition && !tach->engine_stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
+            err_sens[LOST][_Ignition] = (!ignition->signal && !tach->engine_stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
             err_sens[LOST][_Speedo] = SpeedoFailure();
             err_sens[LOST][_Tach] = TachFailure();
             err_sens[RANGE][_Speedo] = (speedo->mph() < speedo->min_human() || speedo->mph() > speedo->max_human());;
@@ -466,7 +466,7 @@ class BootMonitor {
     void recover_drive() {
         Serial.printf("  Resuming %s status..\n", codestatuscard[codestatus_postmortem]);
         boot_to_runmode = (codestatus_postmortem == Driving) ? FLY : HOLD;
-        ignition_request = REQ_ON;
+        ignition.ign_request(REQ_ON);
         // gas.(brake.pc[STOP]);  // brake.pid_targ_pc(brake.pc[STOP]);
     }
     void update() {

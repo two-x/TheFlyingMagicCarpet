@@ -627,7 +627,7 @@ class Display {
         // if (!disp_bools_dirty) return;
         draw_bool((nowmode == CAL), 2, disp_bools_dirty);
         draw_bool((nowmode == BASIC), 3, disp_bools_dirty);
-        draw_bool(ignition, 4, disp_bools_dirty);
+        draw_bool(ignition.signal, 4, disp_bools_dirty);
         draw_bool(syspower, 5, disp_bools_dirty);
         disp_bools_dirty = false;
     }

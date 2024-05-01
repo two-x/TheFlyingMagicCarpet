@@ -187,11 +187,7 @@ volatile int sel_val = 0;               // in the real time tuning UI, which of 
 volatile int sel_val_last = 0;          
 volatile int sel_val_last_last = 0;          
 bool syspower = HIGH;                   // set by handler only. Reflects current state of the signal
-bool ignition = LOW;                    // set by handler only. Reflects current state of the signal
-bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
 bool basicmodesw = LOW;
-int ignition_request = REQ_NA;
-int panicstop_request = REQ_ON;         // on powerup we assume the code just rebooted during a drive, because for all we know it could have 
 int sleep_request = REQ_NA;
 float maf_gps = 0;                      // manifold mass airflow in grams per second
 uint16_t heartbeat_override_color = 0x0000;
@@ -351,7 +347,6 @@ class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regul
     // }
 };
 Timer sleep_inactivity_timer(300000000);
-Timer panicTimer(15000000);  // How long should a panic stop last?  we can't stay mad forever
 
 void kick_inactivity_timer(int source=0) {
     sleep_inactivity_timer.reset();  // evidence of user activity
