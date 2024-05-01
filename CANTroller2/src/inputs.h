@@ -287,7 +287,7 @@ class Touchscreen {
         }
         else if (tquad == 0x04 && longpress()) sim.toggle();  // Pressed the simulation mode toggle. Needs long-press
         else if (tquad == 0x20 && sim.enabled() && longpress()) calmode_request = true;
-        else if (tquad == 0x40 && sim.enabled() && longpress()) ignition.ign_request(REQ_TOG);
+        else if (tquad == 0x40 && sim.enabled() && longpress()) ignition.request(REQ_TOG);
         else if (tquad == 0x50 && sim.enabled() && longpress()) sleep_request = REQ_TOG;  // sleep requests are handled by shutdown or asleep mode, otherwise will be ignored
         else if (tquad == 0x30 && sim.simulating(sens::basicsw) && longpress()) basicmode_request = true;
         else if (tquad == 0x31 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(tedit); // (+= 25) Pressed the increase brake pressure button

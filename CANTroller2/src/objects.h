@@ -165,8 +165,8 @@ class Ignition {
     bool signal = LOW;                    // set by handler only. Reflects current state of the signal
     // bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
     Ignition(int _pin) : pin(_pin) { set_pin(pin, OUTPUT, LOW); }
+    void request(int req) { ign_req = req; }
     void panic_request(int req) { panic_req = req; }
-    void ign_request(int req) { ign_req = req; }
     void update(int runmode) {  // Run once each main loop
         if (panic_req == REQ_TOG) panic_req = !panicstop;
         if (ign_req == REQ_TOG) ign_req = !signal;

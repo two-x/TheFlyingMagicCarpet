@@ -466,7 +466,7 @@ class BootMonitor {
     void recover_drive() {
         Serial.printf("  Resuming %s status..\n", codestatuscard[codestatus_postmortem]);
         boot_to_runmode = (codestatus_postmortem == Driving) ? FLY : HOLD;
-        ignition.ign_request(REQ_ON);
+        ignition.request(REQ_ON);
         // gas.(brake.pc[STOP]);  // brake.pid_targ_pc(brake.pc[STOP]);
     }
     void update() {
