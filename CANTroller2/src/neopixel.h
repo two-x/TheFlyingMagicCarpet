@@ -327,8 +327,9 @@ class IdiotLights {
         &starter.req_active, &starter.motor, tach.pin_activity_ptr(), // &powering_up,
         &web_disabled, &fuelpump.status_inverse,
         &bootbutton.now, &nowtouch, &encoder.enc_a, &running_on_devboard, 
-        &(sensidiots[0]), &(sensidiots[1]), &(sensidiots[2]), &(sensidiots[3]), &(sensidiots[4]), 
-        &(sensidiots[5]), &(sensidiots[6]), &(sensidiots[7]), &(sensidiots[8]), &(sensidiots[9]), &(sensidiots[10]),
+        &sensidiots[_GasServo], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor],
+        &sensidiots[_HotRC], &sensidiots[_Speedo], &sensidiots[_Tach], &sensidiots[_BrakePres], 
+        &sensidiots[_BrakePosn], &sensidiots[_Temps], &sensidiots[_Other], &sensidiots[_GPIO],
     };  // , sim.enabled_ptr()
     uint8_t icon[iconcount][11] = {
         { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e, },  // 0 = "S" w/ crossout symbol
