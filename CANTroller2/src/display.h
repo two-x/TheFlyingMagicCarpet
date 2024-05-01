@@ -100,14 +100,11 @@ volatile bool pushtime = 0;
 volatile bool drawn = false;
 volatile bool pushed = true;
 
-#if VIDEO_TASKS
-  SemaphoreHandle_t pushbuf_sem;  // StaticSemaphore_t push_semaphorebuf_sem;
-  SemaphoreHandle_t drawbuf_sem;  // StaticSemaphore_t draw_semaphorebuf_sem;
-  static void push_task_wrapper(void *parameter);
-  static void draw_task_wrapper(void *parameter);
-#endif
+SemaphoreHandle_t pushbuf_sem;  // StaticSemaphore_t push_semaphorebuf_sem;
+SemaphoreHandle_t drawbuf_sem;  // StaticSemaphore_t draw_semaphorebuf_sem;
+static void push_task_wrapper(void *parameter);
+static void draw_task_wrapper(void *parameter);
 void semaphore_setup() {
-    #if VIDEO_TASKS
     Serial.printf("Semaphores..");
     pushbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t push_semaphorebuf_sem;
     drawbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t draw_semaphorebuf_sem;
@@ -117,7 +114,6 @@ void semaphore_setup() {
         xSemaphoreGive(drawbuf_sem);
     }
     Serial.printf("\n");
-    #endif
 }
 volatile int disp_oldmode = SHUTDOWN;
 LGFX_Sprite* sprptr;
@@ -221,9 +217,6 @@ class Display {
         animations.setup();
         sprptr = &framebuf[flip];
         reset_request = true;
-        #if !VIDEO_TASKS
-        update();
-        #endif
         Serial.printf("  display initialized\n");
     }
     void reset(LGFX_Sprite* spr) {
@@ -799,18 +792,6 @@ class Display {
   public:
     void update(int _nowmode = -1) {
         if (_nowmode >= 0) nowmode = _nowmode;
-        #if !VIDEO_TASKS
-            if (pushtime) {
-                if (!(screenRefreshTimer.expired() || always_max_refresh || auto_saver_enabled)) return;
-                screenRefreshTimer.reset();
-                push_task();
-                pushtime = false;
-            }
-            else {
-                draw_task();
-                pushtime = true;
-            }
-        #endif
     }
     bool draw_all(LGFX_Sprite* spr) {
         if (reset_request) reset(spr);
@@ -1059,7 +1040,6 @@ static IdiotLights idiots;
 static Touchscreen touch;
 static Display screen(&neo, &touch, &idiots, &sim);
 static Tuner tuner(&screen, &neo, &touch);
-#if VIDEO_TASKS
 bool take_two_semaphores(SemaphoreHandle_t* sem1, SemaphoreHandle_t* sem2, TickType_t waittime=portMAX_DELAY) {   // pdMS_TO_TICKS(1)
     if (xSemaphoreTake(*sem1, waittime) == pdTRUE) {
         if (xSemaphoreTake(*sem2, waittime) == pdTRUE) return true;
@@ -1092,7 +1072,6 @@ static void draw_task_wrapper(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
     }
 }
-#endif
 // The following project draws a nice looking gauge cluster, very apropos to our needs and the code is given.
 // See this video: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
 // Rinkydink home page: http://www.rinkydinkelectronics.com

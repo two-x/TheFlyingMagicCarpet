@@ -165,7 +165,7 @@ class Ignition {
     bool signal = LOW;                    // set by handler only. Reflects current state of the signal
     // bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
     Ignition(int _pin) : pin(_pin) {}
-    void setup () {  // must run after diag recovery function, to ensure initial ign value is asserted correctly
+    void setup() {  // must run after diag recovery function, to ensure initial ign value is asserted correctly
         bool pin_initial_val = LOW;
         if (!booted && (ign_req == REQ_ON || ign_req == REQ_OFF)) pin_initial_val = (ign_req == REQ_ON) ? HIGH : LOW;
         set_pin(pin, OUTPUT, pin_initial_val);
