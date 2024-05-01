@@ -656,7 +656,7 @@ class BrakeMotor : public JagMotor {
         pc[OUT] = pid_final_out_pc;
     }
     void carstop(bool panic_support=true) {
-        bool panic = panic_support && ignition.panicstop;
+        bool panic = panic_support && panicstop;
         bool stopped_now = speedo->car_stopped();
         if (stopped_last && !stopped_now) stopcar_timer.reset();
         stopped_last = stopped_now;

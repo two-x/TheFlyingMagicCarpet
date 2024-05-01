@@ -197,6 +197,7 @@ float loop_avg_us;
 bool sensidiots[11];
 bool web_disabled = false;
 int ui_context = DatapagesUI;
+bool panicstop = false;
 // bool sensor_present[telemetry_full];
 
 // fast macros

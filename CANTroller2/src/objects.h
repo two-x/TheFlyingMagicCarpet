@@ -7,8 +7,6 @@
 #include "globals.h"
 #include "sensors.h"  // includes uictrl.h, i2cbus.h
 #include "motors.h"  // includes qpid.h, temperature.h
-#include "diag.h"
-#include "web.h"
 
 // Instantiate objects
 std::random_device rd;
@@ -30,10 +28,7 @@ static MAPSensor mapsens(&i2c);
 static GasServo gas(gas_pwm_pin, 52);
 static BrakeMotor brake(brake_pwm_pin, 50);
 static SteerMotor steer(steer_pwm_pin, 50);
-static LoopTimer looptimer;
-static WebManager web(&looptimer);
-static BootMonitor watchdog(&prefs, &looptimer);
-static SdCard sdcard;
+static LightingBox lightbox(&i2c);  // lightbox(&diag);
 
 int rn(int values=256) {  // Generate a random number between 0 and values-1
     std::uniform_int_distribution<> dis(0, values - 1);
@@ -89,12 +84,6 @@ void sim_setup() {
     // sim.register_device(sens::engtemp, temp, temp.source());
     // sim.register_device(sens::starter, starter, starter.source());
     sim.set_potmap();
-}
-void update_web(void *parameter) {
-    while (true) {
-        web.update();
-        vTaskDelay(pdMS_TO_TICKS(20)); // Delay for 20ms, hopefully that's fast enough
-    }
 }
 // RTOS task that updates temp sensors in a separate task
 void update_temperature_sensors(void *parameter) {
@@ -169,38 +158,38 @@ void psram_setup() {  // see https://www.upesy.com/blogs/tutorials/get-more-ram-
 }
 class Ignition {
   private:
-    int ign_request = REQ_NA, panic_request = REQ_NA, pin;
+    int ign_req = REQ_NA, panic_req = REQ_NA, pin;
     bool paniclast;
     Timer panicTimer{15000000};  // How long should a panic stop last?  we can't stay mad forever
   public:
     bool signal = LOW;                    // set by handler only. Reflects current state of the signal
-    bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
-    Ignition(int _pin) : pin(_pin) { set_pin(ignition_pin, OUTPUT, LOW); }
-    void panic_request(int req) { panic_request = req; }
-    void ign_request(int req) { ign_request = req; }
+    // bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
+    Ignition(int _pin) : pin(_pin) { set_pin(pin, OUTPUT, LOW); }
+    void panic_request(int req) { panic_req = req; }
+    void ign_request(int req) { ign_req = req; }
     void update(int runmode) {  // Run once each main loop
-        if (panic_request == REQ_TOG) panic_request = !panicstop;
-        if (ign_request == REQ_TOG) ign_request = !signal;
+        if (panic_req == REQ_TOG) panic_req = !panicstop;
+        if (ign_req == REQ_TOG) ign_req = !signal;
         // else if (request == signal) request = REQ_NA;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
-        if (speedo.car_stopped() || panicTimer.expired()) panic_request = REQ_OFF;  // Cancel panic stop if car is stopped
+        if (speedo.car_stopped() || panicTimer.expired()) panic_req = REQ_OFF;  // Cancel panic stop if car is stopped
         if (!speedo.car_stopped() && (runmode == FLY || runmode == CRUISE || runmode == HOLD)) {
-            if (signal && ign_request == REQ_OFF) panic_request = REQ_ON;  // ignition cut while driving causes panic stop
-            if (!sim.simulating(sens::joy) && hotrc.radiolost()) panic_request = REQ_ON;
+            if (signal && ign_req == REQ_OFF) panic_req = REQ_ON;  // ignition cut while driving causes panic stop
+            if (!sim.simulating(sens::joy) && hotrc.radiolost()) panic_req = REQ_ON;
         }
         paniclast = panicstop;
-        if (panic_request != REQ_NA) {
-            panicstop = (bool)panic_request;    // printf("panic=%d\n", panicstop);
+        if (panic_req != REQ_NA) {
+            panicstop = (bool)panic_req;    // printf("panic=%d\n", panicstop);
             if (panicstop && !paniclast) panicTimer.reset();
         }
-        if (panicstop) ign_request = REQ_OFF;  // panic stop causes ignition cut
-        if (ign_request != REQ_NA && runmode != ASLEEP) {
-            signal = (bool)ign_request;
-            write_pin (ignition_pin, signal);  // turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
+        if (panicstop) ign_req = REQ_OFF;  // panic stop causes ignition cut
+        if (ign_req != REQ_NA && runmode != ASLEEP) {
+            signal = (bool)ign_req;
+            write_pin(pin, signal);  // turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
         }
-        panic_request = ign_request = REQ_NA;  // cancel outstanding requests
+        panic_req = ign_req = REQ_NA;  // cancel outstanding requests
     }
 };
-Ignition ignition(ignition_pin);
+static Ignition ignition(ignition_pin);
 
 class Starter {
   private:
@@ -240,7 +229,7 @@ class Starter {
             gas.setmode(Starting);            // give it some gas
             starterTimer.set((int64_t)run_timeout);  // if left on the starter will turn off automatically after X seconds
             motor = HIGH;    // ensure starter variable always reflects the starter status regardless who is driving it
-            write_pin (pin, motor);           // and start the motor
+            write_pin(pin, motor);           // and start the motor
             now_req = REQ_NA;                 // we have serviced starter-on request, so cancel it
             return;                           // if the brake was right we have started driving the starter
         }  // from here on, we can assume the brake isn't being held on, which is in the way of our task to begin driving the starter
@@ -340,9 +329,21 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
     }
 };
 static FuelPump fuelpump(tp_cs_fuel_pin);
-static LightingBox lightbox(&i2c);  // lightbox(&diag);
+#include "diag.h"
+static LoopTimer looptimer;
+#include "web.h"
+static WebManager web(&looptimer);
+static BootMonitor watchdog(&prefs, &looptimer);
+static SdCard sdcard;
 static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &ignition);
 
 #include "display.h"  // includes neopixel.h, touch.h
 #include "runmodes.h"
 static RunModeManager run(&screen, &encoder);
+
+void update_web(void *parameter) {
+    while (true) {
+        web.update();
+        vTaskDelay(pdMS_TO_TICKS(20)); // Delay for 20ms, hopefully that's fast enough
+    }
+}

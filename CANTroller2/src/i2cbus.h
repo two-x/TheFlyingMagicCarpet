@@ -203,7 +203,7 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
         uint8_t byt = 0x00;  // command template for runmode update
         uint8_t warning = 0;  // (diag->worst_sensor(3) != _None);
         uint8_t alarm = 0;  // (diag->worst_sensor(4) != _None);
-        byt |= (uint8_t)syspower | (uint8_t)(ignition.panicstop << 1) | (uint8_t)(warning << 2) | (alarm << 3);  // insert status bits nibble
+        byt |= (uint8_t)syspower | (uint8_t)(panicstop << 1) | (uint8_t)(warning << 2) | (alarm << 3);  // insert status bits nibble
         if (byt == status_nibble_last) return false;
         Wire.beginTransmission(addr);
         Wire.write(byt);
