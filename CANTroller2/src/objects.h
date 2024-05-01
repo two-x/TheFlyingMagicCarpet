@@ -159,12 +159,19 @@ void psram_setup() {  // see https://www.upesy.com/blogs/tutorials/get-more-ram-
 class Ignition {
   private:
     int ign_req = REQ_NA, panic_req = REQ_NA, pin;
-    bool paniclast;
+    bool paniclast, booted = false;
     Timer panicTimer{15000000};  // How long should a panic stop last?  we can't stay mad forever
   public:
     bool signal = LOW;                    // set by handler only. Reflects current state of the signal
     // bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
-    Ignition(int _pin) : pin(_pin) { set_pin(pin, OUTPUT, LOW); }
+    Ignition(int _pin) : pin(_pin) {}
+    void setup () {  // must run after diag recovery function, to ensure initial ign value is asserted correctly
+        bool pin_initial_val = LOW;
+        if (!booted && (ign_req == REQ_ON || ign_req == REQ_OFF)) pin_initial_val = (ign_req == REQ_ON) ? HIGH : LOW;
+        set_pin(pin, OUTPUT, pin_initial_val);
+        booted = true;
+        ign_req = REQ_NA;
+    }
     void request(int req) { ign_req = req; }
     void panic_request(int req) { panic_req = req; }
     void update(int runmode) {  // Run once each main loop
