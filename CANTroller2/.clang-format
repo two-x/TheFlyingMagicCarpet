@@ -1,4 +1,4 @@
-# syntax formatting support, soren-optimized
+# syntax formatting support, soren-optimized.  https://clang.llvm.org/doxygen/structclang_1_1format_1_1FormatStyle.html
 ---
 Language: Cpp
 BasedOnStyle: Microsoft  # All possible: LLVM, Google, Chromium, Mozilla, WebKit, Microsoft, GNU, Java, Stroustrup
@@ -52,7 +52,7 @@ AllowShortBlocksOnASingleLine: true
 AllowShortCaseLabelsOnASingleLine: true
 AllowShortCompoundRequirementOnASingleLine: true
 AllowShortEnumsOnASingleLine: true
-AllowShortFunctionsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: true  #  Empty
 AllowShortIfStatementsOnASingleLine: true
 AllowShortLambdasOnASingleLine: All
 AllowShortLoopsOnASingleLine: true
@@ -60,36 +60,39 @@ AlwaysBreakAfterDefinitionReturnType: None
 AlwaysBreakAfterReturnType: None
 AlwaysBreakBeforeMultilineStrings: false
 AlwaysBreakTemplateDeclarations: MultiLine
+ArrayInitializerAlignment: AIAS_Right
 # AttributeMacros:
 #   - __capability
 BinPackArguments: true
 BinPackParameters: false
 BitFieldColonSpacing: Both
+BraceBreaking: BS_Stroustrup  # Should key include "Style"?
 BraceWrapping:
   AfterCaseLabel: false
   AfterClass: false
   AfterControlStatement: false
   AfterEnum: false
-  # AfterExternBlock: true
+  AfterExternBlock: true
   AfterFunction: false
   AfterNamespace: false
-  # AfterObjCDeclaration: true
+  AfterObjCDeclaration: false
   AfterStruct: false
   AfterUnion: false
-  # BeforeCatch: false
+  BeforeCatch: false
   BeforeElse: true
-  # BeforeLambdaBody: false
-  # BeforeWhile: false
+  BeforeFunction: false
+  BeforeLambdaBody: false
+  BeforeWhile: false
   IndentBraces: false
-  # SplitEmptyFunction: true
-  # SplitEmptyRecord: true
-  # SplitEmptyNamespace: true
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
 BreakAdjacentStringLiterals: false
 BreakAfterAttributes: Leave
 BreakAfterJavaFieldAnnotations: false
 BreakArrays: false
 BreakBeforeBinaryOperators: false
-BreakBeforeBraces: Attach   # Custom
+BreakBeforeBraces: Custom   # Custom defers to BraceWrapping sub-settings above
 # BreakBeforeConceptDeclarations: Always
 BreakBeforeInlineASMColon: OnlyMultiline
 BreakBeforeTernaryOperators: false
@@ -101,7 +104,7 @@ ColumnLimit: 300
 # ConstructorInitializerAllOnOneLineOrOnePerLine: true    # is this a valid key?
 ConstructorInitializerIndentWidth: 2
 ContinuationIndentWidth: 2
-Cpp11BracedListStyle: true  # Format braced lists as per C++11 style.
+# Cpp11BracedListStyle: true  # Format braced lists as per C++11 style.
 DerivePointerAlignment: false
 DisableFormat: false
 EmptyLineAfterAccessModifier: Never
@@ -189,7 +192,7 @@ RequiresExpressionIndentation: OuterScope
 SeparateDefinitionBlocks: Leave
 ShortNamespaceLines: 1
 SkipMacroDefinitionBody: false
-# SortIncludes: CaseSensitive
+SortIncludes: false
 # SortJavaStaticImport: Before
 # SortUsingDeclarations: LexicographicNumeric
 SpaceAfterCStyleCast: false
@@ -216,6 +219,7 @@ SpaceBeforeParensOptions:
   BeforeNonEmptyParentheses: false
 SpaceBeforeRangeBasedForLoopColon: true
 SpaceBeforeSquareBrackets: false
+SpacesInBraceInitialization: true
 SpaceInEmptyBlock: false
 # SpaceInEmptyParentheses: false  # is this a valid key?
 SpacesBeforeTrailingComments: 2
