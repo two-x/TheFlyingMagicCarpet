@@ -1,8 +1,10 @@
 #pragma once
 #include <NeoPixelBus.h>
 #define neorgb_t RgbColor  // RgbwColor
-#define striplength 8
-NeoPixelBus<NeoGrbFeature, NeoSk6812Method> neoobj(striplength, neopixel_pin);  // NeoWs2812Method, NeoWs2812xMethod, NeoSk6812Method, NeoEsp32Rmt0Ws2812xMethod, NeoEsp32I2s1800KbpsMethod, NeoEsp32I2s1Sk6812Method, 
+#define dual_neo_idiot_strips true
+int striplength = 8;
+int totallength = striplength * dual_neo_idiot_strips ? 2 : 1;
+NeoPixelBus<NeoGrbFeature, NeoSk6812Method> neoobj(totallength, neopixel_pin);  // NeoWs2812Method, NeoWs2812xMethod, NeoSk6812Method, NeoEsp32Rmt0Ws2812xMethod, NeoEsp32I2s1800KbpsMethod, NeoEsp32I2s1Sk6812Method, 
 // Default for esp32 is dma via I2S bus 1 at 800kHz using RMT. Don't know the protocol difference between "Ws2812", "Ws2812x", and "Sk6812"
 // Run neos in a task example: https://github.com/Makuna/NeoPixelBus/wiki/ESP32-and-RTOS-Tasks
 
@@ -51,7 +53,7 @@ class NeopixelStrip {
     int32_t heartbeat_level = 0;
     int64_t heartbeat_ekg_us[4] = {250000, 240000, 620000, 2000000};  // {187500, 125000, 562500, 1250000};
     int32_t heartbeat_pulse = 255;
-    static const uint8_t numpixels = 1 + idiotcount;  //  + extIdiotCount;  // 15 pixels = heartbeat RGB + 7 onboard RGB + 7 external RGBW
+    static constexpr uint8_t numpixels = (1 + idiotcount) * dual_neo_idiot_strips ? 2 : 1;  //  + extIdiotCount;  // 15 pixels = heartbeat RGB + 7 onboard RGB + 7 external RGBW
     neorgb_t neostrip[numpixels];
     neorgb_t heartbeatColor, heartbeatNow;
     uint8_t heartcolor16 = 0x00;  // blackened heart
@@ -74,6 +76,7 @@ class NeopixelStrip {
     void fevpush(uint _idiot, int8_t push_off, bool push_val);
     void update_idiot(uint _idiot);
     void calc_lobright();
+    void duplicate_strip();
   public:
     NeopixelStrip(int argpin) { pin = argpin; }
     void refresh();
@@ -125,6 +128,10 @@ neorgb_t NeopixelStrip::desaturate(neorgb_t color, int32_t _desat_of_ten) {  // 
     // }
     return neorgb_t(rgb[0], rgb[1], rgb[2]);
 }
+void NeopixelStrip::duplicate_strip() {
+    if (!dual_neo_idiot_strips) return;
+    for (int i=0; i<striplength; i++) neostrip[i + striplength] = neostrip[i];
+}
 void NeopixelStrip::recolor_idiots(int8_t _idiot) {  // pass in -1 to recolor all idiots
     int8_t start = (_idiot >= 0) ? _idiot : 0;
     int8_t end = (_idiot >= 0) ? _idiot + 1 : idiotcount;
@@ -136,18 +143,22 @@ void NeopixelStrip::recolor_idiots(int8_t _idiot) {  // pass in -1 to recolor al
     }
 }
 void NeopixelStrip::refresh() {
-    int32_t numledstowrite = (heartbeatNow != neostrip[0]);
+    int numledstowrite = (heartbeatNow != neostrip[0]);
     neostrip[0] = heartbeatNow;
-    neoobj.SetPixelColor(0, heartbeatNow);
     for (int32_t i=0; i<idiotcount; i++) {
         if (cidiot[i][cnow] != neostrip[i+1]) {
-            neoobj.SetPixelColor (1+i, cidiot[i][cnow]);
             neostrip[i + 1] = cidiot[i][cnow];  // color_to_neo(cidiot[i][cnow]);
             numledstowrite = 2 + i;  // + idiotCount;
         }
     }
+    if (dual_neo_idiot_strips) {
+        duplicate_strip();
+        numledstowrite += striplength;
+    }
+    for (int32_t i=0; i<numpixels; i++) neoobj.SetPixelColor(i, neostrip[i]);
     if (numledstowrite) neoobj.Show(numledstowrite);  // This ability to exclude pixels at the end of the strip that haven't changed from the data write is an advantage of neopixelbus over adafruit
 }
+
 void NeopixelStrip::setup(bool viewcontext) {
     std::cout << "Neopixels.. ";
     breadboard = running_on_devboard;
