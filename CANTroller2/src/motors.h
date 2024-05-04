@@ -421,30 +421,18 @@ class GasServo : public ServoMotor {
     }
     void set_output() {
         // Serial.printf("mode");
-        if (motormode == Calibrate) {
-            cal_gasmode = true;
-            pc[OUT] = out_si_to_pc(map(pot->val(), pot->min(), pot->max(), si[ABSMIN], si[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
-            return;  // cal mode sets the output directly, skipping the post processing at the end of this function
-        }
-        cal_gasmode = false;
-        if (motormode == Idle) {
-            mode_busy = true;
-            throttle_target_pc = idle_pc;
-        }
-        else if (motormode == Starting) {
-            mode_busy = true;
-            throttle_target_pc = starting_pc;
-        }
-        else if (motormode == Cruise) {
-            calc_cruise_target();  // cruise mode just got too big to be nested in this if-else clause
-        }
-        else if (motormode == ParkMotor) {
-            mode_busy = true;
-            throttle_target_pc = pc[PARKED];
-        }
+        if (motormode == Idle) throttle_target_pc = idle_pc;
+        else if (motormode == Starting) throttle_target_pc = starting_pc;
+        else if (motormode == Cruise) calc_cruise_target();  // cruise mode just got too big to be nested in this if-else clause
+        else if (motormode == ParkMotor) throttle_target_pc = pc[PARKED];
         else if (motormode == OpenLoop || motormode == ActivePID) {
             if (hotrc->joydir() != JOY_UP) throttle_target_pc = idle_pc;  // If in deadband or being pushed down, we want idle
             else throttle_target_pc = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], idle_pc, pc[GOVERN]);  // actuators still respond even w/ engine turned off
+        }
+        else if (motormode == Calibrate) {
+            cal_gasmode = true;
+            pc[OUT] = out_si_to_pc(map(pot->val(), pot->min(), pot->max(), si[ABSMIN], si[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
+            return;  // cal mode sets the output directly, skipping the post processing at the end of this function
         }
         // Serial.printf(":%d tgt:%lf pk:%lf idl:%lf\n", motormode, throttle_target_pc, pc[PARKED], idle_pc);
         float new_out;
@@ -471,21 +459,20 @@ class GasServo : public ServoMotor {
     }
   public:
     void setmode(int _mode) {
-        mode_busy = false;
-        if (_mode != motormode) {
-            throttleRateTimer.reset();
-            if (_mode == Cruise) {
-                cruisepid.set_target(speedo->filt());  // set pid loop speed target to current speed  (for PID_SUSPEND_FLY mode)
-                pid.set_target(tach->filt());  // initialize pid output (rpm target) to current rpm  (for PID_SUSPEND_FLY mode)
-                throttle_target_pc = pc[OUT];  //  set target throttle angle to current throttle angle  (for THROTTLE_ANGLE/THROTTLE_DELTA modes)
-                cruise_adjusting = cruise_trigger_released = false;  // in case trigger is being pulled as cruise mode is entered, the ability to adjust is only unlocked after the trigger is subsequently released to the center
-            }
-            if (_mode == Calibrate) {
-                float temp = pot->mapToRange(0.0, 180.0);
-                if (temp >= si[PARKED] && temp <= si[OPMAX]) motormode = Calibrate;
-            }
-            else motormode = _mode;
+        if (_mode == motormode) return;
+        cal_gasmode = false;
+        throttleRateTimer.reset();
+        if (_mode == Cruise) {
+            cruisepid.set_target(speedo->filt());  // set pid loop speed target to current speed  (for PID_SUSPEND_FLY mode)
+            pid.set_target(tach->filt());  // initialize pid output (rpm target) to current rpm  (for PID_SUSPEND_FLY mode)
+            throttle_target_pc = pc[OUT];  //  set target throttle angle to current throttle angle  (for THROTTLE_ANGLE/THROTTLE_DELTA modes)
+            cruise_adjusting = cruise_trigger_released = false;  // in case trigger is being pulled as cruise mode is entered, the ability to adjust is only unlocked after the trigger is subsequently released to the center
         }
+        if (_mode == Calibrate) {
+            float temp = pot->mapToRange(0.0, 180.0);
+            if (temp >= si[PARKED] && temp <= si[OPMAX]) motormode = Calibrate;
+        }
+        else motormode = _mode;
     }
     int parked() {
         return (std::abs(out_pc_to_si(pc[OUT]) - si[PARKED]) < 1);
@@ -530,7 +517,7 @@ class BrakeMotor : public JagMotor {
     PressureSensor* pressure;
     GasServo* throttle;
     TemperatureSensorManager* tempsens;
-    float brakemotor_max_duty_pc = 25.0;  // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
+    float brakemotor_duty_spec_pc = 25.0;  // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
     float press_kp = 0.142;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float press_ki = 0.000;        // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float press_kd = 0.000;        // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
@@ -554,7 +541,7 @@ class BrakeMotor : public JagMotor {
   public:
     using JagMotor::JagMotor;
     int motormode = Halt, oldmode = Halt, active_pids = HybridPID, dominantpid = brake_default_pid;
-    bool mode_busy = false, brake_tempsens_exists = false, posn_pid_active = (dominantpid == PositionPID);
+    bool brake_tempsens_exists = false, posn_pid_active = (dominantpid == PositionPID);
     QPID pids[2];  // brake changes from pressure target to position target as pressures decrease, and vice versa
     QPID* pid_dom = &(pids[PressurePID]);  // AnalogSensor sensed[2];
     float brake_pid_trans_threshold_lo = 0.25;  // tunable. At what fraction of full brake pressure will motor control begin to transition from posn control to pressure control
@@ -586,7 +573,7 @@ class BrakeMotor : public JagMotor {
         Serial.printf("Brake motor..");
         JagMotor::setup(_hotrc, _speedo, _batt);
         pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
-        // duty_fwd_pc = brakemotor_max_duty_pc;
+        // duty_fwd_pc = brakemotor_duty_spec_pc;
         pres_last = pressure->filt();
         posn_last = brkpos->filt();
         set_dominant_pid(brake_default_pid);
@@ -607,19 +594,17 @@ class BrakeMotor : public JagMotor {
             if (brake_tempsens_exists) motor_heat = tempsens->val(loc::BRAKE);
             else {
                 nowtemp = tempsens->val(loc::AMBIENT);
-                if (std::isnan(motor_heat) && !std::isnan(nowtemp)) {
-                    motor_heat = nowtemp;
-                    Serial.printf("Actively forecasting brake motor heat generation\n");
-                    return;
-                }
-                if (std::isnan(nowtemp)) added_heat = motor_heatloss_rate / -4.0;
+                if (std::isnan(motor_heat) && !std::isnan(nowtemp)) motor_heat = nowtemp;  // Serial.printf("Actively forecasting brake motor heat generation\n");
                 else {
-                    motor_heat_min = nowtemp;
-                    if (motor_heat > nowtemp) added_heat = -motor_heatloss_rate * (motor_heat - nowtemp) / nowtemp;
+                    if (std::isnan(nowtemp)) added_heat = motor_heatloss_rate / -4.0;
+                    else {
+                        motor_heat_min = nowtemp;
+                        if (motor_heat > nowtemp) added_heat = -motor_heatloss_rate * (motor_heat - nowtemp) / nowtemp;
+                    }
+                    if (pc[OUT] <= brakemotor_duty_spec_pc + pc[MARGIN]) added_heat += map(pc[OUT], 0.0, -100.0, 0.0, motor_max_unloaded_heatup_rate);
+                    else if (pc[OUT] > brakemotor_duty_spec_pc - pc[MARGIN]) added_heat += map(pc[OUT], brakemotor_duty_spec_pc, 100.0, 0.0, motor_max_loaded_heatup_rate);
+                    motor_heat += added_heat;
                 }
-                if (pc[OUT] <= brakemotor_max_duty_pc + pc[MARGIN]) added_heat += map(pc[OUT], 0.0, -100.0, 0.0, motor_max_unloaded_heatup_rate);
-                else if (pc[OUT] > brakemotor_max_duty_pc - pc[MARGIN]) added_heat += map(pc[OUT], brakemotor_max_duty_pc, 100.0, 0.0, motor_max_loaded_heatup_rate);
-                motor_heat += added_heat;
             }
             motor_heat = constrain(motor_heat, motor_heat_min, motor_heat_max);
         }
@@ -713,7 +698,6 @@ class BrakeMotor : public JagMotor {
             else set_pidtarg(map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], 0.0, 100.0));  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
             pid_out();
         }
-        mode_busy = autostopping || parking || releasing;
     }
     void constrain_output() {  // keep within the operational range, or to full absolute range if calibrating (caution don't break anything!)
         if (motormode == Calibrate) pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);
@@ -726,13 +710,12 @@ class BrakeMotor : public JagMotor {
     }
   public:
     void setmode(int _mode) {
-        if (_mode != motormode) {
-            autostopping = autoholding = cal_brakemode = parking = releasing = mode_busy = false;        
-            interval_timer.reset();
-            stopcar_timer.reset();
-            motor_park_timer.reset();
-            active_pids = HybridPID;
-        }
+        if (_mode == motormode) return;
+        autostopping = autoholding = cal_brakemode = parking = releasing = false;        
+        interval_timer.reset();
+        stopcar_timer.reset();
+        motor_park_timer.reset();
+        active_pids = HybridPID;
         motormode = _mode;
     }
     void update() {  // Brakes - Determine motor output and write it to motor
@@ -775,7 +758,6 @@ class SteerMotor : public JagMotor {
         }
     }
     void setmode(int _mode) { motormode = _mode; }
-
   private:
     void set_output() {
         if (motormode == Halt) pc[OUT] = pc[STOP];  // Stop the steering motor if in shutdown mode and shutdown is complete

@@ -985,11 +985,11 @@ class Tuner {
                 else if (sel_val == 10) { adj_val(&(brake.duty_fwd_pc), fdelta, 0.0f, 100.0f); brake.derive(); }
             }
             else if (datapage == PG_IDLE) {
-                if (sel_val == 5) adj_val(&gas.starting_pc, fdelta, gas.pc[OPMIN], gas.pc[OPMAX]);
-                else if (sel_val == 6) gas.add_idlecold(fdelta);
-                else if (sel_val == 7) gas.add_idlehot(fdelta);
-                else if (sel_val == 8) gas.add_tempcold(fdelta);
-                else if (sel_val == 9) gas.add_temphot(fdelta);
+                if (sel_val == 6) adj_val(&gas.starting_pc, fdelta, gas.pc[OPMIN], gas.pc[OPMAX]);
+                else if (sel_val == 7) gas.add_idlecold(fdelta);
+                else if (sel_val == 8) gas.add_idlehot(fdelta);
+                else if (sel_val == 9) gas.add_tempcold(fdelta);
+                else if (sel_val == 10) gas.add_temphot(fdelta);
             }
             else if (datapage == PG_BPID) {
                 if (sel_val == 8) brake.pid_dom->add_kp(0.001f * fdelta);
