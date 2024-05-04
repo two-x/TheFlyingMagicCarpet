@@ -549,8 +549,8 @@ class BrakeMotor : public JagMotor {
     float brake_pid_trans_threshold_hi = 0.50;  // tunable. At what fraction of full brake pressure will motor control be fully transitioned to pressure control
     bool autostopping = false, autoholding = false, reverse = false;
     float panic_initial_pc, hold_initial_pc, panic_increment_pc, hold_increment_pc, parkpos_pc, zeropoint_pc;
-    float outnow_pc[2], hybrid_math_offset, hybrid_math_coeff, pid_targ_pc, pid_err_pc, pid_final_out_pc;
-    float hybrid_sens_ratio, hybrid_sens_ratio_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0, hybrid_targ_ratio = 1.0, hybrid_targ_ratio_pc = 100.0;
+    float hybrid_math_offset, hybrid_math_coeff, hybrid_sens_ratio, hybrid_sens_ratio_pc, pid_targ_pc, pid_err_pc;
+    float hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0, hybrid_targ_ratio = 1.0, hybrid_targ_ratio_pc = 100.0;
     float motor_heat = NAN, motor_heatloss_rate = 3.0, motor_max_loaded_heatup_rate = 1.5, motor_max_unloaded_heatup_rate = 0.3;  // deg F per timer timeout
     void derive() {
         JagMotor::derive();
@@ -617,13 +617,10 @@ class BrakeMotor : public JagMotor {
     // "dominant" PID means the PID loop (pressure or position) that has the majority influence over the motor
     float calc_hybrid_ratio(float pressure_val) {  // pass in a pressure reading or target value (in psi). returns the appropriate ratio of pressure influence (from 0.0 to 1.0)
         float pressure_ratio = (pressure_val - pressure->min_human()) / (pressure->max_human() - pressure->min_human());  // calculate ratio of output to range
-        float hybrid_ratio = (float)active_pids;  // will get written over if using hybrid pid
-        if (active_pids == HybridPID) {
-            if (pressure_ratio >= brake_pid_trans_threshold_hi) hybrid_ratio = 1.0;  // at pressure above hi threshold, pressure has 100% influence
-            else if (pressure_ratio <= brake_pid_trans_threshold_lo) hybrid_ratio = 0.0;  // at pressure below lo threshold, position has 100% influence
-            else hybrid_ratio = 0.5 + 0.5 * sin(hybrid_math_coeff * (pressure_ratio - hybrid_math_offset));  // in between we make a steep but smooth transition during which both have some influence
-        }
-        return hybrid_ratio;
+        if (active_pids != HybridPID) return (float)active_pids;
+        if (pressure_ratio >= brake_pid_trans_threshold_hi) return 1.0;  // at pressure above hi threshold, pressure has 100% influence
+        if (pressure_ratio <= brake_pid_trans_threshold_lo) return 0.0;  // at pressure below lo threshold, position has 100% influence
+        return 0.5 + 0.5 * sin(hybrid_math_coeff * (pressure_ratio - hybrid_math_offset));  // in between we make a steep but smooth transition during which both have some influence
     }
     void set_pidtarg(float targ_pc) {  // pass in desired brake target as an overall percent, will set pressure and position pid targets consistent with current configuration
         pid_targ_pc = targ_pc;
@@ -637,9 +634,7 @@ class BrakeMotor : public JagMotor {
         hybrid_out_ratio = calc_hybrid_ratio(pressure->filt());  // calculate pressure vs. position multiplier based on the sensed values
         hybrid_out_ratio_pc = 100.0 * hybrid_out_ratio;  // for display
         set_dominant_pid((int)(hybrid_out_ratio + 0.5));  // round to 0 (posn pid) or 1 (pressure pid)
-        for (int p = PositionPID; p <= PressurePID; p++) outnow_pc[p] = pids[p].compute();  // get each pid calculated output
-        pid_final_out_pc = hybrid_out_ratio * outnow_pc[PressurePID] + (1.0 - hybrid_out_ratio) * outnow_pc[PositionPID];  // combine pid outputs weighted by the multiplier
-        pc[OUT] = pid_final_out_pc;
+        pc[OUT] = hybrid_out_ratio * pids[PressurePID].compute() + (1.0 - hybrid_out_ratio) * pids[PositionPID].compute();  // combine pid outputs weighted by the multiplier
     }
     void carstop(bool panic_support=true) {
         bool panic = panic_support && panicstop;
