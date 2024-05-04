@@ -393,13 +393,7 @@ class GasServo : public ServoMotor {
   private:
     void calc_cruise_target() {
         int joydir = hotrc->joydir(VERT);
-        if (joydir == JOY_CENT) {
-            cruise_adjusting = false;
-            cruise_trigger_released = true;
-            cruise_ctrl_extent_pc = hotrc->pc[VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
-            if (cruise_setpoint_scheme == PID_SUSPEND_FLY) throttle_target_pc = cruisepid.compute();
-        }
-        else if ((joydir == JOY_UP || (joydir == JOY_DN && cruise_speed_lowerable)) && cruise_trigger_released) {  // adjustments disabled until trigger has been to center at least once since going to cruise mode
+        if ((joydir == JOY_UP || (joydir == JOY_DN && cruise_speed_lowerable)) && cruise_trigger_released) {  // adjustments disabled until trigger has been to center at least once since going to cruise mode
             if (joydir == JOY_UP) ctrlratio = (hotrc->pc[VERT][FILT] - hotrc->pc[VERT][DBTOP]) / (hotrc->pc[VERT][OPMAX] - hotrc->pc[VERT][DBTOP]);
             else ctrlratio = (hotrc->pc[VERT][FILT] - hotrc->pc[VERT][DBBOT]) / (hotrc->pc[VERT][OPMIN] - hotrc->pc[VERT][DBBOT]);
             if (cruise_setpoint_scheme == THROTTLE_DELTA) {
@@ -418,6 +412,21 @@ class GasServo : public ServoMotor {
             }
             cruise_adjusting = true;
         }
+        else {
+            if (joydir == JOY_CENT) {
+                cruise_adjusting = false;
+                cruise_trigger_released = true;
+                cruise_ctrl_extent_pc = hotrc->pc[VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
+            }
+            if (cruise_setpoint_scheme == PID_SUSPEND_FLY) throttle_target_pc = cruisepid.compute();
+        }
+    }
+    float rate_limiter(float val) {
+        float max_change = (float)throttleRateTimer.elapsed() * max_throttle_angular_velocity_pcps / 1000000.0;
+        throttleRateTimer.reset();  // Serial.printf(" new:%lf pc0:%lf mx:%lf", throttle_target_pc, pc[OUT], max_change);
+        if (val > pc[OUT] + max_change) return pc[OUT] + max_change;
+        else if (val < pc[OUT] - max_change) return pc[OUT] - max_change;
+        else return val;  // Serial.printf(" tgt:%lf pc1:%lf\n", throttle_target_pc, pc[OUT]);
     }
     void set_output() {
         // Serial.printf("mode");
@@ -432,30 +441,22 @@ class GasServo : public ServoMotor {
         else if (motormode == Calibrate) {
             cal_gasmode = true;
             pc[OUT] = out_si_to_pc(map(pot->val(), pot->min(), pot->max(), si[ABSMIN], si[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
-            return;  // cal mode sets the output directly, skipping the post processing at the end of this function
-        }
-        // Serial.printf(":%d tgt:%lf pk:%lf idl:%lf\n", motormode, throttle_target_pc, pc[PARKED], idle_pc);
+            return;  // cal mode sets the output directly, skipping the post processing below
+        }  // Serial.printf(":%d tgt:%lf pk:%lf idl:%lf\n", motormode, throttle_target_pc, pc[PARKED], idle_pc);
         float new_out;
         throttle_target_pc = constrain(throttle_target_pc, pc[PARKED], pc[OPMAX]);
         if (throttle_ctrl_mode == ActivePID) {
             pid.set_target(pc_to_rpm(throttle_target_pc));
             new_out = pid.compute();
         }
-        else new_out = throttle_target_pc;
-        // Serial.printf(" ela:%ld pcps:%lf", throttleRateTimer.elapsed(), max_throttle_angular_velocity_pcps);
-        float max_change = (float)throttleRateTimer.elapsed() * max_throttle_angular_velocity_pcps / 1000000.0;
-        throttleRateTimer.reset();
-        // Serial.printf(" new:%lf pc0:%lf mx:%lf", throttle_target_pc, pc[OUT], max_change);
-        if (new_out > pc[OUT] + max_change) pc[OUT] += max_change;
-        else if (new_out < pc[OUT] - max_change) pc[OUT] -= max_change;
-        else pc[OUT] = new_out;
-        if (throttle_ctrl_mode == ActivePID) pid.set_output(pc[OUT]);
-        // Serial.printf(" tgt:%lf pc1:%lf\n", throttle_target_pc, pc[OUT]);
+        else new_out = throttle_target_pc;  // Serial.printf(" ela:%ld pcps:%lf", throttleRateTimer.elapsed(), max_throttle_angular_velocity_pcps);
+        pc[OUT] = rate_limiter(new_out);
     }
     void constrain_output() {
         if (motormode == Calibrate) pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);
         else if (motormode == ParkMotor || motormode == Halt) pc[OUT] = constrain(pc[OUT], pc[PARKED], pc[GOVERN]);
         else pc[OUT] = constrain(pc[OUT], idle_pc, pc[GOVERN]);
+        if (throttle_ctrl_mode == ActivePID) pid.set_output(pc[OUT]);  // feed possibly-modified output value back into pid
     }
   public:
     void setmode(int _mode) {

@@ -212,7 +212,7 @@ class Starter {
     bool req_active = false;
     void setup() {
         Serial.printf("Starter.. output-only supported\n");
-        set_pin(pin, OUTPUT);  // set pin as input or output
+        set_pin(pin, OUTPUT);  // set pin as output
     }
     void request(int req) { now_req = req; }  // Serial.printf("r:%d n:%d\n", req, now_req);}
     void update() {  // starter bidirectional handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
@@ -227,7 +227,7 @@ class Starter {
             return;                  // ditch out, leaving the motor-off request intact. we'll check on the timer next time
         }  // now, we have stopped driving the starter if we were supposed to stop
         // if (sim.simulating(sens::starter)) motor = pin_outputting;  // if simulating starter, there's no external influence
-        if (motor || now_req != REQ_ON) {  // if starter is already being driven by us or externally, or we aren't being tasked to drive it
+        if (motor || now_req != REQ_ON) {  // if starter is already being driven, or we aren't being tasked to drive it
             now_req = REQ_NA;          // cancel any requests
             return;                    // and ditch
         }  // from here on, we can assume the starter is off and we are supposed to turn it on
