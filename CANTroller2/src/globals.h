@@ -145,7 +145,7 @@ bool print_framebuffers = false;
 int sprite_color_depth = 8;
 uint32_t looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. Set to 0 linefeeds all prints
 float flycruise_vert_margin_pc = 0.3;       // Margin of error for determining hard brake value for dropping out of cruise mode
-int cruise_setpoint_scheme = THROTTLE_DELTA;
+int cruise_scheme = THROTTLE_DELTA;
 int32_t cruise_delta_max_pc_per_s = 16;  // (in THROTTLE_DELTA mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
 float cruise_angle_attenuator = 0.016;   // (in THROTTLE_ANGLE mode) Limits the change of each adjust trigger pull to this fraction of what's possible
 float temp_lims_f[NUM_TEMP_CATEGORIES][6]{
