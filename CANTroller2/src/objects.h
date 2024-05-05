@@ -167,7 +167,11 @@ class Ignition {
     Ignition(int _pin) : pin(_pin) {}
     void setup() {  // must run after diag recovery function, to ensure initial ign value is asserted correctly
         bool pin_initial_val = LOW;
-        if (!booted && (ign_req == REQ_ON || ign_req == REQ_OFF)) pin_initial_val = (ign_req == REQ_ON) ? HIGH : LOW;
+        if (!booted) {
+            panicstop = (bool)prefs.getUInt("panicstop", false);
+            if (!panicstop && (ign_req == REQ_ON)) pin_initial_val = HIGH;
+            else pin_initial_val = LOW;        
+        }
         set_pin(pin, OUTPUT, pin_initial_val);
         booted = true;
         ign_req = REQ_NA;
@@ -183,11 +187,14 @@ class Ignition {
             if (signal && ign_req == REQ_OFF) panic_req = REQ_ON;  // ignition cut while driving causes panic stop
             if (!sim.simulating(sens::joy) && hotrc.radiolost()) panic_req = REQ_ON;
         }
-        paniclast = panicstop;
         if (panic_req != REQ_NA) {
             panicstop = (bool)panic_req;    // printf("panic=%d\n", panicstop);
-            if (panicstop && !paniclast) panicTimer.reset();
+            if (panicstop != paniclast) {
+                prefs.putUInt("panicstop", (uint32_t)panicstop);
+                if (panicstop) panicTimer.reset();
+            }
         }
+        paniclast = panicstop;
         if (panicstop) ign_req = REQ_OFF;  // panic stop causes ignition cut
         if (ign_req != REQ_NA && runmode != ASLEEP) {
             signal = (bool)ign_req;
@@ -215,11 +222,11 @@ class Starter {
         set_pin(pin, OUTPUT);  // set pin as output
     }
     void request(int req) { now_req = req; }  // Serial.printf("r:%d n:%d\n", req, now_req);}
-    void update() {  // starter bidirectional handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
+    void update() {  // starter drive handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
         // if (now_req != NA) Serial.printf("m:%d r:%d\n", motor, now_req);
         if (now_req == REQ_TOG) now_req = !motor;  // translate a toggle request to a drive request opposite to the current drive state
         req_active = (now_req != REQ_NA);                   // for display
-        if (motor && (now_req == REQ_OFF)) {  // if we're driving the motor but need to stop or in the process of stopping
+        if (motor && ((now_req == REQ_OFF) || starterTimer.expired()))  {  // if we're driving the motor but need to stop or in the process of stopping
             motor = LOW;             // we will turn it off
             write_pin (pin, motor);  // begin driving the pin low voltage
             if (gas.motormode == Starting) gas.setmode(lastgasmode);  // put the throttle back to doing whatever it was doing before
