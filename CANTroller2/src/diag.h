@@ -90,32 +90,17 @@ class DiagRuntime {
             }
         }
     }
-    void set_sensidiots() {
-        for (int err=0; err<=_GPIO; err++) {
-            sensidiots[err] = false;
-            for (int typ=0; typ<=NUM_ERR_TYPES; typ++) {
-                if (err == _HotRC)  // error with any hotrc channel triggers the hotrc idiot light
-                    for (int ch = HORZ; ch <= CH4; ch++) 
-                        sensidiots[err] = sensidiots[err] || err_sens[typ][ch];
-                else if (err == _Temps)  // error with any temp sensor triggers the temp idiot light
-                    for (int sens = _TempEng; sens <= _TempAmb; sens++)
-                        sensidiots[err] = sensidiots[err] || err_sens[typ][sens];
-                else if (err == _GPIO) {  // error with any digital signal triggers the GPIO idiot light
-                    sensidiots[err] = sensidiots[err] || err_sens[typ][_Ignition];
-                    sensidiots[err] = sensidiots[err] || err_sens[typ][_BasicSw];
-                    sensidiots[err] = sensidiots[err] || err_sens[typ][_FuelPump];
-                    sensidiots[err] = sensidiots[err] || err_sens[typ][_Starter];
-                    sensidiots[err] = sensidiots[err] || err_sens[typ][_FuelPump];
-                }
-                else if (err == _Other) {  // error with any other sensor not having its own idiot light triggers the "Other" (aka "ETC") idiot light
-                    sensidiots[err] = sensidiots[err] || err_sens[typ][_MuleBatt];
-                    sensidiots[err] = sensidiots[err] || err_sens[typ][_AirVelo];
-                    sensidiots[err] = sensidiots[err] || err_sens[typ][_MAP];
-                    sensidiots[err] = sensidiots[err] || err_sens[typ][_Pot];
-                }
-                else sensidiots[err] = sensidiots[err] || err_sens[typ][err];
-            }
+    void set_sensorgroups() {
+        for (int typ=0; typ<NUM_ERR_TYPES; typ++) {
+            err_sens[typ][_HotRC] = err_sens[typ][_HotRCHorz] || err_sens[typ][_HotRCVert] || err_sens[typ][_HotRCCh3] || err_sens[typ][_HotRCCh4];
+            err_sens[typ][_GPIO] = err_sens[typ][_Ignition] || err_sens[typ][_BasicSw] || err_sens[typ][_Starter] || err_sens[typ][_FuelPump];
+            err_sens[typ][_Other] = err_sens[typ][_MuleBatt] || err_sens[typ][_AirVelo] || err_sens[typ][_MAP] || err_sens[typ][_Pot];
+            err_sens[typ][_Temps] = err_sens[typ][_TempEng] || err_sens[typ][_TempWhFL] || err_sens[typ][_TempWhFR] || err_sens[typ][_TempWhRL]
+                                 || err_sens[typ][_TempWhRR] || err_sens[typ][_TempBrake] || err_sens[typ][_TempAmb];
         }
+    }
+    void set_sensidiots() {
+        for (int err=0; err<=_GPIO; err++) sensidiots[err] = err_sens[LOST][err] || err_sens[RANGE][err];
     }
     void update(int _runmode) {
         runmode = _runmode;
@@ -142,17 +127,7 @@ class DiagRuntime {
             err_sens[RANGE][_BrakePres] = (pressure->psi() < pressure->op_min() || pressure->psi() > pressure->op_max());
             err_sens[LOST][_BrakePres] = (pressure->raw() < err_margin_adc);
             err_sens[RANGE][_MuleBatt] = (mulebatt->v() < mulebatt->op_min_v() || mulebatt->v() > mulebatt->op_max_v());
-            for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
-                int errindex;
-                if (ch == HORZ) errindex = _HotRCHorz;
-                else if (ch == VERT) errindex = _HotRCVert;
-                else if (ch == CH3) errindex = _HotRCCh3;
-                else if (ch == CH4) errindex = _HotRCCh4;
-                err_sens[RANGE][errindex] = !hotrc->radiolost() && ((hotrc->us[ch][RAW] < hotrc->us[ch][OPMIN] - (hotrc->us[ch][MARGIN] >> 1)) 
-                                        || (hotrc->us[ch][RAW] > hotrc->us[ch][OPMAX] + (hotrc->us[ch][MARGIN] >> 1)));  // && ch != VERT
-                err_sens[LOST][errindex] = !hotrc->radiolost() && ((hotrc->us[ch][RAW] < (hotrc->absmin_us - hotrc->us[ch][MARGIN]))
-                                        || (hotrc->us[ch][RAW] > (hotrc->absmax_us + hotrc->us[ch][MARGIN])));
-            }
+            HotRCFailure();
             err_sens[LOST][_Ignition] = (!ignition->signal && !tach->engine_stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
             err_sens[LOST][_Speedo] = SpeedoFailure();
             err_sens[LOST][_Tach] = TachFailure();
@@ -160,6 +135,7 @@ class DiagRuntime {
             err_sens[RANGE][_Tach] = (tach->rpm() < tach->min_human() || tach->rpm() > tach->max_human());
             
             // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != ASLEEP));
+            set_sensorgroups();
             set_sensidiots();
 
             // err_sens[RANGE][_HotRCVert] = (hotrc->us[VERT][RAW] < hotrc->failsafe_us - hotrc->us[ch][MARGIN])
@@ -255,6 +231,24 @@ class DiagRuntime {
         }
         running_last = running_it;
         return fail;
+    }
+    void HotRCFailure() {
+        // bool lost = false, range = false;
+        for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
+            int errindex;
+            if (ch == HORZ) errindex = _HotRCHorz;
+            else if (ch == VERT) errindex = _HotRCVert;
+            else if (ch == CH3) errindex = _HotRCCh3;
+            else if (ch == CH4) errindex = _HotRCCh4;
+            err_sens[RANGE][errindex] = !hotrc->radiolost() && ((hotrc->us[ch][RAW] < hotrc->us[ch][OPMIN] - (hotrc->us[ch][MARGIN] >> 1)) 
+                                    || (hotrc->us[ch][RAW] > hotrc->us[ch][OPMAX] + (hotrc->us[ch][MARGIN] >> 1)));  // && ch != VERT
+            err_sens[LOST][errindex] = !hotrc->radiolost() && ((hotrc->us[ch][RAW] < (hotrc->absmin_us - hotrc->us[ch][MARGIN]))
+                                    || (hotrc->us[ch][RAW] > (hotrc->absmax_us + hotrc->us[ch][MARGIN])));
+            // if (err_sens[RANGE][errindex]) range = true;
+            // if (err_sens[LOST][errindex]) lost = true;
+        }
+        // err_sens[RANGE][_HotRC] = range;
+        // err_sens[LOST][_HotRC] = lost;
     }
 };
 // Detectable transducer-related failures :: How we can detect them
