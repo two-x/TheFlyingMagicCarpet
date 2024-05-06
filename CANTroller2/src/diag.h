@@ -100,7 +100,10 @@ class DiagRuntime {
         }
     }
     void set_sensidiots() {
-        for (int err=0; err<=_GPIO; err++) sensidiots[err] = err_sens[LOST][err] || err_sens[RANGE][err];
+        for (int err=0; err<=_GPIO; err++) {
+            sensidiots[err] = false;
+            for (int typ=0; typ<NUM_ERR_TYPES; typ++) sensidiots[err] = sensidiots[err] || err_sens[typ][err];
+        }
     }
     void update(int _runmode) {
         runmode = _runmode;
