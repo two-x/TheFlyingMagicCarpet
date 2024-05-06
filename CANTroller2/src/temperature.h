@@ -94,12 +94,12 @@ public:
         READY_TO_READ
     };
     bool vehicle_detected = true;
+    int32_t temperature_precision = 11;  // 9-12 bit resolution
+    int detected_devices_ct = 0;
 private:
     // Replace DeviceAddress with std::array<uint8_t, 8>
     using DeviceAddress = std::array<uint8_t, 8>;
 
-    int32_t temperature_precision = 11;  // 9-12 bit resolution
-    int detected_devices_ct = 0;
     unsigned long last_read_request_time;
     int sensor_index;
     State _state;
@@ -116,7 +116,7 @@ private:
         loc::WHEEL_RL,
         loc::WHEEL_RR,
         loc::BRAKE,
-        };
+    };
     std::map<loc, DeviceAddress> known_addresses = {
         {loc::ENGINE, {0x28, 0x1a, 0x27, 0x90, 0x5c, 0x21, 0x01, 0x59}},
         {loc::AMBIENT, {0x28, 0x3c, 0xf3, 0xa7, 0xc1, 0x21, 0x06, 0x69}},
@@ -124,7 +124,15 @@ private:
         {loc::WHEEL_FR, {0x28, 0x70, 0x73, 0xb3, 0x5c, 0x21, 0x01, 0x27}},
         {loc::WHEEL_RL, {0x28, 0x54, 0xfb, 0x88, 0x5c, 0x21, 0x01, 0x64}},
         {loc::WHEEL_RR, {0x28, 0x6f, 0xcd, 0xba, 0x5c, 0x21, 0x01, 0x26}},
-        {loc::BRAKE, {0x28, 0x09, 0xe0, 0xd7, 0x5c, 0x21, 0x01, 0x4e}},
+        {loc::BRAKE, {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2}},
+        
+        // Attn Bobby!
+        // Todo: The BRAKE sensor above might be either of two sensor addresses, depending on which
+        // motor is installed. We want to use this to autodetect which motor is installed, to inform
+        // other parts of the code. But either one should become the loc::BRAKE location.
+        // Here are the two addresses:
+        // Thomson Motor: {0x28, 0x09, 0xe0, 0xd7, 0x5c, 0x21, 0x01, 0x4e}
+        //     LAE Motor: {0x28, 0xce, 0x10, 0x8b, 0x4b, 0x20, 0x01, 0xcc}
     };
 
     std::map<loc, TemperatureSensor> sensors;
@@ -217,7 +225,7 @@ public:
             // Request temperature for each sensor, this will make the is_ready() method work
             request_temperatures();
         }
-        Serial.printf("  detected sensor addresses consistent with %s context\n", vehicle_detected ? "on-vehicle" : "dev-board");
+        Serial.printf("  detected sensor addresses consistent with %s context", vehicle_detected ? "on-vehicle" : "dev-board");
         return vehicle_detected;
     }
 
