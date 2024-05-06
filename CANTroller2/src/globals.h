@@ -167,6 +167,7 @@ float tuning_rate_pcps = 7.5;  // values being edited by touch buttons change va
 // non-tunable values. probably these belong with their related code
 uint32_t codestatus = Booting;
 bool running_on_devboard = false;       // will overwrite with value read thru pull resistor on tx pin at boot
+bool fun_flag = false;                  // since now using temp sensor address to detect vehicle, our tx resistor can be used for who knows what else!
 bool shutdown_incomplete = true;        // minor state variable for shutdown mode - Shutdown mode has not completed its work and can't yet stop activity
 bool parking = false;                   // indicates in process of parking the brake & gas motors so the pedals can be used manually without interference
 bool releasing = false;                 // indicates in process of releasing the brake to the zero brake point

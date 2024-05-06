@@ -93,7 +93,7 @@ public:
         CONVERTING,
         READY_TO_READ
     };
-
+    bool vehicle_detected = true;
 private:
     // Replace DeviceAddress with std::array<uint8_t, 8>
     using DeviceAddress = std::array<uint8_t, 8>;
@@ -161,6 +161,7 @@ private:
             }
         }
         if (lost_sensors) Serial.printf("  did not detect %d known sensor(s)\n", lost_sensors);
+        vehicle_detected = detected(loc::AMBIENT);
     }
 
     // Assign remaining addresses to any unassigned locations, in order of the locations enum
@@ -186,7 +187,7 @@ private:
 
 public:
     TemperatureSensorManager(uint8_t _onewire_pin) : one_wire_bus(_onewire_pin), tempsensebus(&one_wire_bus),  last_read_request_time(0), sensor_index(0), _state(State::CONVERTING) {}
-    void setup() {
+    bool setup() {
         Serial.printf("Temperature sensors..");
         
         tempsensebus.setWaitForConversion(false);
@@ -197,24 +198,27 @@ public:
         Serial.printf(" parasitic power %s. found %d device(s):\n", (tempsensebus.isParasitePowerMode()) ? "on" : "off", detected_devices_ct);  // , DEC);
         if (detected_devices_ct == 0) {
             // Serial.printf("  no devices detected\n");
-            return;
+            vehicle_detected = false;
         }
-
-        // find all detected devices and set their temperature precision
-        for (int i = 0; i < detected_devices_ct; i++) {
-            if (tempsensebus.getAddress(detected_addresses[i].data(), i)) {
-                tempsensebus.setResolution(detected_addresses[i].data(), temperature_precision);
+        else {
+            // find all detected devices and set their temperature precision
+            for (int i = 0; i < detected_devices_ct; i++) {
+                if (tempsensebus.getAddress(detected_addresses[i].data(), i)) {
+                    tempsensebus.setResolution(detected_addresses[i].data(), temperature_precision);
+                }
             }
+
+            // Assign known addresses to the sensors they belong to
+            assign_known_addresses();
+
+            // Assign remaining addresses to the sensors in order using all_locations
+            assign_remaining_addresses();
+
+            // Request temperature for each sensor, this will make the is_ready() method work
+            request_temperatures();
         }
-
-        // Assign known addresses to the sensors they belong to
-        assign_known_addresses();
-
-        // Assign remaining addresses to the sensors in order using all_locations
-        assign_remaining_addresses();
-
-        // Request temperature for each sensor, this will make the is_ready() method work
-        request_temperatures();
+        Serial.printf("  detected sensor addresses consistent with %s context\n", vehicle_detected ? "on-vehicle" : "dev-board");
+        return vehicle_detected;
     }
 
     // gets the state of the sensors (still converting values, or ready to read)

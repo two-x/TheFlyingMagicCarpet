@@ -35,6 +35,7 @@ int rn(int values=256) {  // Generate a random number between 0 and values-1
     return dis(gen);
 }
 void initialize_pins() {
+    Serial.printf("** Setup begin..\nInitialize misc pins..\n");
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);    // deasserting unused cs line ensures available spi bus
     set_pin(syspower_pin, OUTPUT, syspower);
     set_pin(basicmodesw_pin, INPUT_PULLUP);
@@ -63,8 +64,8 @@ void set_board_defaults() {          // true for dev boards, false for printed b
     }
     printf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
 }
-void partition_table() {
-    printf("\n** Setup begin\nPartition Typ SubT  Address SizeByte   kB\n");
+void print_partition_table() {
+    printf("\nPartition Typ SubT  Address SizeByte   kB\n");
     esp_partition_iterator_t iterator = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, NULL);
     const esp_partition_t *partition;
     while ((partition = esp_partition_get(iterator)) != NULL) {
