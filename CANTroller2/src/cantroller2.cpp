@@ -64,7 +64,7 @@ void loop() {                 // arduino-style loop() is like main() but with a 
         else sim.toggle();
     }
     
-    basicsw_update();         // see if basic mode switch got hit
+    basicsw.update();         // see if basic mode switch got hit
     starter.update();         // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
     encoder.update();         // read encoder input signals  // 20 us per loop
     pot.update();             // consistent 400 us per loop for analog read operation. we only see this for the pot (!?) changing pins is no help 

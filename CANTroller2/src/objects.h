@@ -34,11 +34,10 @@ int rn(int values=256) {  // Generate a random number between 0 and values-1
     std::uniform_int_distribution<> dis(0, values - 1);
     return dis(gen);
 }
-void initialize_pins() {
+void initialize_pins() {  // set up those straggler pins which aren't taken care of inside class objects
     Serial.printf("** Setup begin..\nInitialize misc pins..\n");
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);    // deasserting unused cs line ensures available spi bus
     set_pin(syspower_pin, OUTPUT, syspower);
-    set_pin(basicmodesw_pin, INPUT_PULLUP);
     if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);         // avoid voltage level contention
     if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);         // avoid voltage level contention
     set_pin(uart_tx_pin, INPUT);             // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
@@ -100,15 +99,32 @@ void update_temperature_sensors(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently
     }
 }
-void basicsw_update() {
-    bool last_val = basicmodesw;
-    if (!sim.simulating(sens::basicsw)) {  // Basic Mode switch
+class ToggleSwitch {
+  public:
+    bool pin_val = HIGH, val = LOW;  // pin low means val high
+  private:
+    int pin;
+    bool last = 0;
+    sens attached_sensor = sens::none;
+    void readswpin() {
+        last = val;
         do {
-            basicmodesw = !digitalRead(basicmodesw_pin);   // !value because electrical signal is active low
-        } while (basicmodesw != !digitalRead(basicmodesw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+            pin_val = digitalRead(pin);   // !value because electrical signal is active low
+        } while (pin_val != digitalRead(pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+        val = !pin_val;  // pin low means switch value is high
     }
-    if (last_val != basicmodesw) kick_inactivity_timer(8);
-}
+  public:
+    ToggleSwitch(int _pin, sens _sens=sens::none) : pin(_pin), attached_sensor(_sens) {
+        set_pin(pin, INPUT_PULLUP);
+        readswpin();
+    }
+    void update() {
+        if ((attached_sensor == sens::none) || !sim.simulating(attached_sensor)) readswpin();
+        if (last != val) kick_inactivity_timer(8);
+    }
+};
+ToggleSwitch basicsw(basicsw_pin, sens::basicsw);
+
 void set_syspower(bool setting) {
     syspower = setting | keep_system_powered;
     write_pin(syspower_pin, syspower);
@@ -189,7 +205,7 @@ class Ignition {
             if (!sim.simulating(sens::joy) && hotrc.radiolost()) panic_req = REQ_ON;
         }
         if (panic_req != REQ_NA) {
-            panicstop = (bool)panic_req;    // printf("panic=%d\n", panicstop);
+            panicstop = (panic_req == REQ_ON) ? true : false;    // printf("panic=%d\n", panicstop);
             if (panicstop != paniclast) {
                 prefs.putUInt("panicstop", (uint32_t)panicstop);
                 if (panicstop) panicTimer.reset();

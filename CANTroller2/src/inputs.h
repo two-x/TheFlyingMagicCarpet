@@ -24,7 +24,7 @@ class MomentaryButton {
         bool myread = now;
         do {
             myread = digitalRead(_sw_pin);   // !value because electrical signal is active low
-        } while (myread != digitalRead(_sw_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+        } while (myread != digitalRead(_sw_pin)); // some pins have a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
 
         if (!myread) {  // if encoder sw is being pressed (switch is active low)
             if (!now) {  // if the press just occurred

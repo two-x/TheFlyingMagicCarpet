@@ -24,7 +24,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
     int mode_logic() {
         if (mode != ASLEEP && mode != CAL) {
-            if (basicmodesw) mode = BASIC;  // if basicmode switch on --> Basic Mode
+            if (basicsw.val) mode = BASIC;  // if basicmode switch on --> Basic Mode
             else if (!ignition.signal) mode = SHUTDOWN;
             else if (tach.engine_stopped()) mode = STALL;  // otherwise if engine not running --> Stall Mode
         }
@@ -75,7 +75,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             display->disp_bools_dirty = true;
         }
         if (hotrc.sw_event(CH4) && !ignition.signal) mode = ASLEEP;
-        if (!basicmodesw && !tach.engine_stopped()) mode = speedo.car_stopped() ? HOLD : FLY;  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
+        if (!basicsw.val && !tach.engine_stopped()) mode = speedo.car_stopped() ? HOLD : FLY;  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
         if (basicmode_request) mode = SHUTDOWN;  // if fully shut down and cal mode requested, go to cal mode
     }
     void run_asleepMode(bool recovering=false) {  // turns off syspower and just idles. sleep_request are handled here or in shutdown mode below
@@ -105,7 +105,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         sleep_request = REQ_NA;
         if (powering_up && pwrup_timer.expired()) {
-            mode = (basicmodesw || (last_conscious_mode == BASIC)) ? BASIC : SHUTDOWN;  // display->all_dirty();  // tells display to redraw everything. display must set back to false
+            mode = (basicsw.val || (last_conscious_mode == BASIC)) ? BASIC : SHUTDOWN;  // display->all_dirty();  // tells display to redraw everything. display must set back to false
             display->disp_bools_dirty = true;
         }
     }

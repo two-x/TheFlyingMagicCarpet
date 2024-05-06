@@ -28,7 +28,7 @@
 #define     starter_pin 36 // sram/ospi/glitch // input/Output (both active high), output when starter is being driven, otherwise input senses external starter activation
 #define        tach_pin 37 // spiram/octspi    // int Input, active high, asserted when magnet south is in range of sensor. 1 pulse per engine rotation. (no pullup) - note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on
 #define  encoder_sw_pin 38 // spiram/octspi  * // input, Rotary encoder push switch, for the UI. active low (needs pullup). signal can be moved to pin 0 to free up this pin. Pin 38 is the neopixel pin on v1.1 boards
-#define basicmodesw_pin 39 // jtck/glitch      // input, asserted to tell us to run in basic mode, active low (has ext pullup) - note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
+#define     basicsw_pin 39 // jtck/glitch      // input, asserted to tell us to run in basic mode, active low (has ext pullup) - note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define   hotrc_ch4_pin 40 // jtdo             // syspower, starter, and cruise mode toggle control. hotrc ch4 pwm toggle signal
 #define   hotrc_ch3_pin 41 // jtdi             // ignition control, hotrc Ch3 PWM toggle signal
 #define   encoder_a_pin 42 // jtms             // int input, the A (aka CLK) pin of the encoder. both A and B complete a negative pulse in between detents. if A pulse goes low first, turn is CCW. (needs pullup)
@@ -188,7 +188,7 @@ volatile int sel_val = 0;               // in the real time tuning UI, which of 
 volatile int sel_val_last = 0;          
 volatile int sel_val_last_last = 0;          
 bool syspower = HIGH;                   // set by handler only. Reflects current state of the signal
-bool basicmodesw = LOW;
+// bool basicmodesw = LOW;
 int sleep_request = REQ_NA;
 float maf_gps = 0;                      // manifold mass airflow in grams per second
 uint16_t heartbeat_override_color = 0x0000;
