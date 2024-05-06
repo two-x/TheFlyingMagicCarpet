@@ -54,7 +54,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { "PressRaw", "BkPosRaw", "TachPuls", " Pot Raw", __________, "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "Gas Mode", "Tach Tgt", "    Idle", "    Idle", "    Idle", "FuelPump", "StartGas", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", },  // PG_IDLE
-    { brAk"Posn", brAk"Mode", "Pn|PrErr", "BrakeTgt", "HybrdTgt", "TgtRatio", "OutRatio", "MotrHeat", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
+    { brAk"Posn", brAk"Mode", "Pn|PrErr", "BrakeTgt", "HybrdTgt", "OutRatio", "MotrHeat", __________, "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "Integral", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "Integral", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", " Touch X", " Touch Y", "  Uptime", "Webservr", },  // PG_TEMP
@@ -67,7 +67,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "adc",  "adc",  "ms",   "adc",  ______, "mph",  "atm",  "atm",  "mph",  "mph",  "in",   },  // PG_SENS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, degree, degree, "us",   "%",    },  // PG_PWMS
     { scroll, "rpm",  "%",    degree, "rpm",  "V",    "%",    degree, degree, degreF, degreF, },  // PG_IDLE
-    { "in",   scroll, "psin", "psin", "%",    "%",    "%",    degreF, ______, "Hz",   "s",    },  // PG_BPID
+    { "in",   scroll, "psin", "psin", "%",    "%",    degreF, ______, ______, "Hz",   "s",    },  // PG_BPID
     { "%",    "rpm",  "rpm",  "%",    "%",    "%",    "%",    degsec, ______, "Hz",   "s",    },  // PG_GPID
     { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "rpm",  "%",    "%/s",  ______, "Hz",   "s",    },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, degreF, "pix",  "pix",  "min",  b1nary, },  // PG_TEMP
@@ -705,9 +705,10 @@ class Display {
             draw_dynamic(11, brake.pid_dom->err(), -brake.sensmax(), brake.sensmax());
             draw_dynamic(12, brake.pid_dom->target(), brake.sensmin(), brake.sensmax());
             draw_dynamic(13, brake.pid_targ_pc, 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
-            draw_dynamic(14, brake.hybrid_targ_ratio_pc, 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
-            draw_dynamic(15, brake.hybrid_out_ratio_pc, 0.0f, 100.0f);  // brake_spid_speedo_delta_adc, -range, range);
-            draw_dynamic(16, brake.motorheat(), brake.motorheatmin(), brake.motorheatmax());  // brake_spid_speedo_delta_adc, -range, range);
+            // draw_dynamic(14, brake.hybrid_targ_ratio_pc, 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
+            draw_dynamic(14, brake.hybrid_out_ratio_pc, 0.0f, 100.0f);  // brake_spid_speedo_delta_adc, -range, range);
+            draw_dynamic(15, brake.motorheat(), brake.motorheatmin(), brake.motorheatmax());  // brake_spid_speedo_delta_adc, -range, range);
+            draw_eraseval(16);
             draw_dynamic(17, brake.pid_dom->kp(), 0.0f, 8.0);
             draw_dynamic(18, brake.pid_dom->ki(), 0.0f, 8.0);
             draw_dynamic(19, brake.pid_dom->kd(), 0.0f, 8.0);

@@ -548,7 +548,7 @@ class BrakeMotor : public JagMotor {
     bool autostopping = false, autoholding = false, reverse = false;
     float panic_initial_pc, hold_initial_pc, panic_increment_pc, hold_increment_pc, parkpos_pc, zeropoint_pc;
     float hybrid_math_offset, hybrid_math_coeff, hybrid_sens_ratio, hybrid_sens_ratio_pc, pid_targ_pc, pid_err_pc;
-    float hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0, hybrid_targ_ratio = 1.0, hybrid_targ_ratio_pc = 100.0;
+    float hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0, hybrid_targ_ratio = 1.0;  // , hybrid_targ_ratio_pc = 100.0;
     float motor_heat = NAN, motor_heatloss_rate = 3.0, motor_max_loaded_heatup_rate = 1.5, motor_max_unloaded_heatup_rate = 0.3;  // deg F per timer timeout
     void derive() {
         JagMotor::derive();
@@ -623,11 +623,16 @@ class BrakeMotor : public JagMotor {
     }
     void set_pidtarg(float targ_pc) {  // pass in desired brake target as an overall percent, will set pressure and position pid targets consistent with current configuration
         pid_targ_pc = targ_pc;
-        if (brake_linearize_target_extremes) hybrid_targ_ratio = pid_targ_pc / 100.0;
-        else hybrid_targ_ratio = calc_hybrid_ratio(pressure_pc_to_si(pid_targ_pc));
-        pids[PressurePID].set_target(pressure->min_human() + hybrid_targ_ratio * (pressure->max_human() - pressure->min_human()));
-        pids[PositionPID].set_target(brkpos->min_human() + (1.0 - hybrid_targ_ratio) * (brkpos->max_human() - brkpos->min_human()));
-        hybrid_targ_ratio_pc = 100.0 * hybrid_targ_ratio;  // for display
+
+        // This all was a mistake - we don't want to apply hybrid ratio to target settings (right?)
+        // if (brake_linearize_target_extremes) hybrid_targ_ratio = pid_targ_pc / 100.0;
+        // else hybrid_targ_ratio = calc_hybrid_ratio(pressure_pc_to_si(pid_targ_pc));
+        // pids[PressurePID].set_target(pressure->min_human() + hybrid_targ_ratio * (pressure->max_human() - pressure->min_human()));
+        // pids[PositionPID].set_target(brkpos->min_human() + (1.0 - hybrid_targ_ratio) * (brkpos->max_human() - brkpos->min_human()));
+        // hybrid_targ_ratio_pc = 100.0 * hybrid_targ_ratio;  // for display
+        
+        pids[PressurePID].set_target(pressure->min_human() + pid_targ_pc * (pressure->max_human() - pressure->min_human()) / 100.0);
+        pids[PositionPID].set_target(brkpos->min_human() + (100.0 - pid_targ_pc) * (brkpos->max_human() - brkpos->min_human()) / 100.0);        
     }
     void pid_out() {  // returns motor output percent calculated using dynamic combination of position and pressure influence
         hybrid_out_ratio = calc_hybrid_ratio(pressure->filt());  // calculate pressure vs. position multiplier based on the sensed values
