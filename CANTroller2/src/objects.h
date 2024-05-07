@@ -185,11 +185,10 @@ class Ignition {
     void setup() {  // must run after diag recovery function, to ensure initial ign value is asserted correctly
         bool pin_initial_val = LOW;
         if (!booted) {
-            panicstop = (bool)prefs.getUInt("panicstop", false);
-            if (!panicstop && (ign_req == REQ_ON)) pin_initial_val = HIGH;
+            if (ign_req == REQ_ON) pin_initial_val = HIGH;
             else pin_initial_val = LOW;        
+            set_pin(pin, OUTPUT, pin_initial_val);
         }
-        set_pin(pin, OUTPUT, pin_initial_val);
         booted = true;
         ign_req = REQ_NA;
     }
@@ -207,7 +206,7 @@ class Ignition {
         if (panic_req != REQ_NA) {
             panicstop = (panic_req == REQ_ON) ? true : false;    // printf("panic=%d\n", panicstop);
             if (panicstop != paniclast) {
-                prefs.putUInt("panicstop", (uint32_t)panicstop);
+                prefs.putUInt("panicstop", (uint32_t)panicstop);  // this is read at boot, see diag.h
                 if (panicstop) panicTimer.reset();
             }
         }

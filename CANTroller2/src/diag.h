@@ -393,6 +393,7 @@ class BootMonitor {
     Timer highWaterTimer{30000000};
     TaskHandle_t* task1; TaskHandle_t* task2; TaskHandle_t* task3; TaskHandle_t* task4;
     UBaseType_t highWaterBytes;
+    bool was_panicked = false;
   public:
     int boot_to_runmode = SHUTDOWN;
     BootMonitor(Preferences* _prefs, LoopTimer* _loop) : myprefs(_prefs), myloop(_loop) {}
@@ -403,6 +404,7 @@ class BootMonitor {
         crashcount = myprefs->getUInt("crashcount", 0);
         if (codestatus_postmortem != Parked) crashcount++;
         myprefs->putUInt("crashcount", crashcount);
+        was_panicked = (bool)myprefs->getUInt("panicstop", false);
     }
     void set_codestatus(int _mode) {
         codestatus = _mode;
@@ -416,7 +418,7 @@ class BootMonitor {
         bootcounter();
         set_codestatus(Booting);
         print_postmortem();
-        if ((codestatus_postmortem == Driving || codestatus_postmortem == Stopped) && crash_driving_recovery) recover_drive();
+        recover_status();
         if (!watchdog_enabled) return;
         Serial.printf("Boot manager.. \n");
         esp_task_wdt_init(timeout_sec, true);  // see https://github.com/espressif/esp-idf/blob/master/examples/system/task_watchdog/main/task_watchdog_example_main.c
@@ -435,7 +437,9 @@ class BootMonitor {
         uptime_recorded = uptime_new;
     }
     void print_postmortem() {
-        Serial.printf("Boot count: %d (%d/%d). Last lost power while %s after ", bootcount, bootcount-crashcount, crashcount, codestatuscard[codestatus_postmortem].c_str());
+        Serial.printf("Boot count: %d (%d/%d). Last lost power while %s", bootcount, bootcount-crashcount, crashcount, codestatuscard[codestatus_postmortem].c_str());
+        if Serial.printf(" and panicking,");
+        Serial.printf(" after ", );
         uint32_t last_uptime = myprefs->getUInt("uptime", 0);
         if (last_uptime > 0) {
             Serial.printf("just over %d min uptime\n", last_uptime);
@@ -460,7 +464,13 @@ class BootMonitor {
             Serial.printf(", pushtask:%d\n", highWaterBytes);
         }
     }
-    void recover_drive() {
+    void recover_status() {
+        if ((codestatus_postmortem != Driving && codestatus_postmortem != Stopped) || !crash_driving_recovery) return;
+        if (was_panicked) {
+            Serial.printf("  Continuing to panic..\n");
+            ignition.panic_request(REQ_ON);
+            return;
+        }
         Serial.printf("  Resuming %s status..\n", codestatuscard[codestatus_postmortem]);
         boot_to_runmode = (codestatus_postmortem == Driving) ? FLY : HOLD;
         ignition.request(REQ_ON);
