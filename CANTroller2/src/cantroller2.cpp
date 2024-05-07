@@ -8,7 +8,7 @@ void setup() {
     Serial.begin(115200);      // open console serial port (will reassign tx pin as output)
     delay(1000);               // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     running_on_devboard = !tempsens.setup();         // onewire bus and temp sensors
-    xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temp Sensors", 2048, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task  // 2048 works, 1024 failed,  priority is from 0 to 24=highest    
+    xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temp Sensors", 4096, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task  // 2048 works, 1024 failed,  priority is from 0 to 24=highest    
     print_partition_table();
     set_board_defaults();      // set variables as appropriate if on a breadboard
     run_tests();
