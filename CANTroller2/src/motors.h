@@ -391,33 +391,36 @@ class GasServo : public ServoMotor {
         // Serial.printf(" si:%lf pc:%lf\n", idle_si[OUT], idle_pc);
     }
   private:
+    void cruise_adjust(int joydir) {
+        if (joydir == JOY_UP) ctrlratio = (hotrc->pc[VERT][FILT] - hotrc->pc[VERT][DBTOP]) / (hotrc->pc[VERT][OPMAX] - hotrc->pc[VERT][DBTOP]);
+        else ctrlratio = (hotrc->pc[VERT][FILT] - hotrc->pc[VERT][DBBOT]) / (hotrc->pc[VERT][OPMIN] - hotrc->pc[VERT][DBBOT]);
+        if (cruise_scheme == THROTTLE_DELTA) {
+            if (cruise_adjusting) throttle_target_pc += joydir * ctrlratio * cruise_delta_max_pc_per_s * cruiseDeltaTimer.elapsed() / 1000000.0;
+            cruiseDeltaTimer.reset(); 
+        }
+        else if (cruise_scheme == THROTTLE_ANGLE && std::abs(hotrc->pc[VERT][FILT]) >= cruise_ctrl_extent_pc) {  // to avoid the adjustments following the trigger back to center when released
+            if (!cruise_adjusting) adjustpoint = throttle_target_pc;  // When beginning adjustment, save current throttle pulse value to use as adjustment endpoint
+            throttle_target_pc = adjustpoint + ctrlratio * cruise_angle_attenuator * (((joydir == JOY_UP) ? 100.0 : 0.0) - adjustpoint);
+            cruise_ctrl_extent_pc = std::abs(hotrc->pc[VERT][FILT]);
+        }
+        else if (cruise_scheme == PID_SUSPEND_FLY) {
+            if (!cruise_adjusting) adjustpoint = (throttle_ctrl_mode == OpenLoop) ? pc[OUT] : rpm_to_pc(tach->filt());
+            throttle_target_pc = adjustpoint + ctrlratio * (((joydir == JOY_UP) ? pc[GOVERN] : idle_pc) - adjustpoint);
+            cruisepid.set_target(speedo->filt());
+        }
+        cruise_adjusting = true;
+    }
     void cruise_logic() {
         int joydir = hotrc->joydir(VERT);
-        if (joydir == JOY_CENT) {
-            cruise_adjusting = false;
-            cruise_trigger_released = true;
-            cruise_ctrl_extent_pc = hotrc->pc[VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
-            if (cruise_scheme == PID_SUSPEND_FLY) throttle_target_pc = cruisepid.compute();  // if cruise is using pid, it's only active when trigger is released
+        if ((joydir == JOY_UP || (joydir == JOY_DN && cruise_speed_lowerable)) && cruise_trigger_released) {  // adjustments disabled until trigger has been to center at least once since going to cruise mode
+            cruise_adjust(joydir);
+            return;
         }
-        else if ((joydir == JOY_UP || (joydir == JOY_DN && cruise_speed_lowerable)) && cruise_trigger_released) {  // adjustments disabled until trigger has been to center at least once since going to cruise mode
-            if (joydir == JOY_UP) ctrlratio = (hotrc->pc[VERT][FILT] - hotrc->pc[VERT][DBTOP]) / (hotrc->pc[VERT][OPMAX] - hotrc->pc[VERT][DBTOP]);
-            else ctrlratio = (hotrc->pc[VERT][FILT] - hotrc->pc[VERT][DBBOT]) / (hotrc->pc[VERT][OPMIN] - hotrc->pc[VERT][DBBOT]);
-            if (cruise_scheme == THROTTLE_DELTA) {
-                if (cruise_adjusting) throttle_target_pc += joydir * ctrlratio * cruise_delta_max_pc_per_s * cruiseDeltaTimer.elapsed() / 1000000.0;
-                cruiseDeltaTimer.reset(); 
-            }
-            else if (cruise_scheme == THROTTLE_ANGLE && std::abs(hotrc->pc[VERT][FILT]) >= cruise_ctrl_extent_pc) {  // to avoid the adjustments following the trigger back to center when released
-                if (!cruise_adjusting) adjustpoint = throttle_target_pc;  // When beginning adjustment, save current throttle pulse value to use as adjustment endpoint
-                throttle_target_pc = adjustpoint + ctrlratio * cruise_angle_attenuator * (((joydir == JOY_UP) ? 100.0 : 0.0) - adjustpoint);
-                cruise_ctrl_extent_pc = std::abs(hotrc->pc[VERT][FILT]);
-            }
-            else if (cruise_scheme == PID_SUSPEND_FLY) {
-                if (!cruise_adjusting) adjustpoint = (throttle_ctrl_mode == OpenLoop) ? pc[OUT] : rpm_to_pc(tach->filt());
-                throttle_target_pc = adjustpoint + ctrlratio * (((joydir == JOY_UP) ? pc[GOVERN] : idle_pc) - adjustpoint);
-                cruisepid.set_target(speedo->filt());
-            }
-            cruise_adjusting = true;
-        }
+        if (joydir != JOY_CENT) return;  // if trigger is being pulled under any other conditions we do nothing. below assume trigger is released
+        cruise_adjusting = false;
+        cruise_trigger_released = true;
+        cruise_ctrl_extent_pc = hotrc->pc[VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
+        if (cruise_scheme == PID_SUSPEND_FLY) throttle_target_pc = cruisepid.compute();  // if cruise is using pid, it's only active when trigger is released
     }
     float rate_limiter(float val) {  // give it where you would want the throttle (%), it gives you back where you're allowed to put it, respecting max angular velocity
         float max_change = (float)throttleRateTimer.elapsed() * max_throttle_angular_velocity_pcps / 1000000.0;
@@ -615,9 +618,10 @@ class BrakeMotor : public JagMotor {
     // near either extreme only one of the two sensors is accurate. So at lower psi, control is 100% position-based, fade to 100% pressure-based at mid/high pressures
     // "dominant" PID means the PID loop (pressure or position) that has the majority influence over the motor
     float calc_hybrid_ratio(float pressure_val) {  // pass in a pressure reading or target value (in psi). returns the appropriate ratio of pressure influence (from 0.0 to 1.0)
-        float pressure_ratio = (pressure_val - pressure->min_human()) / (pressure->max_human() - pressure->min_human());  // calculate ratio of output to range
+        if (!brake_hybrid_pid) return (float)brake_default_pid;  // if hybrid pid is not supported, use the default pid. note, this depends on specific enum values, careful if you change them!
         if (active_pids == PressurePID) return 1.0;
         if (active_pids == PositionPID) return 0.0;
+        float pressure_ratio = (pressure_val - pressure->min_human()) / (pressure->max_human() - pressure->min_human());  // calculate ratio of output to range
         if (pressure_ratio >= brake_pid_trans_threshold_hi) return 1.0;  // at pressure above hi threshold, pressure has 100% influence
         if (pressure_ratio <= brake_pid_trans_threshold_lo) return 0.0;  // at pressure below lo threshold, position has 100% influence
         return 0.5 + 0.5 * sin(hybrid_math_coeff * (pressure_ratio - hybrid_math_offset));  // in between we make a steep but smooth transition during which both have some influence
