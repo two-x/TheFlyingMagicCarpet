@@ -525,7 +525,7 @@ class BrakeMotor : public JagMotor {
     float posn_kd = 0.000;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     static constexpr uint32_t pid_timeout = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
-    int dominantpid_last = brake_default_pid;    // float posn_inflect, pres_inflect, pc_inflect;
+    int dominantpid_last = PositionPID;    // float posn_inflect, pres_inflect, pc_inflect;
     float heat_math_offset, motor_heat_min = 75.0, motor_heat_max = 200.0;
     Timer stopcar_timer{10000000}, interval_timer{1000000}, motor_park_timer{4000000}, motorheat_timer{500000};
     bool stopped_last = false;
@@ -539,7 +539,7 @@ class BrakeMotor : public JagMotor {
     }
   public:
     using JagMotor::JagMotor;
-    int motormode = Halt, oldmode = Halt, active_pids = HybridPID, dominantpid = brake_default_pid;
+    int motormode = Halt, oldmode = Halt, active_pids = HybridPID, dominantpid = PositionPID;
     bool brake_tempsens_exists = false, posn_pid_active = (dominantpid == PositionPID);
     QPID pids[2];  // brake changes from pressure target to position target as pressures decrease, and vice versa
     QPID* pid_dom = &(pids[PressurePID]);  // AnalogSensor sensed[2];
@@ -575,7 +575,7 @@ class BrakeMotor : public JagMotor {
         // duty_fwd_pc = brakemotor_duty_spec_pc;
         pres_last = pressure->filt();
         posn_last = brkpos->filt();
-        set_dominant_pid(brake_default_pid);
+        // set_dominant_pid(brake_default_pid);
         detect_tempsens();
         if (!std::isnan(tempsens->val(loc::AMBIENT))) motor_heat_min = tempsens->val(loc::AMBIENT);
         derive();

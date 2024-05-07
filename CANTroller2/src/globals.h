@@ -112,34 +112,31 @@ enum telemetry_full { _HotRCHorz=11, _HotRCVert=12, _HotRCCh3=13, _HotRCCh4=14, 
 enum err_type { LOST=0, RANGE=1, NUM_ERR_TYPES=2 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, 
 
 // global configuration settings
-bool brake_hybrid_pid = true;
-int brake_default_pid = PressurePID;
-// bool brake_linearize_target_extremes = true;  // keep brake target values linear near endpoints despite decreasing accuracy of one of the sensors? (this is the more accurate choice)  otherwise jump inaccurate-sensor influence near endpoint to actual endpoint (this is more predictable/consistent)
+bool brake_hybrid_pid = true;        // should the brake use different pid loops for each end of its travel? 
 bool autostop_disabled = false;      // temporary measure to keep brake behaving until we get it debugged. Eventually should be false
-bool allow_rolling_start = true;    // may be a smart prerequisite, may be us putting obstacles in our way
-bool flip_the_screen = false;
+bool allow_rolling_start = true;     // are we lenient that it's ok to go to fly mode if the car is already moving? may be a smart prerequisite, may be us putting obstacles in our way
+bool flip_the_screen = false;        // did you mount your screen upside-down?
 bool cruise_speed_lowerable = true;  // allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool display_enabled = true;         // should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
-bool use_i2c_baton = true;
-bool always_max_refresh = false;
-bool brake_before_starting = true;
-bool watchdog_enabled = false;      // enabling this messes with the hotrc (?)
-bool fuelpump_supported = true;      // note if resistive touchscreen is present then fuelpump is automatically not supported regardless of this
-int throttle_ctrl_mode = OpenLoop;
-bool print_task_stack_usage = false;
-bool autosaver_display_fps = true;
+bool use_i2c_baton = true;           // use soren's custom homemade semaphores to prevent i2c bus collisions?
+bool always_max_refresh = false;     // set to true to enforce a cap on screen frame draws (90 Hz I think it is), otherwise craw as fast as we can. fullscreen screensaver ignores this
+bool brake_before_starting = true;   // if true, the starter motor pushes the brake pedal first, and won't turn on until it senses the pressure
+bool watchdog_enabled = false;       // enable the esp's built-in watchdog circuit, it will reset us if it doesn't get pet often enough (to prevent infinite hangs). disabled cuz it seems to mess with the hotrc (?)
+bool fuelpump_supported = true;      // do we drive power to vehicle fuel pump?  note if resistive touchscreen is present then fuelpump is automatically not supported regardless of this
+int throttle_ctrl_mode = OpenLoop;   // should gas servo use the rpm-sensing pid? values: ActivePID or OpenLoop
+bool print_task_stack_usage = true;  // enable to have remaining heap size and free task memory printed to console every so often. for tuning memory allocation
+bool autosaver_display_fps = true;   // do you want to see the fps performance of the fullscreen saver in the corner?
 bool crash_driving_recovery = true;  // if code crashes while driving, should it continue driving after reboot?
 // dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
-// bool usb_jtag = true;                // if you will need the usb otg port for jtag debugging (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/jtag-debugging/configure-builtin-jtag.html)
-bool dont_take_temperatures = false; // in case debugging dallas sensors or causing problems
-bool console_enabled = true;         // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
-bool keep_system_powered = false;    // use true during development
-bool looptime_print = false;         // makes code write out timestamps throughout loop to serial port
-bool touch_reticles = true;
-bool button_test_heartbeat_color = false; // Encoder short press when not tuning makes heartbeat a random color (for testing)
-bool wifi_client_mode = false;       // Should wifi be in client or access point mode?
-bool saver_on_sleep = true;
-bool print_framebuffers = false;
+bool dont_take_temperatures = false; // disables temp sensors. in case debugging dallas sensors or causing problems
+bool console_enabled = true;         // completely disables the console serial output. idea being, it may be safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
+bool keep_system_powered = false;    // equivalent to syspower always being high.
+bool looptime_print = false;         // makes code write out timestamps throughout loop to serial port. for analyzing what parts of the code take the most time
+bool touch_reticles = true;          // draws tiny little plus reticles to aim at for doing touchscreen calibration
+bool button_test_heartbeat_color = false; // makes boot button short press change heartbeat color. useful for testing code on bare esp
+bool wifi_client_mode = false;       // should wifi be in client or access point mode?
+bool saver_on_sleep = true;          // does fullscreen screensaver start automatically when asleep, after a delay?
+bool print_framebuffers = false;     // dumps out ascii representations of screen buffer contents to console. for debugging frame buffers. *hella* slow
 
 // global tunable variables
 int sprite_color_depth = 8;
