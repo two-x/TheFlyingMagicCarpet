@@ -127,9 +127,9 @@ private:
         {loc::BRAKE, {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2}},
         
         // Attn Bobby!
-        // Todo: The BRAKE sensor above might be either of two sensor addresses, depending on which
-        // motor is installed. We want to use this to autodetect which motor is installed, to inform
-        // other parts of the code. But either one should become the loc::BRAKE location.
+        // Todo: The BRAKE sensor above might be either of two sensor addresses, depending on which motor is installed.
+        // Actually we'd like to use this fact to autodetect which motor is installed, that can inform other parts of 
+        // the code. But whichever of the two is detected should be assigned to the loc::BRAKE location.
         // Here are the two addresses:
         // Thomson Motor: {0x28, 0x09, 0xe0, 0xd7, 0x5c, 0x21, 0x01, 0x4e}
         //     LAE Motor: {0x28, 0xce, 0x10, 0x8b, 0x4b, 0x20, 0x01, 0xcc}

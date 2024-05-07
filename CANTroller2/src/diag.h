@@ -38,7 +38,6 @@ class DiagRuntime {
         "TmpWRL", "TmpWRR", "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS", "FuelP",
         "NA", "None"
     };
-
     // diag non-tunable values
     bool temp_err[NUM_TEMP_CATEGORIES];  // [AMBIENT/ENGINE/WHEEL]
     bool err_sens_alarm[NUM_ERR_TYPES] = { false, false };
@@ -57,53 +56,6 @@ class DiagRuntime {
         for (int32_t i=0; i<NUM_ERR_TYPES; i++)
             for (int32_t j=0; j<NumTelemetryFull; j++)
                 err_sens[i][j] = err_last[i][j] = false; // Initialize sensor error flags to false
-    }
-    void make_log_entry() {
-        if (logTimer.expireset()) {
-            times[dic][index] = esp_timer_get_time();
-            tel[dic][_GasServo][index] = gas->pc[OUT];
-            tel[dic][_BrakeMotor][index] = brake->pc[OUT];
-            tel[dic][_SteerMotor][index] = steer->pc[OUT];
-            tel[dic][_BrakePres][index] = pressure->filt();
-            tel[dic][_BrakePosn][index] = brkpos->filt();
-            tel[dic][_Speedo][index] = speedo->filt();
-            tel[dic][_Tach][index] = tach->filt();
-            // tel[dic][_HotRCHorz][index] = hotrc->pc[HORZ][FILT];
-            // tel[dic][_HotRCVert][index] = hotrc->pc[VERT][FILT];
-            // tel[dic][_MuleBatt][index] = mulebatt->filt();
-            // tel[dic][_AirVelo][index] = airvelo->filt(); 
-            // tel[dic][_MAP][index] = mapsens->filt();
-            // tel[dic][_MAF][index] = *maf;
-            // tel[dic][_Pot][index] = pot->val();
-            // bools[dic][_Ignition][index] = *ignition;
-            // tel[dic][_TempEng][index] = 
-            // tel[dic][_TempWhFL][index] = 
-            // tel[dic][_TempWhFR][index] = 
-            // tel[dic][_TempWhRL][index] = 
-            // tel[dic][_TempWhRR][index] = 
-            // tel[dic][_TempAmb][index] = 
-            ++index %= entries;
-            // printf(".");
-            if (!index) {
-                dic = !dic;
-                // printf("Filled dic %d\n", dic);
-            }
-        }
-    }
-    void set_sensorgroups() {
-        for (int typ=0; typ<NUM_ERR_TYPES; typ++) {
-            err_sens[typ][_HotRC] = err_sens[typ][_HotRCHorz] || err_sens[typ][_HotRCVert] || err_sens[typ][_HotRCCh3] || err_sens[typ][_HotRCCh4];
-            err_sens[typ][_GPIO] = err_sens[typ][_Ignition] || err_sens[typ][_BasicSw] || err_sens[typ][_Starter] || err_sens[typ][_FuelPump];
-            err_sens[typ][_Other] = err_sens[typ][_MuleBatt] || err_sens[typ][_AirVelo] || err_sens[typ][_MAP] || err_sens[typ][_Pot];
-            err_sens[typ][_Temps] = err_sens[typ][_TempEng] || err_sens[typ][_TempWhFL] || err_sens[typ][_TempWhFR] || err_sens[typ][_TempWhRL]
-                                 || err_sens[typ][_TempWhRR] || err_sens[typ][_TempBrake] || err_sens[typ][_TempAmb];
-        }
-    }
-    void set_sensidiots() {
-        for (int err=0; err<=_GPIO; err++) {
-            sensidiots[err] = false;
-            for (int typ=0; typ<NUM_ERR_TYPES; typ++) sensidiots[err] = sensidiots[err] || err_sens[typ][err];
-        }
     }
     void update(int _runmode) {
         runmode = _runmode;
@@ -140,22 +92,29 @@ class DiagRuntime {
             // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != ASLEEP));
             set_sensorgroups();
             set_sensidiots();
-
-            // err_sens[RANGE][_HotRCVert] = (hotrc->us[VERT][RAW] < hotrc->failsafe_us - hotrc->us[ch][MARGIN])
-            //     || ((hotrc->us[VERT][RAW] < hotrc->us[VERT][OPMIN] - halfMARGIN) && (hotrc->us[VERT][RAW] > hotrc->failsafe_us + hotrc->us[ch][MARGIN]));
-            
-            // Set sensor error idiot light flags
-            // printf ("Sensors errors: ");
-            
             set_idiot_blinks();
-            // detect and report changes in any error values
-            report_changes();
+            report_changes();  // detect and report changes in any error values
 
-            for (int32_t i=0; i<NUM_ERR_TYPES; i++)
-                for (int32_t j=0; j<NumTelemetryFull; j++)
-
-            // printf ("\n");
-            make_log_entry();
+            // for (int32_t i=0; i<NUM_ERR_TYPES; i++)
+            //     for (int32_t j=0; j<NumTelemetryFull; j++)
+            // // printf ("\n");
+            // make_log_entry();
+        }
+    }
+  private:
+    void set_sensorgroups() {
+        for (int typ=0; typ<NUM_ERR_TYPES; typ++) {
+            err_sens[typ][_HotRC] = err_sens[typ][_HotRCHorz] || err_sens[typ][_HotRCVert] || err_sens[typ][_HotRCCh3] || err_sens[typ][_HotRCCh4];
+            err_sens[typ][_GPIO] = err_sens[typ][_Ignition] || err_sens[typ][_BasicSw] || err_sens[typ][_Starter] || err_sens[typ][_FuelPump];
+            err_sens[typ][_Other] = err_sens[typ][_MuleBatt] || err_sens[typ][_AirVelo] || err_sens[typ][_MAP] || err_sens[typ][_Pot];
+            err_sens[typ][_Temps] = err_sens[typ][_TempEng] || err_sens[typ][_TempWhFL] || err_sens[typ][_TempWhFR] || err_sens[typ][_TempWhRL]
+                                 || err_sens[typ][_TempWhRR] || err_sens[typ][_TempBrake] || err_sens[typ][_TempAmb];
+        }
+    }
+    void set_sensidiots() {
+        for (int err=0; err<=_GPIO; err++) {
+            sensidiots[err] = false;
+            for (int typ=0; typ<NUM_ERR_TYPES; typ++) sensidiots[err] = sensidiots[err] || err_sens[typ][err];
         }
     }
     void set_idiot_blinks() {  // adds blink code to lost and range err neopixels corresponing to the lowest numbered failing sensor
@@ -236,7 +195,6 @@ class DiagRuntime {
         return fail;
     }
     void HotRCFailure() {
-        // bool lost = false, range = false;
         for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
             int errindex;
             if (ch == HORZ) errindex = _HotRCHorz;
@@ -247,11 +205,41 @@ class DiagRuntime {
                                     || (hotrc->us[ch][RAW] > hotrc->us[ch][OPMAX] + (hotrc->us[ch][MARGIN] >> 1)));  // && ch != VERT
             err_sens[LOST][errindex] = !hotrc->radiolost() && ((hotrc->us[ch][RAW] < (hotrc->absmin_us - hotrc->us[ch][MARGIN]))
                                     || (hotrc->us[ch][RAW] > (hotrc->absmax_us + hotrc->us[ch][MARGIN])));
-            // if (err_sens[RANGE][errindex]) range = true;
-            // if (err_sens[LOST][errindex]) lost = true;
+            // err_sens[RANGE][_HotRCVert] = (hotrc->us[VERT][RAW] < hotrc->failsafe_us - hotrc->us[ch][MARGIN])
+            //     || ((hotrc->us[VERT][RAW] < hotrc->us[VERT][OPMIN] - halfMARGIN) && (hotrc->us[VERT][RAW] > hotrc->failsafe_us + hotrc->us[ch][MARGIN]));
         }
-        // err_sens[RANGE][_HotRC] = range;
-        // err_sens[LOST][_HotRC] = lost;
+    }
+    void make_log_entry() {
+        if (logTimer.expireset()) {
+            times[dic][index] = esp_timer_get_time();
+            tel[dic][_GasServo][index] = gas->pc[OUT];
+            tel[dic][_BrakeMotor][index] = brake->pc[OUT];
+            tel[dic][_SteerMotor][index] = steer->pc[OUT];
+            tel[dic][_BrakePres][index] = pressure->filt();
+            tel[dic][_BrakePosn][index] = brkpos->filt();
+            tel[dic][_Speedo][index] = speedo->filt();
+            tel[dic][_Tach][index] = tach->filt();
+            // tel[dic][_HotRCHorz][index] = hotrc->pc[HORZ][FILT];
+            // tel[dic][_HotRCVert][index] = hotrc->pc[VERT][FILT];
+            // tel[dic][_MuleBatt][index] = mulebatt->filt();
+            // tel[dic][_AirVelo][index] = airvelo->filt(); 
+            // tel[dic][_MAP][index] = mapsens->filt();
+            // tel[dic][_MAF][index] = *maf;
+            // tel[dic][_Pot][index] = pot->val();
+            // bools[dic][_Ignition][index] = *ignition;
+            // tel[dic][_TempEng][index] = 
+            // tel[dic][_TempWhFL][index] = 
+            // tel[dic][_TempWhFR][index] = 
+            // tel[dic][_TempWhRL][index] = 
+            // tel[dic][_TempWhRR][index] = 
+            // tel[dic][_TempAmb][index] = 
+            ++index %= entries;
+            // printf(".");
+            if (!index) {
+                dic = !dic;
+                // printf("Filled dic %d\n", dic);
+            }
+        }
     }
 };
 // Detectable transducer-related failures :: How we can detect them
@@ -397,15 +385,6 @@ class BootMonitor {
   public:
     int boot_to_runmode = SHUTDOWN;
     BootMonitor(Preferences* _prefs, LoopTimer* _loop) : myprefs(_prefs), myloop(_loop) {}
-    void bootcounter() {
-        bootcount = myprefs->getUInt("bootcount", 0) + 1;
-        myprefs->putUInt("bootcount", bootcount);
-        codestatus_postmortem = myprefs->getUInt("codestatus", Confused);
-        crashcount = myprefs->getUInt("crashcount", 0);
-        if (codestatus_postmortem != Parked) crashcount++;
-        myprefs->putUInt("crashcount", crashcount);
-        was_panicked = (bool)myprefs->getUInt("panicstop", false);
-    }
     void set_codestatus(int _mode) {
         codestatus = _mode;
         if (codestatus_last != codestatus) myprefs->putUInt("codestatus", codestatus);
@@ -424,9 +403,29 @@ class BootMonitor {
         esp_task_wdt_init(timeout_sec, true);  // see https://github.com/espressif/esp-idf/blob/master/examples/system/task_watchdog/main/task_watchdog_example_main.c
         esp_task_wdt_add(NULL);
     }
+    void pet() {
+        if (!watchdog_enabled) return;
+        esp_task_wdt_reset();
+    }
     void add(TaskHandle_t taskh) {
         if (!watchdog_enabled) return;
         esp_task_wdt_add(taskh);
+    }
+    void update() {
+        pet();
+        if (codestatus == Booting) set_codestatus(Confused);  // we are not booting any more
+        write_uptime();
+        print_high_water(task1, task2, task3, task4);
+    }
+  private:
+    void bootcounter() {
+        bootcount = myprefs->getUInt("bootcount", 0) + 1;
+        myprefs->putUInt("bootcount", bootcount);
+        codestatus_postmortem = myprefs->getUInt("codestatus", Confused);
+        crashcount = myprefs->getUInt("crashcount", 0);
+        if (codestatus_postmortem != Parked) crashcount++;
+        myprefs->putUInt("crashcount", crashcount);
+        was_panicked = (bool)myprefs->getUInt("panicstop", false);
     }
     void write_uptime() {
         float get_uptime = myloop->uptime();
@@ -438,18 +437,14 @@ class BootMonitor {
     }
     void print_postmortem() {
         Serial.printf("Boot count: %d (%d/%d). Last lost power while %s", bootcount, bootcount-crashcount, crashcount, codestatuscard[codestatus_postmortem].c_str());
-        if Serial.printf(" and panicking,");
-        Serial.printf(" after ", );
+        if (was_panicked) Serial.printf(" and panicking,");
+        Serial.printf(" after ");
         uint32_t last_uptime = myprefs->getUInt("uptime", 0);
         if (last_uptime > 0) {
             Serial.printf("just over %d min uptime\n", last_uptime);
             write_uptime();
         }
         else Serial.printf("under 1 min uptime\n");
-    }
-    void pet() {
-        if (!watchdog_enabled) return;
-        esp_task_wdt_reset();
     }
     void print_high_water(xTaskHandle* t1, xTaskHandle* t2, xTaskHandle* t3, xTaskHandle* t4) {
         if (print_task_stack_usage && highWaterTimer.expireset()) {
@@ -475,12 +470,6 @@ class BootMonitor {
         boot_to_runmode = (codestatus_postmortem == Driving) ? FLY : HOLD;
         ignition.request(REQ_ON);
         // gas.(brake.pc[STOP]);  // brake.pid_targ_pc(brake.pc[STOP]);
-    }
-    void update() {
-        pet();
-        if (codestatus == Booting) set_codestatus(Confused);  // we are not booting any more
-        write_uptime();
-        print_high_water(task1, task2, task3, task4);
     }
 };
 
