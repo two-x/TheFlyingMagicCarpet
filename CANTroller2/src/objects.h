@@ -99,32 +99,6 @@ void update_temperature_sensors(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently
     }
 }
-class ToggleSwitch {
-  public:
-    bool pin_val = HIGH, val = LOW;  // pin low means val high
-  private:
-    int pin;
-    bool last = 0;
-    sens attached_sensor = sens::none;
-    void readswpin() {
-        last = val;
-        do {
-            pin_val = digitalRead(pin);   // !value because electrical signal is active low
-        } while (pin_val != digitalRead(pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
-        val = !pin_val;  // pin low means switch value is high
-    }
-  public:
-    ToggleSwitch(int _pin, sens _sens=sens::none) : pin(_pin), attached_sensor(_sens) {
-        set_pin(pin, INPUT_PULLUP);
-        readswpin();
-    }
-    void update() {
-        if ((attached_sensor == sens::none) || !sim.simulating(attached_sensor)) readswpin();
-        if (last != val) kick_inactivity_timer(8);
-    }
-};
-ToggleSwitch basicsw(basicsw_pin, sens::basicsw);
-
 void set_syspower(bool setting) {
     syspower = setting | keep_system_powered;
     write_pin(syspower_pin, syspower);
@@ -173,6 +147,32 @@ void psram_setup() {  // see https://www.upesy.com/blogs/tutorials/get-more-ram-
     // // free(array_int); //The allocated memory is freed.
     Serial.println((String)"size (B): " +ESP.getFreePsram());
 }
+class ToggleSwitch {
+  public:
+    bool pin_val = HIGH, val = LOW;  // pin low means val high
+  private:
+    int pin;
+    bool last = 0;
+    sens attached_sensor = sens::none;
+    void readswpin() {
+        last = val;
+        do {
+            pin_val = digitalRead(pin);   // !value because electrical signal is active low
+        } while (pin_val != digitalRead(pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+        val = !pin_val;  // pin low means switch value is high
+    }
+  public:
+    ToggleSwitch(int _pin, sens _sens=sens::none) : pin(_pin), attached_sensor(_sens) {
+        set_pin(pin, INPUT_PULLUP);
+        readswpin();
+    }
+    void update() {
+        if ((attached_sensor == sens::none) || !sim.simulating(attached_sensor)) readswpin();
+        if (last != val) kick_inactivity_timer(8);
+    }
+};
+ToggleSwitch basicsw(basicsw_pin, sens::basicsw);
+
 class Ignition {
   private:
     int ign_req = REQ_NA, panic_req = REQ_NA, pin;
@@ -375,5 +375,12 @@ void update_web(void *parameter) {
     while (true) {
         web.update();
         vTaskDelay(pdMS_TO_TICKS(20)); // Delay for 20ms, hopefully that's fast enough
+    }
+}
+void bootbutton_actions() {  // temporary (?) functionality added for development convenience
+    if (bootbutton.longpress()) screen.auto_saver(!auto_saver_enabled);
+    if (bootbutton.shortpress()) {
+        if (auto_saver_enabled) animations.change_saver();
+        else sim.toggle();
     }
 }

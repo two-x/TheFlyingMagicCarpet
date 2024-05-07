@@ -455,6 +455,7 @@ class GasServo : public ServoMotor {
         else if (motormode == ParkMotor || motormode == Halt) pc[OUT] = constrain(pc[OUT], pc[PARKED], pc[GOVERN]);
         else pc[OUT] = constrain(pc[OUT], idle_pc, pc[GOVERN]);
         if (throttle_ctrl_mode == ActivePID) pid.set_output(pc[OUT]);  // feed possibly-modified output value back into pid
+        if ((motormode == Cruise) && (cruise_scheme == PID_SUSPEND_FLY)) cruisepid.set_output(throttle_target_pc);  // feed possibly-modified output value back into pid
     }
   public:
     void setmode(int _mode) {
@@ -469,9 +470,9 @@ class GasServo : public ServoMotor {
         }
         if (_mode == Calibrate) {
             float temp = pot->mapToRange(0.0, 180.0);
-            if (temp >= si[PARKED] && temp <= si[OPMAX]) motormode = Calibrate;
+            if (temp < si[PARKED] || temp > si[OPMAX]) return;  // do not change to cal mode if attempting to enter while pot is out of range
         }
-        else motormode = _mode;
+        motormode = _mode;
     }
     int parked() {
         return (std::abs(out_pc_to_si(pc[OUT]) - si[PARKED]) < 1);

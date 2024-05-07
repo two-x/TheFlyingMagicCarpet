@@ -56,14 +56,7 @@ void loop() {                 // arduino-style loop() is like main() but with a 
     watchdog.update();           // pet the watchdog regularly to prevent reset
     ignition.update(run.mode);  // manage panic stop condition and drive ignition signal as needed
     bootbutton.update();      // read the builtin button
-
-    // temporarily added for development convenience
-    if (bootbutton.longpress()) screen.auto_saver(!auto_saver_enabled);
-    if (bootbutton.shortpress()) {
-        if (auto_saver_enabled) animations.change_saver();
-        else sim.toggle();
-    }
-    
+    bootbutton_actions();          // temporary (?) functionality added for development convenience
     basicsw.update();         // see if basic mode switch got hit
     starter.update();         // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
     encoder.update();         // read encoder input signals  // 20 us per loop
