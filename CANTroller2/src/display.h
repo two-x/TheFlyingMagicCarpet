@@ -120,6 +120,35 @@ LGFX_Sprite* sprptr;
 std::string nulstr = "";
 std::string* nulstrptr = &nulstr;
 
+uint8_t paldef[256];
+// {
+//     0,   1,   2,   3,   4,   5,   6,   7,   8,   9,
+//     10,  11,  12,  13,  14,  15,  16,  17,  18,  19,
+//     20,  21,  22,  23,  24,  25,  26,  27,  28,  29,
+//     30,  31,  32,  33,  34,  35,  36,  37,  38,  39,
+//     40,  41,  42,  43,  44,  45,  46,  47,  48,  49,
+//     50,  51,  52,  53,  54,  55,  56,  57,  58,  59,
+//     60,  61,  62,  63,  64,  65,  66,  67,  68,  69,
+//     70,  71,  72,  73,  74,  75,  76,  77,  78,  79,
+//     80,  81,  82,  83,  84,  85,  86,  87,  88,  89,
+//     90,  91,  92,  93,  94,  95,  96,  97,  98,  99,
+//     100, 101, 102, 103, 104, 105, 106, 107, 108, 109,
+//     110, 111, 112, 113, 114, 115, 116, 117, 118, 119,
+//     120, 121, 122, 123, 124, 125, 126, 127, 128, 129,
+//     130, 131, 132, 133, 134, 135, 136, 137, 138, 139,
+//     140, 141, 142, 143, 144, 145, 146, 147, 148, 149,
+//     150, 151, 152, 153, 154, 155, 156, 157, 158, 159,
+//     160, 161, 162, 163, 164, 165, 166, 167, 168, 169,
+//     170, 171, 172, 173, 174, 175, 176, 177, 178, 179,
+//     180, 181, 182, 183, 184, 185, 186, 187, 188, 189,
+//     190, 191, 192, 193, 194, 195, 196, 197, 198, 199,
+//     200, 201, 202, 203, 204, 205, 206, 207, 208, 209,
+//     210, 211, 212, 213, 214, 215, 216, 217, 218, 219,
+//     220, 221, 222, 223, 224, 225, 226, 227, 228, 229,
+//     230, 231, 232, 233, 234, 235, 236, 237, 238, 239,
+//     240, 241, 242, 243, 244, 245, 246, 247, 248, 249,
+//     250, 251, 252, 253, 254, 255,
+// };
 class Display {
   private:
     NeopixelStrip* neo;
@@ -155,6 +184,44 @@ class Display {
     volatile bool disp_idiots_dirty;
     Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim)
       : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {}
+    void create_palette() {
+
+        // const uint8_t myPalette[] = {0}; // First color only
+
+        // Define the RGB565 value for the first color
+        for (uint8_t j; j<256; j++) paldef[j] = j;  // color_to_565(j);
+        uint8_t count = rn(256);
+        for (int i=0; i<2; i++) {
+            framebuf[i].setColorDepth(8);
+            framebuf[i].createPalette();  // (paldef, arraysize(paldef));
+            for (uint8_t j; j<256; j++) framebuf[i].setPaletteColor(i, ((j-count-1) & 0x7F)<<1, ((j-count-1) & 0xFF), ((j-count-1) & 0x3F)<<2);   // framebuf[i].setPaletteColor(j, paldef[j]);
+        }
+
+        // for (uint8_t j; j<256; j++) framebuf[i].setPaletteColor(j, color_to_565(j));
+        
+        // const uint16_t paletteColors[] = {
+        // LGFX::color565(255, 0, 0),    // Red
+        // LGFX::color565(0, 255, 0),    // Green
+        // LGFX::color565(0, 0, 255)     // Blue
+        // };
+
+        // void setup() {
+        // LGFX lcd;
+        
+        // // Initialize the display
+        // lcd.init();
+        // lcd.setRotation(1); // Adjust rotation if needed
+
+        // // Set the color palette
+        // lcd.hasPalette() olorPalette(myPalette, sizeof(myPalette), paletteColors);
+        
+        // // Clear the screen with the first color from the palette
+        // lcd.clear(myPalette[0]);
+
+        // // Draw something using indexed colors from the palette
+        // lcd.fillRect(50, 50, 100, 100, 1);  // Green
+
+    }
     void init_framebuffers(int _sprwidth, int _sprheight) {
         int sprsize[2] = { _sprwidth, _sprheight };
         Serial.printf("  create frame buffers.. ");
@@ -189,6 +256,7 @@ class Display {
             else using_psram = true;
         }
         Serial.printf(" made 2x %dx%d sprites in %sram\n", framewidth, frameheight, using_psram ? "ps" : "native ");
+        create_palette();
     }
     void setup() {
         if (!display_enabled) return;

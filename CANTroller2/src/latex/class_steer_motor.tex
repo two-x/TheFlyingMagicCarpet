@@ -1,0 +1,132 @@
+\doxysection{Steer\+Motor Class Reference}
+\hypertarget{class_steer_motor}{}\label{class_steer_motor}\index{SteerMotor@{SteerMotor}}
+Inheritance diagram for Steer\+Motor\+:\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[height=3.000000cm]{class_steer_motor}
+\end{center}
+\end{figure}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_steer_motor_aba9b9bcdd49e51f64957e8beb7eedc95}\label{class_steer_motor_aba9b9bcdd49e51f64957e8beb7eedc95} 
+void {\bfseries setup} (\mbox{\hyperlink{class_hotrc}{Hotrc}} \texorpdfstring{$\ast$}{*}\+\_\+hotrc, \mbox{\hyperlink{class_speedometer}{Speedometer}} \texorpdfstring{$\ast$}{*}\+\_\+speedo, \mbox{\hyperlink{class_car_battery}{Car\+Battery}} \texorpdfstring{$\ast$}{*}\+\_\+batt)
+\item 
+\Hypertarget{class_steer_motor_a3c1d7bd6d89380175127cde5e109f78a}\label{class_steer_motor_a3c1d7bd6d89380175127cde5e109f78a} 
+void {\bfseries update} ()
+\item 
+\Hypertarget{class_steer_motor_aa717314642f890af409d7272eb658236}\label{class_steer_motor_aa717314642f890af409d7272eb658236} 
+void {\bfseries setmode} (int \+\_\+mode)
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_jag_motor}{Jag\+Motor}}}
+\begin{DoxyCompactItemize}
+\item 
+void {\bfseries derive} ()
+\item 
+float {\bfseries out\+\_\+pc\+\_\+to\+\_\+si} (float \+\_\+pc)
+\item 
+float {\bfseries out\+\_\+si\+\_\+to\+\_\+pc} (float \+\_\+si)
+\item 
+float {\bfseries out\+\_\+si\+\_\+to\+\_\+us} (float \+\_\+si)
+\item 
+float {\bfseries out\+\_\+pc\+\_\+to\+\_\+us} (float \+\_\+pc)
+\item 
+void {\bfseries setup} (\mbox{\hyperlink{class_hotrc}{Hotrc}} \texorpdfstring{$\ast$}{*}\+\_\+hotrc, \mbox{\hyperlink{class_speedometer}{Speedometer}} \texorpdfstring{$\ast$}{*}\+\_\+speedo, \mbox{\hyperlink{class_car_battery}{Car\+Battery}} \texorpdfstring{$\ast$}{*}\+\_\+batt)
+\item 
+void {\bfseries write\+\_\+motor} ()
+\item 
+{\bfseries Servo\+Motor} (int \+\_\+pin, int \+\_\+freq)
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_servo_motor}{Servo\+Motor}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Servo\+Motor} (int \+\_\+pin, int \+\_\+freq)
+\item 
+void {\bfseries setup} (\mbox{\hyperlink{class_hotrc}{Hotrc}} \texorpdfstring{$\ast$}{*}\+\_\+hotrc, \mbox{\hyperlink{class_speedometer}{Speedometer}} \texorpdfstring{$\ast$}{*}\+\_\+speedo)
+\item 
+float {\bfseries out\+\_\+pc\+\_\+to\+\_\+si} (float \+\_\+pc)
+\item 
+float {\bfseries out\+\_\+si\+\_\+to\+\_\+pc} (float \+\_\+si)
+\item 
+float {\bfseries out\+\_\+si\+\_\+to\+\_\+us} (float \+\_\+si)
+\item 
+float {\bfseries out\+\_\+pc\+\_\+to\+\_\+us} (float \+\_\+pc)
+\item 
+void {\bfseries write\+\_\+motor} ()
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_steer_motor_afba34e8ad21f5302185be4216d0a046c}\label{class_steer_motor_afba34e8ad21f5302185be4216d0a046c} 
+int {\bfseries motormode} = Halt
+\item 
+\Hypertarget{class_steer_motor_aef3ee0797cfe92cad9d613a03e7d77a1}\label{class_steer_motor_aef3ee0797cfe92cad9d613a03e7d77a1} 
+int {\bfseries oldmode} = Halt
+\item 
+\Hypertarget{class_steer_motor_ae26d892e6f969e125cdbc33ac7ac424b}\label{class_steer_motor_ae26d892e6f969e125cdbc33ac7ac424b} 
+float {\bfseries steer\+\_\+safe\+\_\+pc} = 72.\+0
+\item 
+\Hypertarget{class_steer_motor_a205ac9e09fdd5ac020cb4923f897f1a0}\label{class_steer_motor_a205ac9e09fdd5ac020cb4923f897f1a0} 
+bool {\bfseries reverse} = false
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Attributes inherited from \mbox{\hyperlink{class_jag_motor}{Jag\+Motor}}}
+\begin{DoxyCompactItemize}
+\item 
+float {\bfseries duty\+\_\+fwd\+\_\+pc} = 100
+\item 
+float {\bfseries duty\+\_\+rev\+\_\+pc} = 100
+\item 
+float {\bfseries pc} \mbox{[}NUM\+\_\+\+MOTORVALS\mbox{]} = \{ NAN, 0, NAN, 0, NAN, -\/100, 100, 2 \}
+\item 
+float {\bfseries si} \mbox{[}NUM\+\_\+\+MOTORVALS\mbox{]} = \{ NAN, 0, NAN, 0, NAN, NAN, NAN, NAN \}
+\item 
+float {\bfseries us} \mbox{[}NUM\+\_\+\+MOTORVALS\mbox{]} = \{ NAN, 1500, NAN, NAN, NAN, 670, 2330, NAN \}
+\item 
+float(\& {\bfseries volt} )\mbox{[}arraysize(si)\mbox{]} = si
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Attributes inherited from \mbox{\hyperlink{class_servo_motor}{Servo\+Motor}}}
+\begin{DoxyCompactItemize}
+\item 
+bool {\bfseries reverse} = false
+\item 
+float {\bfseries pc} \mbox{[}NUM\+\_\+\+MOTORVALS\mbox{]} = \{ 0, NAN, 100, 0, NAN, NAN, NAN, NAN \}
+\item 
+float {\bfseries si} \mbox{[}NUM\+\_\+\+MOTORVALS\mbox{]} = \{ 45.\+0, 43.\+0, 168.\+2, 45.\+0, NAN, 0, 180, 1.\+0 \}
+\item 
+float {\bfseries us} \mbox{[}NUM\+\_\+\+MOTORVALS\mbox{]} = \{ NAN, 1500, NAN, NAN, NAN, 500, 2500, NAN \}
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Additional Inherited Members}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_jag_motor}{Jag\+Motor}}}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_car_battery}{Car\+Battery}} \texorpdfstring{$\ast$}{*} {\bfseries mulebatt}
+\item 
+float {\bfseries car\+\_\+batt\+\_\+fake\+\_\+v} = 12.\+0
+\item 
+\mbox{\hyperlink{class_timer}{Timer}} {\bfseries volt\+\_\+check\+\_\+timer} = \mbox{\hyperlink{class_timer}{Timer}}(3500000)
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_servo_motor}{Servo\+Motor}}}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_hotrc}{Hotrc}} \texorpdfstring{$\ast$}{*} {\bfseries hotrc}
+\item 
+\mbox{\hyperlink{class_speedometer}{Speedometer}} \texorpdfstring{$\ast$}{*} {\bfseries speedo}
+\item 
+Servo {\bfseries motor}
+\item 
+\mbox{\hyperlink{class_timer}{Timer}} {\bfseries pid\+\_\+timer} = \mbox{\hyperlink{class_timer}{Timer}}(pid\+\_\+timeout)
+\item 
+int {\bfseries pin}
+\item 
+int {\bfseries freq}
+\end{DoxyCompactItemize}
+\doxysubsection*{Static Protected Attributes inherited from \mbox{\hyperlink{class_servo_motor}{Servo\+Motor}}}
+\begin{DoxyCompactItemize}
+\item 
+static const uint32\+\_\+t {\bfseries pid\+\_\+timeout} = 85000
+\end{DoxyCompactItemize}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+motors.\+h\end{DoxyCompactItemize}

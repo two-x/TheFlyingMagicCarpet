@@ -1,0 +1,243 @@
+\doxysection{Brake\+Motor Class Reference}
+\hypertarget{class_brake_motor}{}\label{class_brake_motor}\index{BrakeMotor@{BrakeMotor}}
+Inheritance diagram for Brake\+Motor\+:\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[height=3.000000cm]{class_brake_motor}
+\end{center}
+\end{figure}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_brake_motor_aa2092a7da1713ccdd30cca04f1636045}\label{class_brake_motor_aa2092a7da1713ccdd30cca04f1636045} 
+void {\bfseries derive} ()
+\item 
+\Hypertarget{class_brake_motor_a5edbcd97082d41659102466243f8db7c}\label{class_brake_motor_a5edbcd97082d41659102466243f8db7c} 
+bool {\bfseries detect\+\_\+tempsens} ()
+\item 
+\Hypertarget{class_brake_motor_af015a67ffcd5d4adcbc50af0e70015e9}\label{class_brake_motor_af015a67ffcd5d4adcbc50af0e70015e9} 
+void {\bfseries setup} (\mbox{\hyperlink{class_hotrc}{Hotrc}} \texorpdfstring{$\ast$}{*}\+\_\+hotrc, \mbox{\hyperlink{class_speedometer}{Speedometer}} \texorpdfstring{$\ast$}{*}\+\_\+speedo, \mbox{\hyperlink{class_car_battery}{Car\+Battery}} \texorpdfstring{$\ast$}{*}\+\_\+batt, \mbox{\hyperlink{class_pressure_sensor}{Pressure\+Sensor}} \texorpdfstring{$\ast$}{*}\+\_\+pressure, \mbox{\hyperlink{class_brake_position_sensor}{Brake\+Position\+Sensor}} \texorpdfstring{$\ast$}{*}\+\_\+brkpos, \mbox{\hyperlink{class_gas_servo}{Gas\+Servo}} \texorpdfstring{$\ast$}{*}\+\_\+throttle, \mbox{\hyperlink{class_temperature_sensor_manager}{Temperature\+Sensor\+Manager}} \texorpdfstring{$\ast$}{*}\+\_\+tempsens)
+\item 
+\Hypertarget{class_brake_motor_ae181b07b93f293517c7785039d11cfc8}\label{class_brake_motor_ae181b07b93f293517c7785039d11cfc8} 
+void {\bfseries setmode} (int \+\_\+mode)
+\item 
+\Hypertarget{class_brake_motor_a7d2b6d7a6f1b662337e026988483005d}\label{class_brake_motor_a7d2b6d7a6f1b662337e026988483005d} 
+void {\bfseries update} ()
+\item 
+\Hypertarget{class_brake_motor_a8d7d96ad245615ce022e8dbe84477aac}\label{class_brake_motor_a8d7d96ad245615ce022e8dbe84477aac} 
+bool {\bfseries parked} ()
+\item 
+\Hypertarget{class_brake_motor_a6ce893de4809929ae9c69ddb42b3b032}\label{class_brake_motor_a6ce893de4809929ae9c69ddb42b3b032} 
+bool {\bfseries released} ()
+\item 
+\Hypertarget{class_brake_motor_a32f1017d9b27328080e94ae90cd22488}\label{class_brake_motor_a32f1017d9b27328080e94ae90cd22488} 
+float {\bfseries sensmin} ()
+\item 
+\Hypertarget{class_brake_motor_a5282880c1c5906035ce429a6a11ceae4}\label{class_brake_motor_a5282880c1c5906035ce429a6a11ceae4} 
+float {\bfseries sensmax} ()
+\item 
+\Hypertarget{class_brake_motor_acae6fe238301c94c6bbea39e4e0c8914}\label{class_brake_motor_acae6fe238301c94c6bbea39e4e0c8914} 
+float {\bfseries motorheat} ()
+\item 
+\Hypertarget{class_brake_motor_a810969ccc2f3fb71b6e602a713060e9d}\label{class_brake_motor_a810969ccc2f3fb71b6e602a713060e9d} 
+float {\bfseries motorheatmin} ()
+\item 
+\Hypertarget{class_brake_motor_a1b67ee1df765acd29f239ed3c32fe283}\label{class_brake_motor_a1b67ee1df765acd29f239ed3c32fe283} 
+float {\bfseries motorheatmax} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_jag_motor}{Jag\+Motor}}}
+\begin{DoxyCompactItemize}
+\item 
+void {\bfseries derive} ()
+\item 
+float {\bfseries out\+\_\+pc\+\_\+to\+\_\+si} (float \+\_\+pc)
+\item 
+float {\bfseries out\+\_\+si\+\_\+to\+\_\+pc} (float \+\_\+si)
+\item 
+float {\bfseries out\+\_\+si\+\_\+to\+\_\+us} (float \+\_\+si)
+\item 
+float {\bfseries out\+\_\+pc\+\_\+to\+\_\+us} (float \+\_\+pc)
+\item 
+void {\bfseries setup} (\mbox{\hyperlink{class_hotrc}{Hotrc}} \texorpdfstring{$\ast$}{*}\+\_\+hotrc, \mbox{\hyperlink{class_speedometer}{Speedometer}} \texorpdfstring{$\ast$}{*}\+\_\+speedo, \mbox{\hyperlink{class_car_battery}{Car\+Battery}} \texorpdfstring{$\ast$}{*}\+\_\+batt)
+\item 
+void {\bfseries write\+\_\+motor} ()
+\item 
+{\bfseries Servo\+Motor} (int \+\_\+pin, int \+\_\+freq)
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_servo_motor}{Servo\+Motor}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Servo\+Motor} (int \+\_\+pin, int \+\_\+freq)
+\item 
+void {\bfseries setup} (\mbox{\hyperlink{class_hotrc}{Hotrc}} \texorpdfstring{$\ast$}{*}\+\_\+hotrc, \mbox{\hyperlink{class_speedometer}{Speedometer}} \texorpdfstring{$\ast$}{*}\+\_\+speedo)
+\item 
+float {\bfseries out\+\_\+pc\+\_\+to\+\_\+si} (float \+\_\+pc)
+\item 
+float {\bfseries out\+\_\+si\+\_\+to\+\_\+pc} (float \+\_\+si)
+\item 
+float {\bfseries out\+\_\+si\+\_\+to\+\_\+us} (float \+\_\+si)
+\item 
+float {\bfseries out\+\_\+pc\+\_\+to\+\_\+us} (float \+\_\+pc)
+\item 
+void {\bfseries write\+\_\+motor} ()
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_brake_motor_a578b521ffdc46e422943985fdbc7f10c}\label{class_brake_motor_a578b521ffdc46e422943985fdbc7f10c} 
+int {\bfseries motormode} = Halt
+\item 
+\Hypertarget{class_brake_motor_add781c9853a63a23e10923b409554c66}\label{class_brake_motor_add781c9853a63a23e10923b409554c66} 
+int {\bfseries oldmode} = Halt
+\item 
+\Hypertarget{class_brake_motor_a84f379f23ad049b95e06a5307644346a}\label{class_brake_motor_a84f379f23ad049b95e06a5307644346a} 
+int {\bfseries active\+\_\+pids} = Hybrid\+PID
+\item 
+\Hypertarget{class_brake_motor_aafb0b7a85794ee845950600b6eec7904}\label{class_brake_motor_aafb0b7a85794ee845950600b6eec7904} 
+int {\bfseries dominantpid} = Position\+PID
+\item 
+\Hypertarget{class_brake_motor_a7458219b29fc35a1129f525e0aabff03}\label{class_brake_motor_a7458219b29fc35a1129f525e0aabff03} 
+bool {\bfseries brake\+\_\+tempsens\+\_\+exists} = false
+\item 
+\Hypertarget{class_brake_motor_ac1af49649d3cdb54c8cc8e4687c34b41}\label{class_brake_motor_ac1af49649d3cdb54c8cc8e4687c34b41} 
+bool {\bfseries posn\+\_\+pid\+\_\+active} = (dominantpid == Position\+PID)
+\item 
+\Hypertarget{class_brake_motor_aa9101df719d5e87a9040103fe544da9c}\label{class_brake_motor_aa9101df719d5e87a9040103fe544da9c} 
+\mbox{\hyperlink{class_q_p_i_d}{QPID}} {\bfseries pids} \mbox{[}2\mbox{]}
+\item 
+\Hypertarget{class_brake_motor_a4367f8f18bc361419deecceae579b317}\label{class_brake_motor_a4367f8f18bc361419deecceae579b317} 
+\mbox{\hyperlink{class_q_p_i_d}{QPID}} \texorpdfstring{$\ast$}{*} {\bfseries pid\+\_\+dom} = \&(pids\mbox{[}Pressure\+PID\mbox{]})
+\item 
+\Hypertarget{class_brake_motor_a33cbe7463ce0c7de6340685e5a936e5a}\label{class_brake_motor_a33cbe7463ce0c7de6340685e5a936e5a} 
+float {\bfseries brake\+\_\+pid\+\_\+trans\+\_\+threshold\+\_\+lo} = 0.\+25
+\item 
+\Hypertarget{class_brake_motor_a74e31f6b15c1a848ec4f5dbc51f90351}\label{class_brake_motor_a74e31f6b15c1a848ec4f5dbc51f90351} 
+float {\bfseries brake\+\_\+pid\+\_\+trans\+\_\+threshold\+\_\+hi} = 0.\+50
+\item 
+\Hypertarget{class_brake_motor_ac21f70842a2cd91d577761ad085c9c99}\label{class_brake_motor_ac21f70842a2cd91d577761ad085c9c99} 
+bool {\bfseries autostopping} = false
+\item 
+\Hypertarget{class_brake_motor_a1fa2710ade724d155f5b9a1dde9081a2}\label{class_brake_motor_a1fa2710ade724d155f5b9a1dde9081a2} 
+bool {\bfseries autoholding} = false
+\item 
+\Hypertarget{class_brake_motor_aa17c10b0aab5b701c6d078c4053b07fa}\label{class_brake_motor_aa17c10b0aab5b701c6d078c4053b07fa} 
+bool {\bfseries reverse} = false
+\item 
+\Hypertarget{class_brake_motor_ad8e3aecb39304d933a4d2c7bd2b6b703}\label{class_brake_motor_ad8e3aecb39304d933a4d2c7bd2b6b703} 
+float {\bfseries panic\+\_\+initial\+\_\+pc}
+\item 
+\Hypertarget{class_brake_motor_a7f37e0b4bc76d911c0abca5c280ae82e}\label{class_brake_motor_a7f37e0b4bc76d911c0abca5c280ae82e} 
+float {\bfseries hold\+\_\+initial\+\_\+pc}
+\item 
+\Hypertarget{class_brake_motor_a6f10d774c0e8644953b56ba2bee8c9bc}\label{class_brake_motor_a6f10d774c0e8644953b56ba2bee8c9bc} 
+float {\bfseries panic\+\_\+increment\+\_\+pc}
+\item 
+\Hypertarget{class_brake_motor_a69465fd478db7b3fed657d898b87b946}\label{class_brake_motor_a69465fd478db7b3fed657d898b87b946} 
+float {\bfseries hold\+\_\+increment\+\_\+pc}
+\item 
+\Hypertarget{class_brake_motor_a9b84346156acffe82bd917778d9be91c}\label{class_brake_motor_a9b84346156acffe82bd917778d9be91c} 
+float {\bfseries parkpos\+\_\+pc}
+\item 
+\Hypertarget{class_brake_motor_ad609b91e2a0efca1ad9246968241b00d}\label{class_brake_motor_ad609b91e2a0efca1ad9246968241b00d} 
+float {\bfseries zeropoint\+\_\+pc}
+\item 
+\Hypertarget{class_brake_motor_ab0c36d41c22be2fe420c287030a5acc5}\label{class_brake_motor_ab0c36d41c22be2fe420c287030a5acc5} 
+float {\bfseries hybrid\+\_\+math\+\_\+offset}
+\item 
+\Hypertarget{class_brake_motor_aee73baf047423dbc36de1a3a4d9653a7}\label{class_brake_motor_aee73baf047423dbc36de1a3a4d9653a7} 
+float {\bfseries hybrid\+\_\+math\+\_\+coeff}
+\item 
+\Hypertarget{class_brake_motor_a57171440326d7be950e6beb35d24e450}\label{class_brake_motor_a57171440326d7be950e6beb35d24e450} 
+float {\bfseries hybrid\+\_\+sens\+\_\+ratio}
+\item 
+\Hypertarget{class_brake_motor_ae46674ac6469d1be701cbad02cade335}\label{class_brake_motor_ae46674ac6469d1be701cbad02cade335} 
+float {\bfseries hybrid\+\_\+sens\+\_\+ratio\+\_\+pc}
+\item 
+\Hypertarget{class_brake_motor_a6ab0224ee2f8dddf16207c48e4b9f17d}\label{class_brake_motor_a6ab0224ee2f8dddf16207c48e4b9f17d} 
+float {\bfseries pid\+\_\+targ\+\_\+pc}
+\item 
+\Hypertarget{class_brake_motor_af945f1c3f59f33c499b57f8306c6566d}\label{class_brake_motor_af945f1c3f59f33c499b57f8306c6566d} 
+float {\bfseries pid\+\_\+err\+\_\+pc}
+\item 
+\Hypertarget{class_brake_motor_a16ef03858e74893a51572f5051325c2d}\label{class_brake_motor_a16ef03858e74893a51572f5051325c2d} 
+float {\bfseries hybrid\+\_\+out\+\_\+ratio} = 1.\+0
+\item 
+\Hypertarget{class_brake_motor_a5bc8346de338c840054e01c2d2cccd64}\label{class_brake_motor_a5bc8346de338c840054e01c2d2cccd64} 
+float {\bfseries hybrid\+\_\+out\+\_\+ratio\+\_\+pc} = 100.\+0
+\item 
+\Hypertarget{class_brake_motor_a89c1c81fcfaff26b6ef4318720b549b0}\label{class_brake_motor_a89c1c81fcfaff26b6ef4318720b549b0} 
+float {\bfseries hybrid\+\_\+targ\+\_\+ratio} = 1.\+0
+\item 
+\Hypertarget{class_brake_motor_a9a0249401b9222e66300e1b6842daae8}\label{class_brake_motor_a9a0249401b9222e66300e1b6842daae8} 
+float {\bfseries motor\+\_\+heat} = NAN
+\item 
+\Hypertarget{class_brake_motor_ad829f12b2e181e81e38562fefc66716e}\label{class_brake_motor_ad829f12b2e181e81e38562fefc66716e} 
+float {\bfseries motor\+\_\+heatloss\+\_\+rate} = 3.\+0
+\item 
+\Hypertarget{class_brake_motor_a584da647441fc6ca9b1414eba1881035}\label{class_brake_motor_a584da647441fc6ca9b1414eba1881035} 
+float {\bfseries motor\+\_\+max\+\_\+loaded\+\_\+heatup\+\_\+rate} = 1.\+5
+\item 
+\Hypertarget{class_brake_motor_a3698300ff21c11ed61a806ac7aefd623}\label{class_brake_motor_a3698300ff21c11ed61a806ac7aefd623} 
+float {\bfseries motor\+\_\+max\+\_\+unloaded\+\_\+heatup\+\_\+rate} = 0.\+3
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Attributes inherited from \mbox{\hyperlink{class_jag_motor}{Jag\+Motor}}}
+\begin{DoxyCompactItemize}
+\item 
+float {\bfseries duty\+\_\+fwd\+\_\+pc} = 100
+\item 
+float {\bfseries duty\+\_\+rev\+\_\+pc} = 100
+\item 
+float {\bfseries pc} \mbox{[}NUM\+\_\+\+MOTORVALS\mbox{]} = \{ NAN, 0, NAN, 0, NAN, -\/100, 100, 2 \}
+\item 
+float {\bfseries si} \mbox{[}NUM\+\_\+\+MOTORVALS\mbox{]} = \{ NAN, 0, NAN, 0, NAN, NAN, NAN, NAN \}
+\item 
+float {\bfseries us} \mbox{[}NUM\+\_\+\+MOTORVALS\mbox{]} = \{ NAN, 1500, NAN, NAN, NAN, 670, 2330, NAN \}
+\item 
+float(\& {\bfseries volt} )\mbox{[}arraysize(si)\mbox{]} = si
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Attributes inherited from \mbox{\hyperlink{class_servo_motor}{Servo\+Motor}}}
+\begin{DoxyCompactItemize}
+\item 
+bool {\bfseries reverse} = false
+\item 
+float {\bfseries pc} \mbox{[}NUM\+\_\+\+MOTORVALS\mbox{]} = \{ 0, NAN, 100, 0, NAN, NAN, NAN, NAN \}
+\item 
+float {\bfseries si} \mbox{[}NUM\+\_\+\+MOTORVALS\mbox{]} = \{ 45.\+0, 43.\+0, 168.\+2, 45.\+0, NAN, 0, 180, 1.\+0 \}
+\item 
+float {\bfseries us} \mbox{[}NUM\+\_\+\+MOTORVALS\mbox{]} = \{ NAN, 1500, NAN, NAN, NAN, 500, 2500, NAN \}
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Additional Inherited Members}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_jag_motor}{Jag\+Motor}}}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_car_battery}{Car\+Battery}} \texorpdfstring{$\ast$}{*} {\bfseries mulebatt}
+\item 
+float {\bfseries car\+\_\+batt\+\_\+fake\+\_\+v} = 12.\+0
+\item 
+\mbox{\hyperlink{class_timer}{Timer}} {\bfseries volt\+\_\+check\+\_\+timer} = \mbox{\hyperlink{class_timer}{Timer}}(3500000)
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_servo_motor}{Servo\+Motor}}}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_hotrc}{Hotrc}} \texorpdfstring{$\ast$}{*} {\bfseries hotrc}
+\item 
+\mbox{\hyperlink{class_speedometer}{Speedometer}} \texorpdfstring{$\ast$}{*} {\bfseries speedo}
+\item 
+Servo {\bfseries motor}
+\item 
+\mbox{\hyperlink{class_timer}{Timer}} {\bfseries pid\+\_\+timer} = \mbox{\hyperlink{class_timer}{Timer}}(pid\+\_\+timeout)
+\item 
+int {\bfseries pin}
+\item 
+int {\bfseries freq}
+\end{DoxyCompactItemize}
+\doxysubsection*{Static Protected Attributes inherited from \mbox{\hyperlink{class_servo_motor}{Servo\+Motor}}}
+\begin{DoxyCompactItemize}
+\item 
+static const uint32\+\_\+t {\bfseries pid\+\_\+timeout} = 85000
+\end{DoxyCompactItemize}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+motors.\+h\end{DoxyCompactItemize}

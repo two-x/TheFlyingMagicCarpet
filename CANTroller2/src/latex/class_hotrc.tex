@@ -1,0 +1,99 @@
+\doxysection{Hotrc Class Reference}
+\hypertarget{class_hotrc}{}\label{class_hotrc}\index{Hotrc@{Hotrc}}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_hotrc_aac3094b0c9543e63d6acec9980a39c96}\label{class_hotrc_aac3094b0c9543e63d6acec9980a39c96} 
+{\bfseries Hotrc} (\mbox{\hyperlink{class_simulator}{Simulator}} \texorpdfstring{$\ast$}{*}\+\_\+sim, \mbox{\hyperlink{class_potentiometer}{Potentiometer}} \texorpdfstring{$\ast$}{*}\+\_\+pot)
+\item 
+\Hypertarget{class_hotrc_a65808ff276e24f9d7739e279ad1a8cec}\label{class_hotrc_a65808ff276e24f9d7739e279ad1a8cec} 
+void {\bfseries setup} ()
+\item 
+\Hypertarget{class_hotrc_a7fe37db4b0c96983b8733444d5d9e32d}\label{class_hotrc_a7fe37db4b0c96983b8733444d5d9e32d} 
+void {\bfseries calc\+\_\+params} ()
+\item 
+\Hypertarget{class_hotrc_ad70c66d49c986dd4f84aac63b8fd1eb2}\label{class_hotrc_ad70c66d49c986dd4f84aac63b8fd1eb2} 
+int {\bfseries update} ()
+\item 
+\Hypertarget{class_hotrc_a256b45fcd8780aef4f06f4114e6b0fe2}\label{class_hotrc_a256b45fcd8780aef4f06f4114e6b0fe2} 
+void {\bfseries toggles\+\_\+reset} ()
+\item 
+\Hypertarget{class_hotrc_a78deb08d34bd5b6820cec6ab14fe7c9c}\label{class_hotrc_a78deb08d34bd5b6820cec6ab14fe7c9c} 
+bool {\bfseries radiolost} ()
+\item 
+\Hypertarget{class_hotrc_a8d4dd45ff84bff95cef5fc9c48181daf}\label{class_hotrc_a8d4dd45ff84bff95cef5fc9c48181daf} 
+bool \texorpdfstring{$\ast$}{*} {\bfseries radiolost\+\_\+ptr} ()
+\item 
+\Hypertarget{class_hotrc_afbd2830c105090d28e88312e3be9f9be}\label{class_hotrc_afbd2830c105090d28e88312e3be9f9be} 
+bool {\bfseries sw\+\_\+event} (uint8\+\_\+t ch)
+\item 
+\Hypertarget{class_hotrc_ab7fdf61d831aa153381bf4abb63f4c3d}\label{class_hotrc_ab7fdf61d831aa153381bf4abb63f4c3d} 
+void {\bfseries set\+\_\+pc} (int8\+\_\+t axis, int8\+\_\+t param, float val)
+\item 
+\Hypertarget{class_hotrc_a097ef17f05d11b313e0894afb72b8c83}\label{class_hotrc_a097ef17f05d11b313e0894afb72b8c83} 
+void {\bfseries set\+\_\+us} (int8\+\_\+t axis, int8\+\_\+t param, int32\+\_\+t val)
+\item 
+\Hypertarget{class_hotrc_a61854570a48341c75f3b9a80ffd1a35c}\label{class_hotrc_a61854570a48341c75f3b9a80ffd1a35c} 
+int32\+\_\+t {\bfseries next\+\_\+unfilt\+\_\+rawval} (uint8\+\_\+t axis)
+\item 
+\Hypertarget{class_hotrc_a721b2dc8929693c195fd87beefaf33f1}\label{class_hotrc_a721b2dc8929693c195fd87beefaf33f1} 
+int {\bfseries joydir} (int8\+\_\+t axis=VERT)
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_hotrc_a7dbcf11c5280e6b645e72bfb0816c6b8}\label{class_hotrc_a7dbcf11c5280e6b645e72bfb0816c6b8} 
+float {\bfseries ema\+\_\+alpha} = 0.\+075
+\item 
+\Hypertarget{class_hotrc_a2fc9b7459ad2a720a38a6685e4a244a2}\label{class_hotrc_a2fc9b7459ad2a720a38a6685e4a244a2} 
+float {\bfseries pc} \mbox{[}NUM\+\_\+\+AXES\mbox{]}\mbox{[}NUM\+\_\+\+VALUS\mbox{]}
+\item 
+int32\+\_\+t \mbox{\hyperlink{class_hotrc_a3b84ddefef001e1d53bae48a4d52a720}{us}} \mbox{[}NUM\+\_\+\+CHANS\mbox{]}\mbox{[}NUM\+\_\+\+VALUS\mbox{]}
+\item 
+\Hypertarget{class_hotrc_a526c88312a17ee9c34a960450bec1a42}\label{class_hotrc_a526c88312a17ee9c34a960450bec1a42} 
+float {\bfseries ema\+\_\+us} \mbox{[}NUM\+\_\+\+AXES\mbox{]} = \{ 1500.\+0, 1500.\+0 \}
+\item 
+\Hypertarget{class_hotrc_aa354fbb0e87e3ebd28781417cc521c3b}\label{class_hotrc_aa354fbb0e87e3ebd28781417cc521c3b} 
+int32\+\_\+t {\bfseries absmin\+\_\+us} = 880
+\item 
+\Hypertarget{class_hotrc_aceb4c96f7536c989db4f2c4a7d87e5d7}\label{class_hotrc_aceb4c96f7536c989db4f2c4a7d87e5d7} 
+int32\+\_\+t {\bfseries absmax\+\_\+us} = 2080
+\item 
+\Hypertarget{class_hotrc_a6c361d8aef7092ec6834790c2c600d30}\label{class_hotrc_a6c361d8aef7092ec6834790c2c600d30} 
+int32\+\_\+t {\bfseries deadband\+\_\+us} = 13
+\item 
+\Hypertarget{class_hotrc_a6a707f8cfae9928eee990b0247b2923b}\label{class_hotrc_a6a707f8cfae9928eee990b0247b2923b} 
+int32\+\_\+t {\bfseries margin\+\_\+us} = 20
+\item 
+\Hypertarget{class_hotrc_aac1f072526e876f14647ad975042e9ee}\label{class_hotrc_aac1f072526e876f14647ad975042e9ee} 
+int32\+\_\+t {\bfseries failsafe\+\_\+us} = 880
+\item 
+\Hypertarget{class_hotrc_a9eff9a9a620ac1ed518b1d846b980afb}\label{class_hotrc_a9eff9a9a620ac1ed518b1d846b980afb} 
+int32\+\_\+t {\bfseries failsafe\+\_\+margin\+\_\+us} = 100
+\item 
+\Hypertarget{class_hotrc_a49450b72eff3ae31151b7eaafe5fa271}\label{class_hotrc_a49450b72eff3ae31151b7eaafe5fa271} 
+int32\+\_\+t {\bfseries failsafe\+\_\+pad\+\_\+us} = 10
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Member Data Documentation}
+\Hypertarget{class_hotrc_a3b84ddefef001e1d53bae48a4d52a720}\label{class_hotrc_a3b84ddefef001e1d53bae48a4d52a720} 
+\index{Hotrc@{Hotrc}!us@{us}}
+\index{us@{us}!Hotrc@{Hotrc}}
+\doxysubsubsection{\texorpdfstring{us}{us}}
+{\footnotesize\ttfamily int32\+\_\+t Hotrc\+::us\mbox{[}NUM\+\_\+\+CHANS\mbox{]}\mbox{[}NUM\+\_\+\+VALUS\mbox{]}}
+
+{\bfseries Initial value\+:}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{=\ \{}
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \{\ \ 971,\ 1470,\ 1968,\ 0,\ 1500,\ 0,\ 0,\ 0\ \},\ \ \ \ \ }
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \{\ 1081,\ 1580,\ 2078,\ 0,\ 1500,\ 0,\ 0,\ 0\ \},\ \ \ \ \ }
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \{\ 1151,\ 1500,\ 1848,\ 0,\ 1500,\ 0,\ 0,\ 0\ \},\ \ \ \ \ }
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \{\ 1251,\ 1500,\ 1748,\ 0,\ 1500,\ 0,\ 0,\ 0\ \},\ \}}
+
+\end{DoxyCode}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+sensors.\+h\end{DoxyCompactItemize}

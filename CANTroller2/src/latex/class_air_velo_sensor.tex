@@ -1,0 +1,325 @@
+\doxysection{Air\+Velo\+Sensor Class Reference}
+\hypertarget{class_air_velo_sensor}{}\label{class_air_velo_sensor}\index{AirVeloSensor@{AirVeloSensor}}
+Inheritance diagram for Air\+Velo\+Sensor\+:\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[height=5.000000cm]{class_air_velo_sensor}
+\end{center}
+\end{figure}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_air_velo_sensor_ab3b536df708734d8b41d2db8e519ad96}\label{class_air_velo_sensor_ab3b536df708734d8b41d2db8e519ad96} 
+{\bfseries Air\+Velo\+Sensor} (\mbox{\hyperlink{class_i2_c}{I2C}} \texorpdfstring{$\ast$}{*}i2c\+\_\+arg)
+\item 
+virtual void \mbox{\hyperlink{class_air_velo_sensor_a29d83dd62f363d1e1482244bfdf0b605}{set\+\_\+val\+\_\+common}} ()
+\item 
+void \mbox{\hyperlink{class_air_velo_sensor_a9324193ce57d497df377d9c93e5c2b73}{setup}} ()
+\item 
+\Hypertarget{class_air_velo_sensor_ae82ebd41d2425a24fb39587fae99fd20}\label{class_air_velo_sensor_ae82ebd41d2425a24fb39587fae99fd20} 
+float {\bfseries min\+\_\+mph} ()
+\item 
+\Hypertarget{class_air_velo_sensor_ac472eda001ba4b9f762ae6c6dc0666e5}\label{class_air_velo_sensor_ac472eda001ba4b9f762ae6c6dc0666e5} 
+float {\bfseries max\+\_\+mph} ()
+\item 
+\Hypertarget{class_air_velo_sensor_a1b68280765909f28e1e5b4dff0e01c4d}\label{class_air_velo_sensor_a1b68280765909f28e1e5b4dff0e01c4d} 
+float {\bfseries abs\+\_\+max\+\_\+mph} ()
+\item 
+\Hypertarget{class_air_velo_sensor_a1571fc1e5938c9b77dbffc798e0c4f42}\label{class_air_velo_sensor_a1571fc1e5938c9b77dbffc798e0c4f42} 
+float \texorpdfstring{$\ast$}{*} {\bfseries max\+\_\+mph\+\_\+ptr} ()
+\item 
+\Hypertarget{class_air_velo_sensor_a277d8b2cfbf6e8985eb69a59b04663cd}\label{class_air_velo_sensor_a277d8b2cfbf6e8985eb69a59b04663cd} 
+std\+::shared\+\_\+ptr$<$ float $>$ {\bfseries max\+\_\+mph\+\_\+shptr} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_i2_c_sensor}{I2\+CSensor}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries I2\+CSensor} (\mbox{\hyperlink{class_i2_c}{I2C}} \texorpdfstring{$\ast$}{*}i2c\+\_\+arg, uint8\+\_\+t i2c\+\_\+address\+\_\+arg)
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_sensor}{Sensor$<$ float, float $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Sensor} (uint8\+\_\+t pin)
+\item 
+void {\bfseries set\+\_\+ema\+\_\+alpha} (float arg\+\_\+alpha)
+\item 
+float {\bfseries ema\+\_\+alpha} ()
+\item 
+float {\bfseries filt} ()
+\item 
+float \texorpdfstring{$\ast$}{*} {\bfseries filt\+\_\+ptr} ()
+\item 
+std\+::shared\+\_\+ptr$<$ float $>$ {\bfseries filt\+\_\+shptr} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_transducer}{Transducer$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Transducer} (uint8\+\_\+t arg\+\_\+pin)
+\item 
+void {\bfseries set\+\_\+native\+\_\+limits} (\mbox{\hyperlink{class_param}{Param}}$<$ NATIVE\+\_\+T $>$ \&arg\+\_\+min, \mbox{\hyperlink{class_param}{Param}}$<$ NATIVE\+\_\+T $>$ \&arg\+\_\+max)
+\item 
+void {\bfseries set\+\_\+human\+\_\+limits} (\mbox{\hyperlink{class_param}{Param}}$<$ HUMAN\+\_\+T $>$ \&arg\+\_\+min, \mbox{\hyperlink{class_param}{Param}}$<$ HUMAN\+\_\+T $>$ \&arg\+\_\+max)
+\item 
+void {\bfseries set\+\_\+native\+\_\+limits} (NATIVE\+\_\+T arg\+\_\+min, NATIVE\+\_\+T arg\+\_\+max)
+\item 
+void {\bfseries set\+\_\+human\+\_\+limits} (HUMAN\+\_\+T arg\+\_\+min, HUMAN\+\_\+T arg\+\_\+max)
+\item 
+bool {\bfseries set\+\_\+native} (NATIVE\+\_\+T arg\+\_\+val\+\_\+native)
+\item 
+bool {\bfseries add\+\_\+native} (NATIVE\+\_\+T arg\+\_\+add\+\_\+native)
+\item 
+bool {\bfseries set\+\_\+human} (HUMAN\+\_\+T arg\+\_\+val\+\_\+human)
+\item 
+bool {\bfseries add\+\_\+human} (HUMAN\+\_\+T arg\+\_\+add\+\_\+human)
+\item 
+void {\bfseries set\+\_\+convert} (float arg\+\_\+m\+\_\+factor, float arg\+\_\+b\+\_\+offset, bool arg\+\_\+invert)
+\item 
+NATIVE\+\_\+T {\bfseries native} ()
+\item 
+HUMAN\+\_\+T {\bfseries human} ()
+\item 
+float {\bfseries percent} ()
+\item 
+NATIVE\+\_\+T {\bfseries raw} ()
+\item 
+NATIVE\+\_\+T {\bfseries min\+\_\+native} ()
+\item 
+NATIVE\+\_\+T {\bfseries max\+\_\+native} ()
+\item 
+HUMAN\+\_\+T {\bfseries min\+\_\+human} ()
+\item 
+HUMAN\+\_\+T {\bfseries max\+\_\+human} ()
+\item 
+HUMAN\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries min\+\_\+human\+\_\+ptr} ()
+\item 
+HUMAN\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries max\+\_\+human\+\_\+ptr} ()
+\item 
+NATIVE\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries native\+\_\+ptr} ()
+\item 
+HUMAN\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries human\+\_\+ptr} ()
+\item 
+std\+::shared\+\_\+ptr$<$ NATIVE\+\_\+T $>$ {\bfseries native\+\_\+shptr} ()
+\item 
+std\+::shared\+\_\+ptr$<$ HUMAN\+\_\+T $>$ {\bfseries human\+\_\+shptr} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Device} (uint8\+\_\+t arg\+\_\+pin)
+\item 
+bool {\bfseries can\+\_\+source} (src arg\+\_\+source)
+\item 
+bool {\bfseries set\+\_\+source} (src arg\+\_\+source)
+\item 
+void {\bfseries update} ()
+\item 
+void {\bfseries attach\+\_\+pot} (\mbox{\hyperlink{class_potentiometer}{Potentiometer}} \&pot\+\_\+arg)
+\item 
+void {\bfseries set\+\_\+enabled} (bool arg\+\_\+enable)
+\item 
+void {\bfseries set\+\_\+can\+\_\+source} (src arg\+\_\+source, bool is\+\_\+possible)
+\item 
+src {\bfseries source} ()
+\item 
+uint8\+\_\+t {\bfseries pin} ()
+\item 
+bool {\bfseries enabled} ()
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_air_velo_sensor_a647f8dce42b86f6ccbf3b54cb765a34d}\label{class_air_velo_sensor_a647f8dce42b86f6ccbf3b54cb765a34d} 
+sens {\bfseries senstype} = sens\+::airvelo
+\item 
+\Hypertarget{class_air_velo_sensor_a498ea7be098fc45740ac9a9fa899ecfc}\label{class_air_velo_sensor_a498ea7be098fc45740ac9a9fa899ecfc} 
+std\+::string {\bfseries \+\_\+long\+\_\+name} = "{}Air velocity sensor"{}
+\item 
+\Hypertarget{class_air_velo_sensor_a199e2e1daaa9cb7852a1656696eaf027}\label{class_air_velo_sensor_a199e2e1daaa9cb7852a1656696eaf027} 
+std\+::string {\bfseries \+\_\+short\+\_\+name} = "{}airvel"{}
+\item 
+\Hypertarget{class_air_velo_sensor_a8b324d2232070472c9a59b0bb7970dae}\label{class_air_velo_sensor_a8b324d2232070472c9a59b0bb7970dae} 
+std\+::string {\bfseries \+\_\+native\+\_\+units\+\_\+name} = "{}mph"{}
+\item 
+\Hypertarget{class_air_velo_sensor_a8606d09906ffff8c4b12c1634c4df9b2}\label{class_air_velo_sensor_a8606d09906ffff8c4b12c1634c4df9b2} 
+std\+::string {\bfseries \+\_\+human\+\_\+units\+\_\+name} = "{}mph"{}
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Attributes inherited from \mbox{\hyperlink{class_i2_c_sensor}{I2\+CSensor}}}
+\begin{DoxyCompactItemize}
+\item 
+uint8\+\_\+t {\bfseries addr}
+\item 
+std\+::string {\bfseries \+\_\+long\+\_\+name} = "{}Unknown \mbox{\hyperlink{class_i2_c}{I2C}} device"{}
+\item 
+std\+::string {\bfseries \+\_\+short\+\_\+name} = "{}i2cdev"{}
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Attributes inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_timer}{Timer}} {\bfseries timer}
+\item 
+std\+::string {\bfseries \+\_\+long\+\_\+name} = "{}Unknown device"{}
+\item 
+std\+::string {\bfseries \+\_\+short\+\_\+name} = "{}device"{}
+\item 
+sens {\bfseries senstype} = sens\+::none
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Static Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_air_velo_sensor_a2160904646822964ba1323db43f39494}\label{class_air_velo_sensor_a2160904646822964ba1323db43f39494} 
+static constexpr uint8\+\_\+t {\bfseries addr} = 0x28
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Protected Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+virtual float \mbox{\hyperlink{class_air_velo_sensor_adfeb5cc0edd580bd49e1c9c7b2d726f2}{read\+\_\+sensor}} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_i2_c_sensor}{I2\+CSensor}}}
+\begin{DoxyCompactItemize}
+\item 
+virtual void \mbox{\hyperlink{class_i2_c_sensor_aa8015f77813353f52e3bd1628421a049}{set\+\_\+val\+\_\+from\+\_\+pin}} ()
+\item 
+virtual void \mbox{\hyperlink{class_i2_c_sensor_ad8ad1972e3675e42d96cff36f747be42}{set\+\_\+val\+\_\+from\+\_\+pot}} ()
+\item 
+virtual void \mbox{\hyperlink{class_i2_c_sensor_a8c931c27e820cdabd1bf7f11dadaeb8a}{update\+\_\+human\+\_\+limits}} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_sensor}{Sensor$<$ float, float $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+void {\bfseries calculate\+\_\+ema} ()
+\item 
+virtual void \mbox{\hyperlink{class_sensor_a0de95fc9f8511e6525291ff254e4c897}{set\+\_\+val\+\_\+from\+\_\+touch}} ()
+\item 
+virtual void \mbox{\hyperlink{class_sensor_afb6b173fbd35e70f076fa3fba9ae8b48}{update\+\_\+source}} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_transducer}{Transducer$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+virtual HUMAN\+\_\+T {\bfseries from\+\_\+native} (NATIVE\+\_\+T arg\+\_\+val\+\_\+native)
+\item 
+virtual NATIVE\+\_\+T {\bfseries to\+\_\+native} (HUMAN\+\_\+T arg\+\_\+val\+\_\+human)
+\item 
+virtual void {\bfseries update\+\_\+native\+\_\+limits} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+virtual void {\bfseries set\+\_\+val\+\_\+from\+\_\+undef} ()
+\item 
+virtual void {\bfseries set\+\_\+val\+\_\+from\+\_\+fixed} ()
+\item 
+virtual void {\bfseries set\+\_\+val\+\_\+from\+\_\+calc} ()
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Protected Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_air_velo_sensor_add71423ad01acc5dc9b954332377f2af}\label{class_air_velo_sensor_add71423ad01acc5dc9b954332377f2af} 
+float {\bfseries \+\_\+min\+\_\+mph} = 0.\+0
+\item 
+\Hypertarget{class_air_velo_sensor_a8ff473d7e357d20015f703d9f6b9aa19}\label{class_air_velo_sensor_a8ff473d7e357d20015f703d9f6b9aa19} 
+float {\bfseries \+\_\+abs\+\_\+max\+\_\+mph} = 33.\+55
+\item 
+\Hypertarget{class_air_velo_sensor_adb3a1dbd1009786f694eed01d49e063c}\label{class_air_velo_sensor_adb3a1dbd1009786f694eed01d49e063c} 
+float {\bfseries \+\_\+op\+\_\+max\+\_\+mph} = 28.\+5
+\item 
+\Hypertarget{class_air_velo_sensor_af668102de0ca04e5f25e582095bdad32}\label{class_air_velo_sensor_af668102de0ca04e5f25e582095bdad32} 
+float {\bfseries \+\_\+initial\+\_\+airvelo\+\_\+mph} = 0.\+0
+\item 
+\Hypertarget{class_air_velo_sensor_aa96aa9f9bf6b567669317854b21da83f}\label{class_air_velo_sensor_aa96aa9f9bf6b567669317854b21da83f} 
+FS3000 {\bfseries \+\_\+sensor}
+\item 
+\Hypertarget{class_air_velo_sensor_a477a1053775715a179717282d8fb2f19}\label{class_air_velo_sensor_a477a1053775715a179717282d8fb2f19} 
+float {\bfseries goodreading} = NAN
+\item 
+\Hypertarget{class_air_velo_sensor_a91ebb8efd07b4980bff3fda18819c51b}\label{class_air_velo_sensor_a91ebb8efd07b4980bff3fda18819c51b} 
+int64\+\_\+t {\bfseries airvelo\+\_\+read\+\_\+period\+\_\+us} = 35000
+\item 
+\Hypertarget{class_air_velo_sensor_ab0ce8d4108b6c65034c2f95b2cb95791}\label{class_air_velo_sensor_ab0ce8d4108b6c65034c2f95b2cb95791} 
+\mbox{\hyperlink{class_timer}{Timer}} {\bfseries airvelo\+Timer}
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_i2_c_sensor}{I2\+CSensor}}}
+\begin{DoxyCompactItemize}
+\item 
+bool {\bfseries \+\_\+detected} = false
+\item 
+\mbox{\hyperlink{class_i2_c}{I2C}} \texorpdfstring{$\ast$}{*} {\bfseries \+\_\+i2c}
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_sensor}{Sensor$<$ float, float $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+float {\bfseries \+\_\+ema\+\_\+alpha}
+\item 
+\mbox{\hyperlink{class_param}{Param}}$<$ float $>$ {\bfseries \+\_\+val\+\_\+filt}
+\item 
+bool {\bfseries \+\_\+should\+\_\+filter}
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_transducer}{Transducer$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+NATIVE\+\_\+T {\bfseries \+\_\+val\+\_\+raw}
+\item 
+float {\bfseries \+\_\+m\+\_\+factor} = 1.\+0
+\item 
+float {\bfseries \+\_\+b\+\_\+offset} = 0.\+0
+\item 
+float {\bfseries \+\_\+zerovalue} = NAN
+\item 
+bool {\bfseries \+\_\+invert} = false
+\item 
+Transducer\+Direction {\bfseries dir} = Transducer\+Direction\+::\+FWD
+\item 
+\mbox{\hyperlink{class_param}{Param}}$<$ HUMAN\+\_\+T $>$ {\bfseries \+\_\+human}
+\item 
+\mbox{\hyperlink{class_param}{Param}}$<$ NATIVE\+\_\+T $>$ {\bfseries \+\_\+native}
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+uint8\+\_\+t {\bfseries \+\_\+pin}
+\item 
+bool {\bfseries \+\_\+enabled} = true
+\item 
+\mbox{\hyperlink{class_potentiometer}{Potentiometer}} \texorpdfstring{$\ast$}{*} {\bfseries \+\_\+pot}
+\item 
+src {\bfseries \+\_\+source} = src\+::\+UNDEF
+\item 
+bool {\bfseries \+\_\+can\+\_\+source} \mbox{[}6\mbox{]} = \{ true, true, false, true, false, false \}
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Member Function Documentation}
+\Hypertarget{class_air_velo_sensor_adfeb5cc0edd580bd49e1c9c7b2d726f2}\label{class_air_velo_sensor_adfeb5cc0edd580bd49e1c9c7b2d726f2} 
+\index{AirVeloSensor@{AirVeloSensor}!read\_sensor@{read\_sensor}}
+\index{read\_sensor@{read\_sensor}!AirVeloSensor@{AirVeloSensor}}
+\doxysubsubsection{\texorpdfstring{read\_sensor()}{read\_sensor()}}
+{\footnotesize\ttfamily virtual float Air\+Velo\+Sensor\+::read\+\_\+sensor (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}, {\ttfamily [protected]}, {\ttfamily [virtual]}}
+
+
+
+Implements \mbox{\hyperlink{class_i2_c_sensor}{I2\+CSensor}}.
+
+\Hypertarget{class_air_velo_sensor_a29d83dd62f363d1e1482244bfdf0b605}\label{class_air_velo_sensor_a29d83dd62f363d1e1482244bfdf0b605} 
+\index{AirVeloSensor@{AirVeloSensor}!set\_val\_common@{set\_val\_common}}
+\index{set\_val\_common@{set\_val\_common}!AirVeloSensor@{AirVeloSensor}}
+\doxysubsubsection{\texorpdfstring{set\_val\_common()}{set\_val\_common()}}
+{\footnotesize\ttfamily virtual void Air\+Velo\+Sensor\+::set\+\_\+val\+\_\+common (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}, {\ttfamily [virtual]}}
+
+
+
+Reimplemented from \mbox{\hyperlink{class_device}{Device}}.
+
+\Hypertarget{class_air_velo_sensor_a9324193ce57d497df377d9c93e5c2b73}\label{class_air_velo_sensor_a9324193ce57d497df377d9c93e5c2b73} 
+\index{AirVeloSensor@{AirVeloSensor}!setup@{setup}}
+\index{setup@{setup}!AirVeloSensor@{AirVeloSensor}}
+\doxysubsubsection{\texorpdfstring{setup()}{setup()}}
+{\footnotesize\ttfamily void Air\+Velo\+Sensor\+::setup (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}, {\ttfamily [virtual]}}
+
+
+
+Reimplemented from \mbox{\hyperlink{class_i2_c_sensor}{I2\+CSensor}}.
+
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+sensors.\+h\end{DoxyCompactItemize}

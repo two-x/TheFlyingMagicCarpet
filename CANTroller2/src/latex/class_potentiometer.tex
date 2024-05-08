@@ -1,0 +1,73 @@
+\doxysection{Potentiometer Class Reference}
+\hypertarget{class_potentiometer}{}\label{class_potentiometer}\index{Potentiometer@{Potentiometer}}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_potentiometer_a1bb4a94fbf8851827c6a995f6921d064}\label{class_potentiometer_a1bb4a94fbf8851827c6a995f6921d064} 
+{\bfseries Potentiometer} (uint8\+\_\+t arg\+\_\+pin)
+\item 
+\Hypertarget{class_potentiometer_a99a5098ebca72159008345be0eca810d}\label{class_potentiometer_a99a5098ebca72159008345be0eca810d} 
+void {\bfseries setup} ()
+\item 
+\Hypertarget{class_potentiometer_a56e36ed55abee08cbe81ce01687f82ad}\label{class_potentiometer_a56e36ed55abee08cbe81ce01687f82ad} 
+void {\bfseries update} ()
+\item 
+\Hypertarget{class_potentiometer_aa47bd40826ae2e25ff63e89e29f2f0b1}\label{class_potentiometer_aa47bd40826ae2e25ff63e89e29f2f0b1} 
+{\footnotesize template$<$typename VAL\+\_\+T $>$ }\\VAL\+\_\+T {\bfseries map\+To\+Range} (VAL\+\_\+T min, VAL\+\_\+T max)
+\item 
+\Hypertarget{class_potentiometer_adfb23df7a12d9bbf9ece15d77088e3b1}\label{class_potentiometer_adfb23df7a12d9bbf9ece15d77088e3b1} 
+float {\bfseries val} ()
+\item 
+\Hypertarget{class_potentiometer_a3f806bebb516ba915e6b0dae537af65f}\label{class_potentiometer_a3f806bebb516ba915e6b0dae537af65f} 
+float {\bfseries min} ()
+\item 
+\Hypertarget{class_potentiometer_a1c76f674fa71e090649b80ecc4434438}\label{class_potentiometer_a1c76f674fa71e090649b80ecc4434438} 
+float {\bfseries max} ()
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_potentiometer_a3141cbbeea893fa3f7b161206a9b0ac0}\label{class_potentiometer_a3141cbbeea893fa3f7b161206a9b0ac0} 
+float {\bfseries adc\+\_\+min} = 380
+\item 
+\Hypertarget{class_potentiometer_af15155e8e618bce74673beea70c584db}\label{class_potentiometer_af15155e8e618bce74673beea70c584db} 
+float {\bfseries adc\+\_\+max} = 4095
+\item 
+\Hypertarget{class_potentiometer_a47c30d2a0f32e590ffa254c3c12df979}\label{class_potentiometer_a47c30d2a0f32e590ffa254c3c12df979} 
+float {\bfseries adc\+\_\+raw}
+\item 
+\Hypertarget{class_potentiometer_a6d1cf32af914c51adacf5451e47acc4b}\label{class_potentiometer_a6d1cf32af914c51adacf5451e47acc4b} 
+sens {\bfseries senstype} = sens\+::none
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Protected Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_potentiometer_a560cf3d48f5270a2a9b3ad94dc73f370}\label{class_potentiometer_a560cf3d48f5270a2a9b3ad94dc73f370} 
+float {\bfseries \+\_\+ema\+\_\+alpha} = .\+95
+\item 
+\Hypertarget{class_potentiometer_a3064309132ba8e260c42c36750b459f9}\label{class_potentiometer_a3064309132ba8e260c42c36750b459f9} 
+float {\bfseries \+\_\+pc\+\_\+min} = 0.\+0
+\item 
+\Hypertarget{class_potentiometer_a33d0e1fba2ec26d4fe76988bba524027}\label{class_potentiometer_a33d0e1fba2ec26d4fe76988bba524027} 
+float {\bfseries \+\_\+pc\+\_\+max} = 100.\+0
+\item 
+\Hypertarget{class_potentiometer_ad62574233d0a4fd06f73202c09236e59}\label{class_potentiometer_ad62574233d0a4fd06f73202c09236e59} 
+float {\bfseries \+\_\+pc\+\_\+activity\+\_\+margin} = 7.\+5
+\item 
+\Hypertarget{class_potentiometer_a19547a0131bd4026bfa520b1a8c7ff2f}\label{class_potentiometer_a19547a0131bd4026bfa520b1a8c7ff2f} 
+uint8\+\_\+t {\bfseries \+\_\+pin}
+\item 
+\Hypertarget{class_potentiometer_a419f89c49412d2fb531a0838e2f884c5}\label{class_potentiometer_a419f89c49412d2fb531a0838e2f884c5} 
+float {\bfseries \+\_\+val} = 0.\+0
+\item 
+\Hypertarget{class_potentiometer_a8247dfd0bbf6dc9c434265270d492ca7}\label{class_potentiometer_a8247dfd0bbf6dc9c434265270d492ca7} 
+float {\bfseries \+\_\+activity\+\_\+ref}
+\item 
+\Hypertarget{class_potentiometer_aea949482d0e76b86ff438eb30c8bc68f}\label{class_potentiometer_aea949482d0e76b86ff438eb30c8bc68f} 
+\mbox{\hyperlink{class_timer}{Timer}} {\bfseries pot\+\_\+timer} \{100000\}
+\end{DoxyCompactItemize}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+sensors.\+h\end{DoxyCompactItemize}

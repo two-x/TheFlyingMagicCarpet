@@ -1,0 +1,285 @@
+\doxysection{Pressure\+Sensor Class Reference}
+\hypertarget{class_pressure_sensor}{}\label{class_pressure_sensor}\index{PressureSensor@{PressureSensor}}
+Inheritance diagram for Pressure\+Sensor\+:\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[height=5.000000cm]{class_pressure_sensor}
+\end{center}
+\end{figure}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_pressure_sensor_a0ce83312dadbb6c6a3b6bcce7a341b2d}\label{class_pressure_sensor_a0ce83312dadbb6c6a3b6bcce7a341b2d} 
+{\bfseries Pressure\+Sensor} (uint8\+\_\+t arg\+\_\+pin)
+\item 
+\Hypertarget{class_pressure_sensor_a3661fb21911ec3208e6093df125db6c4}\label{class_pressure_sensor_a3661fb21911ec3208e6093df125db6c4} 
+void {\bfseries setup} ()
+\item 
+\Hypertarget{class_pressure_sensor_a09d71f491fccff3a0b4bd846690c3448}\label{class_pressure_sensor_a09d71f491fccff3a0b4bd846690c3448} 
+float {\bfseries psi} ()
+\item 
+\Hypertarget{class_pressure_sensor_a8e3b6bb8cedcc0241cfbee6e4c025549}\label{class_pressure_sensor_a8e3b6bb8cedcc0241cfbee6e4c025549} 
+float {\bfseries min\+\_\+psi} ()
+\item 
+\Hypertarget{class_pressure_sensor_a6ecfdd68c9545d7046b09ab9ea3ba589}\label{class_pressure_sensor_a6ecfdd68c9545d7046b09ab9ea3ba589} 
+float {\bfseries max\+\_\+psi} ()
+\item 
+\Hypertarget{class_pressure_sensor_af8d697fad3ba1385da8c0ab26aba8978}\label{class_pressure_sensor_af8d697fad3ba1385da8c0ab26aba8978} 
+float {\bfseries op\+\_\+min} ()
+\item 
+\Hypertarget{class_pressure_sensor_a9d945e608cc7d7c75d572a1ec0de04ed}\label{class_pressure_sensor_a9d945e608cc7d7c75d572a1ec0de04ed} 
+float {\bfseries op\+\_\+max} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_analog_sensor}{Analog\+Sensor$<$ int32\+\_\+t, float $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Analog\+Sensor} (uint8\+\_\+t arg\+\_\+pin)
+\item 
+void {\bfseries setup} ()
+\item 
+int32\+\_\+t {\bfseries adc} ()
+\item 
+int32\+\_\+t {\bfseries min\+\_\+adc} ()
+\item 
+int32\+\_\+t {\bfseries max\+\_\+adc} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_sensor}{Sensor$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Sensor} (uint8\+\_\+t pin)
+\item 
+void {\bfseries set\+\_\+ema\+\_\+alpha} (float arg\+\_\+alpha)
+\item 
+float {\bfseries ema\+\_\+alpha} ()
+\item 
+HUMAN\+\_\+T {\bfseries filt} ()
+\item 
+HUMAN\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries filt\+\_\+ptr} ()
+\item 
+std\+::shared\+\_\+ptr$<$ HUMAN\+\_\+T $>$ {\bfseries filt\+\_\+shptr} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_transducer}{Transducer$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Transducer} (uint8\+\_\+t arg\+\_\+pin)
+\item 
+void {\bfseries set\+\_\+native\+\_\+limits} (\mbox{\hyperlink{class_param}{Param}}$<$ NATIVE\+\_\+T $>$ \&arg\+\_\+min, \mbox{\hyperlink{class_param}{Param}}$<$ NATIVE\+\_\+T $>$ \&arg\+\_\+max)
+\item 
+void {\bfseries set\+\_\+human\+\_\+limits} (\mbox{\hyperlink{class_param}{Param}}$<$ HUMAN\+\_\+T $>$ \&arg\+\_\+min, \mbox{\hyperlink{class_param}{Param}}$<$ HUMAN\+\_\+T $>$ \&arg\+\_\+max)
+\item 
+void {\bfseries set\+\_\+native\+\_\+limits} (NATIVE\+\_\+T arg\+\_\+min, NATIVE\+\_\+T arg\+\_\+max)
+\item 
+void {\bfseries set\+\_\+human\+\_\+limits} (HUMAN\+\_\+T arg\+\_\+min, HUMAN\+\_\+T arg\+\_\+max)
+\item 
+bool {\bfseries set\+\_\+native} (NATIVE\+\_\+T arg\+\_\+val\+\_\+native)
+\item 
+bool {\bfseries add\+\_\+native} (NATIVE\+\_\+T arg\+\_\+add\+\_\+native)
+\item 
+bool {\bfseries set\+\_\+human} (HUMAN\+\_\+T arg\+\_\+val\+\_\+human)
+\item 
+bool {\bfseries add\+\_\+human} (HUMAN\+\_\+T arg\+\_\+add\+\_\+human)
+\item 
+void {\bfseries set\+\_\+convert} (float arg\+\_\+m\+\_\+factor, float arg\+\_\+b\+\_\+offset, bool arg\+\_\+invert)
+\item 
+NATIVE\+\_\+T {\bfseries native} ()
+\item 
+HUMAN\+\_\+T {\bfseries human} ()
+\item 
+float {\bfseries percent} ()
+\item 
+NATIVE\+\_\+T {\bfseries raw} ()
+\item 
+NATIVE\+\_\+T {\bfseries min\+\_\+native} ()
+\item 
+NATIVE\+\_\+T {\bfseries max\+\_\+native} ()
+\item 
+HUMAN\+\_\+T {\bfseries min\+\_\+human} ()
+\item 
+HUMAN\+\_\+T {\bfseries max\+\_\+human} ()
+\item 
+HUMAN\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries min\+\_\+human\+\_\+ptr} ()
+\item 
+HUMAN\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries max\+\_\+human\+\_\+ptr} ()
+\item 
+NATIVE\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries native\+\_\+ptr} ()
+\item 
+HUMAN\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries human\+\_\+ptr} ()
+\item 
+std\+::shared\+\_\+ptr$<$ NATIVE\+\_\+T $>$ {\bfseries native\+\_\+shptr} ()
+\item 
+std\+::shared\+\_\+ptr$<$ HUMAN\+\_\+T $>$ {\bfseries human\+\_\+shptr} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Device} (uint8\+\_\+t arg\+\_\+pin)
+\item 
+bool {\bfseries can\+\_\+source} (src arg\+\_\+source)
+\item 
+bool {\bfseries set\+\_\+source} (src arg\+\_\+source)
+\item 
+void {\bfseries update} ()
+\item 
+void {\bfseries attach\+\_\+pot} (\mbox{\hyperlink{class_potentiometer}{Potentiometer}} \&pot\+\_\+arg)
+\item 
+void {\bfseries set\+\_\+enabled} (bool arg\+\_\+enable)
+\item 
+void {\bfseries set\+\_\+can\+\_\+source} (src arg\+\_\+source, bool is\+\_\+possible)
+\item 
+src {\bfseries source} ()
+\item 
+uint8\+\_\+t {\bfseries pin} ()
+\item 
+bool {\bfseries enabled} ()
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_pressure_sensor_a99ec91797eaa76f1bd9fd78f47abe043}\label{class_pressure_sensor_a99ec91797eaa76f1bd9fd78f47abe043} 
+sens {\bfseries senstype} = sens\+::pressure
+\item 
+\Hypertarget{class_pressure_sensor_aed1a2281e267e8be589daeaaae6c72d5}\label{class_pressure_sensor_aed1a2281e267e8be589daeaaae6c72d5} 
+int32\+\_\+t {\bfseries op\+\_\+min\+\_\+adc}
+\item 
+\Hypertarget{class_pressure_sensor_a6b1dc5b1bfd84ef4068664916fbdb455}\label{class_pressure_sensor_a6b1dc5b1bfd84ef4068664916fbdb455} 
+int32\+\_\+t {\bfseries op\+\_\+max\+\_\+adc}
+\item 
+\Hypertarget{class_pressure_sensor_a5792aa8a8c653108f3089bc54808f6c2}\label{class_pressure_sensor_a5792aa8a8c653108f3089bc54808f6c2} 
+float {\bfseries hold\+\_\+initial\+\_\+psi}
+\item 
+\Hypertarget{class_pressure_sensor_a80335f5796d7cede3ae01aa1a78e5044}\label{class_pressure_sensor_a80335f5796d7cede3ae01aa1a78e5044} 
+float {\bfseries hold\+\_\+increment\+\_\+psi}
+\item 
+\Hypertarget{class_pressure_sensor_ada779ee3e3706c7f982028946731e444}\label{class_pressure_sensor_ada779ee3e3706c7f982028946731e444} 
+float {\bfseries panic\+\_\+initial\+\_\+psi}
+\item 
+\Hypertarget{class_pressure_sensor_a1e0895ab8d17cd7a3fff5ebe9500ce36}\label{class_pressure_sensor_a1e0895ab8d17cd7a3fff5ebe9500ce36} 
+float {\bfseries panic\+\_\+increment\+\_\+psi}
+\item 
+\Hypertarget{class_pressure_sensor_a3a288aeea016760011a0b9a66a880c63}\label{class_pressure_sensor_a3a288aeea016760011a0b9a66a880c63} 
+float {\bfseries margin\+\_\+psi}
+\item 
+\Hypertarget{class_pressure_sensor_a70bf475a3dc30579a7b17d39cd387110}\label{class_pressure_sensor_a70bf475a3dc30579a7b17d39cd387110} 
+std\+::string {\bfseries \+\_\+long\+\_\+name} = "{}Brake pressure sensor"{}
+\item 
+\Hypertarget{class_pressure_sensor_af529cb714b5a27fa4f6d4295f1c236b8}\label{class_pressure_sensor_af529cb714b5a27fa4f6d4295f1c236b8} 
+std\+::string {\bfseries \+\_\+short\+\_\+name} = "{}presur"{}
+\item 
+\Hypertarget{class_pressure_sensor_a2262e3cf5d3f12bbe283391ccba481ff}\label{class_pressure_sensor_a2262e3cf5d3f12bbe283391ccba481ff} 
+std\+::string {\bfseries \+\_\+native\+\_\+units\+\_\+name} = "{}adc"{}
+\item 
+\Hypertarget{class_pressure_sensor_a290e426688e23d9fc0e532b95deacab7}\label{class_pressure_sensor_a290e426688e23d9fc0e532b95deacab7} 
+std\+::string {\bfseries \+\_\+human\+\_\+units\+\_\+name} = "{}psi"{}
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Attributes inherited from \mbox{\hyperlink{class_analog_sensor}{Analog\+Sensor$<$ int32\+\_\+t, float $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+std\+::string {\bfseries \+\_\+long\+\_\+name}
+\item 
+std\+::string {\bfseries \+\_\+short\+\_\+name}
+\item 
+std\+::string {\bfseries \+\_\+native\+\_\+units\+\_\+name}
+\item 
+std\+::string {\bfseries \+\_\+human\+\_\+units\+\_\+name}
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Attributes inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_timer}{Timer}} {\bfseries timer}
+\item 
+std\+::string {\bfseries \+\_\+long\+\_\+name} = "{}Unknown device"{}
+\item 
+std\+::string {\bfseries \+\_\+short\+\_\+name} = "{}device"{}
+\item 
+sens {\bfseries senstype} = sens\+::none
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Additional Inherited Members}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_analog_sensor}{Analog\+Sensor$<$ int32\+\_\+t, float $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+virtual void \mbox{\hyperlink{class_analog_sensor_abe3859be9a366c073fd9cb14732abbcb}{set\+\_\+val\+\_\+from\+\_\+pin}} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_sensor}{Sensor$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+void {\bfseries calculate\+\_\+ema} ()
+\item 
+virtual void \mbox{\hyperlink{class_sensor_a0de95fc9f8511e6525291ff254e4c897}{set\+\_\+val\+\_\+from\+\_\+touch}} ()
+\item 
+virtual void \mbox{\hyperlink{class_sensor_a8868d62d88321e9f791b777505f97ff7}{set\+\_\+val\+\_\+from\+\_\+pot}} ()
+\item 
+virtual void \mbox{\hyperlink{class_sensor_aee2eb3de9171bf4e89adbd9fe6ee480f}{update\+\_\+human\+\_\+limits}} ()
+\item 
+virtual void \mbox{\hyperlink{class_sensor_afb6b173fbd35e70f076fa3fba9ae8b48}{update\+\_\+source}} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_transducer}{Transducer$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+virtual HUMAN\+\_\+T {\bfseries from\+\_\+native} (NATIVE\+\_\+T arg\+\_\+val\+\_\+native)
+\item 
+virtual NATIVE\+\_\+T {\bfseries to\+\_\+native} (HUMAN\+\_\+T arg\+\_\+val\+\_\+human)
+\item 
+virtual void {\bfseries update\+\_\+native\+\_\+limits} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+virtual void {\bfseries set\+\_\+val\+\_\+from\+\_\+undef} ()
+\item 
+virtual void {\bfseries set\+\_\+val\+\_\+from\+\_\+fixed} ()
+\item 
+virtual void {\bfseries set\+\_\+val\+\_\+from\+\_\+calc} ()
+\item 
+virtual void {\bfseries set\+\_\+val\+\_\+common} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_analog_sensor}{Analog\+Sensor$<$ int32\+\_\+t, float $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_timer}{Timer}} {\bfseries read\+\_\+timer}
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_sensor}{Sensor$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+float {\bfseries \+\_\+ema\+\_\+alpha} = 0.\+1
+\item 
+\mbox{\hyperlink{class_param}{Param}}$<$ HUMAN\+\_\+T $>$ {\bfseries \+\_\+val\+\_\+filt}
+\item 
+bool {\bfseries \+\_\+should\+\_\+filter} = true
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_transducer}{Transducer$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+NATIVE\+\_\+T {\bfseries \+\_\+val\+\_\+raw}
+\item 
+float {\bfseries \+\_\+m\+\_\+factor} = 1.\+0
+\item 
+float {\bfseries \+\_\+b\+\_\+offset} = 0.\+0
+\item 
+float {\bfseries \+\_\+zerovalue} = NAN
+\item 
+bool {\bfseries \+\_\+invert} = false
+\item 
+Transducer\+Direction {\bfseries dir} = Transducer\+Direction\+::\+FWD
+\item 
+\mbox{\hyperlink{class_param}{Param}}$<$ HUMAN\+\_\+T $>$ {\bfseries \+\_\+human}
+\item 
+\mbox{\hyperlink{class_param}{Param}}$<$ NATIVE\+\_\+T $>$ {\bfseries \+\_\+native}
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+uint8\+\_\+t {\bfseries \+\_\+pin}
+\item 
+bool {\bfseries \+\_\+enabled} = true
+\item 
+\mbox{\hyperlink{class_potentiometer}{Potentiometer}} \texorpdfstring{$\ast$}{*} {\bfseries \+\_\+pot}
+\item 
+src {\bfseries \+\_\+source} = src\+::\+UNDEF
+\item 
+bool {\bfseries \+\_\+can\+\_\+source} \mbox{[}6\mbox{]} = \{ true, true, false, true, false, false \}
+\end{DoxyCompactItemize}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+sensors.\+h\end{DoxyCompactItemize}

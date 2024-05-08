@@ -1,0 +1,144 @@
+\doxysection{Collisions\+Saver Class Reference}
+\hypertarget{class_collisions_saver}{}\label{class_collisions_saver}\index{CollisionsSaver@{CollisionsSaver}}
+\doxysubsubsection*{Classes}
+\begin{DoxyCompactItemize}
+\item 
+struct \mbox{\hyperlink{struct_collisions_saver_1_1ball__info__t}{ball\+\_\+info\+\_\+t}}
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_collisions_saver_aaa5f65c8bd87ba7faed37f1df11b9271}\label{class_collisions_saver_aaa5f65c8bd87ba7faed37f1df11b9271} 
+void {\bfseries drawfunc} ()
+\item 
+\Hypertarget{class_collisions_saver_a18c3d6ff7f49ba3e3baeaf2637f3e6c9}\label{class_collisions_saver_a18c3d6ff7f49ba3e3baeaf2637f3e6c9} 
+void {\bfseries new\+\_\+ball} (int ballno)
+\item 
+\Hypertarget{class_collisions_saver_a1b5122ae3ac8e660fab8ef6274f38133}\label{class_collisions_saver_a1b5122ae3ac8e660fab8ef6274f38133} 
+void {\bfseries saver\+\_\+touch} (LGFX\+\_\+\+Sprite \texorpdfstring{$\ast$}{*}spr, int x, int y)
+\item 
+\Hypertarget{class_collisions_saver_af0c4c33243e9a23284ea7f260a0c07a1}\label{class_collisions_saver_af0c4c33243e9a23284ea7f260a0c07a1} 
+bool {\bfseries mainfunc} (void)
+\item 
+\Hypertarget{class_collisions_saver_a3c8c0c7ea0adeb01dbbd448d109f9703}\label{class_collisions_saver_a3c8c0c7ea0adeb01dbbd448d109f9703} 
+void {\bfseries setup} (LGFX\+\_\+\+Sprite \texorpdfstring{$\ast$}{*}\+\_\+nowspr, \mbox{\hyperlink{structviewport}{viewport}} \texorpdfstring{$\ast$}{*}\+\_\+vp)
+\item 
+\Hypertarget{class_collisions_saver_af4eaba44e35c258efdb44d76a20fd660}\label{class_collisions_saver_af4eaba44e35c258efdb44d76a20fd660} 
+void {\bfseries reset} (LGFX\+\_\+\+Sprite \texorpdfstring{$\ast$}{*}sp0, LGFX\+\_\+\+Sprite \texorpdfstring{$\ast$}{*}sp1, \mbox{\hyperlink{structviewport}{viewport}} \texorpdfstring{$\ast$}{*}\+\_\+vp)
+\item 
+\Hypertarget{class_collisions_saver_ad94b73520c0c33a017a20500bb272b4e}\label{class_collisions_saver_ad94b73520c0c33a017a20500bb272b4e} 
+int {\bfseries update} (LGFX\+\_\+\+Sprite \texorpdfstring{$\ast$}{*}\+\_\+nowspr, \mbox{\hyperlink{structviewport}{viewport}} \texorpdfstring{$\ast$}{*}\+\_\+vp)
+\item 
+\Hypertarget{class_collisions_saver_a2ac9d8a258a7ddd728c5a1674544c4a7}\label{class_collisions_saver_a2ac9d8a258a7ddd728c5a1674544c4a7} 
+void {\bfseries saver\+\_\+touch} (int, int)
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_collisions_saver_af2f69e335e5a3e43426c5b0f6d81e500}\label{class_collisions_saver_af2f69e335e5a3e43426c5b0f6d81e500} 
+bool {\bfseries touchnow} = false
+\item 
+\Hypertarget{class_collisions_saver_a8e9a8b36a0549d4848847db9e563be4a}\label{class_collisions_saver_a8e9a8b36a0549d4848847db9e563be4a} 
+bool {\bfseries touchlast}
+\item 
+\Hypertarget{class_collisions_saver_a901a3dd79873c8db95cb1db0f5a9dde6}\label{class_collisions_saver_a901a3dd79873c8db95cb1db0f5a9dde6} 
+\mbox{\hyperlink{structviewport}{viewport}} \texorpdfstring{$\ast$}{*} {\bfseries vp}
+\item 
+\Hypertarget{class_collisions_saver_a05f647e9b7cc5ce592f35d4f276776f8}\label{class_collisions_saver_a05f647e9b7cc5ce592f35d4f276776f8} 
+uint8\+\_\+t {\bfseries sqrme}
+\item 
+\Hypertarget{class_collisions_saver_a10ef9c9d6f1c21d18e5f4d0aea0aca35}\label{class_collisions_saver_a10ef9c9d6f1c21d18e5f4d0aea0aca35} 
+uint8\+\_\+t {\bfseries slices} = 8
+\item 
+\Hypertarget{class_collisions_saver_a95f601b1f00a8cc1b70ea0e6483311dd}\label{class_collisions_saver_a95f601b1f00a8cc1b70ea0e6483311dd} 
+\mbox{\hyperlink{struct_collisions_saver_1_1ball__info__t}{ball\+\_\+info\+\_\+t}} \texorpdfstring{$\ast$}{*} {\bfseries balls}
+\item 
+\Hypertarget{class_collisions_saver_a6c6300624573113b32e9b17432580742}\label{class_collisions_saver_a6c6300624573113b32e9b17432580742} 
+\mbox{\hyperlink{struct_collisions_saver_1_1ball__info__t}{ball\+\_\+info\+\_\+t}} \texorpdfstring{$\ast$}{*} {\bfseries a}
+\item 
+\Hypertarget{class_collisions_saver_a85872e644c8438eec0196f04d0046ccd}\label{class_collisions_saver_a85872e644c8438eec0196f04d0046ccd} 
+\mbox{\hyperlink{struct_collisions_saver_1_1ball__info__t}{ball\+\_\+info\+\_\+t}} {\bfseries touchball} = \{ 100, 100, 0, 0, touchball\+\_\+r $<$$<$ SHIFTSIZE, 10, GRN \}
+\item 
+\Hypertarget{class_collisions_saver_aff894b7345b4e6ba03483c1d64ad9e69}\label{class_collisions_saver_aff894b7345b4e6ba03483c1d64ad9e69} 
+LGFX\+\_\+\+Sprite \texorpdfstring{$\ast$}{*} {\bfseries sprite}
+\item 
+\Hypertarget{class_collisions_saver_a3f8e529fc08865520e06fdc6d6aaaa58}\label{class_collisions_saver_a3f8e529fc08865520e06fdc6d6aaaa58} 
+\mbox{\hyperlink{struct_collisions_saver_1_1ball__info__t}{ball\+\_\+info\+\_\+t}} {\bfseries \+\_\+balls} \mbox{[}2\mbox{]}\mbox{[}BALL\+\_\+\+MAX\mbox{]}
+\item 
+\Hypertarget{class_collisions_saver_a35c9f81f1eb02e6b27e5f03c8870283b}\label{class_collisions_saver_a35c9f81f1eb02e6b27e5f03c8870283b} 
+std\+::uint32\+\_\+t {\bfseries \+\_\+ball\+\_\+count} = 0
+\item 
+\Hypertarget{class_collisions_saver_a9b93f9e6913a6a1ebdaafa97d2ec2e57}\label{class_collisions_saver_a9b93f9e6913a6a1ebdaafa97d2ec2e57} 
+std\+::uint32\+\_\+t {\bfseries \+\_\+myfps} = 0
+\item 
+\Hypertarget{class_collisions_saver_a9ba8bf9613c362cbe53ec3678256b5b7}\label{class_collisions_saver_a9ba8bf9613c362cbe53ec3678256b5b7} 
+std\+::uint32\+\_\+t {\bfseries ball\+\_\+thismax}
+\item 
+\Hypertarget{class_collisions_saver_a52b4ecc4903aadcee1dafb8136e7d9f8}\label{class_collisions_saver_a52b4ecc4903aadcee1dafb8136e7d9f8} 
+std\+::uint32\+\_\+t {\bfseries ball\+\_\+count} = 0
+\item 
+\Hypertarget{class_collisions_saver_a034942b19b9eff64714e2e793be88d3f}\label{class_collisions_saver_a034942b19b9eff64714e2e793be88d3f} 
+int {\bfseries \+\_\+width}
+\item 
+\Hypertarget{class_collisions_saver_afa0d56d5e04efb913745313f1e11d780}\label{class_collisions_saver_afa0d56d5e04efb913745313f1e11d780} 
+int {\bfseries \+\_\+height}
+\item 
+\Hypertarget{class_collisions_saver_a650ba6827946f93a6dfc374b142f4263}\label{class_collisions_saver_a650ba6827946f93a6dfc374b142f4263} 
+int {\bfseries touchx}
+\item 
+\Hypertarget{class_collisions_saver_a1c486a99a6e11e8710871dbc7914b69f}\label{class_collisions_saver_a1c486a99a6e11e8710871dbc7914b69f} 
+int {\bfseries touchy}
+\item 
+\Hypertarget{class_collisions_saver_afe9cce2f7e69560851eba88281e8b02f}\label{class_collisions_saver_afe9cce2f7e69560851eba88281e8b02f} 
+int {\bfseries lastx}
+\item 
+\Hypertarget{class_collisions_saver_aa7445fb15f6445a1634c8bebfce1831f}\label{class_collisions_saver_aa7445fb15f6445a1634c8bebfce1831f} 
+int {\bfseries lasty}
+\item 
+\Hypertarget{class_collisions_saver_ae80fbadafd17fb116698216dfe757488}\label{class_collisions_saver_ae80fbadafd17fb116698216dfe757488} 
+std\+::uint32\+\_\+t {\bfseries sec}
+\item 
+\Hypertarget{class_collisions_saver_a176b34a29cdbdd0f7f7c339c9e360829}\label{class_collisions_saver_a176b34a29cdbdd0f7f7c339c9e360829} 
+std\+::uint32\+\_\+t {\bfseries psec}
+\item 
+\Hypertarget{class_collisions_saver_a22b79c65d943487a824fddb703a06245}\label{class_collisions_saver_a22b79c65d943487a824fddb703a06245} 
+std\+::uint32\+\_\+t {\bfseries ball\+\_\+create\+\_\+rate} = 3200
+\item 
+\Hypertarget{class_collisions_saver_a0286e3d4d0f4227ca048cf0d3e91319f}\label{class_collisions_saver_a0286e3d4d0f4227ca048cf0d3e91319f} 
+std\+::uint32\+\_\+t {\bfseries myfps} = 0
+\item 
+\Hypertarget{class_collisions_saver_aafb8059fe0433aaf303822527c4743fe}\label{class_collisions_saver_aafb8059fe0433aaf303822527c4743fe} 
+std\+::uint32\+\_\+t {\bfseries frame\+\_\+count} = 0
+\item 
+\Hypertarget{class_collisions_saver_ad655efa3e91646e79d033c451b4c9abd}\label{class_collisions_saver_ad655efa3e91646e79d033c451b4c9abd} 
+float {\bfseries ball\+\_\+radius\+\_\+base} = 4.\+5 / 235.\+0
+\item 
+\Hypertarget{class_collisions_saver_a854c0085c8ecada5c67042337590536e}\label{class_collisions_saver_a854c0085c8ecada5c67042337590536e} 
+float {\bfseries ball\+\_\+radius\+\_\+modifier} = 2.\+6 / 235.\+0
+\item 
+\Hypertarget{class_collisions_saver_a85273c46064503924daac0192d434170}\label{class_collisions_saver_a85273c46064503924daac0192d434170} 
+uint8\+\_\+t {\bfseries ball\+\_\+redoubler\+\_\+rate} = 0x18
+\item 
+\Hypertarget{class_collisions_saver_aba0626ed8b344e3764646b78006177b5}\label{class_collisions_saver_aba0626ed8b344e3764646b78006177b5} 
+uint8\+\_\+t {\bfseries ball\+\_\+gravity} = 16
+\item 
+\Hypertarget{class_collisions_saver_a17c6efd3db5535f283fdae890f9916a9}\label{class_collisions_saver_a17c6efd3db5535f283fdae890f9916a9} 
+volatile bool {\bfseries \+\_\+is\+\_\+running}
+\item 
+\Hypertarget{class_collisions_saver_a115f7eada8f01ad21e23b3602bb5412a}\label{class_collisions_saver_a115f7eada8f01ad21e23b3602bb5412a} 
+volatile std\+::uint32\+\_\+t {\bfseries \+\_\+loop\+\_\+count} = 0
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Static Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_collisions_saver_ad3675640714ae0d0f34105a409ff48e2}\label{class_collisions_saver_ad3675640714ae0d0f34105a409ff48e2} 
+static constexpr int {\bfseries touchball\+\_\+r} = 15
+\item 
+\Hypertarget{class_collisions_saver_af8ac4cecb3b49837776e56b0c1f63fd7}\label{class_collisions_saver_af8ac4cecb3b49837776e56b0c1f63fd7} 
+static constexpr std\+::uint32\+\_\+t {\bfseries BALL\+\_\+\+MAX} = 35
+\end{DoxyCompactItemize}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+animations.\+h\end{DoxyCompactItemize}

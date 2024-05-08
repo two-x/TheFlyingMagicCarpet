@@ -1,0 +1,267 @@
+\doxysection{runmodes.\+h}
+\hypertarget{runmodes_8h_source}{}\label{runmodes_8h_source}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{preprocessor}{\#pragma\ once}}
+\DoxyCodeLine{00002\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_run_mode_manager}{RunModeManager}}\ \{\ \ \textcolor{comment}{//\ Runmode\ state\ machine.\ Gas/brake\ control\ targets\ are\ determined\ here.\ \ -\/\ takes\ 36\ us\ in\ shutdown\ mode\ with\ no\ activity}}
+\DoxyCodeLine{00003\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00004\ \ \ \ \ \textcolor{keywordtype}{int}\ \_joydir;}
+\DoxyCodeLine{00005\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ screenSaverTimer\{15000000\};\ \ \textcolor{comment}{//\ Time\ after\ entering\ sleep\ mode\ where\ screensaver\ turns\ on}}
+\DoxyCodeLine{00006\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ gestureFlyTimer\{1250000\};\ \ \textcolor{comment}{//\ Time\ allowed\ for\ joy\ mode-\/change\ gesture\ motions\ (Fly\ mode\ <==>\ Cruise\ mode)\ (in\ us)}}
+\DoxyCodeLine{00007\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ pwrup\_timer\{1500000\};\ \ \textcolor{comment}{//\ Timeout\ when\ parking\ motors\ if\ they\ don't\ park\ for\ whatever\ reason\ (in\ us)}}
+\DoxyCodeLine{00008\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ shutdown\_timer\{5000000\};}
+\DoxyCodeLine{00009\ \ \ \ \ \mbox{\hyperlink{class_encoder}{Encoder}}*\ encoder;}
+\DoxyCodeLine{00010\ \ \ \ \ \mbox{\hyperlink{class_display}{Display}}*\ display;}
+\DoxyCodeLine{00011\ \ \ \ \ \textcolor{keywordtype}{int}\ oldmode\ =\ ASLEEP,\ last\_conscious\_mode;}
+\DoxyCodeLine{00012\ \ \ \ \ \textcolor{keywordtype}{bool}\ still\_interactive\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00013\ \ \ \ \ uint32\_t\ initial\_inactivity;}
+\DoxyCodeLine{00014\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00015\ \ \ \ \ \textcolor{keywordtype}{int}\ mode\ =\ SHUTDOWN;}
+\DoxyCodeLine{00016\ \ \ \ \ \textcolor{keywordtype}{bool}\ we\_just\_switched\_modes\ =\ \textcolor{keyword}{true};\ \ \textcolor{comment}{//\ For\ mode\ logic\ to\ set\ things\ up\ upon\ first\ entry\ into\ mode}}
+\DoxyCodeLine{00017\ \ \ \ \ \textcolor{keywordtype}{bool}\ joy\_centered\ =\ \textcolor{keyword}{false};\ \ \textcolor{comment}{//\ minor\ state\ variable\ for\ hold\ mode}}
+\DoxyCodeLine{00018\ \ \ \ \ \mbox{\hyperlink{class_run_mode_manager}{RunModeManager}}(\mbox{\hyperlink{class_display}{Display}}*\ \_display,\ \mbox{\hyperlink{class_encoder}{Encoder}}*\ \_encoder)\ \{}
+\DoxyCodeLine{00019\ \ \ \ \ \ \ \ \ display\ =\ \_display;}
+\DoxyCodeLine{00020\ \ \ \ \ \ \ \ \ encoder\ =\ \_encoder;}
+\DoxyCodeLine{00021\ \ \ \ \ \}}
+\DoxyCodeLine{00022\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{\ \ \textcolor{comment}{//\ we\ don't\ really\ need\ to\ set\ up\ anything,\ unless\ we\ need\ to\ recover\ to\ a\ specific\ runmode\ after\ crash}}
+\DoxyCodeLine{00023\ \ \ \ \ \ \ \ \ mode\ =\ watchdog.boot\_to\_runmode;}
+\DoxyCodeLine{00024\ \ \ \ \ \}}
+\DoxyCodeLine{00025\ \ \ \ \ \textcolor{keywordtype}{int}\ mode\_logic()\ \{}
+\DoxyCodeLine{00026\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (mode\ !=\ ASLEEP\ \&\&\ mode\ !=\ CAL)\ \{}
+\DoxyCodeLine{00027\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (basicsw.val)\ mode\ =\ BASIC;\ \ \textcolor{comment}{//\ if\ basicmode\ switch\ on\ -\/-\/>\ Basic\ Mode}}
+\DoxyCodeLine{00028\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (!ignition.signal)\ mode\ =\ SHUTDOWN;}
+\DoxyCodeLine{00029\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (tach.engine\_stopped())\ mode\ =\ STALL;\ \ \textcolor{comment}{//\ otherwise\ if\ engine\ not\ running\ -\/-\/>\ Stall\ Mode}}
+\DoxyCodeLine{00030\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00031\ \ \ \ \ \ \ \ \ we\_just\_switched\_modes\ =\ (mode\ !=\ oldmode);\ \ \textcolor{comment}{//\ currentMode\ should\ not\ be\ changed\ after\ this\ point\ in\ loop}}
+\DoxyCodeLine{00032\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (we\_just\_switched\_modes)\ \{}
+\DoxyCodeLine{00033\ \ \ \ \ \ \ \ \ \ \ \ \ display-\/>disp\_runmode\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00034\ \ \ \ \ \ \ \ \ \ \ \ \ cleanup\_state\_variables();}
+\DoxyCodeLine{00035\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00036\ \ \ \ \ \ \ \ \ oldmode\ =\ mode;\ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00037\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ common\ to\ almost\ all\ the\ modes,\ so\ i\ put\ it\ here}}
+\DoxyCodeLine{00038\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (mode\ !=\ ASLEEP)\ \{}
+\DoxyCodeLine{00039\ \ \ \ \ \ \ \ \ \ \ \ \ last\_conscious\_mode\ =\ mode;}
+\DoxyCodeLine{00040\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (hotrc.sw\_event(CH3))\ ignition.request(REQ\_TOG);\ \ \textcolor{comment}{//\ Turn\ on/off\ the\ vehicle\ ignition.\ if\ ign\ is\ turned\ off\ while\ the\ car\ is\ moving,\ this\ leads\ to\ panic\ stop}}
+\DoxyCodeLine{00041\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00042\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (mode\ ==\ BASIC)\ run\_basicMode();\ \textcolor{comment}{//\ Basic\ mode\ is\ for\ when\ we\ want\ to\ operate\ the\ pedals\ manually.\ All\ PIDs\ stop,\ only\ steering\ still\ works.}}
+\DoxyCodeLine{00043\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (mode\ ==\ ASLEEP)\ run\_asleepMode();}
+\DoxyCodeLine{00044\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (mode\ ==\ SHUTDOWN)\ run\_shutdownMode();}
+\DoxyCodeLine{00045\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (mode\ ==\ STALL)\ run\_stallMode();}
+\DoxyCodeLine{00046\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (mode\ ==\ HOLD)\ run\_holdMode();}
+\DoxyCodeLine{00047\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (mode\ ==\ FLY)\ run\_flyMode();}
+\DoxyCodeLine{00048\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (mode\ ==\ CRUISE)\ run\_cruiseMode();}
+\DoxyCodeLine{00049\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (mode\ ==\ CAL)\ run\_calMode();}
+\DoxyCodeLine{00050\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{\ \ \textcolor{comment}{//\ Obviously\ this\ should\ never\ happen}}
+\DoxyCodeLine{00051\ \ \ \ \ \ \ \ \ \ \ \ \ Serial.println\ (F(\textcolor{stringliteral}{"{}Error:\ Invalid\ runmode\ entered"{}}));}
+\DoxyCodeLine{00052\ \ \ \ \ \ \ \ \ \ \ \ \ mode\ =\ SHUTDOWN;}
+\DoxyCodeLine{00053\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00054\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ mode;}
+\DoxyCodeLine{00055\ \ \ \ \ \}}
+\DoxyCodeLine{00056\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00057\ \ \ \ \ \textcolor{keywordtype}{void}\ cleanup\_state\_variables()\ \{}
+\DoxyCodeLine{00058\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (oldmode\ ==\ BASIC);}
+\DoxyCodeLine{00059\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (oldmode\ ==\ ASLEEP);}
+\DoxyCodeLine{00060\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (oldmode\ ==\ SHUTDOWN)\ shutdown\_incomplete\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00061\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (oldmode\ ==\ STALL);}
+\DoxyCodeLine{00062\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (oldmode\ ==\ HOLD)\ joy\_centered\ =\ \textcolor{keyword}{false};\ \ \textcolor{comment}{//\ starter.request(REQ\_OFF);\ \ //\ Stop\ any\ in-\/progress\ startings}}
+\DoxyCodeLine{00063\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (oldmode\ ==\ FLY)\ car\_hasnt\_moved\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00064\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (oldmode\ ==\ CRUISE)\ cruise\_adjusting\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00065\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (oldmode\ ==\ CAL)\ cal\_gasmode\ =\ cal\_brakemode\ =\ cal\_gasmode\_request\ =\ cal\_brakemode\_request\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00066\ \ \ \ \ \ \ \ \ display-\/>disp\_bools\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00067\ \ \ \ \ \}}
+\DoxyCodeLine{00068\ \ \ \ \ \textcolor{keywordtype}{void}\ run\_basicMode()\ \{\ \textcolor{comment}{//\ Basic\ mode\ is\ for\ when\ we\ want\ to\ operate\ the\ pedals\ manually.\ All\ PIDs\ stop,\ only\ steering\ still\ works.}}
+\DoxyCodeLine{00069\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (we\_just\_switched\_modes)\ \{}
+\DoxyCodeLine{00070\ \ \ \ \ \ \ \ \ \ \ \ \ gas.setmode(ParkMotor);\ \ \textcolor{comment}{//\ Upon\ entering\ basic\ mode,\ the\ brake\ and\ gas\ actuators\ need\ to\ be\ parked\ out\ of\ the\ way\ so\ the\ pedals\ can\ be\ used.}}
+\DoxyCodeLine{00071\ \ \ \ \ \ \ \ \ \ \ \ \ brake.setmode(ParkMotor);}
+\DoxyCodeLine{00072\ \ \ \ \ \ \ \ \ \ \ \ \ steer.setmode(OpenLoop);}
+\DoxyCodeLine{00073\ \ \ \ \ \ \ \ \ \ \ \ \ powering\_up\ =\ basicmode\_request\ =\ \textcolor{keyword}{false};\ \ \textcolor{comment}{//\ to\ cover\ unlikely\ edge\ case\ where\ basic\ mode\ switch\ is\ enabled\ during\ wakeup\ from\ asleep\ mode}}
+\DoxyCodeLine{00074\ \ \ \ \ \ \ \ \ \ \ \ \ watchdog.set\_codestatus(Parked);}
+\DoxyCodeLine{00075\ \ \ \ \ \ \ \ \ \ \ \ \ display-\/>disp\_bools\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00076\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00077\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (hotrc.sw\_event(CH4)\ \&\&\ !ignition.signal)\ mode\ =\ ASLEEP;}
+\DoxyCodeLine{00078\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!basicsw.val\ \&\&\ !tach.engine\_stopped())\ mode\ =\ speedo.car\_stopped()\ ?\ HOLD\ :\ FLY;\ \ \textcolor{comment}{//\ If\ we\ turned\ off\ the\ basic\ mode\ switch\ with\ engine\ running,\ change\ modes.\ If\ engine\ is\ not\ running,\ we'll\ end\ up\ in\ Stall\ Mode\ automatically}}
+\DoxyCodeLine{00079\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (basicmode\_request)\ mode\ =\ SHUTDOWN;\ \ \textcolor{comment}{//\ if\ fully\ shut\ down\ and\ cal\ mode\ requested,\ go\ to\ cal\ mode}}
+\DoxyCodeLine{00080\ \ \ \ \ \}}
+\DoxyCodeLine{00081\ \ \ \ \ \textcolor{keywordtype}{void}\ run\_asleepMode(\textcolor{keywordtype}{bool}\ recovering=\textcolor{keyword}{false})\ \{\ \ \textcolor{comment}{//\ turns\ off\ syspower\ and\ just\ idles.\ sleep\_request\ are\ handled\ here\ or\ in\ shutdown\ mode\ below}}
+\DoxyCodeLine{00082\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (we\_just\_switched\_modes)\ \{}
+\DoxyCodeLine{00083\ \ \ \ \ \ \ \ \ \ \ \ \ screenSaverTimer.reset();}
+\DoxyCodeLine{00084\ \ \ \ \ \ \ \ \ \ \ \ \ initial\_inactivity\ =\ (uint32\_t)sleep\_inactivity\_timer.elapsed();\ \ \textcolor{comment}{//\ if\ entered\ asleep\ mode\ manually\ rather\ than\ timeout,\ start\ screensaver\ countdown}}
+\DoxyCodeLine{00085\ \ \ \ \ \ \ \ \ \ \ \ \ still\_interactive\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00086\ \ \ \ \ \ \ \ \ \ \ \ \ sleep\_request\ =\ REQ\_NA;}
+\DoxyCodeLine{00087\ \ \ \ \ \ \ \ \ \ \ \ \ powering\_up\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00088\ \ \ \ \ \ \ \ \ \ \ \ \ display-\/>disp\_bools\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00089\ \ \ \ \ \ \ \ \ \ \ \ \ brake.setmode(Halt);}
+\DoxyCodeLine{00090\ \ \ \ \ \ \ \ \ \ \ \ \ steer.setmode(Halt);}
+\DoxyCodeLine{00091\ \ \ \ \ \ \ \ \ \ \ \ \ set\_syspower(LOW);\ \textcolor{comment}{//\ Power\ down\ devices\ to\ save\ battery}}
+\DoxyCodeLine{00092\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00093\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (still\_interactive)\ \{}
+\DoxyCodeLine{00094\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((uint32\_t)sleep\_inactivity\_timer.elapsed()\ <\ initial\_inactivity)\ screenSaverTimer.reset();\ \ \textcolor{comment}{//\ keep\ resetting\ the\ screen\ saver\ timer\ if\ user\ is\ looking\ at\ data,\ etc.}}
+\DoxyCodeLine{00095\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (saver\_on\_sleep\ \&\&\ screenSaverTimer.expired())\ \{}
+\DoxyCodeLine{00096\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ display-\/>auto\_saver(\textcolor{keyword}{true});\ \ \textcolor{comment}{//\ after\ a\ bit\ turn\ on\ the\ screen\ saver}}
+\DoxyCodeLine{00097\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ still\_interactive\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00098\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00099\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00100\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (hotrc.sw\_event(CH4)\ ||\ encoder-\/>button.pressed()\ ||\ sleep\_request\ ==\ REQ\_TOG\ ||\ sleep\_request\ ==\ REQ\_OFF)\ \{\ \ \textcolor{comment}{//\ if\ we've\ been\ triggered\ to\ wake\ up}}
+\DoxyCodeLine{00101\ \ \ \ \ \ \ \ \ \ \ \ \ set\_syspower(HIGH);\ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ switch\ on\ control\ system\ devices}}
+\DoxyCodeLine{00102\ \ \ \ \ \ \ \ \ \ \ \ \ pwrup\_timer.reset();\ \ \textcolor{comment}{//\ stay\ in\ asleep\ mode\ for\ a\ delay\ to\ allow\ devices\ to\ power\ up}}
+\DoxyCodeLine{00103\ \ \ \ \ \ \ \ \ \ \ \ \ powering\_up\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00104\ \ \ \ \ \ \ \ \ \ \ \ \ display-\/>auto\_saver(\textcolor{keyword}{false});\ \ \ \ \ \ \textcolor{comment}{//\ turn\ off\ screensaver}}
+\DoxyCodeLine{00105\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00106\ \ \ \ \ \ \ \ \ sleep\_request\ =\ REQ\_NA;}
+\DoxyCodeLine{00107\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (powering\_up\ \&\&\ pwrup\_timer.expired())\ \{}
+\DoxyCodeLine{00108\ \ \ \ \ \ \ \ \ \ \ \ \ mode\ =\ (basicsw.val\ ||\ (last\_conscious\_mode\ ==\ BASIC))\ ?\ BASIC\ :\ SHUTDOWN;\ \ \textcolor{comment}{//\ display-\/>all\_dirty();\ \ //\ tells\ display\ to\ redraw\ everything.\ display\ must\ set\ back\ to\ false}}
+\DoxyCodeLine{00109\ \ \ \ \ \ \ \ \ \ \ \ \ display-\/>disp\_bools\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00110\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00111\ \ \ \ \ \}}
+\DoxyCodeLine{00112\ \ \ \ \ \textcolor{keywordtype}{void}\ run\_shutdownMode(\textcolor{keywordtype}{bool}\ recovering=\textcolor{keyword}{false})\ \{\ \textcolor{comment}{//\ In\ shutdown\ mode\ we\ stop\ the\ car\ if\ it's\ moving,\ park\ the\ motors,\ go\ idle\ for\ a\ while\ and\ eventually\ sleep.}}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (we\_just\_switched\_modes)\ \{\ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00114\ \ \ \ \ \ \ \ \ \ \ \ \ shutdown\_incomplete\ =\ !powering\_up;\ \ \ \textcolor{comment}{//\ if\ waking\ up\ from\ sleep\ shutdown\ is\ already\ complete}}
+\DoxyCodeLine{00115\ \ \ \ \ \ \ \ \ \ \ \ \ powering\_up\ =\ calmode\_request\ =\ basicmode\_request\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ \ \ \ \ \ \ gas.setmode(ParkMotor);\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ carburetor\ parked\ }}
+\DoxyCodeLine{00117\ \ \ \ \ \ \ \ \ \ \ \ \ brake.setmode(AutoStop);\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ if\ car\ is\ moving\ begin\ autostopping}}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ \ \ \ \ \ \ shutdown\_timer.reset();}
+\DoxyCodeLine{00119\ \ \ \ \ \ \ \ \ \ \ \ \ sleep\_request\ =\ REQ\_NA;}
+\DoxyCodeLine{00120\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00121\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (shutdown\_incomplete)\ \{\ \ \textcolor{comment}{//\ first\ we\ need\ to\ stop\ the\ car\ and\ release\ brakes\ and\ gas\ before\ shutting\ down}}
+\DoxyCodeLine{00122\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (shutdown\_timer.expired())\ shutdown\_incomplete\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00123\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (brake.motormode\ !=\ AutoStop)\ \{\ \ \textcolor{comment}{//\ brake\ autostop\ mode\ will\ have\ dropped\ to\ Halt\ mode\ once\ complete,\ check\ for\ that}}
+\DoxyCodeLine{00124\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (brake.parked())\ shutdown\_incomplete\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00125\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ brake.setmode(ParkMotor);}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00128\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{\ \ \textcolor{comment}{//\ if\ shutdown\ is\ complete}}
+\DoxyCodeLine{00129\ \ \ \ \ \ \ \ \ \ \ \ \ steer.setmode(Halt);\ \ \textcolor{comment}{//\ disable\ steering,\ in\ case\ it\ was\ left\ on\ while\ we\ were\ panic\ stopping}}
+\DoxyCodeLine{00130\ \ \ \ \ \ \ \ \ \ \ \ \ brake.setmode(Halt);}
+\DoxyCodeLine{00131\ \ \ \ \ \ \ \ \ \ \ \ \ watchdog.set\_codestatus(Parked);\ \ \textcolor{comment}{//\ write\ to\ flash\ we\ are\ in\ an\ appropriate\ place\ to\ lose\ power,\ so\ we\ can\ detect\ crashes\ on\ boot}}
+\DoxyCodeLine{00132\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (hotrc.sw\_event(CH4)\ ||\ sleep\_inactivity\_timer.expired()\ ||\ sleep\_request\ ==\ REQ\_TOG\ ||\ sleep\_request\ ==\ REQ\_ON)\ mode\ =\ ASLEEP;}
+\DoxyCodeLine{00133\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (calmode\_request)\ mode\ =\ CAL;\ \ \textcolor{comment}{//\ if\ fully\ shut\ down\ and\ cal\ mode\ requested,\ go\ to\ cal\ mode}}
+\DoxyCodeLine{00134\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (basicmode\_request)\ mode\ =\ BASIC;\ \ \textcolor{comment}{//\ if\ fully\ shut\ down\ and\ basic\ mode\ requested,\ go\ to\ basic\ mode}}
+\DoxyCodeLine{00135\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00136\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((speedo.car\_stopped()\ ||\ allow\_rolling\_start)\ \&\&\ ignition.signal\ \&\&\ !panicstop\ \&\&\ !tach.engine\_stopped())\ mode\ =\ HOLD;\ \ \textcolor{comment}{//\ If\ we\ started\ the\ car,\ go\ to\ Hold\ mode.\ If\ ignition\ is\ on\ w/o\ engine\ running,\ we'll\ end\ up\ in\ Stall\ Mode\ automatically}}
+\DoxyCodeLine{00137\ \ \ \ \ \ \ \ \ sleep\_request\ =\ REQ\_NA;}
+\DoxyCodeLine{00138\ \ \ \ \ \}}
+\DoxyCodeLine{00139\ \ \ \ \ \textcolor{keywordtype}{void}\ run\_stallMode(\textcolor{keywordtype}{bool}\ recovering=\textcolor{keyword}{false})\ \{\ \ \textcolor{comment}{//\ In\ stall\ mode,\ the\ gas\ doesn't\ have\ feedback,\ so\ runs\ open\ loop,\ and\ brake\ pressure\ target\ proportional\ to\ joystick}}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (we\_just\_switched\_modes)\ \{}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ \ \ \ \ \ \ gas.setmode(OpenLoop);\ \ \ \ \ \textcolor{comment}{//\ throttle\ always\ runs\ open\ loop\ in\ stall\ mode,\ b/c\ there's\ no\ rpm\ for\ the\ pid\ to\ measure\ anyway}}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \ \ \ \ \ \ brake.setmode(ActivePID);}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ \ \ \ \ \ \ steer.setmode(OpenLoop);}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (hotrc.sw\_event(CH4))\ starter.request(REQ\_TOG);\ \ \textcolor{comment}{//\ Serial.printf("{}stall:\ req=\%d\(\backslash\)n"{},\ REQ\_TOG);}}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (starter.motor\ ||\ !tach.engine\_stopped())\ mode\ =\ HOLD;\ \ \textcolor{comment}{//\ If\ we\ started\ the\ car,\ enter\ hold\ mode\ once\ starter\ is\ released}}
+\DoxyCodeLine{00147\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Serial.printf("{}\%d/\%d\ "{},\ starter\_request,\ starter);}}
+\DoxyCodeLine{00148\ \ \ \ \ \}}
+\DoxyCodeLine{00149\ \ \ \ \ \textcolor{keywordtype}{void}\ run\_holdMode(\textcolor{keywordtype}{bool}\ recovering=\textcolor{keyword}{false})\ \{}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (we\_just\_switched\_modes)\ \{}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \ \ \ \ \ \ joy\_centered\ =\ recovering;\ \ \textcolor{comment}{//\ Fly\ mode\ will\ be\ locked\ until\ the\ joystick\ first\ is\ put\ at\ or\ below\ center}}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ \ \ \ \ \ \ watchdog.set\_codestatus(Stopped);\ \ \textcolor{comment}{//\ write\ to\ flash\ we\ are\ NOT\ in\ an\ appropriate\ place\ to\ lose\ power,\ so\ we\ can\ detect\ crashes\ on\ boot}}
+\DoxyCodeLine{00153\ \ \ \ \ \ \ \ \ \ \ \ \ gas.setmode(throttle\_ctrl\_mode);}
+\DoxyCodeLine{00154\ \ \ \ \ \ \ \ \ \ \ \ \ brake.setmode(AutoHold);}
+\DoxyCodeLine{00155\ \ \ \ \ \ \ \ \ \ \ \ \ steer.setmode(OpenLoop);}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (hotrc.sw\_event(CH4))\ starter.request(REQ\_OFF);}
+\DoxyCodeLine{00158\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (hotrc.joydir(VERT)\ !=\ JOY\_UP)\ joy\_centered\ =\ \textcolor{keyword}{true};\ \ \textcolor{comment}{//\ mark\ joystick\ at\ or\ below\ center,\ now\ pushing\ up\ will\ go\ to\ fly\ mode}}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (joy\_centered\ \&\&\ !starter.motor\ \&\&\ !hotrc.radiolost())\ mode\ =\ FLY;\ \ \textcolor{comment}{//\ Enter\ Fly\ Mode\ upon\ joystick\ movement\ from\ center\ to\ above\ center\ \ //\ Possibly\ add\ "{}\&\&\ car\_stopped()"{}\ to\ above\ check?}}
+\DoxyCodeLine{00160\ \ \ \ \ \}}
+\DoxyCodeLine{00161\ \ \ \ \ \textcolor{keywordtype}{void}\ run\_flyMode(\textcolor{keywordtype}{bool}\ recovering=\textcolor{keyword}{false})\ \{}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (we\_just\_switched\_modes)\ \{}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ \ \ \ \ \ \ car\_hasnt\_moved\ =\ speedo.car\_stopped();\ \ \textcolor{comment}{//\ note\ whether\ car\ is\ moving\ going\ into\ fly\ mode\ (probably\ not),\ this\ turns\ true\ once\ it\ has\ initially\ got\ moving}}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \ \ \ \ \ \ gas.setmode(throttle\_ctrl\_mode);}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ \ \ \ \ \ \ brake.setmode(ActivePID);}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (car\_hasnt\_moved)\ \{}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (hotrc.joydir(VERT)\ !=\ JOY\_UP)\ mode\ =\ HOLD;\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ must\ keep\ pulling\ trigger\ until\ car\ moves,\ or\ it\ drops\ back\ to\ hold\ mode}}
+\DoxyCodeLine{00169\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (!speedo.car\_stopped())\ car\_hasnt\_moved\ =\ \textcolor{keyword}{false};\ \ \textcolor{comment}{//\ once\ car\ moves,\ we're\ allowed\ to\ release\ the\ trigger\ without\ falling\ out\ of\ fly\ mode}}
+\DoxyCodeLine{00170\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ \ \ \ \ \ \ watchdog.set\_codestatus(Driving);\ \ \textcolor{comment}{//\ write\ to\ flash\ we\ are\ NOT\ in\ an\ appropriate\ place\ to\ lose\ power,\ so\ we\ can\ detect\ crashes\ on\ boot}}
+\DoxyCodeLine{00173\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (speedo.car\_stopped()\ \&\&\ hotrc.joydir()\ !=\ JOY\_UP)\ mode\ =\ HOLD;\ \ \textcolor{comment}{//\ go\ to\ Hold\ Mode\ if\ we\ have\ come\ to\ a\ stop\ after\ moving\ \ //\ \&\&\ hotrc.pc[VERT][FILT]\ <=\ hotrc.pc[VERT][DBBOT]}}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!sim.simulating(sens::joy)\ \&\&\ hotrc.radiolost())\ mode\ =\ HOLD;\ \ \ \ \ \ \ \ \textcolor{comment}{//\ radio\ must\ be\ good\ to\ fly,\ this\ should\ already\ be\ handled\ elsewhere\ but\ another\ check\ can't\ hurt}}
+\DoxyCodeLine{00176\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (hotrc.sw\_event(CH4))\ mode\ =\ CRUISE;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ enter\ fly\ mode\ by\ pressing\ hrc\ ch4\ button}}
+\DoxyCodeLine{00177\ \ \ \ \ \}}
+\DoxyCodeLine{00178\ \ \ \ \ \textcolor{keywordtype}{void}\ run\_cruiseMode(\textcolor{keywordtype}{bool}\ recovering=\textcolor{keyword}{false})\ \{}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (we\_just\_switched\_modes)\ \{\ \ \textcolor{comment}{//\ upon\ first\ entering\ cruise\ mode,\ initialize\ things}}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \ \ \ \ \ \ gas.setmode(Cruise);}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ \ \ \ \ \ \ brake.setmode(Release);}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ \ \ \ \ \ \ gestureFlyTimer.reset();\ \ \textcolor{comment}{//\ initialize\ brake-\/trigger\ timer}}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00184\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (hotrc.joydir(VERT)\ ==\ JOY\_DN\ \&\&\ !cruise\_speed\_lowerable)\ mode\ =\ FLY;}
+\DoxyCodeLine{00185\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (hotrc.sw\_event(CH4))\ mode\ =\ FLY;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ go\ to\ fly\ mode\ if\ hotrc\ ch4\ button\ pushed}}
+\DoxyCodeLine{00186\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ if\ joystick\ is\ held\ full-\/brake\ for\ more\ than\ X,\ driver\ could\ be\ confused\ \&\ panicking,\ drop\ to\ fly\ mode\ so\ fly\ mode\ will\ push\ the\ brakes}}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (hotrc.pc[VERT][FILT]\ >\ hotrc.pc[VERT][OPMIN]\ +\ flycruise\_vert\_margin\_pc)\ gestureFlyTimer.reset();\ \ \textcolor{comment}{//\ keep\ resetting\ timer\ if\ joystick\ not\ at\ bottom}}
+\DoxyCodeLine{00188\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (gestureFlyTimer.expired())\ mode\ =\ FLY;\ \ \textcolor{comment}{//\ new\ gesture\ to\ drop\ to\ fly\ mode\ is\ hold\ the\ brake\ all\ the\ way\ down\ for\ more\ than\ X\ ms}}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (speedo.car\_stopped())\ mode\ =\ (hotrc.joydir(VERT)\ ==\ JOY\_UP)\ ?\ FLY\ :\ HOLD;\ \ \textcolor{comment}{//\ in\ case\ we\ slam\ into\ camp\ Q\ woofer\ stack,\ get\ out\ of\ cruise\ mode.}}
+\DoxyCodeLine{00190\ \ \ \ \ \}}
+\DoxyCodeLine{00191\ \ \ \ \ \textcolor{keywordtype}{void}\ run\_calMode(\textcolor{keywordtype}{bool}\ recovering=\textcolor{keyword}{false})\ \{\ \ \textcolor{comment}{//\ calibration\ mode\ is\ purposely\ difficult\ to\ get\ into,\ because\ it\ allows\ control\ of\ motors\ without\ constraints\ for\ purposes\ of\ calibration\ -\/\ don't\ use\ it\ unless\ you\ know\ how.}}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (we\_just\_switched\_modes)\ \{}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ \ \ \ \ \ \ calmode\_request\ =\ cal\_gasmode\_request\ =\ cal\_brakemode\_request\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00194\ \ \ \ \ \ \ \ \ \ \ \ \ display-\/>disp\_bools\_dirty\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00195\ \ \ \ \ \ \ \ \ \ \ \ \ gas.setmode(Idle);}
+\DoxyCodeLine{00196\ \ \ \ \ \ \ \ \ \ \ \ \ brake.setmode(Halt);}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \ \ \ \ \ \ steer.setmode(Halt);}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (calmode\_request)\ mode\ =\ SHUTDOWN;}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ if\ (cal\_brakemode)\ brake.setmode(Calibrate);}}
+\DoxyCodeLine{00201\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ else\ if\ (brake.motormode\ ==\ Calibrate)\ brake.setmode(Halt);}}
+\DoxyCodeLine{00202\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cal\_gasmode\_request\ \&\&\ gas.motormode\ !=\ Calibrate)\ gas.setmode(Calibrate);}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (!cal\_gasmode\_request\ \&\&\ gas.motormode\ ==\ Calibrate)\ gas.setmode(Idle);}
+\DoxyCodeLine{00204\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cal\_brakemode\_request\ \&\&\ brake.motormode\ !=\ Calibrate)\ brake.setmode(Calibrate);}
+\DoxyCodeLine{00205\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (!cal\_brakemode\_request\ \&\&\ brake.motormode\ ==\ Calibrate)\ brake.setmode(Halt);}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ \ \ cal\_gasmode\_request\ =\ cal\_brakemode\_request\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00207\ \ \ \ \ \}}
+\DoxyCodeLine{00208\ \};}
+\DoxyCodeLine{00209\ \textcolor{comment}{//\ Here\ are\ the\ different\ runmodes\ documented}}
+\DoxyCodeLine{00210\ \textcolor{comment}{//}}
+\DoxyCodeLine{00211\ \textcolor{comment}{//\ **\ Basic\ Mode\ **}}
+\DoxyCodeLine{00212\ \textcolor{comment}{//\ -\/\ Required:\ BasicMode\ switch\ On}}
+\DoxyCodeLine{00213\ \textcolor{comment}{//\ At\ startup\ it\ attempts\ to\ park\ the\ gas\ servo\ and\ brake\ motor,\ to\ release\ all\ tension\ on\ gas\ or\ brake}}
+\DoxyCodeLine{00214\ \textcolor{comment}{//\ pedals\ so\ you\ can\ drive\ w/\ your\ feet.\ Thereafter\ the\ gas\ and\ brake\ don't\ do\ anything.\ Only\ the\ steering}}
+\DoxyCodeLine{00215\ \textcolor{comment}{//\ works,\ so\ use\ the\ pedals.\ This\ mode\ is\ enabled\ by\ a\ switch\ on\ the\ controller\ box.\ The\ only\ way\ to\ }}
+\DoxyCodeLine{00216\ \textcolor{comment}{//\ leave\ Basic\ Mode\ is\ by\ turning\ off\ the\ basic\ switch,\ or\ turning\ off\ the\ syspower\ signal.}}
+\DoxyCodeLine{00217\ \textcolor{comment}{//}}
+\DoxyCodeLine{00218\ \textcolor{comment}{//\ **\ Asleep\ Mode\ **}}
+\DoxyCodeLine{00219\ \textcolor{comment}{//\ -\/\ Required:\ Request\ with\ hotrc\ ch4\ button\ when\ shut\ down}}
+\DoxyCodeLine{00220\ \textcolor{comment}{//\ Turns\ off\ power\ to\ the\ system.\ This\ includes\ all\ sensors/actuators\ and\ the\ screen,\ but\ not\ the\ hotrc\ receiver.}}
+\DoxyCodeLine{00221\ \textcolor{comment}{//\ When\ requested\ to\ power\ up\ (same\ ch4\ hotrc\ button),\ it\ re-\/powers\ everything\ and\ goes\ to\ shutdown\ mode.}}
+\DoxyCodeLine{00222\ \textcolor{comment}{//}}
+\DoxyCodeLine{00223\ \textcolor{comment}{//\ **\ Shutdown\ Mode\ **}}
+\DoxyCodeLine{00224\ \textcolor{comment}{//\ -\/\ Required:\ BasicMode\ switch\ Off\ \&\ Ignition\ Off}}
+\DoxyCodeLine{00225\ \textcolor{comment}{//\ This\ mode\ is\ active\ at\ boot,\ or\ whenever\ the\ ignition\ is\ off\ or\ when\ panic\ stopping.\ If\ the\ car\ is}}
+\DoxyCodeLine{00226\ \textcolor{comment}{//\ moving,\ then\ like\ hold\ mode,\ shutdown\ mode\ will\ try\ to\ stop\ the\ car.\ Once\ stopped,\ then\ like\ basic\ mode,}}
+\DoxyCodeLine{00227\ \textcolor{comment}{//\ it\ will\ park\ the\ motors\ out\ of\ the\ way\ and\ all\ systems\ stop.\ After\ a\ timeout\ it\ will\ go\ to\ asleep\ mode.}}
+\DoxyCodeLine{00228\ \textcolor{comment}{//}}
+\DoxyCodeLine{00229\ \textcolor{comment}{//\ **\ Stall\ Mode\ **}}
+\DoxyCodeLine{00230\ \textcolor{comment}{//\ -\/\ Required:\ Engine\ stopped\ \&\ BasicMode\ switch\ Off\ \&\ Ignition\ On}}
+\DoxyCodeLine{00231\ \textcolor{comment}{//\ This\ mode\ is\ active\ when\ the\ engine\ is\ not\ running.\ \ If\ car\ is\ moving,\ then\ it\ presumably\ may}}
+\DoxyCodeLine{00232\ \textcolor{comment}{//\ coast\ to\ a\ stop.\ \ The\ actuators\ are\ all\ enabled\ and\ work,\ but\ the\ gas\ drops\ to\ open-\/loop\ control.}}
+\DoxyCodeLine{00233\ \textcolor{comment}{//\ The\ starter\ may\ be\ turned\ on\ or\ off\ freely\ here\ by\ hitting\ the\ hotrc\ ch4\ button.\ If\ the\ engine\ }}
+\DoxyCodeLine{00234\ \textcolor{comment}{//\ turns,\ then\ it'll\ go\ to\ hold\ mode.\ May\ be\ useful\ if\ beoing\ pushed\ or\ towed,\ or\ when\ servicing.}}
+\DoxyCodeLine{00235\ \textcolor{comment}{//}}
+\DoxyCodeLine{00236\ \textcolor{comment}{//\ **\ Hold\ Mode\ **}}
+\DoxyCodeLine{00237\ \textcolor{comment}{//\ -\/\ Required:\ Engine\ running\ \&\ JoyVert<=Center\ \&\ BasicMode\ switch\ Off\ \&\ Ignition\ On}}
+\DoxyCodeLine{00238\ \textcolor{comment}{//\ This\ mode\ ensures\ the\ car\ is\ stopped\ and\ stays\ stopped\ until\ you\ pull\ the\ trigger\ to\ give\ it\ gas,\ at\ which}}
+\DoxyCodeLine{00239\ \textcolor{comment}{//\ point\ it\ goes\ to\ fly\ mode.\ This\ mode\ is\ entered\ from\ fly\ mode\ if\ the\ car\ comes\ to\ a\ stop,\ or\ from\ Stall\ Mode\ if}}
+\DoxyCodeLine{00240\ \textcolor{comment}{//\ the\ engine\ starts\ turning.\ The\ starter\ can\ possibly\ be\ on\ through\ that\ transition,\ and\ thereafter\ it\ may\ be\ }}
+\DoxyCodeLine{00241\ \textcolor{comment}{//\ turned\ off\ but\ not\ on\ from\ hold\ mode.}}
+\DoxyCodeLine{00242\ \textcolor{comment}{//}}
+\DoxyCodeLine{00243\ \textcolor{comment}{//\ **\ Fly\ Mode\ **}}
+\DoxyCodeLine{00244\ \textcolor{comment}{//\ -\/\ Required:\ JoyVert>Center\ \&\ Engine\ running\ \&\ BasicMode\ Off\ \&\ Ign\ On}}
+\DoxyCodeLine{00245\ \textcolor{comment}{//\ This\ mode\ is\ for\ driving\ under\ manual\ control.\ This\ mode\ is\ entered\ from\ hold\ mode\ by\ pulling\ the\ gas\ trigger.}}
+\DoxyCodeLine{00246\ \textcolor{comment}{//\ If\ the\ trigger\ is\ released\ again\ before\ the\ car\ moves,\ it's\ back\ to\ hold\ mode\ though.\ Trigger\ pull\ controls\ throttle}}
+\DoxyCodeLine{00247\ \textcolor{comment}{//\ and\ trigger\ push\ controls\ brake,\ either/or.\ Whenever\ the\ car\ stops,\ then\ back\ to\ hold\ mode.\ Cruise\ mode\ may\ be\ }}
+\DoxyCodeLine{00248\ \textcolor{comment}{//\ entered\ from\ fly\ mode\ by\ pressing\ the\ cruise\ toggle\ button\ (ch4).}}
+\DoxyCodeLine{00249\ \textcolor{comment}{//}}
+\DoxyCodeLine{00250\ \textcolor{comment}{//\ **\ Cruise\ Mode\ **}}
+\DoxyCodeLine{00251\ \textcolor{comment}{//\ -\/\ Required:\ Car\ Moving\ \&\ Engine\ running\ \&\ BasicMode\ switch\ Off\ \&\ Ignition\ On}}
+\DoxyCodeLine{00252\ \textcolor{comment}{//\ This\ mode\ is\ entered\ from\ Fly\ Mode\ by\ pushing\ the\ cruise\ toggle\ button,\ and\ pushing\ it\ again\ will\ take\ you\ back.}}
+\DoxyCodeLine{00253\ \textcolor{comment}{//\ There\ are\ no\ brakes\ in\ cruise\ mode,\ and\ pushing\ away\ on\ the\ trigger\ instead\ allows\ decreasing\ the\ cruise\ setpoint}}
+\DoxyCodeLine{00254\ \textcolor{comment}{//\ (or\ pull\ it\ to\ increase\ the\ setpoint)\ Cruise\ can\ be\ run\ in\ three\ modes\ which\ adjust\ differently.\ The\ default}}
+\DoxyCodeLine{00255\ \textcolor{comment}{//\ THROTTLE\_DELTA\ mode\ holds\ a\ fixed\ throttle\ servo\ position\ as\ long\ as\ the\ trigger\ is\ centered,\ and\ if\ not,}}
+\DoxyCodeLine{00256\ \textcolor{comment}{//\ it\ adjusts\ the\ setpoint\ up\ or\ down\ proportional\ to\ how\ far\ and\ how\ long\ you\ hold\ the\ trigger\ away\ from\ center.}}
+\DoxyCodeLine{00257\ \textcolor{comment}{//\ If\ you\ panic\ and\ push\ full\ brake\ for\ over\ 500ms,\ it\ will\ drop\ to\ fly\ mode\ and\ then\ push\ brakes.}}
+\DoxyCodeLine{00258\ \textcolor{comment}{//}}
+\DoxyCodeLine{00259\ \textcolor{comment}{//\ **\ Cal\ Mode\ **}}
+\DoxyCodeLine{00260\ \textcolor{comment}{//\ This\ mode\ allows\ direct\ control\ of\ some\ actuators\ without\ respecting\ limits\ of\ motion,\ for\ purpose\ of}}
+\DoxyCodeLine{00261\ \textcolor{comment}{//\ calibrating\ those\ very\ limits.\ It\ can\ be\ entered\ from\ shutdown\ mode\ with\ simulator\ on\ by\ long-\/pressing\ the\ CAL}}
+\DoxyCodeLine{00262\ \textcolor{comment}{//\ button.\ Be\ careful\ with\ it.}}
+
+\end{DoxyCode}

@@ -1,0 +1,287 @@
+\doxysection{Pulse\+Sensor\texorpdfstring{$<$}{<} HUMAN\+\_\+T \texorpdfstring{$>$}{>} Class Template Reference}
+\hypertarget{class_pulse_sensor}{}\label{class_pulse_sensor}\index{PulseSensor$<$ HUMAN\_T $>$@{PulseSensor$<$ HUMAN\_T $>$}}
+Inheritance diagram for Pulse\+Sensor\texorpdfstring{$<$}{<} HUMAN\+\_\+T \texorpdfstring{$>$}{>}\+:\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[height=4.000000cm]{class_pulse_sensor}
+\end{center}
+\end{figure}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_pulse_sensor_af214b26134075911504764a01501b96b}\label{class_pulse_sensor_af214b26134075911504764a01501b96b} 
+{\bfseries Pulse\+Sensor} (uint8\+\_\+t arg\+\_\+pin, int64\+\_\+t delta\+\_\+abs\+\_\+min\+\_\+us\+\_\+arg, float stop\+\_\+thresh\+\_\+arg)
+\item 
+\Hypertarget{class_pulse_sensor_a21b563b6a3f8dc687ab2de364573711a}\label{class_pulse_sensor_a21b563b6a3f8dc687ab2de364573711a} 
+void {\bfseries setup} ()
+\item 
+\Hypertarget{class_pulse_sensor_a0bcbf21bf418170b78ca0613a9d27a63}\label{class_pulse_sensor_a0bcbf21bf418170b78ca0613a9d27a63} 
+bool {\bfseries stopped} ()
+\item 
+\Hypertarget{class_pulse_sensor_ad55fb16ad3ea517cc57d0b9ae2a2c0c6}\label{class_pulse_sensor_ad55fb16ad3ea517cc57d0b9ae2a2c0c6} 
+float {\bfseries last\+\_\+read\+\_\+time} ()
+\item 
+\Hypertarget{class_pulse_sensor_a689dc6fa161dd5c32e55db288b5488e0}\label{class_pulse_sensor_a689dc6fa161dd5c32e55db288b5488e0} 
+int32\+\_\+t {\bfseries us} ()
+\item 
+\Hypertarget{class_pulse_sensor_a03f94b98fe5b58ced03f7d8a1076147a}\label{class_pulse_sensor_a03f94b98fe5b58ced03f7d8a1076147a} 
+int32\+\_\+t {\bfseries min\+\_\+us} ()
+\item 
+\Hypertarget{class_pulse_sensor_a911455a20dc433ba0d2a59b10ec036c0}\label{class_pulse_sensor_a911455a20dc433ba0d2a59b10ec036c0} 
+int32\+\_\+t {\bfseries max\+\_\+us} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_sensor}{Sensor$<$ int32\+\_\+t, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Sensor} (uint8\+\_\+t pin)
+\item 
+void {\bfseries set\+\_\+ema\+\_\+alpha} (float arg\+\_\+alpha)
+\item 
+float {\bfseries ema\+\_\+alpha} ()
+\item 
+HUMAN\+\_\+T {\bfseries filt} ()
+\item 
+HUMAN\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries filt\+\_\+ptr} ()
+\item 
+std\+::shared\+\_\+ptr$<$ HUMAN\+\_\+T $>$ {\bfseries filt\+\_\+shptr} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_transducer}{Transducer$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Transducer} (uint8\+\_\+t arg\+\_\+pin)
+\item 
+void {\bfseries set\+\_\+native\+\_\+limits} (\mbox{\hyperlink{class_param}{Param}}$<$ NATIVE\+\_\+T $>$ \&arg\+\_\+min, \mbox{\hyperlink{class_param}{Param}}$<$ NATIVE\+\_\+T $>$ \&arg\+\_\+max)
+\item 
+void {\bfseries set\+\_\+human\+\_\+limits} (\mbox{\hyperlink{class_param}{Param}}$<$ HUMAN\+\_\+T $>$ \&arg\+\_\+min, \mbox{\hyperlink{class_param}{Param}}$<$ HUMAN\+\_\+T $>$ \&arg\+\_\+max)
+\item 
+void {\bfseries set\+\_\+native\+\_\+limits} (NATIVE\+\_\+T arg\+\_\+min, NATIVE\+\_\+T arg\+\_\+max)
+\item 
+void {\bfseries set\+\_\+human\+\_\+limits} (HUMAN\+\_\+T arg\+\_\+min, HUMAN\+\_\+T arg\+\_\+max)
+\item 
+bool {\bfseries set\+\_\+native} (NATIVE\+\_\+T arg\+\_\+val\+\_\+native)
+\item 
+bool {\bfseries add\+\_\+native} (NATIVE\+\_\+T arg\+\_\+add\+\_\+native)
+\item 
+bool {\bfseries set\+\_\+human} (HUMAN\+\_\+T arg\+\_\+val\+\_\+human)
+\item 
+bool {\bfseries add\+\_\+human} (HUMAN\+\_\+T arg\+\_\+add\+\_\+human)
+\item 
+void {\bfseries set\+\_\+convert} (float arg\+\_\+m\+\_\+factor, float arg\+\_\+b\+\_\+offset, bool arg\+\_\+invert)
+\item 
+NATIVE\+\_\+T {\bfseries native} ()
+\item 
+HUMAN\+\_\+T {\bfseries human} ()
+\item 
+float {\bfseries percent} ()
+\item 
+NATIVE\+\_\+T {\bfseries raw} ()
+\item 
+NATIVE\+\_\+T {\bfseries min\+\_\+native} ()
+\item 
+NATIVE\+\_\+T {\bfseries max\+\_\+native} ()
+\item 
+HUMAN\+\_\+T {\bfseries min\+\_\+human} ()
+\item 
+HUMAN\+\_\+T {\bfseries max\+\_\+human} ()
+\item 
+HUMAN\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries min\+\_\+human\+\_\+ptr} ()
+\item 
+HUMAN\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries max\+\_\+human\+\_\+ptr} ()
+\item 
+NATIVE\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries native\+\_\+ptr} ()
+\item 
+HUMAN\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries human\+\_\+ptr} ()
+\item 
+std\+::shared\+\_\+ptr$<$ NATIVE\+\_\+T $>$ {\bfseries native\+\_\+shptr} ()
+\item 
+std\+::shared\+\_\+ptr$<$ HUMAN\+\_\+T $>$ {\bfseries human\+\_\+shptr} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Device} (uint8\+\_\+t arg\+\_\+pin)
+\item 
+bool {\bfseries can\+\_\+source} (src arg\+\_\+source)
+\item 
+bool {\bfseries set\+\_\+source} (src arg\+\_\+source)
+\item 
+void {\bfseries update} ()
+\item 
+void {\bfseries attach\+\_\+pot} (\mbox{\hyperlink{class_potentiometer}{Potentiometer}} \&pot\+\_\+arg)
+\item 
+void {\bfseries set\+\_\+enabled} (bool arg\+\_\+enable)
+\item 
+void {\bfseries set\+\_\+can\+\_\+source} (src arg\+\_\+source, bool is\+\_\+possible)
+\item 
+src {\bfseries source} ()
+\item 
+uint8\+\_\+t {\bfseries pin} ()
+\item 
+bool {\bfseries enabled} ()
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_pulse_sensor_ad516872a5deb5884f355ac9037de272c}\label{class_pulse_sensor_ad516872a5deb5884f355ac9037de272c} 
+std\+::string {\bfseries \+\_\+long\+\_\+name} = "{}Unknown Hall Effect sensor"{}
+\item 
+\Hypertarget{class_pulse_sensor_af50c1cff17dfa2230ced1e1a8db58087}\label{class_pulse_sensor_af50c1cff17dfa2230ced1e1a8db58087} 
+std\+::string {\bfseries \+\_\+short\+\_\+name} = "{}pulsen"{}
+\item 
+\Hypertarget{class_pulse_sensor_a8c20b6bfa0852aeb2a49f43236ba0535}\label{class_pulse_sensor_a8c20b6bfa0852aeb2a49f43236ba0535} 
+std\+::string {\bfseries \+\_\+native\+\_\+units\+\_\+name} = "{}us"{}
+\item 
+\Hypertarget{class_pulse_sensor_a5da4479121aadb0f19307f7ce379f1de}\label{class_pulse_sensor_a5da4479121aadb0f19307f7ce379f1de} 
+std\+::string {\bfseries \+\_\+human\+\_\+units\+\_\+name} = "{}"{}
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Attributes inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_timer}{Timer}} {\bfseries timer}
+\item 
+std\+::string {\bfseries \+\_\+long\+\_\+name} = "{}Unknown device"{}
+\item 
+std\+::string {\bfseries \+\_\+short\+\_\+name} = "{}device"{}
+\item 
+sens {\bfseries senstype} = sens\+::none
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Protected Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_pulse_sensor_a84df056c32d1cc2360edeb33c21bd2f1}\label{class_pulse_sensor_a84df056c32d1cc2360edeb33c21bd2f1} 
+void IRAM\+\_\+\+ATTR {\bfseries \+\_\+isr} ()
+\item 
+virtual void \mbox{\hyperlink{class_pulse_sensor_a84d50393861e1ea0145f2aedba24197d}{set\+\_\+val\+\_\+from\+\_\+pin}} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_sensor}{Sensor$<$ int32\+\_\+t, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+void {\bfseries calculate\+\_\+ema} ()
+\item 
+virtual void \mbox{\hyperlink{class_sensor_a0de95fc9f8511e6525291ff254e4c897}{set\+\_\+val\+\_\+from\+\_\+touch}} ()
+\item 
+virtual void \mbox{\hyperlink{class_sensor_a8868d62d88321e9f791b777505f97ff7}{set\+\_\+val\+\_\+from\+\_\+pot}} ()
+\item 
+virtual void \mbox{\hyperlink{class_sensor_aee2eb3de9171bf4e89adbd9fe6ee480f}{update\+\_\+human\+\_\+limits}} ()
+\item 
+virtual void \mbox{\hyperlink{class_sensor_afb6b173fbd35e70f076fa3fba9ae8b48}{update\+\_\+source}} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_transducer}{Transducer$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+virtual HUMAN\+\_\+T {\bfseries from\+\_\+native} (NATIVE\+\_\+T arg\+\_\+val\+\_\+native)
+\item 
+virtual NATIVE\+\_\+T {\bfseries to\+\_\+native} (HUMAN\+\_\+T arg\+\_\+val\+\_\+human)
+\item 
+virtual void {\bfseries update\+\_\+native\+\_\+limits} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+virtual void {\bfseries set\+\_\+val\+\_\+from\+\_\+undef} ()
+\item 
+virtual void {\bfseries set\+\_\+val\+\_\+from\+\_\+fixed} ()
+\item 
+virtual void {\bfseries set\+\_\+val\+\_\+from\+\_\+calc} ()
+\item 
+virtual void {\bfseries set\+\_\+val\+\_\+common} ()
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Protected Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_pulse_sensor_aa0758757ebabba409b4cf1f0316dd8bf}\label{class_pulse_sensor_aa0758757ebabba409b4cf1f0316dd8bf} 
+int32\+\_\+t {\bfseries \+\_\+stop\+\_\+timeout\+\_\+us} = 1250000
+\item 
+\Hypertarget{class_pulse_sensor_a4193eec269e87d599467ca0684351cfd}\label{class_pulse_sensor_a4193eec269e87d599467ca0684351cfd} 
+\mbox{\hyperlink{class_timer}{Timer}} {\bfseries \+\_\+stop\+\_\+timer}
+\item 
+\Hypertarget{class_pulse_sensor_ab0a57bc87d3843830d4b9f24642d3709}\label{class_pulse_sensor_ab0a57bc87d3843830d4b9f24642d3709} 
+bool {\bfseries \+\_\+negative} = false
+\item 
+\Hypertarget{class_pulse_sensor_a885e6bd6813dee69aa93b301da1cc500}\label{class_pulse_sensor_a885e6bd6813dee69aa93b301da1cc500} 
+bool {\bfseries \+\_\+pin\+\_\+activity}
+\item 
+\Hypertarget{class_pulse_sensor_a136955e349f76f2db1615da73c53880a}\label{class_pulse_sensor_a136955e349f76f2db1615da73c53880a} 
+float {\bfseries \+\_\+stop\+\_\+thresh}
+\item 
+\Hypertarget{class_pulse_sensor_a4128b98fc9410a414a822d03c669d898}\label{class_pulse_sensor_a4128b98fc9410a414a822d03c669d898} 
+float {\bfseries \+\_\+last\+\_\+read\+\_\+time\+\_\+us}
+\item 
+\Hypertarget{class_pulse_sensor_a095ad2feb5ec3c9cc488a397b3b45d3f}\label{class_pulse_sensor_a095ad2feb5ec3c9cc488a397b3b45d3f} 
+int32\+\_\+t {\bfseries \+\_\+min\+\_\+us} = 100000.\+0
+\item 
+\Hypertarget{class_pulse_sensor_ac3ad28511479868e0263b4bb989bf1c0}\label{class_pulse_sensor_ac3ad28511479868e0263b4bb989bf1c0} 
+volatile int64\+\_\+t {\bfseries \+\_\+isr\+\_\+us} = 0
+\item 
+\Hypertarget{class_pulse_sensor_a40a3014f1177a9cb9b316bd48ce01c59}\label{class_pulse_sensor_a40a3014f1177a9cb9b316bd48ce01c59} 
+volatile int64\+\_\+t {\bfseries \+\_\+isr\+\_\+timer\+\_\+start\+\_\+us} = 0
+\item 
+\Hypertarget{class_pulse_sensor_adc8f8fe4e3848e3aad5b7a0b4a1aeb90}\label{class_pulse_sensor_adc8f8fe4e3848e3aad5b7a0b4a1aeb90} 
+volatile int64\+\_\+t {\bfseries \+\_\+isr\+\_\+timer\+\_\+read\+\_\+us} = 0
+\item 
+\Hypertarget{class_pulse_sensor_a8c490007bc95afd9e72521ebab364bb7}\label{class_pulse_sensor_a8c490007bc95afd9e72521ebab364bb7} 
+int32\+\_\+t {\bfseries \+\_\+isr\+\_\+buf\+\_\+us} = 0
+\item 
+\Hypertarget{class_pulse_sensor_ae3d9576178ba9bdcecc7208ecdce6fce}\label{class_pulse_sensor_ae3d9576178ba9bdcecc7208ecdce6fce} 
+int64\+\_\+t {\bfseries \+\_\+delta\+\_\+abs\+\_\+min\+\_\+us}
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_sensor}{Sensor$<$ int32\+\_\+t, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+float {\bfseries \+\_\+ema\+\_\+alpha}
+\item 
+\mbox{\hyperlink{class_param}{Param}}$<$ HUMAN\+\_\+T $>$ {\bfseries \+\_\+val\+\_\+filt}
+\item 
+bool {\bfseries \+\_\+should\+\_\+filter}
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_transducer}{Transducer$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+NATIVE\+\_\+T {\bfseries \+\_\+val\+\_\+raw}
+\item 
+float {\bfseries \+\_\+m\+\_\+factor} = 1.\+0
+\item 
+float {\bfseries \+\_\+b\+\_\+offset} = 0.\+0
+\item 
+float {\bfseries \+\_\+zerovalue} = NAN
+\item 
+bool {\bfseries \+\_\+invert} = false
+\item 
+Transducer\+Direction {\bfseries dir} = Transducer\+Direction\+::\+FWD
+\item 
+\mbox{\hyperlink{class_param}{Param}}$<$ HUMAN\+\_\+T $>$ {\bfseries \+\_\+human}
+\item 
+\mbox{\hyperlink{class_param}{Param}}$<$ NATIVE\+\_\+T $>$ {\bfseries \+\_\+native}
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+uint8\+\_\+t {\bfseries \+\_\+pin}
+\item 
+bool {\bfseries \+\_\+enabled} = true
+\item 
+\mbox{\hyperlink{class_potentiometer}{Potentiometer}} \texorpdfstring{$\ast$}{*} {\bfseries \+\_\+pot}
+\item 
+src {\bfseries \+\_\+source} = src\+::\+UNDEF
+\item 
+bool {\bfseries \+\_\+can\+\_\+source} \mbox{[}6\mbox{]} = \{ true, true, false, true, false, false \}
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Member Function Documentation}
+\Hypertarget{class_pulse_sensor_a84d50393861e1ea0145f2aedba24197d}\label{class_pulse_sensor_a84d50393861e1ea0145f2aedba24197d} 
+\index{PulseSensor$<$ HUMAN\_T $>$@{PulseSensor$<$ HUMAN\_T $>$}!set\_val\_from\_pin@{set\_val\_from\_pin}}
+\index{set\_val\_from\_pin@{set\_val\_from\_pin}!PulseSensor$<$ HUMAN\_T $>$@{PulseSensor$<$ HUMAN\_T $>$}}
+\doxysubsubsection{\texorpdfstring{set\_val\_from\_pin()}{set\_val\_from\_pin()}}
+{\footnotesize\ttfamily template$<$typename HUMAN\+\_\+T $>$ \\
+virtual void \mbox{\hyperlink{class_pulse_sensor}{Pulse\+Sensor}}$<$ HUMAN\+\_\+T $>$\+::set\+\_\+val\+\_\+from\+\_\+pin (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}, {\ttfamily [protected]}, {\ttfamily [virtual]}}
+
+
+
+Reimplemented from \mbox{\hyperlink{class_device}{Device}}.
+
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+sensors.\+h\end{DoxyCompactItemize}

@@ -1,0 +1,268 @@
+\doxysection{unittests.\+h}
+\hypertarget{unittests_8h_source}{}\label{unittests_8h_source}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00002\ \textcolor{comment}{//\ Contains\ unit\ tests\ for\ class\ structures\ etc.}}
+\DoxyCodeLine{00003\ \textcolor{preprocessor}{\#pragma\ once}}
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#include\ <cassert>}\ \ \textcolor{comment}{//\ for\ assert}}
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#include\ <memory>}}
+\DoxyCodeLine{00006\ \textcolor{comment}{//\ \#include\ "{}sensors.h"{}}}
+\DoxyCodeLine{00007\ }
+\DoxyCodeLine{00008\ \textcolor{keywordtype}{void}\ test\_Param()\ \{}
+\DoxyCodeLine{00009\ \ \ \ \ \textcolor{comment}{//\ default\ constructor}}
+\DoxyCodeLine{00010\ \ \ \ \ printf(\textcolor{stringliteral}{"{}Testing\ default\ constructor...\(\backslash\)n"{}});}
+\DoxyCodeLine{00011\ \ \ \ \ \mbox{\hyperlink{class_param}{Param<int>}}\ t1;}
+\DoxyCodeLine{00012\ \ \ \ \ assert(t1.ptr()\ !=\ t1.min\_ptr());}
+\DoxyCodeLine{00013\ \ \ \ \ assert(t1.ptr()\ !=\ t1.max\_ptr());}
+\DoxyCodeLine{00014\ \ \ \ \ assert(t1.min\_ptr()\ !=\ t1.max\_ptr());}
+\DoxyCodeLine{00015\ \ \ \ \ assert(t1.shptr().use\_count()\ ==\ 2);\ \textcolor{comment}{//\ 1\ for\ Param\ +\ 1\ for\ each\ external}}
+\DoxyCodeLine{00016\ \ \ \ \ assert(t1.min\_shptr().use\_count()\ ==\ 2);\ \textcolor{comment}{//\ 1\ for\ Param\ +\ 1\ for\ each\ external}}
+\DoxyCodeLine{00017\ \ \ \ \ assert(t1.max\_shptr().use\_count()\ ==\ 2);\ \textcolor{comment}{//\ 1\ for\ Param\ +\ 1\ for\ each\ external}}
+\DoxyCodeLine{00018\ \ \ \ \ assert(t1.val()\ ==\ t1.min());}
+\DoxyCodeLine{00019\ \ \ \ \ assert(t1.min()\ ==\ t1.max());}
+\DoxyCodeLine{00020\ \ \ \ \ assert(t1.max()\ ==\ t1.last());}
+\DoxyCodeLine{00021\ \ \ \ \ assert(t1.val()\ ==\ t1.last());}
+\DoxyCodeLine{00022\ \ \ \ \ assert(t1.saturated()\ ==\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00023\ \ \ \ \ \textcolor{comment}{//\ test\ set}}
+\DoxyCodeLine{00024\ \ \ \ \ assert(!t1.set(3));\ \textcolor{comment}{//\ value\ didn't\ change}}
+\DoxyCodeLine{00025\ \ \ \ \ assert(t1.val()\ ==\ t1.last());}
+\DoxyCodeLine{00026\ \ \ \ \ assert(t1.min()\ ==\ t1.last());}
+\DoxyCodeLine{00027\ \ \ \ \ assert(t1.max()\ ==\ t1.last());}
+\DoxyCodeLine{00028\ \ \ \ \ assert(t1.saturated()\ ==\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00029\ \ \ \ \ \textcolor{comment}{//\ test\ add}}
+\DoxyCodeLine{00030\ \ \ \ \ assert(!t1.add(1));\ \textcolor{comment}{//\ value\ didn't\ change}}
+\DoxyCodeLine{00031\ \ \ \ \ assert(t1.val()\ ==\ t1.last());}
+\DoxyCodeLine{00032\ \ \ \ \ assert(t1.min()\ ==\ t1.last());}
+\DoxyCodeLine{00033\ \ \ \ \ assert(t1.max()\ ==\ t1.last());}
+\DoxyCodeLine{00034\ \ \ \ \ assert(t1.saturated()\ ==\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00035\ \ \ \ \ \textcolor{comment}{//\ test\ set\_limits}}
+\DoxyCodeLine{00036\ \ \ \ \ t1.set\_limits(1,\ 5);}
+\DoxyCodeLine{00037\ \ \ \ \ assert(t1.min()\ ==\ 1);}
+\DoxyCodeLine{00038\ \ \ \ \ assert(t1.max()\ ==\ 5);}
+\DoxyCodeLine{00039\ \ \ \ \ assert(t1.set(3));\ \textcolor{comment}{//\ value\ changed}}
+\DoxyCodeLine{00040\ \ \ \ \ assert(t1.val()\ ==\ 3);}
+\DoxyCodeLine{00041\ \ \ \ \ assert(t1.saturated()\ ==\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00042\ \ \ \ \ assert(t1.add(1));}
+\DoxyCodeLine{00043\ \ \ \ \ assert(t1.val()\ ==\ 4);}
+\DoxyCodeLine{00044\ \ \ \ \ assert(t1.last()\ ==\ 3);}
+\DoxyCodeLine{00045\ \ \ \ \ assert(t1.saturated()\ ==\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00046\ }
+\DoxyCodeLine{00047\ \ \ \ \ \textcolor{comment}{//\ copy\ constructor}}
+\DoxyCodeLine{00048\ \ \ \ \ printf(\textcolor{stringliteral}{"{}Testing\ copy\ constructor...\(\backslash\)n"{}});}
+\DoxyCodeLine{00049\ \ \ \ \ \mbox{\hyperlink{class_param}{Param<int>}}\ t2(t1);}
+\DoxyCodeLine{00050\ \ \ \ \ assert(t1.val()\ ==\ t2.val());}
+\DoxyCodeLine{00051\ \ \ \ \ assert(t1.min()\ ==\ t2.min());}
+\DoxyCodeLine{00052\ \ \ \ \ assert(t1.max()\ ==\ t2.max());}
+\DoxyCodeLine{00053\ \ \ \ \ assert(t1.ptr()\ ==\ t2.ptr());}
+\DoxyCodeLine{00054\ \ \ \ \ assert(t1.min\_ptr()\ ==\ t2.min\_ptr());}
+\DoxyCodeLine{00055\ \ \ \ \ assert(t1.max\_ptr()\ ==\ t2.max\_ptr());}
+\DoxyCodeLine{00056\ \ \ \ \ assert(t1.shptr().use\_count()\ ==\ 3);\ \textcolor{comment}{//\ 1\ for\ each\ Param\ +\ 1\ external}}
+\DoxyCodeLine{00057\ \ \ \ \ assert(t1.min\_shptr().use\_count()\ ==\ 3);\ \textcolor{comment}{//\ 1\ for\ each\ Param\ +\ 1\ external}}
+\DoxyCodeLine{00058\ \ \ \ \ assert(t1.max\_shptr().use\_count()\ ==\ 3);\ \textcolor{comment}{//\ 1\ for\ each\ Param\ +\ 1\ external}}
+\DoxyCodeLine{00059\ \ \ \ \ \textcolor{comment}{//\ test\ set}}
+\DoxyCodeLine{00060\ \ \ \ \ t1.set(3);}
+\DoxyCodeLine{00061\ \ \ \ \ assert(t2.val()\ ==\ 3);}
+\DoxyCodeLine{00062\ \ \ \ \ \textcolor{comment}{//\ test\ add}}
+\DoxyCodeLine{00063\ \ \ \ \ t1.add(1);}
+\DoxyCodeLine{00064\ \ \ \ \ assert(t2.val()\ ==\ 4);}
+\DoxyCodeLine{00065\ \ \ \ \ \textcolor{comment}{//\ test\ set\_limits}}
+\DoxyCodeLine{00066\ \ \ \ \ t1.set\_limits(0,15);}
+\DoxyCodeLine{00067\ \ \ \ \ assert(t2.val()\ ==\ 4);}
+\DoxyCodeLine{00068\ \ \ \ \ assert(t2.min()\ ==\ 0);}
+\DoxyCodeLine{00069\ \ \ \ \ assert(t2.max()\ ==\ 15);}
+\DoxyCodeLine{00070\ \ \ \ \ assert(t2.saturated()\ ==\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00071\ }
+\DoxyCodeLine{00072\ \ \ \ \ \textcolor{comment}{//\ destructor}}
+\DoxyCodeLine{00073\ \ \ \ \ printf(\textcolor{stringliteral}{"{}Testing\ destructor...\(\backslash\)n"{}});}
+\DoxyCodeLine{00074\ \ \ \ \ std::shared\_ptr<int>\ r1;}
+\DoxyCodeLine{00075\ \ \ \ \ \mbox{\hyperlink{class_param}{Param<int>}}\ *p1;}
+\DoxyCodeLine{00076\ \ \ \ \ \{}
+\DoxyCodeLine{00077\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{class_param}{Param<int>}}\ p2;}
+\DoxyCodeLine{00078\ \ \ \ \ \ \ \ \ p1\ =\ \textcolor{keyword}{new}\ \mbox{\hyperlink{class_param}{Param<int>}}(p2);}
+\DoxyCodeLine{00079\ \ \ \ \ \ \ \ \ r1\ =\ p2.shptr();}
+\DoxyCodeLine{00080\ \ \ \ \ \ \ \ \ assert(p2.shptr().use\_count()\ ==\ 4);\ \textcolor{comment}{//\ 1\ for\ each\ Param\ +\ 2\ external}}
+\DoxyCodeLine{00081\ \ \ \ \ \}}
+\DoxyCodeLine{00082\ \ \ \ \ assert(p1-\/>shptr().use\_count()\ ==\ 3);\ \textcolor{comment}{//\ 1\ for\ Param\ +\ 2\ external}}
+\DoxyCodeLine{00083\ \ \ \ \ \textcolor{keyword}{delete}\ p1;}
+\DoxyCodeLine{00084\ \ \ \ \ assert(r1.use\_count()\ ==\ 1);\ \textcolor{comment}{//\ 1\ external}}
+\DoxyCodeLine{00085\ }
+\DoxyCodeLine{00086\ \ \ \ \ \textcolor{comment}{//\ value\ constructor}}
+\DoxyCodeLine{00087\ \ \ \ \ printf(\textcolor{stringliteral}{"{}Testing\ value\ constructor...\(\backslash\)n"{}});}
+\DoxyCodeLine{00088\ \ \ \ \ \mbox{\hyperlink{class_param}{Param<int>}}\ t3(13);}
+\DoxyCodeLine{00089\ \ \ \ \ assert(t3.val()\ ==\ 13);}
+\DoxyCodeLine{00090\ \ \ \ \ assert(t3.val()\ ==\ t3.min());}
+\DoxyCodeLine{00091\ \ \ \ \ assert(t3.val()\ ==\ t3.max());}
+\DoxyCodeLine{00092\ \ \ \ \ assert(t3.val()\ ==\ t3.last());}
+\DoxyCodeLine{00093\ \ \ \ \ assert(t3.shptr().use\_count()\ ==\ 2);}
+\DoxyCodeLine{00094\ \ \ \ \ assert(t3.min\_shptr().use\_count()\ ==\ 2);}
+\DoxyCodeLine{00095\ \ \ \ \ assert(t3.max\_shptr().use\_count()\ ==\ 2);\ \textcolor{comment}{//\ 1\ for\ Param\ +\ 1\ external}}
+\DoxyCodeLine{00096\ \ \ \ \ assert(t3.ptr()\ !=\ t3.min\_ptr());}
+\DoxyCodeLine{00097\ \ \ \ \ assert(t3.ptr()\ !=\ t3.max\_ptr());}
+\DoxyCodeLine{00098\ \ \ \ \ assert(t3.min\_ptr()\ !=\ t3.max\_ptr());}
+\DoxyCodeLine{00099\ }
+\DoxyCodeLine{00100\ \ \ \ \ \textcolor{comment}{//\ set\_limits}}
+\DoxyCodeLine{00101\ \ \ \ \ printf(\textcolor{stringliteral}{"{}Testing\ set\_limits...\(\backslash\)n"{}});}
+\DoxyCodeLine{00102\ \ \ \ \ \textcolor{comment}{//\ test\ set\ (below\ limit)}}
+\DoxyCodeLine{00103\ \ \ \ \ assert(!t3.set(3));\ \textcolor{comment}{//\ value\ didn't\ change}}
+\DoxyCodeLine{00104\ \ \ \ \ assert(t3.val()\ ==\ 13);}
+\DoxyCodeLine{00105\ \ \ \ \ assert(t3.min()\ ==\ 13);}
+\DoxyCodeLine{00106\ \ \ \ \ assert(t3.max()\ ==\ 13);}
+\DoxyCodeLine{00107\ \ \ \ \ assert(t3.saturated()\ ==\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00108\ \ \ \ \ \textcolor{comment}{//\ test\ add\ (above\ limit)}}
+\DoxyCodeLine{00109\ \ \ \ \ assert(!t3.add(1));\ \textcolor{comment}{//\ value\ didn't\ change}}
+\DoxyCodeLine{00110\ \ \ \ \ assert(t3.val()\ ==\ 13);}
+\DoxyCodeLine{00111\ \ \ \ \ assert(t3.min()\ ==\ 13);}
+\DoxyCodeLine{00112\ \ \ \ \ assert(t3.max()\ ==\ 13);}
+\DoxyCodeLine{00113\ \ \ \ \ assert(t3.saturated()\ ==\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00114\ \ \ \ \ \textcolor{comment}{//\ test\ tight\ set\_limits\ +\ upwards\ constrain}}
+\DoxyCodeLine{00115\ \ \ \ \ t3.set\_limits(15,15);}
+\DoxyCodeLine{00116\ \ \ \ \ assert(t3.val()\ ==\ 15);}
+\DoxyCodeLine{00117\ \ \ \ \ assert(t3.min()\ ==\ 15);}
+\DoxyCodeLine{00118\ \ \ \ \ assert(t3.max()\ ==\ 15);}
+\DoxyCodeLine{00119\ \ \ \ \ assert(t3.saturated()\ ==\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00120\ \ \ \ \ \textcolor{comment}{//\ test\ tight\ set\_limits\ +\ downwards\ constrain}}
+\DoxyCodeLine{00121\ \ \ \ \ t3.set\_limits(7,7);}
+\DoxyCodeLine{00122\ \ \ \ \ assert(t3.val()\ ==\ 7);}
+\DoxyCodeLine{00123\ \ \ \ \ assert(t3.min()\ ==\ 7);}
+\DoxyCodeLine{00124\ \ \ \ \ assert(t3.max()\ ==\ 7);}
+\DoxyCodeLine{00125\ \ \ \ \ assert(t3.saturated()\ ==\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00126\ \ \ \ \ \textcolor{comment}{//\ test\ set\_limits}}
+\DoxyCodeLine{00127\ \ \ \ \ t3.set\_limits(5,15);}
+\DoxyCodeLine{00128\ \ \ \ \ assert(t3.val()\ ==\ 7);}
+\DoxyCodeLine{00129\ \ \ \ \ assert(t3.min()\ ==\ 5);}
+\DoxyCodeLine{00130\ \ \ \ \ assert(t3.max()\ ==\ 15);}
+\DoxyCodeLine{00131\ \ \ \ \ assert(t3.saturated()\ ==\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00132\ \ \ \ \ \textcolor{comment}{//\ test\ set\ with\ limits}}
+\DoxyCodeLine{00133\ \ \ \ \ t3.set(8);}
+\DoxyCodeLine{00134\ \ \ \ \ assert(t3.val()\ ==\ 8);}
+\DoxyCodeLine{00135\ \ \ \ \ assert(t3.min()\ ==\ 5);}
+\DoxyCodeLine{00136\ \ \ \ \ assert(t3.max()\ ==\ 15);}
+\DoxyCodeLine{00137\ \ \ \ \ assert(t3.saturated()\ ==\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00138\ \ \ \ \ \textcolor{comment}{//\ test\ add\ with\ limits}}
+\DoxyCodeLine{00139\ \ \ \ \ t3.add(1);}
+\DoxyCodeLine{00140\ \ \ \ \ assert(t3.val()\ ==\ 9);}
+\DoxyCodeLine{00141\ \ \ \ \ assert(t3.min()\ ==\ 5);}
+\DoxyCodeLine{00142\ \ \ \ \ assert(t3.max()\ ==\ 15);}
+\DoxyCodeLine{00143\ \ \ \ \ assert(t3.saturated()\ ==\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00144\ \ \ \ \ \textcolor{comment}{//\ test\ set\_limits\ +\ downwards\ constrain}}
+\DoxyCodeLine{00145\ \ \ \ \ t3.set\_limits(10,15);}
+\DoxyCodeLine{00146\ \ \ \ \ assert(t3.val()\ ==\ 10);}
+\DoxyCodeLine{00147\ \ \ \ \ assert(t3.min()\ ==\ 10);}
+\DoxyCodeLine{00148\ \ \ \ \ assert(t3.max()\ ==\ 15);}
+\DoxyCodeLine{00149\ \ \ \ \ assert(t3.saturated()\ ==\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00150\ \ \ \ \ \textcolor{comment}{//\ test\ set\_limits\ +\ upwards\ constrain}}
+\DoxyCodeLine{00151\ \ \ \ \ t3.set\_limits(2,8);}
+\DoxyCodeLine{00152\ \ \ \ \ assert(t3.val()\ ==\ 8);}
+\DoxyCodeLine{00153\ \ \ \ \ assert(t3.min()\ ==\ 2);}
+\DoxyCodeLine{00154\ \ \ \ \ assert(t3.max()\ ==\ 8);}
+\DoxyCodeLine{00155\ \ \ \ \ assert(t3.saturated()\ ==\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00156\ }
+\DoxyCodeLine{00157\ \ \ \ \ \textcolor{comment}{//\ limits\ constructor}}
+\DoxyCodeLine{00158\ \ \ \ \ printf(\textcolor{stringliteral}{"{}Testing\ limits\ constructor...\(\backslash\)n"{}});}
+\DoxyCodeLine{00159\ \ \ \ \ \mbox{\hyperlink{class_param}{Param<int>}}\ t4(5,\ 1,\ 10);}
+\DoxyCodeLine{00160\ \ \ \ \ assert(t4.val()\ ==\ 5);}
+\DoxyCodeLine{00161\ \ \ \ \ assert(t4.min()\ ==\ 1);}
+\DoxyCodeLine{00162\ \ \ \ \ assert(t4.max()\ ==\ 10);}
+\DoxyCodeLine{00163\ \ \ \ \ assert(t4.last()\ ==\ 5);}
+\DoxyCodeLine{00164\ \ \ \ \ assert(t4.saturated()\ ==\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00165\ \ \ \ \ assert(t4.shptr().use\_count()\ ==\ 2);}
+\DoxyCodeLine{00166\ \ \ \ \ assert(t4.min\_shptr().use\_count()\ ==\ 2);}
+\DoxyCodeLine{00167\ \ \ \ \ assert(t4.max\_shptr().use\_count()\ ==\ 2);\ \textcolor{comment}{//\ 1\ for\ Param\ +\ 1\ external}}
+\DoxyCodeLine{00168\ \ \ \ \ assert(t4.ptr()\ !=\ t4.min\_ptr());}
+\DoxyCodeLine{00169\ \ \ \ \ assert(t4.ptr()\ !=\ t4.max\_ptr());}
+\DoxyCodeLine{00170\ \ \ \ \ assert(t4.min\_ptr()\ !=\ t4.max\_ptr());}
+\DoxyCodeLine{00171\ \ \ \ \ \textcolor{comment}{//\ test\ constructor\ with\ upwards\ constrain}}
+\DoxyCodeLine{00172\ \ \ \ \ \mbox{\hyperlink{class_param}{Param<int>}}\ t5(1,\ 5,\ 10);}
+\DoxyCodeLine{00173\ \ \ \ \ assert(t5.val()\ ==\ 5);}
+\DoxyCodeLine{00174\ \ \ \ \ assert(t5.min()\ ==\ 5);}
+\DoxyCodeLine{00175\ \ \ \ \ assert(t5.max()\ ==\ 10);}
+\DoxyCodeLine{00176\ \ \ \ \ assert(t5.last()\ ==\ 5);}
+\DoxyCodeLine{00177\ \ \ \ \ assert(t5.saturated()\ ==\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00178\ \ \ \ \ \textcolor{comment}{//\ test\ constructor\ with\ downwards\ constrain}}
+\DoxyCodeLine{00179\ \ \ \ \ \mbox{\hyperlink{class_param}{Param<int>}}\ t6(10,\ 1,\ 5);}
+\DoxyCodeLine{00180\ \ \ \ \ assert(t6.val()\ ==\ 5);}
+\DoxyCodeLine{00181\ \ \ \ \ assert(t6.min()\ ==\ 1);}
+\DoxyCodeLine{00182\ \ \ \ \ assert(t6.max()\ ==\ 5);}
+\DoxyCodeLine{00183\ \ \ \ \ assert(t6.last()\ ==\ 5);}
+\DoxyCodeLine{00184\ \ \ \ \ assert(t6.saturated()\ ==\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00185\ }
+\DoxyCodeLine{00186\ \ \ \ \ \textcolor{comment}{//\ external\ limits\ constructor}}
+\DoxyCodeLine{00187\ \ \ \ \ printf(\textcolor{stringliteral}{"{}Testing\ external\ limits\ constructor...\(\backslash\)n"{}});}
+\DoxyCodeLine{00188\ \ \ \ \ \mbox{\hyperlink{class_param}{Param<int>}}\ t7(5,\ 0,\ 20);}
+\DoxyCodeLine{00189\ \ \ \ \ \mbox{\hyperlink{class_param}{Param<int>}}\ t8(10,\ 0,\ 20);}
+\DoxyCodeLine{00190\ \ \ \ \ \mbox{\hyperlink{class_param}{Param<int>}}\ t9(8,\ t7.shptr(),\ t8.shptr());}
+\DoxyCodeLine{00191\ \ \ \ \ assert(t9.val()\ ==\ 8);}
+\DoxyCodeLine{00192\ \ \ \ \ assert(t9.min()\ ==\ 5);}
+\DoxyCodeLine{00193\ \ \ \ \ assert(t9.max()\ ==\ 10);}
+\DoxyCodeLine{00194\ \ \ \ \ assert(t9.last()\ ==\ 8);}
+\DoxyCodeLine{00195\ \ \ \ \ assert(t9.saturated()\ ==\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00196\ \ \ \ \ assert(t9.shptr().use\_count()\ ==\ 2);}
+\DoxyCodeLine{00197\ \ \ \ \ assert(t9.min\_shptr().use\_count()\ ==\ 3);\ \textcolor{comment}{//\ 1\ for\ each\ Param\ +\ 1\ external}}
+\DoxyCodeLine{00198\ \ \ \ \ assert(t9.max\_shptr().use\_count()\ ==\ 3);\ \textcolor{comment}{//\ 1\ for\ each\ Param\ +\ 1\ external}}
+\DoxyCodeLine{00199\ \ \ \ \ assert(t7.ptr()\ ==\ t9.min\_ptr());}
+\DoxyCodeLine{00200\ \ \ \ \ assert(t8.ptr()\ ==\ t9.max\_ptr());}
+\DoxyCodeLine{00201\ \ \ \ \ \textcolor{comment}{//\ test\ constructor\ with\ upwards\ constrain}}
+\DoxyCodeLine{00202\ \ \ \ \ \mbox{\hyperlink{class_param}{Param<int>}}\ t10(1,\ t7.shptr(),\ t8.shptr());}
+\DoxyCodeLine{00203\ \ \ \ \ assert(t10.val()\ ==\ 5);}
+\DoxyCodeLine{00204\ \ \ \ \ assert(t10.min()\ ==\ 5);}
+\DoxyCodeLine{00205\ \ \ \ \ assert(t10.max()\ ==\ 10);}
+\DoxyCodeLine{00206\ \ \ \ \ assert(t10.last()\ ==\ 5);}
+\DoxyCodeLine{00207\ \ \ \ \ assert(t10.saturated()\ ==\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00208\ \ \ \ \ \textcolor{comment}{//\ test\ constructor\ with\ downwards\ constrain}}
+\DoxyCodeLine{00209\ \ \ \ \ \mbox{\hyperlink{class_param}{Param<int>}}\ t11(11,\ t7.shptr(),\ t8.shptr());}
+\DoxyCodeLine{00210\ \ \ \ \ assert(t11.val()\ ==\ 10);}
+\DoxyCodeLine{00211\ \ \ \ \ assert(t11.min()\ ==\ 5);}
+\DoxyCodeLine{00212\ \ \ \ \ assert(t11.max()\ ==\ 10);}
+\DoxyCodeLine{00213\ \ \ \ \ assert(t11.last()\ ==\ 10);}
+\DoxyCodeLine{00214\ \ \ \ \ assert(t11.saturated()\ ==\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00215\ \ \ \ \ \textcolor{comment}{//\ test\ change\ limits}}
+\DoxyCodeLine{00216\ \ \ \ \ \mbox{\hyperlink{class_param}{Param<int>}}\ t12(8,\ t7.shptr(),\ t8.shptr());}
+\DoxyCodeLine{00217\ \ \ \ \ t7.set(4);}
+\DoxyCodeLine{00218\ \ \ \ \ t8.set(11);}
+\DoxyCodeLine{00219\ \ \ \ \ assert(t12.val()\ ==\ 8);}
+\DoxyCodeLine{00220\ \ \ \ \ assert(t12.min()\ ==\ 4);}
+\DoxyCodeLine{00221\ \ \ \ \ assert(t12.max()\ ==\ 11);}
+\DoxyCodeLine{00222\ \ \ \ \ assert(t12.last()\ ==\ 8);}
+\DoxyCodeLine{00223\ \ \ \ \ assert(t12.saturated()\ ==\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00224\ \ \ \ \ \textcolor{comment}{//\ test\ change\ limits\ with\ upwards\ constrain}}
+\DoxyCodeLine{00225\ \ \ \ \ t7.set(9);}
+\DoxyCodeLine{00226\ \ \ \ \ assert(t12.val()\ ==\ 8);}
+\DoxyCodeLine{00227\ \ \ \ \ assert(t12.min()\ ==\ 9);}
+\DoxyCodeLine{00228\ \ \ \ \ assert(t12.max()\ ==\ 11);}
+\DoxyCodeLine{00229\ \ \ \ \ assert(t12.last()\ ==\ 8);}
+\DoxyCodeLine{00230\ \ \ \ \ assert(t12.saturated()\ ==\ \textcolor{keyword}{false});\ \textcolor{comment}{//\ NOTE:\ should\ we\ constrain\ on\ get()...?}}
+\DoxyCodeLine{00231\ \ \ \ \ t12.set(8);}
+\DoxyCodeLine{00232\ \ \ \ \ assert(t12.val()\ ==\ 9);}
+\DoxyCodeLine{00233\ \ \ \ \ assert(t12.min()\ ==\ 9);}
+\DoxyCodeLine{00234\ \ \ \ \ assert(t12.max()\ ==\ 11);}
+\DoxyCodeLine{00235\ \ \ \ \ assert(t12.last()\ ==\ 8);}
+\DoxyCodeLine{00236\ \ \ \ \ assert(t12.saturated()\ ==\ \textcolor{keyword}{true});\ \textcolor{comment}{//\ NOTE:\ should\ we\ constrain\ on\ get()...?}}
+\DoxyCodeLine{00237\ \ \ \ \ \textcolor{comment}{//\ test\ change\ limits\ with\ downwards\ constrain}}
+\DoxyCodeLine{00238\ \ \ \ \ t12.set(10);}
+\DoxyCodeLine{00239\ \ \ \ \ t7.set(1);}
+\DoxyCodeLine{00240\ \ \ \ \ t8.set(7);}
+\DoxyCodeLine{00241\ \ \ \ \ assert(t12.val()\ ==\ 10);}
+\DoxyCodeLine{00242\ \ \ \ \ assert(t12.min()\ ==\ 1);}
+\DoxyCodeLine{00243\ \ \ \ \ assert(t12.max()\ ==\ 7);}
+\DoxyCodeLine{00244\ \ \ \ \ assert(t12.last()\ ==\ 9);}
+\DoxyCodeLine{00245\ \ \ \ \ assert(t12.saturated()\ ==\ \textcolor{keyword}{false});\ \textcolor{comment}{//\ NOTE:\ should\ we\ constrain\ on\ get()...?}}
+\DoxyCodeLine{00246\ \ \ \ \ t12.set(9);}
+\DoxyCodeLine{00247\ \ \ \ \ assert(t12.val()\ ==\ 7);}
+\DoxyCodeLine{00248\ \ \ \ \ assert(t12.min()\ ==\ 1);}
+\DoxyCodeLine{00249\ \ \ \ \ assert(t12.max()\ ==\ 7);}
+\DoxyCodeLine{00250\ \ \ \ \ assert(t12.last()\ ==\ 10);}
+\DoxyCodeLine{00251\ \ \ \ \ assert(t12.saturated()\ ==\ \textcolor{keyword}{true});\ \textcolor{comment}{//\ NOTE:\ should\ we\ constrain\ on\ get()...?}}
+\DoxyCodeLine{00252\ \ \ \ \ \textcolor{comment}{//\ test\ external\ limits\ destructor}}
+\DoxyCodeLine{00253\ \ \ \ \ \mbox{\hyperlink{class_param}{Param<int>}}\ t13(10);}
+\DoxyCodeLine{00254\ \ \ \ \ \{}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{class_param}{Param<int>}}\ p1(5);}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{class_param}{Param<int>}}\ p2(15);}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ t13.set\_limits(p1.shptr(),\ p2.shptr());}
+\DoxyCodeLine{00258\ \ \ \ \ \}}
+\DoxyCodeLine{00259\ \ \ \ \ assert(t13.min()\ ==\ 5);}
+\DoxyCodeLine{00260\ \ \ \ \ assert(t13.max()\ ==\ 15);}
+\DoxyCodeLine{00261\ \ \ \ \ assert(t13.min\_shptr().use\_count()\ ==\ 2);}
+\DoxyCodeLine{00262\ \ \ \ \ assert(t13.max\_shptr().use\_count()\ ==\ 2);}
+\DoxyCodeLine{00263\ \}}
+
+\end{DoxyCode}

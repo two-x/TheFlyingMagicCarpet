@@ -1,0 +1,254 @@
+\doxysection{i2cbus.\+h}
+\hypertarget{i2cbus_8h_source}{}\label{i2cbus_8h_source}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{preprocessor}{\#pragma\ once}}
+\DoxyCodeLine{00002\ \textcolor{preprocessor}{\#include\ <Wire.h>}\ \ \ \textcolor{comment}{//\ for\ i2c\ bus\ support}}
+\DoxyCodeLine{00003\ \textcolor{keyword}{enum}\ i2c\_nodes\ :\ \textcolor{keywordtype}{int}\ \{\ i2c\_touch,\ i2c\_lightbox,\ i2c\_airvelo,\ i2c\_map,\ num\_i2c\_slaves\ \};\ \ \textcolor{comment}{//\ i2c\_touch,\ }}
+\DoxyCodeLine{00004\ }
+\DoxyCodeLine{00005\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_i2_c}{I2C}}\ \{}
+\DoxyCodeLine{00006\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00007\ \ \ \ \ \textcolor{keywordtype}{bool}\ disabled\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00008\ \ \ \ \ int32\_t\ \_devicecount\ =\ 0;}
+\DoxyCodeLine{00009\ \ \ \ \ uint8\_t\ \_detaddrs[10];\ \ \textcolor{comment}{//\ addresses\ detected,\ unordered}}
+\DoxyCodeLine{00010\ \ \ \ \ uint8\_t\ \_devaddrs[num\_i2c\_slaves];\ \ \textcolor{comment}{//\ addresses\ of\ known\ devices,\ ordered\ per\ enum}}
+\DoxyCodeLine{00011\ \ \ \ \ \textcolor{keywordtype}{bool}\ \_detected[num\_i2c\_slaves];\ \ \textcolor{comment}{//\ detection\ status\ of\ known\ devices,\ ordered\ per\ enum}}
+\DoxyCodeLine{00012\ \ \ \ \ uint8\_t\ \_sda\_pin,\ \_scl\_pin;}
+\DoxyCodeLine{00013\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ scanTimer;}
+\DoxyCodeLine{00014\ \ \ \ \ \textcolor{keywordtype}{int}\ lastsens\ =\ i2c\_map;}
+\DoxyCodeLine{00015\ \ \ \ \ \textcolor{keywordtype}{void}\ fill\_det\_array()\ \{}
+\DoxyCodeLine{00016\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ sl\ =\ 0;\ sl<num\_i2c\_slaves;\ sl++)\ \{}
+\DoxyCodeLine{00017\ \ \ \ \ \ \ \ \ \ \ \ \ \_detected[sl]\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00018\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i<\_devicecount;\ i++)}
+\DoxyCodeLine{00019\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_detaddrs[i]\ ==\ \_devaddrs[sl])\ \_detected[sl]\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00020\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00021\ \ \ \ \ \}}
+\DoxyCodeLine{00022\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00023\ \ \ \ \ \textcolor{keywordtype}{int}\ i2cbaton\ =\ i2c\_lightbox;\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ A\ semaphore\ mechanism\ to\ prevent\ bus\ conflict\ on\ i2c\ bus}}
+\DoxyCodeLine{00024\ \ \ \ \ \mbox{\hyperlink{class_i2_c}{I2C}}(uint8\_t\ sda\_pin\_arg,\ uint8\_t\ scl\_pin\_arg)\ :\ \_sda\_pin(sda\_pin\_arg),\ \_scl\_pin(scl\_pin\_arg)\ \{\}}
+\DoxyCodeLine{00025\ \ \ \ \ \textcolor{keywordtype}{int}\ setup(uint8\_t\ touch\_addr,\ uint8\_t\ lightbox\_addr,\ uint8\_t\ airvelo\_addr,\ uint8\_t\ map\_addr)\ \{}
+\DoxyCodeLine{00026\ \ \ \ \ \ \ \ \ \_devaddrs[i2c\_touch]\ =\ touch\_addr;}
+\DoxyCodeLine{00027\ \ \ \ \ \ \ \ \ \_devaddrs[i2c\_lightbox]\ =\ lightbox\_addr;}
+\DoxyCodeLine{00028\ \ \ \ \ \ \ \ \ \_devaddrs[i2c\_airvelo]\ =\ airvelo\_addr;}
+\DoxyCodeLine{00029\ \ \ \ \ \ \ \ \ \_devaddrs[i2c\_map]\ =\ map\_addr;}
+\DoxyCodeLine{00030\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}I2C\ bus"{}});\ delay(1);\ \ \textcolor{comment}{//\ Attempt\ to\ force\ print\ to\ happen\ before\ init}}
+\DoxyCodeLine{00031\ \ \ \ \ \ \ \ \ scanTimer.reset();}
+\DoxyCodeLine{00032\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (disabled)\ \textcolor{keywordflow}{return}\ 0;}
+\DoxyCodeLine{00033\ \ \ \ \ \ \ \ \ Wire.begin(\_sda\_pin,\ \_scl\_pin);\ \ \textcolor{comment}{//\ I2c\ bus\ needed\ for\ airflow\ sensor}}
+\DoxyCodeLine{00034\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{byte}\ error,\ address;}
+\DoxyCodeLine{00035\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}\ scan.."{}});}
+\DoxyCodeLine{00036\ \ \ \ \ \ \ \ \ \_devicecount\ =\ 0;}
+\DoxyCodeLine{00037\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (address\ =\ 1;\ address\ <\ 127;\ address++\ )\ \{}
+\DoxyCodeLine{00038\ \ \ \ \ \ \ \ \ \ \ \ \ Wire.beginTransmission(address);}
+\DoxyCodeLine{00039\ \ \ \ \ \ \ \ \ \ \ \ \ error\ =\ Wire.endTransmission();}
+\DoxyCodeLine{00040\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (error\ ==\ 0)\ \{}
+\DoxyCodeLine{00041\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ printf\ (\textcolor{stringliteral}{"{}\ found\ addr:\ 0x\%s\%x"{}},\ (address\ <\ 16)\ ?\ \textcolor{stringliteral}{"{}0"{}}\ :\ \textcolor{stringliteral}{"{}"{}},\ address);}
+\DoxyCodeLine{00042\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_detaddrs[\_devicecount++]\ =\ address;}
+\DoxyCodeLine{00043\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00044\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (error==4)\ printf\ (\textcolor{stringliteral}{"{}\ error\ addr:\ 0x\%s\%x"{}},\ (address\ <\ 16)\ ?\ \textcolor{stringliteral}{"{}0"{}}\ :\ \textcolor{stringliteral}{"{}"{}},\ address);}
+\DoxyCodeLine{00045\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00046\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (scanTimer.elapsed()\ >\ 5000000)\ printf(\textcolor{stringliteral}{"{}\ timeout\ \&\ fail\ bus\ scan."{}});}
+\DoxyCodeLine{00047\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_devicecount\ ==\ 0)\ printf(\textcolor{stringliteral}{"{}\ no\ devices\ found."{}});}
+\DoxyCodeLine{00048\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}\ ..done\(\backslash\)n"{}});}
+\DoxyCodeLine{00049\ \ \ \ \ \ \ \ \ fill\_det\_array();}
+\DoxyCodeLine{00050\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ detected(i2c\_touch);}
+\DoxyCodeLine{00051\ \ \ \ \ \}}
+\DoxyCodeLine{00052\ \ \ \ \ \textcolor{keywordtype}{bool}\ detected\_by\_addr(uint8\_t\ addr)\ \{\ \ \textcolor{comment}{//\ argument\ is\ an\ i2c\ address}}
+\DoxyCodeLine{00053\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i=0;\ i\ <\ \_devicecount;\ i++)\ \textcolor{keywordflow}{if}\ (\_detaddrs[i]\ ==\ addr)\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00054\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00055\ \ \ \ \ \}}
+\DoxyCodeLine{00056\ \ \ \ \ \textcolor{keywordtype}{bool}\ detected(\textcolor{keywordtype}{int}\ device)\ \{\ \ \textcolor{comment}{//\ argument\ is\ one\ of\ the\ enums}}
+\DoxyCodeLine{00057\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \_detected[device];}
+\DoxyCodeLine{00058\ \ \ \ \ \}}
+\DoxyCodeLine{00059\ \ \ \ \ \textcolor{keywordtype}{void}\ pass\_i2c\_baton()\ \{}
+\DoxyCodeLine{00060\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ printf("{}\%d-\/>"{},\ i2cbaton);}}
+\DoxyCodeLine{00061\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (i2cbaton\ ==\ i2c\_airvelo\ ||\ i2cbaton\ ==\ i2c\_map)\ i2cbaton\ =\ (captouch)\ ?\ i2c\_touch\ :\ i2c\_lightbox;\ }
+\DoxyCodeLine{00062\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (i2cbaton\ ==\ i2c\_touch)\ i2cbaton\ =\ i2c\_lightbox;}
+\DoxyCodeLine{00063\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (i2cbaton\ ==\ i2c\_lightbox)\ \{}
+\DoxyCodeLine{00064\ \ \ \ \ \ \ \ \ \ \ \ \ i2cbaton\ =\ (lastsens\ ==\ i2c\_airvelo)\ ?\ i2c\_map\ :\ i2c\_airvelo;}
+\DoxyCodeLine{00065\ \ \ \ \ \ \ \ \ \ \ \ \ lastsens\ =\ i2cbaton;}
+\DoxyCodeLine{00066\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00067\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ printf("{}\(\backslash\)r-\/\%d-\/"{},\ i2cbaton);}}
+\DoxyCodeLine{00068\ \ \ \ \ \}}
+\DoxyCodeLine{00069\ \ \ \ \ \textcolor{keywordtype}{bool}\ not\_my\_turn(\textcolor{keywordtype}{int}\ checkdev)\ \{}
+\DoxyCodeLine{00070\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ retval\ =\ (use\_i2c\_baton\ \&\&\ (checkdev\ !=\ i2cbaton));}
+\DoxyCodeLine{00071\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ printf("{}b:\%d\ c:\%d\ nmt:\%d\(\backslash\)n"{},\ i2cbaton,\ checkdev,\ retval);}}
+\DoxyCodeLine{00072\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ retval;\ \ \ \ \ \ \ }
+\DoxyCodeLine{00073\ \ \ \ \ \}}
+\DoxyCodeLine{00074\ \};}
+\DoxyCodeLine{00075\ }
+\DoxyCodeLine{00076\ \textcolor{comment}{//\ map.h\ -\/\ an\ i2c\ sensor\ to\ track\ the\ air\ pressure\ in\ our\ intake\ manifold.\ This,\ together\ with\ the\ air\ velocity}}
+\DoxyCodeLine{00077\ \textcolor{comment}{//\ and\ temperature\ gives\ us\ the\ mass\ air\ flow\ which\ is\ proportional\ to\ how\ hard\ the\ engine\ is\ working.}}
+\DoxyCodeLine{00078\ \textcolor{comment}{//\ I\ stole\ this\ library\ and\ modified\ it\ as\ such.\ to\ not\ block\ for\ 6-\/7ms\ on\ each\ read.\ -\/\ Soren}}
+\DoxyCodeLine{00079\ \textcolor{comment}{//\ SparkFun\_MicroPressure\ library\ by\ Alex\ Wende\ July\ 2020\ (Beerware\ license)}}
+\DoxyCodeLine{00080\ \textcolor{comment}{//\ This\ is\ a\ library\ for\ the\ Qwiic\ MicroPressure\ Sensor,\ which\ can\ read\ from\ 0\ to\ 25\ PSI.}}
+\DoxyCodeLine{00081\ \textcolor{keyword}{enum}\ Pressure\_Units\ \{PSI,\ PA,\ KPA,\ TORR,\ INHG,\ ATM,\ BAR\};\ \ \textcolor{comment}{//\ \{PSI,\ Pa,\ kPa,\ torr,\ inHg,\ atm,\ bar\};}}
+\DoxyCodeLine{00082\ }
+\DoxyCodeLine{00083\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_spark_fun___micro_pressure}{SparkFun\_MicroPressure}}\ \{}
+\DoxyCodeLine{00084\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00085\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ uint8\_t\ addr\ =\ 0x18;}
+\DoxyCodeLine{00086\ \ \ \ \ \mbox{\hyperlink{class_spark_fun___micro_pressure}{SparkFun\_MicroPressure}}(int8\_t\ eoc\_pin=-\/1,\ int8\_t\ rst\_pin=-\/1,\ uint8\_t\ minimumPSI=MINIMUM\_PSI,\ uint8\_t\ maximumPSI=MAXIMUM\_PSI);}
+\DoxyCodeLine{00087\ \ \ \ \ \textcolor{keywordtype}{bool}\ begin(uint8\_t\ deviceAddress\ =\ addr,\ TwoWire\ \&wirePort\ =\ Wire);}
+\DoxyCodeLine{00088\ \ \ \ \ uint8\_t\ readStatus(\textcolor{keywordtype}{void});}
+\DoxyCodeLine{00089\ \ \ \ \ \textcolor{keywordtype}{float}\ readPressure(Pressure\_Units\ units=PSI,\ \textcolor{keywordtype}{bool}\ noblock=\textcolor{keyword}{false});}
+\DoxyCodeLine{00090\ \ \ \ \ uint8\_t\ get\_addr();}
+\DoxyCodeLine{00091\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00092\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ \textcolor{keywordtype}{int}\ MAXIMUM\_PSI\ =\ 25;}
+\DoxyCodeLine{00093\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ \textcolor{keywordtype}{int}\ MINIMUM\_PSI\ =\ 0;}
+\DoxyCodeLine{00094\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ uint8\_t\ BUSY\_FLAG\ =\ 0x20;}
+\DoxyCodeLine{00095\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ uint8\_t\ INTEGRITY\_FLAG\ =\ 0x04;}
+\DoxyCodeLine{00096\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ uint8\_t\ MATH\_SAT\_FLAG\ =\ 0x01;}
+\DoxyCodeLine{00097\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ uint32\_t\ OUTPUT\_MAX\ =\ 0xE66666;}
+\DoxyCodeLine{00098\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ uint32\_t\ OUTPUT\_MIN\ =\ 0x19999A;}
+\DoxyCodeLine{00099\ \ \ \ \ \textcolor{keywordtype}{bool}\ run\_preamble\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00100\ \ \ \ \ \textcolor{keywordtype}{float}\ pressure\ =\ NAN;}
+\DoxyCodeLine{00101\ \ \ \ \ int8\_t\ \_address,\ \_eoc,\ \_rst;}
+\DoxyCodeLine{00102\ \ \ \ \ uint8\_t\ \_minPsi,\ \_maxPsi,\ \_status;}
+\DoxyCodeLine{00103\ \ \ \ \ TwoWire\ *\_i2cPort\ =\ \&Wire;}
+\DoxyCodeLine{00104\ \};}
+\DoxyCodeLine{00105\ \textcolor{comment}{//\ -\/\ (Optional)\ eoc\_pin,\ End\ of\ Conversion\ indicator.\ Default:\ -\/1\ (skip)}}
+\DoxyCodeLine{00106\ \textcolor{comment}{//\ -\/\ (Optional)\ rst\_pin,\ Reset\ pin\ for\ MPR\ sensor.\ Default:\ -\/1\ (skip)}}
+\DoxyCodeLine{00107\ \textcolor{comment}{//\ -\/\ minimum/maximum\ PSI,\ minimum\ range\ value\ of\ the\ sensor\ (in\ PSI).\ Default:\ 0}}
+\DoxyCodeLine{00108\ \textcolor{comment}{//\ -\/\ maximumPSI,\ maximum\ range\ value\ of\ the\ sensor\ (in\ pSI).\ Default:\ 25}}
+\DoxyCodeLine{00109\ SparkFun\_MicroPressure::SparkFun\_MicroPressure(int8\_t\ eoc\_pin,\ int8\_t\ rst\_pin,\ uint8\_t\ minimumPSI,\ uint8\_t\ maximumPSI)\ \{}
+\DoxyCodeLine{00110\ \ \ \ \ \_eoc\ =\ eoc\_pin;}
+\DoxyCodeLine{00111\ \ \ \ \ \_rst\ =\ rst\_pin;}
+\DoxyCodeLine{00112\ \ \ \ \ \_minPsi\ =\ minimumPSI;}
+\DoxyCodeLine{00113\ \ \ \ \ \_maxPsi\ =\ maximumPSI;}
+\DoxyCodeLine{00114\ \}}
+\DoxyCodeLine{00115\ \textcolor{comment}{//\ -\/\ deviceAddress,\ I2C\ address\ of\ the\ sensor.\ Default:\ 0x18}}
+\DoxyCodeLine{00116\ \textcolor{comment}{//\ -\/\ wirePort,\ sets\ the\ I2C\ bus\ used\ for\ communication.\ Default:\ Wire}}
+\DoxyCodeLine{00117\ \textcolor{comment}{//\ -\/\ Returns\ 0/1:\ 0:\ sensor\ not\ found,\ 1:\ sensor\ connected\ \ */}}
+\DoxyCodeLine{00118\ \textcolor{keywordtype}{bool}\ SparkFun\_MicroPressure::begin(uint8\_t\ deviceAddress,\ TwoWire\ \&wirePort)\ \{}
+\DoxyCodeLine{00119\ \ \ \ \ \_address\ =\ deviceAddress;}
+\DoxyCodeLine{00120\ \ \ \ \ \_i2cPort\ =\ \&wirePort;}
+\DoxyCodeLine{00121\ \ \ \ \ \textcolor{keywordflow}{if}(\_eoc\ !=\ -\/1)\ pinMode(\_eoc,\ INPUT);}
+\DoxyCodeLine{00122\ \ \ \ \ \textcolor{keywordflow}{if}(\_rst\ !=\ -\/1)\ \{}
+\DoxyCodeLine{00123\ \ \ \ \ \ \ \ \ pinMode(\_rst,\ OUTPUT);}
+\DoxyCodeLine{00124\ \ \ \ \ \ \ \ \ digitalWrite(\_rst,LOW);}
+\DoxyCodeLine{00125\ \ \ \ \ \ \ \ \ delay(5);}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \ \ digitalWrite(\_rst,HIGH);}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ \ \ delay(5);}
+\DoxyCodeLine{00128\ \ \ \ \ \}}
+\DoxyCodeLine{00129\ \ \ \ \ run\_preamble\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00130\ \ \ \ \ \_i2cPort-\/>beginTransmission(\_address);}
+\DoxyCodeLine{00131\ \ \ \ \ \textcolor{comment}{//return\ !(\_i2cPort-\/>endTransmission());}}
+\DoxyCodeLine{00132\ \ \ \ \ uint8\_t\ error\ =\ \_i2cPort-\/>endTransmission();}
+\DoxyCodeLine{00133\ \ \ \ \ \textcolor{keywordflow}{if}(error\ ==\ 0)\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00134\ \ \ \ \ \textcolor{keywordflow}{else}\ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00135\ \}}
+\DoxyCodeLine{00136\ uint8\_t\ SparkFun\_MicroPressure::readStatus(\textcolor{keywordtype}{void})\ \{}
+\DoxyCodeLine{00137\ \ \ \ \ \_i2cPort-\/>requestFrom(\_address,1);}
+\DoxyCodeLine{00138\ \ \ \ \ \textcolor{keywordflow}{return}\ \_i2cPort-\/>read();}
+\DoxyCodeLine{00139\ \}}
+\DoxyCodeLine{00140\ \textcolor{keywordtype}{float}\ SparkFun\_MicroPressure::readPressure(Pressure\_Units\ units,\ \textcolor{keywordtype}{bool}\ noblock)\ \{}
+\DoxyCodeLine{00141\ \ \ \ \ \textcolor{keywordflow}{if}\ (run\_preamble)\ \{}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \ \ \_i2cPort-\/>beginTransmission(\_address);}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ \ \ \_i2cPort-\/>write((uint8\_t)0xAA);}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ \ \ \_i2cPort-\/>write((uint8\_t)0x00);}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \ \ \_i2cPort-\/>write((uint8\_t)0x00);}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ \ \ \_i2cPort-\/>endTransmission();}
+\DoxyCodeLine{00147\ \ \ \ \ \}}
+\DoxyCodeLine{00148\ \ \ \ \ run\_preamble\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00149\ \ \ \ \ \textcolor{keywordflow}{if}\ (\_eoc\ !=\ -\/1)\ \{\ \textcolor{comment}{//\ Use\ GPIO\ pin\ if\ defined}}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (!digitalRead(\_eoc))\ \{}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (noblock)\ \textcolor{keywordflow}{return}\ NAN;}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ \ \ \ \ \ \ delay(1);}
+\DoxyCodeLine{00153\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00154\ \ \ \ \ \}}
+\DoxyCodeLine{00155\ \ \ \ \ \textcolor{keywordflow}{else}\ \{\ \textcolor{comment}{//\ Check\ status\ byte\ if\ GPIO\ is\ not\ defined}}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \ \ \_status\ =\ readStatus();}
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}((\_status\&BUSY\_FLAG)\ \&\&\ (\_status!=0xFF))\ \{}
+\DoxyCodeLine{00158\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (noblock)\ \textcolor{keywordflow}{return}\ NAN;}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \ \ \ \ \ \ delay(1);}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ \ \ \ \ \ \ \_status\ =\ readStatus();}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00162\ \ \ \ \ \}}
+\DoxyCodeLine{00163\ \ \ \ \ run\_preamble\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00164\ \ \ \ \ \_i2cPort-\/>requestFrom(\_address,4);}
+\DoxyCodeLine{00165\ \ \ \ \ \_status\ =\ \_i2cPort-\/>read();}
+\DoxyCodeLine{00166\ \ \ \ \ \textcolor{keywordflow}{if}((\_status\ \&\ INTEGRITY\_FLAG)\ ||\ (\_status\ \&\ MATH\_SAT\_FLAG))\ \textcolor{keywordflow}{return}\ NAN;\ \textcolor{comment}{//\ \ check\ memory\ integrity\ and\ math\ saturation\ bit}}
+\DoxyCodeLine{00167\ \ \ \ \ uint32\_t\ reading\ =\ 0;}
+\DoxyCodeLine{00168\ \ \ \ \ \textcolor{keywordflow}{for}(uint8\_t\ i=0;i<3;i++)\ \{\ \ \textcolor{comment}{//\ \ read\ 24-\/bit\ pressure}}
+\DoxyCodeLine{00169\ \ \ \ \ \ \ \ \ reading\ |=\ \_i2cPort-\/>read();}
+\DoxyCodeLine{00170\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}(i\ !=\ 2)\ reading\ =\ reading<<8;}
+\DoxyCodeLine{00171\ \ \ \ \ \}}
+\DoxyCodeLine{00172\ \ \ \ \ pressure\ =\ (reading\ -\/\ OUTPUT\_MIN)\ *\ (\_maxPsi\ -\/\ \_minPsi);}
+\DoxyCodeLine{00173\ \ \ \ \ pressure\ =\ (pressure\ /\ (OUTPUT\_MAX\ -\/\ OUTPUT\_MIN))\ +\ \_minPsi;}
+\DoxyCodeLine{00174\ \ \ \ \ \textcolor{keywordflow}{if}(units\ ==\ PA)\ \ \ \ \ \ \ \ pressure\ *=\ 6894.7573;\ \textcolor{comment}{//Pa\ (Pascal)}}
+\DoxyCodeLine{00175\ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}(units\ ==\ KPA)\ \ pressure\ *=\ 6.89476;\ \ \ \textcolor{comment}{//kPa\ (kilopascal)}}
+\DoxyCodeLine{00176\ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}(units\ ==\ TORR)\ pressure\ *=\ 51.7149;\ \ \ \textcolor{comment}{//torr\ (mmHg)}}
+\DoxyCodeLine{00177\ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}(units\ ==\ INHG)\ pressure\ *=\ 2.03602;\ \ \ \textcolor{comment}{//inHg\ (inch\ of\ mercury)}}
+\DoxyCodeLine{00178\ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}(units\ ==\ ATM)\ \ pressure\ *=\ 0.06805;\ \ \ \textcolor{comment}{//atm\ (atmosphere)}}
+\DoxyCodeLine{00179\ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}(units\ ==\ BAR)\ \ pressure\ *=\ 0.06895;\ \ \ \textcolor{comment}{//bar}}
+\DoxyCodeLine{00180\ \ \ \ \ \textcolor{keywordflow}{return}\ pressure;}
+\DoxyCodeLine{00181\ \}}
+\DoxyCodeLine{00182\ }
+\DoxyCodeLine{00183\ \textcolor{comment}{//\ LightingBox\ -\/\ object\ to\ manage\ 12c\ communications\ link\ to\ our\ lighting\ box}}
+\DoxyCodeLine{00184\ \textcolor{comment}{//\ Our\ protocol\ is:\ 1st\ nibble\ of\ 1st\ byte\ contains\ 4-\/bit\ command/request\ code.\ The\ 2nd\ nibble\ and\ any\ additional\ bytes\ contain\ data,\ as\ required\ by\ the\ code}}
+\DoxyCodeLine{00185\ \textcolor{comment}{//\ code:\ 0x0F\ =\ status\ flags.\ F\ bits:\ 0=syspower,\ 1=panicstop,\ 2=warning,\ 3=alarm}}
+\DoxyCodeLine{00186\ \textcolor{comment}{//\ code:\ 0x1R\ =\ entered\ runmode\ given\ by\ R\ (no\ additional\ bytes)}}
+\DoxyCodeLine{00187\ \textcolor{comment}{//\ code:\ 0x2H,0xLL\ =\ speedometer\ value\ update.\ 12-\/bit\ value\ contained\ in\ HLL\ is\ speed\ in\ hundredths-\/of-\/mph}}
+\DoxyCodeLine{00188\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_lighting_box}{LightingBox}}\ \{\ \ \textcolor{comment}{//\ represents\ the\ lighting\ controller\ i2c\ slave\ endpoint}}
+\DoxyCodeLine{00189\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00190\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ send\_timer\ =\ \mbox{\hyperlink{class_timer}{Timer}}(250000);}
+\DoxyCodeLine{00191\ \ \ \ \ \textcolor{keywordtype}{int}\ runmode\_last\ =\ SHUTDOWN;}
+\DoxyCodeLine{00192\ \ \ \ \ uint16\_t\ speed\_last;}
+\DoxyCodeLine{00193\ \ \ \ \ uint8\_t\ status\_nibble\_last;}
+\DoxyCodeLine{00194\ \ \ \ \ \mbox{\hyperlink{class_i2_c}{I2C}}*\ i2c;}
+\DoxyCodeLine{00195\ \ \ \ \ \textcolor{comment}{//\ DiagRuntime*\ diag;}}
+\DoxyCodeLine{00196\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00197\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ uint8\_t\ addr\ =\ 0x69;}
+\DoxyCodeLine{00198\ \ \ \ \ \mbox{\hyperlink{class_lighting_box}{LightingBox}}(\mbox{\hyperlink{class_i2_c}{I2C}}*\ \_i2c)\ :\ i2c\{\_i2c\}\ \{\}\ \ \textcolor{comment}{//\ LightingBox(DiagRuntime*\ \_diag)\ :\ diag(\_diag)\ \{\}}}
+\DoxyCodeLine{00199\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}Lighting\ box\ serial\ comm..\(\backslash\)n"{}});}
+\DoxyCodeLine{00201\ \ \ \ \ \}}
+\DoxyCodeLine{00202\ \ \ \ \ \textcolor{keywordtype}{bool}\ sendstatus()\ \{}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ \ \ uint8\_t\ byt\ =\ 0x00;\ \ \textcolor{comment}{//\ command\ template\ for\ runmode\ update}}
+\DoxyCodeLine{00204\ \ \ \ \ \ \ \ \ uint8\_t\ warning\ =\ 0;\ \ \textcolor{comment}{//\ (diag-\/>worst\_sensor(3)\ !=\ \_None);}}
+\DoxyCodeLine{00205\ \ \ \ \ \ \ \ \ uint8\_t\ alarm\ =\ 0;\ \ \textcolor{comment}{//\ (diag-\/>worst\_sensor(4)\ !=\ \_None);}}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ \ \ byt\ |=\ (uint8\_t)syspower\ |\ (uint8\_t)(panicstop\ <<\ 1)\ |\ (uint8\_t)(warning\ <<\ 2)\ |\ (alarm\ <<\ 3);\ \ \textcolor{comment}{//\ insert\ status\ bits\ nibble}}
+\DoxyCodeLine{00207\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (byt\ ==\ status\_nibble\_last)\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ \ \ Wire.beginTransmission(addr);}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \ \ Wire.write(byt);}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ \ \ Wire.endTransmission(addr);}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \ \ status\_nibble\_last\ =\ byt;}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00213\ \ \ \ \ \}}
+\DoxyCodeLine{00214\ \ \ \ \ \textcolor{keywordtype}{bool}\ sendrunmode(\textcolor{keywordtype}{int}\ runmode)\ \{}
+\DoxyCodeLine{00215\ \ \ \ \ \ \ \ \ uint8\_t\ byt\ =\ 0x10;\ \ \textcolor{comment}{//\ command\ template\ for\ runmode\ update}}
+\DoxyCodeLine{00216\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (runmode\ ==\ runmode\_last)\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ \ \ byt\ |=\ (uint8\_t)(runmode\ \&\ 0x0f);\ \ \textcolor{comment}{//\ insert\ runmode\ in\ 2nd\ nibble}}
+\DoxyCodeLine{00218\ \ \ \ \ \ \ \ \ Wire.beginTransmission(addr);}
+\DoxyCodeLine{00219\ \ \ \ \ \ \ \ \ Wire.write(byt);}
+\DoxyCodeLine{00220\ \ \ \ \ \ \ \ \ Wire.endTransmission(addr);}
+\DoxyCodeLine{00221\ \ \ \ \ \ \ \ \ runmode\_last\ =\ runmode;}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00223\ \ \ \ \ \}}
+\DoxyCodeLine{00224\ \ \ \ \ \textcolor{keywordtype}{bool}\ sendspeed(\textcolor{keywordtype}{float}\ \_speed)\ \{}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \ \ uint8\_t\ byt\ =\ 0x20;\ \ \textcolor{comment}{//\ command\ template\ for\ speed\ update}}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ \ \ uint16\_t\ speed\ =\ (uint16\_t)(\_speed\ *\ 100);}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (speed\ ==\ speed\_last)\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \ \ byt\ |=\ ((speed\ >>\ 8)\ \&\ 0x0f);}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \ \ Wire.beginTransmission(addr);}
+\DoxyCodeLine{00230\ \ \ \ \ \ \ \ \ Wire.write(byt);}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ \ \ byt\ =\ (uint8\_t)(speed\ \&\ 0xff);}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ \ \ Wire.write(byt);}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ \ \ Wire.endTransmission();}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ \ \ speed\_last\ =\ speed;}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00236\ \ \ \ \ \}}
+\DoxyCodeLine{00237\ \ \ \ \ uint8\_t\ get\_addr()\ \{\ \textcolor{keywordflow}{return}\ addr;\ \}}
+\DoxyCodeLine{00238\ \ \ \ \ \textcolor{keywordtype}{void}\ update(\textcolor{keywordtype}{int}\ runmode,\ \textcolor{keywordtype}{float}\ speed)\ \{}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ sent\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00240\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (i2c-\/>not\_my\_turn(i2c\_lightbox))\ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ if\ (i2c-\/>detected(i2c\_lightbox)\ \&\&\ send\_timer.expireset())\ \{}}
+\DoxyCodeLine{00242\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (send\_timer.expireset())\ \{\ \ \textcolor{comment}{//\ enable\ for\ now\ to\ test}}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ \ \ \ \ \ \ sent\ =\ sendstatus();}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \ \ \ \ \ \ sent\ |=\ sendrunmode(runmode);}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!sent)\ sent\ =\ sendspeed(speed);}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ \ \ i2c-\/>pass\_i2c\_baton();}
+\DoxyCodeLine{00248\ \ \ \ \ \}}
+\DoxyCodeLine{00249\ \};}
+
+\end{DoxyCode}

@@ -1,0 +1,31 @@
+\doxysection{Spark\+Fun\+\_\+\+Micro\+Pressure Class Reference}
+\hypertarget{class_spark_fun___micro_pressure}{}\label{class_spark_fun___micro_pressure}\index{SparkFun\_MicroPressure@{SparkFun\_MicroPressure}}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_spark_fun___micro_pressure_ad62fb6aefa064981de1a0f199a9ee082}\label{class_spark_fun___micro_pressure_ad62fb6aefa064981de1a0f199a9ee082} 
+{\bfseries Spark\+Fun\+\_\+\+Micro\+Pressure} (int8\+\_\+t eoc\+\_\+pin=-\/1, int8\+\_\+t rst\+\_\+pin=-\/1, uint8\+\_\+t minimum\+PSI=MINIMUM\+\_\+\+PSI, uint8\+\_\+t maximum\+PSI=MAXIMUM\+\_\+\+PSI)
+\item 
+\Hypertarget{class_spark_fun___micro_pressure_a522d4e90041897d1810c950ccc41eda3}\label{class_spark_fun___micro_pressure_a522d4e90041897d1810c950ccc41eda3} 
+bool {\bfseries begin} (uint8\+\_\+t device\+Address=addr, Two\+Wire \&wire\+Port=Wire)
+\item 
+\Hypertarget{class_spark_fun___micro_pressure_a6b81bd5d5ce90c8bd3ed08e0e835f313}\label{class_spark_fun___micro_pressure_a6b81bd5d5ce90c8bd3ed08e0e835f313} 
+uint8\+\_\+t {\bfseries read\+Status} (void)
+\item 
+\Hypertarget{class_spark_fun___micro_pressure_a635621179ab3c4c17f9f6686e12323b8}\label{class_spark_fun___micro_pressure_a635621179ab3c4c17f9f6686e12323b8} 
+float {\bfseries read\+Pressure} (Pressure\+\_\+\+Units units=PSI, bool noblock=false)
+\item 
+\Hypertarget{class_spark_fun___micro_pressure_ac59878f145cdf920ecdd80b5ab620058}\label{class_spark_fun___micro_pressure_ac59878f145cdf920ecdd80b5ab620058} 
+uint8\+\_\+t {\bfseries get\+\_\+addr} ()
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Static Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_spark_fun___micro_pressure_aa6520c46fb19b16304afa51887ee6368}\label{class_spark_fun___micro_pressure_aa6520c46fb19b16304afa51887ee6368} 
+static constexpr uint8\+\_\+t {\bfseries addr} = 0x18
+\end{DoxyCompactItemize}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+i2cbus.\+h\end{DoxyCompactItemize}

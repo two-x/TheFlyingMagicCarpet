@@ -1,0 +1,34 @@
+\doxysection{I2C Class Reference}
+\hypertarget{class_i2_c}{}\label{class_i2_c}\index{I2C@{I2C}}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_i2_c_aa742afd8d8b82a6f4568d533a3f1c8ea}\label{class_i2_c_aa742afd8d8b82a6f4568d533a3f1c8ea} 
+{\bfseries I2C} (uint8\+\_\+t sda\+\_\+pin\+\_\+arg, uint8\+\_\+t scl\+\_\+pin\+\_\+arg)
+\item 
+\Hypertarget{class_i2_c_a52e2860fb751bceb56a0cfe2c0cda086}\label{class_i2_c_a52e2860fb751bceb56a0cfe2c0cda086} 
+int {\bfseries setup} (uint8\+\_\+t touch\+\_\+addr, uint8\+\_\+t lightbox\+\_\+addr, uint8\+\_\+t airvelo\+\_\+addr, uint8\+\_\+t map\+\_\+addr)
+\item 
+\Hypertarget{class_i2_c_a7e630177b014d3990497c8e4bae51629}\label{class_i2_c_a7e630177b014d3990497c8e4bae51629} 
+bool {\bfseries detected\+\_\+by\+\_\+addr} (uint8\+\_\+t addr)
+\item 
+\Hypertarget{class_i2_c_ace609f44b2e5e25e809a189234832bbf}\label{class_i2_c_ace609f44b2e5e25e809a189234832bbf} 
+bool {\bfseries detected} (int device)
+\item 
+\Hypertarget{class_i2_c_acbc249a1b846b68db3b85e8359f37bf8}\label{class_i2_c_acbc249a1b846b68db3b85e8359f37bf8} 
+void {\bfseries pass\+\_\+i2c\+\_\+baton} ()
+\item 
+\Hypertarget{class_i2_c_a3a578edbef26b6339ccadc029c49cfcc}\label{class_i2_c_a3a578edbef26b6339ccadc029c49cfcc} 
+bool {\bfseries not\+\_\+my\+\_\+turn} (int checkdev)
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_i2_c_acb345dfb795045941e1aca86341faca6}\label{class_i2_c_acb345dfb795045941e1aca86341faca6} 
+int {\bfseries i2cbaton} = i2c\+\_\+lightbox
+\end{DoxyCompactItemize}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+i2cbus.\+h\end{DoxyCompactItemize}

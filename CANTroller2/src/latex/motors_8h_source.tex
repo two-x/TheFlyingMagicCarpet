@@ -1,0 +1,791 @@
+\doxysection{motors.\+h}
+\hypertarget{motors_8h_source}{}\label{motors_8h_source}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{comment}{//\ motors.h\ :\ centralized\ wrapper\ classes\ for\ all\ braking,\ throttle,\ and\ steering\ activity,\ as\ holistic\ coordination\ between\ sensors,\ actuator,\ and\ intent\ is\ critical}}
+\DoxyCodeLine{00002\ \textcolor{preprocessor}{\#pragma\ once}}
+\DoxyCodeLine{00003\ \textcolor{preprocessor}{\#include\ <ESP32Servo.h>}\ \ \textcolor{comment}{//\ Eventually\ move\ Servos\ into\ new\ ServoPWM\ objects\ then\ remove\ this}}
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#include\ "{}temperature.h"{}}}
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#include\ <cmath>}}
+\DoxyCodeLine{00006\ }
+\DoxyCodeLine{00007\ \textcolor{comment}{//\ I\ stole\ this\ library\ and\ modified\ it\ heavily\ to\ our\ purpposes\ -\/\ Soren}}
+\DoxyCodeLine{00008\ \textcolor{comment}{//\ QPID\ Library\ for\ Arduino\ -\/\ Version\ 3.1.9\ by\ dlloydev\ https://github.com/Dlloydev/QPID}}
+\DoxyCodeLine{00009\ \textcolor{comment}{//\ Based\ on\ the\ Arduino\ PID\_v1\ Library.\ Licensed\ under\ the\ MIT\ License.}}
+\DoxyCodeLine{00010\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_q_p_i_d}{QPID}}\ \{}
+\DoxyCodeLine{00011\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00012\ \ \ \ \ \textcolor{keyword}{enum\ class}\ ctrl\ :\ \textcolor{keywordtype}{int}\ \{manual,\ automatic,\ toggle\};\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ controller\ mode}}
+\DoxyCodeLine{00013\ \ \ \ \ \textcolor{keyword}{enum\ class}\ cdir\ :\ \textcolor{keywordtype}{int}\ \{reverse=-\/1,\ direct=1\};\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ controller\ direction}}
+\DoxyCodeLine{00014\ \ \ \ \ \textcolor{keyword}{enum\ class}\ pmod\ :\ \textcolor{keywordtype}{int}\ \{onerr,\ onmeas,\ onerrmeas\};\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ proportional\ mode}}
+\DoxyCodeLine{00015\ \ \ \ \ \textcolor{keyword}{enum\ class}\ dmod\ :\ \textcolor{keywordtype}{int}\ \{onerr,\ onmeas\};\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ derivative\ mode}}
+\DoxyCodeLine{00016\ \ \ \ \ \textcolor{keyword}{enum\ class}\ awmod\ :\ \textcolor{keywordtype}{int}\ \{cond,\ clamp,\ off,\ round,\ roundcond\};\ \ \textcolor{comment}{//\ integral\ anti-\/windup\ mode}}
+\DoxyCodeLine{00017\ \ \ \ \ \textcolor{keyword}{enum\ class}\ centmod\ :\ \textcolor{keywordtype}{int}\ \{off,\ on,\ strict\};\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Allows\ a\ defined\ output\ zero\ point}}
+\DoxyCodeLine{00018\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00019\ \ \ \ \ \textcolor{keywordtype}{float}\ dispkp\ =\ 0;\ \textcolor{keywordtype}{float}\ dispki\ =\ 0;\ \textcolor{keywordtype}{float}\ dispkd\ =\ 0;}
+\DoxyCodeLine{00020\ \ \ \ \ \textcolor{keywordtype}{float}\ \_pterm,\ \_iterm,\ \_dterm,\ \_kp,\ \_ki,\ \_kd,\ \_err,\ lasterr,\ lastin,\ \_cent,\ \_outsum,\ \_target,\ \_output;}
+\DoxyCodeLine{00021\ \ \ \ \ \textcolor{keywordtype}{float}\ *myin;\ \ \ \ \ \textcolor{comment}{//\ Pointers\ to\ the\ input,\ output,\ and\ target\ variables.\ This\ \ creates\ a}}
+\DoxyCodeLine{00022\ \ \ \ \ \textcolor{keywordtype}{float}\ *\_outmin;}
+\DoxyCodeLine{00023\ \ \ \ \ \textcolor{keywordtype}{float}\ *\_outmax;}
+\DoxyCodeLine{00024\ \ \ \ \ ctrl\ \_mode\ =\ ctrl::manual;}
+\DoxyCodeLine{00025\ \ \ \ \ cdir\ \_dir\ =\ cdir::direct;}
+\DoxyCodeLine{00026\ \ \ \ \ pmod\ \_pmode\ =\ pmod::onerr;}
+\DoxyCodeLine{00027\ \ \ \ \ dmod\ \_dmode\ =\ dmod::onmeas;}
+\DoxyCodeLine{00028\ \ \ \ \ awmod\ \_awmode\ =\ awmod::cond;}
+\DoxyCodeLine{00029\ \ \ \ \ centmod\ \_centmode\ =\ centmod::off;}
+\DoxyCodeLine{00030\ \ \ \ \ uint32\_t\ sampletime,\ lasttime;}
+\DoxyCodeLine{00031\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00032\ \ \ \ \ \mbox{\hyperlink{class_q_p_i_d}{QPID}}()\ \{\}\ \ \textcolor{comment}{//\ Default\ constructor}}
+\DoxyCodeLine{00033\ \ \ \ \ \mbox{\hyperlink{class_q_p_i_d}{QPID}}(\textcolor{keywordtype}{float}*\ a\_in,\ \textcolor{keywordtype}{float}*\ a\_min,\ \textcolor{keywordtype}{float}*\ a\_max,\ \textcolor{keywordtype}{float}\ a\_kp\ =\ 0,\ \textcolor{keywordtype}{float}\ a\_ki\ =\ 0,\ \textcolor{keywordtype}{float}\ a\_kd\ =\ 0,}
+\DoxyCodeLine{00034\ \ \ \ \ \ \ pmod\ a\_pmode\ =\ pmod::onerr,\ dmod\ a\_dmode\ =\ dmod::onmeas,\ awmod\ a\_awmode\ =\ awmod::cond,\ cdir\ a\_dir\ =\ cdir::direct,}
+\DoxyCodeLine{00035\ \ \ \ \ \ \ uint32\_t\ a\_sampletime\ =\ 100000,\ ctrl\ a\_mode\ =\ ctrl::manual,\ centmod\ a\_centmode\ =\ centmod::off,\ \textcolor{keywordtype}{float}\ a\_cent\ =\ NAN)\ \{}
+\DoxyCodeLine{00036\ \ \ \ \ \ \ \ \ init(a\_in,\ a\_min,\ a\_max,\ a\_kp,\ a\_ki,\ a\_kd,\ a\_pmode,\ a\_dmode,\ a\_awmode,\ a\_dir,\ a\_sampletime,\ a\_mode,\ a\_centmode,\ a\_cent);}
+\DoxyCodeLine{00037\ \ \ \ \ \}}
+\DoxyCodeLine{00038\ \ \ \ \ \textcolor{keywordtype}{void}\ init(\textcolor{keywordtype}{float}*\ a\_in,\ \textcolor{keywordtype}{float}*\ a\_min,\ \textcolor{keywordtype}{float}*\ a\_max,\ \textcolor{keywordtype}{float}\ a\_kp\ =\ 0,\ \textcolor{keywordtype}{float}\ a\_ki\ =\ 0,\ \textcolor{keywordtype}{float}\ a\_kd\ =\ 0,}
+\DoxyCodeLine{00039\ \ \ \ \ \ \ pmod\ a\_pmode\ =\ pmod::onerr,\ dmod\ a\_dmode\ =\ dmod::onmeas,\ awmod\ a\_awmode\ =\ awmod::cond,\ cdir\ a\_dir\ =\ cdir::direct,}
+\DoxyCodeLine{00040\ \ \ \ \ \ \ uint32\_t\ a\_sampletime\ =\ 100000,\ ctrl\ a\_mode\ =\ ctrl::manual,\ centmod\ a\_centmode\ =\ centmod::off,\ \textcolor{keywordtype}{float}\ a\_cent\ =\ NAN)\ \{}
+\DoxyCodeLine{00041\ \ \ \ \ \ \ \ \ myin\ =\ a\_in;}
+\DoxyCodeLine{00042\ \ \ \ \ \ \ \ \ \_mode\ =\ a\_mode;}
+\DoxyCodeLine{00043\ \ \ \ \ \ \ \ \ \_outmin\ =\ a\_min;}
+\DoxyCodeLine{00044\ \ \ \ \ \ \ \ \ \_outmax\ =\ a\_max;}
+\DoxyCodeLine{00045\ \ \ \ \ \ \ \ \ \_output\ =\ constrain(\_output,\ *\_outmin,\ *\_outmax);}
+\DoxyCodeLine{00046\ \ \ \ \ \ \ \ \ \_outsum\ =\ constrain(\_outsum,\ *\_outmin,\ *\_outmax);}
+\DoxyCodeLine{00047\ \ \ \ \ \ \ \ \ set\_centmode(a\_centmode);}
+\DoxyCodeLine{00048\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_centmode\ !=\ centmod::off\ \&\&\ !std::isnan(a\_cent))\ \{}
+\DoxyCodeLine{00049\ \ \ \ \ \ \ \ \ \ \ \ \ set\_cent(a\_cent);}
+\DoxyCodeLine{00050\ \ \ \ \ \ \ \ \ \ \ \ \ \_outsum\ =\ \_cent;}
+\DoxyCodeLine{00051\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00052\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ set\_cent(*\_outmin);}
+\DoxyCodeLine{00053\ \ \ \ \ \ \ \ \ sampletime\ =\ a\_sampletime;}
+\DoxyCodeLine{00054\ \ \ \ \ \ \ \ \ set\_dir(a\_dir);}
+\DoxyCodeLine{00055\ \ \ \ \ \ \ \ \ set\_tunings(a\_kp,\ a\_ki,\ a\_kd,\ \_pmode,\ \_dmode,\ \_awmode);}
+\DoxyCodeLine{00056\ \ \ \ \ \ \ \ \ lasttime\ =\ micros()\ -\/\ sampletime;}
+\DoxyCodeLine{00057\ \ \ \ \ \}}
+\DoxyCodeLine{00058\ \ \ \ \ \textcolor{keywordtype}{void}\ init(\textcolor{keywordtype}{float}\ preload\_output\ =\ NAN)\ \{\ \ \textcolor{comment}{//\ Ensure\ a\ bumpless\ transfer\ from\ manual\ to\ automatic\ mode}}
+\DoxyCodeLine{00059\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!std::isnan(preload\_output))\ \_output\ =\ preload\_output;}
+\DoxyCodeLine{00060\ \ \ \ \ \ \ \ \ \_outsum\ =\ \_output;}
+\DoxyCodeLine{00061\ \ \ \ \ \ \ \ \ lastin\ =\ *myin;}
+\DoxyCodeLine{00062\ \ \ \ \ \ \ \ \ \_outsum\ =\ constrain(\_outsum,\ *\_outmin,\ *\_outmax);}
+\DoxyCodeLine{00063\ \ \ \ \ \}}
+\DoxyCodeLine{00064\ \ \ \ \ \textcolor{comment}{//\ This\ function\ should\ be\ called\ every\ time\ "{}void\ loop()"{}\ executes.\ The\ function\ will\ decide\ whether\ a\ new\ }}
+\DoxyCodeLine{00065\ \ \ \ \ \textcolor{comment}{//\ PID\ output\ needs\ to\ be\ computed.\ Returns\ true\ when\ the\ output\ is\ computed,\ false\ when\ nothing\ has\ been\ done.}}
+\DoxyCodeLine{00066\ \ \ \ \ \textcolor{keywordtype}{float}\ compute()\ \{}
+\DoxyCodeLine{00067\ \ \ \ \ \ \ \ \ uint32\_t\ now\ =\ micros();}
+\DoxyCodeLine{00068\ \ \ \ \ \ \ \ \ uint32\_t\ timechange\ =\ (now\ -\/\ lasttime);}
+\DoxyCodeLine{00069\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_mode\ ==\ ctrl::automatic\ \&\&\ timechange\ <\ sampletime)\ \textcolor{keywordflow}{return}\ \_output;\ \ \textcolor{comment}{//\ If\ class\ is\ handling\ the\ timing\ and\ this\ time\ was\ a\ nop}}
+\DoxyCodeLine{00070\ }
+\DoxyCodeLine{00071\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ in\ =\ *myin;}
+\DoxyCodeLine{00072\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ din\ =\ in\ -\/\ lastin;}
+\DoxyCodeLine{00073\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_dir\ ==\ cdir::reverse)\ din\ =\ -\/din;}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00075\ \ \ \ \ \ \ \ \ \_err\ =\ \_target\ -\/\ in;}
+\DoxyCodeLine{00076\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_dir\ ==\ cdir::reverse)\ \_err\ =\ -\/\_err;}
+\DoxyCodeLine{00077\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ derr\ =\ \_err\ -\/\ lasterr;}
+\DoxyCodeLine{00078\ }
+\DoxyCodeLine{00079\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ peterm\ =\ \_kp\ *\ \_err;}
+\DoxyCodeLine{00080\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ pmterm\ =\ \_kp\ *\ din;}
+\DoxyCodeLine{00081\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_pmode\ ==\ pmod::onerr)\ pmterm\ =\ 0;}
+\DoxyCodeLine{00082\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_pmode\ ==\ pmod::onmeas)\ peterm\ =\ 0;}
+\DoxyCodeLine{00083\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{\ \textcolor{comment}{//onerrmeas}}
+\DoxyCodeLine{00084\ \ \ \ \ \ \ \ \ \ \ \ \ peterm\ *=\ 0.5f;}
+\DoxyCodeLine{00085\ \ \ \ \ \ \ \ \ \ \ \ \ pmterm\ *=\ 0.5f;}
+\DoxyCodeLine{00086\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00087\ \ \ \ \ \ \ \ \ \_pterm\ =\ peterm\ -\/\ pmterm;}
+\DoxyCodeLine{00088\ \ \ \ \ \ \ \ \ \_iterm\ =\ \_ki\ *\ \_err;}
+\DoxyCodeLine{00089\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_dmode\ ==\ dmod::onerr)\ \_dterm\ =\ \_kd\ *\ derr;}
+\DoxyCodeLine{00090\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \_dterm\ =\ -\/\_kd\ *\ din;\ \textcolor{comment}{//\ onmeas}}
+\DoxyCodeLine{00091\ }
+\DoxyCodeLine{00092\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_awmode\ ==\ awmod::cond\ ||\ \_awmode\ ==\ awmod::roundcond)\ \{\ \ \textcolor{comment}{//\ condition\ anti-\/windup\ (default)}}
+\DoxyCodeLine{00093\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ aw\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00094\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ \_itermout\ =\ (peterm\ -\/\ pmterm)\ +\ \_ki\ *\ (\_iterm\ +\ \_err);}
+\DoxyCodeLine{00095\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_itermout\ >\ *\_outmax\ \&\&\ derr\ >\ 0)\ aw\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00096\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_itermout\ <\ *\_outmin\ \&\&\ derr\ <\ 0)\ aw\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00097\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (aw\ \&\&\ \_ki)\ \_iterm\ =\ constrain(\_itermout,\ -\/(*\_outmax),\ *\_outmax);}
+\DoxyCodeLine{00098\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00099\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((\_awmode\ ==\ awmod::round\ ||\ \_awmode\ ==\ awmod::roundcond)\ \&\&\ \_err\ <\ 0.001\ \&\&\ \_err\ >\ -\/0.001)\ \{}
+\DoxyCodeLine{00100\ \ \ \ \ \ \ \ \ \ \ \ \ \_err\ =\ 0.0;}
+\DoxyCodeLine{00101\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_centmode\ ==\ centmod::on\ ||\ \_centmode\ ==\ centmod::strict)\ \_outsum\ =\ \_cent;\ \ \ \ \ }
+\DoxyCodeLine{00102\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00103\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_centmode\ ==\ centmod::strict\ \&\&\ \_err\ *\ lasterr\ <\ 0)\ \_outsum\ =\ \_cent;\ \ \textcolor{comment}{//\ Recenters\ any\ old\ integral\ when\ error\ crosses\ zero}}
+\DoxyCodeLine{00104\ }
+\DoxyCodeLine{00105\ \ \ \ \ \ \ \ \ \_outsum\ +=\ \_iterm\ -\/\ pmterm;\ \ \textcolor{comment}{//\ by\ default,\ compute\ output\ as\ per\ PID\_v1\ \ \ \ //\ include\ integral\ amount\ and\ pmterm}}
+\DoxyCodeLine{00106\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_awmode\ !=\ awmod::off)\ \_outsum\ =\ constrain(\_outsum,\ *\_outmin,\ *\_outmax);\ \ \textcolor{comment}{//\ Clamp}}
+\DoxyCodeLine{00107\ }
+\DoxyCodeLine{00108\ \ \ \ \ \ \ \ \ \_output\ =\ constrain(\_outsum\ +\ peterm\ +\ \_dterm,\ *\_outmin,\ *\_outmax);\ \ \textcolor{comment}{//\ include\ \_dterm,\ clamp\ and\ drive\ output}}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00110\ \ \ \ \ \ \ \ \ lasterr\ =\ \_err;}
+\DoxyCodeLine{00111\ \ \ \ \ \ \ \ \ lastin\ =\ in;}
+\DoxyCodeLine{00112\ \ \ \ \ \ \ \ \ lasttime\ =\ now;}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \_output;}
+\DoxyCodeLine{00114\ \ \ \ \ \}}
+\DoxyCodeLine{00115\ \ \ \ \ \textcolor{comment}{//\ set\_tunings\ \ This\ function\ allows\ the\ controller's\ dynamic\ performance\ to\ be\ adjusted.\ It's\ called\ }}
+\DoxyCodeLine{00116\ \ \ \ \ \textcolor{comment}{//\ automatically\ from\ the\ constructor,\ but\ tunings\ can\ also\ be\ adjusted\ on\ the\ fly\ during\ normal\ operation.}}
+\DoxyCodeLine{00117\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_tunings(\textcolor{keywordtype}{float}\ a\_kp,\ \textcolor{keywordtype}{float}\ a\_ki,\ \textcolor{keywordtype}{float}\ a\_kd,\ pmod\ a\_pmode\ =\ pmod::onerr,}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ dmod\ a\_dmode\ =\ dmod::onmeas,\ awmod\ a\_awmode\ =\ awmod::cond)\ \{}
+\DoxyCodeLine{00119\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (a\_kp\ <\ 0\ ||\ a\_ki\ <\ 0\ ||\ a\_kd\ <\ 0\ ||\ !sampletime)\ \textcolor{keywordflow}{return};\ \ \textcolor{comment}{//\ added\ divide\ by\ zero\ protection}}
+\DoxyCodeLine{00120\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (a\_ki\ ==\ 0)\ \_outsum\ =\ 0;}
+\DoxyCodeLine{00121\ \ \ \ \ \ \ \ \ \_pmode\ =\ a\_pmode;\ \_dmode\ =\ a\_dmode;\ \_awmode\ =\ a\_awmode;}
+\DoxyCodeLine{00122\ \ \ \ \ \ \ \ \ dispkp\ =\ a\_kp;\ dispki\ =\ a\_ki;\ dispkd\ =\ a\_kd;}
+\DoxyCodeLine{00123\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ sampletime\_sec\ =\ (float)sampletime\ /\ 1000000;}
+\DoxyCodeLine{00124\ \ \ \ \ \ \ \ \ \_kp\ =\ a\_kp;}
+\DoxyCodeLine{00125\ \ \ \ \ \ \ \ \ \_ki\ =\ a\_ki\ *\ sampletime\_sec;}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \ \ \_kd\ =\ a\_kd\ /\ sampletime\_sec;}
+\DoxyCodeLine{00127\ \ \ \ \ \}}
+\DoxyCodeLine{00128\ \ \ \ \ \textcolor{comment}{//\ set\_tunings\ \ Set\ Tunings\ using\ the\ last\ remembered\ pmode,\ dmode\ and\ awmode\ settings.}}
+\DoxyCodeLine{00129\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_tunings(\textcolor{keywordtype}{float}\ a\_kp,\ \textcolor{keywordtype}{float}\ a\_ki,\ \textcolor{keywordtype}{float}\ a\_kd)\ \{}
+\DoxyCodeLine{00130\ \ \ \ \ \ \ \ \ set\_tunings(a\_kp,\ a\_ki,\ a\_kd,\ \_pmode,\ \_dmode,\ \_awmode);}
+\DoxyCodeLine{00131\ \ \ \ \ \}}
+\DoxyCodeLine{00132\ \ \ \ \ \textcolor{comment}{//\ set\_sampletime\ \ Sets\ the\ period,\ in\ microseconds,\ at\ which\ the\ calculation\ is\ performed.}}
+\DoxyCodeLine{00133\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_sampletime(uint32\_t\ a\_sampletime)\ \{}
+\DoxyCodeLine{00134\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (a\_sampletime\ >\ 0\ \&\&\ sampletime)\ \{\ \ \textcolor{comment}{//\ added\ more\ divide\ by\ zero\ protection}}
+\DoxyCodeLine{00135\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ ratio\ \ =\ (float)a\_sampletime\ /\ (\textcolor{keywordtype}{float})sampletime;}
+\DoxyCodeLine{00136\ \ \ \ \ \ \ \ \ \ \ \ \ \_ki\ *=\ ratio;}
+\DoxyCodeLine{00137\ \ \ \ \ \ \ \ \ \ \ \ \ \_kd\ /=\ ratio;}
+\DoxyCodeLine{00138\ \ \ \ \ \ \ \ \ \ \ \ \ sampletime\ =\ a\_sampletime;}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00140\ \ \ \ \ \}}
+\DoxyCodeLine{00141\ \ \ \ \ \textcolor{comment}{//\ set\_mode\ Sets\ the\ controller\ mode\ to\ manual\ (0),\ automatic\ (1)\ or\ timer\ (2)\ when\ the\ transition\ }}
+\DoxyCodeLine{00142\ \ \ \ \ \textcolor{comment}{//\ from\ manual\ to\ automatic\ or\ timer\ occurs,\ the\ controller\ is\ automatically\ initialized.}}
+\DoxyCodeLine{00143\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_mode(ctrl\ a\_mode)\ \{}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_mode\ ==\ ctrl::manual\ \&\&\ a\_mode\ !=\ ctrl::manual)\ \{\ \textcolor{comment}{//\ just\ went\ from\ manual\ to\ automatic}}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \ \ \ \ \ \ \_mode\ =\ ctrl::automatic;}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ \ \ \ \ \ \ init();}
+\DoxyCodeLine{00147\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00148\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_mode\ ==\ ctrl::automatic\ \&\&\ a\_mode\ !=\ ctrl::automatic)\ \_mode\ =\ ctrl::manual;}
+\DoxyCodeLine{00149\ \ \ \ \ \}}
+\DoxyCodeLine{00150\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_mode(\textcolor{keywordtype}{int}\ a\_mode)\ \{\ set\_mode((ctrl)a\_mode);\ \}}
+\DoxyCodeLine{00151\ \ \ \ \ \textcolor{comment}{//\ Does\ all\ the\ things\ that\ need\ to\ happen\ to\ ensure\ a\ bumpless\ transfer\ from\ manual\ to\ automatic\ mode.}}
+\DoxyCodeLine{00152\ \ \ \ \ \textcolor{keywordtype}{void}\ reset()\ \{}
+\DoxyCodeLine{00153\ \ \ \ \ \ \ \ \ lasttime\ =\ micros()\ -\/\ sampletime;}
+\DoxyCodeLine{00154\ \ \ \ \ \ \ \ \ lastin\ =\ 0;\ \_outsum\ =\ 0;}
+\DoxyCodeLine{00155\ \ \ \ \ \ \ \ \ \_pterm\ =\ 0;\ \_iterm\ =\ 0;\ \_dterm\ =\ 0;}
+\DoxyCodeLine{00156\ \ \ \ \ \}}
+\DoxyCodeLine{00157\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_kp(\textcolor{keywordtype}{float}\ a\_kp)\ \{\ set\_tunings(a\_kp,\ dispki,\ dispkd,\ \_pmode,\ \_dmode,\ \_awmode);\ \}}
+\DoxyCodeLine{00158\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_ki(\textcolor{keywordtype}{float}\ a\_ki)\ \{\ set\_tunings(dispkp,\ a\_ki,\ dispkd,\ \_pmode,\ \_dmode,\ \_awmode);\ \}}
+\DoxyCodeLine{00159\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_kd(\textcolor{keywordtype}{float}\ a\_kd)\ \{\ set\_tunings(dispkp,\ dispki,\ a\_kd,\ \_pmode,\ \_dmode,\ \_awmode);\ \}}
+\DoxyCodeLine{00160\ \ \ \ \ \textcolor{keywordtype}{void}\ add\_kp(\textcolor{keywordtype}{float}\ add)\ \{\ set\_kp(\_kp\ +\ add);\ \}}
+\DoxyCodeLine{00161\ \ \ \ \ \textcolor{keywordtype}{void}\ add\_ki(\textcolor{keywordtype}{float}\ add)\ \{\ set\_ki(\_ki\ +\ add);\ \}}
+\DoxyCodeLine{00162\ \ \ \ \ \textcolor{keywordtype}{void}\ add\_kd(\textcolor{keywordtype}{float}\ add)\ \{\ set\_kd(\_kd\ +\ add);\ \}}
+\DoxyCodeLine{00163\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_centmode(centmod\ a\_centmode)\ \{\ \_centmode\ =\ a\_centmode;\ \}}
+\DoxyCodeLine{00164\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_centmode(\textcolor{keywordtype}{int}\ a\_centmode)\ \{\ \_centmode\ =\ (centmod)a\_centmode;\ \}}
+\DoxyCodeLine{00165\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_cent(\textcolor{keywordtype}{float}\ a\_cent)\ \{\ \textcolor{keywordflow}{if}\ (*\_outmin\ <=\ a\_cent\ \&\&\ *\_outmax\ >=\ a\_cent)\ \_cent\ =\ a\_cent;\ \}}
+\DoxyCodeLine{00166\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_target(\textcolor{keywordtype}{float}\ a\_target)\ \{\ \_target\ =\ a\_target;\ \}}
+\DoxyCodeLine{00167\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_output(\textcolor{keywordtype}{float}\ a\_output)\ \{\ \_output\ =\ constrain(a\_output,\ *\_outmin,\ *\_outmax);\ \}}
+\DoxyCodeLine{00168\ \ \ \ \ \textcolor{comment}{//\ The\ PID\ will\ either\ be\ connected\ to\ a\ direct\ acting\ process\ (+output\ leads\ to\ +input)\ or\ a\ reverse\ acting\ process(+output\ leads\ to\ -\/input).}}
+\DoxyCodeLine{00169\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_dir(cdir\ a\_dir)\ \{\ \_dir\ =\ a\_dir;\ \}}
+\DoxyCodeLine{00170\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_dir(\textcolor{keywordtype}{int}\ a\_dir)\ \{\ \_dir\ =\ (cdir)a\_dir;\ \}}
+\DoxyCodeLine{00171\ \ \ \ \ \textcolor{comment}{//\ Sets\ the\ computation\ method\ for\ the\ proportional\ term,\ to\ compute\ based\ either\ on\ error\ (default),\ on\ measurement,\ or\ the\ average\ of\ both.}}
+\DoxyCodeLine{00172\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_pmode(pmod\ a\_pmode)\ \{\ \_pmode\ =\ a\_pmode;\ \}}
+\DoxyCodeLine{00173\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_pmode(\textcolor{keywordtype}{int}\ a\_pmode)\ \{\ \_pmode\ =\ (pmod)a\_pmode;\ \}}
+\DoxyCodeLine{00174\ \ \ \ \ \textcolor{comment}{//\ Sets\ the\ computation\ method\ for\ the\ derivative\ term,\ to\ compute\ based\ either\ on\ error\ or\ on\ measurement\ (default).}}
+\DoxyCodeLine{00175\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_dmode(dmod\ a\_dmode)\ \{\ \_dmode\ =\ a\_dmode;\ \}}
+\DoxyCodeLine{00176\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_dmode(\textcolor{keywordtype}{int}\ a\_dmode)\ \{\ \_dmode\ =\ (dmod)a\_dmode;\ \}}
+\DoxyCodeLine{00177\ \ \ \ \ \textcolor{comment}{//\ Sets\ the\ integral\ anti-\/windup\ mode\ to\ one\ of\ clamp,\ which\ clamps\ the\ output\ after\ adding\ integral\ and\ proportional\ (on\ measurement)\ terms,}}
+\DoxyCodeLine{00178\ \ \ \ \ \textcolor{comment}{//\ or\ cond\ (default),\ which\ provides\ some\ integral\ correction,\ prevents\ deep\ saturation\ and\ reduces\ overshoot.\ Option\ off\ disables\ anti-\/windup\ altogether.}}
+\DoxyCodeLine{00179\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_awmode(awmod\ a\_awmode)\ \{\ \_awmode\ =\ a\_awmode;\ \}}
+\DoxyCodeLine{00180\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_awmode(\textcolor{keywordtype}{int}\ a\_awmode)\ \{\ \_awmode\ =\ (awmod)a\_awmode;\ \}}
+\DoxyCodeLine{00181\ \ \ \ \ \textcolor{comment}{//\ sets\ the\ output\ summation\ value}}
+\DoxyCodeLine{00182\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_outsum(\textcolor{keywordtype}{float}\ a\_outsum)\ \{\ \_outsum\ =\ a\_outsum;\ \}}
+\DoxyCodeLine{00183\ \ \ \ \ \textcolor{comment}{//\ Getter\ functions}}
+\DoxyCodeLine{00184\ \ \ \ \ \textcolor{keywordtype}{float}\ err()\ \{\ \textcolor{keywordflow}{return}\ \_err;\ \}}
+\DoxyCodeLine{00185\ \ \ \ \ \textcolor{keywordtype}{float}\ kp()\ \{\ \textcolor{keywordflow}{return}\ dispkp;\ \}}
+\DoxyCodeLine{00186\ \ \ \ \ \textcolor{keywordtype}{float}\ ki()\ \{\ \textcolor{keywordflow}{return}\ dispki;\ \}}
+\DoxyCodeLine{00187\ \ \ \ \ \textcolor{keywordtype}{float}\ kd()\ \{\ \textcolor{keywordflow}{return}\ dispkd;\ \}}
+\DoxyCodeLine{00188\ \ \ \ \ \textcolor{keywordtype}{float}\ pterm()\ \{\ \textcolor{keywordflow}{return}\ \_pterm;\ \}}
+\DoxyCodeLine{00189\ \ \ \ \ \textcolor{keywordtype}{float}\ iterm()\ \{\ \textcolor{keywordflow}{return}\ \_iterm;\ \}}
+\DoxyCodeLine{00190\ \ \ \ \ \textcolor{keywordtype}{float}\ dterm()\ \{\ \textcolor{keywordflow}{return}\ \_dterm;\ \}}
+\DoxyCodeLine{00191\ \ \ \ \ \textcolor{keywordtype}{float}\ outsum()\ \{\ \textcolor{keywordflow}{return}\ \_outsum;\ \}}
+\DoxyCodeLine{00192\ \ \ \ \ \textcolor{keywordtype}{float}\ outmin()\ \{\ \textcolor{keywordflow}{return}\ *\_outmin;\ \}}
+\DoxyCodeLine{00193\ \ \ \ \ \textcolor{keywordtype}{float}\ outmax()\ \{\ \textcolor{keywordflow}{return}\ *\_outmax;\ \}}
+\DoxyCodeLine{00194\ \ \ \ \ \textcolor{keywordtype}{float}\ outrange()\ \{\ \textcolor{keywordflow}{return}\ *\_outmax\ -\/\ *\_outmin;\ \}}
+\DoxyCodeLine{00195\ \ \ \ \ \textcolor{keywordtype}{float}\ cent()\ \{\ \textcolor{keywordflow}{return}\ \_cent;\ \}}
+\DoxyCodeLine{00196\ \ \ \ \ \textcolor{keywordtype}{float}\ target()\ \{\ \textcolor{keywordflow}{return}\ \_target;\ \}}
+\DoxyCodeLine{00197\ \ \ \ \ \textcolor{keywordtype}{float}\ output()\ \{\ \textcolor{keywordflow}{return}\ \_output;\ \}}
+\DoxyCodeLine{00198\ \ \ \ \ \textcolor{keywordtype}{int}\ mode()\ \{\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{int}\textcolor{keyword}{>}(\_mode);\ \}}
+\DoxyCodeLine{00199\ \ \ \ \ \textcolor{keywordtype}{int}\ dir()\ \{\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{int}\textcolor{keyword}{>}(\_dir);\ \}}
+\DoxyCodeLine{00200\ \ \ \ \ \textcolor{keywordtype}{int}\ pmode()\ \{\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{int}\textcolor{keyword}{>}(\_pmode);\ \}}
+\DoxyCodeLine{00201\ \ \ \ \ \textcolor{keywordtype}{int}\ dmode()\ \{\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{int}\textcolor{keyword}{>}(\_dmode);\ \}}
+\DoxyCodeLine{00202\ \ \ \ \ \textcolor{keywordtype}{int}\ awmode()\ \{\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{int}\textcolor{keyword}{>}(\_awmode);\ \}}
+\DoxyCodeLine{00203\ \ \ \ \ \textcolor{keywordtype}{int}\ centmode()\ \{\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{int}\textcolor{keyword}{>}(\_centmode);\ \}}
+\DoxyCodeLine{00204\ \ \ \ \ \textcolor{keywordtype}{float}*\ target\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \&\_target;\ \}}
+\DoxyCodeLine{00205\ \};}
+\DoxyCodeLine{00206\ \textcolor{comment}{//\ ServoMotor\ -\/\ a\ parent\ class\ providing\ common\ elements\ for\ motor\ manager\ child\ classes.\ These\ subclasses\ each}}
+\DoxyCodeLine{00207\ \textcolor{comment}{//\ coordinate\ all\ aspects\ of\ one\ motor,\ including\ related\ sensors\ \&\ pid,\ having\ a\ standard\ control\ interface}}
+\DoxyCodeLine{00208\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_servo_motor}{ServoMotor}}\ \{}
+\DoxyCodeLine{00209\ \ \ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{00210\ \ \ \ \ \mbox{\hyperlink{class_hotrc}{Hotrc}}*\ hotrc;}
+\DoxyCodeLine{00211\ \ \ \ \ \mbox{\hyperlink{class_speedometer}{Speedometer}}*\ speedo;}
+\DoxyCodeLine{00212\ \ \ \ \ Servo\ motor;}
+\DoxyCodeLine{00213\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ uint32\_t\ pid\_timeout\ =\ 85000;}
+\DoxyCodeLine{00214\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ pid\_timer\ =\ \mbox{\hyperlink{class_timer}{Timer}}(pid\_timeout);}
+\DoxyCodeLine{00215\ \ \ \ \ \textcolor{keywordtype}{int}\ pin,\ freq;}
+\DoxyCodeLine{00216\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00217\ \ \ \ \ \textcolor{keywordtype}{bool}\ reverse\ =\ \textcolor{keyword}{false};\ \ \textcolor{comment}{//\ defaults.\ subclasses\ override\ as\ necessary}}
+\DoxyCodeLine{00218\ \ \ \ \ \textcolor{keywordtype}{float}\ pc[NUM\_MOTORVALS]\ =\ \{\ 0,\ NAN,\ 100,\ 0,\ NAN,\ NAN,\ NAN,\ NAN\ \};\ \ \textcolor{comment}{//\ percent\ values\ [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]\ \ values\ range\ from\ -\/100\%\ to\ 100\%\ are\ all\ derived\ or\ auto-\/assigned}}
+\DoxyCodeLine{00219\ \ \ \ \ \textcolor{keywordtype}{float}\ si[NUM\_MOTORVALS]\ =\ \{\ 45.0,\ 43.0,\ 168.2,\ 45.0,\ NAN,\ 0,\ 180,\ 1.0\ \};\ \ \textcolor{comment}{//\ standard\ si-\/unit\ values\ [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]}}
+\DoxyCodeLine{00220\ \ \ \ \ \textcolor{keywordtype}{float}\ us[NUM\_MOTORVALS]\ =\ \{\ NAN,\ 1500,\ NAN,\ NAN,\ NAN,\ 500,\ 2500,\ NAN\ \};\ \ \textcolor{comment}{//\ us\ pulsewidth\ values\ [-\//CENT/-\//OUT/-\//ABSMIN/ABSMAX/-\/]}}
+\DoxyCodeLine{00221\ \ \ \ \ \mbox{\hyperlink{class_servo_motor}{ServoMotor}}(\textcolor{keywordtype}{int}\ \_pin,\ \textcolor{keywordtype}{int}\ \_freq)\ \{\ pin\ =\ \_pin;\ freq\ =\ \_freq;\ \}}
+\DoxyCodeLine{00222\ \ \ \ \ \textcolor{keywordtype}{void}\ setup(\mbox{\hyperlink{class_hotrc}{Hotrc}}*\ \_hotrc,\ \mbox{\hyperlink{class_speedometer}{Speedometer}}*\ \_speedo)\ \{}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \ \ hotrc\ =\ \_hotrc;}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ \ \ speedo\ =\ \_speedo;}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \ \ motor.setPeriodHertz(freq);}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ \ \ motor.attach(pin,\ us[ABSMIN],\ us[ABSMAX]);\ \ \textcolor{comment}{//\ Servo\ goes\ from\ 500us\ (+90deg\ CW)\ to\ 2500us\ (-\/90deg\ CCW)}}
+\DoxyCodeLine{00227\ \ \ \ \ \}}
+\DoxyCodeLine{00228\ \ \ \ \ \textcolor{keywordtype}{float}\ out\_pc\_to\_si(\textcolor{keywordtype}{float}\ \_pc)\ \{\ \ \textcolor{comment}{//\ Eventually\ this\ should\ be\ linearized}}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ map(\_pc,\ pc[ABSMIN],\ pc[ABSMAX],\ si[ABSMIN],\ si[ABSMAX]);\ }
+\DoxyCodeLine{00230\ \ \ \ \ \}}
+\DoxyCodeLine{00231\ \ \ \ \ \textcolor{keywordtype}{float}\ out\_si\_to\_pc(\textcolor{keywordtype}{float}\ \_si)\ \{\ \ \textcolor{comment}{//\ Eventually\ this\ should\ be\ linearized}}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ map(\_si,\ si[ABSMIN],\ si[ABSMAX],\ pc[ABSMIN],\ pc[ABSMAX]);}
+\DoxyCodeLine{00233\ \ \ \ \ \}}
+\DoxyCodeLine{00234\ \ \ \ \ \textcolor{keywordtype}{float}\ out\_si\_to\_us(\textcolor{keywordtype}{float}\ \_si)\ \{\ \ \textcolor{comment}{//\ works\ for\ motor\ with\ or\ without\ stop\ value}}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ map(\_si,\ si[ABSMIN],\ si[ABSMAX],\ reverse\ ?\ us[ABSMAX]\ :\ us[ABSMIN],\ reverse\ ?\ us[ABSMIN]\ :\ us[ABSMAX]);}
+\DoxyCodeLine{00236\ \ \ \ \ \}}
+\DoxyCodeLine{00237\ \ \ \ \ \textcolor{keywordtype}{float}\ out\_pc\_to\_us(\textcolor{keywordtype}{float}\ \_pc)\ \{\ \ \textcolor{comment}{//\ works\ for\ motor\ with\ or\ without\ stop\ value}}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ map(\_pc,\ pc[ABSMIN],\ pc[ABSMAX],\ reverse\ ?\ us[ABSMAX]\ :\ us[ABSMIN],\ reverse\ ?\ us[ABSMIN]\ :\ us[ABSMAX]);}
+\DoxyCodeLine{00239\ \ \ \ \ \}}
+\DoxyCodeLine{00240\ \ \ \ \ \textcolor{keywordtype}{void}\ write\_motor()\ \{\ \textcolor{keywordflow}{if}\ (!std::isnan(us[OUT]))\ motor.writeMicroseconds((int32\_t)(us[OUT]));\ \}}
+\DoxyCodeLine{00241\ \};}
+\DoxyCodeLine{00242\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_jag_motor}{JagMotor}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{class_servo_motor}{ServoMotor}}\ \{}
+\DoxyCodeLine{00243\ \ \ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{00244\ \ \ \ \ \mbox{\hyperlink{class_car_battery}{CarBattery}}*\ mulebatt;}
+\DoxyCodeLine{00245\ \ \ \ \ \textcolor{keywordtype}{float}\ car\_batt\_fake\_v\ =\ 12.0;}
+\DoxyCodeLine{00246\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ volt\_check\_timer\ =\ \mbox{\hyperlink{class_timer}{Timer}}(3500000);}
+\DoxyCodeLine{00247\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00248\ \ \ \ \ \textcolor{keyword}{using\ }ServoMotor::ServoMotor;}
+\DoxyCodeLine{00249\ \ \ \ \ \textcolor{keywordtype}{float}\ duty\_fwd\_pc\ =\ 100;\ \ \textcolor{comment}{//\ default.\ subclasses\ override\ as\ necessary}}
+\DoxyCodeLine{00250\ \ \ \ \ \textcolor{keywordtype}{float}\ duty\_rev\_pc\ =\ 100;\ \ \textcolor{comment}{//\ default.\ subclasses\ override\ as\ necessary}}
+\DoxyCodeLine{00251\ \ \ \ \ \textcolor{keywordtype}{float}\ pc[NUM\_MOTORVALS]\ =\ \{\ NAN,\ 0,\ NAN,\ 0,\ NAN,\ -\/100,\ 100,\ 2\ \};\ \ \textcolor{comment}{//\ percent\ values\ [OPMIN/STOP/OPMAX/OUT/-\//ABSMIN/ABSMAX/MARGIN]\ \ values\ range\ from\ -\/100\%\ to\ 100\%\ are\ all\ derived\ or\ auto-\/assigned}}
+\DoxyCodeLine{00252\ \ \ \ \ \textcolor{keywordtype}{float}\ si[NUM\_MOTORVALS]\ =\ \{\ NAN,\ 0,\ NAN,\ 0,\ NAN,\ NAN,\ NAN,\ NAN\ \};\ \ \textcolor{comment}{//\ standard\ si-\/unit\ values\ [OPMIN/STOP/OPMAX/OUT/-\//ABSMIN/ABSMAX/MARGIN]}}
+\DoxyCodeLine{00253\ \ \ \ \ \textcolor{keywordtype}{float}\ us[NUM\_MOTORVALS]\ =\ \{\ NAN,\ 1500,\ NAN,\ NAN,\ NAN,\ 670,\ 2330,\ NAN\ \};\ \ \textcolor{comment}{//\ us\ pulsewidth\ values\ [-\//CENT/-\//OUT/-\//ABSMIN/ABSMAX/-\/]}}
+\DoxyCodeLine{00254\ \ \ \ \ float\ (\&volt)[arraysize(si)]\ =\ si;\ \ \textcolor{comment}{//\ our\ standard\ si\ value\ is\ volts.\ Create\ reference\ so\ si\ and\ volt\ are\ interchangeable}}
+\DoxyCodeLine{00255\ \ \ \ \ \textcolor{comment}{//\ JagMotor(int\ \_pin,\ int\ \_freq)\ :\ ServoMotor(\_pin,\ \_freq)\ \{\}}}
+\DoxyCodeLine{00256\ \ \ \ \ \textcolor{keywordtype}{void}\ derive()\ \{\ \ \textcolor{comment}{//\ calc\ pc\ and\ voltage\ op\ limits\ from\ volt\ and\ us\ abs\ limits\ }}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ si[ABSMAX]\ =\ running\_on\_devboard\ ?\ car\_batt\_fake\_v\ :\ mulebatt-\/>v();}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \ \ si[ABSMIN]\ =\ -\/(si[ABSMAX]);}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \ \ pc[OPMIN]\ =\ pc[ABSMIN]\ *\ duty\_rev\_pc\ /\ 100.0;}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \ \ pc[OPMAX]\ =\ pc[ABSMAX]\ *\ duty\_fwd\_pc\ /\ 100.0;}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \ \ si[OPMIN]\ =\ map(pc[OPMIN],\ pc[STOP],\ pc[ABSMIN],\ si[STOP],\ si[ABSMIN]);}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \ \ si[OPMAX]\ =\ map(pc[OPMAX],\ pc[STOP],\ pc[ABSMAX],\ si[STOP],\ si[ABSMAX]);}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \ \ si[MARGIN]\ =\ map(pc[MARGIN],\ pc[ABSMIN],\ pc[ABSMAX],\ si[ABSMIN],\ si[ABSMAX]);}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ us[MARGIN]\ =\ map(pc[MARGIN],\ pc[ABSMIN],\ pc[ABSMAX],\ us[ABSMIN],\ us[ABSMAX]);}}
+\DoxyCodeLine{00265\ \ \ \ \ \}}
+\DoxyCodeLine{00266\ \ \ \ \ \textcolor{keywordtype}{float}\ out\_pc\_to\_si(\textcolor{keywordtype}{float}\ \_pc)\ \{\ \ \textcolor{comment}{//\ Eventually\ this\ should\ be\ linearized}}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_pc\ >\ pc[STOP])\ \textcolor{keywordflow}{return}\ map(\_pc,\ pc[STOP],\ pc[ABSMAX],\ si[STOP],\ si[ABSMAX]);}
+\DoxyCodeLine{00268\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_pc\ <\ pc[STOP])\ \textcolor{keywordflow}{return}\ map(\_pc,\ pc[STOP],\ pc[ABSMIN],\ si[STOP],\ si[ABSMIN]);}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ si[STOP];}
+\DoxyCodeLine{00270\ \ \ \ \ \}}
+\DoxyCodeLine{00271\ \ \ \ \ \textcolor{keywordtype}{float}\ out\_si\_to\_pc(\textcolor{keywordtype}{float}\ \_si)\ \{\ \ \textcolor{comment}{//\ Eventually\ this\ should\ be\ linearized}}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_si\ >\ si[STOP])\ \textcolor{keywordflow}{return}\ map(\_si,\ si[STOP],\ si[ABSMAX],\ pc[STOP],\ pc[ABSMAX]);}
+\DoxyCodeLine{00273\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_si\ <\ si[STOP])\ \textcolor{keywordflow}{return}\ map(\_si,\ si[STOP],\ si[ABSMIN],\ pc[STOP],\ pc[ABSMIN]);}
+\DoxyCodeLine{00274\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ pc[STOP];}
+\DoxyCodeLine{00275\ \ \ \ \ \}}
+\DoxyCodeLine{00276\ \ \ \ \ \textcolor{keywordtype}{float}\ out\_si\_to\_us(\textcolor{keywordtype}{float}\ \_si)\ \{\ \ \textcolor{comment}{//\ works\ for\ motor\ with\ center\ stop\ value}}
+\DoxyCodeLine{00277\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_si\ >\ si[STOP])\ \textcolor{keywordflow}{return}\ map(\_si,\ si[STOP],\ si[ABSMAX],\ us[STOP],\ reverse\ ?\ us[ABSMIN]\ :\ us[ABSMAX]);}
+\DoxyCodeLine{00278\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_si\ <\ si[STOP])\ \textcolor{keywordflow}{return}\ map(\_si,\ si[STOP],\ si[ABSMIN],\ us[STOP],\ reverse\ ?\ us[ABSMAX]\ :\ us[ABSMIN]);}
+\DoxyCodeLine{00279\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ us[STOP];}
+\DoxyCodeLine{00280\ \ \ \ \ \}}
+\DoxyCodeLine{00281\ \ \ \ \ \textcolor{keywordtype}{float}\ out\_pc\_to\_us(\textcolor{keywordtype}{float}\ \_pc)\ \{\ \ \textcolor{comment}{//\ works\ for\ motor\ with\ center\ stop\ value}}
+\DoxyCodeLine{00282\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_pc\ >\ pc[STOP])\ \textcolor{keywordflow}{return}\ map(\_pc,\ pc[STOP],\ pc[ABSMAX],\ us[STOP],\ reverse\ ?\ us[ABSMIN]\ :\ us[ABSMAX]);}
+\DoxyCodeLine{00283\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_pc\ <\ pc[STOP])\ \textcolor{keywordflow}{return}\ map(\_pc,\ pc[STOP],\ pc[ABSMIN],\ us[STOP],\ reverse\ ?\ us[ABSMAX]\ :\ us[ABSMIN]);}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ us[STOP];}
+\DoxyCodeLine{00285\ \ \ \ \ \}}
+\DoxyCodeLine{00286\ \ \ \ \ \textcolor{keywordtype}{void}\ setup(\mbox{\hyperlink{class_hotrc}{Hotrc}}*\ \_hotrc,\ \mbox{\hyperlink{class_speedometer}{Speedometer}}*\ \_speedo,\ \mbox{\hyperlink{class_car_battery}{CarBattery}}*\ \_batt)\ \{}
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \ \ ServoMotor::setup(\_hotrc,\ \_speedo);}
+\DoxyCodeLine{00288\ \ \ \ \ \ \ \ \ mulebatt\ =\ \_batt;}
+\DoxyCodeLine{00289\ \ \ \ \ \ \ \ \ derive();}
+\DoxyCodeLine{00290\ \ \ \ \ \ \ \ \ pc[OUT]\ =\ out\_si\_to\_pc(si[OUT]);}
+\DoxyCodeLine{00291\ \ \ \ \ \ \ \ \ us[OUT]\ =\ out\_si\_to\_us(si[OUT]);}
+\DoxyCodeLine{00292\ \ \ \ \ \}}
+\DoxyCodeLine{00293\ \ \ \ \ \textcolor{keywordtype}{void}\ write\_motor()\ \{\ \textcolor{keywordflow}{if}\ (!std::isnan(us[OUT]))\ motor.writeMicroseconds((int32\_t)(us[OUT]));\ \}}
+\DoxyCodeLine{00294\ \};}
+\DoxyCodeLine{00295\ \textcolor{comment}{//\ throttle\_ctrl\_mode\ :\ (compile\ time\ option)}}
+\DoxyCodeLine{00296\ \textcolor{comment}{//\ \ \ \ OpenLoop\ :\ Servo\ angle\ is\ simply\ proportional\ to\ trigger\ pull.\ This\ is\ our\ tested\ default}}
+\DoxyCodeLine{00297\ \textcolor{comment}{//\ \ \ \ ActivePID\ :\ Servo\ angle\ is\ determined\ by\ PID\ calculation\ designed\ to\ converge\ engine\ rpm\ to\ a\ target\ value\ set\ proportional\ to\ trigger\ pull}}
+\DoxyCodeLine{00298\ \textcolor{comment}{//\ cruise\_scheme\ :\ (compile\ time\ option)\ Pick\ from\ 3\ different\ styles\ for\ adjustment\ of\ cruise\ setpoint.\ I\ prefer\ THROTTLE\_DELTA.}}
+\DoxyCodeLine{00299\ \textcolor{comment}{//\ \ \ \ THROTTLE\_ANGLE\ :\ Cruise\ locks\ servo\ angle\ (throttle\_target\_pc),\ instead\ of\ pid.\ Moving\ trigger\ from\ center\ adjusts\ setpoint\ proportional\ to\ how\ far\ you\ push\ it\ before\ releasing\ (and\ reduced\ by\ an\ attenuation\ factor)}}
+\DoxyCodeLine{00300\ \textcolor{comment}{//\ \ \ \ THROTTLE\_DELTA\ :\ Cruise\ locks\ servo\ angle\ (throttle\_target\_pc),\ instead\ of\ pid.\ Any\ non-\/center\ trigger\ position\ continuously\ adjusts\ setpoint\ proportional\ to\ how\ far\ it's\ pulled\ over\ time\ (up\ to\ a\ specified\ maximum\ rate)}}
+\DoxyCodeLine{00301\ \textcolor{comment}{//\ \ \ \ PID\_SUSPEND\_FLY\ :\ Cruise\ uses\ its\ own\ pid\ targeting\ a\ speed\ value.\ The\ PID\ output\ is\ either\ a\ servo\ angle\ or\ an\ rpm\ target\ for\ the\ gas\ pid,\ depending\ on\ throttle\_ctrl\_mode\ setting\ above.\ Whatever\ speed\ you're\ at\ when\ trigger\ releases\ is\ new\ cruise\ target\ \ }}
+\DoxyCodeLine{00302\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_gas_servo}{GasServo}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{class_servo_motor}{ServoMotor}}\ \{}
+\DoxyCodeLine{00303\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00304\ \ \ \ \ \mbox{\hyperlink{class_tachometer}{Tachometer}}*\ tach;}
+\DoxyCodeLine{00305\ \ \ \ \ \mbox{\hyperlink{class_potentiometer}{Potentiometer}}*\ pot;}
+\DoxyCodeLine{00306\ \ \ \ \ \mbox{\hyperlink{class_temperature_sensor_manager}{TemperatureSensorManager}}*\ tempsens;}
+\DoxyCodeLine{00307\ \ \ \ \ \textcolor{keywordtype}{float}\ cruise\_pidgas\_kp\ =\ 5.57;\ \ \ \ \textcolor{comment}{//\ PID\ proportional\ coefficient\ (cruise)\ How\ many\ RPM\ for\ each\ unit\ of\ difference\ between\ measured\ and\ desired\ car\ speed\ \ (unitless\ range\ 0-\/1)}}
+\DoxyCodeLine{00308\ \ \ \ \ \textcolor{keywordtype}{float}\ cruise\_pidgas\_ki\ =\ 0.000;\ \ \ \textcolor{comment}{//\ PID\ integral\ frequency\ factor\ (cruise).\ How\ many\ more\ RPM\ for\ each\ unit\ time\ trying\ to\ reach\ desired\ car\ speed\ \ (in\ 1/us\ (mhz),\ range\ 0-\/1)}}
+\DoxyCodeLine{00309\ \ \ \ \ \textcolor{keywordtype}{float}\ cruise\_pidgas\_kd\ =\ 0.000;\ \ \ \textcolor{comment}{//\ PID\ derivative\ time\ factor\ (cruise).\ How\ much\ to\ dampen\ sudden\ RPM\ changes\ due\ to\ P\ and\ I\ infuences\ (in\ us,\ range\ 0-\/1)}}
+\DoxyCodeLine{00310\ \ \ \ \ \textcolor{keywordtype}{float}\ cruise\_opengas\_kp\ =\ 7.00;\ \ \ \textcolor{comment}{//\ PID\ proportional\ coefficient\ (cruise)\ How\ many\ RPM\ for\ each\ unit\ of\ difference\ between\ measured\ and\ desired\ car\ speed\ \ (unitless\ range\ 0-\/1)}}
+\DoxyCodeLine{00311\ \ \ \ \ \textcolor{keywordtype}{float}\ cruise\_opengas\_ki\ =\ 0.000;\ \ \textcolor{comment}{//\ PID\ integral\ frequency\ factor\ (cruise).\ How\ many\ more\ RPM\ for\ each\ unit\ time\ trying\ to\ reach\ desired\ car\ speed\ \ (in\ 1/us\ (mhz),\ range\ 0-\/1)}}
+\DoxyCodeLine{00312\ \ \ \ \ \textcolor{keywordtype}{float}\ cruise\_opengas\_kd\ =\ 0.000;\ \ \textcolor{comment}{//\ PID\ derivative\ time\ factor\ (cruise).\ How\ much\ to\ dampen\ sudden\ RPM\ changes\ due\ to\ P\ and\ I\ infuences\ (in\ us,\ range\ 0-\/1)}}
+\DoxyCodeLine{00313\ \ \ \ \ \textcolor{keywordtype}{float}\ gas\_kp\ =\ 0.013;\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ PID\ proportional\ coefficient\ (gas)\ How\ much\ to\ open\ throttle\ for\ each\ unit\ of\ difference\ between\ measured\ and\ desired\ RPM\ \ (unitless\ range\ 0-\/1)}}
+\DoxyCodeLine{00314\ \ \ \ \ \textcolor{keywordtype}{float}\ gas\_ki\ =\ 0.000;\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ PID\ integral\ frequency\ factor\ (gas).\ How\ much\ more\ to\ open\ throttle\ for\ each\ unit\ time\ trying\ to\ reach\ desired\ RPM\ \ (in\ 1/us\ (mhz),\ range\ 0-\/1)}}
+\DoxyCodeLine{00315\ \ \ \ \ \textcolor{keywordtype}{float}\ gas\_kd\ =\ 0.000;\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ PID\ derivative\ time\ factor\ (gas).\ How\ much\ to\ dampen\ sudden\ throttle\ changes\ due\ to\ P\ and\ I\ infuences\ (in\ us,\ range\ 0-\/1)}}
+\DoxyCodeLine{00316\ \ \ \ \ \textcolor{keywordtype}{float}\ cruise\_ctrl\_extent\_pc,\ adjustpoint,\ ctrlratio;\ \ \textcolor{comment}{//\ During\ cruise\ adjustments,\ saves\ farthest\ trigger\ position\ read}}
+\DoxyCodeLine{00317\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ cruiseDeltaTimer,\ throttleRateTimer;}
+\DoxyCodeLine{00318\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00319\ \ \ \ \ \textcolor{keyword}{using\ }ServoMotor::ServoMotor;}
+\DoxyCodeLine{00320\ \ \ \ \ \mbox{\hyperlink{class_q_p_i_d}{QPID}}\ pid,\ cruisepid;}
+\DoxyCodeLine{00321\ \ \ \ \ \textcolor{keywordtype}{int}\ motormode\ =\ Idle;}
+\DoxyCodeLine{00322\ \ \ \ \ \textcolor{keywordtype}{bool}\ cruise\_trigger\_released\ =\ \textcolor{keyword}{false},\ mode\_busy\ =\ \textcolor{keyword}{false},\ reverse\ =\ \textcolor{keyword}{false};\ \ \textcolor{comment}{//\ if\ servo\ higher\ pulsewidth\ turns\ ccw,\ then\ do\ reverse=true}}
+\DoxyCodeLine{00323\ \ \ \ \ float\ (\&deg)[arraysize(si)]\ =\ si;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ our\ standard\ si\ value\ is\ degrees\ of\ rotation\ "{}deg"{}.\ Create\ reference\ so\ si\ and\ deg\ are\ interchangeable}}
+\DoxyCodeLine{00324\ \ \ \ \ \textcolor{keywordtype}{float}\ max\_throttle\_angular\_velocity\_degps\ =\ 65.0;\ \ \textcolor{comment}{//\ deg/sec\ How\ quickly\ can\ the\ throttle\ change\ angle?\ \ too\ low\ is\ unresponsive,\ too\ high\ can\ cause\ engine\ hesitations\ (going\ up)\ or\ stalls\ (going\ down)}}
+\DoxyCodeLine{00325\ \ \ \ \ \textcolor{keywordtype}{float}\ tach\_last,\ throttle\_target\_pc,\ governor\ =\ 95,\ max\_throttle\_angular\_velocity\_pcps;\ \ \textcolor{comment}{//\ Software\ governor\ will\ only\ allow\ this\ percent\ of\ full-\/open\ throttle\ (percent\ 0-\/100)}}
+\DoxyCodeLine{00326\ \ \ \ \ \textcolor{keywordtype}{float}\ idle\_si[NUM\_MOTORVALS]\ =\ \{\ 45.0,\ NAN,\ 60.0,\ 58.0,\ NAN,\ 43.0,\ 75.0,\ 1.0\ \};\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ in\ angular\ degrees\ [OPMIN(hot)/-\//OPMAX(cold)/OUT/-\//ABSMIN/ABSMAX/MARGIN]}}
+\DoxyCodeLine{00327\ \ \ \ \ \textcolor{keywordtype}{float}\ idletemp\_f[NUM\_MOTORVALS]\ =\ \{\ 60.0,\ NAN,\ 205.0,\ 75.0,\ NAN,\ 40.0,\ 225.0,\ 1.5\};\ \ \ \ \ \ \textcolor{comment}{//\ in\ degrees\ F\ [OPMIN/-\//OPMAX/OUT/-\//ABSMIN/ABSMAX/MARGIN]}}
+\DoxyCodeLine{00328\ \ \ \ \ \textcolor{keywordtype}{float}\ idle\_pc\ =\ 11.3;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ idle\ percent\ is\ derived\ from\ the\ si\ (degrees)\ value}}
+\DoxyCodeLine{00329\ \ \ \ \ \textcolor{keywordtype}{float}\ starting\_pc\ =\ 25.0;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ percent\ throttle\ to\ open\ to\ while\ starting\ the\ car}}
+\DoxyCodeLine{00330\ \ \ \ \ \textcolor{keywordtype}{float}\ pc\_to\_rpm(\textcolor{keywordtype}{float}\ \_pc)\ \{}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ map(\_pc,\ 0.0,\ 100.0,\ tach-\/>idle\_rpm(),\ tach-\/>govern\_rpm());}
+\DoxyCodeLine{00332\ \ \ \ \ \}}
+\DoxyCodeLine{00333\ \ \ \ \ \textcolor{keywordtype}{float}\ rpm\_to\_pc(\textcolor{keywordtype}{float}\ \_rpm)\ \{}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ map(\_rpm,\ tach-\/>idle\_rpm(),\ tach-\/>govern\_rpm(),\ 0.0,\ 100.0);}
+\DoxyCodeLine{00335\ \ \ \ \ \}}
+\DoxyCodeLine{00336\ \ \ \ \ \textcolor{keywordtype}{void}\ derive()\ \{\ \ \textcolor{comment}{//\ calc\ derived\ limit\ values\ for\ all\ units\ based\ on\ tuned\ values\ for\ each\ motor}}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \ \ pc[ABSMIN]\ =\ map(si[ABSMIN],\ si[OPMIN],\ si[OPMAX],\ pc[OPMIN],\ pc[OPMAX]);}
+\DoxyCodeLine{00338\ \ \ \ \ \ \ \ \ pc[ABSMAX]\ =\ map(si[ABSMAX],\ si[OPMIN],\ si[OPMAX],\ pc[OPMIN],\ pc[OPMAX]);}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ \ \ pc[PARKED]\ =\ map(si[PARKED],\ si[OPMIN],\ si[OPMAX],\ pc[OPMIN],\ pc[OPMAX]);}
+\DoxyCodeLine{00340\ \ \ \ \ \ \ \ \ pc[GOVERN]\ =\ map(governor,\ 0.0,\ 100.0,\ pc[OPMIN],\ pc[OPMAX]);\ \ \textcolor{comment}{//\ pc[GOVERN]\ =\ pc[OPMIN]\ +\ governor\ *\ (pc[OPMAX]\ -\/\ pc[OPMIN])\ /\ 100.0;\ \ \ \ \ \ }}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \ \ si[GOVERN]\ =\ map(pc[GOVERN],\ pc[OPMIN],\ pc[OPMAX],\ si[OPMIN],\ si[OPMAX]);}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \ \ pc[MARGIN]\ =\ map(si[MARGIN],\ si[OPMIN],\ si[OPMAX],\ pc[OPMIN],\ pc[OPMAX]);}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ \ \ max\_throttle\_angular\_velocity\_pcps\ =\ 100.0\ *\ max\_throttle\_angular\_velocity\_degps\ /\ (si[OPMAX]\ -\/\ si[OPMIN]);}
+\DoxyCodeLine{00344\ \ \ \ \ \}}
+\DoxyCodeLine{00345\ \ \ \ \ \textcolor{keywordtype}{void}\ linearize\_throttle()\ \{\ \ \textcolor{comment}{//\ todo\ :\ compensate\ for\ at\ least\ 3\ known\ sources\ of\ non-\/linearity\ in\ the\ throttle}}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ 1.\ The\ coin-\/shaped\ butterfly\ valve\ blocks\ the\ cylindrical\ carb\ intake\ passage.\ The\ engine\ power\ is\ a\ function}}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ of\ the\ airflow\ which\ is\ a\ function\ of\ the\ elliptical\ cross-\/section\ of\ the\ valve\ as\ it\ rotates.\ Here's\ math:}}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ d\ =\ throttle\ intake\ /\ valve\ diameter\ (about\ 1\ inch)}}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ g\ =\ angle\ of\ valve,\ with\ 90\ deg\ =\ full\ closed\ and\ 0\ deg\ =\ full\ open}}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Open\ Area:\ \ A\ =\ pi/4\ *\ d\string^2\ -\/\ pi\ *\ d\string^2\ *\ cos(g)\ \ \ \ //\ in\ squared\ units\ of\ d}}
+\DoxyCodeLine{00351\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Open\ Ratio:\ R\ =\ 1\ -\/\ 4\ *\ cos(g)\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ //\ as\ a\ ratio\ to\ full-\/open\ (range\ 0-\/1)}}
+\DoxyCodeLine{00352\ \ \ \ \ \ \ \ \ \textcolor{comment}{//}}
+\DoxyCodeLine{00353\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ 2.\ Due\ to\ the\ mount\ and\ pull\ angles,\ the\ servo\ opens\ the\ throttle\ more\ degrees\ per\ degree\ of\ its\ own\ rotation\ }}
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ when\ the\ throttle\ is\ closed\ vs.\ when\ it's\ open.\ Need\ to\ do\ the\ math\ for\ this,\ but\ I\ imagine\ it'll\ be\ another\ }}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ curve\ from\ 1\ to\ 0,\ perhaps\ another\ cosine,\ to\ multiply\ by\ depending\ on\ current\ servo\ angle.\ Note\ it's\ possible}}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ to\ mechanically\ nullify\ this\ pull\ angle\ non-\/linearity\ by\ having\ a\ rotational\ linkage\ instead\ of\ servo\ horns,}}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ for\ example\ like\ a\ belt,\ or\ maybe\ pulleys\ on\ both\ servo\ and\ valve\ with\ a\ string\ wrapped\ around\ them.}}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \ \ \textcolor{comment}{//}}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ 3.\ The\ engine\ will\ characteristically\ produce\ power\ as\ a\ nonlinear\ function\ of\ carb\ airflow.\ Data\ for\ this\ would}}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ be\ nice.\ [Research\ into\ typical\ curves]\ <\ [Specific\ performance\ data\ for\ this\ engine]\ <\ [Do\ empirical\ testing].}}
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \ \ \textcolor{comment}{//}}
+\DoxyCodeLine{00362\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ It's\ a\ bit\ too\ complex\ (I'm\ too\ ignorant)\ to\ predict\ which\ of\ the\ above\ might\ serve\ to\ cancel/exacerbate\ the\ }}
+\DoxyCodeLine{00363\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ others.\ None\ of\ this\ matters\ if\ we\ use\ the\ throttle\ PID,\ only\ if\ we\ run\ open\ loop}}
+\DoxyCodeLine{00364\ \ \ \ \ \}}
+\DoxyCodeLine{00365\ \ \ \ \ \textcolor{keywordtype}{void}\ setup(\mbox{\hyperlink{class_hotrc}{Hotrc}}*\ \_hotrc,\ \mbox{\hyperlink{class_speedometer}{Speedometer}}*\ \_speedo,\ \mbox{\hyperlink{class_tachometer}{Tachometer}}*\ \_tach,\ \mbox{\hyperlink{class_potentiometer}{Potentiometer}}*\ \_pot,\ \mbox{\hyperlink{class_temperature_sensor_manager}{TemperatureSensorManager}}*\ \_temp)\ \{}
+\DoxyCodeLine{00366\ \ \ \ \ \ \ \ \ tach\ =\ \_tach;\ \ pot\ =\ \_pot;\ \ tempsens\ =\ \_temp;}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}Gas\ servo..\(\backslash\)n"{}});}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ \ \ ServoMotor::setup(\_hotrc,\ \_speedo);}
+\DoxyCodeLine{00369\ \ \ \ \ \ \ \ \ throttleRateTimer.reset();}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ \ \ derive();}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ \ \ pid.init(tach-\/>filt\_ptr(),\ \&pc[OPMIN],\ \&pc[OPMAX],\ gas\_kp,\ gas\_ki,\ gas\_kd,\ QPID::pmod::onerr,\ }
+\DoxyCodeLine{00372\ \ \ \ \ \ \ \ \ \ \ \ \ QPID::dmod::onerr,\ QPID::awmod::clamp,\ QPID::cdir::direct,\ pid\_timeout);}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (throttle\_ctrl\_mode\ ==\ ActivePID)\ \{}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ \ \ \ \ \ \ cruisepid.init(speedo-\/>filt\_ptr(),\ tach-\/>idle\_rpm\_ptr(),\ tach-\/>govern\_rpm\_ptr(),\ cruise\_pidgas\_kp,\ cruise\_pidgas\_ki,}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ cruise\_pidgas\_kd,\ QPID::pmod::onerr,\ QPID::dmod::onerr,\ QPID::awmod::round,\ QPID::cdir::direct,\ pid\_timeout);}
+\DoxyCodeLine{00377\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{\ \ \textcolor{comment}{//\ if\ OpenLoop}}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \ \ \ \ \ \ cruisepid.init(speedo-\/>filt\_ptr(),\ \&pc[OPMIN],\ \&pc[OPMAX],\ cruise\_opengas\_kp,\ cruise\_opengas\_ki,}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ cruise\_opengas\_kd,\ QPID::pmod::onerr,\ QPID::dmod::onerr,\ QPID::awmod::round,\ QPID::cdir::direct,\ pid\_timeout);}
+\DoxyCodeLine{00381\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00382\ \ \ \ \ \}}
+\DoxyCodeLine{00383\ \ \ \ \ \textcolor{keywordtype}{void}\ update\_idlespeed()\ \{}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Serial.printf("{}idle"{});}}
+\DoxyCodeLine{00385\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!std::isnan(tempsens-\/>val(loc::ENGINE)))\ idletemp\_f[OUT]\ =\ tempsens-\/>val(loc::ENGINE);}
+\DoxyCodeLine{00386\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (std::isnan(idletemp\_f[OUT]))\ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00387\ \ \ \ \ \ \ \ \ idle\_si[OUT]\ =\ map(idletemp\_f[OUT],\ idletemp\_f[OPMIN],\ idletemp\_f[OPMAX],\ idle\_si[OPMAX],\ idle\_si[OPMIN]);}
+\DoxyCodeLine{00388\ \ \ \ \ \ \ \ \ idle\_si[OUT]\ =\ constrain(idle\_si[OUT],\ idle\_si[OPMIN],\ idle\_si[OPMAX]);}
+\DoxyCodeLine{00389\ \ \ \ \ \ \ \ \ idle\_pc\ =\ out\_si\_to\_pc(idle\_si[OUT]);}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ \ \ tach-\/>set\_idle\_rpm(map(idletemp\_f[OUT],\ idletemp\_f[OPMIN],\ idletemp\_f[OPMAX],\ tach-\/>idle\_cold\_rpm(),\ tach-\/>idle\_hot\_rpm()));}
+\DoxyCodeLine{00391\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Serial.printf("{}\ si:\%lf\ pc:\%lf\(\backslash\)n"{},\ idle\_si[OUT],\ idle\_pc);}}
+\DoxyCodeLine{00392\ \ \ \ \ \}}
+\DoxyCodeLine{00393\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00394\ \ \ \ \ \textcolor{keywordtype}{void}\ cruise\_adjust(\textcolor{keywordtype}{int}\ joydir)\ \{}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (joydir\ ==\ JOY\_UP)\ ctrlratio\ =\ (hotrc-\/>pc[VERT][FILT]\ -\/\ hotrc-\/>pc[VERT][DBTOP])\ /\ (hotrc-\/>pc[VERT][OPMAX]\ -\/\ hotrc-\/>pc[VERT][DBTOP]);}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ ctrlratio\ =\ (hotrc-\/>pc[VERT][FILT]\ -\/\ hotrc-\/>pc[VERT][DBBOT])\ /\ (hotrc-\/>pc[VERT][OPMIN]\ -\/\ hotrc-\/>pc[VERT][DBBOT]);}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cruise\_scheme\ ==\ THROTTLE\_DELTA)\ \{}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cruise\_adjusting)\ throttle\_target\_pc\ +=\ joydir\ *\ ctrlratio\ *\ cruise\_delta\_max\_pc\_per\_s\ *\ cruiseDeltaTimer.elapsed()\ /\ 1000000.0;}
+\DoxyCodeLine{00399\ \ \ \ \ \ \ \ \ \ \ \ \ cruiseDeltaTimer.reset();\ }
+\DoxyCodeLine{00400\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (cruise\_scheme\ ==\ THROTTLE\_ANGLE\ \&\&\ std::abs(hotrc-\/>pc[VERT][FILT])\ >=\ cruise\_ctrl\_extent\_pc)\ \{\ \ \textcolor{comment}{//\ to\ avoid\ the\ adjustments\ following\ the\ trigger\ back\ to\ center\ when\ released}}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!cruise\_adjusting)\ adjustpoint\ =\ throttle\_target\_pc;\ \ \textcolor{comment}{//\ When\ beginning\ adjustment,\ save\ current\ throttle\ pulse\ value\ to\ use\ as\ adjustment\ endpoint}}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ \ \ \ \ \ \ throttle\_target\_pc\ =\ adjustpoint\ +\ ctrlratio\ *\ cruise\_angle\_attenuator\ *\ (((joydir\ ==\ JOY\_UP)\ ?\ 100.0\ :\ 0.0)\ -\/\ adjustpoint);}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \ \ \ \ \ \ cruise\_ctrl\_extent\_pc\ =\ std::abs(hotrc-\/>pc[VERT][FILT]);}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (cruise\_scheme\ ==\ PID\_SUSPEND\_FLY)\ \{}
+\DoxyCodeLine{00407\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!cruise\_adjusting)\ adjustpoint\ =\ (throttle\_ctrl\_mode\ ==\ OpenLoop)\ ?\ pc[OUT]\ :\ rpm\_to\_pc(tach-\/>filt());}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ \ \ \ \ \ \ throttle\_target\_pc\ =\ adjustpoint\ +\ ctrlratio\ *\ (((joydir\ ==\ JOY\_UP)\ ?\ pc[GOVERN]\ :\ idle\_pc)\ -\/\ adjustpoint);}
+\DoxyCodeLine{00409\ \ \ \ \ \ \ \ \ \ \ \ \ cruisepid.set\_target(speedo-\/>filt());}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ \ \ cruise\_adjusting\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00412\ \ \ \ \ \}}
+\DoxyCodeLine{00413\ \ \ \ \ \textcolor{keywordtype}{void}\ cruise\_logic()\ \{}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ joydir\ =\ hotrc-\/>joydir(VERT);}
+\DoxyCodeLine{00415\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((joydir\ ==\ JOY\_UP\ ||\ (joydir\ ==\ JOY\_DN\ \&\&\ cruise\_speed\_lowerable))\ \&\&\ cruise\_trigger\_released)\ \{\ \ \textcolor{comment}{//\ adjustments\ disabled\ until\ trigger\ has\ been\ to\ center\ at\ least\ once\ since\ going\ to\ cruise\ mode}}
+\DoxyCodeLine{00416\ \ \ \ \ \ \ \ \ \ \ \ \ cruise\_adjust(joydir);}
+\DoxyCodeLine{00417\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00419\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (joydir\ !=\ JOY\_CENT)\ \textcolor{keywordflow}{return};\ \ \textcolor{comment}{//\ if\ trigger\ is\ being\ pulled\ under\ any\ other\ conditions\ we\ do\ nothing.\ below\ assume\ trigger\ is\ released}}
+\DoxyCodeLine{00420\ \ \ \ \ \ \ \ \ cruise\_adjusting\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00421\ \ \ \ \ \ \ \ \ cruise\_trigger\_released\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00422\ \ \ \ \ \ \ \ \ cruise\_ctrl\_extent\_pc\ =\ hotrc-\/>pc[VERT][CENT];\ \ \textcolor{comment}{//\ After\ an\ adjustment,\ need\ this\ to\ prevent\ setpoint\ from\ following\ the\ trigger\ back\ to\ center\ as\ you\ release\ it}}
+\DoxyCodeLine{00423\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cruise\_scheme\ ==\ PID\_SUSPEND\_FLY)\ throttle\_target\_pc\ =\ cruisepid.compute();\ \ \textcolor{comment}{//\ if\ cruise\ is\ using\ pid,\ it's\ only\ active\ when\ trigger\ is\ released}}
+\DoxyCodeLine{00424\ \ \ \ \ \}}
+\DoxyCodeLine{00425\ \ \ \ \ \textcolor{keywordtype}{float}\ rate\_limiter(\textcolor{keywordtype}{float}\ val)\ \{\ \ \textcolor{comment}{//\ give\ it\ where\ you\ would\ want\ the\ throttle\ (\%),\ it\ gives\ you\ back\ where\ you're\ allowed\ to\ put\ it,\ respecting\ max\ angular\ velocity}}
+\DoxyCodeLine{00426\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ max\_change\ =\ (float)throttleRateTimer.elapsed()\ *\ max\_throttle\_angular\_velocity\_pcps\ /\ 1000000.0;}
+\DoxyCodeLine{00427\ \ \ \ \ \ \ \ \ throttleRateTimer.reset();\ \ \textcolor{comment}{//\ Serial.printf("{}\ new:\%lf\ pc0:\%lf\ mx:\%lf"{},\ throttle\_target\_pc,\ pc[OUT],\ max\_change);}}
+\DoxyCodeLine{00428\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (val\ >\ pc[OUT]\ +\ max\_change)\ \textcolor{keywordflow}{return}\ pc[OUT]\ +\ max\_change;}
+\DoxyCodeLine{00429\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (val\ <\ pc[OUT]\ -\/\ max\_change)\ \textcolor{keywordflow}{return}\ pc[OUT]\ -\/\ max\_change;}
+\DoxyCodeLine{00430\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{return}\ val;\ \ \textcolor{comment}{//\ Serial.printf("{}\ tgt:\%lf\ pc1:\%lf\(\backslash\)n"{},\ throttle\_target\_pc,\ pc[OUT]);}}
+\DoxyCodeLine{00431\ \ \ \ \ \}}
+\DoxyCodeLine{00432\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_output()\ \{}
+\DoxyCodeLine{00433\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Serial.printf("{}mode"{});}}
+\DoxyCodeLine{00434\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (motormode\ ==\ Idle)\ throttle\_target\_pc\ =\ idle\_pc;}
+\DoxyCodeLine{00435\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (motormode\ ==\ Starting)\ throttle\_target\_pc\ =\ starting\_pc;}
+\DoxyCodeLine{00436\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (motormode\ ==\ Cruise)\ cruise\_logic();\ \ \textcolor{comment}{//\ cruise\ mode\ just\ got\ too\ big\ to\ be\ nested\ in\ this\ if-\/else\ clause}}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (motormode\ ==\ ParkMotor)\ throttle\_target\_pc\ =\ pc[PARKED];}
+\DoxyCodeLine{00438\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (motormode\ ==\ OpenLoop\ ||\ motormode\ ==\ ActivePID)\ \{}
+\DoxyCodeLine{00439\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (hotrc-\/>joydir()\ !=\ JOY\_UP)\ throttle\_target\_pc\ =\ idle\_pc;\ \ \textcolor{comment}{//\ If\ in\ deadband\ or\ being\ pushed\ down,\ we\ want\ idle}}
+\DoxyCodeLine{00440\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ throttle\_target\_pc\ =\ map(hotrc-\/>pc[VERT][FILT],\ hotrc-\/>pc[VERT][DBTOP],\ hotrc-\/>pc[VERT][OPMAX],\ idle\_pc,\ pc[GOVERN]);\ \ \textcolor{comment}{//\ actuators\ still\ respond\ even\ w/\ engine\ turned\ off}}
+\DoxyCodeLine{00441\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00442\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (motormode\ ==\ Calibrate)\ \{}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ \ \ \ \ \ \ cal\_gasmode\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00444\ \ \ \ \ \ \ \ \ \ \ \ \ pc[OUT]\ =\ out\_si\_to\_pc(map(pot-\/>val(),\ pot-\/>min(),\ pot-\/>max(),\ si[ABSMIN],\ si[ABSMAX]));\ \ \textcolor{comment}{//\ gas\_ccw\_max\_us,\ gas\_cw\_min\_us}}
+\DoxyCodeLine{00445\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};\ \ \textcolor{comment}{//\ cal\ mode\ sets\ the\ output\ directly,\ skipping\ the\ post\ processing\ below}}
+\DoxyCodeLine{00446\ \ \ \ \ \ \ \ \ \}\ \ \textcolor{comment}{//\ Serial.printf("{}:\%d\ tgt:\%lf\ pk:\%lf\ idl:\%lf\(\backslash\)n"{},\ motormode,\ throttle\_target\_pc,\ pc[PARKED],\ idle\_pc);}}
+\DoxyCodeLine{00447\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ new\_out;}
+\DoxyCodeLine{00448\ \ \ \ \ \ \ \ \ throttle\_target\_pc\ =\ constrain(throttle\_target\_pc,\ pc[PARKED],\ pc[OPMAX]);}
+\DoxyCodeLine{00449\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (throttle\_ctrl\_mode\ ==\ ActivePID)\ \{}
+\DoxyCodeLine{00450\ \ \ \ \ \ \ \ \ \ \ \ \ pid.set\_target(pc\_to\_rpm(throttle\_target\_pc));}
+\DoxyCodeLine{00451\ \ \ \ \ \ \ \ \ \ \ \ \ new\_out\ =\ pid.compute();}
+\DoxyCodeLine{00452\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00453\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ new\_out\ =\ throttle\_target\_pc;\ \ \textcolor{comment}{//\ Serial.printf("{}\ ela:\%ld\ pcps:\%lf"{},\ throttleRateTimer.elapsed(),\ max\_throttle\_angular\_velocity\_pcps);}}
+\DoxyCodeLine{00454\ \ \ \ \ \ \ \ \ pc[OUT]\ =\ rate\_limiter(new\_out);}
+\DoxyCodeLine{00455\ \ \ \ \ \}}
+\DoxyCodeLine{00456\ \ \ \ \ \textcolor{keywordtype}{void}\ constrain\_output()\ \{}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (motormode\ ==\ Calibrate)\ pc[OUT]\ =\ constrain(pc[OUT],\ pc[ABSMIN],\ pc[ABSMAX]);}
+\DoxyCodeLine{00458\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (motormode\ ==\ ParkMotor\ ||\ motormode\ ==\ Halt)\ pc[OUT]\ =\ constrain(pc[OUT],\ pc[PARKED],\ pc[GOVERN]);}
+\DoxyCodeLine{00459\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ pc[OUT]\ =\ constrain(pc[OUT],\ idle\_pc,\ pc[GOVERN]);}
+\DoxyCodeLine{00460\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (throttle\_ctrl\_mode\ ==\ ActivePID)\ pid.set\_output(pc[OUT]);\ \ \textcolor{comment}{//\ feed\ possibly-\/modified\ output\ value\ back\ into\ pid}}
+\DoxyCodeLine{00461\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((motormode\ ==\ Cruise)\ \&\&\ (cruise\_scheme\ ==\ PID\_SUSPEND\_FLY))\ cruisepid.set\_output(throttle\_target\_pc);\ \ \textcolor{comment}{//\ feed\ possibly-\/modified\ output\ value\ back\ into\ pid}}
+\DoxyCodeLine{00462\ \ \ \ \ \}}
+\DoxyCodeLine{00463\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00464\ \ \ \ \ \textcolor{keywordtype}{void}\ setmode(\textcolor{keywordtype}{int}\ \_mode)\ \{}
+\DoxyCodeLine{00465\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_mode\ ==\ motormode)\ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00466\ \ \ \ \ \ \ \ \ cal\_gasmode\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00467\ \ \ \ \ \ \ \ \ throttleRateTimer.reset();}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_mode\ ==\ Cruise)\ \{}
+\DoxyCodeLine{00469\ \ \ \ \ \ \ \ \ \ \ \ \ cruisepid.set\_target(speedo-\/>filt());\ \ \textcolor{comment}{//\ set\ pid\ loop\ speed\ target\ to\ current\ speed\ \ (for\ PID\_SUSPEND\_FLY\ mode)}}
+\DoxyCodeLine{00470\ \ \ \ \ \ \ \ \ \ \ \ \ pid.set\_target(tach-\/>filt());\ \ \textcolor{comment}{//\ initialize\ pid\ output\ (rpm\ target)\ to\ current\ rpm\ \ (for\ PID\_SUSPEND\_FLY\ mode)}}
+\DoxyCodeLine{00471\ \ \ \ \ \ \ \ \ \ \ \ \ throttle\_target\_pc\ =\ pc[OUT];\ \ \textcolor{comment}{//\ \ set\ target\ throttle\ angle\ to\ current\ throttle\ angle\ \ (for\ THROTTLE\_ANGLE/THROTTLE\_DELTA\ modes)}}
+\DoxyCodeLine{00472\ \ \ \ \ \ \ \ \ \ \ \ \ cruise\_adjusting\ =\ cruise\_trigger\_released\ =\ \textcolor{keyword}{false};\ \ \textcolor{comment}{//\ in\ case\ trigger\ is\ being\ pulled\ as\ cruise\ mode\ is\ entered,\ the\ ability\ to\ adjust\ is\ only\ unlocked\ after\ the\ trigger\ is\ subsequently\ released\ to\ the\ center}}
+\DoxyCodeLine{00473\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00474\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_mode\ ==\ Calibrate)\ \{}
+\DoxyCodeLine{00475\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ temp\ =\ pot-\/>mapToRange(0.0,\ 180.0);}
+\DoxyCodeLine{00476\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (temp\ <\ si[PARKED]\ ||\ temp\ >\ si[OPMAX])\ \textcolor{keywordflow}{return};\ \ \textcolor{comment}{//\ do\ not\ change\ to\ cal\ mode\ if\ attempting\ to\ enter\ while\ pot\ is\ out\ of\ range}}
+\DoxyCodeLine{00477\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00478\ \ \ \ \ \ \ \ \ motormode\ =\ \_mode;}
+\DoxyCodeLine{00479\ \ \ \ \ \}}
+\DoxyCodeLine{00480\ \ \ \ \ \textcolor{keywordtype}{int}\ parked()\ \{}
+\DoxyCodeLine{00481\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ (std::abs(out\_pc\_to\_si(pc[OUT])\ -\/\ si[PARKED])\ <\ 1);}
+\DoxyCodeLine{00482\ \ \ \ \ \}}
+\DoxyCodeLine{00483\ \ \ \ \ \textcolor{keywordtype}{void}\ update()\ \{}
+\DoxyCodeLine{00484\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pid\_timer.expireset())\ \{}
+\DoxyCodeLine{00485\ \ \ \ \ \ \ \ \ \ \ \ \ update\_idlespeed();\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Step\ 1\ :\ do\ any\ idle\ speed\ management\ needed\ \ \ \ \ \ \ \ \ \ }}
+\DoxyCodeLine{00486\ \ \ \ \ \ \ \ \ \ \ \ \ set\_output();\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Step\ 2\ :\ determine\ motor\ output\ value.\ updates\ throttle\ target\ from\ idle\ control\ or\ cruise\ mode\ pid,\ if\ applicable\ (on\ the\ same\ timer\ as\ gas\ pid).\ allows\ idle\ control\ to\ mess\ with\ tach\_target\ if\ necessary,\ or\ otherwise\ step\ in\ to\ prevent\ car\ from\ stalling}}
+\DoxyCodeLine{00487\ \ \ \ \ \ \ \ \ \ \ \ \ constrain\_output();\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Step\ 3\ :\ fix\ output\ to\ ensure\ it's\ in\ range}}
+\DoxyCodeLine{00488\ \ \ \ \ \ \ \ \ \ \ \ \ us[OUT]\ =\ out\_pc\_to\_us(pc[OUT]);\ \ \ \textcolor{comment}{//\ Step\ 4\ :\ convert\ motor\ value\ to\ pulsewidth\ time}}
+\DoxyCodeLine{00489\ \ \ \ \ \ \ \ \ \ \ \ \ deg[OUT]\ =\ out\_pc\_to\_si(pc[OUT]);}
+\DoxyCodeLine{00490\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Serial.printf("{}out\ pc:\%lf\ us:\%lf\(\backslash\)n"{},\ pc[OUT],\ us[OUT]);}}
+\DoxyCodeLine{00491\ \ \ \ \ \ \ \ \ \ \ \ \ write\_motor();\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Step\ 5\ :\ write\ to\ servo}}
+\DoxyCodeLine{00492\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00493\ \ \ \ \ \}}
+\DoxyCodeLine{00494\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_idlehot(\textcolor{keywordtype}{float}\ newidlehot)\ \{}
+\DoxyCodeLine{00495\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (throttle\_ctrl\_mode\ ==\ ActivePID)\ tach-\/>set\_idlehot\_rpm(constrain(newidlehot,\ tach-\/>min\_human(),\ tach-\/>idle\_cold\_rpm()\ -\/\ 1.0));}
+\DoxyCodeLine{00496\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ idle\_si[OPMIN]\ =\ constrain(newidlehot,\ idle\_si[ABSMIN],\ idle\_si[OPMAX]\ -\/\ 1.0);}
+\DoxyCodeLine{00497\ \ \ \ \ \}}
+\DoxyCodeLine{00498\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_idlecold(\textcolor{keywordtype}{float}\ newidlecold)\ \{}
+\DoxyCodeLine{00499\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (throttle\_ctrl\_mode\ ==\ ActivePID)\ tach-\/>set\_idlecold\_rpm(constrain(newidlecold,\ tach-\/>idle\_hot\_rpm()\ +\ 1.0,\ tach-\/>max\_human()));}
+\DoxyCodeLine{00500\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ idle\_si[OPMAX]\ =\ constrain(newidlecold,\ idle\_si[OPMIN]\ +\ 1.0,\ idle\_si[ABSMAX]);}
+\DoxyCodeLine{00501\ \ \ \ \ \}}
+\DoxyCodeLine{00502\ \ \ \ \ \textcolor{keywordtype}{void}\ add\_idlehot(\textcolor{keywordtype}{float}\ add)\ \{\ }
+\DoxyCodeLine{00503\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (throttle\_ctrl\_mode\ ==\ ActivePID)\ tach-\/>set\_idlehot\_rpm(tach-\/>idle\_hot\_rpm()\ +\ add);}
+\DoxyCodeLine{00504\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ set\_idlehot(idle\_si[OPMIN]\ +\ add);}
+\DoxyCodeLine{00505\ \ \ \ \ \}}
+\DoxyCodeLine{00506\ \ \ \ \ \textcolor{keywordtype}{void}\ add\_idlecold(\textcolor{keywordtype}{float}\ add)\ \{}
+\DoxyCodeLine{00507\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (throttle\_ctrl\_mode\ ==\ ActivePID)\ tach-\/>set\_idlecold\_rpm(tach-\/>idle\_cold\_rpm()\ +\ add);}
+\DoxyCodeLine{00508\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ set\_idlecold(idle\_si[OPMAX]\ +\ add);}
+\DoxyCodeLine{00509\ \ \ \ \ \}}
+\DoxyCodeLine{00510\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_temphot(\textcolor{keywordtype}{float}\ newtemphot)\ \{\ idletemp\_f[OPMAX]\ =\ constrain(newtemphot,\ idletemp\_f[OPMIN]\ +\ 1.0,\ idletemp\_f[ABSMAX]);\ \}}
+\DoxyCodeLine{00511\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_tempcold(\textcolor{keywordtype}{float}\ newtempcold)\ \{\ idletemp\_f[OPMIN]\ =\ constrain(newtempcold,\ idletemp\_f[ABSMIN],\ idletemp\_f[OPMAX]\ -\/\ 1.0);\ \}}
+\DoxyCodeLine{00512\ \ \ \ \ \textcolor{keywordtype}{void}\ add\_temphot(\textcolor{keywordtype}{float}\ add)\ \{\ set\_temphot(idletemp\_f[OPMAX]\ +\ add);\ \}}
+\DoxyCodeLine{00513\ \ \ \ \ \textcolor{keywordtype}{void}\ add\_tempcold(\textcolor{keywordtype}{float}\ add)\ \{\ set\_tempcold(idletemp\_f[OPMIN]\ +\ add);\ \}}
+\DoxyCodeLine{00514\ \};}
+\DoxyCodeLine{00515\ \textcolor{comment}{//\ Brake\ uses\ two\ PID\ loops:\ one\ based\ on\ pressure\ (accurate\ for\ high\ brake\ pressures),\ and\ one\ based\ on\ position\ (accurate\ when\ pedal\ is\ more\ released)}}
+\DoxyCodeLine{00516\ \textcolor{comment}{//\ Note\ as\ pedal\ is\ pressed\ down,\ position\ decreases\ as\ pressure\ increases.\ PID\ output\ is\ percent\ motor\ power.}}
+\DoxyCodeLine{00517\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_brake_motor}{BrakeMotor}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{class_jag_motor}{JagMotor}}\ \{}
+\DoxyCodeLine{00518\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00519\ \ \ \ \ \mbox{\hyperlink{class_brake_position_sensor}{BrakePositionSensor}}*\ brkpos;}
+\DoxyCodeLine{00520\ \ \ \ \ \mbox{\hyperlink{class_pressure_sensor}{PressureSensor}}*\ pressure;}
+\DoxyCodeLine{00521\ \ \ \ \ \mbox{\hyperlink{class_gas_servo}{GasServo}}*\ throttle;}
+\DoxyCodeLine{00522\ \ \ \ \ \mbox{\hyperlink{class_temperature_sensor_manager}{TemperatureSensorManager}}*\ tempsens;}
+\DoxyCodeLine{00523\ \ \ \ \ \textcolor{keywordtype}{float}\ brakemotor\_duty\_spec\_pc\ =\ 25.0;\ \ \textcolor{comment}{//\ In\ order\ to\ not\ exceed\ spec\ and\ overheat\ the\ actuator,\ limit\ brake\ presses\ when\ under\ pressure\ and\ adding\ pressure}}
+\DoxyCodeLine{00524\ \ \ \ \ \textcolor{keywordtype}{float}\ press\_kp\ =\ 0.142;\ \ \ \ \ \ \ \ \textcolor{comment}{//\ PID\ proportional\ coefficient\ (brake).\ How\ hard\ to\ push\ for\ each\ unit\ of\ difference\ between\ measured\ and\ desired\ pressure\ (unitless\ range\ 0-\/1)}}
+\DoxyCodeLine{00525\ \ \ \ \ \textcolor{keywordtype}{float}\ press\_ki\ =\ 0.000;\ \ \ \ \ \ \ \ \textcolor{comment}{//\ PID\ integral\ frequency\ factor\ (brake).\ How\ much\ harder\ to\ push\ for\ each\ unit\ time\ trying\ to\ reach\ desired\ pressure\ \ (in\ 1/us\ (mhz),\ range\ 0-\/1)}}
+\DoxyCodeLine{00526\ \ \ \ \ \textcolor{keywordtype}{float}\ press\_kd\ =\ 0.000;\ \ \ \ \ \ \ \ \textcolor{comment}{//\ PID\ derivative\ time\ factor\ (brake).\ How\ much\ to\ dampen\ sudden\ braking\ changes\ due\ to\ P\ and\ I\ infuences\ (in\ us,\ range\ 0-\/1)}}
+\DoxyCodeLine{00527\ \ \ \ \ \textcolor{keywordtype}{float}\ posn\_kp\ =\ 6.5;\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ PID\ proportional\ coefficient\ (brake).\ How\ hard\ to\ push\ for\ each\ unit\ of\ difference\ between\ measured\ and\ desired\ pressure\ (unitless\ range\ 0-\/1)}}
+\DoxyCodeLine{00528\ \ \ \ \ \textcolor{keywordtype}{float}\ posn\_ki\ =\ 0.000;\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ PID\ integral\ frequency\ factor\ (brake).\ How\ much\ harder\ to\ push\ for\ each\ unit\ time\ trying\ to\ reach\ desired\ pressure\ \ (in\ 1/us\ (mhz),\ range\ 0-\/1)}}
+\DoxyCodeLine{00529\ \ \ \ \ \textcolor{keywordtype}{float}\ posn\_kd\ =\ 0.000;\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ PID\ derivative\ time\ factor\ (brake).\ How\ much\ to\ dampen\ sudden\ braking\ changes\ due\ to\ P\ and\ I\ infuences\ (in\ us,\ range\ 0-\/1)}}
+\DoxyCodeLine{00530\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ uint32\_t\ pid\_timeout\ =\ 85000;\ \ \textcolor{comment}{//\ Needs\ to\ be\ long\ enough\ for\ motor\ to\ cause\ change\ in\ measurement,\ but\ higher\ means\ less\ responsive}}
+\DoxyCodeLine{00531\ \ \ \ \ \textcolor{keywordtype}{float}\ pres\_out,\ posn\_out,\ pc\_out\_last,\ posn\_last,\ pres\_last;}
+\DoxyCodeLine{00532\ \ \ \ \ \textcolor{keywordtype}{int}\ dominantpid\_last\ =\ PositionPID;\ \ \ \ \textcolor{comment}{//\ float\ posn\_inflect,\ pres\_inflect,\ pc\_inflect;}}
+\DoxyCodeLine{00533\ \ \ \ \ \textcolor{keywordtype}{float}\ heat\_math\_offset,\ motor\_heat\_min\ =\ 75.0,\ motor\_heat\_max\ =\ 200.0;}
+\DoxyCodeLine{00534\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ stopcar\_timer\{10000000\},\ interval\_timer\{1000000\},\ motor\_park\_timer\{4000000\},\ motorheat\_timer\{500000\};}
+\DoxyCodeLine{00535\ \ \ \ \ \textcolor{keywordtype}{bool}\ stopped\_last\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00536\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_dominant\_pid(\textcolor{keywordtype}{int}\ \_pid)\ \{}
+\DoxyCodeLine{00537\ \ \ \ \ \ \ \ \ dominantpid\ =\ \_pid;}
+\DoxyCodeLine{00538\ \ \ \ \ \ \ \ \ pid\_dom\ =\ \&(pids[dominantpid]);}
+\DoxyCodeLine{00539\ \ \ \ \ \ \ \ \ posn\_pid\_active\ =\ (dominantpid\ ==\ PositionPID);\ \ \textcolor{comment}{//\ for\ display}}
+\DoxyCodeLine{00540\ \ \ \ \ \}}
+\DoxyCodeLine{00541\ \ \ \ \ \textcolor{keywordtype}{float}\ pressure\_pc\_to\_si(\textcolor{keywordtype}{float}\ pc)\ \{}
+\DoxyCodeLine{00542\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ map(pc,\ 0.0,\ 100.0,\ pressure-\/>min\_human(),\ pressure-\/>max\_human());}
+\DoxyCodeLine{00543\ \ \ \ \ \}}
+\DoxyCodeLine{00544\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00545\ \ \ \ \ \textcolor{keyword}{using\ }JagMotor::JagMotor;}
+\DoxyCodeLine{00546\ \ \ \ \ \textcolor{keywordtype}{int}\ motormode\ =\ Halt,\ oldmode\ =\ Halt,\ active\_pids\ =\ HybridPID,\ dominantpid\ =\ PositionPID;}
+\DoxyCodeLine{00547\ \ \ \ \ \textcolor{keywordtype}{bool}\ brake\_tempsens\_exists\ =\ \textcolor{keyword}{false},\ posn\_pid\_active\ =\ (dominantpid\ ==\ PositionPID);}
+\DoxyCodeLine{00548\ \ \ \ \ \mbox{\hyperlink{class_q_p_i_d}{QPID}}\ pids[2];\ \ \textcolor{comment}{//\ brake\ changes\ from\ pressure\ target\ to\ position\ target\ as\ pressures\ decrease,\ and\ vice\ versa}}
+\DoxyCodeLine{00549\ \ \ \ \ \mbox{\hyperlink{class_q_p_i_d}{QPID}}*\ pid\_dom\ =\ \&(pids[PressurePID]);\ \ \textcolor{comment}{//\ AnalogSensor\ sensed[2];}}
+\DoxyCodeLine{00550\ \ \ \ \ \textcolor{keywordtype}{float}\ brake\_pid\_trans\_threshold\_lo\ =\ 0.25;\ \ \textcolor{comment}{//\ tunable.\ At\ what\ fraction\ of\ full\ brake\ pressure\ will\ motor\ control\ begin\ to\ transition\ from\ posn\ control\ to\ pressure\ control}}
+\DoxyCodeLine{00551\ \ \ \ \ \textcolor{keywordtype}{float}\ brake\_pid\_trans\_threshold\_hi\ =\ 0.50;\ \ \textcolor{comment}{//\ tunable.\ At\ what\ fraction\ of\ full\ brake\ pressure\ will\ motor\ control\ be\ fully\ transitioned\ to\ pressure\ control}}
+\DoxyCodeLine{00552\ \ \ \ \ \textcolor{keywordtype}{bool}\ autostopping\ =\ \textcolor{keyword}{false},\ autoholding\ =\ \textcolor{keyword}{false},\ reverse\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00553\ \ \ \ \ \textcolor{keywordtype}{float}\ panic\_initial\_pc,\ hold\_initial\_pc,\ panic\_increment\_pc,\ hold\_increment\_pc,\ parkpos\_pc,\ zeropoint\_pc;}
+\DoxyCodeLine{00554\ \ \ \ \ \textcolor{keywordtype}{float}\ hybrid\_math\_offset,\ hybrid\_math\_coeff,\ hybrid\_sens\_ratio,\ hybrid\_sens\_ratio\_pc,\ pid\_targ\_pc,\ pid\_err\_pc;}
+\DoxyCodeLine{00555\ \ \ \ \ \textcolor{keywordtype}{float}\ hybrid\_out\_ratio\ =\ 1.0,\ hybrid\_out\_ratio\_pc\ =\ 100.0,\ hybrid\_targ\_ratio\ =\ 1.0;\ \ \textcolor{comment}{//\ ,\ hybrid\_targ\_ratio\_pc\ =\ 100.0;}}
+\DoxyCodeLine{00556\ \ \ \ \ \textcolor{keywordtype}{float}\ motor\_heat\ =\ NAN,\ motor\_heatloss\_rate\ =\ 3.0,\ motor\_max\_loaded\_heatup\_rate\ =\ 1.5,\ motor\_max\_unloaded\_heatup\_rate\ =\ 0.3;\ \ \textcolor{comment}{//\ deg\ F\ per\ timer\ timeout}}
+\DoxyCodeLine{00557\ \ \ \ \ \textcolor{keywordtype}{void}\ derive()\ \{}
+\DoxyCodeLine{00558\ \ \ \ \ \ \ \ \ JagMotor::derive();}
+\DoxyCodeLine{00559\ \ \ \ \ \ \ \ \ parkpos\_pc\ =\ map(brkpos-\/>parkpos(),\ brkpos-\/>min\_human(),\ brkpos-\/>max\_human(),\ 100.0,\ 0.0);}
+\DoxyCodeLine{00560\ \ \ \ \ \ \ \ \ zeropoint\_pc\ =\ map(brkpos-\/>zeropoint(),\ brkpos-\/>min\_human(),\ brkpos-\/>max\_human(),\ 100.0,\ 0.0);}
+\DoxyCodeLine{00561\ \ \ \ \ \ \ \ \ panic\_initial\_pc\ =\ map(pressure-\/>panic\_initial\_psi,\ pressure-\/>min\_human(),\ pressure-\/>max\_human(),\ 0.0,\ 100.0);}
+\DoxyCodeLine{00562\ \ \ \ \ \ \ \ \ hold\_initial\_pc\ =\ map(pressure-\/>hold\_initial\_psi,\ pressure-\/>min\_human(),\ pressure-\/>max\_human(),\ 0.0,\ 100.0);}
+\DoxyCodeLine{00563\ \ \ \ \ \ \ \ \ panic\_increment\_pc\ =\ 100.0\ *\ pressure-\/>panic\_increment\_psi\ /\ (pressure-\/>max\_human()\ -\/\ pressure-\/>min\_human());}
+\DoxyCodeLine{00564\ \ \ \ \ \ \ \ \ hold\_increment\_pc\ =\ 100.0\ *\ pressure-\/>hold\_increment\_psi\ /\ (pressure-\/>max\_human()\ -\/\ pressure-\/>min\_human());}
+\DoxyCodeLine{00565\ \ \ \ \ \ \ \ \ pc[MARGIN]\ =\ 100.0\ *\ pressure-\/>margin\_psi\ /\ (pressure-\/>max\_human()\ -\/\ pressure-\/>min\_human());}
+\DoxyCodeLine{00566\ \ \ \ \ \ \ \ \ hybrid\_math\_offset\ =\ 0.5\ *\ (brake\_pid\_trans\_threshold\_hi\ +\ brake\_pid\_trans\_threshold\_lo);}
+\DoxyCodeLine{00567\ \ \ \ \ \ \ \ \ hybrid\_math\_coeff\ =\ M\_PI\ /\ (brake\_pid\_trans\_threshold\_hi\ -\/\ brake\_pid\_trans\_threshold\_lo);}
+\DoxyCodeLine{00568\ \ \ \ \ \}}
+\DoxyCodeLine{00569\ \ \ \ \ \textcolor{keywordtype}{bool}\ detect\_tempsens()\ \{}
+\DoxyCodeLine{00570\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ trytemp\ =\ tempsens-\/>val(loc::BRAKE);}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \ \ brake\_tempsens\_exists\ =\ !std::isnan(trytemp);}
+\DoxyCodeLine{00572\ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}\ using\ heat\ \%s\ sensor\(\backslash\)n"{}},\ brake\_tempsens\_exists\ ?\ \textcolor{stringliteral}{"{}readings\ from\ detected"{}}\ :\ \textcolor{stringliteral}{"{}estimates\ in\ lieu\ of"{}});}
+\DoxyCodeLine{00573\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ brake\_tempsens\_exists;}
+\DoxyCodeLine{00574\ \ \ \ \ \}}
+\DoxyCodeLine{00575\ \ \ \ \ \textcolor{keywordtype}{void}\ setup(\mbox{\hyperlink{class_hotrc}{Hotrc}}*\ \_hotrc,\ \mbox{\hyperlink{class_speedometer}{Speedometer}}*\ \_speedo,\ \mbox{\hyperlink{class_car_battery}{CarBattery}}*\ \_batt,\ \mbox{\hyperlink{class_pressure_sensor}{PressureSensor}}*\ \_pressure,\ \mbox{\hyperlink{class_brake_position_sensor}{BrakePositionSensor}}*\ \_brkpos,\ \mbox{\hyperlink{class_gas_servo}{GasServo}}*\ \_throttle,\ \mbox{\hyperlink{class_temperature_sensor_manager}{TemperatureSensorManager}}*\ \_tempsens)\ \{\ \ \textcolor{comment}{//\ (int8\_t\ \_motor\_pin,\ int8\_t\ \_press\_pin,\ int8\_t\ \_posn\_pin)}}
+\DoxyCodeLine{00576\ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}Brake\ motor.."{}});}
+\DoxyCodeLine{00577\ \ \ \ \ \ \ \ \ JagMotor::setup(\_hotrc,\ \_speedo,\ \_batt);}
+\DoxyCodeLine{00578\ \ \ \ \ \ \ \ \ pressure\ =\ \_pressure;\ \ brkpos\ =\ \_brkpos;\ \ throttle\ =\ \_throttle;\ \ throttle\ =\ \_throttle;\ \ tempsens\ =\ \_tempsens;\ }
+\DoxyCodeLine{00579\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ duty\_fwd\_pc\ =\ brakemotor\_duty\_spec\_pc;}}
+\DoxyCodeLine{00580\ \ \ \ \ \ \ \ \ pres\_last\ =\ pressure-\/>filt();}
+\DoxyCodeLine{00581\ \ \ \ \ \ \ \ \ posn\_last\ =\ brkpos-\/>filt();}
+\DoxyCodeLine{00582\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ set\_dominant\_pid(brake\_default\_pid);}}
+\DoxyCodeLine{00583\ \ \ \ \ \ \ \ \ detect\_tempsens();}
+\DoxyCodeLine{00584\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!std::isnan(tempsens-\/>val(loc::AMBIENT)))\ motor\_heat\_min\ =\ tempsens-\/>val(loc::AMBIENT);}
+\DoxyCodeLine{00585\ \ \ \ \ \ \ \ \ derive();}
+\DoxyCodeLine{00586\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (brake\_hybrid\_pid)\ calc\_hybrid\_ratio(pressure-\/>filt());}
+\DoxyCodeLine{00587\ \ \ \ \ \ \ \ \ pids[PressurePID].init(pressure-\/>filt\_ptr(),\ \&(pc[OPMIN]),\ \&(pc[OPMAX]),\ press\_kp,\ press\_ki,\ press\_kd,\ QPID::pmod::onerr,}
+\DoxyCodeLine{00588\ \ \ \ \ \ \ \ \ \ \ \ \ QPID::dmod::onerr,\ QPID::awmod::cond,\ QPID::cdir::direct,\ pid\_timeout,\ QPID::ctrl::manual,\ QPID::centmod::on,\ pc[STOP]);}
+\DoxyCodeLine{00589\ \ \ \ \ \ \ \ \ pids[PositionPID].init(brkpos-\/>filt\_ptr(),\ \&(pc[OPMIN]),\ \&(pc[OPMAX]),\ posn\_kp,\ posn\_ki,\ posn\_kd,\ QPID::pmod::onerr,\ }
+\DoxyCodeLine{00590\ \ \ \ \ \ \ \ \ \ \ \ \ QPID::dmod::onerr,\ QPID::awmod::cond,\ QPID::cdir::reverse,\ pid\_timeout,\ QPID::ctrl::manual,\ QPID::centmod::on,\ pc[STOP]);}
+\DoxyCodeLine{00591\ \ \ \ \ \}}
+\DoxyCodeLine{00592\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00593\ \ \ \ \ \textcolor{keywordtype}{void}\ update\_motorheat()\ \{\ \ \textcolor{comment}{//\ i\ am\ probably\ going\ to\ scrap\ all\ this\ nonsense\ and\ just\ put\ another\ temp\ sensor\ on\ the\ motor}}
+\DoxyCodeLine{00594\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ added\_heat,\ nowtemp,\ out\_ratio;}
+\DoxyCodeLine{00595\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (motorheat\_timer.expireset())\ \{}
+\DoxyCodeLine{00596\ \ \ \ \ \ \ \ \ \ \ \ \ out\_ratio\ =\ pc[OUT]\ /\ 100.0;}
+\DoxyCodeLine{00597\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (brake\_tempsens\_exists)\ motor\_heat\ =\ tempsens-\/>val(loc::BRAKE);}
+\DoxyCodeLine{00598\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00599\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ nowtemp\ =\ tempsens-\/>val(loc::AMBIENT);}
+\DoxyCodeLine{00600\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (std::isnan(motor\_heat)\ \&\&\ !std::isnan(nowtemp))\ motor\_heat\ =\ nowtemp;\ \ \textcolor{comment}{//\ Serial.printf("{}Actively\ forecasting\ brake\ motor\ heat\ generation\(\backslash\)n"{});}}
+\DoxyCodeLine{00601\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00602\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (std::isnan(nowtemp))\ added\_heat\ =\ motor\_heatloss\_rate\ /\ -\/4.0;}
+\DoxyCodeLine{00603\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00604\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ motor\_heat\_min\ =\ nowtemp;}
+\DoxyCodeLine{00605\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (motor\_heat\ >\ nowtemp)\ added\_heat\ =\ -\/motor\_heatloss\_rate\ *\ (motor\_heat\ -\/\ nowtemp)\ /\ nowtemp;}
+\DoxyCodeLine{00606\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00607\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pc[OUT]\ <=\ brakemotor\_duty\_spec\_pc\ +\ pc[MARGIN])\ added\_heat\ +=\ map(pc[OUT],\ 0.0,\ -\/100.0,\ 0.0,\ motor\_max\_unloaded\_heatup\_rate);}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (pc[OUT]\ >\ brakemotor\_duty\_spec\_pc\ -\/\ pc[MARGIN])\ added\_heat\ +=\ map(pc[OUT],\ brakemotor\_duty\_spec\_pc,\ 100.0,\ 0.0,\ motor\_max\_loaded\_heatup\_rate);}
+\DoxyCodeLine{00609\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ motor\_heat\ +=\ added\_heat;}
+\DoxyCodeLine{00610\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00611\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00612\ \ \ \ \ \ \ \ \ \ \ \ \ motor\_heat\ =\ constrain(motor\_heat,\ motor\_heat\_min,\ motor\_heat\_max);}
+\DoxyCodeLine{00613\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00614\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ that's\ great\ to\ have\ some\ idea\ whether\ the\ motor\ is\ hot.\ but\ we\ need\ to\ take\ some\ actions\ in\ response}}
+\DoxyCodeLine{00615\ \ \ \ \ \}}
+\DoxyCodeLine{00616\ \ \ \ \ \textcolor{comment}{//\ the\ influence\ on\ the\ final\ output\ from\ the\ pressure\ and\ position\ pids\ is\ weighted\ based\ on\ the\ pressure\ reading}}
+\DoxyCodeLine{00617\ \ \ \ \ \textcolor{comment}{//\ as\ the\ brakes\ are\ pressurized\ beyond\ X\ psi,\ use\ pressure\ reading,\ otherwise\ use\ position\ as\ feedback,\ because}}
+\DoxyCodeLine{00618\ \ \ \ \ \textcolor{comment}{//\ near\ either\ extreme\ only\ one\ of\ the\ two\ sensors\ is\ accurate.\ So\ at\ lower\ psi,\ control\ is\ 100\%\ position-\/based,\ fade\ to\ 100\%\ pressure-\/based\ at\ mid/high\ pressures}}
+\DoxyCodeLine{00619\ \ \ \ \ \textcolor{comment}{//\ "{}dominant"{}\ PID\ means\ the\ PID\ loop\ (pressure\ or\ position)\ that\ has\ the\ majority\ influence\ over\ the\ motor}}
+\DoxyCodeLine{00620\ \ \ \ \ \textcolor{keywordtype}{float}\ calc\_hybrid\_ratio(\textcolor{keywordtype}{float}\ pressure\_val)\ \{\ \ \textcolor{comment}{//\ pass\ in\ a\ pressure\ reading\ or\ target\ value\ (in\ psi).\ returns\ the\ appropriate\ ratio\ of\ pressure\ influence\ (from\ 0.0\ to\ 1.0)}}
+\DoxyCodeLine{00621\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!brake\_hybrid\_pid)\ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{float})brake\_default\_pid;\ \ \textcolor{comment}{//\ if\ hybrid\ pid\ is\ not\ supported,\ use\ the\ default\ pid.\ note,\ this\ depends\ on\ specific\ enum\ values,\ careful\ if\ you\ change\ them!}}
+\DoxyCodeLine{00622\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (active\_pids\ ==\ PressurePID)\ \textcolor{keywordflow}{return}\ 1.0;}
+\DoxyCodeLine{00623\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (active\_pids\ ==\ PositionPID)\ \textcolor{keywordflow}{return}\ 0.0;}
+\DoxyCodeLine{00624\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ pressure\_ratio\ =\ (pressure\_val\ -\/\ pressure-\/>min\_human())\ /\ (pressure-\/>max\_human()\ -\/\ pressure-\/>min\_human());\ \ \textcolor{comment}{//\ calculate\ ratio\ of\ output\ to\ range}}
+\DoxyCodeLine{00625\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pressure\_ratio\ >=\ brake\_pid\_trans\_threshold\_hi)\ \textcolor{keywordflow}{return}\ 1.0;\ \ \textcolor{comment}{//\ at\ pressure\ above\ hi\ threshold,\ pressure\ has\ 100\%\ influence}}
+\DoxyCodeLine{00626\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pressure\_ratio\ <=\ brake\_pid\_trans\_threshold\_lo)\ \textcolor{keywordflow}{return}\ 0.0;\ \ \textcolor{comment}{//\ at\ pressure\ below\ lo\ threshold,\ position\ has\ 100\%\ influence}}
+\DoxyCodeLine{00627\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 0.5\ +\ 0.5\ *\ sin(hybrid\_math\_coeff\ *\ (pressure\_ratio\ -\/\ hybrid\_math\_offset));\ \ \textcolor{comment}{//\ in\ between\ we\ make\ a\ steep\ but\ smooth\ transition\ during\ which\ both\ have\ some\ influence}}
+\DoxyCodeLine{00628\ \ \ \ \ \}}
+\DoxyCodeLine{00629\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_pidtarg(\textcolor{keywordtype}{float}\ targ\_pc)\ \{\ \ \textcolor{comment}{//\ pass\ in\ desired\ brake\ target\ as\ an\ overall\ percent,\ will\ set\ pressure\ and\ position\ pid\ targets\ consistent\ with\ current\ configuration}}
+\DoxyCodeLine{00630\ \ \ \ \ \ \ \ \ pid\_targ\_pc\ =\ targ\_pc;}
+\DoxyCodeLine{00631\ }
+\DoxyCodeLine{00632\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ all\ was\ a\ mistake\ -\/\ we\ don't\ want\ to\ apply\ hybrid\ ratio\ to\ target\ settings\ (right?)}}
+\DoxyCodeLine{00633\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ if\ (brake\_linearize\_target\_extremes)\ hybrid\_targ\_ratio\ =\ pid\_targ\_pc\ /\ 100.0;}}
+\DoxyCodeLine{00634\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ else\ hybrid\_targ\_ratio\ =\ calc\_hybrid\_ratio(pressure\_pc\_to\_si(pid\_targ\_pc));}}
+\DoxyCodeLine{00635\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ pids[PressurePID].set\_target(pressure-\/>min\_human()\ +\ hybrid\_targ\_ratio\ *\ (pressure-\/>max\_human()\ -\/\ pressure-\/>min\_human()));}}
+\DoxyCodeLine{00636\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ pids[PositionPID].set\_target(brkpos-\/>min\_human()\ +\ (1.0\ -\/\ hybrid\_targ\_ratio)\ *\ (brkpos-\/>max\_human()\ -\/\ brkpos-\/>min\_human()));}}
+\DoxyCodeLine{00637\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ hybrid\_targ\_ratio\_pc\ =\ 100.0\ *\ hybrid\_targ\_ratio;\ \ //\ for\ display}}
+\DoxyCodeLine{00638\ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00639\ \ \ \ \ \ \ \ \ pids[PressurePID].set\_target(pressure-\/>min\_human()\ +\ pid\_targ\_pc\ *\ (pressure-\/>max\_human()\ -\/\ pressure-\/>min\_human())\ /\ 100.0);}
+\DoxyCodeLine{00640\ \ \ \ \ \ \ \ \ pids[PositionPID].set\_target(brkpos-\/>min\_human()\ +\ (100.0\ -\/\ pid\_targ\_pc)\ *\ (brkpos-\/>max\_human()\ -\/\ brkpos-\/>min\_human())\ /\ 100.0);\ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00641\ \ \ \ \ \}}
+\DoxyCodeLine{00642\ \ \ \ \ \textcolor{keywordtype}{void}\ pid\_out()\ \{\ \ \textcolor{comment}{//\ returns\ motor\ output\ percent\ calculated\ using\ dynamic\ combination\ of\ position\ and\ pressure\ influence}}
+\DoxyCodeLine{00643\ \ \ \ \ \ \ \ \ hybrid\_out\_ratio\ =\ calc\_hybrid\_ratio(pressure-\/>filt());\ \ \textcolor{comment}{//\ calculate\ pressure\ vs.\ position\ multiplier\ based\ on\ the\ sensed\ values}}
+\DoxyCodeLine{00644\ \ \ \ \ \ \ \ \ hybrid\_out\_ratio\_pc\ =\ 100.0\ *\ hybrid\_out\_ratio;\ \ \textcolor{comment}{//\ for\ display}}
+\DoxyCodeLine{00645\ \ \ \ \ \ \ \ \ set\_dominant\_pid((\textcolor{keywordtype}{int})(hybrid\_out\_ratio\ +\ 0.5));\ \ \textcolor{comment}{//\ round\ to\ 0\ (posn\ pid)\ or\ 1\ (pressure\ pid)}}
+\DoxyCodeLine{00646\ \ \ \ \ \ \ \ \ pc[OUT]\ =\ hybrid\_out\_ratio\ *\ pids[PressurePID].compute()\ +\ (1.0\ -\/\ hybrid\_out\_ratio)\ *\ pids[PositionPID].compute();\ \ \textcolor{comment}{//\ combine\ pid\ outputs\ weighted\ by\ the\ multiplier}}
+\DoxyCodeLine{00647\ \ \ \ \ \}}
+\DoxyCodeLine{00648\ \ \ \ \ \textcolor{keywordtype}{void}\ carstop(\textcolor{keywordtype}{bool}\ panic\_support=\textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{00649\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ panic\ =\ panic\_support\ \&\&\ panicstop;}
+\DoxyCodeLine{00650\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ stopped\_now\ =\ speedo-\/>car\_stopped();}
+\DoxyCodeLine{00651\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (stopped\_last\ \&\&\ !stopped\_now)\ stopcar\_timer.reset();}
+\DoxyCodeLine{00652\ \ \ \ \ \ \ \ \ stopped\_last\ =\ stopped\_now;}
+\DoxyCodeLine{00653\ \ \ \ \ \ \ \ \ autostopping\ =\ (!stopped\_now\ \&\&\ !stopcar\_timer.expired());}
+\DoxyCodeLine{00654\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!autostopping)\ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00655\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (interval\_timer.expireset())\ set\_pidtarg(std::min(100.0f,\ pid\_targ\_pc\ +\ panic\ ?\ panic\_increment\_pc\ :\ hold\_increment\_pc));}
+\DoxyCodeLine{00656\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ set\_pidtarg(std::max(pid\_targ\_pc,\ panic\ ?\ panic\_initial\_pc\ :\ hold\_initial\_pc));}
+\DoxyCodeLine{00657\ \ \ \ \ \ \ \ \ pid\_out();}
+\DoxyCodeLine{00658\ \ \ \ \ \}}
+\DoxyCodeLine{00659\ \ \ \ \ \textcolor{keywordtype}{bool}\ goto\_fixed\_position(\textcolor{keywordtype}{float}\ tgt\_position,\ \textcolor{keywordtype}{bool}\ at\_position)\ \{\ \ \textcolor{comment}{//\ goes\ to\ a\ fixed\ position\ then\ stops.\ \ useful\ for\ parking\ and\ releasing\ modes}}
+\DoxyCodeLine{00660\ \ \ \ \ \ \ \ \ active\_pids\ =\ PositionPID;}
+\DoxyCodeLine{00661\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ in\_progress\ =\ (!at\_position\ \&\&\ !motor\_park\_timer.expired());}
+\DoxyCodeLine{00662\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (in\_progress)\ set\_pidtarg(tgt\_position);\ \ \textcolor{comment}{//\ Flipped\ to\ 100-\/value\ because\ function\ argument\ subtracts\ back\ for\ position\ pid}}
+\DoxyCodeLine{00663\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ setmode(Halt);}
+\DoxyCodeLine{00664\ \ \ \ \ \ \ \ \ pid\_out();}
+\DoxyCodeLine{00665\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ in\_progress;}
+\DoxyCodeLine{00666\ \ \ \ \ \}}
+\DoxyCodeLine{00667\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_output()\ \{}
+\DoxyCodeLine{00668\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (motormode\ ==\ AutoHold)\ \{\ \ \textcolor{comment}{//\ autohold:\ apply\ initial\ moderate\ brake\ pressure,\ and\ incrementally\ more\ if\ car\ is\ moving.\ If\ car\ stops,\ then\ stop\ motor\ but\ continue\ to\ monitor\ car\ speed\ indefinitely,\ adding\ brake\ as\ needed}}
+\DoxyCodeLine{00669\ \ \ \ \ \ \ \ \ \ \ \ \ carstop(\textcolor{keyword}{false});}
+\DoxyCodeLine{00670\ \ \ \ \ \ \ \ \ \ \ \ \ autoholding\ =\ !autostopping\ \&\&\ (pressure-\/>filt()\ >=\ pressure-\/>hold\_initial\_psi\ -\/\ pressure-\/>margin\_psi);\ \ \textcolor{comment}{//\ this\ needs\ to\ be\ tested\ \ //\ if\ (!speedo-\/>car\_stopped())\ \{\ \ \ \ \ \ \ \ \ \ \ \ }}
+\DoxyCodeLine{00671\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Serial.printf("{}as:\%d\ ah:\%d\ f:\%lf,\ h:\%lf,\ m:\%lf\(\backslash\)n"{},\ autostopping,\ autoholding,\ pressure-\/>filt(),\ pressure-\/>hold\_initial\_psi,\ pressure-\/>margin\_psi);}}
+\DoxyCodeLine{00672\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (autoholding)\ pc[OUT]\ =\ pc[STOP];}
+\DoxyCodeLine{00673\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (!autostopping)\ \{}
+\DoxyCodeLine{00674\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_pidtarg(std::max(pid\_targ\_pc,\ hold\_initial\_pc));}
+\DoxyCodeLine{00675\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ pid\_out();}
+\DoxyCodeLine{00676\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00677\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00678\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (motormode\ ==\ AutoStop)\ \{\ \ \textcolor{comment}{//\ autostop:\ if\ car\ is\ moving,\ apply\ initial\ pressure\ plus\ incremental\ pressure\ every\ few\ seconds\ until\ it\ stops\ or\ timeout\ expires,\ then\ stop\ motor\ and\ cancel\ mode}}
+\DoxyCodeLine{00679\ \ \ \ \ \ \ \ \ \ \ \ \ throttle-\/>setmode(Idle);\ \ \textcolor{comment}{//\ Stop\ pushing\ the\ gas,\ will\ help\ us\ stop\ the\ car\ better}}
+\DoxyCodeLine{00680\ \ \ \ \ \ \ \ \ \ \ \ \ carstop(\textcolor{keyword}{true});}
+\DoxyCodeLine{00681\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!autostopping)\ setmode(Halt);\ \ \textcolor{comment}{//\ After\ AutoStop\ mode\ stops\ the\ car\ or\ times\ out,\ then\ stop\ driving\ the\ motor}}
+\DoxyCodeLine{00682\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00683\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (motormode\ ==\ Halt)\ \{}
+\DoxyCodeLine{00684\ \ \ \ \ \ \ \ \ \ \ \ \ active\_pids\ =\ NA;}
+\DoxyCodeLine{00685\ \ \ \ \ \ \ \ \ \ \ \ \ pc[OUT]\ =\ pc[STOP];}
+\DoxyCodeLine{00686\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00687\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (motormode\ ==\ Calibrate)\ \{}
+\DoxyCodeLine{00688\ \ \ \ \ \ \ \ \ \ \ \ \ active\_pids\ =\ NA;}
+\DoxyCodeLine{00689\ \ \ \ \ \ \ \ \ \ \ \ \ cal\_brakemode\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00690\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \_joydir\ =\ hotrc-\/>joydir();\ }
+\DoxyCodeLine{00691\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_joydir\ ==\ JOY\_UP)\ pc[OUT]\ =\ map(hotrc-\/>pc[VERT][FILT],\ hotrc-\/>pc[VERT][DBTOP],\ hotrc-\/>pc[VERT][OPMAX],\ pc[STOP],\ pc[OPMAX]);}
+\DoxyCodeLine{00692\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_joydir\ ==\ JOY\_DN)\ pc[OUT]\ =\ map(hotrc-\/>pc[VERT][FILT],\ hotrc-\/>pc[VERT][OPMIN],\ hotrc-\/>pc[VERT][DBBOT],\ pc[OPMIN],\ pc[STOP]);}
+\DoxyCodeLine{00693\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ pc[OUT]\ =\ pc[STOP];}
+\DoxyCodeLine{00694\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00695\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (motormode\ ==\ Release)\ \{}
+\DoxyCodeLine{00696\ \ \ \ \ \ \ \ \ \ \ \ \ releasing\ =\ goto\_fixed\_position(zeropoint\_pc,\ released());}
+\DoxyCodeLine{00697\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00698\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (motormode\ ==\ ParkMotor)\ \{}
+\DoxyCodeLine{00699\ \ \ \ \ \ \ \ \ \ \ \ \ parking\ =\ goto\_fixed\_position(parkpos\_pc,\ parked());}
+\DoxyCodeLine{00700\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00701\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (motormode\ ==\ ActivePID)\ \{}
+\DoxyCodeLine{00702\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (hotrc-\/>joydir(VERT)\ !=\ JOY\_DN)\ set\_pidtarg(0);\ \ \textcolor{comment}{//\ let\ off\ the\ brake}}
+\DoxyCodeLine{00703\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ set\_pidtarg(map(hotrc-\/>pc[VERT][FILT],\ hotrc-\/>pc[VERT][DBBOT],\ hotrc-\/>pc[VERT][OPMIN],\ 0.0,\ 100.0));\ \ \textcolor{comment}{//\ If\ we\ are\ trying\ to\ brake,\ scale\ joystick\ value\ to\ determine\ brake\ pressure\ setpoint}}
+\DoxyCodeLine{00704\ \ \ \ \ \ \ \ \ \ \ \ \ pid\_out();}
+\DoxyCodeLine{00705\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00706\ \ \ \ \ \}}
+\DoxyCodeLine{00707\ \ \ \ \ \textcolor{keywordtype}{void}\ constrain\_output()\ \{\ \ \textcolor{comment}{//\ keep\ within\ the\ operational\ range,\ or\ to\ full\ absolute\ range\ if\ calibrating\ (caution\ don't\ break\ anything!)}}
+\DoxyCodeLine{00708\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (motormode\ ==\ Calibrate)\ pc[OUT]\ =\ constrain(pc[OUT],\ pc[ABSMIN],\ pc[ABSMAX]);}
+\DoxyCodeLine{00709\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ ((pc[OUT]\ <\ pc[STOP]\ \&\&\ brkpos-\/>filt()\ >\ brkpos-\/>parkpos()\ -\/\ brkpos-\/>margin())\ }
+\DoxyCodeLine{00710\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ||\ (pc[OUT]\ >\ pc[STOP]\ \&\&\ brkpos-\/>filt()\ <\ brkpos-\/>min\_in()\ +\ brkpos-\/>margin()))\ \ \textcolor{comment}{//\ if\ brake\ is\ at\ position\ limits\ and\ we're\ tring\ to\ go\ further,\ stop\ the\ motor}}
+\DoxyCodeLine{00711\ \ \ \ \ \ \ \ \ \ \ \ \ pc[OUT]\ =\ pc[STOP];\ }
+\DoxyCodeLine{00712\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ pc[OUT]\ =\ constrain(pc[OUT],\ pc[OPMIN],\ pc[OPMAX]);\ \ \textcolor{comment}{//\ send\ to\ the\ actuator.\ refuse\ to\ exceed\ range}}
+\DoxyCodeLine{00713\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (std::abs(pc[OUT])\ <\ 0.01)\ pc[OUT]\ =\ 0.0;}
+\DoxyCodeLine{00714\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ p\ =\ PositionPID;\ p\ <=\ PressurePID;\ p++)\ pids[p].set\_output(pc[OUT]);\ \ \textcolor{comment}{//\ Feed\ the\ final\ value\ back\ into\ the\ pids}}
+\DoxyCodeLine{00715\ \ \ \ \ \}}
+\DoxyCodeLine{00716\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00717\ \ \ \ \ \textcolor{keywordtype}{void}\ setmode(\textcolor{keywordtype}{int}\ \_mode)\ \{}
+\DoxyCodeLine{00718\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_mode\ ==\ motormode)\ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00719\ \ \ \ \ \ \ \ \ autostopping\ =\ autoholding\ =\ cal\_brakemode\ =\ parking\ =\ releasing\ =\ \textcolor{keyword}{false};\ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00720\ \ \ \ \ \ \ \ \ interval\_timer.reset();}
+\DoxyCodeLine{00721\ \ \ \ \ \ \ \ \ stopcar\_timer.reset();}
+\DoxyCodeLine{00722\ \ \ \ \ \ \ \ \ motor\_park\_timer.reset();}
+\DoxyCodeLine{00723\ \ \ \ \ \ \ \ \ active\_pids\ =\ HybridPID;}
+\DoxyCodeLine{00724\ \ \ \ \ \ \ \ \ motormode\ =\ \_mode;}
+\DoxyCodeLine{00725\ \ \ \ \ \}}
+\DoxyCodeLine{00726\ \ \ \ \ \textcolor{keywordtype}{void}\ update()\ \{\ \ \textcolor{comment}{//\ Brakes\ -\/\ Determine\ motor\ output\ and\ write\ it\ to\ motor}}
+\DoxyCodeLine{00727\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (volt\_check\_timer.expireset())\ derive();}
+\DoxyCodeLine{00728\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pid\_timer.expireset())\ \{}
+\DoxyCodeLine{00729\ \ \ \ \ \ \ \ \ \ \ \ \ update\_motorheat();\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Step\ 1\ :\ Continuously\ estimate\ motor\ heat\ to\ prevent\ exceeding\ duty\ limitation\ requirement}}
+\DoxyCodeLine{00730\ \ \ \ \ \ \ \ \ \ \ \ \ set\_output();\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Step\ 2\ :\ Determine\ motor\ percent\ value}}
+\DoxyCodeLine{00731\ \ \ \ \ \ \ \ \ \ \ \ \ constrain\_output();\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Step\ 3\ :\ Fix\ motor\ pc\ value\ if\ it's\ out\ of\ range\ or\ threatening\ to\ exceed\ positional\ limits}}
+\DoxyCodeLine{00732\ \ \ \ \ \ \ \ \ \ \ \ \ us[OUT]\ =\ out\_pc\_to\_us(pc[OUT]);\ \ \ \textcolor{comment}{//\ Step\ 4\ :\ Convert\ motor\ percent\ value\ to\ pulse\ width\ for\ motor,\ and\ to\ volts\ for\ display}}
+\DoxyCodeLine{00733\ \ \ \ \ \ \ \ \ \ \ \ \ volt[OUT]\ =\ out\_pc\_to\_si(pc[OUT]);}
+\DoxyCodeLine{00734\ \ \ \ \ \ \ \ \ \ \ \ \ write\_motor();\ \ \textcolor{comment}{//\ Step\ 5\ :\ Write\ to\ motor}}
+\DoxyCodeLine{00735\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00736\ \ \ \ \ \}}
+\DoxyCodeLine{00737\ \ \ \ \ \textcolor{keywordtype}{bool}\ parked()\ \{\ \textcolor{keywordflow}{return}\ brkpos-\/>parked();\ \}\ \ \ \ \ \ \textcolor{comment}{//\ return\ (brkpos-\/>filt()\ >=\ brkpos-\/>parkpos()\ -\/\ brkpos-\/>margin());\ \ //\ return\ (std::abs(pc[OUT]\ -\/\ parkpos\_pc)\ <=\ pc[MARGIN]);\ \ //\ return\ (std::abs(brkpos-\/>filt()\ -\/\ brkpos-\/>parkpos())\ <=\ brkpos-\/>margin());\ \ \ //\ (brkpos-\/>filt()\ +\ brkpos-\/>margin()\ >\ brkpos-\/>parkpos());}}
+\DoxyCodeLine{00738\ \ \ \ \ \textcolor{keywordtype}{bool}\ released()\ \{\ \textcolor{keywordflow}{return}\ brkpos-\/>released();\ \}\ \ \textcolor{comment}{//\ return\ (brkpos-\/>filt()\ >=\ brkpos-\/>zeropoint()\ -\/\ brkpos-\/>margin());\ \ //\ return\ (std::abs(pc[OUT]\ -\/\ zeropoint\_pc)\ <=\ pc[MARGIN]);\ \ //\ return\ (std::abs(brkpos-\/>filt()\ -\/\ brkpos-\/>zeropoint())\ <=\ brkpos-\/>margin());\ \ \ //\ (brkpos-\/>filt()\ +\ brkpos-\/>margin()\ >\ brkpos-\/>parkpos());}}
+\DoxyCodeLine{00739\ \ \ \ \ \textcolor{keywordtype}{float}\ sensmin()\ \{\ \textcolor{keywordflow}{return}\ (dominantpid\ ==\ PressurePID)\ ?\ pressure-\/>op\_min()\ :\ brkpos-\/>op\_min();\ \}}
+\DoxyCodeLine{00740\ \ \ \ \ \textcolor{keywordtype}{float}\ sensmax()\ \{\ \textcolor{keywordflow}{return}\ (dominantpid\ ==\ PressurePID)\ ?\ pressure-\/>op\_max()\ :\ brkpos-\/>op\_max();\ \}}
+\DoxyCodeLine{00741\ \ \ \ \ \textcolor{keywordtype}{float}\ motorheat()\ \{\ \textcolor{keywordflow}{return}\ motor\_heat;\ \}}
+\DoxyCodeLine{00742\ \ \ \ \ \textcolor{keywordtype}{float}\ motorheatmin()\ \{\ \textcolor{keywordflow}{return}\ motor\_heat\_min;\ \}}
+\DoxyCodeLine{00743\ \ \ \ \ \textcolor{keywordtype}{float}\ motorheatmax()\ \{\ \textcolor{keywordflow}{return}\ motor\_heat\_max;\ \}}
+\DoxyCodeLine{00744\ \};}
+\DoxyCodeLine{00745\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_steer_motor}{SteerMotor}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{class_jag_motor}{JagMotor}}\ \{}
+\DoxyCodeLine{00746\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00747\ \ \ \ \ \textcolor{keyword}{using\ }JagMotor::JagMotor;}
+\DoxyCodeLine{00748\ \ \ \ \ \textcolor{keywordtype}{int}\ motormode\ =\ Halt,\ oldmode\ =\ Halt;}
+\DoxyCodeLine{00749\ \ \ \ \ \textcolor{keywordtype}{float}\ steer\_safe\_pc\ =\ 72.0;\ \ \textcolor{comment}{//\ this\ percent\ is\ taken\ off\ full\ steering\ power\ when\ driving\ full\ speed\ (linearly\ applied)}}
+\DoxyCodeLine{00750\ \ \ \ \ \textcolor{keywordtype}{bool}\ reverse\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00751\ \ \ \ \ \textcolor{keywordtype}{void}\ setup(\mbox{\hyperlink{class_hotrc}{Hotrc}}*\ \_hotrc,\ \mbox{\hyperlink{class_speedometer}{Speedometer}}*\ \_speedo,\ \mbox{\hyperlink{class_car_battery}{CarBattery}}*\ \_batt)\ \{\ \ \textcolor{comment}{//\ (int8\_t\ \_motor\_pin,\ int8\_t\ \_press\_pin,\ int8\_t\ \_posn\_pin)}}
+\DoxyCodeLine{00752\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}Steering\ motor..\(\backslash\)n"{}});}
+\DoxyCodeLine{00753\ \ \ \ \ \ \ \ \ JagMotor::setup(\_hotrc,\ \_speedo,\ \_batt);}
+\DoxyCodeLine{00754\ \ \ \ \ \}}
+\DoxyCodeLine{00755\ \ \ \ \ \textcolor{keywordtype}{void}\ update()\ \{}
+\DoxyCodeLine{00756\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (volt\_check\_timer.expireset())\ derive();}
+\DoxyCodeLine{00757\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pid\_timer.expireset())\ \{}
+\DoxyCodeLine{00758\ \ \ \ \ \ \ \ \ \ \ \ \ set\_output();\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Step\ 1\ :\ Determine\ motor\ percent\ value}}
+\DoxyCodeLine{00759\ \ \ \ \ \ \ \ \ \ \ \ \ constrain\_output();\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Step\ 2\ :\ Fix\ motor\ pc\ value\ if\ it's\ out\ of\ range}}
+\DoxyCodeLine{00760\ \ \ \ \ \ \ \ \ \ \ \ \ us[OUT]\ =\ out\_pc\_to\_us(pc[OUT]);\ \ \textcolor{comment}{//\ Step\ 3\ :\ Convert\ motor\ percent\ value\ to\ pulse\ width\ for\ motor,\ and\ to\ volts\ for\ display}}
+\DoxyCodeLine{00761\ \ \ \ \ \ \ \ \ \ \ \ \ volt[OUT]\ =\ out\_pc\_to\_si(pc[OUT]);}
+\DoxyCodeLine{00762\ \ \ \ \ \ \ \ \ \ \ \ \ write\_motor();\ \ \textcolor{comment}{//\ Step\ 4\ :\ Write\ to\ motor}}
+\DoxyCodeLine{00763\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00764\ \ \ \ \ \}}
+\DoxyCodeLine{00765\ \ \ \ \ \textcolor{keywordtype}{void}\ setmode(\textcolor{keywordtype}{int}\ \_mode)\ \{\ motormode\ =\ \_mode;\ \}}
+\DoxyCodeLine{00766\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00767\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_output()\ \{}
+\DoxyCodeLine{00768\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (motormode\ ==\ Halt)\ pc[OUT]\ =\ pc[STOP];\ \ \textcolor{comment}{//\ Stop\ the\ steering\ motor\ if\ in\ shutdown\ mode\ and\ shutdown\ is\ complete}}
+\DoxyCodeLine{00769\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (motormode\ ==\ OpenLoop)\ \{}
+\DoxyCodeLine{00770\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \_joydir\ =\ hotrc-\/>joydir(HORZ);}
+\DoxyCodeLine{00771\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_joydir\ ==\ JOY\_RT)}
+\DoxyCodeLine{00772\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ pc[OUT]\ =\ map(hotrc-\/>pc[HORZ][FILT],\ hotrc-\/>pc[HORZ][DBTOP],\ hotrc-\/>pc[HORZ][OPMAX],\ pc[STOP],\ steer\_safe(pc[OPMAX]));\ \ \textcolor{comment}{//\ if\ joy\ to\ the\ right\ of\ deadband}}
+\DoxyCodeLine{00773\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_joydir\ ==\ JOY\_LT)}
+\DoxyCodeLine{00774\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ pc[OUT]\ =\ map(hotrc-\/>pc[HORZ][FILT],\ hotrc-\/>pc[HORZ][DBBOT],\ hotrc-\/>pc[HORZ][OPMIN],\ pc[STOP],\ steer\_safe(pc[OPMIN]));\ \ \textcolor{comment}{//\ if\ joy\ to\ the\ left\ of\ deadband}}
+\DoxyCodeLine{00775\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}}
+\DoxyCodeLine{00776\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ pc[OUT]\ =\ pc[STOP];\ \ \textcolor{comment}{//\ Stop\ the\ steering\ motor\ if\ inside\ the\ deadband}}
+\DoxyCodeLine{00777\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00778\ \ \ \ \ \}}
+\DoxyCodeLine{00779\ \ \ \ \ \textcolor{keywordtype}{void}\ constrain\_output()\ \{}
+\DoxyCodeLine{00780\ \ \ \ \ \ \ \ \ pc[OUT]\ =\ constrain(pc[OUT],\ pc[OPMIN],\ pc[OPMAX]);}
+\DoxyCodeLine{00781\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (std::abs(pc[OUT])\ <\ 0.01)\ pc[OUT]\ =\ 0.0;}
+\DoxyCodeLine{00782\ \ \ \ \ \}}
+\DoxyCodeLine{00783\ \ \ \ \ \textcolor{keywordtype}{float}\ steer\_safe(\textcolor{keywordtype}{float}\ endpoint)\ \{}
+\DoxyCodeLine{00784\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ pc[STOP]\ +\ (endpoint\ -\/\ pc[STOP])\ *\ (1.0\ -\/\ steer\_safe\_pc\ *\ speedo-\/>filt()\ /\ (100.0\ *\ speedo-\/>redline\_mph()));}
+\DoxyCodeLine{00785\ \ \ \ \ \}}
+\DoxyCodeLine{00786\ \};}
+
+\end{DoxyCode}

@@ -1,0 +1,340 @@
+\doxysection{MAPSensor Class Reference}
+\hypertarget{class_m_a_p_sensor}{}\label{class_m_a_p_sensor}\index{MAPSensor@{MAPSensor}}
+Inheritance diagram for MAPSensor\+:\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[height=5.000000cm]{class_m_a_p_sensor}
+\end{center}
+\end{figure}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_m_a_p_sensor_a184cee8fa6489d72f06d011f2e7a91c3}\label{class_m_a_p_sensor_a184cee8fa6489d72f06d011f2e7a91c3} 
+{\bfseries MAPSensor} (\mbox{\hyperlink{class_i2_c}{I2C}} \texorpdfstring{$\ast$}{*}i2c\+\_\+arg)
+\item 
+virtual void \mbox{\hyperlink{class_m_a_p_sensor_aeda42b8aa6dda1d664d6ffec50fffed7}{set\+\_\+val\+\_\+common}} ()
+\item 
+void \mbox{\hyperlink{class_m_a_p_sensor_a5162c8a3a6003afa93164d02e224fa9a}{setup}} ()
+\item 
+\Hypertarget{class_m_a_p_sensor_abe0bdbe7a8f723eec020cd0ea1b74d4f}\label{class_m_a_p_sensor_abe0bdbe7a8f723eec020cd0ea1b74d4f} 
+float {\bfseries min\+\_\+atm} ()
+\item 
+\Hypertarget{class_m_a_p_sensor_a68620dc1f06700eb563f0f9eddfafc26}\label{class_m_a_p_sensor_a68620dc1f06700eb563f0f9eddfafc26} 
+float {\bfseries max\+\_\+atm} ()
+\item 
+\Hypertarget{class_m_a_p_sensor_a18363a0f5b09ca24ea9d7cdfc14b3937}\label{class_m_a_p_sensor_a18363a0f5b09ca24ea9d7cdfc14b3937} 
+float {\bfseries abs\+\_\+min\+\_\+atm} ()
+\item 
+\Hypertarget{class_m_a_p_sensor_a0fed7301ec2f1a3b8ab030ed28973035}\label{class_m_a_p_sensor_a0fed7301ec2f1a3b8ab030ed28973035} 
+float {\bfseries abs\+\_\+max\+\_\+atm} ()
+\item 
+\Hypertarget{class_m_a_p_sensor_ac7d74844a6f3b44c3adfdefe51abe6fa}\label{class_m_a_p_sensor_ac7d74844a6f3b44c3adfdefe51abe6fa} 
+float \texorpdfstring{$\ast$}{*} {\bfseries min\+\_\+atm\+\_\+ptr} ()
+\item 
+\Hypertarget{class_m_a_p_sensor_a5b478cd9bcecfe32309c1f9366987a48}\label{class_m_a_p_sensor_a5b478cd9bcecfe32309c1f9366987a48} 
+float \texorpdfstring{$\ast$}{*} {\bfseries max\+\_\+atm\+\_\+ptr} ()
+\item 
+\Hypertarget{class_m_a_p_sensor_aeb520163d17a62bc9acaae9080b3d7ce}\label{class_m_a_p_sensor_aeb520163d17a62bc9acaae9080b3d7ce} 
+std\+::shared\+\_\+ptr$<$ float $>$ {\bfseries min\+\_\+atm\+\_\+shptr} ()
+\item 
+\Hypertarget{class_m_a_p_sensor_af32961107a675acc3aa276d230515d41}\label{class_m_a_p_sensor_af32961107a675acc3aa276d230515d41} 
+std\+::shared\+\_\+ptr$<$ float $>$ {\bfseries max\+\_\+atm\+\_\+shptr} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_i2_c_sensor}{I2\+CSensor}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries I2\+CSensor} (\mbox{\hyperlink{class_i2_c}{I2C}} \texorpdfstring{$\ast$}{*}i2c\+\_\+arg, uint8\+\_\+t i2c\+\_\+address\+\_\+arg)
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_sensor}{Sensor$<$ float, float $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Sensor} (uint8\+\_\+t pin)
+\item 
+void {\bfseries set\+\_\+ema\+\_\+alpha} (float arg\+\_\+alpha)
+\item 
+float {\bfseries ema\+\_\+alpha} ()
+\item 
+float {\bfseries filt} ()
+\item 
+float \texorpdfstring{$\ast$}{*} {\bfseries filt\+\_\+ptr} ()
+\item 
+std\+::shared\+\_\+ptr$<$ float $>$ {\bfseries filt\+\_\+shptr} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_transducer}{Transducer$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Transducer} (uint8\+\_\+t arg\+\_\+pin)
+\item 
+void {\bfseries set\+\_\+native\+\_\+limits} (\mbox{\hyperlink{class_param}{Param}}$<$ NATIVE\+\_\+T $>$ \&arg\+\_\+min, \mbox{\hyperlink{class_param}{Param}}$<$ NATIVE\+\_\+T $>$ \&arg\+\_\+max)
+\item 
+void {\bfseries set\+\_\+human\+\_\+limits} (\mbox{\hyperlink{class_param}{Param}}$<$ HUMAN\+\_\+T $>$ \&arg\+\_\+min, \mbox{\hyperlink{class_param}{Param}}$<$ HUMAN\+\_\+T $>$ \&arg\+\_\+max)
+\item 
+void {\bfseries set\+\_\+native\+\_\+limits} (NATIVE\+\_\+T arg\+\_\+min, NATIVE\+\_\+T arg\+\_\+max)
+\item 
+void {\bfseries set\+\_\+human\+\_\+limits} (HUMAN\+\_\+T arg\+\_\+min, HUMAN\+\_\+T arg\+\_\+max)
+\item 
+bool {\bfseries set\+\_\+native} (NATIVE\+\_\+T arg\+\_\+val\+\_\+native)
+\item 
+bool {\bfseries add\+\_\+native} (NATIVE\+\_\+T arg\+\_\+add\+\_\+native)
+\item 
+bool {\bfseries set\+\_\+human} (HUMAN\+\_\+T arg\+\_\+val\+\_\+human)
+\item 
+bool {\bfseries add\+\_\+human} (HUMAN\+\_\+T arg\+\_\+add\+\_\+human)
+\item 
+void {\bfseries set\+\_\+convert} (float arg\+\_\+m\+\_\+factor, float arg\+\_\+b\+\_\+offset, bool arg\+\_\+invert)
+\item 
+NATIVE\+\_\+T {\bfseries native} ()
+\item 
+HUMAN\+\_\+T {\bfseries human} ()
+\item 
+float {\bfseries percent} ()
+\item 
+NATIVE\+\_\+T {\bfseries raw} ()
+\item 
+NATIVE\+\_\+T {\bfseries min\+\_\+native} ()
+\item 
+NATIVE\+\_\+T {\bfseries max\+\_\+native} ()
+\item 
+HUMAN\+\_\+T {\bfseries min\+\_\+human} ()
+\item 
+HUMAN\+\_\+T {\bfseries max\+\_\+human} ()
+\item 
+HUMAN\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries min\+\_\+human\+\_\+ptr} ()
+\item 
+HUMAN\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries max\+\_\+human\+\_\+ptr} ()
+\item 
+NATIVE\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries native\+\_\+ptr} ()
+\item 
+HUMAN\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries human\+\_\+ptr} ()
+\item 
+std\+::shared\+\_\+ptr$<$ NATIVE\+\_\+T $>$ {\bfseries native\+\_\+shptr} ()
+\item 
+std\+::shared\+\_\+ptr$<$ HUMAN\+\_\+T $>$ {\bfseries human\+\_\+shptr} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Device} (uint8\+\_\+t arg\+\_\+pin)
+\item 
+bool {\bfseries can\+\_\+source} (src arg\+\_\+source)
+\item 
+bool {\bfseries set\+\_\+source} (src arg\+\_\+source)
+\item 
+void {\bfseries update} ()
+\item 
+void {\bfseries attach\+\_\+pot} (\mbox{\hyperlink{class_potentiometer}{Potentiometer}} \&pot\+\_\+arg)
+\item 
+void {\bfseries set\+\_\+enabled} (bool arg\+\_\+enable)
+\item 
+void {\bfseries set\+\_\+can\+\_\+source} (src arg\+\_\+source, bool is\+\_\+possible)
+\item 
+src {\bfseries source} ()
+\item 
+uint8\+\_\+t {\bfseries pin} ()
+\item 
+bool {\bfseries enabled} ()
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_m_a_p_sensor_aaf2354d8df1e7dc2ad19894e0d8e4378}\label{class_m_a_p_sensor_aaf2354d8df1e7dc2ad19894e0d8e4378} 
+sens {\bfseries senstype} = sens\+::mapsens
+\item 
+\Hypertarget{class_m_a_p_sensor_a4f48e0f0a1e44213cb2036f0f8abf731}\label{class_m_a_p_sensor_a4f48e0f0a1e44213cb2036f0f8abf731} 
+std\+::string {\bfseries \+\_\+long\+\_\+name} = "{}Manifold Air Pressure sensor"{}
+\item 
+\Hypertarget{class_m_a_p_sensor_a76f69a28d27d0a1b38aea1685df0923e}\label{class_m_a_p_sensor_a76f69a28d27d0a1b38aea1685df0923e} 
+std\+::string {\bfseries \+\_\+short\+\_\+name} = "{}map"{}
+\item 
+\Hypertarget{class_m_a_p_sensor_a27bfa7ccd98e933e6183bf21d7f8acc2}\label{class_m_a_p_sensor_a27bfa7ccd98e933e6183bf21d7f8acc2} 
+std\+::string {\bfseries \+\_\+native\+\_\+units\+\_\+name} = "{}atm"{}
+\item 
+\Hypertarget{class_m_a_p_sensor_ab7ded8abbe10a896febf56d052c31d56}\label{class_m_a_p_sensor_ab7ded8abbe10a896febf56d052c31d56} 
+std\+::string {\bfseries \+\_\+human\+\_\+units\+\_\+name} = "{}atm"{}
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Attributes inherited from \mbox{\hyperlink{class_i2_c_sensor}{I2\+CSensor}}}
+\begin{DoxyCompactItemize}
+\item 
+uint8\+\_\+t {\bfseries addr}
+\item 
+std\+::string {\bfseries \+\_\+long\+\_\+name} = "{}Unknown \mbox{\hyperlink{class_i2_c}{I2C}} device"{}
+\item 
+std\+::string {\bfseries \+\_\+short\+\_\+name} = "{}i2cdev"{}
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Attributes inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_timer}{Timer}} {\bfseries timer}
+\item 
+std\+::string {\bfseries \+\_\+long\+\_\+name} = "{}Unknown device"{}
+\item 
+std\+::string {\bfseries \+\_\+short\+\_\+name} = "{}device"{}
+\item 
+sens {\bfseries senstype} = sens\+::none
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Static Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_m_a_p_sensor_a89ab2fad480aee6064f62f4d4f462f08}\label{class_m_a_p_sensor_a89ab2fad480aee6064f62f4d4f462f08} 
+static constexpr uint8\+\_\+t {\bfseries addr} = 0x18
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Protected Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+virtual float \mbox{\hyperlink{class_m_a_p_sensor_ad9e345be8372d22c14eb974351a85054}{read\+\_\+sensor}} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_i2_c_sensor}{I2\+CSensor}}}
+\begin{DoxyCompactItemize}
+\item 
+virtual void \mbox{\hyperlink{class_i2_c_sensor_aa8015f77813353f52e3bd1628421a049}{set\+\_\+val\+\_\+from\+\_\+pin}} ()
+\item 
+virtual void \mbox{\hyperlink{class_i2_c_sensor_ad8ad1972e3675e42d96cff36f747be42}{set\+\_\+val\+\_\+from\+\_\+pot}} ()
+\item 
+virtual void \mbox{\hyperlink{class_i2_c_sensor_a8c931c27e820cdabd1bf7f11dadaeb8a}{update\+\_\+human\+\_\+limits}} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_sensor}{Sensor$<$ float, float $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+void {\bfseries calculate\+\_\+ema} ()
+\item 
+virtual void \mbox{\hyperlink{class_sensor_a0de95fc9f8511e6525291ff254e4c897}{set\+\_\+val\+\_\+from\+\_\+touch}} ()
+\item 
+virtual void \mbox{\hyperlink{class_sensor_afb6b173fbd35e70f076fa3fba9ae8b48}{update\+\_\+source}} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_transducer}{Transducer$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+virtual HUMAN\+\_\+T {\bfseries from\+\_\+native} (NATIVE\+\_\+T arg\+\_\+val\+\_\+native)
+\item 
+virtual NATIVE\+\_\+T {\bfseries to\+\_\+native} (HUMAN\+\_\+T arg\+\_\+val\+\_\+human)
+\item 
+virtual void {\bfseries update\+\_\+native\+\_\+limits} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+virtual void {\bfseries set\+\_\+val\+\_\+from\+\_\+undef} ()
+\item 
+virtual void {\bfseries set\+\_\+val\+\_\+from\+\_\+fixed} ()
+\item 
+virtual void {\bfseries set\+\_\+val\+\_\+from\+\_\+calc} ()
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Protected Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_m_a_p_sensor_a98504a71db79cbcfe960429cda1b866b}\label{class_m_a_p_sensor_a98504a71db79cbcfe960429cda1b866b} 
+float {\bfseries \+\_\+abs\+\_\+min\+\_\+atm} = 0.\+06
+\item 
+\Hypertarget{class_m_a_p_sensor_a9ac9e2be47073315562c12883bd9563a}\label{class_m_a_p_sensor_a9ac9e2be47073315562c12883bd9563a} 
+float {\bfseries \+\_\+abs\+\_\+max\+\_\+atm} = 2.\+46
+\item 
+\Hypertarget{class_m_a_p_sensor_a31f0f66341db76868ef689a52f8ada11}\label{class_m_a_p_sensor_a31f0f66341db76868ef689a52f8ada11} 
+float {\bfseries \+\_\+op\+\_\+min\+\_\+atm} = 0.\+68
+\item 
+\Hypertarget{class_m_a_p_sensor_a51c9dde22e92e53640197d57fccf1b6c}\label{class_m_a_p_sensor_a51c9dde22e92e53640197d57fccf1b6c} 
+float {\bfseries \+\_\+op\+\_\+max\+\_\+atm} = 1.\+02
+\item 
+\Hypertarget{class_m_a_p_sensor_a279e4db771f36f7c52c4f544eb089454}\label{class_m_a_p_sensor_a279e4db771f36f7c52c4f544eb089454} 
+float {\bfseries \+\_\+initial\+\_\+atm} = 1.\+00
+\item 
+\Hypertarget{class_m_a_p_sensor_aba4952f3fac81da630cf657b5a64a09f}\label{class_m_a_p_sensor_aba4952f3fac81da630cf657b5a64a09f} 
+\mbox{\hyperlink{class_timer}{Timer}} {\bfseries map\+\_\+read\+\_\+timer}
+\item 
+\Hypertarget{class_m_a_p_sensor_ac9a140327acc1eaa4cb2cac49d859848}\label{class_m_a_p_sensor_ac9a140327acc1eaa4cb2cac49d859848} 
+uint32\+\_\+t {\bfseries map\+\_\+read\+\_\+timeout} = 100000
+\item 
+\Hypertarget{class_m_a_p_sensor_a2858b06b4bf1711e3905652ab4f31bac}\label{class_m_a_p_sensor_a2858b06b4bf1711e3905652ab4f31bac} 
+uint32\+\_\+t {\bfseries map\+\_\+retry\+\_\+timeout} = 10000
+\item 
+\Hypertarget{class_m_a_p_sensor_a3cd151e7b304588e984799d45a2fa6f3}\label{class_m_a_p_sensor_a3cd151e7b304588e984799d45a2fa6f3} 
+float {\bfseries goodreading} = NAN
+\item 
+\Hypertarget{class_m_a_p_sensor_a6e3c4e236d73a2ec95637d3ca9159f18}\label{class_m_a_p_sensor_a6e3c4e236d73a2ec95637d3ca9159f18} 
+\mbox{\hyperlink{class_spark_fun___micro_pressure}{Spark\+Fun\+\_\+\+Micro\+Pressure}} {\bfseries \+\_\+sensor}
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_i2_c_sensor}{I2\+CSensor}}}
+\begin{DoxyCompactItemize}
+\item 
+bool {\bfseries \+\_\+detected} = false
+\item 
+\mbox{\hyperlink{class_i2_c}{I2C}} \texorpdfstring{$\ast$}{*} {\bfseries \+\_\+i2c}
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_sensor}{Sensor$<$ float, float $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+float {\bfseries \+\_\+ema\+\_\+alpha}
+\item 
+\mbox{\hyperlink{class_param}{Param}}$<$ float $>$ {\bfseries \+\_\+val\+\_\+filt}
+\item 
+bool {\bfseries \+\_\+should\+\_\+filter}
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_transducer}{Transducer$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+NATIVE\+\_\+T {\bfseries \+\_\+val\+\_\+raw}
+\item 
+float {\bfseries \+\_\+m\+\_\+factor} = 1.\+0
+\item 
+float {\bfseries \+\_\+b\+\_\+offset} = 0.\+0
+\item 
+float {\bfseries \+\_\+zerovalue} = NAN
+\item 
+bool {\bfseries \+\_\+invert} = false
+\item 
+Transducer\+Direction {\bfseries dir} = Transducer\+Direction\+::\+FWD
+\item 
+\mbox{\hyperlink{class_param}{Param}}$<$ HUMAN\+\_\+T $>$ {\bfseries \+\_\+human}
+\item 
+\mbox{\hyperlink{class_param}{Param}}$<$ NATIVE\+\_\+T $>$ {\bfseries \+\_\+native}
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+uint8\+\_\+t {\bfseries \+\_\+pin}
+\item 
+bool {\bfseries \+\_\+enabled} = true
+\item 
+\mbox{\hyperlink{class_potentiometer}{Potentiometer}} \texorpdfstring{$\ast$}{*} {\bfseries \+\_\+pot}
+\item 
+src {\bfseries \+\_\+source} = src\+::\+UNDEF
+\item 
+bool {\bfseries \+\_\+can\+\_\+source} \mbox{[}6\mbox{]} = \{ true, true, false, true, false, false \}
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Member Function Documentation}
+\Hypertarget{class_m_a_p_sensor_ad9e345be8372d22c14eb974351a85054}\label{class_m_a_p_sensor_ad9e345be8372d22c14eb974351a85054} 
+\index{MAPSensor@{MAPSensor}!read\_sensor@{read\_sensor}}
+\index{read\_sensor@{read\_sensor}!MAPSensor@{MAPSensor}}
+\doxysubsubsection{\texorpdfstring{read\_sensor()}{read\_sensor()}}
+{\footnotesize\ttfamily virtual float MAPSensor\+::read\+\_\+sensor (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}, {\ttfamily [protected]}, {\ttfamily [virtual]}}
+
+
+
+Implements \mbox{\hyperlink{class_i2_c_sensor}{I2\+CSensor}}.
+
+\Hypertarget{class_m_a_p_sensor_aeda42b8aa6dda1d664d6ffec50fffed7}\label{class_m_a_p_sensor_aeda42b8aa6dda1d664d6ffec50fffed7} 
+\index{MAPSensor@{MAPSensor}!set\_val\_common@{set\_val\_common}}
+\index{set\_val\_common@{set\_val\_common}!MAPSensor@{MAPSensor}}
+\doxysubsubsection{\texorpdfstring{set\_val\_common()}{set\_val\_common()}}
+{\footnotesize\ttfamily virtual void MAPSensor\+::set\+\_\+val\+\_\+common (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}, {\ttfamily [virtual]}}
+
+
+
+Reimplemented from \mbox{\hyperlink{class_device}{Device}}.
+
+\Hypertarget{class_m_a_p_sensor_a5162c8a3a6003afa93164d02e224fa9a}\label{class_m_a_p_sensor_a5162c8a3a6003afa93164d02e224fa9a} 
+\index{MAPSensor@{MAPSensor}!setup@{setup}}
+\index{setup@{setup}!MAPSensor@{MAPSensor}}
+\doxysubsubsection{\texorpdfstring{setup()}{setup()}}
+{\footnotesize\ttfamily void MAPSensor\+::setup (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}, {\ttfamily [virtual]}}
+
+
+
+Reimplemented from \mbox{\hyperlink{class_i2_c_sensor}{I2\+CSensor}}.
+
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+sensors.\+h\end{DoxyCompactItemize}

@@ -1,0 +1,803 @@
+\doxysection{animations.\+h}
+\hypertarget{animations_8h_source}{}\label{animations_8h_source}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{preprocessor}{\#pragma\ once}}
+\DoxyCodeLine{00002\ \textcolor{preprocessor}{\#include\ <Arduino.h>}}
+\DoxyCodeLine{00003\ \textcolor{comment}{//\ \#define\ touch\_simbutton\ 38}}
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#define\ disp\_simbuttons\_x\ 164}}
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#define\ disp\_simbuttons\_y\ 48}}
+\DoxyCodeLine{00006\ \textcolor{preprocessor}{\#define\ disp\_simbuttons\_w\ (disp\_width\_pix\ -\/\ disp\_simbuttons\_x)\ \ }\textcolor{comment}{//\ 156}}
+\DoxyCodeLine{00007\ \textcolor{preprocessor}{\#define\ disp\_simbuttons\_h\ (disp\_height\_pix\ -\/\ disp\_simbuttons\_y)\ \ }\textcolor{comment}{//\ 192}}
+\DoxyCodeLine{00008\ \textcolor{keyword}{const}\ uint8\_t\ BLK\ \ =\ 0x00;\ \ \textcolor{comment}{//\ greyscale:\ full\ black\ (RGB\ elements\ off)}}
+\DoxyCodeLine{00009\ \textcolor{keyword}{const}\ uint8\_t\ DGRY\ =\ 0x49;\ \ \textcolor{comment}{//\ pseudo-\/greyscale:\ very\ dark\ grey\ (blueish)}}
+\DoxyCodeLine{00010\ \textcolor{keyword}{const}\ uint8\_t\ MGRY\ =\ 0x6d;\ \ \textcolor{comment}{//\ pseudo-\/greyscale:\ medium\ grey\ (yellowish)}}
+\DoxyCodeLine{00011\ \textcolor{keyword}{const}\ uint8\_t\ LGRY\ =\ 0xb6;\ \ \textcolor{comment}{//\ greyscale:\ very\ light\ grey}}
+\DoxyCodeLine{00012\ \textcolor{keyword}{const}\ uint8\_t\ WHT\ \ =\ 0xff;\ \ \textcolor{comment}{//\ greyscale:\ full\ white\ (RGB\ elements\ full\ on)}}
+\DoxyCodeLine{00013\ \textcolor{keyword}{const}\ uint8\_t\ RED\ \ =\ 0xe0;\ \ \textcolor{comment}{//\ primary\ red\ (R\ element\ full\ on)}}
+\DoxyCodeLine{00014\ \textcolor{keyword}{const}\ uint8\_t\ YEL\ \ =\ 0xfc;\ \ \textcolor{comment}{//\ Secondary\ yellow\ (RG\ elements\ full\ on)}}
+\DoxyCodeLine{00015\ \textcolor{keyword}{const}\ uint8\_t\ GRN\ \ =\ 0x1c;\ \ \textcolor{comment}{//\ primary\ green\ (G\ element\ full\ on)}}
+\DoxyCodeLine{00016\ \textcolor{keyword}{const}\ uint8\_t\ CYN\ \ =\ 0x1f;\ \ \textcolor{comment}{//\ secondary\ cyan\ (GB\ elements\ full\ on)\ \ (00000)(111\ 111)(11111)\ =\ 07\ ff}}
+\DoxyCodeLine{00017\ \textcolor{keyword}{const}\ uint8\_t\ BLU\ \ =\ 0x03;\ \ \textcolor{comment}{//\ primary\ blue\ (B\ element\ full\ on)}}
+\DoxyCodeLine{00018\ \textcolor{keyword}{const}\ uint8\_t\ MGT\ \ =\ 0xe2;\ \ \textcolor{comment}{//\ secondary\ magenta\ (RB\ elements\ full\ on)}}
+\DoxyCodeLine{00019\ \textcolor{keyword}{const}\ uint8\_t\ DRED\ =\ 0x80;\ \ \textcolor{comment}{//\ dark\ red}}
+\DoxyCodeLine{00020\ \textcolor{keyword}{const}\ uint8\_t\ BORG\ =\ 0xe8;\ \ \textcolor{comment}{//\ blood\ orange\ (very\ reddish\ orange)}}
+\DoxyCodeLine{00021\ \textcolor{keyword}{const}\ uint8\_t\ BRN\ \ =\ 0x88;\ \ \textcolor{comment}{//\ dark\ orange\ aka\ brown}}
+\DoxyCodeLine{00022\ \textcolor{keyword}{const}\ uint8\_t\ DBRN\ =\ 0x44;\ \ \textcolor{comment}{//\ dark\ brown}}
+\DoxyCodeLine{00023\ \textcolor{keyword}{const}\ uint8\_t\ ORG\ \ =\ 0xf0;\ \ \textcolor{comment}{//\ }}
+\DoxyCodeLine{00024\ \textcolor{keyword}{const}\ uint8\_t\ LYEL\ =\ 0xfe;\ \ \textcolor{comment}{//\ }}
+\DoxyCodeLine{00025\ \textcolor{keyword}{const}\ uint8\_t\ GGRN\ =\ 0x9e;\ \ \textcolor{comment}{//\ a\ low\ saturation\ greyish\ pastel\ green}}
+\DoxyCodeLine{00026\ \textcolor{keyword}{const}\ uint8\_t\ TEAL\ =\ 0x1e;\ \ \textcolor{comment}{//\ this\ teal\ is\ barely\ distinguishable\ from\ cyan}}
+\DoxyCodeLine{00027\ \textcolor{keyword}{const}\ uint8\_t\ STBL\ =\ 0x9b;\ \ \textcolor{comment}{//\ steel\ blue\ is\ desaturated\ light\ blue}}
+\DoxyCodeLine{00028\ \textcolor{keyword}{const}\ uint8\_t\ DCYN\ =\ 0x12;\ \ \textcolor{comment}{//\ dark\ cyan}}
+\DoxyCodeLine{00029\ \textcolor{keyword}{const}\ uint8\_t\ RBLU\ =\ 0x0b;\ \ \textcolor{comment}{//\ royal\ blue}}
+\DoxyCodeLine{00030\ \textcolor{keyword}{const}\ uint8\_t\ MBLU\ =\ 0x02;\ \ \textcolor{comment}{//\ midnight\ blue}}
+\DoxyCodeLine{00031\ \textcolor{keyword}{const}\ uint8\_t\ INDG\ =\ 0x43;\ \ \textcolor{comment}{//\ indigo\ (deep\ blue\ with\ a\ hint\ of\ purple)}}
+\DoxyCodeLine{00032\ \textcolor{keyword}{const}\ uint8\_t\ ORCD\ =\ 0x8f;\ \ \textcolor{comment}{//\ orchid\ (lighter\ and\ less\ saturated\ purple)}}
+\DoxyCodeLine{00033\ \textcolor{keyword}{const}\ uint8\_t\ VIO\ \ =\ 0x83;\ \ \textcolor{comment}{//\ }}
+\DoxyCodeLine{00034\ \textcolor{keyword}{const}\ uint8\_t\ PUR\ \ =\ 0x63;}
+\DoxyCodeLine{00035\ \textcolor{keyword}{const}\ uint8\_t\ GPUR\ =\ 0x6a;\ \ \textcolor{comment}{//\ a\ low\ saturation\ greyish\ pastel\ purple}}
+\DoxyCodeLine{00036\ \textcolor{keyword}{const}\ uint8\_t\ LPUR\ =\ 0xb3;\ \ \textcolor{comment}{//\ a\ light\ pastel\ purple}}
+\DoxyCodeLine{00037\ \textcolor{keyword}{const}\ uint8\_t\ PNK\ \ =\ 0xe3;\ \ \textcolor{comment}{//\ pink\ is\ the\ best\ color}}
+\DoxyCodeLine{00038\ \textcolor{keyword}{const}\ uint8\_t\ MPNK\ =\ 0xeb;\ \ \textcolor{comment}{//\ we\ need\ all\ shades\ of\ pink}}
+\DoxyCodeLine{00039\ \textcolor{keyword}{const}\ uint8\_t\ LPNK\ =\ 0xf3;\ \ \textcolor{comment}{//\ especially\ light\ pink,\ the\ champagne\ of\ pinks}}
+\DoxyCodeLine{00040\ \textcolor{keyword}{const}\ uint8\_t\ NON\ \ =\ 0x45;\ \ \textcolor{comment}{//\ used\ as\ default\ value\ when\ color\ is\ unspecified}}
+\DoxyCodeLine{00041\ \textcolor{keywordtype}{int}\ simgriddir[4][3]\ =\ \{}
+\DoxyCodeLine{00042\ \ \ \ \ \{\ JOY\_PLUS,\ \ JOY\_PLUS,\ \ JOY\_PLUS,\ \ \},}
+\DoxyCodeLine{00043\ \ \ \ \ \{\ JOY\_MINUS,\ JOY\_MINUS,\ JOY\_MINUS,\ \},}
+\DoxyCodeLine{00044\ \ \ \ \ \{\ JOY\_PLUS,\ \ JOY\_UP,\ \ \ \ JOY\_RT,\ \ \ \ \},}
+\DoxyCodeLine{00045\ \ \ \ \ \{\ JOY\_MINUS,\ JOY\_DN,\ \ \ \ JOY\_LT,\ \ \ \ \},}
+\DoxyCodeLine{00046\ \};}
+\DoxyCodeLine{00047\ std::string\ simgrid[4][3]\ =\ \{}
+\DoxyCodeLine{00048\ \ \ \ \ \{\ \textcolor{stringliteral}{"{}psi"{}},\ \textcolor{stringliteral}{"{}rpm"{}},\ \textcolor{stringliteral}{"{}mph"{}}\ \},}
+\DoxyCodeLine{00049\ \ \ \ \ \{\ \textcolor{stringliteral}{"{}psi"{}},\ \textcolor{stringliteral}{"{}rpm"{}},\ \textcolor{stringliteral}{"{}mph"{}}\ \},}
+\DoxyCodeLine{00050\ \ \ \ \ \{\ \textcolor{stringliteral}{"{}pos"{}},\ \textcolor{stringliteral}{"{}joy"{}},\ \textcolor{stringliteral}{"{}joy"{}}\ \},}
+\DoxyCodeLine{00051\ \ \ \ \ \{\ \textcolor{stringliteral}{"{}pos"{}},\ \textcolor{stringliteral}{"{}joy"{}},\ \textcolor{stringliteral}{"{}joy"{}}\ \},}
+\DoxyCodeLine{00052\ \};\ \ \textcolor{comment}{//\ The\ greek\ mu\ character\ we\ used\ for\ microseconds\ no\ longer\ works\ after\ switching\ from\ Adafruit\ to\ tft\_espi\ library.\ So\ I\ switched\ em\ to\ "{}us"{}\ :(}}
+\DoxyCodeLine{00053\ }
+\DoxyCodeLine{00054\ \textcolor{keyword}{volatile}\ \textcolor{keywordtype}{bool}\ \_is\_running;}
+\DoxyCodeLine{00055\ \textcolor{keyword}{volatile}\ std::uint32\_t\ \_loop\_count;}
+\DoxyCodeLine{00056\ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ std::uint32\_t\ SHIFTSIZE\ =\ 8;}
+\DoxyCodeLine{00057\ \textcolor{keyword}{volatile}\ \textcolor{keywordtype}{bool}\ flip\ =\ 0;}
+\DoxyCodeLine{00058\ \textcolor{keyword}{volatile}\ int32\_t\ refresh\_limit\ =\ 16666;\ \textcolor{comment}{//\ 16666;\ //\ =\ 60\ Hz}}
+\DoxyCodeLine{00059\ \textcolor{keyword}{volatile}\ \textcolor{keywordtype}{bool}\ auto\_saver\_enabled\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00060\ \mbox{\hyperlink{class_timer}{Timer}}\ screenRefreshTimer\ =\ \mbox{\hyperlink{class_timer}{Timer}}((int64\_t)refresh\_limit);}
+\DoxyCodeLine{00061\ \mbox{\hyperlink{class_l_g_f_x}{LGFX}}\ lcd;}
+\DoxyCodeLine{00062\ LGFX\_Sprite\ framebuf[2];\ \ \textcolor{comment}{//\ ,\ datapage\_sp[2],\ bargraph\_sp[2],\ idiots\_sp[2];}}
+\DoxyCodeLine{00063\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structviewport}{viewport}}\ \{}
+\DoxyCodeLine{00064\ \ \ \ \ int32\_t\ x;}
+\DoxyCodeLine{00065\ \ \ \ \ int32\_t\ y;}
+\DoxyCodeLine{00066\ \ \ \ \ int32\_t\ w;}
+\DoxyCodeLine{00067\ \ \ \ \ int32\_t\ h;}
+\DoxyCodeLine{00068\ \};}
+\DoxyCodeLine{00069\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_collisions_saver}{CollisionsSaver}}\ \{}
+\DoxyCodeLine{00070\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00071\ \ \ \ \ \textcolor{keyword}{struct\ }\mbox{\hyperlink{struct_collisions_saver_1_1ball__info__t}{ball\_info\_t}}\ \{}
+\DoxyCodeLine{00072\ \ \ \ \ \ \ \ \ int32\_t\ x;}
+\DoxyCodeLine{00073\ \ \ \ \ \ \ \ \ int32\_t\ y;}
+\DoxyCodeLine{00074\ \ \ \ \ \ \ \ \ int32\_t\ dx;}
+\DoxyCodeLine{00075\ \ \ \ \ \ \ \ \ int32\_t\ dy;}
+\DoxyCodeLine{00076\ \ \ \ \ \ \ \ \ int32\_t\ r;}
+\DoxyCodeLine{00077\ \ \ \ \ \ \ \ \ int32\_t\ m;}
+\DoxyCodeLine{00078\ \ \ \ \ \ \ \ \ uint8\_t\ color;}
+\DoxyCodeLine{00079\ \ \ \ \ \};}
+\DoxyCodeLine{00080\ \ \ \ \ \textcolor{keywordtype}{bool}\ touchnow\ =\ \textcolor{keyword}{false},\ touchlast;}
+\DoxyCodeLine{00081\ \ \ \ \ \mbox{\hyperlink{structviewport}{viewport}}*\ vp;}
+\DoxyCodeLine{00082\ \ \ \ \ uint8\_t\ sqrme,\ slices\ =\ 8;}
+\DoxyCodeLine{00083\ \ \ \ \ \mbox{\hyperlink{struct_collisions_saver_1_1ball__info__t}{ball\_info\_t}}*\ balls;}
+\DoxyCodeLine{00084\ \ \ \ \ \mbox{\hyperlink{struct_collisions_saver_1_1ball__info__t}{ball\_info\_t}}*\ a;}
+\DoxyCodeLine{00085\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ \textcolor{keywordtype}{int}\ touchball\_r\ =\ 15;}
+\DoxyCodeLine{00086\ \ \ \ \ \mbox{\hyperlink{struct_collisions_saver_1_1ball__info__t}{ball\_info\_t}}\ touchball\ =\ \{\ 100,\ 100,\ 0,\ 0,\ touchball\_r\ <<\ SHIFTSIZE,\ 10,\ GRN\ \};}
+\DoxyCodeLine{00087\ \ \ \ \ LGFX\_Sprite*\ sprite;}
+\DoxyCodeLine{00088\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ std::uint32\_t\ BALL\_MAX\ =\ 35;\ \ \textcolor{comment}{//\ 256}}
+\DoxyCodeLine{00089\ \ \ \ \ ball\_info\_t\ \_balls[2][BALL\_MAX];}
+\DoxyCodeLine{00090\ \ \ \ \ std::uint32\_t\ \_ball\_count\ =\ 0,\ \_myfps\ =\ 0;}
+\DoxyCodeLine{00091\ \ \ \ \ std::uint32\_t\ ball\_thismax,\ ball\_count\ =\ 0;}
+\DoxyCodeLine{00092\ \ \ \ \ \textcolor{keywordtype}{int}\ \_width,\ \_height,\ touchx,\ touchy,\ lastx,\ lasty;}
+\DoxyCodeLine{00093\ \ \ \ \ std::uint32\_t\ sec,\ psec,\ ball\_create\_rate\ =\ 3200;}
+\DoxyCodeLine{00094\ \ \ \ \ std::uint32\_t\ myfps\ =\ 0,\ frame\_count\ =\ 0;}
+\DoxyCodeLine{00095\ \ \ \ \ \textcolor{keywordtype}{float}\ ball\_radius\_base\ =\ 4.5\ /\ 235.0;\ \ \textcolor{comment}{//\ 7\ pixels\ radius\ /\ 125x100\ sprite\ =\ about\ 5\ pix\ per\ 235\ sides\ sum}}
+\DoxyCodeLine{00096\ \ \ \ \ \textcolor{keywordtype}{float}\ ball\_radius\_modifier\ =\ 2.6\ /\ 235.0;\ \ \textcolor{comment}{//\ 4\ pixels\ radius\ /\ 125x100\ sprite\ =\ about\ 3\ pix\ per...}}
+\DoxyCodeLine{00097\ \ \ \ \ uint8\_t\ ball\_redoubler\_rate\ =\ 0x18;\ \ \textcolor{comment}{//\ originally\ 0x07}}
+\DoxyCodeLine{00098\ \ \ \ \ uint8\_t\ ball\_gravity\ =\ 16;\ \ \textcolor{comment}{//\ originally\ 0\ with\ suggestion\ of\ 4}}
+\DoxyCodeLine{00099\ \ \ \ \ \textcolor{keyword}{volatile}\ \textcolor{keywordtype}{bool}\ \_is\_running;}
+\DoxyCodeLine{00100\ \ \ \ \ \textcolor{keyword}{volatile}\ std::uint32\_t\ \_loop\_count\ =\ 0;}
+\DoxyCodeLine{00101\ \ \ \ \ \mbox{\hyperlink{class_collisions_saver}{CollisionsSaver}}()\ \{\}}
+\DoxyCodeLine{00102\ \ \ \ \ \textcolor{keywordtype}{void}\ drawfunc()\ \{}
+\DoxyCodeLine{00103\ \ \ \ \ \ \ \ \ \textcolor{keyword}{auto}\ sprwidth\ =\ vp-\/>w;}
+\DoxyCodeLine{00104\ \ \ \ \ \ \ \ \ \textcolor{keyword}{auto}\ sprheight\ =\ vp-\/>h;}
+\DoxyCodeLine{00105\ \ \ \ \ \ \ \ \ balls\ =\ \&\_balls[flip][0];}
+\DoxyCodeLine{00106\ \ \ \ \ \ \ \ \ sprite-\/>fillSprite(BLK);}
+\DoxyCodeLine{00107\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{float}\ i\ =\ 0.125;\ i\ <\ 1.0;\ i\ +=\ 0.125)\ \{}
+\DoxyCodeLine{00108\ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawGradientVLine((\textcolor{keywordtype}{int})(i\ *\ (vp-\/>w\ -\/\ 1))\ +\ vp-\/>x,\ vp-\/>y,\ vp-\/>h,\ (uint8\_t)(hsv\_to\_rgb<uint16\_t>((uint16\_t)(i\ *\ 65535)+25*\_loop\_count,\ 255,\ 200)\ >>\ 8),\ (uint8\_t)(hsv\_to\_rgb<uint16\_t>((uint16\_t)((1.0-\/i)\ *\ 65535)+25*\_loop\_count,\ 255,\ 200)\ >>\ 8));}
+\DoxyCodeLine{00109\ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawGradientHLine(vp-\/>x,\ (\textcolor{keywordtype}{int})(i\ *\ (vp-\/>h\ -\/\ 1))\ +\ vp-\/>y,\ vp-\/>w,\ (uint8\_t)(hsv\_to\_rgb<uint16\_t>((uint16\_t)(i\ *\ 65535)+25*\_loop\_count,\ 255,\ 200)\ >>\ 8),\ (uint8\_t)(hsv\_to\_rgb<uint16\_t>((uint16\_t)((1.0-\/i)\ *\ 65535)+25*\_loop\_count,\ 255,\ 200)\ >>\ 8));}
+\DoxyCodeLine{00110\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00111\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{float}\ i\ =\ 0.0;\ i\ <=\ 1.0;\ i\ +=\ 1.0)\ \{}
+\DoxyCodeLine{00112\ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawGradientVLine((\textcolor{keywordtype}{int})(i\ *\ (vp-\/>w\ -\/\ 1))\ +\ vp-\/>x,\ vp-\/>y,\ vp-\/>h,\ (uint8\_t)(hsv\_to\_rgb<uint16\_t>((uint16\_t)(i\ *\ 65535)+25*\_loop\_count,\ 255,\ 200)\ >>\ 8),\ (uint8\_t)(hsv\_to\_rgb<uint16\_t>((uint16\_t)((1.0-\/i)\ *\ 65535)+25*\_loop\_count,\ 255,\ 200)\ >>\ 8));}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawGradientHLine(vp-\/>x,\ (\textcolor{keywordtype}{int})(i\ *\ (vp-\/>h\ -\/\ 1))\ +\ vp-\/>y,\ vp-\/>w,\ (uint8\_t)(hsv\_to\_rgb<uint16\_t>((uint16\_t)(i\ *\ 65535)+25*\_loop\_count,\ 255,\ 200)\ >>\ 8),\ (uint8\_t)(hsv\_to\_rgb<uint16\_t>((uint16\_t)((1.0-\/i)\ *\ 65535)+25*\_loop\_count,\ 255,\ 200)\ >>\ 8));}
+\DoxyCodeLine{00114\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00115\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (std::uint32\_t\ i\ =\ 0;\ i\ <\ \_ball\_count;\ i++)\ \{}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ \ \ \ \ \ \ a\ =\ \&balls[i];}
+\DoxyCodeLine{00117\ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>fillCircle((a-\/>x\ >>\ SHIFTSIZE)\ +\ vp-\/>x,\ (a-\/>y\ >>\ SHIFTSIZE)\ +\ vp-\/>y,\ a-\/>r\ >>\ SHIFTSIZE,\ (uint8\_t)(a-\/>color));}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00119\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (touchnow)\ sprite-\/>fillCircle((touchball.x\ >>\ SHIFTSIZE)\ +\ vp-\/>x,\ (touchball.y\ >>\ SHIFTSIZE)\ +\ vp-\/>y,\ touchball.r\ >>\ SHIFTSIZE,\ touchball.color);}
+\DoxyCodeLine{00120\ \ \ \ \ \ \ \ \ touchnow\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00121\ \ \ \ \ \}}
+\DoxyCodeLine{00122\ \ \ \ \ \textcolor{keywordtype}{void}\ new\_ball(\textcolor{keywordtype}{int}\ ballno)\ \{}
+\DoxyCodeLine{00123\ \ \ \ \ \ \ \ \ \textcolor{keyword}{auto}\ a\ =\ \&\_balls[\_loop\_count\ \&\ 1][ballno];}
+\DoxyCodeLine{00124\ \ \ \ \ \ \ \ \ a-\/>color\ =\ lgfx::color332(100\ +\ (rand()\ \%\ 155),\ 100\ +\ (rand()\ \%\ 155),\ 100\ +\ (rand()\ \%\ 155));}
+\DoxyCodeLine{00125\ \ \ \ \ \ \ \ \ a-\/>x\ =\ \_width\ *\ rn(2);}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \ \ a-\/>dx\ =\ (rand()\ \&\ (5\ <<\ SHIFTSIZE))\ +\ 1;}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ \ \ a-\/>dy\ =\ (rand()\ \&\ (5\ <<\ SHIFTSIZE))\ +\ 1;}
+\DoxyCodeLine{00128\ \ \ \ \ \ \ \ \ sqrme\ =\ (uint8\_t)(ball\_radius\_base\ *\ (\textcolor{keywordtype}{float})(vp-\/>w\ +\ vp-\/>h));}
+\DoxyCodeLine{00129\ \ \ \ \ \ \ \ \ sqrme\ +=\ rn((\textcolor{keywordtype}{int})(ball\_radius\_modifier\ *\ (\textcolor{keywordtype}{float})(vp-\/>w\ +\ vp-\/>h)));}
+\DoxyCodeLine{00130\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i=0;\ i<2;\ i++)\ \textcolor{keywordflow}{if}\ (!rn(ball\_redoubler\_rate))\ sqrme\ *=2;}
+\DoxyCodeLine{00131\ \ \ \ \ \ \ \ \ a-\/>r\ =\ sqrme\ <<\ SHIFTSIZE;\ \ \textcolor{comment}{//\ (sqrme\ *\ sqrme)));}}
+\DoxyCodeLine{00132\ \ \ \ \ \ \ \ \ a-\/>m\ =\ 4\ +\ (ball\_count\ \&\ 0x07);}
+\DoxyCodeLine{00133\ \ \ \ \ \}}
+\DoxyCodeLine{00134\ \ \ \ \ \textcolor{keywordtype}{void}\ saver\_touch(LGFX\_Sprite*\ spr,\ \textcolor{keywordtype}{int}\ x,\ \textcolor{keywordtype}{int}\ y)\ \{\ \ \textcolor{comment}{//\ you\ can\ draw\ colorful\ lines\ on\ the\ screensaver}}
+\DoxyCodeLine{00135\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ pencolor\ =\ (cycle\ ==\ 1)\ ?\ rando\_color()\ :\ hsv\_to\_rgb<uint8\_t>(penhue,\ (uint8\_t)pensat,\ 200\ +\ rn(56));}}
+\DoxyCodeLine{00136\ \ \ \ \ \ \ \ \ lastx\ =\ touchball.x;}
+\DoxyCodeLine{00137\ \ \ \ \ \ \ \ \ lasty\ =\ touchball.y;}
+\DoxyCodeLine{00138\ \ \ \ \ \ \ \ \ touchx\ =\ x;}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ \ \ touchy\ =\ y;}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \ \ touchnow\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00141\ \ \ \ \ \ \ \ \ touchball.x\ =\ constrain(touchx,\ touchball\_r,\ vp-\/>w\ -\/\ touchball\_r)\ <<\ SHIFTSIZE;}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \ \ touchball.y\ =\ constrain(touchy,\ touchball\_r,\ vp-\/>h\ -\/\ touchball\_r)\ <<\ SHIFTSIZE;}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ \ \ touchball.dx\ =\ (touchball.x\ -\/\ lastx)\ /\ 2;}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ \ \ touchball.dy\ =\ (touchball.y\ -\/\ lasty)\ /\ 2;}
+\DoxyCodeLine{00145\ \ \ \ \ \}}
+\DoxyCodeLine{00146\ \ \ \ \ \textcolor{comment}{//\ ball\_info\_t\ temp\_ball(int32\_t\ x,\ int32\_t\ y,\ int32\_t\ dx,\ int32\_t\ dy,\ int32\_t\ r,\ int32\_t\ m,\ uint8\_t\ color)\ \{}}
+\DoxyCodeLine{00147\ \ \ \ \ \textcolor{comment}{//\ \ \ \ \ return\ \{\ x,\ y,\ dx,\ dy,\ r,\ m,\ color\ \};\ //\ Uniform\ initialization}}
+\DoxyCodeLine{00148\ \ \ \ \ \textcolor{comment}{//\ \}}}
+\DoxyCodeLine{00149\ \ \ \ \ \textcolor{keywordtype}{bool}\ mainfunc(\textcolor{keywordtype}{void})\ \{}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ new\_round\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ \textcolor{keywordtype}{float}\ e\ =\ 0.999;\ \ \textcolor{comment}{//\ Coefficient\ of\ friction}}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ \ \ sec\ =\ lgfx::millis()\ /\ ball\_create\_rate;}
+\DoxyCodeLine{00153\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (psec\ !=\ sec)\ \{}
+\DoxyCodeLine{00154\ \ \ \ \ \ \ \ \ \ \ \ \ psec\ =\ sec;}
+\DoxyCodeLine{00155\ \ \ \ \ \ \ \ \ \ \ \ \ myfps\ =\ frame\_count;}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \ \ \ \ \ \ frame\_count\ =\ 0;}
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (++ball\_count\ >=\ ball\_thismax)\ \{}
+\DoxyCodeLine{00158\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ new\_round\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ball\_count\ =\ 1;}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \ \ \ \ \ \ new\_ball(ball\_count\ -\/\ 1);}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ \ \ frame\_count++;}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \ \ \_loop\_count++;}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ \ \ ball\_info\_t\ *a,\ *b,\ *balls;}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \ \ int32\_t\ rr,\ len,\ vx2vy2;}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ vx,\ vy,\ distance,\ t;}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ f\ =\ \_loop\_count\ \&\ 1;}
+\DoxyCodeLine{00169\ \ \ \ \ \ \ \ \ balls\ =\ a\ =\ \&\_balls[f][0];}
+\DoxyCodeLine{00170\ \ \ \ \ \ \ \ \ b\ =\ \&\_balls[!f][0];}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \ \ memcpy(a,\ b,\ \textcolor{keyword}{sizeof}(ball\_info\_t)\ *\ ball\_count);}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ ball\_count\ +\ touchnow;\ i++)\ \{}
+\DoxyCodeLine{00173\ \ \ \ \ \ \ \ \ \ \ \ \ a\ =\ (i\ ==\ ball\_count)\ ?\ \&touchball\ :\ \&balls[i];}
+\DoxyCodeLine{00174\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (i\ <\ ball\_count)\ \{}
+\DoxyCodeLine{00175\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ a-\/>dy\ +=\ ball\_gravity;\ \textcolor{comment}{//\ gravity}}
+\DoxyCodeLine{00176\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ a-\/>x\ +=\ a-\/>dx;}
+\DoxyCodeLine{00177\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (a-\/>x\ <\ a-\/>r)\ \{}
+\DoxyCodeLine{00178\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ a-\/>x\ =\ a-\/>r;}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (a-\/>dx\ <\ 0)\ a-\/>dx\ =\ -\/a-\/>dx\ *\ e;}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (a-\/>x\ >=\ \_width\ -\/\ a-\/>r)\ \{}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ a-\/>x\ =\ \_width\ -\/\ a-\/>r\ -\/\ 1;}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (a-\/>dx\ >\ 0)\ a-\/>dx\ =\ -\/a-\/>dx\ *\ e;}
+\DoxyCodeLine{00184\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00185\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ a-\/>y\ +=\ a-\/>dy;}
+\DoxyCodeLine{00186\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (a-\/>y\ <\ a-\/>r)\ \{}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ a-\/>y\ =\ a-\/>r;}
+\DoxyCodeLine{00188\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (a-\/>dy\ <\ 0)\ a-\/>dy\ =\ -\/a-\/>dy\ *\ e;}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00190\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (a-\/>y\ >=\ \_height\ -\/\ a-\/>r)\ \{}
+\DoxyCodeLine{00191\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ a-\/>y\ =\ \_height\ -\/\ a-\/>r\ -\/\ 1;}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (a-\/>dy\ >\ 0)\ a-\/>dy\ =\ -\/a-\/>dy\ *\ e;}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00194\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00195\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ j\ =\ i\ +\ 1;\ j\ <\ ball\_count\ +\ touchnow;\ j++)\ \{}
+\DoxyCodeLine{00196\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ b\ =\ (j\ ==\ ball\_count)\ ?\ \&touchball\ :\ \&balls[j];}
+\DoxyCodeLine{00197\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ rr\ =\ a-\/>r\ +\ b-\/>r;}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ vx\ =\ a-\/>x\ -\/\ b-\/>x;}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (abs(vx)\ >\ rr)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ vy\ =\ a-\/>y\ -\/\ b-\/>y;}
+\DoxyCodeLine{00201\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (abs(vy)\ >\ rr)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00202\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ len\ =\ sqrt(vx\ *\ vx\ +\ vy\ *\ vy);}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (len\ >=\ rr)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00204\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (len\ ==\ 0.0)\ \textcolor{keywordflow}{continue};}
+\DoxyCodeLine{00205\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ distance\ =\ (rr\ -\/\ len)\ >>\ 1;}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ vx\ *=\ distance\ /\ len;}
+\DoxyCodeLine{00207\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ vy\ *=\ distance\ /\ len;}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ a-\/>x\ +=\ vx;}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (j\ <\ ball\_count)\ b-\/>x\ -\/=\ vx;}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ vx\ =\ b-\/>x\ -\/\ a-\/>x;}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ a-\/>y\ +=\ vy;}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (j\ <\ ball\_count)\ b-\/>y\ -\/=\ vy;}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ vy\ =\ b-\/>y\ -\/\ a-\/>y;}
+\DoxyCodeLine{00214\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ vx2vy2\ =\ vx\ *\ vx\ +\ vy\ *\ vy;}
+\DoxyCodeLine{00215\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ t\ =\ -\/(vx\ *\ a-\/>dx\ +\ vy\ *\ a-\/>dy)\ /\ vx2vy2;}
+\DoxyCodeLine{00216\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ arx\ =\ a-\/>dx\ +\ vx\ *\ t;}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ ary\ =\ a-\/>dy\ +\ vy\ *\ t;}
+\DoxyCodeLine{00218\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ t\ =\ -\/(-\/vy\ *\ a-\/>dx\ +\ vx\ *\ a-\/>dy)\ /\ vx2vy2;}
+\DoxyCodeLine{00219\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ amx\ =\ a-\/>dx\ -\/\ vy\ *\ t;}
+\DoxyCodeLine{00220\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ amy\ =\ a-\/>dy\ +\ vx\ *\ t;}
+\DoxyCodeLine{00221\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ t\ =\ -\/(vx\ *\ b-\/>dx\ +\ vy\ *\ b-\/>dy)\ /\ vx2vy2;}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ brx\ =\ b-\/>dx\ +\ vx\ *\ t;}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ bry\ =\ b-\/>dy\ +\ vy\ *\ t;}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ t\ =\ -\/(-\/vy\ *\ b-\/>dx\ +\ vx\ *\ b-\/>dy)\ /\ vx2vy2;}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ bmx\ =\ b-\/>dx\ -\/\ vy\ *\ t;}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ bmy\ =\ b-\/>dy\ +\ vx\ *\ t;}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ adx\ =\ (a-\/>m\ *\ amx\ +\ b-\/>m\ *\ bmx\ +\ bmx\ *\ e\ *\ b-\/>m\ -\/\ amx\ *\ e\ *\ b-\/>m)\ /\ (a-\/>m\ +\ b-\/>m);}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ bdx\ =\ -\/e\ *\ (bmx\ -\/\ amx)\ +\ adx;}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ ady\ =\ (a-\/>m\ *\ amy\ +\ b-\/>m\ *\ bmy\ +\ bmy\ *\ e\ *\ b-\/>m\ -\/\ amy\ *\ e\ *\ b-\/>m)\ /\ (a-\/>m\ +\ b-\/>m);}
+\DoxyCodeLine{00230\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ bdy\ =\ -\/e\ *\ (bmy\ -\/\ amy)\ +\ ady;}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ a-\/>dx\ =\ roundf(adx\ +\ arx);}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ a-\/>dy\ =\ roundf(ady\ +\ ary);}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (j\ <\ ball\_count)\ \{}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ b-\/>dx\ =\ roundf(bdx\ +\ brx);}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ b-\/>dy\ =\ roundf(bdy\ +\ bry);}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ \ \ \_myfps\ =\ myfps;}
+\DoxyCodeLine{00240\ \ \ \ \ \ \ \ \ \_ball\_count\ =\ ball\_count;}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ new\_round;}
+\DoxyCodeLine{00242\ \ \ \ \ \}}
+\DoxyCodeLine{00243\ \ \ \ \ \textcolor{keywordtype}{void}\ setup(LGFX\_Sprite*\ \_nowspr,\ \mbox{\hyperlink{structviewport}{viewport}}*\ \_vp)\ \{}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \ \ sprite\ =\ \_nowspr;}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ \ \ vp\ =\ \_vp;}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \ \ \_width\ =\ vp-\/>w\ <<\ SHIFTSIZE;}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ \ \ \_height\ =\ vp-\/>h\ <<\ SHIFTSIZE;}
+\DoxyCodeLine{00248\ \ \ \ \ \}}
+\DoxyCodeLine{00249\ \ \ \ \ \textcolor{keywordtype}{void}\ reset(LGFX\_Sprite*\ sp0,\ LGFX\_Sprite*\ sp1,\ \mbox{\hyperlink{structviewport}{viewport}}*\ \_vp)\ \{}
+\DoxyCodeLine{00250\ \ \ \ \ \ \ \ \ vp\ =\ \_vp;}
+\DoxyCodeLine{00251\ \ \ \ \ \ \ \ \ \_width\ =\ vp-\/>w\ <<\ SHIFTSIZE;}
+\DoxyCodeLine{00252\ \ \ \ \ \ \ \ \ \_height\ =\ vp-\/>h\ <<\ SHIFTSIZE;}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \ \ LGFX\_Sprite*\ spp[2]\ =\ \{\ sp0,\ sp1\ \};}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ spp[0]-\/>fillSprite(BLK);}}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <=\ 1;\ i++)\ \{}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ spp[i]-\/>setBaseColor(BLK);}}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ \ \ \ \ spp[i]-\/>setTextSize(1);}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \ \ \ \ \ \ spp[i]-\/>setTextDatum(textdatum\_t::top\_left);}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \ \ ball\_thismax\ =\ BALL\_MAX\ -\/\ rn(25);}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (std::uint32\_t\ i\ =\ 0;\ i\ <\ ball\_count;\ ++i)\ new\_ball(i);}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \ \ refresh\_limit\ =\ 20000;\ \ \textcolor{comment}{//\ 50\ Hz\ limit}}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \ \ screenRefreshTimer.set(refresh\_limit);}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ \ \ \_is\_running\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00265\ \ \ \ \ \}}
+\DoxyCodeLine{00266\ \ \ \ \ \textcolor{keywordtype}{int}\ update(LGFX\_Sprite*\ \_nowspr,\ \mbox{\hyperlink{structviewport}{viewport}}*\ \_vp)\ \{}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \ \ sprite\ =\ \_nowspr;}
+\DoxyCodeLine{00268\ \ \ \ \ \ \ \ \ vp\ =\ \_vp;}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ round\_over\ =\ mainfunc();}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \ \ drawfunc();}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ !round\_over;\ \ \textcolor{comment}{//\ not\ done\ yet}}
+\DoxyCodeLine{00272\ \ \ \ \ \}}
+\DoxyCodeLine{00273\ \ \ \ \ \textcolor{keywordtype}{void}\ saver\_touch(\textcolor{keywordtype}{int},\ \textcolor{keywordtype}{int})\ \{\};\ \ \textcolor{comment}{//\ unused}}
+\DoxyCodeLine{00274\ \};}
+\DoxyCodeLine{00275\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_eraser_saver}{EraserSaver}}\ \{\ \ \textcolor{comment}{//\ draws\ colorful\ patterns\ to\ exercise}}
+\DoxyCodeLine{00276\ \ \ \ \ \textcolor{keyword}{enum}\ savershapes\ :\ \textcolor{keywordtype}{int}\ \{\ Wedges,\ Dots,\ Rings,\ Ellipses,\ Boxes,\ Ascii,\ Worm,\ Rotate,\ NumSaverShapes\ \};}
+\DoxyCodeLine{00277\ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00278\ \ \ \ \ LGFX\_Sprite*\ sprite;}
+\DoxyCodeLine{00279\ \ \ \ \ \mbox{\hyperlink{structviewport}{viewport}}*\ vp;}
+\DoxyCodeLine{00280\ \ \ \ \ \textcolor{keywordtype}{int}\ wormpos[2]\ =\ \{0,\ 0\},\ wormvel[2]\ =\ \{0,\ 0\},\ wormsign[2]\ =\ \{1,\ 1\},\ wormd[2]\ =\ \{20,\ 20\};}
+\DoxyCodeLine{00281\ \ \ \ \ \textcolor{keywordtype}{int}\ shifter\ =\ 2,\ wormdmin\ =\ 8,\ wormdmax\ =\ 50,\ wormvelmax\ =\ 1\ <<\ shifter,\ wormsat\ =\ 128;}
+\DoxyCodeLine{00282\ \ \ \ \ uint32\_t\ boxsize[2],\ huebase\ =\ 0;}
+\DoxyCodeLine{00283\ \ \ \ \ \textcolor{keywordtype}{int}\ sprsize[2],\ rotate\ =\ -\/1,\ scaler\ =\ 1,\ season\ =\ 0,\ numseasons\ =\ 4;}
+\DoxyCodeLine{00284\ \ \ \ \ \textcolor{keywordtype}{int}\ point[2],\ plast[2],\ er[2],\ erpos\_max[2],\ wormstripe\ =\ 2;}
+\DoxyCodeLine{00285\ \ \ \ \ \textcolor{keywordtype}{int}\ eraser\_rad\ =\ 14,\ eraser\_rad\_min\ =\ 22,\ eraser\_rad\_max\ =\ 40,\ eraser\_velo\_min\ =\ 3,\ eraser\_velo\_max\ =\ 7,\ touch\_w\_last\ =\ 2;}
+\DoxyCodeLine{00286\ \ \ \ \ \textcolor{keywordtype}{int}\ erpos[2]\ =\ \{0,\ 0\},\ eraser\_velo\_sign[2]\ =\ \{1,\ 1\},\ now\ =\ 0;}
+\DoxyCodeLine{00287\ \ \ \ \ \textcolor{keywordtype}{int}\ eraser\_velo[2]\ =\ \{rn(eraser\_velo\_max),\ rn(eraser\_velo\_max)\},\ shapes\_per\_run\ =\ 5,\ shapes\_done\ =\ 0;}
+\DoxyCodeLine{00288\ \ \ \ \ uint8\_t\ wclast,\ pencolor\ =\ RED;}
+\DoxyCodeLine{00289\ \ \ \ \ \textcolor{keywordtype}{float}\ pensat\ =\ 200.0;}
+\DoxyCodeLine{00290\ \ \ \ \ uint16\_t\ spothue\ =\ 65535,\ slowhue\ =\ 0,\ penhue\ =\ rn(65535);}
+\DoxyCodeLine{00291\ \ \ \ \ \textcolor{keywordtype}{int}\ num\_cycles\ =\ 3,\ cycle\ =\ 0,\ boxrad,\ boxminsize,\ boxmaxarea\ =\ 200,\ shape\ =\ rn(Rotate),\ pensatdir\ =\ 1;}
+\DoxyCodeLine{00292\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ uint32\_t\ saver\_cycletime\_us\ =\ 18000000;}
+\DoxyCodeLine{00293\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ saverCycleTimer,\ pentimer\ =\ \mbox{\hyperlink{class_timer}{Timer}}(70000),\ lucktimer,\ seasontimer;}
+\DoxyCodeLine{00294\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ wormmovetimer\ =\ \mbox{\hyperlink{class_timer}{Timer}}(20000),\ wormtimer\ =\ \mbox{\hyperlink{class_timer}{Timer}}(1000000),\ wormstripetimer\ =\ \mbox{\hyperlink{class_timer}{Timer}}(2850000);}
+\DoxyCodeLine{00295\ \ \ \ \ \textcolor{keywordtype}{bool}\ saver\_lotto\ =\ \textcolor{keyword}{false},\ has\_eraser\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00296\ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00297\ \ \ \ \ \mbox{\hyperlink{class_eraser_saver}{EraserSaver}}()\ \{\}}
+\DoxyCodeLine{00298\ \ \ \ \ \textcolor{keywordtype}{void}\ setup(LGFX\_Sprite*\ \_nowspr,\ \mbox{\hyperlink{structviewport}{viewport}}*\ \_vp)\ \{}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ \ \ sprite\ =\ \_nowspr;}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ \ \ vp\ =\ \_vp;}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ \ \ lucktimer.set((2\ +\ rn(5))\ *\ 10000000);}
+\DoxyCodeLine{00302\ \ \ \ \ \}}
+\DoxyCodeLine{00303\ \ \ \ \ \textcolor{keywordtype}{void}\ reset(LGFX\_Sprite*\ sp0,\ LGFX\_Sprite*\ sp1,\ \mbox{\hyperlink{structviewport}{viewport}}*\ \_vp)\ \{}
+\DoxyCodeLine{00304\ \ \ \ \ \ \ \ \ vp\ =\ \_vp;}
+\DoxyCodeLine{00305\ \ \ \ \ \ \ \ \ LGFX\_Sprite*\ spp[2]\ =\ \{\ sp0,\ sp1\ \};}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ \ \ shapes\_done\ =\ cycle\ =\ 0;}
+\DoxyCodeLine{00307\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ spp[0]-\/>fillSprite(BLK);}}
+\DoxyCodeLine{00308\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <=\ 1;\ i++)\ \{}
+\DoxyCodeLine{00309\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ spp[i]-\/>setBaseColor(BLK);}}
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \ \ \ \ \ \ spp[i]-\/>setTextSize(1);}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ \ \ \ \ \ \ spp[i]-\/>setTextDatum(textdatum\_t::middle\_center);}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \ \ \ \ \ \ spp[i]-\/>setTextColor(BLK);}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \ \ \ \ \ \ spp[i]-\/>setCursor(vp-\/>w\ /\ 2\ +\ vp-\/>x,\ vp-\/>h\ /\ 2\ +\ vp-\/>y);}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \ \ change\_pattern(-\/2);\ \ \textcolor{comment}{//\ randomize\ new\ pattern\ whenever\ turned\ off\ and\ on}}
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \ \ saverCycleTimer.set(saver\_cycletime\_us);}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \ \ refresh\_limit\ =\ 11111;\ \ \textcolor{comment}{//\ 90\ Hz\ limit}}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \ \ screenRefreshTimer.set(refresh\_limit);}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \ \ seasontimer.set(3000000);}
+\DoxyCodeLine{00320\ \ \ \ \ \ \ \ \ scaler\ =\ std::max(1,\ (vp-\/>w\ +\ vp-\/>h)/200);}
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \ \ erpos\_max[HORZ]\ =\ (int32\_t)vp-\/>w\ /\ 2\ -\/\ eraser\_rad;}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \ \ erpos\_max[VERT]\ =\ (int32\_t)vp-\/>h\ /\ 2\ -\/\ eraser\_rad;}
+\DoxyCodeLine{00323\ \ \ \ \ \ \ \ \ point[HORZ]\ =\ rn(vp-\/>w);}
+\DoxyCodeLine{00324\ \ \ \ \ \ \ \ \ point[VERT]\ =\ rn(vp-\/>h);}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ axis\ =\ 0;\ axis\ <=\ 1;\ axis++)\ eraser\_velo\_sign[axis]\ =\ (rn(1))\ ?\ 1\ :\ -\/1;}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \ \ \_is\_running\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00327\ \ \ \ \ \}}
+\DoxyCodeLine{00328\ \ \ \ \ \textcolor{keywordtype}{void}\ saver\_touch(LGFX\_Sprite*\ spr,\ \textcolor{keywordtype}{int}\ x,\ \textcolor{keywordtype}{int}\ y)\ \{\ \ \textcolor{comment}{//\ you\ can\ draw\ colorful\ lines\ on\ the\ screensaver}}
+\DoxyCodeLine{00329\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ pencolor\ =\ (cycle\ ==\ 1)\ ?\ rando\_color()\ :\ hsv\_to\_rgb<uint8\_t>(penhue,\ (uint8\_t)pensat,\ 200\ +\ rn(56));}}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \ \ spr-\/>fillCircle(x\ +\ vp-\/>x,\ y\ +\ vp-\/>y,\ 20\ *\ scaler,\ pencolor);}
+\DoxyCodeLine{00331\ \ \ \ \ \}}
+\DoxyCodeLine{00332\ \ \ \ \ \textcolor{keywordtype}{int}\ update(LGFX\_Sprite*\ \_nowspr,\ \mbox{\hyperlink{structviewport}{viewport}}*\ \_vp)\ \{}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ \ \ sprite\ =\ \_nowspr;}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ \ \ vp\ =\ \_vp;}
+\DoxyCodeLine{00335\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (saverCycleTimer.expired())\ \{}
+\DoxyCodeLine{00336\ \ \ \ \ \ \ \ \ \ \ \ \ ++cycle\ \%=\ num\_cycles;}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (cycle\ ==\ 0)\ change\_pattern(-\/1);}
+\DoxyCodeLine{00338\ \ \ \ \ \ \ \ \ \ \ \ \ saverCycleTimer.set((saver\_cycletime\_us\ /\ ((cycle\ ==\ 2)\ ?\ 5\ :\ 1))\ <<\ (shape\ ==\ Worm));}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00340\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (seasontimer.expireset())\ \{}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \ \ \ \ \ \ ++season\ \%=\ numseasons;}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \ \ \ \ \ \ seasontimer.set(2000000\ *\ (1\ +\ rn(4)));}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \ \ drawsprite();}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ shapes\_done;}
+\DoxyCodeLine{00346\ \ \ \ \ \}}
+\DoxyCodeLine{00347\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00348\ \ \ \ \ \textcolor{keywordtype}{void}\ drawsprite()\ \{}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \ \ point[HORZ]\ =\ rn(vp-\/>w);}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \ \ point[VERT]\ =\ rn(vp-\/>h);}
+\DoxyCodeLine{00351\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (shape\ ==\ Rotate)\ ++rotate\ \%=\ NumSaverShapes;}
+\DoxyCodeLine{00352\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ rotate\ =\ shape;}
+\DoxyCodeLine{00353\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((cycle\ !=\ 2)\ ||\ !has\_eraser)\ \{}
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ if\ (!rn(35))\ huebase\ =\ rn(1\ <<\ 21);}}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ else\ ++huebase\ \%=\ (1\ <<\ 21);}}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ spothue\ =\ (uint16\_t)(huebase\ >>\ 5);}}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pentimer.expireset())\ \{}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (season\ <=\ 1)\ \{}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ pensat\ +=\ (float)pensatdir\ *\ 1.5;}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pensat\ >\ 255.0)\ \{}
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ pensat\ =\ 255;}
+\DoxyCodeLine{00362\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ pensatdir\ =\ -\/1;}
+\DoxyCodeLine{00363\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00364\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (pensat\ <\ 100.0)\ \{}
+\DoxyCodeLine{00365\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ pensat\ =\ 100;}
+\DoxyCodeLine{00366\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ pensatdir\ =\ 1;}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \};}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00369\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ penhue\ +=\ 255;}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ pencolor\ =\ hsv\_to\_rgb<uint8\_t>(penhue,\ (uint8\_t)pensat,\ 200\ +\ rn(56));}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00372\ \ \ \ \ \ \ \ \ \ \ \ \ spothue\ -\/=\ 2;}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!rn(20))\ spothue\ =\ rn(65535);}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (spothue\ \&\ 1)\ slowhue\ +=\ 13;}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (rotate\ ==\ Wedges)\ \{}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint8\_t\ wcball,\ wctip;}
+\DoxyCodeLine{00377\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint16\_t\ hue\ =\ rn(65536);}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint8\_t\ brt\ =\ 156\ +\ rn(100);}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (season\ ==\ 1)\ \{}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ wctip\ =\ hsv\_to\_rgb<uint8\_t>(hue,\ 0,\ brt);}
+\DoxyCodeLine{00381\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ wcball\ =\ hsv\_to\_rgb<uint8\_t>(hue,\ 64,\ brt);}
+\DoxyCodeLine{00382\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (season\ ==\ 3)\ \{}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ wctip\ =\ hsv\_to\_rgb<uint8\_t>(hue,\ 0,\ brt);}
+\DoxyCodeLine{00385\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ wcball\ =\ hsv\_to\_rgb<uint8\_t>(hue,\ 64,\ rn(64));}
+\DoxyCodeLine{00386\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00387\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00388\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ wcball\ =\ hsv\_to\_rgb<uint8\_t>(hue,\ 127\ +\ (spothue\ >>\ 9),\ 200\ +\ rn(56));}
+\DoxyCodeLine{00389\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ wctip\ =\ wclast;}
+\DoxyCodeLine{00390\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00391\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ im\ =\ 0;}
+\DoxyCodeLine{00392\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (plast[VERT]\ !=\ point[VERT])\ im\ =\ (float)(plast[HORZ]\ -\/\ point[HORZ])\ /\ (float)(plast[VERT]\ -\/\ point[VERT]);}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>fillCircle(plast[HORZ]\ +\ vp-\/>x,\ plast[VERT]\ +\ vp-\/>y,\ 3,\ wcball);}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ sprite-\/>drawCircle(point[HORZ],\ point[VERT],\ 3,\ BLK);}}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ h=-\/4;\ h<=4;\ h++)}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawGradientLine(point[HORZ]\ +\ vp-\/>x,\ point[VERT]\ +\ vp-\/>y,\ plast[HORZ]\ \ +\ vp-\/>x\ +\ (\textcolor{keywordtype}{int})(h\ /\ ((std::abs(im)\ >\ 1.0)\ ?\ im\ :\ 1)),\ plast[VERT]\ +\ vp-\/>y\ +\ (int)(h\ *\ ((std::abs(im)\ >\ 1.0)\ ?\ 1\ :\ im)),\ wctip,\ wcball);}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ wclast\ =\ wcball;}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00399\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (rotate\ ==\ Ellipses)\ \{}
+\DoxyCodeLine{00400\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ d[2]\ =\ \{10\ +\ rn(30),\ 10\ +\ rn(30)\};}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint8\_t\ sat,\ brt;}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint16\_t\ mult\ =\ rn(2000),\ hue\ =\ spothue\ +\ rn(3000);}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sat\ =\ 100\ +\ rn(156);}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ brt\ =\ 120\ +\ rn(136);}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ 6\ +\ rn(20);\ i++)\ \{\ }
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawEllipse(point[HORZ]\ +\ vp-\/>x,\ point[VERT]\ +\ vp-\/>y,\ scaler\ *\ d[0]\ -\/\ i,\ scaler\ *\ d[1]\ +\ i,\ hsv\_to\_rgb<uint8\_t>(hue\ +\ mult\ *\ i,\ sat,\ brt));}
+\DoxyCodeLine{00407\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00408\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00409\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (rotate\ ==\ Rings)\ \{}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ d\ =\ 6\ +\ rn(45);}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint16\_t\ hue\ =\ spothue\ +\ 32768\ *\ rn(2);}
+\DoxyCodeLine{00412\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint8\_t\ sat\ =\ 255\ -\/\ ((uint8\_t)(spothue\ >>\ (7+season)));\ \ \textcolor{comment}{//\ +\ rn(63)\ }}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint8\_t\ brt\ =\ 150\ +\ (30\ *\ season)\ +\ rn(156\ -\/\ 30\ *\ season);}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint8\_t\ c\ =\ hsv\_to\_rgb<uint8\_t>(hue,\ sat,\ brt);}
+\DoxyCodeLine{00415\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint8\_t\ c2\ =\ hsv\_to\_rgb<uint8\_t>(hue,\ sat,\ std::abs(brt-\/10));}
+\DoxyCodeLine{00416\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Serial.printf("{}\%3.0f\%3.0f\%3.0f\ (\%3.0f\%3.0f\%3.0f)\ (\%3.0f\%3.0f\%3.0f)\(\backslash\)n"{},\ (float)(hue/655.35),\ (float)(sat/2.56),\ (float)(brt/2.56),\ 100*(float)((c\ >>\ 11)\ \&\ 0x1f)/(float)0x1f,\ 100*(float)((c\ >>\ 5)\ \&\ 0x3f)/(float)0x3f,\ 100*(float)(c\ \&\ 0x1f)/(float)0x1f,\ 100*(float)((c2\ >>\ 11)\ \&\ 0x1f)/(float)0x1f,\ 100*(float)((c2\ >>\ 5)\ \&\ 0x3f)/(float)0x3f,\ 100*(float)(c2\ \&\ 0x1f)/(float)0x1f);}}
+\DoxyCodeLine{00417\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ xo\ =\ -\/1;\ xo\ <=\ 1;\ xo\ +=\ 2)\ \{}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawCircle(point[HORZ]\ +\ vp-\/>x,\ point[VERT]\ +\ vp-\/>y,\ d\ *\ scaler,\ c);}
+\DoxyCodeLine{00419\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawCircle(point[HORZ]\ +\ vp-\/>x,\ point[VERT]\ +\ vp-\/>y\ +\ xo,\ d\ *\ scaler,\ c);}
+\DoxyCodeLine{00420\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawCircle(point[HORZ]\ +\ vp-\/>x\ +\ xo,\ point[VERT]\ +\ vp-\/>y,\ d\ *\ scaler,\ c);}
+\DoxyCodeLine{00421\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00422\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ edge\ =\ -\/1;\ edge\ <=\ 1;\ edge\ +=\ 2)}
+\DoxyCodeLine{00423\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawCircle(point[HORZ]\ +\ vp-\/>x,\ point[VERT]\ +\ vp-\/>y,\ d\ *\ scaler\ +\ edge,\ c2);}
+\DoxyCodeLine{00424\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00425\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (rotate\ ==\ Dots)\ \{}
+\DoxyCodeLine{00426\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint8\_t\ sat\ =\ (30\ *\ season)\ +\ rn(256\ -\/\ 30\ *\ season);}
+\DoxyCodeLine{00427\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ star\ =\ 0;\ star\ <\ 12;\ star++)}
+\DoxyCodeLine{00428\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>fillCircle(rn(vp-\/>w)\ +\ vp-\/>x,\ rn(vp-\/>h)\ +\ vp-\/>y,\ scaler\ *\ (2\ +\ rn(2)),\ hsv\_to\_rgb<uint8\_t>((uint16\_t)(spothue\ +\ (spothue\ >>\ 2)\ *\ rn(3)),\ sat,\ 130\ +\ rn(126)));\ \ \textcolor{comment}{//\ hue\_to\_rgb16(rn(255)),\ BLK);}}
+\DoxyCodeLine{00429\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00430\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (rotate\ ==\ Boxes)\ \{}
+\DoxyCodeLine{00431\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ boxrad\ =\ 2\ +\ rn(2\ +\ 4\ *\ season);}
+\DoxyCodeLine{00432\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ boxminsize\ =\ 2\ *\ boxrad\ +\ 5;}
+\DoxyCodeLine{00433\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ longer\ =\ rn(2);}
+\DoxyCodeLine{00434\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ boxsize[longer]\ =\ boxminsize\ +\ rn(vp-\/>w\ -\/\ boxminsize);}
+\DoxyCodeLine{00435\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ boxsize[!longer]\ =\ boxminsize\ +\ rn(boxsize[longer]\ >>\ 2);\ \ \textcolor{comment}{//\ cheesy\ attempt\ to\ work\ around\ crazy-\/values\ bug}}
+\DoxyCodeLine{00436\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ point[HORZ]\ =\ rn(vp-\/>w)\ -\/\ (boxsize[HORZ]\ >>\ 1);}
+\DoxyCodeLine{00437\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ point[VERT]\ =\ rn(vp-\/>h)\ -\/\ (boxsize[VERT]\ >>\ 1);}
+\DoxyCodeLine{00438\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ axis=HORZ;\ axis<=VERT;\ axis++)\ \{}
+\DoxyCodeLine{00439\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (point[axis]\ <\ 0)\ \{}
+\DoxyCodeLine{00440\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ boxsize[axis]\ +=\ point[axis];}
+\DoxyCodeLine{00441\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ point[axis]\ =\ -\/boxrad;}
+\DoxyCodeLine{00442\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00443\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00444\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (point[HORZ]\ +\ boxsize[HORZ]\ >\ vp-\/>w)\ boxsize[HORZ]\ =\ (vp-\/>w\ +\ boxrad\ -\/\ point[HORZ]);}
+\DoxyCodeLine{00445\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (point[VERT]\ +\ boxsize[VERT]\ >\ vp-\/>h)\ boxsize[VERT]\ =\ (vp-\/>h\ +\ boxrad\ -\/\ point[VERT]);}
+\DoxyCodeLine{00446\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ std::cout\ <<\ "{}px"{}\ <<\ point[HORZ]\ <<\ "{}\ py"{}\ <<\ point[VERT]\ <<\ "{}\ bx"{}\ <<\ boxsize[HORZ]\ <<\ "{}\ by"{}\ <<\ boxsize[VERT]\ <<\ "{}\(\backslash\)n"{};}}
+\DoxyCodeLine{00447\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>fillSmoothRoundRect(point[HORZ]\ +\ vp-\/>x,\ point[VERT]\ +\ vp-\/>y,\ boxsize[HORZ],\ boxsize[VERT],\ boxrad,\ rando\_color());\ \ \textcolor{comment}{//\ Change\ colors\ as\ needed}}
+\DoxyCodeLine{00448\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00449\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (rotate\ ==\ Ascii)\ \{}
+\DoxyCodeLine{00450\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>setTextSize(1);}
+\DoxyCodeLine{00451\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>setTextDatum(textdatum\_t::middle\_center);}
+\DoxyCodeLine{00452\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>setFont(\&fonts::Font4);}
+\DoxyCodeLine{00453\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ star\ =\ 0;\ star\ <\ 4;\ star++)\ \{}
+\DoxyCodeLine{00454\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ point[HORZ]\ =\ rn(vp-\/>w);}
+\DoxyCodeLine{00455\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ point[VERT]\ =\ rn(vp-\/>h);}
+\DoxyCodeLine{00456\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint16\_t\ hue\ =\ point[VERT]\ *\ 65535\ /\ vp-\/>h;}
+\DoxyCodeLine{00457\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint8\_t\ sat\ =\ point[HORZ]\ *\ 255\ /\ vp-\/>w;}
+\DoxyCodeLine{00458\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ String\ letter\ =\ (String)((\textcolor{keywordtype}{char})(0x21\ +\ rn(0x5d)));}
+\DoxyCodeLine{00459\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint8\_t\ c\ =\ hsv\_to\_rgb<uint8\_t>(hue,\ sat,\ 100\ +\ 100\ *\ (spothue\ >\ 32767)\ +\ rn(56));}
+\DoxyCodeLine{00460\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawString(letter,\ point[HORZ]+1\ +\ vp-\/>x,\ point[VERT]+1\ +\ vp-\/>y);}
+\DoxyCodeLine{00461\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawString(letter,\ point[HORZ]-\/1\ +\ vp-\/>x,\ point[VERT]-\/1\ +\ vp-\/>y);}
+\DoxyCodeLine{00462\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>setTextColor(hsv\_to\_rgb<uint8\_t>(hue,\ sat,\ 100\ +\ 100\ *\ (spothue\ >\ 32767)\ +\ rn(56)));}
+\DoxyCodeLine{00463\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawString(letter,\ point[HORZ]\ +\ vp-\/>x,\ point[VERT]\ +\ vp-\/>y);}
+\DoxyCodeLine{00464\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>setTextColor(BLK);\ \ \textcolor{comment}{//\ allows\ subliminal\ messaging}}
+\DoxyCodeLine{00465\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00466\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>setFont(\&fonts::Font0);}
+\DoxyCodeLine{00467\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (rotate\ ==\ Worm)\ \{}
+\DoxyCodeLine{00469\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ has\_eraser\ =\ saver\_lotto\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00470\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ lucktimer.reset();}
+\DoxyCodeLine{00471\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ uint8\_t\ sat\ =\ spothue\ >>\ 8;}}
+\DoxyCodeLine{00472\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ uint8\_t\ brt\ =\ 129\ +\ 42\ *\ (1\ +\ std::abs(season-\/1));}}
+\DoxyCodeLine{00473\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ uint8\_t\ c\ =\ (!wormstripe)\ ?\ BLK\ :\ pencolor;}
+\DoxyCodeLine{00474\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (wormstripetimer.expired())\ \{}
+\DoxyCodeLine{00475\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ++wormstripe\ \%=\ 2;}
+\DoxyCodeLine{00476\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ wormstripetimer.set(500000\ *\ ((!wormstripe)\ ?\ 1\ :\ 3));}
+\DoxyCodeLine{00477\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00478\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ if\ ((spothue\ >>\ 5)\ \&\ 3\ ==\ 3)\ \{}}
+\DoxyCodeLine{00479\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ \ \ \ \ if\ (season\ ==\ 3)\ c\ =\ BLK;}}
+\DoxyCodeLine{00480\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ \ \ \ \ else\ if\ (season\ ==1)\ c\ =\ WHT;}}
+\DoxyCodeLine{00481\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ \}}}
+\DoxyCodeLine{00482\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ wormposmax[2]\ =\ \{(vp-\/>w\ -\/\ wormd[HORZ])\ /\ 2,\ (vp-\/>h\ -\/\ wormd[VERT])\ /\ 2\};}
+\DoxyCodeLine{00483\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (wormmovetimer.expireset())\ \{}
+\DoxyCodeLine{00484\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ axis\ =\ HORZ;\ axis\ <=\ VERT;\ axis++)\ \{}
+\DoxyCodeLine{00485\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ wormpos[axis]\ +=\ wormvel[axis]\ *\ wormsign[axis];}
+\DoxyCodeLine{00486\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((wormpos[axis]\ *\ wormsign[axis])\ >>\ shifter\ >=\ wormposmax[axis]\ +\ 2)\ \{}
+\DoxyCodeLine{00487\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ wormpos[axis]\ =\ (wormsign[axis]\ *\ wormposmax[axis])\ <<\ shifter;}
+\DoxyCodeLine{00488\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ wormsign[axis]\ *=\ -\/1;}
+\DoxyCodeLine{00489\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00490\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00491\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ wormsat\ =\ constrain(wormsat\ +\ rn(3)\ -\/\ 1,\ 96,\ 255);}}
+\DoxyCodeLine{00492\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00493\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ axis\ =\ HORZ;\ axis\ <=\ VERT;\ axis++)\ \{}
+\DoxyCodeLine{00494\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!rn(3))\ wormd[axis]\ =\ constrain(wormd[axis]\ +\ rn(3)\ -\/\ 1,\ wormdmin,\ wormdmax);}
+\DoxyCodeLine{00495\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00496\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (wormtimer.expireset())\ \{}
+\DoxyCodeLine{00497\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ axis\ =\ HORZ;\ axis\ <=\ VERT;\ axis++)\ \{}
+\DoxyCodeLine{00498\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ wormvel[axis]\ =\ constrain(wormvel[axis]\ +\ rn(2),\ 0,\ wormvelmax);}
+\DoxyCodeLine{00499\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (wormvel[axis]\ ==\ 0)\ wormsign[axis]\ =\ (rn(2)\ <<\ 1)\ -\/\ 1;}
+\DoxyCodeLine{00500\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00501\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00502\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ sprite-\/>fillEllipse((vp-\/>w\ /\ 2)\ +\ (wormpos[HORZ]\ >>\ shifter)\ +\ vp-\/>x,\ (vp-\/>h\ /\ 2)\ +\ (wormpos[VERT]\ >>\ shifter)\ +\ vp-\/>y,\ wormd[HORZ]\ *\ scaler,\ wormd[VERT]\ *\ scaler,\ BLK);}}
+\DoxyCodeLine{00503\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawEllipse((vp-\/>w\ /\ 2)\ +\ (wormpos[HORZ]\ >>\ shifter)\ +\ vp-\/>x,\ (vp-\/>h\ /\ 2)\ +\ (wormpos[VERT]\ >>\ shifter)\ +\ vp-\/>y,\ wormd[HORZ]\ *\ scaler,\ wormd[VERT]\ *\ scaler,\ c);}
+\DoxyCodeLine{00504\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawEllipse((vp-\/>w\ /\ 2)\ +\ (wormpos[HORZ]\ >>\ shifter)\ +\ vp-\/>x\ +\ 1,\ (vp-\/>h\ /\ 2)\ +\ (wormpos[VERT]\ >>\ shifter)\ +\ vp-\/>y,\ wormd[HORZ]\ *\ scaler,\ wormd[VERT]\ *\ scaler,\ c);}
+\DoxyCodeLine{00505\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawEllipse((vp-\/>w\ /\ 2)\ +\ (wormpos[HORZ]\ >>\ shifter)\ +\ vp-\/>x\ -\/\ 1,\ (vp-\/>h\ /\ 2)\ +\ (wormpos[VERT]\ >>\ shifter)\ +\ vp-\/>y,\ wormd[HORZ]\ *\ scaler,\ wormd[VERT]\ *\ scaler,\ c);}
+\DoxyCodeLine{00506\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawEllipse((vp-\/>w\ /\ 2)\ +\ (wormpos[HORZ]\ >>\ shifter)\ +\ vp-\/>x,\ (vp-\/>h\ /\ 2)\ +\ (wormpos[VERT]\ >>\ shifter)\ +\ vp-\/>y\ +\ 1,\ wormd[HORZ]\ *\ scaler,\ wormd[VERT]\ *\ scaler,\ c);}
+\DoxyCodeLine{00507\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawEllipse((vp-\/>w\ /\ 2)\ +\ (wormpos[HORZ]\ >>\ shifter)\ +\ vp-\/>x,\ (vp-\/>h\ /\ 2)\ +\ (wormpos[VERT]\ >>\ shifter)\ +\ vp-\/>y\ -\/\ 1,\ wormd[HORZ]\ *\ scaler,\ wormd[VERT]\ *\ scaler,\ c);}
+\DoxyCodeLine{00508\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00509\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00510\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((cycle\ !=\ 0)\ \&\&\ has\_eraser)\ \{}
+\DoxyCodeLine{00511\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ erpos\_max[2]\ =\ \{(vp-\/>w\ -\/\ eraser\_rad)\ /\ 2,\ (vp-\/>h\ -\/\ eraser\_rad)\ /\ 2\};}
+\DoxyCodeLine{00512\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ axis\ =\ HORZ;\ axis\ <=\ VERT;\ axis++)\ \{}
+\DoxyCodeLine{00513\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ erpos[axis]\ +=\ eraser\_velo[axis]\ *\ eraser\_velo\_sign[axis];}
+\DoxyCodeLine{00514\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (erpos[axis]\ *\ eraser\_velo\_sign[axis]\ >=\ erpos\_max[axis]\ +\ 5)\ \{}
+\DoxyCodeLine{00515\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ erpos[axis]\ =\ eraser\_velo\_sign[axis]\ *\ erpos\_max[axis];}
+\DoxyCodeLine{00516\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ eraser\_velo[axis]\ =\ eraser\_velo\_min\ +\ rn(eraser\_velo\_max\ -\/\ eraser\_velo\_min);}
+\DoxyCodeLine{00517\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ eraser\_velo[!axis]\ =\ eraser\_velo\_min\ +\ rn(eraser\_velo\_max\ -\/\ eraser\_velo\_min);}
+\DoxyCodeLine{00518\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ eraser\_velo\_sign[axis]\ *=\ -\/1;}
+\DoxyCodeLine{00519\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ eraser\_rad\ =\ constrain((\textcolor{keywordtype}{int})(eraser\_rad\ +\ rn(5)\ -\/\ 2),\ eraser\_rad\_min,\ eraser\_rad\_max);}
+\DoxyCodeLine{00520\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00521\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00522\ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>fillCircle((vp-\/>w\ /\ 2)\ +\ erpos[HORZ]\ +\ vp-\/>x,\ (vp-\/>h\ /\ 2)\ +\ erpos[VERT]\ +\ vp-\/>y,\ eraser\_rad\ *\ scaler,\ BLK);}
+\DoxyCodeLine{00523\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00524\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (lucktimer.expired())\ \ \{}
+\DoxyCodeLine{00525\ \ \ \ \ \ \ \ \ \ \ \ \ saver\_lotto\ =\ !saver\_lotto;}
+\DoxyCodeLine{00526\ \ \ \ \ \ \ \ \ \ \ \ \ lucktimer.set(3200000\ +\ !saver\_lotto\ *\ (5\ +\ rn(350))\ *\ 4000000);}
+\DoxyCodeLine{00527\ \ \ \ \ \ \ \ \ \}\ }
+\DoxyCodeLine{00528\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (saver\_lotto)\ \{}
+\DoxyCodeLine{00529\ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>setTextDatum(textdatum\_t::middle\_center);}
+\DoxyCodeLine{00530\ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>setFont(\&fonts::Font4);}
+\DoxyCodeLine{00531\ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>setTextColor(BLK);}
+\DoxyCodeLine{00532\ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>drawString(\textcolor{stringliteral}{"{}do\ drugs"{}},\ vp-\/>w\ /\ 2\ +\ vp-\/>x,\ vp-\/>h\ /\ 2\ +\ vp-\/>y);}
+\DoxyCodeLine{00533\ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>setFont(\&fonts::Font0);}
+\DoxyCodeLine{00534\ \ \ \ \ \ \ \ \ \ \ \ \ sprite-\/>setTextDatum(textdatum\_t::top\_left);}
+\DoxyCodeLine{00535\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00536\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ axis\ =\ HORZ;\ axis\ <=\ VERT;\ axis++)\ plast[axis]\ =\ point[axis];\ \ \textcolor{comment}{//\ erlast[axis]\ =\ erpos[axis];}}
+\DoxyCodeLine{00537\ \ \ \ \ \}}
+\DoxyCodeLine{00538\ \ \ \ \ \textcolor{keywordtype}{void}\ change\_pattern(\textcolor{keywordtype}{int}\ newpat\ =\ -\/1)\ \{\ \ \textcolor{comment}{//\ pass\ non-\/negative\ value\ for\ a\ specific\ pattern,\ or\ \ -\/1\ for\ cycle,\ -\/2\ for\ random}}
+\DoxyCodeLine{00539\ \ \ \ \ \ \ \ \ ++shapes\_done\ \%=\ 5;}
+\DoxyCodeLine{00540\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ last\_pat\ =\ shape;}
+\DoxyCodeLine{00541\ \ \ \ \ \ \ \ \ has\_eraser\ =\ !rn(2);}
+\DoxyCodeLine{00542\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (0\ <=\ newpat\ \&\&\ newpat\ <\ NumSaverShapes)\ shape\ =\ newpat;\ \ \textcolor{comment}{//}}
+\DoxyCodeLine{00543\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00544\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (newpat\ ==\ -\/1)\ ++shape\ \%=\ Worm;}
+\DoxyCodeLine{00545\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (newpat\ ==\ -\/2)\ \textcolor{keywordflow}{while}\ (last\_pat\ ==\ shape)\ shape\ =\ rn(Rotate);}
+\DoxyCodeLine{00546\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (rn(25)\ ==\ 13)\ shape\ =\ Rotate;}
+\DoxyCodeLine{00547\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00548\ \ \ \ \ \}}
+\DoxyCodeLine{00549\ \};}
+\DoxyCodeLine{00550\ \textcolor{preprocessor}{\#include\ <iostream>}}
+\DoxyCodeLine{00551\ \textcolor{preprocessor}{\#include\ <string>}}
+\DoxyCodeLine{00552\ \textcolor{preprocessor}{\#include\ <vector>}}
+\DoxyCodeLine{00553\ \textcolor{preprocessor}{\#include\ <sstream>}}
+\DoxyCodeLine{00554\ \textcolor{preprocessor}{\#include\ <stdarg.h>}}
+\DoxyCodeLine{00555\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_diag_console}{DiagConsole}}\ \{}
+\DoxyCodeLine{00556\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00557\ \ \ \ \ \mbox{\hyperlink{class_l_g_f_x}{LGFX}}*\ mylcd;}
+\DoxyCodeLine{00558\ \ \ \ \ LGFX\_Sprite*\ nowspr\_ptr;}
+\DoxyCodeLine{00559\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ \textcolor{keywordtype}{int}\ num\_lines\ =\ 16;}
+\DoxyCodeLine{00560\ \ \ \ \ \textcolor{comment}{//\ std::string\ textlines[num\_lines];}}
+\DoxyCodeLine{00561\ \ \ \ \ \textcolor{keywordtype}{int}\ usedlines\ =\ 0;}
+\DoxyCodeLine{00562\ \ \ \ \ std::vector<std::string>\ textlines;\ \textcolor{comment}{//\ Ring\ buffer\ array}}
+\DoxyCodeLine{00563\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ bufferSize;\ \textcolor{comment}{//\ Size\ of\ the\ ring\ buffer}}
+\DoxyCodeLine{00564\ \ \ \ \ \textcolor{keywordtype}{size\_t}\ nextIndex;\ \textcolor{comment}{//\ Index\ for\ the\ next\ insertion}}
+\DoxyCodeLine{00565\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00566\ \ \ \ \ \textcolor{keywordtype}{void}\ init()\ \{}
+\DoxyCodeLine{00567\ \ \ \ \ \ \ \ \ this-\/>printf(\textcolor{stringliteral}{"{}Temperature:\ \%d,\ Humidity:\ \%.2f"{}},\ 25,\ 50.67);}
+\DoxyCodeLine{00568\ \ \ \ \ \ \ \ \ this-\/>printf(\textcolor{stringliteral}{"{}Error\ Code:\ \%d"{}},\ 404);}
+\DoxyCodeLine{00569\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{size\_t}\ i\ =\ 0;\ i\ <\ 5;\ ++i)\ \{}
+\DoxyCodeLine{00570\ \ \ \ \ \ \ \ \ \ \ \ \ std::cout\ <<\ \textcolor{stringliteral}{"{}Element\ "{}}\ <<\ i\ <<\ \textcolor{stringliteral}{"{}:\ "{}}\ <<\ this-\/>getBufferElement(i)\ <<\ std::endl;}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00572\ \ \ \ \ \}}
+\DoxyCodeLine{00573\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{\}}
+\DoxyCodeLine{00574\ \ \ \ \ \textcolor{comment}{//\ void\ redraw()\ \{}}
+\DoxyCodeLine{00575\ \ \ \ \ \textcolor{comment}{//\ \ \ \ \ panel-\/>diffpush(\&framebuf[flip],\ \&framebuf[!flip]);}}
+\DoxyCodeLine{00576\ \ \ \ \ \textcolor{comment}{//\ \}}}
+\DoxyCodeLine{00577\ \ \ \ \ \textcolor{comment}{//\ void\ add\_errorline(std::string\ type,\ std::string\ item)\ \{}}
+\DoxyCodeLine{00578\ \ \ \ \ \textcolor{comment}{//\ \ \ \ \ std::string\ newerr\ =\ type\ +\ "{}:\ "{}\ +\ item;}}
+\DoxyCodeLine{00579\ \ \ \ \ \textcolor{comment}{//\ \ \ \ \ if\ (newerr.length()\ >\ 15)\ newerr\ =\ newerr.substr(0,\ 15);}}
+\DoxyCodeLine{00580\ \ \ \ \ \textcolor{comment}{//\ \ \ \ \ textlines[usedlines++]\ =\ newerr;}}
+\DoxyCodeLine{00581\ \ \ \ \ \textcolor{comment}{//\ \}}}
+\DoxyCodeLine{00582\ \ \ \ \ \textcolor{keywordtype}{void}\ update()\ \{}
+\DoxyCodeLine{00583\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ int\ flip\ =\ panel-\/>setflip(false);}}
+\DoxyCodeLine{00584\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ nowspr\_ptr\ =\ \&(framebuf[flip]);}}
+\DoxyCodeLine{00585\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ panel-\/>diffpush(\&framebuf[flip],\ \&framebuf[!flip]);}}
+\DoxyCodeLine{00586\ \ \ \ \ \}}
+\DoxyCodeLine{00587\ \ \ \ \ \textcolor{comment}{//\ DiagConsole(size\_t\ size)\ :\ bufferSize(size),\ nextIndex(0)\ \{}}
+\DoxyCodeLine{00588\ \ \ \ \ \textcolor{comment}{//\ \ \ \ \ textlines.resize(size);}}
+\DoxyCodeLine{00589\ \ \ \ \ \textcolor{comment}{//\ \}}}
+\DoxyCodeLine{00590\ \ \ \ \ \mbox{\hyperlink{class_diag_console}{DiagConsole}}()\ \{}
+\DoxyCodeLine{00591\ \ \ \ \ \ \ \ \ nextIndex\ =\ 0;}
+\DoxyCodeLine{00592\ \ \ \ \ \ \ \ \ textlines.resize(bufferSize);}
+\DoxyCodeLine{00593\ \ \ \ \ \}}
+\DoxyCodeLine{00594\ }
+\DoxyCodeLine{00595\ \ \ \ \ \textcolor{comment}{//\ Function\ similar\ to\ Serial.printf()}}
+\DoxyCodeLine{00596\ \ \ \ \ \textcolor{keywordtype}{void}\ printf(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ format,\ ...)\ \{}
+\DoxyCodeLine{00597\ \ \ \ \ \ \ \ \ va\_list\ args;}
+\DoxyCodeLine{00598\ \ \ \ \ \ \ \ \ va\_start(args,\ format);}
+\DoxyCodeLine{00599\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{char}\ temp[100];\ \textcolor{comment}{//\ Assuming\ maximum\ length\ of\ output\ string}}
+\DoxyCodeLine{00600\ \ \ \ \ \ \ \ \ vsnprintf(temp,\ \textcolor{keyword}{sizeof}(temp),\ format,\ args);}
+\DoxyCodeLine{00601\ \ \ \ \ \ \ \ \ va\_end(args);}
+\DoxyCodeLine{00602\ \ \ \ \ \ \ \ \ textlines[nextIndex]\ =\ temp;\ \textcolor{comment}{//\ Store\ formatted\ output\ into\ buffer}}
+\DoxyCodeLine{00603\ \ \ \ \ \ \ \ \ nextIndex\ =\ (nextIndex\ +\ 1)\ \%\ bufferSize;\ \textcolor{comment}{//\ Update\ next\ insertion\ index}}
+\DoxyCodeLine{00604\ \ \ \ \ \}}
+\DoxyCodeLine{00605\ }
+\DoxyCodeLine{00606\ \ \ \ \ \textcolor{comment}{//\ Function\ to\ retrieve\ the\ stored\ strings}}
+\DoxyCodeLine{00607\ \ \ \ \ std::string\ getBufferElement(\textcolor{keywordtype}{size\_t}\ index)\ \{}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (index\ <\ bufferSize)\ \{}
+\DoxyCodeLine{00609\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ textlines[index];}
+\DoxyCodeLine{00610\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00611\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}"{}};\ \textcolor{comment}{//\ Return\ empty\ string\ if\ index\ is\ out\ of\ range}}
+\DoxyCodeLine{00612\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00613\ \ \ \ \ \}}
+\DoxyCodeLine{00614\ \};}
+\DoxyCodeLine{00615\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_animation_manager}{AnimationManager}}\ \{}
+\DoxyCodeLine{00616\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00617\ \ \ \ \ \textcolor{keyword}{enum}\ saverchoices\ :\ \textcolor{keywordtype}{int}\ \{\ Eraser,\ Collisions,\ NumSaverMenu,\ Blank\ \};}
+\DoxyCodeLine{00618\ \ \ \ \ \textcolor{keywordtype}{int}\ nowsaver\ =\ Eraser,\ still\_running\ =\ 0;}
+\DoxyCodeLine{00619\ \ \ \ \ \mbox{\hyperlink{class_l_g_f_x}{LGFX}}*\ mylcd;}
+\DoxyCodeLine{00620\ \ \ \ \ LGFX\_Sprite*\ nowspr\_ptr;}
+\DoxyCodeLine{00621\ \ \ \ \ \mbox{\hyperlink{structviewport}{viewport}}\ vp;}
+\DoxyCodeLine{00622\ \ \ \ \ \mbox{\hyperlink{class_eraser_saver}{EraserSaver}}\ eSaver;}
+\DoxyCodeLine{00623\ \ \ \ \ \mbox{\hyperlink{class_collisions_saver}{CollisionsSaver}}\ cSaver;}
+\DoxyCodeLine{00624\ \ \ \ \ \mbox{\hyperlink{class_simulator}{Simulator}}*\ sim;}
+\DoxyCodeLine{00625\ \ \ \ \ \mbox{\hyperlink{class_touchscreen}{Touchscreen}}*\ touch;}
+\DoxyCodeLine{00626\ \ \ \ \ \mbox{\hyperlink{class_diag_console}{DiagConsole}}\ diagconsole;\ \textcolor{comment}{//\ Initialize\ serial\ buffer\ with\ size\ 5}}
+\DoxyCodeLine{00627\ \ \ \ \ \textcolor{keywordtype}{int}\ touchp[2],\ dispfps;}
+\DoxyCodeLine{00628\ \ \ \ \ \textcolor{keywordtype}{int}\ corner[2],\ sprsize[2];}
+\DoxyCodeLine{00629\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ fps\_timer,\ fps\_timer2\{250000\};}
+\DoxyCodeLine{00630\ \ \ \ \ \textcolor{keywordtype}{float}\ myfps\ =\ 0.0;}
+\DoxyCodeLine{00631\ \ \ \ \ int64\_t\ fps\_mark;}
+\DoxyCodeLine{00632\ \ \ \ \ \textcolor{keywordtype}{bool}\ screensaver\_last\ =\ \textcolor{keyword}{false},\ simulating\_last\ =\ \textcolor{keyword}{false},\ mule\_drawn\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00633\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00634\ \ \ \ \ std::uint32\_t\ sec,\ psec,\ \_width,\ \_height,\ \_myfps\ =\ 0,\ frame\_count\ =\ 0;}
+\DoxyCodeLine{00635\ \ \ \ \ \textcolor{keywordtype}{bool}\ anim\_reset\_request\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00636\ \ \ \ \ \mbox{\hyperlink{class_animation_manager}{AnimationManager}}()\ \{\}}
+\DoxyCodeLine{00637\ \ \ \ \ \textcolor{keywordtype}{void}\ change\_saver()\ \{\ \ \textcolor{comment}{//\ pass\ non-\/negative\ value\ for\ a\ specific\ pattern,\ -\/1\ for\ cycle,\ -\/2\ for\ random}}
+\DoxyCodeLine{00638\ \ \ \ \ \ \ \ \ ++nowsaver\ \%=\ NumSaverMenu;}
+\DoxyCodeLine{00639\ \ \ \ \ \ \ \ \ anim\_reset\_request\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00640\ \ \ \ \ \}}
+\DoxyCodeLine{00641\ \ \ \ \ \textcolor{keywordtype}{void}\ init(\mbox{\hyperlink{class_l_g_f_x}{LGFX}}*\ \_lgfx,\ \mbox{\hyperlink{class_simulator}{Simulator}}*\ \_sim,\ \mbox{\hyperlink{class_touchscreen}{Touchscreen}}*\ \_touch,\ \textcolor{keywordtype}{int}\ \_cornerx,\ \textcolor{keywordtype}{int}\ \_cornery,\ \textcolor{keywordtype}{int}\ \_sprwidth,\ \textcolor{keywordtype}{int}\ \_sprheight)\ \{}
+\DoxyCodeLine{00642\ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}\ \ animations\ init\ .."{}});}
+\DoxyCodeLine{00643\ \ \ \ \ \ \ \ \ mylcd\ =\ \_lgfx;}
+\DoxyCodeLine{00644\ \ \ \ \ \ \ \ \ sim\ =\ \_sim;}
+\DoxyCodeLine{00645\ \ \ \ \ \ \ \ \ touch\ =\ \_touch;}
+\DoxyCodeLine{00646\ \ \ \ \ \ \ \ \ set\_vp(\_cornerx,\ \_cornery,\ \_sprwidth,\ \_sprheight);}
+\DoxyCodeLine{00647\ \ \ \ \ \ \ \ \ \_width\ =\ vp.w\ <<\ SHIFTSIZE;}
+\DoxyCodeLine{00648\ \ \ \ \ \ \ \ \ \_height\ =\ vp.h\ <<\ SHIFTSIZE;}
+\DoxyCodeLine{00649\ \ \ \ \ \}}
+\DoxyCodeLine{00650\ \ \ \ \ \textcolor{keywordtype}{void}\ reset()\ \{}
+\DoxyCodeLine{00651\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (nowsaver\ ==\ Eraser)\ eSaver.reset(\&framebuf[flip],\ \&framebuf[!flip],\ \&vp);}
+\DoxyCodeLine{00652\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (nowsaver\ ==\ Collisions)\ cSaver.reset(\&framebuf[flip],\ \&framebuf[!flip],\ \&vp);}
+\DoxyCodeLine{00653\ \ \ \ \ \ \ \ \ anim\_reset\_request\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00654\ \ \ \ \ \}}
+\DoxyCodeLine{00655\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{}
+\DoxyCodeLine{00656\ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}\ screensavers\ ..\ "{}});}
+\DoxyCodeLine{00657\ \ \ \ \ \ \ \ \ eSaver.setup(\&framebuf[flip],\ \&vp);}
+\DoxyCodeLine{00658\ \ \ \ \ \ \ \ \ cSaver.setup(\&framebuf[flip],\ \&vp);}
+\DoxyCodeLine{00659\ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}set\ up\(\backslash\)n"{}});}
+\DoxyCodeLine{00660\ \ \ \ \ \}}
+\DoxyCodeLine{00661\ \ \ \ \ \textcolor{keywordtype}{void}\ draw\_simbutton(LGFX\_Sprite*\ spr,\ \textcolor{keywordtype}{int}\ cntr\_x,\ \textcolor{keywordtype}{int}\ cntr\_y,\ \textcolor{keywordtype}{int}\ dir,\ uint8\_t\ color)\ \{}
+\DoxyCodeLine{00662\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (dir\ ==\ JOY\_PLUS)\ \ spr-\/>pushImage(cntr\_x-\/16,\ cntr\_y-\/16,\ 32,\ 32,\ blue\_plus\_32x32x8,\ BLK);}
+\DoxyCodeLine{00663\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (dir\ ==\ JOY\_MINUS)\ spr-\/>pushImage(cntr\_x-\/16,\ cntr\_y-\/16,\ 32,\ 32,\ blue\_minus\_32x32x8,\ BLK);}
+\DoxyCodeLine{00664\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (dir\ ==\ JOY\_UP)\ spr-\/>pushImage(cntr\_x-\/16,\ cntr\_y-\/16,\ 32,\ 32,\ blue\_up\_32x32x8,\ BLK);}
+\DoxyCodeLine{00665\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (dir\ ==\ JOY\_DN)\ spr-\/>pushImageRotateZoom(cntr\_x,\ cntr\_y,\ 16,\ 16,\ 180,\ 1,\ 1,\ 32,\ 32,\ blue\_up\_32x32x8,\ BLK);}
+\DoxyCodeLine{00666\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (dir\ ==\ JOY\_LT)\ spr-\/>pushImageRotateZoom(cntr\_x,\ cntr\_y,\ 16,\ 16,\ 270,\ 1,\ 1,\ 32,\ 32,\ blue\_up\_32x32x8,\ BLK);}
+\DoxyCodeLine{00667\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (dir\ ==\ JOY\_RT)\ spr-\/>pushImageRotateZoom(cntr\_x,\ cntr\_y,\ 16,\ 16,\ 90,\ 1,\ 1,\ 32,\ 32,\ blue\_up\_32x32x8,\ BLK);}
+\DoxyCodeLine{00668\ \ \ \ \ \}}
+\DoxyCodeLine{00669\ \ \ \ \ \textcolor{keywordtype}{void}\ draw\_simbuttons\ (LGFX\_Sprite*\ spr,\ \textcolor{keywordtype}{bool}\ create)\ \{\ \ \textcolor{comment}{//\ draw\ grid\ of\ buttons\ to\ simulate\ sensors.\ If\ create\ is\ true\ it\ draws\ buttons,\ if\ false\ it\ erases\ them}}
+\DoxyCodeLine{00670\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!create)\ \{}
+\DoxyCodeLine{00671\ \ \ \ \ \ \ \ \ \ \ \ \ spr-\/>fillSprite(BLK);}
+\DoxyCodeLine{00672\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00673\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00674\ \ \ \ \ \ \ \ \ spr-\/>setTextDatum(textdatum\_t::middle\_center);}
+\DoxyCodeLine{00675\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ do\_draw;}
+\DoxyCodeLine{00676\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (int32\_t\ row\ =\ 0;\ row\ <\ arraysize(simgrid);\ row++)\ \{}
+\DoxyCodeLine{00677\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (int32\_t\ col\ =\ 0;\ col\ <\ arraysize(simgrid[row]);\ col++)\ \{}
+\DoxyCodeLine{00678\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ do\_draw\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00679\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((simgrid[row][col].find(\textcolor{stringliteral}{"{}pos"{}})\ !=\ std::string::npos)\ \&\&\ (!sim-\/>can\_sim(sens::brkpos)\ ||\ sim-\/>potmapping(sens::brkpos)))\ do\_draw\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00680\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((simgrid[row][col].find(\textcolor{stringliteral}{"{}psi"{}})\ !=\ std::string::npos)\ \&\&\ (!sim-\/>can\_sim(sens::pressure)\ ||\ sim-\/>potmapping(sens::pressure)))\ do\_draw\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00681\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((simgrid[row][col].find(\textcolor{stringliteral}{"{}mph"{}})\ !=\ std::string::npos)\ \&\&\ (!sim-\/>can\_sim(sens::speedo)\ ||\ sim-\/>potmapping(sens::speedo)))\ do\_draw\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00682\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((simgrid[row][col].find(\textcolor{stringliteral}{"{}rpm"{}})\ !=\ std::string::npos)\ \&\&\ (!sim-\/>can\_sim(sens::tach)\ ||\ sim-\/>potmapping(sens::tach)))\ do\_draw\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00683\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (simgrid[row][col].find(\textcolor{stringliteral}{"{}joy"{}})\ !=\ std::string::npos)\ \{}
+\DoxyCodeLine{00684\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (sim-\/>potmapping(sens::joy)\ \&\&\ (col\ ==\ 2))\ do\_draw\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00685\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!sim-\/>can\_sim(sens::joy))\ do\_draw\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00686\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00687\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (do\_draw)\ \{}
+\DoxyCodeLine{00688\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ int32\_t\ cntr\_x\ =\ touch\_cell\_h\_pix*col\ +\ (touch\_cell\_h\_pix>>1)\ +\ 2\ +\ vp.x\ -\/\ 5\ +\ 2;}
+\DoxyCodeLine{00689\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ int32\_t\ cntr\_y\ =\ touch\_cell\_v\_pix*row\ +\ (touch\_cell\_v\_pix>>1)\ +\ vp.y\ -\/\ 1;}
+\DoxyCodeLine{00690\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (simgrid[row][col]\ !=\ \textcolor{stringliteral}{"{}\ \ \ \ "{}})\ \{}
+\DoxyCodeLine{00691\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ draw\_simbutton(spr,\ cntr\_x\ +\ 2,\ cntr\_y\ -\/\ 1,\ simgriddir[row][col],\ YEL);\ \ \textcolor{comment}{//\ for\ 3d\ look}}
+\DoxyCodeLine{00692\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ draw\_simbutton(spr,\ cntr\_x,\ cntr\_y,\ simgriddir[row][col],\ DGRY);}
+\DoxyCodeLine{00693\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ spr-\/>fillRoundRect(cntr\_x\ -\/\ 20,\ cntr\_y\ -\/\ touch\_cell\_v\_pix/2\ -\/\ 10,\ 40,\ 20,\ 5,\ DGRY);}}
+\DoxyCodeLine{00694\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ spr-\/>drawRoundRect(cntr\_x\ -\/\ 20,\ cntr\_y\ -\/\ touch\_cell\_v\_pix/2\ -\/\ 10,\ 40,\ 20,\ 5,\ BLK);}}
+\DoxyCodeLine{00695\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((row\ \%\ 2)\ \&\&\ (simgrid[row][col].find(\textcolor{stringliteral}{"{}joy"{}})\ ==\ std::string::npos))\ \{}
+\DoxyCodeLine{00696\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ spr-\/>setFont(\&fonts::FreeSans9pt7b);}
+\DoxyCodeLine{00697\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ spr-\/>setTextColor(BLK);}
+\DoxyCodeLine{00698\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ spr-\/>drawString(simgrid[row][col].c\_str(),\ cntr\_x\ -\/\ 1,\ cntr\_y\ -\/\ touch\_cell\_v\_pix/2\ +\ 5\ -\/\ 1);}
+\DoxyCodeLine{00699\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ spr-\/>drawString(simgrid[row][col].c\_str(),\ cntr\_x\ +\ 1,\ cntr\_y\ -\/\ touch\_cell\_v\_pix/2\ +\ 5\ +\ 1);}
+\DoxyCodeLine{00700\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ spr-\/>setTextColor(LYEL);}
+\DoxyCodeLine{00701\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ spr-\/>drawString(simgrid[row][col].c\_str(),\ cntr\_x,\ cntr\_y\ -\/\ touch\_cell\_v\_pix/2\ +\ 5);}
+\DoxyCodeLine{00702\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00703\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00704\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00705\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \ \ \ \ }
+\DoxyCodeLine{00706\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00707\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ draw\_reticles(spr);}}
+\DoxyCodeLine{00708\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ spr-\/>setTextDatum(textdatum\_t::top\_left);}}
+\DoxyCodeLine{00709\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ spr-\/>setFont(\&fonts::Font0);}}
+\DoxyCodeLine{00710\ \ \ \ \ \ \ \ \ spr-\/>setTextColor(BLK);}
+\DoxyCodeLine{00711\ \ \ \ \ \}}
+\DoxyCodeLine{00712\ \ \ \ \ \textcolor{keywordtype}{void}\ calc\_fps()\ \{}
+\DoxyCodeLine{00713\ \ \ \ \ \ \ \ \ int64\_t\ now\ =\ fps\_timer.elapsed();}
+\DoxyCodeLine{00714\ \ \ \ \ \ \ \ \ myfps\ =\ (float)(now\ -\/\ fps\_mark);}
+\DoxyCodeLine{00715\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (myfps\ >\ 0.001)\ myfps\ =\ 1000000\ /\ myfps;}
+\DoxyCodeLine{00716\ \ \ \ \ \ \ \ \ fps\_mark\ =\ now;}
+\DoxyCodeLine{00717\ \ \ \ \ \}}
+\DoxyCodeLine{00718\ \ \ \ \ \textcolor{keywordtype}{void}\ display\_fps(LGFX\_Sprite*\ spr)\ \{}
+\DoxyCodeLine{00719\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (auto\_saver\_enabled\ \&\&\ autosaver\_display\_fps)\ \{}
+\DoxyCodeLine{00720\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (fps\_timer2.expireset())\ dispfps\ =\ (int)myfps;}
+\DoxyCodeLine{00721\ \ \ \ \ \ \ \ \ \ \ \ \ spr-\/>fillRect(9,\ 9,\ 20,\ 10,\ BLK);}
+\DoxyCodeLine{00722\ \ \ \ \ \ \ \ \ \ \ \ \ spr-\/>setFont(\&fonts::Font0);}
+\DoxyCodeLine{00723\ \ \ \ \ \ \ \ \ \ \ \ \ spr-\/>setTextDatum(textdatum\_t::top\_left);}
+\DoxyCodeLine{00724\ \ \ \ \ \ \ \ \ \ \ \ \ spr-\/>setCursor(10,\ 10);}
+\DoxyCodeLine{00725\ \ \ \ \ \ \ \ \ \ \ \ \ spr-\/>setTextColor(WHT);}
+\DoxyCodeLine{00726\ \ \ \ \ \ \ \ \ \ \ \ \ spr-\/>print(std::to\_string(dispfps).c\_str());}
+\DoxyCodeLine{00727\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00728\ \ \ \ \ \}}
+\DoxyCodeLine{00729\ \ \ \ \ \textcolor{keywordtype}{float}\ update(LGFX\_Sprite*\ spr,\ \textcolor{keywordtype}{bool}\ dirty=\textcolor{keyword}{false})\ \{}
+\DoxyCodeLine{00730\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!screensaver\_last\ \&\&\ screensaver)\ change\_saver();\ \ \textcolor{comment}{//\ ptrsaver-\/>reset();}}
+\DoxyCodeLine{00731\ \ \ \ \ \ \ \ \ screensaver\_last\ =\ screensaver;}
+\DoxyCodeLine{00732\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (anim\_reset\_request)\ reset();}
+\DoxyCodeLine{00733\ \ \ \ \ \ \ \ \ spr-\/>setClipRect(vp.x,\ vp.y,\ vp.w,\ vp.h);}
+\DoxyCodeLine{00734\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (dirty)\ \{}
+\DoxyCodeLine{00735\ \ \ \ \ \ \ \ \ \ \ \ \ spr-\/>fillSprite(BLK);}
+\DoxyCodeLine{00736\ \ \ \ \ \ \ \ \ \ \ \ \ mule\_drawn\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00737\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00738\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (screensaver)\ \{\ \ \textcolor{comment}{//\ With\ timer\ ==\ 16666\ drawing\ dots,\ avg=8k,\ peak=17k.\ \ balls,\ avg\ 2.7k,\ peak\ 9k\ after\ 20sec}}
+\DoxyCodeLine{00739\ \ \ \ \ \ \ \ \ \ \ \ \ mule\_drawn\ =\ \textcolor{keyword}{false};\ \ \textcolor{comment}{//\ With\ max\ refresh\ drawing\ dots,\ avg=14k,\ peak=28k.\ \ balls,\ avg\ 6k,\ peak\ 8k\ after\ 20sec}}
+\DoxyCodeLine{00740\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (nowsaver\ ==\ Eraser)\ \{}
+\DoxyCodeLine{00741\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ still\_running\ =\ eSaver.update(spr,\ \&vp);}
+\DoxyCodeLine{00742\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (touched())\ eSaver.saver\_touch(spr,\ touch\_pt(HORZ),\ touch\_pt(VERT));}
+\DoxyCodeLine{00743\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ display\_fps(spr);}
+\DoxyCodeLine{00744\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00745\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (nowsaver\ ==\ Collisions)\ \{}
+\DoxyCodeLine{00746\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (touched())\ cSaver.saver\_touch(spr,\ touch\_pt(HORZ),\ touch\_pt(VERT));}
+\DoxyCodeLine{00747\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ still\_running\ =\ cSaver.update(spr,\ \&vp);}
+\DoxyCodeLine{00748\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ display\_fps(spr);}
+\DoxyCodeLine{00749\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00750\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!still\_running)\ change\_saver();}
+\DoxyCodeLine{00751\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00752\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (!mule\_drawn)\ \{}
+\DoxyCodeLine{00753\ \ \ \ \ \ \ \ \ \ \ \ \ spr-\/>fillSprite(BLK);}
+\DoxyCodeLine{00754\ \ \ \ \ \ \ \ \ \ \ \ \ spr-\/>pushImageRotateZoom(85\ +\ vp.x,\ 85\ +\ vp.y,\ 82,\ 37,\ 0,\ 1,\ 1,\ 145,\ 74,\ mulechassis\_145x74x8,\ BLK);}
+\DoxyCodeLine{00755\ \ \ \ \ \ \ \ \ \ \ \ \ mule\_drawn\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00756\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00757\ \ \ \ \ \ \ \ \ spr-\/>clearClipRect();}
+\DoxyCodeLine{00758\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (sim-\/>enabled())\ \{}
+\DoxyCodeLine{00759\ \ \ \ \ \ \ \ \ \ \ \ \ draw\_simbuttons(spr,\ sim-\/>enabled());\ \ \textcolor{comment}{//\ if\ we\ just\ entered\ simulator\ draw\ the\ simulator\ buttons,\ or\ if\ we\ just\ left\ erase\ them}}
+\DoxyCodeLine{00760\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00761\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (simulating\_last)\ \{}
+\DoxyCodeLine{00762\ \ \ \ \ \ \ \ \ \ \ \ \ spr-\/>fillRect(vp.x,\ vp.y,\ vp.w,\ vp.h,\ BLK);}
+\DoxyCodeLine{00763\ \ \ \ \ \ \ \ \ \ \ \ \ mule\_drawn\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00764\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00765\ \ \ \ \ \ \ \ \ simulating\_last\ =\ sim-\/>enabled();}
+\DoxyCodeLine{00766\ \ \ \ \ \ \ \ \ calc\_fps();}
+\DoxyCodeLine{00767\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ myfps;}
+\DoxyCodeLine{00768\ \ \ \ \ \}}
+\DoxyCodeLine{00769\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_vp(\textcolor{keywordtype}{int}\ \_cornerx,\ \textcolor{keywordtype}{int}\ \_cornery,\ \textcolor{keywordtype}{int}\ \_sprwidth,\ \textcolor{keywordtype}{int}\ \_sprheight)\ \{}
+\DoxyCodeLine{00770\ \ \ \ \ \ \ \ \ vp.x\ =\ \_cornerx;}
+\DoxyCodeLine{00771\ \ \ \ \ \ \ \ \ vp.y\ =\ \_cornery;}
+\DoxyCodeLine{00772\ \ \ \ \ \ \ \ \ vp.w\ =\ \_sprwidth;}
+\DoxyCodeLine{00773\ \ \ \ \ \ \ \ \ vp.h\ =\ \_sprheight;}
+\DoxyCodeLine{00774\ \ \ \ \ \}}
+\DoxyCodeLine{00775\ \ \ \ \ \textcolor{keywordtype}{bool}\ touched()\ \{}
+\DoxyCodeLine{00776\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (touch-\/>touched())\ \{}
+\DoxyCodeLine{00777\ \ \ \ \ \ \ \ \ \ \ \ \ touchp[HORZ]\ =\ touch-\/>touch\_pt(HORZ)\ -\/\ vp.x;}
+\DoxyCodeLine{00778\ \ \ \ \ \ \ \ \ \ \ \ \ touchp[VERT]\ =\ touch-\/>touch\_pt(VERT)\ -\/\ vp.y;}
+\DoxyCodeLine{00779\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00780\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00781\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00782\ \ \ \ \ \}}
+\DoxyCodeLine{00783\ \ \ \ \ \textcolor{keywordtype}{int}\ touch\_pt(\textcolor{keywordtype}{int}\ axis)\ \{}
+\DoxyCodeLine{00784\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ touchp[axis];}
+\DoxyCodeLine{00785\ \ \ \ \ \}}
+\DoxyCodeLine{00786\ \};}
+\DoxyCodeLine{00787\ \textcolor{preprocessor}{\#ifdef\ CONVERT\_IMAGE\ }}
+\DoxyCodeLine{00788\ \textcolor{preprocessor}{\#define\ IMAGE\_ARRAY\ mulechassis\_145x74\ }}
+\DoxyCodeLine{00789\ \textcolor{preprocessor}{\#define\ IMAGE\_WIDTH\ 145}}
+\DoxyCodeLine{00790\ \textcolor{keywordtype}{void}\ convert\_565\_to\_332\_image()\ \{}
+\DoxyCodeLine{00791\ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}const\ uint8\_t\ \%sx8[\%ld]\ PROGMEM\ =\ \{\(\backslash\)n\(\backslash\)t"{}},\ String(IMAGE\_ARRAY).c\_str(),\ arraysize(IMAGE\_ARRAY));}
+\DoxyCodeLine{00792\ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i=0;\ i<arraysize(IMAGE\_ARRAY);\ i++)\ \{}
+\DoxyCodeLine{00793\ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}0x\%02x,\ "{}},\ color\_16b\_to\_8b(IMAGE\_ARRAY[i]));}
+\DoxyCodeLine{00794\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!(i\ \%\ IMAGE\_WIDTH))\ Serial.printf(\textcolor{stringliteral}{"{}\ \ //\ pixel\#\ \%ld\(\backslash\)n\%s"{}},\ pixcount,\ (i\ <\ arraysize(IMAGE\_ARRAY)\ -\/\ 1)\ ?\ \textcolor{stringliteral}{"{}\(\backslash\)t"{}}\ :\ \textcolor{stringliteral}{"{}"{}});}
+\DoxyCodeLine{00795\ \ \ \ \ \}}
+\DoxyCodeLine{00796\ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}\};\(\backslash\)n"{}});}
+\DoxyCodeLine{00797\ \}}
+\DoxyCodeLine{00798\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

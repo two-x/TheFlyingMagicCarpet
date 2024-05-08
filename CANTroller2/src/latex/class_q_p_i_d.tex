@@ -1,0 +1,204 @@
+\doxysection{QPID Class Reference}
+\hypertarget{class_q_p_i_d}{}\label{class_q_p_i_d}\index{QPID@{QPID}}
+\doxysubsubsection*{Public Types}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_q_p_i_d_aed71cda552fa89e2b3142fa2c5ba2de6}\label{class_q_p_i_d_aed71cda552fa89e2b3142fa2c5ba2de6} 
+enum class {\bfseries ctrl} \+: int \{ {\bfseries manual}
+, {\bfseries automatic}
+, {\bfseries toggle}
+ \}
+\item 
+\Hypertarget{class_q_p_i_d_aaba821549c603e76c1199fe4942b0933}\label{class_q_p_i_d_aaba821549c603e76c1199fe4942b0933} 
+enum class {\bfseries cdir} \+: int \{ {\bfseries reverse} =-\/1
+, {\bfseries direct} =1
+ \}
+\item 
+\Hypertarget{class_q_p_i_d_a562e276dc31f046eade7f86cc67aaa58}\label{class_q_p_i_d_a562e276dc31f046eade7f86cc67aaa58} 
+enum class {\bfseries pmod} \+: int \{ {\bfseries onerr}
+, {\bfseries onmeas}
+, {\bfseries onerrmeas}
+ \}
+\item 
+\Hypertarget{class_q_p_i_d_ad15a4ba7783e325a4ce5d97a43c2520f}\label{class_q_p_i_d_ad15a4ba7783e325a4ce5d97a43c2520f} 
+enum class {\bfseries dmod} \+: int \{ {\bfseries onerr}
+, {\bfseries onmeas}
+ \}
+\item 
+\Hypertarget{class_q_p_i_d_af7ddf1eb266ef4cef2779aea0eece331}\label{class_q_p_i_d_af7ddf1eb266ef4cef2779aea0eece331} 
+enum class {\bfseries awmod} \+: int \{ \newline
+{\bfseries cond}
+, {\bfseries clamp}
+, {\bfseries off}
+, {\bfseries round}
+, \newline
+{\bfseries roundcond}
+ \}
+\item 
+\Hypertarget{class_q_p_i_d_a2b0e49934c95d6fb82f33ceeb6d56f2d}\label{class_q_p_i_d_a2b0e49934c95d6fb82f33ceeb6d56f2d} 
+enum class {\bfseries centmod} \+: int \{ {\bfseries off}
+, {\bfseries on}
+, {\bfseries strict}
+ \}
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_q_p_i_d_aeeb45f958aa4f9ece43d08fe5c0cbff6}\label{class_q_p_i_d_aeeb45f958aa4f9ece43d08fe5c0cbff6} 
+{\bfseries QPID} (float \texorpdfstring{$\ast$}{*}a\+\_\+in, float \texorpdfstring{$\ast$}{*}a\+\_\+min, float \texorpdfstring{$\ast$}{*}a\+\_\+max, float a\+\_\+kp=0, float a\+\_\+ki=0, float a\+\_\+kd=0, pmod a\+\_\+pmode=pmod\+::onerr, dmod a\+\_\+dmode=dmod\+::onmeas, awmod a\+\_\+awmode=awmod\+::cond, cdir a\+\_\+dir=cdir\+::direct, uint32\+\_\+t a\+\_\+sampletime=100000, ctrl a\+\_\+mode=ctrl\+::manual, centmod a\+\_\+centmode=centmod\+::off, float a\+\_\+cent=NAN)
+\item 
+\Hypertarget{class_q_p_i_d_a536368cb6c5f5c8ba65fe194f3fb7853}\label{class_q_p_i_d_a536368cb6c5f5c8ba65fe194f3fb7853} 
+void {\bfseries init} (float \texorpdfstring{$\ast$}{*}a\+\_\+in, float \texorpdfstring{$\ast$}{*}a\+\_\+min, float \texorpdfstring{$\ast$}{*}a\+\_\+max, float a\+\_\+kp=0, float a\+\_\+ki=0, float a\+\_\+kd=0, pmod a\+\_\+pmode=pmod\+::onerr, dmod a\+\_\+dmode=dmod\+::onmeas, awmod a\+\_\+awmode=awmod\+::cond, cdir a\+\_\+dir=cdir\+::direct, uint32\+\_\+t a\+\_\+sampletime=100000, ctrl a\+\_\+mode=ctrl\+::manual, centmod a\+\_\+centmode=centmod\+::off, float a\+\_\+cent=NAN)
+\item 
+\Hypertarget{class_q_p_i_d_aba5654296f86bb3de5a7cebe1f6594d7}\label{class_q_p_i_d_aba5654296f86bb3de5a7cebe1f6594d7} 
+void {\bfseries init} (float preload\+\_\+output=NAN)
+\item 
+\Hypertarget{class_q_p_i_d_a41b73a5104879a0b9bf7364dbe3d6414}\label{class_q_p_i_d_a41b73a5104879a0b9bf7364dbe3d6414} 
+float {\bfseries compute} ()
+\item 
+\Hypertarget{class_q_p_i_d_a60d125f7a90c66083382faafdd5f0f8b}\label{class_q_p_i_d_a60d125f7a90c66083382faafdd5f0f8b} 
+void {\bfseries set\+\_\+tunings} (float a\+\_\+kp, float a\+\_\+ki, float a\+\_\+kd, pmod a\+\_\+pmode=pmod\+::onerr, dmod a\+\_\+dmode=dmod\+::onmeas, awmod a\+\_\+awmode=awmod\+::cond)
+\item 
+\Hypertarget{class_q_p_i_d_a422c28309e9d101c32c0457c45348144}\label{class_q_p_i_d_a422c28309e9d101c32c0457c45348144} 
+void {\bfseries set\+\_\+tunings} (float a\+\_\+kp, float a\+\_\+ki, float a\+\_\+kd)
+\item 
+\Hypertarget{class_q_p_i_d_a22a415a0bbddc9695bfe2b06a821c42c}\label{class_q_p_i_d_a22a415a0bbddc9695bfe2b06a821c42c} 
+void {\bfseries set\+\_\+sampletime} (uint32\+\_\+t a\+\_\+sampletime)
+\item 
+\Hypertarget{class_q_p_i_d_a13490ffb8bcea1f80c5b9b6baee6686d}\label{class_q_p_i_d_a13490ffb8bcea1f80c5b9b6baee6686d} 
+void {\bfseries set\+\_\+mode} (ctrl a\+\_\+mode)
+\item 
+\Hypertarget{class_q_p_i_d_a496291a39d54b4092daa2589909ce5b3}\label{class_q_p_i_d_a496291a39d54b4092daa2589909ce5b3} 
+void {\bfseries set\+\_\+mode} (int a\+\_\+mode)
+\item 
+\Hypertarget{class_q_p_i_d_a7a8981de3a1230a29bf9c57f17d6e911}\label{class_q_p_i_d_a7a8981de3a1230a29bf9c57f17d6e911} 
+void {\bfseries reset} ()
+\item 
+\Hypertarget{class_q_p_i_d_aea55037d3102a178acea70f553426863}\label{class_q_p_i_d_aea55037d3102a178acea70f553426863} 
+void {\bfseries set\+\_\+kp} (float a\+\_\+kp)
+\item 
+\Hypertarget{class_q_p_i_d_ab7cbc93d6235a7d39d6fcef18c07c519}\label{class_q_p_i_d_ab7cbc93d6235a7d39d6fcef18c07c519} 
+void {\bfseries set\+\_\+ki} (float a\+\_\+ki)
+\item 
+\Hypertarget{class_q_p_i_d_a8bd5d7ce9f3e864bcda08fe6d17ae989}\label{class_q_p_i_d_a8bd5d7ce9f3e864bcda08fe6d17ae989} 
+void {\bfseries set\+\_\+kd} (float a\+\_\+kd)
+\item 
+\Hypertarget{class_q_p_i_d_a9e023e35d64feefae976aee2f247fbd5}\label{class_q_p_i_d_a9e023e35d64feefae976aee2f247fbd5} 
+void {\bfseries add\+\_\+kp} (float add)
+\item 
+\Hypertarget{class_q_p_i_d_af7e13bb489156f127514b517b81af78b}\label{class_q_p_i_d_af7e13bb489156f127514b517b81af78b} 
+void {\bfseries add\+\_\+ki} (float add)
+\item 
+\Hypertarget{class_q_p_i_d_a2851e2799aa4b5eea251cf6161cd5987}\label{class_q_p_i_d_a2851e2799aa4b5eea251cf6161cd5987} 
+void {\bfseries add\+\_\+kd} (float add)
+\item 
+\Hypertarget{class_q_p_i_d_a0b55542bb9c92c959b8b18dc97cba61d}\label{class_q_p_i_d_a0b55542bb9c92c959b8b18dc97cba61d} 
+void {\bfseries set\+\_\+centmode} (centmod a\+\_\+centmode)
+\item 
+\Hypertarget{class_q_p_i_d_a78b94bdcbb7496461317c231e654f053}\label{class_q_p_i_d_a78b94bdcbb7496461317c231e654f053} 
+void {\bfseries set\+\_\+centmode} (int a\+\_\+centmode)
+\item 
+\Hypertarget{class_q_p_i_d_a0be6e882893ea8bd50407b29505708dd}\label{class_q_p_i_d_a0be6e882893ea8bd50407b29505708dd} 
+void {\bfseries set\+\_\+cent} (float a\+\_\+cent)
+\item 
+\Hypertarget{class_q_p_i_d_a489de38f6cca9443c62f6977cc62fa56}\label{class_q_p_i_d_a489de38f6cca9443c62f6977cc62fa56} 
+void {\bfseries set\+\_\+target} (float a\+\_\+target)
+\item 
+\Hypertarget{class_q_p_i_d_a18a26486c68d575b6285cc15679a79ff}\label{class_q_p_i_d_a18a26486c68d575b6285cc15679a79ff} 
+void {\bfseries set\+\_\+output} (float a\+\_\+output)
+\item 
+\Hypertarget{class_q_p_i_d_aaab44aa8207f447e1d0b8cea75114c25}\label{class_q_p_i_d_aaab44aa8207f447e1d0b8cea75114c25} 
+void {\bfseries set\+\_\+dir} (cdir a\+\_\+dir)
+\item 
+\Hypertarget{class_q_p_i_d_a927f13b63efc32f725d3625e17971ad8}\label{class_q_p_i_d_a927f13b63efc32f725d3625e17971ad8} 
+void {\bfseries set\+\_\+dir} (int a\+\_\+dir)
+\item 
+\Hypertarget{class_q_p_i_d_a3bbb3e9a788e957c9536a539570b7235}\label{class_q_p_i_d_a3bbb3e9a788e957c9536a539570b7235} 
+void {\bfseries set\+\_\+pmode} (pmod a\+\_\+pmode)
+\item 
+\Hypertarget{class_q_p_i_d_a480e399efd2e1001d5763f43e5d4a9e7}\label{class_q_p_i_d_a480e399efd2e1001d5763f43e5d4a9e7} 
+void {\bfseries set\+\_\+pmode} (int a\+\_\+pmode)
+\item 
+\Hypertarget{class_q_p_i_d_a1b8fe3de4100065ea7c2d8e246850c15}\label{class_q_p_i_d_a1b8fe3de4100065ea7c2d8e246850c15} 
+void {\bfseries set\+\_\+dmode} (dmod a\+\_\+dmode)
+\item 
+\Hypertarget{class_q_p_i_d_a051c461e616dc69dfe46c1e76f44c848}\label{class_q_p_i_d_a051c461e616dc69dfe46c1e76f44c848} 
+void {\bfseries set\+\_\+dmode} (int a\+\_\+dmode)
+\item 
+\Hypertarget{class_q_p_i_d_ab8f3a0bcca2b0c3792365f7bebe37427}\label{class_q_p_i_d_ab8f3a0bcca2b0c3792365f7bebe37427} 
+void {\bfseries set\+\_\+awmode} (awmod a\+\_\+awmode)
+\item 
+\Hypertarget{class_q_p_i_d_a5dc50947f44b41076aec62fd1408bf54}\label{class_q_p_i_d_a5dc50947f44b41076aec62fd1408bf54} 
+void {\bfseries set\+\_\+awmode} (int a\+\_\+awmode)
+\item 
+\Hypertarget{class_q_p_i_d_af5c405f1bfc172e8833682216430ca20}\label{class_q_p_i_d_af5c405f1bfc172e8833682216430ca20} 
+void {\bfseries set\+\_\+outsum} (float a\+\_\+outsum)
+\item 
+\Hypertarget{class_q_p_i_d_a45ac78d3ff0ebdcfbf19f02913167ff0}\label{class_q_p_i_d_a45ac78d3ff0ebdcfbf19f02913167ff0} 
+float {\bfseries err} ()
+\item 
+\Hypertarget{class_q_p_i_d_a4694caceb5555171ee7eaa388a903128}\label{class_q_p_i_d_a4694caceb5555171ee7eaa388a903128} 
+float {\bfseries kp} ()
+\item 
+\Hypertarget{class_q_p_i_d_a1e60f1ca3e532440909bd495fc031c2b}\label{class_q_p_i_d_a1e60f1ca3e532440909bd495fc031c2b} 
+float {\bfseries ki} ()
+\item 
+\Hypertarget{class_q_p_i_d_a5abfb6f8e86ec388a3aeb8d4751d0e30}\label{class_q_p_i_d_a5abfb6f8e86ec388a3aeb8d4751d0e30} 
+float {\bfseries kd} ()
+\item 
+\Hypertarget{class_q_p_i_d_a9810fcd2a8c9eb99156ff90d19372cad}\label{class_q_p_i_d_a9810fcd2a8c9eb99156ff90d19372cad} 
+float {\bfseries pterm} ()
+\item 
+\Hypertarget{class_q_p_i_d_a193cb1b154cbec4d2628269da4d6152c}\label{class_q_p_i_d_a193cb1b154cbec4d2628269da4d6152c} 
+float {\bfseries iterm} ()
+\item 
+\Hypertarget{class_q_p_i_d_a4a0bfda542091e2933bcf8c5233fd804}\label{class_q_p_i_d_a4a0bfda542091e2933bcf8c5233fd804} 
+float {\bfseries dterm} ()
+\item 
+\Hypertarget{class_q_p_i_d_ab9a2e478e999c45808b216fbbe02f047}\label{class_q_p_i_d_ab9a2e478e999c45808b216fbbe02f047} 
+float {\bfseries outsum} ()
+\item 
+\Hypertarget{class_q_p_i_d_a3844f8431ea0cc09148db6d4bbb6d542}\label{class_q_p_i_d_a3844f8431ea0cc09148db6d4bbb6d542} 
+float {\bfseries outmin} ()
+\item 
+\Hypertarget{class_q_p_i_d_a4cacc27ec1d6a8039b443147a6212ddc}\label{class_q_p_i_d_a4cacc27ec1d6a8039b443147a6212ddc} 
+float {\bfseries outmax} ()
+\item 
+\Hypertarget{class_q_p_i_d_a89a551adcc9c4506c64f7b4925d56a3e}\label{class_q_p_i_d_a89a551adcc9c4506c64f7b4925d56a3e} 
+float {\bfseries outrange} ()
+\item 
+\Hypertarget{class_q_p_i_d_ac6d10aa4f1003bfdfe038b19dc2ab05f}\label{class_q_p_i_d_ac6d10aa4f1003bfdfe038b19dc2ab05f} 
+float {\bfseries cent} ()
+\item 
+\Hypertarget{class_q_p_i_d_a7495dc6d8445924c9bd1a082fb40062d}\label{class_q_p_i_d_a7495dc6d8445924c9bd1a082fb40062d} 
+float {\bfseries target} ()
+\item 
+\Hypertarget{class_q_p_i_d_a67bf3760284d6709f31f264fe350d34e}\label{class_q_p_i_d_a67bf3760284d6709f31f264fe350d34e} 
+float {\bfseries output} ()
+\item 
+\Hypertarget{class_q_p_i_d_af42f8efed6d9cd2f91dd64ecac23564f}\label{class_q_p_i_d_af42f8efed6d9cd2f91dd64ecac23564f} 
+int {\bfseries mode} ()
+\item 
+\Hypertarget{class_q_p_i_d_afff58acfc7d3fccf3be32410244d0412}\label{class_q_p_i_d_afff58acfc7d3fccf3be32410244d0412} 
+int {\bfseries dir} ()
+\item 
+\Hypertarget{class_q_p_i_d_abdda37bfceb53602624f70222064245a}\label{class_q_p_i_d_abdda37bfceb53602624f70222064245a} 
+int {\bfseries pmode} ()
+\item 
+\Hypertarget{class_q_p_i_d_a62c1cf66fa2d2e53249746fa0f9d6087}\label{class_q_p_i_d_a62c1cf66fa2d2e53249746fa0f9d6087} 
+int {\bfseries dmode} ()
+\item 
+\Hypertarget{class_q_p_i_d_a4e4bcfca5e66e8a7b0ebe932f2061ebf}\label{class_q_p_i_d_a4e4bcfca5e66e8a7b0ebe932f2061ebf} 
+int {\bfseries awmode} ()
+\item 
+\Hypertarget{class_q_p_i_d_a4ff46bc276e97093814e08b03362b2cd}\label{class_q_p_i_d_a4ff46bc276e97093814e08b03362b2cd} 
+int {\bfseries centmode} ()
+\item 
+\Hypertarget{class_q_p_i_d_a6b0a2b455239938b6b0a7915da3e273c}\label{class_q_p_i_d_a6b0a2b455239938b6b0a7915da3e273c} 
+float \texorpdfstring{$\ast$}{*} {\bfseries target\+\_\+ptr} ()
+\end{DoxyCompactItemize}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+motors.\+h\end{DoxyCompactItemize}

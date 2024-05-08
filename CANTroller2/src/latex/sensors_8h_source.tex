@@ -1,0 +1,1552 @@
+\doxysection{sensors.\+h}
+\hypertarget{sensors_8h_source}{}\label{sensors_8h_source}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{preprocessor}{\#pragma\ once}}
+\DoxyCodeLine{00002\ \textcolor{preprocessor}{\#include\ <iostream>}}
+\DoxyCodeLine{00003\ \textcolor{preprocessor}{\#include\ <map>}}
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#include\ <memory>}\ \textcolor{comment}{//\ for\ std::shared\_ptr}}
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#include\ <SparkFun\_FS3000\_Arduino\_Library.h>}\ \ \textcolor{comment}{//\ For\ air\ velocity\ sensor\ \ http://librarymanager/All\#SparkFun\_FS3000}}
+\DoxyCodeLine{00006\ \textcolor{preprocessor}{\#include\ <Arduino.h>}}
+\DoxyCodeLine{00007\ \textcolor{preprocessor}{\#include\ <FunctionalInterrupt.h>}}
+\DoxyCodeLine{00008\ \textcolor{preprocessor}{\#include\ "{}driver/rmt.h"{}}}
+\DoxyCodeLine{00009\ \textcolor{preprocessor}{\#include\ <ESP32Servo.h>}\ \ \ \ \ \ \ \ \textcolor{comment}{//\ Makes\ PWM\ output\ to\ control\ motors\ (for\ rudimentary\ control\ of\ our\ gas\ and\ steering)}}
+\DoxyCodeLine{00010\ \textcolor{preprocessor}{\#include\ <Preferences.h>}\ \ \textcolor{comment}{//\ Functions\ for\ writing\ values\ to\ nvs\ flash\ partition}}
+\DoxyCodeLine{00011\ }
+\DoxyCodeLine{00012\ \textcolor{comment}{//\ This\ enum\ class\ represent\ the\ components\ which\ can\ be\ simulated\ (sensor).\ It's\ a\ uint8\_t\ type\ under\ the\ covers,\ so\ it\ can\ be\ used\ as\ an\ index}}
+\DoxyCodeLine{00013\ \textcolor{comment}{//\ typedef\ uint8\_t\ opt\_t;}}
+\DoxyCodeLine{00014\ \textcolor{keyword}{enum\ class}\ sens\ :\ \textcolor{keywordtype}{int}\ \{\ none=0,\ joy=1,\ pressure=2,\ brkpos=3,\ speedo=4,\ tach=5,\ airvelo=6,\ mapsens=7,\ engtemp=8,\ mulebatt=9,\ starter=10,\ basicsw=11,\ NUM\_SENSORS=12\ \};\ \ \textcolor{comment}{//,\ ignition,\ syspower\ \};\ \ //\ ,\ NUM\_SENSORS,\ err\_flag\ \};}}
+\DoxyCodeLine{00015\ \textcolor{keyword}{enum\ class}\ src\ :\ \textcolor{keywordtype}{int}\ \{\ UNDEF=0,\ FIXED=1,\ PIN=2,\ TOUCH=3,\ POT=4,\ CALC=5\ \};}
+\DoxyCodeLine{00016\ }
+\DoxyCodeLine{00017\ \textcolor{keywordtype}{int}\ sources[\textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{int}\textcolor{keyword}{>}(sens::NUM\_SENSORS)]\ =\ \{\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{int}\textcolor{keyword}{>}(src::UNDEF)\ \};}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}i2cbus.h"{}}}
+\DoxyCodeLine{00019\ }
+\DoxyCodeLine{00020\ \textcolor{comment}{//\ Potentiometer\ does\ an\ analog\ read\ from\ a\ pin\ and\ maps\ it\ to\ a\ percent\ (0\%-\/100\%).\ We\ filter\ the\ value\ to\ keep\ it\ smooth.}}
+\DoxyCodeLine{00021\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_potentiometer}{Potentiometer}}\ \{}
+\DoxyCodeLine{00022\ \ \ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{00023\ \ \ \ \ \textcolor{keywordtype}{float}\ \_ema\_alpha\ =\ .95;}
+\DoxyCodeLine{00024\ \ \ \ \ \textcolor{keywordtype}{float}\ \_pc\_min\ =\ 0.0;}
+\DoxyCodeLine{00025\ \ \ \ \ \textcolor{keywordtype}{float}\ \_pc\_max\ =\ 100.0;}
+\DoxyCodeLine{00026\ \ \ \ \ \textcolor{keywordtype}{float}\ \_pc\_activity\_margin\ =\ 7.5;}
+\DoxyCodeLine{00027\ \ \ \ \ uint8\_t\ \_pin;}
+\DoxyCodeLine{00028\ \ \ \ \ \textcolor{keywordtype}{float}\ \_val\ =\ 0.0,\ \_activity\_ref;}
+\DoxyCodeLine{00029\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ pot\_timer\{100000\};\ \ \textcolor{comment}{//\ adc\ cannot\ read\ too\ fast\ w/o\ errors,\ so\ give\ some\ time\ between\ readings}}
+\DoxyCodeLine{00030\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00031\ \ \ \ \ \textcolor{comment}{//\ tune\ these\ by\ monitoring\ adc\_raw\ and\ twist\ pot\ to\ each\ limit.\ set\ min\ at\ the\ highest\ value\ seen\ when\ turned\ full\ CCW,\ and\ vice\ versas\ for\ max,\ then\ trim\ each\ toward\ adc\_midrange\ until\ you\ get\ full\ 0\ to\ 100\%\ range}}
+\DoxyCodeLine{00032\ \ \ \ \ \textcolor{keywordtype}{float}\ adc\_min\ =\ 380;\ \textcolor{comment}{//\ TUNED\ 230603\ -\/\ Used\ only\ in\ determining\ theconversion\ factor}}
+\DoxyCodeLine{00033\ \ \ \ \ \textcolor{keywordtype}{float}\ adc\_max\ =\ 4095;\ \textcolor{comment}{//\ TUNED\ 230613\ -\/\ adc\ max\ measured\ =\ ?,\ or\ 9x.?\ \%\ of\ adc\_range.\ Used\ only\ in\ determining\ theconversion\ factor}}
+\DoxyCodeLine{00034\ \ \ \ \ \textcolor{keywordtype}{float}\ adc\_raw;}
+\DoxyCodeLine{00035\ \ \ \ \ \mbox{\hyperlink{class_potentiometer}{Potentiometer}}(uint8\_t\ arg\_pin)\ :\ \_pin(arg\_pin)\ \{\}}
+\DoxyCodeLine{00036\ \ \ \ \ \mbox{\hyperlink{class_potentiometer}{Potentiometer}}()\ =\ \textcolor{keyword}{delete};\ \textcolor{comment}{//\ must\ have\ a\ pin\ defined}}
+\DoxyCodeLine{00037\ \ \ \ \ sens\ senstype\ =\ sens::none;}
+\DoxyCodeLine{00038\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{}
+\DoxyCodeLine{00039\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}Pot\ setup..\(\backslash\)n"{}});}
+\DoxyCodeLine{00040\ \ \ \ \ \ \ \ \ set\_pin(\_pin,\ INPUT);}
+\DoxyCodeLine{00041\ \ \ \ \ \ \ \ \ \_activity\_ref\ =\ \_val;}
+\DoxyCodeLine{00042\ \ \ \ \ \}}
+\DoxyCodeLine{00043\ \ \ \ \ \textcolor{keywordtype}{void}\ update()\ \{}
+\DoxyCodeLine{00044\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (pot\_timer.expireset())\ \{}
+\DoxyCodeLine{00045\ \ \ \ \ \ \ \ \ \ \ \ \ adc\_raw\ =\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{float}\textcolor{keyword}{>}(analogRead(\_pin));}
+\DoxyCodeLine{00046\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ new\_val\ =\ map(adc\_raw,\ adc\_min,\ adc\_max,\ \_pc\_min,\ \_pc\_max);}
+\DoxyCodeLine{00047\ \ \ \ \ \ \ \ \ \ \ \ \ ema\_filt(new\_val,\ \&\_val,\ \_ema\_alpha);}
+\DoxyCodeLine{00048\ \ \ \ \ \ \ \ \ \ \ \ \ \_val\ =\ constrain(\_val,\ \_pc\_min,\ \_pc\_max);\ \textcolor{comment}{//\ the\ lower\ limit\ of\ the\ adc\ reading\ isn't\ steady\ (it\ will\ dip\ below\ zero)\ so\ constrain\ it\ back\ in\ range}}
+\DoxyCodeLine{00049\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (std::abs(\_val\ -\/\ \_activity\_ref)\ >\ \_pc\_activity\_margin)\ \{}
+\DoxyCodeLine{00050\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Serial.printf("{}a:\%ld\ n:\%lf\ v:\%lf\ r:\%lf\ m:\%lf\ "{},\ adc\_raw,\ new\_val,\ \_val,\ \_activity\_ref,\ \_pc\_activity\_margin);}}
+\DoxyCodeLine{00051\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ kick\_inactivity\_timer(7);\ \ \textcolor{comment}{//\ evidence\ of\ user\ activity}}
+\DoxyCodeLine{00052\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_activity\_ref\ =\ \_val;}
+\DoxyCodeLine{00053\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Serial.printf("{}r2:\%lf\(\backslash\)n"{},\ \_activity\_ref);}}
+\DoxyCodeLine{00054\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00055\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00056\ \ \ \ \ \}}
+\DoxyCodeLine{00057\ \ \ \ \ \textcolor{keyword}{template}<\textcolor{keyword}{typename}\ VAL\_T>}
+\DoxyCodeLine{00058\ \ \ \ \ VAL\_T\ mapToRange(VAL\_T\ min,\ VAL\_T\ max)\ \{}
+\DoxyCodeLine{00059\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{static\_cast<}VAL\_T\textcolor{keyword}{>}(map(\_val,\ \_pc\_min,\ \_pc\_max,\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{float}\textcolor{keyword}{>}(min),\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{float}\textcolor{keyword}{>}(max)));}
+\DoxyCodeLine{00060\ \ \ \ \ \}}
+\DoxyCodeLine{00061\ \ \ \ \ \textcolor{keywordtype}{float}\ val()\ \{\ \textcolor{keywordflow}{return}\ \_val;\ \}}
+\DoxyCodeLine{00062\ \ \ \ \ \textcolor{keywordtype}{float}\ min()\ \{\ \textcolor{keywordflow}{return}\ \_pc\_min;\ \}}
+\DoxyCodeLine{00063\ \ \ \ \ \textcolor{keywordtype}{float}\ max()\ \{\ \textcolor{keywordflow}{return}\ \_pc\_max;\ \}}
+\DoxyCodeLine{00064\ \};}
+\DoxyCodeLine{00065\ \textcolor{comment}{//\ NOTE:\ the\ following\ classes\ all\ contain\ their\ own\ initial\ config\ values\ (for\ simplicity).\ We\ could\ instead\ use\ Config\ objects\ and\ pass\ them\ in\ at\ construction\ time,\ which\ might\ be}}
+\DoxyCodeLine{00066\ \textcolor{comment}{//\ \ \ \ \ \ \ a\ little\ cleaner\ organization-\/wise,\ since\ all\ the\ configs\ would\ be\ consolidated.\ It\ would\ also\ allow\ us\ to\ read\ Configs\ from\ storage\ somewhere,\ so\ we\ could\ have\ persistent}}
+\DoxyCodeLine{00067\ \textcolor{comment}{//\ \ \ \ \ \ \ calibration.}}
+\DoxyCodeLine{00068\ }
+\DoxyCodeLine{00069\ \textcolor{comment}{//\ Param\ is\ a\ value\ which\ is\ constrained\ between\ min/max\ limits,\ representing\ a\ "{}raw"{}\ (aka\ unfiltered)\ quantity.\ A\ value\ with\ tight\ limits}}
+\DoxyCodeLine{00070\ \textcolor{comment}{//\ (wehere\ min=val=max)\ is\ constant\ and\ cannot\ be\ changed\ without\ changing\ the\ limits.\ An\ unconstrained\ value\ can\ be\ represented\ by\ setting}}
+\DoxyCodeLine{00071\ \textcolor{comment}{//\ either\ or\ both\ min/max\ to\ infinity.}}
+\DoxyCodeLine{00072\ \textcolor{keyword}{template}<\textcolor{keyword}{typename}\ VALUE\_T>}
+\DoxyCodeLine{00073\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_param}{Param}}\ \{}
+\DoxyCodeLine{00074\ \ \ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{00075\ \ \ \ \ std::shared\_ptr<VALUE\_T>\ \_val,\ \_min,\ \_max;}
+\DoxyCodeLine{00076\ \ \ \ \ VALUE\_T\ \_last;\ \textcolor{comment}{//\ keep\ track\ of\ the\ last\ value\ (still\ needed?)}}
+\DoxyCodeLine{00077\ \ \ \ \ \textcolor{keywordtype}{bool}\ \_saturated\ =\ \textcolor{keyword}{false};\ \textcolor{comment}{//\ keeps\ track\ of\ whether\ the\ value\ has\ been\ constrained\ by\ the\ limits\ or\ not}}
+\DoxyCodeLine{00078\ \ \ \ \ \textcolor{comment}{//\ NOTE:\ add\ centerpoint...?}}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00080\ \ \ \ \ \textcolor{keywordtype}{void}\ constrain\_value()\ \{}
+\DoxyCodeLine{00081\ \ \ \ \ \ \ \ \ \_saturated\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00082\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (*\_val\ <\ *\_min)\ \{}
+\DoxyCodeLine{00083\ \ \ \ \ \ \ \ \ \ \ \ \ *\_val\ =\ *\_min;}
+\DoxyCodeLine{00084\ \ \ \ \ \ \ \ \ \ \ \ \ \_saturated\ =\ \textcolor{keyword}{true};\ \ \textcolor{comment}{//\ Constraint\ was\ necessary}}
+\DoxyCodeLine{00085\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00086\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (*\_val\ >\ *\_max)\ \{}
+\DoxyCodeLine{00087\ \ \ \ \ \ \ \ \ \ \ \ \ *\_val\ =\ *\_max;}
+\DoxyCodeLine{00088\ \ \ \ \ \ \ \ \ \ \ \ \ \_saturated\ =\ \textcolor{keyword}{true};\ \ \textcolor{comment}{//\ Constraint\ was\ necessary}}
+\DoxyCodeLine{00089\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00090\ \ \ \ \ \}}
+\DoxyCodeLine{00091\ \ \ \ \ }
+\DoxyCodeLine{00092\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00093\ \ \ \ \ std::string\ \_long\_name\ =\ \textcolor{stringliteral}{"{}Unnamed\ value"{}};}
+\DoxyCodeLine{00094\ \ \ \ \ std::string\ \_short\_name\ =\ \textcolor{stringliteral}{"{}noname"{}};}
+\DoxyCodeLine{00095\ \ \ \ \ std::string\ \_native\_units\_name\ =\ \textcolor{stringliteral}{"{}"{}};}
+\DoxyCodeLine{00096\ \ \ \ \ std::string\ \_human\_units\_name\ =\ \textcolor{stringliteral}{"{}"{}};}
+\DoxyCodeLine{00097\ }
+\DoxyCodeLine{00098\ \ \ \ \ \textcolor{comment}{//\ Creates\ a\ constant\ Param\ with\ the\ default\ value\ for\ VALUE\_T}}
+\DoxyCodeLine{00099\ \ \ \ \ \textcolor{comment}{//\ NOTE:\ this\ is\ really\ only\ needed\ for\ initalization\ cases\ where\ we\ don't\ have\ a\ valid\ starting\ value\ when\ we\ first\ make\ the\ Param}}
+\DoxyCodeLine{00100\ \ \ \ \ \mbox{\hyperlink{class_param}{Param}}()\{}
+\DoxyCodeLine{00101\ \ \ \ \ \ \ \ \ \_val\ =\ std::make\_shared<VALUE\_T>();}
+\DoxyCodeLine{00102\ \ \ \ \ \ \ \ \ \_min\ =\ std::make\_shared<VALUE\_T>();}
+\DoxyCodeLine{00103\ \ \ \ \ \ \ \ \ \_max\ =\ std::make\_shared<VALUE\_T>();}
+\DoxyCodeLine{00104\ \ \ \ \ \ \ \ \ \_last\ =\ *\_val;}
+\DoxyCodeLine{00105\ \ \ \ \ \}}
+\DoxyCodeLine{00106\ \ \ \ \ \textcolor{comment}{//\ Creates\ a\ constant\ Param\ (with\ min/max\ ==\ val)}}
+\DoxyCodeLine{00107\ \ \ \ \ \mbox{\hyperlink{class_param}{Param}}(VALUE\_T\ arg\_val)\ \{}
+\DoxyCodeLine{00108\ \ \ \ \ \ \ \ \ \_val\ =\ std::make\_shared<VALUE\_T>(arg\_val);}
+\DoxyCodeLine{00109\ \ \ \ \ \ \ \ \ \_min\ =\ std::make\_shared<VALUE\_T>(arg\_val);}
+\DoxyCodeLine{00110\ \ \ \ \ \ \ \ \ \_max\ =\ std::make\_shared<VALUE\_T>(arg\_val);}
+\DoxyCodeLine{00111\ \ \ \ \ \ \ \ \ \_last\ =\ *\_val;}
+\DoxyCodeLine{00112\ \ \ \ \ \}\ }
+\DoxyCodeLine{00113\ \ \ \ \ \textcolor{comment}{//\ Creates\ a\ regular\ constrained\ Param}}
+\DoxyCodeLine{00114\ \ \ \ \ \mbox{\hyperlink{class_param}{Param}}(VALUE\_T\ arg\_val,\ VALUE\_T\ arg\_min,\ VALUE\_T\ arg\_max)\ \{}
+\DoxyCodeLine{00115\ \ \ \ \ \ \ \ \ \_val\ =\ std::make\_shared<VALUE\_T>(arg\_val);}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ \ \ \_min\ =\ std::make\_shared<VALUE\_T>();}
+\DoxyCodeLine{00117\ \ \ \ \ \ \ \ \ \_max\ =\ std::make\_shared<VALUE\_T>();}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ \ \ set\_limits(arg\_min,\ arg\_max);}
+\DoxyCodeLine{00119\ \ \ \ \ \ \ \ \ \_last\ =\ *\_val;}
+\DoxyCodeLine{00120\ \ \ \ \ \}\ }
+\DoxyCodeLine{00121\ \ \ \ \ \textcolor{comment}{//\ Creates\ a\ constraned\ Param\ which\ uses\ external\ limits.}}
+\DoxyCodeLine{00122\ \ \ \ \ \textcolor{comment}{//\ NOTE:\ if\ using\ external\ limits,\ it's\ (currently)\ possible\ to\ get\ stale\ values,\ since\ there\ is\ no}}
+\DoxyCodeLine{00123\ \ \ \ \ \textcolor{comment}{//\ \ \ \ \ \ \ callback\ mechanism\ in\ place.\ We\ could\ get\ around\ this\ by\ calling\ constrain\_value()\ on\ every}}
+\DoxyCodeLine{00124\ \ \ \ \ \textcolor{comment}{//\ \ \ \ \ \ \ get()\ call,\ but\ that\ seems\ like\ overkill...}}
+\DoxyCodeLine{00125\ \ \ \ \ \mbox{\hyperlink{class_param}{Param}}(VALUE\_T\ arg\_val,\ std::shared\_ptr<VALUE\_T>\ arg\_min\_ptr,\ std::shared\_ptr<VALUE\_T>\ arg\_max\_ptr)\ \{}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \ \ \_val\ =\ std::make\_shared<VALUE\_T>(arg\_val);}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ \ \ \_min\ =\ std::make\_shared<VALUE\_T>();}
+\DoxyCodeLine{00128\ \ \ \ \ \ \ \ \ \_max\ =\ std::make\_shared<VALUE\_T>();}
+\DoxyCodeLine{00129\ \ \ \ \ \ \ \ \ set\_limits(arg\_min\_ptr,\ arg\_max\_ptr);}
+\DoxyCodeLine{00130\ \ \ \ \ \ \ \ \ \_last\ =\ *\_val;}
+\DoxyCodeLine{00131\ \ \ \ \ \}\ }
+\DoxyCodeLine{00132\ }
+\DoxyCodeLine{00133\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_limits(VALUE\_T\ arg\_min,\ VALUE\_T\ arg\_max)\ \{\ \ \textcolor{comment}{//\ Use\ if\ min/max\ are\ kept\ in-\/class}}
+\DoxyCodeLine{00134\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (arg\_min\ >\ arg\_max)}
+\DoxyCodeLine{00135\ \ \ \ \ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}Error:\ min\ is\ >=\ max\(\backslash\)n"{}});}
+\DoxyCodeLine{00136\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00137\ \ \ \ \ \ \ \ \ \ \ \ \ *\_min\ =\ arg\_min;}
+\DoxyCodeLine{00138\ \ \ \ \ \ \ \ \ \ \ \ \ *\_max\ =\ arg\_max;}
+\DoxyCodeLine{00139\ \ \ \ \ \ \ \ \ \ \ \ \ constrain\_value();}
+\DoxyCodeLine{00140\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00141\ \ \ \ \ \}}
+\DoxyCodeLine{00142\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_limits(std::shared\_ptr<VALUE\_T>\ arg\_min\_ptr,\ std::shared\_ptr<VALUE\_T>\ arg\_max\_ptr)\ \{\ \textcolor{comment}{//\ Use\ if\ min/max\ are\ external}}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (arg\_min\_ptr.get()\ >\ arg\_max\_ptr.get())}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}Error:\ *min\ is\ >\ *max\(\backslash\)n"{}});}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ \ \ \ \ \ \ \_min\ =\ arg\_min\_ptr;}
+\DoxyCodeLine{00147\ \ \ \ \ \ \ \ \ \ \ \ \ \_max\ =\ arg\_max\_ptr;}
+\DoxyCodeLine{00148\ \ \ \ \ \ \ \ \ \ \ \ \ constrain\_value();}
+\DoxyCodeLine{00149\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00150\ \ \ \ \ \}}
+\DoxyCodeLine{00151\ }
+\DoxyCodeLine{00152\ \ \ \ \ \textcolor{comment}{//\ return\ value\ indicates\ if\ the\ value\ actually\ changed\ or\ not}}
+\DoxyCodeLine{00153\ \ \ \ \ \textcolor{keywordtype}{bool}\ set(VALUE\_T\ arg\_val)\ \{}
+\DoxyCodeLine{00154\ \ \ \ \ \ \ \ \ \_last\ =\ *\_val;}
+\DoxyCodeLine{00155\ \ \ \ \ \ \ \ \ *\_val\ =\ arg\_val;}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \ \ constrain\_value();}
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (*\_val\ !=\ \_last)\ \{}
+\DoxyCodeLine{00158\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00161\ \ \ \ \ \}}
+\DoxyCodeLine{00162\ }
+\DoxyCodeLine{00163\ \ \ \ \ \textcolor{keywordtype}{bool}\ add(VALUE\_T\ arg\_add)\ \{}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ set(*\_val\ +\ arg\_add);}
+\DoxyCodeLine{00165\ \ \ \ \ \}}
+\DoxyCodeLine{00166\ \ \ \ \ \textcolor{comment}{//\ Getter\ functions}}
+\DoxyCodeLine{00167\ \ \ \ \ VALUE\_T\ val()\ \{\ \textcolor{keywordflow}{return}\ *\_val;\ \}}
+\DoxyCodeLine{00168\ \ \ \ \ VALUE\_T\ min()\ \{\ \textcolor{keywordflow}{return}\ *\_min;\ \}}
+\DoxyCodeLine{00169\ \ \ \ \ VALUE\_T\ max()\ \{\ \textcolor{keywordflow}{return}\ *\_max;\ \}}
+\DoxyCodeLine{00170\ \ \ \ \ VALUE\_T*\ ptr()\ \{\ \textcolor{keywordflow}{return}\ \_val.get();\ \}}
+\DoxyCodeLine{00171\ \ \ \ \ VALUE\_T*\ min\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \_min.get();\ \}}
+\DoxyCodeLine{00172\ \ \ \ \ VALUE\_T*\ max\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \_max.get();\ \}}
+\DoxyCodeLine{00173\ \ \ \ \ std::shared\_ptr<VALUE\_T>\ shptr()\ \{\ \textcolor{keywordflow}{return}\ \_val;\ \}}
+\DoxyCodeLine{00174\ \ \ \ \ std::shared\_ptr<VALUE\_T>\ min\_shptr()\ \{\ \textcolor{keywordflow}{return}\ \_min;\ \}}
+\DoxyCodeLine{00175\ \ \ \ \ std::shared\_ptr<VALUE\_T>\ max\_shptr()\ \{\ \textcolor{keywordflow}{return}\ \_max;\ \}}
+\DoxyCodeLine{00176\ \ \ \ \ VALUE\_T\ last()\ \{\ \textcolor{keywordflow}{return}\ \_last;\ \}\ \textcolor{comment}{//\ NOTE:\ currently\ unused,\ do\ we\ still\ need\ this\ for\ drawing\ purposes?}}
+\DoxyCodeLine{00177\ \ \ \ \ \textcolor{keywordtype}{bool}\ saturated()\ \{\ \textcolor{keywordflow}{return}\ \_saturated;\ \}}
+\DoxyCodeLine{00178\ \};}
+\DoxyCodeLine{00179\ }
+\DoxyCodeLine{00180\ \textcolor{comment}{//\ Device\ class\ -\/\ is\ a\ base\ class\ for\ any\ connected\ system\ device\ or\ signal\ associated\ with\ a\ pin}}
+\DoxyCodeLine{00181\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_device}{Device}}\ \{}
+\DoxyCodeLine{00182\ \ \ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{00183\ \ \ \ \ \textcolor{comment}{//\ Which\ types\ of\ sources\ are\ possible\ for\ this\ device?}}
+\DoxyCodeLine{00184\ \ \ \ \ uint8\_t\ \_pin;}
+\DoxyCodeLine{00185\ \ \ \ \ \textcolor{keywordtype}{bool}\ \_enabled\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00186\ \ \ \ \ \mbox{\hyperlink{class_potentiometer}{Potentiometer}}*\ \_pot;\ \textcolor{comment}{//\ to\ pull\ input\ from\ the\ pot\ if\ we're\ in\ simulation\ mode}}
+\DoxyCodeLine{00187\ \ \ \ \ src\ \_source\ =\ src::UNDEF;}
+\DoxyCodeLine{00188\ \ \ \ \ \textcolor{keywordtype}{bool}\ \_can\_source[6]\ =\ \{\ \textcolor{keyword}{true},\ \textcolor{keyword}{true},\ \textcolor{keyword}{false},\ \textcolor{keyword}{true},\ \textcolor{keyword}{false},\ \textcolor{keyword}{false}\ \};}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ UNDEF,\ FIXED,\ \ PIN,\ TOUCH,\ \ POT,\ \ CALC}}
+\DoxyCodeLine{00190\ \ \ \ \ \textcolor{comment}{//\ source\ handling\ functions\ (should\ be\ overridden\ in\ child\ classes\ as\ needed)}}
+\DoxyCodeLine{00191\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ set\_val\_from\_undef()\ \{\}}
+\DoxyCodeLine{00192\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ set\_val\_from\_fixed()\ \{\}}
+\DoxyCodeLine{00193\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ set\_val\_from\_pin()\ \{\}}
+\DoxyCodeLine{00194\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ set\_val\_from\_touch()\ \{\}}
+\DoxyCodeLine{00195\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ set\_val\_from\_pot()\ \{\}}
+\DoxyCodeLine{00196\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ set\_val\_from\_calc()\ \{\}}
+\DoxyCodeLine{00197\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ set\_val\_common()\ \{\}\ \ \textcolor{comment}{//\ Runs\ when\ setting\ val\ from\ any\ source,\ after\ one\ of\ the\ above}}
+\DoxyCodeLine{00198\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ update\_source()\ \{\}}
+\DoxyCodeLine{00199\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00200\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ timer;\ \ \textcolor{comment}{//\ Can\ be\ used\ for\ external\ purposes}}
+\DoxyCodeLine{00201\ \ \ \ \ std::string\ \_long\_name\ =\ \textcolor{stringliteral}{"{}Unknown\ device"{}};}
+\DoxyCodeLine{00202\ \ \ \ \ std::string\ \_short\_name\ =\ \textcolor{stringliteral}{"{}device"{}};}
+\DoxyCodeLine{00203\ \ \ \ \ sens\ senstype\ =\ sens::none;}
+\DoxyCodeLine{00204\ \ \ \ \ \mbox{\hyperlink{class_device}{Device}}()\ =\ \textcolor{keyword}{delete};\ \textcolor{comment}{//\ should\ always\ be\ created\ with\ a\ pin}}
+\DoxyCodeLine{00205\ \ \ \ \ \textcolor{comment}{//\ NOTE:\ should\ we\ start\ in\ PIN\ mode?}}
+\DoxyCodeLine{00206\ \ \ \ \ \mbox{\hyperlink{class_device}{Device}}(uint8\_t\ arg\_pin)\ :\ \_pin(arg\_pin)\ \{\}}
+\DoxyCodeLine{00207\ \ \ \ \ \textcolor{keywordtype}{bool}\ can\_source(src\ arg\_source)\ \{\ \textcolor{keywordflow}{return}\ \_can\_source[\textcolor{keyword}{static\_cast<}uint8\_t\textcolor{keyword}{>}(arg\_source)];\ \}}
+\DoxyCodeLine{00208\ \ \ \ \ \textcolor{keywordtype}{bool}\ set\_source(src\ arg\_source)\ \{}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_can\_source[\textcolor{keyword}{static\_cast<}uint8\_t\textcolor{keyword}{>}(arg\_source)])\ \{}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ \ \ \ \ \ \ \_source\ =\ arg\_source;}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \ \ \ \ \ \ update\_source();}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ \ \ \ \ \ \ sources[\textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{int}\textcolor{keyword}{>}(senstype)]\ =\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{int}\textcolor{keyword}{>}(arg\_source);}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00214\ \ \ \ \ \ \ \ \ \}\ }
+\DoxyCodeLine{00215\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00216\ \ \ \ \ \}}
+\DoxyCodeLine{00217\ }
+\DoxyCodeLine{00218\ \ \ \ \ \textcolor{keywordtype}{void}\ update()\ \{}
+\DoxyCodeLine{00219\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_enabled)\ \textcolor{keywordflow}{return};\ \textcolor{comment}{//\ do\ nothing\ if\ the\ Device\ is\ disabled}}
+\DoxyCodeLine{00220\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}\ (\_source)\ \{}
+\DoxyCodeLine{00221\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ src::UNDEF:}
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_val\_from\_undef();}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00224\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ src::FIXED:}
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_val\_from\_fixed();}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ src::PIN:}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_val\_from\_pin();}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00230\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ src::TOUCH:}
+\DoxyCodeLine{00231\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_val\_from\_touch();}
+\DoxyCodeLine{00232\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00233\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ src::POT:}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_val\_from\_pot();}
+\DoxyCodeLine{00235\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00236\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ src::CALC:}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_val\_from\_calc();}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00239\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{default}:}
+\DoxyCodeLine{00240\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ should\ never\ get\ here}}
+\DoxyCodeLine{00241\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}invalid\ Device\ source:\ \%d\(\backslash\)n"{}},\ \_source);}
+\DoxyCodeLine{00242\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ \ \ set\_val\_common();}
+\DoxyCodeLine{00244\ \ \ \ \ \}}
+\DoxyCodeLine{00245\ \ \ \ \ \textcolor{keywordtype}{void}\ attach\_pot(\mbox{\hyperlink{class_potentiometer}{Potentiometer}}\ \&pot\_arg)\ \{}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \ \ \_pot\ =\ \&pot\_arg;}
+\DoxyCodeLine{00247\ \ \ \ \ \}}
+\DoxyCodeLine{00248\ \ \ \ \ \textcolor{comment}{//\ Setters\ and\ getters}}
+\DoxyCodeLine{00249\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_enabled(\textcolor{keywordtype}{bool}\ arg\_enable)\ \{\ \_enabled\ =\ arg\_enable;\ \}}
+\DoxyCodeLine{00250\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_can\_source(src\ arg\_source,\ \textcolor{keywordtype}{bool}\ is\_possible)\ \{\ \_can\_source[\textcolor{keyword}{static\_cast<}uint8\_t\textcolor{keyword}{>}(arg\_source)]\ =\ is\_possible;\ \}}
+\DoxyCodeLine{00251\ \ \ \ \ src\ source()\ \{\ \textcolor{keywordflow}{return}\ \_source;\ \}}
+\DoxyCodeLine{00252\ \ \ \ \ uint8\_t\ pin()\ \{\ \textcolor{keywordflow}{return}\ \_pin;\ \}}
+\DoxyCodeLine{00253\ \ \ \ \ \textcolor{keywordtype}{bool}\ enabled()\ \{\ \textcolor{keywordflow}{return}\ \_enabled;\ \}}
+\DoxyCodeLine{00254\ \};}
+\DoxyCodeLine{00255\ }
+\DoxyCodeLine{00256\ \textcolor{comment}{//\ Device::Transducer\ is\ a\ base\ class\ for\ any\ system\ devices\ that\ convert\ real-\/world\ values\ <-\/-\/>\ signals\ in\ either\ direction.\ It\ has\ a\ "{}native"{}}}
+\DoxyCodeLine{00257\ \textcolor{comment}{//\ value\ which\ represents\ the\ sensed\ or\ driven\ hardware\ input/output.\ It\ also\ has\ a\ "{}human"{}\ value\ which\ represents\ the\ logical\ or\ human-\/readable}}
+\DoxyCodeLine{00258\ \textcolor{comment}{//\ equivalent\ value.\ Adjusting\ either\ value\ will\ automatically\ change\ the\ other\ one.}}
+\DoxyCodeLine{00259\ \textcolor{keyword}{enum\ class}\ TransducerDirection\ :\ uint8\_t\ \{REV,\ FWD\};\ \textcolor{comment}{//\ possible\ dir\ values.\ REV\ means\ native\ sensed\ value\ has\ the\ opposite\ polarity\ of\ the\ real\ world\ effect\ (for\ example,\ if\ we\ sense\ fewer\ us\ per\ rotation,\ the\ engine\ is\ going\ faster)}}
+\DoxyCodeLine{00260\ \textcolor{keyword}{template}<\textcolor{keyword}{typename}\ NATIVE\_T,\ \textcolor{keyword}{typename}\ HUMAN\_T>}
+\DoxyCodeLine{00261\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_transducer}{Transducer}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{class_device}{Device}}\ \{}
+\DoxyCodeLine{00262\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00263\ \ \ \ \ std::string\ \_long\_name\ =\ \textcolor{stringliteral}{"{}Unknown\ transducer"{}};}
+\DoxyCodeLine{00264\ \ \ \ \ std::string\ \_short\_name\ =\ \textcolor{stringliteral}{"{}xducer"{}};}
+\DoxyCodeLine{00265\ \ \ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{00266\ \ \ \ \ \textcolor{comment}{//\ Multiplier\ and\ adder\ values\ to\ plug\ in\ for\ unit\ conversion\ math}}
+\DoxyCodeLine{00267\ \ \ \ \ NATIVE\_T\ \_val\_raw;\ \ \textcolor{comment}{//\ Keep\ track\ of\ the\ most\ recent\ unfiltered\ and\ unconstrained\ native\ value,\ for\ monitoring\ and\ diag\ purposes}}
+\DoxyCodeLine{00268\ \ \ \ \ \textcolor{keywordtype}{float}\ \_m\_factor\ =\ 1.0;}
+\DoxyCodeLine{00269\ \ \ \ \ \textcolor{keywordtype}{float}\ \_b\_offset\ =\ 0.0;}
+\DoxyCodeLine{00270\ \ \ \ \ \textcolor{keywordtype}{float}\ \_zerovalue\ =\ NAN;\ \ \textcolor{comment}{//\ value\ to\ return\ from\ to\_native\ conversion\ when\ val\ is\ zero\ (needed\ for\ speedometer)}}
+\DoxyCodeLine{00271\ \ \ \ \ \textcolor{keywordtype}{bool}\ \_invert\ =\ \textcolor{keyword}{false};\ \ \textcolor{comment}{//\ Flag\ to\ indicated\ if\ unit\ conversion\ math\ should\ multiply\ or\ divide}}
+\DoxyCodeLine{00272\ \ \ \ \ TransducerDirection\ dir\ =\ TransducerDirection::FWD;\ \textcolor{comment}{//\ NOTE:\ whats\ ts\ for,\ exactly?}}
+\DoxyCodeLine{00273\ \ \ \ \ }
+\DoxyCodeLine{00274\ \ \ \ \ \textcolor{comment}{//\ these\ linear\ conversion\ functions\ change\ native\ values\ to\ human\ and\ back\ -\/\ overwrite\ in\ child\ classes\ as\ needed}}
+\DoxyCodeLine{00275\ \ \ \ \ \textcolor{comment}{//\ \ \ \_m\_factor\ :\ is\ conversion\ rate\ in\ human/native\ units\ (in\ normal\ noninverted\ case)}}
+\DoxyCodeLine{00276\ \ \ \ \ \textcolor{comment}{//\ \ \ \_b\_offset\ :\ (in\ human\ units)\ is\ added\ to\ result\ of\ multiplying\ native\ value\ by\ \_m\_factor}}
+\DoxyCodeLine{00277\ \ \ \ \ \textcolor{comment}{//\ \ \ \_invert\ :\ if\ set\ true,\ before\ multiplying\ the\ math\ will\ invert\ the\ given\ native\ value.\ }}
+\DoxyCodeLine{00278\ \ \ \ \ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ \ \ \ \ intended\ if\ native\ and\ human\ are\ inverse\ values\ like\ time\ (eg\ us)\ and\ frequency\ (eg\ mph,\ rpm).\ }}
+\DoxyCodeLine{00279\ \ \ \ \ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ \ \ \ \ e.g.\ for\ native\ in\ sec/in\ and\ human\ in\ ft/minute,\ then\ use\ \_m\_factor\ of\ 60\ /\ 12\ =\ 5\ ft/min\ (per\ in/sec)}}
+\DoxyCodeLine{00280\ \ \ \ \ \textcolor{comment}{//\ \ \ dir\ :\ optional\ mirroring\ of\ result\ around\ min/max\ range\ center\ point.\ set\ to\ REV\ if\ native\ value\ increases\ as\ human\ decreases}}
+\DoxyCodeLine{00281\ \ \ \ \ \textcolor{comment}{//\ note,\ to\ avoid\ crashes,\ divide\ by\ zero\ attempts\ result\ in\ return\ of\ max\ value\ in\ lieu\ of\ infinity}}
+\DoxyCodeLine{00282\ \ \ \ \ \textcolor{keyword}{virtual}\ HUMAN\_T\ from\_native(NATIVE\_T\ arg\_val\_native)\ \{}
+\DoxyCodeLine{00283\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ arg\_val\_f\ =\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{float}\textcolor{keyword}{>}(arg\_val\_native);\ \textcolor{comment}{//\ convert\ everything\ to\ floats\ so\ we\ don't\ introduce\ rounding\ errors}}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ min\_f\ =\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{float}\textcolor{keyword}{>}(\_native.min());}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ max\_f\ =\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{float}\textcolor{keyword}{>}(\_native.max());}
+\DoxyCodeLine{00286\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ ret\ =\ -\/1;}
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_invert)\ \{}
+\DoxyCodeLine{00288\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (dir\ ==\ TransducerDirection::REV)\ \{}
+\DoxyCodeLine{00289\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ret\ =\ min\_f\ +\ max\_f\ -\/\ \_b\_offset\ -\/\ \_m\_factor\ *\ arg\_val\_f;\ \ \textcolor{comment}{//\ Serial.printf("{}\%lf\ =\ \%lf\ +\ \%lf\ -\/\ \%lf\ -\/\ \%lf\ *\ \%lf\(\backslash\)n"{},\ ret,\ min\_f,\ max\_f,\ \_b\_offset,\ \_m\_factor,\ arg\_val\_f);}}
+\DoxyCodeLine{00290\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00291\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00292\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ret\ =\ \_b\_offset\ +\ \_m\_factor\ *\ arg\_val\_f;\ \textcolor{comment}{//\ Serial.printf("{}\%lf\ =\ \%lf\ +\ \%lf\ *\ \%lf\(\backslash\)n"{},\ ret,\ \_b\_offset,\ \_m\_factor,\ arg\_val\_f);}}
+\DoxyCodeLine{00293\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00294\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (std::abs(arg\_val\_f)\ >\ 0.000001)\ \{\ \textcolor{comment}{//\ NOTE:\ isn't\ 0.0\ a\ valid\ value\ tho?\ \ Soren:\ Only\ if\ the\ pulley\ can\ rotate\ all\ the\ way\ around\ in\ under\ 1\ planck\ time}}
+\DoxyCodeLine{00295\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (dir\ ==\ TransducerDirection::REV)\ \{}
+\DoxyCodeLine{00296\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ret\ =\ min\_f\ +\ max\_f\ -\/\ \_b\_offset\ -\/\ \_m\_factor\ /\ arg\_val\_f;\ \ \textcolor{comment}{//\ Serial.printf("{}\%lf\ =\ \%lf\ +\ \%lf\ -\/\ \%lf\ -\/\ \%lf\ /\ \%lf\(\backslash\)n"{},\ ret,\ min\_f,\ max\_f,\ \_b\_offset,\ \_m\_factor,\ arg\_val\_f);}}
+\DoxyCodeLine{00297\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00298\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ret\ =\ \_b\_offset\ +\ \_m\_factor\ /\ arg\_val\_f;\ \ \textcolor{comment}{//\ Serial.printf("{}\%lf\ =\ \%lf\ +\ \%lf\ /\ \%lf\(\backslash\)n"{},\ ret,\ \_b\_offset,\ \_m\_factor,\ arg\_val\_f);}}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ \ \ \ \ \ \ printf\ (\textcolor{stringliteral}{"{}err:\ from\_native\ conversion\ div/zero\ attempt.\ max=\%5.2f,\ d=\%d,\ i=\%d,\ v=\%5.2f,\ m=\%5.2f,\ b=\%5.2f\(\backslash\)n"{}},\ max\_f,\ dir,\ \_invert,\ arg\_val\_f,\ \_m\_factor,\ \_b\_offset);}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ \ \ \ \ \ \ ret\ =\ max\_f;\ \ \textcolor{comment}{//\ Best\ return\ given\ division\ would\ be\ infinite\ \ //\ Serial.printf("{}\%lf\ =\ \%lf\(\backslash\)n"{},\ ret,\ max\_f);}}
+\DoxyCodeLine{00304\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00305\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{static\_cast<}HUMAN\_T\textcolor{keyword}{>}(ret);}
+\DoxyCodeLine{00306\ \ \ \ \ \}}
+\DoxyCodeLine{00307\ \ \ \ \ \textcolor{keyword}{virtual}\ NATIVE\_T\ to\_native(HUMAN\_T\ arg\_val\_human)\ \{}
+\DoxyCodeLine{00308\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ arg\_val\_f\ =\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{float}\textcolor{keyword}{>}(arg\_val\_human);\ \textcolor{comment}{//\ convert\ everything\ to\ floats\ so\ we\ don't\ introduce\ rounding\ errors}}
+\DoxyCodeLine{00309\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ min\_f\ =\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{float}\textcolor{keyword}{>}(\_human.min());}
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ max\_f\ =\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{float}\textcolor{keyword}{>}(\_human.max());}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ ret\ =\ -\/1;}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (dir\ ==\ TransducerDirection::REV)\ \{}
+\DoxyCodeLine{00313\ \ \ \ \ \ \ \ \ \ \ \ \ arg\_val\_f\ =\ min\_f\ +\ max\_f\ -\/\ arg\_val\_f;}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_invert\ \&\&\ std::abs(arg\_val\_f\ -\/\ \_b\_offset)\ >\ 0.000001)\ \{\ \ \textcolor{comment}{//\ trying\ to\ dodge\ risk\ of\ floating\ point\ error\ comparing\ near-\/zero\ values}}
+\DoxyCodeLine{00316\ \ \ \ \ \ \ \ \ \ \ \ \ ret\ =\ \_m\_factor\ /\ (arg\_val\_f\ -\/\ \_b\_offset);}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (!\_invert\ \&\&\ std::abs(\_m\_factor)\ >\ 0.000001)\ \{\ \ \textcolor{comment}{//\ risk\ here\ of\ floating\ point\ error\ comparing\ near-\/zero\ values}}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \ \ \ \ \ \ ret\ =\ (arg\_val\_f\ -\/\ \_b\_offset)\ /\ \_m\_factor;}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (!std::isnan(\_zerovalue))\ \{}
+\DoxyCodeLine{00320\ \ \ \ \ \ \ \ \ \ \ \ \ ret\ =\ \_zerovalue;}
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \ \ \ \ \ \ printf\ (\textcolor{stringliteral}{"{}err:\ to\_native\ conversion\ div/zero\ attempt.\ max=\%5.2f,\ d=\%d,\ i=\%d,\ v=\%5.2f,\ m=\%5.2f,\ b=\%5.2f\(\backslash\)n"{}},\ max\_f,\ dir,\ \_invert,\ arg\_val\_f,\ \_m\_factor,\ \_b\_offset);}
+\DoxyCodeLine{00323\ \ \ \ \ \ \ \ \ \ \ \ \ ret\ =\ max\_f;\ \ \textcolor{comment}{//\ Best\ return\ given\ division\ would\ be\ infinite}}
+\DoxyCodeLine{00324\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{static\_cast<}NATIVE\_T\textcolor{keyword}{>}(ret);}
+\DoxyCodeLine{00326\ \ \ \ \ \}}
+\DoxyCodeLine{00327\ }
+\DoxyCodeLine{00328\ \ \ \ \ \textcolor{comment}{//\ NOTE:\ do\ we\ really\ need\ two\ values?\ or\ should\ this\ just\ be\ a\ single\ value\ and\ get\ converted\ wherever\ needed?}}
+\DoxyCodeLine{00329\ \ \ \ \ \textcolor{comment}{//\ To\ hold\ val/min/max\ display\ values\ in\ display\ units\ (like\ V,\ mph,\ etc.)}}
+\DoxyCodeLine{00330\ \ \ \ \ \mbox{\hyperlink{class_param}{Param<HUMAN\_T>}}\ \_human;}
+\DoxyCodeLine{00331\ \ \ \ \ \mbox{\hyperlink{class_param}{Param<NATIVE\_T>}}\ \_native;}
+\DoxyCodeLine{00332\ \ \ \ \ }
+\DoxyCodeLine{00333\ \ \ \ \ \textcolor{comment}{//\ override\ these\ in\ children\ that\ need\ to\ react\ to\ limits\ changing}}
+\DoxyCodeLine{00334\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ update\_native\_limits()\ \{\}}
+\DoxyCodeLine{00335\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ update\_human\_limits()\ \{\}}
+\DoxyCodeLine{00336\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00337\ \ \ \ \ \mbox{\hyperlink{class_transducer}{Transducer}}(uint8\_t\ arg\_pin)\ :\ \mbox{\hyperlink{class_device}{Device}}(arg\_pin)\ \{\}}
+\DoxyCodeLine{00338\ \ \ \ \ \mbox{\hyperlink{class_transducer}{Transducer}}()\ =\ \textcolor{keyword}{delete};}
+\DoxyCodeLine{00339\ }
+\DoxyCodeLine{00340\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_native\_limits(\mbox{\hyperlink{class_param}{Param<NATIVE\_T>}}\ \&arg\_min,\ \mbox{\hyperlink{class_param}{Param<NATIVE\_T>}}\ \&arg\_max)\ \{}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (arg\_min.val()\ >\ arg\_max.val())\ \{}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \ \ \ \ \ \ dir\ =\ TransducerDirection::REV;}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ \ \ \ \ \ \ \_native.set\_limits(arg\_max.val(),\ arg\_min.val());}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ \ \ \ \ \ \ dir\ =\ TransducerDirection::FWD;}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \ \ \ \ \ \ \_native.set\_limits(arg\_min.val(),\ arg\_max.val());}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \ \ update\_native\_limits();}
+\DoxyCodeLine{00350\ }
+\DoxyCodeLine{00351\ \ \ \ \ \}}
+\DoxyCodeLine{00352\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_human\_limits(\mbox{\hyperlink{class_param}{Param<HUMAN\_T>}}\ \&arg\_min,\ \mbox{\hyperlink{class_param}{Param<HUMAN\_T>}}\ \&arg\_max)\ \{}
+\DoxyCodeLine{00353\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (arg\_min.val()\ >\ arg\_max.val())\ \{}
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \ \ \ \ \ \ dir\ =\ TransducerDirection::REV;}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \ \ \ \ \ \ \_human.set\_limits(arg\_max.val(),\ arg\_min.val());}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \ \ \ \ \ \ dir\ =\ TransducerDirection::FWD;}
+\DoxyCodeLine{00359\ \ \ \ \ \ \ \ \ \ \ \ \ \_human.set\_limits(arg\_min.val(),\ arg\_max.val());}
+\DoxyCodeLine{00360\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00361\ \ \ \ \ \ \ \ \ update\_human\_limits();}
+\DoxyCodeLine{00362\ \ \ \ \ \}}
+\DoxyCodeLine{00363\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_native\_limits(NATIVE\_T\ arg\_min,\ NATIVE\_T\ arg\_max)\ \{}
+\DoxyCodeLine{00364\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (arg\_min\ >\ arg\_max)\ \{}
+\DoxyCodeLine{00365\ \ \ \ \ \ \ \ \ \ \ \ \ dir\ =\ TransducerDirection::REV;}
+\DoxyCodeLine{00366\ \ \ \ \ \ \ \ \ \ \ \ \ \_native.set\_limits(arg\_max,\ arg\_min);}
+\DoxyCodeLine{00367\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00368\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00369\ \ \ \ \ \ \ \ \ \ \ \ \ dir\ =\ TransducerDirection::FWD;}
+\DoxyCodeLine{00370\ \ \ \ \ \ \ \ \ \ \ \ \ \_native.set\_limits(arg\_min,\ arg\_max);}
+\DoxyCodeLine{00371\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00372\ \ \ \ \ \ \ \ \ update\_native\_limits();}
+\DoxyCodeLine{00373\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Need\ to\ set\ human\ limits\ here.}}
+\DoxyCodeLine{00374\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ HUMAN\_T\ human\_min\ =\ from\_native(\_native.min());}}
+\DoxyCodeLine{00375\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ HUMAN\_T\ human\_max\ =\ from\_native(\_native.max());}}
+\DoxyCodeLine{00376\ \ \ \ \ \}}
+\DoxyCodeLine{00377\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_human\_limits(HUMAN\_T\ arg\_min,\ HUMAN\_T\ arg\_max)\ \{}
+\DoxyCodeLine{00378\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (arg\_min\ >\ arg\_max)\ \{}
+\DoxyCodeLine{00379\ \ \ \ \ \ \ \ \ \ \ \ \ dir\ =\ TransducerDirection::REV;}
+\DoxyCodeLine{00380\ \ \ \ \ \ \ \ \ \ \ \ \ \_human.set\_limits(arg\_max,\ arg\_min);}
+\DoxyCodeLine{00381\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00382\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ \ \ \ \ \ \ dir\ =\ TransducerDirection::FWD;}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ \ \ \ \ \ \ \_human.set\_limits(arg\_min,\ arg\_max);}
+\DoxyCodeLine{00385\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00386\ \ \ \ \ \ \ \ \ update\_human\_limits();}
+\DoxyCodeLine{00387\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ need\ to\ set\ native\ limits\ here}}
+\DoxyCodeLine{00388\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ \_human.set\_native\_limits(from\_human(\_human.min()),\ from\_human(\_human.max()));}}
+\DoxyCodeLine{00389\ }
+\DoxyCodeLine{00390\ \ \ \ \ \}}
+\DoxyCodeLine{00391\ }
+\DoxyCodeLine{00392\ \ \ \ \ \textcolor{keywordtype}{bool}\ set\_native(NATIVE\_T\ arg\_val\_native)\ \{}
+\DoxyCodeLine{00393\ \ \ \ \ \ \ \ \ \_val\_raw\ =\ arg\_val\_native;}
+\DoxyCodeLine{00394\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_native.set(arg\_val\_native))\ \{}
+\DoxyCodeLine{00395\ \ \ \ \ \ \ \ \ \ \ \ \ \_human.set(from\_native(\_native.val()));}
+\DoxyCodeLine{00396\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00397\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00398\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00399\ \ \ \ \ \}}
+\DoxyCodeLine{00400\ \ \ \ \ \textcolor{keywordtype}{bool}\ add\_native(NATIVE\_T\ arg\_add\_native)\ \{}
+\DoxyCodeLine{00401\ \ \ \ \ \ \ \ \ \_val\_raw\ +=\ arg\_add\_native;}
+\DoxyCodeLine{00402\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_native.add(arg\_add\_native))\ \{}
+\DoxyCodeLine{00403\ \ \ \ \ \ \ \ \ \ \ \ \ \_human.set(from\_native(\_native.val()));}
+\DoxyCodeLine{00404\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00405\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00406\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00407\ \ \ \ \ \}}
+\DoxyCodeLine{00408\ \ \ \ \ \textcolor{keywordtype}{bool}\ set\_human(HUMAN\_T\ arg\_val\_human)\ \{}
+\DoxyCodeLine{00409\ \ \ \ \ \ \ \ \ \_val\_raw\ =\ to\_native(arg\_val\_human);}
+\DoxyCodeLine{00410\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_human.set(arg\_val\_human))\ \{}
+\DoxyCodeLine{00411\ \ \ \ \ \ \ \ \ \ \ \ \ \_native.set(to\_native(\_human.val()));}
+\DoxyCodeLine{00412\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00413\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00414\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00415\ \ \ \ \ \}}
+\DoxyCodeLine{00416\ \ \ \ \ \textcolor{keywordtype}{bool}\ add\_human(HUMAN\_T\ arg\_add\_human)\ \{}
+\DoxyCodeLine{00417\ \ \ \ \ \ \ \ \ HUMAN\_T\ delta\ =\ (HUMAN\_T)(arg\_add\_human\ *\ tuning\_rate\_pcps\ *\ loop\_avg\_us\ *\ (max\_human()\ -\/\ min\_human())\ /\ (100.0\ *\ 1000000));}
+\DoxyCodeLine{00418\ \ \ \ \ \ \ \ \ \_val\_raw\ +=\ to\_native(delta);}
+\DoxyCodeLine{00419\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_human.add(delta))\ \{}
+\DoxyCodeLine{00420\ \ \ \ \ \ \ \ \ \ \ \ \ \_native.set(to\_native(\_human.val()));}
+\DoxyCodeLine{00421\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00422\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00423\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00424\ \ \ \ \ \}}
+\DoxyCodeLine{00425\ }
+\DoxyCodeLine{00426\ \ \ \ \ \textcolor{comment}{//\ Convert\ units\ from\ base\ numerical\ value\ to\ disp\ units:\ \ val\_native\ =\ m-\/factor*val\_numeric\ +\ offset\ \ -\/or-\/\ \ val\_native\ =\ m-\/factor/val\_numeric\ +\ offset\ \ where\ m-\/factor,\ b-\/offset,\ invert\ are\ set\ here}}
+\DoxyCodeLine{00427\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_convert(\textcolor{keywordtype}{float}\ arg\_m\_factor,\ \textcolor{keywordtype}{float}\ arg\_b\_offset,\ \textcolor{keywordtype}{bool}\ arg\_invert)\ \{}
+\DoxyCodeLine{00428\ \ \ \ \ \ \ \ \ \_m\_factor\ =\ arg\_m\_factor;}
+\DoxyCodeLine{00429\ \ \ \ \ \ \ \ \ \_b\_offset\ =\ arg\_b\_offset;}
+\DoxyCodeLine{00430\ \ \ \ \ \ \ \ \ \_invert\ =\ arg\_invert;}
+\DoxyCodeLine{00431\ \ \ \ \ \}}
+\DoxyCodeLine{00432\ \ \ \ \ \textcolor{comment}{//\ Getter\ functions}}
+\DoxyCodeLine{00433\ \ \ \ \ NATIVE\_T\ native()\ \{\ \textcolor{keywordflow}{return}\ \_native.val();\ \}}
+\DoxyCodeLine{00434\ \ \ \ \ HUMAN\_T\ human()\ \{\ \textcolor{keywordflow}{return}\ \_human.val();\ \}}
+\DoxyCodeLine{00435\ \ \ \ \ \textcolor{keywordtype}{float}\ percent()\ \{\ \textcolor{keywordflow}{return}\ map(\_human.val(),\ \_human.min,\ \_human.max,\ 0.0,\ 100.0);\ \}}
+\DoxyCodeLine{00436\ \ \ \ \ NATIVE\_T\ raw()\ \{\ \textcolor{keywordflow}{return}\ \_val\_raw;\ \}\ \ \textcolor{comment}{//\ This\ is\ a\ native\ unit\ value,\ unconstrained\ and\ unfiltered}}
+\DoxyCodeLine{00437\ \ \ \ \ NATIVE\_T\ min\_native()\ \{\ \textcolor{keywordflow}{return}\ \_native.min();\ \}}
+\DoxyCodeLine{00438\ \ \ \ \ NATIVE\_T\ max\_native()\ \{\ \textcolor{keywordflow}{return}\ \_native.max();\ \}}
+\DoxyCodeLine{00439\ \ \ \ \ HUMAN\_T\ min\_human()\ \{\ \textcolor{keywordflow}{return}\ \_human.min();\ \}}
+\DoxyCodeLine{00440\ \ \ \ \ HUMAN\_T\ max\_human()\ \{\ \textcolor{keywordflow}{return}\ \_human.max();\ \}}
+\DoxyCodeLine{00441\ \ \ \ \ HUMAN\_T*\ min\_human\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \_human.min\_ptr();\ \}}
+\DoxyCodeLine{00442\ \ \ \ \ HUMAN\_T*\ max\_human\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \_human.max\_ptr();\ \}}
+\DoxyCodeLine{00443\ \ \ \ \ NATIVE\_T*\ native\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \_native.ptr();\ \}}
+\DoxyCodeLine{00444\ \ \ \ \ HUMAN\_T*\ human\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \_human.ptr();\ \}}
+\DoxyCodeLine{00445\ \ \ \ \ std::shared\_ptr<NATIVE\_T>\ native\_shptr()\ \{\ \textcolor{keywordflow}{return}\ \_native.shptr();\ \}}
+\DoxyCodeLine{00446\ \ \ \ \ std::shared\_ptr<HUMAN\_T>\ human\_shptr()\ \{\ \textcolor{keywordflow}{return}\ \_human.shptr();\ \}}
+\DoxyCodeLine{00447\ \};}
+\DoxyCodeLine{00448\ }
+\DoxyCodeLine{00449\ \textcolor{comment}{//\ Sensor\ class\ -\/\ is\ a\ base\ class\ for\ control\ system\ sensors,\ ie\ anything\ that\ measures\ real\ world\ data\ or\ electrical\ signals\ }}
+\DoxyCodeLine{00450\ \textcolor{keyword}{template}<\textcolor{keyword}{typename}\ NATIVE\_T,\ \textcolor{keyword}{typename}\ HUMAN\_T>}
+\DoxyCodeLine{00451\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_sensor}{Sensor}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{class_transducer}{Transducer}}<NATIVE\_T,\ HUMAN\_T>\ \{}
+\DoxyCodeLine{00452\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00453\ \ \ \ \ std::string\ \_long\_name\ =\ \textcolor{stringliteral}{"{}Unknown\ sensor"{}};}
+\DoxyCodeLine{00454\ \ \ \ \ std::string\ \_short\_name\ =\ \textcolor{stringliteral}{"{}sensor"{}};}
+\DoxyCodeLine{00455\ \ \ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{00456\ \ \ \ \ \textcolor{keywordtype}{float}\ \_ema\_alpha\ =\ 0.1;}
+\DoxyCodeLine{00457\ \ \ \ \ \mbox{\hyperlink{class_param}{Param<HUMAN\_T>}}\ \_val\_filt;}
+\DoxyCodeLine{00458\ \ \ \ \ \textcolor{keywordtype}{bool}\ \_should\_filter\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00459\ }
+\DoxyCodeLine{00460\ \ \ \ \ \textcolor{keywordtype}{void}\ calculate\_ema()\ \{\ \textcolor{comment}{//\ Exponential\ Moving\ Average}}
+\DoxyCodeLine{00461\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_should\_filter)\ \{}
+\DoxyCodeLine{00462\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ cur\_val\ =\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{float}\textcolor{keyword}{>}(this-\/>\_human.val());}
+\DoxyCodeLine{00463\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ filt\_val\ =\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{float}\textcolor{keyword}{>}(\_val\_filt.val());}
+\DoxyCodeLine{00464\ \ \ \ \ \ \ \ \ \ \ \ \ \_val\_filt.set(ema\_filt(cur\_val,\ filt\_val,\ \_ema\_alpha));}
+\DoxyCodeLine{00465\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00466\ \ \ \ \ \ \ \ \ \ \ \ \ \_val\_filt.set(this-\/>\_human.val());}
+\DoxyCodeLine{00467\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ \_should\_filter\ =\ true;\ \ //\ soren:\ I\ commented\ this\ out,\ wouldn't\ this\ always\ turn\ on\ filtering?}}
+\DoxyCodeLine{00468\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00469\ \ \ \ \ \}}
+\DoxyCodeLine{00470\ }
+\DoxyCodeLine{00471\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ set\_val\_from\_touch()\ \{}
+\DoxyCodeLine{00472\ \ \ \ \ \ \ \ \ this-\/>\_val\_filt.set(this-\/>\_human.val());}
+\DoxyCodeLine{00473\ \ \ \ \ \}}
+\DoxyCodeLine{00474\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ set\_val\_from\_pot()\ \{}
+\DoxyCodeLine{00475\ \ \ \ \ \ \ \ \ this-\/>\_human.set(this-\/>\_pot-\/>mapToRange(this-\/>\_human.min(),\ this-\/>\_human.max()));}
+\DoxyCodeLine{00476\ \ \ \ \ \ \ \ \ this-\/>\_val\_raw\ =\ this-\/>\_native.val();\ \ \textcolor{comment}{//\ Arguably\ pot\ should\ set\ the\ raw\ value\ and\ let\ the\ filter\ work\ normally,\ instead\ of\ this}}
+\DoxyCodeLine{00477\ \ \ \ \ \ \ \ \ this-\/>\_val\_filt.set(this-\/>\_human.val());\ \textcolor{comment}{//\ don't\ filter\ the\ value\ we\ get\ from\ the\ pot,\ the\ pot\ output\ is\ already\ filtered}}
+\DoxyCodeLine{00478\ \ \ \ \ \}}
+\DoxyCodeLine{00479\ }
+\DoxyCodeLine{00480\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ update\_human\_limits()\ \{\ \_val\_filt.set\_limits(this-\/>\_human.min\_shptr(),\ this-\/>\_human.max\_shptr());\ \}\ \textcolor{comment}{//\ make\ sure\ our\ filtered\ value\ has\ the\ same\ limits\ as\ our\ regular\ value}}
+\DoxyCodeLine{00481\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ update\_source()\ \{\ \textcolor{keywordflow}{if}\ (this-\/>\_source\ ==\ src::PIN)\ \_should\_filter\ =\ \textcolor{keyword}{false};\ \}\ \textcolor{comment}{//\ if\ we\ just\ switched\ to\ pin\ input,\ the\ old\ filtered\ value\ is\ not\ valid}}
+\DoxyCodeLine{00482\ }
+\DoxyCodeLine{00483\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00484\ \ \ \ \ \mbox{\hyperlink{class_sensor}{Sensor}}(uint8\_t\ pin)\ :\ \mbox{\hyperlink{class_transducer}{Transducer<NATIVE\_T,\ HUMAN\_T>}}(pin)\ \{\}\ \ }
+\DoxyCodeLine{00485\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_ema\_alpha(\textcolor{keywordtype}{float}\ arg\_alpha)\ \{\ \_ema\_alpha\ =\ arg\_alpha;\ \}}
+\DoxyCodeLine{00486\ \ \ \ \ \textcolor{keywordtype}{float}\ ema\_alpha()\ \{\ \textcolor{keywordflow}{return}\ \_ema\_alpha;\ \}}
+\DoxyCodeLine{00487\ \ \ \ \ HUMAN\_T\ filt()\ \{\ \textcolor{keywordflow}{return}\ \_val\_filt.val();\ \}}
+\DoxyCodeLine{00488\ \ \ \ \ HUMAN\_T*\ filt\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \_val\_filt.ptr();\ \}}
+\DoxyCodeLine{00489\ \ \ \ \ std::shared\_ptr<HUMAN\_T>\ filt\_shptr()\ \{\ \textcolor{keywordflow}{return}\ \_val\_filt.shptr();\ \}\ \textcolor{comment}{//\ NOTE:\ should\ just\ be\ public?}}
+\DoxyCodeLine{00490\ \};}
+\DoxyCodeLine{00491\ }
+\DoxyCodeLine{00492\ \textcolor{comment}{//\ Base\ class\ for\ sensors\ which\ communicate\ using\ i2c.}}
+\DoxyCodeLine{00493\ \textcolor{comment}{//\ NOTE:\ this\ is\ a\ strange\ type\ of\ Sensor,\ it's\ not\ really\ a\ Transducer\ but\ it\ does\ do\ filtering.\ maybe\ we\ should\ rethink\ the\ hierarchy\ a\ little?}}
+\DoxyCodeLine{00494\ \textcolor{comment}{//\ \ \ \ \ \ \ I\ think\ we\ can\ move\ Param\ to\ common.h\ and\ add\ a\ class\ ExponentialMovingAverage\ there\ as\ well\ that\ just\ has\ the\ ema\ functionality,\ then\ make}}
+\DoxyCodeLine{00495\ \textcolor{comment}{//\ \ \ \ \ \ \ I2CSensor\ a\ child\ of\ -\/>\ Device,\ ExponentialMovingAverage\ and\ not\ a\ Sensor\ at\ all.}}
+\DoxyCodeLine{00496\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_i2_c_sensor}{I2CSensor}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{class_sensor}{Sensor}}<float,float>\ \{}
+\DoxyCodeLine{00497\ \ \ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{00498\ \ \ \ \ \textcolor{keywordtype}{bool}\ \_detected\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00499\ \ \ \ \ \mbox{\hyperlink{class_i2_c}{I2C}}*\ \_i2c;}
+\DoxyCodeLine{00500\ }
+\DoxyCodeLine{00501\ \ \ \ \ \textcolor{comment}{//\ implement\ in\ child\ classes\ using\ the\ appropriate\ i2c\ sensor}}
+\DoxyCodeLine{00502\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{float}\ read\_sensor()\ =\ 0;}
+\DoxyCodeLine{00503\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ set\_val\_from\_pin()\ \{}
+\DoxyCodeLine{00504\ \ \ \ \ \ \ \ \ this-\/>set\_native(read\_sensor());}
+\DoxyCodeLine{00505\ \ \ \ \ \ \ \ \ calculate\_ema();\ \ \textcolor{comment}{//\ Sensor\ EMA\ filter}}
+\DoxyCodeLine{00506\ \ \ \ \ \}}
+\DoxyCodeLine{00507\ }
+\DoxyCodeLine{00508\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ set\_val\_from\_pot()\ \{}
+\DoxyCodeLine{00509\ \ \ \ \ \ \ \ \ this-\/>\_human.set(this-\/>\_pot-\/>mapToRange(this-\/>\_human.min(),\ this-\/>\_human.max()));}
+\DoxyCodeLine{00510\ \ \ \ \ \ \ \ \ this-\/>\_val\_raw\ =\ this-\/>\_native.val();}
+\DoxyCodeLine{00511\ \ \ \ \ \ \ \ \ this-\/>\_val\_filt.set(this-\/>\_human.val());\ \textcolor{comment}{//\ don't\ filter\ the\ value\ we\ get\ from\ the\ pot,\ the\ pot\ output\ is\ already\ filtered}}
+\DoxyCodeLine{00512\ \ \ \ \ \}}
+\DoxyCodeLine{00513\ }
+\DoxyCodeLine{00514\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ update\_human\_limits()\ \{}
+\DoxyCodeLine{00515\ \ \ \ \ \ \ \ \ \_native.set\_limits(\_human.min\_shptr(),\ \_human.max\_shptr());\ \ \textcolor{comment}{//\ Our\ two\ i2c\ sensors\ (airvelo\ \&\ MAP)\ don't\ reveal\ low-\/level\ readings,\ so\ we\ only\ get\ human\ units}}
+\DoxyCodeLine{00516\ \ \ \ \ \ \ \ \ \_val\_filt.set\_limits(\_human.min\_shptr(),\ \_human.max\_shptr());}
+\DoxyCodeLine{00517\ \ \ \ \ \}}
+\DoxyCodeLine{00518\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00519\ \ \ \ \ uint8\_t\ addr;}
+\DoxyCodeLine{00520\ \ \ \ \ \mbox{\hyperlink{class_i2_c_sensor}{I2CSensor}}(\mbox{\hyperlink{class_i2_c}{I2C}}*\ i2c\_arg,\ uint8\_t\ i2c\_address\_arg)\ :\ \mbox{\hyperlink{class_sensor}{Sensor<float,float>}}(-\/1),\ \_i2c(i2c\_arg),\ addr(i2c\_address\_arg)\ \{\ set\_can\_source(src::PIN,\ \textcolor{keyword}{true});\ \}}
+\DoxyCodeLine{00521\ \ \ \ \ \mbox{\hyperlink{class_i2_c_sensor}{I2CSensor}}()\ =\ \textcolor{keyword}{delete};}
+\DoxyCodeLine{00522\ \ \ \ \ std::string\ \_long\_name\ =\ \textcolor{stringliteral}{"{}Unknown\ I2C\ device"{}};}
+\DoxyCodeLine{00523\ \ \ \ \ std::string\ \_short\_name\ =\ \textcolor{stringliteral}{"{}i2cdev"{}};}
+\DoxyCodeLine{00524\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ setup()\ \{}
+\DoxyCodeLine{00525\ \ \ \ \ \ \ \ \ \_detected\ =\ \_i2c-\/>detected\_by\_addr(addr);}
+\DoxyCodeLine{00526\ \ \ \ \ \ \ \ \ set\_source(src::PIN);\ \textcolor{comment}{//\ we\ aren't\ actually\ reading\ from\ a\ pin\ but\ the\ point\ is\ the\ same...}}
+\DoxyCodeLine{00527\ \ \ \ \ \}}
+\DoxyCodeLine{00528\ \};}
+\DoxyCodeLine{00529\ }
+\DoxyCodeLine{00530\ \textcolor{comment}{//\ AirVeloSensor\ measures\ the\ air\ intake\ into\ the\ engine\ in\ MPH.\ It\ communicates\ with\ the\ external\ sensor\ using\ i2c.}}
+\DoxyCodeLine{00531\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_air_velo_sensor}{AirVeloSensor}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{class_i2_c_sensor}{I2CSensor}}\ \{}
+\DoxyCodeLine{00532\ \ \ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{00533\ \ \ \ \ \textcolor{comment}{//\ NOTE:\ would\ all\ AirVeloSensors\ have\ the\ same\ address?\ how\ does\ this\ get\ determined?}}
+\DoxyCodeLine{00534\ \ \ \ \ \textcolor{keywordtype}{float}\ \_min\_mph\ =\ 0.0;}
+\DoxyCodeLine{00535\ \ \ \ \ \textcolor{keywordtype}{float}\ \_abs\_max\_mph\ =\ 33.55;\ \textcolor{comment}{//\ Sensor\ maximum\ mph\ reading.\ \ Our\ sensor\ mounted\ in\ 2-\/in\ ID\ intake\ tube}}
+\DoxyCodeLine{00536\ \ \ \ \ \textcolor{keywordtype}{float}\ \_op\_max\_mph\ =\ 28.5;\ \ \textcolor{comment}{//\ 620/2\ cm3/rot\ *\ 5000\ rot/min\ (max)\ *\ 60\ min/hr\ *\ 1/(pi\ *\ ((2\ *\ 2.54)\ /\ 2)\string^2)\ 1/cm2\ *\ 1/160934\ mi/cm\ =\ 28.5\ mi/hr\ (mph)\ \ \ \ \ \ \ \ \ \ \ \ //\ 620/2\ cm3/rot\ *\ 5000\ rot/min\ (max)\ *\ 60\ min/hr\ *\ 1/(pi\ *\ (2.85\ /\ 2)\string^2)\ 1/cm2\ *\ 1/160934\ mi/cm\ =\ 90.58\ mi/hr\ (mph)\ (?!)\ \ }}
+\DoxyCodeLine{00537\ \ \ \ \ \textcolor{keywordtype}{float}\ \_initial\_airvelo\_mph\ =\ 0.0;}
+\DoxyCodeLine{00538\ \ \ \ \ FS3000\ \_sensor;}
+\DoxyCodeLine{00539\ \ \ \ \ \textcolor{keywordtype}{float}\ goodreading\ =\ NAN;}
+\DoxyCodeLine{00540\ \ \ \ \ int64\_t\ airvelo\_read\_period\_us\ =\ 35000;}
+\DoxyCodeLine{00541\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ airveloTimer;}
+\DoxyCodeLine{00542\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{float}\ read\_sensor()\ \{}
+\DoxyCodeLine{00543\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_i2c-\/>detected(i2c\_airvelo))\ \textcolor{keywordflow}{return}\ NAN;}
+\DoxyCodeLine{00544\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_i2c-\/>not\_my\_turn(i2c\_airvelo))\ \textcolor{keywordflow}{return}\ goodreading;}
+\DoxyCodeLine{00545\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (airveloTimer.expireset())\ goodreading\ =\ \_sensor.readMilesPerHour();\ \ \textcolor{comment}{//\ note,\ this\ returns\ a\ float\ from\ 0-\/33.55\ for\ the\ FS3000-\/1015\ }}
+\DoxyCodeLine{00546\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ goodreading;}
+\DoxyCodeLine{00547\ \ \ \ \ \}}
+\DoxyCodeLine{00548\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00549\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ uint8\_t\ addr\ =\ 0x28;}
+\DoxyCodeLine{00550\ \ \ \ \ sens\ senstype\ =\ sens::airvelo;}
+\DoxyCodeLine{00551\ \ \ \ \ \mbox{\hyperlink{class_air_velo_sensor}{AirVeloSensor}}(\mbox{\hyperlink{class_i2_c}{I2C}}*\ i2c\_arg)\ :\ \mbox{\hyperlink{class_i2_c_sensor}{I2CSensor}}(i2c\_arg,\ addr)\ \{}
+\DoxyCodeLine{00552\ \ \ \ \ \ \ \ \ \_ema\_alpha\ =\ 0.2;}
+\DoxyCodeLine{00553\ \ \ \ \ \ \ \ \ set\_human\_limits(\_min\_mph,\ \_abs\_max\_mph);}
+\DoxyCodeLine{00554\ \ \ \ \ \ \ \ \ set\_human(\_initial\_airvelo\_mph);}
+\DoxyCodeLine{00555\ \ \ \ \ \ \ \ \ set\_can\_source(src::POT,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00556\ \ \ \ \ \ \ \ \ airveloTimer.set(airvelo\_read\_period\_us);}
+\DoxyCodeLine{00557\ \ \ \ \ \}}
+\DoxyCodeLine{00558\ \ \ \ \ \mbox{\hyperlink{class_air_velo_sensor}{AirVeloSensor}}()\ =\ \textcolor{keyword}{delete};}
+\DoxyCodeLine{00559\ \ \ \ \ std::string\ \_long\_name\ =\ \textcolor{stringliteral}{"{}Air\ velocity\ sensor"{}};}
+\DoxyCodeLine{00560\ \ \ \ \ std::string\ \_short\_name\ =\ \textcolor{stringliteral}{"{}airvel"{}};}
+\DoxyCodeLine{00561\ \ \ \ \ std::string\ \_native\_units\_name\ =\ \textcolor{stringliteral}{"{}mph"{}};}
+\DoxyCodeLine{00562\ \ \ \ \ std::string\ \_human\_units\_name\ =\ \textcolor{stringliteral}{"{}mph"{}};}
+\DoxyCodeLine{00563\ }
+\DoxyCodeLine{00564\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ set\_val\_common()\ \{}
+\DoxyCodeLine{00565\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_i2c-\/>i2cbaton\ ==\ i2c\_airvelo)\ \_i2c-\/>pass\_i2c\_baton();}
+\DoxyCodeLine{00566\ \ \ \ \ \}}
+\DoxyCodeLine{00567\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{}
+\DoxyCodeLine{00568\ \ \ \ \ \ \ \ \ \_m\_factor\ =\ 1.0;}
+\DoxyCodeLine{00569\ \ \ \ \ \ \ \ \ \_b\_offset\ =\ 0.0;}
+\DoxyCodeLine{00570\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}\%s.."{}},\ this-\/>\_long\_name.c\_str());}
+\DoxyCodeLine{00571\ \ \ \ \ \ \ \ \ I2CSensor::setup();}
+\DoxyCodeLine{00572\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}\ \%sdetected"{}},\ \_detected\ ?\ \textcolor{stringliteral}{"{}"{}}\ :\ \textcolor{stringliteral}{"{}not\ "{}});}
+\DoxyCodeLine{00573\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_detected)\ \{}
+\DoxyCodeLine{00574\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_sensor.begin()\ ==\ \textcolor{keyword}{false})\ \{}
+\DoxyCodeLine{00575\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{},\ not\ responding\(\backslash\)n"{}});\ \ \textcolor{comment}{//\ Begin\ communication\ with\ air\ flow\ sensor)\ over\ I2C\ }}
+\DoxyCodeLine{00576\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_source(src::FIXED);\ \textcolor{comment}{//\ sensor\ is\ detected\ but\ not\ working,\ leave\ it\ in\ an\ error\ state\ ('fixed'\ as\ in\ not\ changing)}}
+\DoxyCodeLine{00577\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00578\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_sensor.setRange(AIRFLOW\_RANGE\_15\_MPS);}
+\DoxyCodeLine{00579\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ printf\ (\textcolor{stringliteral}{"{}\ and\ responding\ properly\(\backslash\)n"{}});}
+\DoxyCodeLine{00580\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00581\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00582\ \ \ \ \ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}\(\backslash\)n"{}});}
+\DoxyCodeLine{00583\ \ \ \ \ \ \ \ \ \ \ \ \ set\_source(src::UNDEF);\ \textcolor{comment}{//\ don't\ even\ have\ a\ device\ at\ all...}}
+\DoxyCodeLine{00584\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00585\ \ \ \ \ \}}
+\DoxyCodeLine{00586\ \ \ \ \ \textcolor{comment}{//\ Getter\ functions}}
+\DoxyCodeLine{00587\ \ \ \ \ \textcolor{keywordtype}{float}\ min\_mph()\ \{\ \textcolor{keywordflow}{return}\ \_human.min();\ \}}
+\DoxyCodeLine{00588\ \ \ \ \ \textcolor{keywordtype}{float}\ max\_mph()\ \{\ \textcolor{keywordflow}{return}\ \_human.max();\ \}}
+\DoxyCodeLine{00589\ \ \ \ \ \textcolor{keywordtype}{float}\ abs\_max\_mph()\ \{\ \textcolor{keywordflow}{return}\ \_abs\_max\_mph;\ \}}
+\DoxyCodeLine{00590\ \ \ \ \ \textcolor{keywordtype}{float}*\ max\_mph\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \_human.max\_ptr();\ \}}
+\DoxyCodeLine{00591\ \ \ \ \ std::shared\_ptr<float>\ max\_mph\_shptr()\ \{\ \textcolor{keywordflow}{return}\ \_human.max\_shptr();\ \}}
+\DoxyCodeLine{00592\ \};}
+\DoxyCodeLine{00593\ }
+\DoxyCodeLine{00594\ \textcolor{comment}{//\ MAPSensor\ measures\ the\ air\ pressure\ of\ the\ engine\ manifold\ in\ PSI.\ It\ communicates\ with\ the\ external\ sensor\ using\ i2c.}}
+\DoxyCodeLine{00595\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_m_a_p_sensor}{MAPSensor}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{class_i2_c_sensor}{I2CSensor}}\ \{}
+\DoxyCodeLine{00596\ \ \ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{00597\ \ \ \ \ \textcolor{comment}{//\ NOTE:\ would\ all\ MAPSensors\ have\ the\ same\ address?\ how\ does\ this\ get\ determined?}}
+\DoxyCodeLine{00598\ \ \ \ \ \textcolor{keywordtype}{float}\ \_abs\_min\_atm\ =\ 0.06;\ \ \textcolor{comment}{//\ Sensor\ min}}
+\DoxyCodeLine{00599\ \ \ \ \ \textcolor{keywordtype}{float}\ \_abs\_max\_atm\ =\ 2.46;\ \ \textcolor{comment}{//\ Sensor\ max}}
+\DoxyCodeLine{00600\ \ \ \ \ \textcolor{keywordtype}{float}\ \_op\_min\_atm\ =\ 0.68;\ \ \textcolor{comment}{//\ Typical\ low\ map\ for\ a\ car\ is\ 10.8\ psi\ =\ 22\ inHg,\ 1\ psi\ =\ 0.068\ atm}}
+\DoxyCodeLine{00601\ \ \ \ \ \textcolor{keywordtype}{float}\ \_op\_max\_atm\ =\ 1.02;}
+\DoxyCodeLine{00602\ \ \ \ \ \textcolor{keywordtype}{float}\ \_initial\_atm\ =\ 1.00;\ \ \textcolor{comment}{//\ 1\ atm\ =\ 14.6959\ psi}}
+\DoxyCodeLine{00603\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ map\_read\_timer;}
+\DoxyCodeLine{00604\ \ \ \ \ uint32\_t\ map\_read\_timeout\ =\ 100000,\ map\_retry\_timeout\ =\ 10000;}
+\DoxyCodeLine{00605\ \ \ \ \ \textcolor{keywordtype}{float}\ goodreading\ =\ NAN;}
+\DoxyCodeLine{00606\ \ \ \ \ \mbox{\hyperlink{class_spark_fun___micro_pressure}{SparkFun\_MicroPressure}}\ \_sensor;}
+\DoxyCodeLine{00607\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{float}\ read\_sensor()\ \{}
+\DoxyCodeLine{00608\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_i2c-\/>detected(i2c\_map))\ \textcolor{keywordflow}{return}\ NAN;}
+\DoxyCodeLine{00609\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_i2c-\/>not\_my\_turn(i2c\_map))\ \textcolor{keywordflow}{return}\ goodreading;}
+\DoxyCodeLine{00610\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (map\_read\_timer.expired())\ \{}
+\DoxyCodeLine{00611\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ temp\ =\ \_sensor.readPressure(ATM,\ \textcolor{keyword}{true});\ \ \textcolor{comment}{//\ \_sensor.readPressure(PSI);\ \ //\ <-\/\ blocking\ version\ takes\ 6.5ms\ to\ read}}
+\DoxyCodeLine{00612\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!std::isnan(temp))\ \{}
+\DoxyCodeLine{00613\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ goodreading\ =\ temp;}
+\DoxyCodeLine{00614\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ map\_read\_timer.set(map\_read\_timeout);}
+\DoxyCodeLine{00615\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00616\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ map\_read\_timer.set(map\_retry\_timeout);}
+\DoxyCodeLine{00617\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Serial.printf("{}av:\%f\(\backslash\)n"{},\ goodreading);}}
+\DoxyCodeLine{00618\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ this-\/>\_val\_raw\ =\ this-\/>human\_val();\ \ //\ (NATIVE\_T)goodreading;\ //\ note,\ this\ returns\ a\ float\ from\ 0-\/33.55\ for\ the\ FS3000-\/1015\ \ \ \ \ \ \ \ \ \ \ \ \ }}
+\DoxyCodeLine{00619\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00620\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ goodreading;}
+\DoxyCodeLine{00621\ \ \ \ \ \}}
+\DoxyCodeLine{00622\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00623\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ uint8\_t\ addr\ =\ 0x18;}
+\DoxyCodeLine{00624\ \ \ \ \ sens\ senstype\ =\ sens::mapsens;}
+\DoxyCodeLine{00625\ \ \ \ \ \mbox{\hyperlink{class_m_a_p_sensor}{MAPSensor}}(\mbox{\hyperlink{class_i2_c}{I2C}}*\ i2c\_arg)\ :\ \mbox{\hyperlink{class_i2_c_sensor}{I2CSensor}}(i2c\_arg,\ addr)\ \{}
+\DoxyCodeLine{00626\ \ \ \ \ \ \ \ \ \_ema\_alpha\ =\ 0.2;}
+\DoxyCodeLine{00627\ \ \ \ \ \ \ \ \ set\_human\_limits(\_abs\_min\_atm,\ \_abs\_max\_atm);}
+\DoxyCodeLine{00628\ \ \ \ \ \ \ \ \ set\_human(\_initial\_atm);}
+\DoxyCodeLine{00629\ \ \ \ \ \ \ \ \ set\_can\_source(src::POT,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00630\ \ \ \ \ \ \ \ \ map\_read\_timer.set(map\_read\_timeout);}
+\DoxyCodeLine{00631\ \ \ \ \ \}}
+\DoxyCodeLine{00632\ \ \ \ \ \mbox{\hyperlink{class_m_a_p_sensor}{MAPSensor}}()\ =\ \textcolor{keyword}{delete};}
+\DoxyCodeLine{00633\ \ \ \ \ std::string\ \_long\_name\ =\ \textcolor{stringliteral}{"{}Manifold\ Air\ Pressure\ sensor"{}};}
+\DoxyCodeLine{00634\ \ \ \ \ std::string\ \_short\_name\ =\ \textcolor{stringliteral}{"{}map"{}};}
+\DoxyCodeLine{00635\ \ \ \ \ std::string\ \_native\_units\_name\ =\ \textcolor{stringliteral}{"{}atm"{}};}
+\DoxyCodeLine{00636\ \ \ \ \ std::string\ \_human\_units\_name\ =\ \textcolor{stringliteral}{"{}atm"{}};}
+\DoxyCodeLine{00637\ }
+\DoxyCodeLine{00638\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ set\_val\_common()\ \{}
+\DoxyCodeLine{00639\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_i2c-\/>i2cbaton\ ==\ i2c\_map)\ \_i2c-\/>pass\_i2c\_baton();}
+\DoxyCodeLine{00640\ \ \ \ \ \}}
+\DoxyCodeLine{00641\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{}
+\DoxyCodeLine{00642\ \ \ \ \ \ \ \ \ \_m\_factor\ =\ 1.0;}
+\DoxyCodeLine{00643\ \ \ \ \ \ \ \ \ \_b\_offset\ =\ 0.0;}
+\DoxyCodeLine{00644\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}\%s.."{}},\ this-\/>\_long\_name.c\_str());}
+\DoxyCodeLine{00645\ \ \ \ \ \ \ \ \ I2CSensor::setup();}
+\DoxyCodeLine{00646\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}\ \%sdetected"{}},\ \_detected\ ?\ \textcolor{stringliteral}{"{}"{}}\ :\ \textcolor{stringliteral}{"{}not\ "{}});}
+\DoxyCodeLine{00647\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_detected)\ \{}
+\DoxyCodeLine{00648\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_sensor.begin()\ ==\ \textcolor{keyword}{false})\ \{}
+\DoxyCodeLine{00649\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{},\ not\ responding\(\backslash\)n"{}});\ \ \textcolor{comment}{//\ Begin\ communication\ with\ air\ flow\ sensor)\ over\ I2C\ }}
+\DoxyCodeLine{00650\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_source(src::FIXED);\ \textcolor{comment}{//\ sensor\ is\ detected\ but\ not\ working,\ leave\ it\ in\ an\ error\ state\ ('fixed'\ as\ in\ not\ changing)}}
+\DoxyCodeLine{00651\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00652\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}\ and\ reading\ \%f\ atm\(\backslash\)n"{}},\ \_sensor.readPressure(ATM));}
+\DoxyCodeLine{00653\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ printf("{}\ \ Sensor\ responding\ properly\(\backslash\)n"{});}}
+\DoxyCodeLine{00654\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00655\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00656\ \ \ \ \ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}\(\backslash\)n"{}});}
+\DoxyCodeLine{00657\ \ \ \ \ \ \ \ \ \ \ \ \ set\_source(src::UNDEF);\ \textcolor{comment}{//\ don't\ even\ have\ a\ device\ at\ all...}}
+\DoxyCodeLine{00658\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00659\ \ \ \ \ \}}
+\DoxyCodeLine{00660\ \ \ \ \ \textcolor{comment}{//\ Getter\ functions}}
+\DoxyCodeLine{00661\ \ \ \ \ \textcolor{keywordtype}{float}\ min\_atm()\ \{\ \textcolor{keywordflow}{return}\ \_human.min();\ \}}
+\DoxyCodeLine{00662\ \ \ \ \ \textcolor{keywordtype}{float}\ max\_atm()\ \{\ \textcolor{keywordflow}{return}\ \_human.max();\ \}}
+\DoxyCodeLine{00663\ \ \ \ \ \textcolor{keywordtype}{float}\ abs\_min\_atm()\ \{\ \textcolor{keywordflow}{return}\ \_abs\_min\_atm;\ \}}
+\DoxyCodeLine{00664\ \ \ \ \ \textcolor{keywordtype}{float}\ abs\_max\_atm()\ \{\ \textcolor{keywordflow}{return}\ \_abs\_max\_atm;\ \}}
+\DoxyCodeLine{00665\ \ \ \ \ \textcolor{keywordtype}{float}*\ min\_atm\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \_human.min\_ptr();\ \}}
+\DoxyCodeLine{00666\ \ \ \ \ \textcolor{keywordtype}{float}*\ max\_atm\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \_human.max\_ptr();\ \}}
+\DoxyCodeLine{00667\ \ \ \ \ std::shared\_ptr<float>\ min\_atm\_shptr()\ \{\ \textcolor{keywordflow}{return}\ \_human.min\_shptr();\ \}}
+\DoxyCodeLine{00668\ \ \ \ \ std::shared\_ptr<float>\ max\_atm\_shptr()\ \{\ \textcolor{keywordflow}{return}\ \_human.max\_shptr();\ \}}
+\DoxyCodeLine{00669\ \};}
+\DoxyCodeLine{00670\ }
+\DoxyCodeLine{00671\ \textcolor{comment}{//\ class\ AnalogSensor\ are\ sensors\ where\ the\ value\ is\ based\ on\ an\ ADC\ reading\ (eg\ brake\ pressure,\ brake\ actuator\ position,\ pot)}}
+\DoxyCodeLine{00672\ \textcolor{keyword}{template}<\textcolor{keyword}{typename}\ NATIVE\_T,\ \textcolor{keyword}{typename}\ HUMAN\_T>}
+\DoxyCodeLine{00673\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_analog_sensor}{AnalogSensor}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{class_sensor}{Sensor}}<NATIVE\_T,\ HUMAN\_T>\ \{}
+\DoxyCodeLine{00674\ \ \ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{00675\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ read\_timer\{25000\};\ \ \textcolor{comment}{//\ adc\ cannot\ read\ too\ fast\ w/o\ errors,\ so\ give\ some\ time\ between\ readings}}
+\DoxyCodeLine{00676\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ set\_val\_from\_pin()\ \{}
+\DoxyCodeLine{00677\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (read\_timer.expireset())\ \{}
+\DoxyCodeLine{00678\ \ \ \ \ \ \ \ \ \ \ \ \ this-\/>set\_native(\textcolor{keyword}{static\_cast<}NATIVE\_T\textcolor{keyword}{>}(analogRead(this-\/>\_pin)));\ \ \textcolor{comment}{//\ Soren:\ can\ this\ be\ done\ without\ two\ casts?}}
+\DoxyCodeLine{00679\ \ \ \ \ \ \ \ \ \ \ \ \ this-\/>calculate\_ema();\ \textcolor{comment}{//\ filtered\ values\ are\ kept\ in\ human\ format}}
+\DoxyCodeLine{00680\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00681\ \ \ \ \ \}}
+\DoxyCodeLine{00682\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00683\ \ \ \ \ \mbox{\hyperlink{class_analog_sensor}{AnalogSensor}}(uint8\_t\ arg\_pin)\ :\ \mbox{\hyperlink{class_sensor}{Sensor<NATIVE\_T,\ HUMAN\_T>}}(arg\_pin)\ \{\}}
+\DoxyCodeLine{00684\ \ \ \ \ std::string\ \_long\_name\ =\ \textcolor{stringliteral}{"{}Unknown\ analog\ sensor"{}};}
+\DoxyCodeLine{00685\ \ \ \ \ std::string\ \_short\_name\ =\ \textcolor{stringliteral}{"{}analog"{}};}
+\DoxyCodeLine{00686\ \ \ \ \ std::string\ \_native\_units\_name\ =\ \textcolor{stringliteral}{"{}adc"{}};}
+\DoxyCodeLine{00687\ \ \ \ \ std::string\ \_human\_units\_name\ =\ \textcolor{stringliteral}{"{}"{}};}
+\DoxyCodeLine{00688\ }
+\DoxyCodeLine{00689\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{}
+\DoxyCodeLine{00690\ \ \ \ \ \ \ \ \ set\_pin(this-\/>\_pin,\ INPUT);}
+\DoxyCodeLine{00691\ \ \ \ \ \ \ \ \ this-\/>set\_source(src::PIN);}
+\DoxyCodeLine{00692\ \ \ \ \ \}}
+\DoxyCodeLine{00693\ \ \ \ \ int32\_t\ adc()\ \{\ \textcolor{keywordflow}{return}\ this-\/>\_native.val();\ \}\ \ \textcolor{comment}{//\ Soren:\ I\ created\ these\ to\ be\ available\ to\ any\ child\ sensors,\ but\ untested\ and\ not\ confident\ it's\ right}}
+\DoxyCodeLine{00694\ \ \ \ \ int32\_t\ min\_adc()\ \{\ \textcolor{keywordflow}{return}\ this-\/>\_native.min();\ \}}
+\DoxyCodeLine{00695\ \ \ \ \ int32\_t\ max\_adc()\ \{\ \textcolor{keywordflow}{return}\ this-\/>\_native.max();\ \}}
+\DoxyCodeLine{00696\ \};}
+\DoxyCodeLine{00697\ }
+\DoxyCodeLine{00698\ \textcolor{comment}{//\ CarBattery\ reads\ the\ voltage\ level\ from\ the\ Mule\ battery}}
+\DoxyCodeLine{00699\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_car_battery}{CarBattery}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{class_analog_sensor}{AnalogSensor}}<int32\_t,\ float>\ \{}
+\DoxyCodeLine{00700\ \ \ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{00701\ \ \ \ \ \textcolor{comment}{//\ float\ \_initial\_adc\ =\ adcmidscale\_adc;}}
+\DoxyCodeLine{00702\ \ \ \ \ \textcolor{keywordtype}{float}\ \_initial\_v\ =\ 10.0;}
+\DoxyCodeLine{00703\ \ \ \ \ \textcolor{keywordtype}{float}\ \_abs\_min\_v\ =\ 0.0;\ \textcolor{comment}{//\ The\ min\ vehicle\ voltage\ we\ can\ sense}}
+\DoxyCodeLine{00704\ \ \ \ \ \textcolor{keywordtype}{float}\ \_abs\_max\_v\ =\ 16.0;\ \textcolor{comment}{//\ The\ min\ vehicle\ voltage\ we\ can\ sense}}
+\DoxyCodeLine{00705\ \ \ \ \ \textcolor{keywordtype}{float}\ \_op\_min\_v\ =\ 7.0;\ \textcolor{comment}{//\ The\ min\ vehicle\ voltage\ we\ expect\ to\ see}}
+\DoxyCodeLine{00706\ \ \ \ \ \textcolor{keywordtype}{float}\ \_op\_max\_v\ =\ 13.8;\ \ \textcolor{comment}{//\ The\ max\ vehicle\ voltage\ we\ expect\ to\ see.}}
+\DoxyCodeLine{00707\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00708\ \ \ \ \ sens\ senstype\ =\ sens::mulebatt;}
+\DoxyCodeLine{00709\ \ \ \ \ \mbox{\hyperlink{class_car_battery}{CarBattery}}(uint8\_t\ arg\_pin)\ :\ \mbox{\hyperlink{class_analog_sensor}{AnalogSensor<int32\_t,\ float>}}(arg\_pin)\ \{}
+\DoxyCodeLine{00710\ \ \ \ \ \ \ \ \ \_ema\_alpha\ =\ 0.01;\ \ \textcolor{comment}{//\ alpha\ value\ for\ ema\ filtering,\ lower\ is\ more\ continuous,\ higher\ is\ more\ responsive\ (0-\/1).\ }}
+\DoxyCodeLine{00711\ \ \ \ \ \ \ \ \ \_m\_factor\ =\ \_abs\_max\_v\ /\ adcrange\_adc;}
+\DoxyCodeLine{00712\ \ \ \ \ \ \ \ \ \_human.set\_limits(\_abs\_min\_v,\ \_abs\_max\_v);}
+\DoxyCodeLine{00713\ \ \ \ \ \ \ \ \ \_native.set\_limits(0.0,\ adcrange\_adc);}
+\DoxyCodeLine{00714\ \ \ \ \ \ \ \ \ set\_human(\_initial\_v);}
+\DoxyCodeLine{00715\ \ \ \ \ \ \ \ \ set\_can\_source(src::PIN,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00716\ \ \ \ \ \}}
+\DoxyCodeLine{00717\ \ \ \ \ \mbox{\hyperlink{class_car_battery}{CarBattery}}()\ =\ \textcolor{keyword}{delete};}
+\DoxyCodeLine{00718\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{}
+\DoxyCodeLine{00719\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}\%s..\(\backslash\)n"{}},\ this-\/>\_long\_name.c\_str());}
+\DoxyCodeLine{00720\ \ \ \ \ \ \ \ \ AnalogSensor::setup();}
+\DoxyCodeLine{00721\ \ \ \ \ \}}
+\DoxyCodeLine{00722\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_val\_from\_touch()\ \{}
+\DoxyCodeLine{00723\ \ \ \ \ \ \ \ \ set\_human(12.0);}
+\DoxyCodeLine{00724\ \ \ \ \ \}}
+\DoxyCodeLine{00725\ }
+\DoxyCodeLine{00726\ \ \ \ \ std::string\ \_long\_name\ =\ \textcolor{stringliteral}{"{}Vehicle\ battery\ voltage"{}};}
+\DoxyCodeLine{00727\ \ \ \ \ std::string\ \_short\_name\ =\ \textcolor{stringliteral}{"{}mulbat"{}};}
+\DoxyCodeLine{00728\ \ \ \ \ std::string\ \_native\_units\_name\ =\ \textcolor{stringliteral}{"{}adc"{}};}
+\DoxyCodeLine{00729\ \ \ \ \ std::string\ \_human\_units\_name\ =\ \textcolor{stringliteral}{"{}V"{}};}
+\DoxyCodeLine{00730\ }
+\DoxyCodeLine{00731\ \ \ \ \ \textcolor{keywordtype}{float}\ v()\ \{\ \textcolor{keywordflow}{return}\ \_human.val();\ \}}
+\DoxyCodeLine{00732\ \ \ \ \ \textcolor{keywordtype}{float}\ min\_v()\ \{\ \textcolor{keywordflow}{return}\ \_human.min();\ \}}
+\DoxyCodeLine{00733\ \ \ \ \ \textcolor{keywordtype}{float}\ max\_v()\ \{\ \textcolor{keywordflow}{return}\ \_human.max();\ \}}
+\DoxyCodeLine{00734\ \ \ \ \ \textcolor{keywordtype}{float}\ op\_min\_v()\ \{\ \textcolor{keywordflow}{return}\ \_op\_min\_v;\ \}}
+\DoxyCodeLine{00735\ \ \ \ \ \textcolor{keywordtype}{float}\ op\_max\_v()\ \{\ \textcolor{keywordflow}{return}\ \_op\_max\_v;\ \}}
+\DoxyCodeLine{00736\ \};}
+\DoxyCodeLine{00737\ }
+\DoxyCodeLine{00738\ \textcolor{comment}{//\ LiPoBatt\ reads\ the\ voltage\ level\ from\ a\ LiPo\ cell}}
+\DoxyCodeLine{00739\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_li_po_batt}{LiPoBatt}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{class_analog_sensor}{AnalogSensor}}<int32\_t,\ float>\ \{}
+\DoxyCodeLine{00740\ \ \ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{00741\ \ \ \ \ \textcolor{keywordtype}{float}\ \_initial\_adc\ =\ adcmidscale\_adc;}
+\DoxyCodeLine{00742\ \ \ \ \ \textcolor{keywordtype}{float}\ \_initial\_v\ =\ 10.0;}
+\DoxyCodeLine{00743\ \ \ \ \ \textcolor{keywordtype}{float}\ \_abs\_min\_v\ =\ 0.0;\ \textcolor{comment}{//\ The\ min\ lipo\ voltage\ we\ can\ sense}}
+\DoxyCodeLine{00744\ \ \ \ \ \textcolor{keywordtype}{float}\ \_abs\_max\_v\ =\ 4.8;\ \textcolor{comment}{//\ The\ min\ lipo\ voltage\ we\ can\ sense}}
+\DoxyCodeLine{00745\ \ \ \ \ \textcolor{keywordtype}{float}\ \_op\_min\_v\ =\ 3.2;\ \textcolor{comment}{//\ The\ min\ lipo\ voltage\ we\ expect\ to\ see}}
+\DoxyCodeLine{00746\ \ \ \ \ \textcolor{keywordtype}{float}\ \_op\_max\_v\ =\ 4.3;\ \ \textcolor{comment}{//\ The\ max\ lipo\ voltage\ we\ expect\ to\ see}}
+\DoxyCodeLine{00747\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00748\ \ \ \ \ sens\ senstype\ =\ sens::none;}
+\DoxyCodeLine{00749\ \ \ \ \ \mbox{\hyperlink{class_li_po_batt}{LiPoBatt}}(uint8\_t\ arg\_pin)\ :\ \mbox{\hyperlink{class_analog_sensor}{AnalogSensor<int32\_t,\ float>}}(arg\_pin)\ \{}
+\DoxyCodeLine{00750\ \ \ \ \ \ \ \ \ \_ema\_alpha\ =\ 0.01;\ \ \textcolor{comment}{//\ alpha\ value\ for\ ema\ filtering,\ lower\ is\ more\ continuous,\ higher\ is\ more\ responsive\ (0-\/1).\ }}
+\DoxyCodeLine{00751\ \ \ \ \ \ \ \ \ \_m\_factor\ =\ \_abs\_max\_v\ /\ adcrange\_adc;}
+\DoxyCodeLine{00752\ \ \ \ \ \ \ \ \ \_human.set\_limits(\_abs\_min\_v,\ \_abs\_max\_v);}
+\DoxyCodeLine{00753\ \ \ \ \ \ \ \ \ \_native.set\_limits(0.0,\ adcrange\_adc);}
+\DoxyCodeLine{00754\ \ \ \ \ \ \ \ \ set\_native(\_initial\_adc);}
+\DoxyCodeLine{00755\ \ \ \ \ \ \ \ \ set\_can\_source(src::PIN,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00756\ \ \ \ \ \}}
+\DoxyCodeLine{00757\ \ \ \ \ \mbox{\hyperlink{class_li_po_batt}{LiPoBatt}}()\ =\ \textcolor{keyword}{delete};}
+\DoxyCodeLine{00758\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{}
+\DoxyCodeLine{00759\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}\%s..\(\backslash\)n"{}},\ this-\/>\_long\_name.c\_str());}
+\DoxyCodeLine{00760\ \ \ \ \ \ \ \ \ AnalogSensor::setup();}
+\DoxyCodeLine{00761\ \ \ \ \ \}}
+\DoxyCodeLine{00762\ \ \ \ \ std::string\ \_long\_name\ =\ \textcolor{stringliteral}{"{}LiPo\ pack\ voltage\ "{}};}
+\DoxyCodeLine{00763\ \ \ \ \ std::string\ \_short\_name\ =\ \textcolor{stringliteral}{"{}lipo"{}};}
+\DoxyCodeLine{00764\ \ \ \ \ std::string\ \_native\_units\_name\ =\ \textcolor{stringliteral}{"{}adc"{}};}
+\DoxyCodeLine{00765\ \ \ \ \ std::string\ \_human\_units\_name\ =\ \textcolor{stringliteral}{"{}V"{}};}
+\DoxyCodeLine{00766\ }
+\DoxyCodeLine{00767\ \ \ \ \ \textcolor{keywordtype}{float}\ v()\ \{\ \textcolor{keywordflow}{return}\ \_human.val();\ \}}
+\DoxyCodeLine{00768\ \ \ \ \ \textcolor{keywordtype}{float}\ min\_v()\ \{\ \textcolor{keywordflow}{return}\ \_human.min();\ \}}
+\DoxyCodeLine{00769\ \ \ \ \ \textcolor{keywordtype}{float}\ max\_v()\ \{\ \textcolor{keywordflow}{return}\ \_human.max();\ \}}
+\DoxyCodeLine{00770\ \ \ \ \ \textcolor{keywordtype}{float}\ op\_min\_v()\ \{\ \textcolor{keywordflow}{return}\ \_op\_min\_v;\ \}}
+\DoxyCodeLine{00771\ \ \ \ \ \textcolor{keywordtype}{float}\ op\_max\_v()\ \{\ \textcolor{keywordflow}{return}\ \_op\_max\_v;\ \}}
+\DoxyCodeLine{00772\ \};}
+\DoxyCodeLine{00773\ \textcolor{comment}{//\ PressureSensor\ represents\ a\ brake\ fluid\ pressure\ sensor.}}
+\DoxyCodeLine{00774\ \textcolor{comment}{//\ It\ extends\ AnalogSensor\ to\ handle\ reading\ an\ analog\ pin}}
+\DoxyCodeLine{00775\ \textcolor{comment}{//\ and\ converting\ the\ ADC\ value\ to\ a\ pressure\ value\ in\ PSI.}}
+\DoxyCodeLine{00776\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_pressure_sensor}{PressureSensor}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{class_analog_sensor}{AnalogSensor}}<int32\_t,\ float>\ \{}
+\DoxyCodeLine{00777\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00778\ \ \ \ \ sens\ senstype\ =\ sens::pressure;}
+\DoxyCodeLine{00779\ \ \ \ \ int32\_t\ op\_min\_adc,\ op\_max\_adc;\ \textcolor{comment}{//\ Sensor\ reading\ when\ brake\ fully\ released.\ \ 230430\ measured\ 658\ adc\ (0.554V)\ =\ no\ brakes}}
+\DoxyCodeLine{00780\ \ \ \ \ \textcolor{comment}{//\ Soren\ 230920:\ Reducing\ max\ to\ value\ even\ wimpier\ than\ Chris'\ pathetic\ 2080\ adc\ (\string~284\ psi)\ brake\ press,\ to\ prevent\ overtaxing\ the\ motor}}
+\DoxyCodeLine{00781\ \ \ \ \ \textcolor{keywordtype}{float}\ hold\_initial\_psi,\ hold\_increment\_psi,\ panic\_initial\_psi,\ panic\_increment\_psi,\ margin\_psi;}
+\DoxyCodeLine{00782\ \ \ \ \ std::string\ \_long\_name\ =\ \textcolor{stringliteral}{"{}Brake\ pressure\ sensor"{}};}
+\DoxyCodeLine{00783\ \ \ \ \ std::string\ \_short\_name\ =\ \textcolor{stringliteral}{"{}presur"{}};}
+\DoxyCodeLine{00784\ \ \ \ \ std::string\ \_native\_units\_name\ =\ \textcolor{stringliteral}{"{}adc"{}};}
+\DoxyCodeLine{00785\ \ \ \ \ std::string\ \_human\_units\_name\ =\ \textcolor{stringliteral}{"{}psi"{}};}
+\DoxyCodeLine{00786\ }
+\DoxyCodeLine{00787\ \ \ \ \ \mbox{\hyperlink{class_pressure_sensor}{PressureSensor}}(uint8\_t\ arg\_pin)\ :\ \mbox{\hyperlink{class_analog_sensor}{AnalogSensor<int32\_t,\ float>}}(arg\_pin)\ \{}
+\DoxyCodeLine{00788\ \ \ \ \ \ \ \ \ \_m\_factor\ =\ 1000.0\ *\ (3.3\ -\/\ 0.554)\ /\ (\ (adcrange\_adc\ -\/\ op\_min\_adc)\ *\ (4.5\ -\/\ 0.554)\ );\ \textcolor{comment}{//\ 1000\ psi\ *\ (adc\_max\ v\ -\/\ v\_min\ v)\ /\ ((4095\ adc\ -\/\ 658\ adc)\ *\ (v-\/max\ v\ -\/\ v-\/min\ v))\ =\ 0.2\ psi/adc\ }}
+\DoxyCodeLine{00789\ \ \ \ \ \ \ \ \ \_b\_offset\ =\ -\/from\_native(op\_min\_adc);}
+\DoxyCodeLine{00790\ \ \ \ \ \ \ \ \ \_invert\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00791\ \ \ \ \ \ \ \ \ \_ema\_alpha\ =\ 0.15;}
+\DoxyCodeLine{00792\ \ \ \ \ \ \ \ \ op\_min\_adc\ =\ 658;\ \textcolor{comment}{//\ Sensor\ reading\ when\ brake\ fully\ released.\ \ 230430\ measured\ 658\ adc\ (0.554V)\ =\ no\ brakes}}
+\DoxyCodeLine{00793\ \ \ \ \ \ \ \ \ op\_max\_adc\ =\ 2080;\ \textcolor{comment}{//\ \string~208psi\ by\ this\ math\ -\/\ "{}Maximum"{}\ braking\ \ //\ older?\ \ int32\_t\ max\_adc\ =\ 2080;\ //\ \string~284psi\ by\ this\ math\ -\/\ Sensor\ measured\ maximum\ reading.\ (ADC\ count\ 0-\/4095).\ 230430\ measured\ 2080\ adc\ (1.89V)\ is\ as\ hard\ as\ [wimp]\ chris\ can\ push}}
+\DoxyCodeLine{00794\ \ \ \ \ \ \ \ \ hold\_initial\_psi\ =\ 120.0;\ \ \textcolor{comment}{//\ Pressure\ initially\ applied\ when\ brakes\ are\ hit\ to\ auto-\/stop\ the\ car\ (ADC\ count\ 0-\/4095)}}
+\DoxyCodeLine{00795\ \ \ \ \ \ \ \ \ hold\_increment\_psi\ =\ 3.0;\ \ \textcolor{comment}{//\ Incremental\ pressure\ added\ periodically\ when\ auto\ stopping\ (ADC\ count\ 0-\/4095)}}
+\DoxyCodeLine{00796\ \ \ \ \ \ \ \ \ panic\_initial\_psi\ =\ 140.0;\ \textcolor{comment}{//\ Pressure\ initially\ applied\ when\ brakes\ are\ hit\ to\ auto-\/stop\ the\ car\ (ADC\ count\ 0-\/4095)}}
+\DoxyCodeLine{00797\ \ \ \ \ \ \ \ \ panic\_increment\_psi\ =\ 5.0;\ \textcolor{comment}{//\ Incremental\ pressure\ added\ periodically\ when\ auto\ stopping\ (ADC\ count\ 0-\/4095)}}
+\DoxyCodeLine{00798\ \ \ \ \ \ \ \ \ margin\_psi\ =\ 1;\ \ \textcolor{comment}{//\ Max\ acceptible\ error\ when\ checking\ psi\ levels}}
+\DoxyCodeLine{00799\ }
+\DoxyCodeLine{00800\ \ \ \ \ \ \ \ \ set\_native\_limits(op\_min\_adc,\ op\_max\_adc);}
+\DoxyCodeLine{00801\ \ \ \ \ \ \ \ \ set\_human\_limits(from\_native(op\_min\_adc),\ from\_native(op\_max\_adc));}
+\DoxyCodeLine{00802\ \ \ \ \ \ \ \ \ set\_native(op\_min\_adc);}
+\DoxyCodeLine{00803\ \ \ \ \ \ \ \ \ set\_can\_source(src::PIN,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00804\ \ \ \ \ \ \ \ \ set\_can\_source(src::POT,\ \textcolor{keyword}{true});\ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00805\ \ \ \ \ \}}
+\DoxyCodeLine{00806\ \ \ \ \ \mbox{\hyperlink{class_pressure_sensor}{PressureSensor}}()\ =\ \textcolor{keyword}{delete};}
+\DoxyCodeLine{00807\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{}
+\DoxyCodeLine{00808\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}\%s..\(\backslash\)n"{}},\ this-\/>\_long\_name.c\_str());}
+\DoxyCodeLine{00809\ \ \ \ \ \ \ \ \ AnalogSensor::setup();}
+\DoxyCodeLine{00810\ \ \ \ \ \}}
+\DoxyCodeLine{00811\ \ \ \ \ \textcolor{keywordtype}{float}\ psi()\ \{\ \textcolor{keywordflow}{return}\ \_human.val();\ \}}
+\DoxyCodeLine{00812\ \ \ \ \ \textcolor{keywordtype}{float}\ min\_psi()\ \{\ \textcolor{keywordflow}{return}\ \_human.min();\ \}}
+\DoxyCodeLine{00813\ \ \ \ \ \textcolor{keywordtype}{float}\ max\_psi()\ \{\ \textcolor{keywordflow}{return}\ \_human.max();\ \}}
+\DoxyCodeLine{00814\ \ \ \ \ \textcolor{keywordtype}{float}\ op\_min()\ \{\ \textcolor{keywordflow}{return}\ from\_native(op\_min\_adc);\ \}}
+\DoxyCodeLine{00815\ \ \ \ \ \textcolor{keywordtype}{float}\ op\_max()\ \{\ \textcolor{keywordflow}{return}\ from\_native(op\_max\_adc);\ \}}
+\DoxyCodeLine{00816\ \};}
+\DoxyCodeLine{00817\ \textcolor{comment}{//\ BrakePositionSensor\ represents\ a\ linear\ position\ sensor}}
+\DoxyCodeLine{00818\ \textcolor{comment}{//\ for\ measuring\ brake\ position\ (TODO\ which\ position?\ pad?\ pedal?)}}
+\DoxyCodeLine{00819\ \textcolor{comment}{//\ Extends\ AnalogSensor\ for\ handling\ analog\ pin\ reading\ and\ conversion.}}
+\DoxyCodeLine{00820\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_brake_position_sensor}{BrakePositionSensor}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{class_analog_sensor}{AnalogSensor}}<int32\_t,\ float>\ \{}
+\DoxyCodeLine{00821\ \ \ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{00822\ \ \ \ \ \textcolor{comment}{//\ TODO:\ add\ description}}
+\DoxyCodeLine{00823\ \ \ \ \ \textcolor{comment}{//\ std::shared\_ptr<float>\ \_zeropoint;}}
+\DoxyCodeLine{00824\ \ \ \ \ \textcolor{comment}{//\ void\ set\_val\_from\_touch()\ \{\ \_val\_filt.set((op\_min\_retract\_in\ +\ *\_zeropoint)\ /\ 2);\ \}\ //\ To\ keep\ brake\ position\ in\ legal\ range\ during\ simulation}}
+\DoxyCodeLine{00825\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00826\ \ \ \ \ sens\ senstype\ =\ sens::brkpos;}
+\DoxyCodeLine{00827\ \ \ \ \ int32\_t\ abs\_min\_retract\_adc,\ abs\_max\_extend\_adc,\ op\_min\_retract\_adc,\ op\_max\_extend\_adc;}
+\DoxyCodeLine{00828\ \ \ \ \ \textcolor{keywordtype}{float}\ op\_min\_retract\_in,\ op\_max\_extend\_in,\ \_parkpos,\ \_margin,\ \_zeropoint,\ abs\_min\_retract\_in,\ abs\_max\_extend\_in;}
+\DoxyCodeLine{00829\ \ \ \ \ std::string\ \_long\_name\ =\ \textcolor{stringliteral}{"{}Brake\ position\ sensor"{}};}
+\DoxyCodeLine{00830\ \ \ \ \ std::string\ \_short\_name\ =\ \textcolor{stringliteral}{"{}brkpos"{}};}
+\DoxyCodeLine{00831\ \ \ \ \ std::string\ \_native\_units\_name\ =\ \textcolor{stringliteral}{"{}adc"{}};}
+\DoxyCodeLine{00832\ \ \ \ \ std::string\ \_human\_units\_name\ =\ \textcolor{stringliteral}{"{}in"{}};}
+\DoxyCodeLine{00833\ }
+\DoxyCodeLine{00834\ \ \ \ \ \mbox{\hyperlink{class_brake_position_sensor}{BrakePositionSensor}}(uint8\_t\ arg\_pin)\ :\ \mbox{\hyperlink{class_analog_sensor}{AnalogSensor<int32\_t,\ float>}}(arg\_pin)\ \{}
+\DoxyCodeLine{00835\ \ \ \ \ \ \ \ \ \_m\_factor\ =\ 3.3\ *\ 10000.0\ /\ (3.3\ *\ adcrange\_adc\ *\ 557);\ \textcolor{comment}{//\ 3.3\ v\ *\ 10k\ ohm\ *\ 1/5\ 1/v\ *\ 1/4095\ 1/adc\ *\ 1/557\ in/ohm\ =\ 0.0029\ in/adc}}
+\DoxyCodeLine{00836\ \ \ \ \ \ \ \ \ \_invert\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00837\ \ \ \ \ \ \ \ \ \_b\_offset\ =\ 0.0;}
+\DoxyCodeLine{00838\ \ \ \ \ \ \ \ \ \_ema\_alpha\ =\ 0.35;}
+\DoxyCodeLine{00839\ \ \ \ \ \ \ \ \ \_zeropoint\ =\ 3.179;\ \ \textcolor{comment}{//\ TUNED\ 230602\ -\/\ Brake\ position\ value\ corresponding\ to\ the\ point\ where\ fluid\ PSI\ hits\ zero\ (in)}}
+\DoxyCodeLine{00840\ \ \ \ \ \ \ \ \ \_margin\ =\ .01;\ \ \textcolor{comment}{//\ TODO:\ add\ description}}
+\DoxyCodeLine{00841\ \ \ \ \ \ \ \ \ \_parkpos\ =\ 4.234;\ \ \textcolor{comment}{//\ TUNED\ 230602\ -\/\ Best\ position\ to\ park\ the\ actuator\ out\ of\ the\ way\ so\ we\ can\ use\ the\ pedal\ (in)}}
+\DoxyCodeLine{00842\ \ \ \ \ \ \ \ \ op\_min\_retract\_adc\ =\ 76;\ \ \textcolor{comment}{//\ Calculated\ on\ windows\ calculator.\ Calculate\ it\ here,\ silly}}
+\DoxyCodeLine{00843\ \ \ \ \ \ \ \ \ op\_max\_extend\_adc\ =\ 965;\ \ \textcolor{comment}{//\ Calculated\ on\ windows\ calculator.\ Calculate\ it\ here,\ silly}}
+\DoxyCodeLine{00844\ \ \ \ \ \ \ \ \ abs\_min\_retract\_adc\ =\ 0;}
+\DoxyCodeLine{00845\ \ \ \ \ \ \ \ \ abs\_max\_extend\_adc\ =\ adcrange\_adc;}
+\DoxyCodeLine{00846\ \ \ \ \ \ \ \ \ abs\_min\_retract\_in\ =\ 0.335;\ \ \textcolor{comment}{//\ TUNED\ 230602\ -\/\ Retract\ value\ corresponding\ with\ the\ absolute\ minimum\ retract\ actuator\ is\ capable\ of.\ ("{}in"{}sandths\ of\ an\ inch)}}
+\DoxyCodeLine{00847\ \ \ \ \ \ \ \ \ abs\_max\_extend\_in\ =\ 8.300;\ \ \textcolor{comment}{//\ TUNED\ 230602\ -\/\ Extend\ value\ corresponding\ with\ the\ absolute\ max\ extension\ actuator\ is\ capable\ of.\ (in)}}
+\DoxyCodeLine{00848\ \ \ \ \ \ \ \ \ op\_min\_retract\_in\ =\ 0.506;\ \ \textcolor{comment}{//\ Retract\ limit\ during\ nominal\ operation.\ Brake\ motor\ is\ prevented\ from\ pushing\ past\ this.\ (in)}}
+\DoxyCodeLine{00849\ \ \ \ \ \ \ \ \ op\_max\_extend\_in\ =\ \_parkpos;\ \textcolor{comment}{//\ 4.624;\ \ //\ TUNED\ 230602\ -\/\ Extend\ limit\ during\ nominal\ operation.\ Brake\ motor\ is\ prevented\ from\ pushing\ past\ this.\ (in)}}
+\DoxyCodeLine{00850\ \ \ \ \ \ \ \ \ set\_human\_limits(op\_min\_retract\_in,\ op\_max\_extend\_in);\ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00851\ \ \ \ \ \ \ \ \ set\_native\_limits(op\_min\_retract\_adc,\ op\_max\_extend\_adc);}
+\DoxyCodeLine{00852\ \ \ \ \ \ \ \ \ set\_can\_source(src::PIN,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00853\ \ \ \ \ \ \ \ \ set\_can\_source(src::POT,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00854\ \ \ \ \ \}}
+\DoxyCodeLine{00855\ \ \ \ \ \mbox{\hyperlink{class_brake_position_sensor}{BrakePositionSensor}}()\ =\ \textcolor{keyword}{delete};}
+\DoxyCodeLine{00856\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{}
+\DoxyCodeLine{00857\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}\%s..\(\backslash\)n"{}},\ this-\/>\_long\_name.c\_str());}
+\DoxyCodeLine{00858\ \ \ \ \ \ \ \ \ AnalogSensor::setup();}
+\DoxyCodeLine{00859\ \ \ \ \ \}}
+\DoxyCodeLine{00860\ \ \ \ \ \textcolor{keywordtype}{bool}\ parked()\ \{\ \textcolor{keywordflow}{return}\ (\_val\_filt.val()\ >=\ \_parkpos\ -\/\ \_margin);\ \}\ \ \textcolor{comment}{//\ is\ tha\ brake\ motor\ parked?}}
+\DoxyCodeLine{00861\ \ \ \ \ \textcolor{keywordtype}{bool}\ released()\ \{\ \textcolor{keywordflow}{return}\ (\_val\_filt.val()\ >=\ \_zeropoint\ -\/\ \_margin);\ \}}
+\DoxyCodeLine{00862\ \ \ \ \ \textcolor{keywordtype}{float}\ in()\ \{\ \textcolor{keywordflow}{return}\ \_human.val();\ \}}
+\DoxyCodeLine{00863\ \ \ \ \ \textcolor{keywordtype}{float}\ min\_in()\ \{\ \textcolor{keywordflow}{return}\ \_human.min();\ \}}
+\DoxyCodeLine{00864\ \ \ \ \ \textcolor{keywordtype}{float}\ max\_in()\ \{\ \textcolor{keywordflow}{return}\ \_human.max();\ \}}
+\DoxyCodeLine{00865\ \ \ \ \ \textcolor{keywordtype}{float}\ op\_min()\ \{\ \textcolor{keywordflow}{return}\ op\_min\_retract\_in;\ \}}
+\DoxyCodeLine{00866\ \ \ \ \ \textcolor{keywordtype}{float}\ op\_max()\ \{\ \textcolor{keywordflow}{return}\ op\_max\_extend\_in;\ \}}
+\DoxyCodeLine{00867\ \ \ \ \ \textcolor{comment}{//\ float\ absmin\_in()\ \{\ return\ abs\_min\_retract\_in;\ \}}}
+\DoxyCodeLine{00868\ \ \ \ \ \textcolor{comment}{//\ float\ absmax\_in()\ \{\ return\ abs\_max\_extend\_in;\ \}}}
+\DoxyCodeLine{00869\ \ \ \ \ \textcolor{keywordtype}{float}\ parkpos()\ \{\ \textcolor{keywordflow}{return}\ \_parkpos;\ \}}
+\DoxyCodeLine{00870\ \ \ \ \ \textcolor{keywordtype}{float}\ margin()\ \{\ \textcolor{keywordflow}{return}\ \_margin;\ \}}
+\DoxyCodeLine{00871\ \ \ \ \ \textcolor{keywordtype}{float}\ zeropoint()\ \{\ \textcolor{keywordflow}{return}\ \_zeropoint;\ \}}
+\DoxyCodeLine{00872\ \ \ \ \ \textcolor{keywordtype}{float}*\ zeropoint\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \&\_zeropoint;\ \}}
+\DoxyCodeLine{00873\ \ \ \ \ \textcolor{comment}{//\ std::shared\_ptr<float>\ zeropoint\_shptr()\ \{\ return\ \_zeropoint;\ \}}}
+\DoxyCodeLine{00874\ \};}
+\DoxyCodeLine{00875\ }
+\DoxyCodeLine{00876\ \textcolor{comment}{//\ class\ PulseSensor\ are\ hall-\/monitor\ sensors\ where\ the\ value\ is\ based\ on\ magnetic\ pulse\ timing\ of\ a\ rotational\ Source\ (eg\ tachometer,\ speedometer)}}
+\DoxyCodeLine{00877\ \textcolor{keyword}{template}<\textcolor{keyword}{typename}\ HUMAN\_T>}
+\DoxyCodeLine{00878\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_pulse_sensor}{PulseSensor}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{class_sensor}{Sensor}}<int32\_t,\ HUMAN\_T>\ \{}
+\DoxyCodeLine{00879\ \ \ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{00880\ \ \ \ \ int32\_t\ \_stop\_timeout\_us\ =\ 1250000;\ \ \textcolor{comment}{//\ Time\ after\ last\ magnet\ pulse\ when\ we\ can\ assume\ the\ engine\ is\ stopped\ (in\ us)}}
+\DoxyCodeLine{00881\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ \_stop\_timer;}
+\DoxyCodeLine{00882\ \ \ \ \ \textcolor{keywordtype}{bool}\ \_negative\ =\ \textcolor{keyword}{false},\ \_pin\_activity;}
+\DoxyCodeLine{00883\ \ \ \ \ \textcolor{keywordtype}{float}\ \_stop\_thresh;}
+\DoxyCodeLine{00884\ \ \ \ \ \textcolor{keywordtype}{float}\ \_last\_read\_time\_us;}
+\DoxyCodeLine{00885\ \ \ \ \ int32\_t\ \_min\_us\ =\ 100000.0;\ \ \textcolor{comment}{//\ default.\ overwrite\ in\ children}}
+\DoxyCodeLine{00886\ \ \ \ \ \textcolor{keyword}{volatile}\ int64\_t\ \_isr\_us\ =\ 0;}
+\DoxyCodeLine{00887\ \ \ \ \ \textcolor{keyword}{volatile}\ int64\_t\ \_isr\_timer\_start\_us\ =\ 0;}
+\DoxyCodeLine{00888\ \ \ \ \ \textcolor{keyword}{volatile}\ int64\_t\ \_isr\_timer\_read\_us\ =\ 0;}
+\DoxyCodeLine{00889\ \ \ \ \ int32\_t\ \_isr\_buf\_us\ =\ 0;}
+\DoxyCodeLine{00890\ \ \ \ \ int64\_t\ \_delta\_abs\_min\_us;\ \textcolor{comment}{//\ must\ be\ passed\ into\ constructor}}
+\DoxyCodeLine{00891\ \ \ \ \ \textcolor{comment}{//\ bool\ \_pin\_activity\ =\ LOW;\ \ //\ \_invert\ =\ true,}}
+\DoxyCodeLine{00892\ }
+\DoxyCodeLine{00893\ \ \ \ \ \textcolor{comment}{//\ Shadows\ a\ hall\ sensor\ being\ triggered\ by\ a\ passing\ magnet\ once\ per\ pulley\ turn.\ The\ ISR\ calls}}
+\DoxyCodeLine{00894\ \ \ \ \ \textcolor{comment}{//\ esp\_timer\_get\_time()\ on\ every\ pulse\ to\ know\ the\ time\ since\ the\ previous\ pulse.\ I\ tested\ this\ on\ the\ bench\ up}}
+\DoxyCodeLine{00895\ \ \ \ \ \textcolor{comment}{//\ to\ about\ 0.750\ mph\ which\ is\ as\ fast\ as\ I\ can\ move\ the\ magnet\ with\ my\ hand,\ and\ it\ works.}}
+\DoxyCodeLine{00896\ \ \ \ \ \textcolor{comment}{//\ Update:\ Janky\ bench\ test\ appeared\ to\ work\ up\ to\ 11000\ rpm.}}
+\DoxyCodeLine{00897\ \ \ \ \ \textcolor{keywordtype}{void}\ IRAM\_ATTR\ \_isr()\ \{\ \textcolor{comment}{//\ The\ isr\ gets\ the\ period\ of\ the\ vehicle\ pulley\ rotations.}}
+\DoxyCodeLine{00898\ \ \ \ \ \ \ \ \ \_isr\_timer\_read\_us\ =\ esp\_timer\_get\_time();}
+\DoxyCodeLine{00899\ \ \ \ \ \ \ \ \ int64\_t\ time\_us\ =\ \_isr\_timer\_read\_us\ -\/\ \_isr\_timer\_start\_us;}
+\DoxyCodeLine{00900\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (time\_us\ >\ \_delta\_abs\_min\_us)\ \{\ \ \textcolor{comment}{//\ ignore\ spurious\ triggers\ or\ bounces}}
+\DoxyCodeLine{00901\ \ \ \ \ \ \ \ \ \ \ \ \ \_isr\_timer\_start\_us\ =\ \_isr\_timer\_read\_us;}
+\DoxyCodeLine{00902\ \ \ \ \ \ \ \ \ \ \ \ \ \_isr\_us\ =\ time\_us;}
+\DoxyCodeLine{00903\ \ \ \ \ \ \ \ \ \ \ \ \ \_pin\_activity\ =\ !\_pin\_activity;}
+\DoxyCodeLine{00904\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00905\ \ \ \ \ \}}
+\DoxyCodeLine{00906\ }
+\DoxyCodeLine{00907\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ set\_val\_from\_pin()\ \{}
+\DoxyCodeLine{00908\ \ \ \ \ \ \ \ \ \_isr\_buf\_us\ =\ \textcolor{keyword}{static\_cast<}int32\_t\textcolor{keyword}{>}(\_isr\_us);\ \ \textcolor{comment}{//\ Copy\ delta\ value\ (in\ case\ another\ interrupt\ happens\ during\ handling)}}
+\DoxyCodeLine{00909\ \ \ \ \ \ \ \ \ \_isr\_us\ =\ 0;\ \ \textcolor{comment}{//\ Indicates\ to\ isr\ we\ processed\ this\ value}}
+\DoxyCodeLine{00910\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_isr\_buf\_us\ >=\ \_min\_us)\ \{\ \ \textcolor{comment}{//\ If\ a\ valid\ rotation\ has\ happened\ since\ last\ time,\ delta\ will\ have\ a\ value}}
+\DoxyCodeLine{00911\ \ \ \ \ \ \ \ \ \ \ \ \ this-\/>set\_native(\_isr\_buf\_us);}
+\DoxyCodeLine{00912\ \ \ \ \ \ \ \ \ \ \ \ \ this-\/>calculate\_ema();}
+\DoxyCodeLine{00913\ \ \ \ \ \ \ \ \ \ \ \ \ \_last\_read\_time\_us\ =\ \_stop\_timer.elapsed();}
+\DoxyCodeLine{00914\ \ \ \ \ \ \ \ \ \ \ \ \ \_stop\_timer.reset();}
+\DoxyCodeLine{00915\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00916\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else};\ \textcolor{comment}{//\ TODO:\ flag\ an\ error\ here,\ out\ of\ range\ or\ sensor\ problem}}
+\DoxyCodeLine{00917\ }
+\DoxyCodeLine{00918\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ NOTE:\ should\ be\ checking\ filt\ here\ maybe?}}
+\DoxyCodeLine{00919\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_stop\_timer.expired())\ \{\ \ \textcolor{comment}{//\ If\ time\ between\ pulses\ is\ long\ enough\ an\ engine\ can't\ run\ that\ slow}}
+\DoxyCodeLine{00920\ \ \ \ \ \ \ \ \ \ \ \ \ this-\/>\_human.set(0.0);}
+\DoxyCodeLine{00921\ \ \ \ \ \ \ \ \ \ \ \ \ this-\/>\_val\_filt.set(0.0);}
+\DoxyCodeLine{00922\ \ \ \ \ \ \ \ \ \}\ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00923\ \ \ \ \ \}}
+\DoxyCodeLine{00924\ }
+\DoxyCodeLine{00925\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00926\ \ \ \ \ \mbox{\hyperlink{class_pulse_sensor}{PulseSensor}}(uint8\_t\ arg\_pin,\ int64\_t\ delta\_abs\_min\_us\_arg,\ \textcolor{keywordtype}{float}\ stop\_thresh\_arg)}
+\DoxyCodeLine{00927\ \ \ \ \ \ \ :\ \mbox{\hyperlink{class_sensor}{Sensor<int32\_t,\ HUMAN\_T>}}(arg\_pin),\ \_stop\_timer(\_stop\_timeout\_us),\ \_delta\_abs\_min\_us(delta\_abs\_min\_us\_arg),\ \_stop\_thresh(stop\_thresh\_arg)\ \{\}}
+\DoxyCodeLine{00928\ \ \ \ \ \mbox{\hyperlink{class_pulse_sensor}{PulseSensor}}()\ =\ \textcolor{keyword}{delete};}
+\DoxyCodeLine{00929\ \ \ \ \ std::string\ \_long\_name\ =\ \textcolor{stringliteral}{"{}Unknown\ Hall\ Effect\ sensor"{}};}
+\DoxyCodeLine{00930\ \ \ \ \ std::string\ \_short\_name\ =\ \textcolor{stringliteral}{"{}pulsen"{}};}
+\DoxyCodeLine{00931\ \ \ \ \ std::string\ \_native\_units\_name\ =\ \textcolor{stringliteral}{"{}us"{}};}
+\DoxyCodeLine{00932\ \ \ \ \ std::string\ \_human\_units\_name\ =\ \textcolor{stringliteral}{"{}"{}};}
+\DoxyCodeLine{00933\ }
+\DoxyCodeLine{00934\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{}
+\DoxyCodeLine{00935\ \ \ \ \ \ \ \ \ set\_pin(this-\/>\_pin,\ INPUT\_PULLUP);}
+\DoxyCodeLine{00936\ \ \ \ \ \ \ \ \ attachInterrupt(digitalPinToInterrupt(this-\/>\_pin),\ [\textcolor{keyword}{this}]\{\ \_isr();\ \},\ \_negative\ ?\ FALLING\ :\ RISING);}
+\DoxyCodeLine{00937\ \ \ \ \ \ \ \ \ this-\/>set\_source(src::PIN);}
+\DoxyCodeLine{00938\ \ \ \ \ \}}
+\DoxyCodeLine{00939\ \ \ \ \ \textcolor{keywordtype}{bool}\ stopped()\ \{\ \textcolor{keywordflow}{return}\ this-\/>\_val\_filt.val()\ <\ \_stop\_thresh;\ \}\ \ \textcolor{comment}{//\ Note\ due\ to\ weird\ float\ math\ stuff,\ can\ not\ just\ check\ if\ tach\ ==\ 0.0}}
+\DoxyCodeLine{00940\ \ \ \ \ \textcolor{keywordtype}{float}\ last\_read\_time()\ \{\ \textcolor{keywordflow}{return}\ \_last\_read\_time\_us;\ \}}
+\DoxyCodeLine{00941\ }
+\DoxyCodeLine{00942\ \ \ \ \ int32\_t\ us()\ \{\ \textcolor{keywordflow}{return}\ this-\/>\_native.val();\ \}\ \ \textcolor{comment}{//\ Soren:\ I\ created\ these\ to\ be\ available\ to\ any\ child\ sensors,\ but\ untested\ and\ not\ confident\ it's\ right}}
+\DoxyCodeLine{00943\ \ \ \ \ int32\_t\ min\_us()\ \{\ \textcolor{keywordflow}{return}\ this-\/>\_native.min();\ \}}
+\DoxyCodeLine{00944\ \ \ \ \ int32\_t\ max\_us()\ \{\ \textcolor{keywordflow}{return}\ this-\/>\_native.max();\ \}}
+\DoxyCodeLine{00945\ \};}
+\DoxyCodeLine{00946\ }
+\DoxyCodeLine{00947\ \textcolor{comment}{//\ Tachometer\ represents\ a\ magnetic\ pulse\ measurement\ of\ the\ enginge\ rotation.}}
+\DoxyCodeLine{00948\ \textcolor{comment}{//\ It\ extends\ PulseSensor\ to\ handle\ reading\ a\ hall\ monitor\ sensor\ and\ converting\ RPU\ to\ RPM}}
+\DoxyCodeLine{00949\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_tachometer}{Tachometer}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{class_pulse_sensor}{PulseSensor}}<float>\ \{}
+\DoxyCodeLine{00950\ \ \ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{00951\ \ \ \ \ int64\_t\ \_delta\_abs\_min\_us\ =\ 6500;;}
+\DoxyCodeLine{00952\ \ \ \ \ \textcolor{keywordtype}{float}\ \_stop\_thresh\_rpm\ =\ 0.2;\ \ \textcolor{comment}{//\ 6500\ us\ corresponds\ to\ about\ 10000\ rpm,\ which\ isn't\ possible.\ Use\ to\ reject\ retriggers}}
+\DoxyCodeLine{00953\ \ \ \ \ \textcolor{keywordtype}{float}\ \_abs\_max\_rpm,\ \_redline\_rpm,\ \_initial\_rpm;}
+\DoxyCodeLine{00954\ \ \ \ \ int32\_t\ \_min\_us,\ \_zerovalue,\ \_stop\_timeout\_us;}
+\DoxyCodeLine{00955\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00956\ \ \ \ \ sens\ senstype\ =\ sens::tach;}
+\DoxyCodeLine{00957\ \ \ \ \ \textcolor{keywordtype}{float}\ \_idle\_rpm\ =\ 600.0,\ \_idle\_cold\_rpm\ =\ 750.0,\ \_idle\_hot\_rpm\ =\ 500.0;}
+\DoxyCodeLine{00958\ \ \ \ \ \textcolor{keywordtype}{float}\ \_margin,\ \_govern\_rpm;\ }
+\DoxyCodeLine{00959\ \ \ \ \ \mbox{\hyperlink{class_tachometer}{Tachometer}}(uint8\_t\ arg\_pin)\ :\ \mbox{\hyperlink{class_pulse_sensor}{PulseSensor<float>}}(arg\_pin,\ \_delta\_abs\_min\_us,\ \_stop\_thresh\_rpm)\ \{}
+\DoxyCodeLine{00960\ \ \ \ \ \ \ \ \ \_abs\_max\_rpm\ =\ 7000.0;\ \ \textcolor{comment}{//\ Max\ possible\ engine\ rotation\ speed}}
+\DoxyCodeLine{00961\ \ \ \ \ \ \ \ \ \_redline\_rpm\ =\ 5500.0;\ \ \textcolor{comment}{//\ Max\ possible\ engine\ rotation\ speed}}
+\DoxyCodeLine{00962\ \ \ \ \ \ \ \ \ \_min\_us\ =\ 110000;\ \ \textcolor{comment}{//\ corresponds\ to\ 5500\ rpm}}
+\DoxyCodeLine{00963\ \ \ \ \ \ \ \ \ \_negative\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00964\ \ \ \ \ \ \ \ \ \_invert\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00965\ \ \ \ \ \ \ \ \ \_m\_factor\ =\ 60.0\ *\ 1000000.0;\ \ \textcolor{comment}{//\ 1\ rot/us\ *\ 60\ sec/min\ *\ 1000000\ us/sec\ =\ 60000000\ rot/min\ (rpm)}}
+\DoxyCodeLine{00966\ \ \ \ \ \ \ \ \ \_b\_offset\ =\ 0.0;}
+\DoxyCodeLine{00967\ \ \ \ \ \ \ \ \ \_ema\_alpha\ =\ 0.015;\ \ \textcolor{comment}{//\ alpha\ value\ for\ ema\ filtering,\ lower\ is\ more\ continuous,\ higher\ is\ more\ responsive\ (0-\/1).\ }}
+\DoxyCodeLine{00968\ \ \ \ \ \ \ \ \ \_govern\_rpm\ =\ \_redline\_rpm;}
+\DoxyCodeLine{00969\ \ \ \ \ \ \ \ \ \_stop\_thresh\_rpm\ =\ 0.2;}
+\DoxyCodeLine{00970\ \ \ \ \ \ \ \ \ \_margin\ =\ 10;}
+\DoxyCodeLine{00971\ \ \ \ \ \ \ \ \ \_initial\_rpm\ =\ 50.0;}
+\DoxyCodeLine{00972\ \ \ \ \ \ \ \ \ \_zerovalue\ =\ 999999;}
+\DoxyCodeLine{00973\ \ \ \ \ \ \ \ \ \_stop\_timeout\_us\ =\ 1250000;}
+\DoxyCodeLine{00974\ \ \ \ \ \ \ \ \ set\_human\_limits(0.0,\ \_redline\_rpm);}
+\DoxyCodeLine{00975\ \ \ \ \ \ \ \ \ set\_native\_limits(\_min\_us,\ \_stop\_timeout\_us);}
+\DoxyCodeLine{00976\ \ \ \ \ \ \ \ \ set\_human(\_initial\_rpm);}
+\DoxyCodeLine{00977\ \ \ \ \ \ \ \ \ set\_can\_source(src::PIN,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00978\ \ \ \ \ \ \ \ \ set\_can\_source(src::POT,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{00979\ \ \ \ \ \}}
+\DoxyCodeLine{00980\ \ \ \ \ \mbox{\hyperlink{class_tachometer}{Tachometer}}()\ =\ \textcolor{keyword}{delete};}
+\DoxyCodeLine{00981\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{}
+\DoxyCodeLine{00982\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}\%s..\(\backslash\)n"{}},\ this-\/>\_long\_name.c\_str());}
+\DoxyCodeLine{00983\ \ \ \ \ \ \ \ \ PulseSensor::setup();}
+\DoxyCodeLine{00984\ \ \ \ \ \}}
+\DoxyCodeLine{00985\ \ \ \ \ std::string\ \_long\_name\ =\ \textcolor{stringliteral}{"{}Tachometer"{}};}
+\DoxyCodeLine{00986\ \ \ \ \ std::string\ \_short\_name\ =\ \textcolor{stringliteral}{"{}tach"{}};}
+\DoxyCodeLine{00987\ \ \ \ \ std::string\ \_native\_units\_name\ =\ \textcolor{stringliteral}{"{}us"{}};}
+\DoxyCodeLine{00988\ \ \ \ \ std::string\ \_human\_units\_name\ =\ \textcolor{stringliteral}{"{}rpm"{}};}
+\DoxyCodeLine{00989\ }
+\DoxyCodeLine{00990\ \ \ \ \ \textcolor{comment}{//\ Query/getter\ functions}}
+\DoxyCodeLine{00991\ \ \ \ \ \textcolor{keywordtype}{float}\ rpm()\ \{\ \textcolor{keywordflow}{return}\ \_human.val();\ \}}
+\DoxyCodeLine{00992\ \ \ \ \ \textcolor{comment}{//\ bool\ engine\_stopped()\ \{\ return\ stopped();\ \}}}
+\DoxyCodeLine{00993\ \ \ \ \ \textcolor{keywordtype}{bool}\ engine\_stopped()\ \{\ \textcolor{keywordflow}{return}\ \_val\_filt.val()\ <\ \_stop\_thresh\_rpm\ ;\ \}\ \ \textcolor{comment}{//\ Note\ due\ to\ weird\ float\ math\ stuff,\ can\ not\ just\ check\ if\ tach\ ==\ 0.0}}
+\DoxyCodeLine{00994\ \ \ \ \ \textcolor{keywordtype}{float}\ margin\_rpm()\ \{\ \textcolor{keywordflow}{return}\ \_margin;\ \}}
+\DoxyCodeLine{00995\ \ \ \ \ \textcolor{keywordtype}{float}\ redline\_rpm()\ \{\ \textcolor{keywordflow}{return}\ \_human.max();\ \}}
+\DoxyCodeLine{00996\ \ \ \ \ \textcolor{keywordtype}{float}\ govern\_rpm()\ \{\ \textcolor{keywordflow}{return}\ \_govern\_rpm;\ \}}
+\DoxyCodeLine{00997\ \ \ \ \ \textcolor{keywordtype}{float}*\ govern\_rpm\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \&\_govern\_rpm;\ \}}
+\DoxyCodeLine{00998\ \ \ \ \ \textcolor{keywordtype}{float}\ idle\_rpm()\ \{\ \textcolor{keywordflow}{return}\ \_idle\_rpm;\ \}}
+\DoxyCodeLine{00999\ \ \ \ \ \textcolor{keywordtype}{float}\ idle\_cold\_rpm()\ \{\ \textcolor{keywordflow}{return}\ \_idle\_cold\_rpm;\ \}}
+\DoxyCodeLine{01000\ \ \ \ \ \textcolor{keywordtype}{float}\ idle\_hot\_rpm()\ \{\ \textcolor{keywordflow}{return}\ \_idle\_hot\_rpm;\ \}}
+\DoxyCodeLine{01001\ \ \ \ \ \textcolor{keywordtype}{float}*\ idle\_rpm\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \&\_idle\_rpm;\ \}}
+\DoxyCodeLine{01002\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_idle\_rpm(\textcolor{keywordtype}{float}\ newidle)\ \{\ \_idle\_rpm\ =\ constrain(newidle,\ \_human.min(),\ \_govern\_rpm);\ \}}
+\DoxyCodeLine{01003\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_govern\_rpm(\textcolor{keywordtype}{float}\ newgovern)\ \{\ \_govern\_rpm\ =\ constrain(newgovern,\ \_idle\_rpm,\ \_human.max());\ \}}
+\DoxyCodeLine{01004\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_idlecold\_rpm(\textcolor{keywordtype}{float}\ newidlecold)\ \{\ \_idle\_cold\_rpm\ =\ constrain(newidlecold,\ \_idle\_hot\_rpm\ +\ 1.0,\ \_human.max());\ \}}
+\DoxyCodeLine{01005\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_idlehot\_rpm(\textcolor{keywordtype}{float}\ newidlehot)\ \{\ \_idle\_hot\_rpm\ =\ constrain(newidlehot,\ \_human.min(),\ \_idle\_cold\_rpm\ -\/\ 1.0);\ \}}
+\DoxyCodeLine{01006\ \ \ \ \ \textcolor{keywordtype}{float}\ abs\_max\_rpm()\ \{\ \textcolor{keywordflow}{return}\ \_abs\_max\_rpm;\ \}}
+\DoxyCodeLine{01007\ \ \ \ \ \textcolor{keywordtype}{float}*\ redline\_rpm\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \_human.max\_ptr();\ \}}
+\DoxyCodeLine{01008\ \ \ \ \ std::shared\_ptr<float>\ redline\_rpm\_shptr()\ \{\ \textcolor{keywordflow}{return}\ \_human.max\_shptr();\ \}}
+\DoxyCodeLine{01009\ \ \ \ \ \textcolor{keywordtype}{bool}*\ pin\_activity\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \&\_pin\_activity;\ \}}
+\DoxyCodeLine{01010\ \};}
+\DoxyCodeLine{01011\ }
+\DoxyCodeLine{01012\ \textcolor{comment}{//\ Speedometer\ represents\ a\ magnetic\ pulse\ measurement\ of\ the\ enginge\ rotation.}}
+\DoxyCodeLine{01013\ \textcolor{comment}{//\ It\ extends\ PulseSensor\ to\ handle\ reading\ a\ hall\ monitor\ sensor\ and\ converting\ RPU\ to\ MPH}}
+\DoxyCodeLine{01014\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_speedometer}{Speedometer}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{class_pulse_sensor}{PulseSensor}}<float>\ \{}
+\DoxyCodeLine{01015\ \ \ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{01016\ \ \ \ \ int64\_t\ \_delta\_abs\_min\_us;\ }
+\DoxyCodeLine{01017\ \ \ \ \ \textcolor{keywordtype}{float}\ \_stop\_thresh\_mph,\ \_min\_mph,\ \_max\_mph,\ \_min\_us,\ \_initial\_mph,\ \_redline\_mph,\ \_govern\_mph,\ \_idle\_mph,\ \_margin;}
+\DoxyCodeLine{01018\ \ \ \ \ \textcolor{keywordtype}{bool}\ \_pin\_activity\ =\ LOW;}
+\DoxyCodeLine{01019\ \ \ \ \ int32\_t\ \_zerovalue;}
+\DoxyCodeLine{01020\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{01021\ \ \ \ \ sens\ senstype\ =\ sens::speedo;}
+\DoxyCodeLine{01022\ \ \ \ \ \mbox{\hyperlink{class_speedometer}{Speedometer}}(uint8\_t\ arg\_pin)\ :\ \mbox{\hyperlink{class_pulse_sensor}{PulseSensor<float>}}(arg\_pin,\ \_delta\_abs\_min\_us,\ \_stop\_thresh\_mph)\ \{}
+\DoxyCodeLine{01023\ \ \ \ \ \ \ \ \ \_delta\_abs\_min\_us\ =\ 4500;\ \ \textcolor{comment}{//\ 4500\ us\ corresponds\ to\ about\ 40\ mph,\ which\ isn't\ possible.\ Use\ to\ reject\ retriggers}}
+\DoxyCodeLine{01024\ \ \ \ \ \ \ \ \ \_min\_mph\ =\ 0.0;}
+\DoxyCodeLine{01025\ \ \ \ \ \ \ \ \ \_max\_mph\ =\ 25.0;\ \textcolor{comment}{//\ What\ is\ max\ speed\ car\ can\ ever\ go}}
+\DoxyCodeLine{01026\ \ \ \ \ \ \ \ \ \_min\_us\ =\ 119000;\ \ \textcolor{comment}{//\ corresponds\ to\ 25.0\ mph}}
+\DoxyCodeLine{01027\ \ \ \ \ \ \ \ \ \_initial\_mph\ =\ 0.0;\ \textcolor{comment}{//\ Current\ speed,\ raw\ value\ converted\ to\ mph\ (in\ mph)}}
+\DoxyCodeLine{01028\ \ \ \ \ \ \ \ \ \_redline\_mph\ =\ 15.0;\ \textcolor{comment}{//\ What\ is\ our\ steady\ state\ speed\ at\ redline?\ Pulley\ rotation\ frequency\ (in\ milli-\/mph)}}
+\DoxyCodeLine{01029\ \ \ \ \ \ \ \ \ \_ema\_alpha\ =\ 0.015;\ \ \textcolor{comment}{//\ alpha\ value\ for\ ema\ filtering,\ lower\ is\ more\ continuous,\ higher\ is\ more\ responsive\ (0-\/1).\ }}
+\DoxyCodeLine{01030\ \ \ \ \ \ \ \ \ \_invert\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01031\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ new\ math\ with\ two\ magnets\ on\ the\ rear\ axle:}}
+\DoxyCodeLine{01032\ \ \ \ \ \ \ \ \ \_m\_factor\ =\ 1000000.0\ *\ 3600.0\ *\ 20\ *\ M\_PI\ /\ (2\ *\ 12\ *\ 5280);\ \ \textcolor{comment}{//\ 1\ magnet/us\ *\ 1000000\ us/sec\ *\ 3600\ sec/hr\ *\ 1/2\ whlrot/magnet\ *\ 20*pi\ in/whlrot\ *\ 1/12\ ft/in\ *\ 1/5280\ mi/ft\ =\ 1785000\ mi/hr\ (mph)\ \ \ \ }}
+\DoxyCodeLine{01033\ \ \ \ \ \ \ \ \ \_b\_offset\ =\ 0.0;}
+\DoxyCodeLine{01034\ \ \ \ \ \ \ \ \ \_margin\ =\ 0.2;}
+\DoxyCodeLine{01035\ \ \ \ \ \ \ \ \ \_stop\_thresh\_mph\ =\ 0.2;\ \ \textcolor{comment}{//\ Below\ which\ the\ car\ is\ considered\ stopped}}
+\DoxyCodeLine{01036\ \ \ \ \ \ \ \ \ \_zerovalue\ =\ 9999999;}
+\DoxyCodeLine{01037\ \ \ \ \ \ \ \ \ set\_human\_limits(\_min\_mph,\ \_redline\_mph);}
+\DoxyCodeLine{01038\ \ \ \ \ \ \ \ \ set\_native\_limits(\_min\_us,\ \_stop\_timeout\_us);}
+\DoxyCodeLine{01039\ \ \ \ \ \ \ \ \ set\_human(\_initial\_mph);}
+\DoxyCodeLine{01040\ \ \ \ \ \ \ \ \ set\_can\_source(src::PIN,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{01041\ \ \ \ \ \ \ \ \ set\_can\_source(src::POT,\ \textcolor{keyword}{true});}
+\DoxyCodeLine{01042\ \ \ \ \ \}}
+\DoxyCodeLine{01043\ \ \ \ \ \mbox{\hyperlink{class_speedometer}{Speedometer}}()\ =\ \textcolor{keyword}{delete};}
+\DoxyCodeLine{01044\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{}
+\DoxyCodeLine{01045\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}\%s..\(\backslash\)n"{}},\ this-\/>\_long\_name.c\_str());}
+\DoxyCodeLine{01046\ \ \ \ \ \ \ \ \ PulseSensor::setup();}
+\DoxyCodeLine{01047\ \ \ \ \ \}}
+\DoxyCodeLine{01048\ \ \ \ \ std::string\ \_long\_name\ =\ \textcolor{stringliteral}{"{}Speedometer"{}};}
+\DoxyCodeLine{01049\ \ \ \ \ std::string\ \_short\_name\ =\ \textcolor{stringliteral}{"{}speedo"{}};}
+\DoxyCodeLine{01050\ \ \ \ \ std::string\ \_native\_units\_name\ =\ \textcolor{stringliteral}{"{}us"{}};}
+\DoxyCodeLine{01051\ \ \ \ \ std::string\ \_human\_units\_name\ =\ \textcolor{stringliteral}{"{}mph"{}};}
+\DoxyCodeLine{01052\ }
+\DoxyCodeLine{01053\ \ \ \ \ \textcolor{comment}{//\ Query/getter\ functions}}
+\DoxyCodeLine{01054\ \ \ \ \ \textcolor{keywordtype}{float}\ mph()\ \{\ \textcolor{keywordflow}{return}\ \_human.val();\ \}}
+\DoxyCodeLine{01055\ \ \ \ \ \textcolor{comment}{//\ bool\ car\_stopped()\ \{\ return\ stopped();\ \}}}
+\DoxyCodeLine{01056\ \ \ \ \ \textcolor{keywordtype}{bool}\ car\_stopped()\ \{\ \textcolor{keywordflow}{return}\ \_val\_filt.val()\ <\ \_stop\_thresh\_mph\ ;\ \}\ \ \textcolor{comment}{//\ Note\ due\ to\ weird\ float\ math\ stuff,\ can\ not\ just\ check\ if\ tach\ ==\ 0.0}}
+\DoxyCodeLine{01057\ \ \ \ \ \textcolor{keywordtype}{float}\ margin\_mph()\ \{\ \textcolor{keywordflow}{return}\ \_margin;\ \}}
+\DoxyCodeLine{01058\ \ \ \ \ \textcolor{keywordtype}{float}\ redline\_mph()\ \{\ \textcolor{keywordflow}{return}\ \_human.max();\ \}}
+\DoxyCodeLine{01059\ \ \ \ \ \textcolor{keywordtype}{float}\ govern\_mph()\ \{\ \textcolor{keywordflow}{return}\ \_govern\_mph;\ \}}
+\DoxyCodeLine{01060\ \ \ \ \ \textcolor{keywordtype}{float}\ idle\_mph()\ \{\ \textcolor{keywordflow}{return}\ \_idle\_mph;\ \}}
+\DoxyCodeLine{01061\ \ \ \ \ \textcolor{keywordtype}{float}*\ idle\_mph\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \&\_idle\_mph;\ \}}
+\DoxyCodeLine{01062\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_govern\_mph(\textcolor{keywordtype}{float}\ newgovern)\ \{\ \_govern\_mph\ =\ newgovern;\ \}}
+\DoxyCodeLine{01063\ \ \ \ \ \textcolor{keywordtype}{float}\ max\_mph()\ \{\ \textcolor{keywordflow}{return}\ \_max\_mph;\ \}}
+\DoxyCodeLine{01064\ \ \ \ \ \textcolor{keywordtype}{float}*\ redline\_mph\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \_human.max\_ptr();\ \}}
+\DoxyCodeLine{01065\ \ \ \ \ std::shared\_ptr<float>\ redline\_mph\_shptr()\ \{\ \textcolor{keywordflow}{return}\ \_human.max\_shptr();\ \}}
+\DoxyCodeLine{01066\ \ \ \ \ \textcolor{keywordtype}{bool}*\ pin\_activity\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \&\_pin\_activity;\ \}}
+\DoxyCodeLine{01067\ \};}
+\DoxyCodeLine{01068\ \textcolor{comment}{//\ NOTE:\ I\ implemented\ the\ gas\ servo,\ but\ it\ looks\ like\ it's\ all\ in\ native\ units.\ should\ it\ still\ be\ a\ transducer?}}
+\DoxyCodeLine{01069\ \textcolor{comment}{//\ ServoPWM\ is\ a\ base\ class\ for\ our\ type\ of\ actuators,\ where\ by\ varying\ a\ pulse\ width\ (in\ us),\ motors\ move.}}
+\DoxyCodeLine{01070\ \textcolor{comment}{//\ \ \ \ e.g.\ the\ gas,\ brake\ and\ steering\ motors.\ The\ gas\ motor\ is\ an\ actual\ servo,\ the\ others\ are\ controlled\ with\ servo\ signaling\ via\ jaguars.}}
+\DoxyCodeLine{01071\ \textcolor{comment}{//\ template<typename\ NATIVE\_T,\ typename\ HUMAN\_T>}}
+\DoxyCodeLine{01072\ \textcolor{comment}{//\ class\ ServoPWM\ :\ public\ Transducer<NATIVE\_T,\ HUMAN\_T>\ \{}}
+\DoxyCodeLine{01073\ \textcolor{comment}{//\ \ \ protected:}}
+\DoxyCodeLine{01074\ \textcolor{comment}{//\ \ \ \ \ Servo\ \_servo;}}
+\DoxyCodeLine{01075\ \textcolor{comment}{//\ \ \ \ \ //\ NOTE:\ should\ be\ marked\ 'override'\ but\ compiler\ says\ it\ doesn't\ override\ anything...?}}
+\DoxyCodeLine{01076\ \textcolor{comment}{//\ \ \ \ \ void\ set\_native\_limits(Param<NATIVE\_T>\ \&minParam,\ Param<NATIVE\_T>\ \&maxParam)\ \{}}
+\DoxyCodeLine{01077\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ this-\/>set\_native\_limits(minParam,\ maxParam);}}
+\DoxyCodeLine{01078\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ \_servo.attach(this-\/>\_pin,\ this-\/>min\_native-\/>val(),\ this-\/>max\_native-\/>val());}}
+\DoxyCodeLine{01079\ \textcolor{comment}{//\ \ \ \ \ \}}}
+\DoxyCodeLine{01080\ \textcolor{comment}{//\ \ \ \ \ void\ set\_human\_limits(Param<HUMAN\_T>\ \&minParam,\ Param<HUMAN\_T>\ \&maxParam)\ \{}}
+\DoxyCodeLine{01081\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ this-\/>set\_human\_limits(minParam,\ maxParam);}}
+\DoxyCodeLine{01082\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ \_servo.attach(this-\/>\_pin,\ this-\/>min\_native-\/>val(),\ this-\/>max\_native-\/>val());}}
+\DoxyCodeLine{01083\ \textcolor{comment}{//\ \ \ \ \ \}}}
+\DoxyCodeLine{01084\ \textcolor{comment}{//\ \ \ public:}}
+\DoxyCodeLine{01085\ \textcolor{comment}{//\ \ \ \ \ //\ ServoPWM(uint8\_t\ pin,\ uint\_t\ freq)\ :\ Transducer<NATIVE\_T,\ HUMAN\_T>(pin)\ \{}}
+\DoxyCodeLine{01086\ \textcolor{comment}{//\ \ \ \ \ ServoPWM(uint8\_t\ pin,\ uint8\_t\ freq)\ :\ Transducer<NATIVE\_T,\ HUMAN\_T>(pin)\ \{}}
+\DoxyCodeLine{01087\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ \_servo.setPeriodHertz(freq);}}
+\DoxyCodeLine{01088\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ \_servo.attach(this-\/>\_pin,\ this-\/>\_native.min(),\ this-\/>\_native.max());}}
+\DoxyCodeLine{01089\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ //\ \_servo.attach(this-\/>\_pin,\ this-\/>\_native.abs\_min(),\ this-\/>\_native.abs\_max());}}
+\DoxyCodeLine{01090\ \textcolor{comment}{//\ \ \ \ \ \}}}
+\DoxyCodeLine{01091\ \textcolor{comment}{//\ \ \ \ \ ServoPWM()\ =\ delete;}}
+\DoxyCodeLine{01092\ \textcolor{comment}{//\ \ \ \ \ std::string\ \_long\_name\ =\ "{}Unknown\ PWM\ motor\ output"{};}}
+\DoxyCodeLine{01093\ \textcolor{comment}{//\ \ \ \ \ std::string\ \_short\_name\ =\ "{}pwmout"{};}}
+\DoxyCodeLine{01094\ \textcolor{comment}{//\ \ \ \ \ std::string\ \_native\_units\_name\ =\ "{}us"{};}}
+\DoxyCodeLine{01095\ \textcolor{comment}{//\ \ \ \ \ std::string\ \_human\_units\_name\ =\ "{}"{};}}
+\DoxyCodeLine{01096\ \textcolor{comment}{//\ \ \ \ \ void\ setup()\ \{}}
+\DoxyCodeLine{01097\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ set\_pin(this-\/>\_pin,\ OUTPUT);}}
+\DoxyCodeLine{01098\ \textcolor{comment}{//\ \ \ \ \ \}}}
+\DoxyCodeLine{01099\ \textcolor{comment}{//\ \ \ \ \ void\ write()\ \{}}
+\DoxyCodeLine{01100\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ this-\/>\_val\_raw\ =\ this-\/>\_native.val();}}
+\DoxyCodeLine{01101\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ \_servo.writeMicroseconds((int32\_t)this-\/>\_val\_raw);\ \ //\ Write\ result\ to\ servo\ interface}}
+\DoxyCodeLine{01102\ \textcolor{comment}{//\ \ \ \ \ \}}}
+\DoxyCodeLine{01103\ \textcolor{comment}{//\ \};}}
+\DoxyCodeLine{01104\ \textcolor{comment}{//\ //\ Device::Toggle\ is\ a\ base\ class\ for\ system\ signals\ or\ devices\ having\ a\ boolean\ value}}
+\DoxyCodeLine{01105\ \textcolor{comment}{//\ class\ Toggle\ :\ public\ Device\ \{}}
+\DoxyCodeLine{01106\ \textcolor{comment}{//\ \ \ public:}}
+\DoxyCodeLine{01107\ \textcolor{comment}{//\ \ \ \ \ //\ NOTE:\ how\ should\ we\ handle\ simulatability?\ I\ almost\ think\ it\ should\ be\ done\ at\ a\ higher\ level\ than\ the\ device...}}
+\DoxyCodeLine{01108\ \textcolor{comment}{//\ \ \ \ \ //\ NOTE:\ should\ use\ Param\ here\ maybe?}}
+\DoxyCodeLine{01109\ \textcolor{comment}{//\ \ \ \ \ bool\ val,\ val\_last,\ can\_sim;}}
+\DoxyCodeLine{01110\ \textcolor{comment}{//\ \ \ \ \ Toggle(int32\_t\ arg\_pin)\ :\ Device(arg\_pin)\{\ \ //\ std::string\&\ eng\_name,\ }}
+\DoxyCodeLine{01111\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ can\_sim\ =\ true;}}
+\DoxyCodeLine{01112\ \textcolor{comment}{//\ \ \ \ \ \}}}
+\DoxyCodeLine{01113\ \textcolor{comment}{//\ \};}}
+\DoxyCodeLine{01114\ \textcolor{comment}{//\ //\ Device::Toggle::InToggle\ is\ system\ signals\ or\ devices\ having\ a\ boolean\ value\ that\ serve\ as\ inputs\ (eg\ basicsw,\ cruisesw)}}
+\DoxyCodeLine{01115\ \textcolor{comment}{//\ class\ InToggle\ :\ public\ Toggle\ \{}}
+\DoxyCodeLine{01116\ \textcolor{comment}{//\ \ \ public:}}
+\DoxyCodeLine{01117\ \textcolor{comment}{//\ \ \ \ \ InToggle(int32\_t\ arg\_pin)\ :\ Toggle(arg\_pin)\ \{}}
+\DoxyCodeLine{01118\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ set\_can\_source(src::PIN,\ true);}}
+\DoxyCodeLine{01119\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ \_source\ =\ src::PIN;}}
+\DoxyCodeLine{01120\ \textcolor{comment}{//\ \ \ \ \ \}}}
+\DoxyCodeLine{01121\ \textcolor{comment}{//\ \ \ \ \ void\ set\_val(bool\ arg\_val)\ \{}}
+\DoxyCodeLine{01122\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ if\ (\_source\ !=\ src::PIN)\ \{}}
+\DoxyCodeLine{01123\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ \ \ \ \ val\_last\ =\ val;}}
+\DoxyCodeLine{01124\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ \ \ \ \ val\ =\ arg\_val;}}
+\DoxyCodeLine{01125\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ \}}}
+\DoxyCodeLine{01126\ \textcolor{comment}{//\ \ \ \ \ \}}}
+\DoxyCodeLine{01127\ \textcolor{comment}{//\ \ \ \ \ void\ read()\ \{}}
+\DoxyCodeLine{01128\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ val\_last\ =\ val;}}
+\DoxyCodeLine{01129\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ val\ =\ digitalRead(\_pin);}}
+\DoxyCodeLine{01130\ \textcolor{comment}{//\ \ \ \ \ \}}}
+\DoxyCodeLine{01131\ \textcolor{comment}{//\ \};}}
+\DoxyCodeLine{01132\ \textcolor{comment}{//\ //\ Device::Toggle::OutToggle\ is\ system\ signals\ or\ devices\ having\ a\ boolean\ value\ that\ serve\ as\ outputs\ (eg\ ignition,\ leds,\ etc.)}}
+\DoxyCodeLine{01133\ \textcolor{comment}{//\ class\ OutToggle\ :\ public\ Toggle\ \{}}
+\DoxyCodeLine{01134\ \textcolor{comment}{//\ \ \ public:}}
+\DoxyCodeLine{01135\ \textcolor{comment}{//\ \ \ \ \ OutToggle(int32\_t\ arg\_pin)\ :\ Toggle(arg\_pin)\ \{}}
+\DoxyCodeLine{01136\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ //\ NOTE:\ LIVE\ is\ not\ a\ valid\ source,\ what\ should\ this\ be?\ Not\ PIN,\ we\ write\ to\ that.\ CALC\ maybe?}}
+\DoxyCodeLine{01137\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ //\ val\_source\ =\ LIVE;}}
+\DoxyCodeLine{01138\ \textcolor{comment}{//\ \ \ \ \ \}}}
+\DoxyCodeLine{01139\ \textcolor{comment}{//\ \ \ \ \ void\ set\_val(bool\ arg\_val)\ \{}}
+\DoxyCodeLine{01140\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ val\_last\ =\ val;}}
+\DoxyCodeLine{01141\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ val\ =\ arg\_val;}}
+\DoxyCodeLine{01142\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ //\ if\ (val\_source\ ==\ LIVE)\ write();}}
+\DoxyCodeLine{01143\ \textcolor{comment}{//\ \ \ \ \ \}}}
+\DoxyCodeLine{01144\ \textcolor{comment}{//\ \ \ \ \ void\ write()\ \{}}
+\DoxyCodeLine{01145\ \textcolor{comment}{//\ \ \ \ \ \ \ \ \ digitalWrite(\_pin,\ val);}}
+\DoxyCodeLine{01146\ \textcolor{comment}{//\ \ \ \ \ \}}}
+\DoxyCodeLine{01147\ \textcolor{comment}{//\ \};}}
+\DoxyCodeLine{01148\ \textcolor{comment}{//\ NOTE:\ if\ devices.h\ gets\ to\ be\ too\ long,\ we\ can\ (and\ maybe\ just\ should)\ move\ this\ to\ a\ separate\ file,\ it's\ not\ really\ a\ device...}}
+\DoxyCodeLine{01149\ \textcolor{comment}{//\ Simulator\ manages\ the\ source\ handling\ logic\ for\ all\ simulatable\ components.\ Currently,\ components\ can\ recieve\ simulated\ input\ from\ either\ the\ touchscreen,\ or\ from}}
+\DoxyCodeLine{01150\ \textcolor{comment}{//\ NOTE:\ this\ class\ is\ designed\ to\ be\ backwards-\/compatible\ with\ existing\ code,\ which\ does\ everything\ with\ global\ booleans.\ if/when\ we\ switch\ all\ our\ Devices\ to\ use\ sources,}}
+\DoxyCodeLine{01151\ \textcolor{comment}{//\ \ \ \ \ \ \ we\ can\ simplify\ the\ logic\ here\ a\ lot.}}
+\DoxyCodeLine{01152\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_simulator}{Simulator}}\ \{}
+\DoxyCodeLine{01153\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{01154\ \ \ \ \ \textcolor{comment}{//\ NOTE:\ if\ we\ only\ simulated\ devices,\ we\ could\ keep\ track\ of\ simulability\ in\ the\ Device\ class.\ We\ could\ keep\ the\ default\ source\ in\ Device\ the\ same\ way.}}
+\DoxyCodeLine{01155\ \ \ \ \ \textcolor{comment}{//\ 3-\/tuple\ for\ a\ given\ component,\ keeping\ track\ of\ simulability\ status\ (whether\ this\ component\ is\ allowed\ to\ be\ simulated),\ an\ associated\ Device\ (a\ pointer\ to\ the\ actual\ component),}}
+\DoxyCodeLine{01156\ \ \ \ \ \textcolor{comment}{//\ and\ a\ default\ source\ (the\ mode\ we\ would\ like\ the\ component\ to\ switch\ back\ to\ when\ it\ stops\ being\ simulated)}}
+\DoxyCodeLine{01157\ \ \ \ \ \textcolor{keyword}{typedef}\ std::tuple<bool,\ Device*,\ src>\ simulable\_t;}
+\DoxyCodeLine{01158\ \ \ \ \ std::map<sens,\ simulable\_t>\ \_devices;\ \textcolor{comment}{//\ a\ collection\ of\ simulatable\ components}}
+\DoxyCodeLine{01159\ \ \ \ \ \textcolor{keywordtype}{bool}\ \_enabled\ =\ \textcolor{keyword}{false};\ \textcolor{comment}{//\ keep\ track\ of\ whether\ the\ simulator\ is\ running\ or\ not}}
+\DoxyCodeLine{01160\ \ \ \ \ sens\ \_potmap;\ \textcolor{comment}{//\ keep\ track\ of\ which\ component\ is\ getting\ info\ from\ the\ pot}}
+\DoxyCodeLine{01161\ \ \ \ \ \mbox{\hyperlink{class_potentiometer}{Potentiometer}}\&\ \_pot;}
+\DoxyCodeLine{01162\ \ \ \ \ Preferences*\ \_myprefs;}
+\DoxyCodeLine{01163\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{01164\ \ \ \ \ \mbox{\hyperlink{class_simulator}{Simulator}}(\mbox{\hyperlink{class_potentiometer}{Potentiometer}}\&\ pot\_arg,\ Preferences*\ myprefs)\ :\ \_pot(pot\_arg),\ \_myprefs(myprefs)\ \{}
+\DoxyCodeLine{01165\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (uint8\_t\ sensor\ =\ (uint8\_t)sens::none\ +\ 1;\ sensor\ <\ (uint8\_t)sens::NUM\_SENSORS;\ sensor++)\ set\_can\_sim((sens)sensor,\ \textcolor{keyword}{false});\ \ \ \textcolor{comment}{//\ initially\ turn\ off\ simulation\ of\ sensors\ \ //\ static\ constexpr\ bool\ initial\_sim\_joy\ =\ false;}}
+\DoxyCodeLine{01166\ \ \ \ \ \ \ \ \ set\_potmap();\ \textcolor{comment}{//\ set\ initial\ pot\ map}}
+\DoxyCodeLine{01167\ \ \ \ \ \}\ \ \textcolor{comment}{//\ syspower,\ ignition\ removed,\ as\ they\ are\ not\ sensors\ or\ even\ inputs}}
+\DoxyCodeLine{01168\ }
+\DoxyCodeLine{01169\ \ \ \ \ \textcolor{keywordtype}{void}\ updateSimulationStatus(\textcolor{keywordtype}{bool}\ enableSimulation)\ \{}
+\DoxyCodeLine{01170\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ the\ simulation\ status\ hasn't\ changed,\ there's\ nothing\ to\ do}}
+\DoxyCodeLine{01171\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_enabled\ ==\ enableSimulation)\ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{01172\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Iterate\ over\ all\ devices}}
+\DoxyCodeLine{01173\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{auto}\ \&deviceEntry\ :\ \_devices)\ \{}
+\DoxyCodeLine{01174\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ can\_sim\ =\ std::get<0>(deviceEntry.second);}
+\DoxyCodeLine{01175\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ the\ device\ can\ be\ simulated\ and\ isn't\ being\ mapped\ from\ the\ potentiometer}}
+\DoxyCodeLine{01176\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (can\_sim\ \&\&\ \_potmap\ !=\ deviceEntry.first)\ \{}
+\DoxyCodeLine{01177\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{class_device}{Device}}\ *d\ =\ std::get<1>(deviceEntry.second);}
+\DoxyCodeLine{01178\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ the\ device\ exists}}
+\DoxyCodeLine{01179\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ NOTE:\ the\ nullptr\ checks\ here\ and\ below\ exist\ so\ that\ we\ can\ work\ with\ boolean\ components\ as\ well\ as\ Devices,\ for\ backwards\ compatability}}
+\DoxyCodeLine{01180\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (d\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{01181\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we're\ enabling\ the\ simulation,\ set\ the\ device's\ source\ to\ the\ touchscreen}}
+\DoxyCodeLine{01182\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Otherwise,\ set\ it\ to\ its\ default\ mode}}
+\DoxyCodeLine{01183\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (enableSimulation)\ \{}
+\DoxyCodeLine{01184\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ d-\/>set\_source(src::TOUCH);}
+\DoxyCodeLine{01185\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01186\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ src\ default\_mode\ =\ std::get<2>(deviceEntry.second);}
+\DoxyCodeLine{01187\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ d-\/>set\_source(default\_mode);}
+\DoxyCodeLine{01188\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01189\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01190\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01191\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01192\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Update\ the\ simulation\ status}}
+\DoxyCodeLine{01193\ \ \ \ \ \ \ \ \ \_enabled\ =\ enableSimulation;}
+\DoxyCodeLine{01194\ \ \ \ \ \}}
+\DoxyCodeLine{01195\ \ \ \ \ \textcolor{comment}{//\ turn\ on\ the\ simulator.\ all\ components\ which\ are\ set\ to\ be\ simulated\ will\ switch\ to\ simulated\ input}}
+\DoxyCodeLine{01196\ \ \ \ \ \textcolor{keywordtype}{void}\ enable()\ \{}
+\DoxyCodeLine{01197\ \ \ \ \ \ \ \ \ updateSimulationStatus(\textcolor{keyword}{true});}
+\DoxyCodeLine{01198\ \ \ \ \ \}}
+\DoxyCodeLine{01199\ \ \ \ \ \textcolor{comment}{//\ turn\ off\ the\ simulator.\ all\ devices\ will\ be\ set\ to\ their\ default\ input\ (if\ they\ are\ not\ being\ mapped\ from\ the\ pot)}}
+\DoxyCodeLine{01200\ \ \ \ \ \textcolor{keywordtype}{void}\ disable()\ \{}
+\DoxyCodeLine{01201\ \ \ \ \ \ \ \ \ updateSimulationStatus(\textcolor{keyword}{false});}
+\DoxyCodeLine{01202\ \ \ \ \ \}}
+\DoxyCodeLine{01203\ \ \ \ \ \textcolor{keywordtype}{void}\ toggle()\ \{}
+\DoxyCodeLine{01204\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \_enabled\ ?\ disable()\ :\ enable();}
+\DoxyCodeLine{01205\ \ \ \ \ \}}
+\DoxyCodeLine{01206\ \ \ \ \ \textcolor{comment}{//\ check\ if\ a\ componenet\ is\ currently\ being\ simulated\ (by\ either\ the\ touchscreen\ or\ the\ pot)}}
+\DoxyCodeLine{01207\ \ \ \ \ \textcolor{keywordtype}{bool}\ simulating()\ \{\ \textcolor{keywordflow}{return}\ \_enabled;\ \}\ \ \textcolor{comment}{//\ equivalent\ to\ enabled()\ \ //\ Maybe\ include\ ||\ potmapping()\ too\ ?}}
+\DoxyCodeLine{01208\ \ \ \ \ \textcolor{keywordtype}{bool}\ simulating(sens\ arg\_sensor)\ \{}
+\DoxyCodeLine{01209\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ can\_sim(arg\_sensor)\ \&\&\ (\_enabled\ ||\ \_potmap\ ==\ arg\_sensor);}
+\DoxyCodeLine{01210\ \ \ \ \ \}}
+\DoxyCodeLine{01211\ \ \ \ \ \textcolor{comment}{//\ associate\ a\ Device\ and\ a\ given\ fall-\/back\ source\ with\ a\ sensor}}
+\DoxyCodeLine{01212\ \ \ \ \ \textcolor{keywordtype}{void}\ register\_device(sens\ arg\_sensor,\ \mbox{\hyperlink{class_device}{Device}}\ \&d,\ src\ default\_mode)\ \{}
+\DoxyCodeLine{01213\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ can\_sim\ =\ \textcolor{keyword}{false};\ \textcolor{comment}{//\ by\ default,\ disable\ simulation\ for\ this\ component}}
+\DoxyCodeLine{01214\ \ \ \ \ \ \ \ \ \textcolor{keyword}{auto}\ kv\ =\ \_devices.find(arg\_sensor);\ \textcolor{comment}{//\ look\ for\ the\ component}}
+\DoxyCodeLine{01215\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (kv\ !=\ \_devices.end())\ \{}
+\DoxyCodeLine{01216\ \ \ \ \ \ \ \ \ \ \ \ \ can\_sim\ =\ std::get<0>(kv-\/>second);\ \textcolor{comment}{//\ if\ an\ entry\ for\ the\ component\ already\ existed,\ preserve\ its\ simulatability\ status}}
+\DoxyCodeLine{01217\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (can\_sim)\ \{\ \textcolor{comment}{//\ if\ simulability\ has\ already\ been\ enabled...}}
+\DoxyCodeLine{01218\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (arg\_sensor\ ==\ \_potmap)\ \{\ \textcolor{comment}{//\ ...and\ the\ pot\ is\ supposed\ to\ map\ to\ this\ component...}}
+\DoxyCodeLine{01219\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ d.set\_source(src::POT);\ \textcolor{comment}{//\ ...then\ set\ the\ input\ source\ for\ the\ associated\ Device\ to\ read\ from\ the\ pot}}
+\DoxyCodeLine{01220\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_enabled)\ \{\ \textcolor{comment}{//\ ...and\ the\ pot\ isn't\ mapping\ to\ this\ component,\ but\ the\ simulator\ is\ running...}}
+\DoxyCodeLine{01221\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ d.set\_source(src::TOUCH);\ \textcolor{comment}{//\ ...then\ set\ the\ input\ source\ for\ the\ associated\ Device\ to\ read\ from\ the\ touchscreen}}
+\DoxyCodeLine{01222\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01223\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01224\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01225\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (d.can\_source(src::POT))\ \{}
+\DoxyCodeLine{01226\ \ \ \ \ \ \ \ \ \ \ \ \ d.attach\_pot(\_pot);\ \textcolor{comment}{//\ if\ this\ device\ can\ be\ mapped\ from\ the\ pot,\ connect\ it\ to\ pot\ input}}
+\DoxyCodeLine{01227\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01228\ \ \ \ \ \ \ \ \ \_devices[arg\_sensor]\ =\ simulable\_t(can\_sim,\ \&d,\ default\_mode);\ \textcolor{comment}{//\ store\ info\ for\ this\ component}}
+\DoxyCodeLine{01229\ \ \ \ \ \}}
+\DoxyCodeLine{01230\ \ \ \ \ \textcolor{comment}{//\ check\ if\ a\ component\ can\ be\ simulated\ (by\ either\ the\ touchscreen\ or\ the\ pot)}}
+\DoxyCodeLine{01231\ \ \ \ \ \textcolor{keywordtype}{bool}\ can\_sim(sens\ arg\_sensor)\ \{}
+\DoxyCodeLine{01232\ \ \ \ \ \ \ \ \ \textcolor{keyword}{auto}\ kv\ =\ \_devices.find(arg\_sensor);\ \textcolor{comment}{//\ look\ for\ the\ component}}
+\DoxyCodeLine{01233\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (kv\ !=\ \_devices.end())\ \{}
+\DoxyCodeLine{01234\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ std::get<0>(kv-\/>second);\ \textcolor{comment}{//\ if\ it\ exists,\ check\ the\ simulability\ status}}
+\DoxyCodeLine{01235\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01236\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{false};\ \textcolor{comment}{//\ couldn't\ find\ component,\ so\ there's\ no\ way\ we\ can\ simulate\ it}}
+\DoxyCodeLine{01237\ \ \ \ \ \}}
+\DoxyCodeLine{01238\ \ \ \ \ \textcolor{keywordtype}{bool}\ touchable(sens\ arg\_sensor)\ \{}
+\DoxyCodeLine{01239\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ can\_sim(arg\_sensor)\ \&\&\ (sources[\textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{int}\textcolor{keyword}{>}(arg\_sensor)]\ ==\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{int}\textcolor{keyword}{>}(src::TOUCH));}
+\DoxyCodeLine{01240\ \ \ \ \ \}}
+\DoxyCodeLine{01241\ \ \ \ \ \textcolor{comment}{//\ set\ simulatability\ status\ for\ a\ component}}
+\DoxyCodeLine{01242\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_can\_sim(sens\ arg\_sensor,\ int32\_t\ can\_sim)\ \{\ set\_can\_sim(arg\_sensor,\ (can\_sim\ >\ 0));\ \}\ \ \textcolor{comment}{//\ allows\ interpreting\ -\/1\ as\ 0,\ convenient\ for\ our\ tuner\ etc.}}
+\DoxyCodeLine{01243\ \ \ \ \ }
+\DoxyCodeLine{01244\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_can\_sim(sens\ arg\_sensor,\ \textcolor{keywordtype}{bool}\ can\_sim)\ \{}
+\DoxyCodeLine{01245\ \ \ \ \ \ \ \ \ \textcolor{keyword}{auto}\ kv\ =\ \_devices.find(arg\_sensor);\ \textcolor{comment}{//\ look\ for\ component}}
+\DoxyCodeLine{01246\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (kv\ !=\ \_devices.end())\ \{\ \textcolor{comment}{//\ if\ an\ entry\ for\ this\ component\ already\ exists,\ check\ if\ the\ new\ simulatability\ status\ is\ different\ from\ the\ old}}
+\DoxyCodeLine{01247\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ old\_can\_sim\ =\ std::get<0>(kv-\/>second);}
+\DoxyCodeLine{01248\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (can\_sim\ !=\ old\_can\_sim)\ \{\ \textcolor{comment}{//\ if\ the\ simulation\ status\ has\ changed,\ we\ need\ to\ update\ the\ input\ source\ for\ the\ component}}
+\DoxyCodeLine{01249\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ src\ default\_mode\ =\ src::UNDEF;}
+\DoxyCodeLine{01250\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{class_device}{Device}}\ *d\ =\ std::get<1>(kv-\/>second);}
+\DoxyCodeLine{01251\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (d\ !=\ \textcolor{keyword}{nullptr})\ \{\ \textcolor{comment}{//\ if\ there\ is\ no\ associated\ Device\ with\ this\ component\ then\ input\ handling\ is\ done\ in\ the\ main\ code}}
+\DoxyCodeLine{01252\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ default\_mode\ =\ std::get<2>(kv-\/>second);\ \textcolor{comment}{//\ preserve\ the\ stored\ default\ controller\ mode}}
+\DoxyCodeLine{01253\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (can\_sim)\ \{\ \textcolor{comment}{//\ if\ we\ just\ enabled\ simulatability...}}
+\DoxyCodeLine{01254\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (arg\_sensor\ ==\ \_potmap)\ \{\ \textcolor{comment}{//\ ...and\ the\ pot\ is\ supposed\ to\ map\ to\ this\ component...}}
+\DoxyCodeLine{01255\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ d-\/>set\_source(src::POT);\ \textcolor{comment}{//\ ...then\ set\ the\ input\ source\ for\ the\ associated\ Device\ to\ read\ from\ the\ pot}}
+\DoxyCodeLine{01256\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (\_enabled)\ \{\ \textcolor{comment}{//\ ...and\ the\ pot\ isn't\ mapping\ to\ this\ component,\ but\ the\ simulator\ is\ running...}}
+\DoxyCodeLine{01257\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ d-\/>set\_source(src::TOUCH);\ \textcolor{comment}{//\ ...then\ set\ the\ input\ source\ for\ the\ associated\ Device\ to\ read\ from\ the\ touchscreen}}
+\DoxyCodeLine{01258\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01259\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01260\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ d-\/>set\_source(default\_mode);\ \textcolor{comment}{//\ we\ disabled\ simulation\ for\ this\ component,\ set\ it\ back\ to\ its\ default\ input\ source}}
+\DoxyCodeLine{01261\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01262\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01263\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ kv-\/>second\ =\ simulable\_t(can\_sim,\ d,\ default\_mode);\ \textcolor{comment}{//\ update\ the\ entry\ with\ the\ new\ simulatability\ status}}
+\DoxyCodeLine{01264\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01265\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01266\ \ \ \ \ \ \ \ \ \ \ \ \ \_devices[arg\_sensor]\ =\ simulable\_t(can\_sim,\ \textcolor{keyword}{nullptr},\ src::UNDEF);\ \textcolor{comment}{//\ add\ a\ new\ entry\ with\ the\ simulatability\ status\ for\ this\ component}}
+\DoxyCodeLine{01267\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01268\ \ \ \ \ \}}
+\DoxyCodeLine{01269\ \ \ \ \ \textcolor{comment}{//\ set\ the\ component\ to\ be\ overridden\ by\ the\ pot\ (the\ pot\ can\ only\ override\ one\ component\ at\ a\ time)}}
+\DoxyCodeLine{01270\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_potmap(sens\ arg\_sensor)\ \{}
+\DoxyCodeLine{01271\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (arg\_sensor\ !=\ \_potmap)\ \{\ \textcolor{comment}{//\ if\ we're\ mapping\ to\ a\ different\ component,\ we\ need\ to\ reset\ the\ input\ source\ for\ the\ old\ one}}
+\DoxyCodeLine{01272\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{auto}\ kv\ =\ \_devices.find(\_potmap);}
+\DoxyCodeLine{01273\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (kv\ !=\ \_devices.end())\ \{}
+\DoxyCodeLine{01274\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{class_device}{Device}}\ *d\ =\ std::get<1>(kv-\/>second);}
+\DoxyCodeLine{01275\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (d\ !=\ \textcolor{keyword}{nullptr})\ \{\ \textcolor{comment}{//\ if\ we\ were\ mapping\ to\ a\ component\ with\ an\ associated\ Device...}}
+\DoxyCodeLine{01276\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ \_can\_sim\ =\ std::get<0>(kv-\/>second);}
+\DoxyCodeLine{01277\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_enabled\ \&\&\ \_can\_sim)\ \{\ \textcolor{comment}{//\ ...and\ the\ simulator\ is\ on,\ and\ we're\ able\ to\ be\ simulated...}}
+\DoxyCodeLine{01278\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ d-\/>set\_source(src::TOUCH);\ \textcolor{comment}{//\ ...then\ set\ the\ input\ source\ to\ the\ touchscreen}}
+\DoxyCodeLine{01279\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{\ \textcolor{comment}{//\ ...and\ either\ the\ simulator\ is\ off\ or\ we\ aren't\ allowing\ simualtion\ for\ this\ component...}}
+\DoxyCodeLine{01280\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ src\ default\_mode\ =\ std::get<2>(kv-\/>second);}
+\DoxyCodeLine{01281\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ d-\/>set\_source(default\_mode);\ \textcolor{comment}{//\ then\ set\ the\ input\ source\ for\ the\ component\ to\ its\ default}}
+\DoxyCodeLine{01282\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01283\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{comment}{//\ ...else\ this\ component\ is\ a\ boolean,\ and\ input\ source\ handling\ is\ done\ elsewhere}}
+\DoxyCodeLine{01284\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01285\ \ \ \ \ \ \ \ \ \ \ \ \ kv\ =\ \_devices.find(arg\_sensor);\ \textcolor{comment}{//\ we\ need\ to\ set\ the\ input\ source\ of\ the\ newly-\/overridden\ component}}
+\DoxyCodeLine{01286\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (kv\ !=\ \_devices.end())\ \{}
+\DoxyCodeLine{01287\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{class_device}{Device}}\ *d\ =\ std::get<1>(kv-\/>second);}
+\DoxyCodeLine{01288\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (d\ !=\ \textcolor{keyword}{nullptr}\ )\ \{\ \textcolor{comment}{//\ if\ \ we're\ mapping\ to\ a\ component\ with\ an\ associated\ device,\ we\ need\ to\ change\ the\ input\ source\ to\ the\ pot}}
+\DoxyCodeLine{01289\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (d-\/>can\_source(src::POT))\ \{\ \textcolor{comment}{//\ ...and\ we're\ allowed\ to\ map\ to\ this\ component...}}
+\DoxyCodeLine{01290\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ \_can\_sim\ =\ std::get<0>(kv-\/>second);}
+\DoxyCodeLine{01291\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_can\_sim)\ \{\ \textcolor{comment}{//\ if\ we\ allow\ simualation\ for\ this\ componenent...}}
+\DoxyCodeLine{01292\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ d-\/>set\_source(src::POT);\ \textcolor{comment}{//\ ...then\ set\ its\ input\ source\ to\ the\ pot}}
+\DoxyCodeLine{01293\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01294\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{01295\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}invalid\ pot\ map\ selected:\ \%d/n"{}},\ arg\_sensor);}
+\DoxyCodeLine{01296\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01297\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01298\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01299\ \ \ \ \ \ \ \ \ \ \ \ \ \_potmap\ =\ arg\_sensor;}
+\DoxyCodeLine{01300\ \ \ \ \ \ \ \ \ \ \ \ \ \_myprefs-\/>putUInt(\textcolor{stringliteral}{"{}potmap"{}},\ \textcolor{keyword}{static\_cast<}uint32\_t\textcolor{keyword}{>}(\_potmap));}
+\DoxyCodeLine{01301\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01302\ \ \ \ \ \}}
+\DoxyCodeLine{01303\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_potmap()\ \{\ }
+\DoxyCodeLine{01304\ \ \ \ \ \ \ \ \ set\_potmap(\textcolor{keyword}{static\_cast<}sens\textcolor{keyword}{>}(\_myprefs-\/>getUInt(\textcolor{stringliteral}{"{}potmap"{}},\ \textcolor{keyword}{static\_cast<}uint32\_t\textcolor{keyword}{>}(sens::none))));}
+\DoxyCodeLine{01305\ \ \ \ \ \}}
+\DoxyCodeLine{01306\ \ \ \ \ \textcolor{comment}{//\ Getter\ functions}}
+\DoxyCodeLine{01307\ \ \ \ \ \textcolor{keywordtype}{bool}\ potmapping(sens\ s)\ \{\ \textcolor{keywordflow}{return}\ can\_sim(s)\ \&\&\ \_potmap\ ==\ s;\ \}\ \ \textcolor{comment}{//\ query\ if\ a\ certain\ sensor\ is\ being\ potmapped}}
+\DoxyCodeLine{01308\ \ \ \ \ \textcolor{keywordtype}{bool}\ potmapping(int32\_t\ s)\ \{\ \textcolor{keywordflow}{return}\ can\_sim(\textcolor{keyword}{static\_cast<}sens\textcolor{keyword}{>}(s))\ \&\&\ (\_potmap\ ==\ \textcolor{keyword}{static\_cast<}sens\textcolor{keyword}{>}(s));\ \}\ \ \textcolor{comment}{//\ query\ if\ a\ certain\ sensor\ is\ being\ potmapped\ \ \ \ \ \ \ \ }}
+\DoxyCodeLine{01309\ \ \ \ \ \textcolor{keywordtype}{bool}\ potmapping()\ \{\ \textcolor{keywordflow}{return}\ can\_sim(\_potmap)\ \&\&\ !(\_potmap\ ==\ sens::none);\ \}\ \ \textcolor{comment}{//\ query\ if\ any\ sensors\ are\ being\ potmapped}}
+\DoxyCodeLine{01310\ \ \ \ \ int32\_t\ potmap()\ \{\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{static\_cast<}int32\_t\textcolor{keyword}{>}(\_potmap);\ \}\ \ \textcolor{comment}{//\ query\ which\ sensor\ is\ being\ potmapped}}
+\DoxyCodeLine{01311\ \ \ \ \ \textcolor{keywordtype}{bool}\ enabled()\ \{\ \textcolor{keywordflow}{return}\ \_enabled;\ \}}
+\DoxyCodeLine{01312\ \ \ \ \ \textcolor{keywordtype}{bool}*\ enabled\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \&\_enabled;\ \}}
+\DoxyCodeLine{01313\ \};}
+\DoxyCodeLine{01314\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_r_m_t_input}{RMTInput}}}
+\DoxyCodeLine{01315\ \{}
+\DoxyCodeLine{01316\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{01317\ \ \ \ \ \mbox{\hyperlink{class_r_m_t_input}{RMTInput}}(rmt\_channel\_t\ channel,\ gpio\_num\_t\ gpio)}
+\DoxyCodeLine{01318\ \ \ \ \ \{}
+\DoxyCodeLine{01319\ \ \ \ \ \ \ \ \ channel\_\ =\ channel;}
+\DoxyCodeLine{01320\ \ \ \ \ \ \ \ \ gpio\_\ =\ gpio;}
+\DoxyCodeLine{01321\ \ \ \ \ \}}
+\DoxyCodeLine{01322\ \ \ \ \ \textcolor{keywordtype}{void}\ init()}
+\DoxyCodeLine{01323\ \ \ \ \ \{}
+\DoxyCodeLine{01324\ \ \ \ \ \ \ \ \ rmt\_config\_t\ \_config;}
+\DoxyCodeLine{01325\ \ \ \ \ \ \ \ \ \_config.channel\ =\ channel\_;}
+\DoxyCodeLine{01326\ \ \ \ \ \ \ \ \ \_config.gpio\_num\ =\ gpio\_;}
+\DoxyCodeLine{01327\ \ \ \ \ \ \ \ \ \_config.clk\_div\ =\ 50;\ \textcolor{comment}{//\ slowed\ from\ 80\ because\ the\ buffer\ was\ getting\ full}}
+\DoxyCodeLine{01328\ \ \ \ \ \ \ \ \ \_config.mem\_block\_num\ =\ 1;}
+\DoxyCodeLine{01329\ \ \ \ \ \ \ \ \ \_config.rmt\_mode\ =\ RMT\_MODE\_RX;}
+\DoxyCodeLine{01330\ \ \ \ \ \ \ \ \ \_config.flags\ =\ 0;}
+\DoxyCodeLine{01331\ \ \ \ \ \ \ \ \ \_config.rx\_config.filter\_en\ =\ \textcolor{keyword}{true};\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Enable\ the\ filter}}
+\DoxyCodeLine{01332\ \ \ \ \ \ \ \ \ \_config.rx\_config.filter\_ticks\_thresh\ =\ 100;\ \textcolor{comment}{//\ Set\ the\ filter\ threshold}}
+\DoxyCodeLine{01333\ \ \ \ \ \ \ \ \ \_config.rx\_config.idle\_threshold\ =\ 12000;\ \ \ \ \textcolor{comment}{//\ Set\ the\ idle\ threshold}}
+\DoxyCodeLine{01334\ }
+\DoxyCodeLine{01335\ \ \ \ \ \ \ \ \ esp\_err\_t\ config\_result\ =\ rmt\_config(\&\_config);}
+\DoxyCodeLine{01336\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (config\_result\ !=\ ESP\_OK)}
+\DoxyCodeLine{01337\ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{01338\ \ \ \ \ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}Failed\ to\ configure\ RMT:\ \%d\(\backslash\)n"{}},\ config\_result);}
+\DoxyCodeLine{01339\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ while\ (1);\ //\ halt\ execution}}
+\DoxyCodeLine{01340\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01341\ \ \ \ \ \ \ \ \ esp\_err\_t\ install\_result\ =\ rmt\_driver\_install(channel\_,\ 2000,\ 0);}
+\DoxyCodeLine{01342\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (install\_result\ !=\ ESP\_OK)}
+\DoxyCodeLine{01343\ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{01344\ \ \ \ \ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}Failed\ to\ install\ RMT\ driver:\ \%d\(\backslash\)n"{}},\ install\_result);}
+\DoxyCodeLine{01345\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ while\ (1);\ //\ halt\ execution}}
+\DoxyCodeLine{01346\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01347\ \ \ \ \ \ \ \ \ rmt\_get\_ringbuf\_handle(channel\_,\ \&rb\_);}
+\DoxyCodeLine{01348\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (rb\_\ ==\ NULL)}
+\DoxyCodeLine{01349\ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{01350\ \ \ \ \ \ \ \ \ \ \ \ \ Serial.println(\textcolor{stringliteral}{"{}Failed\ to\ initialize\ ring\ buffer"{}});}
+\DoxyCodeLine{01351\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ while\ (1);\ //\ halt\ execution}}
+\DoxyCodeLine{01352\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01353\ \ \ \ \ \ \ \ \ esp\_err\_t\ start\_result\ =\ rmt\_rx\_start(channel\_,\ 1);}
+\DoxyCodeLine{01354\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (start\_result\ !=\ ESP\_OK)}
+\DoxyCodeLine{01355\ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{01356\ \ \ \ \ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}Failed\ to\ start\ RMT\ receiver:\ \%d\(\backslash\)n"{}},\ start\_result);}
+\DoxyCodeLine{01357\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ while\ (1);\ //\ halt\ execution}}
+\DoxyCodeLine{01358\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01359\ \ \ \ \ \}}
+\DoxyCodeLine{01360\ \ \ \ \ int32\_t\ readPulseWidth(\textcolor{keywordtype}{bool}\ persistence)\ \ \textcolor{comment}{//\ persistence\ means\ the\ last\ reading\ will\ be\ returned\ until\ a\ newer\ one\ is\ gathered.\ Otherwise\ 0\ if\ no\ reading}}
+\DoxyCodeLine{01361\ \ \ \ \ \{}
+\DoxyCodeLine{01362\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{size\_t}\ rx\_size\ =\ 0;}
+\DoxyCodeLine{01363\ \ \ \ \ \ \ \ \ rmt\_item32\_t\ *item\ =\ (rmt\_item32\_t\ *)xRingbufferReceive(rb\_,\ \&rx\_size,\ 0);}
+\DoxyCodeLine{01364\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (item\ !=\ NULL\ \&\&\ rx\_size\ ==\ \textcolor{keyword}{sizeof}(rmt\_item32\_t))}
+\DoxyCodeLine{01365\ \ \ \ \ \ \ \ \ \{}
+\DoxyCodeLine{01366\ \ \ \ \ \ \ \ \ \ \ \ \ pulse\_width\ =\ item-\/>duration0\ +\ item-\/>duration1;}
+\DoxyCodeLine{01367\ \ \ \ \ \ \ \ \ \ \ \ \ vRingbufferReturnItem(rb\_,\ (\textcolor{keywordtype}{void}\ *)item);}
+\DoxyCodeLine{01368\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!persistence\ ||\ pulse\_width\ >\ 0)\ pulse\_width\_last\ =\ pulse\_width\ *\ scale\_factor;}
+\DoxyCodeLine{01369\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01370\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ pulse\_width\ =\ 0;}
+\DoxyCodeLine{01371\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ (persistence)\ ?\ pulse\_width\_last\ :\ pulse\_width;\ \textcolor{comment}{//\ No\ data}}
+\DoxyCodeLine{01372\ \ \ \ \ \}}
+\DoxyCodeLine{01373\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{01374\ \ \ \ \ rmt\_channel\_t\ channel\_;}
+\DoxyCodeLine{01375\ \ \ \ \ gpio\_num\_t\ gpio\_;}
+\DoxyCodeLine{01376\ \ \ \ \ int32\_t\ pulse\_width,\ pulse\_width\_last;}
+\DoxyCodeLine{01377\ \ \ \ \ \textcolor{keywordtype}{float}\ scale\_factor\ =\ 0.625;}
+\DoxyCodeLine{01378\ \ \ \ \ RingbufHandle\_t\ rb\_;}
+\DoxyCodeLine{01379\ \};}
+\DoxyCodeLine{01380\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_hotrc}{Hotrc}}\ \{\ \ \textcolor{comment}{//\ All\ things\ Hotrc,\ in\ a\ convenient,\ easily-\/digestible\ format\ the\ kids\ will\ just\ love}}
+\DoxyCodeLine{01381\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{01382\ \ \ \ \ \textcolor{keywordtype}{float}\ ema\_alpha\ =\ 0.075;\ \ \textcolor{comment}{//\ alpha\ value\ for\ ema\ filtering,\ lower\ is\ more\ continuous,\ higher\ is\ more\ responsive\ (0-\/1).}}
+\DoxyCodeLine{01383\ \ \ \ \ \textcolor{keywordtype}{float}\ pc[NUM\_AXES][NUM\_VALUS];\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ values\ range\ from\ -\/100\%\ to\ 100\%\ are\ all\ derived\ or\ auto-\/assigned}}
+\DoxyCodeLine{01384\ \ \ \ \ int32\_t\ us[NUM\_CHANS][NUM\_VALUS]\ =\ \{}
+\DoxyCodeLine{01385\ \ \ \ \ \ \ \ \ \{\ \ 971,\ 1470,\ 1968,\ 0,\ 1500,\ 0,\ 0,\ 0\ \},\ \ \ \ \ \textcolor{comment}{//\ 1000-\/30+1,\ 1500-\/30,\ \ 2000-\/30-\/2\ \ \ //\ [HORZ]\ [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]}}
+\DoxyCodeLine{01386\ \ \ \ \ \ \ \ \ \{\ 1081,\ 1580,\ 2078,\ 0,\ 1500,\ 0,\ 0,\ 0\ \},\ \ \ \ \ \textcolor{comment}{//\ 1000+80+1,\ 1500+80,\ \ 2000+80-\/2,\ \ //\ [VERT]\ [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]}}
+\DoxyCodeLine{01387\ \ \ \ \ \ \ \ \ \{\ 1151,\ 1500,\ 1848,\ 0,\ 1500,\ 0,\ 0,\ 0\ \},\ \ \ \ \ \textcolor{comment}{//\ 1000+150+1,\ \ \ 1500,\ 2000-\/150-\/2,\ \ //\ [CH3]\ [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]}}
+\DoxyCodeLine{01388\ \ \ \ \ \ \ \ \ \{\ 1251,\ 1500,\ 1748,\ 0,\ 1500,\ 0,\ 0,\ 0\ \},\ \};\ \ \textcolor{comment}{//\ 1000+250+1,\ \ \ 1500,\ 2000-\/250-\/2,\ \ //\ [CH4]\ [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]}}
+\DoxyCodeLine{01389\ \ \ \ \ \textcolor{keywordtype}{float}\ ema\_us[NUM\_AXES]\ =\ \{\ 1500.0,\ 1500.0\ \};\ \ \textcolor{comment}{//\ [HORZ/VERT]}}
+\DoxyCodeLine{01390\ \ \ \ \ int32\_t\ absmin\_us\ =\ 880;}
+\DoxyCodeLine{01391\ \ \ \ \ int32\_t\ absmax\_us\ =\ 2080;}
+\DoxyCodeLine{01392\ \ \ \ \ int32\_t\ deadband\_us\ =\ 13;\ \ \textcolor{comment}{//\ All\ [DBBOT]\ and\ [DBTOP]\ values\ above\ are\ derived\ from\ this\ by\ calling\ calc\_params()}}
+\DoxyCodeLine{01393\ \ \ \ \ int32\_t\ margin\_us\ =\ 20;\ \ \textcolor{comment}{//\ All\ [MARGIN]\ values\ above\ are\ derived\ from\ this\ by\ calling\ calc\_params()}}
+\DoxyCodeLine{01394\ \ \ \ \ int32\_t\ failsafe\_us\ =\ 880;\ \textcolor{comment}{//\ Hotrc\ must\ be\ configured\ per\ the\ instructions:\ search\ for\ "{}HotRC\ Setup\ Procedure"{}}}
+\DoxyCodeLine{01395\ \ \ \ \ int32\_t\ failsafe\_margin\_us\ =\ 100;\ \textcolor{comment}{//\ in\ the\ carpet\ dumpster\ file:\ https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit}}
+\DoxyCodeLine{01396\ \ \ \ \ int32\_t\ failsafe\_pad\_us\ =\ 10;}
+\DoxyCodeLine{01397\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{01398\ \ \ \ \ \mbox{\hyperlink{class_simulator}{Simulator}}*\ sim;}
+\DoxyCodeLine{01399\ \ \ \ \ \mbox{\hyperlink{class_potentiometer}{Potentiometer}}*\ pot;}
+\DoxyCodeLine{01400\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ uint32\_t\ failsafe\_timeout\ =\ 15000;}
+\DoxyCodeLine{01401\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ failsafe\_timer;\ \ \textcolor{comment}{//\ How\ long\ to\ receive\ failsafe\ pulse\ value\ continuously\ before\ recognizing\ radio\ is\ lost.\ To\ prevent\ false\ positives}}
+\DoxyCodeLine{01402\ \ \ \ \ \textcolor{keywordtype}{bool}\ \_radiolost\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01403\ \ \ \ \ \textcolor{keywordtype}{bool}\ sw[NUM\_CHANS]\ =\ \{\ 1,\ 1,\ 0,\ 0\ \};\ \ \textcolor{comment}{//\ index[2]=CH3,\ index[3]=CH4\ and\ using\ [0]\ and\ [1]\ indices\ for\ LAST\ values\ of\ ch3\ and\ ch4\ respectively}}
+\DoxyCodeLine{01404\ \ \ \ \ \textcolor{keywordtype}{bool}\ \_sw\_event[NUM\_CHANS];\ \ \textcolor{comment}{//\ First\ 2\ indices\ are\ unused.\ \ What\ a\ tragic\ waste}}
+\DoxyCodeLine{01405\ \ \ \ \ \mbox{\hyperlink{class_r_m_t_input}{RMTInput}}\ rmt[NUM\_CHANS]\ =\ \{}
+\DoxyCodeLine{01406\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{class_r_m_t_input}{RMTInput}}(RMT\_CHANNEL\_4,\ gpio\_num\_t(hotrc\_ch1\_h\_pin)),\ \ \textcolor{comment}{//\ hotrc[HORZ]}}
+\DoxyCodeLine{01407\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{class_r_m_t_input}{RMTInput}}(RMT\_CHANNEL\_5,\ gpio\_num\_t(hotrc\_ch2\_v\_pin)),\ \ \textcolor{comment}{//\ hotrc[VERT]}}
+\DoxyCodeLine{01408\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{class_r_m_t_input}{RMTInput}}(RMT\_CHANNEL\_6,\ gpio\_num\_t(hotrc\_ch3\_pin)),\ \ \textcolor{comment}{//\ hotrc[CH3]}}
+\DoxyCodeLine{01409\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{class_r_m_t_input}{RMTInput}}(RMT\_CHANNEL\_7,\ gpio\_num\_t(hotrc\_ch4\_pin)),\ \ \textcolor{comment}{//\ hotrc[CH4]}}
+\DoxyCodeLine{01410\ \ \ \ \ \};}
+\DoxyCodeLine{01411\ \ \ \ \ \textcolor{keywordtype}{bool}\ spike\_signbit;}
+\DoxyCodeLine{01412\ \ \ \ \ int32\_t\ spike\_length,\ this\_delta,\ interpolated\_slope,\ loopindex,\ previndex,\ spike\_cliff[NUM\_AXES];}
+\DoxyCodeLine{01413\ \ \ \ \ int32\_t\ spike\_threshold[NUM\_AXES]\ =\ \{\ 6,\ 6\ \};}
+\DoxyCodeLine{01414\ \ \ \ \ int32\_t\ prespike\_index[NUM\_AXES]\ =\ \{\ -\/1,\ -\/1\ \};}
+\DoxyCodeLine{01415\ \ \ \ \ int32\_t\ index[NUM\_AXES]\ =\ \{\ 1,\ 1\ \};\ \ \textcolor{comment}{//\ index\ is\ the\ oldest\ values\ are\ popped\ from\ then\ new\ incoming\ values\ pushed\ in\ to\ the\ LIFO}}
+\DoxyCodeLine{01416\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{const}\ int32\_t\ depth\ =\ 9;\ \ \textcolor{comment}{//\ more\ depth\ will\ reject\ longer\ spikes\ at\ the\ expense\ of\ controller\ delay}}
+\DoxyCodeLine{01417\ \ \ \ \ int32\_t\ raw\_history[NUM\_AXES][depth],\ filt\_history[NUM\_AXES][depth];\ \ \textcolor{comment}{//\ Values\ before\ and\ after\ filtering.}}
+\DoxyCodeLine{01418\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{01419\ \ \ \ \ \mbox{\hyperlink{class_hotrc}{Hotrc}}(\mbox{\hyperlink{class_simulator}{Simulator}}*\ \_sim,\ \mbox{\hyperlink{class_potentiometer}{Potentiometer}}*\ \_pot)\ :\ sim(\_sim),\ pot(\_pot)\ \{}
+\DoxyCodeLine{01420\ \ \ \ \ \ \ \ \ calc\_params();}
+\DoxyCodeLine{01421\ \ \ \ \ \}}
+\DoxyCodeLine{01422\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{}
+\DoxyCodeLine{01423\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}Hotrc\ init..\ Starting\ rmt..\(\backslash\)n"{}});}
+\DoxyCodeLine{01424\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ axis=HORZ;\ axis<=CH4;\ axis++)\ rmt[axis].init();\ \ \textcolor{comment}{//\ Set\ up\ 4\ RMT\ receivers,\ one\ per\ channel}}
+\DoxyCodeLine{01425\ \ \ \ \ \ \ \ \ failsafe\_timer.set(failsafe\_timeout);\ }
+\DoxyCodeLine{01426\ \ \ \ \ \}}
+\DoxyCodeLine{01427\ \ \ \ \ \textcolor{keywordtype}{void}\ calc\_params()\ \{}
+\DoxyCodeLine{01428\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ m\_factor;}
+\DoxyCodeLine{01429\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (int8\_t\ axis=HORZ;\ axis<=VERT;\ axis++)\ \{}
+\DoxyCodeLine{01430\ \ \ \ \ \ \ \ \ \ \ \ \ us[axis][DBBOT]\ =\ us[axis][CENT]\ -\/\ deadband\_us;}
+\DoxyCodeLine{01431\ \ \ \ \ \ \ \ \ \ \ \ \ us[axis][DBTOP]\ =\ us[axis][CENT]\ +\ deadband\_us;}
+\DoxyCodeLine{01432\ \ \ \ \ \ \ \ \ \ \ \ \ us[axis][MARGIN]\ =\ margin\_us;}
+\DoxyCodeLine{01433\ \ \ \ \ \ \ \ \ \ \ \ \ pc[axis][OPMIN]\ =\ -\/100.0;}
+\DoxyCodeLine{01434\ \ \ \ \ \ \ \ \ \ \ \ \ pc[axis][CENT]\ =\ 0.0;}
+\DoxyCodeLine{01435\ \ \ \ \ \ \ \ \ \ \ \ \ pc[axis][OPMAX]\ =\ 100.0;}
+\DoxyCodeLine{01436\ \ \ \ \ \ \ \ \ \ \ \ \ m\_factor\ =\ (pc[axis][OPMAX]\ -\/\ pc[axis][OPMIN])\ /\ (\textcolor{keywordtype}{float})(us[axis][OPMAX]\ -\/\ us[axis][OPMIN]);}
+\DoxyCodeLine{01437\ \ \ \ \ \ \ \ \ \ \ \ \ pc[axis][DBBOT]\ =\ pc[axis][CENT]\ -\/\ deadband\_us\ *\ m\_factor;}
+\DoxyCodeLine{01438\ \ \ \ \ \ \ \ \ \ \ \ \ pc[axis][DBTOP]\ =\ pc[axis][CENT]\ +\ deadband\_us\ *\ m\_factor;}
+\DoxyCodeLine{01439\ \ \ \ \ \ \ \ \ \ \ \ \ pc[axis][MARGIN]\ =\ margin\_us\ *\ m\_factor;}
+\DoxyCodeLine{01440\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01441\ \ \ \ \ \}}
+\DoxyCodeLine{01442\ \ \ \ \ \textcolor{keywordtype}{int}\ update()\ \{}
+\DoxyCodeLine{01443\ \ \ \ \ \ \ \ \ toggles\_update();}
+\DoxyCodeLine{01444\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!(sim-\/>simulating(sens::joy)))\ direction\_update();}
+\DoxyCodeLine{01445\ \ \ \ \ \ \ \ \ radiolost\_update();}
+\DoxyCodeLine{01446\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ joydir();}
+\DoxyCodeLine{01447\ \ \ \ \ \}}
+\DoxyCodeLine{01448\ \ \ \ \ \textcolor{keywordtype}{void}\ toggles\_reset()\ \{\ \ \textcolor{comment}{//\ Shouldn't\ be\ necessary\ to\ reset\ events\ due\ to\ sw\_event(ch)\ auto-\/resets\ when\ read}}
+\DoxyCodeLine{01449\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (int8\_t\ ch\ =\ CH3;\ ch\ <=\ CH4;\ ch++)\ \_sw\_event[ch]\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01450\ \ \ \ \ \}}
+\DoxyCodeLine{01451\ \ \ \ \ \textcolor{keywordtype}{bool}\ radiolost()\ \{\ \textcolor{keywordflow}{return}\ \_radiolost;\ \}}
+\DoxyCodeLine{01452\ \ \ \ \ \textcolor{keywordtype}{bool}*\ radiolost\_ptr()\ \{\ \textcolor{keywordflow}{return}\ \&\_radiolost;\ \}}
+\DoxyCodeLine{01453\ \ \ \ \ \textcolor{keywordtype}{bool}\ sw\_event(uint8\_t\ ch)\ \{\ \ \textcolor{comment}{//\ returns\ if\ there's\ an\ event\ on\ the\ given\ channel\ then\ resets\ that\ channel}}
+\DoxyCodeLine{01454\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ retval\ =\ \_sw\_event[ch];}
+\DoxyCodeLine{01455\ \ \ \ \ \ \ \ \ \_sw\_event[ch]\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01456\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ retval;\ \ \ \ \ \ \ \ }
+\DoxyCodeLine{01457\ \ \ \ \ \}}
+\DoxyCodeLine{01458\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_pc(int8\_t\ axis,\ int8\_t\ param,\ \textcolor{keywordtype}{float}\ val)\ \{\ pc[axis][param]\ =\ val;\ \}}
+\DoxyCodeLine{01459\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_us(int8\_t\ axis,\ int8\_t\ param,\ int32\_t\ val)\ \{\ us[axis][param]\ =\ val;\ \}}
+\DoxyCodeLine{01460\ \ \ \ \ int32\_t\ next\_unfilt\_rawval\ (uint8\_t\ axis)\ \{\ \textcolor{keywordflow}{return}\ raw\_history[axis][index[axis]];\ \}\ \ \textcolor{comment}{//\ helps\ to\ debug\ the\ filter\ from\ outside\ the\ class}}
+\DoxyCodeLine{01461\ \ \ \ \ \textcolor{keywordtype}{int}\ joydir(int8\_t\ axis\ =\ VERT)\ \{}
+\DoxyCodeLine{01462\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (axis\ ==\ VERT)\ \textcolor{keywordflow}{return}\ ((pc[axis][FILT]\ >\ pc[axis][DBTOP])\ ?\ JOY\_UP\ :\ ((pc[axis][FILT]\ <\ pc[axis][DBBOT])\ ?\ JOY\_DN\ :\ JOY\_CENT));}
+\DoxyCodeLine{01463\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ ((pc[axis][FILT]\ >\ pc[axis][DBTOP])\ ?\ JOY\_RT\ :\ ((pc[axis][FILT]\ <\ pc[axis][DBBOT])\ ?\ JOY\_LT\ :\ JOY\_CENT));}
+\DoxyCodeLine{01464\ \ \ \ \ \}\ \ \textcolor{comment}{//\ return\ (pc[axis][FILT]\ >\ pc[axis][DBTOP])\ ?\ ((axis\ ==\ VERT)\ ?\ JOY\_UP\ :\ JOY\_RT)\ :\ (pc[axis][FILT]\ <\ pc[axis][DBBOT])\ ?\ ((axis\ ==\ VERT)\ ?\ JOY\_DN\ :\ JOY\_LT)\ :\ JOY\_CENT;}}
+\DoxyCodeLine{01465\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{01466\ \ \ \ \ \textcolor{keywordtype}{void}\ toggles\_update()\ \{\ \ \textcolor{comment}{//}}
+\DoxyCodeLine{01467\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (int8\_t\ chan\ =\ CH3;\ chan\ <=\ CH4;\ chan++)\ \{}
+\DoxyCodeLine{01468\ \ \ \ \ \ \ \ \ \ \ \ \ us[chan][RAW]\ =\ (int32\_t)(rmt[chan].readPulseWidth(\textcolor{keyword}{true}));}
+\DoxyCodeLine{01469\ \ \ \ \ \ \ \ \ \ \ \ \ sw[chan]\ =\ (us[chan][RAW]\ <=\ us[chan][CENT]);\ \textcolor{comment}{//\ Ch3\ switch\ true\ if\ short\ pulse,\ otherwise\ false\ \ us[CH3][CENT]}}
+\DoxyCodeLine{01470\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((sw[chan]\ !=\ sw[chan-\/2])\ \&\&\ !\_radiolost)\ \{}
+\DoxyCodeLine{01471\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \_sw\_event[chan]\ =\ \textcolor{keyword}{true};\ \textcolor{comment}{//\ So\ a\ handler\ routine\ can\ be\ signaled.\ Handler\ must\ reset\ this\ to\ false.\ Skip\ possible\ erroneous\ events\ while\ radio\ lost,\ because\ on\ powerup\ its\ switch\ pulses\ go\ low}}
+\DoxyCodeLine{01472\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ kick\_inactivity\_timer(5);\ \ \textcolor{comment}{//\ evidence\ of\ user\ activity}}
+\DoxyCodeLine{01473\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01474\ \ \ \ \ \ \ \ \ \ \ \ \ sw[chan-\/2]\ =\ sw[chan];\ \ \textcolor{comment}{//\ chan-\/2\ index\ being\ used\ to\ store\ previous\ values\ of\ index\ chan}}
+\DoxyCodeLine{01475\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01476\ \ \ \ \ \}}
+\DoxyCodeLine{01477\ \ \ \ \ \textcolor{keywordtype}{float}\ us\_to\_pc(int8\_t\ axis,\ int32\_t\ \_us,\ \textcolor{keywordtype}{bool}\ deadbands=\textcolor{keyword}{false})\ \{}
+\DoxyCodeLine{01478\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (deadbands)\ \{}
+\DoxyCodeLine{01479\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_us\ >=\ us[axis][DBTOP])\ \textcolor{keywordflow}{return}\ map((\textcolor{keywordtype}{float})\_us,\ (\textcolor{keywordtype}{float})us[axis][DBTOP],\ (\textcolor{keywordtype}{float})us[axis][OPMAX],\ pc[axis][CENT],\ pc[axis][OPMAX]);}
+\DoxyCodeLine{01480\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_us\ <=\ us[axis][DBBOT])\ \textcolor{keywordflow}{return}\ map((\textcolor{keywordtype}{float})\_us,\ (\textcolor{keywordtype}{float})us[axis][DBBOT],\ (\textcolor{keywordtype}{float})us[axis][OPMIN],\ pc[axis][CENT],\ pc[axis][OPMIN]);}
+\DoxyCodeLine{01481\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ pc[axis][CENT];}
+\DoxyCodeLine{01482\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01483\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_us\ >=\ us[axis][CENT])\ \textcolor{keywordflow}{return}\ map((\textcolor{keywordtype}{float})\_us,\ (\textcolor{keywordtype}{float})us[axis][CENT],\ (\textcolor{keywordtype}{float})us[axis][OPMAX],\ pc[axis][CENT],\ pc[axis][OPMAX]);}
+\DoxyCodeLine{01484\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ map((\textcolor{keywordtype}{float})\_us,\ (\textcolor{keywordtype}{float})us[axis][CENT],\ (\textcolor{keywordtype}{float})us[axis][OPMIN],\ pc[axis][CENT],\ pc[axis][OPMIN]);\ \ \ \ }
+\DoxyCodeLine{01485\ \ \ \ \ \}}
+\DoxyCodeLine{01486\ \ \ \ \ \textcolor{keywordtype}{void}\ direction\_update()\ \{}
+\DoxyCodeLine{01487\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (sim-\/>simulating(sens::joy))\ \{}
+\DoxyCodeLine{01488\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (sim-\/>potmapping(sens::joy))\ pc[HORZ][FILT]\ =\ pot-\/>mapToRange(pc[HORZ][OPMIN],\ pc[HORZ][OPMAX]);\ \ \textcolor{comment}{//\ overwrite\ horz\ value\ if\ potmapping}}
+\DoxyCodeLine{01489\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Serial.printf("{}\%d\ \%d\ \%lf\(\backslash\)n"{},sim-\/>potmapping(sens::joy),sim-\/>potmapping(),\ pc[HORZ][FILT]);}}
+\DoxyCodeLine{01490\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01491\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{for}\ (int8\_t\ axis\ =\ HORZ;\ axis\ <=\ VERT;\ axis++)\ \{\ \ \textcolor{comment}{//\ read\ pulses\ and\ update\ filtered\ percent\ values}}
+\DoxyCodeLine{01492\ \ \ \ \ \ \ \ \ \ \ \ \ us[axis][RAW]\ =\ (int32\_t)(rmt[axis].readPulseWidth(\textcolor{keyword}{true}));}
+\DoxyCodeLine{01493\ \ \ \ \ \ \ \ \ \ \ \ \ int32\_t\ us\_spike\ =\ spike\_filter(axis,\ us[axis][RAW]);}
+\DoxyCodeLine{01494\ \ \ \ \ \ \ \ \ \ \ \ \ ema\_filt(us\_spike,\ \&us[axis][FILT],\ ema\_alpha);}
+\DoxyCodeLine{01495\ \ \ \ \ \ \ \ \ \ \ \ \ pc[axis][RAW]\ =\ us\_to\_pc(axis,\ us[axis][RAW],\ \textcolor{keyword}{false});}
+\DoxyCodeLine{01496\ \ \ \ \ \ \ \ \ \ \ \ \ pc[axis][FILT]\ =\ us\_to\_pc(axis,\ us[axis][FILT],\ \textcolor{keyword}{true});}
+\DoxyCodeLine{01497\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (\_radiolost)\ pc[axis][FILT]\ =\ pc[axis][CENT];\ \ \textcolor{comment}{//\ if\ radio\ lost\ set\ joy\_axis\_filt\ to\ CENTer\ value}}
+\DoxyCodeLine{01498\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (std::abs(pc[axis][FILT]\ -\/\ pc[axis][CENT])\ >\ pc[axis][MARGIN])\ kick\_inactivity\_timer(6);\ \ \textcolor{comment}{//\ indicate\ evidence\ of\ user\ activity}}
+\DoxyCodeLine{01499\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01500\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (int8\_t\ axis\ =\ HORZ;\ axis\ <=\ VERT;\ axis++)\ pc[axis][FILT]\ =\ constrain(pc[axis][FILT],\ pc[axis][OPMIN],\ pc[axis][OPMAX]);}
+\DoxyCodeLine{01501\ \ \ \ \ \}}
+\DoxyCodeLine{01502\ \ \ \ \ \textcolor{keywordtype}{bool}\ radiolost\_update()\ \{}
+\DoxyCodeLine{01503\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (us[VERT][FILT]\ >\ failsafe\_us\ +\ failsafe\_margin\_us)\ \{}
+\DoxyCodeLine{01504\ \ \ \ \ \ \ \ \ \ \ \ \ failsafe\_timer.reset();}
+\DoxyCodeLine{01505\ \ \ \ \ \ \ \ \ \ \ \ \ \_radiolost\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{01506\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01507\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (failsafe\_timer.expired())\ \_radiolost\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{01508\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \_radiolost;}
+\DoxyCodeLine{01509\ \ \ \ \ \}}
+\DoxyCodeLine{01510\ \ \ \ \ \textcolor{comment}{//\ Spike\ filter\ pushes\ new\ hotrc\ readings\ into\ a\ LIFO\ ring\ buffer,\ replaces\ any\ well-\/defined\ spikes\ with\ values\ }}
+\DoxyCodeLine{01511\ \ \ \ \ \textcolor{comment}{//\ interpolated\ from\ before\ and\ after\ the\ spike.\ Also\ smoothes\ out\ abrupt\ value\ changes\ that\ don't\ recover\ later}}
+\DoxyCodeLine{01512\ \ \ \ \ int32\_t\ spike\_filter\ (uint8\_t\ axis,\ int32\_t\ new\_val)\ \{\ \ \textcolor{comment}{//\ pushes\ next\ val\ in,\ massages\ any\ detected\ spikes,\ returns\ filtered\ past\ value}}
+\DoxyCodeLine{01513\ \ \ \ \ \ \ \ \ previndex\ =\ (depth\ +\ index[axis]\ -\/\ 1)\ \%\ depth;\ \ \textcolor{comment}{//\ previndex\ is\ where\ the\ incoming\ new\ value\ will\ be\ stored}}
+\DoxyCodeLine{01514\ \ \ \ \ \ \ \ \ this\_delta\ =\ new\_val\ -\/\ filt\_history[axis][previndex];\ \ \textcolor{comment}{//\ Value\ change\ since\ last\ reading}}
+\DoxyCodeLine{01515\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (std::abs(this\_delta)\ >\ spike\_cliff[axis])\ \{\ \ \textcolor{comment}{//\ If\ new\ value\ is\ a\ cliff\ edge\ (start\ or\ end\ of\ a\ spike)}}
+\DoxyCodeLine{01516\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (prespike\_index[axis]\ ==\ -\/1)\ \{\ \ \textcolor{comment}{//\ If\ this\ cliff\ edge\ is\ the\ start\ of\ a\ new\ spike}}
+\DoxyCodeLine{01517\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ prespike\_index[axis]\ =\ previndex;\ \ \textcolor{comment}{//\ save\ index\ of\ last\ good\ value\ just\ before\ the\ cliff}}
+\DoxyCodeLine{01518\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ spike\_signbit\ =\ signbit(this\_delta);\ \ \textcolor{comment}{//\ Save\ the\ direction\ of\ the\ cliff}}
+\DoxyCodeLine{01519\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01520\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (spike\_signbit\ ==\ signbit(this\_delta))\ \{\ \ \textcolor{comment}{//\ If\ this\ cliff\ edge\ deepens\ an\ in-\/progress\ spike\ (or\ more\ likely\ the\ change\ is\ valid)}}
+\DoxyCodeLine{01521\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ inject\_interpolations(axis,\ previndex,\ filt\_history[axis][previndex]);\ \ \textcolor{comment}{//\ Smoothly\ grade\ the\ values\ from\ before\ the\ last\ cliff\ to\ previous\ value}}
+\DoxyCodeLine{01522\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ prespike\_index[axis]\ =\ previndex;\ \ \textcolor{comment}{//\ Consider\ this\ cliff\ edge\ the\ start\ of\ the\ spike\ instead}}
+\DoxyCodeLine{01523\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01524\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{\ \ \textcolor{comment}{//\ If\ this\ cliff\ edge\ is\ a\ recovery\ of\ an\ in-\/progress\ spike}}
+\DoxyCodeLine{01525\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ inject\_interpolations(axis,\ index[axis],\ new\_val);\ \ \textcolor{comment}{//\ Fill\ in\ the\ spiked\ values\ with\ interpolated\ values}}
+\DoxyCodeLine{01526\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ prespike\_index[axis]\ =\ -\/1;\ \ \textcolor{comment}{//\ Cancel\ the\ current\ spike}}
+\DoxyCodeLine{01527\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01528\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01529\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (prespike\_index[axis]\ ==\ index[axis])\ \{\ \ \textcolor{comment}{//\ If\ a\ current\ spike\ lasted\ thru\ our\ whole\ buffer}}
+\DoxyCodeLine{01530\ \ \ \ \ \ \ \ \ \ \ \ \ inject\_interpolations\ (axis,\ previndex,\ filt\_history[axis][previndex]);\ \ \textcolor{comment}{//\ Smoothly\ grade\ the\ whole\ buffer}}
+\DoxyCodeLine{01531\ \ \ \ \ \ \ \ \ \ \ \ \ prespike\_index[axis]\ =\ -\/1;\ \ \textcolor{comment}{//\ Cancel\ the\ current\ spike}}
+\DoxyCodeLine{01532\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{01533\ \ \ \ \ \ \ \ \ int32\_t\ returnval\ =\ filt\_history[axis][index[axis]];\ \ \textcolor{comment}{//\ Save\ the\ incumbent\ value\ at\ current\ index\ (oldest\ value)\ into\ buffer}}
+\DoxyCodeLine{01534\ \ \ \ \ \ \ \ \ filt\_history[axis][index[axis]]\ =\ new\_val;}
+\DoxyCodeLine{01535\ \ \ \ \ \ \ \ \ raw\_history[axis][index[axis]]\ =\ new\_val;}
+\DoxyCodeLine{01536\ \ \ \ \ \ \ \ \ ++(index[axis])\ \%=\ depth;\ \ \textcolor{comment}{//\ Update\ index\ for\ next\ time}}
+\DoxyCodeLine{01537\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ returnval;\ \ \textcolor{comment}{//\ Return\ the\ saved\ old\ value}}
+\DoxyCodeLine{01538\ \ \ \ \ \}}
+\DoxyCodeLine{01539\ \ \ \ \ \textcolor{keywordtype}{void}\ inject\_interpolations(uint8\_t\ axis,\ int32\_t\ endspike\_index,\ int32\_t\ endspike\_val)\ \{\ \ \textcolor{comment}{//\ Replaces\ values\ between\ indexes\ with\ linear\ interpolated\ values}}
+\DoxyCodeLine{01540\ \ \ \ \ \ \ \ \ spike\_length\ =\ ((depth\ +\ endspike\_index\ -\/\ prespike\_index[axis])\ \%\ depth)\ -\/\ 1;\ \ \textcolor{comment}{//\ Equal\ to\ the\ spiking\ values\ count\ plus\ one}}
+\DoxyCodeLine{01541\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!spike\_length)\ \textcolor{keywordflow}{return};\ \ \textcolor{comment}{//\ Two\ cliffs\ in\ the\ same\ direction\ on\ consecutive\ readings\ needs\ no\ adjustment,\ also\ prevents\ divide\ by\ zero\ }}
+\DoxyCodeLine{01542\ \ \ \ \ \ \ \ \ interpolated\_slope\ =\ (endspike\_val\ -\/\ filt\_history[axis][prespike\_index[axis]])\ /\ spike\_length;}
+\DoxyCodeLine{01543\ \ \ \ \ \ \ \ \ loopindex\ =\ 0;}
+\DoxyCodeLine{01544\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (++loopindex\ <=\ spike\_length)}
+\DoxyCodeLine{01545\ \ \ \ \ \ \ \ \ \ \ \ \ filt\_history[axis][(prespike\_index[axis]\ +\ loopindex)\ \%\ depth]\ =\ filt\_history[axis][prespike\_index[axis]]\ +\ loopindex\ *\ interpolated\_slope;}
+\DoxyCodeLine{01546\ \ \ \ \ \}}
+\DoxyCodeLine{01547\ \};}
+
+\end{DoxyCode}

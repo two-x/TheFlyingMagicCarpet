@@ -1,0 +1,391 @@
+\doxysection{objects.\+h}
+\hypertarget{objects_8h_source}{}\label{objects_8h_source}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{comment}{//\ objects.h\ :\ contains\ instantiations\ of\ major\ system\ components,\ and\ global\ functions}}
+\DoxyCodeLine{00002\ \textcolor{preprocessor}{\#pragma\ once}}
+\DoxyCodeLine{00003\ \textcolor{preprocessor}{\#include\ "{}freertos/FreeRTOS.h"{}}\ \ \textcolor{comment}{//\ for\ semaphores}}
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#include\ "{}freertos/semphr.h"{}}\ \ \textcolor{comment}{//\ for\ semaphores}}
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#include\ <esp\_partition.h>}}
+\DoxyCodeLine{00006\ \textcolor{preprocessor}{\#include\ <random>}}
+\DoxyCodeLine{00007\ \textcolor{preprocessor}{\#include\ "{}globals.h"{}}}
+\DoxyCodeLine{00008\ \textcolor{preprocessor}{\#include\ "{}sensors.h"{}}\ \ \textcolor{comment}{//\ includes\ uictrl.h,\ i2cbus.h}}
+\DoxyCodeLine{00009\ \textcolor{preprocessor}{\#include\ "{}motors.h"{}}\ \ \textcolor{comment}{//\ includes\ qpid.h,\ temperature.h}}
+\DoxyCodeLine{00010\ }
+\DoxyCodeLine{00011\ \textcolor{comment}{//\ Instantiate\ objects}}
+\DoxyCodeLine{00012\ std::random\_device\ rd;}
+\DoxyCodeLine{00013\ std::mt19937\ gen(rd());\ \ \textcolor{comment}{//\ randomizer}}
+\DoxyCodeLine{00014\ }
+\DoxyCodeLine{00015\ \textcolor{keyword}{static}\ Preferences\ prefs;\ \ \textcolor{comment}{//\ Persistent\ config\ storage}}
+\DoxyCodeLine{00016\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_potentiometer}{Potentiometer}}\ pot(pot\_pin);}
+\DoxyCodeLine{00017\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_simulator}{Simulator}}\ sim(pot,\ \&prefs);}
+\DoxyCodeLine{00018\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_hotrc}{Hotrc}}\ hotrc(\&sim,\ \&pot);}
+\DoxyCodeLine{00019\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_temperature_sensor_manager}{TemperatureSensorManager}}\ tempsens(onewire\_pin);}
+\DoxyCodeLine{00020\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_car_battery}{CarBattery}}\ mulebatt(mulebatt\_pin);}
+\DoxyCodeLine{00021\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_pressure_sensor}{PressureSensor}}\ pressure(pressure\_pin);}
+\DoxyCodeLine{00022\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_brake_position_sensor}{BrakePositionSensor}}\ brkpos(brake\_pos\_pin);}
+\DoxyCodeLine{00023\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_speedometer}{Speedometer}}\ speedo(speedo\_pin);}
+\DoxyCodeLine{00024\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_tachometer}{Tachometer}}\ tach(tach\_pin);}
+\DoxyCodeLine{00025\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_i2_c}{I2C}}\ i2c(i2c\_sda\_pin,\ i2c\_scl\_pin);}
+\DoxyCodeLine{00026\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_air_velo_sensor}{AirVeloSensor}}\ airvelo(\&i2c);}
+\DoxyCodeLine{00027\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_m_a_p_sensor}{MAPSensor}}\ mapsens(\&i2c);}
+\DoxyCodeLine{00028\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_gas_servo}{GasServo}}\ gas(gas\_pwm\_pin,\ 52);}
+\DoxyCodeLine{00029\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_brake_motor}{BrakeMotor}}\ brake(brake\_pwm\_pin,\ 50);}
+\DoxyCodeLine{00030\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_steer_motor}{SteerMotor}}\ steer(steer\_pwm\_pin,\ 50);}
+\DoxyCodeLine{00031\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_lighting_box}{LightingBox}}\ lightbox(\&i2c);\ \ \textcolor{comment}{//\ lightbox(\&diag);}}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ \textcolor{keywordtype}{int}\ rn(\textcolor{keywordtype}{int}\ values=256)\ \{\ \ \textcolor{comment}{//\ Generate\ a\ random\ number\ between\ 0\ and\ values-\/1}}
+\DoxyCodeLine{00034\ \ \ \ \ std::uniform\_int\_distribution<>\ dis(0,\ values\ -\/\ 1);}
+\DoxyCodeLine{00035\ \ \ \ \ \textcolor{keywordflow}{return}\ dis(gen);}
+\DoxyCodeLine{00036\ \}}
+\DoxyCodeLine{00037\ \textcolor{keywordtype}{void}\ initialize\_pins()\ \{\ \ \textcolor{comment}{//\ set\ up\ those\ straggler\ pins\ which\ aren't\ taken\ care\ of\ inside\ class\ objects}}
+\DoxyCodeLine{00038\ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}**\ Setup\ begin..\(\backslash\)nInitialize\ misc\ pins..\(\backslash\)n"{}});}
+\DoxyCodeLine{00039\ \ \ \ \ set\_pin(sdcard\_cs\_pin,\ OUTPUT,\ HIGH);\ \ \ \ \textcolor{comment}{//\ deasserting\ unused\ cs\ line\ ensures\ available\ spi\ bus}}
+\DoxyCodeLine{00040\ \ \ \ \ set\_pin(syspower\_pin,\ OUTPUT,\ syspower);}
+\DoxyCodeLine{00041\ \ \ \ \ \textcolor{keywordflow}{if}\ (!USB\_JTAG)\ set\_pin(steer\_enc\_a\_pin,\ INPUT\_PULLUP);\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ avoid\ voltage\ level\ contention}}
+\DoxyCodeLine{00042\ \ \ \ \ \textcolor{keywordflow}{if}\ (!USB\_JTAG)\ set\_pin(steer\_enc\_b\_pin,\ INPUT\_PULLUP);\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ avoid\ voltage\ level\ contention}}
+\DoxyCodeLine{00043\ \ \ \ \ set\_pin(uart\_tx\_pin,\ INPUT);\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ UART:\ \ 1st\ detect\ breadboard\ vs.\ vehicle\ PCB\ using\ TX\ pin\ pullup,\ then\ repurpose\ pin\ for\ UART\ and\ start\ UART\ }}
+\DoxyCodeLine{00044\ \}}
+\DoxyCodeLine{00045\ \textcolor{keywordtype}{void}\ set\_board\_defaults()\ \{\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ true\ for\ dev\ boards,\ false\ for\ printed\ board\ (on\ the\ car)}}
+\DoxyCodeLine{00046\ \ \ \ \ sim.set\_can\_sim(sens::joy,\ \textcolor{keyword}{false});}
+\DoxyCodeLine{00047\ \ \ \ \ \textcolor{keywordflow}{for}\ (sens\ sen=sens::pressure;\ sen<=sens::mulebatt;\ sen=(sens)((\textcolor{keywordtype}{int})sen+1))\ sim.set\_can\_sim(sen,\ running\_on\_devboard);}
+\DoxyCodeLine{00048\ \ \ \ \ \textcolor{comment}{//\ for\ (sens\ sen=sens::engtemp;\ sen<sens::basicsw;\ sen=(sens)((int)sen+1))\ sim.set\_can\_sim(sen,\ false);}}
+\DoxyCodeLine{00049\ \ \ \ \ \textcolor{comment}{//\ sim.set\_can\_sim(sens::basicsw,\ running\_on\_devboard);}}
+\DoxyCodeLine{00050\ \ \ \ \ \textcolor{comment}{//\ sim.set\_can\_sim(sens::starter,\ running\_on\_devboard);}}
+\DoxyCodeLine{00051\ \ \ \ \ \textcolor{comment}{//\ sim.set\_can\_sim(sens::mulebatt,\ running\_on\_devboard);}}
+\DoxyCodeLine{00052\ \ \ \ \ \textcolor{keywordflow}{if}\ (!running\_on\_devboard)\ \{\ \ \ \ \ \ \textcolor{comment}{//\ override\ settings\ if\ running\ on\ the\ real\ car}}
+\DoxyCodeLine{00053\ \ \ \ \ \ \ \ \ sim.set\_potmap(sens::none);\ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00054\ \ \ \ \ \ \ \ \ looptime\_print\ =\ \textcolor{keyword}{false};\ \ \ \ \ \ \textcolor{comment}{//\ Makes\ code\ write\ out\ timestamps\ throughout\ loop\ to\ serial\ port}}
+\DoxyCodeLine{00055\ \ \ \ \ \ \ \ \ touch\_reticles\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00056\ \ \ \ \ \ \ \ \ console\_enabled\ =\ \textcolor{keyword}{false};\ \ \ \ \ \textcolor{comment}{//\ safer\ to\ disable\ because\ serial\ printing\ itself\ can\ easily\ cause\ new\ problems,\ and\ libraries\ might\ do\ it\ whenever}}
+\DoxyCodeLine{00057\ \ \ \ \ \ \ \ \ wifi\_client\_mode\ =\ \textcolor{keyword}{false};\ \ \ \ \ \ \ \textcolor{comment}{//\ Should\ wifi\ be\ in\ client\ or\ access\ point\ mode?}}
+\DoxyCodeLine{00058\ \ \ \ \ \ \ \ \ keep\_system\_powered\ =\ \textcolor{keyword}{false};\ \textcolor{comment}{//\ Use\ true\ during\ development}}
+\DoxyCodeLine{00059\ \ \ \ \ \ \ \ \ dont\_take\_temperatures\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00060\ \ \ \ \ \ \ \ \ button\_test\_heartbeat\_color\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00061\ \ \ \ \ \ \ \ \ print\_framebuffers\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00062\ \ \ \ \ \ \ \ \ print\_task\_stack\_usage\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00063\ \ \ \ \ \}}
+\DoxyCodeLine{00064\ \ \ \ \ printf(\textcolor{stringliteral}{"{}Using\ \%s\ defaults..\(\backslash\)n"{}},\ (running\_on\_devboard)\ ?\ \textcolor{stringliteral}{"{}dev-\/board"{}}\ :\ \textcolor{stringliteral}{"{}vehicle-\/pcb"{}});}
+\DoxyCodeLine{00065\ \}}
+\DoxyCodeLine{00066\ \textcolor{keywordtype}{void}\ print\_partition\_table()\ \{}
+\DoxyCodeLine{00067\ \ \ \ \ printf(\textcolor{stringliteral}{"{}\(\backslash\)nPartition\ Typ\ SubT\ \ Address\ SizeByte\ \ \ kB\(\backslash\)n"{}});}
+\DoxyCodeLine{00068\ \ \ \ \ esp\_partition\_iterator\_t\ iterator\ =\ esp\_partition\_find(ESP\_PARTITION\_TYPE\_ANY,\ ESP\_PARTITION\_SUBTYPE\_ANY,\ NULL);}
+\DoxyCodeLine{00069\ \ \ \ \ \textcolor{keyword}{const}\ esp\_partition\_t\ *partition;}
+\DoxyCodeLine{00070\ \ \ \ \ \textcolor{keywordflow}{while}\ ((partition\ =\ esp\_partition\_get(iterator))\ !=\ NULL)\ \{}
+\DoxyCodeLine{00071\ \ \ \ \ \ \ \ \ printf(\textcolor{stringliteral}{"{}\ \%8s\ \%3d\ 0x\%02x\ 0x\%06x\ 0x\%06x\ \%4d\(\backslash\)n"{}},\ partition-\/>label,\ partition-\/>type,\ partition-\/>subtype,\ partition-\/>address,\ partition-\/>size,\ (partition-\/>size)/1024);}
+\DoxyCodeLine{00072\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!strcmp(partition-\/>label,\ \textcolor{stringliteral}{"{}coredump"{}}))\ \textcolor{keywordflow}{break};}
+\DoxyCodeLine{00073\ \ \ \ \ \ \ \ \ iterator\ =\ esp\_partition\_next(iterator);}
+\DoxyCodeLine{00074\ \ \ \ \ \}}
+\DoxyCodeLine{00075\ \ \ \ \ esp\_partition\_iterator\_release(iterator);}
+\DoxyCodeLine{00076\ \}}
+\DoxyCodeLine{00077\ \textcolor{keywordtype}{void}\ sim\_setup()\ \{}
+\DoxyCodeLine{00078\ \ \ \ \ sim.register\_device(sens::pressure,\ pressure,\ pressure.source());}
+\DoxyCodeLine{00079\ \ \ \ \ sim.register\_device(sens::brkpos,\ brkpos,\ brkpos.source());}
+\DoxyCodeLine{00080\ \ \ \ \ sim.register\_device(sens::airvelo,\ airvelo,\ airvelo.source());}
+\DoxyCodeLine{00081\ \ \ \ \ sim.register\_device(sens::mapsens,\ mapsens,\ mapsens.source());}
+\DoxyCodeLine{00082\ \ \ \ \ sim.register\_device(sens::tach,\ tach,\ tach.source());}
+\DoxyCodeLine{00083\ \ \ \ \ sim.register\_device(sens::speedo,\ speedo,\ speedo.source());}
+\DoxyCodeLine{00084\ \ \ \ \ \textcolor{comment}{//\ sim.register\_device(sens::engtemp,\ temp,\ temp.source());}}
+\DoxyCodeLine{00085\ \ \ \ \ \textcolor{comment}{//\ sim.register\_device(sens::starter,\ starter,\ starter.source());}}
+\DoxyCodeLine{00086\ \ \ \ \ sim.set\_potmap();}
+\DoxyCodeLine{00087\ \}}
+\DoxyCodeLine{00088\ \textcolor{comment}{//\ RTOS\ task\ that\ updates\ temp\ sensors\ in\ a\ separate\ task}}
+\DoxyCodeLine{00089\ \textcolor{keywordtype}{void}\ update\_temperature\_sensors(\textcolor{keywordtype}{void}\ *parameter)\ \{}
+\DoxyCodeLine{00090\ \ \ \ \ \textcolor{keywordflow}{while}\ (\textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{00091\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!dont\_take\_temperatures)}
+\DoxyCodeLine{00092\ \ \ \ \ \ \ \ \ \ \ \ \ tempsens.update\_temperatures();}
+\DoxyCodeLine{00093\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (sim.potmapping(sens::engtemp))\ \{}
+\DoxyCodeLine{00094\ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{\hyperlink{class_temperature_sensor}{TemperatureSensor}}\ *engine\_sensor\ =\ tempsens.get\_sensor(loc::ENGINE);}
+\DoxyCodeLine{00095\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (engine\_sensor\ !=\ \textcolor{keyword}{nullptr})\ \{}
+\DoxyCodeLine{00096\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ engine\_sensor-\/>set\_temperature(pot.mapToRange(temp\_sensor\_min\_f,\ temp\_sensor\_max\_f));}
+\DoxyCodeLine{00097\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00098\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00099\ \ \ \ \ \ \ \ \ vTaskDelay(pdMS\_TO\_TICKS(1000));\ \textcolor{comment}{//\ Delay\ for\ a\ second\ to\ avoid\ updating\ the\ sensors\ too\ frequently}}
+\DoxyCodeLine{00100\ \ \ \ \ \}}
+\DoxyCodeLine{00101\ \}}
+\DoxyCodeLine{00102\ \textcolor{keywordtype}{void}\ set\_syspower(\textcolor{keywordtype}{bool}\ setting)\ \{}
+\DoxyCodeLine{00103\ \ \ \ \ syspower\ =\ setting\ |\ keep\_system\_powered;}
+\DoxyCodeLine{00104\ \ \ \ \ write\_pin(syspower\_pin,\ syspower);}
+\DoxyCodeLine{00105\ \}}
+\DoxyCodeLine{00106\ \textcolor{comment}{//\ Calculates\ massairflow\ in\ g/s\ using\ values\ passed\ in\ if\ present,\ otherwise\ it\ reads\ fresh\ values}}
+\DoxyCodeLine{00107\ \textcolor{keywordtype}{float}\ massairflow(\textcolor{keywordtype}{float}\ \_map\ =\ NAN,\ \textcolor{keywordtype}{float}\ \_airvelo\ =\ NAN,\ \textcolor{keywordtype}{float}\ \_ambient\ =\ NAN)\ \{\ \ \textcolor{comment}{//\ mdot\ (kg/s)\ =\ density\ (kg/m3)\ *\ v\ (m/s)\ *\ A\ (m2)\ .\ \ And\ density\ =\ P/RT.\ \ So,\ \ \ mdot\ =\ v\ *\ A\ *\ P\ /\ (R\ *\ T)\ \ in\ kg/s}}
+\DoxyCodeLine{00108\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keywordtype}{float}\ maf\_map\_last;}
+\DoxyCodeLine{00109\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keywordtype}{float}\ maf\_velo\_last;}
+\DoxyCodeLine{00110\ \ \ \ \ \textcolor{keywordtype}{float}\ temp\ =\ \_ambient;}
+\DoxyCodeLine{00111\ \ \ \ \ \textcolor{keywordtype}{float}\ new\_velo\ =\ airvelo.human();}
+\DoxyCodeLine{00112\ \ \ \ \ \textcolor{keywordtype}{float}\ new\_map\ =\ mapsens.human();}
+\DoxyCodeLine{00113\ \ \ \ \ \textcolor{keywordflow}{if}\ (std::isnan(\_ambient))\ \{}
+\DoxyCodeLine{00114\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (new\_velo\ ==\ maf\_velo\_last\ \&\&\ new\_map\ ==\ maf\_map\_last)\ \textcolor{keywordflow}{return}\ maf\_gps;\ \ \textcolor{comment}{//\ if\ no\ new\ sensor\ readings,\ don't\ recalculate\ the\ same\ value}}
+\DoxyCodeLine{00115\ \ \ \ \ \ \ \ \ temp\ =\ tempsens.val(loc::AMBIENT);}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (std::isnan(temp)\ \&\&\ running\_on\_devboard)\ temp\ =\ tempsens.val(loc::ENGINE);}
+\DoxyCodeLine{00117\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (std::isnan(temp))\ \textcolor{keywordflow}{return}\ -\/1;\ \ \textcolor{comment}{//\ Avoid\ crashing\ due\ to\ trying\ to\ read\ absent\ sensor}}
+\DoxyCodeLine{00118\ \ \ \ \ \}}
+\DoxyCodeLine{00119\ \ \ \ \ maf\_velo\_last\ =\ new\_velo;}
+\DoxyCodeLine{00120\ \ \ \ \ maf\_map\_last\ =\ new\_map;}
+\DoxyCodeLine{00121\ \ \ \ \ \textcolor{keywordtype}{float}\ T\ =\ 0.556\ *\ (temp\ -\/\ 32.0)\ +\ 273.15;\ \ \textcolor{comment}{//\ in\ K.\ \ This\ converts\ from\ degF\ to\ K}}
+\DoxyCodeLine{00122\ \ \ \ \ \textcolor{keywordtype}{float}\ R\ =\ 287.1;\ \ \textcolor{comment}{//\ R\ (for\ air)\ in\ J/(kg·K)\ (\ equivalent\ to\ 8.314\ J/(mol·K)\ )\ \ 1\ J\ =\ 1\ kg*m2/s2}}
+\DoxyCodeLine{00123\ \ \ \ \ \textcolor{keywordtype}{float}\ v\ =\ 0.447\ *\ (std::isnan(\_airvelo)\ ?\ new\_velo\ :\ \_airvelo);\ \textcolor{comment}{//\ in\ m/s\ \ \ 1609.34\ m/mi\ *\ 1/3600\ hr/s\ =\ 0.447}}
+\DoxyCodeLine{00124\ \ \ \ \ \textcolor{keywordtype}{float}\ Ain2\ =\ 3.1415926;\ \ \textcolor{comment}{//\ in\ in2\ \ \ \ 1.0\string^2\ in2\ *\ pi\ \ //\ will\ still\ need\ to\ divide\ by\ 1550\ in2/m2}}
+\DoxyCodeLine{00125\ \ \ \ \ \textcolor{keywordtype}{float}\ P\ =\ 101325.0\ *\ (std::isnan(\_map)\ ?\ new\_map\ :\ \_map);\ \ \textcolor{comment}{//\ in\ Pa\ \ \ 101325\ Pa/atm\ \ 1\ Pa\ =\ 1\ J/m3}}
+\DoxyCodeLine{00126\ \ \ \ \ \textcolor{keywordtype}{float}\ maf\ =\ v\ *\ Ain2\ *\ P\ *\ 1000.0\ /\ (R\ *\ T\ *\ 1550);\ \ \textcolor{comment}{//\ mass\ air\ flow\ in\ grams\ per\ second\ (g/s)\ \ \ (1000\ g/kg\ *\ m/s\ *\ in2\ *\ J/m3)\ /\ (J/(kg*K)\ *\ K\ *\ 1550\ in2/m2)\ =\ g/s}}
+\DoxyCodeLine{00127\ \ \ \ \ \textcolor{keywordflow}{if}\ (std::abs(maf)\ <\ 0.001)\ maf\ =\ 0;}
+\DoxyCodeLine{00128\ \ \ \ \ \textcolor{keywordflow}{return}\ maf;}
+\DoxyCodeLine{00129\ \}}
+\DoxyCodeLine{00130\ \textcolor{keywordtype}{void}\ psram\_setup()\ \{\ \ \textcolor{comment}{//\ see\ https://www.upesy.com/blogs/tutorials/get-\/more-\/ram-\/on-\/esp32-\/with-\/psram\#}}
+\DoxyCodeLine{00131\ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}PSRAM.."{}});}
+\DoxyCodeLine{00132\ \textcolor{preprocessor}{\ \ \ \ \#ifndef\ BOARD\_HAS\_PSRAM}}
+\DoxyCodeLine{00133\ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}\ support\ is\ currently\ disabled\(\backslash\)n"{}});}
+\DoxyCodeLine{00134\ \ \ \ \ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00135\ \textcolor{preprocessor}{\ \ \ \ \#endif}}
+\DoxyCodeLine{00136\ \ \ \ \ \textcolor{keywordflow}{if}\ (psramInit())\ Serial.printf(\textcolor{stringliteral}{"{}\ is\ correctly\ initialized,\ "{}});}
+\DoxyCodeLine{00137\ \ \ \ \ \textcolor{keywordflow}{else}\ Serial.printf(\textcolor{stringliteral}{"{}\ is\ not\ available,\ "{}});}
+\DoxyCodeLine{00138\ \ \ \ \ \textcolor{comment}{//\ int\ available\_PSRAM\_size\ =\ ESP.getFreePsram();}}
+\DoxyCodeLine{00139\ \ \ \ \ \textcolor{comment}{//\ Serial.println((String)"{}\ \ PSRAM\ Size\ available\ (bytes):\ "{}\ +\ available\_PSRAM\_size);}}
+\DoxyCodeLine{00140\ \ \ \ \ \textcolor{comment}{//\ int\ *array\_int\ =\ (int\ *)\ ps\_malloc(1000\ *\ sizeof(int));\ //\ Create\ an\ integer\ array\ of\ 1000}}
+\DoxyCodeLine{00141\ \ \ \ \ \textcolor{comment}{//\ array\_int[0]\ =\ 42;}}
+\DoxyCodeLine{00142\ \ \ \ \ \textcolor{comment}{//\ array\_int[999]\ =\ 42;\ //We\ access\ array\ values\ like\ classic\ array}}
+\DoxyCodeLine{00143\ \ \ \ \ \textcolor{comment}{//\ int\ available\_PSRAM\_size\_after\ =\ ESP.getFreePsram();}}
+\DoxyCodeLine{00144\ \ \ \ \ \textcolor{comment}{//\ Serial.println((String)"{}\ \ PSRAM\ Size\ available\ (bytes):\ "{}\ +\ available\_PSRAM\_size\_after);\ //\ Free\ memory\ space\ has\ decreased}}
+\DoxyCodeLine{00145\ \ \ \ \ \textcolor{comment}{//\ int\ array\_size\ =\ available\_PSRAM\_size\ -\/\ available\_PSRAM\_size\_after;}}
+\DoxyCodeLine{00146\ \ \ \ \ \textcolor{comment}{//\ Serial.println((String)"{}Array\ size\ in\ PSRAM\ in\ bytes:\ "{}\ +\ array\_size);}}
+\DoxyCodeLine{00147\ \ \ \ \ \textcolor{comment}{//\ //\ free(array\_int);\ //The\ allocated\ memory\ is\ freed.}}
+\DoxyCodeLine{00148\ \ \ \ \ Serial.println((String)\textcolor{stringliteral}{"{}size\ (B):\ "{}}\ +ESP.getFreePsram());}
+\DoxyCodeLine{00149\ \}}
+\DoxyCodeLine{00150\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_toggle_switch}{ToggleSwitch}}\ \{}
+\DoxyCodeLine{00151\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00152\ \ \ \ \ \textcolor{keywordtype}{bool}\ pin\_val\ =\ HIGH,\ val\ =\ LOW;\ \ \textcolor{comment}{//\ pin\ low\ means\ val\ high}}
+\DoxyCodeLine{00153\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00154\ \ \ \ \ \textcolor{keywordtype}{int}\ pin;}
+\DoxyCodeLine{00155\ \ \ \ \ \textcolor{keywordtype}{bool}\ last\ =\ 0;}
+\DoxyCodeLine{00156\ \ \ \ \ sens\ attached\_sensor\ =\ sens::none;}
+\DoxyCodeLine{00157\ \ \ \ \ \textcolor{keywordtype}{void}\ readswpin()\ \{}
+\DoxyCodeLine{00158\ \ \ \ \ \ \ \ \ last\ =\ val;}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{do}\ \{}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ \ \ \ \ \ \ pin\_val\ =\ digitalRead(pin);\ \ \ \textcolor{comment}{//\ !value\ because\ electrical\ signal\ is\ active\ low}}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{while}\ (pin\_val\ !=\ digitalRead(pin));\ \textcolor{comment}{//\ basicmodesw\ pin\ has\ a\ tiny\ (70ns)\ window\ in\ which\ it\ could\ get\ invalid\ low\ values,\ so\ read\ it\ twice\ to\ be\ sure}}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ \ \ val\ =\ !pin\_val;\ \ \textcolor{comment}{//\ pin\ low\ means\ switch\ value\ is\ high}}
+\DoxyCodeLine{00163\ \ \ \ \ \}}
+\DoxyCodeLine{00164\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00165\ \ \ \ \ \mbox{\hyperlink{class_toggle_switch}{ToggleSwitch}}(\textcolor{keywordtype}{int}\ \_pin,\ sens\ \_sens=sens::none)\ :\ pin(\_pin),\ attached\_sensor(\_sens)\ \{}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \ \ set\_pin(pin,\ INPUT\_PULLUP);}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \ \ readswpin();}
+\DoxyCodeLine{00168\ \ \ \ \ \}}
+\DoxyCodeLine{00169\ \ \ \ \ \textcolor{keywordtype}{void}\ update()\ \{}
+\DoxyCodeLine{00170\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ ((attached\_sensor\ ==\ sens::none)\ ||\ !sim.simulating(attached\_sensor))\ readswpin();}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (last\ !=\ val)\ kick\_inactivity\_timer(8);}
+\DoxyCodeLine{00172\ \ \ \ \ \}}
+\DoxyCodeLine{00173\ \};}
+\DoxyCodeLine{00174\ \mbox{\hyperlink{class_toggle_switch}{ToggleSwitch}}\ basicsw(basicsw\_pin,\ sens::basicsw);}
+\DoxyCodeLine{00175\ }
+\DoxyCodeLine{00176\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_ignition}{Ignition}}\ \{}
+\DoxyCodeLine{00177\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00178\ \ \ \ \ \textcolor{keywordtype}{int}\ ign\_req\ =\ REQ\_NA,\ panic\_req\ =\ REQ\_NA,\ pin;}
+\DoxyCodeLine{00179\ \ \ \ \ \textcolor{keywordtype}{bool}\ paniclast,\ booted\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00180\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ panicTimer\{15000000\};\ \ \textcolor{comment}{//\ How\ long\ should\ a\ panic\ stop\ last?\ \ we\ can't\ stay\ mad\ forever}}
+\DoxyCodeLine{00181\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00182\ \ \ \ \ \textcolor{keywordtype}{bool}\ signal\ =\ LOW;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ set\ by\ handler\ only.\ Reflects\ current\ state\ of\ the\ signal}}
+\DoxyCodeLine{00183\ \ \ \ \ \textcolor{comment}{//\ bool\ panicstop\ =\ false;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ //\ initialize\ NOT\ in\ panic,\ but\ with\ an\ active\ panic\ request,\ this\ puts\ us\ in\ panic\ mode\ with\ timer\ set\ properly\ etc.}}
+\DoxyCodeLine{00184\ \ \ \ \ \mbox{\hyperlink{class_ignition}{Ignition}}(\textcolor{keywordtype}{int}\ \_pin)\ :\ pin(\_pin)\ \{\}}
+\DoxyCodeLine{00185\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{\ \ \textcolor{comment}{//\ must\ run\ after\ diag\ recovery\ function,\ to\ ensure\ initial\ ign\ value\ is\ asserted\ correctly}}
+\DoxyCodeLine{00186\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{bool}\ pin\_initial\_val\ =\ LOW;}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!booted)\ \{}
+\DoxyCodeLine{00188\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ign\_req\ ==\ REQ\_ON)\ pin\_initial\_val\ =\ HIGH;}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ pin\_initial\_val\ =\ LOW;\ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00190\ \ \ \ \ \ \ \ \ \ \ \ \ set\_pin(pin,\ OUTPUT,\ pin\_initial\_val);}
+\DoxyCodeLine{00191\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \ \ booted\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ \ \ ign\_req\ =\ REQ\_NA;}
+\DoxyCodeLine{00194\ \ \ \ \ \}}
+\DoxyCodeLine{00195\ \ \ \ \ \textcolor{keywordtype}{void}\ request(\textcolor{keywordtype}{int}\ req)\ \{\ ign\_req\ =\ req;\ \}}
+\DoxyCodeLine{00196\ \ \ \ \ \textcolor{keywordtype}{void}\ panic\_request(\textcolor{keywordtype}{int}\ req)\ \{\ panic\_req\ =\ req;\ \}}
+\DoxyCodeLine{00197\ \ \ \ \ \textcolor{keywordtype}{void}\ update(\textcolor{keywordtype}{int}\ runmode)\ \{\ \ \textcolor{comment}{//\ Run\ once\ each\ main\ loop}}
+\DoxyCodeLine{00198\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (panic\_req\ ==\ REQ\_TOG)\ panic\_req\ =\ !panicstop;}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ign\_req\ ==\ REQ\_TOG)\ ign\_req\ =\ !signal;}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ else\ if\ (request\ ==\ signal)\ request\ =\ REQ\_NA;\ \ //\ With\ this\ line,\ it\ ignores\ requests\ to\ go\ to\ state\ it's\ already\ in,\ i.e.\ won't\ do\ unnecessary\ pin\ write}}
+\DoxyCodeLine{00201\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (speedo.car\_stopped()\ ||\ panicTimer.expired())\ panic\_req\ =\ REQ\_OFF;\ \ \textcolor{comment}{//\ Cancel\ panic\ stop\ if\ car\ is\ stopped}}
+\DoxyCodeLine{00202\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!speedo.car\_stopped()\ \&\&\ (runmode\ ==\ FLY\ ||\ runmode\ ==\ CRUISE\ ||\ runmode\ ==\ HOLD))\ \{}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (signal\ \&\&\ ign\_req\ ==\ REQ\_OFF)\ panic\_req\ =\ REQ\_ON;\ \ \textcolor{comment}{//\ ignition\ cut\ while\ driving\ causes\ panic\ stop}}
+\DoxyCodeLine{00204\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!sim.simulating(sens::joy)\ \&\&\ hotrc.radiolost())\ panic\_req\ =\ REQ\_ON;}
+\DoxyCodeLine{00205\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (panic\_req\ !=\ REQ\_NA)\ \{}
+\DoxyCodeLine{00207\ \ \ \ \ \ \ \ \ \ \ \ \ panicstop\ =\ (panic\_req\ ==\ REQ\_ON)\ ?\ \textcolor{keyword}{true}\ :\ \textcolor{keyword}{false};\ \ \ \ \textcolor{comment}{//\ printf("{}panic=\%d\(\backslash\)n"{},\ panicstop);}}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (panicstop\ !=\ paniclast)\ \{}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ prefs.putUInt(\textcolor{stringliteral}{"{}panicstop"{}},\ (uint32\_t)panicstop);\ \ \textcolor{comment}{//\ this\ is\ read\ at\ boot,\ see\ diag.h}}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (panicstop)\ panicTimer.reset();}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ \ \ paniclast\ =\ panicstop;}
+\DoxyCodeLine{00214\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (panicstop)\ ign\_req\ =\ REQ\_OFF;\ \ \textcolor{comment}{//\ panic\ stop\ causes\ ignition\ cut}}
+\DoxyCodeLine{00215\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ign\_req\ !=\ REQ\_NA\ \&\&\ runmode\ !=\ ASLEEP)\ \{}
+\DoxyCodeLine{00216\ \ \ \ \ \ \ \ \ \ \ \ \ signal\ =\ (bool)ign\_req;}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ \ \ \ \ \ \ write\_pin(pin,\ signal);\ \ \textcolor{comment}{//\ turn\ car\ off\ or\ on\ (ign\ output\ is\ active\ high),\ ensuring\ to\ never\ turn\ on\ the\ ignition\ while\ panicking}}
+\DoxyCodeLine{00218\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00219\ \ \ \ \ \ \ \ \ panic\_req\ =\ ign\_req\ =\ REQ\_NA;\ \ \textcolor{comment}{//\ cancel\ outstanding\ requests}}
+\DoxyCodeLine{00220\ \ \ \ \ \}}
+\DoxyCodeLine{00221\ \};}
+\DoxyCodeLine{00222\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_ignition}{Ignition}}\ ignition(ignition\_pin);}
+\DoxyCodeLine{00223\ }
+\DoxyCodeLine{00224\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_starter}{Starter}}\ \{}
+\DoxyCodeLine{00225\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00226\ \ \ \ \ uint32\_t\ pushbrake\_timeout\ =\ 6000000;}
+\DoxyCodeLine{00227\ \ \ \ \ uint32\_t\ run\_timeout\ =\ 5000000;}
+\DoxyCodeLine{00228\ \ \ \ \ uint32\_t\ turnoff\_timeout\ =\ 100000;}
+\DoxyCodeLine{00229\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ starterTimer;\ \ \textcolor{comment}{//\ If\ remotely-\/started\ starting\ event\ is\ left\ on\ for\ this\ long,\ end\ it\ automatically}}
+\DoxyCodeLine{00230\ \ \ \ \ \textcolor{keywordtype}{int}\ lastbrakemode,\ lastgasmode,\ pin;}
+\DoxyCodeLine{00231\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00232\ \ \ \ \ \mbox{\hyperlink{class_starter}{Starter}}(\textcolor{keywordtype}{int}\ \_pin)\ :\ pin(\_pin)\ \{\}}
+\DoxyCodeLine{00233\ \ \ \ \ \textcolor{keywordtype}{bool}\ motor\ =\ LOW;\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ set\ by\ handler\ only.\ Reflects\ current\ state\ of\ starter\ signal\ (does\ not\ indicate\ source)}}
+\DoxyCodeLine{00234\ \ \ \ \ \textcolor{keywordtype}{int}\ now\_req\ =\ REQ\_NA;}
+\DoxyCodeLine{00235\ \ \ \ \ \textcolor{keywordtype}{bool}\ req\_active\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00236\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{}
+\DoxyCodeLine{00237\ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}Starter..\ output-\/only\ supported\(\backslash\)n"{}});}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ set\_pin(pin,\ OUTPUT);\ \ \textcolor{comment}{//\ set\ pin\ as\ output}}
+\DoxyCodeLine{00239\ \ \ \ \ \}}
+\DoxyCodeLine{00240\ \ \ \ \ \textcolor{keywordtype}{void}\ request(\textcolor{keywordtype}{int}\ req)\ \{\ now\_req\ =\ req;\ \}\ \ \textcolor{comment}{//\ Serial.printf("{}r:\%d\ n:\%d\(\backslash\)n"{},\ req,\ now\_req);\}}}
+\DoxyCodeLine{00241\ \ \ \ \ \textcolor{keywordtype}{void}\ update()\ \{\ \ \textcolor{comment}{//\ starter\ drive\ handler\ logic.\ \ Outside\ code\ interacts\ with\ handler\ by\ calling\ request(XX)\ =\ REQ\_OFF,\ REQ\_ON,\ or\ REQ\_TOG}}
+\DoxyCodeLine{00242\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ if\ (now\_req\ !=\ NA)\ Serial.printf("{}m:\%d\ r:\%d\(\backslash\)n"{},\ motor,\ now\_req);}}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (now\_req\ ==\ REQ\_TOG)\ now\_req\ =\ !motor;\ \ \textcolor{comment}{//\ translate\ a\ toggle\ request\ to\ a\ drive\ request\ opposite\ to\ the\ current\ drive\ state}}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \ \ req\_active\ =\ (now\_req\ !=\ REQ\_NA);\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ for\ display}}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (motor\ \&\&\ ((now\_req\ ==\ REQ\_OFF)\ ||\ starterTimer.expired()))\ \ \{\ \ \textcolor{comment}{//\ if\ we're\ driving\ the\ motor\ but\ need\ to\ stop\ or\ in\ the\ process\ of\ stopping}}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \ \ \ \ \ \ motor\ =\ LOW;\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ we\ will\ turn\ it\ off}}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ \ \ \ \ \ \ write\_pin\ (pin,\ motor);\ \ \textcolor{comment}{//\ begin\ driving\ the\ pin\ low\ voltage}}
+\DoxyCodeLine{00248\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (gas.motormode\ ==\ Starting)\ gas.setmode(lastgasmode);\ \ \textcolor{comment}{//\ put\ the\ throttle\ back\ to\ doing\ whatever\ it\ was\ doing\ before}}
+\DoxyCodeLine{00249\ \ \ \ \ \ \ \ \ \ \ \ \ now\_req\ =\ REQ\_NA;}
+\DoxyCodeLine{00250\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ ditch\ out,\ leaving\ the\ motor-\/off\ request\ intact.\ we'll\ check\ on\ the\ timer\ next\ time}}
+\DoxyCodeLine{00251\ \ \ \ \ \ \ \ \ \}\ \ \textcolor{comment}{//\ now,\ we\ have\ stopped\ driving\ the\ starter\ if\ we\ were\ supposed\ to\ stop}}
+\DoxyCodeLine{00252\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ if\ (sim.simulating(sens::starter))\ motor\ =\ pin\_outputting;\ \ //\ if\ simulating\ starter,\ there's\ no\ external\ influence}}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (motor\ ||\ now\_req\ !=\ REQ\_ON)\ \{\ \ \textcolor{comment}{//\ if\ starter\ is\ already\ being\ driven,\ or\ we\ aren't\ being\ tasked\ to\ drive\ it}}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \ \ \ \ \ \ now\_req\ =\ REQ\_NA;\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ cancel\ any\ requests}}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ and\ ditch}}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \ \ \}\ \ \textcolor{comment}{//\ from\ here\ on,\ we\ can\ assume\ the\ starter\ is\ off\ and\ we\ are\ supposed\ to\ turn\ it\ on}}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (brake.autoholding\ ||\ !brake\_before\_starting)\ \{\ \ \textcolor{comment}{//\ if\ the\ brake\ is\ being\ held\ down,\ or\ if\ we\ don't\ care\ whether\ it\ is}}
+\DoxyCodeLine{00258\ \ \ \ \ \ \ \ \ \ \ \ \ lastgasmode\ =\ gas.motormode;\ \ \ \ \ \ \textcolor{comment}{//\ remember\ incumbent\ gas\ setting}}
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \ \ \ \ \ \ gas.setmode(Starting);\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ give\ it\ some\ gas}}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \ \ \ \ \ \ starterTimer.set((int64\_t)run\_timeout);\ \ \textcolor{comment}{//\ if\ left\ on\ the\ starter\ will\ turn\ off\ automatically\ after\ X\ seconds}}
+\DoxyCodeLine{00261\ \ \ \ \ \ \ \ \ \ \ \ \ motor\ =\ HIGH;\ \ \ \ \textcolor{comment}{//\ ensure\ starter\ variable\ always\ reflects\ the\ starter\ status\ regardless\ who\ is\ driving\ it}}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \ \ \ \ \ \ write\_pin(pin,\ motor);\ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ and\ start\ the\ motor}}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \ \ \ \ \ \ now\_req\ =\ REQ\_NA;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ we\ have\ serviced\ starter-\/on\ request,\ so\ cancel\ it}}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ if\ the\ brake\ was\ right\ we\ have\ started\ driving\ the\ starter}}
+\DoxyCodeLine{00265\ \ \ \ \ \ \ \ \ \}\ \ \textcolor{comment}{//\ from\ here\ on,\ we\ can\ assume\ the\ brake\ isn't\ being\ held\ on,\ which\ is\ in\ the\ way\ of\ our\ task\ to\ begin\ driving\ the\ starter}}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (brake.motormode\ !=\ AutoHold)\ \{\ \ \ \textcolor{comment}{//\ if\ we\ haven't\ yet\ told\ the\ brake\ to\ hold\ down}}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \ \ \ \ \ \ lastbrakemode\ =\ brake.motormode;\ \textcolor{comment}{//\ remember\ incumbent\ brake\ setting}}
+\DoxyCodeLine{00268\ \ \ \ \ \ \ \ \ \ \ \ \ brake.setmode(AutoHold);\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ tell\ the\ brake\ to\ hold}}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \ \ \ \ \ \ starterTimer.set((int64\_t)pushbrake\_timeout);\ \ \ \textcolor{comment}{//\ start\ a\ timer\ to\ time\ box\ that\ action}}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return};\ \ \textcolor{comment}{//\ we\ told\ the\ brake\ to\ hold\ down,\ leaving\ the\ request\ to\ turn\ the\ starter\ on\ intact,\ so\ we'll\ be\ back\ to\ check}}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ \}\ \ \textcolor{comment}{//\ at\ this\ point\ the\ brake\ has\ been\ told\ to\ hold\ but\ isn't\ holding\ yet}}
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (starterTimer.expired())\ \{\ \ \textcolor{comment}{//\ if\ we've\ waited\ long\ enough\ for\ the\ damn\ brake}}
+\DoxyCodeLine{00273\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (brake.motormode\ ==\ AutoHold)\ brake.setmode(lastbrakemode);\ \ \textcolor{comment}{//\ put\ the\ brake\ back\ to\ doing\ whatever\ it\ was\ doing\ before,\ unless\ it's\ already\ been\ changed}}
+\DoxyCodeLine{00274\ \ \ \ \ \ \ \ \ \ \ \ \ now\_req\ =\ REQ\_NA;\ \ \textcolor{comment}{//\ cancel\ the\ starter-\/on\ request,\ we\ can't\ drive\ the\ starter\ cuz\ the\ car\ might\ lurch\ forward}}
+\DoxyCodeLine{00275\ \ \ \ \ \ \ \ \ \}\ \ \textcolor{comment}{//\ otherwise\ we're\ still\ waiting\ for\ the\ brake\ to\ push.\ the\ starter\ turn-\/on\ request\ remains\ intact}}
+\DoxyCodeLine{00276\ \ \ \ \ \}}
+\DoxyCodeLine{00277\ \ \ \ \ \textcolor{comment}{//\ src\ source()\ \{\ return\ pin\_outputting\ ?\ src::CALC\ :\ src::PIN;\ \}}}
+\DoxyCodeLine{00278\ \};}
+\DoxyCodeLine{00279\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_starter}{Starter}}\ starter(starter\_pin);}
+\DoxyCodeLine{00280\ }
+\DoxyCodeLine{00281\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_fuel_pump}{FuelPump}}\ \{\ \ \textcolor{comment}{//\ drives\ power\ to\ the\ fuel\ pump\ when\ the\ engine\ is\ turning}}
+\DoxyCodeLine{00282\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00283\ \ \ \ \ \textcolor{keywordtype}{float}\ off\_v\ =\ 0.0;}
+\DoxyCodeLine{00284\ \ \ \ \ \textcolor{keywordtype}{float}\ on\_min\_v\ =\ 8.0;}
+\DoxyCodeLine{00285\ \ \ \ \ \textcolor{keywordtype}{float}\ on\_max\_v\ =\ 12.0;}
+\DoxyCodeLine{00286\ \ \ \ \ \textcolor{keywordtype}{float}\ volts\ =\ 0.0;}
+\DoxyCodeLine{00287\ \ \ \ \ \textcolor{keywordtype}{float}\ turnon\_rpm\ =\ 50.0;}
+\DoxyCodeLine{00288\ \ \ \ \ \textcolor{keywordtype}{float}\ duty,\ pwm\_period\ =\ 25000;\ \ \textcolor{comment}{//\ used\ for\ software\ pwm\ timing}}
+\DoxyCodeLine{00289\ \ \ \ \ \textcolor{keywordtype}{int}\ adc\ =\ 0;}
+\DoxyCodeLine{00290\ \ \ \ \ \textcolor{keywordtype}{bool}\ status\ =\ LOW,\ status\_inverse\ =\ HIGH,\ pump\_last\ =\ LOW,\ sw\_pwm\_out\_now\ =\ LOW;}
+\DoxyCodeLine{00291\ \ \ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00292\ \ \ \ \ \textcolor{keywordtype}{bool}\ variable\_speed\_output\ =\ \textcolor{keyword}{false};\ \ \textcolor{comment}{//\ this\ interferes\ with\ the\ gas\ servo\ pwm\ when\ enabled}}
+\DoxyCodeLine{00293\ \ \ \ \ \textcolor{keywordtype}{bool}\ use\_software\_pwm\ =\ \textcolor{keyword}{true};\ \ \textcolor{comment}{//\ avoid\ using\ hardware\ resources\ for\ variable\ output,\ we\ can\ fake\ it\ with\ a\ timer}}
+\DoxyCodeLine{00294\ \ \ \ \ \mbox{\hyperlink{class_timer}{Timer}}\ fuelTimer;}
+\DoxyCodeLine{00295\ \ \ \ \ \textcolor{keywordtype}{int}\ timeout\ =\ 25000;\ \ \textcolor{comment}{//\ not\ tunable}}
+\DoxyCodeLine{00296\ \ \ \ \ \textcolor{keywordtype}{int}\ pin,\ ledc\_channel,\ pwm\_frequency\ =\ 42,\ pwm\_resolution\ =\ 8;\ \ \textcolor{comment}{//\ for\ if\ hardware\ pwm\ is\ used}}
+\DoxyCodeLine{00297\ \ \ \ \ \textcolor{keywordtype}{void}\ writepin()\ \{}
+\DoxyCodeLine{00298\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (variable\_speed\_output)\ \{}
+\DoxyCodeLine{00299\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (use\_software\_pwm)\ \{}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (duty\ >\ 99.5)\ write\_pin(pin,\ HIGH);}
+\DoxyCodeLine{00301\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (duty\ <\ 0.5)\ write\_pin(pin,\ LOW);}
+\DoxyCodeLine{00302\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (fuelTimer.expired())\ \{}
+\DoxyCodeLine{00303\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sw\_pwm\_out\_now\ =\ !sw\_pwm\_out\_now;}
+\DoxyCodeLine{00304\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ timeout\ =\ (int)(duty\ *\ pwm\_period\ /\ 100.0);}
+\DoxyCodeLine{00305\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!sw\_pwm\_out\_now)\ timeout\ =\ (int)pwm\_period\ -\/\ timeout;}
+\DoxyCodeLine{00306\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ write\_pin(pin,\ sw\_pwm\_out\_now);}
+\DoxyCodeLine{00307\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ fuelTimer.set(timeout);}
+\DoxyCodeLine{00308\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00309\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ ledcWrite(ledc\_channel,\ adc);}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00312\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ write\_pin(pin,\ status);}
+\DoxyCodeLine{00313\ \ \ \ \ \}}
+\DoxyCodeLine{00314\ \ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00315\ \ \ \ \ \mbox{\hyperlink{class_fuel_pump}{FuelPump}}(\textcolor{keywordtype}{int}\ \_pin)\ :\ pin(\_pin)\ \{\}}
+\DoxyCodeLine{00316\ \ \ \ \ \textcolor{keywordtype}{void}\ update()\ \{}
+\DoxyCodeLine{00317\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!fuelpump\_supported\ ||\ !captouch)\ \textcolor{keywordflow}{return};}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ tachnow\ =\ tach.filt();}
+\DoxyCodeLine{00319\ \ \ \ \ \ \ \ \ pump\_last\ =\ status;}
+\DoxyCodeLine{00320\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (starter.motor\ ||\ (ignition.signal\ \&\&\ (tachnow\ >=\ turnon\_rpm)))\ \{}
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \ \ \ \ \ \ volts\ =\ map(gas.pc[OUT],\ gas.pc[OPMIN],\ gas.pc[OPMAX],\ on\_min\_v,\ on\_max\_v);}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \ \ \ \ \ \ volts\ =\ constrain(volts,\ on\_min\_v,\ on\_max\_v);}
+\DoxyCodeLine{00323\ \ \ \ \ \ \ \ \ \ \ \ \ adc\ =\ map((\textcolor{keywordtype}{int})volts,\ 0,\ (\textcolor{keywordtype}{int})on\_max\_v,\ 0,\ 255);}
+\DoxyCodeLine{00324\ \ \ \ \ \ \ \ \ \ \ \ \ duty\ =\ 100.0\ *\ volts\ /\ on\_max\_v;}
+\DoxyCodeLine{00325\ \ \ \ \ \ \ \ \ \ \ \ \ status\ =\ HIGH;}
+\DoxyCodeLine{00326\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00327\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00328\ \ \ \ \ \ \ \ \ \ \ \ \ volts\ =\ off\_v;}
+\DoxyCodeLine{00329\ \ \ \ \ \ \ \ \ \ \ \ \ adc\ =\ 0;}
+\DoxyCodeLine{00330\ \ \ \ \ \ \ \ \ \ \ \ \ duty\ =\ 0.0;}
+\DoxyCodeLine{00331\ \ \ \ \ \ \ \ \ \ \ \ \ status\ =\ LOW;}
+\DoxyCodeLine{00332\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00333\ \ \ \ \ \ \ \ \ status\_inverse\ =\ !status;\ \ \textcolor{comment}{//\ for\ idiot\ light}}
+\DoxyCodeLine{00334\ \ \ \ \ \ \ \ \ writepin();}
+\DoxyCodeLine{00335\ \ \ \ \ \}}
+\DoxyCodeLine{00336\ \ \ \ \ \textcolor{keywordtype}{void}\ setup()\ \{}
+\DoxyCodeLine{00337\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!fuelpump\_supported\ ||\ !captouch)\ \textcolor{keywordflow}{return};\ \ \textcolor{comment}{//\ if\ resistive\ touchscreen,\ then\ pin\ is\ needed\ for\ chip\ select}}
+\DoxyCodeLine{00338\ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}Fuel\ pump..\ "{}});}
+\DoxyCodeLine{00339\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (variable\_speed\_output)\ \{}
+\DoxyCodeLine{00340\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (use\_software\_pwm)\ \{}
+\DoxyCodeLine{00341\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_pin(pin,\ OUTPUT);\ \ \textcolor{comment}{//\ initialize\_pin}}
+\DoxyCodeLine{00342\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ fuelTimer.set(timeout);\ \ \textcolor{comment}{//\ start\ the\ timer\ in\ case\ we\ are\ doing\ software\ pwm}}
+\DoxyCodeLine{00343\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}using\ software\ pwm\(\backslash\)n"{}});}
+\DoxyCodeLine{00344\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00345\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00346\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ ledc\_channel\ =\ analogGetChannel(pin);}
+\DoxyCodeLine{00347\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (ledcSetup(ledc\_channel,\ pwm\_frequency,\ pwm\_resolution)\ ==\ 0)\ Serial.printf(\textcolor{stringliteral}{"{}failed\ to\ configure\ "{}});}
+\DoxyCodeLine{00348\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00349\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}using\ "{}});}
+\DoxyCodeLine{00350\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ledcAttachPin(pin,\ ledc\_channel);}
+\DoxyCodeLine{00351\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00352\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}ledc\ ch\ \%d,\ \%d\ bit\ at\ \%d\ Hz\(\backslash\)n"{}},\ ledc\_channel,\ pwm\_resolution,\ pwm\_frequency);}
+\DoxyCodeLine{00353\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00354\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00356\ \ \ \ \ \ \ \ \ \ \ \ \ set\_pin(pin,\ OUTPUT);\ \ \textcolor{comment}{//\ initialize\_pin}}
+\DoxyCodeLine{00357\ \ \ \ \ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}using\ digital\ drive\(\backslash\)n"{}});}
+\DoxyCodeLine{00358\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00359\ \ \ \ \ \}}
+\DoxyCodeLine{00360\ \};}
+\DoxyCodeLine{00361\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_fuel_pump}{FuelPump}}\ fuelpump(tp\_cs\_fuel\_pin);}
+\DoxyCodeLine{00362\ \textcolor{preprocessor}{\#include\ "{}diag.h"{}}}
+\DoxyCodeLine{00363\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_loop_timer}{LoopTimer}}\ looptimer;}
+\DoxyCodeLine{00364\ \textcolor{preprocessor}{\#include\ "{}web.h"{}}}
+\DoxyCodeLine{00365\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_web_manager}{WebManager}}\ web(\&looptimer);}
+\DoxyCodeLine{00366\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_boot_monitor}{BootMonitor}}\ watchdog(\&prefs,\ \&looptimer);}
+\DoxyCodeLine{00367\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_sd_card}{SdCard}}\ sdcard;}
+\DoxyCodeLine{00368\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_diag_runtime}{DiagRuntime}}\ diag(\&hotrc,\ \&tempsens,\ \&pressure,\ \&brkpos,\ \&tach,\ \&speedo,\ \&gas,\ \&brake,\ \&steer,\ \&mulebatt,\ \&airvelo,\ \&mapsens,\ \&pot,\ \&ignition);}
+\DoxyCodeLine{00369\ }
+\DoxyCodeLine{00370\ \textcolor{preprocessor}{\#include\ "{}display.h"{}}\ \ \textcolor{comment}{//\ includes\ neopixel.h,\ touch.h}}
+\DoxyCodeLine{00371\ \textcolor{preprocessor}{\#include\ "{}runmodes.h"{}}}
+\DoxyCodeLine{00372\ \textcolor{keyword}{static}\ \mbox{\hyperlink{class_run_mode_manager}{RunModeManager}}\ run(\&screen,\ \&encoder);}
+\DoxyCodeLine{00373\ }
+\DoxyCodeLine{00374\ \textcolor{keywordtype}{void}\ update\_web(\textcolor{keywordtype}{void}\ *parameter)\ \{}
+\DoxyCodeLine{00375\ \ \ \ \ \textcolor{keywordflow}{while}\ (\textcolor{keyword}{true})\ \{}
+\DoxyCodeLine{00376\ \ \ \ \ \ \ \ \ web.update();}
+\DoxyCodeLine{00377\ \ \ \ \ \ \ \ \ vTaskDelay(pdMS\_TO\_TICKS(20));\ \textcolor{comment}{//\ Delay\ for\ 20ms,\ hopefully\ that's\ fast\ enough}}
+\DoxyCodeLine{00378\ \ \ \ \ \}}
+\DoxyCodeLine{00379\ \}}
+\DoxyCodeLine{00380\ \textcolor{keywordtype}{void}\ bootbutton\_actions()\ \{\ \ \textcolor{comment}{//\ temporary\ (?)\ functionality\ added\ for\ development\ convenience}}
+\DoxyCodeLine{00381\ \ \ \ \ \textcolor{keywordflow}{if}\ (bootbutton.longpress())\ screen.auto\_saver(!auto\_saver\_enabled);}
+\DoxyCodeLine{00382\ \ \ \ \ \textcolor{keywordflow}{if}\ (bootbutton.shortpress())\ \{}
+\DoxyCodeLine{00383\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (auto\_saver\_enabled)\ animations.change\_saver();}
+\DoxyCodeLine{00384\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ sim.toggle();}
+\DoxyCodeLine{00385\ \ \ \ \ \}}
+\DoxyCodeLine{00386\ \}}
+
+\end{DoxyCode}

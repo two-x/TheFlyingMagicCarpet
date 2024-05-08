@@ -1,0 +1,79 @@
+\doxysection{Servo\+Motor Class Reference}
+\hypertarget{class_servo_motor}{}\label{class_servo_motor}\index{ServoMotor@{ServoMotor}}
+Inheritance diagram for Servo\+Motor\+:\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[height=3.000000cm]{class_servo_motor}
+\end{center}
+\end{figure}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_servo_motor_a2641038a3165611c54c59b5aca00bcc2}\label{class_servo_motor_a2641038a3165611c54c59b5aca00bcc2} 
+{\bfseries Servo\+Motor} (int \+\_\+pin, int \+\_\+freq)
+\item 
+\Hypertarget{class_servo_motor_a8ad19267f5e38e718131ef155e565dbc}\label{class_servo_motor_a8ad19267f5e38e718131ef155e565dbc} 
+void {\bfseries setup} (\mbox{\hyperlink{class_hotrc}{Hotrc}} \texorpdfstring{$\ast$}{*}\+\_\+hotrc, \mbox{\hyperlink{class_speedometer}{Speedometer}} \texorpdfstring{$\ast$}{*}\+\_\+speedo)
+\item 
+\Hypertarget{class_servo_motor_a8e8f312bf17d36ff844a395666522a98}\label{class_servo_motor_a8e8f312bf17d36ff844a395666522a98} 
+float {\bfseries out\+\_\+pc\+\_\+to\+\_\+si} (float \+\_\+pc)
+\item 
+\Hypertarget{class_servo_motor_a1e44733364847ce60c7ac65e25166f84}\label{class_servo_motor_a1e44733364847ce60c7ac65e25166f84} 
+float {\bfseries out\+\_\+si\+\_\+to\+\_\+pc} (float \+\_\+si)
+\item 
+\Hypertarget{class_servo_motor_a31baf3ca1608d38f466fbf71f773298e}\label{class_servo_motor_a31baf3ca1608d38f466fbf71f773298e} 
+float {\bfseries out\+\_\+si\+\_\+to\+\_\+us} (float \+\_\+si)
+\item 
+\Hypertarget{class_servo_motor_aa00292d01224284794780509d95cfa95}\label{class_servo_motor_aa00292d01224284794780509d95cfa95} 
+float {\bfseries out\+\_\+pc\+\_\+to\+\_\+us} (float \+\_\+pc)
+\item 
+\Hypertarget{class_servo_motor_a57ac81e2f29d4b3e326915d6477d210e}\label{class_servo_motor_a57ac81e2f29d4b3e326915d6477d210e} 
+void {\bfseries write\+\_\+motor} ()
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_servo_motor_a9093972d60efc3868b87198c8f282063}\label{class_servo_motor_a9093972d60efc3868b87198c8f282063} 
+bool {\bfseries reverse} = false
+\item 
+\Hypertarget{class_servo_motor_a7ca6a19b4b4fa1f9f954b2deb4a3793e}\label{class_servo_motor_a7ca6a19b4b4fa1f9f954b2deb4a3793e} 
+float {\bfseries pc} \mbox{[}NUM\+\_\+\+MOTORVALS\mbox{]} = \{ 0, NAN, 100, 0, NAN, NAN, NAN, NAN \}
+\item 
+\Hypertarget{class_servo_motor_aa6584bf6fc33bc5816d6dd209045db0e}\label{class_servo_motor_aa6584bf6fc33bc5816d6dd209045db0e} 
+float {\bfseries si} \mbox{[}NUM\+\_\+\+MOTORVALS\mbox{]} = \{ 45.\+0, 43.\+0, 168.\+2, 45.\+0, NAN, 0, 180, 1.\+0 \}
+\item 
+\Hypertarget{class_servo_motor_a5002f2cf41b0f7593da6ea3ec747356f}\label{class_servo_motor_a5002f2cf41b0f7593da6ea3ec747356f} 
+float {\bfseries us} \mbox{[}NUM\+\_\+\+MOTORVALS\mbox{]} = \{ NAN, 1500, NAN, NAN, NAN, 500, 2500, NAN \}
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Protected Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_servo_motor_a558f3e74f3513fc640ddbc1fd946d07e}\label{class_servo_motor_a558f3e74f3513fc640ddbc1fd946d07e} 
+\mbox{\hyperlink{class_hotrc}{Hotrc}} \texorpdfstring{$\ast$}{*} {\bfseries hotrc}
+\item 
+\Hypertarget{class_servo_motor_ad0f6425f1db80da9ca947945217a7ce2}\label{class_servo_motor_ad0f6425f1db80da9ca947945217a7ce2} 
+\mbox{\hyperlink{class_speedometer}{Speedometer}} \texorpdfstring{$\ast$}{*} {\bfseries speedo}
+\item 
+\Hypertarget{class_servo_motor_add13285a9d34d38e1521da600e3d7249}\label{class_servo_motor_add13285a9d34d38e1521da600e3d7249} 
+Servo {\bfseries motor}
+\item 
+\Hypertarget{class_servo_motor_a8833e557a5dca773860b58c6d34f5cad}\label{class_servo_motor_a8833e557a5dca773860b58c6d34f5cad} 
+\mbox{\hyperlink{class_timer}{Timer}} {\bfseries pid\+\_\+timer} = \mbox{\hyperlink{class_timer}{Timer}}(pid\+\_\+timeout)
+\item 
+\Hypertarget{class_servo_motor_a9afdd4df039658d51e952ad505942f56}\label{class_servo_motor_a9afdd4df039658d51e952ad505942f56} 
+int {\bfseries pin}
+\item 
+\Hypertarget{class_servo_motor_a74cce9edee63a22ff285c9422f4b2f96}\label{class_servo_motor_a74cce9edee63a22ff285c9422f4b2f96} 
+int {\bfseries freq}
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Static Protected Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_servo_motor_a62d7e304b5c93655706aabea859cd19c}\label{class_servo_motor_a62d7e304b5c93655706aabea859cd19c} 
+static const uint32\+\_\+t {\bfseries pid\+\_\+timeout} = 85000
+\end{DoxyCompactItemize}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+motors.\+h\end{DoxyCompactItemize}

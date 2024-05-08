@@ -1,0 +1,333 @@
+\doxysection{temperature.\+h}
+\hypertarget{temperature_8h_source}{}\label{temperature_8h_source}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{preprocessor}{\#pragma\ once}}
+\DoxyCodeLine{00002\ \textcolor{preprocessor}{\#include\ <vector>}}
+\DoxyCodeLine{00003\ \textcolor{preprocessor}{\#include\ <DallasTemperature.h>}}
+\DoxyCodeLine{00004\ }
+\DoxyCodeLine{00005\ \textcolor{keyword}{enum\ class}\ loc\ \{\ AMBIENT,\ ENGINE,\ WHEEL\_FL,\ WHEEL\_FR,\ WHEEL\_RL,\ WHEEL\_RR,\ BRAKE,\ NUM\_LOCATIONS\ \};\ \ \textcolor{comment}{//\ ,\ SOREN\_DEV0,\ SOREN\_DEV1,\ \};}}
+\DoxyCodeLine{00006\ }
+\DoxyCodeLine{00007\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_temperature_sensor}{TemperatureSensor}}\ \{}
+\DoxyCodeLine{00008\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00009\ \ \ \ \ \textcolor{comment}{//\ Replace\ DeviceAddress\ with\ std::array<uint8\_t,\ 8>}}
+\DoxyCodeLine{00010\ \ \ \ \ \textcolor{keyword}{using\ }DeviceAddress\ =\ std::array<uint8\_t,\ 8>;}
+\DoxyCodeLine{00011\ }
+\DoxyCodeLine{00012\ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00013\ \ \ \ \ loc\ \_location;}
+\DoxyCodeLine{00014\ \ \ \ \ DeviceAddress\ \_address;}
+\DoxyCodeLine{00015\ \ \ \ \ \textcolor{keywordtype}{float}\ \_temperature;}
+\DoxyCodeLine{00016\ \ \ \ \ DallasTemperature*\ \_tempsensebus;}
+\DoxyCodeLine{00017\ }
+\DoxyCodeLine{00018\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00019\ \ \ \ \ \mbox{\hyperlink{class_temperature_sensor}{TemperatureSensor}}(loc\ location,\ \textcolor{keyword}{const}\ DeviceAddress\&\ address,\ DallasTemperature*\ tempsensebus)}
+\DoxyCodeLine{00020\ \ \ \ :\ \_location(location),\ \_address(address),\ \_tempsensebus(tempsensebus),\ \_temperature(-\/999)\ \{\}}
+\DoxyCodeLine{00021\ }
+\DoxyCodeLine{00022\ \ \ \ \ \mbox{\hyperlink{class_temperature_sensor}{TemperatureSensor}}()\ =\ \textcolor{keyword}{delete};\ \textcolor{comment}{//\ always\ create\ with\ a\ pointer\ to\ the\ tempsensorbus}}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \ \ \ \ \ \textcolor{keywordtype}{void}\ request\_temperature()\ \{}
+\DoxyCodeLine{00025\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Request\ temperature\ from\ sensor}}
+\DoxyCodeLine{00026\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!\_tempsensebus-\/>requestTemperaturesByAddress(\_address.data()))\ \{}
+\DoxyCodeLine{00027\ \ \ \ \ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}\ \ failed\ temperature\ request\ from\ sensor\ addr:\ "{}});}
+\DoxyCodeLine{00028\ \ \ \ \ \ \ \ \ \ \ \ \ print\_address();}
+\DoxyCodeLine{00029\ \ \ \ \ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}\(\backslash\)n"{}});}
+\DoxyCodeLine{00030\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00031\ \ \ \ \ \}}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ \ \ \ \ \textcolor{keywordtype}{bool}\ has\_valid\_address()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00034\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Check\ if\ the\ sensor\ has\ a\ valid\ address}}
+\DoxyCodeLine{00035\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ This\ could\ involve\ checking\ if\ the\ address\ is\ not\ equal\ to\ a\ default\ or\ invalid\ address}}
+\DoxyCodeLine{00036\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \_address\ !=\ DeviceAddress\{\};}
+\DoxyCodeLine{00037\ \ \ \ \ \}}
+\DoxyCodeLine{00038\ }
+\DoxyCodeLine{00039\ \ \ \ \ \textcolor{keywordtype}{float}\ read\_temperature()\ \{}
+\DoxyCodeLine{00040\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{float}\ temp\ =\ \_tempsensebus-\/>getTempF(\_address.data());}
+\DoxyCodeLine{00041\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (temp\ ==\ DEVICE\_DISCONNECTED\_F)\ \{}
+\DoxyCodeLine{00042\ \ \ \ \ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}\ \ disconnected\ device\ \%s\ w/\ addr:\ "{}},\ location\_to\_string(\_location));}
+\DoxyCodeLine{00043\ \ \ \ \ \ \ \ \ \ \ \ \ print\_address();}
+\DoxyCodeLine{00044\ \ \ \ \ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}\(\backslash\)n"{}});}
+\DoxyCodeLine{00045\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ DEVICE\_DISCONNECTED\_F;}
+\DoxyCodeLine{00046\ \ \ \ \ \ \ \ \ \}\ }
+\DoxyCodeLine{00047\ \ \ \ \ \ \ \ \ \_temperature\ =\ temp;}
+\DoxyCodeLine{00048\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \_temperature;}
+\DoxyCodeLine{00049\ \ \ \ \ \}}
+\DoxyCodeLine{00050\ }
+\DoxyCodeLine{00051\ \ \ \ \ \textcolor{comment}{//\ getters}}
+\DoxyCodeLine{00052\ \ \ \ \ loc\ get\_location()\textcolor{keyword}{\ const\ }\{\ \textcolor{keywordflow}{return}\ \_location;\ \}}
+\DoxyCodeLine{00053\ \ \ \ \ \textcolor{keywordtype}{float}\ get\_temperature()\textcolor{keyword}{\ const\ }\{\ \textcolor{keywordflow}{return}\ \_temperature;\ \}}
+\DoxyCodeLine{00054\ \ \ \ \ \textcolor{keyword}{const}\ DeviceAddress\&\ get\_address()\textcolor{keyword}{\ const\ }\{\ \textcolor{keywordflow}{return}\ \_address;\ \}}
+\DoxyCodeLine{00055\ \ \ \ \ }
+\DoxyCodeLine{00056\ \ \ \ \ \textcolor{comment}{//\ setters}}
+\DoxyCodeLine{00057\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_location(loc\ location)\ \{\ \_location\ =\ location;\ \}}
+\DoxyCodeLine{00058\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_temperature(\textcolor{keywordtype}{float}\ temperature)\ \{\ \_temperature\ =\ temperature;\ \}}
+\DoxyCodeLine{00059\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_address(DeviceAddress\ address)\ \{}
+\DoxyCodeLine{00060\ \ \ \ \ \ \ \ \ \_address\ =\ address;}
+\DoxyCodeLine{00061\ \ \ \ \ \}}
+\DoxyCodeLine{00062\ \ \ \ \ }
+\DoxyCodeLine{00063\ \ \ \ \ \textcolor{keywordtype}{void}\ print\_address()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00064\ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}0x"{}});}
+\DoxyCodeLine{00065\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}(uint8\_t\ i\ =\ 0;\ i\ <\ \_address.size();\ i++)\ Serial.printf(\textcolor{stringliteral}{"{}\%02x"{}},\ \_address[i]);}
+\DoxyCodeLine{00066\ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}\(\backslash\)n"{}});}
+\DoxyCodeLine{00067\ \ \ \ \ \}}
+\DoxyCodeLine{00068\ }
+\DoxyCodeLine{00069\ \ \ \ \ \textcolor{keywordtype}{void}\ print\_sensor\_info()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00070\ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}\ \ location:\ \%s,\ assigned\ addr:\ "{}},\ location\_to\_string(\_location).c\_str());}
+\DoxyCodeLine{00071\ \ \ \ \ \ \ \ \ print\_address();}
+\DoxyCodeLine{00072\ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}\(\backslash\)n"{}});}
+\DoxyCodeLine{00073\ \ \ \ \ \}}
+\DoxyCodeLine{00074\ }
+\DoxyCodeLine{00075\ \ \ \ \ \textcolor{keyword}{static}\ std::string\ location\_to\_string(loc\ location)\ \{}
+\DoxyCodeLine{00076\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{switch}(location)\ \{}
+\DoxyCodeLine{00077\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ loc::AMBIENT:\ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}ambient"{}};}
+\DoxyCodeLine{00078\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ loc::ENGINE:\ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}engine"{}};}
+\DoxyCodeLine{00079\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ loc::WHEEL\_FL:\ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}wheel\_fl"{}};}
+\DoxyCodeLine{00080\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ loc::WHEEL\_FR:\ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}wheel\_fr"{}};}
+\DoxyCodeLine{00081\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ loc::WHEEL\_RL:\ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}wheel\_rl"{}};}
+\DoxyCodeLine{00082\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ loc::WHEEL\_RR:\ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}wheel\_rr"{}};}
+\DoxyCodeLine{00083\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{case}\ loc::BRAKE:\ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}brakemotor"{}};}
+\DoxyCodeLine{00084\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{default}:\ \textcolor{keywordflow}{return}\ \textcolor{stringliteral}{"{}unknown"{}};}
+\DoxyCodeLine{00085\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00086\ \ \ \ \ \}}
+\DoxyCodeLine{00087\ \};}
+\DoxyCodeLine{00088\ }
+\DoxyCodeLine{00089\ \textcolor{comment}{//\ Class\ to\ manage\ OneWire\ temperature\ sensors}}
+\DoxyCodeLine{00090\ \textcolor{keyword}{class\ }\mbox{\hyperlink{class_temperature_sensor_manager}{TemperatureSensorManager}}\ \{}
+\DoxyCodeLine{00091\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00092\ \ \ \ \ \textcolor{keyword}{enum\ class}\ State\ \{}
+\DoxyCodeLine{00093\ \ \ \ \ \ \ \ \ CONVERTING,}
+\DoxyCodeLine{00094\ \ \ \ \ \ \ \ \ READY\_TO\_READ}
+\DoxyCodeLine{00095\ \ \ \ \ \};}
+\DoxyCodeLine{00096\ \ \ \ \ \textcolor{keywordtype}{bool}\ vehicle\_detected\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00097\ \ \ \ \ int32\_t\ temperature\_precision\ =\ 11;\ \ \textcolor{comment}{//\ 9-\/12\ bit\ resolution}}
+\DoxyCodeLine{00098\ \ \ \ \ \textcolor{keywordtype}{int}\ detected\_devices\_ct\ =\ 0;}
+\DoxyCodeLine{00099\ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00100\ \ \ \ \ \textcolor{comment}{//\ Replace\ DeviceAddress\ with\ std::array<uint8\_t,\ 8>}}
+\DoxyCodeLine{00101\ \ \ \ \ \textcolor{keyword}{using\ }DeviceAddress\ =\ std::array<uint8\_t,\ 8>;}
+\DoxyCodeLine{00102\ }
+\DoxyCodeLine{00103\ \ \ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{long}\ last\_read\_request\_time;}
+\DoxyCodeLine{00104\ \ \ \ \ \textcolor{keywordtype}{int}\ sensor\_index;}
+\DoxyCodeLine{00105\ \ \ \ \ State\ \_state;}
+\DoxyCodeLine{00106\ \ \ \ \ }
+\DoxyCodeLine{00107\ \ \ \ \ OneWire\ one\_wire\_bus;}
+\DoxyCodeLine{00108\ \ \ \ \ DallasTemperature\ tempsensebus;}
+\DoxyCodeLine{00109\ }
+\DoxyCodeLine{00110\ \ \ \ \ std::vector<DeviceAddress>\ detected\_addresses;}
+\DoxyCodeLine{00111\ \ \ \ \ std::vector<loc>\ all\_locations\ =\ \{}
+\DoxyCodeLine{00112\ \ \ \ \ \ \ \ \ loc::ENGINE,}
+\DoxyCodeLine{00113\ \ \ \ \ \ \ \ \ loc::AMBIENT,}
+\DoxyCodeLine{00114\ \ \ \ \ \ \ \ \ loc::WHEEL\_FL,}
+\DoxyCodeLine{00115\ \ \ \ \ \ \ \ \ loc::WHEEL\_FR,}
+\DoxyCodeLine{00116\ \ \ \ \ \ \ \ \ loc::WHEEL\_RL,}
+\DoxyCodeLine{00117\ \ \ \ \ \ \ \ \ loc::WHEEL\_RR,}
+\DoxyCodeLine{00118\ \ \ \ \ \ \ \ \ loc::BRAKE,}
+\DoxyCodeLine{00119\ \ \ \ \ \};}
+\DoxyCodeLine{00120\ \ \ \ \ std::map<loc,\ DeviceAddress>\ known\_addresses\ =\ \{}
+\DoxyCodeLine{00121\ \ \ \ \ \ \ \ \ \{loc::ENGINE,\ \{0x28,\ 0x1a,\ 0x27,\ 0x90,\ 0x5c,\ 0x21,\ 0x01,\ 0x59\}\},}
+\DoxyCodeLine{00122\ \ \ \ \ \ \ \ \ \{loc::AMBIENT,\ \{0x28,\ 0x3c,\ 0xf3,\ 0xa7,\ 0xc1,\ 0x21,\ 0x06,\ 0x69\}\},}
+\DoxyCodeLine{00123\ \ \ \ \ \ \ \ \ \{loc::WHEEL\_FL,\ \{0x28,\ 0x55,\ 0x42,\ 0x8f,\ 0x5c,\ 0x21,\ 0x01,\ 0x69\}\},}
+\DoxyCodeLine{00124\ \ \ \ \ \ \ \ \ \{loc::WHEEL\_FR,\ \{0x28,\ 0x70,\ 0x73,\ 0xb3,\ 0x5c,\ 0x21,\ 0x01,\ 0x27\}\},}
+\DoxyCodeLine{00125\ \ \ \ \ \ \ \ \ \{loc::WHEEL\_RL,\ \{0x28,\ 0x54,\ 0xfb,\ 0x88,\ 0x5c,\ 0x21,\ 0x01,\ 0x64\}\},}
+\DoxyCodeLine{00126\ \ \ \ \ \ \ \ \ \{loc::WHEEL\_RR,\ \{0x28,\ 0x6f,\ 0xcd,\ 0xba,\ 0x5c,\ 0x21,\ 0x01,\ 0x26\}\},}
+\DoxyCodeLine{00127\ \ \ \ \ \ \ \ \ \{loc::BRAKE,\ \{0x28,\ 0x6b,\ 0x0f,\ 0x84,\ 0x4b,\ 0x20,\ 0x01,\ 0xf2\}\},}
+\DoxyCodeLine{00128\ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00129\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Attn\ Bobby!}}
+\DoxyCodeLine{00130\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Todo:\ The\ BRAKE\ sensor\ above\ might\ be\ either\ of\ two\ sensor\ addresses,\ depending\ on\ which\ motor\ is\ installed.}}
+\DoxyCodeLine{00131\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Actually\ we'd\ like\ to\ use\ this\ fact\ to\ autodetect\ which\ motor\ is\ installed,\ that\ can\ inform\ other\ parts\ of\ }}
+\DoxyCodeLine{00132\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ the\ code.\ But\ whichever\ of\ the\ two\ is\ detected\ should\ be\ assigned\ to\ the\ loc::BRAKE\ location.}}
+\DoxyCodeLine{00133\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Here\ are\ the\ two\ addresses:}}
+\DoxyCodeLine{00134\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Thomson\ Motor:\ \{0x28,\ 0x09,\ 0xe0,\ 0xd7,\ 0x5c,\ 0x21,\ 0x01,\ 0x4e\}}}
+\DoxyCodeLine{00135\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ \ \ \ \ LAE\ Motor:\ \{0x28,\ 0xce,\ 0x10,\ 0x8b,\ 0x4b,\ 0x20,\ 0x01,\ 0xcc\}}}
+\DoxyCodeLine{00136\ \ \ \ \ \};}
+\DoxyCodeLine{00137\ }
+\DoxyCodeLine{00138\ \ \ \ \ std::map<loc,\ TemperatureSensor>\ sensors;}
+\DoxyCodeLine{00139\ }
+\DoxyCodeLine{00140\ \ \ \ \ \textcolor{comment}{//\ Assigns\ known\ addresses\ to\ Sensors.\ The\ sensors\ will\ have\ locations\ like\ engine\ or\ ambient}}
+\DoxyCodeLine{00141\ \ \ \ \ \textcolor{keywordtype}{void}\ assign\_known\_addresses()\ \{}
+\DoxyCodeLine{00142\ \ \ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ lost\_sensors\ =\ 0;}
+\DoxyCodeLine{00143\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{auto}\&\ known\_address\ :\ known\_addresses)\ \{}
+\DoxyCodeLine{00144\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ check\ to\ see\ if\ we\ have\ a\ known\ address\ that\ wasn't\ detected,\ print\ a\ warning\ if\ yes}}
+\DoxyCodeLine{00145\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{auto}\ detected\_address\_it\ =\ std::find\_if(detected\_addresses.begin(),\ detected\_addresses.end(),\ [\&](\textcolor{keyword}{const}\ DeviceAddress\&\ detected\_address)\ \{}
+\DoxyCodeLine{00146\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ return\ std::equal(detected\_address.begin(),\ detected\_address.end(),\ known\_address.second.begin());}
+\DoxyCodeLine{00147\ \ \ \ \ \ \ \ \ \ \ \ \ \});}
+\DoxyCodeLine{00148\ }
+\DoxyCodeLine{00149\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (detected\_address\_it\ !=\ detected\_addresses.end())\ \{}
+\DoxyCodeLine{00150\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ known\ address\ was\ detected,\ so\ assign\ it\ to\ the\ corresponding\ sensor}}
+\DoxyCodeLine{00151\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{auto}\ sensor\_it\ =\ sensors.find(known\_address.first);}
+\DoxyCodeLine{00152\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (sensor\_it\ ==\ sensors.end())\ \{}
+\DoxyCodeLine{00153\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ sensor\ doesn't\ exist\ yet,\ so\ create\ it\ and\ add\ it\ to\ the\ map}}
+\DoxyCodeLine{00154\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sensors.emplace(known\_address.first,\ \mbox{\hyperlink{class_temperature_sensor}{TemperatureSensor}}(known\_address.first,\ *detected\_address\_it,\ \&tempsensebus));}
+\DoxyCodeLine{00155\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Print\ the\ sensor\ address\ for\ debugging\ purposes}}
+\DoxyCodeLine{00156\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}\ \ assigned\ known\ sensor\ \%s\ at\ addr:\ "{}},\ TemperatureSensor::location\_to\_string(known\_address.first).c\_str());}
+\DoxyCodeLine{00157\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sensors.at(known\_address.first).print\_address();}
+\DoxyCodeLine{00158\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00159\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ sensor\ already\ exists,\ so\ just\ update\ its\ address}}
+\DoxyCodeLine{00160\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sensor\_it-\/>second.set\_address(*detected\_address\_it);}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Print\ the\ updated\ sensor\ address\ for\ debugging\ purposes}}
+\DoxyCodeLine{00162\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}\ \ updated\ sensor\ addr:\ "{}});}
+\DoxyCodeLine{00163\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sensor\_it-\/>second.print\_address();}
+\DoxyCodeLine{00164\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00165\ \ \ \ \ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00166\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ lost\_sensors++;}
+\DoxyCodeLine{00167\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ known\ address\ was\ not\ detected,\ so\ log\ a\ warning\ message}}
+\DoxyCodeLine{00168\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Serial.printf("{}\ \ known\ sensor\ \%s\ not\ detected\(\backslash\)n"{},\ TemperatureSensor::location\_to\_string(known\_address.first).c\_str());}}
+\DoxyCodeLine{00169\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00170\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00171\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (lost\_sensors)\ Serial.printf(\textcolor{stringliteral}{"{}\ \ did\ not\ detect\ \%d\ known\ sensor(s)\(\backslash\)n"{}},\ lost\_sensors);}
+\DoxyCodeLine{00172\ \ \ \ \ \ \ \ \ vehicle\_detected\ =\ detected(loc::AMBIENT);}
+\DoxyCodeLine{00173\ \ \ \ \ \}}
+\DoxyCodeLine{00174\ }
+\DoxyCodeLine{00175\ \ \ \ \ \textcolor{comment}{//\ Assign\ remaining\ addresses\ to\ any\ unassigned\ locations,\ in\ order\ of\ the\ locations\ enum}}
+\DoxyCodeLine{00176\ \ \ \ \ \textcolor{keywordtype}{void}\ assign\_remaining\_addresses()\ \{}
+\DoxyCodeLine{00177\ \ \ \ \ \ \ \ \ \textcolor{keyword}{auto}\ it\ =\ all\_locations.begin();}
+\DoxyCodeLine{00178\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keyword}{auto}\&\ detected\_address\ :\ detected\_addresses)\ \{}
+\DoxyCodeLine{00179\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (std::find\_if(sensors.begin(),\ sensors.end(),\ [\&](\textcolor{keyword}{const}\ std::pair<const\ loc,\ TemperatureSensor>\&\ pair)\ \{}
+\DoxyCodeLine{00180\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ return\ std::equal(pair.second.get\_address().begin(),\ pair.second.get\_address().end(),\ detected\_address.begin());}
+\DoxyCodeLine{00181\ \ \ \ \ \ \ \ \ \ \ \ \ \})\ ==\ sensors.end())\ \{}
+\DoxyCodeLine{00182\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{while}\ (it\ !=\ all\_locations.end()\ \&\&\ sensors.find(*it)\ !=\ sensors.end())\ \{}
+\DoxyCodeLine{00183\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ++it;}
+\DoxyCodeLine{00184\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00185\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (it\ !=\ all\_locations.end())\ \{}
+\DoxyCodeLine{00186\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ sensor\ doesn't\ exist\ yet,\ so\ create\ it\ and\ add\ it\ to\ the\ map\ and\ print\ the\ sensor\ address}}
+\DoxyCodeLine{00187\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}\ \ detected\ unknown\ sensor\ addr:\ "{}});}
+\DoxyCodeLine{00188\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sensors.emplace(*it,\ \mbox{\hyperlink{class_temperature_sensor}{TemperatureSensor}}(*it,\ detected\_address,\ \&tempsensebus));}
+\DoxyCodeLine{00189\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ sensors.at(*it).print\_address();}
+\DoxyCodeLine{00190\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}\(\backslash\)n"{}});}
+\DoxyCodeLine{00191\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00192\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00193\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00194\ \ \ \ \ \}}
+\DoxyCodeLine{00195\ }
+\DoxyCodeLine{00196\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00197\ \ \ \ \ \mbox{\hyperlink{class_temperature_sensor_manager}{TemperatureSensorManager}}(uint8\_t\ \_onewire\_pin)\ :\ one\_wire\_bus(\_onewire\_pin),\ tempsensebus(\&one\_wire\_bus),\ \ last\_read\_request\_time(0),\ sensor\_index(0),\ \_state(State::CONVERTING)\ \{\}}
+\DoxyCodeLine{00198\ \ \ \ \ \textcolor{keywordtype}{bool}\ setup()\ \{}
+\DoxyCodeLine{00199\ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}Temperature\ sensors.."{}});}
+\DoxyCodeLine{00200\ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00201\ \ \ \ \ \ \ \ \ tempsensebus.setWaitForConversion(\textcolor{keyword}{false});}
+\DoxyCodeLine{00202\ \ \ \ \ \ \ \ \ tempsensebus.setCheckForConversion(\textcolor{keyword}{true});}
+\DoxyCodeLine{00203\ \ \ \ \ \ \ \ \ tempsensebus.begin();}
+\DoxyCodeLine{00204\ \ \ \ \ \ \ \ \ detected\_devices\_ct\ =\ tempsensebus.getDeviceCount();}
+\DoxyCodeLine{00205\ \ \ \ \ \ \ \ \ detected\_addresses.resize(detected\_devices\_ct);}
+\DoxyCodeLine{00206\ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}\ parasitic\ power\ \%s.\ found\ \%d\ device(s):\(\backslash\)n"{}},\ (tempsensebus.isParasitePowerMode())\ ?\ \textcolor{stringliteral}{"{}on"{}}\ :\ \textcolor{stringliteral}{"{}off"{}},\ detected\_devices\_ct);\ \ \textcolor{comment}{//\ ,\ DEC);}}
+\DoxyCodeLine{00207\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (detected\_devices\_ct\ ==\ 0)\ \{}
+\DoxyCodeLine{00208\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Serial.printf("{}\ \ no\ devices\ detected\(\backslash\)n"{});}}
+\DoxyCodeLine{00209\ \ \ \ \ \ \ \ \ \ \ \ \ vehicle\_detected\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00210\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00211\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00212\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ find\ all\ detected\ devices\ and\ set\ their\ temperature\ precision}}
+\DoxyCodeLine{00213\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{for}\ (\textcolor{keywordtype}{int}\ i\ =\ 0;\ i\ <\ detected\_devices\_ct;\ i++)\ \{}
+\DoxyCodeLine{00214\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (tempsensebus.getAddress(detected\_addresses[i].data(),\ i))\ \{}
+\DoxyCodeLine{00215\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ tempsensebus.setResolution(detected\_addresses[i].data(),\ temperature\_precision);}
+\DoxyCodeLine{00216\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00217\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00218\ }
+\DoxyCodeLine{00219\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Assign\ known\ addresses\ to\ the\ sensors\ they\ belong\ to}}
+\DoxyCodeLine{00220\ \ \ \ \ \ \ \ \ \ \ \ \ assign\_known\_addresses();}
+\DoxyCodeLine{00221\ }
+\DoxyCodeLine{00222\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Assign\ remaining\ addresses\ to\ the\ sensors\ in\ order\ using\ all\_locations}}
+\DoxyCodeLine{00223\ \ \ \ \ \ \ \ \ \ \ \ \ assign\_remaining\_addresses();}
+\DoxyCodeLine{00224\ }
+\DoxyCodeLine{00225\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Request\ temperature\ for\ each\ sensor,\ this\ will\ make\ the\ is\_ready()\ method\ work}}
+\DoxyCodeLine{00226\ \ \ \ \ \ \ \ \ \ \ \ \ request\_temperatures();}
+\DoxyCodeLine{00227\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00228\ \ \ \ \ \ \ \ \ Serial.printf(\textcolor{stringliteral}{"{}\ \ detected\ sensor\ addresses\ consistent\ with\ \%s\ context"{}},\ vehicle\_detected\ ?\ \textcolor{stringliteral}{"{}on-\/vehicle"{}}\ :\ \textcolor{stringliteral}{"{}dev-\/board"{}});}
+\DoxyCodeLine{00229\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ vehicle\_detected;}
+\DoxyCodeLine{00230\ \ \ \ \ \}}
+\DoxyCodeLine{00231\ }
+\DoxyCodeLine{00232\ \ \ \ \ \textcolor{comment}{//\ gets\ the\ state\ of\ the\ sensors\ (still\ converting\ values,\ or\ ready\ to\ read)}}
+\DoxyCodeLine{00233\ \ \ \ \ State\ get\_state()\textcolor{keyword}{\ const\ }\{}
+\DoxyCodeLine{00234\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \_state;}
+\DoxyCodeLine{00235\ \ \ \ \ \}}
+\DoxyCodeLine{00236\ }
+\DoxyCodeLine{00237\ \ \ \ \ \textcolor{keywordtype}{void}\ set\_state(State\ state)\ \{}
+\DoxyCodeLine{00238\ \ \ \ \ \ \ \ \ \_state\ =\ state;}
+\DoxyCodeLine{00239\ \ \ \ \ \}}
+\DoxyCodeLine{00240\ }
+\DoxyCodeLine{00241\ \ \ \ \ \textcolor{comment}{//\ checks\ if\ all\ of\ the\ sensors\ on\ the\ device\ are\ ready\ to\ be\ read\ from,\ runs\ every\ }}
+\DoxyCodeLine{00242\ \ \ \ \ \textcolor{keywordtype}{void}\ update\_state()\ \{}
+\DoxyCodeLine{00243\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (tempsensebus.isConversionComplete())\ \{}
+\DoxyCodeLine{00244\ \ \ \ \ \ \ \ \ \ \ \ \ \_state\ =\ State::READY\_TO\_READ;}
+\DoxyCodeLine{00245\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00246\ \ \ \ \ \ \ \ \ \ \ \ \ \_state\ =\ State::CONVERTING;}
+\DoxyCodeLine{00247\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00248\ \ \ \ \ \}}
+\DoxyCodeLine{00249\ }
+\DoxyCodeLine{00250\ \ \ \ \ \textcolor{comment}{//\ previously\ called\ temp\_soren()}}
+\DoxyCodeLine{00251\ \ \ \ \ \textcolor{keywordtype}{void}\ update\_temperatures()\ \{}
+\DoxyCodeLine{00252\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (sensors.size()\ ==\ 0)\ \textcolor{keywordflow}{return};\ \textcolor{comment}{//\ if\ there\ are\ no\ sensors\ connected,\ bail}}
+\DoxyCodeLine{00253\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Check\ if\ conversions\ are\ complete}}
+\DoxyCodeLine{00254\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (get\_state()\ ==\ State::READY\_TO\_READ)\ \{}
+\DoxyCodeLine{00255\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Read\ temperature\ from\ one\ sensor}}
+\DoxyCodeLine{00256\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{auto}\ sensor\_it\ =\ std::next(sensors.begin(),\ sensor\_index);}
+\DoxyCodeLine{00257\ \ \ \ \ \ \ \ \ \ \ \ \ sensor\_it-\/>second.read\_temperature();}
+\DoxyCodeLine{00258\ }
+\DoxyCodeLine{00259\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Move\ to\ the\ next\ sensor}}
+\DoxyCodeLine{00260\ \ \ \ \ \ \ \ \ \ \ \ \ sensor\_index\ =\ (sensor\_index\ +\ 1)\ \%\ sensors.size();}
+\DoxyCodeLine{00261\ }
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ If\ we've\ read\ from\ all\ sensors,\ start\ the\ next\ round\ of\ conversions}}
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (sensor\_index\ ==\ 0)\ \{}
+\DoxyCodeLine{00264\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ request\_temperatures();}
+\DoxyCodeLine{00265\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ set\_state(State::CONVERTING);}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ last\_read\_request\_time\ =\ millis();}
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00268\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \textcolor{keywordflow}{if}\ (millis()\ -\/\ last\_read\_request\_time\ >=\ tempsensebus.millisToWaitForConversion(tempsensebus.getResolution()))\ \{}
+\DoxyCodeLine{00269\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Enough\ time\ has\ passed\ since\ the\ last\ conversion\ request,\ so\ check\ if\ conversions\ are\ complete}}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \ \ \ \ \ \ update\_state();}
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00272\ \ \ \ \ \}}
+\DoxyCodeLine{00273\ }
+\DoxyCodeLine{00274\ \ \ \ \ \textcolor{keywordtype}{int}\ get\_detected\_device\_count()\ \{}
+\DoxyCodeLine{00275\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ detected\_devices\_ct;}
+\DoxyCodeLine{00276\ \ \ \ \ \}}
+\DoxyCodeLine{00277\ }
+\DoxyCodeLine{00278\ \ \ \ \ \textcolor{comment}{//\ Method\ to\ get\ a\ sensor\ by\ its\ location}}
+\DoxyCodeLine{00279\ \ \ \ \ \mbox{\hyperlink{class_temperature_sensor}{TemperatureSensor}}*\ get\_sensor(loc\ location)\ \{}
+\DoxyCodeLine{00280\ \ \ \ \ \ \ \ \ \textcolor{keyword}{auto}\ it\ =\ sensors.find(location);}
+\DoxyCodeLine{00281\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (it\ !=\ sensors.end())\ \{}
+\DoxyCodeLine{00282\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ sensor\ exists\ in\ the\ map,\ so\ return\ it}}
+\DoxyCodeLine{00283\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \&it-\/>second;}
+\DoxyCodeLine{00284\ \ \ \ \ \ \ \ \ \}\ \textcolor{keywordflow}{else}\ \{}
+\DoxyCodeLine{00285\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ The\ sensor\ doesn't\ exist\ in\ the\ map}}
+\DoxyCodeLine{00286\ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{nullptr};}
+\DoxyCodeLine{00287\ \ \ \ \ \ \ \ \ \}}
+\DoxyCodeLine{00288\ \ \ \ \ \}}
+\DoxyCodeLine{00289\ }
+\DoxyCodeLine{00290\ \ \ \ \ \textcolor{keywordtype}{void}\ request\_temperatures()\ \{}
+\DoxyCodeLine{00291\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ todo\ consider\ removing\ this,\ as\ it's\ non\ blocking\ and\ we\ risk\ it\ not\ finishing\ before\ is\_ready\ runs}}
+\DoxyCodeLine{00292\ \ \ \ \ \ \ \ \ tempsensebus.requestTemperatures();}
+\DoxyCodeLine{00293\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Set\ state\ to\ converting\ until\ the\ sensors\ are\ ready\ to\ be\ read\ from}}
+\DoxyCodeLine{00294\ \ \ \ \ \ \ \ \ set\_state(State::CONVERTING);}
+\DoxyCodeLine{00295\ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ Record\ the\ time\ we\ made\ this\ request\ so\ we\ only\ check\ if\ the\ sensors\ are\ ready\ every\ so\ often}}
+\DoxyCodeLine{00296\ \ \ \ \ \ \ \ \ last\_read\_request\_time\ =\ millis();}
+\DoxyCodeLine{00297\ \ \ \ \ \}}
+\DoxyCodeLine{00298\ }
+\DoxyCodeLine{00299\ \ \ \ \ \textcolor{keywordtype}{int}\ get\_micros\_to\_wait\_for\_conversion()\ \{}
+\DoxyCodeLine{00300\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ 1000\ *\ tempsensebus.millisToWaitForConversion(tempsensebus.getResolution());}
+\DoxyCodeLine{00301\ \ \ \ \ \}}
+\DoxyCodeLine{00302\ \ \ \ \ \textcolor{comment}{//\ This\ looks\ wrong\ so\ I\ modified\ above.\ Here\ is\ the\ original.\ I\ don't\ think\ it's\ used\ anywhere}}
+\DoxyCodeLine{00303\ \ \ \ \ \textcolor{comment}{//\ int\ get\_micros\_to\_wait\_for\_conversion(int\ microseconds)\ \{}}
+\DoxyCodeLine{00304\ \ \ \ \ \textcolor{comment}{//\ \ \ \ \ return\ 1000\ *\ tempsensebus.millisToWaitForConversion(microseconds);}}
+\DoxyCodeLine{00305\ \ \ \ \ \textcolor{comment}{//\ \}}}
+\DoxyCodeLine{00306\ }
+\DoxyCodeLine{00307\ \ \ \ \ \textcolor{comment}{//\ Soren:\ I\ made\ this\ function\ for\ code\ to\ easily\ get\ most\ recently\ read\ temp\ value\ from\ a\ location}}
+\DoxyCodeLine{00308\ \ \ \ \ \textcolor{keywordtype}{float}\ val(loc\ locat)\ \{}
+\DoxyCodeLine{00309\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{class_temperature_sensor}{TemperatureSensor}}*\ sens\ =\ get\_sensor(locat);\ \ \textcolor{comment}{//\ ambient}}
+\DoxyCodeLine{00310\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (!sens)\ \textcolor{keywordflow}{return}\ NAN;\ \ \textcolor{comment}{//\ avoid\ crashing\ if\ undetected\ location\ is\ indicated}}
+\DoxyCodeLine{00311\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ sens-\/>get\_temperature();}
+\DoxyCodeLine{00312\ \ \ \ \ \}}
+\DoxyCodeLine{00313\ \ \ \ \ \textcolor{keywordtype}{bool}\ detected(loc\ locat)\ \{}
+\DoxyCodeLine{00314\ \ \ \ \ \ \ \ \ \mbox{\hyperlink{class_temperature_sensor}{TemperatureSensor}}*\ sens\ =\ get\_sensor(locat);\ \ \textcolor{comment}{//\ ambient}}
+\DoxyCodeLine{00315\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ (\textcolor{keywordtype}{bool})sens;\ }
+\DoxyCodeLine{00316\ \ \ \ \ \}}
+\DoxyCodeLine{00317\ \ \ \ \ \textcolor{keywordtype}{int}\ locint(loc\ locat\ =\ loc::NUM\_LOCATIONS)\ \{}
+\DoxyCodeLine{00318\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{int}\textcolor{keyword}{>}(locat);}
+\DoxyCodeLine{00319\ \ \ \ \ \}}
+\DoxyCodeLine{00320\ \ \ \ \ \textcolor{keywordtype}{int}\ errclass(loc\ locat)\ \{}
+\DoxyCodeLine{00321\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{if}\ (locat\ ==\ loc::AMBIENT\ ||\ locat\ ==\ loc::ENGINE)\ \textcolor{keywordflow}{return}\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{int}\textcolor{keyword}{>}(locat);}
+\DoxyCodeLine{00322\ \ \ \ \ \ \ \ \ \textcolor{keywordflow}{return}\ \textcolor{keyword}{static\_cast<}\textcolor{keywordtype}{int}\textcolor{keyword}{>}(loc::WHEEL\_FL);\ \ \textcolor{comment}{//\ All\ wheels\ use\ this\ error\ class}}
+\DoxyCodeLine{00323\ \ \ \ \ \}}
+\DoxyCodeLine{00324\ \ \ \ \ \textcolor{keywordtype}{int}\ errclass(\textcolor{keywordtype}{int}\ locat)\ \{\ \textcolor{keywordflow}{return}\ errclass(\textcolor{keyword}{static\_cast<}loc\textcolor{keyword}{>}(locat));\ \}}
+\DoxyCodeLine{00325\ \ \ \ \ \textcolor{keywordtype}{float}\ val(\textcolor{keywordtype}{int}\ locat)\ \{\ \textcolor{keywordflow}{return}\ val(\textcolor{keyword}{static\_cast<}loc\textcolor{keyword}{>}(locat));\ \}}
+\DoxyCodeLine{00326\ \ \ \ \ \textcolor{keywordtype}{bool}\ detected(\textcolor{keywordtype}{int}\ locat)\ \{\ \textcolor{keywordflow}{return}\ detected(\textcolor{keyword}{static\_cast<}loc\textcolor{keyword}{>}(locat));\ \}}
+\DoxyCodeLine{00327\ \ \ \ \ src\ source()\ \{\ \textcolor{keywordflow}{return}\ src::PIN;\ \}}
+\DoxyCodeLine{00328\ \};}
+
+\end{DoxyCode}

@@ -1,0 +1,84 @@
+\doxysection{Temperature\+Sensor\+Manager Class Reference}
+\hypertarget{class_temperature_sensor_manager}{}\label{class_temperature_sensor_manager}\index{TemperatureSensorManager@{TemperatureSensorManager}}
+\doxysubsubsection*{Public Types}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_temperature_sensor_manager_a0ab312f611a5f8ec54652b857c974442}\label{class_temperature_sensor_manager_a0ab312f611a5f8ec54652b857c974442} 
+enum class {\bfseries State} \{ {\bfseries CONVERTING}
+, {\bfseries READY\+\_\+\+TO\+\_\+\+READ}
+ \}
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_temperature_sensor_manager_a96728f2d77b43e8e483425f3f7784296}\label{class_temperature_sensor_manager_a96728f2d77b43e8e483425f3f7784296} 
+{\bfseries Temperature\+Sensor\+Manager} (uint8\+\_\+t \+\_\+onewire\+\_\+pin)
+\item 
+\Hypertarget{class_temperature_sensor_manager_a6d866a86b4b72524aa951b6fdb2c2c5a}\label{class_temperature_sensor_manager_a6d866a86b4b72524aa951b6fdb2c2c5a} 
+bool {\bfseries setup} ()
+\item 
+\Hypertarget{class_temperature_sensor_manager_afbdd2765e862203611adfe3a1d70fe39}\label{class_temperature_sensor_manager_afbdd2765e862203611adfe3a1d70fe39} 
+State {\bfseries get\+\_\+state} () const
+\item 
+\Hypertarget{class_temperature_sensor_manager_a883be0cb70a756de620c232c2d5d7b77}\label{class_temperature_sensor_manager_a883be0cb70a756de620c232c2d5d7b77} 
+void {\bfseries set\+\_\+state} (State state)
+\item 
+\Hypertarget{class_temperature_sensor_manager_ac9d48bcb4bafc27971cd3c3f536ada6a}\label{class_temperature_sensor_manager_ac9d48bcb4bafc27971cd3c3f536ada6a} 
+void {\bfseries update\+\_\+state} ()
+\item 
+\Hypertarget{class_temperature_sensor_manager_a69e41bfb5022e43ec768489f2f539af9}\label{class_temperature_sensor_manager_a69e41bfb5022e43ec768489f2f539af9} 
+void {\bfseries update\+\_\+temperatures} ()
+\item 
+\Hypertarget{class_temperature_sensor_manager_aa9ef9bfb111c111ae2999a1d73718b29}\label{class_temperature_sensor_manager_aa9ef9bfb111c111ae2999a1d73718b29} 
+int {\bfseries get\+\_\+detected\+\_\+device\+\_\+count} ()
+\item 
+\Hypertarget{class_temperature_sensor_manager_a10b66dee254a0a0e0b65b64597d87d20}\label{class_temperature_sensor_manager_a10b66dee254a0a0e0b65b64597d87d20} 
+\mbox{\hyperlink{class_temperature_sensor}{Temperature\+Sensor}} \texorpdfstring{$\ast$}{*} {\bfseries get\+\_\+sensor} (loc location)
+\item 
+\Hypertarget{class_temperature_sensor_manager_a77119915c531d4de897baa9303ea4167}\label{class_temperature_sensor_manager_a77119915c531d4de897baa9303ea4167} 
+void {\bfseries request\+\_\+temperatures} ()
+\item 
+\Hypertarget{class_temperature_sensor_manager_a3f300718b8f30eadfa7bce50303fc1dc}\label{class_temperature_sensor_manager_a3f300718b8f30eadfa7bce50303fc1dc} 
+int {\bfseries get\+\_\+micros\+\_\+to\+\_\+wait\+\_\+for\+\_\+conversion} ()
+\item 
+\Hypertarget{class_temperature_sensor_manager_aafccd1003e7b61eda68cae8ab8ea4015}\label{class_temperature_sensor_manager_aafccd1003e7b61eda68cae8ab8ea4015} 
+float {\bfseries val} (loc locat)
+\item 
+\Hypertarget{class_temperature_sensor_manager_aff53d17565827015ccb44b989c5857b7}\label{class_temperature_sensor_manager_aff53d17565827015ccb44b989c5857b7} 
+bool {\bfseries detected} (loc locat)
+\item 
+\Hypertarget{class_temperature_sensor_manager_a52c0bd46b05e8b1cceeb5db5bdcf2f1a}\label{class_temperature_sensor_manager_a52c0bd46b05e8b1cceeb5db5bdcf2f1a} 
+int {\bfseries locint} (loc locat=loc\+::\+NUM\+\_\+\+LOCATIONS)
+\item 
+\Hypertarget{class_temperature_sensor_manager_a45cedabad489487f0e45813bf7ee6d40}\label{class_temperature_sensor_manager_a45cedabad489487f0e45813bf7ee6d40} 
+int {\bfseries errclass} (loc locat)
+\item 
+\Hypertarget{class_temperature_sensor_manager_ad17e3e0b057cc5b914dc0f4ce5bf57ab}\label{class_temperature_sensor_manager_ad17e3e0b057cc5b914dc0f4ce5bf57ab} 
+int {\bfseries errclass} (int locat)
+\item 
+\Hypertarget{class_temperature_sensor_manager_ad37c117e4dc1803c2aae88bec0174e45}\label{class_temperature_sensor_manager_ad37c117e4dc1803c2aae88bec0174e45} 
+float {\bfseries val} (int locat)
+\item 
+\Hypertarget{class_temperature_sensor_manager_a84ba5f4940e6da3cb2bff36e7ed27c27}\label{class_temperature_sensor_manager_a84ba5f4940e6da3cb2bff36e7ed27c27} 
+bool {\bfseries detected} (int locat)
+\item 
+\Hypertarget{class_temperature_sensor_manager_aad76db6cc33ac78d2048056d36ce58fa}\label{class_temperature_sensor_manager_aad76db6cc33ac78d2048056d36ce58fa} 
+src {\bfseries source} ()
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_temperature_sensor_manager_ab3431ebaeebce5ef0302238df3406cdc}\label{class_temperature_sensor_manager_ab3431ebaeebce5ef0302238df3406cdc} 
+bool {\bfseries vehicle\+\_\+detected} = true
+\item 
+\Hypertarget{class_temperature_sensor_manager_a3bafba0e969e8e25e56c460130c1704e}\label{class_temperature_sensor_manager_a3bafba0e969e8e25e56c460130c1704e} 
+int32\+\_\+t {\bfseries temperature\+\_\+precision} = 11
+\item 
+\Hypertarget{class_temperature_sensor_manager_ac622e4198bf4792775a86b2ce9296582}\label{class_temperature_sensor_manager_ac622e4198bf4792775a86b2ce9296582} 
+int {\bfseries detected\+\_\+devices\+\_\+ct} = 0
+\end{DoxyCompactItemize}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+temperature.\+h\end{DoxyCompactItemize}

@@ -1,0 +1,88 @@
+\doxysection{Loop\+Timer Class Reference}
+\hypertarget{class_loop_timer}{}\label{class_loop_timer}\index{LoopTimer@{LoopTimer}}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_loop_timer_a3e32903203a021927d1518f560061fcd}\label{class_loop_timer_a3e32903203a021927d1518f560061fcd} 
+void {\bfseries setup} ()
+\item 
+\Hypertarget{class_loop_timer_ad02d52dcd8c146ff4c9fbb1af392f7d7}\label{class_loop_timer_ad02d52dcd8c146ff4c9fbb1af392f7d7} 
+void {\bfseries mark} (std\+::string loopname=std\+::string("{}"{}))
+\item 
+\Hypertarget{class_loop_timer_a2f8f731795c41fced583924687f0c38c}\label{class_loop_timer_a2f8f731795c41fced583924687f0c38c} 
+float {\bfseries calc\+\_\+avg} (uint32\+\_\+t \+\_\+loop\+\_\+now, uint32\+\_\+t \+\_\+thisloop)
+\item 
+\Hypertarget{class_loop_timer_aec0c3ad1909735f2276fc9db987791a5}\label{class_loop_timer_aec0c3ad1909735f2276fc9db987791a5} 
+void {\bfseries update} ()
+\item 
+\Hypertarget{class_loop_timer_a2fb51a6418fa5d2d07ce086d76e8df03}\label{class_loop_timer_a2fb51a6418fa5d2d07ce086d76e8df03} 
+float {\bfseries uptime} ()
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_loop_timer_a2d526cd1d2c91bd4d85b88ad49395e78}\label{class_loop_timer_a2d526cd1d2c91bd4d85b88ad49395e78} 
+\mbox{\hyperlink{class_timer}{Timer}} {\bfseries loop\+\_\+timer} = \mbox{\hyperlink{class_timer}{Timer}}(1000000)
+\item 
+\Hypertarget{class_loop_timer_a6b5878c063913566ab0a2ac8ba0c32d8}\label{class_loop_timer_a6b5878c063913566ab0a2ac8ba0c32d8} 
+int32\+\_\+t {\bfseries loopno} = 1
+\item 
+\Hypertarget{class_loop_timer_a18365aee112fdbb28abd8e2e6cfafa1d}\label{class_loop_timer_a18365aee112fdbb28abd8e2e6cfafa1d} 
+int32\+\_\+t {\bfseries loopindex} = 0
+\item 
+\Hypertarget{class_loop_timer_aa4acefb83bbbe70cb3c1b70f5291f4f3}\label{class_loop_timer_aa4acefb83bbbe70cb3c1b70f5291f4f3} 
+int32\+\_\+t {\bfseries loop\+\_\+recentsum} = 0
+\item 
+\Hypertarget{class_loop_timer_aa203e62153e58e1c6a7bd9736096290c}\label{class_loop_timer_aa203e62153e58e1c6a7bd9736096290c} 
+int32\+\_\+t {\bfseries loop\+\_\+scale\+\_\+min\+\_\+us} = 0
+\item 
+\Hypertarget{class_loop_timer_ab55367bf40ac666b8ad2ad821589c609}\label{class_loop_timer_ab55367bf40ac666b8ad2ad821589c609} 
+int32\+\_\+t {\bfseries loop\+\_\+scale\+\_\+avg\+\_\+max\+\_\+us} = 2500
+\item 
+\Hypertarget{class_loop_timer_ac7b3ac72f1137ae1725fbcdaca0600fb}\label{class_loop_timer_ac7b3ac72f1137ae1725fbcdaca0600fb} 
+int32\+\_\+t {\bfseries loop\+\_\+scale\+\_\+peak\+\_\+max\+\_\+us} = 25000
+\item 
+\Hypertarget{class_loop_timer_a1c1fb39d16bf095172ed5d464d40362f}\label{class_loop_timer_a1c1fb39d16bf095172ed5d464d40362f} 
+float {\bfseries loop\+\_\+sum\+\_\+s}
+\item 
+\Hypertarget{class_loop_timer_aaf061749894f00299e58db54d882b515}\label{class_loop_timer_aaf061749894f00299e58db54d882b515} 
+float {\bfseries loopfreq\+\_\+hz}
+\item 
+\Hypertarget{class_loop_timer_a5f801bb330110cbde3c53bd09f77c8bf}\label{class_loop_timer_a5f801bb330110cbde3c53bd09f77c8bf} 
+uint32\+\_\+t {\bfseries looptimes\+\_\+us} \mbox{[}20\mbox{]}
+\item 
+\Hypertarget{class_loop_timer_a24faf9798e1a0fb165939b328c5acd16}\label{class_loop_timer_a24faf9798e1a0fb165939b328c5acd16} 
+bool {\bfseries loop\+\_\+dirty} \mbox{[}20\mbox{]}
+\item 
+\Hypertarget{class_loop_timer_a2b838bcf0e43ccb929bece1ab2fa7e76}\label{class_loop_timer_a2b838bcf0e43ccb929bece1ab2fa7e76} 
+int64\+\_\+t {\bfseries loop\+\_\+cout\+\_\+mark\+\_\+us}
+\item 
+\Hypertarget{class_loop_timer_a0a93a970d92d0460fdd9e0a29b676fb6}\label{class_loop_timer_a0a93a970d92d0460fdd9e0a29b676fb6} 
+int64\+\_\+t {\bfseries boot\+\_\+mark}
+\item 
+\Hypertarget{class_loop_timer_a3519d588d535ec7840a7950b0e3fcb4c}\label{class_loop_timer_a3519d588d535ec7840a7950b0e3fcb4c} 
+uint32\+\_\+t {\bfseries loop\+\_\+cout\+\_\+us} = 0
+\item 
+\Hypertarget{class_loop_timer_a1e9e001837f9d3e37be0aa7c5e475e23}\label{class_loop_timer_a1e9e001837f9d3e37be0aa7c5e475e23} 
+uint32\+\_\+t {\bfseries loop\+\_\+peak\+\_\+us} = 0
+\item 
+\Hypertarget{class_loop_timer_a92d81f516dda6fc7614d4da6e2d7bbf5}\label{class_loop_timer_a92d81f516dda6fc7614d4da6e2d7bbf5} 
+uint32\+\_\+t {\bfseries loop\+\_\+now} = 0
+\item 
+\Hypertarget{class_loop_timer_ae561bc1a8326d9b3b75d9bdb9d4e82ab}\label{class_loop_timer_ae561bc1a8326d9b3b75d9bdb9d4e82ab} 
+uint32\+\_\+t {\bfseries loop\+\_\+periods\+\_\+us} \mbox{[}loop\+\_\+history\mbox{]}
+\item 
+\Hypertarget{class_loop_timer_afeb769a4bd492f2de701545eeb1a1afe}\label{class_loop_timer_afeb769a4bd492f2de701545eeb1a1afe} 
+std\+::string {\bfseries loop\+\_\+names} \mbox{[}20\mbox{]}
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Static Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_loop_timer_a8200ffb8ea1e72c8fa1d7ebecb66e10b}\label{class_loop_timer_a8200ffb8ea1e72c8fa1d7ebecb66e10b} 
+static constexpr uint32\+\_\+t {\bfseries loop\+\_\+history} = 100
+\end{DoxyCompactItemize}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+diag.\+h\end{DoxyCompactItemize}

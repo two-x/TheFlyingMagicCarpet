@@ -1,0 +1,118 @@
+\doxysection{Display Class Reference}
+\hypertarget{class_display}{}\label{class_display}\index{Display@{Display}}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_display_a968293f1bd7d6e798a7ec39b6672e338}\label{class_display_a968293f1bd7d6e798a7ec39b6672e338} 
+{\bfseries Display} (\mbox{\hyperlink{class_neopixel_strip}{Neopixel\+Strip}} \texorpdfstring{$\ast$}{*}\+\_\+neo, \mbox{\hyperlink{class_touchscreen}{Touchscreen}} \texorpdfstring{$\ast$}{*}\+\_\+touch, \mbox{\hyperlink{class_idiot_lights}{Idiot\+Lights}} \texorpdfstring{$\ast$}{*}\+\_\+idiots, \mbox{\hyperlink{class_simulator}{Simulator}} \texorpdfstring{$\ast$}{*}\+\_\+sim)
+\item 
+\Hypertarget{class_display_a4820aa1b0a9f948d19df1cf01a3e8b72}\label{class_display_a4820aa1b0a9f948d19df1cf01a3e8b72} 
+void {\bfseries init\+\_\+framebuffers} (int \+\_\+sprwidth, int \+\_\+sprheight)
+\item 
+\Hypertarget{class_display_ada73f4cecc58feafaecdb9e77747747d}\label{class_display_ada73f4cecc58feafaecdb9e77747747d} 
+void {\bfseries setup} ()
+\item 
+\Hypertarget{class_display_aafb7db48281b210469ddc20293b29c8d}\label{class_display_aafb7db48281b210469ddc20293b29c8d} 
+void {\bfseries reset} (LGFX\+\_\+\+Sprite \texorpdfstring{$\ast$}{*}spr)
+\item 
+\Hypertarget{class_display_a7736cb20d1716d81d16c9936eeb33a75}\label{class_display_a7736cb20d1716d81d16c9936eeb33a75} 
+void {\bfseries all\+\_\+dirty} ()
+\item 
+\Hypertarget{class_display_a6ebec674cbe5134ac9de8f89cf018119}\label{class_display_a6ebec674cbe5134ac9de8f89cf018119} 
+void {\bfseries blackout} (LGFX\+\_\+\+Sprite \texorpdfstring{$\ast$}{*}spr)
+\item 
+\Hypertarget{class_display_a7b04eab57102d9b6546b0d4ff11bdabe}\label{class_display_a7b04eab57102d9b6546b0d4ff11bdabe} 
+void {\bfseries set\+\_\+runmodecolors} ()
+\item 
+\Hypertarget{class_display_adb8e8020f9c36fd68a54920bc808c74a}\label{class_display_adb8e8020f9c36fd68a54920bc808c74a} 
+void {\bfseries tiny\+\_\+text} ()
+\item 
+\Hypertarget{class_display_a1c9e7a0b418209fae2dad70d34ebc354}\label{class_display_a1c9e7a0b418209fae2dad70d34ebc354} 
+uint8\+\_\+t {\bfseries darken\+\_\+color} (uint8\+\_\+t color)
+\item 
+\Hypertarget{class_display_ac2e004430c50e1b777e4f8aaf739ba38}\label{class_display_ac2e004430c50e1b777e4f8aaf739ba38} 
+uint16\+\_\+t {\bfseries darken\+\_\+color} (uint16\+\_\+t color, int32\+\_\+t halvings=1)
+\item 
+\Hypertarget{class_display_a8543fd66c861ea08919122c82d88c5a1}\label{class_display_a8543fd66c861ea08919122c82d88c5a1} 
+void {\bfseries update} (int \+\_\+nowmode=-\/1)
+\item 
+\Hypertarget{class_display_ab3f21e44e00d463f112923e90b4f2f07}\label{class_display_ab3f21e44e00d463f112923e90b4f2f07} 
+bool {\bfseries draw\+\_\+all} (LGFX\+\_\+\+Sprite \texorpdfstring{$\ast$}{*}spr)
+\item 
+\Hypertarget{class_display_a45c4931f44fe988abbbf2d4de953f12c}\label{class_display_a45c4931f44fe988abbbf2d4de953f12c} 
+void {\bfseries push\+\_\+task} ()
+\item 
+\Hypertarget{class_display_a922fc70fdce04256e36b8f47092ae97d}\label{class_display_a922fc70fdce04256e36b8f47092ae97d} 
+void {\bfseries draw\+\_\+task} ()
+\item 
+\Hypertarget{class_display_a0f37b622513e9e77606fe2aaa0bc82f6}\label{class_display_a0f37b622513e9e77606fe2aaa0bc82f6} 
+void {\bfseries diffpush} (LGFX\+\_\+\+Sprite \texorpdfstring{$\ast$}{*}source, LGFX\+\_\+\+Sprite \texorpdfstring{$\ast$}{*}ref)
+\item 
+\Hypertarget{class_display_aafeefd019ba1eed2af7029c8972c3675}\label{class_display_aafeefd019ba1eed2af7029c8972c3675} 
+void {\bfseries auto\+\_\+saver} (bool enable)
+\item 
+\Hypertarget{class_display_a1a6c4bb4e4fe4d44de4be7ffe7dece34}\label{class_display_a1a6c4bb4e4fe4d44de4be7ffe7dece34} 
+void {\bfseries printframebufs} (int reduce=2, bool ascii=false)
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_display_a16fbd011b7e82a0a1585b81c5363354d}\label{class_display_a16fbd011b7e82a0a1585b81c5363354d} 
+volatile int {\bfseries nowmode} = SHUTDOWN
+\item 
+\Hypertarget{class_display_ad3a9e70f6d82f9a7531a707c9f90d898}\label{class_display_ad3a9e70f6d82f9a7531a707c9f90d898} 
+std\+::string {\bfseries disp\+\_\+values} \mbox{[}disp\+\_\+lines\mbox{]}
+\item 
+\Hypertarget{class_display_a30ae98b09b4e4e6b0a23443433b00b70}\label{class_display_a30ae98b09b4e4e6b0a23443433b00b70} 
+volatile bool {\bfseries disp\+\_\+bool\+\_\+values} \mbox{[}6\mbox{]}
+\item 
+\Hypertarget{class_display_a57d21e5e0a130692df24bf0f540552a3}\label{class_display_a57d21e5e0a130692df24bf0f540552a3} 
+volatile bool {\bfseries disp\+\_\+bargraphs} \mbox{[}disp\+\_\+lines\mbox{]}
+\item 
+\Hypertarget{class_display_a08071b97dc6569d545f1b467bbb53890}\label{class_display_a08071b97dc6569d545f1b467bbb53890} 
+volatile bool {\bfseries disp\+\_\+polarities} \mbox{[}disp\+\_\+lines\mbox{]}
+\item 
+\Hypertarget{class_display_a6deea29832dfe14c0c6089cea872dd60}\label{class_display_a6deea29832dfe14c0c6089cea872dd60} 
+volatile int32\+\_\+t {\bfseries disp\+\_\+needles} \mbox{[}disp\+\_\+lines\mbox{]}
+\item 
+\Hypertarget{class_display_a8356965afc4dba81df5ee05ea3461ca9}\label{class_display_a8356965afc4dba81df5ee05ea3461ca9} 
+volatile int32\+\_\+t {\bfseries disp\+\_\+targets} \mbox{[}disp\+\_\+lines\mbox{]}
+\item 
+\Hypertarget{class_display_ae5e308bdadc1bd46688619114e926bd3}\label{class_display_ae5e308bdadc1bd46688619114e926bd3} 
+volatile int32\+\_\+t {\bfseries disp\+\_\+age\+\_\+quanta} \mbox{[}disp\+\_\+lines\mbox{]}
+\item 
+\Hypertarget{class_display_aba8cc6a6c94277ab9dd00aa9bd6aa30c}\label{class_display_aba8cc6a6c94277ab9dd00aa9bd6aa30c} 
+volatile uint8\+\_\+t {\bfseries disp\+\_\+val\+\_\+colors} \mbox{[}disp\+\_\+lines\mbox{]}
+\item 
+\Hypertarget{class_display_aee25f8ce577ecc0651b09224ab7d313b}\label{class_display_aee25f8ce577ecc0651b09224ab7d313b} 
+volatile bool {\bfseries disp\+\_\+selected\+\_\+val\+\_\+dirty}
+\item 
+\Hypertarget{class_display_a721ab69fcdf6af54103d99ca90698cfd}\label{class_display_a721ab69fcdf6af54103d99ca90698cfd} 
+volatile bool {\bfseries disp\+\_\+datapage\+\_\+dirty}
+\item 
+\Hypertarget{class_display_a9e79ef83d9effc38024582cd6cf02c51}\label{class_display_a9e79ef83d9effc38024582cd6cf02c51} 
+volatile bool {\bfseries disp\+\_\+values\+\_\+dirty}
+\item 
+\Hypertarget{class_display_ae76e1ed12ad88b6d3edda9b11ff8f92a}\label{class_display_ae76e1ed12ad88b6d3edda9b11ff8f92a} 
+volatile bool {\bfseries disp\+\_\+data\+\_\+dirty} \mbox{[}disp\+\_\+lines\mbox{]}
+\item 
+\Hypertarget{class_display_a0fc1b2e7883db6bcc3e564d40015c7c2}\label{class_display_a0fc1b2e7883db6bcc3e564d40015c7c2} 
+volatile bool {\bfseries disp\+\_\+bools\+\_\+dirty}
+\item 
+\Hypertarget{class_display_a1d5521c52b0401f719f4a6f16a6caa14}\label{class_display_a1d5521c52b0401f719f4a6f16a6caa14} 
+volatile bool {\bfseries disp\+\_\+sidemenu\+\_\+dirty}
+\item 
+\Hypertarget{class_display_a23b1a7d9a5607444f7707ceff218eb0f}\label{class_display_a23b1a7d9a5607444f7707ceff218eb0f} 
+volatile bool {\bfseries disp\+\_\+runmode\+\_\+dirty}
+\item 
+\Hypertarget{class_display_a76949f827d8366535a36b74f0a4be27a}\label{class_display_a76949f827d8366535a36b74f0a4be27a} 
+volatile bool {\bfseries disp\+\_\+simbuttons\+\_\+dirty}
+\item 
+\Hypertarget{class_display_a661b024f9b0a9a931e3bbe3070585cad}\label{class_display_a661b024f9b0a9a931e3bbe3070585cad} 
+volatile bool {\bfseries disp\+\_\+idiots\+\_\+dirty}
+\end{DoxyCompactItemize}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+display.\+h\end{DoxyCompactItemize}

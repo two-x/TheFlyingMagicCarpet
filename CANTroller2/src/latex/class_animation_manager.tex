@@ -1,0 +1,70 @@
+\doxysection{Animation\+Manager Class Reference}
+\hypertarget{class_animation_manager}{}\label{class_animation_manager}\index{AnimationManager@{AnimationManager}}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_animation_manager_a8402a9aff49e87f734336b54a4ecabec}\label{class_animation_manager_a8402a9aff49e87f734336b54a4ecabec} 
+void {\bfseries change\+\_\+saver} ()
+\item 
+\Hypertarget{class_animation_manager_a490f237b860bb391d7bcade71a040a2c}\label{class_animation_manager_a490f237b860bb391d7bcade71a040a2c} 
+void {\bfseries init} (\mbox{\hyperlink{class_l_g_f_x}{LGFX}} \texorpdfstring{$\ast$}{*}\+\_\+lgfx, \mbox{\hyperlink{class_simulator}{Simulator}} \texorpdfstring{$\ast$}{*}\+\_\+sim, \mbox{\hyperlink{class_touchscreen}{Touchscreen}} \texorpdfstring{$\ast$}{*}\+\_\+touch, int \+\_\+cornerx, int \+\_\+cornery, int \+\_\+sprwidth, int \+\_\+sprheight)
+\item 
+\Hypertarget{class_animation_manager_a9897bc2c4cc507b6d3ba2c7bf3800c37}\label{class_animation_manager_a9897bc2c4cc507b6d3ba2c7bf3800c37} 
+void {\bfseries reset} ()
+\item 
+\Hypertarget{class_animation_manager_a01d5423a35bdefe03ea139f7dd8cfb8e}\label{class_animation_manager_a01d5423a35bdefe03ea139f7dd8cfb8e} 
+void {\bfseries setup} ()
+\item 
+\Hypertarget{class_animation_manager_a2613eecd8e58fa8f7f479e71015bfb20}\label{class_animation_manager_a2613eecd8e58fa8f7f479e71015bfb20} 
+void {\bfseries draw\+\_\+simbutton} (LGFX\+\_\+\+Sprite \texorpdfstring{$\ast$}{*}spr, int cntr\+\_\+x, int cntr\+\_\+y, int dir, uint8\+\_\+t color)
+\item 
+\Hypertarget{class_animation_manager_a0e88d66f50d5050c084218dc84c8efc1}\label{class_animation_manager_a0e88d66f50d5050c084218dc84c8efc1} 
+void {\bfseries draw\+\_\+simbuttons} (LGFX\+\_\+\+Sprite \texorpdfstring{$\ast$}{*}spr, bool create)
+\item 
+\Hypertarget{class_animation_manager_a2340c1b034aca01907937fa4e57bc7d3}\label{class_animation_manager_a2340c1b034aca01907937fa4e57bc7d3} 
+void {\bfseries calc\+\_\+fps} ()
+\item 
+\Hypertarget{class_animation_manager_a29ad1c8dd2ff7d843f47b7ccb4950185}\label{class_animation_manager_a29ad1c8dd2ff7d843f47b7ccb4950185} 
+void {\bfseries display\+\_\+fps} (LGFX\+\_\+\+Sprite \texorpdfstring{$\ast$}{*}spr)
+\item 
+\Hypertarget{class_animation_manager_ab1a512b8d694035e611854a03fe43f81}\label{class_animation_manager_ab1a512b8d694035e611854a03fe43f81} 
+float {\bfseries update} (LGFX\+\_\+\+Sprite \texorpdfstring{$\ast$}{*}spr, bool dirty=false)
+\item 
+\Hypertarget{class_animation_manager_aa6ce6c78dc861e3b7cb9ea8aa7ece8a9}\label{class_animation_manager_aa6ce6c78dc861e3b7cb9ea8aa7ece8a9} 
+void {\bfseries set\+\_\+vp} (int \+\_\+cornerx, int \+\_\+cornery, int \+\_\+sprwidth, int \+\_\+sprheight)
+\item 
+\Hypertarget{class_animation_manager_a0a773e0a50ab9fd84ce482725654255c}\label{class_animation_manager_a0a773e0a50ab9fd84ce482725654255c} 
+bool {\bfseries touched} ()
+\item 
+\Hypertarget{class_animation_manager_a4e2d92e54eb53aca074200d48d2bb530}\label{class_animation_manager_a4e2d92e54eb53aca074200d48d2bb530} 
+int {\bfseries touch\+\_\+pt} (int axis)
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_animation_manager_a3fa755efcd67fad814cfa71ce479f7bc}\label{class_animation_manager_a3fa755efcd67fad814cfa71ce479f7bc} 
+std\+::uint32\+\_\+t {\bfseries sec}
+\item 
+\Hypertarget{class_animation_manager_a59ab300d93476afa33c0a5a4633640e4}\label{class_animation_manager_a59ab300d93476afa33c0a5a4633640e4} 
+std\+::uint32\+\_\+t {\bfseries psec}
+\item 
+\Hypertarget{class_animation_manager_ab531de4ccf6fb7e3fe775281b39d044a}\label{class_animation_manager_ab531de4ccf6fb7e3fe775281b39d044a} 
+std\+::uint32\+\_\+t {\bfseries \+\_\+width}
+\item 
+\Hypertarget{class_animation_manager_a0c2c57c83608e07a22fb56c02991d335}\label{class_animation_manager_a0c2c57c83608e07a22fb56c02991d335} 
+std\+::uint32\+\_\+t {\bfseries \+\_\+height}
+\item 
+\Hypertarget{class_animation_manager_abba202d3daab5c830b5fc5cf0e2a1d5c}\label{class_animation_manager_abba202d3daab5c830b5fc5cf0e2a1d5c} 
+std\+::uint32\+\_\+t {\bfseries \+\_\+myfps} = 0
+\item 
+\Hypertarget{class_animation_manager_a8f715061b644ba0556e82a0c8889fd6b}\label{class_animation_manager_a8f715061b644ba0556e82a0c8889fd6b} 
+std\+::uint32\+\_\+t {\bfseries frame\+\_\+count} = 0
+\item 
+\Hypertarget{class_animation_manager_a9a088aa16620d983bcb1dbc52d5284a3}\label{class_animation_manager_a9a088aa16620d983bcb1dbc52d5284a3} 
+bool {\bfseries anim\+\_\+reset\+\_\+request} = false
+\end{DoxyCompactItemize}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+animations.\+h\end{DoxyCompactItemize}

@@ -1,0 +1,315 @@
+\doxysection{Brake\+Position\+Sensor Class Reference}
+\hypertarget{class_brake_position_sensor}{}\label{class_brake_position_sensor}\index{BrakePositionSensor@{BrakePositionSensor}}
+Inheritance diagram for Brake\+Position\+Sensor\+:\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[height=5.000000cm]{class_brake_position_sensor}
+\end{center}
+\end{figure}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_brake_position_sensor_a16e7076c4a4b58dd323a4567299ef96e}\label{class_brake_position_sensor_a16e7076c4a4b58dd323a4567299ef96e} 
+{\bfseries Brake\+Position\+Sensor} (uint8\+\_\+t arg\+\_\+pin)
+\item 
+\Hypertarget{class_brake_position_sensor_ad31043af8989d834f6156add92bc8e3f}\label{class_brake_position_sensor_ad31043af8989d834f6156add92bc8e3f} 
+void {\bfseries setup} ()
+\item 
+\Hypertarget{class_brake_position_sensor_a3059e6b6f611217c2c4f240d2d020de3}\label{class_brake_position_sensor_a3059e6b6f611217c2c4f240d2d020de3} 
+bool {\bfseries parked} ()
+\item 
+\Hypertarget{class_brake_position_sensor_ab044ae442498ec9bec24ce7a22e1afa2}\label{class_brake_position_sensor_ab044ae442498ec9bec24ce7a22e1afa2} 
+bool {\bfseries released} ()
+\item 
+\Hypertarget{class_brake_position_sensor_a13ca1a86989bc82992895877c1281f9b}\label{class_brake_position_sensor_a13ca1a86989bc82992895877c1281f9b} 
+float {\bfseries in} ()
+\item 
+\Hypertarget{class_brake_position_sensor_a7edc4bb7451c92229a91602b69550210}\label{class_brake_position_sensor_a7edc4bb7451c92229a91602b69550210} 
+float {\bfseries min\+\_\+in} ()
+\item 
+\Hypertarget{class_brake_position_sensor_af8fe9316de79c768a697a5a3c6a59cd5}\label{class_brake_position_sensor_af8fe9316de79c768a697a5a3c6a59cd5} 
+float {\bfseries max\+\_\+in} ()
+\item 
+\Hypertarget{class_brake_position_sensor_a21daff6e81e5499a59822c29f61e71a8}\label{class_brake_position_sensor_a21daff6e81e5499a59822c29f61e71a8} 
+float {\bfseries op\+\_\+min} ()
+\item 
+\Hypertarget{class_brake_position_sensor_aec84a705c0b5665c6b6422729c72782a}\label{class_brake_position_sensor_aec84a705c0b5665c6b6422729c72782a} 
+float {\bfseries op\+\_\+max} ()
+\item 
+\Hypertarget{class_brake_position_sensor_a42dca3d11f682a32b27c0869df5fae0f}\label{class_brake_position_sensor_a42dca3d11f682a32b27c0869df5fae0f} 
+float {\bfseries parkpos} ()
+\item 
+\Hypertarget{class_brake_position_sensor_ab0e4e3dc7981629a86a6d21d66b386d6}\label{class_brake_position_sensor_ab0e4e3dc7981629a86a6d21d66b386d6} 
+float {\bfseries margin} ()
+\item 
+\Hypertarget{class_brake_position_sensor_a6088e34ebf7be7b6b9c5d89f30d8ae96}\label{class_brake_position_sensor_a6088e34ebf7be7b6b9c5d89f30d8ae96} 
+float {\bfseries zeropoint} ()
+\item 
+\Hypertarget{class_brake_position_sensor_a075b785936bd55fb597894e2bcc90052}\label{class_brake_position_sensor_a075b785936bd55fb597894e2bcc90052} 
+float \texorpdfstring{$\ast$}{*} {\bfseries zeropoint\+\_\+ptr} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_analog_sensor}{Analog\+Sensor$<$ int32\+\_\+t, float $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Analog\+Sensor} (uint8\+\_\+t arg\+\_\+pin)
+\item 
+void {\bfseries setup} ()
+\item 
+int32\+\_\+t {\bfseries adc} ()
+\item 
+int32\+\_\+t {\bfseries min\+\_\+adc} ()
+\item 
+int32\+\_\+t {\bfseries max\+\_\+adc} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_sensor}{Sensor$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Sensor} (uint8\+\_\+t pin)
+\item 
+void {\bfseries set\+\_\+ema\+\_\+alpha} (float arg\+\_\+alpha)
+\item 
+float {\bfseries ema\+\_\+alpha} ()
+\item 
+HUMAN\+\_\+T {\bfseries filt} ()
+\item 
+HUMAN\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries filt\+\_\+ptr} ()
+\item 
+std\+::shared\+\_\+ptr$<$ HUMAN\+\_\+T $>$ {\bfseries filt\+\_\+shptr} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_transducer}{Transducer$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Transducer} (uint8\+\_\+t arg\+\_\+pin)
+\item 
+void {\bfseries set\+\_\+native\+\_\+limits} (\mbox{\hyperlink{class_param}{Param}}$<$ NATIVE\+\_\+T $>$ \&arg\+\_\+min, \mbox{\hyperlink{class_param}{Param}}$<$ NATIVE\+\_\+T $>$ \&arg\+\_\+max)
+\item 
+void {\bfseries set\+\_\+human\+\_\+limits} (\mbox{\hyperlink{class_param}{Param}}$<$ HUMAN\+\_\+T $>$ \&arg\+\_\+min, \mbox{\hyperlink{class_param}{Param}}$<$ HUMAN\+\_\+T $>$ \&arg\+\_\+max)
+\item 
+void {\bfseries set\+\_\+native\+\_\+limits} (NATIVE\+\_\+T arg\+\_\+min, NATIVE\+\_\+T arg\+\_\+max)
+\item 
+void {\bfseries set\+\_\+human\+\_\+limits} (HUMAN\+\_\+T arg\+\_\+min, HUMAN\+\_\+T arg\+\_\+max)
+\item 
+bool {\bfseries set\+\_\+native} (NATIVE\+\_\+T arg\+\_\+val\+\_\+native)
+\item 
+bool {\bfseries add\+\_\+native} (NATIVE\+\_\+T arg\+\_\+add\+\_\+native)
+\item 
+bool {\bfseries set\+\_\+human} (HUMAN\+\_\+T arg\+\_\+val\+\_\+human)
+\item 
+bool {\bfseries add\+\_\+human} (HUMAN\+\_\+T arg\+\_\+add\+\_\+human)
+\item 
+void {\bfseries set\+\_\+convert} (float arg\+\_\+m\+\_\+factor, float arg\+\_\+b\+\_\+offset, bool arg\+\_\+invert)
+\item 
+NATIVE\+\_\+T {\bfseries native} ()
+\item 
+HUMAN\+\_\+T {\bfseries human} ()
+\item 
+float {\bfseries percent} ()
+\item 
+NATIVE\+\_\+T {\bfseries raw} ()
+\item 
+NATIVE\+\_\+T {\bfseries min\+\_\+native} ()
+\item 
+NATIVE\+\_\+T {\bfseries max\+\_\+native} ()
+\item 
+HUMAN\+\_\+T {\bfseries min\+\_\+human} ()
+\item 
+HUMAN\+\_\+T {\bfseries max\+\_\+human} ()
+\item 
+HUMAN\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries min\+\_\+human\+\_\+ptr} ()
+\item 
+HUMAN\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries max\+\_\+human\+\_\+ptr} ()
+\item 
+NATIVE\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries native\+\_\+ptr} ()
+\item 
+HUMAN\+\_\+T \texorpdfstring{$\ast$}{*} {\bfseries human\+\_\+ptr} ()
+\item 
+std\+::shared\+\_\+ptr$<$ NATIVE\+\_\+T $>$ {\bfseries native\+\_\+shptr} ()
+\item 
+std\+::shared\+\_\+ptr$<$ HUMAN\+\_\+T $>$ {\bfseries human\+\_\+shptr} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Device} (uint8\+\_\+t arg\+\_\+pin)
+\item 
+bool {\bfseries can\+\_\+source} (src arg\+\_\+source)
+\item 
+bool {\bfseries set\+\_\+source} (src arg\+\_\+source)
+\item 
+void {\bfseries update} ()
+\item 
+void {\bfseries attach\+\_\+pot} (\mbox{\hyperlink{class_potentiometer}{Potentiometer}} \&pot\+\_\+arg)
+\item 
+void {\bfseries set\+\_\+enabled} (bool arg\+\_\+enable)
+\item 
+void {\bfseries set\+\_\+can\+\_\+source} (src arg\+\_\+source, bool is\+\_\+possible)
+\item 
+src {\bfseries source} ()
+\item 
+uint8\+\_\+t {\bfseries pin} ()
+\item 
+bool {\bfseries enabled} ()
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_brake_position_sensor_af80af8440d438dd4b6b957577938f648}\label{class_brake_position_sensor_af80af8440d438dd4b6b957577938f648} 
+sens {\bfseries senstype} = sens\+::brkpos
+\item 
+\Hypertarget{class_brake_position_sensor_a17c0f8763063b12fc957414a491ebd96}\label{class_brake_position_sensor_a17c0f8763063b12fc957414a491ebd96} 
+int32\+\_\+t {\bfseries abs\+\_\+min\+\_\+retract\+\_\+adc}
+\item 
+\Hypertarget{class_brake_position_sensor_ade8e953b0f5e33e39bc966ef939d529b}\label{class_brake_position_sensor_ade8e953b0f5e33e39bc966ef939d529b} 
+int32\+\_\+t {\bfseries abs\+\_\+max\+\_\+extend\+\_\+adc}
+\item 
+\Hypertarget{class_brake_position_sensor_a73c148af303c16a8480c012e2bc21385}\label{class_brake_position_sensor_a73c148af303c16a8480c012e2bc21385} 
+int32\+\_\+t {\bfseries op\+\_\+min\+\_\+retract\+\_\+adc}
+\item 
+\Hypertarget{class_brake_position_sensor_a687d4e196a7bc116b174d14775b4c1b3}\label{class_brake_position_sensor_a687d4e196a7bc116b174d14775b4c1b3} 
+int32\+\_\+t {\bfseries op\+\_\+max\+\_\+extend\+\_\+adc}
+\item 
+\Hypertarget{class_brake_position_sensor_adabdaacaa77bd6d73abdbf6b4bfc9ab2}\label{class_brake_position_sensor_adabdaacaa77bd6d73abdbf6b4bfc9ab2} 
+float {\bfseries op\+\_\+min\+\_\+retract\+\_\+in}
+\item 
+\Hypertarget{class_brake_position_sensor_a7c224ec1c32b1f54452bce351b221ac2}\label{class_brake_position_sensor_a7c224ec1c32b1f54452bce351b221ac2} 
+float {\bfseries op\+\_\+max\+\_\+extend\+\_\+in}
+\item 
+\Hypertarget{class_brake_position_sensor_a12868394ecade78c52c4eddf3cbe14c4}\label{class_brake_position_sensor_a12868394ecade78c52c4eddf3cbe14c4} 
+float {\bfseries \+\_\+parkpos}
+\item 
+\Hypertarget{class_brake_position_sensor_a16fff348de8f179969f65d96b7e76ffd}\label{class_brake_position_sensor_a16fff348de8f179969f65d96b7e76ffd} 
+float {\bfseries \+\_\+margin}
+\item 
+\Hypertarget{class_brake_position_sensor_a6bfd8420a8f70a0a9f79175ff9e0d3e2}\label{class_brake_position_sensor_a6bfd8420a8f70a0a9f79175ff9e0d3e2} 
+float {\bfseries \+\_\+zeropoint}
+\item 
+\Hypertarget{class_brake_position_sensor_aa1a19d633b69f1ee6dc85eae8400212e}\label{class_brake_position_sensor_aa1a19d633b69f1ee6dc85eae8400212e} 
+float {\bfseries abs\+\_\+min\+\_\+retract\+\_\+in}
+\item 
+\Hypertarget{class_brake_position_sensor_aeff6cfd0976767409450c3e257588359}\label{class_brake_position_sensor_aeff6cfd0976767409450c3e257588359} 
+float {\bfseries abs\+\_\+max\+\_\+extend\+\_\+in}
+\item 
+\Hypertarget{class_brake_position_sensor_a29cbb76ab4f862676611f0fca573dcb1}\label{class_brake_position_sensor_a29cbb76ab4f862676611f0fca573dcb1} 
+std\+::string {\bfseries \+\_\+long\+\_\+name} = "{}Brake position sensor"{}
+\item 
+\Hypertarget{class_brake_position_sensor_ad59715bd55bd84f89cefc0ce08903113}\label{class_brake_position_sensor_ad59715bd55bd84f89cefc0ce08903113} 
+std\+::string {\bfseries \+\_\+short\+\_\+name} = "{}brkpos"{}
+\item 
+\Hypertarget{class_brake_position_sensor_a3afbe0e7403eeeb7c5e77e695e06eb58}\label{class_brake_position_sensor_a3afbe0e7403eeeb7c5e77e695e06eb58} 
+std\+::string {\bfseries \+\_\+native\+\_\+units\+\_\+name} = "{}adc"{}
+\item 
+\Hypertarget{class_brake_position_sensor_a0c6bafc3324aefe4993142e237c956fa}\label{class_brake_position_sensor_a0c6bafc3324aefe4993142e237c956fa} 
+std\+::string {\bfseries \+\_\+human\+\_\+units\+\_\+name} = "{}in"{}
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Attributes inherited from \mbox{\hyperlink{class_analog_sensor}{Analog\+Sensor$<$ int32\+\_\+t, float $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+std\+::string {\bfseries \+\_\+long\+\_\+name}
+\item 
+std\+::string {\bfseries \+\_\+short\+\_\+name}
+\item 
+std\+::string {\bfseries \+\_\+native\+\_\+units\+\_\+name}
+\item 
+std\+::string {\bfseries \+\_\+human\+\_\+units\+\_\+name}
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Attributes inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_timer}{Timer}} {\bfseries timer}
+\item 
+std\+::string {\bfseries \+\_\+long\+\_\+name} = "{}Unknown device"{}
+\item 
+std\+::string {\bfseries \+\_\+short\+\_\+name} = "{}device"{}
+\item 
+sens {\bfseries senstype} = sens\+::none
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Additional Inherited Members}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_analog_sensor}{Analog\+Sensor$<$ int32\+\_\+t, float $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+virtual void \mbox{\hyperlink{class_analog_sensor_abe3859be9a366c073fd9cb14732abbcb}{set\+\_\+val\+\_\+from\+\_\+pin}} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_sensor}{Sensor$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+void {\bfseries calculate\+\_\+ema} ()
+\item 
+virtual void \mbox{\hyperlink{class_sensor_a0de95fc9f8511e6525291ff254e4c897}{set\+\_\+val\+\_\+from\+\_\+touch}} ()
+\item 
+virtual void \mbox{\hyperlink{class_sensor_a8868d62d88321e9f791b777505f97ff7}{set\+\_\+val\+\_\+from\+\_\+pot}} ()
+\item 
+virtual void \mbox{\hyperlink{class_sensor_aee2eb3de9171bf4e89adbd9fe6ee480f}{update\+\_\+human\+\_\+limits}} ()
+\item 
+virtual void \mbox{\hyperlink{class_sensor_afb6b173fbd35e70f076fa3fba9ae8b48}{update\+\_\+source}} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_transducer}{Transducer$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+virtual HUMAN\+\_\+T {\bfseries from\+\_\+native} (NATIVE\+\_\+T arg\+\_\+val\+\_\+native)
+\item 
+virtual NATIVE\+\_\+T {\bfseries to\+\_\+native} (HUMAN\+\_\+T arg\+\_\+val\+\_\+human)
+\item 
+virtual void {\bfseries update\+\_\+native\+\_\+limits} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Member Functions inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+virtual void {\bfseries set\+\_\+val\+\_\+from\+\_\+undef} ()
+\item 
+virtual void {\bfseries set\+\_\+val\+\_\+from\+\_\+fixed} ()
+\item 
+virtual void {\bfseries set\+\_\+val\+\_\+from\+\_\+calc} ()
+\item 
+virtual void {\bfseries set\+\_\+val\+\_\+common} ()
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_analog_sensor}{Analog\+Sensor$<$ int32\+\_\+t, float $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_timer}{Timer}} {\bfseries read\+\_\+timer}
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_sensor}{Sensor$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+float {\bfseries \+\_\+ema\+\_\+alpha} = 0.\+1
+\item 
+\mbox{\hyperlink{class_param}{Param}}$<$ HUMAN\+\_\+T $>$ {\bfseries \+\_\+val\+\_\+filt}
+\item 
+bool {\bfseries \+\_\+should\+\_\+filter} = true
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_transducer}{Transducer$<$ NATIVE\+\_\+\+T, HUMAN\+\_\+\+T $>$}}}
+\begin{DoxyCompactItemize}
+\item 
+NATIVE\+\_\+T {\bfseries \+\_\+val\+\_\+raw}
+\item 
+float {\bfseries \+\_\+m\+\_\+factor} = 1.\+0
+\item 
+float {\bfseries \+\_\+b\+\_\+offset} = 0.\+0
+\item 
+float {\bfseries \+\_\+zerovalue} = NAN
+\item 
+bool {\bfseries \+\_\+invert} = false
+\item 
+Transducer\+Direction {\bfseries dir} = Transducer\+Direction\+::\+FWD
+\item 
+\mbox{\hyperlink{class_param}{Param}}$<$ HUMAN\+\_\+T $>$ {\bfseries \+\_\+human}
+\item 
+\mbox{\hyperlink{class_param}{Param}}$<$ NATIVE\+\_\+T $>$ {\bfseries \+\_\+native}
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{class_device}{Device}}}
+\begin{DoxyCompactItemize}
+\item 
+uint8\+\_\+t {\bfseries \+\_\+pin}
+\item 
+bool {\bfseries \+\_\+enabled} = true
+\item 
+\mbox{\hyperlink{class_potentiometer}{Potentiometer}} \texorpdfstring{$\ast$}{*} {\bfseries \+\_\+pot}
+\item 
+src {\bfseries \+\_\+source} = src\+::\+UNDEF
+\item 
+bool {\bfseries \+\_\+can\+\_\+source} \mbox{[}6\mbox{]} = \{ true, true, false, true, false, false \}
+\end{DoxyCompactItemize}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+sensors.\+h\end{DoxyCompactItemize}
