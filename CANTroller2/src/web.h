@@ -1,4 +1,5 @@
 #pragma once
+#if WIFI_SUPPORTED
 #include <Arduino.h>
 #include <FS.h>
 #include <LittleFS.h>
@@ -199,6 +200,7 @@ class WebManager {
     Web server;
     WebManager(LoopTimer* _lt) : looptimer(_lt) {}
     void setup() {
+        if (!wifi_web_supported) return;
         wifi.setup();
         fs.setup();
         server.setup(looptimer);
@@ -212,6 +214,7 @@ class WebManager {
         return String("rgb(") + String(random(256)) + "," + String(random(256)) + "," + String(random(256)) + ")";  // Generate a random RGB color
     }
     void update() {
+        if (!wifi_web_supported) web_disabled = true;
         if (web_disabled) return;
         if (!web_started) setup();
         wifi.enable(syspower);
@@ -219,3 +222,11 @@ class WebManager {
         // if (<activity in web page is detected>) sleep_inactivity_timer.reset();  // evidence of user activity
     }
 };
+#else
+class WebManager {  // just a useless dummy version for code compatibility 
+  public:
+    WebManager(LoopTimer* unused) {}
+    void setup() { printf("Wifi/Web features are disabled..\n"); }
+    void update() { web_disabled = true; }
+};
+#endif

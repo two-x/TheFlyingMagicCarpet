@@ -118,6 +118,7 @@ bool keep_system_powered = false;    // equivalent to syspower always being high
 bool looptime_print = false;         // makes code write out timestamps throughout loop to serial port. for analyzing what parts of the code take the most time
 bool touch_reticles = true;          // draws tiny little plus reticles to aim at for doing touchscreen calibration
 bool button_test_heartbeat_color = false; // makes boot button short press change heartbeat color. useful for testing code on bare esp
+// bool wifi_web_supported = false;     // use to completely disable wifi and web
 bool wifi_client_mode = false;       // should wifi be in client or access point mode?
 bool saver_on_sleep = true;          // does fullscreen screensaver start automatically when asleep, after a delay?
 bool print_framebuffers = false;     // dumps out ascii representations of screen buffer contents to console. for debugging frame buffers. *hella* slow
